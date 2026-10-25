@@ -530,7 +530,8 @@ struct qore_list_private {
         }
 
         QoreValue rv = entry[offset];
-        entry[offset].assignNothing();
+        // Transfer every owned representation, including inline enum references.
+        entry[offset].clear();
 
         if (needs_scan(rv)) {
             --obj_count;

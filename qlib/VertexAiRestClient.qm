@@ -384,6 +384,13 @@ public class VertexAiLlmProvider inherits GeminiBodyShape::AbstractGeminiModelPr
         return "Vertex AI";
     }
 
+    #! Enables reuse of native response-schema definitions
+    /** @return True: Vertex AI supports response-schema \c defs and \c ref
+    */
+    bool supportsResponseSchemaReferences() {
+        return True;
+    }
+
     string getDefaultModel() {
         return DefaultModel;
     }

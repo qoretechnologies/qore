@@ -594,7 +594,7 @@ QoreValue QoreScalarCastOperatorNode::castValueToType(const QoreTypeInfo* typeIn
 
     const QoreTypeInfo* conversionTypeInfo = getConversionTypeInfo(typeInfo, or_nothing);
     if (!conversionTypeInfo) {
-        return inner.hasNode() ? inner.refSelf() : inner;
+        return inner.needsRef() ? inner.refSelf() : inner;
     }
 
     if (QoreTypeInfo::runtimeAcceptsValue(conversionTypeInfo, inner) == QTI_NOT_EQUAL) {
@@ -603,7 +603,7 @@ QoreValue QoreScalarCastOperatorNode::castValueToType(const QoreTypeInfo* typeIn
         return QoreValue();
     }
 
-    QoreValue val = inner.hasNode() ? inner.refSelf() : inner;
+    QoreValue val = inner.needsRef() ? inner.refSelf() : inner;
     QoreTypeInfo::acceptAssignment(conversionTypeInfo, "<cast operator>", val, xsink);
     if (xsink && *xsink) {
         val.discard(nullptr);
@@ -630,7 +630,7 @@ QoreValue QoreScalarCastOperatorNode::evalImpl(bool& needs_deref, ExceptionSink*
         return QoreValue();
     }
 
-    needs_deref = result.hasNode();
+    needs_deref = result.needsRef();
     return result;
 }
 
@@ -685,7 +685,7 @@ QoreValue QoreClassCastOperatorNode::castValue(QoreValue inner, ExceptionSink* x
     if (QoreClassCastOperatorNode::checkValue(xsink, inner, false)) {
         return QoreValue();
     }
-    return inner.hasNode() ? inner.refSelf() : inner;
+    return inner.needsRef() ? inner.refSelf() : inner;
 }
 
 static const TypedHashDecl* qore_hashdecl_cast_get_runtime_hashdecl(const QoreHashDeclCastOperatorNode& node,
@@ -798,14 +798,14 @@ QoreValue QoreHashDeclCastOperatorNode::castValue(QoreValue inner, ExceptionSink
 
     if (!target_hd) {
         if (!vhd && !h->getValueTypeInfo()) {
-            return inner.hasNode() ? inner.refSelf() : inner;
+            return inner.needsRef() ? inner.refSelf() : inner;
         }
         return qore_hash_private::getPlainHash(inner.get<QoreHashNode>()->hashRefSelf());
     }
 
     // if we already have the expected type, then there's nothing more to do
     if (vhd && typed_hash_decl_private::get(*vhd)->equal(*typed_hash_decl_private::get(*target_hd))) {
-        return inner.hasNode() ? inner.refSelf() : inner;
+        return inner.needsRef() ? inner.refSelf() : inner;
     }
 
     // do the runtime cast
@@ -970,7 +970,7 @@ QoreValue QoreComplexListCastOperatorNode::castValue(QoreValue inner, ExceptionS
     }
 
     if (is_softlist && inner.getType() != NT_LIST) {
-        QoreValue ref_inner = inner.hasNode() ? inner.refSelf() : inner;
+        QoreValue ref_inner = inner.needsRef() ? inner.refSelf() : inner;
         return qore_cast_coerce_softlist_value(typeInfo, ref_inner, xsink);
     }
 
@@ -980,7 +980,7 @@ QoreValue QoreComplexListCastOperatorNode::castValue(QoreValue inner, ExceptionS
     const QoreTypeInfo* ti = inner.getFullTypeInfo();
     if ((!typeInfo && (ti == listTypeInfo))
         || (typeInfo && ti == typeInfo)) {
-        return inner.hasNode() ? inner.refSelf() : inner;
+        return inner.needsRef() ? inner.refSelf() : inner;
     }
 
     // do the runtime cast
@@ -988,7 +988,7 @@ QoreValue QoreComplexListCastOperatorNode::castValue(QoreValue inner, ExceptionS
         return qore_list_private::getPlainList(inner.get<QoreListNode>()->listRefSelf());
     }
 
-    QoreValue ref_inner = inner.hasNode() ? inner.refSelf() : inner;
+    QoreValue ref_inner = inner.needsRef() ? inner.refSelf() : inner;
     return qore_list_private::newComplexListFromValue(typeInfo, ref_inner, xsink);
 }
 
@@ -1055,15 +1055,15 @@ QoreValue QoreEnumCastOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* x
 
     // If already a TAG_ENUM of the same enum, return as-is
     if (rv->isEnum() && rv->getEnumMember()->getEnumDecl() == ed) {
-        needs_deref = false;
-        return *rv;
+        needs_deref = true;
+        return rv.takeReferencedValue();
     }
 
     // Find the member by value and return a TAG_ENUM
     QoreValue base_val = rv->isEnum() ? rv->getEnumMember()->getValue() : *rv;
     const QoreEnumMember* member = ed->findMemberByValue(base_val);
     assert(member);
-    needs_deref = false;
+    needs_deref = true;
     return QoreValue::makeEnum(member);
 }
 
@@ -1077,7 +1077,7 @@ QoreValue QoreEnumCastOperatorNode::castValue(QoreValue inner, ExceptionSink* xs
     }
     // If already a TAG_ENUM of the same enum, return as-is
     if (inner.isEnum() && inner.getEnumMember()->getEnumDecl() == ed) {
-        return inner;
+        return inner.refSelf();
     }
     // Find the member by value and return a TAG_ENUM
     QoreValue base_val = inner.isEnum() ? inner.getEnumMember()->getValue() : inner;

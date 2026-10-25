@@ -886,6 +886,10 @@ void LValueHelper::saveTemp(QoreValue val) {
 }
 
 void LValueHelper::saveTempRef(QoreValue& val) {
+    if (val.isEnum()) {
+        val.discard(nullptr);
+        return;
+    }
     if (!val.isReferenceCounted()) {
         return;
     }
@@ -2281,7 +2285,8 @@ int LValueHelper::makeFloat(const char* desc) {
 int LValueHelper::makeNumber(const char* desc) {
     member_lvalue_modified = true;
     assert(val || qv);
-    if ((val && val->getType() == NT_NUMBER) || (qv && qv->getType() == NT_NUMBER)) {
+    if ((val && val->type == QV_Node && val->getType() == NT_NUMBER)
+            || (qv && !qv->isEnum() && qv->getType() == NT_NUMBER)) {
         return 0;
     }
 

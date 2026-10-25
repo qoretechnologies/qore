@@ -62,6 +62,12 @@ public:
     //! returns the parent enum declaration
     DLLEXPORT const QoreEnumDecl* getEnumDecl() const;
 
+    //! Retains the member and its declaration; each reference must be released with deref()
+    DLLEXPORT void ref() const;
+
+    //! Releases a reference acquired with ref(); the member can be deleted by this call
+    DLLEXPORT void deref() const;
+
 private:
     DLLLOCAL QoreEnumMember(const char* name, QoreValue val, const QoreEnumDecl* parent = nullptr);
     DLLLOCAL ~QoreEnumMember();

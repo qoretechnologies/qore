@@ -1226,7 +1226,7 @@ static bool resolveDeferredConstRefDefault(std::string& path, QoreValue& default
     if (path.empty()) {
         return true;
     }
-    if (default_val.hasNode()) {
+    if (default_val.needsRef()) {
         default_val.discard(nullptr);
         default_val = QoreValue();
     }
@@ -1603,7 +1603,7 @@ static void resolveDeferredExprTreeDefault(std::vector<uint8_t>& blob,
     if (blob.empty()) {
         return;
     }
-    if (default_val.hasNode()) {
+    if (default_val.needsRef()) {
         default_val.discard(nullptr);
         default_val = QoreValue();
     }
@@ -1624,7 +1624,7 @@ static bool resolveDeferredNativeExprDefault(const QoreAOTBinaryReader& reader,
     if (blob.empty()) {
         return true;
     }
-    if (default_val.hasNode()) {
+    if (default_val.needsRef()) {
         default_val.discard(nullptr);
         default_val = QoreValue();
     }
@@ -15593,7 +15593,7 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
             if (!class_already_existed && mname && *mname) {
                 instance_members.push_back(std::move(pim));
             } else {
-                if (default_val.hasNode()) {
+                if (default_val.needsRef()) {
                     default_val.discard(nullptr);
                 }
                 for (auto& v : pim.pending_new_args) {
@@ -15631,7 +15631,7 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
             if (!class_already_existed && sm_name && *sm_name) {
                 static_members.push_back(std::move(psm));
             } else {
-                if (default_val.hasNode()) {
+                if (default_val.needsRef()) {
                     default_val.discard(nullptr);
                 }
                 for (auto& v : psm.pending_new_args) {

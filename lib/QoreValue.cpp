@@ -634,6 +634,9 @@ bool QoreValue::hasNode() const {
 }
 
 bool QoreValue::isReferenceCounted() const {
+    if (isEnum()) {
+        return true;
+    }
     AbstractQoreNode* n = getOwnedNodeIntern();
     return n && n->isReferenceCounted();
 }
@@ -802,6 +805,11 @@ void QoreValue::clear() {
 }
 
 void QoreValue::discard(ExceptionSink* xsink) {
+    if (isEnum()) {
+        getEnumMember()->deref();
+        bits = VAL_NOTHING;
+        return;
+    }
     // an opaque reference owns its payload exactly like a pointer value does
     AbstractQoreNode* n = getOwnedNodeIntern();
     if (n) {
@@ -922,6 +930,10 @@ void QoreValue::sanitize() {
 // ============================================================================
 
 void QoreValue::ref() const {
+    if (isEnum()) {
+        getEnumMember()->ref();
+        return;
+    }
     // an opaque reference owns its payload exactly like a pointer value does
     AbstractQoreNode* n = getOwnedNodeIntern();
     if (n) {
@@ -933,6 +945,11 @@ void QoreValue::ref() const {
 QoreValue QoreValue::refSelf() const {
     ref();
     return *this;
+}
+
+QoreValue QoreValue::makeEnum(const QoreEnumMember* member) {
+    member->ref();
+    return makeEnumBorrowed(member);
 }
 
 // ============================================================================
@@ -955,6 +972,11 @@ AbstractQoreNode* QoreValue::takeNodeIntern() {
 }
 
 AbstractQoreNode* QoreValue::takeIfNode() {
+    // Enum declarations contain scalar values only; releasing one cannot run a Qore destructor.
+    if (isEnum()) {
+        discard(nullptr);
+        return nullptr;
+    }
     // an opaque reference owns its payload, so it must be handed to the caller for dereferencing;
     // assign() uses this to release the value being overwritten
     if (!isPointer()) {
@@ -1092,7 +1114,7 @@ QoreString* QoreValue::getAsString(bool& del, int format_offset, ExceptionSink* 
 
 QoreValue QoreValue::eval(ExceptionSink* xsink) const {
     if (!isPointer()) {
-        return *this;
+        return refSelf();
     }
     AbstractQoreNode* n = getPointerUnsafe();
     if (!n) {
@@ -1338,12 +1360,7 @@ ValueOptionalRefHolder::~ValueOptionalRefHolder() {
 void ValueOptionalRefHolder::ensureReferencedValue() {
     if (!needs_deref) {
         needs_deref = true;
-        if (v.isPointer()) {
-            AbstractQoreNode* n = v.getPointerUnsafe();
-            if (n) {
-                n->ref();
-            }
-        }
+        v.ref();
     }
 }
 
@@ -1369,6 +1386,8 @@ QoreValue ValueOptionalRefHolder::takeReferencedValue() {
     }
     if (needs_deref) {
         needs_deref = false;
+    } else {
+        v.ref();
     }
     return v;
 }

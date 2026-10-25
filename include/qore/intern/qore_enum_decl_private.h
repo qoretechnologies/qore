@@ -90,6 +90,7 @@ class qore_enum_decl_private {
 
 public:
     DLLLOCAL qore_enum_decl_private(const QoreProgramLocation* loc) : loc(loc), orig(this) {
+        setParseLocation(loc);
         assignModule();
     }
 
@@ -216,7 +217,12 @@ public:
 
     //! Sets the declaration location of an enum not created by the parser (a deserialized \c .qo shell)
     DLLLOCAL void setParseLocation(const QoreProgramLocation* l) {
-        loc = l;
+        saved_location.set(l->getFile(), l->start_line, l->end_line, l->getSource(), l->offset,
+            l->getLanguage());
+        auto& saved = const_cast<QoreProgramLocation&>(saved_location.get());
+        saved.start_column = l->start_column;
+        saved.end_column = l->end_column;
+        loc = &saved;
     }
 
     DLLLOCAL static qore_enum_decl_private* get(QoreEnumDecl& enumdecl) {
@@ -261,6 +267,8 @@ public:
 protected:
     // references
     mutable QoreReferenceCounter refs;
+    // The declaration can outlive the Program's interned source locations.
+    QoreExternalProgramLocationWrapper saved_location;
     const QoreProgramLocation* loc;
     std::string name;
     std::string path;

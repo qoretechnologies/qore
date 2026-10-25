@@ -868,7 +868,7 @@ static inline const QoreObject* qore_rt_get_strong_object(const QoreValue& value
 // Increments reference count if value is a pointer (node), returns value unchanged
 extern "C" DLLEXPORT uint64_t qore_rt_ref(uint64_t val) {
     QoreValue v = fromBits(val);
-    if (v.hasNode()) {
+    if (v.needsRef()) {
         return toBits(v.refSelf());
     }
     return val;
@@ -1077,8 +1077,8 @@ extern "C" DLLEXPORT int64_t qore_rt_is_null_or_nothing(uint64_t val) {
 
 extern "C" DLLEXPORT void qore_rt_incref(uint64_t val) {
     QoreValue v = fromBits(val);
-    if (v.hasNode()) {
-        v.getInternalNode()->ref();
+    if (v.needsRef()) {
+        v.ref();
     }
 }
 
@@ -1142,7 +1142,7 @@ extern "C" DLLEXPORT void qore_rt_clear_arg_cleanups(uint64_t** arg_cleanups,
 //! @param val the NaN-boxed value to track
 extern "C" DLLEXPORT void qore_rt_cleanup_push(uint64_t** stack, int32_t* count, uint64_t val) {
     QoreValue v = fromBits(val);
-    if (!v.hasNode()) {
+    if (!v.needsRef()) {
         return;  // Simple types (int, float, bool, NOTHING) don't need cleanup
     }
     int32_t n = *count;
@@ -1277,7 +1277,7 @@ extern "C" DLLEXPORT void qore_rt_throw_value(ExceptionSink* xsink, uint64_t val
     if (arg.getType() == NT_LIST) {
         xsink->raiseException(arg.get<const QoreListNode>());
     } else {
-        QoreValue owned_arg = arg.hasNode() ? arg.refSelf() : arg;
+        QoreValue owned_arg = arg.needsRef() ? arg.refSelf() : arg;
         xsink->raiseExceptionArg("THROW-ERROR", owned_arg, "throw");
     }
 }
@@ -1772,7 +1772,7 @@ static void qore_rt_assign_local_impl(LocalVar* var, uint64_t value, ExceptionSi
         return;
     }
     // refSelf before assign — assign takes ownership of the reference
-    QoreValue stored = val.hasNode() ? val.refSelf() : val;
+    QoreValue stored = val.needsRef() ? val.refSelf() : val;
     helper.assign(stored, "<lvalue>", check_types);
 }
 
@@ -1793,7 +1793,7 @@ static void qore_rt_assign_closure_impl(ClosureVarValue* cvv, uint64_t value,
     if (cvv->getLValue(helper, false, true)) {
         return;
     }
-    QoreValue stored = val.hasNode() ? val.refSelf() : val;
+    QoreValue stored = val.needsRef() ? val.refSelf() : val;
     helper.assign(stored, "<lvalue>", true);
 }
 
@@ -1859,7 +1859,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_coerce_value(const QoreTypeInfo* ti, uint6
     // `list<string>`.  The inner-scope StoreLocal coerce-copy path freed the
     // shared list prematurely, tripping `AbstractQoreNode::deref` on dangling
     // bits when the outer response hash later dereffed.
-    if (val.hasNode()) {
+    if (val.needsRef()) {
         val.refSelf();
     }
     QoreTypeInfo::acceptAssignment(ti, "<lvalue>", val, xsink);
@@ -1890,7 +1890,7 @@ static uint64_t qore_rt_coerce_return_value(const QoreTypeInfo* ti, uint64_t val
     if (xsink && *xsink) {
         return toBits(QoreValue());
     }
-    if (val.hasNode()) {
+    if (val.needsRef()) {
         val.refSelf();
     }
     QoreTypeInfo::acceptAssignment(ti, "<return statement>", val, xsink);
@@ -1964,7 +1964,7 @@ extern "C" DLLEXPORT void qore_rt_sync_local(LocalVar* var, uint64_t value) {
 
     LValueHelper helper(&xsink);
     if (!var->getLValue(helper, false, true)) {
-        QoreValue stored = val.hasNode() ? val.refSelf() : val;
+        QoreValue stored = val.needsRef() ? val.refSelf() : val;
         // This is a cache publication before running deferred handlers.  The
         // value has already passed normal StoreLocal/type checks in compiled code.
         helper.assign(stored, "<lvalue>", false);
@@ -1980,7 +1980,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_weak_value(uint64_t value, ExceptionS
     }
     QoreValue val = fromBits(value);
     if (!val.hasNode()) {
-        return value;
+        return toBits(val.refSelf());
     }
     switch (val.getType()) {
         case NT_OBJECT:
@@ -2004,7 +2004,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_opaque_value(uint64_t value, Exceptio
     }
     QoreValue val = fromBits(value);
     if (!val.hasNode()) {
-        return value;
+        return toBits(val.refSelf());
     }
     switch (val.getType()) {
         case NT_OBJECT:
@@ -2019,7 +2019,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_opaque_value(uint64_t value, Exceptio
 
 static QoreValue qore_rt_deref_loaded_var_value(QoreValue result, bool owned, ExceptionSink* xsink) {
     if (result.getType() != NT_REFERENCE) {
-        if (!owned && result.hasNode()) {
+        if (!owned && result.needsRef()) {
             return result.refSelf();
         }
         return result;
@@ -2031,7 +2031,7 @@ static QoreValue qore_rt_deref_loaded_var_value(QoreValue result, bool owned, Ex
     if (xsink && *xsink) {
         return QoreValue();
     }
-    if (!needs_deref && deref.hasNode()) {
+    if (!needs_deref && deref.needsRef()) {
         deref = deref.refSelf();
     }
     return deref;
@@ -2069,7 +2069,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_local_weak(LocalVar* var, int8_t* own
     // reference that has to be evaluated): fall back to the owning load and tell the caller that
     // the value has to be dereferenced.
     QoreValue rv = qore_rt_deref_loaded_var_value(result, needs_deref, xsink);
-    if (owned_out && rv.hasNode()) {
+    if (owned_out && rv.needsRef()) {
         *owned_out = 1;
     }
     return toBits(rv);
@@ -2151,7 +2151,7 @@ static inline uint64_t qore_rt_eval_reference_node(AbstractQoreNode* node, Excep
     // stays in the alloca; only the target is returned with an extra reference.
     bool needs_deref = true;
     QoreValue result = node->eval(needs_deref, xsink);
-    if (!needs_deref && result.hasNode()) {
+    if (!needs_deref && result.needsRef()) {
         result = result.refSelf();
     }
     return toBits(result);
@@ -2506,7 +2506,7 @@ static void qore_rt_store_global_impl(Var* var, uint64_t value, ExceptionSink* x
             return;
         }
     }
-    QoreValue stored = val.hasNode() ? val.refSelf() : val;
+    QoreValue stored = val.needsRef() ? val.refSelf() : val;
     LValueHelper helper(xsink);
     if (!var->getLValue(helper, false)) {
         helper.assign(stored);
@@ -2544,7 +2544,7 @@ static void qore_rt_store_closure_impl(ClosureVarValue* var, uint64_t value, Exc
             return;
         }
     }
-    QoreValue stored = val.hasNode() ? val.refSelf() : val;
+    QoreValue stored = val.needsRef() ? val.refSelf() : val;
     LValueHelper helper(xsink);
     if (!var->getLValue(helper, false)) {
         helper.assign(stored);
@@ -2907,7 +2907,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_object(const QoreClass* qc, const Abst
 extern "C" DLLEXPORT uint64_t qore_rt_load_constant(const RuntimeConstantRefNode* node, ExceptionSink* xsink) {
     bool needs_deref = true;
     QoreValue result = const_cast<RuntimeConstantRefNode*>(node)->eval(needs_deref, xsink);
-    if (!needs_deref && result.hasNode()) {
+    if (!needs_deref && result.needsRef()) {
         result = result.refSelf();
     }
     return toBits(result);
@@ -2938,7 +2938,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_constant_aot(QoreAOTContext* ctx, int
 extern "C" DLLEXPORT uint64_t qore_rt_create_closure(const QoreClosureParseNode* cn, ExceptionSink* xsink) {
     bool needs_deref = true;
     QoreValue result = const_cast<QoreClosureParseNode*>(cn)->eval(needs_deref, xsink);
-    if (!needs_deref && result.hasNode()) {
+    if (!needs_deref && result.needsRef()) {
         result = result.refSelf();
     }
     return toBits(result);
@@ -3077,7 +3077,7 @@ static uint64_t qore_rt_cast_by_type_path_in_program(uint64_t inner_bits,
                 return toBits(QoreValue());
             }
         }
-        return inner.hasNode() ? toBits(inner.refSelf()) : toBits(inner);
+        return toBits(inner.refSelf());
     }
 
     // Try hashdecl cast
@@ -3138,7 +3138,7 @@ static uint64_t qore_rt_cast_by_type_path_in_program(uint64_t inner_bits,
         }
         const QoreHashNode* h = inner.get<const QoreHashNode>();
         if (!h->getHashDecl() && !h->getValueTypeInfo()) {
-            return inner.hasNode() ? toBits(inner.refSelf()) : toBits(inner);
+            return toBits(inner.refSelf());
         }
         return toBits(qore_hash_private::getPlainHash(inner.get<QoreHashNode>()->hashRefSelf()));
     }
@@ -3173,7 +3173,7 @@ static uint64_t qore_rt_cast_by_type_path_in_program(uint64_t inner_bits,
             return toBits(QoreValue());
         }
         if (inner.getFullTypeInfo() == listTypeInfo) {
-            return inner.hasNode() ? toBits(inner.refSelf()) : toBits(inner);
+            return toBits(inner.refSelf());
         }
         return toBits(qore_list_private::getPlainList(inner.get<QoreListNode>()->listRefSelf()));
     }
@@ -3191,7 +3191,7 @@ static uint64_t qore_rt_cast_by_type_path_in_program(uint64_t inner_bits,
         if (inner.isEnum()) {
             const QoreEnumMember* src_member = inner.getEnumMember();
             if (src_member->getEnumDecl() == ed) {
-                return inner.hasNode() ? toBits(inner.refSelf()) : toBits(inner);
+                return toBits(inner.refSelf());
             }
             // Different enum: check the base value against target
             QoreValue base_val = src_member->getValue();
@@ -3287,7 +3287,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_call_ref(uint64_t expr_bits, Except
     bool needs_deref = true;
     QoreValue ref_expr = expr.refSelf();
     QoreValue result = ref_expr.getInternalNode()->eval(needs_deref, xsink);
-    if (!needs_deref && result.hasNode()) {
+    if (!needs_deref && result.needsRef()) {
         result = result.refSelf();
     }
     ref_expr.discard(xsink);
@@ -3693,7 +3693,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_member_hash_ref_aot(
     // SelfVarrefNode references the member variable on the current object
     SelfVarrefNode* svn = new SelfVarrefNode(&loc_builtin, strdup(member_name));
     QoreValue key = fromBits(key_bits);
-    QoreValue key_copy = key.hasNode() ? key.refSelf() : key;
+    QoreValue key_copy = key.needsRef() ? key.refSelf() : key;
     QoreValue lv(new QoreHashObjectDereferenceOperatorNode(&loc_builtin, QoreValue(svn), key_copy));
 
     // Create ReferenceNode with the partial lvalue
@@ -3706,7 +3706,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_member_hash_ref_aot(
 extern "C" DLLEXPORT uint64_t qore_rt_new_hash_decl(const NewHashDeclNode* node, ExceptionSink* xsink) {
     bool needs_deref = true;
     QoreValue result = const_cast<NewHashDeclNode*>(node)->eval(needs_deref, xsink);
-    if (!needs_deref && result.hasNode()) {
+    if (!needs_deref && result.needsRef()) {
         result = result.refSelf();
     }
     return toBits(result);
@@ -3727,7 +3727,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_hash_decl_aot(QoreAOTContext* ctx, int
 extern "C" DLLEXPORT uint64_t qore_rt_new_complex_hash(const NewComplexHashNode* node, ExceptionSink* xsink) {
     bool needs_deref = true;
     QoreValue result = const_cast<NewComplexHashNode*>(node)->eval(needs_deref, xsink);
-    if (!needs_deref && result.hasNode()) {
+    if (!needs_deref && result.needsRef()) {
         result = result.refSelf();
     }
     return toBits(result);
@@ -3748,7 +3748,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_complex_hash_aot(QoreAOTContext* ctx, 
 extern "C" DLLEXPORT uint64_t qore_rt_new_complex_list(const NewComplexListNode* node, ExceptionSink* xsink) {
     bool needs_deref = true;
     QoreValue result = const_cast<NewComplexListNode*>(node)->eval(needs_deref, xsink);
-    if (!needs_deref && result.hasNode()) {
+    if (!needs_deref && result.needsRef()) {
         result = result.refSelf();
     }
     return toBits(result);
@@ -3769,7 +3769,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_complex_list_aot(QoreAOTContext* ctx, 
 extern "C" DLLEXPORT uint64_t qore_rt_new_complex_buffer(const NewComplexBufferNode* node, ExceptionSink* xsink) {
     bool needs_deref = true;
     QoreValue result = const_cast<NewComplexBufferNode*>(node)->eval(needs_deref, xsink);
-    if (!needs_deref && result.hasNode()) {
+    if (!needs_deref && result.needsRef()) {
         result = result.refSelf();
     }
     return toBits(result);
@@ -3972,7 +3972,7 @@ extern "C" DLLEXPORT void qore_rt_hash_set_key_value(uint64_t hash_bits, uint64_
         return;
     }
     QoreHashNode* hash = hash_val.get<QoreHashNode>();
-    if (value_val.hasNode()) {
+    if (value_val.needsRef()) {
         value_val.refSelf();
     }
     hash->setKeyValue(key_str.c_str(), value_val, xsink);
@@ -4014,7 +4014,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_implicit_arg(int offset, ExceptionSin
         return toBits(QoreValue());
     }
     QoreValue result = argv->retrieveEntry(offset);
-    if (result.hasNode()) {
+    if (result.needsRef()) {
         result = result.refSelf();
     }
     return toBits(result);
@@ -4404,7 +4404,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_complex_list_from_value(const QoreType
     }
 
     QoreValue value = fromBits(value_bits);
-    QoreValue init = value.hasNode() ? value.refSelf() : value;
+    QoreValue init = value.needsRef() ? value.refSelf() : value;
     QoreListNode* result = qore_list_private::newComplexListFromValue(typeInfo, init, xsink);
     return toBits(result ? QoreValue(result) : QoreValue());
 }
@@ -4436,7 +4436,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_complex_buffer_from_value_kind(const Q
     }
 
     QoreValue value = fromBits(value_bits);
-    QoreValue init = value.hasNode() ? value.refSelf() : value;
+    QoreValue init = value.needsRef() ? value.refSelf() : value;
     QoreBufferNode* result = qore_new_complex_buffer_from_value(typeInfo, init, xsink,
         static_cast<QoreComplexBufferInitKind>(init_kind));
     return toBits(result ? QoreValue(result) : QoreValue());
@@ -4738,7 +4738,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_list(uint64_t* vals, int count, const
             return toBits(QoreValue());
         }
         QoreValue v = fromBits(vals[i]);
-        if (v.hasNode()) {
+        if (v.needsRef()) {
             v.refSelf();
         }
         const QoreTypeInfo* vt = v.getTypeInfo();
@@ -4801,7 +4801,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_hash(uint64_t* kv_pairs, int count, c
         if (*xsink) {
             return toBits(QoreValue());
         }
-        if (val.hasNode()) {
+        if (val.needsRef()) {
             val.refSelf();
         }
         const QoreTypeInfo* vt = val.getFullTypeInfo();
@@ -4929,7 +4929,7 @@ static uint64_t qore_rt_make_hash_const_keys_impl(const char** keys, uint64_t* v
             return toBits(QoreValue());
         }
         QoreValue val = fromBits(vals[i]);
-        if (val.hasNode()) {
+        if (val.needsRef()) {
             val.refSelf();
         }
         const QoreTypeInfo* vt = val.getFullTypeInfo();
@@ -4982,10 +4982,10 @@ static uint64_t qore_rt_make_hash_const_keys_2_unique_impl(
 
     QoreValue val0 = fromBits(val0_bits);
     QoreValue val1 = fromBits(val1_bits);
-    if (val0.hasNode()) {
+    if (val0.needsRef()) {
         val0.refSelf();
     }
-    if (val1.hasNode()) {
+    if (val1.needsRef()) {
         val1.refSelf();
     }
 
@@ -5030,13 +5030,13 @@ static uint64_t qore_rt_make_hash_const_keys_3_unique_impl(
     QoreValue val0 = fromBits(val0_bits);
     QoreValue val1 = fromBits(val1_bits);
     QoreValue val2 = fromBits(val2_bits);
-    if (val0.hasNode()) {
+    if (val0.needsRef()) {
         val0.refSelf();
     }
-    if (val1.hasNode()) {
+    if (val1.needsRef()) {
         val1.refSelf();
     }
-    if (val2.hasNode()) {
+    if (val2.needsRef()) {
         val2.refSelf();
     }
 
@@ -5999,7 +5999,7 @@ extern "C" DLLEXPORT int64_t qore_rt_hash_keys_string_prehashed(
             }
             return 0;
         }
-        results[i] = toBits(value.hasNode() ? value.refSelf() : value);
+        results[i] = toBits(value.needsRef() ? value.refSelf() : value);
     }
     return 1;
 }
@@ -6078,7 +6078,7 @@ static void qore_rt_assign_object_member_lvalue(QoreObject* obj, const char* key
         helper.vl.addMemberNotification(obj, key);
     }
 
-    QoreValue stored = val.hasNode() ? val.refSelf() : val;
+    QoreValue stored = val.needsRef() ? val.refSelf() : val;
     helper.assign(stored);
 }
 
@@ -6273,7 +6273,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
 
         // Apply element type coercion if the list has a typed value type
         // (e.g. list<softint> converts "50" → 50 before storing)
-        QoreValue entry = val.hasNode() ? val.refSelf() : val;
+        QoreValue entry = val.needsRef() ? val.refSelf() : val;
         const QoreTypeInfo* vti = qore_list_private::get(*l)->getValueTypeInfo();
         if (QoreTypeInfo::hasType(vti)
                 && !QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
@@ -6297,7 +6297,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
         const QoreTypeInfo* varTI = var->getTypeInfo();
         const QoreTypeInfo* elemTI = QoreTypeInfo::getReturnComplexListOrNothing(varTI);
         QoreListNode* new_l = new QoreListNode(elemTI ? elemTI : autoTypeInfo);
-        QoreValue entry = val.hasNode() ? val.refSelf() : val;
+        QoreValue entry = val.needsRef() ? val.refSelf() : val;
         // Apply element type coercion if needed
         const QoreTypeInfo* vti = qore_list_private::get(*new_l)->getValueTypeInfo();
         if (QoreTypeInfo::hasType(vti)
@@ -6363,7 +6363,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
             }
         }
         // Apply element type coercion if the list has a typed value type
-        QoreValue entry = val.hasNode() ? val.refSelf() : val;
+        QoreValue entry = val.needsRef() ? val.refSelf() : val;
         const QoreTypeInfo* vti = qore_list_private::get(*l)->getValueTypeInfo();
         if (QoreTypeInfo::hasType(vti)
                 && !QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
@@ -6388,7 +6388,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
         const QoreTypeInfo* varTI = var->getTypeInfo();
         const QoreTypeInfo* elemTI = QoreTypeInfo::getReturnComplexListOrNothing(varTI);
         QoreListNode* new_l = new QoreListNode(elemTI ? elemTI : autoTypeInfo);
-        QoreValue entry = val.hasNode() ? val.refSelf() : val;
+        QoreValue entry = val.needsRef() ? val.refSelf() : val;
         // Apply element type coercion if needed
         const QoreTypeInfo* vti = qore_list_private::get(*new_l)->getValueTypeInfo();
         if (QoreTypeInfo::hasType(vti)
@@ -7242,7 +7242,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_1(uint64_t ref_bits, uint64_t
     // Build single-element list with pre-allocated capacity
     ReferenceHolder<QoreListNode> arg_list(new QoreListNode(autoTypeInfo), xsink);
     QoreValue arg0 = fromBits(arg0_bits);
-    if (arg0.hasNode()) {
+    if (arg0.needsRef()) {
         arg0.refSelf();
     }
     qore_list_private::get(**arg_list)->pushIntern(arg0);
@@ -7316,7 +7316,7 @@ static uint64_t qore_rt_call_closure_fast_impl(uint64_t ref_bits, uint64_t* args
         priv->reserve(nargs);
         for (int i = 0; i < nargs; ++i) {
             QoreValue val = fromBits(args[i]);
-            if (val.hasNode()) {
+            if (val.needsRef()) {
                 val.refSelf();
             }
             priv->pushIntern(val);
@@ -9592,7 +9592,7 @@ static uint64_t qore_rt_call_with_args_impl(uint64_t expr_bits, uint64_t* args,
         priv->reserve(nargs);
         for (int i = 0; i < nargs; ++i) {
             QoreValue val = fromBits(args[i]);
-            if (val.hasNode()) {
+            if (val.needsRef()) {
                 val.refSelf();
             }
             priv->pushIntern(val);
@@ -9611,7 +9611,7 @@ static uint64_t qore_rt_call_with_args_impl(uint64_t expr_bits, uint64_t* args,
         ValueHolder call_holder(call_expr, nullptr);
         bool needs_deref = true;
         result = call_expr.getInternalNode()->eval(needs_deref, xsink);
-        if (!needs_deref && result.hasNode()) {
+        if (!needs_deref && result.needsRef()) {
             result = result.refSelf();
         }
         used_operands = true;
@@ -9620,7 +9620,7 @@ static uint64_t qore_rt_call_with_args_impl(uint64_t expr_bits, uint64_t* args,
         ValueHolder call_holder(call_expr, nullptr);
         bool needs_deref = true;
         result = call_expr.getInternalNode()->eval(needs_deref, xsink);
-        if (!needs_deref && result.hasNode()) {
+        if (!needs_deref && result.needsRef()) {
             result = result.refSelf();
         }
         used_operands = true;
@@ -9629,7 +9629,7 @@ static uint64_t qore_rt_call_with_args_impl(uint64_t expr_bits, uint64_t* args,
         ValueHolder call_holder(call_expr, nullptr);
         bool needs_deref = true;
         result = call_expr.getInternalNode()->eval(needs_deref, xsink);
-        if (!needs_deref && result.hasNode()) {
+        if (!needs_deref && result.needsRef()) {
             result = result.refSelf();
         }
         used_operands = true;
@@ -9637,14 +9637,14 @@ static uint64_t qore_rt_call_with_args_impl(uint64_t expr_bits, uint64_t* args,
         const ParseNode* parse_node = dynamic_cast<const ParseNode*>(expr.getInternalNode());
         const QoreProgramLocation* loc = parse_node ? parse_node->loc : nullptr;
         QoreValue exp = call->getExp();
-        if (exp.hasNode()) {
+        if (exp.needsRef()) {
             exp = exp.refSelf();
         }
         QoreValue call_expr(new CallReferenceCallNode(loc, exp, arg_list.release()));
         ValueHolder call_holder(call_expr, nullptr);
         bool needs_deref = true;
         result = call_expr.getInternalNode()->eval(needs_deref, xsink);
-        if (!needs_deref && result.hasNode()) {
+        if (!needs_deref && result.needsRef()) {
             result = result.refSelf();
         }
         used_operands = true;
@@ -9914,7 +9914,7 @@ extern "C" DLLEXPORT uint64_t qore_fast_hash_values(uint64_t arg_bits, Exception
         ConstHashIterator hi(hash);
         while (hi.next()) {
             QoreValue v = hi.get();
-            if (v.hasNode()) {
+            if (v.needsRef()) {
                 v.refSelf();
             }
             qore_list_private::get(*vals)->push(v, xsink);
@@ -10007,7 +10007,7 @@ extern "C" DLLEXPORT uint64_t qore_fast_first(uint64_t arg_bits, ExceptionSink* 
     if (auto* list = dynamic_cast<const QoreListNode*>(node)) {
         if (list->size() > 0) {
             QoreValue result = list->retrieveEntry(0);
-            if (result.hasNode()) {
+            if (result.needsRef()) {
                 result.refSelf();
             }
             return toBits(result);
@@ -10034,7 +10034,7 @@ extern "C" DLLEXPORT uint64_t qore_fast_last(uint64_t arg_bits, ExceptionSink* x
         size_t size = list->size();
         if (size > 0) {
             QoreValue result = list->retrieveEntry(size - 1);
-            if (result.hasNode()) {
+            if (result.needsRef()) {
                 result.refSelf();
             }
             return toBits(result);
@@ -10100,7 +10100,7 @@ static uint64_t qore_rt_call_function_direct_impl(const QoreFunction* func,
         priv->reserve(nargs);
         for (int i = 0; i < nargs; ++i) {
             QoreValue val = fromBits(args[i]);
-            if (val.hasNode()) {
+            if (val.needsRef()) {
                 val.refSelf();
             }
             priv->pushIntern(val);
@@ -10160,7 +10160,7 @@ static uint64_t qore_rt_call_function_dynamic_impl(const QoreFunction* func,
         priv->reserve(nargs);
         for (int i = 0; i < nargs; ++i) {
             QoreValue val = fromBits(args[i]);
-            if (val.hasNode()) {
+            if (val.needsRef()) {
                 val.refSelf();
             }
             priv->pushIntern(val);
@@ -11953,7 +11953,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
         argv_priv->reserve(nargs - num_params);
         for (int i = num_params; i < nargs; ++i) {
             QoreValue val = fromBits(args[i]);
-            if (val.hasNode()) {
+            if (val.needsRef()) {
                 val.refSelf();
             }
             argv_priv->pushIntern(val);
@@ -12148,7 +12148,7 @@ static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBa
         argv_priv->reserve(nargs - num_params);
         for (int i = num_params; i < nargs; ++i) {
             QoreValue val = fromBits(args[i]);
-            if (val.hasNode()) {
+            if (val.needsRef()) {
                 val.refSelf();
             }
             argv_priv->pushIntern(val);
@@ -12385,7 +12385,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast_with_target(uint64_t (*target_fn
         argv_priv->reserve(nargs - num_params);
         for (int i = num_params; i < nargs; ++i) {
             QoreValue val = fromBits(args[i]);
-            if (val.hasNode()) {
+            if (val.needsRef()) {
                 val.refSelf();
             }
             argv_priv->pushIntern(val);
@@ -12462,7 +12462,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_self_recursive(const AbstractQoreFunc
             priv->reserve(nargs);
             for (int i = 0; i < nargs; ++i) {
                 QoreValue val = fromBits(args[i]);
-                if (val.hasNode()) {
+                if (val.needsRef()) {
                     val.refSelf();
                 }
                 priv->pushIntern(val);
@@ -12516,7 +12516,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_self_recursive(const AbstractQoreFunc
         argv_priv->reserve(nargs - num_params);
         for (int i = num_params; i < nargs; ++i) {
             QoreValue val = fromBits(args[i]);
-            if (val.hasNode()) {
+            if (val.needsRef()) {
                 val.refSelf();
             }
             argv_priv->pushIntern(val);
@@ -12589,7 +12589,7 @@ static uint64_t qore_rt_call_method_direct_impl(const QoreMethod* method,
         priv->reserve(nargs);
         for (int i = 0; i < nargs; ++i) {
             QoreValue val = fromBits(args[i]);
-            if (val.hasNode()) {
+            if (val.needsRef()) {
                 val.refSelf();
             }
             priv->pushIntern(val);
@@ -12666,7 +12666,7 @@ static uint64_t qore_rt_call_self_method_dispatch_impl(const QoreAOTCallTarget& 
         priv->reserve(nargs);
         for (int i = 0; i < nargs; ++i) {
             QoreValue val = fromBits(args[i]);
-            if (val.hasNode()) {
+            if (val.needsRef()) {
                 val.refSelf();
             }
             priv->pushIntern(val);
@@ -12804,7 +12804,7 @@ static uint64_t qore_rt_call_method_fast_impl(const QoreMethod* method,
         argv_priv->reserve(nargs - num_params);
         for (int i = num_params; i < nargs; ++i) {
             QoreValue val = fromBits(args[i]);
-            if (val.hasNode()) {
+            if (val.needsRef()) {
                 val.refSelf();
             }
             argv_priv->pushIntern(val);
@@ -12949,7 +12949,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_ref_fast(uint64_t ref_bits, uint64_t*
         priv->reserve(nargs);
         for (int i = 0; i < nargs; ++i) {
             QoreValue val = fromBits(args[i]);
-            if (val.hasNode()) {
+            if (val.needsRef()) {
                 val.refSelf();
             }
             priv->pushIntern(val);
@@ -13043,7 +13043,7 @@ extern "C" DLLEXPORT void qore_rt_set_native_ir_slot_cache_value(void* guard_ptr
     }
 
     QoreValue qv = fromBits(value);
-    slot = qv.hasNode() ? qv.refSelf() : qv;
+    slot = qv.needsRef() ? qv.refSelf() : qv;
     guard->slot_to_lvar[ir_slot] = var;
 }
 
@@ -13478,7 +13478,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_assign_class_local_result_aot_v1(QoreAOTCo
             // cleanup could reenter Qore and change the stored value. Do not extend
             // this shortcut to reassignment, references or captured/shared slots.
             fresh = helper.isNothing();
-            QoreValue stored = val.hasNode() ? val.refSelf() : val;
+            QoreValue stored = val.needsRef() ? val.refSelf() : val;
             if (helper.assign(stored, "<lvalue>", true)) {
                 return toBits(QoreValue());
             }
@@ -16770,7 +16770,7 @@ static uint64_t qore_rt_call_direct_aot_impl(QoreAOTContext* ctx, int32_t slot,
             argv_priv->reserve(nargs - num_params);
             for (int i = num_params; i < nargs; ++i) {
                 QoreValue val = fromBits(args[i]);
-                if (val.hasNode()) {
+                if (val.needsRef()) {
                     val.refSelf();
                 }
                 argv_priv->pushIntern(val);
@@ -17354,7 +17354,7 @@ static uint64_t qore_rt_call_self_recursive_aot_impl(AotFunctionPtr self_fn,
         argv_priv->reserve(nargs - num_params);
         for (int i = num_params; i < nargs; ++i) {
             QoreValue val = fromBits(args[i]);
-            if (val.hasNode()) {
+            if (val.needsRef()) {
                 val.refSelf();
             }
             argv_priv->pushIntern(val);
@@ -18160,7 +18160,7 @@ static QoreListNode* buildArgListFromNanBoxed(uint64_t* args, int nargs, Excepti
     priv->reserve(nargs);
     for (int i = 0; i < nargs; ++i) {
         QoreValue val = fromBits(args[i]);
-        if (val.hasNode()) {
+        if (val.needsRef()) {
             val.refSelf();
         }
         priv->pushIntern(val);
@@ -18884,7 +18884,7 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
         argv_priv->reserve(nargs - num_params);
         for (int i = num_params; i < nargs; ++i) {
             QoreValue val = fromBits(args[i]);
-            if (val.hasNode()) {
+            if (val.needsRef()) {
                 val.refSelf();
             }
             argv_priv->pushIntern(val);
@@ -20721,7 +20721,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_object_member_set_get_aot(
             return toBits(QoreValue());
         }
         QoreValue assigned_value = fromBits(args[value_param]);
-        if (helper.assign(assigned_value.hasNode()
+        if (helper.assign(assigned_value.needsRef()
                 ? assigned_value.refSelf() : assigned_value)
                 || *xsink) {
             return toBits(QoreValue());
@@ -20808,7 +20808,7 @@ static T qore_rt_object_member_set_get_native_aot(QoreAOTContext* ctx,
             if (rc) {
                 return T();
             }
-            if (helper.assign(assigned_value.hasNode()
+            if (helper.assign(assigned_value.needsRef()
                     ? assigned_value.refSelf() : assigned_value)
                     || *xsink) {
                 return T();
@@ -21059,7 +21059,7 @@ static uint64_t qore_rt_call_static_method_direct_impl(const QoreMethod* method,
         argv_priv->reserve(nargs - num_params);
         for (int i = num_params; i < nargs; ++i) {
             QoreValue val = fromBits(args[i]);
-            if (val.hasNode()) {
+            if (val.needsRef()) {
                 val.refSelf();
             }
             argv_priv->pushIntern(val);
@@ -21464,7 +21464,7 @@ static uint64_t qore_rt_list_first_last(uint64_t base_bits, bool last) {
     }
 
     QoreValue result = list->retrieveEntry(last ? size - 1 : 0);
-    if (result.hasNode()) {
+    if (result.needsRef()) {
         result.refSelf();
     }
     return toBits(result);
@@ -22042,7 +22042,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_self_call(
         priv->reserve(nargs);
         for (int i = 0; i < nargs; i++) {
             QoreValue val = fromBits(args[i]);
-            if (val.hasNode()) {
+            if (val.needsRef()) {
                 val.refSelf();
             }
             priv->pushIntern(val);
@@ -22094,7 +22094,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_self_call_aot(
         priv->reserve(nargs);
         for (int i = 0; i < nargs; i++) {
             QoreValue val = fromBits(args[i]);
-            if (val.hasNode()) {
+            if (val.needsRef()) {
                 val.refSelf();
             }
             priv->pushIntern(val);
@@ -22127,7 +22127,7 @@ QoreListNode* bgBuildArgList(uint64_t* args, int nargs) {
     priv->reserve(nargs);
     for (int i = 0; i < nargs; ++i) {
         QoreValue val = fromBits(args[i]);
-        if (val.hasNode()) {
+        if (val.needsRef()) {
             val.refSelf();
         }
         priv->pushIntern(val);
@@ -22180,7 +22180,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_dot_eval_call(
     MethodCallNode* source_m = devn->getMethodCall();
     assert(source_m);
     QoreValue recv = fromBits(recv_bits);
-    if (recv.hasNode()) {
+    if (recv.needsRef()) {
         recv.refSelf();  // node takes ownership of this ref
     }
     QoreListNode* arg_list = bgBuildArgList(args, nargs);
@@ -22200,7 +22200,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_call_ref_call(
         uint64_t* args, int nargs, ExceptionSink* xsink) {
     assert(crcn);
     QoreValue callee = fromBits(callee_bits);
-    if (callee.hasNode()) {
+    if (callee.needsRef()) {
         callee.refSelf();
     }
     QoreListNode* arg_list = bgBuildArgList(args, nargs);
@@ -22297,7 +22297,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_dot_eval_call_aot(
         return 0;
     }
     QoreValue recv = fromBits(recv_bits);
-    if (recv.hasNode()) {
+    if (recv.needsRef()) {
         recv.refSelf();
     }
     QoreListNode* arg_list = bgBuildArgList(args, nargs);
@@ -22314,7 +22314,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_dot_eval_name_call_aot(
         uint64_t* args, int nargs, ExceptionSink* xsink) {
     assert(method_name);
     QoreValue recv = fromBits(recv_bits);
-    if (recv.hasNode()) {
+    if (recv.needsRef()) {
         recv.refSelf();
     }
     QoreListNode* arg_list = bgBuildArgList(args, nargs);
@@ -22362,7 +22362,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_static_method_name_call_aot(
 extern "C" DLLEXPORT uint64_t qore_rt_background_call_ref_value_aot(
         uint64_t callee_bits, uint64_t* args, int nargs, ExceptionSink* xsink) {
     QoreValue callee = fromBits(callee_bits);
-    if (callee.hasNode()) {
+    if (callee.needsRef()) {
         callee.refSelf();
     }
     QoreListNode* arg_list = bgBuildArgList(args, nargs);
@@ -22387,7 +22387,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_call_ref_call_aot(
         return 0;
     }
     QoreValue callee = fromBits(callee_bits);
-    if (callee.hasNode()) {
+    if (callee.needsRef()) {
         callee.refSelf();
     }
     QoreListNode* arg_list = bgBuildArgList(args, nargs);

@@ -335,7 +335,7 @@ private:
     static constexpr uint64_t TAG_CHAR          = static_cast<uint64_t>(TAG16_CHAR) << 48;
     //! Short strings: 0xFFC + (length in bits 48-50), so 0xFFC0-0xFFC6
     static constexpr uint64_t TAG_SHORTSTR_BASE = static_cast<uint64_t>(TAG12_SHORTSTR) << 52;
-    //! Enum values: stores pointer to QoreEnumMember, zero allocation, zero ref-counting
+    //! Enum values: stores a member pointer and owns a reference to its declaration, without allocation
     static constexpr uint64_t TAG_ENUM          = static_cast<uint64_t>(TAG16_ENUM) << 48;
     //! Opaque references: stores the referenced node inline; a strong reference the DGC scanner
     //! does not follow.  Unlike every other inline tag, this one OWNS its payload.
@@ -1056,10 +1056,10 @@ public:
     // Reference counting
     // ========================================================================
 
-    //! Increments reference count if the value is a node
+    //! Retains an owned payload, including an enum's declaration
     DLLEXPORT void ref() const;
 
-    //! Increments reference count if the value is a node and returns *this
+    //! Retains an owned payload, including an enum's declaration, and returns *this
     DLLEXPORT QoreValue refSelf() const;
 
     // ========================================================================
@@ -1069,7 +1069,7 @@ public:
     //! Takes and returns the node value, leaving this empty (asserts if not a node)
     DLLEXPORT AbstractQoreNode* takeNode();
 
-    //! Takes and returns the node value if present, otherwise returns nullptr
+    //! Takes and returns a node; releases an inline enum reference and returns nullptr for non-node values
     DLLEXPORT AbstractQoreNode* takeIfNode();
 
     //! Returns a pointer to an object of the given class (takes the pointer)
@@ -1247,11 +1247,26 @@ public:
     //! Creates a FALSE value
     DLLLOCAL static QoreValue makeFalse() { QoreValue v; v.bits = VAL_FALSE; return v; }
 
-    //! Creates a TAG_ENUM value from an enum member pointer (zero allocation, zero ref-counting)
-    DLLLOCAL static QoreValue makeEnum(const QoreEnumMember* member) {
+    //! Creates an owned enum value, retaining the member's declaration without allocating a value node
+    /** @param member a non-null member of a live enum declaration
+        @return an enum value whose reference the caller must release with discard()
+        @note The value retains the declaration, but does not keep its Program alive.
+    */
+    DLLEXPORT static QoreValue makeEnum(const QoreEnumMember* member);
+
+    //! Creates a borrowed enum value; the caller must keep the declaration alive
+    /** @param member a non-null member of a live enum declaration
+        @return a borrowed enum value; use refSelf() to acquire an owned reference
+    */
+    DLLLOCAL static QoreValue makeEnumBorrowed(const QoreEnumMember* member) {
         QoreValue v;
         v.bits = TAG_ENUM | (reinterpret_cast<uint64_t>(member) & PAYLOAD_MASK);
         return v;
+    }
+
+    //! Returns true if an owned value must be released with discard(), including inline enum values
+    DLLLOCAL bool needsRef() const {
+        return isPointer() || isEnum();
     }
 
     //! Extracts the QoreEnumMember pointer from a TAG_ENUM value (asserts if not an enum)
@@ -1460,7 +1475,8 @@ public:
             nd = needs_deref;
             return v.takeNodeIntern();
         }
-        nd = false;
+        nd = needs_deref;
+        needs_deref = false;
         return v;
     }
 

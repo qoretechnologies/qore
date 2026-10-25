@@ -131,12 +131,21 @@ const QoreEnumDecl* QoreEnumMember::getEnumDecl() const {
     return priv->getEnumDecl();
 }
 
+void QoreEnumMember::ref() const {
+    qore_enum_decl_private::get(*priv->getEnumDecl())->ref();
+}
+
+void QoreEnumMember::deref() const {
+    qore_enum_decl_private::get(*const_cast<QoreEnumDecl*>(priv->getEnumDecl()))->deref();
+}
+
 // qore_enum_decl_private implementation
 qore_enum_decl_private::qore_enum_decl_private(const QoreProgramLocation* loc, const char* n, const char* p,
         const QoreTypeInfo* baseType, QoreEnumDecl* ed)
         : loc(loc), name(n), path(p), ed(ed), orig(this), baseTypeInfo(baseType),
           typeInfo(new QoreEnumTypeInfo(ed, n, p)),
           orNothingTypeInfo(new QoreEnumOrNothingTypeInfo(ed, n, p)) {
+    setParseLocation(loc);
     assignModule();
 }
 
@@ -146,6 +155,7 @@ qore_enum_decl_private::qore_enum_decl_private(const qore_enum_decl_private& old
           typeInfo(new QoreEnumTypeInfo(ed, old.name.c_str(), old.path.c_str())),
           orNothingTypeInfo(new QoreEnumOrNothingTypeInfo(ed, old.name.c_str(), old.path.c_str())),
           pub(old.pub), sys(old.sys), mod_imported(old.mod_imported) {
+    setParseLocation(old.loc);
     // Copy members - must ref the value since constructor takes ownership
     for (auto* member : old.members) {
         QoreEnumMember* new_member = new QoreEnumMember(member->getName(), member->getValue().refSelf(), ed);
@@ -343,7 +353,11 @@ QoreProgram* QoreEnumDecl::getProgram() const {
 
 std::string QoreEnumDecl::getNamespacePath(bool anchored) const {
     if (!priv->getNamespace()) {
-        return anchored ? std::string("::") + priv->getName() : priv->getName();
+        std::string path = priv->getPath();
+        if (path.compare(0, 2, "::") == 0) {
+            path.erase(0, 2);
+        }
+        return anchored ? std::string("::") + path : path;
     }
     std::string path;
     priv->getNamespace()->getPath(path, anchored);
