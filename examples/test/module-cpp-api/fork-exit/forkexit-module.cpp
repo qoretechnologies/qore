@@ -7,7 +7,7 @@
     - \c forkexita registers an \c atexit() handler that blocks forever in a child (as one that joins a thread of
       the parent or takes a lock that a thread of the parent held)
     - \c forkexitb has a static object whose destructor aborts in a child (as one that destroys a kernel object that
-      the child does not have)
+      the child does not have); the deliberate abort leaves no core file
 
     The exit-time code does nothing unless the module is armed with a marker descriptor with \c arm().  Before it blocks
     or aborts, it writes a marker line to that descriptor, so that the test sees deterministically that it ran; in the
@@ -44,6 +44,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <signal.h>
+#include <sys/resource.h>
 #include <unistd.h>
 
 #if !defined(FORKEXIT_ID) || !defined(FORKEXIT_NAME) || !defined(FORKEXIT_NS) || !defined(FORKEXIT_ATEXIT) \
@@ -104,6 +105,10 @@ void run_exit_code() {
     }
 #else
     write_marker(FORKEXIT_NAME, "abort");
+    // the abort is the expected outcome of this control case, not a crash: it leaves no core file, so that a core
+    // file of a test run always means a real crash; the test sees the abort from the marker and the exit status
+    struct rlimit no_core = {0, 0};
+    setrlimit(RLIMIT_CORE, &no_core);
     abort();
 #endif
 }
