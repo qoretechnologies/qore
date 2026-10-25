@@ -1,0 +1,122 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%include loop-local-uninstantiate-checks.qi
+
+%exec-class LoopLocalUninstantiateTest
+
+#! Regression test for the locals of a loop body that continues before some of its declarations
+/** The IR interpreter's list of the locals a frame has instantiated grew by every local a loop body instantiated in
+    every iteration, and a continue that uninstantiated the locals declared after it scanned the whole list for them,
+    so every iteration of such a loop was slower than the one before, for as long as the function ran.  The checks
+    in loop-local-uninstantiate-checks.qi run in this program and in a worker in each execution mode.
+    dbg_get_ir_instantiated_local_entries() reports the list size (0 outside the IR interpreter), so the growth
+    checks read as "no growth" in ast and native code too.
+*/
+class LoopLocalUninstantiateTest inherits QUnit::Test {
+    public {
+        #! the execution modes the worker is run in
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("LoopLocalUninstantiateTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("the list of instantiated locals does not grow in this program", \testGrowthInProgram());
+        addTestCase("the list of instantiated locals does not grow in each mode", \testGrowthExecModes());
+        addTestCase("the locals of a loop body are released as in the AST interpreter", \testReleaseInProgram());
+        addTestCase("the locals of a loop body are released in each mode", \testReleaseExecModes());
+
+        set_return_value(main());
+    }
+
+    #! the growth checks read the size of the list, which only a library-debug build exposes
+    private checkGrowthAvailable() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the list of instantiated locals (dbg_get_ir_instantiated_local_entries()) is only in "
+                "library-debug builds");
+        }
+    }
+
+    #! the list must not grow across the loops, in whatever mode this test program itself runs
+    testGrowthInProgram() {
+        checkGrowthAvailable();
+        checkGrowth("in-program", llu_growth_results());
+    }
+
+    #! the list must not grow in any execution mode, and the IR interpreter must record the loops' locals in it
+    testGrowthExecModes() {
+        checkGrowthAvailable();
+        foreach string mode in (ExecModes) {
+            hash<string, int> results = runWorker(mode);
+            checkGrowth(mode, results);
+            if (mode == "ir") {
+                # the object of the branch that continues is recorded, so the growth checks test the list: a loop
+                # whose locals the IR interpreter keeps only in its own slots would pass them trivially
+                assertGt(0, results."object-recorded", "ir: the loop's object is recorded in the list");
+            }
+        }
+    }
+
+    #! the locals of a loop body are released when the branch that declares them continues, in this program
+    testReleaseInProgram() {
+        int created = LluCounted::created;
+        assertEq(0, llu_branch_local_pending(), "in-program: no object of an iteration is alive in the next one");
+        assertGt(created, LluCounted::created, "in-program: the loop creates objects");
+        assertEq(LluCounted::created, LluCounted::destroyed, "in-program: nothing outlives the loop");
+    }
+
+    #! the locals of a loop body are released when the branch that declares them continues, in each mode
+    testReleaseExecModes() {
+        foreach string mode in (ExecModes) {
+            hash<string, int> results = runWorker(mode);
+            assertEq(0, results."branch-local-pending", mode + ": no object of an iteration is alive in the next one");
+            assertEq(0, results."permanent-leak", mode + ": nothing outlives the checks");
+        }
+    }
+
+    #! checks the results of llu_growth_results()
+    private checkGrowth(string label, hash<string, int> results) {
+        assertEq(LluIters, results."object-got", label + ": the object loop runs every iteration");
+        assertEq(0, results."object-growth", label + ": no growth across the iterations of the object loop");
+        assertEq(LluIters, results."list-total", label + ": the list loop runs every iteration");
+        assertEq(0, results."list-growth", label + ": no growth across the iterations of the list loop");
+        assertEq(LluLocales.size() * LluIters, results.placed, label + ": every value is placed");
+        assertEq(0, results."placement-growth", label + ": no growth across the iterations of a placement round");
+        assertEq(0, results."placement-round-growth", label + ": no growth across the placement rounds");
+    }
+
+    #! runs the worker in the given mode and parses its "name=value" output
+    private hash<string, int> runWorker(string mode) {
+        string worker = get_script_dir() + DirSep + "loop-local-uninstantiate-worker.q";
+        string cmd = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+            libqore_dir, libqore_dir, qore_bin, mode, worker);
+        string out = backquote(cmd);
+        hash<string, int> results = {};
+        foreach string line in (out.split("\n")) {
+            *list<*string> parts = (line =~ x/^([-a-z]+)=(-?[0-9]+)$/);
+            if (!parts) {
+                if (line.val()) {
+                    fail(sprintf("%s: unexpected worker output: %y", mode, out));
+                }
+                continue;
+            }
+            results{parts[0]} = parts[1].toInt();
+        }
+        assertTrue(results.hasKey("permanent-leak"), mode + ": worker produced results (" + out + ")");
+        return results;
+    }
+}

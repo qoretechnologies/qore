@@ -107,3 +107,53 @@ the condition (the reported case), a `continue` out of a `switch` over a live te
 inner loop nested in such a `switch`; and that no mode keeps an object alive past the frame that ran the loop.
 With the fix reverted, the growth checks report one leaked entry per iteration for the `continue`'s own mark and
 two for the `switch` case, in the ir and tiered modes.
+
+## The list of instantiated locals
+
+A frame also records the locals it instantiates on the runtime local stack, in instantiation order
+(`IRCallFrame::instantiated_locals_ordered`, filled by `ensureLocalInstantiated()`), so that frame exit cleans them up
+in reverse.  Only locals that the IR interpreter does not keep in its own slots are recorded: objects (so that a
+destructor runs when the block is left), lists and hashes assigned through the runtime stack (such as the target of
+`placed += {...}`), and every local of a function that `computeIROnlyLocals()` cannot analyse completely; a method
+call on `stderr` is one such construct, so `qore-data-provider-i18n`'s `rekeySourceTree()` has all of its locals
+recorded.
+
+`UninstantiateLocal` cleared a local's entry without removing it, and it scanned the list even for a local that was
+not instantiated.  A `continue` uninstantiates every local of the loop body, including the locals the body declares
+after the `continue`, which that iteration never instantiated; each such `continue` therefore scanned the whole
+list, and the list grew by every local the body instantiated in every iteration.  A loop like
+
+    foreach hash<auto> entry in (new_messages.pairIterator()) {
+        if (*hash<string, int> c = counts{entry.key}) {
+            string message = mostFrequent(c, first{entry.key});
+            placed += {"id": entry.key, "pos": first{entry.key}{message}, ...};
+            continue;
+        }
+        *hash<string, bool> same_text = by_text{text_key};
+        if (same_text.size() == 1) {
+            placed += {"id": entry.key, "pos": unplaced, ...};
+            continue;
+        }
+        ...
+    }
+
+got slower with every iteration that the function had run before it, and so did every later pass of a loop around
+it.  A single `continue` branch only grows the list; the scans come from the locals declared after it, which is why
+the slowdown needed a second branch.  The JIT and tiered modes run a function in the IR interpreter until its native
+form is ready, from its next call on, so a single long call such as `rekeySourceTree()` showed the same slowdown.
+
+`UninstantiateLocal` now scans only for a local that is instantiated (the list has exactly one entry for each one),
+and drops the cleared entries at the end of the list.  A block uninstantiates its locals in the reverse order of
+their instantiation, so the list stays at the locals that are instantiated.  An entry can stay behind a local that
+remains instantiated, but only once per local, not once per iteration: a local declared in the condition of an `if`
+statement is never uninstantiated by the IR (it stays instantiated until the function returns, unlike in AST mode,
+where it is released when the `if` statement ends), so the entries of the first loop pass's locals that precede it
+stay in the list once.  Native code keeps no such list.
+
+`examples/test/ir/loop-local-uninstantiate/` asserts, via `dbg_get_ir_instantiated_local_entries()` (the size of the
+innermost IR frame's list, 0 outside the IR interpreter), that the list does not grow across the iterations of loops
+that hold an object, a list extended with `+=`, and the re-key's placement loop, nor across the passes of the
+placement loop from the second pass on, in the ast, ir, jit and tiered modes; that the IR interpreter records the
+object loop's local, so the growth checks are not vacuous; and that the loop's locals are released when the AST
+interpreter releases them.  The counter is called directly in each measured function: a helper function would report
+its own frame.

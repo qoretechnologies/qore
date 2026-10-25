@@ -1241,6 +1241,16 @@ int64 q_get_ir_innermost_cleanup_entries() {
     return tls_innermost_ir_cleanup ? static_cast<int64>(tls_innermost_ir_cleanup->size()) : 0;
 }
 
+// Points at the innermost running execute() frame's list of the locals it has instantiated, in instantiation order
+// (null when no IR frame is running); set and restored with tls_innermost_ir_cleanup.  Used only by
+// q_get_ir_innermost_instantiated_local_entries() for the loop local uninstantiation regression test.
+static thread_local const std::vector<const LocalVar*>* tls_innermost_ir_instantiated_locals = nullptr;
+
+int64 q_get_ir_innermost_instantiated_local_entries() {
+    return tls_innermost_ir_instantiated_locals
+        ? static_cast<int64>(tls_innermost_ir_instantiated_locals->size()) : 0;
+}
+
 // Lightweight wrapper around a std::vector<QoreValue> that provides operator[]
 // and size(), allowing it to be used as a drop-in replacement for
 // std::vector<QoreValue> in function signatures without changing call sites.
@@ -5774,9 +5784,14 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // on any exit path (a nested IR call overwrites it and restores ours on return).
     struct CleanupTlsGuard {
         const IRCleanupSlots* prev;
-        ~CleanupTlsGuard() { tls_innermost_ir_cleanup = prev; }
-    } cleanup_tls_guard{tls_innermost_ir_cleanup};
+        const std::vector<const LocalVar*>* prev_instantiated_locals;
+        ~CleanupTlsGuard() {
+            tls_innermost_ir_cleanup = prev;
+            tls_innermost_ir_instantiated_locals = prev_instantiated_locals;
+        }
+    } cleanup_tls_guard{tls_innermost_ir_cleanup, tls_innermost_ir_instantiated_locals};
     tls_innermost_ir_cleanup = &cleanup;
+    tls_innermost_ir_instantiated_locals = &frame.instantiated_locals_ordered;
     auto& locals_slot_cache = frame.locals_slot_cache;
     auto& locals_lvar_cache = frame.locals_lvar_cache;
     auto& instantiated_locals = frame.instantiated_locals;
@@ -10958,15 +10973,30 @@ load_local_done:
                     // never added to instantiated_locals. The !is_pre && !was_instantiated
                     // path below handles them safely: it clears the slot cache but
                     // does NOT call uninstantiate(), so no stack corruption occurs.
-                    bool was_instantiated = instantiated_locals.count(local_inst->local) > 0;
                     // Remove from instantiated_locals since we're explicitly cleaning it up
-                    instantiated_locals.erase(local_inst->local);
-                    // Mark as null in ordered list (reverse scan finds most recent first)
-                    for (auto rit = instantiated_locals_ordered.rbegin();
-                            rit != instantiated_locals_ordered.rend(); ++rit) {
-                        if (*rit == local_inst->local) {
-                            *rit = nullptr;
-                            break;
+                    bool was_instantiated = instantiated_locals.erase(local_inst->local) > 0;
+                    // The ordered list has exactly one entry for each local in instantiated_locals (see
+                    // ensureLocalInstantiated()), so a local that is not instantiated has none to clear.  Scanning
+                    // for it anyway walked the whole list: a continue that leaves a loop body uninstantiates the
+                    // locals the body declares after it, which that iteration never instantiated, so each such
+                    // continue cost a pass over a list that, without the trimming below, grew by every local the
+                    // loop body instantiated in every iteration, and a loop got slower with every iteration that
+                    // the function had run before it.
+                    if (was_instantiated) {
+                        // Mark as null in ordered list (reverse scan finds most recent first)
+                        for (auto rit = instantiated_locals_ordered.rbegin();
+                                rit != instantiated_locals_ordered.rend(); ++rit) {
+                            if (*rit == local_inst->local) {
+                                *rit = nullptr;
+                                break;
+                            }
+                        }
+                        // A block uninstantiates its locals in the reverse order of their instantiation, so the
+                        // cleared entries are at the end of the list; dropping them keeps the list at the locals
+                        // that are instantiated, however many iterations a loop instantiates its locals in.  The
+                        // order of the remaining entries, which frame exit cleans up in reverse, is unchanged.
+                        while (!instantiated_locals_ordered.empty() && !instantiated_locals_ordered.back()) {
+                            instantiated_locals_ordered.pop_back();
                         }
                     }
                     // Clear the fast-path instantiation flag

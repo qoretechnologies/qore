@@ -12546,6 +12546,18 @@ static QoreValue f_dbg_get_ir_cleanup_entries(const QoreListNode* params, Runtim
     return q_get_ir_innermost_cleanup_entries();
 }
 
+//! returns the number of entries in the innermost running IR-interpreter frame's list of the locals it has instantiated
+/** The list used to grow by every local that a loop body instantiated in every iteration, and a continue that
+    uninstantiated a local the iteration had not instantiated scanned all of it, so each later iteration of a loop
+    in the same frame was slower than the one before; a test reads this inside such a loop to verify the list no
+    longer grows.  Returns 0 outside the IR interpreter (for example under \c --exec-mode=ast or in JIT/AOT native
+    code, which have no such list).
+*/
+static QoreValue f_dbg_get_ir_instantiated_local_entries(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return q_get_ir_innermost_instantiated_local_entries();
+}
+
 //! returns the number of recursive sets that scans in the current thread have created
 /** A scan that finds the recursive sets it would compute already in place creates none and leaves them alone,
     so tests use this to verify that a scan of an unchanged graph does not replace a set with an identical one.
@@ -14077,6 +14089,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_ir_cleanup_entries", f_dbg_get_ir_cleanup_entries, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_get_ir_instantiated_local_entries", f_dbg_get_ir_instantiated_local_entries,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_rset_create_count", f_dbg_get_rset_create_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_rset_restart_count", f_dbg_get_rset_restart_count, QCF_NO_FLAGS,

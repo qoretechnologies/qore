@@ -1,0 +1,225 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# Shared checks for the loop local uninstantiation regression: a loop body that declares locals in a branch that
+# continues and after it.  Run in the test program itself and in a worker in each execution mode.
+#
+# The IR interpreter records the locals a frame instantiates on the runtime local stack in a list, in instantiation
+# order, so that it can clean them up in reverse when the frame exits.  Uninstantiating a local cleared its entry
+# but did not remove it, so the list grew by every such local that a loop body instantiated in every iteration, and
+# a continue uninstantiated the locals that the body declares after it, which that iteration had not instantiated,
+# by scanning the whole list for them.  Each iteration was therefore slower than the one before, for as long as the
+# function ran: qore-data-provider-i18n spent 0.5 s re-keying the first locale of the Azure OpenAI catalog and 4.1 s
+# re-keying the twelfth.
+#
+# Only locals that are kept on the runtime local stack are recorded; the IR interpreter keeps others in its own
+# slots.  The loops below use the three kinds of such locals that a loop body commonly has: an object (kept there so
+# that its destructor runs when its block is left), a list extended with "+=" (assigned through the runtime stack),
+# and every local of a function that the IR interpreter cannot analyse completely, which is how the re-keying loop
+# has them: its function reports on stderr, and the IR interpreter does not analyse a method call on stderr.
+#
+# Two things are asserted, deterministically and without timing:
+#
+#  - the list does not grow across the iterations of such a loop, nor across the rounds of a loop around it.
+#    dbg_get_ir_instantiated_local_entries() reports the size of the innermost IR frame's list; it is 0 outside the
+#    IR interpreter (ast and native code have no such list), so the check reads as "no growth" there too.  It is
+#    called directly in each loop, not through a helper function, which would report the helper's own frame;
+#
+#  - the loop's locals are released as the AST interpreter releases them: an object held by a local of the branch
+#    that continues is destroyed when the continue leaves the branch, and nothing outlives the function.
+
+const LluIters = 200;
+const LluSampleLow = 20;
+const LluSampleHigh = LluIters - 20;
+#! the locales of the placement loop: one round of it each, as qore-data-provider-i18n re-keys each locale
+const LluLocales = ("cs", "de", "fr", "it");
+
+#! the debug introspection function that reports the size of the list
+/** It is registered only in a debug build of the library (Option::HAVE_LIBRARY_DEBUGGING), like the other dbg_get_*()
+    counters, so it is called by name: a build without it parses, and the checks read 0 ("no list") there.
+*/
+const LluEntriesFunc = "dbg_get_ir_instantiated_local_entries";
+
+#! counts its instances; the counts are static members so that they are initialized when a program that runs no
+#! top-level code (such as one with %exec-class) is
+class LluCounted {
+    public {
+        static int created = 0;
+        static int destroyed = 0;
+    }
+
+    constructor() { ++created; }
+    destructor() { ++destroyed; }
+    string get() { return "x"; }
+}
+
+#! a loop whose body holds an object in a branch that continues and another one after it
+/** @return "object-growth": the growth of the list between two iterations; "object-recorded": the entries that the
+    branch's object adds to the list (more than 0 in the IR interpreter, where this loop's locals are recorded)
+*/
+hash<string, int> sub llu_object_locals() {
+    int before = 0;
+    int lo = 0;
+    int hi = 0;
+    int got = 0;
+    if (Option::HAVE_LIBRARY_DEBUGGING) {
+        before = call_function(LluEntriesFunc);
+    }
+    for (int i = 0; i < LluIters; ++i) {
+        if (i % 4 != 3) {
+            LluCounted counted();
+            if (Option::HAVE_LIBRARY_DEBUGGING) {
+                if (i == LluSampleLow) {
+                    lo = call_function(LluEntriesFunc);
+                } else if (i == LluSampleHigh) {
+                    hi = call_function(LluEntriesFunc);
+                }
+            }
+            if (counted.get() == "x") {
+                ++got;
+                continue;
+            }
+        }
+        LluCounted later();
+        if (later.get() == "x") {
+            ++got;
+        }
+    }
+    return {
+        "object-got": got,
+        "object-growth": hi - lo,
+        "object-recorded": lo - before,
+    };
+}
+
+#! a loop whose body extends a list with "+=" in a branch that continues and another list after it
+/** @return "list-growth": the growth of the list of instantiated locals between two iterations
+*/
+hash<string, int> sub llu_list_locals() {
+    int lo = 0;
+    int hi = 0;
+    int total = 0;
+    foreach int i in (xrange(LluIters)) {
+        if (i % 2 == 0) {
+            list<hash<auto>> evens = ();
+            evens += {"i": i, "half": i / 2};
+            if (Option::HAVE_LIBRARY_DEBUGGING) {
+                if (i == LluSampleLow) {
+                    lo = call_function(LluEntriesFunc);
+                } else if (i == LluSampleHigh) {
+                    hi = call_function(LluEntriesFunc);
+                }
+            }
+            total += evens.size();
+            continue;
+        }
+        list<hash<auto>> odds = ();
+        odds += {"i": i};
+        if (odds) {
+            total += odds.size();
+            continue;
+        }
+    }
+    return {
+        "list-total": total,
+        "list-growth": hi - lo,
+    };
+}
+
+#! the placement loop of qore-data-provider-i18n's re-key, in rounds as the tool runs it once for each locale
+/** A branch with a local that continues, then a local declared after it.  Like the tool's function, this one
+    reports on stderr (if a round places nothing, which none does), so the IR interpreter keeps all of its locals on
+    the runtime local stack and records them.
+
+    @return "placed": the number of values placed; "placement-growth": the growth of the list between two iterations
+    of the first round; "placement-round-growth": the growth between the start of the second and of the last round.
+    The rounds are compared from the second one on: the locals that the first round instantiates for the rest of the
+    function, such as a local declared in the condition of an if statement, which the IR interpreter keeps
+    instantiated until the function returns, stay in the list once, and the entries of the locals that the first
+    round instantiates before them stay with them
+*/
+hash<string, int> sub llu_placement() {
+    hash<string, string> sources = map {sprintf("key %d", $1): sprintf("text %d", $1 % 7)}, xrange(LluIters);
+    int placed_count = 0;
+    int second_round = 0;
+    int round_growth = 0;
+    int lo = 0;
+    int hi = 0;
+    foreach string locale in (LluLocales) {
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            if (locale == LluLocales[1]) {
+                second_round = call_function(LluEntriesFunc);
+            } else if (locale == LluLocales.last()) {
+                round_growth = call_function(LluEntriesFunc) - second_round;
+            }
+        }
+        hash<auto> catalog = {"locale": locale, "messages": map {$1.key: {"source": $1.value,
+            "message": $1.value + " " + locale}}, sources.pairIterator()};
+        hash<string, hash<string, int>> counts = {};
+        foreach hash<auto> entry in (catalog.messages.pairIterator()) {
+            counts{entry.key}{entry.value.message} = 1;
+        }
+        hash<string, hash<string, bool>> by_text = {};
+        list<hash<auto>> placed = ();
+        int i = 0;
+        foreach hash<auto> entry in (sources.pairIterator()) {
+            if (*hash<string, int> c = counts{entry.key}) {
+                string message = c.firstKey();
+                placed += {"id": entry.key, "value": {"source": entry.value, "message": message}};
+                if (Option::HAVE_LIBRARY_DEBUGGING && locale == LluLocales[0]) {
+                    if (i == LluSampleLow) {
+                        lo = call_function(LluEntriesFunc);
+                    } else if (i == LluSampleHigh) {
+                        hi = call_function(LluEntriesFunc);
+                    }
+                }
+                ++i;
+                continue;
+            }
+            # never reached: every key has a count; continuing above uninstantiates this local, which the iteration
+            # has not instantiated
+            *hash<string, bool> same_text = by_text{entry.key};
+            if (same_text.size() == 1) {
+                placed += {"id": entry.key, "value": {"source": entry.value, "message": same_text.firstKey()}};
+                continue;
+            }
+        }
+        if (!placed) {
+            stderr.printf("%s: no values placed\n", locale);
+        }
+        placed_count += placed.size();
+    }
+    return {
+        "placed": placed_count,
+        "placement-growth": hi - lo,
+        "placement-round-growth": round_growth,
+    };
+}
+
+#! the objects alive when the next iteration starts, at most: an object held by a local of the branch that continues
+#! is destroyed when the continue leaves the branch, as in the AST interpreter
+int sub llu_branch_local_pending() {
+    int max_pending = 0;
+    for (int i = 0; i < LluIters; ++i) {
+        int pending = LluCounted::created - LluCounted::destroyed;
+        if (pending > max_pending) {
+            max_pending = pending;
+        }
+        if (i % 2 == 0) {
+            LluCounted counted();
+            if (counted.get() == "x") {
+                continue;
+            }
+        }
+        *LluCounted later = (i % 2) ? new LluCounted() : NOTHING;
+        if (later) {
+            continue;
+        }
+    }
+    return max_pending;
+}
+
+#! returns the results of the growth checks as a hash
+hash<string, int> sub llu_growth_results() {
+    return llu_object_locals() + llu_list_locals() + llu_placement();
+}
