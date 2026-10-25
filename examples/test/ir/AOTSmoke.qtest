@@ -12088,23 +12088,61 @@ public namespace CorruptQmodTest {
         }
         string cmd = sprintf("LD_LIBRARY_PATH=%s %s 15 %s --exec-mode=ast -l %s %s 2>&1; echo EXIT=$?",
             libqore_dir, timeout_cmd, qore_bin, qmod_path, script);
-        date started = now_us();
         string out = backquote(cmd);
-        date elapsed = now_us() - started;
 
         # Deadlock would make timeout kill the process, producing
-        # EXIT=124.  With the fix, qore returns fast with a non-zero exit
+        # EXIT=124.  With the fix, qore exits by itself with a non-zero exit
         # (the module load fails) but NOT 124.  Any of the AOT init error
         # tags ("LOAD-MODULE-ERROR", "MODULE-LOAD-ERROR") is acceptable —
         # the regression is the HANG, not which specific error surfaces.
-        assertTrue(elapsed < 10s,
-            "corrupt-qmod-regression: load returned promptly (elapsed=" + elapsed.format("u") + "us): " + out);
         assertFalse(out.regex("EXIT=124"),
             "corrupt-qmod-regression: process not killed by timeout: " + out);
         assertFalse(out.regex("EXIT=137"),
             "corrupt-qmod-regression: the loader read the module instead of being killed mapping it: " + out);
         assertTrue(out.regex("(MODULE-LOAD-ERROR|LOAD-MODULE-ERROR)"),
             "corrupt-qmod-regression: saw module load error: " + out);
+
+        # The hang was the failed load leaving the module loader unusable.  So a program that is refused the
+        # corrupt module goes on: it is refused it again, then loads a sound module and calls it, and only then
+        # ends by itself.  Each step prints a line, so the order of the lines shows that each load returned before
+        # the next began; the timeout above stays only as the bound of a regression.
+        string sound_path = tmp_dir + "/SoundModuleAfterCorrupt.qm";
+        {
+            File f();
+            f.open2(sound_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern\nmodule SoundModuleAfterCorrupt {\n    version = \"1.0\";\n    desc = \"test\";\n"
+                "    author = \"Test\";\n    license = \"MIT\";\n}\n"
+                "public namespace SoundModuleAfterCorrupt {\n    public int sub two() { return 2; }\n}\n");
+            f.close();
+        }
+        string loader = tmp_dir + "/load-after-corrupt.q";
+        {
+            File f();
+            f.open2(loader, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern\n"
+                "for (int i = 1; i <= 2; ++i) {\n"
+                "    try {\n"
+                "        load_module(ARGV[0]);\n"
+                "        printf(\"attempt %d: loaded\\n\", i);\n"
+                "    } catch (hash<ExceptionInfo> ex) {\n"
+                "        printf(\"attempt %d: %s\\n\", i, ex.err);\n"
+                "    }\n"
+                "}\n"
+                "load_module(ARGV[1]);\n"
+                "printf(\"sound module: %d\\n\", call_function(\"SoundModuleAfterCorrupt::two\"));\n");
+            f.close();
+        }
+        out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 15 %s --exec-mode=ast %s %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, timeout_cmd, qore_bin, loader, qmod_path, sound_path));
+        list<string> lines = map $1, out.split("\n"), $1 =~ /^(attempt [0-9]|sound module|EXIT=)/;
+        assertEq(4, lines.size(), "corrupt-qmod-regression: the program reports each step: " + out);
+        assertRegex("^attempt 1: (MODULE-LOAD-ERROR|LOAD-MODULE-ERROR)$", lines[0],
+            "corrupt-qmod-regression: the first load is refused: " + out);
+        assertRegex("^attempt 2: (MODULE-LOAD-ERROR|LOAD-MODULE-ERROR)$", lines[1],
+            "corrupt-qmod-regression: the second load is refused too, after the first returned: " + out);
+        assertEq("sound module: 2", lines[2],
+            "corrupt-qmod-regression: a sound module loads after the refused loads: " + out);
+        assertEq("EXIT=0", lines[3], "corrupt-qmod-regression: the program ends by itself: " + out);
     }
 
     #! Signs a qcc-built .qmod again after its bytes were changed (macOS)
