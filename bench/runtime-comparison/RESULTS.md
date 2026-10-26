@@ -24104,3 +24104,70 @@ Full Release -O3 -DNDEBUG build with allocation tracking off and all 391 qmods p
 These are integration correctness checks, not post-merge performance measurements. The preceding scalar-read results belong to 04a948519b before these compiler/runtime changes. A fresh installed merged baseline is required before further optimization; neither Java parity nor maximum performance is established. No full-suite, sanitizer, Linux-only, external module rebuild or JVM-host result is claimed.
 
 [Audit](audit-merge-eb6a.md); [evidence](results-merge-eb6a.json).
+
+## Explicit thread ID at Program entry (2026-10-26)
+
+Program entry now passes its live ThreadData thread ID to internal parse-lock and thread-count checks. Generic callers retain TLS discovery, including the shutdown fallback. Locks, counts, ancestor reentry, TLPD setup, debugger callbacks, canonical RuntimeConfig synchronization and deferred Program destruction remain. The context helper has no new fields; public headers, exported symbol names and generated benchmark LLVM are unchanged. This shared runtime path can serve IR and AOT; timing here measures optimized AOT modules.
+
+The paired baseline is merged commit 25fa8ebaddb6c1ee06cef2d93ff22bd2590f9715, including develop eb6af43dbf. Both use Release -O3 -DNDEBUG with allocation tracking off and the same 15 qcc -O3/LLVM 22 native modules. The 73-workload screen has three forks, confirmation five; default/reverse/shuffle-487 layouts use 4096 items, one warmup and three 150 ms samples. The prospective gate requires at least two of four call targets to improve at least 1% in aggregate and improve in every layout in both phases. Values are whole-kernel ns/item, not isolated call latency.
+
+Retain under the authorized broader workload tradeoff. All four indirect-call targets pass the prospective aggregate and every-layout gates in both phases. Confirmation improves integer, float, wide and affine-wide calls by 4.69%, 3.59%, 4.27% and 4.70%, saving 2.23–3.02 ns/item. Captured closures have a repeated 2.54% confirmation cost (+0.637337 ns/item), and ordinary closures a repeated 0.38% cost (+0.073162 ns/item). Smaller repeated costs are reported without significance claims. No workload meets the predeclared disjoint-range adverse flag in either phase. List building improves 1.35% and the callback pipeline 1.71%; these broader changes are observations, not attributed to removed TLS work. List mutation (+0.75%) and CSV (+0.64%) reverse their screening direction. Count-1 indirect integer/float workloads cost 0.74%/0.35%, while count-16 improves 1.26%/0.68%; these include dispatch/setup and do not pass the steady-state all-layout gate. No zero-regression, weighted application or universal speedup claim.
+
+|!Confirmed workload|!Before ns/item|!Candidate ns/item|!Change
+|float:callback_local_float_result|0.823041|0.818516|-0.550%
+|float:callback_local_float_return|0.882853|0.879216|-0.412%
+|float:callback_loop_float_return|5.231397|5.221535|-0.189%
+|float:direct_loop_float_return|5.965150|5.960468|-0.078%
+|float:typed_local_int_result|0.839755|0.843182|+0.408%
+|float:typed_local_int_unary|1.230037|1.230972|+0.076%
+|index:list_negative|8.032879|7.968296|-0.804%
+|index:list_positive|7.960298|7.946727|-0.170%
+|micro:boxed_float_method_call|21.065582|20.945128|-0.572%
+|micro:boxed_float_method_fallback|35.398789|35.451634|+0.149%
+|micro:boxed_int_method_call|17.312008|17.250846|-0.353%
+|micro:boxed_int_method_fallback|33.428093|33.502947|+0.224%
+|micro:closure_call|19.332296|19.405458|+0.378%
+|micro:closure_capture|25.047314|25.684651|+2.545%
+|micro:direct_call|1.638739|1.644102|+0.327%
+|micro:indirect_affine_wide|64.321334|61.300361|-4.697%
+|micro:indirect_call|64.126129|61.115956|-4.694%
+|micro:indirect_float|62.045440|59.817109|-3.591%
+|micro:indirect_wide|64.249245|61.503859|-4.273%
+|micro:list_build|27.583684|27.211526|-1.349%
+|micro:list_mutate|135.736565|136.750059|+0.747%
+|micro:list_read|3.037179|3.043396|+0.205%
+|micro:method_call|1.714066|1.706997|-0.412%
+|micro:monomorphic_call|3.928062|3.905013|-0.587%
+|micro:monomorphic_float_call|4.317138|4.327563|+0.241%
+|micro:temporary_hash|1.802739|1.803467|+0.040%
+|mixed:callback_pipeline|129.487623|127.268743|-1.714%
+|mixed:csv_report|967.717207|973.890083|+0.638%
+|mixed:object_orders|1852.376302|1852.107747|-0.014%
+|mixed:text_index|1513.255208|1509.503852|-0.248%
+
+|!Repeated aggregate cost|!Screen change|!Confirmation change|!Confirmation ns/item cost
+|micro:boxed_int_method_fallback|+1.152%|+0.224%|+0.074854
+|micro:closure_call|+1.286%|+0.378%|+0.073162
+|micro:closure_capture|+0.745%|+2.545%|+0.637337
+|micro:list_read|+0.235%|+0.205%|+0.006216
+|micro:temporary_hash|+0.413%|+0.040%|+0.000728
+
+|!Short workload|!Items|!Before ns/item|!Candidate ns/item
+|micro:indirect_call|1|2600.965712|2620.176051
+|micro:indirect_float|1|2710.621964|2720.054068
+|float:typed_local_int_unary|1|815.473015|811.984916
+|micro:direct_call|1|2472.132377|2488.679423
+|micro:method_call|1|2786.857506|2767.339253
+|micro:indirect_call|16|223.578238|220.757514
+|micro:indirect_float|16|228.057108|226.508444
+|float:typed_local_int_unary|16|51.412558|51.651871
+|micro:direct_call|16|155.583584|155.873537
+|micro:method_call|16|174.209447|173.599205
+
+Short invocations include dispatch, setup and cleanup. The preceding canonical-snapshot-pointer candidate passed its target gate (confirmed indirect improvements 1.7–2.6%) but had repeated ordinary/captured closure costs of 6.47%/4.78%, with little broad mixed-workload benefit. Its production changes were reverted; its complete four-phase evidence and diagnostic profiles remain in the report. Those profiles do not establish the cause of the closure cost. The new candidate is measured against the original merged baseline, not against that rejected candidate.
+
+Selected Release/Debug qualification passes 8679/8879 assertions with no skips; original/candidate native checks each pass 2906 assertions. Standard 1110, common-module 8424 and rebuilt-compiler 1053 reference checks pass. All 391 Release module links/hashes are verified after Debug testing. All 2394 jobs/7182 sample windows are independently replayed. Machine review verifies explicit thread-ID loads and unchanged counter/teardown semantics; instruction totals are not speed estimates. New native tests are Debug-only.
+
+Shared macOS ARM64 host without affinity, frequency or thermal control; no owned build, test or profile overlaps timing. No fresh Java/develop ratio, weighted application speedup, full-suite, sanitizer, Linux or global performance-ceiling claim. A fresh cumulative checkpoint and the remaining closure/context costs are next.
+
+[Audit](audit-program-entry-tid.md); [evidence](results-program-entry-tid-macos-arm64.json).

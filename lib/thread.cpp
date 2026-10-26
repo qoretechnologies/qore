@@ -3801,10 +3801,11 @@ void ProgramThreadCountContextHelper::setWithThreadData(ThreadData* td, Exceptio
     // from that program while module init is still running; re-entering the
     // same-thread parse-locked program only needs a local frame. Calling
     // incThreadCount() is invalid while parsing_in_progress is set.
-    const bool skip_thread_count = pp->parsingLocked();
+    // Both checks refer to this same live thread, before any initialization callbacks.
+    const bool skip_thread_count = pp->parsingLocked(td->tid);
     if (!skip_thread_count) {
         // try to increment thread count
-        if (pp->incThreadCount(xsink)) {
+        if (pp->incThreadCount(xsink, td->tid)) {
             printd(5, "ProgramThreadCountContextHelper::set() failed\n");
             return;
         }

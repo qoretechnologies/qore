@@ -452,6 +452,119 @@ private:
     UnitTestCounters& counters;
 };
 
+// Copyright 2026 Qore Technologies, s.r.o.
+//! Program transitions must update the canonical snapshot even when the supplied live view is a copy.
+static void ut_program_context_snapshot(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    QoreProgramHelper caller(PO_MODERN, xsink);
+    QoreProgramHelper callee(PO_MODERN, xsink);
+    QoreProgramHelper nested(PO_MODERN, xsink);
+    QoreExternalProgramContextHelper caller_context(&xsink, *caller);
+    UT_ASSERT(c, !xsink, "Program snapshot fixture enters its caller");
+    if (xsink) {
+        return;
+    }
+    RuntimeConfig& canonical = RuntimeConfigNativeAccess::getCurrent();
+    ThreadLocalProgramData* caller_tlpd = canonical.getThreadLocalProgramData();
+    QoreProgramLocation location("program-context-snapshot-unit", 17, 17);
+    RuntimeConfigLocationHelper location_guard(canonical, &location);
+    UT_ASSERT(c, caller_tlpd && canonical.getProgram() == *caller,
+        "caller has a canonical Program and local-data snapshot");
+    UT_ASSERT(c, (*caller)->getThreadCount() == 1 && !(*callee)->getThreadCount()
+        && !(*nested)->getThreadCount(), "only the caller has an active Program entry");
+    for (bool copied_view : {false, true}) {
+        for (bool replace_impl : {false, true}) {
+            for (bool null_location : {false, true}) {
+                for (bool pending_exception : {false, true}) {
+                    RuntimeConfig copy(canonical);
+                    copy.setProgram(*nested);
+                    copy.setThreadLocalProgramData(nullptr);
+                    RuntimeConfig& input = copied_view ? copy : canonical;
+                    canonical.setLocation(&location);
+                    {
+                        ProgramThreadCountContextHelper context(input, &xsink, *callee, true);
+                        UT_ASSERT(c, !xsink, "explicit Program entry succeeds");
+                        if (xsink) {
+                            return;
+                        }
+                        UT_ASSERT(c, canonical.getProgram() == *callee && getProgram() == *callee,
+                            "entry updates canonical snapshot and live Program");
+                        ThreadLocalProgramData* callee_tlpd = get_thread_local_program_data();
+                        UT_ASSERT(c, callee_tlpd && canonical.getThreadLocalProgramData() == callee_tlpd,
+                            "entry installs the callee local-data snapshot");
+                        UT_ASSERT(c, (*caller)->getThreadCount() == 1 && (*callee)->getThreadCount() == 1,
+                            "cross-Program entry preserves the caller and counts the callee");
+                        {
+                            ProgramThreadCountContextHelper nested_context(&xsink, *nested, true);
+                            UT_ASSERT(c, !xsink && canonical.getProgram() == *nested && getProgram() == *nested,
+                                "nested generic entry updates the canonical Program");
+                            UT_ASSERT(c, canonical.getThreadLocalProgramData() == get_thread_local_program_data(),
+                                "nested entry installs its own local-data snapshot");
+                            UT_ASSERT_EQ(c, 1u, (*nested)->getThreadCount(), "nested entry is counted");
+                            {
+                                ProgramThreadCountContextHelper reentry(input, &xsink, *caller, true);
+                                UT_ASSERT(c, !xsink && (*caller)->getThreadCount() == 2
+                                    && (*nested)->getThreadCount() == 1,
+                                    "reentering an ancestor counts a distinct Program entry");
+                            }
+                            UT_ASSERT(c, (*caller)->getThreadCount() == 1 && (*nested)->getThreadCount() == 1,
+                                "ancestor exit releases only its own entry");
+                        }
+                        UT_ASSERT(c, canonical.getProgram() == *callee && getProgram() == *callee,
+                            "nested exit restores the callee Program");
+                        UT_ASSERT(c, canonical.getThreadLocalProgramData() == callee_tlpd
+                            && get_thread_local_program_data() == callee_tlpd,
+                            "nested exit restores the callee local-data snapshot");
+                        UT_ASSERT_EQ(c, 0u, (*nested)->getThreadCount(), "nested exit balances its entry");
+                        if (replace_impl) {
+                            RuntimeConfig replacement(canonical);
+                            canonical = std::move(replacement);
+                        }
+                        canonical.setLocation(null_location ? nullptr : &location);
+                        if (pending_exception) {
+                            xsink.raiseException("PROGRAM-SNAPSHOT-TEST", "pending exception during restoration");
+                        }
+                    }
+                    // Do not refresh the RuntimeConfig here: that would mask an incorrect restoration.
+                    UT_ASSERT(c, canonical.getProgram() == *caller && getProgram() == *caller,
+                        "exit restores the caller through the current canonical implementation");
+                    UT_ASSERT(c, canonical.getThreadLocalProgramData() == caller_tlpd
+                        && get_thread_local_program_data() == caller_tlpd,
+                        "exit restores the caller local-data snapshot");
+                    UT_ASSERT(c, (*caller)->getThreadCount() == 1 && !(*callee)->getThreadCount(),
+                        "cross-Program exit balances the callee and retains the caller entry");
+                    UT_ASSERT(c, canonical.getLocation() == (null_location ? &loc_builtin : &location),
+                        "exit initializes a null location and preserves a nonnull location");
+                    UT_ASSERT(c, copy.getProgram() == *nested && !copy.getThreadLocalProgramData(),
+                        "the independent copied snapshot is never used as the canonical snapshot");
+                    UT_ASSERT_EQ(c, pending_exception, bool(xsink), "restoration preserves the pending exception");
+                    if (pending_exception && xsink) {
+                        UT_ASSERT(c, xsink.getExceptionErr().get<const QoreStringNode>()->equal("PROGRAM-SNAPSHOT-TEST"),
+                            "restoration keeps the original exception");
+                    }
+                    xsink.clear();
+                }
+            }
+        }
+    }
+    // No-op helpers must not initialize or replace snapshot fields as a side effect.
+    canonical.setLocation(nullptr);
+    canonical.setProgram(*nested);
+    canonical.setThreadLocalProgramData(nullptr);
+    {
+        ProgramThreadCountContextHelper inactive;
+        ProgramThreadCountContextHelper null_context(canonical, &xsink, nullptr, true);
+        ProgramThreadCountContextHelper same_context(canonical, &xsink, *caller, true);
+    }
+    UT_ASSERT(c, !xsink && canonical.getProgram() == *nested && !canonical.getThreadLocalProgramData()
+        && !canonical.getLocation(), "default, null and same-Program scopes leave snapshots untouched");
+    UT_ASSERT(c, getProgram() == *caller && get_thread_local_program_data() == caller_tlpd,
+        "no-op scopes retain the live caller context");
+    UT_ASSERT_EQ(c, 1u, (*caller)->getThreadCount(), "no-op scopes do not change Program entry counts");
+    canonical.setProgram(*caller);
+    canonical.setThreadLocalProgramData(caller_tlpd);
+}
+
 //! Test hidden closure-self TLS without exposing additional runtime APIs to an external fixture.
 static void ut_native_closure_context(UnitTestCounters& c) {
     ExceptionSink xsink;
@@ -14038,6 +14151,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_ir_scalar_snapshot(c);
     ut_aot_string_split(c);
     ut_native_closure_context(c);
+    ut_program_context_snapshot(c);
     ut_lvalue_object_count_records(c);
     ut_local_discard(c);
     ut_aot_scalar_local_store(c);
@@ -14067,6 +14181,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_ir_scalar_snapshot(c);
     ut_aot_string_split(c);
     ut_native_closure_context(c);
+    ut_program_context_snapshot(c);
     ut_lvalue_object_count_records(c);
     ut_local_discard(c);
     ut_aot_scalar_local_store(c);

@@ -1340,8 +1340,11 @@ public:
 
     // returns 0 for OK, -1 for error
     DLLLOCAL int incThreadCount(ExceptionSink* xsink) {
-        int tid = q_gettid();
+        return incThreadCount(xsink, q_gettid());
+    }
 
+    //! Uses the current thread's ID when the caller already holds its live ThreadData.
+    DLLLOCAL int incThreadCount(ExceptionSink* xsink, int tid) {
         // grab program-level lock
         AutoLocker al(plock);
 
@@ -1498,6 +1501,11 @@ public:
 
     DLLLOCAL bool parsingLocked() const {
         return parse_tid == q_gettid();
+    }
+
+    //! Uses the current thread's ID without acquiring its ThreadData again.
+    DLLLOCAL bool parsingLocked(int tid) const {
+        return parse_tid == tid;
     }
 
     // called only with plock held
