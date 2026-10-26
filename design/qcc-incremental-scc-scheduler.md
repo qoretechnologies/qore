@@ -202,13 +202,34 @@ publishes: the same object and the same compile contract.
 The coordinator picks between three answers, in order of how much it parses:
 
 |!Condition|!Answer
+|first pass, stale set of one single-source component|compile it standalone first
 |rebuild closure ≥ the escalation floor (below)|whole-group parse
 |stale set spans a multi-source component, or ≥ 2 components|one parse over the stale set
 |otherwise|standalone compiles, one component at a time
 
-The **closure** decides only the first question — compiling a component rewrites
-its compile contract, so its consumers go stale as a result, and a closure that
-large will be parsed either way. The **stale set** decides the second: two stale
+The **closure** decides only the whole-group question, and only from what a compile
+actually moved. The closure is what a stale set *can* reach: a consumer goes stale
+only when a contract it follows moves, and an edit to a body, a comment, or a
+default that only the script aggregate embeds moves none of them (the declaration
+contract leaves out the aggregate-only rows; see "What the aggregate contract
+covers"). Deciding from the closure before compiling reparsed the whole group for
+every such edit to a widely required source. So a first pass whose stale set is one
+single-source component compiles it standalone, and the next pass, planned against
+the contracts that compile published, finds either nothing stale or a closure that
+is real and escalates. Measured on Qorus (QORUS_CORE_MAIN, 1192 sources), edits to
+`lib/cpc-api.ql`, whose closure is 502 components:
+
+|!Edit|!Before|!After
+|a function body (and the line it adds)|1192 objects, 6m27|1 object, 1m00
+|a comment line that moves every declaration below it|1192 objects, 7m38|1 object, 0m52
+|a constant value its consumers fold|1192 objects, 5m42|1 + 1192 objects, 5m30
+
+An edit that moves a widely followed contract pays that one standalone compile on
+top of the group's parse (the last row, within the noise of the parse). Edits to a
+source in a component of several sources still parse the group whenever partial
+parses are off, as do edits that add or remove a symbol (the source-symbol barrier
+re-runs the batch), and most sources have closures under the floor and were never
+escalated; those are unchanged. The **stale set** decides the second: two stale
 components already pay for a shared parse, because N standalone compiles preload
 the group N times while one parse preloads it once.
 
