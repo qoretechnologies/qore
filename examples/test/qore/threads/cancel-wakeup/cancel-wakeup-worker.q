@@ -3,15 +3,20 @@
 # Copyright 2026 Qore Technologies, s.r.o.
 # SPDX-License-Identifier: MIT
 
-# cancels threads blocked in each kind of wait and reports how long each wait took to end after the request
+# cancels threads blocked in each kind of wait and reports which path ended each wait
 # usage: cancel-wakeup-worker.q <tmpdir> <file with a TLS certificate and private key>
-# output: one line per case: "<case>|<exception>|<longest latency in microseconds>|<detail>"
+# output: one line per case: "<case>|<exception>|<wakes>|<checks>|<detail>", where <wakes> is the number of times the
+# request woke the wait in each trial ("1/1/1"; "-" in builds without the debug counters), and <checks> the most
+# cancellation checks that the waiting thread made during the call in any trial (-1 without the debug counters)
 
 %modern
 %no-child-restrictions
 
 # the number of times each case is run; the longest latency is reported
 const Trials = 3;
+
+# the debug counters and the wait for a registered wait exist in debug builds only
+const Counted = Option::HAVE_LIBRARY_DEBUGGING;
 
 string tmpdir = ARGV[0];
 string tls_pem = ReadOnlyFile::readTextFile(ARGV[1]);
@@ -58,12 +63,15 @@ string sub make_fifo() {
 /** A call that ended before the request could be made is reported with an error code that starts with "EARLY:",
     followed by the exception (or "NONE") that ended it, and the exception's description as its detail.
 */
-hash<auto> sub cancel_one(code blocking, code wait_blocked, code cancel) {
+hash<auto> sub cancel_one(code blocking, code wait_blocked, *code cancel, bool await_wait) {
     Queue started();
     # the end of the call ({"done": ...}); a case that waits for a child process of the call also gets its start here
     Queue events();
     int tid = background sub () {
         hash<auto> rv;
+        # the counters of the waiting thread before and after the call
+        int wakes = Counted ? call_function("dbg_get_cancel_wake_count") : 0;
+        int checks = Counted ? call_function("dbg_get_cancel_check_count") : 0;
         try {
             started.push(True);
             rv.detail = blocking();
@@ -73,7 +81,10 @@ hash<auto> sub cancel_one(code blocking, code wait_blocked, code cancel) {
             rv.detail = ex.arg;
             rv.desc = ex.desc;
         }
-        rv.end = clock_get_monotonic_us();
+        if (Counted) {
+            rv.wakes = call_function("dbg_get_cancel_wake_count") - wakes;
+            rv.checks = call_function("dbg_get_cancel_check_count") - checks;
+        }
         events.push({"done": rv});
     }();
     started.get();
@@ -82,14 +93,25 @@ hash<auto> sub cancel_one(code blocking, code wait_blocked, code cancel) {
         return early.done + {
             "err": "EARLY:" + early.done.err,
             "detail": early.done.desc ?? early.done.detail,
-            "us": 0,
         };
     }
-    int start = clock_get_monotonic_us();
-    cancel(tid);
-    hash<auto> rv = events.get().done;
-    rv.us = rv.end - start;
-    return rv;
+    # the request is made while the thread is blocked in the wait under test, which cannot end any other way: the
+    # debug hook delivers it before the thread can leave the wait
+    if (!cancel && await_wait && Counted) {
+        if (!call_function("dbg_cancel_in_cancellable_wait", tid, "cancel-wakeup test", 3600000)) {
+            return {"err": "NOT-BLOCKED", "detail": "the thread did not block in a cancellable wait"};
+        }
+    } else {
+        if (await_wait && Counted && !call_function("dbg_wait_for_cancellable_wait", tid, 3600000)) {
+            return {"err": "NOT-BLOCKED", "detail": "the thread did not block in a cancellable wait"};
+        }
+        if (cancel) {
+            cancel(tid);
+        } else {
+            cancel_tid(tid);
+        }
+    }
+    return events.get().done;
 }
 
 sub cancel_tid(int tid) {
@@ -100,25 +122,28 @@ sub nothing_to_wait_for(Queue events) {
 }
 
 # runs a case Trials times and prints its line
-sub run_case(string name, code blocking, code wait_blocked = \nothing_to_wait_for(), code cancel = \cancel_tid()) {
+sub run_case(string name, code blocking, code wait_blocked = \nothing_to_wait_for(), *code cancel,
+        bool await_wait = True) {
     *string err;
-    int max_us = 0;
+    list<string> wakes = ();
+    int max_checks = -1;
     string detail = "";
     for (int i = 0; i < Trials; ++i) {
-        hash<auto> rv = cancel_one(blocking, wait_blocked, cancel);
+        hash<auto> rv = cancel_one(blocking, wait_blocked, cancel, await_wait);
         if (exists err && rv.err != err) {
             err = sprintf("%s/%s", err, rv.err);
         } else {
             err = rv.err;
         }
-        if (rv.us > max_us) {
-            max_us = rv.us;
+        wakes += exists rv.wakes ? rv.wakes.toString() : "-";
+        if (exists rv.checks && rv.checks > max_checks) {
+            max_checks = rv.checks;
         }
         if (exists rv.detail) {
             detail = sprintf("%y", rv.detail);
         }
     }
-    printf("%s|%s|%d|%s\n", name, err, max_us, detail);
+    printf("%s|%s|%s|%d|%s\n", name, err, wakes.join("/"), max_checks, detail);
     flush();
 }
 
@@ -281,7 +306,7 @@ run_case("usleep", auto sub () {
         ds.open();
         ds.beginTransaction();
     } catch (hash<ExceptionInfo> ex) {
-        printf("datasource lock|SKIP|0|%s\n", ex.err);
+        printf("datasource lock|SKIP|-|-1|%s\n", ex.err);
         remove ds;
     }
     if (ds) {
@@ -309,9 +334,15 @@ run_case("usleep", auto sub () {
 # a cancellation requested during a deferral is delivered only after the deferred wait has completed normally
 {
     string fifo = make_fifo();
+    # one FIFO per trial; the child finishes only once the cancellation has been requested (see the cancel code
+    # below)
+    list<string> releases = map make_fifo(), xrange(Trials);
+    int idx = 0;
+    string release;
     run_case("deferred backquote read", auto sub () {
+        release = releases[idx++];
         string out = defer_thread_cancel(string sub () {
-            return backquote(sprintf("printf x > '%s'; sleep 0.2; printf done", fifo));
+            return backquote(sprintf("printf x > '%s'; read l < '%s'; printf done", fifo, release));
         });
         # the next cancellation point raises the request; the output of the deferred call is reported with it
         try {
@@ -320,7 +351,14 @@ run_case("usleep", auto sub () {
             throw ex.err, ex.desc, out;
         }
         return out;
-    }, *hash<auto> sub (Queue events) { return wait_fifo(fifo, events); });
+    }, *hash<auto> sub (Queue events) { return wait_fifo(fifo, events); }, sub (int tid) {
+        cancel_tid(tid);
+        # the request is pending: let the child of the deferred call finish
+        File w();
+        w.open2(release, O_WRONLY);
+        w.write("go\n");
+        w.close();
+    }, False);
 }
 
 # after a cancelled wait and clear_thread_cancel(), the next wait is not woken by the earlier request
@@ -335,13 +373,13 @@ run_case("usleep", auto sub () {
         } catch (hash<ExceptionInfo> ex) {
             clear_thread_cancel();
         }
-        int start = clock_get_monotonic_us();
-        # a read with a timeout must time out after the whole timeout
+        # a read with a timeout ends on its timeout, not on the earlier request: no request wakes it
+        int wakes = Counted ? call_function("dbg_get_cancel_wake_count") : 0;
         try {
             p.read.readBinary(1, 200);
         } catch (hash<ExceptionInfo> ex) {
-            int us = clock_get_monotonic_us() - start;
-            throw "AFTER-CLEAR", ex.err, us >= 200000;
+            int woken = Counted ? call_function("dbg_get_cancel_wake_count") - wakes : 0;
+            throw "AFTER-CLEAR", ex.err, ex.err != "THREAD-CANCELLED" && !woken;
         }
-    }, sub (Queue events) { ready.get(); });
+    }, sub (Queue events) { ready.get(); }, NOTHING, False);
 }

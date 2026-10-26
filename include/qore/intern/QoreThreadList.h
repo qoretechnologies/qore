@@ -163,6 +163,16 @@ public:
     //! the nesting depth of qore_cancel_wakeup_register() registrations; only used by the thread itself
     int wake_reg_depth = 0;
 
+#ifdef DEBUG
+    //! the number of times a cancellation request woke a wait that the thread had registered (debug builds)
+    /** Counted by the wake paths (QoreThreadList::wakeCondWaiter() and QoreThreadList::signalWaitingFd()) when the
+        thread has a registered condition wait or wakeup channel; see q_get_cancel_wake_count()
+    */
+    std::atomic<int64> dbg_cancel_wakes{0};
+    //! true while the thread has a registered cancellable wait (debug builds); see q_wait_for_cancellable_wait()
+    std::atomic<bool> dbg_in_wait{false};
+#endif
+
     DLLLOCAL void cleanup();
 
     //! frees the entry of a thread of the parent process in a child created with fork(), where it does not exist
@@ -421,7 +431,29 @@ public:
         assert(tid >= 0 && tid < MAX_QORE_THREADS);
         assert(fd == entry[tid].wake_fd);
         entry[tid].waiting_fd.store(fd, std::memory_order_seq_cst);
+#ifdef DEBUG
+        dbgNoteWait(tid, true);
+#endif
     }
+
+#ifdef DEBUG
+    //! Records that a thread has registered or released a cancellable wait, and wakes threads waiting for that
+    DLLLOCAL void dbgNoteWait(int tid, bool in_wait);
+
+    //! Waits until the given thread has a registered cancellable wait; returns false on timeout
+    DLLLOCAL bool dbgWaitForWait(int tid, int64 timeout_ms);
+
+    //! Requests the cancellation of the given thread while it is blocked in a registered cancellable wait
+    /** Returns false if the thread has no registered wait in \a timeout_ms or the request cannot be made
+    */
+    DLLLOCAL bool dbgCancelInWait(int tid, const char* reason, int64 timeout_ms);
+
+    //! Returns the number of times cancellation requests woke waits of the given thread
+    DLLLOCAL int64 dbgGetCancelWakes(int tid) const {
+        assert(tid >= 0 && tid < MAX_QORE_THREADS);
+        return entry[tid].dbg_cancel_wakes.load();
+    }
+#endif
 
     //! Clears the current thread's registered wakeup descriptor under lck
     /** After this returns, no canceller can write to the channel any more, so draining it afterwards leaves it
@@ -510,6 +542,13 @@ protected:
 
     // last TID issued to avoid reusing the same TID over and over again
     int last_tid = 0;
+
+#ifdef DEBUG
+    //! guards waits for a thread's registered cancellable wait (debug builds; see dbgWaitForWait())
+    QoreThreadLock dbg_wait_lck;
+    //! signalled when a thread registers a cancellable wait (debug builds)
+    QoreCondition dbg_wait_cond;
+#endif
 
     DLLLOCAL void releaseIntern(int tid) {
         // NOTE: cannot safely call printd here, because normally the thread_data has been deleted

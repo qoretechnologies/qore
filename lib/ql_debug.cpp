@@ -12622,6 +12622,33 @@ static QoreValue f_dbg_get_cancel_check_count(const QoreListNode* params, Runtim
     return q_get_cancel_check_count();
 }
 
+//! returns the number of times a cancellation request woke a registered wait of a thread (default: the current one)
+/** A wait that a request wakes through the thread's registered condition or wakeup channel is counted once per
+    request, so a test can verify which path ended a cancelled wait: a wait that only noticed the request at a
+    periodic check is not counted.
+*/
+static QoreValue f_dbg_get_cancel_wake_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreValue tid = get_param_value(params, 0);
+    return q_get_cancel_wake_count(tid.isNothing() ? -1 : static_cast<int>(tid.getAsBigInt()));
+}
+
+//! waits until a thread has registered a cancellable wait; returns False if it has not in the given time
+/** A test makes a cancellation request after this returns, so the request is delivered to the wait under test and
+    not to the code before it, without sleeping for an arbitrary time.
+*/
+static QoreValue f_dbg_cancel_in_cancellable_wait(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreStringNode* reason = get_param_value(params, 1).get<const QoreStringNode>();
+    return q_cancel_in_cancellable_wait(static_cast<int>(get_param_value(params, 0).getAsBigInt()), reason->c_str(),
+        get_param_value(params, 2).getAsBigInt());
+}
+
+static QoreValue f_dbg_wait_for_cancellable_wait(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return q_wait_for_cancellable_wait(static_cast<int>(get_param_value(params, 0).getAsBigInt()),
+        get_param_value(params, 1).getAsBigInt());
+}
+
 //! returns the size of the innermost running IR-interpreter frame's temp cleanup vector on the current thread
 /** A break or continue that leaves a temp scope without draining it used to leave a sentinel on this vector every
     time it executed, so the vector grew without bound in a long-running loop and every later cleanup scan got
@@ -14173,6 +14200,14 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_cancel_check_count", f_dbg_get_cancel_check_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_get_cancel_wake_count", f_dbg_get_cancel_wake_count, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo, 1, bigIntOrNothingTypeInfo, QORE_PARAM_NO_ARG, "tid");
+    qns.addBuiltinVariant("dbg_cancel_in_cancellable_wait", f_dbg_cancel_in_cancellable_wait, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 3, bigIntTypeInfo, QORE_PARAM_NO_ARG, "tid", stringTypeInfo,
+        QORE_PARAM_NO_ARG, "reason", bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_wait_for_cancellable_wait", f_dbg_wait_for_cancellable_wait, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "tid", bigIntTypeInfo,
+        QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_get_ir_cleanup_entries", f_dbg_get_ir_cleanup_entries, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_ir_instantiated_local_entries", f_dbg_get_ir_instantiated_local_entries,

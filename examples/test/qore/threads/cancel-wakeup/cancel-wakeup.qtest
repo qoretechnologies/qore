@@ -13,26 +13,28 @@
 %exec-class CancelWakeupTest
 
 #! A blocked wait ends as soon as cancellation is requested, without a periodic timeout
-/** The worker blocks a thread in each kind of wait, cancels it (or interrupts its Program) and reports how long the
-    wait took to end after the request, the longest of three trials.  Before blocking waits were woken by the
-    request, they noticed it at their next periodic check: up to 500 ms later for I/O, lock and condition waits, and up
-    to 100 ms later for sleep() and usleep(), so the longest of three trials was nearly always well over the limits
-    below.  Woken waits end within a millisecond or so, also with sanitizers.
+/** The worker blocks a thread in each kind of wait that only a cancellation can end, makes the request once the
+    thread is blocked in the wait (dbg_wait_for_cancellable_wait()), and reports, for each of three trials, how the
+    wait ended.  Before blocking waits were woken by the request, they noticed it at a periodic cancellation check:
+    every 500 ms for I/O, lock and condition waits, and every 100 ms for sleep() and usleep().
 
-    Each case also checks the order of events: the wait ends with the cancellation exception and nothing else, the
-    child process never writes to its output, and a condition wait ends with its lock held again.
+    In debug builds each case checks which path ended the wait, with no timing: the request woke the wait exactly
+    once through the thread's registered condition or wakeup channel (dbg_get_cancel_wake_count()), and the waiting
+    thread made only a few cancellation checks (dbg_get_cancel_check_count()), so the wait did not poll.  Every build
+    checks the order of events: the wait ends with the cancellation exception and nothing else, the child process
+    never writes to its output, and a condition wait ends with its lock held again.
 */
 class CancelWakeupTest inherits QUnit::Test {
     public {
-        #! the most a woken wait may take to end after the request, in microseconds
-        const MaxLatencyUs = 100000;
-        #! the same for sleep() and usleep(), which checked every 100 ms before
-        const MaxSleepLatencyUs = 25000;
+        #! the most cancellation checks that the waiting thread may make during a woken call
+        /** A woken wait checks before and after it registers and once after it wakes, and the code around it a fixed
+            number of times more, which depends on the execution mode (a condition wait makes 6 in AST mode, 19 in IR
+            mode under the harness), not on time; a wait that polled would check at every interval for as long as it
+            was blocked.
+        */
+        const MaxChecks = 32;
 
-        #! the cases whose waits ended at the next periodic check before they were woken by the request
-        const SleepCases = ("sleep", "usleep");
-
-        #! cases with their expected exception and detail; the latency is not checked for those with a detail
+        #! cases with their expected exception and detail; the wake path is not checked for those with a detail
         const Special = {
             "interrupted backquote read": {"err": "PROGRAM-INTERRUPTED"},
             "deferred backquote read": {"err": "THREAD-CANCELLED", "detail": "\"done\""},
@@ -77,10 +79,10 @@ class CancelWakeupTest inherits QUnit::Test {
             }
             list<string> l = line.split("|");
             # an empty detail at the end of the line is not returned by split()
-            if (l.size() == 3) {
+            if (l.size() == 4) {
                 l += "";
             }
-            if (l.size() != 4) {
+            if (l.size() != 5) {
                 fail(sprintf("%s: unexpected output line %y", mode, line));
             }
             results{l[0]} = l;
@@ -98,12 +100,17 @@ class CancelWakeupTest inherits QUnit::Test {
             *hash<auto> special = Special{name};
             assertEq(special.err ?? "THREAD-CANCELLED", l[1], label + ": exception");
             if (special.detail) {
-                assertEq(special.detail, l[3], label + ": detail");
+                assertEq(special.detail, l[4], label + ": detail");
                 continue;
             }
-            int max_us = inlist(name, SleepCases) ? MaxSleepLatencyUs : MaxLatencyUs;
-            int us = l[2].toInt();
-            assertTrue(us < max_us, sprintf("%s: woken %d us after the request (limit %d us)", label, us, max_us));
+            if (!Option::HAVE_LIBRARY_DEBUGGING) {
+                continue;
+            }
+            # each trial's request woke the wait once, through its registered condition or wakeup channel
+            assertEq("1/1/1", l[2], label + ": the request woke the wait once in each trial");
+            int checks = l[3].toInt();
+            assertTrue(checks >= 0 && checks <= MaxChecks, sprintf("%s: %d cancellation checks during the call "
+                "(at most %d: the wait did not poll)", label, checks, MaxChecks));
         }
     }
 }
