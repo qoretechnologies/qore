@@ -12538,6 +12538,24 @@ static QoreValue f_dbg_make_short_string(const QoreListNode* params, RuntimeConf
     return rv;
 }
 
+//! returns a new hash of the hashdecl of the given hash, initialized as the C++ API does without an ExceptionSink
+/** QoreHashNode(hd, nullptr) is how Qore fills its builtin hashdecls, such as CallStackInfo for a new exception; a
+    test uses this to check that the initializers of the members of a hashdecl are evaluated with a sink then too,
+    and that an exception that one raises is reported as unhandled instead of crashing.
+*/
+static QoreValue f_dbg_new_hashdecl_hash_without_sink(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreValue v = get_param_value(params, 0);
+    const QoreHashNode* h = v.getType() == NT_HASH ? v.get<const QoreHashNode>() : nullptr;
+    const TypedHashDecl* hd = h ? h->getHashDecl() : nullptr;
+    if (!hd) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_new_hashdecl_hash_without_sink() requires a hash of a "
+            "hashdecl type");
+        return QoreValue();
+    }
+    return new QoreHashNode(hd, nullptr);
+}
+
 //! returns the number of recursive-reference scans started by lvalue operations in the current thread
 /** A scan walks the whole object graph reachable from the object holding the lvalue, so tests use this to
     verify that an operation that cannot change that graph does not start one.
@@ -14176,6 +14194,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_continue_program_release", f_dbg_continue_program_release, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_new_hashdecl_hash_without_sink", f_dbg_new_hashdecl_hash_without_sink, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo, 1, anyTypeInfo, QORE_PARAM_NO_ARG, "h");
     qns.addBuiltinVariant("dbg_make_short_string", f_dbg_make_short_string, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         stringTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "value");
     qns.addBuiltinVariant("dbg_is_short_string", f_dbg_is_short_string, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,

@@ -1,0 +1,60 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class HashdeclNullSinkTest
+
+#! Regression test for the initialization of a hashdecl hash without an ExceptionSink
+/** QoreHashNode(hd, nullptr), which Qore uses for the builtin hashdecls that it fills itself (CallStackInfo for a new
+    exception, for example), dereferenced the null sink when a member of the hashdecl had an initializer.  The worker
+    creates hashes of hashdecls with initializers that way through dbg_new_hashdecl_hash_without_sink() (library-debug
+    builds only), in each execution mode.
+*/
+class HashdeclNullSinkTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("HashdeclNullSinkTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        addTestCase("a hashdecl hash is initialized without a sink in each mode", \testExecModes());
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_new_hashdecl_hash_without_sink() is only in library-debug builds");
+        }
+        foreach string mode in (ExecModes) {
+            string worker = get_script_dir() + DirSep + "hashdecl-null-sink-worker.q";
+            string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+                libqore_dir, libqore_dir, qore_bin, mode, worker));
+            hash<string, string> results;
+            foreach string line in (out.split("\n")) {
+                *list<*string> parts = (line =~ x/^([-a-z]+)=(.*)$/);
+                if (parts) {
+                    results{parts[0]} = parts[1];
+                }
+            }
+            assertEq("1", results.done, mode + ": the worker ran to the end: " + out);
+            assertEq("{a: 1, b: \"x\", l: [1, 2]}", results.defaults, mode + ": member initializers");
+            assertEq("hash<NsDefaults>", results."defaults-type", mode + ": hashdecl type");
+            assertEq("{a: 1, b: \"x\", l: [1, 2], c: 3}", results.child, mode + ": parent and own initializers");
+            assertEq("{a: 1, b: null}", results.throws, mode + ": members initialized before the exception");
+            assertRegex("unhandled QORE User exception.*NULL-SINK-TEST: initializer \\(while initializing hashdecl "
+                "'NsThrows'\\)", replace(out, "\n", " "), mode + ": the exception is reported as unhandled: " + out);
+        }
+    }
+}
