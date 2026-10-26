@@ -453,7 +453,24 @@ while :; do
     # one shared parse and standalone compiles, and a component that spans
     # several sources always needs a parse: its members are mutually dependent
     # and have no valid internal order.
-    if [ "$rebuild_scope" -ge "$group_batch_floor" ]; then
+    #
+    # The closure is what the stale set CAN reach, though, not what it will: a
+    # consumer goes stale only when a contract it follows moves, and an edit to a
+    # body, a comment, or a default that only the script aggregate embeds moves
+    # none of them.  Measured on Qorus, every edit to a widely required source
+    # reparsed the whole group, also when its compile left every consumer current.
+    # So a first pass whose stale set is one standalone component compiles it
+    # before the closure is consulted, and the closure decides from the next pass,
+    # which is planned against the contracts that compile actually published.  An
+    # edit that does move a widely followed contract pays that one compile on top
+    # of the group's parse.
+    if [ "$phase" -eq 1 ] && [ "$stale_count" -lt "$batch_threshold" ] \
+            && ! stale_plan_has_multi_member_component; then
+        if [ "$rebuild_scope" -ge "$group_batch_floor" ]; then
+            echo "$0: the consumer closure spans $rebuild_scope component(s);" \
+                "compiling the stale component first to see which contracts move"
+        fi
+    elif [ "$rebuild_scope" -ge "$group_batch_floor" ]; then
         escalate_to_group_batch
     fi
 

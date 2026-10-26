@@ -217,13 +217,34 @@ publishes: the same object and the same compile contract.
 The coordinator picks between three answers, in order of how much it parses:
 
 |!Condition|!Answer
+|first pass, stale set of one single-source component|compile it standalone first
 |rebuild closure ≥ the escalation floor (below)|whole-group parse
 |stale set spans a multi-source component, or ≥ 2 components|one parse over the stale set
 |otherwise|standalone compiles, one component at a time
 
-The **closure** decides only the first question — compiling a component rewrites
-its compile contract, so its consumers go stale as a result, and a closure that
-large will be parsed either way. The **stale set** decides the second: two stale
+The **closure** decides only the whole-group question, and only from what a compile
+actually moved. The closure is what a stale set *can* reach: a consumer goes stale
+only when a contract it follows moves, and an edit to a body, a comment, or a
+default that only the script aggregate embeds moves none of them (the declaration
+contract leaves out the aggregate-only rows; see "What the aggregate contract
+covers"). Deciding from the closure before compiling reparsed the whole group for
+every such edit to a widely required source. So a first pass whose stale set is one
+single-source component compiles it standalone, and the next pass, planned against
+the contracts that compile published, finds either nothing stale or a closure that
+is real and escalates. Measured on Qorus (QORUS_CORE_MAIN, 1192 sources), edits to
+`lib/cpc-api.ql`, whose closure is 502 components:
+
+|!Edit|!Before|!After
+|a function body (and the line it adds)|1192 objects, 6m27|1 object, 1m00
+|a comment line that moves every declaration below it|1192 objects, 7m38|1 object, 0m52
+|a constant value its consumers fold|1192 objects, 5m42|1 + 1192 objects, 5m30
+
+An edit that moves a widely followed contract pays that one standalone compile on
+top of the group's parse (the last row, within the noise of the parse). Edits to a
+source in a component of several sources still parse the group whenever partial
+parses are off, as do edits that add or remove a symbol (the source-symbol barrier
+re-runs the batch), and most sources have closures under the floor and were never
+escalated; those are unchanged. The **stale set** decides the second: two stale
 components already pay for a shared parse, because N standalone compiles preload
 the group N times while one parse preloads it once.
 
@@ -855,7 +876,7 @@ widely required source rebuilds every object that folded any constant from it.
 
 **Channel 1 — the depfile edge, which is what the build tool reads.**
 `--depfile-declaration-contract-stamps` rewrites those source dependencies to the provider's
-`.qo.aggregate-contract.stamp`, after the pass that narrows *imported* providers to their
+`.qo.declaration-contract.stamp`, after the pass that narrows *imported* providers to their
 compile-contract stamp and before the one that would otherwise reduce them to source digests.
 Two things are deliberately not narrowed: a source the object also defines into (its own bytes
 are what must rebuild it), and a provider it imports with a recorded body-contract hash (the
@@ -916,13 +937,13 @@ the declaration contract every member must publish before any depfile is rewritt
 in the pre-pass that already wrote the compile contracts, and the narrowing itself reads the
 symbol index the passes around it already read.
 
-### What the aggregate contract covers
+### What the aggregate contract covers, and why consumers do not watch it
 
 The native-registration script aggregate is compiled from the group's sources in one parse,
-but it is rebuilt only when the aggregate contract of one of its members moves, so that
-contract has to cover everything the aggregate embeds from a member: its declaration rows, the
-declaration locations (`aggregate_declaration_location_v1`), and the values the declaration
-sections carry that no consumer compiles against -- the defaults of instance members, static
+but it is rebuilt only when the aggregate contract (`.qo.aggregate-contract.stamp`) of one of
+its members moves, so that contract has to cover everything the aggregate embeds from a member:
+its declaration rows, the declaration locations (`aggregate_declaration_location_v1`), and the
+values the declaration sections carry that no consumer compiles against -- the defaults of instance members, static
 variables and hashdecl members, the default arguments of functions and methods, and the
 arguments a constructor passes to its base classes.  The linked program initializes members and
 fills in omitted arguments from those values, so a member that only changed an initializer was
@@ -931,10 +952,20 @@ recompiled while the aggregate kept, and the program ran, the old default.
 Each such value is written a second time to a writer of its own and hashed
 (`aotRecordAggregateDeclarationDigest()`), so the digest follows the value and not the offsets
 its strings take in the object's string pool, which move with every edit of the source.  The
-digests are symbol-index context rows whose keys start with `aggregate_`; the compile contract
-leaves out every such row.  The declaration contract is the same stamp, so a consumer whose
-generation follows it is recompiled when an embedded default moves, as it already was when a
-declaration only moved to another line.
+digests are symbol-index context rows whose keys start with `aggregate_`.
+
+Consumers do not depend on those rows, so they watch a different stamp.  The declaration
+contract (`.qo.declaration-contract.stamp`) is the aggregate contract without the `aggregate_`
+rows; it is what channel 1 narrows a folded-value dependency to and what channel 2's generation
+token digests for a predecessor (`DeclarationContractSuffix` in `qore-qo-source-order`), and the
+compile contract leaves the rows out as well.  So a declaration that only moved to another line,
+or a member default, default argument or base class argument that only changed its value,
+rebuilds the script aggregate and no consumer; a change to what a declaration is (a member's
+type, a new member, a signature) moves all three.  Before the two were split the declaration
+contract was the aggregate stamp itself, and every consumer that folded a value from or followed
+a provider was recompiled for a line shift.  A depfile written before the split names the
+provider's `.aggregate-contract.stamp`; it is still recognised as a declaration-contract
+dependency until that object is rebuilt.
 A class row also names the class's own instance members (name, type, access, transient), which
 consumers do compile against, so adding a member or changing its type moves both contracts.
 
@@ -1421,13 +1452,16 @@ which two builders can still race to restore.
   comment-only provider edit leaves it byte-identical, and that a changed value does not;
   folded enum members in both compile modes; the body-contract rows a consumer records;
   that a preloaded object's module loads in a program a `--stub` parse left mid-parse; and
-  that a preloaded object's code that cannot load at parse commit exits 78 while a failure
+  that a typedef of another source is a dependency in either compile mode (a typedef is expanded where
+  it is used, so a standalone compile of its consumer must preload its source); that a preloaded object's code that cannot load at parse commit exits 78 while a failure
   in the compiled source's own initializer exits 1; and that a static class variable another
   source declares is imported the same way by a batch and a standalone compile, whether it is
   folded into a constant, read in a body or written
 - `examples/test/ir/AOTSccIncrementalDriver.qtest` — the driver and coordinator
   against a compiler that rewrites another member's depfile mid-compile; also the
-  coordinator's pass loop: a cascade walked to convergence, a pass that changes
+  coordinator's pass loop: a stale component whose compile moves no contract compiled
+  without parsing the group, and one whose compile moves a widely followed contract
+  parsing the group after that compile, a cascade walked to convergence, a pass that changes
   nothing escalating instead of lapping, a compile that gains an edge to a current
   provider converging in one pass (and one that closes a cycle keeping the frozen
   graph's record for the parse to replace), the external-input depfile the coordinator

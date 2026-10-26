@@ -141,6 +141,27 @@ RestHandler handler(NOTHING, swagger);
     @section swagger_relnotes Swagger Module Release Notes
 
     @subsection swagger_2_6 Swagger v2.6
+    - a path that differs from another only by a trailing slash, such as Pipedrive's \c /oauth/token and
+      \c /oauth/token/, is a path of its own instead of making the schema fail to load with
+      \c INVALID-PATH-COMPONENT; a URI path with or without the trailing slash still matches the path declared only
+      without or only with it
+    - @ref RestSchemaValidator::AbstractRestSchemaValidator::getPathOperationHash() "getPathOperationHash()" gives
+      the operations of every path, whatever the order of the paths in the document; a path whose sub-path came
+      first was missing
+    - an enumeration (\c enum) can have array and object values, as JSON Schema allows; Mailchimp's schema failed to
+      load with \c INVALID-FIELD-TYPE.  An array or object value is valid when it is equal to one of them, and they
+      are the allowed values of the field
+    - an operation with more than one path parameter is validated on the client and on the server; the value of each
+      parameter was extracted with a pattern that still had the templates of the others, and every request failed
+      with \c RUNTIME-OVERLOAD-ERROR
+    - the error for a parameter outside the body with type \c "object", which Swagger 2.0 does not allow, names the
+      parse option that accepts it (@ref Swagger::LM_ACCEPT_QUERY_OBJECTS "LM_ACCEPT_QUERY_OBJECTS"), which the
+      \c lax_parsing option of a Swagger data provider and the \c swagger_lax_parsing option of a REST connection set
+    - a name in the \c required list of a schema that its \c properties do not declare, which JSON Schema allows, is a
+      required property of type \c any instead of making the schema fail to load with \c INVALID-FIELD-VALUE, as
+      with Pipedrive's subscription updates; a property that a schema composed with \c allOf declares replaces it,
+      and a schema whose \c additionalProperties is \c false is still refused, as no value could satisfy it (see
+      @ref RestSchemaValidator::AbstractRestSchemaObject::undeclared_required "undeclared_required")
     - a schema object whose document has been destroyed throws \c SCHEMA-DOCUMENT-DESTROYED when it is asked to build
       a type, instead of failing with an unrelated error; the types it has already built keep working (see
       @ref Swagger::SchemaObject "SchemaObject")
@@ -483,6 +504,11 @@ class SchemaBase inherits RestSchemaValidator::AbstractSchemaBaseValidator {
         optional_field(objType, oh, "minItems", NT_INT, \minItems);
         optional_field(objType, oh, "uniqueItems", NT_BOOLEAN, \uniqueItems);
         optional_field(objType, oh, "enum", SwaggerListToAnySet, \enumValues);
+        # the values of an enumeration can be of any type; one that is a list or a hash cannot be a key of
+        # enumValues, so the enumeration is kept as declared too
+        if (oh."enum".typeCode() == NT_LIST && (select oh."enum", inlist($1.typeCode(), (NT_LIST, NT_HASH)))) {
+            enumValueList = oh."enum";
+        }
         optional_field(objType, oh, "multipleOf", (NT_FLOAT: True, NT_INT: True), \multipleOf);
     }
 
@@ -491,7 +517,7 @@ class SchemaBase inherits RestSchemaValidator::AbstractSchemaBaseValidator {
         self += map {$1: other.$1}, (
             "maximum", "minimum", "exclusiveMax", "exclusiveMin",
             "maxLength", "minLength", "pattern", "maxItems", "minItems",
-            "uniqueItems", "enumValues", "multipleOf"), exists other.$1;
+            "uniqueItems", "enumValues", "enumValueList", "multipleOf"), exists other.$1;
     }
 
     #! Private constructor
@@ -2278,7 +2304,7 @@ public class PathComponent inherits Qore::Serializable {
             if (!pfx.val() && h.key !~ /^\//) {
                 throw "INVALID-FIELD-FORMAT", sprintf("Paths Object: root path %y does not begin with a slash", h.key);
             }
-            list<string> l = h.key.split("/");
+            list<string> l = PathComponent::splitPath(h.key);
             shift l;
             try {
                 add(h.key, l, 0, h.value, swagger);
@@ -2292,11 +2318,33 @@ public class PathComponent inherits Qore::Serializable {
     }
 
     #! private constructor
+    /** @param full_path the path being added
+        @param l the segments of the path after its leading slash
+        @param offset the number of segments of \a l that lead to this component, including its own
+        @param oh the Path Item Object of the path being added
+    */
     private constructor(string full_path, list<auto> l, int offset, hash<auto> oh) {
+        # the prefix is the path to this component; the path being added can continue past it
         list<auto> l0 = l;
-        splice l0, offset + 1;
+        splice l0, offset;
         pfx = l0.join("/");
         name = l[offset - 1];
+    }
+
+    #! Splits a URI path into its segments
+    /** @param path the URI path to split, beginning with a slash
+
+        @return the segments of the path; the first is the empty string before the leading slash, and a path
+        ending in a slash ends with an empty segment, so that \c "/a" and \c "/a/" are different paths, as they
+        are different URIs (<a href="https://www.rfc-editor.org/rfc/rfc3986#section-3.3">RFC 3986 section 3.3</a>)
+    */
+    static list<string> splitPath(string path) {
+        list<string> rv = path.split("/");
+        # split() drops one trailing empty field; the root path "/" has no segment after its slash
+        if (path.size() > 1 && path =~ /\/$/) {
+            push rv, "";
+        }
+        return rv;
     }
 
     #! adds a component or a Path Item Object to the tree
@@ -2340,7 +2388,11 @@ public class PathComponent inherits Qore::Serializable {
     */
     *PathItemObject tryMatch(list<auto> path) {
         PathComponent w = self;
-        for (int i = 1; i < path.size(); ++i) {
+        int size = path.size();
+        for (int i = 1; i < size; ++i) {
+            if (i == (size - 1) && path[i] === "") {
+                return w.matchTrailingSlash();
+            }
             *PathComponent next = w.paths{path[i]} ?? w.wildcard;
             if (!next) {
                 if (w.paths) {
@@ -2353,7 +2405,28 @@ public class PathComponent inherits Qore::Serializable {
             }
             w = next;
         }
-        return w.pio;
+        return w.matchNoTrailingSlash();
+    }
+
+    #! Returns the Path Item Object of a URI path that ends in a slash, whose last component is this one
+    /** A path declared with the trailing slash is the one that matches it.  Otherwise the path without it
+        does, so a URI path given with a trailing slash still matches the schema's path without one.
+    */
+    private *PathItemObject matchTrailingSlash() {
+        *PathComponent slash = paths{""};
+        return (slash ? slash.pio : NOTHING) ?? pio;
+    }
+
+    #! Returns the Path Item Object of a URI path that ends in this component without a trailing slash
+    /** A path declared without a trailing slash is the one that matches it.  Otherwise the path with it does,
+        so a URI path given without a trailing slash still matches the schema's path with one.
+    */
+    private *PathItemObject matchNoTrailingSlash() {
+        if (pio) {
+            return pio;
+        }
+        *PathComponent slash = paths{""};
+        return slash ? slash.pio : NOTHING;
     }
 
     #! populates a hash of URI paths as keys with values as lists of supported HTTP methods
@@ -2365,6 +2438,29 @@ public class PathComponent inherits Qore::Serializable {
         map $1.getPathOperationHash(\h), paths.iterator();
         if (wildcard)
             wildcard.getPathOperationHash(\h);
+    }
+
+    #! Returns an anchored pattern for a path template that captures the value of each of its parameters
+    /** @param path the path template; each parameter is delimited by braces
+        @return an anchored regular expression with all literal path characters escaped, capturing the value of
+        each parameter in template order
+
+        @throw INVALID-PATH-COMPONENT an empty or unterminated parameter was encountered
+    */
+    static string getTemplatePattern(string path) {
+        string pattern = "^";
+        int offset = 0;
+        int start;
+        while ((start = index(path, "{", offset)) >= 0) {
+            int end = index(path, "}", start + 1);
+            if (end <= start + 1) {
+                throw "INVALID-PATH-COMPONENT", sprintf("Invalid path template %y", path);
+            }
+            pattern += Util::regex_escape(path.substr(offset, start - offset));
+            pattern += "([^/]*)";
+            offset = end + 1;
+        }
+        return pattern + Util::regex_escape(path.substr(offset)) + "$";
     }
 }
 
@@ -2397,7 +2493,7 @@ public class PathsObject inherits ObjectBase {
         }
         # strip query from path before matching
         path =~ s/\?.*//g;
-        return paths.match(path.split("/"));
+        return paths.match(PathComponent::splitPath(path));
     }
 
     #! matches a URI path with a PathItemObject
@@ -2407,7 +2503,7 @@ public class PathsObject inherits ObjectBase {
         if (!path.equalPartial("/")) {
             path = "/" + path;
         }
-        return paths.tryMatch(path.split("/"));
+        return paths.tryMatch(PathComponent::splitPath(path));
     }
 
     #! returns a hash of URI paths as keys with values as lists of supported HTTP methods
@@ -2917,16 +3013,31 @@ public class OperationObject inherits ParameterGroup, RestSchemaValidator::Abstr
         }
 
         # check path parameters
-        foreach string param in (path =~ x/{([^}]+)}/g) {
+        *list<string> path_names = path =~ x/{([^}]+)}/g;
+        *list<string> path_values;
+        if (path_names) {
+            string actual_path = h.method.startsWith("/") ? h.method : "/" + h.method;
+            # a path that differs from the template only by a trailing slash matches it (see PathComponent)
+            if (actual_path =~ /.\/$/ && path !~ /\/$/) {
+                splice actual_path, -1;
+            } else if (actual_path !~ /\/$/ && path =~ /.\/$/) {
+                actual_path += "/";
+            }
+            # every template is replaced in the pattern, so each value is that of its own parameter
+            path_values = regex_extract(actual_path, PathComponent::getTemplatePattern(path));
+            if (path_values.size() != path_names.size()) {
+                error("SCHEMA-VALIDATION-ERROR", "Request path %y does not match path template %y for %s",
+                    actual_path, path, method.upr());
+            }
+        }
+        foreach string param in (path_names) {
             *OtherParameter po = parameters{param} ?? pio.parameters{param};
             if (!po) {
                 error("SCHEMA-VALIDATION-ERROR", "No path parameter %y defined for %s %s (%y); known "
                     "parameters: %y", param, method.upr(), path, keys (parameters + pio.parameters));
             }
 
-            string pattern = replace(path, "{" + param + "}", "(.*)");
-            pattern =~ s/^\//\/?/;
-            auto val = decode_url(regex_extract(h.method, pattern)[0]);
+            auto val = decode_url(path_values[$#]);
 
             # convert string to actual type
             switch (po.type) {
@@ -3658,8 +3769,15 @@ public class OtherParameter inherits TypedParameter {
         if (!exists type) {
             type = "any";
         } else if (!ParameterTypes{type} && (type != "object" || !(swagger.getParseFlags() & LM_ACCEPT_QUERY_OBJECTS))) {
+            # Swagger 2.0 limits a parameter outside the body to simple types; a schema that declares an object
+            # anyway can only be accepted with the parse option that allows it, which the error names
             throw "INVALID-FIELD-VALUE", sprintf("Parameter Object (%s) %y: invalid parameter type value passed: %y, "
-                "expecting one of: %y", inLoc, name, type, keys ParameterTypes);
+                "expecting one of: %y%s", inLoc, name, type, keys ParameterTypes, type == "object"
+                    ? "; Swagger 2.0 allows \"object\" only for a \"body\" parameter; the parse flag "
+                        "LM_ACCEPT_QUERY_OBJECTS accepts it as an object serialized as one query argument per "
+                        "member; it is set by the \"lax_parsing\" option of a Swagger data provider and the "
+                        "\"swagger_lax_parsing\" option of a REST connection"
+                    : "");
         }
     }
 }
@@ -4228,7 +4346,20 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
                     }
                     if (so) {
                         allOf[allOf.size()] = so;
-                        map properties{$1.key} = $1.value, so.properties.pairIterator(), !properties.hasKey($1.key);
+                        # a property of the member is added unless this schema already has it; a declared one
+                        # replaces one that only a "required" list gave (see undeclared_required)
+                        foreach hash<auto> i in (so.properties.pairIterator()) {
+                            if (properties.hasKey(i.key)
+                                && (!undeclared_required{i.key} || so.undeclared_required{i.key})) {
+                                continue;
+                            }
+                            properties{i.key} = i.value;
+                            if (so.undeclared_required{i.key}) {
+                                undeclared_required{i.key} = True;
+                            } else {
+                                remove undeclared_required{i.key};
+                            }
+                        }
                         nullable_properties += so.nullable_properties;
                         if (!exists additionalProperties && exists so.additionalProperties) {
                             additionalProperties = so.additionalProperties;
@@ -4254,10 +4385,20 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         if (optional_field(objType, oh, "required", SwaggerListToStringSet, \required, opt_flags)) {
             if (!required)
                 throw "INVALID-FIELD-FORMAT", sprintf("Schema Object %y: field 'required' is an empty list", name);
-            # make sure all required properties are defined
-            if (!additionalProperties && (*list<string> missing = keys (required - keys properties))) {
-                throw "INVALID-FIELD-VALUE", sprintf("Schema Object %y: the following required properties are not "
-                    "defined: %y", name, missing);
+            # "required" asserts only that a member is present; a name that neither "properties" nor an "allOf"
+            # member declares is a property with the empty schema, which accepts any value (see
+            # AbstractRestSchemaObject::undeclared_required).  Additional properties accept it anyway, unless they
+            # are explicitly forbidden, which no value could then satisfy
+            if (*list<string> missing = keys (required - keys properties)) {
+                if (additionalProperties === False) {
+                    throw "INVALID-FIELD-VALUE", sprintf("Schema Object %y: the following required properties are "
+                        "not defined, and \"additionalProperties\" is false, so no value can have them: %y", name,
+                        missing);
+                }
+                if (!additionalProperties) {
+                    addProperties((map {$1: {}}, missing), opt_flags);
+                    map undeclared_required{$1} = True, missing;
+                }
             }
         }
 
@@ -4297,6 +4438,8 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             properties{k} = SchemaObject::newSchemaObject(k, val, swagger, NOTHING,
                 AbstractRestSchemaObject::childSchemaIdentity(
                     AbstractRestSchemaObject::childSchemaIdentity(schema_identity, "properties"), k));
+            # a declared property replaces one that only a "required" list gave
+            remove undeclared_required{k};
             if (!properties{k}.nullable && (val."x-nullable" || (opt_flags & LM_OPTIONAL_REF_PROPERTIES))) {
                 nullable_properties{k} = True;
             }
@@ -4505,6 +4648,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         if (type != "object" && type != "any") {
             throwInvalidType(name, "object", type, v);
         }
+        checkEnumValueList(path, method, name, v);
 
         # check "allOf" schemas, if any
         map $1.checkIntern(serialize, request, type, NOTHING, path, method, name, v, \value, True), allOf;
@@ -5022,6 +5166,10 @@ namespace Priv {
             }
         } else if (typeCode == SwaggerListToAnySet) {
             foreach auto v in (val) {
+                # a list or hash value cannot be a key of the set; SchemaBase keeps the list of values that has one
+                if (inlist(v.typeCode(), (NT_LIST, NT_HASH))) {
+                    continue;
+                }
                 if (!v.strp())
                     throw "INVALID-FIELD-TYPE", sprintf("%s Object: %y element %d/%d in list value has type %y which "
                         "cannot be converted to a string; the Swagger module only supports types that can be "

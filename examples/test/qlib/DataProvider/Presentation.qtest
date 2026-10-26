@@ -140,6 +140,10 @@ class DataProviderPresentationTest inherits QUnit::Test {
             \mechanicalRekeyToolTest());
         addTestCase("qore-data-provider-i18n carries the translations of a renamed type from its action",
             \rekeyRenamedTypeToolTest());
+        addTestCase("qore-data-provider-i18n carries the translations of a type whose class changed",
+            \rekeyChangedTypeClassToolTest(), (False,));
+        addTestCase("qore-data-provider-i18n carries the translations of a schema type whose identity named its class",
+            \rekeyChangedTypeClassToolTest(), (True,));
         addTestCase("qore-data-provider-i18n re-keys only the catalogs of the owners it is given",
             \rekeySelectedOwnerToolTest());
         addTestCase("qore-data-provider-i18n re-keys nothing when texts conflict",
@@ -2038,6 +2042,56 @@ class DataProviderPresentationTest inherits QUnit::Test {
                 RekeyOwnerModule), \out), "the re-keyed tree passes the source-tree check: " + out);
     }
 
+    #! Re-keying carries every translation of a type whose message ids named the class that implemented it
+    /** The presentation identity of a type with a path or a schema identity named the class implementing the type,
+        so replacing the class (as Swagger and OpenApi3 did, building request types as schema hash types) gave every
+        text of the type a new message id although no text changed.  Catalogs with those ids are re-keyed once: the
+        old id of each text differs from the new one only in its type identity, and the translation is carried for
+        the same text of the same field of the same action.
+    */
+    rekeyChangedTypeClassToolTest(bool schema_identity) {
+        string root = sourceRoot();
+        string work = make_tmp_dir("data-provider-i18n-rekey-class-");
+        on_exit remove_tree(work);
+        # with a schema identity, the type's new identity names no class, while its old one did
+        if (schema_identity) {
+            setenv("QORE_TEST_REKEY_SCHEMA_IDENTITY", "#/components/schemas/RekeyAddress");
+        }
+        on_exit unsetenv("QORE_TEST_REKEY_SCHEMA_IDENTITY");
+        hash<auto> fx = rekeyFixture(root, work);
+        assertEq(schema_identity, parse_base64_url_string_to_string(fx.city.split(".")[3]) !~ /DataType:RekeyAddress#/,
+            "the identity of a schema type names no class");
+        hash<auto> messages = fx.root_catalog.locales.root.messages;
+
+        # the old root has the texts of the address type under an identity naming another class
+        hash<auto> old_messages = map {($1.key.split(".")[2] == "type" ? changedClassMessageId($1.key)
+            : $1.key): $1.value}, messages.pairIterator();
+        assertEq(messages.size(), old_messages.size());
+        # every text is translated; those of the type under their old ids
+        hash<auto> cs = map {$1.key: {"source": $1.value.source, "message": $1.value.source + " (cs)"}},
+            old_messages.pairIterator();
+        # another type of the same action translates the same text of the same field otherwise, so the text alone
+        # does not tell which translation is the type's
+        cs{unrelatedTypeMessageId(changedClassMessageId(fx.street))} = {"source": "Street", "message": "Třída"};
+        string tree = join_paths(work, "tree");
+        writeRekeyTree(tree, fx, old_messages, {"cs": cs});
+
+        string out;
+        assertEq(0, runI18nTool(root, sprintf("--rekey-source-tree -o %s --owner %s", shellQuote(tree),
+                RekeyOwnerModule), \out), "re-keying succeeds: " + out);
+        assertRegex("(?m)^REKEY: .*root\\.json: 27 -> 27 message\\(s\\); translations carried 24, matched by type 3, "
+            "variants 0, reused by text 0, missing 0; new texts 0$", out,
+            "every translation of the type is carried as that of the same type: " + out);
+        hash<auto> cs_messages = parse_json(ReadOnlyFile::readTextFile(join_paths(tree, fx.domain, "cs.json")))
+            .locales.cs.messages;
+        assertEq(messages.size(), cs_messages.size(), "no translation is dropped");
+        assertEq({"source": "Street", "message": "Street (cs)"}, cs_messages{fx.street});
+        assertEq({"source": "City", "message": "City (cs)"}, cs_messages{fx.city});
+        assertEq("The city of the address (cs)", cs_messages{fx.city_desc}.message);
+        assertEq(0, runI18nTool(root, sprintf("--check-source-tree -o %s --owner %s", shellQuote(tree),
+                RekeyOwnerModule), \out), "the re-keyed tree passes the source-tree check: " + out);
+    }
+
     #! The tool re-keys only the catalogs of the owners that --owner and --module name, and loads only those owners
     /** It loaded and extracted every owner below the output and re-keyed every catalog, whatever --owner and --module
         named: re-keying two apps of the Qore tree loaded its 264 provider modules and re-keyed its 285 catalogs.  A
@@ -2107,7 +2161,13 @@ class DataProviderPresentationTest inherits QUnit::Test {
         assertFalse(regex(out, "(?m)^loading provider module " + RekeyOwnerModule + "$"),
             "the other owner is not loaded: " + out);
         hash<string, string> after_module = readTreeFiles(selected);
-        assertEq(after_owner - pattern_root, after_module - pattern_root,
+        # the generator record of a catalog directory is written with its catalogs (I18nGeneratorRecord.qtest)
+        string rekey_record = join_paths("qlib", RekeyOwnerModule + ".i18n", ".qore-generator.json");
+        string pattern_record = join_paths("qlib", PatternOwnerModule + ".i18n", ".qore-generator.json");
+        assertTrue(exists after_owner{rekey_record}, "re-keying records the Qore in the selected owner's directory");
+        assertFalse(exists after_owner{pattern_record}, "re-keying records nothing in the other owner's directory");
+        assertTrue(exists after_module{pattern_record}, "re-keying records the Qore in the module's directory");
+        assertEq(after_owner - pattern_root, after_module - (pattern_root, pattern_record),
             "the files of the other owner are left as they are");
         assertEq(pattern_catalog, parse_json(after_module{pattern_root}), "the module's catalog is re-keyed");
 
@@ -2413,6 +2473,21 @@ class DataProviderPresentationTest inherits QUnit::Test {
     private static string renamedTypeMessageId(string id) {
         return changeTypeIdentity(id, string sub (string identity) {
             return regex_subst(identity, ":RekeyAddress#[0-9a-f]{64}$", ":rekeyAddress#" + strmul("1", 64));
+        });
+    }
+
+    #! Returns the id of a text of the fixture's address type under an identity naming another implementing class
+    private static string changedClassMessageId(string id) {
+        return changeTypeIdentity(id, string sub (string identity) {
+            return regex_subst(identity, "^(action:[A-Za-z0-9_-]+:)(?:[A-Za-z]+DataType:)?RekeyAddress#[0-9a-f]{64}$",
+                "$1SchemaHashDataType:RekeyAddress#" + strmul("2", 64));
+        });
+    }
+
+    #! Returns the id of a text of another type of the same action, of another name
+    private static string unrelatedTypeMessageId(string id) {
+        return changeTypeIdentity(id, string sub (string identity) {
+            return regex_subst(identity, ":RekeyAddress#[0-9a-f]{64}$", ":RekeyParcel#" + strmul("3", 64));
         });
     }
 

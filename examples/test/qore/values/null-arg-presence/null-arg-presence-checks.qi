@@ -1,0 +1,121 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file null-arg-presence-checks.qi checks that a builtin reads a NULL argument as a value in every execution mode
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+/** A builtin function or method reads its arguments in C++, where a value is present when QoreValue::operator bool()
+    says so: NOTHING is no value, and NULL is a value, as with the AST interpreter.  A DBI driver relies on this to
+    bind a NULL argument (module-odbc's placeholder parser pushes an argument only if it is present).
+
+    The AST interpreter passes a NULL literal as the QoreNullNode, while the IR and JIT engines pass it inline in the
+    QoreValue; both must read the same.  The checks call dbg_arg_presence() with a literal NULL, a literal NOTHING
+    and NULL from a variable, from a function, a method, a static method and a closure; the caller adds checks from
+    its top-level code.
+
+    The checks run in each execution mode in null-arg-presence-worker.q, which includes this file in its main
+    program, and as a compiled (AOT) module in NullArgPresenceChecks.qm, which includes it as well.
+*/
+public namespace NullArgPresenceChecks {
+#! collects the result of each check as \c "ok <label>" or \c "FAIL <label>: <reason>"
+public class Checker {
+    private {
+        list<string> results = ();
+    }
+
+    #! checks the arguments read by dbg_arg_presence() for a call with a NULL or NOTHING first argument and 2
+    /** @param label the check
+        @param args the result of dbg_arg_presence()
+        @param first_present whether the first argument is a value: True for NULL, False for NOTHING
+        @param first_type the type name of the first argument
+    */
+    check(string label, list<auto> args, bool first_present, string first_type) {
+        list<string> errs = ();
+        if (args.size() != 2) {
+            errs += sprintf("%d arguments, expected 2", args.size());
+        } else {
+            if (args[0].present !== first_present) {
+                errs += sprintf("the first argument is present: %y, expected %y", args[0].present, first_present);
+            }
+            if (args[0].simple_present !== first_present) {
+                errs += sprintf("the first argument is present as a QoreSimpleValue: %y, expected %y",
+                    args[0].simple_present, first_present);
+            }
+            if (args[0].type !== first_type) {
+                errs += sprintf("the first argument has type %y, expected %y", args[0].type, first_type);
+            }
+            if (args[1].present !== True || args[1].type !== "integer") {
+                errs += sprintf("the second argument is %y, expected a present integer", args[1]);
+            }
+        }
+        results += errs ? sprintf("FAIL %s: %s", label, errs.join("; ")) : "ok " + label;
+    }
+
+    #! adds the checks of a context: a literal NULL, a literal NOTHING and NULL from a variable
+    checkContext(string caller, list<auto> null_lit, list<auto> nothing_lit, list<auto> null_var) {
+        check(caller + ": literal NULL", null_lit, True, "NULL");
+        check(caller + ": literal NOTHING", nothing_lit, False, "nothing");
+        check(caller + ": NULL in a variable", null_var, True, "NULL");
+    }
+
+    list<string> getResults() {
+        return results;
+    }
+}
+
+#! a class whose methods call the builtin
+public class Caller {
+    #! calls the builtin from a method
+    list<list<auto>> nullArgMethod() {
+        auto n = NULL;
+        return (dbg_arg_presence(NULL, 2), dbg_arg_presence(NOTHING, 2), dbg_arg_presence(n, 2));
+    }
+
+    #! calls the builtin from a static method
+    static list<list<auto>> nullArgStatic() {
+        auto n = NULL;
+        return (dbg_arg_presence(NULL, 2), dbg_arg_presence(NOTHING, 2), dbg_arg_presence(n, 2));
+    }
+}
+
+#! calls the builtin from a function
+public list<list<auto>> sub null_arg_function() {
+    auto n = NULL;
+    return (dbg_arg_presence(NULL, 2), dbg_arg_presence(NOTHING, 2), dbg_arg_presence(n, 2));
+}
+
+#! runs the checks and returns their results
+public list<string> sub get_results() {
+    Checker c();
+    list<list<auto>> r = null_arg_function();
+    c.checkContext("function", r[0], r[1], r[2]);
+    r = new Caller().nullArgMethod();
+    c.checkContext("method", r[0], r[1], r[2]);
+    r = Caller::nullArgStatic();
+    c.checkContext("static method", r[0], r[1], r[2]);
+    code closure = list<list<auto>> sub () {
+        auto n = NULL;
+        return (dbg_arg_presence(NULL, 2), dbg_arg_presence(NOTHING, 2), dbg_arg_presence(n, 2));
+    };
+    r = closure();
+    c.checkContext("closure", r[0], r[1], r[2]);
+    return c.getResults();
+}
+}

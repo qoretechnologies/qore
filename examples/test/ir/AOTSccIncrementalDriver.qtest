@@ -38,6 +38,10 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
         #! Above pid_max on every platform these tests run on, so it is dead.
         const DeadPid = 2147483647;
 
+        #! a compiler fragment that publishes contracts derived from the source, so that an edit moves them
+        const MovingContracts = "cksum < \"$src\" > \"$out.compile-contract.stamp\"\n"
+            "cp \"$out.compile-contract.stamp\" \"$out.aggregate-contract.stamp\"";
+
         const MemberArtifactSuffixes = (
             "", ".status.json", ".content.stamp", ".compile-contract.stamp",
             ".aggregate-contract.stamp", ".stamp", ".source.manifest.json",
@@ -83,8 +87,10 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
             \testBootstrapHandsTheStaleSetToTheCoordinator());
         addTestCase("a preset contention signal cannot bypass the batch lock",
             \testPresetContentionSignalCannotBypassBatchLock());
-        addTestCase("the batch is chosen from what a rebuild reaches, not from what is stale",
-            \testPlanChoosesTheBatchFromTheConsumerClosure());
+        addTestCase("a stale component whose compile moves no contract is compiled without parsing the group",
+            \testPlanCompilesFirstWhenNoContractMoves());
+        addTestCase("a stale component whose compile moves a widely followed contract parses the group after it",
+            \testPlanParsesTheGroupWhenTheContractMoves());
         addTestCase("a cascading invalidation is walked to convergence, not escalated",
             \testCascadingInvalidationIsWalkedToConvergence());
         addTestCase("a pass that changes nothing escalates instead of looping",
@@ -888,80 +894,107 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
             "the locked shared parse writes every group member");
     }
 
-    #! The batch decision must weigh the consumer closure, not the stale set.
-    /** A component's generation names its own sources and its DIRECT
-        predecessors' published compile contracts, so editing one widely
-        required source leaves exactly one component stale: its consumers still
-        name the contract that source published last time.  They go stale the
-        moment it is recompiled -- which is why the stale set understates the
-        work by the size of the closure, and why deciding from it sent a
-        group-wide invalidation down the standalone path.  The observed cost was
-        one compile at a time on a 32-core host, followed by the shared parse
-        recompiling everything the serial pass had just built.
+    #! The batch decision is made from the contracts that a compile moves, not from what it could reach.
+    /** A component's generation names its own sources and the contracts its direct predecessors published, so
+        editing one widely required source leaves one component stale.  Its consumers go stale only if its compile
+        moves a contract they follow: an edit to a body, a comment or a default that only the script aggregate
+        embeds moves none of them, and then the consumer closure, however wide, is work the build never does.
+        Deciding from the closure reparsed the whole group for every such edit (measured on Qorus: QORUS_CORE_MAIN,
+        1192 sources, about six minutes for a body edit to a widely required source).
 
-        The fixture is that shape exactly: one stale component whose consumers
-        are the rest of the group.  Holding the coordinator to the batch here is
-        what stops the wasted serial pass from coming back.
+        So the coordinator compiles a stale set of one standalone component first, and the closure decides from the
+        next pass.  This case is the edit that moves no contract: only the edited component is compiled.
     */
-    testPlanChoosesTheBatchFromTheConsumerClosure() {
+    testPlanCompilesFirstWhenNoContractMoves() {
         TmpDir tmp("qore-aot-driver-closure-");
-        list<string> extra = ();
-        for (int i = 0; i < 10; ++i) {
-            push extra, sprintf("p%02d", i);
-        }
-        # Every component a singleton, so nothing is routed to the shared parse
-        # for spanning several sources; the decision can only come from the
-        # closure.
-        hash<auto> fx = fixture(tmp.path, NOTHING, False, extra);
-        foreach string name in (extra) {
-            writeDepfile(fx.qo_dir, name, "d");
-        }
-        writeCompiler(fx);
+        hash<auto> fx = closureFixture(tmp.path);
+        # the compile publishes the contracts that the component had, as an edit to a body does
+        writeCompiler(fx, NOTHING, "name=$(basename \"$out\" .qo)\n"
+            + "for suffix in .compile-contract.stamp .aggregate-contract.stamp; do\n"
+            + "    printf '%s\\n' \"$name$suffix\" > \"$out$suffix\"\n"
+            + "done");
         writeBatchCompiler(fx);
-
-        # A component published before the group's last shared parse is stale by
-        # definition, so the marker must not be newer than any member stamp for
-        # this fixture to be able to start out current.  Writing the marker first
-        # and the stamps after establishes that without waiting for anything: the
-        # comparison is strict, so the equal mtimes a whole-second filesystem
-        # produces satisfy it too.
-        write(fx.qo_dir + "/.qcc-batch-bootstrap.stamp", "bootstrapped\n");
-        foreach string name in (fx.names) {
-            write(fx.qo_dir + "/" + name + ".qo.stamp", "stamp\n");
-        }
-        assertEq(0, runTool(("--scc-publish-all", fx.context)).rc,
-            "the fixture starts fully published");
-        assertEq((), stalePlan(fx).stale, "and fully current");
+        startPublished(fx);
 
         # One edited source, and nothing else.
         write(fx.src_dir + "/d.qc", isolatedSource("d") + "# edited\n");
 
         hash<auto> planned = stalePlan(fx);
-        assertEq(1, planned.stale.size(),
-            "exactly one component is stale: " + planned.output);
-        assertTrue(planned.stale[0].source =~ /\/d\.qc$/,
-            "and it is the edited one: " + planned.output);
-        assertEq(extra.size() + 1, planned.closure,
-            "its consumer closure is d and everything that requires it: "
-                + planned.output);
+        assertEq(1, planned.stale.size(), "exactly one component is stale: " + planned.output);
+        assertTrue(planned.stale[0].source =~ /\/d\.qc$/, "and it is the edited one: " + planned.output);
+        assertEq(fx.consumers + 1, planned.closure,
+            "its consumer closure is d and everything that requires it: " + planned.output);
 
         hash<auto> result = plan(fx);
         assertEq(0, result.rc, "the coordinator succeeds: " + result.output);
-        assertTrue(result.output.find("selecting the shared-parse batch") >= 0,
-            "the closure selects the shared parse: " + result.output);
-        assertEq(-1, result.output.find("incrementally"),
-            "and no component is compiled one at a time: " + result.output);
-
-        # The compile log distinguishes the two builders, so "no standalone
-        # compile ran first" is checked rather than inferred from timing.
+        assertTrue(result.output.find("compiling the stale component first") >= 0,
+            "the coordinator compiles the stale component before it weighs the closure: " + result.output);
+        assertEq(-1, result.output.find("selecting the shared-parse batch"),
+            "and does not parse the group: " + result.output);
         list<string> compiled = compiles(fx);
-        assertEq(fx.names.size(), (select compiled, $1 =~ /^batch /).size(),
-            "the shared parse writes every member: " + compiled.join(", "));
-        assertEq((), (select compiled, $1 !~ /^batch /),
-            "and nothing is compiled standalone: " + compiled.join(", "));
+        assertEq(("d.qc d.qo",), compiled, "only the edited component is compiled: " + compiled.join(", "));
+        assertEq((), stalePlan(fx).stale, "the group is current when the coordinator returns");
+    }
 
-        assertEq((), stalePlan(fx).stale,
-            "the group is current when the coordinator returns");
+    #! An edit that moves a widely followed contract still parses the group, after one compile of the edit
+    /** The same fixture, with a compiler that publishes a contract derived from the source, so the edited
+        component's compile moves the contract that every consumer follows: the next pass finds the closure stale,
+        and the group's own parse compiles it.  The one standalone compile before it is the price of finding out.
+    */
+    testPlanParsesTheGroupWhenTheContractMoves() {
+        TmpDir tmp("qore-aot-driver-closure-moved-");
+        hash<auto> fx = closureFixture(tmp.path);
+        # the compile publishes contracts other than the ones the component had, so its consumers go stale
+        writeCompiler(fx);
+        writeBatchCompiler(fx);
+        startPublished(fx);
+
+        write(fx.src_dir + "/d.qc", isolatedSource("d") + "# edited\n");
+
+        hash<auto> result = plan(fx);
+        assertEq(0, result.rc, "the coordinator succeeds: " + result.output);
+        assertTrue(result.output.find("compiling the stale component first") >= 0,
+            "the coordinator compiles the stale component first: " + result.output);
+        assertTrue(result.output.find("selecting the shared-parse batch") >= 0,
+            "and parses the group once the compile has moved the contract its consumers follow: "
+                + result.output);
+        list<string> compiled = compiles(fx);
+        assertEq("d.qc d.qo", compiled[0], "the edited component is compiled first: " + compiled.join(", "));
+        assertEq(fx.names.size(), (select compiled, $1 =~ /^batch /).size(),
+            "then the shared parse writes every member: " + compiled.join(", "));
+        assertEq(1, (select compiled, $1 !~ /^batch /).size(),
+            "and nothing else is compiled standalone: " + compiled.join(", "));
+        assertEq((), stalePlan(fx).stale, "the group is current when the coordinator returns");
+    }
+
+    #! A group of singleton components: d and ten consumers that require it, all published and current
+    private hash<auto> closureFixture(string dir) {
+        list<string> extra = ();
+        for (int i = 0; i < 10; ++i) {
+            push extra, sprintf("p%02d", i);
+        }
+        # Every component a singleton, so nothing is routed to the shared parse for spanning several sources; the
+        # decision can only come from the closure.
+        hash<auto> fx = fixture(dir, NOTHING, False, extra);
+        foreach string name in (extra) {
+            writeDepfile(fx.qo_dir, name, "d");
+        }
+        fx.consumers = extra.size();
+        return fx;
+    }
+
+    #! Publishes the fixture's generations so that it starts out current
+    private startPublished(hash<auto> fx) {
+        # A component published before the group's last shared parse is stale by definition, so the marker must not
+        # be newer than any member stamp for this fixture to be able to start out current.  Writing the marker first
+        # and the stamps after establishes that without waiting for anything: the comparison is strict, so the equal
+        # mtimes a whole-second filesystem produces satisfy it too.
+        write(fx.qo_dir + "/.qcc-batch-bootstrap.stamp", "bootstrapped\n");
+        foreach string name in (fx.names) {
+            write(fx.qo_dir + "/" + name + ".qo.stamp", "stamp\n");
+        }
+        assertEq(0, runTool(("--scc-publish-all", fx.context)).rc, "the fixture starts fully published");
+        assertEq((), stalePlan(fx).stale, "and fully current");
     }
 
     #! Reads the coordinator's stale plan: its rows and its closure size.
@@ -1801,7 +1834,9 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
         foreach string name in (extra) {
             writeDepfile(fx.qo_dir, name, "d");
         }
-        writeCompiler(fx);
+        # the compile publishes contracts derived from the source, so the edit moves the contract that every
+        # consumer of d follows, and the coordinator escalates once it has compiled d
+        writeCompiler(fx, NOTHING, MovingContracts);
         writeBatchCompiler(fx);
         assertEq(0, plan(fx).rc, "the coordinator brings the group current");
         assertEq((), stalePlan(fx).stale, "the group starts current");
@@ -1827,8 +1862,9 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
         assertEq(-1, result.output.find("left stale components"),
             "so the post-condition is not reported against a parse that never "
             "ran: " + result.output);
-        assertEq(fx.names.size(), compiles(fx).size() - before,
-            "the group is parsed once, writing every member: "
+        # d is compiled once on its own, which moves the contract its consumers follow, then the group is parsed
+        assertEq(fx.names.size() + 1, compiles(fx).size() - before,
+            "the edited component is compiled, then the group is parsed once, writing every member: "
                 + compiles(fx).join(", "));
         assertEq((), stalePlan(fx).stale, "and nothing is left stale");
         assertTrue(is_file(fx.qo_dir + "/.qcc-incremental-plan.stamp"),
@@ -1858,7 +1894,9 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
         foreach string name in (extra) {
             writeDepfile(fx.qo_dir, name, "d");
         }
-        writeCompiler(fx);
+        # the compile publishes contracts derived from the source, so the edit moves the contract that every
+        # consumer of d follows, and the coordinator escalates once it has compiled d
+        writeCompiler(fx, NOTHING, MovingContracts);
         writeBatchCompiler(fx);
         assertEq(0, plan(fx).rc, "the coordinator brings the group current");
 

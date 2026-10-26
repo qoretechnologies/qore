@@ -1847,231 +1847,231 @@
           "source": "Request",
           "message": "請求"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTpUcmFuc2xhdGlvblJlcXVlc3RCb2R5IzNlOWRmOTQzYTRkOGVkYTczY2JkYjVjY2E0ZTY5YzU4NDVlMjYyOWJkMzRkNzNlZjY0YTEzMTZlZTZlZDkwZTk.field.dHJhbnNsYXRpb24.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROlRyYW5zbGF0aW9uUmVxdWVzdEJvZHkjYzU2N2VhNzhlZWFjZTE3YTg4ODJiYTRiODlkMDY5YWJkODdiMmNkOGJjOTE5YTg1ZWNkZDg4ZDBiMWMwN2IzZQ.field.dHJhbnNsYXRpb24.display_name": {
           "source": "Translation",
           "message": "翻譯"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTp0cmFuc2xhdGlvbiNjOWRhYzgxM2VlNTU0OGI2ZmRhZTg1YjczNjExMWZhMDRkMTAyOGYyODllYmU0ZWU3MTllY2JiMWVmZTVlMjYx.field.Zm9ybWFs.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.Zm9ybWFs.display_name": {
           "source": "Formal",
           "message": "正式"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTp0cmFuc2xhdGlvbiNjOWRhYzgxM2VlNTU0OGI2ZmRhZTg1YjczNjExMWZhMDRkMTAyOGYyODllYmU0ZWU3MTllY2JiMWVmZTVlMjYx.field.Zm9ybWFs.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.Zm9ybWFs.short_desc": {
           "source": "Use formal language style",
           "message": "使用正式的語言風格"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTp0cmFuc2xhdGlvbiNjOWRhYzgxM2VlNTU0OGI2ZmRhZTg1YjczNjExMWZhMDRkMTAyOGYyODllYmU0ZWU3MTllY2JiMWVmZTVlMjYx.field.Zm9ybWFs.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.Zm9ybWFs.desc": {
           "source": "Use formal language style. See [Translation](https://www.assemblyai.com/docs/speech-understanding/translation) for more details.",
           "message": "使用正式的語言風格。有關更多詳細信息，請參閱[翻譯](https://www.assemblyai.com/docs/speech-understanding/translation)。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTp0cmFuc2xhdGlvbiNjOWRhYzgxM2VlNTU0OGI2ZmRhZTg1YjczNjExMWZhMDRkMTAyOGYyODllYmU0ZWU3MTllY2JiMWVmZTVlMjYx.field.bWF0Y2hfb3JpZ2luYWxfdXR0ZXJhbmNl.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.bWF0Y2hfb3JpZ2luYWxfdXR0ZXJhbmNl.display_name": {
           "source": "Match Original Utterance",
           "message": "匹配原文"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTp0cmFuc2xhdGlvbiNjOWRhYzgxM2VlNTU0OGI2ZmRhZTg1YjczNjExMWZhMDRkMTAyOGYyODllYmU0ZWU3MTllY2JiMWVmZTVlMjYx.field.bWF0Y2hfb3JpZ2luYWxfdXR0ZXJhbmNl.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.bWF0Y2hfb3JpZ2luYWxfdXR0ZXJhbmNl.short_desc": {
           "source": "When enabled with Speaker Labels, returns translated text in the utterances…",
           "message": "当启用演讲者标签时，返回话语中的翻译文本..."
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTp0cmFuc2xhdGlvbiNjOWRhYzgxM2VlNTU0OGI2ZmRhZTg1YjczNjExMWZhMDRkMTAyOGYyODllYmU0ZWU3MTllY2JiMWVmZTVlMjYx.field.bWF0Y2hfb3JpZ2luYWxfdXR0ZXJhbmNl.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.bWF0Y2hfb3JpZ2luYWxfdXR0ZXJhbmNl.desc": {
           "source": "When enabled with Speaker Labels, returns translated text in the utterances array. Each utterance will include a `translated_texts` key containing translations for each target language.",
           "message": "當與說話者標籤一起啟用時，傳回話語數組中的翻譯文字。每個話語都將包含一個 `translated_texts` 鍵，其中包含每種目標語言的翻譯。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTp0cmFuc2xhdGlvbiNjOWRhYzgxM2VlNTU0OGI2ZmRhZTg1YjczNjExMWZhMDRkMTAyOGYyODllYmU0ZWU3MTllY2JiMWVmZTVlMjYx.field.dGFyZ2V0X2xhbmd1YWdlcw.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.dGFyZ2V0X2xhbmd1YWdlcw.display_name": {
           "source": "Target Languages",
           "message": "目標語言"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTp0cmFuc2xhdGlvbiNjOWRhYzgxM2VlNTU0OGI2ZmRhZTg1YjczNjExMWZhMDRkMTAyOGYyODllYmU0ZWU3MTllY2JiMWVmZTVlMjYx.field.dGFyZ2V0X2xhbmd1YWdlcw.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.dGFyZ2V0X2xhbmd1YWdlcw.short_desc": {
           "source": "List of target language codes (e.g., '[\"es\", \"de\"]')",
           "message": "目標語言代碼清單（例如，'[\"es\", \"de\"]'）"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTp0cmFuc2xhdGlvbiNjOWRhYzgxM2VlNTU0OGI2ZmRhZTg1YjczNjExMWZhMDRkMTAyOGYyODllYmU0ZWU3MTllY2JiMWVmZTVlMjYx.field.dGFyZ2V0X2xhbmd1YWdlcw.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.dGFyZ2V0X2xhbmd1YWdlcw.desc": {
           "source": "List of target language codes (e.g., `[\"es\", \"de\"]`). See [Translation](https://www.assemblyai.com/docs/speech-understanding/translation) for supported languages.",
           "message": "目標語言代碼清單（例如 `[\"es\", \"de\"]`）。有關支援的語言，請參閱[翻譯](https://www.assemblyai.com/docs/speech-understanding/translation)。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTpTcGVha2VySWRlbnRpZmljYXRpb25SZXF1ZXN0Qm9keSM3NmJhYjE0OGIyMDVlYmY4YzljZThkYzc0NWMwYTk3YzAwZTdhM2JkM2I3NDFjMThlOWFmOTRiMzQwOGQ4NTNl.field.c3BlYWtlcl9pZGVudGlmaWNhdGlvbg.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROlNwZWFrZXJJZGVudGlmaWNhdGlvblJlcXVlc3RCb2R5IzUzNDM0ZTBkMDhhMGY3MDUyYTQ2Y2U2YzMzZGQ1ZmJiOGQ4YTU0ZDc0YjExY2JjY2YzYjAzYTIwY2NlOGExM2I.field.c3BlYWtlcl9pZGVudGlmaWNhdGlvbg.display_name": {
           "source": "Speaker Identification",
           "message": "說話者識別"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTpzcGVha2VyX2lkZW50aWZpY2F0aW9uIzEwNzI2MmYzOTY2YzZhODEwODMwMmQxMTNjOWVhNTk5ZGNiYmRmOWQzMDU5YjU2OTYwZTg4ODg0Y2IwMTcyNzg.field.a25vd25fdmFsdWVz.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.a25vd25fdmFsdWVz.display_name": {
           "source": "Known Values",
           "message": "已知值"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTpzcGVha2VyX2lkZW50aWZpY2F0aW9uIzEwNzI2MmYzOTY2YzZhODEwODMwMmQxMTNjOWVhNTk5ZGNiYmRmOWQzMDU5YjU2OTYwZTg4ODg0Y2IwMTcyNzg.field.a25vd25fdmFsdWVz.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.a25vd25fdmFsdWVz.short_desc": {
           "source": "Required if speaker_type is \"role\"",
           "message": "如果speaker_type是「role」則為必填項"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTpzcGVha2VyX2lkZW50aWZpY2F0aW9uIzEwNzI2MmYzOTY2YzZhODEwODMwMmQxMTNjOWVhNTk5ZGNiYmRmOWQzMDU5YjU2OTYwZTg4ODg0Y2IwMTcyNzg.field.a25vd25fdmFsdWVz.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.a25vd25fdmFsdWVz.desc": {
           "source": "Required if speaker_type is \"role\". Each value must be 35 characters or less.",
           "message": "如果speaker_type 是“role”，则为必填项。每個值不得超過 35 個字元。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTpzcGVha2VyX2lkZW50aWZpY2F0aW9uIzEwNzI2MmYzOTY2YzZhODEwODMwMmQxMTNjOWVhNTk5ZGNiYmRmOWQzMDU5YjU2OTYwZTg4ODg0Y2IwMTcyNzg.field.c3BlYWtlcl90eXBl.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.c3BlYWtlcl90eXBl.display_name": {
           "source": "Speaker Type",
           "message": "揚聲器類型"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTpzcGVha2VyX2lkZW50aWZpY2F0aW9uIzEwNzI2MmYzOTY2YzZhODEwODMwMmQxMTNjOWVhNTk5ZGNiYmRmOWQzMDU5YjU2OTYwZTg4ODg0Y2IwMTcyNzg.field.c3BlYWtlcl90eXBl.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.c3BlYWtlcl90eXBl.short_desc": {
           "source": "Type of speaker identification",
           "message": "說話者辨識類型"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTpzcGVha2VyX2lkZW50aWZpY2F0aW9uIzEwNzI2MmYzOTY2YzZhODEwODMwMmQxMTNjOWVhNTk5ZGNiYmRmOWQzMDU5YjU2OTYwZTg4ODg0Y2IwMTcyNzg.field.c3BlYWtlcl90eXBl.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.c3BlYWtlcl90eXBl.desc": {
           "source": "Type of speaker identification. See [Speaker Identification](https://www.assemblyai.com/docs/speech-understanding/speaker-identification) for details on each type.",
           "message": "說話者辨識的類型。有關每種類型的詳細信息，請參閱[說話者識別](https://www.assemblyai.com/docs/speech-understanding/speaker-identification)。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTpzcGVha2VyX2lkZW50aWZpY2F0aW9uIzEwNzI2MmYzOTY2YzZhODEwODMwMmQxMTNjOWVhNTk5ZGNiYmRmOWQzMDU5YjU2OTYwZTg4ODg0Y2IwMTcyNzg.field.c3BlYWtlcl90eXBl.allowed-value.c3RyaW5nOnJvbGU.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.c3BlYWtlcl90eXBl.allowed-value.c3RyaW5nOnJvbGU.display_name": {
           "source": "role",
           "message": "角色"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTpzcGVha2VyX2lkZW50aWZpY2F0aW9uIzEwNzI2MmYzOTY2YzZhODEwODMwMmQxMTNjOWVhNTk5ZGNiYmRmOWQzMDU5YjU2OTYwZTg4ODg0Y2IwMTcyNzg.field.c3BlYWtlcl90eXBl.allowed-value.c3RyaW5nOm5hbWU.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.c3BlYWtlcl90eXBl.allowed-value.c3RyaW5nOm5hbWU.display_name": {
           "source": "name",
           "message": "姓名"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTpzcGVha2VyX2lkZW50aWZpY2F0aW9uIzEwNzI2MmYzOTY2YzZhODEwODMwMmQxMTNjOWVhNTk5ZGNiYmRmOWQzMDU5YjU2OTYwZTg4ODg0Y2IwMTcyNzg.field.c3BlYWtlcnM.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.c3BlYWtlcnM.display_name": {
           "source": "Speakers",
           "message": "揚聲器"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTpzcGVha2VyX2lkZW50aWZpY2F0aW9uIzEwNzI2MmYzOTY2YzZhODEwODMwMmQxMTNjOWVhNTk5ZGNiYmRmOWQzMDU5YjU2OTYwZTg4ODg0Y2IwMTcyNzg.field.c3BlYWtlcnM.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.c3BlYWtlcnM.short_desc": {
           "source": "An array of speaker objects with metadata to improve identification accuracy",
           "message": "一系列具有元数据的说话者对象，可提高识别准确性"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTpzcGVha2VyX2lkZW50aWZpY2F0aW9uIzEwNzI2MmYzOTY2YzZhODEwODMwMmQxMTNjOWVhNTk5ZGNiYmRmOWQzMDU5YjU2OTYwZTg4ODg0Y2IwMTcyNzg.field.c3BlYWtlcnM.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.c3BlYWtlcnM.desc": {
           "source": "An array of speaker objects with metadata to improve identification accuracy. Each object should include a `role` or `name` (depending on `speaker_type`) and an optional `description` to help the model identify the speaker. You can also include any additional custom properties (e.g., `company`, `title`) to provide more context. Use this as an alternative to `known_values` when you want to provide additional context about each speaker.",
           "message": "一系列具有元数据的说话者对象，可提高识别准确性。每個物件應包含 `role` 或 `name` （取決於 `speaker_type`）和可選的 `description` 以幫助模型識別說話者。您还可以包含任何其他自定义属性（例如，`company`、`title`）以提供更多上下文。當您想要提供有關每個發言者的附加上下文時，可以使用此選項來替代 `known_values`。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTppdGVtcyM5MjNjZDVlMDRhZjFjNmYyMDNkYmNjNWU2N2NiZjhlOTQ5NmU0MzE2ODU5ZGYwYzE5N2VlYjVmMmNmMDI1NjZi.field.ZGVzY3JpcHRpb24.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROml0ZW1zIzFmMTEwOWQ1ZjBiMmM5NDE4M2Y2ZTBjMzI2ZDQ5OWVkY2UzZWJjODQwZGQ2ZWRhNzQzOGRhYmQyZDRiMzZmNmE.field.ZGVzY3JpcHRpb24.display_name": {
           "source": "Description",
           "message": "說明"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTppdGVtcyM5MjNjZDVlMDRhZjFjNmYyMDNkYmNjNWU2N2NiZjhlOTQ5NmU0MzE2ODU5ZGYwYzE5N2VlYjVmMmNmMDI1NjZi.field.ZGVzY3JpcHRpb24.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROml0ZW1zIzFmMTEwOWQ1ZjBiMmM5NDE4M2Y2ZTBjMzI2ZDQ5OWVkY2UzZWJjODQwZGQ2ZWRhNzQzOGRhYmQyZDRiMzZmNmE.field.ZGVzY3JpcHRpb24.short_desc": {
           "source": "A description of the speaker to help the model identify them based on…",
           "message": "對說話者的描述，以幫助模型根據…識別他們"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTppdGVtcyM5MjNjZDVlMDRhZjFjNmYyMDNkYmNjNWU2N2NiZjhlOTQ5NmU0MzE2ODU5ZGYwYzE5N2VlYjVmMmNmMDI1NjZi.field.ZGVzY3JpcHRpb24.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROml0ZW1zIzFmMTEwOWQ1ZjBiMmM5NDE4M2Y2ZTBjMzI2ZDQ5OWVkY2UzZWJjODQwZGQ2ZWRhNzQzOGRhYmQyZDRiMzZmNmE.field.ZGVzY3JpcHRpb24.desc": {
           "source": "A description of the speaker to help the model identify them based on conversational context.",
           "message": "對說話者的描述，幫助模型根據對話上下文識別他們。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTppdGVtcyM5MjNjZDVlMDRhZjFjNmYyMDNkYmNjNWU2N2NiZjhlOTQ5NmU0MzE2ODU5ZGYwYzE5N2VlYjVmMmNmMDI1NjZi.field.bmFtZQ.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROml0ZW1zIzFmMTEwOWQ1ZjBiMmM5NDE4M2Y2ZTBjMzI2ZDQ5OWVkY2UzZWJjODQwZGQ2ZWRhNzQzOGRhYmQyZDRiMzZmNmE.field.bmFtZQ.display_name": {
           "source": "Name",
           "message": "名稱"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTppdGVtcyM5MjNjZDVlMDRhZjFjNmYyMDNkYmNjNWU2N2NiZjhlOTQ5NmU0MzE2ODU5ZGYwYzE5N2VlYjVmMmNmMDI1NjZi.field.bmFtZQ.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROml0ZW1zIzFmMTEwOWQ1ZjBiMmM5NDE4M2Y2ZTBjMzI2ZDQ5OWVkY2UzZWJjODQwZGQ2ZWRhNzQzOGRhYmQyZDRiMzZmNmE.field.bmFtZQ.short_desc": {
           "source": "The name of the speaker",
           "message": "發言者姓名"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTppdGVtcyM5MjNjZDVlMDRhZjFjNmYyMDNkYmNjNWU2N2NiZjhlOTQ5NmU0MzE2ODU5ZGYwYzE5N2VlYjVmMmNmMDI1NjZi.field.bmFtZQ.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROml0ZW1zIzFmMTEwOWQ1ZjBiMmM5NDE4M2Y2ZTBjMzI2ZDQ5OWVkY2UzZWJjODQwZGQ2ZWRhNzQzOGRhYmQyZDRiMzZmNmE.field.bmFtZQ.desc": {
           "source": "The name of the speaker. Required when `speaker_type` is \"name\".",
           "message": "說話者的姓名。當 `speaker_type` 為「名稱」時為必要。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTppdGVtcyM5MjNjZDVlMDRhZjFjNmYyMDNkYmNjNWU2N2NiZjhlOTQ5NmU0MzE2ODU5ZGYwYzE5N2VlYjVmMmNmMDI1NjZi.field.cm9sZQ.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROml0ZW1zIzFmMTEwOWQ1ZjBiMmM5NDE4M2Y2ZTBjMzI2ZDQ5OWVkY2UzZWJjODQwZGQ2ZWRhNzQzOGRhYmQyZDRiMzZmNmE.field.cm9sZQ.display_name": {
           "source": "Role",
           "message": "角色"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTppdGVtcyM5MjNjZDVlMDRhZjFjNmYyMDNkYmNjNWU2N2NiZjhlOTQ5NmU0MzE2ODU5ZGYwYzE5N2VlYjVmMmNmMDI1NjZi.field.cm9sZQ.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROml0ZW1zIzFmMTEwOWQ1ZjBiMmM5NDE4M2Y2ZTBjMzI2ZDQ5OWVkY2UzZWJjODQwZGQ2ZWRhNzQzOGRhYmQyZDRiMzZmNmE.field.cm9sZQ.short_desc": {
           "source": "The role of the speaker",
           "message": "演講者的角色"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTppdGVtcyM5MjNjZDVlMDRhZjFjNmYyMDNkYmNjNWU2N2NiZjhlOTQ5NmU0MzE2ODU5ZGYwYzE5N2VlYjVmMmNmMDI1NjZi.field.cm9sZQ.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROml0ZW1zIzFmMTEwOWQ1ZjBiMmM5NDE4M2Y2ZTBjMzI2ZDQ5OWVkY2UzZWJjODQwZGQ2ZWRhNzQzOGRhYmQyZDRiMzZmNmE.field.cm9sZQ.desc": {
           "source": "The role of the speaker. Required when `speaker_type` is \"role\".",
           "message": "演講者的角色。當 `speaker_type` 為「角色」時為必要。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTpDdXN0b21Gb3JtYXR0aW5nUmVxdWVzdEJvZHkjNGI4Yjc5NDY0YmZhYmY4ODU0MjU3ZDgyODE1MjJjZTJkNjg4MzAxMGFmNjM5ZTNjOTUyMDQ1MzRmY2EyNTJiNw.field.Y3VzdG9tX2Zvcm1hdHRpbmc.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkN1c3RvbUZvcm1hdHRpbmdSZXF1ZXN0Qm9keSNkNDhmYmRiNmRjMmY0OGFlM2QyM2E5NTBiOThjNzk2NTg4MjY1MGQwZWY5MzMwYTUyZjhmY2ZlNzhlM2U5ZTcz.field.Y3VzdG9tX2Zvcm1hdHRpbmc.display_name": {
           "source": "Custom Formatting",
           "message": "自訂格式"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTpjdXN0b21fZm9ybWF0dGluZyM5YzA1OWE0YzIxYTg5NGE5YWM4ZWI3YTFhYzY4MTBlYWE3ODY1MzliMDY2NDIyMmJiYzc0YjQ4YWIzMjc3Yjcw.field.ZGF0ZQ.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.ZGF0ZQ.display_name": {
           "source": "Date",
           "message": "日期"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTpjdXN0b21fZm9ybWF0dGluZyM5YzA1OWE0YzIxYTg5NGE5YWM4ZWI3YTFhYzY4MTBlYWE3ODY1MzliMDY2NDIyMmJiYzc0YjQ4YWIzMjc3Yjcw.field.ZGF0ZQ.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.ZGF0ZQ.short_desc": {
           "source": "Date format pattern (e.g., '\"mm/dd/yyyy\"')",
           "message": "日期格式模式（例如“mm/dd/yyyy”）"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTpjdXN0b21fZm9ybWF0dGluZyM5YzA1OWE0YzIxYTg5NGE5YWM4ZWI3YTFhYzY4MTBlYWE3ODY1MzliMDY2NDIyMmJiYzc0YjQ4YWIzMjc3Yjcw.field.ZGF0ZQ.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.ZGF0ZQ.desc": {
           "source": "Date format pattern (e.g., `\"mm/dd/yyyy\"`). See [Custom Formatting](https://www.assemblyai.com/docs/speech-understanding/custom-formatting) for more details.",
           "message": "日期格式模式（例如 `\"mm/dd/yyyy\"`）。有關更多詳細信息，請參閱[自訂格式](https://www.assemblyai.com/docs/speech-understanding/custom-formatting)。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTpjdXN0b21fZm9ybWF0dGluZyM5YzA1OWE0YzIxYTg5NGE5YWM4ZWI3YTFhYzY4MTBlYWE3ODY1MzliMDY2NDIyMmJiYzc0YjQ4YWIzMjc3Yjcw.field.ZW1haWw.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.ZW1haWw.display_name": {
           "source": "Email",
           "message": "電子郵件"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTpjdXN0b21fZm9ybWF0dGluZyM5YzA1OWE0YzIxYTg5NGE5YWM4ZWI3YTFhYzY4MTBlYWE3ODY1MzliMDY2NDIyMmJiYzc0YjQ4YWIzMjc3Yjcw.field.ZW1haWw.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.ZW1haWw.short_desc": {
           "source": "Email format pattern (e.g., '\"username@domain.com\"')",
           "message": "電子郵件格式模式（例如“username@domain.com”）"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTpjdXN0b21fZm9ybWF0dGluZyM5YzA1OWE0YzIxYTg5NGE5YWM4ZWI3YTFhYzY4MTBlYWE3ODY1MzliMDY2NDIyMmJiYzc0YjQ4YWIzMjc3Yjcw.field.ZW1haWw.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.ZW1haWw.desc": {
           "source": "Email format pattern (e.g., `\"username@domain.com\"`). See [Custom Formatting](https://www.assemblyai.com/docs/speech-understanding/custom-formatting) for more details.",
           "message": "電子郵件格式模式（例如 `\"username@domain.com\"`）。有關更多詳細信息，請參閱[自訂格式](https://www.assemblyai.com/docs/speech-understanding/custom-formatting)。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTpjdXN0b21fZm9ybWF0dGluZyM5YzA1OWE0YzIxYTg5NGE5YWM4ZWI3YTFhYzY4MTBlYWE3ODY1MzliMDY2NDIyMmJiYzc0YjQ4YWIzMjc3Yjcw.field.cGhvbmVfbnVtYmVy.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.cGhvbmVfbnVtYmVy.display_name": {
           "source": "Phone Number",
           "message": "電話號碼"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTpjdXN0b21fZm9ybWF0dGluZyM5YzA1OWE0YzIxYTg5NGE5YWM4ZWI3YTFhYzY4MTBlYWE3ODY1MzliMDY2NDIyMmJiYzc0YjQ4YWIzMjc3Yjcw.field.cGhvbmVfbnVtYmVy.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.cGhvbmVfbnVtYmVy.short_desc": {
           "source": "Phone number format pattern (e.g., '\"(xxx)xxx-xxxx\"')",
           "message": "電話號碼格式模式（例如“(xxx)xxx-xxxx”）"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTpjdXN0b21fZm9ybWF0dGluZyM5YzA1OWE0YzIxYTg5NGE5YWM4ZWI3YTFhYzY4MTBlYWE3ODY1MzliMDY2NDIyMmJiYzc0YjQ4YWIzMjc3Yjcw.field.cGhvbmVfbnVtYmVy.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.cGhvbmVfbnVtYmVy.desc": {
           "source": "Phone number format pattern (e.g., `\"(xxx)xxx-xxxx\"`). See [Custom Formatting](https://www.assemblyai.com/docs/speech-understanding/custom-formatting) for more details.",
           "message": "電話號碼格式模式（例如 `\"(xxx)xxx-xxxx\"`）。有關更多詳細信息，請參閱[自訂格式](https://www.assemblyai.com/docs/speech-understanding/custom-formatting)。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTpTdW1tYXJpemF0aW9uUmVxdWVzdEJvZHkjYjAwYTRkYzhkN2UyZDdmNTc1YTNmMDY2ZWZkNjAxMDgxZGJkNDdmZDRmMjBlZGI1ZTdkZThhNmQwMTFlMGYxMQ.field.c3VtbWFyaXphdGlvbg.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROlN1bW1hcml6YXRpb25SZXF1ZXN0Qm9keSNkYmMwOGM4MDlmYTEyOTU3YzNkOWY0ODRkYTYyMzRjZjc0Y2MwZDA4MmM2NjdiYTc0NDlhMjE0MDE4YTI5OWMy.field.c3VtbWFyaXphdGlvbg.display_name": {
           "source": "Summarization",
           "message": "摘要生成"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTpzdW1tYXJpemF0aW9uI2FkNmIwZDYyNmVkYjc2Mzk5OWYwZDRkMmI5MmQ0ZTkzMzI4MTY3MmI5ODA4MzVkZGRjYmVmYWQ2MzNkZmNjNDY.field.ZWZmb3J0.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnN1bW1hcml6YXRpb24jODBlMTQ5NDZkZWIxY2Y5NWY0NDVjNTk2MGUwNzliZGZkZWE1MDEzYTMwYzEzMGVlMTZiYzA1YjdhNTZhOGZjYw.field.ZWZmb3J0.display_name": {
           "source": "Effort",
           "message": "投入度"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTpzdW1tYXJpemF0aW9uI2FkNmIwZDYyNmVkYjc2Mzk5OWYwZDRkMmI5MmQ0ZTkzMzI4MTY3MmI5ODA4MzVkZGRjYmVmYWQ2MzNkZmNjNDY.field.ZWZmb3J0.allowed-value.c3RyaW5nOmxvdw.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnN1bW1hcml6YXRpb24jODBlMTQ5NDZkZWIxY2Y5NWY0NDVjNTk2MGUwNzliZGZkZWE1MDEzYTMwYzEzMGVlMTZiYzA1YjdhNTZhOGZjYw.field.ZWZmb3J0.allowed-value.c3RyaW5nOmxvdw.display_name": {
           "source": "low",
           "message": "低"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTpzdW1tYXJpemF0aW9uI2FkNmIwZDYyNmVkYjc2Mzk5OWYwZDRkMmI5MmQ0ZTkzMzI4MTY3MmI5ODA4MzVkZGRjYmVmYWQ2MzNkZmNjNDY.field.ZWZmb3J0.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnN1bW1hcml6YXRpb24jODBlMTQ5NDZkZWIxY2Y5NWY0NDVjNTk2MGUwNzliZGZkZWE1MDEzYTMwYzEzMGVlMTZiYzA1YjdhNTZhOGZjYw.field.ZWZmb3J0.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
           "source": "medium",
           "message": "中"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTpzdW1tYXJpemF0aW9uI2FkNmIwZDYyNmVkYjc2Mzk5OWYwZDRkMmI5MmQ0ZTkzMzI4MTY3MmI5ODA4MzVkZGRjYmVmYWQ2MzNkZmNjNDY.field.c3VtbWFyeV90eXBl.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnN1bW1hcml6YXRpb24jODBlMTQ5NDZkZWIxY2Y5NWY0NDVjNTk2MGUwNzliZGZkZWE1MDEzYTMwYzEzMGVlMTZiYzA1YjdhNTZhOGZjYw.field.c3VtbWFyeV90eXBl.display_name": {
           "source": "Summary Type",
           "message": "摘要類型"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTpzdW1tYXJpemF0aW9uI2FkNmIwZDYyNmVkYjc2Mzk5OWYwZDRkMmI5MmQ0ZTkzMzI4MTY3MmI5ODA4MzVkZGRjYmVmYWQ2MzNkZmNjNDY.field.c3VtbWFyeV90eXBl.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnN1bW1hcml6YXRpb24jODBlMTQ5NDZkZWIxY2Y5NWY0NDVjNTk2MGUwNzliZGZkZWE1MDEzYTMwYzEzMGVlMTZiYzA1YjdhNTZhOGZjYw.field.c3VtbWFyeV90eXBl.short_desc": {
           "source": "Type of summary",
           "message": "摘要類型"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTpzdW1tYXJpemF0aW9uI2FkNmIwZDYyNmVkYjc2Mzk5OWYwZDRkMmI5MmQ0ZTkzMzI4MTY3MmI5ODA4MzVkZGRjYmVmYWQ2MzNkZmNjNDY.field.c3VtbWFyeV90eXBl.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnN1bW1hcml6YXRpb24jODBlMTQ5NDZkZWIxY2Y5NWY0NDVjNTk2MGUwNzliZGZkZWE1MDEzYTMwYzEzMGVlMTZiYzA1YjdhNTZhOGZjYw.field.c3VtbWFyeV90eXBl.desc": {
           "source": "Type of summary. Bullets returns short bullet point style summaries, paragraph is generally more verbose and detailed.",
           "message": "摘要類型。項目符號傳回簡短的要點樣式摘要，段落通常更冗長和詳細。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTpzdW1tYXJpemF0aW9uI2FkNmIwZDYyNmVkYjc2Mzk5OWYwZDRkMmI5MmQ0ZTkzMzI4MTY3MmI5ODA4MzVkZGRjYmVmYWQ2MzNkZmNjNDY.field.c3VtbWFyeV90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaA.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnN1bW1hcml6YXRpb24jODBlMTQ5NDZkZWIxY2Y5NWY0NDVjNTk2MGUwNzliZGZkZWE1MDEzYTMwYzEzMGVlMTZiYzA1YjdhNTZhOGZjYw.field.c3VtbWFyeV90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaA.display_name": {
           "source": "paragraph",
           "message": "段落"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTpzdW1tYXJpemF0aW9uI2FkNmIwZDYyNmVkYjc2Mzk5OWYwZDRkMmI5MmQ0ZTkzMzI4MTY3MmI5ODA4MzVkZGRjYmVmYWQ2MzNkZmNjNDY.field.c3VtbWFyeV90eXBl.allowed-value.c3RyaW5nOmJ1bGxldHM.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROnN1bW1hcml6YXRpb24jODBlMTQ5NDZkZWIxY2Y5NWY0NDVjNTk2MGUwNzliZGZkZWE1MDEzYTMwYzEzMGVlMTZiYzA1YjdhNTZhOGZjYw.field.c3VtbWFyeV90eXBl.allowed-value.c3RyaW5nOmJ1bGxldHM.display_name": {
           "source": "bullets",
           "message": "子彈"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTpBY3Rpb25JdGVtc1JlcXVlc3RCb2R5IzMxODY0M2FlNTc1MDc3YTNhZGQyMmVlYmIyNTIyOTNmNTRiOTc2ZjllOTU5M2E5ZDFkNzI5Yjc1ZGJmMzE5MmY.field.YWN0aW9uX2l0ZW1z.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkFjdGlvbkl0ZW1zUmVxdWVzdEJvZHkjMDg2ZmRiZGJkZjBhZDJhOTlmMjk0YWQxYjljYjUwZTk5NTY4MzUzM2U2MWNkMTE3MGMwOGQ2Mzk3MmI0NWQxMg.field.YWN0aW9uX2l0ZW1z.display_name": {
           "source": "Action Items",
           "message": "行動項目"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTphY3Rpb25faXRlbXMjZTAxNzNjY2MwZTVjYTEyNzEwNzc3ZTdmNjk0ZDA5MDlmOGQwYTY4NTZjNjQ0YjJjMDQyMzAwOTMyZWExY2JkZA.field.ZWZmb3J0.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROmFjdGlvbl9pdGVtcyMxNmUyZWY4MzAxNTNhZmE0M2RlNGRlZjE3MGQyNGRiOTM5NTY5NWZkZDFjMjU0OWNhZDk5NDYyMzU5MDY2Y2Zk.field.ZWZmb3J0.display_name": {
           "source": "Effort",
           "message": "投入度"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTphY3Rpb25faXRlbXMjZTAxNzNjY2MwZTVjYTEyNzEwNzc3ZTdmNjk0ZDA5MDlmOGQwYTY4NTZjNjQ0YjJjMDQyMzAwOTMyZWExY2JkZA.field.ZWZmb3J0.allowed-value.c3RyaW5nOmxvdw.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROmFjdGlvbl9pdGVtcyMxNmUyZWY4MzAxNTNhZmE0M2RlNGRlZjE3MGQyNGRiOTM5NTY5NWZkZDFjMjU0OWNhZDk5NDYyMzU5MDY2Y2Zk.field.ZWZmb3J0.allowed-value.c3RyaW5nOmxvdw.display_name": {
           "source": "low",
           "message": "低"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTphY3Rpb25faXRlbXMjZTAxNzNjY2MwZTVjYTEyNzEwNzc3ZTdmNjk0ZDA5MDlmOGQwYTY4NTZjNjQ0YjJjMDQyMzAwOTMyZWExY2JkZA.field.ZWZmb3J0.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROmFjdGlvbl9pdGVtcyMxNmUyZWY4MzAxNTNhZmE0M2RlNGRlZjE3MGQyNGRiOTM5NTY5NWZkZDFjMjU0OWNhZDk5NDYyMzU5MDY2Y2Zk.field.ZWZmb3J0.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
           "source": "medium",
           "message": "中"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTphY3Rpb25faXRlbXMjZTAxNzNjY2MwZTVjYTEyNzEwNzc3ZTdmNjk0ZDA5MDlmOGQwYTY4NTZjNjQ0YjJjMDQyMzAwOTMyZWExY2JkZA.field.aW5jbHVkZV9kZWNpc2lvbnM.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROmFjdGlvbl9pdGVtcyMxNmUyZWY4MzAxNTNhZmE0M2RlNGRlZjE3MGQyNGRiOTM5NTY5NWZkZDFjMjU0OWNhZDk5NDYyMzU5MDY2Y2Zk.field.aW5jbHVkZV9kZWNpc2lvbnM.display_name": {
           "source": "Include Decisions",
           "message": "包括決定"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTphY3Rpb25faXRlbXMjZTAxNzNjY2MwZTVjYTEyNzEwNzc3ZTdmNjk0ZDA5MDlmOGQwYTY4NTZjNjQ0YjJjMDQyMzAwOTMyZWExY2JkZA.field.aW5jbHVkZV9kZWNpc2lvbnM.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROmFjdGlvbl9pdGVtcyMxNmUyZWY4MzAxNTNhZmE0M2RlNGRlZjE3MGQyNGRiOTM5NTY5NWZkZDFjMjU0OWNhZDk5NDYyMzU5MDY2Y2Zk.field.aW5jbHVkZV9kZWNpc2lvbnM.short_desc": {
           "source": "Option to include decision making in action items",
           "message": "將決策納入行動項目的選項"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROkhhc2hEYXRhVHlwZTphY3Rpb25faXRlbXMjZTAxNzNjY2MwZTVjYTEyNzEwNzc3ZTdmNjk0ZDA5MDlmOGQwYTY4NTZjNjQ0YjJjMDQyMzAwOTMyZWExY2JkZA.field.aW5jbHVkZV9kZWNpc2lvbnM.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFhSeVlXNXpZM0pwY0hROmFjdGlvbl9pdGVtcyMxNmUyZWY4MzAxNTNhZmE0M2RlNGRlZjE3MGQyNGRiOTM5NTY5NWZkZDFjMjU0OWNhZDk5NDYyMzU5MDY2Y2Zk.field.aW5jbHVkZV9kZWNpc2lvbnM.desc": {
           "source": "Option to include decision making in action items.",
           "message": "將決策納入行動項目的選項。"
         },
@@ -2639,23 +2639,23 @@
           "source": "Format",
           "message": "格式"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipBdWRpb0Zvcm1hdCMzN2ZkZTc3MzI2YTE3MTkwYjczNjk3NTU4MDU3ZWFjMmE1YmZmOTVhYzcwMDNlMDM5YzFiMzkxZmZkOTIzMmE4.field.ZW5jb2Rpbmc.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6KkF1ZGlvRm9ybWF0IzI5YzA2Nzg3M2I0ZDc2YzYzYzIxMGYzYzM3ODRkMGJkMWQ0OTdhYjFjOTgwMzNmMzlkMTE5ZGU3NDU5YzA0ZmQ.field.ZW5jb2Rpbmc.display_name": {
           "source": "Encoding",
           "message": "編碼"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipBdWRpb0Zvcm1hdCMzN2ZkZTc3MzI2YTE3MTkwYjczNjk3NTU4MDU3ZWFjMmE1YmZmOTVhYzcwMDNlMDM5YzFiMzkxZmZkOTIzMmE4.field.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOmF1ZGlvL3BjbQ.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6KkF1ZGlvRm9ybWF0IzI5YzA2Nzg3M2I0ZDc2YzYzYzIxMGYzYzM3ODRkMGJkMWQ0OTdhYjFjOTgwMzNmMzlkMTE5ZGU3NDU5YzA0ZmQ.field.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOmF1ZGlvL3BjbQ.display_name": {
           "source": "audio/pcm",
           "message": "audio/pcm"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipBdWRpb0Zvcm1hdCMzN2ZkZTc3MzI2YTE3MTkwYjczNjk3NTU4MDU3ZWFjMmE1YmZmOTVhYzcwMDNlMDM5YzFiMzkxZmZkOTIzMmE4.field.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOmF1ZGlvL3BjbXU.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6KkF1ZGlvRm9ybWF0IzI5YzA2Nzg3M2I0ZDc2YzYzYzIxMGYzYzM3ODRkMGJkMWQ0OTdhYjFjOTgwMzNmMzlkMTE5ZGU3NDU5YzA0ZmQ.field.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOmF1ZGlvL3BjbXU.display_name": {
           "source": "audio/pcmu",
           "message": "audio/pcmu"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipBdWRpb0Zvcm1hdCMzN2ZkZTc3MzI2YTE3MTkwYjczNjk3NTU4MDU3ZWFjMmE1YmZmOTVhYzcwMDNlMDM5YzFiMzkxZmZkOTIzMmE4.field.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOmF1ZGlvL3BjbWE.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6KkF1ZGlvRm9ybWF0IzI5YzA2Nzg3M2I0ZDc2YzYzYzIxMGYzYzM3ODRkMGJkMWQ0OTdhYjFjOTgwMzNmMzlkMTE5ZGU3NDU5YzA0ZmQ.field.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOmF1ZGlvL3BjbWE.display_name": {
           "source": "audio/pcma",
           "message": "audio/pcma"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipBdWRpb0Zvcm1hdCMzN2ZkZTc3MzI2YTE3MTkwYjczNjk3NTU4MDU3ZWFjMmE1YmZmOTVhYzcwMDNlMDM5YzFiMzkxZmZkOTIzMmE4.field.c2FtcGxlX3JhdGU.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6KkF1ZGlvRm9ybWF0IzI5YzA2Nzg3M2I0ZDc2YzYzYzIxMGYzYzM3ODRkMGJkMWQ0OTdhYjFjOTgwMzNmMzlkMTE5ZGU3NDU5YzA0ZmQ.field.c2FtcGxlX3JhdGU.display_name": {
           "source": "Sample Rate",
           "message": "取樣率"
         },
@@ -2779,59 +2779,59 @@
           "source": "Makes the tool a server-side HTTP tool. AssemblyAI calls this endpoint when the model invokes the tool.",
           "message": "使該工具成為伺服器端 HTTP 工具。當模型呼叫該工具時，AssemblyAI 會呼叫此端點。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipIdHRwVG9vbENvbmZpZyNkMTA0ZGU4NGJlNjlmOTIxZTViZTQwNDdlMGEzODgxOThjNTIyYzc3NWVkYTM4M2MxYzQxYzEzOWZhMGQwY2Yx.field.aGVhZGVycw.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6Kkh0dHBUb29sQ29uZmlnIzQ2NWRlNTY3YzA3ODY2ZmFmYzg3OTJhNTVlMWNiYWJmNWRhNWNkM2YxMzdlODdlODgxMjg3YzcwZDI0YWZjOWU.field.aGVhZGVycw.display_name": {
           "source": "Headers",
           "message": "標頭"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipIdHRwVG9vbENvbmZpZyNkMTA0ZGU4NGJlNjlmOTIxZTViZTQwNDdlMGEzODgxOThjNTIyYzc3NWVkYTM4M2MxYzQxYzEzOWZhMGQwY2Yx.field.aGVhZGVycw.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6Kkh0dHBUb29sQ29uZmlnIzQ2NWRlNTY3YzA3ODY2ZmFmYzg3OTJhNTVlMWNiYWJmNWRhNWNkM2YxMzdlODdlODgxMjg3YzcwZDI0YWZjOWU.field.aGVhZGVycw.short_desc": {
           "source": "Sent on every call",
           "message": "每次通話時發送"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipIdHRwVG9vbENvbmZpZyNkMTA0ZGU4NGJlNjlmOTIxZTViZTQwNDdlMGEzODgxOThjNTIyYzc3NWVkYTM4M2MxYzQxYzEzOWZhMGQwY2Yx.field.aGVhZGVycw.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6Kkh0dHBUb29sQ29uZmlnIzQ2NWRlNTY3YzA3ODY2ZmFmYzg3OTJhNTVlMWNiYWJmNWRhNWNkM2YxMzdlODdlODgxMjg3YzcwZDI0YWZjOWU.field.aGVhZGVycw.desc": {
           "source": "Sent on every call. Values are encrypted at rest and write-only (masked as \"***\" in responses).",
           "message": "每次通話時都會發送。值在靜態時加密且只寫（在回應中屏蔽為“***”）。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipIdHRwVG9vbENvbmZpZyNkMTA0ZGU4NGJlNjlmOTIxZTViZTQwNDdlMGEzODgxOThjNTIyYzc3NWVkYTM4M2MxYzQxYzEzOWZhMGQwY2Yx.field.aHR0cF9tZXRob2Q.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6Kkh0dHBUb29sQ29uZmlnIzQ2NWRlNTY3YzA3ODY2ZmFmYzg3OTJhNTVlMWNiYWJmNWRhNWNkM2YxMzdlODdlODgxMjg3YzcwZDI0YWZjOWU.field.aHR0cF9tZXRob2Q.display_name": {
           "source": "HTTP Method",
           "message": "HTTP 方法"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipIdHRwVG9vbENvbmZpZyNkMTA0ZGU4NGJlNjlmOTIxZTViZTQwNDdlMGEzODgxOThjNTIyYzc3NWVkYTM4M2MxYzQxYzEzOWZhMGQwY2Yx.field.aHR0cF9tZXRob2Q.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6Kkh0dHBUb29sQ29uZmlnIzQ2NWRlNTY3YzA3ODY2ZmFmYzg3OTJhNTVlMWNiYWJmNWRhNWNkM2YxMzdlODdlODgxMjg3YzcwZDI0YWZjOWU.field.aHR0cF9tZXRob2Q.short_desc": {
           "source": "GET/DELETE send arguments as query params",
           "message": "GET/DELETE 將參數作為查詢參數發送"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipIdHRwVG9vbENvbmZpZyNkMTA0ZGU4NGJlNjlmOTIxZTViZTQwNDdlMGEzODgxOThjNTIyYzc3NWVkYTM4M2MxYzQxYzEzOWZhMGQwY2Yx.field.aHR0cF9tZXRob2Q.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6Kkh0dHBUb29sQ29uZmlnIzQ2NWRlNTY3YzA3ODY2ZmFmYzg3OTJhNTVlMWNiYWJmNWRhNWNkM2YxMzdlODdlODgxMjg3YzcwZDI0YWZjOWU.field.aHR0cF9tZXRob2Q.desc": {
           "source": "GET/DELETE send arguments as query params; POST/PUT/PATCH send them as a JSON body.",
           "message": "GET/DELETE 將參數作為查詢參數發送； POST/PUT/PATCH 將它們作為 JSON 正文發送。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipIdHRwVG9vbENvbmZpZyNkMTA0ZGU4NGJlNjlmOTIxZTViZTQwNDdlMGEzODgxOThjNTIyYzc3NWVkYTM4M2MxYzQxYzEzOWZhMGQwY2Yx.field.aHR0cF9tZXRob2Q.allowed-value.c3RyaW5nOkdFVA.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6Kkh0dHBUb29sQ29uZmlnIzQ2NWRlNTY3YzA3ODY2ZmFmYzg3OTJhNTVlMWNiYWJmNWRhNWNkM2YxMzdlODdlODgxMjg3YzcwZDI0YWZjOWU.field.aHR0cF9tZXRob2Q.allowed-value.c3RyaW5nOkdFVA.display_name": {
           "source": "GET",
           "message": "GET"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipIdHRwVG9vbENvbmZpZyNkMTA0ZGU4NGJlNjlmOTIxZTViZTQwNDdlMGEzODgxOThjNTIyYzc3NWVkYTM4M2MxYzQxYzEzOWZhMGQwY2Yx.field.aHR0cF9tZXRob2Q.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6Kkh0dHBUb29sQ29uZmlnIzQ2NWRlNTY3YzA3ODY2ZmFmYzg3OTJhNTVlMWNiYWJmNWRhNWNkM2YxMzdlODdlODgxMjg3YzcwZDI0YWZjOWU.field.aHR0cF9tZXRob2Q.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
           "source": "POST",
           "message": "POST"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipIdHRwVG9vbENvbmZpZyNkMTA0ZGU4NGJlNjlmOTIxZTViZTQwNDdlMGEzODgxOThjNTIyYzc3NWVkYTM4M2MxYzQxYzEzOWZhMGQwY2Yx.field.aHR0cF9tZXRob2Q.allowed-value.c3RyaW5nOlBVVA.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6Kkh0dHBUb29sQ29uZmlnIzQ2NWRlNTY3YzA3ODY2ZmFmYzg3OTJhNTVlMWNiYWJmNWRhNWNkM2YxMzdlODdlODgxMjg3YzcwZDI0YWZjOWU.field.aHR0cF9tZXRob2Q.allowed-value.c3RyaW5nOlBVVA.display_name": {
           "source": "PUT",
           "message": "PUT"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipIdHRwVG9vbENvbmZpZyNkMTA0ZGU4NGJlNjlmOTIxZTViZTQwNDdlMGEzODgxOThjNTIyYzc3NWVkYTM4M2MxYzQxYzEzOWZhMGQwY2Yx.field.aHR0cF9tZXRob2Q.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6Kkh0dHBUb29sQ29uZmlnIzQ2NWRlNTY3YzA3ODY2ZmFmYzg3OTJhNTVlMWNiYWJmNWRhNWNkM2YxMzdlODdlODgxMjg3YzcwZDI0YWZjOWU.field.aHR0cF9tZXRob2Q.allowed-value.c3RyaW5nOlBBVENI.display_name": {
           "source": "PATCH",
           "message": "PATCH"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipIdHRwVG9vbENvbmZpZyNkMTA0ZGU4NGJlNjlmOTIxZTViZTQwNDdlMGEzODgxOThjNTIyYzc3NWVkYTM4M2MxYzQxYzEzOWZhMGQwY2Yx.field.aHR0cF9tZXRob2Q.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6Kkh0dHBUb29sQ29uZmlnIzQ2NWRlNTY3YzA3ODY2ZmFmYzg3OTJhNTVlMWNiYWJmNWRhNWNkM2YxMzdlODdlODgxMjg3YzcwZDI0YWZjOWU.field.aHR0cF9tZXRob2Q.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
           "source": "DELETE",
           "message": "DELETE"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipIdHRwVG9vbENvbmZpZyNkMTA0ZGU4NGJlNjlmOTIxZTViZTQwNDdlMGEzODgxOThjNTIyYzc3NWVkYTM4M2MxYzQxYzEzOWZhMGQwY2Yx.field.dXJs.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6Kkh0dHBUb29sQ29uZmlnIzQ2NWRlNTY3YzA3ODY2ZmFmYzg3OTJhNTVlMWNiYWJmNWRhNWNkM2YxMzdlODdlODgxMjg3YzcwZDI0YWZjOWU.field.dXJs.display_name": {
           "source": "URL",
           "message": "URL"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipIdHRwVG9vbENvbmZpZyNkMTA0ZGU4NGJlNjlmOTIxZTViZTQwNDdlMGEzODgxOThjNTIyYzc3NWVkYTM4M2MxYzQxYzEzOWZhMGQwY2Yx.field.dXJs.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6Kkh0dHBUb29sQ29uZmlnIzQ2NWRlNTY3YzA3ODY2ZmFmYzg3OTJhNTVlMWNiYWJmNWRhNWNkM2YxMzdlODdlODgxMjg3YzcwZDI0YWZjOWU.field.dXJs.short_desc": {
           "source": "Must be https and resolve to a public host",
           "message": "必須是 https 並解析為公共主機"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipIdHRwVG9vbENvbmZpZyNkMTA0ZGU4NGJlNjlmOTIxZTViZTQwNDdlMGEzODgxOThjNTIyYzc3NWVkYTM4M2MxYzQxYzEzOWZhMGQwY2Yx.field.dXJs.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6Kkh0dHBUb29sQ29uZmlnIzQ2NWRlNTY3YzA3ODY2ZmFmYzg3OTJhNTVlMWNiYWJmNWRhNWNkM2YxMzdlODdlODgxMjg3YzcwZDI0YWZjOWU.field.dXJs.desc": {
           "source": "Must be https and resolve to a public host. Max 2048 chars.",
           "message": "必須是 https 並解析為公共主機。最多 2048 個字元。"
         },
@@ -2859,35 +2859,35 @@
           "source": "A JSON Schema describing the tool's arguments. The same form for HTTP and\nclient-side tools. Each property accepts standard JSON-Schema keywords; beyond\n`type` and `description`, use `enum`, `examples`, `pattern`, and `format` to\nsharpen tool-calling and turn-detection accuracy.\n",
           "message": "描述工具參數的 JSON 架構。 HTTP 和的形式相同\n客户端工具。每個屬性都接受標準 JSON-Schema 關鍵字；超越\n`type` 和 `description`，使用 `enum`、`examples`、`pattern` 和 `format` 来\n提高工具呼叫和轉彎檢測的準確性。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipUb29sUGFyYW1ldGVycyM5MjliMWFjNzc3YjQ3NGM2OTE5NzMwMWZhNTRmNzNhZGI5Y2ZiMTNkYzc4NDQ0OTVmMDRhMjZjY2Y3ZDBiYzA4.field.cHJvcGVydGllcw.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6KlRvb2xQYXJhbWV0ZXJzIzVkYmVhYWUzZmIxNWI1NTRiYTJiMmY2ZjY1ZTRkMDRlNDAwYTdjMDYyYWIxYzU2NjcxZWIyODc1MWYwOGZjYTg.field.cHJvcGVydGllcw.display_name": {
           "source": "Properties",
           "message": "屬性"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipUb29sUGFyYW1ldGVycyM5MjliMWFjNzc3YjQ3NGM2OTE5NzMwMWZhNTRmNzNhZGI5Y2ZiMTNkYzc4NDQ0OTVmMDRhMjZjY2Y3ZDBiYzA4.field.cHJvcGVydGllcw.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6KlRvb2xQYXJhbWV0ZXJzIzVkYmVhYWUzZmIxNWI1NTRiYTJiMmY2ZjY1ZTRkMDRlNDAwYTdjMDYyYWIxYzU2NjcxZWIyODc1MWYwOGZjYTg.field.cHJvcGVydGllcw.short_desc": {
           "source": "Map of argument name to its JSON-Schema definition",
           "message": "參數名稱與其 JSON 架構定義的映射"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipUb29sUGFyYW1ldGVycyM5MjliMWFjNzc3YjQ3NGM2OTE5NzMwMWZhNTRmNzNhZGI5Y2ZiMTNkYzc4NDQ0OTVmMDRhMjZjY2Y3ZDBiYzA4.field.cHJvcGVydGllcw.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6KlRvb2xQYXJhbWV0ZXJzIzVkYmVhYWUzZmIxNWI1NTRiYTJiMmY2ZjY1ZTRkMDRlNDAwYTdjMDYyYWIxYzU2NjcxZWIyODc1MWYwOGZjYTg.field.cHJvcGVydGllcw.desc": {
           "source": "Map of argument name to its JSON-Schema definition.",
           "message": "參數名稱與其 JSON 架構定義的對應。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipUb29sUGFyYW1ldGVycyM5MjliMWFjNzc3YjQ3NGM2OTE5NzMwMWZhNTRmNzNhZGI5Y2ZiMTNkYzc4NDQ0OTVmMDRhMjZjY2Y3ZDBiYzA4.field.cmVxdWlyZWQ.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6KlRvb2xQYXJhbWV0ZXJzIzVkYmVhYWUzZmIxNWI1NTRiYTJiMmY2ZjY1ZTRkMDRlNDAwYTdjMDYyYWIxYzU2NjcxZWIyODc1MWYwOGZjYTg.field.cmVxdWlyZWQ.display_name": {
           "source": "Required",
           "message": "必要"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipUb29sUGFyYW1ldGVycyM5MjliMWFjNzc3YjQ3NGM2OTE5NzMwMWZhNTRmNzNhZGI5Y2ZiMTNkYzc4NDQ0OTVmMDRhMjZjY2Y3ZDBiYzA4.field.cmVxdWlyZWQ.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6KlRvb2xQYXJhbWV0ZXJzIzVkYmVhYWUzZmIxNWI1NTRiYTJiMmY2ZjY1ZTRkMDRlNDAwYTdjMDYyYWIxYzU2NjcxZWIyODc1MWYwOGZjYTg.field.cmVxdWlyZWQ.short_desc": {
           "source": "Names of the required arguments",
           "message": "所需參數的名稱"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipUb29sUGFyYW1ldGVycyM5MjliMWFjNzc3YjQ3NGM2OTE5NzMwMWZhNTRmNzNhZGI5Y2ZiMTNkYzc4NDQ0OTVmMDRhMjZjY2Y3ZDBiYzA4.field.cmVxdWlyZWQ.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6KlRvb2xQYXJhbWV0ZXJzIzVkYmVhYWUzZmIxNWI1NTRiYTJiMmY2ZjY1ZTRkMDRlNDAwYTdjMDYyYWIxYzU2NjcxZWIyODc1MWYwOGZjYTg.field.cmVxdWlyZWQ.desc": {
           "source": "Names of the required arguments.",
           "message": "所需參數的名稱。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipUb29sUGFyYW1ldGVycyM5MjliMWFjNzc3YjQ3NGM2OTE5NzMwMWZhNTRmNzNhZGI5Y2ZiMTNkYzc4NDQ0OTVmMDRhMjZjY2Y3ZDBiYzA4.field.dHlwZQ.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6KlRvb2xQYXJhbWV0ZXJzIzVkYmVhYWUzZmIxNWI1NTRiYTJiMmY2ZjY1ZTRkMDRlNDAwYTdjMDYyYWIxYzU2NjcxZWIyODc1MWYwOGZjYTg.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "類型"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipUb29sUGFyYW1ldGVycyM5MjliMWFjNzc3YjQ3NGM2OTE5NzMwMWZhNTRmNzNhZGI5Y2ZiMTNkYzc4NDQ0OTVmMDRhMjZjY2Y3ZDBiYzA4.field.dHlwZQ.allowed-value.c3RyaW5nOm9iamVjdA.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6KlRvb2xQYXJhbWV0ZXJzIzVkYmVhYWUzZmIxNWI1NTRiYTJiMmY2ZjY1ZTRkMDRlNDAwYTdjMDYyYWIxYzU2NjcxZWIyODc1MWYwOGZjYTg.field.dHlwZQ.allowed-value.c3RyaW5nOm9iamVjdA.display_name": {
           "source": "object",
           "message": "物件"
         },
@@ -2979,59 +2979,59 @@
           "source": "Makes the tool a server-side HTTP tool. AssemblyAI calls this endpoint when the model invokes the tool.",
           "message": "使該工具成為伺服器端 HTTP 工具。當模型呼叫該工具時，AssemblyAI 會呼叫此端點。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOkh0dHBUb29sQ29uZmlnIzhhMjkyZGUyMWJjYWE0MWZhNWMwZjA0YzI5N2FjM2UzMzgyMWY1NzUyZDc2ZTBiM2YxNGNkNDU1NjRiNDVlY2E.field.aGVhZGVycw.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SHR0cFRvb2xDb25maWcjNzBiNjBkNjMzMDE1NmU4MzE2OTEwMDMzMTM4NjQ4Y2IzOGFkODI2NjBiYTc5MGM1MmIxYmEwZWQyMTRlNzUxYg.field.aGVhZGVycw.display_name": {
           "source": "Headers",
           "message": "標頭"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOkh0dHBUb29sQ29uZmlnIzhhMjkyZGUyMWJjYWE0MWZhNWMwZjA0YzI5N2FjM2UzMzgyMWY1NzUyZDc2ZTBiM2YxNGNkNDU1NjRiNDVlY2E.field.aGVhZGVycw.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SHR0cFRvb2xDb25maWcjNzBiNjBkNjMzMDE1NmU4MzE2OTEwMDMzMTM4NjQ4Y2IzOGFkODI2NjBiYTc5MGM1MmIxYmEwZWQyMTRlNzUxYg.field.aGVhZGVycw.short_desc": {
           "source": "Sent on every call",
           "message": "每次通話時發送"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOkh0dHBUb29sQ29uZmlnIzhhMjkyZGUyMWJjYWE0MWZhNWMwZjA0YzI5N2FjM2UzMzgyMWY1NzUyZDc2ZTBiM2YxNGNkNDU1NjRiNDVlY2E.field.aGVhZGVycw.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SHR0cFRvb2xDb25maWcjNzBiNjBkNjMzMDE1NmU4MzE2OTEwMDMzMTM4NjQ4Y2IzOGFkODI2NjBiYTc5MGM1MmIxYmEwZWQyMTRlNzUxYg.field.aGVhZGVycw.desc": {
           "source": "Sent on every call. Values are encrypted at rest and write-only (masked as \"***\" in responses).",
           "message": "每次通話時都會發送。值在靜態時加密且只寫（在回應中屏蔽為“***”）。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOkh0dHBUb29sQ29uZmlnIzhhMjkyZGUyMWJjYWE0MWZhNWMwZjA0YzI5N2FjM2UzMzgyMWY1NzUyZDc2ZTBiM2YxNGNkNDU1NjRiNDVlY2E.field.aHR0cF9tZXRob2Q.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SHR0cFRvb2xDb25maWcjNzBiNjBkNjMzMDE1NmU4MzE2OTEwMDMzMTM4NjQ4Y2IzOGFkODI2NjBiYTc5MGM1MmIxYmEwZWQyMTRlNzUxYg.field.aHR0cF9tZXRob2Q.display_name": {
           "source": "HTTP Method",
           "message": "HTTP 方法"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOkh0dHBUb29sQ29uZmlnIzhhMjkyZGUyMWJjYWE0MWZhNWMwZjA0YzI5N2FjM2UzMzgyMWY1NzUyZDc2ZTBiM2YxNGNkNDU1NjRiNDVlY2E.field.aHR0cF9tZXRob2Q.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SHR0cFRvb2xDb25maWcjNzBiNjBkNjMzMDE1NmU4MzE2OTEwMDMzMTM4NjQ4Y2IzOGFkODI2NjBiYTc5MGM1MmIxYmEwZWQyMTRlNzUxYg.field.aHR0cF9tZXRob2Q.short_desc": {
           "source": "GET/DELETE send arguments as query params",
           "message": "GET/DELETE 將參數作為查詢參數發送"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOkh0dHBUb29sQ29uZmlnIzhhMjkyZGUyMWJjYWE0MWZhNWMwZjA0YzI5N2FjM2UzMzgyMWY1NzUyZDc2ZTBiM2YxNGNkNDU1NjRiNDVlY2E.field.aHR0cF9tZXRob2Q.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SHR0cFRvb2xDb25maWcjNzBiNjBkNjMzMDE1NmU4MzE2OTEwMDMzMTM4NjQ4Y2IzOGFkODI2NjBiYTc5MGM1MmIxYmEwZWQyMTRlNzUxYg.field.aHR0cF9tZXRob2Q.desc": {
           "source": "GET/DELETE send arguments as query params; POST/PUT/PATCH send them as a JSON body.",
           "message": "GET/DELETE 將參數作為查詢參數發送； POST/PUT/PATCH 將它們作為 JSON 正文發送。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOkh0dHBUb29sQ29uZmlnIzhhMjkyZGUyMWJjYWE0MWZhNWMwZjA0YzI5N2FjM2UzMzgyMWY1NzUyZDc2ZTBiM2YxNGNkNDU1NjRiNDVlY2E.field.aHR0cF9tZXRob2Q.allowed-value.c3RyaW5nOkdFVA.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SHR0cFRvb2xDb25maWcjNzBiNjBkNjMzMDE1NmU4MzE2OTEwMDMzMTM4NjQ4Y2IzOGFkODI2NjBiYTc5MGM1MmIxYmEwZWQyMTRlNzUxYg.field.aHR0cF9tZXRob2Q.allowed-value.c3RyaW5nOkdFVA.display_name": {
           "source": "GET",
           "message": "GET"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOkh0dHBUb29sQ29uZmlnIzhhMjkyZGUyMWJjYWE0MWZhNWMwZjA0YzI5N2FjM2UzMzgyMWY1NzUyZDc2ZTBiM2YxNGNkNDU1NjRiNDVlY2E.field.aHR0cF9tZXRob2Q.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SHR0cFRvb2xDb25maWcjNzBiNjBkNjMzMDE1NmU4MzE2OTEwMDMzMTM4NjQ4Y2IzOGFkODI2NjBiYTc5MGM1MmIxYmEwZWQyMTRlNzUxYg.field.aHR0cF9tZXRob2Q.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
           "source": "POST",
           "message": "POST"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOkh0dHBUb29sQ29uZmlnIzhhMjkyZGUyMWJjYWE0MWZhNWMwZjA0YzI5N2FjM2UzMzgyMWY1NzUyZDc2ZTBiM2YxNGNkNDU1NjRiNDVlY2E.field.aHR0cF9tZXRob2Q.allowed-value.c3RyaW5nOlBVVA.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SHR0cFRvb2xDb25maWcjNzBiNjBkNjMzMDE1NmU4MzE2OTEwMDMzMTM4NjQ4Y2IzOGFkODI2NjBiYTc5MGM1MmIxYmEwZWQyMTRlNzUxYg.field.aHR0cF9tZXRob2Q.allowed-value.c3RyaW5nOlBVVA.display_name": {
           "source": "PUT",
           "message": "PUT"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOkh0dHBUb29sQ29uZmlnIzhhMjkyZGUyMWJjYWE0MWZhNWMwZjA0YzI5N2FjM2UzMzgyMWY1NzUyZDc2ZTBiM2YxNGNkNDU1NjRiNDVlY2E.field.aHR0cF9tZXRob2Q.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SHR0cFRvb2xDb25maWcjNzBiNjBkNjMzMDE1NmU4MzE2OTEwMDMzMTM4NjQ4Y2IzOGFkODI2NjBiYTc5MGM1MmIxYmEwZWQyMTRlNzUxYg.field.aHR0cF9tZXRob2Q.allowed-value.c3RyaW5nOlBBVENI.display_name": {
           "source": "PATCH",
           "message": "PATCH"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOkh0dHBUb29sQ29uZmlnIzhhMjkyZGUyMWJjYWE0MWZhNWMwZjA0YzI5N2FjM2UzMzgyMWY1NzUyZDc2ZTBiM2YxNGNkNDU1NjRiNDVlY2E.field.aHR0cF9tZXRob2Q.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SHR0cFRvb2xDb25maWcjNzBiNjBkNjMzMDE1NmU4MzE2OTEwMDMzMTM4NjQ4Y2IzOGFkODI2NjBiYTc5MGM1MmIxYmEwZWQyMTRlNzUxYg.field.aHR0cF9tZXRob2Q.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
           "source": "DELETE",
           "message": "DELETE"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOkh0dHBUb29sQ29uZmlnIzhhMjkyZGUyMWJjYWE0MWZhNWMwZjA0YzI5N2FjM2UzMzgyMWY1NzUyZDc2ZTBiM2YxNGNkNDU1NjRiNDVlY2E.field.dXJs.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SHR0cFRvb2xDb25maWcjNzBiNjBkNjMzMDE1NmU4MzE2OTEwMDMzMTM4NjQ4Y2IzOGFkODI2NjBiYTc5MGM1MmIxYmEwZWQyMTRlNzUxYg.field.dXJs.display_name": {
           "source": "URL",
           "message": "URL"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOkh0dHBUb29sQ29uZmlnIzhhMjkyZGUyMWJjYWE0MWZhNWMwZjA0YzI5N2FjM2UzMzgyMWY1NzUyZDc2ZTBiM2YxNGNkNDU1NjRiNDVlY2E.field.dXJs.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SHR0cFRvb2xDb25maWcjNzBiNjBkNjMzMDE1NmU4MzE2OTEwMDMzMTM4NjQ4Y2IzOGFkODI2NjBiYTc5MGM1MmIxYmEwZWQyMTRlNzUxYg.field.dXJs.short_desc": {
           "source": "Must be https and resolve to a public host",
           "message": "必須是 https 並解析為公共主機"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOkh0dHBUb29sQ29uZmlnIzhhMjkyZGUyMWJjYWE0MWZhNWMwZjA0YzI5N2FjM2UzMzgyMWY1NzUyZDc2ZTBiM2YxNGNkNDU1NjRiNDVlY2E.field.dXJs.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SHR0cFRvb2xDb25maWcjNzBiNjBkNjMzMDE1NmU4MzE2OTEwMDMzMTM4NjQ4Y2IzOGFkODI2NjBiYTc5MGM1MmIxYmEwZWQyMTRlNzUxYg.field.dXJs.desc": {
           "source": "Must be https and resolve to a public host. Max 2048 chars.",
           "message": "必須是 https 並解析為公共主機。最多 2048 個字元。"
         },
@@ -3047,39 +3047,39 @@
           "source": "Values to capture from the JSON response.",
           "message": "從 JSON 回應中擷取的值。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOlByZUNvbm5lY3RSZXR1cm4jMjQ3Yjc1Njc1MmJkM2UyMmZhNGJiYmJjYzBhZTYxMjhmMmMwYmZhOTAwNzI3OWU1M2E0ZDRiNDYwNzYyYmFhNw.field.ZGVmYXVsdA.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6UHJlQ29ubmVjdFJldHVybiM2ZjYzMGMwYmVlZGU1MGFhYWNiNzNlNDVkZDRmYTc1NWRiNDU1MzU3MDQwZTkzMzA3MTBkYWUwZjc1Yzc4MWMy.field.ZGVmYXVsdA.display_name": {
           "source": "Default",
           "message": "預設"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOlByZUNvbm5lY3RSZXR1cm4jMjQ3Yjc1Njc1MmJkM2UyMmZhNGJiYmJjYzBhZTYxMjhmMmMwYmZhOTAwNzI3OWU1M2E0ZDRiNDYwNzYyYmFhNw.field.ZGVmYXVsdA.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6UHJlQ29ubmVjdFJldHVybiM2ZjYzMGMwYmVlZGU1MGFhYWNiNzNlNDVkZDRmYTc1NWRiNDU1MzU3MDQwZTkzMzA3MTBkYWUwZjc1Yzc4MWMy.field.ZGVmYXVsdA.short_desc": {
           "source": "Used when the path does not resolve",
           "message": "當路徑無法解析時使用"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOlByZUNvbm5lY3RSZXR1cm4jMjQ3Yjc1Njc1MmJkM2UyMmZhNGJiYmJjYzBhZTYxMjhmMmMwYmZhOTAwNzI3OWU1M2E0ZDRiNDYwNzYyYmFhNw.field.ZGVmYXVsdA.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6UHJlQ29ubmVjdFJldHVybiM2ZjYzMGMwYmVlZGU1MGFhYWNiNzNlNDVkZDRmYTc1NWRiNDU1MzU3MDQwZTkzMzA3MTBkYWUwZjc1Yzc4MWMy.field.ZGVmYXVsdA.desc": {
           "source": "Used when the path does not resolve. Without one, an unresolved\npath leaves the value unset. For greeting placeholders use a\nnon-empty default: a placeholder that resolves to nothing makes the\nplatform speak the agent's greeting as declared.\n",
           "message": "當路徑無法解析時使用。沒有一個，一個未解決的問題\n路徑未設定值。對於問候語佔位符，請使用\n非空預設值：解析為空的佔位符使得\n平台依照聲明說出代理的問候語。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOlByZUNvbm5lY3RSZXR1cm4jMjQ3Yjc1Njc1MmJkM2UyMmZhNGJiYmJjYzBhZTYxMjhmMmMwYmZhOTAwNzI3OWU1M2E0ZDRiNDYwNzYyYmFhNw.field.bmFtZQ.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6UHJlQ29ubmVjdFJldHVybiM2ZjYzMGMwYmVlZGU1MGFhYWNiNzNlNDVkZDRmYTc1NWRiNDU1MzU3MDQwZTkzMzA3MTBkYWUwZjc1Yzc4MWMy.field.bmFtZQ.display_name": {
           "source": "Name",
           "message": "名稱"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOlByZUNvbm5lY3RSZXR1cm4jMjQ3Yjc1Njc1MmJkM2UyMmZhNGJiYmJjYzBhZTYxMjhmMmMwYmZhOTAwNzI3OWU1M2E0ZDRiNDYwNzYyYmFhNw.field.bmFtZQ.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6UHJlQ29ubmVjdFJldHVybiM2ZjYzMGMwYmVlZGU1MGFhYWNiNzNlNDVkZDRmYTc1NWRiNDU1MzU3MDQwZTkzMzA3MTBkYWUwZjc1Yzc4MWMy.field.bmFtZQ.short_desc": {
           "source": "Name the value is captured under",
           "message": "捕獲值的名稱"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOlByZUNvbm5lY3RSZXR1cm4jMjQ3Yjc1Njc1MmJkM2UyMmZhNGJiYmJjYzBhZTYxMjhmMmMwYmZhOTAwNzI3OWU1M2E0ZDRiNDYwNzYyYmFhNw.field.bmFtZQ.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6UHJlQ29ubmVjdFJldHVybiM2ZjYzMGMwYmVlZGU1MGFhYWNiNzNlNDVkZDRmYTc1NWRiNDU1MzU3MDQwZTkzMzA3MTBkYWUwZjc1Yzc4MWMy.field.bmFtZQ.desc": {
           "source": "Name the value is captured under. Available to later entries'\n`sends`, to `{{name}}` placeholders in the agent's greeting, and to\nthe model as `aai_pre_connect_context`. Unique across all entries.\n",
           "message": "捕獲值的名稱。可用於以後的條目'\n`sends`，到代理問候語中的 `{{name}}` 佔位符，以及\n模型為 `aai_pre_connect_context`。所有條目中都是唯一的。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOlByZUNvbm5lY3RSZXR1cm4jMjQ3Yjc1Njc1MmJkM2UyMmZhNGJiYmJjYzBhZTYxMjhmMmMwYmZhOTAwNzI3OWU1M2E0ZDRiNDYwNzYyYmFhNw.field.cGF0aA.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6UHJlQ29ubmVjdFJldHVybiM2ZjYzMGMwYmVlZGU1MGFhYWNiNzNlNDVkZDRmYTc1NWRiNDU1MzU3MDQwZTkzMzA3MTBkYWUwZjc1Yzc4MWMy.field.cGF0aA.display_name": {
           "source": "Path",
           "message": "路徑"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOlByZUNvbm5lY3RSZXR1cm4jMjQ3Yjc1Njc1MmJkM2UyMmZhNGJiYmJjYzBhZTYxMjhmMmMwYmZhOTAwNzI3OWU1M2E0ZDRiNDYwNzYyYmFhNw.field.cGF0aA.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6UHJlQ29ubmVjdFJldHVybiM2ZjYzMGMwYmVlZGU1MGFhYWNiNzNlNDVkZDRmYTc1NWRiNDU1MzU3MDQwZTkzMzA3MTBkYWUwZjc1Yzc4MWMy.field.cGF0aA.short_desc": {
           "source": "Dotted path into the JSON response, e.g. 'patient.first_name' or",
           "message": "JSON 回應的點路徑，例如'患者.first_name' 或"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOlByZUNvbm5lY3RSZXR1cm4jMjQ3Yjc1Njc1MmJkM2UyMmZhNGJiYmJjYzBhZTYxMjhmMmMwYmZhOTAwNzI3OWU1M2E0ZDRiNDYwNzYyYmFhNw.field.cGF0aA.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdGblpXNTA6UHJlQ29ubmVjdFJldHVybiM2ZjYzMGMwYmVlZGU1MGFhYWNiNzNlNDVkZDRmYTc1NWRiNDU1MzU3MDQwZTkzMzA3MTBkYWUwZjc1Yzc4MWMy.field.cGF0aA.desc": {
           "source": "Dotted path into the JSON response, e.g. `patient.first_name` or\n`results.0.id`. Segments match `[A-Za-z0-9_-]+`, at most 10 deep and\n256 characters. Shape is validated at write time; whether the path\nexists is only knowable at call time.\n",
           "message": "JSON 回應的點路徑，例如`patient.first_name` 或\n`results.0.id`。段匹配 `[A-Za-z0-9_-]+`，最多 10 個深度\n256 個字元。形狀在寫入時驗證；是否路徑\n存在僅在呼叫時可知。"
         },
@@ -3211,23 +3211,23 @@
           "source": "Format",
           "message": "格式"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipBdWRpb0Zvcm1hdCMzN2ZkZTc3MzI2YTE3MTkwYjczNjk3NTU4MDU3ZWFjMmE1YmZmOTVhYzcwMDNlMDM5YzFiMzkxZmZkOTIzMmE4.field.ZW5jb2Rpbmc.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6KkF1ZGlvRm9ybWF0IzI5YzA2Nzg3M2I0ZDc2YzYzYzIxMGYzYzM3ODRkMGJkMWQ0OTdhYjFjOTgwMzNmMzlkMTE5ZGU3NDU5YzA0ZmQ.field.ZW5jb2Rpbmc.display_name": {
           "source": "Encoding",
           "message": "編碼"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipBdWRpb0Zvcm1hdCMzN2ZkZTc3MzI2YTE3MTkwYjczNjk3NTU4MDU3ZWFjMmE1YmZmOTVhYzcwMDNlMDM5YzFiMzkxZmZkOTIzMmE4.field.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOmF1ZGlvL3BjbQ.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6KkF1ZGlvRm9ybWF0IzI5YzA2Nzg3M2I0ZDc2YzYzYzIxMGYzYzM3ODRkMGJkMWQ0OTdhYjFjOTgwMzNmMzlkMTE5ZGU3NDU5YzA0ZmQ.field.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOmF1ZGlvL3BjbQ.display_name": {
           "source": "audio/pcm",
           "message": "audio/pcm"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipBdWRpb0Zvcm1hdCMzN2ZkZTc3MzI2YTE3MTkwYjczNjk3NTU4MDU3ZWFjMmE1YmZmOTVhYzcwMDNlMDM5YzFiMzkxZmZkOTIzMmE4.field.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOmF1ZGlvL3BjbXU.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6KkF1ZGlvRm9ybWF0IzI5YzA2Nzg3M2I0ZDc2YzYzYzIxMGYzYzM3ODRkMGJkMWQ0OTdhYjFjOTgwMzNmMzlkMTE5ZGU3NDU5YzA0ZmQ.field.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOmF1ZGlvL3BjbXU.display_name": {
           "source": "audio/pcmu",
           "message": "audio/pcmu"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipBdWRpb0Zvcm1hdCMzN2ZkZTc3MzI2YTE3MTkwYjczNjk3NTU4MDU3ZWFjMmE1YmZmOTVhYzcwMDNlMDM5YzFiMzkxZmZkOTIzMmE4.field.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOmF1ZGlvL3BjbWE.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6KkF1ZGlvRm9ybWF0IzI5YzA2Nzg3M2I0ZDc2YzYzYzIxMGYzYzM3ODRkMGJkMWQ0OTdhYjFjOTgwMzNmMzlkMTE5ZGU3NDU5YzA0ZmQ.field.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOmF1ZGlvL3BjbWE.display_name": {
           "source": "audio/pcma",
           "message": "audio/pcma"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipBdWRpb0Zvcm1hdCMzN2ZkZTc3MzI2YTE3MTkwYjczNjk3NTU4MDU3ZWFjMmE1YmZmOTVhYzcwMDNlMDM5YzFiMzkxZmZkOTIzMmE4.field.c2FtcGxlX3JhdGU.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6KkF1ZGlvRm9ybWF0IzI5YzA2Nzg3M2I0ZDc2YzYzYzIxMGYzYzM3ODRkMGJkMWQ0OTdhYjFjOTgwMzNmMzlkMTE5ZGU3NDU5YzA0ZmQ.field.c2FtcGxlX3JhdGU.display_name": {
           "source": "Sample Rate",
           "message": "取樣率"
         },
@@ -3343,59 +3343,59 @@
           "source": "Makes the tool a server-side HTTP tool. AssemblyAI calls this endpoint when the model invokes the tool.",
           "message": "使該工具成為伺服器端 HTTP 工具。當模型呼叫該工具時，AssemblyAI 會呼叫此端點。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipIdHRwVG9vbENvbmZpZyNkMTA0ZGU4NGJlNjlmOTIxZTViZTQwNDdlMGEzODgxOThjNTIyYzc3NWVkYTM4M2MxYzQxYzEzOWZhMGQwY2Yx.field.aGVhZGVycw.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6Kkh0dHBUb29sQ29uZmlnIzQ2NWRlNTY3YzA3ODY2ZmFmYzg3OTJhNTVlMWNiYWJmNWRhNWNkM2YxMzdlODdlODgxMjg3YzcwZDI0YWZjOWU.field.aGVhZGVycw.display_name": {
           "source": "Headers",
           "message": "標頭"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipIdHRwVG9vbENvbmZpZyNkMTA0ZGU4NGJlNjlmOTIxZTViZTQwNDdlMGEzODgxOThjNTIyYzc3NWVkYTM4M2MxYzQxYzEzOWZhMGQwY2Yx.field.aGVhZGVycw.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6Kkh0dHBUb29sQ29uZmlnIzQ2NWRlNTY3YzA3ODY2ZmFmYzg3OTJhNTVlMWNiYWJmNWRhNWNkM2YxMzdlODdlODgxMjg3YzcwZDI0YWZjOWU.field.aGVhZGVycw.short_desc": {
           "source": "Sent on every call",
           "message": "每次通話時發送"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipIdHRwVG9vbENvbmZpZyNkMTA0ZGU4NGJlNjlmOTIxZTViZTQwNDdlMGEzODgxOThjNTIyYzc3NWVkYTM4M2MxYzQxYzEzOWZhMGQwY2Yx.field.aGVhZGVycw.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6Kkh0dHBUb29sQ29uZmlnIzQ2NWRlNTY3YzA3ODY2ZmFmYzg3OTJhNTVlMWNiYWJmNWRhNWNkM2YxMzdlODdlODgxMjg3YzcwZDI0YWZjOWU.field.aGVhZGVycw.desc": {
           "source": "Sent on every call. Values are encrypted at rest and write-only (masked as \"***\" in responses).",
           "message": "每次通話時都會發送。值在靜態時加密且只寫（在回應中屏蔽為“***”）。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipIdHRwVG9vbENvbmZpZyNkMTA0ZGU4NGJlNjlmOTIxZTViZTQwNDdlMGEzODgxOThjNTIyYzc3NWVkYTM4M2MxYzQxYzEzOWZhMGQwY2Yx.field.aHR0cF9tZXRob2Q.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6Kkh0dHBUb29sQ29uZmlnIzQ2NWRlNTY3YzA3ODY2ZmFmYzg3OTJhNTVlMWNiYWJmNWRhNWNkM2YxMzdlODdlODgxMjg3YzcwZDI0YWZjOWU.field.aHR0cF9tZXRob2Q.display_name": {
           "source": "HTTP Method",
           "message": "HTTP 方法"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipIdHRwVG9vbENvbmZpZyNkMTA0ZGU4NGJlNjlmOTIxZTViZTQwNDdlMGEzODgxOThjNTIyYzc3NWVkYTM4M2MxYzQxYzEzOWZhMGQwY2Yx.field.aHR0cF9tZXRob2Q.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6Kkh0dHBUb29sQ29uZmlnIzQ2NWRlNTY3YzA3ODY2ZmFmYzg3OTJhNTVlMWNiYWJmNWRhNWNkM2YxMzdlODdlODgxMjg3YzcwZDI0YWZjOWU.field.aHR0cF9tZXRob2Q.short_desc": {
           "source": "GET/DELETE send arguments as query params",
           "message": "GET/DELETE 將參數作為查詢參數發送"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipIdHRwVG9vbENvbmZpZyNkMTA0ZGU4NGJlNjlmOTIxZTViZTQwNDdlMGEzODgxOThjNTIyYzc3NWVkYTM4M2MxYzQxYzEzOWZhMGQwY2Yx.field.aHR0cF9tZXRob2Q.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6Kkh0dHBUb29sQ29uZmlnIzQ2NWRlNTY3YzA3ODY2ZmFmYzg3OTJhNTVlMWNiYWJmNWRhNWNkM2YxMzdlODdlODgxMjg3YzcwZDI0YWZjOWU.field.aHR0cF9tZXRob2Q.desc": {
           "source": "GET/DELETE send arguments as query params; POST/PUT/PATCH send them as a JSON body.",
           "message": "GET/DELETE 將參數作為查詢參數發送； POST/PUT/PATCH 將它們作為 JSON 正文發送。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipIdHRwVG9vbENvbmZpZyNkMTA0ZGU4NGJlNjlmOTIxZTViZTQwNDdlMGEzODgxOThjNTIyYzc3NWVkYTM4M2MxYzQxYzEzOWZhMGQwY2Yx.field.aHR0cF9tZXRob2Q.allowed-value.c3RyaW5nOkdFVA.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6Kkh0dHBUb29sQ29uZmlnIzQ2NWRlNTY3YzA3ODY2ZmFmYzg3OTJhNTVlMWNiYWJmNWRhNWNkM2YxMzdlODdlODgxMjg3YzcwZDI0YWZjOWU.field.aHR0cF9tZXRob2Q.allowed-value.c3RyaW5nOkdFVA.display_name": {
           "source": "GET",
           "message": "GET"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipIdHRwVG9vbENvbmZpZyNkMTA0ZGU4NGJlNjlmOTIxZTViZTQwNDdlMGEzODgxOThjNTIyYzc3NWVkYTM4M2MxYzQxYzEzOWZhMGQwY2Yx.field.aHR0cF9tZXRob2Q.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6Kkh0dHBUb29sQ29uZmlnIzQ2NWRlNTY3YzA3ODY2ZmFmYzg3OTJhNTVlMWNiYWJmNWRhNWNkM2YxMzdlODdlODgxMjg3YzcwZDI0YWZjOWU.field.aHR0cF9tZXRob2Q.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
           "source": "POST",
           "message": "POST"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipIdHRwVG9vbENvbmZpZyNkMTA0ZGU4NGJlNjlmOTIxZTViZTQwNDdlMGEzODgxOThjNTIyYzc3NWVkYTM4M2MxYzQxYzEzOWZhMGQwY2Yx.field.aHR0cF9tZXRob2Q.allowed-value.c3RyaW5nOlBVVA.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6Kkh0dHBUb29sQ29uZmlnIzQ2NWRlNTY3YzA3ODY2ZmFmYzg3OTJhNTVlMWNiYWJmNWRhNWNkM2YxMzdlODdlODgxMjg3YzcwZDI0YWZjOWU.field.aHR0cF9tZXRob2Q.allowed-value.c3RyaW5nOlBVVA.display_name": {
           "source": "PUT",
           "message": "PUT"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipIdHRwVG9vbENvbmZpZyNkMTA0ZGU4NGJlNjlmOTIxZTViZTQwNDdlMGEzODgxOThjNTIyYzc3NWVkYTM4M2MxYzQxYzEzOWZhMGQwY2Yx.field.aHR0cF9tZXRob2Q.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6Kkh0dHBUb29sQ29uZmlnIzQ2NWRlNTY3YzA3ODY2ZmFmYzg3OTJhNTVlMWNiYWJmNWRhNWNkM2YxMzdlODdlODgxMjg3YzcwZDI0YWZjOWU.field.aHR0cF9tZXRob2Q.allowed-value.c3RyaW5nOlBBVENI.display_name": {
           "source": "PATCH",
           "message": "PATCH"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipIdHRwVG9vbENvbmZpZyNkMTA0ZGU4NGJlNjlmOTIxZTViZTQwNDdlMGEzODgxOThjNTIyYzc3NWVkYTM4M2MxYzQxYzEzOWZhMGQwY2Yx.field.aHR0cF9tZXRob2Q.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6Kkh0dHBUb29sQ29uZmlnIzQ2NWRlNTY3YzA3ODY2ZmFmYzg3OTJhNTVlMWNiYWJmNWRhNWNkM2YxMzdlODdlODgxMjg3YzcwZDI0YWZjOWU.field.aHR0cF9tZXRob2Q.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
           "source": "DELETE",
           "message": "DELETE"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipIdHRwVG9vbENvbmZpZyNkMTA0ZGU4NGJlNjlmOTIxZTViZTQwNDdlMGEzODgxOThjNTIyYzc3NWVkYTM4M2MxYzQxYzEzOWZhMGQwY2Yx.field.dXJs.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6Kkh0dHBUb29sQ29uZmlnIzQ2NWRlNTY3YzA3ODY2ZmFmYzg3OTJhNTVlMWNiYWJmNWRhNWNkM2YxMzdlODdlODgxMjg3YzcwZDI0YWZjOWU.field.dXJs.display_name": {
           "source": "URL",
           "message": "URL"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipIdHRwVG9vbENvbmZpZyNkMTA0ZGU4NGJlNjlmOTIxZTViZTQwNDdlMGEzODgxOThjNTIyYzc3NWVkYTM4M2MxYzQxYzEzOWZhMGQwY2Yx.field.dXJs.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6Kkh0dHBUb29sQ29uZmlnIzQ2NWRlNTY3YzA3ODY2ZmFmYzg3OTJhNTVlMWNiYWJmNWRhNWNkM2YxMzdlODdlODgxMjg3YzcwZDI0YWZjOWU.field.dXJs.short_desc": {
           "source": "Must be https and resolve to a public host",
           "message": "必須是 https 並解析為公共主機"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipIdHRwVG9vbENvbmZpZyNkMTA0ZGU4NGJlNjlmOTIxZTViZTQwNDdlMGEzODgxOThjNTIyYzc3NWVkYTM4M2MxYzQxYzEzOWZhMGQwY2Yx.field.dXJs.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6Kkh0dHBUb29sQ29uZmlnIzQ2NWRlNTY3YzA3ODY2ZmFmYzg3OTJhNTVlMWNiYWJmNWRhNWNkM2YxMzdlODdlODgxMjg3YzcwZDI0YWZjOWU.field.dXJs.desc": {
           "source": "Must be https and resolve to a public host. Max 2048 chars.",
           "message": "必須是 https 並解析為公共主機。最多 2048 個字元。"
         },
@@ -3423,35 +3423,35 @@
           "source": "A JSON Schema describing the tool's arguments. The same form for HTTP and\nclient-side tools. Each property accepts standard JSON-Schema keywords; beyond\n`type` and `description`, use `enum`, `examples`, `pattern`, and `format` to\nsharpen tool-calling and turn-detection accuracy.\n",
           "message": "描述工具參數的 JSON 架構。 HTTP 和的形式相同\n客户端工具。每個屬性都接受標準 JSON-Schema 關鍵字；超越\n`type` 和 `description`，使用 `enum`、`examples`、`pattern` 和 `format` 来\n提高工具呼叫和轉彎檢測的準確性。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipUb29sUGFyYW1ldGVycyM5MjliMWFjNzc3YjQ3NGM2OTE5NzMwMWZhNTRmNzNhZGI5Y2ZiMTNkYzc4NDQ0OTVmMDRhMjZjY2Y3ZDBiYzA4.field.cHJvcGVydGllcw.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6KlRvb2xQYXJhbWV0ZXJzIzVkYmVhYWUzZmIxNWI1NTRiYTJiMmY2ZjY1ZTRkMDRlNDAwYTdjMDYyYWIxYzU2NjcxZWIyODc1MWYwOGZjYTg.field.cHJvcGVydGllcw.display_name": {
           "source": "Properties",
           "message": "屬性"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipUb29sUGFyYW1ldGVycyM5MjliMWFjNzc3YjQ3NGM2OTE5NzMwMWZhNTRmNzNhZGI5Y2ZiMTNkYzc4NDQ0OTVmMDRhMjZjY2Y3ZDBiYzA4.field.cHJvcGVydGllcw.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6KlRvb2xQYXJhbWV0ZXJzIzVkYmVhYWUzZmIxNWI1NTRiYTJiMmY2ZjY1ZTRkMDRlNDAwYTdjMDYyYWIxYzU2NjcxZWIyODc1MWYwOGZjYTg.field.cHJvcGVydGllcw.short_desc": {
           "source": "Map of argument name to its JSON-Schema definition",
           "message": "參數名稱與其 JSON 架構定義的映射"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipUb29sUGFyYW1ldGVycyM5MjliMWFjNzc3YjQ3NGM2OTE5NzMwMWZhNTRmNzNhZGI5Y2ZiMTNkYzc4NDQ0OTVmMDRhMjZjY2Y3ZDBiYzA4.field.cHJvcGVydGllcw.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6KlRvb2xQYXJhbWV0ZXJzIzVkYmVhYWUzZmIxNWI1NTRiYTJiMmY2ZjY1ZTRkMDRlNDAwYTdjMDYyYWIxYzU2NjcxZWIyODc1MWYwOGZjYTg.field.cHJvcGVydGllcw.desc": {
           "source": "Map of argument name to its JSON-Schema definition.",
           "message": "參數名稱與其 JSON 架構定義的對應。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipUb29sUGFyYW1ldGVycyM5MjliMWFjNzc3YjQ3NGM2OTE5NzMwMWZhNTRmNzNhZGI5Y2ZiMTNkYzc4NDQ0OTVmMDRhMjZjY2Y3ZDBiYzA4.field.cmVxdWlyZWQ.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6KlRvb2xQYXJhbWV0ZXJzIzVkYmVhYWUzZmIxNWI1NTRiYTJiMmY2ZjY1ZTRkMDRlNDAwYTdjMDYyYWIxYzU2NjcxZWIyODc1MWYwOGZjYTg.field.cmVxdWlyZWQ.display_name": {
           "source": "Required",
           "message": "必要"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipUb29sUGFyYW1ldGVycyM5MjliMWFjNzc3YjQ3NGM2OTE5NzMwMWZhNTRmNzNhZGI5Y2ZiMTNkYzc4NDQ0OTVmMDRhMjZjY2Y3ZDBiYzA4.field.cmVxdWlyZWQ.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6KlRvb2xQYXJhbWV0ZXJzIzVkYmVhYWUzZmIxNWI1NTRiYTJiMmY2ZjY1ZTRkMDRlNDAwYTdjMDYyYWIxYzU2NjcxZWIyODc1MWYwOGZjYTg.field.cmVxdWlyZWQ.short_desc": {
           "source": "Names of the required arguments",
           "message": "所需參數的名稱"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipUb29sUGFyYW1ldGVycyM5MjliMWFjNzc3YjQ3NGM2OTE5NzMwMWZhNTRmNzNhZGI5Y2ZiMTNkYzc4NDQ0OTVmMDRhMjZjY2Y3ZDBiYzA4.field.cmVxdWlyZWQ.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6KlRvb2xQYXJhbWV0ZXJzIzVkYmVhYWUzZmIxNWI1NTRiYTJiMmY2ZjY1ZTRkMDRlNDAwYTdjMDYyYWIxYzU2NjcxZWIyODc1MWYwOGZjYTg.field.cmVxdWlyZWQ.desc": {
           "source": "Names of the required arguments.",
           "message": "所需參數的名稱。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipUb29sUGFyYW1ldGVycyM5MjliMWFjNzc3YjQ3NGM2OTE5NzMwMWZhNTRmNzNhZGI5Y2ZiMTNkYzc4NDQ0OTVmMDRhMjZjY2Y3ZDBiYzA4.field.dHlwZQ.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6KlRvb2xQYXJhbWV0ZXJzIzVkYmVhYWUzZmIxNWI1NTRiYTJiMmY2ZjY1ZTRkMDRlNDAwYTdjMDYyYWIxYzU2NjcxZWIyODc1MWYwOGZjYTg.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "類型"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOipUb29sUGFyYW1ldGVycyM5MjliMWFjNzc3YjQ3NGM2OTE5NzMwMWZhNTRmNzNhZGI5Y2ZiMTNkYzc4NDQ0OTVmMDRhMjZjY2Y3ZDBiYzA4.field.dHlwZQ.allowed-value.c3RyaW5nOm9iamVjdA.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6KlRvb2xQYXJhbWV0ZXJzIzVkYmVhYWUzZmIxNWI1NTRiYTJiMmY2ZjY1ZTRkMDRlNDAwYTdjMDYyYWIxYzU2NjcxZWIyODc1MWYwOGZjYTg.field.dHlwZQ.allowed-value.c3RyaW5nOm9iamVjdA.display_name": {
           "source": "object",
           "message": "物件"
         },
@@ -3535,59 +3535,59 @@
           "source": "Makes the tool a server-side HTTP tool. AssemblyAI calls this endpoint when the model invokes the tool.",
           "message": "使該工具成為伺服器端 HTTP 工具。當模型呼叫該工具時，AssemblyAI 會呼叫此端點。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOkh0dHBUb29sQ29uZmlnIzhhMjkyZGUyMWJjYWE0MWZhNWMwZjA0YzI5N2FjM2UzMzgyMWY1NzUyZDc2ZTBiM2YxNGNkNDU1NjRiNDVlY2E.field.aGVhZGVycw.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SHR0cFRvb2xDb25maWcjNzBiNjBkNjMzMDE1NmU4MzE2OTEwMDMzMTM4NjQ4Y2IzOGFkODI2NjBiYTc5MGM1MmIxYmEwZWQyMTRlNzUxYg.field.aGVhZGVycw.display_name": {
           "source": "Headers",
           "message": "標頭"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOkh0dHBUb29sQ29uZmlnIzhhMjkyZGUyMWJjYWE0MWZhNWMwZjA0YzI5N2FjM2UzMzgyMWY1NzUyZDc2ZTBiM2YxNGNkNDU1NjRiNDVlY2E.field.aGVhZGVycw.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SHR0cFRvb2xDb25maWcjNzBiNjBkNjMzMDE1NmU4MzE2OTEwMDMzMTM4NjQ4Y2IzOGFkODI2NjBiYTc5MGM1MmIxYmEwZWQyMTRlNzUxYg.field.aGVhZGVycw.short_desc": {
           "source": "Sent on every call",
           "message": "每次通話時發送"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOkh0dHBUb29sQ29uZmlnIzhhMjkyZGUyMWJjYWE0MWZhNWMwZjA0YzI5N2FjM2UzMzgyMWY1NzUyZDc2ZTBiM2YxNGNkNDU1NjRiNDVlY2E.field.aGVhZGVycw.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SHR0cFRvb2xDb25maWcjNzBiNjBkNjMzMDE1NmU4MzE2OTEwMDMzMTM4NjQ4Y2IzOGFkODI2NjBiYTc5MGM1MmIxYmEwZWQyMTRlNzUxYg.field.aGVhZGVycw.desc": {
           "source": "Sent on every call. Values are encrypted at rest and write-only (masked as \"***\" in responses).",
           "message": "每次通話時都會發送。值在靜態時加密且只寫（在回應中屏蔽為“***”）。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOkh0dHBUb29sQ29uZmlnIzhhMjkyZGUyMWJjYWE0MWZhNWMwZjA0YzI5N2FjM2UzMzgyMWY1NzUyZDc2ZTBiM2YxNGNkNDU1NjRiNDVlY2E.field.aHR0cF9tZXRob2Q.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SHR0cFRvb2xDb25maWcjNzBiNjBkNjMzMDE1NmU4MzE2OTEwMDMzMTM4NjQ4Y2IzOGFkODI2NjBiYTc5MGM1MmIxYmEwZWQyMTRlNzUxYg.field.aHR0cF9tZXRob2Q.display_name": {
           "source": "HTTP Method",
           "message": "HTTP 方法"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOkh0dHBUb29sQ29uZmlnIzhhMjkyZGUyMWJjYWE0MWZhNWMwZjA0YzI5N2FjM2UzMzgyMWY1NzUyZDc2ZTBiM2YxNGNkNDU1NjRiNDVlY2E.field.aHR0cF9tZXRob2Q.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SHR0cFRvb2xDb25maWcjNzBiNjBkNjMzMDE1NmU4MzE2OTEwMDMzMTM4NjQ4Y2IzOGFkODI2NjBiYTc5MGM1MmIxYmEwZWQyMTRlNzUxYg.field.aHR0cF9tZXRob2Q.short_desc": {
           "source": "GET/DELETE send arguments as query params",
           "message": "GET/DELETE 將參數作為查詢參數發送"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOkh0dHBUb29sQ29uZmlnIzhhMjkyZGUyMWJjYWE0MWZhNWMwZjA0YzI5N2FjM2UzMzgyMWY1NzUyZDc2ZTBiM2YxNGNkNDU1NjRiNDVlY2E.field.aHR0cF9tZXRob2Q.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SHR0cFRvb2xDb25maWcjNzBiNjBkNjMzMDE1NmU4MzE2OTEwMDMzMTM4NjQ4Y2IzOGFkODI2NjBiYTc5MGM1MmIxYmEwZWQyMTRlNzUxYg.field.aHR0cF9tZXRob2Q.desc": {
           "source": "GET/DELETE send arguments as query params; POST/PUT/PATCH send them as a JSON body.",
           "message": "GET/DELETE 將參數作為查詢參數發送； POST/PUT/PATCH 將它們作為 JSON 正文發送。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOkh0dHBUb29sQ29uZmlnIzhhMjkyZGUyMWJjYWE0MWZhNWMwZjA0YzI5N2FjM2UzMzgyMWY1NzUyZDc2ZTBiM2YxNGNkNDU1NjRiNDVlY2E.field.aHR0cF9tZXRob2Q.allowed-value.c3RyaW5nOkdFVA.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SHR0cFRvb2xDb25maWcjNzBiNjBkNjMzMDE1NmU4MzE2OTEwMDMzMTM4NjQ4Y2IzOGFkODI2NjBiYTc5MGM1MmIxYmEwZWQyMTRlNzUxYg.field.aHR0cF9tZXRob2Q.allowed-value.c3RyaW5nOkdFVA.display_name": {
           "source": "GET",
           "message": "GET"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOkh0dHBUb29sQ29uZmlnIzhhMjkyZGUyMWJjYWE0MWZhNWMwZjA0YzI5N2FjM2UzMzgyMWY1NzUyZDc2ZTBiM2YxNGNkNDU1NjRiNDVlY2E.field.aHR0cF9tZXRob2Q.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SHR0cFRvb2xDb25maWcjNzBiNjBkNjMzMDE1NmU4MzE2OTEwMDMzMTM4NjQ4Y2IzOGFkODI2NjBiYTc5MGM1MmIxYmEwZWQyMTRlNzUxYg.field.aHR0cF9tZXRob2Q.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
           "source": "POST",
           "message": "POST"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOkh0dHBUb29sQ29uZmlnIzhhMjkyZGUyMWJjYWE0MWZhNWMwZjA0YzI5N2FjM2UzMzgyMWY1NzUyZDc2ZTBiM2YxNGNkNDU1NjRiNDVlY2E.field.aHR0cF9tZXRob2Q.allowed-value.c3RyaW5nOlBVVA.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SHR0cFRvb2xDb25maWcjNzBiNjBkNjMzMDE1NmU4MzE2OTEwMDMzMTM4NjQ4Y2IzOGFkODI2NjBiYTc5MGM1MmIxYmEwZWQyMTRlNzUxYg.field.aHR0cF9tZXRob2Q.allowed-value.c3RyaW5nOlBVVA.display_name": {
           "source": "PUT",
           "message": "PUT"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOkh0dHBUb29sQ29uZmlnIzhhMjkyZGUyMWJjYWE0MWZhNWMwZjA0YzI5N2FjM2UzMzgyMWY1NzUyZDc2ZTBiM2YxNGNkNDU1NjRiNDVlY2E.field.aHR0cF9tZXRob2Q.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SHR0cFRvb2xDb25maWcjNzBiNjBkNjMzMDE1NmU4MzE2OTEwMDMzMTM4NjQ4Y2IzOGFkODI2NjBiYTc5MGM1MmIxYmEwZWQyMTRlNzUxYg.field.aHR0cF9tZXRob2Q.allowed-value.c3RyaW5nOlBBVENI.display_name": {
           "source": "PATCH",
           "message": "PATCH"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOkh0dHBUb29sQ29uZmlnIzhhMjkyZGUyMWJjYWE0MWZhNWMwZjA0YzI5N2FjM2UzMzgyMWY1NzUyZDc2ZTBiM2YxNGNkNDU1NjRiNDVlY2E.field.aHR0cF9tZXRob2Q.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SHR0cFRvb2xDb25maWcjNzBiNjBkNjMzMDE1NmU4MzE2OTEwMDMzMTM4NjQ4Y2IzOGFkODI2NjBiYTc5MGM1MmIxYmEwZWQyMTRlNzUxYg.field.aHR0cF9tZXRob2Q.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
           "source": "DELETE",
           "message": "DELETE"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOkh0dHBUb29sQ29uZmlnIzhhMjkyZGUyMWJjYWE0MWZhNWMwZjA0YzI5N2FjM2UzMzgyMWY1NzUyZDc2ZTBiM2YxNGNkNDU1NjRiNDVlY2E.field.dXJs.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SHR0cFRvb2xDb25maWcjNzBiNjBkNjMzMDE1NmU4MzE2OTEwMDMzMTM4NjQ4Y2IzOGFkODI2NjBiYTc5MGM1MmIxYmEwZWQyMTRlNzUxYg.field.dXJs.display_name": {
           "source": "URL",
           "message": "URL"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOkh0dHBUb29sQ29uZmlnIzhhMjkyZGUyMWJjYWE0MWZhNWMwZjA0YzI5N2FjM2UzMzgyMWY1NzUyZDc2ZTBiM2YxNGNkNDU1NjRiNDVlY2E.field.dXJs.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SHR0cFRvb2xDb25maWcjNzBiNjBkNjMzMDE1NmU4MzE2OTEwMDMzMTM4NjQ4Y2IzOGFkODI2NjBiYTc5MGM1MmIxYmEwZWQyMTRlNzUxYg.field.dXJs.short_desc": {
           "source": "Must be https and resolve to a public host",
           "message": "必須是 https 並解析為公共主機"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOkh0dHBUb29sQ29uZmlnIzhhMjkyZGUyMWJjYWE0MWZhNWMwZjA0YzI5N2FjM2UzMzgyMWY1NzUyZDc2ZTBiM2YxNGNkNDU1NjRiNDVlY2E.field.dXJs.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SHR0cFRvb2xDb25maWcjNzBiNjBkNjMzMDE1NmU4MzE2OTEwMDMzMTM4NjQ4Y2IzOGFkODI2NjBiYTc5MGM1MmIxYmEwZWQyMTRlNzUxYg.field.dXJs.desc": {
           "source": "Must be https and resolve to a public host. Max 2048 chars.",
           "message": "必須是 https 並解析為公共主機。最多 2048 個字元。"
         },
@@ -3603,39 +3603,39 @@
           "source": "Values to capture from the JSON response.",
           "message": "從 JSON 回應中擷取的值。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOlByZUNvbm5lY3RSZXR1cm4jMjQ3Yjc1Njc1MmJkM2UyMmZhNGJiYmJjYzBhZTYxMjhmMmMwYmZhOTAwNzI3OWU1M2E0ZDRiNDYwNzYyYmFhNw.field.ZGVmYXVsdA.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6UHJlQ29ubmVjdFJldHVybiM2ZjYzMGMwYmVlZGU1MGFhYWNiNzNlNDVkZDRmYTc1NWRiNDU1MzU3MDQwZTkzMzA3MTBkYWUwZjc1Yzc4MWMy.field.ZGVmYXVsdA.display_name": {
           "source": "Default",
           "message": "預設"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOlByZUNvbm5lY3RSZXR1cm4jMjQ3Yjc1Njc1MmJkM2UyMmZhNGJiYmJjYzBhZTYxMjhmMmMwYmZhOTAwNzI3OWU1M2E0ZDRiNDYwNzYyYmFhNw.field.ZGVmYXVsdA.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6UHJlQ29ubmVjdFJldHVybiM2ZjYzMGMwYmVlZGU1MGFhYWNiNzNlNDVkZDRmYTc1NWRiNDU1MzU3MDQwZTkzMzA3MTBkYWUwZjc1Yzc4MWMy.field.ZGVmYXVsdA.short_desc": {
           "source": "Used when the path does not resolve",
           "message": "當路徑無法解析時使用"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOlByZUNvbm5lY3RSZXR1cm4jMjQ3Yjc1Njc1MmJkM2UyMmZhNGJiYmJjYzBhZTYxMjhmMmMwYmZhOTAwNzI3OWU1M2E0ZDRiNDYwNzYyYmFhNw.field.ZGVmYXVsdA.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6UHJlQ29ubmVjdFJldHVybiM2ZjYzMGMwYmVlZGU1MGFhYWNiNzNlNDVkZDRmYTc1NWRiNDU1MzU3MDQwZTkzMzA3MTBkYWUwZjc1Yzc4MWMy.field.ZGVmYXVsdA.desc": {
           "source": "Used when the path does not resolve. Without one, an unresolved\npath leaves the value unset. For greeting placeholders use a\nnon-empty default: a placeholder that resolves to nothing makes the\nplatform speak the agent's greeting as declared.\n",
           "message": "當路徑無法解析時使用。沒有一個，一個未解決的問題\n路徑未設定值。對於問候語佔位符，請使用\n非空預設值：解析為空的佔位符使得\n平台依照聲明說出代理的問候語。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOlByZUNvbm5lY3RSZXR1cm4jMjQ3Yjc1Njc1MmJkM2UyMmZhNGJiYmJjYzBhZTYxMjhmMmMwYmZhOTAwNzI3OWU1M2E0ZDRiNDYwNzYyYmFhNw.field.bmFtZQ.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6UHJlQ29ubmVjdFJldHVybiM2ZjYzMGMwYmVlZGU1MGFhYWNiNzNlNDVkZDRmYTc1NWRiNDU1MzU3MDQwZTkzMzA3MTBkYWUwZjc1Yzc4MWMy.field.bmFtZQ.display_name": {
           "source": "Name",
           "message": "名稱"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOlByZUNvbm5lY3RSZXR1cm4jMjQ3Yjc1Njc1MmJkM2UyMmZhNGJiYmJjYzBhZTYxMjhmMmMwYmZhOTAwNzI3OWU1M2E0ZDRiNDYwNzYyYmFhNw.field.bmFtZQ.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6UHJlQ29ubmVjdFJldHVybiM2ZjYzMGMwYmVlZGU1MGFhYWNiNzNlNDVkZDRmYTc1NWRiNDU1MzU3MDQwZTkzMzA3MTBkYWUwZjc1Yzc4MWMy.field.bmFtZQ.short_desc": {
           "source": "Name the value is captured under",
           "message": "捕獲值的名稱"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOlByZUNvbm5lY3RSZXR1cm4jMjQ3Yjc1Njc1MmJkM2UyMmZhNGJiYmJjYzBhZTYxMjhmMmMwYmZhOTAwNzI3OWU1M2E0ZDRiNDYwNzYyYmFhNw.field.bmFtZQ.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6UHJlQ29ubmVjdFJldHVybiM2ZjYzMGMwYmVlZGU1MGFhYWNiNzNlNDVkZDRmYTc1NWRiNDU1MzU3MDQwZTkzMzA3MTBkYWUwZjc1Yzc4MWMy.field.bmFtZQ.desc": {
           "source": "Name the value is captured under. Available to later entries'\n`sends`, to `{{name}}` placeholders in the agent's greeting, and to\nthe model as `aai_pre_connect_context`. Unique across all entries.\n",
           "message": "捕獲值的名稱。可用於以後的條目'\n`sends`，到代理問候語中的 `{{name}}` 佔位符，以及\n模型為 `aai_pre_connect_context`。所有條目中都是唯一的。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOlByZUNvbm5lY3RSZXR1cm4jMjQ3Yjc1Njc1MmJkM2UyMmZhNGJiYmJjYzBhZTYxMjhmMmMwYmZhOTAwNzI3OWU1M2E0ZDRiNDYwNzYyYmFhNw.field.cGF0aA.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6UHJlQ29ubmVjdFJldHVybiM2ZjYzMGMwYmVlZGU1MGFhYWNiNzNlNDVkZDRmYTc1NWRiNDU1MzU3MDQwZTkzMzA3MTBkYWUwZjc1Yzc4MWMy.field.cGF0aA.display_name": {
           "source": "Path",
           "message": "路徑"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOlByZUNvbm5lY3RSZXR1cm4jMjQ3Yjc1Njc1MmJkM2UyMmZhNGJiYmJjYzBhZTYxMjhmMmMwYmZhOTAwNzI3OWU1M2E0ZDRiNDYwNzYyYmFhNw.field.cGF0aA.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6UHJlQ29ubmVjdFJldHVybiM2ZjYzMGMwYmVlZGU1MGFhYWNiNzNlNDVkZDRmYTc1NWRiNDU1MzU3MDQwZTkzMzA3MTBkYWUwZjc1Yzc4MWMy.field.cGF0aA.short_desc": {
           "source": "Dotted path into the JSON response, e.g. 'patient.first_name' or",
           "message": "JSON 回應的點路徑，例如'患者.first_name' 或"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6SGFzaERhdGFUeXBlOlByZUNvbm5lY3RSZXR1cm4jMjQ3Yjc1Njc1MmJkM2UyMmZhNGJiYmJjYzBhZTYxMjhmMmMwYmZhOTAwNzI3OWU1M2E0ZDRiNDYwNzYyYmFhNw.field.cGF0aA.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRYQmtZWFJsTFdGblpXNTA6UHJlQ29ubmVjdFJldHVybiM2ZjYzMGMwYmVlZGU1MGFhYWNiNzNlNDVkZDRmYTc1NWRiNDU1MzU3MDQwZTkzMzA3MTBkYWUwZjc1Yzc4MWMy.field.cGF0aA.desc": {
           "source": "Dotted path into the JSON response, e.g. `patient.first_name` or\n`results.0.id`. Segments match `[A-Za-z0-9_-]+`, at most 10 deep and\n256 characters. Shape is validated at write time; whether the path\nexists is only knowable at call time.\n",
           "message": "JSON 回應的點路徑，例如`patient.first_name` 或\n`results.0.id`。段匹配 `[A-Za-z0-9_-]+`，最多 10 個深度\n256 個字元。形狀在寫入時驗證；是否路徑\n存在僅在呼叫時可知。"
         },
@@ -3819,87 +3819,87 @@
           "source": "A list of messages comprising the conversation so far.",
           "message": "目前為止的談話內容列表 。"
         },
-        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWVzc2FnZXM.union.SGFzaERhdGFUeXBlOlVzZXJBc3Npc3RhbnRTeXN0ZW1NZXNzYWdlIzExNDBhYTZhMWJhODM0N2M1ZjIzMjU0ZWYxOWQ3OWQ2ZmQwNTA4ZDc1MjNkYzY5MjU0OGZmM2UxN2I2MjNiYmY.field.Y29udGVudA.display_name": {
+        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWVzc2FnZXM.union.VXNlckFzc2lzdGFudFN5c3RlbU1lc3NhZ2UjYWVlNTAzODU1NGNkMjRmMzc1YWExNjc3MDAwODViYTk2NzhlMWEwNTBiYTRmMmVkNzQ4N2FjMjQ2NjNhNGJiNg.field.Y29udGVudA.display_name": {
           "source": "Content",
           "message": "內容"
         },
-        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWVzc2FnZXM.union.SGFzaERhdGFUeXBlOlVzZXJBc3Npc3RhbnRTeXN0ZW1NZXNzYWdlIzExNDBhYTZhMWJhODM0N2M1ZjIzMjU0ZWYxOWQ3OWQ2ZmQwNTA4ZDc1MjNkYzY5MjU0OGZmM2UxN2I2MjNiYmY.field.Y29udGVudA.short_desc": {
+        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWVzc2FnZXM.union.VXNlckFzc2lzdGFudFN5c3RlbU1lc3NhZ2UjYWVlNTAzODU1NGNkMjRmMzc1YWExNjc3MDAwODViYTk2NzhlMWEwNTBiYTRmMmVkNzQ4N2FjMjQ2NjNhNGJiNg.field.Y29udGVudA.short_desc": {
           "source": "The content of the message",
           "message": "訊息的內容"
         },
-        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWVzc2FnZXM.union.SGFzaERhdGFUeXBlOlVzZXJBc3Npc3RhbnRTeXN0ZW1NZXNzYWdlIzExNDBhYTZhMWJhODM0N2M1ZjIzMjU0ZWYxOWQ3OWQ2ZmQwNTA4ZDc1MjNkYzY5MjU0OGZmM2UxN2I2MjNiYmY.field.Y29udGVudA.desc": {
+        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWVzc2FnZXM.union.VXNlckFzc2lzdGFudFN5c3RlbU1lc3NhZ2UjYWVlNTAzODU1NGNkMjRmMzc1YWExNjc3MDAwODViYTk2NzhlMWEwNTBiYTRmMmVkNzQ4N2FjMjQ2NjNhNGJiNg.field.Y29udGVudA.desc": {
           "source": "The content of the message. Can be a string or an array of content parts (for user messages).",
           "message": "訊息的內容。可以是字串或內容部分數組（用於用戶訊息）。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpIYXNoRGF0YVR5cGU6VGV4dENvbnRlbnQjNTkzNjU2MDBmNTY5ZGQ1YTIwNDg5NTU4OWU0Y2VkNWIwYjczZDFiM2ZmODVmNDVkMTU2MjgwMThiNTRkMmM1Yg.field.dGV4dA.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpUZXh0Q29udGVudCM1NTcxMTgwY2Q2MTNjMTBhZDZmNjk4ZGM3NDY4M2IzMTJhM2VmODBmYTU5ODQ0ZmVlOGJiYTUwMWEyZTc0MTg4.field.dGV4dA.display_name": {
           "source": "Text",
           "message": "文字"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpIYXNoRGF0YVR5cGU6VGV4dENvbnRlbnQjNTkzNjU2MDBmNTY5ZGQ1YTIwNDg5NTU4OWU0Y2VkNWIwYjczZDFiM2ZmODVmNDVkMTU2MjgwMThiNTRkMmM1Yg.field.dHlwZQ.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpUZXh0Q29udGVudCM1NTcxMTgwY2Q2MTNjMTBhZDZmNjk4ZGM3NDY4M2IzMTJhM2VmODBmYTU5ODQ0ZmVlOGJiYTUwMWEyZTc0MTg4.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "類型"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpIYXNoRGF0YVR5cGU6VGV4dENvbnRlbnQjNTkzNjU2MDBmNTY5ZGQ1YTIwNDg5NTU4OWU0Y2VkNWIwYjczZDFiM2ZmODVmNDVkMTU2MjgwMThiNTRkMmM1Yg.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpUZXh0Q29udGVudCM1NTcxMTgwY2Q2MTNjMTBhZDZmNjk4ZGM3NDY4M2IzMTJhM2VmODBmYTU5ODQ0ZmVlOGJiYTUwMWEyZTc0MTg4.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.display_name": {
           "source": "text",
           "message": "文字"
         },
-        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWVzc2FnZXM.union.SGFzaERhdGFUeXBlOlVzZXJBc3Npc3RhbnRTeXN0ZW1NZXNzYWdlIzExNDBhYTZhMWJhODM0N2M1ZjIzMjU0ZWYxOWQ3OWQ2ZmQwNTA4ZDc1MjNkYzY5MjU0OGZmM2UxN2I2MjNiYmY.field.bmFtZQ.display_name": {
+        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWVzc2FnZXM.union.VXNlckFzc2lzdGFudFN5c3RlbU1lc3NhZ2UjYWVlNTAzODU1NGNkMjRmMzc1YWExNjc3MDAwODViYTk2NzhlMWEwNTBiYTRmMmVkNzQ4N2FjMjQ2NjNhNGJiNg.field.bmFtZQ.display_name": {
           "source": "Name",
           "message": "名稱"
         },
-        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWVzc2FnZXM.union.SGFzaERhdGFUeXBlOlVzZXJBc3Npc3RhbnRTeXN0ZW1NZXNzYWdlIzExNDBhYTZhMWJhODM0N2M1ZjIzMjU0ZWYxOWQ3OWQ2ZmQwNTA4ZDc1MjNkYzY5MjU0OGZmM2UxN2I2MjNiYmY.field.bmFtZQ.short_desc": {
+        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWVzc2FnZXM.union.VXNlckFzc2lzdGFudFN5c3RlbU1lc3NhZ2UjYWVlNTAzODU1NGNkMjRmMzc1YWExNjc3MDAwODViYTk2NzhlMWEwNTBiYTRmMmVkNzQ4N2FjMjQ2NjNhNGJiNg.field.bmFtZQ.short_desc": {
           "source": "An optional name for the participant",
           "message": "參與者的選填名稱"
         },
-        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWVzc2FnZXM.union.SGFzaERhdGFUeXBlOlVzZXJBc3Npc3RhbnRTeXN0ZW1NZXNzYWdlIzExNDBhYTZhMWJhODM0N2M1ZjIzMjU0ZWYxOWQ3OWQ2ZmQwNTA4ZDc1MjNkYzY5MjU0OGZmM2UxN2I2MjNiYmY.field.bmFtZQ.desc": {
+        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWVzc2FnZXM.union.VXNlckFzc2lzdGFudFN5c3RlbU1lc3NhZ2UjYWVlNTAzODU1NGNkMjRmMzc1YWExNjc3MDAwODViYTk2NzhlMWEwNTBiYTRmMmVkNzQ4N2FjMjQ2NjNhNGJiNg.field.bmFtZQ.desc": {
           "source": "An optional name for the participant.",
           "message": "參與者的可選名稱。"
         },
-        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWVzc2FnZXM.union.SGFzaERhdGFUeXBlOlVzZXJBc3Npc3RhbnRTeXN0ZW1NZXNzYWdlIzExNDBhYTZhMWJhODM0N2M1ZjIzMjU0ZWYxOWQ3OWQ2ZmQwNTA4ZDc1MjNkYzY5MjU0OGZmM2UxN2I2MjNiYmY.field.cm9sZQ.display_name": {
+        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWVzc2FnZXM.union.VXNlckFzc2lzdGFudFN5c3RlbU1lc3NhZ2UjYWVlNTAzODU1NGNkMjRmMzc1YWExNjc3MDAwODViYTk2NzhlMWEwNTBiYTRmMmVkNzQ4N2FjMjQ2NjNhNGJiNg.field.cm9sZQ.display_name": {
           "source": "Role",
           "message": "角色"
         },
-        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWVzc2FnZXM.union.SGFzaERhdGFUeXBlOlVzZXJBc3Npc3RhbnRTeXN0ZW1NZXNzYWdlIzExNDBhYTZhMWJhODM0N2M1ZjIzMjU0ZWYxOWQ3OWQ2ZmQwNTA4ZDc1MjNkYzY5MjU0OGZmM2UxN2I2MjNiYmY.field.cm9sZQ.allowed-value.c3RyaW5nOnVzZXI.display_name": {
+        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWVzc2FnZXM.union.VXNlckFzc2lzdGFudFN5c3RlbU1lc3NhZ2UjYWVlNTAzODU1NGNkMjRmMzc1YWExNjc3MDAwODViYTk2NzhlMWEwNTBiYTRmMmVkNzQ4N2FjMjQ2NjNhNGJiNg.field.cm9sZQ.allowed-value.c3RyaW5nOnVzZXI.display_name": {
           "source": "user",
           "message": "使用者"
         },
-        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWVzc2FnZXM.union.SGFzaERhdGFUeXBlOlVzZXJBc3Npc3RhbnRTeXN0ZW1NZXNzYWdlIzExNDBhYTZhMWJhODM0N2M1ZjIzMjU0ZWYxOWQ3OWQ2ZmQwNTA4ZDc1MjNkYzY5MjU0OGZmM2UxN2I2MjNiYmY.field.cm9sZQ.allowed-value.c3RyaW5nOmFzc2lzdGFudA.display_name": {
+        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWVzc2FnZXM.union.VXNlckFzc2lzdGFudFN5c3RlbU1lc3NhZ2UjYWVlNTAzODU1NGNkMjRmMzc1YWExNjc3MDAwODViYTk2NzhlMWEwNTBiYTRmMmVkNzQ4N2FjMjQ2NjNhNGJiNg.field.cm9sZQ.allowed-value.c3RyaW5nOmFzc2lzdGFudA.display_name": {
           "source": "assistant",
           "message": "助理"
         },
-        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWVzc2FnZXM.union.SGFzaERhdGFUeXBlOlVzZXJBc3Npc3RhbnRTeXN0ZW1NZXNzYWdlIzExNDBhYTZhMWJhODM0N2M1ZjIzMjU0ZWYxOWQ3OWQ2ZmQwNTA4ZDc1MjNkYzY5MjU0OGZmM2UxN2I2MjNiYmY.field.cm9sZQ.allowed-value.c3RyaW5nOnN5c3RlbQ.display_name": {
+        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWVzc2FnZXM.union.VXNlckFzc2lzdGFudFN5c3RlbU1lc3NhZ2UjYWVlNTAzODU1NGNkMjRmMzc1YWExNjc3MDAwODViYTk2NzhlMWEwNTBiYTRmMmVkNzQ4N2FjMjQ2NjNhNGJiNg.field.cm9sZQ.allowed-value.c3RyaW5nOnN5c3RlbQ.display_name": {
           "source": "system",
           "message": "系統"
         },
-        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWVzc2FnZXM.union.SGFzaERhdGFUeXBlOlRvb2xNZXNzYWdlIzM1NzJkMzM4YmU4ZmY1MGNkMmJiMDJmMDVlNzc0NTI4MmJjMGU3NTdkZDI0NjYwNWUwN2YzNTZkMzBlZmExZjI.field.Y29udGVudA.display_name": {
+        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWVzc2FnZXM.union.VG9vbE1lc3NhZ2UjOGNhMWY4MjlhNTBmMWM2ODcwNDU0MzU5MzVkMmI0YTcwMWM0ZWRiMzE3MWM4OTE4OGYyZDlhZWUxMTgzNzQ4MA.field.Y29udGVudA.display_name": {
           "source": "Content",
           "message": "內容"
         },
-        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWVzc2FnZXM.union.SGFzaERhdGFUeXBlOlRvb2xNZXNzYWdlIzM1NzJkMzM4YmU4ZmY1MGNkMmJiMDJmMDVlNzc0NTI4MmJjMGU3NTdkZDI0NjYwNWUwN2YzNTZkMzBlZmExZjI.field.Y29udGVudA.short_desc": {
+        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWVzc2FnZXM.union.VG9vbE1lc3NhZ2UjOGNhMWY4MjlhNTBmMWM2ODcwNDU0MzU5MzVkMmI0YTcwMWM0ZWRiMzE3MWM4OTE4OGYyZDlhZWUxMTgzNzQ4MA.field.Y29udGVudA.short_desc": {
           "source": "The result of the tool call",
           "message": "工具調用的結果"
         },
-        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWVzc2FnZXM.union.SGFzaERhdGFUeXBlOlRvb2xNZXNzYWdlIzM1NzJkMzM4YmU4ZmY1MGNkMmJiMDJmMDVlNzc0NTI4MmJjMGU3NTdkZDI0NjYwNWUwN2YzNTZkMzBlZmExZjI.field.Y29udGVudA.desc": {
+        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWVzc2FnZXM.union.VG9vbE1lc3NhZ2UjOGNhMWY4MjlhNTBmMWM2ODcwNDU0MzU5MzVkMmI0YTcwMWM0ZWRiMzE3MWM4OTE4OGYyZDlhZWUxMTgzNzQ4MA.field.Y29udGVudA.desc": {
           "source": "The result of the tool call.",
           "message": "工具調用的結果。"
         },
-        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWVzc2FnZXM.union.SGFzaERhdGFUeXBlOlRvb2xNZXNzYWdlIzM1NzJkMzM4YmU4ZmY1MGNkMmJiMDJmMDVlNzc0NTI4MmJjMGU3NTdkZDI0NjYwNWUwN2YzNTZkMzBlZmExZjI.field.cm9sZQ.display_name": {
+        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWVzc2FnZXM.union.VG9vbE1lc3NhZ2UjOGNhMWY4MjlhNTBmMWM2ODcwNDU0MzU5MzVkMmI0YTcwMWM0ZWRiMzE3MWM4OTE4OGYyZDlhZWUxMTgzNzQ4MA.field.cm9sZQ.display_name": {
           "source": "Role",
           "message": "角色"
         },
-        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWVzc2FnZXM.union.SGFzaERhdGFUeXBlOlRvb2xNZXNzYWdlIzM1NzJkMzM4YmU4ZmY1MGNkMmJiMDJmMDVlNzc0NTI4MmJjMGU3NTdkZDI0NjYwNWUwN2YzNTZkMzBlZmExZjI.field.cm9sZQ.allowed-value.c3RyaW5nOnRvb2w.display_name": {
+        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWVzc2FnZXM.union.VG9vbE1lc3NhZ2UjOGNhMWY4MjlhNTBmMWM2ODcwNDU0MzU5MzVkMmI0YTcwMWM0ZWRiMzE3MWM4OTE4OGYyZDlhZWUxMTgzNzQ4MA.field.cm9sZQ.allowed-value.c3RyaW5nOnRvb2w.display_name": {
           "source": "tool",
           "message": "工具"
         },
-        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWVzc2FnZXM.union.SGFzaERhdGFUeXBlOlRvb2xNZXNzYWdlIzM1NzJkMzM4YmU4ZmY1MGNkMmJiMDJmMDVlNzc0NTI4MmJjMGU3NTdkZDI0NjYwNWUwN2YzNTZkMzBlZmExZjI.field.dG9vbF9jYWxsX2lk.display_name": {
+        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWVzc2FnZXM.union.VG9vbE1lc3NhZ2UjOGNhMWY4MjlhNTBmMWM2ODcwNDU0MzU5MzVkMmI0YTcwMWM0ZWRiMzE3MWM4OTE4OGYyZDlhZWUxMTgzNzQ4MA.field.dG9vbF9jYWxsX2lk.display_name": {
           "source": "Tool Call ID",
           "message": "工具呼叫 ID"
         },
-        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWVzc2FnZXM.union.SGFzaERhdGFUeXBlOlRvb2xNZXNzYWdlIzM1NzJkMzM4YmU4ZmY1MGNkMmJiMDJmMDVlNzc0NTI4MmJjMGU3NTdkZDI0NjYwNWUwN2YzNTZkMzBlZmExZjI.field.dG9vbF9jYWxsX2lk.short_desc": {
+        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWVzc2FnZXM.union.VG9vbE1lc3NhZ2UjOGNhMWY4MjlhNTBmMWM2ODcwNDU0MzU5MzVkMmI0YTcwMWM0ZWRiMzE3MWM4OTE4OGYyZDlhZWUxMTgzNzQ4MA.field.dG9vbF9jYWxsX2lk.short_desc": {
           "source": "The ID of the tool call that this message is responding to",
           "message": "此訊息回應的工具呼叫的 ID"
         },
-        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWVzc2FnZXM.union.SGFzaERhdGFUeXBlOlRvb2xNZXNzYWdlIzM1NzJkMzM4YmU4ZmY1MGNkMmJiMDJmMDVlNzc0NTI4MmJjMGU3NTdkZDI0NjYwNWUwN2YzNTZkMzBlZmExZjI.field.dG9vbF9jYWxsX2lk.desc": {
+        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.bWVzc2FnZXM.union.VG9vbE1lc3NhZ2UjOGNhMWY4MjlhNTBmMWM2ODcwNDU0MzU5MzVkMmI0YTcwMWM0ZWRiMzE3MWM4OTE4OGYyZDlhZWUxMTgzNzQ4MA.field.dG9vbF9jYWxsX2lk.desc": {
           "source": "The ID of the tool call that this message is responding to.",
           "message": "此訊息正在回應的工具呼叫的 ID。"
         },
@@ -4011,39 +4011,39 @@
           "source": "Function",
           "message": "函式"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpIYXNoRGF0YVR5cGU6RnVuY3Rpb25EZXNjcmlwdGlvbiM2MDdmNzdkYjNiZmRmMzU4ODZmNzNmODE0YWY5YzYxNjRiM2QxYTZmYzM0MzE0ZDQzNmNkMTQ3N2FlMjdkMjZk.field.ZGVzY3JpcHRpb24.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpGdW5jdGlvbkRlc2NyaXB0aW9uIzkwYTQ2ZTdhMTdhYWU4OTcyNDhjNTBlNzZlZGY3NmNjZmE2OWIzMDJkYjQyMWVlZTkwMmIzMWMxZjYxMGVkODQ.field.ZGVzY3JpcHRpb24.display_name": {
           "source": "Description",
           "message": "說明"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpIYXNoRGF0YVR5cGU6RnVuY3Rpb25EZXNjcmlwdGlvbiM2MDdmNzdkYjNiZmRmMzU4ODZmNzNmODE0YWY5YzYxNjRiM2QxYTZmYzM0MzE0ZDQzNmNkMTQ3N2FlMjdkMjZk.field.ZGVzY3JpcHRpb24.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpGdW5jdGlvbkRlc2NyaXB0aW9uIzkwYTQ2ZTdhMTdhYWU4OTcyNDhjNTBlNzZlZGY3NmNjZmE2OWIzMDJkYjQyMWVlZTkwMmIzMWMxZjYxMGVkODQ.field.ZGVzY3JpcHRpb24.short_desc": {
           "source": "A description of what the function does",
           "message": "描述該函數的功能"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpIYXNoRGF0YVR5cGU6RnVuY3Rpb25EZXNjcmlwdGlvbiM2MDdmNzdkYjNiZmRmMzU4ODZmNzNmODE0YWY5YzYxNjRiM2QxYTZmYzM0MzE0ZDQzNmNkMTQ3N2FlMjdkMjZk.field.ZGVzY3JpcHRpb24.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpGdW5jdGlvbkRlc2NyaXB0aW9uIzkwYTQ2ZTdhMTdhYWU4OTcyNDhjNTBlNzZlZGY3NmNjZmE2OWIzMDJkYjQyMWVlZTkwMmIzMWMxZjYxMGVkODQ.field.ZGVzY3JpcHRpb24.desc": {
           "source": "A description of what the function does.",
           "message": "該函數的作用的描述。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpIYXNoRGF0YVR5cGU6RnVuY3Rpb25EZXNjcmlwdGlvbiM2MDdmNzdkYjNiZmRmMzU4ODZmNzNmODE0YWY5YzYxNjRiM2QxYTZmYzM0MzE0ZDQzNmNkMTQ3N2FlMjdkMjZk.field.bmFtZQ.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpGdW5jdGlvbkRlc2NyaXB0aW9uIzkwYTQ2ZTdhMTdhYWU4OTcyNDhjNTBlNzZlZGY3NmNjZmE2OWIzMDJkYjQyMWVlZTkwMmIzMWMxZjYxMGVkODQ.field.bmFtZQ.display_name": {
           "source": "Name",
           "message": "名稱"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpIYXNoRGF0YVR5cGU6RnVuY3Rpb25EZXNjcmlwdGlvbiM2MDdmNzdkYjNiZmRmMzU4ODZmNzNmODE0YWY5YzYxNjRiM2QxYTZmYzM0MzE0ZDQzNmNkMTQ3N2FlMjdkMjZk.field.bmFtZQ.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpGdW5jdGlvbkRlc2NyaXB0aW9uIzkwYTQ2ZTdhMTdhYWU4OTcyNDhjNTBlNzZlZGY3NmNjZmE2OWIzMDJkYjQyMWVlZTkwMmIzMWMxZjYxMGVkODQ.field.bmFtZQ.short_desc": {
           "source": "The name of the function to be called",
           "message": "要呼叫的函數名稱"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpIYXNoRGF0YVR5cGU6RnVuY3Rpb25EZXNjcmlwdGlvbiM2MDdmNzdkYjNiZmRmMzU4ODZmNzNmODE0YWY5YzYxNjRiM2QxYTZmYzM0MzE0ZDQzNmNkMTQ3N2FlMjdkMjZk.field.bmFtZQ.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpGdW5jdGlvbkRlc2NyaXB0aW9uIzkwYTQ2ZTdhMTdhYWU4OTcyNDhjNTBlNzZlZGY3NmNjZmE2OWIzMDJkYjQyMWVlZTkwMmIzMWMxZjYxMGVkODQ.field.bmFtZQ.desc": {
           "source": "The name of the function to be called.",
           "message": "要呼叫的函數的名稱。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpIYXNoRGF0YVR5cGU6RnVuY3Rpb25EZXNjcmlwdGlvbiM2MDdmNzdkYjNiZmRmMzU4ODZmNzNmODE0YWY5YzYxNjRiM2QxYTZmYzM0MzE0ZDQzNmNkMTQ3N2FlMjdkMjZk.field.cGFyYW1ldGVycw.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpGdW5jdGlvbkRlc2NyaXB0aW9uIzkwYTQ2ZTdhMTdhYWU4OTcyNDhjNTBlNzZlZGY3NmNjZmE2OWIzMDJkYjQyMWVlZTkwMmIzMWMxZjYxMGVkODQ.field.cGFyYW1ldGVycw.display_name": {
           "source": "Parameters",
           "message": "參數"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpIYXNoRGF0YVR5cGU6RnVuY3Rpb25EZXNjcmlwdGlvbiM2MDdmNzdkYjNiZmRmMzU4ODZmNzNmODE0YWY5YzYxNjRiM2QxYTZmYzM0MzE0ZDQzNmNkMTQ3N2FlMjdkMjZk.field.cGFyYW1ldGVycw.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpGdW5jdGlvbkRlc2NyaXB0aW9uIzkwYTQ2ZTdhMTdhYWU4OTcyNDhjNTBlNzZlZGY3NmNjZmE2OWIzMDJkYjQyMWVlZTkwMmIzMWMxZjYxMGVkODQ.field.cGFyYW1ldGVycw.short_desc": {
           "source": "A JSON Schema object describing the parameters the function accepts",
           "message": "描述函數所接受的參數的 JSON Schema 對象"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpIYXNoRGF0YVR5cGU6RnVuY3Rpb25EZXNjcmlwdGlvbiM2MDdmNzdkYjNiZmRmMzU4ODZmNzNmODE0YWY5YzYxNjRiM2QxYTZmYzM0MzE0ZDQzNmNkMTQ3N2FlMjdkMjZk.field.cGFyYW1ldGVycw.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpGdW5jdGlvbkRlc2NyaXB0aW9uIzkwYTQ2ZTdhMTdhYWU4OTcyNDhjNTBlNzZlZGY3NmNjZmE2OWIzMDJkYjQyMWVlZTkwMmIzMWMxZjYxMGVkODQ.field.cGFyYW1ldGVycw.desc": {
           "source": "A JSON Schema object describing the parameters the function accepts.",
           "message": "描述函數接受的參數的 JSON Schema 物件。"
         },
@@ -4067,19 +4067,19 @@
           "source": "Controls which (if any) function is called by the model.",
           "message": "控制模型呼叫哪個函數（如果有）。"
         },
-        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.dG9vbF9jaG9pY2U.union.SGFzaERhdGFUeXBlOipUb29sQ2hvaWNlT25lT2YjZmU2YzY4NDBhYWQ4YjY2NjIzNWRmNzY0MmJiN2ExMTYxZmEyZTIzNDYzOTMzMjg0MzU2YzRjZWJjOWY3NDEzYw.field.ZnVuY3Rpb24.display_name": {
+        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.dG9vbF9jaG9pY2U.union.KlRvb2xDaG9pY2VPbmVPZiMxMTE1Yjk2OGJmYWQwOWNhNzU3MTYyMjIyM2IyYzIyYzliMWNhZTk0M2M2MTkxZDg4ZTg1MTRiYjhmMjI2Mzc5.field.ZnVuY3Rpb24.display_name": {
           "source": "Function",
           "message": "函式"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpIYXNoRGF0YVR5cGU6ZnVuY3Rpb24jZmE4Y2YzZTU0M2JiMGM0NWMzMTAwMDg1ZjZmMDk0YWI3ODQzYjdiMTg4ZTgwZjNiYjBjYjlhOWFkYmNjMjhjOA.field.bmFtZQ.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpmdW5jdGlvbiM0MjEwYjM1MWVjYzcxY2RjODBmZjdlNWQyMzcyOTRlOTUxMmJlMjJhNGJiNTQxMDdmNzQ1YzY2ODNmMTBlZGY5.field.bmFtZQ.display_name": {
           "source": "Name",
           "message": "名稱"
         },
-        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.dG9vbF9jaG9pY2U.union.SGFzaERhdGFUeXBlOipUb29sQ2hvaWNlT25lT2YjZmU2YzY4NDBhYWQ4YjY2NjIzNWRmNzY0MmJiN2ExMTYxZmEyZTIzNDYzOTMzMjg0MzU2YzRjZWJjOWY3NDEzYw.field.dHlwZQ.display_name": {
+        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.dG9vbF9jaG9pY2U.union.KlRvb2xDaG9pY2VPbmVPZiMxMTE1Yjk2OGJmYWQwOWNhNzU3MTYyMjIyM2IyYzIyYzliMWNhZTk0M2M2MTkxZDg4ZTg1MTRiYjhmMjI2Mzc5.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "類型"
         },
-        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.dG9vbF9jaG9pY2U.union.SGFzaERhdGFUeXBlOipUb29sQ2hvaWNlT25lT2YjZmU2YzY4NDBhYWQ4YjY2NjIzNWRmNzY0MmJiN2ExMTYxZmEyZTIzNDYzOTMzMjg0MzU2YzRjZWJjOWY3NDEzYw.field.dHlwZQ.allowed-value.c3RyaW5nOmZ1bmN0aW9u.display_name": {
+        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLWNoYXQtY29tcGxldGlvbg.option.dG9vbF9jaG9pY2U.union.KlRvb2xDaG9pY2VPbmVPZiMxMTE1Yjk2OGJmYWQwOWNhNzU3MTYyMjIyM2IyYzIyYzliMWNhZTk0M2M2MTkxZDg4ZTg1MTRiYjhmMjI2Mzc5.field.dHlwZQ.allowed-value.c3RyaW5nOmZ1bmN0aW9u.display_name": {
           "source": "function",
           "message": "函數"
         },
@@ -4107,39 +4107,39 @@
           "source": "Configuration for JSON schema-based structured outputs.",
           "message": "基於 JSON 模式的結構化輸出的配置。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpIYXNoRGF0YVR5cGU6SnNvblNjaGVtYUNvbmZpZyMzNTg1NDhiMDdjODhiMzQyODM2NWVkZTU5NDQ2ZTFkODJkMDMzNGIxZGNiN2MyZTBiMDE4OGFmYThmNTZjN2My.field.bmFtZQ.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpKc29uU2NoZW1hQ29uZmlnIzJmMjIwZDU5YjNlNTlkZjU0NmIxZTk5Yzg1MjE3MzE4Y2IyZTQ3YzYyZTk2NzQ1MGUwZGVjOTY5OTg5OTVhMzc.field.bmFtZQ.display_name": {
           "source": "Name",
           "message": "名稱"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpIYXNoRGF0YVR5cGU6SnNvblNjaGVtYUNvbmZpZyMzNTg1NDhiMDdjODhiMzQyODM2NWVkZTU5NDQ2ZTFkODJkMDMzNGIxZGNiN2MyZTBiMDE4OGFmYThmNTZjN2My.field.bmFtZQ.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpKc29uU2NoZW1hQ29uZmlnIzJmMjIwZDU5YjNlNTlkZjU0NmIxZTk5Yzg1MjE3MzE4Y2IyZTQ3YzYyZTk2NzQ1MGUwZGVjOTY5OTg5OTVhMzc.field.bmFtZQ.short_desc": {
           "source": "A name for the schema",
           "message": "模式的名稱"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpIYXNoRGF0YVR5cGU6SnNvblNjaGVtYUNvbmZpZyMzNTg1NDhiMDdjODhiMzQyODM2NWVkZTU5NDQ2ZTFkODJkMDMzNGIxZGNiN2MyZTBiMDE4OGFmYThmNTZjN2My.field.bmFtZQ.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpKc29uU2NoZW1hQ29uZmlnIzJmMjIwZDU5YjNlNTlkZjU0NmIxZTk5Yzg1MjE3MzE4Y2IyZTQ3YzYyZTk2NzQ1MGUwZGVjOTY5OTg5OTVhMzc.field.bmFtZQ.desc": {
           "source": "A name for the schema. Used for identification purposes.",
           "message": "架構的名稱。用於識別目的。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpIYXNoRGF0YVR5cGU6SnNvblNjaGVtYUNvbmZpZyMzNTg1NDhiMDdjODhiMzQyODM2NWVkZTU5NDQ2ZTFkODJkMDMzNGIxZGNiN2MyZTBiMDE4OGFmYThmNTZjN2My.field.c2NoZW1h.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpKc29uU2NoZW1hQ29uZmlnIzJmMjIwZDU5YjNlNTlkZjU0NmIxZTk5Yzg1MjE3MzE4Y2IyZTQ3YzYyZTk2NzQ1MGUwZGVjOTY5OTg5OTVhMzc.field.c2NoZW1h.display_name": {
           "source": "Schema",
           "message": "結構綱要"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpIYXNoRGF0YVR5cGU6SnNvblNjaGVtYUNvbmZpZyMzNTg1NDhiMDdjODhiMzQyODM2NWVkZTU5NDQ2ZTFkODJkMDMzNGIxZGNiN2MyZTBiMDE4OGFmYThmNTZjN2My.field.c2NoZW1h.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpKc29uU2NoZW1hQ29uZmlnIzJmMjIwZDU5YjNlNTlkZjU0NmIxZTk5Yzg1MjE3MzE4Y2IyZTQ3YzYyZTk2NzQ1MGUwZGVjOTY5OTg5OTVhMzc.field.c2NoZW1h.short_desc": {
           "source": "A valid JSON Schema object that defines the structure of the expected response",
           "message": "定義預期回應結構的有效 JSON Schema 對象"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpIYXNoRGF0YVR5cGU6SnNvblNjaGVtYUNvbmZpZyMzNTg1NDhiMDdjODhiMzQyODM2NWVkZTU5NDQ2ZTFkODJkMDMzNGIxZGNiN2MyZTBiMDE4OGFmYThmNTZjN2My.field.c2NoZW1h.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpKc29uU2NoZW1hQ29uZmlnIzJmMjIwZDU5YjNlNTlkZjU0NmIxZTk5Yzg1MjE3MzE4Y2IyZTQ3YzYyZTk2NzQ1MGUwZGVjOTY5OTg5OTVhMzc.field.c2NoZW1h.desc": {
           "source": "A valid JSON Schema object that defines the structure of the expected response.",
           "message": "定義預期回應結構的有效 JSON 架構物件。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpIYXNoRGF0YVR5cGU6SnNvblNjaGVtYUNvbmZpZyMzNTg1NDhiMDdjODhiMzQyODM2NWVkZTU5NDQ2ZTFkODJkMDMzNGIxZGNiN2MyZTBiMDE4OGFmYThmNTZjN2My.field.c3RyaWN0.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpKc29uU2NoZW1hQ29uZmlnIzJmMjIwZDU5YjNlNTlkZjU0NmIxZTk5Yzg1MjE3MzE4Y2IyZTQ3YzYyZTk2NzQ1MGUwZGVjOTY5OTg5OTVhMzc.field.c3RyaWN0.display_name": {
           "source": "Strict",
           "message": "嚴格"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpIYXNoRGF0YVR5cGU6SnNvblNjaGVtYUNvbmZpZyMzNTg1NDhiMDdjODhiMzQyODM2NWVkZTU5NDQ2ZTFkODJkMDMzNGIxZGNiN2MyZTBiMDE4OGFmYThmNTZjN2My.field.c3RyaWN0.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpKc29uU2NoZW1hQ29uZmlnIzJmMjIwZDU5YjNlNTlkZjU0NmIxZTk5Yzg1MjE3MzE4Y2IyZTQ3YzYyZTk2NzQ1MGUwZGVjOTY5OTg5OTVhMzc.field.c3RyaWN0.short_desc": {
           "source": "When 'true', the model will strictly adhere to the schema",
           "message": "當「true」時，模型將嚴格遵守架構"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpIYXNoRGF0YVR5cGU6SnNvblNjaGVtYUNvbmZpZyMzNTg1NDhiMDdjODhiMzQyODM2NWVkZTU5NDQ2ZTFkODJkMDMzNGIxZGNiN2MyZTBiMDE4OGFmYThmNTZjN2My.field.c3RyaWN0.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpKc29uU2NoZW1hQ29uZmlnIzJmMjIwZDU5YjNlNTlkZjU0NmIxZTk5Yzg1MjE3MzE4Y2IyZTQ3YzYyZTk2NzQ1MGUwZGVjOTY5OTg5OTVhMzc.field.c3RyaWN0.desc": {
           "source": "When `true`, the model will strictly adhere to the schema. Recommended for reliable parsing.",
           "message": "當 `true` 時，模型將嚴格遵守架構。推薦用於可靠的解析。"
         },
@@ -4195,75 +4195,75 @@
           "source": "Override the messages for the fallback request.",
           "message": "覆蓋回退請求的訊息。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpIYXNoRGF0YVR5cGU6VXNlckFzc2lzdGFudFN5c3RlbU1lc3NhZ2UjMTE0MGFhNmExYmE4MzQ3YzVmMjMyNTRlZjE5ZDc5ZDZmZDA1MDhkNzUyM2RjNjkyNTQ4ZmYzZTE3YjYyM2JiZg.field.Y29udGVudA.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpVc2VyQXNzaXN0YW50U3lzdGVtTWVzc2FnZSNhZWU1MDM4NTU0Y2QyNGYzNzVhYTE2NzcwMDA4NWJhOTY3OGUxYTA1MGJhNGYyZWQ3NDg3YWMyNDY2M2E0YmI2.field.Y29udGVudA.display_name": {
           "source": "Content",
           "message": "內容"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpIYXNoRGF0YVR5cGU6VXNlckFzc2lzdGFudFN5c3RlbU1lc3NhZ2UjMTE0MGFhNmExYmE4MzQ3YzVmMjMyNTRlZjE5ZDc5ZDZmZDA1MDhkNzUyM2RjNjkyNTQ4ZmYzZTE3YjYyM2JiZg.field.Y29udGVudA.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpVc2VyQXNzaXN0YW50U3lzdGVtTWVzc2FnZSNhZWU1MDM4NTU0Y2QyNGYzNzVhYTE2NzcwMDA4NWJhOTY3OGUxYTA1MGJhNGYyZWQ3NDg3YWMyNDY2M2E0YmI2.field.Y29udGVudA.short_desc": {
           "source": "The content of the message",
           "message": "訊息的內容"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpIYXNoRGF0YVR5cGU6VXNlckFzc2lzdGFudFN5c3RlbU1lc3NhZ2UjMTE0MGFhNmExYmE4MzQ3YzVmMjMyNTRlZjE5ZDc5ZDZmZDA1MDhkNzUyM2RjNjkyNTQ4ZmYzZTE3YjYyM2JiZg.field.Y29udGVudA.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpVc2VyQXNzaXN0YW50U3lzdGVtTWVzc2FnZSNhZWU1MDM4NTU0Y2QyNGYzNzVhYTE2NzcwMDA4NWJhOTY3OGUxYTA1MGJhNGYyZWQ3NDg3YWMyNDY2M2E0YmI2.field.Y29udGVudA.desc": {
           "source": "The content of the message. Can be a string or an array of content parts (for user messages).",
           "message": "訊息的內容。可以是字串或內容部分數組（用於用戶訊息）。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpIYXNoRGF0YVR5cGU6VXNlckFzc2lzdGFudFN5c3RlbU1lc3NhZ2UjMTE0MGFhNmExYmE4MzQ3YzVmMjMyNTRlZjE5ZDc5ZDZmZDA1MDhkNzUyM2RjNjkyNTQ4ZmYzZTE3YjYyM2JiZg.field.bmFtZQ.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpVc2VyQXNzaXN0YW50U3lzdGVtTWVzc2FnZSNhZWU1MDM4NTU0Y2QyNGYzNzVhYTE2NzcwMDA4NWJhOTY3OGUxYTA1MGJhNGYyZWQ3NDg3YWMyNDY2M2E0YmI2.field.bmFtZQ.display_name": {
           "source": "Name",
           "message": "名稱"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpIYXNoRGF0YVR5cGU6VXNlckFzc2lzdGFudFN5c3RlbU1lc3NhZ2UjMTE0MGFhNmExYmE4MzQ3YzVmMjMyNTRlZjE5ZDc5ZDZmZDA1MDhkNzUyM2RjNjkyNTQ4ZmYzZTE3YjYyM2JiZg.field.bmFtZQ.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpVc2VyQXNzaXN0YW50U3lzdGVtTWVzc2FnZSNhZWU1MDM4NTU0Y2QyNGYzNzVhYTE2NzcwMDA4NWJhOTY3OGUxYTA1MGJhNGYyZWQ3NDg3YWMyNDY2M2E0YmI2.field.bmFtZQ.short_desc": {
           "source": "An optional name for the participant",
           "message": "參與者的選填名稱"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpIYXNoRGF0YVR5cGU6VXNlckFzc2lzdGFudFN5c3RlbU1lc3NhZ2UjMTE0MGFhNmExYmE4MzQ3YzVmMjMyNTRlZjE5ZDc5ZDZmZDA1MDhkNzUyM2RjNjkyNTQ4ZmYzZTE3YjYyM2JiZg.field.bmFtZQ.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpVc2VyQXNzaXN0YW50U3lzdGVtTWVzc2FnZSNhZWU1MDM4NTU0Y2QyNGYzNzVhYTE2NzcwMDA4NWJhOTY3OGUxYTA1MGJhNGYyZWQ3NDg3YWMyNDY2M2E0YmI2.field.bmFtZQ.desc": {
           "source": "An optional name for the participant.",
           "message": "參與者的可選名稱。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpIYXNoRGF0YVR5cGU6VXNlckFzc2lzdGFudFN5c3RlbU1lc3NhZ2UjMTE0MGFhNmExYmE4MzQ3YzVmMjMyNTRlZjE5ZDc5ZDZmZDA1MDhkNzUyM2RjNjkyNTQ4ZmYzZTE3YjYyM2JiZg.field.cm9sZQ.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpVc2VyQXNzaXN0YW50U3lzdGVtTWVzc2FnZSNhZWU1MDM4NTU0Y2QyNGYzNzVhYTE2NzcwMDA4NWJhOTY3OGUxYTA1MGJhNGYyZWQ3NDg3YWMyNDY2M2E0YmI2.field.cm9sZQ.display_name": {
           "source": "Role",
           "message": "角色"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpIYXNoRGF0YVR5cGU6VXNlckFzc2lzdGFudFN5c3RlbU1lc3NhZ2UjMTE0MGFhNmExYmE4MzQ3YzVmMjMyNTRlZjE5ZDc5ZDZmZDA1MDhkNzUyM2RjNjkyNTQ4ZmYzZTE3YjYyM2JiZg.field.cm9sZQ.allowed-value.c3RyaW5nOnVzZXI.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpVc2VyQXNzaXN0YW50U3lzdGVtTWVzc2FnZSNhZWU1MDM4NTU0Y2QyNGYzNzVhYTE2NzcwMDA4NWJhOTY3OGUxYTA1MGJhNGYyZWQ3NDg3YWMyNDY2M2E0YmI2.field.cm9sZQ.allowed-value.c3RyaW5nOnVzZXI.display_name": {
           "source": "user",
           "message": "使用者"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpIYXNoRGF0YVR5cGU6VXNlckFzc2lzdGFudFN5c3RlbU1lc3NhZ2UjMTE0MGFhNmExYmE4MzQ3YzVmMjMyNTRlZjE5ZDc5ZDZmZDA1MDhkNzUyM2RjNjkyNTQ4ZmYzZTE3YjYyM2JiZg.field.cm9sZQ.allowed-value.c3RyaW5nOmFzc2lzdGFudA.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpVc2VyQXNzaXN0YW50U3lzdGVtTWVzc2FnZSNhZWU1MDM4NTU0Y2QyNGYzNzVhYTE2NzcwMDA4NWJhOTY3OGUxYTA1MGJhNGYyZWQ3NDg3YWMyNDY2M2E0YmI2.field.cm9sZQ.allowed-value.c3RyaW5nOmFzc2lzdGFudA.display_name": {
           "source": "assistant",
           "message": "助理"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpIYXNoRGF0YVR5cGU6VXNlckFzc2lzdGFudFN5c3RlbU1lc3NhZ2UjMTE0MGFhNmExYmE4MzQ3YzVmMjMyNTRlZjE5ZDc5ZDZmZDA1MDhkNzUyM2RjNjkyNTQ4ZmYzZTE3YjYyM2JiZg.field.cm9sZQ.allowed-value.c3RyaW5nOnN5c3RlbQ.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpVc2VyQXNzaXN0YW50U3lzdGVtTWVzc2FnZSNhZWU1MDM4NTU0Y2QyNGYzNzVhYTE2NzcwMDA4NWJhOTY3OGUxYTA1MGJhNGYyZWQ3NDg3YWMyNDY2M2E0YmI2.field.cm9sZQ.allowed-value.c3RyaW5nOnN5c3RlbQ.display_name": {
           "source": "system",
           "message": "系統"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpIYXNoRGF0YVR5cGU6VG9vbE1lc3NhZ2UjMzU3MmQzMzhiZThmZjUwY2QyYmIwMmYwNWU3NzQ1MjgyYmMwZTc1N2RkMjQ2NjA1ZTA3ZjM1NmQzMGVmYTFmMg.field.Y29udGVudA.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpUb29sTWVzc2FnZSM4Y2ExZjgyOWE1MGYxYzY4NzA0NTQzNTkzNWQyYjRhNzAxYzRlZGIzMTcxYzg5MTg4ZjJkOWFlZTExODM3NDgw.field.Y29udGVudA.display_name": {
           "source": "Content",
           "message": "內容"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpIYXNoRGF0YVR5cGU6VG9vbE1lc3NhZ2UjMzU3MmQzMzhiZThmZjUwY2QyYmIwMmYwNWU3NzQ1MjgyYmMwZTc1N2RkMjQ2NjA1ZTA3ZjM1NmQzMGVmYTFmMg.field.Y29udGVudA.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpUb29sTWVzc2FnZSM4Y2ExZjgyOWE1MGYxYzY4NzA0NTQzNTkzNWQyYjRhNzAxYzRlZGIzMTcxYzg5MTg4ZjJkOWFlZTExODM3NDgw.field.Y29udGVudA.short_desc": {
           "source": "The result of the tool call",
           "message": "工具調用的結果"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpIYXNoRGF0YVR5cGU6VG9vbE1lc3NhZ2UjMzU3MmQzMzhiZThmZjUwY2QyYmIwMmYwNWU3NzQ1MjgyYmMwZTc1N2RkMjQ2NjA1ZTA3ZjM1NmQzMGVmYTFmMg.field.Y29udGVudA.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpUb29sTWVzc2FnZSM4Y2ExZjgyOWE1MGYxYzY4NzA0NTQzNTkzNWQyYjRhNzAxYzRlZGIzMTcxYzg5MTg4ZjJkOWFlZTExODM3NDgw.field.Y29udGVudA.desc": {
           "source": "The result of the tool call.",
           "message": "工具調用的結果。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpIYXNoRGF0YVR5cGU6VG9vbE1lc3NhZ2UjMzU3MmQzMzhiZThmZjUwY2QyYmIwMmYwNWU3NzQ1MjgyYmMwZTc1N2RkMjQ2NjA1ZTA3ZjM1NmQzMGVmYTFmMg.field.cm9sZQ.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpUb29sTWVzc2FnZSM4Y2ExZjgyOWE1MGYxYzY4NzA0NTQzNTkzNWQyYjRhNzAxYzRlZGIzMTcxYzg5MTg4ZjJkOWFlZTExODM3NDgw.field.cm9sZQ.display_name": {
           "source": "Role",
           "message": "角色"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpIYXNoRGF0YVR5cGU6VG9vbE1lc3NhZ2UjMzU3MmQzMzhiZThmZjUwY2QyYmIwMmYwNWU3NzQ1MjgyYmMwZTc1N2RkMjQ2NjA1ZTA3ZjM1NmQzMGVmYTFmMg.field.cm9sZQ.allowed-value.c3RyaW5nOnRvb2w.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpUb29sTWVzc2FnZSM4Y2ExZjgyOWE1MGYxYzY4NzA0NTQzNTkzNWQyYjRhNzAxYzRlZGIzMTcxYzg5MTg4ZjJkOWFlZTExODM3NDgw.field.cm9sZQ.allowed-value.c3RyaW5nOnRvb2w.display_name": {
           "source": "tool",
           "message": "工具"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpIYXNoRGF0YVR5cGU6VG9vbE1lc3NhZ2UjMzU3MmQzMzhiZThmZjUwY2QyYmIwMmYwNWU3NzQ1MjgyYmMwZTc1N2RkMjQ2NjA1ZTA3ZjM1NmQzMGVmYTFmMg.field.dG9vbF9jYWxsX2lk.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpUb29sTWVzc2FnZSM4Y2ExZjgyOWE1MGYxYzY4NzA0NTQzNTkzNWQyYjRhNzAxYzRlZGIzMTcxYzg5MTg4ZjJkOWFlZTExODM3NDgw.field.dG9vbF9jYWxsX2lk.display_name": {
           "source": "Tool Call ID",
           "message": "工具呼叫 ID"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpIYXNoRGF0YVR5cGU6VG9vbE1lc3NhZ2UjMzU3MmQzMzhiZThmZjUwY2QyYmIwMmYwNWU3NzQ1MjgyYmMwZTc1N2RkMjQ2NjA1ZTA3ZjM1NmQzMGVmYTFmMg.field.dG9vbF9jYWxsX2lk.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpUb29sTWVzc2FnZSM4Y2ExZjgyOWE1MGYxYzY4NzA0NTQzNTkzNWQyYjRhNzAxYzRlZGIzMTcxYzg5MTg4ZjJkOWFlZTExODM3NDgw.field.dG9vbF9jYWxsX2lk.short_desc": {
           "source": "The ID of the tool call that this message is responding to",
           "message": "此訊息回應的工具呼叫的 ID"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpIYXNoRGF0YVR5cGU6VG9vbE1lc3NhZ2UjMzU3MmQzMzhiZThmZjUwY2QyYmIwMmYwNWU3NzQ1MjgyYmMwZTc1N2RkMjQ2NjA1ZTA3ZjM1NmQzMGVmYTFmMg.field.dG9vbF9jYWxsX2lk.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOlkzSmxZWFJsTFdOb1lYUXRZMjl0Y0d4bGRHbHZiZzpUb29sTWVzc2FnZSM4Y2ExZjgyOWE1MGYxYzY4NzA0NTQzNTkzNWQyYjRhNzAxYzRlZGIzMTcxYzg5MTg4ZjJkOWFlZTExODM3NDgw.field.dG9vbF9jYWxsX2lk.desc": {
           "source": "The ID of the tool call that this message is responding to.",
           "message": "此訊息正在回應的工具呼叫的 ID。"
         },
@@ -4395,231 +4395,231 @@
           "source": "Request",
           "message": "請求"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTpUcmFuc2xhdGlvblJlcXVlc3RCb2R5IzNlOWRmOTQzYTRkOGVkYTczY2JkYjVjY2E0ZTY5YzU4NDVlMjYyOWJkMzRkNzNlZjY0YTEzMTZlZTZlZDkwZTk.field.dHJhbnNsYXRpb24.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOlRyYW5zbGF0aW9uUmVxdWVzdEJvZHkjYzU2N2VhNzhlZWFjZTE3YTg4ODJiYTRiODlkMDY5YWJkODdiMmNkOGJjOTE5YTg1ZWNkZDg4ZDBiMWMwN2IzZQ.field.dHJhbnNsYXRpb24.display_name": {
           "source": "Translation",
           "message": "翻譯"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTp0cmFuc2xhdGlvbiNjOWRhYzgxM2VlNTU0OGI2ZmRhZTg1YjczNjExMWZhMDRkMTAyOGYyODllYmU0ZWU3MTllY2JiMWVmZTVlMjYx.field.Zm9ybWFs.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.Zm9ybWFs.display_name": {
           "source": "Formal",
           "message": "正式"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTp0cmFuc2xhdGlvbiNjOWRhYzgxM2VlNTU0OGI2ZmRhZTg1YjczNjExMWZhMDRkMTAyOGYyODllYmU0ZWU3MTllY2JiMWVmZTVlMjYx.field.Zm9ybWFs.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.Zm9ybWFs.short_desc": {
           "source": "Use formal language style",
           "message": "使用正式的語言風格"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTp0cmFuc2xhdGlvbiNjOWRhYzgxM2VlNTU0OGI2ZmRhZTg1YjczNjExMWZhMDRkMTAyOGYyODllYmU0ZWU3MTllY2JiMWVmZTVlMjYx.field.Zm9ybWFs.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.Zm9ybWFs.desc": {
           "source": "Use formal language style. See [Translation](https://www.assemblyai.com/docs/speech-understanding/translation) for more details.",
           "message": "使用正式的語言風格。有關更多詳細信息，請參閱[翻譯](https://www.assemblyai.com/docs/speech-understanding/translation)。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTp0cmFuc2xhdGlvbiNjOWRhYzgxM2VlNTU0OGI2ZmRhZTg1YjczNjExMWZhMDRkMTAyOGYyODllYmU0ZWU3MTllY2JiMWVmZTVlMjYx.field.bWF0Y2hfb3JpZ2luYWxfdXR0ZXJhbmNl.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.bWF0Y2hfb3JpZ2luYWxfdXR0ZXJhbmNl.display_name": {
           "source": "Match Original Utterance",
           "message": "匹配原文"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTp0cmFuc2xhdGlvbiNjOWRhYzgxM2VlNTU0OGI2ZmRhZTg1YjczNjExMWZhMDRkMTAyOGYyODllYmU0ZWU3MTllY2JiMWVmZTVlMjYx.field.bWF0Y2hfb3JpZ2luYWxfdXR0ZXJhbmNl.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.bWF0Y2hfb3JpZ2luYWxfdXR0ZXJhbmNl.short_desc": {
           "source": "When enabled with Speaker Labels, returns translated text in the utterances…",
           "message": "当启用演讲者标签时，返回话语中的翻译文本..."
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTp0cmFuc2xhdGlvbiNjOWRhYzgxM2VlNTU0OGI2ZmRhZTg1YjczNjExMWZhMDRkMTAyOGYyODllYmU0ZWU3MTllY2JiMWVmZTVlMjYx.field.bWF0Y2hfb3JpZ2luYWxfdXR0ZXJhbmNl.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.bWF0Y2hfb3JpZ2luYWxfdXR0ZXJhbmNl.desc": {
           "source": "When enabled with Speaker Labels, returns translated text in the utterances array. Each utterance will include a `translated_texts` key containing translations for each target language.",
           "message": "當與說話者標籤一起啟用時，傳回話語數組中的翻譯文字。每個話語都將包含一個 `translated_texts` 鍵，其中包含每種目標語言的翻譯。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTp0cmFuc2xhdGlvbiNjOWRhYzgxM2VlNTU0OGI2ZmRhZTg1YjczNjExMWZhMDRkMTAyOGYyODllYmU0ZWU3MTllY2JiMWVmZTVlMjYx.field.dGFyZ2V0X2xhbmd1YWdlcw.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.dGFyZ2V0X2xhbmd1YWdlcw.display_name": {
           "source": "Target Languages",
           "message": "目標語言"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTp0cmFuc2xhdGlvbiNjOWRhYzgxM2VlNTU0OGI2ZmRhZTg1YjczNjExMWZhMDRkMTAyOGYyODllYmU0ZWU3MTllY2JiMWVmZTVlMjYx.field.dGFyZ2V0X2xhbmd1YWdlcw.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.dGFyZ2V0X2xhbmd1YWdlcw.short_desc": {
           "source": "List of target language codes (e.g., '[\"es\", \"de\"]')",
           "message": "目標語言代碼清單（例如，'[\"es\", \"de\"]'）"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTp0cmFuc2xhdGlvbiNjOWRhYzgxM2VlNTU0OGI2ZmRhZTg1YjczNjExMWZhMDRkMTAyOGYyODllYmU0ZWU3MTllY2JiMWVmZTVlMjYx.field.dGFyZ2V0X2xhbmd1YWdlcw.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.dGFyZ2V0X2xhbmd1YWdlcw.desc": {
           "source": "List of target language codes (e.g., `[\"es\", \"de\"]`). See [Translation](https://www.assemblyai.com/docs/speech-understanding/translation) for supported languages.",
           "message": "目標語言代碼清單（例如 `[\"es\", \"de\"]`）。有關支援的語言，請參閱[翻譯](https://www.assemblyai.com/docs/speech-understanding/translation)。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTpTcGVha2VySWRlbnRpZmljYXRpb25SZXF1ZXN0Qm9keSM3NmJhYjE0OGIyMDVlYmY4YzljZThkYzc0NWMwYTk3YzAwZTdhM2JkM2I3NDFjMThlOWFmOTRiMzQwOGQ4NTNl.field.c3BlYWtlcl9pZGVudGlmaWNhdGlvbg.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOlNwZWFrZXJJZGVudGlmaWNhdGlvblJlcXVlc3RCb2R5IzUzNDM0ZTBkMDhhMGY3MDUyYTQ2Y2U2YzMzZGQ1ZmJiOGQ4YTU0ZDc0YjExY2JjY2YzYjAzYTIwY2NlOGExM2I.field.c3BlYWtlcl9pZGVudGlmaWNhdGlvbg.display_name": {
           "source": "Speaker Identification",
           "message": "說話者識別"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTpzcGVha2VyX2lkZW50aWZpY2F0aW9uIzEwNzI2MmYzOTY2YzZhODEwODMwMmQxMTNjOWVhNTk5ZGNiYmRmOWQzMDU5YjU2OTYwZTg4ODg0Y2IwMTcyNzg.field.a25vd25fdmFsdWVz.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.a25vd25fdmFsdWVz.display_name": {
           "source": "Known Values",
           "message": "已知值"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTpzcGVha2VyX2lkZW50aWZpY2F0aW9uIzEwNzI2MmYzOTY2YzZhODEwODMwMmQxMTNjOWVhNTk5ZGNiYmRmOWQzMDU5YjU2OTYwZTg4ODg0Y2IwMTcyNzg.field.a25vd25fdmFsdWVz.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.a25vd25fdmFsdWVz.short_desc": {
           "source": "Required if speaker_type is \"role\"",
           "message": "如果speaker_type是「role」則為必填項"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTpzcGVha2VyX2lkZW50aWZpY2F0aW9uIzEwNzI2MmYzOTY2YzZhODEwODMwMmQxMTNjOWVhNTk5ZGNiYmRmOWQzMDU5YjU2OTYwZTg4ODg0Y2IwMTcyNzg.field.a25vd25fdmFsdWVz.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.a25vd25fdmFsdWVz.desc": {
           "source": "Required if speaker_type is \"role\". Each value must be 35 characters or less.",
           "message": "如果speaker_type 是“role”，则为必填项。每個值不得超過 35 個字元。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTpzcGVha2VyX2lkZW50aWZpY2F0aW9uIzEwNzI2MmYzOTY2YzZhODEwODMwMmQxMTNjOWVhNTk5ZGNiYmRmOWQzMDU5YjU2OTYwZTg4ODg0Y2IwMTcyNzg.field.c3BlYWtlcl90eXBl.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.c3BlYWtlcl90eXBl.display_name": {
           "source": "Speaker Type",
           "message": "揚聲器類型"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTpzcGVha2VyX2lkZW50aWZpY2F0aW9uIzEwNzI2MmYzOTY2YzZhODEwODMwMmQxMTNjOWVhNTk5ZGNiYmRmOWQzMDU5YjU2OTYwZTg4ODg0Y2IwMTcyNzg.field.c3BlYWtlcl90eXBl.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.c3BlYWtlcl90eXBl.short_desc": {
           "source": "Type of speaker identification",
           "message": "說話者辨識類型"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTpzcGVha2VyX2lkZW50aWZpY2F0aW9uIzEwNzI2MmYzOTY2YzZhODEwODMwMmQxMTNjOWVhNTk5ZGNiYmRmOWQzMDU5YjU2OTYwZTg4ODg0Y2IwMTcyNzg.field.c3BlYWtlcl90eXBl.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.c3BlYWtlcl90eXBl.desc": {
           "source": "Type of speaker identification. See [Speaker Identification](https://www.assemblyai.com/docs/speech-understanding/speaker-identification) for details on each type.",
           "message": "說話者辨識的類型。有關每種類型的詳細信息，請參閱[說話者識別](https://www.assemblyai.com/docs/speech-understanding/speaker-identification)。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTpzcGVha2VyX2lkZW50aWZpY2F0aW9uIzEwNzI2MmYzOTY2YzZhODEwODMwMmQxMTNjOWVhNTk5ZGNiYmRmOWQzMDU5YjU2OTYwZTg4ODg0Y2IwMTcyNzg.field.c3BlYWtlcl90eXBl.allowed-value.c3RyaW5nOnJvbGU.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.c3BlYWtlcl90eXBl.allowed-value.c3RyaW5nOnJvbGU.display_name": {
           "source": "role",
           "message": "角色"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTpzcGVha2VyX2lkZW50aWZpY2F0aW9uIzEwNzI2MmYzOTY2YzZhODEwODMwMmQxMTNjOWVhNTk5ZGNiYmRmOWQzMDU5YjU2OTYwZTg4ODg0Y2IwMTcyNzg.field.c3BlYWtlcl90eXBl.allowed-value.c3RyaW5nOm5hbWU.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.c3BlYWtlcl90eXBl.allowed-value.c3RyaW5nOm5hbWU.display_name": {
           "source": "name",
           "message": "姓名"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTpzcGVha2VyX2lkZW50aWZpY2F0aW9uIzEwNzI2MmYzOTY2YzZhODEwODMwMmQxMTNjOWVhNTk5ZGNiYmRmOWQzMDU5YjU2OTYwZTg4ODg0Y2IwMTcyNzg.field.c3BlYWtlcnM.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.c3BlYWtlcnM.display_name": {
           "source": "Speakers",
           "message": "揚聲器"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTpzcGVha2VyX2lkZW50aWZpY2F0aW9uIzEwNzI2MmYzOTY2YzZhODEwODMwMmQxMTNjOWVhNTk5ZGNiYmRmOWQzMDU5YjU2OTYwZTg4ODg0Y2IwMTcyNzg.field.c3BlYWtlcnM.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.c3BlYWtlcnM.short_desc": {
           "source": "An array of speaker objects with metadata to improve identification accuracy",
           "message": "一系列具有元数据的说话者对象，可提高识别准确性"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTpzcGVha2VyX2lkZW50aWZpY2F0aW9uIzEwNzI2MmYzOTY2YzZhODEwODMwMmQxMTNjOWVhNTk5ZGNiYmRmOWQzMDU5YjU2OTYwZTg4ODg0Y2IwMTcyNzg.field.c3BlYWtlcnM.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.c3BlYWtlcnM.desc": {
           "source": "An array of speaker objects with metadata to improve identification accuracy. Each object should include a `role` or `name` (depending on `speaker_type`) and an optional `description` to help the model identify the speaker. You can also include any additional custom properties (e.g., `company`, `title`) to provide more context. Use this as an alternative to `known_values` when you want to provide additional context about each speaker.",
           "message": "一系列具有元数据的说话者对象，可提高识别准确性。每個物件應包含 `role` 或 `name` （取決於 `speaker_type`）和可選的 `description` 以幫助模型識別說話者。您还可以包含任何其他自定义属性（例如，`company`、`title`）以提供更多上下文。當您想要提供有關每個發言者的附加上下文時，可以使用此選項來替代 `known_values`。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTppdGVtcyM5MjNjZDVlMDRhZjFjNmYyMDNkYmNjNWU2N2NiZjhlOTQ5NmU0MzE2ODU5ZGYwYzE5N2VlYjVmMmNmMDI1NjZi.field.ZGVzY3JpcHRpb24.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOml0ZW1zIzFmMTEwOWQ1ZjBiMmM5NDE4M2Y2ZTBjMzI2ZDQ5OWVkY2UzZWJjODQwZGQ2ZWRhNzQzOGRhYmQyZDRiMzZmNmE.field.ZGVzY3JpcHRpb24.display_name": {
           "source": "Description",
           "message": "說明"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTppdGVtcyM5MjNjZDVlMDRhZjFjNmYyMDNkYmNjNWU2N2NiZjhlOTQ5NmU0MzE2ODU5ZGYwYzE5N2VlYjVmMmNmMDI1NjZi.field.ZGVzY3JpcHRpb24.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOml0ZW1zIzFmMTEwOWQ1ZjBiMmM5NDE4M2Y2ZTBjMzI2ZDQ5OWVkY2UzZWJjODQwZGQ2ZWRhNzQzOGRhYmQyZDRiMzZmNmE.field.ZGVzY3JpcHRpb24.short_desc": {
           "source": "A description of the speaker to help the model identify them based on…",
           "message": "對說話者的描述，以幫助模型根據…識別他們"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTppdGVtcyM5MjNjZDVlMDRhZjFjNmYyMDNkYmNjNWU2N2NiZjhlOTQ5NmU0MzE2ODU5ZGYwYzE5N2VlYjVmMmNmMDI1NjZi.field.ZGVzY3JpcHRpb24.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOml0ZW1zIzFmMTEwOWQ1ZjBiMmM5NDE4M2Y2ZTBjMzI2ZDQ5OWVkY2UzZWJjODQwZGQ2ZWRhNzQzOGRhYmQyZDRiMzZmNmE.field.ZGVzY3JpcHRpb24.desc": {
           "source": "A description of the speaker to help the model identify them based on conversational context.",
           "message": "對說話者的描述，幫助模型根據對話上下文識別他們。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTppdGVtcyM5MjNjZDVlMDRhZjFjNmYyMDNkYmNjNWU2N2NiZjhlOTQ5NmU0MzE2ODU5ZGYwYzE5N2VlYjVmMmNmMDI1NjZi.field.bmFtZQ.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOml0ZW1zIzFmMTEwOWQ1ZjBiMmM5NDE4M2Y2ZTBjMzI2ZDQ5OWVkY2UzZWJjODQwZGQ2ZWRhNzQzOGRhYmQyZDRiMzZmNmE.field.bmFtZQ.display_name": {
           "source": "Name",
           "message": "名稱"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTppdGVtcyM5MjNjZDVlMDRhZjFjNmYyMDNkYmNjNWU2N2NiZjhlOTQ5NmU0MzE2ODU5ZGYwYzE5N2VlYjVmMmNmMDI1NjZi.field.bmFtZQ.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOml0ZW1zIzFmMTEwOWQ1ZjBiMmM5NDE4M2Y2ZTBjMzI2ZDQ5OWVkY2UzZWJjODQwZGQ2ZWRhNzQzOGRhYmQyZDRiMzZmNmE.field.bmFtZQ.short_desc": {
           "source": "The name of the speaker",
           "message": "發言者姓名"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTppdGVtcyM5MjNjZDVlMDRhZjFjNmYyMDNkYmNjNWU2N2NiZjhlOTQ5NmU0MzE2ODU5ZGYwYzE5N2VlYjVmMmNmMDI1NjZi.field.bmFtZQ.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOml0ZW1zIzFmMTEwOWQ1ZjBiMmM5NDE4M2Y2ZTBjMzI2ZDQ5OWVkY2UzZWJjODQwZGQ2ZWRhNzQzOGRhYmQyZDRiMzZmNmE.field.bmFtZQ.desc": {
           "source": "The name of the speaker. Required when `speaker_type` is \"name\".",
           "message": "說話者的姓名。當 `speaker_type` 為「名稱」時為必要。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTppdGVtcyM5MjNjZDVlMDRhZjFjNmYyMDNkYmNjNWU2N2NiZjhlOTQ5NmU0MzE2ODU5ZGYwYzE5N2VlYjVmMmNmMDI1NjZi.field.cm9sZQ.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOml0ZW1zIzFmMTEwOWQ1ZjBiMmM5NDE4M2Y2ZTBjMzI2ZDQ5OWVkY2UzZWJjODQwZGQ2ZWRhNzQzOGRhYmQyZDRiMzZmNmE.field.cm9sZQ.display_name": {
           "source": "Role",
           "message": "角色"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTppdGVtcyM5MjNjZDVlMDRhZjFjNmYyMDNkYmNjNWU2N2NiZjhlOTQ5NmU0MzE2ODU5ZGYwYzE5N2VlYjVmMmNmMDI1NjZi.field.cm9sZQ.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOml0ZW1zIzFmMTEwOWQ1ZjBiMmM5NDE4M2Y2ZTBjMzI2ZDQ5OWVkY2UzZWJjODQwZGQ2ZWRhNzQzOGRhYmQyZDRiMzZmNmE.field.cm9sZQ.short_desc": {
           "source": "The role of the speaker",
           "message": "演講者的角色"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTppdGVtcyM5MjNjZDVlMDRhZjFjNmYyMDNkYmNjNWU2N2NiZjhlOTQ5NmU0MzE2ODU5ZGYwYzE5N2VlYjVmMmNmMDI1NjZi.field.cm9sZQ.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOml0ZW1zIzFmMTEwOWQ1ZjBiMmM5NDE4M2Y2ZTBjMzI2ZDQ5OWVkY2UzZWJjODQwZGQ2ZWRhNzQzOGRhYmQyZDRiMzZmNmE.field.cm9sZQ.desc": {
           "source": "The role of the speaker. Required when `speaker_type` is \"role\".",
           "message": "演講者的角色。當 `speaker_type` 為「角色」時為必要。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTpDdXN0b21Gb3JtYXR0aW5nUmVxdWVzdEJvZHkjNGI4Yjc5NDY0YmZhYmY4ODU0MjU3ZDgyODE1MjJjZTJkNjg4MzAxMGFmNjM5ZTNjOTUyMDQ1MzRmY2EyNTJiNw.field.Y3VzdG9tX2Zvcm1hdHRpbmc.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkN1c3RvbUZvcm1hdHRpbmdSZXF1ZXN0Qm9keSNkNDhmYmRiNmRjMmY0OGFlM2QyM2E5NTBiOThjNzk2NTg4MjY1MGQwZWY5MzMwYTUyZjhmY2ZlNzhlM2U5ZTcz.field.Y3VzdG9tX2Zvcm1hdHRpbmc.display_name": {
           "source": "Custom Formatting",
           "message": "自訂格式"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTpjdXN0b21fZm9ybWF0dGluZyM5YzA1OWE0YzIxYTg5NGE5YWM4ZWI3YTFhYzY4MTBlYWE3ODY1MzliMDY2NDIyMmJiYzc0YjQ4YWIzMjc3Yjcw.field.ZGF0ZQ.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.ZGF0ZQ.display_name": {
           "source": "Date",
           "message": "日期"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTpjdXN0b21fZm9ybWF0dGluZyM5YzA1OWE0YzIxYTg5NGE5YWM4ZWI3YTFhYzY4MTBlYWE3ODY1MzliMDY2NDIyMmJiYzc0YjQ4YWIzMjc3Yjcw.field.ZGF0ZQ.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.ZGF0ZQ.short_desc": {
           "source": "Date format pattern (e.g., '\"mm/dd/yyyy\"')",
           "message": "日期格式模式（例如“mm/dd/yyyy”）"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTpjdXN0b21fZm9ybWF0dGluZyM5YzA1OWE0YzIxYTg5NGE5YWM4ZWI3YTFhYzY4MTBlYWE3ODY1MzliMDY2NDIyMmJiYzc0YjQ4YWIzMjc3Yjcw.field.ZGF0ZQ.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.ZGF0ZQ.desc": {
           "source": "Date format pattern (e.g., `\"mm/dd/yyyy\"`). See [Custom Formatting](https://www.assemblyai.com/docs/speech-understanding/custom-formatting) for more details.",
           "message": "日期格式模式（例如 `\"mm/dd/yyyy\"`）。有關更多詳細信息，請參閱[自訂格式](https://www.assemblyai.com/docs/speech-understanding/custom-formatting)。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTpjdXN0b21fZm9ybWF0dGluZyM5YzA1OWE0YzIxYTg5NGE5YWM4ZWI3YTFhYzY4MTBlYWE3ODY1MzliMDY2NDIyMmJiYzc0YjQ4YWIzMjc3Yjcw.field.ZW1haWw.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.ZW1haWw.display_name": {
           "source": "Email",
           "message": "電子郵件"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTpjdXN0b21fZm9ybWF0dGluZyM5YzA1OWE0YzIxYTg5NGE5YWM4ZWI3YTFhYzY4MTBlYWE3ODY1MzliMDY2NDIyMmJiYzc0YjQ4YWIzMjc3Yjcw.field.ZW1haWw.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.ZW1haWw.short_desc": {
           "source": "Email format pattern (e.g., '\"username@domain.com\"')",
           "message": "電子郵件格式模式（例如“username@domain.com”）"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTpjdXN0b21fZm9ybWF0dGluZyM5YzA1OWE0YzIxYTg5NGE5YWM4ZWI3YTFhYzY4MTBlYWE3ODY1MzliMDY2NDIyMmJiYzc0YjQ4YWIzMjc3Yjcw.field.ZW1haWw.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.ZW1haWw.desc": {
           "source": "Email format pattern (e.g., `\"username@domain.com\"`). See [Custom Formatting](https://www.assemblyai.com/docs/speech-understanding/custom-formatting) for more details.",
           "message": "電子郵件格式模式（例如 `\"username@domain.com\"`）。有關更多詳細信息，請參閱[自訂格式](https://www.assemblyai.com/docs/speech-understanding/custom-formatting)。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTpjdXN0b21fZm9ybWF0dGluZyM5YzA1OWE0YzIxYTg5NGE5YWM4ZWI3YTFhYzY4MTBlYWE3ODY1MzliMDY2NDIyMmJiYzc0YjQ4YWIzMjc3Yjcw.field.cGhvbmVfbnVtYmVy.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.cGhvbmVfbnVtYmVy.display_name": {
           "source": "Phone Number",
           "message": "電話號碼"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTpjdXN0b21fZm9ybWF0dGluZyM5YzA1OWE0YzIxYTg5NGE5YWM4ZWI3YTFhYzY4MTBlYWE3ODY1MzliMDY2NDIyMmJiYzc0YjQ4YWIzMjc3Yjcw.field.cGhvbmVfbnVtYmVy.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.cGhvbmVfbnVtYmVy.short_desc": {
           "source": "Phone number format pattern (e.g., '\"(xxx)xxx-xxxx\"')",
           "message": "電話號碼格式模式（例如“(xxx)xxx-xxxx”）"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTpjdXN0b21fZm9ybWF0dGluZyM5YzA1OWE0YzIxYTg5NGE5YWM4ZWI3YTFhYzY4MTBlYWE3ODY1MzliMDY2NDIyMmJiYzc0YjQ4YWIzMjc3Yjcw.field.cGhvbmVfbnVtYmVy.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.cGhvbmVfbnVtYmVy.desc": {
           "source": "Phone number format pattern (e.g., `\"(xxx)xxx-xxxx\"`). See [Custom Formatting](https://www.assemblyai.com/docs/speech-understanding/custom-formatting) for more details.",
           "message": "電話號碼格式模式（例如 `\"(xxx)xxx-xxxx\"`）。有關更多詳細信息，請參閱[自訂格式](https://www.assemblyai.com/docs/speech-understanding/custom-formatting)。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTpTdW1tYXJpemF0aW9uUmVxdWVzdEJvZHkjYjAwYTRkYzhkN2UyZDdmNTc1YTNmMDY2ZWZkNjAxMDgxZGJkNDdmZDRmMjBlZGI1ZTdkZThhNmQwMTFlMGYxMQ.field.c3VtbWFyaXphdGlvbg.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOlN1bW1hcml6YXRpb25SZXF1ZXN0Qm9keSNkYmMwOGM4MDlmYTEyOTU3YzNkOWY0ODRkYTYyMzRjZjc0Y2MwZDA4MmM2NjdiYTc0NDlhMjE0MDE4YTI5OWMy.field.c3VtbWFyaXphdGlvbg.display_name": {
           "source": "Summarization",
           "message": "摘要生成"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTpzdW1tYXJpemF0aW9uI2E3MDQzOGZiMjUxODI3YjNkNTcyNjU5Y2M0YTg1Y2U1ODY5OWIyNjRkNTU1ZDUwOTgwNjBhMjY2ZWU1ZjMwZjA.field.ZWZmb3J0.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnN1bW1hcml6YXRpb24jMDQ4NmNmYTY2ZTFlZjVlNDJlMTI0Zjk2NTY3OThkZmM3ZWMzMDQ2M2U3Njc0ZDViY2ZkNDcyYTQ1ODY3ZTkzZA.field.ZWZmb3J0.display_name": {
           "source": "Effort",
           "message": "投入度"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTpzdW1tYXJpemF0aW9uI2E3MDQzOGZiMjUxODI3YjNkNTcyNjU5Y2M0YTg1Y2U1ODY5OWIyNjRkNTU1ZDUwOTgwNjBhMjY2ZWU1ZjMwZjA.field.ZWZmb3J0.allowed-value.c3RyaW5nOmxvdw.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnN1bW1hcml6YXRpb24jMDQ4NmNmYTY2ZTFlZjVlNDJlMTI0Zjk2NTY3OThkZmM3ZWMzMDQ2M2U3Njc0ZDViY2ZkNDcyYTQ1ODY3ZTkzZA.field.ZWZmb3J0.allowed-value.c3RyaW5nOmxvdw.display_name": {
           "source": "low",
           "message": "低"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTpzdW1tYXJpemF0aW9uI2E3MDQzOGZiMjUxODI3YjNkNTcyNjU5Y2M0YTg1Y2U1ODY5OWIyNjRkNTU1ZDUwOTgwNjBhMjY2ZWU1ZjMwZjA.field.ZWZmb3J0.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnN1bW1hcml6YXRpb24jMDQ4NmNmYTY2ZTFlZjVlNDJlMTI0Zjk2NTY3OThkZmM3ZWMzMDQ2M2U3Njc0ZDViY2ZkNDcyYTQ1ODY3ZTkzZA.field.ZWZmb3J0.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
           "source": "medium",
           "message": "中"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTpzdW1tYXJpemF0aW9uI2E3MDQzOGZiMjUxODI3YjNkNTcyNjU5Y2M0YTg1Y2U1ODY5OWIyNjRkNTU1ZDUwOTgwNjBhMjY2ZWU1ZjMwZjA.field.c3VtbWFyeV90eXBl.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnN1bW1hcml6YXRpb24jMDQ4NmNmYTY2ZTFlZjVlNDJlMTI0Zjk2NTY3OThkZmM3ZWMzMDQ2M2U3Njc0ZDViY2ZkNDcyYTQ1ODY3ZTkzZA.field.c3VtbWFyeV90eXBl.display_name": {
           "source": "Summary Type",
           "message": "摘要類型"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTpzdW1tYXJpemF0aW9uI2E3MDQzOGZiMjUxODI3YjNkNTcyNjU5Y2M0YTg1Y2U1ODY5OWIyNjRkNTU1ZDUwOTgwNjBhMjY2ZWU1ZjMwZjA.field.c3VtbWFyeV90eXBl.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnN1bW1hcml6YXRpb24jMDQ4NmNmYTY2ZTFlZjVlNDJlMTI0Zjk2NTY3OThkZmM3ZWMzMDQ2M2U3Njc0ZDViY2ZkNDcyYTQ1ODY3ZTkzZA.field.c3VtbWFyeV90eXBl.short_desc": {
           "source": "Type of summary",
           "message": "摘要類型"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTpzdW1tYXJpemF0aW9uI2E3MDQzOGZiMjUxODI3YjNkNTcyNjU5Y2M0YTg1Y2U1ODY5OWIyNjRkNTU1ZDUwOTgwNjBhMjY2ZWU1ZjMwZjA.field.c3VtbWFyeV90eXBl.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnN1bW1hcml6YXRpb24jMDQ4NmNmYTY2ZTFlZjVlNDJlMTI0Zjk2NTY3OThkZmM3ZWMzMDQ2M2U3Njc0ZDViY2ZkNDcyYTQ1ODY3ZTkzZA.field.c3VtbWFyeV90eXBl.desc": {
           "source": "Type of summary. Bullets returns short bullet point style summaries, paragraph is generally more verbose and detailed.",
           "message": "摘要類型。項目符號傳回簡短的要點樣式摘要，段落通常更冗長和詳細。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTpzdW1tYXJpemF0aW9uI2E3MDQzOGZiMjUxODI3YjNkNTcyNjU5Y2M0YTg1Y2U1ODY5OWIyNjRkNTU1ZDUwOTgwNjBhMjY2ZWU1ZjMwZjA.field.c3VtbWFyeV90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaA.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnN1bW1hcml6YXRpb24jMDQ4NmNmYTY2ZTFlZjVlNDJlMTI0Zjk2NTY3OThkZmM3ZWMzMDQ2M2U3Njc0ZDViY2ZkNDcyYTQ1ODY3ZTkzZA.field.c3VtbWFyeV90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaA.display_name": {
           "source": "paragraph",
           "message": "段落"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTpzdW1tYXJpemF0aW9uI2E3MDQzOGZiMjUxODI3YjNkNTcyNjU5Y2M0YTg1Y2U1ODY5OWIyNjRkNTU1ZDUwOTgwNjBhMjY2ZWU1ZjMwZjA.field.c3VtbWFyeV90eXBl.allowed-value.c3RyaW5nOmJ1bGxldHM.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOnN1bW1hcml6YXRpb24jMDQ4NmNmYTY2ZTFlZjVlNDJlMTI0Zjk2NTY3OThkZmM3ZWMzMDQ2M2U3Njc0ZDViY2ZkNDcyYTQ1ODY3ZTkzZA.field.c3VtbWFyeV90eXBl.allowed-value.c3RyaW5nOmJ1bGxldHM.display_name": {
           "source": "bullets",
           "message": "子彈"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTpBY3Rpb25JdGVtc1JlcXVlc3RCb2R5IzMxODY0M2FlNTc1MDc3YTNhZGQyMmVlYmIyNTIyOTNmNTRiOTc2ZjllOTU5M2E5ZDFkNzI5Yjc1ZGJmMzE5MmY.field.YWN0aW9uX2l0ZW1z.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkFjdGlvbkl0ZW1zUmVxdWVzdEJvZHkjMDg2ZmRiZGJkZjBhZDJhOTlmMjk0YWQxYjljYjUwZTk5NTY4MzUzM2U2MWNkMTE3MGMwOGQ2Mzk3MmI0NWQxMg.field.YWN0aW9uX2l0ZW1z.display_name": {
           "source": "Action Items",
           "message": "行動項目"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTphY3Rpb25faXRlbXMjZTAxNzNjY2MwZTVjYTEyNzEwNzc3ZTdmNjk0ZDA5MDlmOGQwYTY4NTZjNjQ0YjJjMDQyMzAwOTMyZWExY2JkZA.field.ZWZmb3J0.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOmFjdGlvbl9pdGVtcyMxNmUyZWY4MzAxNTNhZmE0M2RlNGRlZjE3MGQyNGRiOTM5NTY5NWZkZDFjMjU0OWNhZDk5NDYyMzU5MDY2Y2Zk.field.ZWZmb3J0.display_name": {
           "source": "Effort",
           "message": "投入度"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTphY3Rpb25faXRlbXMjZTAxNzNjY2MwZTVjYTEyNzEwNzc3ZTdmNjk0ZDA5MDlmOGQwYTY4NTZjNjQ0YjJjMDQyMzAwOTMyZWExY2JkZA.field.ZWZmb3J0.allowed-value.c3RyaW5nOmxvdw.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOmFjdGlvbl9pdGVtcyMxNmUyZWY4MzAxNTNhZmE0M2RlNGRlZjE3MGQyNGRiOTM5NTY5NWZkZDFjMjU0OWNhZDk5NDYyMzU5MDY2Y2Zk.field.ZWZmb3J0.allowed-value.c3RyaW5nOmxvdw.display_name": {
           "source": "low",
           "message": "低"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTphY3Rpb25faXRlbXMjZTAxNzNjY2MwZTVjYTEyNzEwNzc3ZTdmNjk0ZDA5MDlmOGQwYTY4NTZjNjQ0YjJjMDQyMzAwOTMyZWExY2JkZA.field.ZWZmb3J0.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOmFjdGlvbl9pdGVtcyMxNmUyZWY4MzAxNTNhZmE0M2RlNGRlZjE3MGQyNGRiOTM5NTY5NWZkZDFjMjU0OWNhZDk5NDYyMzU5MDY2Y2Zk.field.ZWZmb3J0.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
           "source": "medium",
           "message": "中"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTphY3Rpb25faXRlbXMjZTAxNzNjY2MwZTVjYTEyNzEwNzc3ZTdmNjk0ZDA5MDlmOGQwYTY4NTZjNjQ0YjJjMDQyMzAwOTMyZWExY2JkZA.field.aW5jbHVkZV9kZWNpc2lvbnM.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOmFjdGlvbl9pdGVtcyMxNmUyZWY4MzAxNTNhZmE0M2RlNGRlZjE3MGQyNGRiOTM5NTY5NWZkZDFjMjU0OWNhZDk5NDYyMzU5MDY2Y2Zk.field.aW5jbHVkZV9kZWNpc2lvbnM.display_name": {
           "source": "Include Decisions",
           "message": "包括決定"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTphY3Rpb25faXRlbXMjZTAxNzNjY2MwZTVjYTEyNzEwNzc3ZTdmNjk0ZDA5MDlmOGQwYTY4NTZjNjQ0YjJjMDQyMzAwOTMyZWExY2JkZA.field.aW5jbHVkZV9kZWNpc2lvbnM.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOmFjdGlvbl9pdGVtcyMxNmUyZWY4MzAxNTNhZmE0M2RlNGRlZjE3MGQyNGRiOTM5NTY5NWZkZDFjMjU0OWNhZDk5NDYyMzU5MDY2Y2Zk.field.aW5jbHVkZV9kZWNpc2lvbnM.short_desc": {
           "source": "Option to include decision making in action items",
           "message": "將決策納入行動項目的選項"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOkhhc2hEYXRhVHlwZTphY3Rpb25faXRlbXMjZTAxNzNjY2MwZTVjYTEyNzEwNzc3ZTdmNjk0ZDA5MDlmOGQwYTY4NTZjNjQ0YjJjMDQyMzAwOTMyZWExY2JkZA.field.aW5jbHVkZV9kZWNpc2lvbnM.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRXNWtaWEp6ZEdGdVpDMXpjR1ZsWTJnOmFjdGlvbl9pdGVtcyMxNmUyZWY4MzAxNTNhZmE0M2RlNGRlZjE3MGQyNGRiOTM5NTY5NWZkZDFjMjU0OWNhZDk5NDYyMzU5MDY2Y2Zk.field.aW5jbHVkZV9kZWNpc2lvbnM.desc": {
           "source": "Option to include decision making in action items.",
           "message": "將決策納入行動項目的選項。"
         },
@@ -7143,231 +7143,231 @@
           "source": "Request",
           "message": "請求"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTpUcmFuc2xhdGlvblJlcXVlc3RCb2R5IzNlOWRmOTQzYTRkOGVkYTczY2JkYjVjY2E0ZTY5YzU4NDVlMjYyOWJkMzRkNzNlZjY0YTEzMTZlZTZlZDkwZTk.field.dHJhbnNsYXRpb24.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROlRyYW5zbGF0aW9uUmVxdWVzdEJvZHkjYzU2N2VhNzhlZWFjZTE3YTg4ODJiYTRiODlkMDY5YWJkODdiMmNkOGJjOTE5YTg1ZWNkZDg4ZDBiMWMwN2IzZQ.field.dHJhbnNsYXRpb24.display_name": {
           "source": "Translation",
           "message": "翻譯"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTp0cmFuc2xhdGlvbiNjOWRhYzgxM2VlNTU0OGI2ZmRhZTg1YjczNjExMWZhMDRkMTAyOGYyODllYmU0ZWU3MTllY2JiMWVmZTVlMjYx.field.Zm9ybWFs.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.Zm9ybWFs.display_name": {
           "source": "Formal",
           "message": "正式"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTp0cmFuc2xhdGlvbiNjOWRhYzgxM2VlNTU0OGI2ZmRhZTg1YjczNjExMWZhMDRkMTAyOGYyODllYmU0ZWU3MTllY2JiMWVmZTVlMjYx.field.Zm9ybWFs.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.Zm9ybWFs.short_desc": {
           "source": "Use formal language style",
           "message": "使用正式的語言風格"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTp0cmFuc2xhdGlvbiNjOWRhYzgxM2VlNTU0OGI2ZmRhZTg1YjczNjExMWZhMDRkMTAyOGYyODllYmU0ZWU3MTllY2JiMWVmZTVlMjYx.field.Zm9ybWFs.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.Zm9ybWFs.desc": {
           "source": "Use formal language style. See [Translation](https://www.assemblyai.com/docs/speech-understanding/translation) for more details.",
           "message": "使用正式的語言風格。有關更多詳細信息，請參閱[翻譯](https://www.assemblyai.com/docs/speech-understanding/translation)。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTp0cmFuc2xhdGlvbiNjOWRhYzgxM2VlNTU0OGI2ZmRhZTg1YjczNjExMWZhMDRkMTAyOGYyODllYmU0ZWU3MTllY2JiMWVmZTVlMjYx.field.bWF0Y2hfb3JpZ2luYWxfdXR0ZXJhbmNl.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.bWF0Y2hfb3JpZ2luYWxfdXR0ZXJhbmNl.display_name": {
           "source": "Match Original Utterance",
           "message": "匹配原文"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTp0cmFuc2xhdGlvbiNjOWRhYzgxM2VlNTU0OGI2ZmRhZTg1YjczNjExMWZhMDRkMTAyOGYyODllYmU0ZWU3MTllY2JiMWVmZTVlMjYx.field.bWF0Y2hfb3JpZ2luYWxfdXR0ZXJhbmNl.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.bWF0Y2hfb3JpZ2luYWxfdXR0ZXJhbmNl.short_desc": {
           "source": "When enabled with Speaker Labels, returns translated text in the utterances…",
           "message": "当启用演讲者标签时，返回话语中的翻译文本..."
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTp0cmFuc2xhdGlvbiNjOWRhYzgxM2VlNTU0OGI2ZmRhZTg1YjczNjExMWZhMDRkMTAyOGYyODllYmU0ZWU3MTllY2JiMWVmZTVlMjYx.field.bWF0Y2hfb3JpZ2luYWxfdXR0ZXJhbmNl.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.bWF0Y2hfb3JpZ2luYWxfdXR0ZXJhbmNl.desc": {
           "source": "When enabled with Speaker Labels, returns translated text in the utterances array. Each utterance will include a `translated_texts` key containing translations for each target language.",
           "message": "當與說話者標籤一起啟用時，傳回話語數組中的翻譯文字。每個話語都將包含一個 `translated_texts` 鍵，其中包含每種目標語言的翻譯。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTp0cmFuc2xhdGlvbiNjOWRhYzgxM2VlNTU0OGI2ZmRhZTg1YjczNjExMWZhMDRkMTAyOGYyODllYmU0ZWU3MTllY2JiMWVmZTVlMjYx.field.dGFyZ2V0X2xhbmd1YWdlcw.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.dGFyZ2V0X2xhbmd1YWdlcw.display_name": {
           "source": "Target Languages",
           "message": "目標語言"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTp0cmFuc2xhdGlvbiNjOWRhYzgxM2VlNTU0OGI2ZmRhZTg1YjczNjExMWZhMDRkMTAyOGYyODllYmU0ZWU3MTllY2JiMWVmZTVlMjYx.field.dGFyZ2V0X2xhbmd1YWdlcw.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.dGFyZ2V0X2xhbmd1YWdlcw.short_desc": {
           "source": "List of target language codes (e.g., '[\"es\", \"de\"]')",
           "message": "目標語言代碼清單（例如，'[\"es\", \"de\"]'）"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTp0cmFuc2xhdGlvbiNjOWRhYzgxM2VlNTU0OGI2ZmRhZTg1YjczNjExMWZhMDRkMTAyOGYyODllYmU0ZWU3MTllY2JiMWVmZTVlMjYx.field.dGFyZ2V0X2xhbmd1YWdlcw.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnRyYW5zbGF0aW9uI2JkMDYzZWFiYzhkYTgxNGRmMDUxMWJmMmQzOGIyNTVhOTQ3YWI5MjI4YTQwYjkwODE4YTFkZGEwMDZmY2UzMmM.field.dGFyZ2V0X2xhbmd1YWdlcw.desc": {
           "source": "List of target language codes (e.g., `[\"es\", \"de\"]`). See [Translation](https://www.assemblyai.com/docs/speech-understanding/translation) for supported languages.",
           "message": "目標語言代碼清單（例如 `[\"es\", \"de\"]`）。有關支援的語言，請參閱[翻譯](https://www.assemblyai.com/docs/speech-understanding/translation)。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTpTcGVha2VySWRlbnRpZmljYXRpb25SZXF1ZXN0Qm9keSM3NmJhYjE0OGIyMDVlYmY4YzljZThkYzc0NWMwYTk3YzAwZTdhM2JkM2I3NDFjMThlOWFmOTRiMzQwOGQ4NTNl.field.c3BlYWtlcl9pZGVudGlmaWNhdGlvbg.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROlNwZWFrZXJJZGVudGlmaWNhdGlvblJlcXVlc3RCb2R5IzUzNDM0ZTBkMDhhMGY3MDUyYTQ2Y2U2YzMzZGQ1ZmJiOGQ4YTU0ZDc0YjExY2JjY2YzYjAzYTIwY2NlOGExM2I.field.c3BlYWtlcl9pZGVudGlmaWNhdGlvbg.display_name": {
           "source": "Speaker Identification",
           "message": "說話者識別"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTpzcGVha2VyX2lkZW50aWZpY2F0aW9uIzEwNzI2MmYzOTY2YzZhODEwODMwMmQxMTNjOWVhNTk5ZGNiYmRmOWQzMDU5YjU2OTYwZTg4ODg0Y2IwMTcyNzg.field.a25vd25fdmFsdWVz.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.a25vd25fdmFsdWVz.display_name": {
           "source": "Known Values",
           "message": "已知值"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTpzcGVha2VyX2lkZW50aWZpY2F0aW9uIzEwNzI2MmYzOTY2YzZhODEwODMwMmQxMTNjOWVhNTk5ZGNiYmRmOWQzMDU5YjU2OTYwZTg4ODg0Y2IwMTcyNzg.field.a25vd25fdmFsdWVz.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.a25vd25fdmFsdWVz.short_desc": {
           "source": "Required if speaker_type is \"role\"",
           "message": "如果speaker_type是「role」則為必填項"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTpzcGVha2VyX2lkZW50aWZpY2F0aW9uIzEwNzI2MmYzOTY2YzZhODEwODMwMmQxMTNjOWVhNTk5ZGNiYmRmOWQzMDU5YjU2OTYwZTg4ODg0Y2IwMTcyNzg.field.a25vd25fdmFsdWVz.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.a25vd25fdmFsdWVz.desc": {
           "source": "Required if speaker_type is \"role\". Each value must be 35 characters or less.",
           "message": "如果speaker_type 是“role”，则为必填项。每個值不得超過 35 個字元。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTpzcGVha2VyX2lkZW50aWZpY2F0aW9uIzEwNzI2MmYzOTY2YzZhODEwODMwMmQxMTNjOWVhNTk5ZGNiYmRmOWQzMDU5YjU2OTYwZTg4ODg0Y2IwMTcyNzg.field.c3BlYWtlcl90eXBl.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.c3BlYWtlcl90eXBl.display_name": {
           "source": "Speaker Type",
           "message": "揚聲器類型"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTpzcGVha2VyX2lkZW50aWZpY2F0aW9uIzEwNzI2MmYzOTY2YzZhODEwODMwMmQxMTNjOWVhNTk5ZGNiYmRmOWQzMDU5YjU2OTYwZTg4ODg0Y2IwMTcyNzg.field.c3BlYWtlcl90eXBl.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.c3BlYWtlcl90eXBl.short_desc": {
           "source": "Type of speaker identification",
           "message": "說話者辨識類型"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTpzcGVha2VyX2lkZW50aWZpY2F0aW9uIzEwNzI2MmYzOTY2YzZhODEwODMwMmQxMTNjOWVhNTk5ZGNiYmRmOWQzMDU5YjU2OTYwZTg4ODg0Y2IwMTcyNzg.field.c3BlYWtlcl90eXBl.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.c3BlYWtlcl90eXBl.desc": {
           "source": "Type of speaker identification. See [Speaker Identification](https://www.assemblyai.com/docs/speech-understanding/speaker-identification) for details on each type.",
           "message": "說話者辨識的類型。有關每種類型的詳細信息，請參閱[說話者識別](https://www.assemblyai.com/docs/speech-understanding/speaker-identification)。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTpzcGVha2VyX2lkZW50aWZpY2F0aW9uIzEwNzI2MmYzOTY2YzZhODEwODMwMmQxMTNjOWVhNTk5ZGNiYmRmOWQzMDU5YjU2OTYwZTg4ODg0Y2IwMTcyNzg.field.c3BlYWtlcl90eXBl.allowed-value.c3RyaW5nOnJvbGU.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.c3BlYWtlcl90eXBl.allowed-value.c3RyaW5nOnJvbGU.display_name": {
           "source": "role",
           "message": "角色"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTpzcGVha2VyX2lkZW50aWZpY2F0aW9uIzEwNzI2MmYzOTY2YzZhODEwODMwMmQxMTNjOWVhNTk5ZGNiYmRmOWQzMDU5YjU2OTYwZTg4ODg0Y2IwMTcyNzg.field.c3BlYWtlcl90eXBl.allowed-value.c3RyaW5nOm5hbWU.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.c3BlYWtlcl90eXBl.allowed-value.c3RyaW5nOm5hbWU.display_name": {
           "source": "name",
           "message": "姓名"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTpzcGVha2VyX2lkZW50aWZpY2F0aW9uIzEwNzI2MmYzOTY2YzZhODEwODMwMmQxMTNjOWVhNTk5ZGNiYmRmOWQzMDU5YjU2OTYwZTg4ODg0Y2IwMTcyNzg.field.c3BlYWtlcnM.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.c3BlYWtlcnM.display_name": {
           "source": "Speakers",
           "message": "揚聲器"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTpzcGVha2VyX2lkZW50aWZpY2F0aW9uIzEwNzI2MmYzOTY2YzZhODEwODMwMmQxMTNjOWVhNTk5ZGNiYmRmOWQzMDU5YjU2OTYwZTg4ODg0Y2IwMTcyNzg.field.c3BlYWtlcnM.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.c3BlYWtlcnM.short_desc": {
           "source": "An array of speaker objects with metadata to improve identification accuracy",
           "message": "一系列具有元数据的说话者对象，可提高识别准确性"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTpzcGVha2VyX2lkZW50aWZpY2F0aW9uIzEwNzI2MmYzOTY2YzZhODEwODMwMmQxMTNjOWVhNTk5ZGNiYmRmOWQzMDU5YjU2OTYwZTg4ODg0Y2IwMTcyNzg.field.c3BlYWtlcnM.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnNwZWFrZXJfaWRlbnRpZmljYXRpb24jMjE2ZmFhMDhlMjM3YWVhMjgwNjIwMTViODYyMDk0Y2MwOTY0MmRlMWY2MDcwNTA0ZTIyYjYzNzM4YzUyYTU5Yg.field.c3BlYWtlcnM.desc": {
           "source": "An array of speaker objects with metadata to improve identification accuracy. Each object should include a `role` or `name` (depending on `speaker_type`) and an optional `description` to help the model identify the speaker. You can also include any additional custom properties (e.g., `company`, `title`) to provide more context. Use this as an alternative to `known_values` when you want to provide additional context about each speaker.",
           "message": "一系列具有元数据的说话者对象，可提高识别准确性。每個物件應包含 `role` 或 `name` （取決於 `speaker_type`）和可選的 `description` 以幫助模型識別說話者。您还可以包含任何其他自定义属性（例如，`company`、`title`）以提供更多上下文。當您想要提供有關每個發言者的附加上下文時，可以使用此選項來替代 `known_values`。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTppdGVtcyM5MjNjZDVlMDRhZjFjNmYyMDNkYmNjNWU2N2NiZjhlOTQ5NmU0MzE2ODU5ZGYwYzE5N2VlYjVmMmNmMDI1NjZi.field.ZGVzY3JpcHRpb24.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROml0ZW1zIzFmMTEwOWQ1ZjBiMmM5NDE4M2Y2ZTBjMzI2ZDQ5OWVkY2UzZWJjODQwZGQ2ZWRhNzQzOGRhYmQyZDRiMzZmNmE.field.ZGVzY3JpcHRpb24.display_name": {
           "source": "Description",
           "message": "說明"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTppdGVtcyM5MjNjZDVlMDRhZjFjNmYyMDNkYmNjNWU2N2NiZjhlOTQ5NmU0MzE2ODU5ZGYwYzE5N2VlYjVmMmNmMDI1NjZi.field.ZGVzY3JpcHRpb24.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROml0ZW1zIzFmMTEwOWQ1ZjBiMmM5NDE4M2Y2ZTBjMzI2ZDQ5OWVkY2UzZWJjODQwZGQ2ZWRhNzQzOGRhYmQyZDRiMzZmNmE.field.ZGVzY3JpcHRpb24.short_desc": {
           "source": "A description of the speaker to help the model identify them based on…",
           "message": "對說話者的描述，以幫助模型根據…識別他們"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTppdGVtcyM5MjNjZDVlMDRhZjFjNmYyMDNkYmNjNWU2N2NiZjhlOTQ5NmU0MzE2ODU5ZGYwYzE5N2VlYjVmMmNmMDI1NjZi.field.ZGVzY3JpcHRpb24.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROml0ZW1zIzFmMTEwOWQ1ZjBiMmM5NDE4M2Y2ZTBjMzI2ZDQ5OWVkY2UzZWJjODQwZGQ2ZWRhNzQzOGRhYmQyZDRiMzZmNmE.field.ZGVzY3JpcHRpb24.desc": {
           "source": "A description of the speaker to help the model identify them based on conversational context.",
           "message": "對說話者的描述，幫助模型根據對話上下文識別他們。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTppdGVtcyM5MjNjZDVlMDRhZjFjNmYyMDNkYmNjNWU2N2NiZjhlOTQ5NmU0MzE2ODU5ZGYwYzE5N2VlYjVmMmNmMDI1NjZi.field.bmFtZQ.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROml0ZW1zIzFmMTEwOWQ1ZjBiMmM5NDE4M2Y2ZTBjMzI2ZDQ5OWVkY2UzZWJjODQwZGQ2ZWRhNzQzOGRhYmQyZDRiMzZmNmE.field.bmFtZQ.display_name": {
           "source": "Name",
           "message": "名稱"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTppdGVtcyM5MjNjZDVlMDRhZjFjNmYyMDNkYmNjNWU2N2NiZjhlOTQ5NmU0MzE2ODU5ZGYwYzE5N2VlYjVmMmNmMDI1NjZi.field.bmFtZQ.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROml0ZW1zIzFmMTEwOWQ1ZjBiMmM5NDE4M2Y2ZTBjMzI2ZDQ5OWVkY2UzZWJjODQwZGQ2ZWRhNzQzOGRhYmQyZDRiMzZmNmE.field.bmFtZQ.short_desc": {
           "source": "The name of the speaker",
           "message": "發言者姓名"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTppdGVtcyM5MjNjZDVlMDRhZjFjNmYyMDNkYmNjNWU2N2NiZjhlOTQ5NmU0MzE2ODU5ZGYwYzE5N2VlYjVmMmNmMDI1NjZi.field.bmFtZQ.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROml0ZW1zIzFmMTEwOWQ1ZjBiMmM5NDE4M2Y2ZTBjMzI2ZDQ5OWVkY2UzZWJjODQwZGQ2ZWRhNzQzOGRhYmQyZDRiMzZmNmE.field.bmFtZQ.desc": {
           "source": "The name of the speaker. Required when `speaker_type` is \"name\".",
           "message": "說話者的姓名。當 `speaker_type` 為「名稱」時為必要。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTppdGVtcyM5MjNjZDVlMDRhZjFjNmYyMDNkYmNjNWU2N2NiZjhlOTQ5NmU0MzE2ODU5ZGYwYzE5N2VlYjVmMmNmMDI1NjZi.field.cm9sZQ.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROml0ZW1zIzFmMTEwOWQ1ZjBiMmM5NDE4M2Y2ZTBjMzI2ZDQ5OWVkY2UzZWJjODQwZGQ2ZWRhNzQzOGRhYmQyZDRiMzZmNmE.field.cm9sZQ.display_name": {
           "source": "Role",
           "message": "角色"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTppdGVtcyM5MjNjZDVlMDRhZjFjNmYyMDNkYmNjNWU2N2NiZjhlOTQ5NmU0MzE2ODU5ZGYwYzE5N2VlYjVmMmNmMDI1NjZi.field.cm9sZQ.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROml0ZW1zIzFmMTEwOWQ1ZjBiMmM5NDE4M2Y2ZTBjMzI2ZDQ5OWVkY2UzZWJjODQwZGQ2ZWRhNzQzOGRhYmQyZDRiMzZmNmE.field.cm9sZQ.short_desc": {
           "source": "The role of the speaker",
           "message": "演講者的角色"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTppdGVtcyM5MjNjZDVlMDRhZjFjNmYyMDNkYmNjNWU2N2NiZjhlOTQ5NmU0MzE2ODU5ZGYwYzE5N2VlYjVmMmNmMDI1NjZi.field.cm9sZQ.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROml0ZW1zIzFmMTEwOWQ1ZjBiMmM5NDE4M2Y2ZTBjMzI2ZDQ5OWVkY2UzZWJjODQwZGQ2ZWRhNzQzOGRhYmQyZDRiMzZmNmE.field.cm9sZQ.desc": {
           "source": "The role of the speaker. Required when `speaker_type` is \"role\".",
           "message": "演講者的角色。當 `speaker_type` 為「角色」時為必要。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTpDdXN0b21Gb3JtYXR0aW5nUmVxdWVzdEJvZHkjNGI4Yjc5NDY0YmZhYmY4ODU0MjU3ZDgyODE1MjJjZTJkNjg4MzAxMGFmNjM5ZTNjOTUyMDQ1MzRmY2EyNTJiNw.field.Y3VzdG9tX2Zvcm1hdHRpbmc.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkN1c3RvbUZvcm1hdHRpbmdSZXF1ZXN0Qm9keSNkNDhmYmRiNmRjMmY0OGFlM2QyM2E5NTBiOThjNzk2NTg4MjY1MGQwZWY5MzMwYTUyZjhmY2ZlNzhlM2U5ZTcz.field.Y3VzdG9tX2Zvcm1hdHRpbmc.display_name": {
           "source": "Custom Formatting",
           "message": "自訂格式"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTpjdXN0b21fZm9ybWF0dGluZyM5YzA1OWE0YzIxYTg5NGE5YWM4ZWI3YTFhYzY4MTBlYWE3ODY1MzliMDY2NDIyMmJiYzc0YjQ4YWIzMjc3Yjcw.field.ZGF0ZQ.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.ZGF0ZQ.display_name": {
           "source": "Date",
           "message": "日期"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTpjdXN0b21fZm9ybWF0dGluZyM5YzA1OWE0YzIxYTg5NGE5YWM4ZWI3YTFhYzY4MTBlYWE3ODY1MzliMDY2NDIyMmJiYzc0YjQ4YWIzMjc3Yjcw.field.ZGF0ZQ.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.ZGF0ZQ.short_desc": {
           "source": "Date format pattern (e.g., '\"mm/dd/yyyy\"')",
           "message": "日期格式模式（例如“mm/dd/yyyy”）"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTpjdXN0b21fZm9ybWF0dGluZyM5YzA1OWE0YzIxYTg5NGE5YWM4ZWI3YTFhYzY4MTBlYWE3ODY1MzliMDY2NDIyMmJiYzc0YjQ4YWIzMjc3Yjcw.field.ZGF0ZQ.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.ZGF0ZQ.desc": {
           "source": "Date format pattern (e.g., `\"mm/dd/yyyy\"`). See [Custom Formatting](https://www.assemblyai.com/docs/speech-understanding/custom-formatting) for more details.",
           "message": "日期格式模式（例如 `\"mm/dd/yyyy\"`）。有關更多詳細信息，請參閱[自訂格式](https://www.assemblyai.com/docs/speech-understanding/custom-formatting)。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTpjdXN0b21fZm9ybWF0dGluZyM5YzA1OWE0YzIxYTg5NGE5YWM4ZWI3YTFhYzY4MTBlYWE3ODY1MzliMDY2NDIyMmJiYzc0YjQ4YWIzMjc3Yjcw.field.ZW1haWw.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.ZW1haWw.display_name": {
           "source": "Email",
           "message": "電子郵件"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTpjdXN0b21fZm9ybWF0dGluZyM5YzA1OWE0YzIxYTg5NGE5YWM4ZWI3YTFhYzY4MTBlYWE3ODY1MzliMDY2NDIyMmJiYzc0YjQ4YWIzMjc3Yjcw.field.ZW1haWw.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.ZW1haWw.short_desc": {
           "source": "Email format pattern (e.g., '\"username@domain.com\"')",
           "message": "電子郵件格式模式（例如“username@domain.com”）"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTpjdXN0b21fZm9ybWF0dGluZyM5YzA1OWE0YzIxYTg5NGE5YWM4ZWI3YTFhYzY4MTBlYWE3ODY1MzliMDY2NDIyMmJiYzc0YjQ4YWIzMjc3Yjcw.field.ZW1haWw.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.ZW1haWw.desc": {
           "source": "Email format pattern (e.g., `\"username@domain.com\"`). See [Custom Formatting](https://www.assemblyai.com/docs/speech-understanding/custom-formatting) for more details.",
           "message": "電子郵件格式模式（例如 `\"username@domain.com\"`）。有關更多詳細信息，請參閱[自訂格式](https://www.assemblyai.com/docs/speech-understanding/custom-formatting)。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTpjdXN0b21fZm9ybWF0dGluZyM5YzA1OWE0YzIxYTg5NGE5YWM4ZWI3YTFhYzY4MTBlYWE3ODY1MzliMDY2NDIyMmJiYzc0YjQ4YWIzMjc3Yjcw.field.cGhvbmVfbnVtYmVy.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.cGhvbmVfbnVtYmVy.display_name": {
           "source": "Phone Number",
           "message": "電話號碼"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTpjdXN0b21fZm9ybWF0dGluZyM5YzA1OWE0YzIxYTg5NGE5YWM4ZWI3YTFhYzY4MTBlYWE3ODY1MzliMDY2NDIyMmJiYzc0YjQ4YWIzMjc3Yjcw.field.cGhvbmVfbnVtYmVy.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.cGhvbmVfbnVtYmVy.short_desc": {
           "source": "Phone number format pattern (e.g., '\"(xxx)xxx-xxxx\"')",
           "message": "電話號碼格式模式（例如“(xxx)xxx-xxxx”）"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTpjdXN0b21fZm9ybWF0dGluZyM5YzA1OWE0YzIxYTg5NGE5YWM4ZWI3YTFhYzY4MTBlYWE3ODY1MzliMDY2NDIyMmJiYzc0YjQ4YWIzMjc3Yjcw.field.cGhvbmVfbnVtYmVy.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROmN1c3RvbV9mb3JtYXR0aW5nIzgyNjM1NzlhYzlkYTQwMzgyNzQyMTJmYmUzZDBiNTgzY2Y5Yjg4YWNiNzViZjljNzUwMWZjMzEwZGQzMTcxMDc.field.cGhvbmVfbnVtYmVy.desc": {
           "source": "Phone number format pattern (e.g., `\"(xxx)xxx-xxxx\"`). See [Custom Formatting](https://www.assemblyai.com/docs/speech-understanding/custom-formatting) for more details.",
           "message": "電話號碼格式模式（例如 `\"(xxx)xxx-xxxx\"`）。有關更多詳細信息，請參閱[自訂格式](https://www.assemblyai.com/docs/speech-understanding/custom-formatting)。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTpTdW1tYXJpemF0aW9uUmVxdWVzdEJvZHkjYjAwYTRkYzhkN2UyZDdmNTc1YTNmMDY2ZWZkNjAxMDgxZGJkNDdmZDRmMjBlZGI1ZTdkZThhNmQwMTFlMGYxMQ.field.c3VtbWFyaXphdGlvbg.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROlN1bW1hcml6YXRpb25SZXF1ZXN0Qm9keSNkYmMwOGM4MDlmYTEyOTU3YzNkOWY0ODRkYTYyMzRjZjc0Y2MwZDA4MmM2NjdiYTc0NDlhMjE0MDE4YTI5OWMy.field.c3VtbWFyaXphdGlvbg.display_name": {
           "source": "Summarization",
           "message": "摘要生成"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTpzdW1tYXJpemF0aW9uI2FkNmIwZDYyNmVkYjc2Mzk5OWYwZDRkMmI5MmQ0ZTkzMzI4MTY3MmI5ODA4MzVkZGRjYmVmYWQ2MzNkZmNjNDY.field.ZWZmb3J0.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnN1bW1hcml6YXRpb24jODBlMTQ5NDZkZWIxY2Y5NWY0NDVjNTk2MGUwNzliZGZkZWE1MDEzYTMwYzEzMGVlMTZiYzA1YjdhNTZhOGZjYw.field.ZWZmb3J0.display_name": {
           "source": "Effort",
           "message": "投入度"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTpzdW1tYXJpemF0aW9uI2FkNmIwZDYyNmVkYjc2Mzk5OWYwZDRkMmI5MmQ0ZTkzMzI4MTY3MmI5ODA4MzVkZGRjYmVmYWQ2MzNkZmNjNDY.field.ZWZmb3J0.allowed-value.c3RyaW5nOmxvdw.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnN1bW1hcml6YXRpb24jODBlMTQ5NDZkZWIxY2Y5NWY0NDVjNTk2MGUwNzliZGZkZWE1MDEzYTMwYzEzMGVlMTZiYzA1YjdhNTZhOGZjYw.field.ZWZmb3J0.allowed-value.c3RyaW5nOmxvdw.display_name": {
           "source": "low",
           "message": "低"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTpzdW1tYXJpemF0aW9uI2FkNmIwZDYyNmVkYjc2Mzk5OWYwZDRkMmI5MmQ0ZTkzMzI4MTY3MmI5ODA4MzVkZGRjYmVmYWQ2MzNkZmNjNDY.field.ZWZmb3J0.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnN1bW1hcml6YXRpb24jODBlMTQ5NDZkZWIxY2Y5NWY0NDVjNTk2MGUwNzliZGZkZWE1MDEzYTMwYzEzMGVlMTZiYzA1YjdhNTZhOGZjYw.field.ZWZmb3J0.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
           "source": "medium",
           "message": "中"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTpzdW1tYXJpemF0aW9uI2FkNmIwZDYyNmVkYjc2Mzk5OWYwZDRkMmI5MmQ0ZTkzMzI4MTY3MmI5ODA4MzVkZGRjYmVmYWQ2MzNkZmNjNDY.field.c3VtbWFyeV90eXBl.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnN1bW1hcml6YXRpb24jODBlMTQ5NDZkZWIxY2Y5NWY0NDVjNTk2MGUwNzliZGZkZWE1MDEzYTMwYzEzMGVlMTZiYzA1YjdhNTZhOGZjYw.field.c3VtbWFyeV90eXBl.display_name": {
           "source": "Summary Type",
           "message": "摘要類型"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTpzdW1tYXJpemF0aW9uI2FkNmIwZDYyNmVkYjc2Mzk5OWYwZDRkMmI5MmQ0ZTkzMzI4MTY3MmI5ODA4MzVkZGRjYmVmYWQ2MzNkZmNjNDY.field.c3VtbWFyeV90eXBl.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnN1bW1hcml6YXRpb24jODBlMTQ5NDZkZWIxY2Y5NWY0NDVjNTk2MGUwNzliZGZkZWE1MDEzYTMwYzEzMGVlMTZiYzA1YjdhNTZhOGZjYw.field.c3VtbWFyeV90eXBl.short_desc": {
           "source": "Type of summary",
           "message": "摘要類型"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTpzdW1tYXJpemF0aW9uI2FkNmIwZDYyNmVkYjc2Mzk5OWYwZDRkMmI5MmQ0ZTkzMzI4MTY3MmI5ODA4MzVkZGRjYmVmYWQ2MzNkZmNjNDY.field.c3VtbWFyeV90eXBl.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnN1bW1hcml6YXRpb24jODBlMTQ5NDZkZWIxY2Y5NWY0NDVjNTk2MGUwNzliZGZkZWE1MDEzYTMwYzEzMGVlMTZiYzA1YjdhNTZhOGZjYw.field.c3VtbWFyeV90eXBl.desc": {
           "source": "Type of summary. Bullets returns short bullet point style summaries, paragraph is generally more verbose and detailed.",
           "message": "摘要類型。項目符號傳回簡短的要點樣式摘要，段落通常更冗長和詳細。"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTpzdW1tYXJpemF0aW9uI2FkNmIwZDYyNmVkYjc2Mzk5OWYwZDRkMmI5MmQ0ZTkzMzI4MTY3MmI5ODA4MzVkZGRjYmVmYWQ2MzNkZmNjNDY.field.c3VtbWFyeV90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaA.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnN1bW1hcml6YXRpb24jODBlMTQ5NDZkZWIxY2Y5NWY0NDVjNTk2MGUwNzliZGZkZWE1MDEzYTMwYzEzMGVlMTZiYzA1YjdhNTZhOGZjYw.field.c3VtbWFyeV90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaA.display_name": {
           "source": "paragraph",
           "message": "段落"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTpzdW1tYXJpemF0aW9uI2FkNmIwZDYyNmVkYjc2Mzk5OWYwZDRkMmI5MmQ0ZTkzMzI4MTY3MmI5ODA4MzVkZGRjYmVmYWQ2MzNkZmNjNDY.field.c3VtbWFyeV90eXBl.allowed-value.c3RyaW5nOmJ1bGxldHM.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROnN1bW1hcml6YXRpb24jODBlMTQ5NDZkZWIxY2Y5NWY0NDVjNTk2MGUwNzliZGZkZWE1MDEzYTMwYzEzMGVlMTZiYzA1YjdhNTZhOGZjYw.field.c3VtbWFyeV90eXBl.allowed-value.c3RyaW5nOmJ1bGxldHM.display_name": {
           "source": "bullets",
           "message": "子彈"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTpBY3Rpb25JdGVtc1JlcXVlc3RCb2R5IzMxODY0M2FlNTc1MDc3YTNhZGQyMmVlYmIyNTIyOTNmNTRiOTc2ZjllOTU5M2E5ZDFkNzI5Yjc1ZGJmMzE5MmY.field.YWN0aW9uX2l0ZW1z.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkFjdGlvbkl0ZW1zUmVxdWVzdEJvZHkjMDg2ZmRiZGJkZjBhZDJhOTlmMjk0YWQxYjljYjUwZTk5NTY4MzUzM2U2MWNkMTE3MGMwOGQ2Mzk3MmI0NWQxMg.field.YWN0aW9uX2l0ZW1z.display_name": {
           "source": "Action Items",
           "message": "行動項目"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTphY3Rpb25faXRlbXMjZTAxNzNjY2MwZTVjYTEyNzEwNzc3ZTdmNjk0ZDA5MDlmOGQwYTY4NTZjNjQ0YjJjMDQyMzAwOTMyZWExY2JkZA.field.ZWZmb3J0.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROmFjdGlvbl9pdGVtcyMxNmUyZWY4MzAxNTNhZmE0M2RlNGRlZjE3MGQyNGRiOTM5NTY5NWZkZDFjMjU0OWNhZDk5NDYyMzU5MDY2Y2Zk.field.ZWZmb3J0.display_name": {
           "source": "Effort",
           "message": "投入度"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTphY3Rpb25faXRlbXMjZTAxNzNjY2MwZTVjYTEyNzEwNzc3ZTdmNjk0ZDA5MDlmOGQwYTY4NTZjNjQ0YjJjMDQyMzAwOTMyZWExY2JkZA.field.ZWZmb3J0.allowed-value.c3RyaW5nOmxvdw.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROmFjdGlvbl9pdGVtcyMxNmUyZWY4MzAxNTNhZmE0M2RlNGRlZjE3MGQyNGRiOTM5NTY5NWZkZDFjMjU0OWNhZDk5NDYyMzU5MDY2Y2Zk.field.ZWZmb3J0.allowed-value.c3RyaW5nOmxvdw.display_name": {
           "source": "low",
           "message": "低"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTphY3Rpb25faXRlbXMjZTAxNzNjY2MwZTVjYTEyNzEwNzc3ZTdmNjk0ZDA5MDlmOGQwYTY4NTZjNjQ0YjJjMDQyMzAwOTMyZWExY2JkZA.field.ZWZmb3J0.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROmFjdGlvbl9pdGVtcyMxNmUyZWY4MzAxNTNhZmE0M2RlNGRlZjE3MGQyNGRiOTM5NTY5NWZkZDFjMjU0OWNhZDk5NDYyMzU5MDY2Y2Zk.field.ZWZmb3J0.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
           "source": "medium",
           "message": "中"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTphY3Rpb25faXRlbXMjZTAxNzNjY2MwZTVjYTEyNzEwNzc3ZTdmNjk0ZDA5MDlmOGQwYTY4NTZjNjQ0YjJjMDQyMzAwOTMyZWExY2JkZA.field.aW5jbHVkZV9kZWNpc2lvbnM.display_name": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROmFjdGlvbl9pdGVtcyMxNmUyZWY4MzAxNTNhZmE0M2RlNGRlZjE3MGQyNGRiOTM5NTY5NWZkZDFjMjU0OWNhZDk5NDYyMzU5MDY2Y2Zk.field.aW5jbHVkZV9kZWNpc2lvbnM.display_name": {
           "source": "Include Decisions",
           "message": "包括決定"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTphY3Rpb25faXRlbXMjZTAxNzNjY2MwZTVjYTEyNzEwNzc3ZTdmNjk0ZDA5MDlmOGQwYTY4NTZjNjQ0YjJjMDQyMzAwOTMyZWExY2JkZA.field.aW5jbHVkZV9kZWNpc2lvbnM.short_desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROmFjdGlvbl9pdGVtcyMxNmUyZWY4MzAxNTNhZmE0M2RlNGRlZjE3MGQyNGRiOTM5NTY5NWZkZDFjMjU0OWNhZDk5NDYyMzU5MDY2Y2Zk.field.aW5jbHVkZV9kZWNpc2lvbnM.short_desc": {
           "source": "Option to include decision making in action items",
           "message": "將決策納入行動項目的選項"
         },
-        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROkhhc2hEYXRhVHlwZTphY3Rpb25faXRlbXMjZTAxNzNjY2MwZTVjYTEyNzEwNzc3ZTdmNjk0ZDA5MDlmOGQwYTY4NTZjNjQ0YjJjMDQyMzAwOTMyZWExY2JkZA.field.aW5jbHVkZV9kZWNpc2lvbnM.desc": {
+        "app.QXNzZW1ibHlBSQ.type.YWN0aW9uOmRISmhibk5qY21saVpROmFjdGlvbl9pdGVtcyMxNmUyZWY4MzAxNTNhZmE0M2RlNGRlZjE3MGQyNGRiOTM5NTY5NWZkZDFjMjU0OWNhZDk5NDYyMzU5MDY2Y2Zk.field.aW5jbHVkZV9kZWNpc2lvbnM.desc": {
           "source": "Option to include decision making in action items.",
           "message": "將決策納入行動項目的選項。"
         },

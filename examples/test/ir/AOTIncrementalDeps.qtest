@@ -51,6 +51,7 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
         addTestCase("folded class constant", \testClassConstant());
         addTestCase("pure type reference is not a dependency", \testPureTypeNotDep());
         addTestCase("typed global import is a build dependency", \testTypedGlobalImportDep());
+        addTestCase("a typedef is a build dependency in either compile mode", \testTypedefDep());
         addTestCase("a folded constant depends on the provider's declaration contract",
             \testFoldedConstantDeclarationContractDep());
         addTestCase("declaration-contract dependencies require a source-content map",
@@ -181,12 +182,13 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
             "%new-style\nclass UseDc { static int f() { return DCVAL * 3 + 1; } }\n");
 
         string prov_obj = lib_dir + "/dck.qo";
-        string decl_stamp = prov_obj + ".aggregate-contract.stamp";
+        string decl_stamp = prov_obj + ".declaration-contract.stamp";
         string compile_stamp = prov_obj + ".compile-contract.stamp";
         code compileProvider = sub () {
             string out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN"
-                + " --compile-contract-stamp=%s --aggregate-contract-stamp=%s -o %s %s",
-                env, qcc_bin, lib_dir, compile_stamp, decl_stamp, prov_obj, prov_src));
+                + " --compile-contract-stamp=%s --aggregate-contract-stamp=%s.aggregate-contract.stamp"
+                + " --declaration-contract-stamp=%s -o %s %s",
+                env, qcc_bin, lib_dir, compile_stamp, prov_obj, decl_stamp, prov_obj, prov_src));
             assertTrue(is_file(prov_obj), "compiled the constant provider: " + out);
             assertTrue(is_file(decl_stamp), "emitted the declaration contract: " + out);
         };
@@ -214,7 +216,7 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
         string plain = File::readTextFile(plain_dep);
         assertTrue(plain.find("dck.qc.sha256") != -1,
             "without the option the folded constant is a source-byte dependency: " + plain);
-        assertEq(-1, plain.find("dck.qo.aggregate-contract.stamp"),
+        assertEq(-1, plain.find("dck.qo.declaration-contract.stamp"),
             "without the option no declaration contract is recorded: " + plain);
 
         # NARROWED: the same compile with the option records the declaration contract instead
@@ -225,8 +227,10 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
             env, qcc_bin, lib_dir, dep_file, map_file, lib_dir, cons_src));
         assertTrue(is_file(lib_dir + "/use_dc.qo"), "compiled the folding consumer: " + cons_out);
         string dep = File::readTextFile(dep_file);
-        assertTrue(dep.find("dck.qo.aggregate-contract.stamp") != -1,
+        assertTrue(dep.find("dck.qo.declaration-contract.stamp") != -1,
             "the folded-constant edge narrows to the provider's declaration contract: " + dep);
+        assertEq(-1, dep.find("dck.qo.aggregate-contract.stamp"),
+            "the folded-constant edge does not name the provider's aggregate contract: " + dep);
         assertEq(-1, dep.find("dck.qc.sha256"),
             "the provider's source-byte edge is replaced, not merely accompanied: " + dep);
         # the consumer's OWN source must stay a source-byte dependency: its own bytes are what
@@ -282,6 +286,36 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
             "a pure-type reference is not recorded as a build dependency: " + dep);
         assertTrue(dep.find("use_type.qc") != -1,
             "depfile still records the target's own source: " + dep);
+    }
+
+    # A typedef is expanded where it is used: a consumer is compiled against the type that the typedef names, and
+    # unlike a class it cannot be deferred to the load of the program, so a standalone compile of the consumer must
+    # preload the source that declares it.  Neither compile mode recorded it: the batch-published depfile of a Qorus
+    # source that used a typedef of another source did not name that source, and the first incremental compile of
+    # the source failed with a parse error ("expects object<DatasourceSizeMeasurements>").
+    testTypedefDep() {
+        TmpDir tmp = initDirs();
+        string prov = tmp_dir + "/td_prov.qc";
+        string cons = tmp_dir + "/td_cons.qc";
+        write(prov, "%new-style\npublic typedef TdMap = hash<string, int>;\n");
+        write(cons, "%new-style\nclass TdUser { static int f() { TdMap m = {\"a\": 1}; return m.a; } }\n");
+
+        # the batch records the provider for the consumer, so the scheduler preloads it
+        string out = run(sprintf(
+            "%s %s -c --parse-option=PO_MODERN --batch-build-sidecars --output-dir=%s --depfile-dir=%s %s %s",
+            env, qcc_bin, lib_dir, lib_dir, prov, cons));
+        string consumer_dep = run(sprintf("cat %s/*td_cons_qc.qo.d", lib_dir));
+        assertTrue(consumer_dep.find("td_prov.qc") != -1,
+            "the batch depfile of the consumer names the source of the typedef: " + out + consumer_dep);
+
+        # a standalone compile against the provider's object records it too, so the next one still preloads it
+        string dep = lib_dir + "/td_cons_single.qo.d";
+        out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN --depfile=%s -o %s/td_cons_single.qo %s",
+            env, qcc_bin, lib_dir, dep, lib_dir, cons));
+        assertTrue(is_file(dep), "the standalone compile emitted its depfile: " + out);
+        assertTrue(File::readTextFile(dep).find("td_prov.qc") != -1,
+            "the standalone depfile of the consumer names the source of the typedef: " + out
+                + File::readTextFile(dep));
     }
 
     # A typed global is the one cross-unit reference that IS hash-verified at link
@@ -1277,10 +1311,10 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
         write(cons_src, "%new-style\nclass UseDe { static DE::Mode f() { return DE::Mode::Off; } }\n");
 
         string prov_obj = lib_dir + "/dce.qo";
-        string decl_stamp = prov_obj + ".aggregate-contract.stamp";
+        string decl_stamp = prov_obj + ".declaration-contract.stamp";
         code compileProvider = sub () {
             string out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN"
-                + " --compile-contract-stamp=%s.compile-contract.stamp --aggregate-contract-stamp=%s -o %s %s",
+                + " --compile-contract-stamp=%s.compile-contract.stamp --declaration-contract-stamp=%s -o %s %s",
                 env, qcc_bin, lib_dir, prov_obj, decl_stamp, prov_obj, prov_src));
             assertTrue(is_file(decl_stamp), "emitted the enum's declaration contract: " + out);
         };
@@ -1300,7 +1334,7 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
             + " --depfile-source-content-map=%s -o %s/use_dce.qo %s",
             env, qcc_bin, lib_dir, dep_file, map_file, lib_dir, cons_src));
         string dep = File::readTextFile(dep_file);
-        assertTrue(dep.find("dce.qo.aggregate-contract.stamp") != -1,
+        assertTrue(dep.find("dce.qo.declaration-contract.stamp") != -1,
             "the folded enum member narrows to the provider's declaration contract: " + dep + out);
         assertEq(-1, dep.find("/dce.qc.sha256"),
             "the provider's source-byte edge is replaced, not merely accompanied: " + dep);

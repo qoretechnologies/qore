@@ -63,7 +63,12 @@ public:
     DLLEXPORT QoreHashNode();
 
     //! creates a hash of the specific type; the hash is initialized according to the hashdecl declaration
-    /** @since %Qore 0.8.13
+    /** @param hd the hashdecl of the hash
+        @param xsink receives an exception raised by the initializer of a member; may be nullptr for a hashdecl whose
+        member initializers raise no exceptions, in which case an exception that one raises anyway is reported as
+        unhandled
+
+        @since %Qore 0.8.13
     */
     DLLEXPORT QoreHashNode(const TypedHashDecl* hd, ExceptionSink* xsink);
 

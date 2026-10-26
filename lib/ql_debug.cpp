@@ -2227,13 +2227,36 @@ static void ut_qorevalue_operator_bool_null(UnitTestCounters& c) {
     QoreValue zero(0);
     QoreValue false_value(false);
 
+    QoreValue null_node(&Null);
+
+    // C++ bool context tells if there is a value: NOTHING is none, and NULL is a value however it is held, as with
+    // the AST interpreter (a DBI driver binds a NULL argument only if it is present)
     UT_ASSERT(c, !(bool)nothing, "QoreValue NOTHING is false in C++ bool context");
-    UT_ASSERT(c, !(bool)null_value, "QoreValue NULL is false in C++ bool context");
+    UT_ASSERT(c, (bool)null_value, "QoreValue inline NULL is a present value in C++ bool context");
+    UT_ASSERT(c, (bool)null_node, "QoreValue QoreNullNode is a present value in C++ bool context");
     UT_ASSERT(c, (bool)zero, "QoreValue int zero remains a present value in C++ bool context");
     UT_ASSERT(c, (bool)false_value, "QoreValue False remains a present value in C++ bool context");
+    UT_ASSERT(c, !(bool)QoreValue(static_cast<AbstractQoreNode*>(nullptr)), "a null node pointer is NOTHING");
+    UT_ASSERT(c, !(bool)QoreValue(static_cast<const AbstractQoreNode*>(&Nothing)), "the QoreNothingNode is NOTHING");
 
+    QoreSimpleValue simple_nothing(nothing);
     QoreSimpleValue simple_null(null_value);
-    UT_ASSERT(c, !(bool)simple_null, "QoreSimpleValue NULL is false in C++ bool context");
+    QoreSimpleValue simple_null_node(null_node);
+    UT_ASSERT(c, !(bool)simple_nothing, "QoreSimpleValue NOTHING is false in C++ bool context");
+    UT_ASSERT(c, (bool)simple_null, "QoreSimpleValue inline NULL is a present value in C++ bool context");
+    UT_ASSERT(c, (bool)simple_null_node, "QoreSimpleValue QoreNullNode is a present value in C++ bool context");
+
+    // the holders give the same result as the value they hold
+    ExceptionSink xsink;
+    {
+        ValueHolder h(QoreValue::makeNull(), &xsink);
+        UT_ASSERT(c, (bool)h, "ValueHolder NULL is a present value in C++ bool context");
+        ValueHolder hn(&xsink);
+        UT_ASSERT(c, !(bool)hn, "ValueHolder NOTHING is false in C++ bool context");
+        ValueOptionalRefHolder oh(QoreValue(&Null), false, &xsink);
+        UT_ASSERT(c, (bool)oh, "ValueOptionalRefHolder NULL is a present value in C++ bool context");
+    }
+    UT_ASSERT(c, !xsink, "no exception from the holders");
 }
 
 //! verifies that NULL held inline in a QoreValue is the same value as the QoreNullNode
@@ -2253,6 +2276,7 @@ static void ut_qorevalue_null_representations(UnitTestCounters& c) {
         UT_ASSERT(c, v.getType() == NT_NULL, (label + "getType()").c_str());
         UT_ASSERT(c, !strcmp(v.getTypeName(), "NULL"), (label + "getTypeName()").c_str());
         UT_ASSERT(c, v.isNull() && v.isNullOrNothing() && !v.isNothing(), (label + "isNull()").c_str());
+        UT_ASSERT(c, (bool)v && (bool)QoreSimpleValue(v), (label + "operator bool()").c_str());
         UT_ASSERT(c, v.getTypeInfo() == nullTypeInfo, (label + "getTypeInfo()").c_str());
         UT_ASSERT(c, v.getFullTypeInfo() == nullTypeInfo, (label + "getFullTypeInfo()").c_str());
         UT_ASSERT(c, !strcmp(v.getFullTypeName(), "NULL"), (label + "getFullTypeName()").c_str());
@@ -13850,6 +13874,54 @@ static QoreValue f_dbg_jobserver_acquire(const QoreListNode* params, RuntimeConf
     return qore_aot_dbg_jobserver_acquire(makeflags->c_str(), max);
 }
 
+//! the state of a signal in the signal manager, for f_dbg_signal_reassign_release()
+static void dbg_signal_state(QoreHashNode* h, const char* step, int sig, ExceptionSink* xsink) {
+    bool waited;
+    SimpleRefHolder<QoreStringNode> owner;
+    {
+        AutoLocker al(&QSM.mutex);
+        waited = sigismember(&QSM.mask, sig) == 1;
+        sig_map_t::const_iterator i = QSM.fmap.find(sig);
+        if (i != QSM.fmap.end()) {
+            owner = new QoreStringNode(i->second);
+        }
+    }
+    ReferenceHolder<QoreHashNode> state(new QoreHashNode(autoTypeInfo), xsink);
+    state->setKeyValue("waited", waited, xsink);
+    state->setKeyValue("owner", owner.release(), xsink);
+    h->setKeyValue(step, state.release(), xsink);
+}
+
+//! Debug-only: a module takes over a signal from the signal manager and releases it, as the jni module does
+/** @return a hash with the keys \c before, \c reassigned and \c released, each a hash with \c waited (whether
+    the signal thread waits for the signal) and \c owner (the name the signal is reserved under, or nothing).  DEBUG
+    builds only.
+*/
+static QoreValue f_dbg_signal_reassign_release(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int sig = static_cast<int>(get_param_value(params, 0).getAsBigInt());
+    QoreStringNodeValueHelper name(get_param_value(params, 1));
+    if (sig <= 0 || sig >= QORE_SIGNAL_MAX) {
+        return xsink->raiseException("DBG-ARGUMENT-ERROR", "invalid signal %d", sig);
+    }
+    if (!QSM.enabled()) {
+        return xsink->raiseException("DBG-ARGUMENT-ERROR", "signal handling is not enabled");
+    }
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    dbg_signal_state(*rv, "before", sig, xsink);
+    sig_vec_t sigs = {sig};
+    if (QoreStringNode* err = QSM.reassignSignals(sigs, name->c_str(), true)) {
+        SimpleRefHolder<QoreStringNode> holder(err);
+        return xsink->raiseException("DBG-SIGNAL-ERROR", holder.release());
+    }
+    dbg_signal_state(*rv, "reassigned", sig, xsink);
+    if (QSM.releaseSignals(sigs, name->c_str())) {
+        return xsink->raiseException("DBG-SIGNAL-ERROR", "signal %d could not be released", sig);
+    }
+    dbg_signal_state(*rv, "released", sig, xsink);
+    return rv.release();
+}
+
 //! Debug-only: creates a child process with fork() while another thread holds the lock of a registered fork handler
 /** The other thread takes the lock as the handler's prepare handler does, and releases it when the prepare handlers
     reach the handler, so fork() waits for it.  The child takes and releases the lock in the same way, runs the code
@@ -14448,6 +14520,24 @@ static QoreValue f_dbg_make_short_string(const QoreListNode* params, RuntimeConf
     return rv;
 }
 
+//! returns a new hash of the hashdecl of the given hash, initialized as the C++ API does without an ExceptionSink
+/** QoreHashNode(hd, nullptr) is how Qore fills its builtin hashdecls, such as CallStackInfo for a new exception; a
+    test uses this to check that the initializers of the members of a hashdecl are evaluated with a sink then too,
+    and that an exception that one raises is reported as unhandled instead of crashing.
+*/
+static QoreValue f_dbg_new_hashdecl_hash_without_sink(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreValue v = get_param_value(params, 0);
+    const QoreHashNode* h = v.getType() == NT_HASH ? v.get<const QoreHashNode>() : nullptr;
+    const TypedHashDecl* hd = h ? h->getHashDecl() : nullptr;
+    if (!hd) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_new_hashdecl_hash_without_sink() requires a hash of a "
+            "hashdecl type");
+        return QoreValue();
+    }
+    return new QoreHashNode(hd, nullptr);
+}
+
 //! returns the number of recursive-reference scans started by lvalue operations in the current thread
 /** A scan walks the whole object graph reachable from the object holding the lvalue, so tests use this to
     verify that an operation that cannot change that graph does not start one.
@@ -14719,6 +14809,28 @@ static QoreValue f_dbg_ref_set_unique_remove_key(const QoreListNode* params, Run
     rv = ref.removeHashObjKey(remove_key->c_str());
     if (*xsink) {
         return QoreValue();
+    }
+    return rv.release();
+}
+
+//! returns, for each argument, whether it holds a value in a C++ boolean context, and how it is held
+/** For each argument passed, a hash with the result of QoreValue::operator bool() for it ("present"), the type name
+    ("type"), and whether it is held inline in the QoreValue rather than as a node pointer ("inline").  C++ code such
+    as a DBI driver reads the arguments of a builtin with these accessors; tests use this to check that an argument
+    reads the same in every execution mode, whichever representation the engine passes.
+*/
+static QoreValue f_dbg_arg_presence(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    size_t count = params ? params->size() : 0;
+    for (size_t i = 0; i < count; ++i) {
+        QoreValue v = params->retrieveEntry(i);
+        QoreSimpleValue sv(v);
+        ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+        h->setKeyValue("present", (bool)v, xsink);
+        h->setKeyValue("simple_present", (bool)sv, xsink);
+        h->setKeyValue("type", new QoreStringNode(v.getTypeName()), xsink);
+        h->setKeyValue("inline", !v.isNothing() && !v.isPointer(), xsink);
+        rv->push(h.release(), xsink);
     }
     return rv.release();
 }
@@ -15638,6 +15750,19 @@ static QoreValue f_dbg_cares_set_servers(const QoreListNode* params, RuntimeConf
     return new QoreStringNode(qore_dbg_cares_set_servers(servers->c_str()));
 }
 
+//! makes the name lookups started from now on read the given hosts file instead of the system's
+/** c-ares reads the file, and so does the check of the addresses that c-ares adds to the answer for a localhost name
+    (RFC 6761), so that a test controls what the hosts file gives \c "localhost".
+
+    @param path the hosts file; an empty string restores the system's hosts file
+
+    @return the previous setting
+*/
+static QoreValue f_dbg_cares_set_hosts_file(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    HARD_QORE_VALUE_PARAM(path, const QoreStringNode, params, 0);
+    return new QoreStringNode(qore_dbg_cares_set_hosts_file(path->c_str()));
+}
+
 namespace {
 //! the state of dbg_fork_lock_cycle_arm(): a stand-in for the lock of the dynamic linker, and what the forking thread
 //! and a thread creating a c-ares channel hold and wait for
@@ -16086,10 +16211,14 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_continue_program_release", f_dbg_continue_program_release, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_new_hashdecl_hash_without_sink", f_dbg_new_hashdecl_hash_without_sink, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo, 1, anyTypeInfo, QORE_PARAM_NO_ARG, "h");
     qns.addBuiltinVariant("dbg_make_short_string", f_dbg_make_short_string, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         stringTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "value");
     qns.addBuiltinVariant("dbg_is_short_string", f_dbg_is_short_string, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         boolTypeInfo, 1, autoTypeInfo, QORE_PARAM_NO_ARG, "value");
+    qns.addBuiltinVariant("dbg_arg_presence", f_dbg_arg_presence, QCF_USES_EXTRA_ARGS, QDOM_DEBUG_HOOK,
+        listTypeInfo);
     qns.addBuiltinVariant("dbg_get_lvalue_scan_count", f_dbg_get_lvalue_scan_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_scan_object_count", f_dbg_get_scan_object_count, QCF_NO_FLAGS,
@@ -16182,6 +16311,8 @@ void init_debug_functions(QoreNamespace& qns) {
         bigIntTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "count");
     qns.addBuiltinVariant("dbg_cares_set_servers", f_dbg_cares_set_servers, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         stringTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "servers");
+    qns.addBuiltinVariant("dbg_cares_set_hosts_file", f_dbg_cares_set_hosts_file, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        stringTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "path");
     qns.addBuiltinVariant("dbg_fork_lock_cycle_arm", f_dbg_fork_lock_cycle_arm, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 1, QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "entered");
     qns.addBuiltinVariant("dbg_fork_lock_cycle_result", f_dbg_fork_lock_cycle_result, QCF_NO_FLAGS,
@@ -16205,6 +16336,9 @@ void init_debug_functions(QoreNamespace& qns) {
         "before_wait");
     qns.addBuiltinVariant("dbg_jobserver_acquire", f_dbg_jobserver_acquire, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "makeflags", bigIntTypeInfo, QORE_PARAM_NO_ARG, "max");
+    qns.addBuiltinVariant("dbg_signal_reassign_release", f_dbg_signal_reassign_release, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "sig", stringTypeInfo, QORE_PARAM_NO_ARG,
+        "name");
     qns.addBuiltinVariant("dbg_file_stream_io_flags", f_dbg_file_stream_io_flags, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         hashTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "fd", codeTypeInfo, QORE_PARAM_NO_ARG, "call");
     qns.addBuiltinVariant("dbg_fork_while_handler_held", f_dbg_fork_while_handler_held, QCF_NO_FLAGS,

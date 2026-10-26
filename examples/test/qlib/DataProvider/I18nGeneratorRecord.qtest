@@ -1,0 +1,559 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/FsUtil.qm
+%requires json
+
+%exec-class I18nGeneratorRecordTest
+
+#! qore-data-provider-i18n records the Qore that generated the catalogs it writes
+/** The Qore that runs the tool is replaced by a wrapper that runs the real Qore but reports the identity of a commit
+    of a fixture Qore history, so that the order of two Qores is the order of two commits of that history:
+
+    @verbatim
+    first -- second
+         \
+          other
+    @endverbatim
+*/
+public class I18nGeneratorRecordTest inherits QUnit::Test {
+    private {
+        const RecordName = ".qore-generator.json";
+        const Generator = "qore-data-provider-i18n";
+        const OwnerModule = "PresentationPatternOwner";
+        #! another owner module, with another catalog domain
+        const OtherOwnerModule = "PresentationRekeyOwner";
+        const OtherQoreExitCode = 3;
+
+        #! the source tree
+        string root;
+        #! the scratch directory of the test
+        string work;
+        #! the fixture Qore history
+        string history;
+        #! the commits of the fixture history: "first", "second" (a child of "first") and "other" (a child of "first")
+        hash<string, string> commits;
+        #! True if git is available to make the fixture history
+        bool have_git;
+    }
+
+    constructor() : Test("I18nGeneratorRecordTest", "1.0", \ARGV) {
+        root = sourceRoot();
+        work = make_tmp_dir("data-provider-i18n-generator-");
+        on_error remove_tree(work);
+        have_git = !system("git --version >/dev/null 2>&1");
+        if (have_git) {
+            makeHistory();
+        }
+
+        addTestCase("a write records the Qore that ran the tool and keeps other generators' records",
+            \recordOnWriteTest());
+        addTestCase("every write mode records the Qore, and a dry run or a check records nothing",
+            \writeModesTest());
+        addTestCase("a check of stale catalogs of another Qore exits with its own code",
+            \otherQoreCheckTest());
+        addTestCase("a write over the catalogs of a newer Qore is refused", \olderQoreRefusedTest());
+        addTestCase("a write over the catalogs of an older Qore records the newer one", \newerQoreAcceptedTest());
+        addTestCase("a write over the catalogs of a Qore that cannot be ordered needs --allow-other-qore",
+            \unorderedQoreTest());
+        addTestCase("a record that names no Qore is an error", \invalidRecordTest());
+        addTestCase("--record-qore records this Qore for current catalogs only", \recordQoreTest());
+        addTestCase("each catalog directory has its own record", \catalogDirectoryTest());
+        set_return_value(main());
+    }
+
+    destructor() {
+        remove_tree(work);
+    }
+
+    #! The tool writes the identity of the Qore that runs it beside the catalogs, and keeps the records of others
+    recordOnWriteTest() {
+        string out = newOutput("record");
+        writeRecord(out, {"qorus-catalogs": {"version": "8.0.0", "git_hash": "0123456789abcdef"}});
+        string log;
+        assertEq(0, runTool(out, "", \log), "extraction succeeds: " + log);
+        hash<auto> record = readRecord(out);
+        assertEq({"version": "8.0.0", "git_hash": "0123456789abcdef"}, record."qorus-catalogs",
+            "the record of another generator is kept");
+        hash<auto> qore = installedQore();
+        assertEq(qore, record{Generator}, "the record names the version and git hash of the Qore that ran the tool");
+        assertRegex("^[0-9a-f]{40}$", record{Generator}.git_hash, "the record has the full git hash");
+        Dir dir();
+        dir.chdir(out);
+        list<string> leftovers = map $1, dir.listFiles(), $1 =~ /^\.qore-generator\.json\./;
+        assertEq((), leftovers, "the record is written without leaving a temporary file");
+    }
+
+    #! --update-source-tree and --rekey-source-tree record the Qore; a dry run and the checks do not
+    writeModesTest() {
+        if (!checkGit()) {
+            return;
+        }
+        string out = newOutput("modes");
+        string log;
+        assertEq(0, runTool(out, "", \log, "first"), "extraction succeeds: " + log);
+        assertEq(commits.first, readRecord(out){Generator}.git_hash, "extraction records the Qore");
+
+        assertEq(0, runTool(out, "--rekey-source-tree", \log, "second"), "re-keying a current tree succeeds: " + log);
+        assertEq(commits.first, readRecord(out){Generator}.git_hash,
+            "re-keying a current tree writes nothing and records nothing");
+
+        # a stale root, which re-keying regenerates
+        string root_path = rootCatalog(out);
+        hash<auto> catalog = parse_json(ReadOnlyFile::readTextFile(root_path));
+        catalog.locales.root.messages{(keys catalog.locales.root.messages)[0]}.source = "outdated";
+        writeJson(root_path, catalog);
+        assertEq(0, runTool(out, "--rekey-source-tree --dry-run", \log, "second"), "a dry run succeeds: " + log);
+        assertEq(commits.first, readRecord(out){Generator}.git_hash, "a dry run records nothing");
+        assertEq(0, runTool(out, "--rekey-source-tree", \log, "second"), "re-keying succeeds: " + log);
+        assertEq(commits.second, readRecord(out){Generator}.git_hash, "re-keying records the Qore");
+        assertEq(0, runTool(out, "--check", \log), "the re-keyed catalogs are current: " + log);
+
+        writeRecord(out, {Generator: {"version": "3.0.0", "git_hash": commits.first}});
+        assertEq(0, runTool(out, "--update-source-tree", \log, "second"), "the update succeeds: " + log);
+        assertEq(commits.second, readRecord(out){Generator}.git_hash, "the source-tree update records the Qore");
+
+        assertEq(0, runTool(out, "--check", \log, "other"), "the check of current catalogs succeeds: " + log);
+        assertEq(0, runTool(out, "--check-source-tree", \log, "other"),
+            "the source-tree check of current catalogs succeeds: " + log);
+        assertEq(commits.second, readRecord(out){Generator}.git_hash, "a check records nothing");
+
+        string fresh = newOutput("modes-check");
+        assertEq(2, runTool(fresh, "--check", \log), "a check of missing catalogs fails: " + log);
+        assertFalse(is_file(fresh + DirSep + RecordName), "a failed check writes no record");
+    }
+
+    #! Stale catalogs of another Qore exit with OtherQoreExitCode and name both Qores; others exit with 2
+    otherQoreCheckTest() {
+        string out = newOutput("check");
+        string log;
+        assertEq(0, runTool(out, "", \log), "extraction succeeds: " + log);
+        string root_path = rootCatalog(out);
+        hash<auto> catalog = parse_json(ReadOnlyFile::readTextFile(root_path));
+        string message_id = (keys catalog.locales.root.messages)[0];
+        catalog.locales.root.messages{message_id}.source = "outdated";
+        writeJson(root_path, catalog);
+
+        assertEq(2, runTool(out, "--check", \log), "stale catalogs of this Qore are stale: " + log);
+        assertRegex("STALE: ", log, "the stale catalog is named");
+        assertNRegex("OTHER-QORE", log, "catalogs of this Qore are not reported as another Qore's");
+
+        string other_hash = "fedcba9876543210fedcba9876543210fedcba98";
+        writeRecord(out, {Generator: {"version": "2.9.9", "git_hash": other_hash}});
+        assertEq(OtherQoreExitCode, runTool(out, "--check", \log),
+            "stale catalogs of another Qore have their own exit code: " + log);
+        hash<auto> qore = installedQore();
+        assertRegex(sprintf("OTHER-QORE: the catalogs in .* were generated with a different Qore \\(2\\.9\\.9 %s, "
+            "installed %s %s\\)", other_hash, qore.version, qore.git_hash), log, "both Qores are named");
+        assertEq(OtherQoreExitCode, runTool(out, "--check-source-tree", \log),
+            "the source-tree check of stale catalogs of another Qore has the same exit code: " + log);
+        assertRegex("OTHER-QORE: ", log, "the source-tree check names the other Qore");
+
+        # the tree check verifies translations against the root catalog that is there
+        string root_dir = dirname(root_path);
+        writeJson(root_dir + DirSep + "cs.json", {
+            "schema_version": catalog.schema_version,
+            "locales": {"cs": {"messages": {message_id: {"source": "older", "message": "starší"}}}},
+        });
+        assertEq(OtherQoreExitCode, runTool(out, "--check-tree", \log),
+            "the tree check of a stale translation of another Qore has the same exit code: " + log);
+        assertRegex("OTHER-QORE: ", log, "the tree check names the other Qore");
+        unlink(root_dir + DirSep + "cs.json");
+
+        unlink(out + DirSep + RecordName);
+        assertEq(2, runTool(out, "--check", \log), "stale catalogs without a record are stale: " + log);
+        assertNRegex("OTHER-QORE", log, "catalogs without a record are not reported as another Qore's");
+
+        writeRecord(out, {Generator: {"version": "2.9.9", "git_hash": other_hash}});
+        assertEq(0, runTool(out, "", \log, NOTHING, "--allow-other-qore"),
+            "regenerating with --allow-other-qore succeeds: " + log);
+        assertEq(0, runTool(out, "--check", \log), "the check of the regenerated catalogs succeeds: " + log);
+    }
+
+    #! A Qore older than the one that generated the catalogs writes nothing
+    olderQoreRefusedTest() {
+        if (!checkGit()) {
+            return;
+        }
+        string out = newOutput("older");
+        string log;
+        assertEq(0, runTool(out, "", \log, "second"), "extraction succeeds: " + log);
+        string root_path = rootCatalog(out);
+        string record = ReadOnlyFile::readTextFile(out + DirSep + RecordName);
+        # extraction would write the missing root catalog
+        unlink(root_path);
+        assertEq(1, runTool(out, "", \log, "first", "--allow-other-qore"),
+            "extraction with an older Qore fails, even with --allow-other-qore: " + log);
+        assertRegex(sprintf("generated with a newer Qore \\(%s\\) than this one \\(%s\\)", commits.second,
+            commits.first), log, "the error names both Qores");
+        assertFalse(is_file(root_path), "extraction with an older Qore writes no catalog");
+        assertEq(record, ReadOnlyFile::readTextFile(out + DirSep + RecordName),
+            "extraction with an older Qore leaves the record as it was");
+
+        # the update and re-keying would write the stale root catalog
+        assertEq(0, runTool(out, "", \log, "second"), "extraction with the recorded Qore succeeds: " + log);
+        hash<auto> catalog = parse_json(ReadOnlyFile::readTextFile(root_path));
+        catalog.locales.root.messages{(keys catalog.locales.root.messages)[0]}.source = "outdated";
+        writeJson(root_path, catalog);
+        string stale = ReadOnlyFile::readTextFile(root_path);
+        foreach string mode in (("--update-source-tree", "--rekey-source-tree")) {
+            assertEq(1, runTool(out, mode, \log, "first"), sprintf("%s with an older Qore fails: %s", mode, log));
+            assertRegex("generated with a newer Qore", log, sprintf("%s names the newer Qore", mode));
+            assertEq(stale, ReadOnlyFile::readTextFile(root_path), sprintf("%s with an older Qore writes no catalog",
+                mode));
+            assertEq(record, ReadOnlyFile::readTextFile(out + DirSep + RecordName),
+                sprintf("%s with an older Qore leaves the record as it was", mode));
+        }
+        assertEq(0, runTool(out, "--rekey-source-tree --dry-run", \log, "first"),
+            "a dry run with an older Qore writes nothing and succeeds: " + log);
+    }
+
+    #! A Qore newer than the one that generated the catalogs regenerates them and records itself
+    newerQoreAcceptedTest() {
+        if (!checkGit()) {
+            return;
+        }
+        string out = newOutput("newer");
+        string log;
+        assertEq(0, runTool(out, "", \log, "first"), "extraction succeeds: " + log);
+        assertEq(0, runTool(out, "", \log, "second"), "extraction with a newer Qore succeeds: " + log);
+        assertEq({"version": "3.0.0", "git_hash": commits.second}, readRecord(out){Generator},
+            "the newer Qore is recorded");
+    }
+
+    #! Qores that are not in one line of history, or not in the checkout, are ordered only by --allow-other-qore
+    unorderedQoreTest() {
+        if (!checkGit()) {
+            return;
+        }
+        string out = newOutput("unordered");
+        string log;
+        assertEq(0, runTool(out, "", \log, "second"), "extraction succeeds: " + log);
+        string record = ReadOnlyFile::readTextFile(out + DirSep + RecordName);
+
+        assertEq(1, runTool(out, "", \log, "other"), "a Qore on another branch fails: " + log);
+        assertRegex(sprintf("generated with Qore %s, and it cannot be told whether this Qore %s is newer; set "
+            "QORE_SRC_DIR to a Qore checkout that has both, or pass --allow-other-qore", commits.second,
+            commits.other), log, "the error names both Qores and the ways out");
+        assertEq(record, ReadOnlyFile::readTextFile(out + DirSep + RecordName), "the refusal leaves the record");
+
+        # a checkout that does not have the recorded commit cannot order the two Qores either
+        string unknown = "0000000000000000000000000000000000000001";
+        writeRecord(out, {Generator: {"version": "3.0.0", "git_hash": unknown}});
+        assertEq(1, runTool(out, "", \log, "first"), "a Qore that the checkout does not have fails: " + log);
+        assertRegex("cannot be told whether", log, "an unknown commit is not ordered");
+
+        # nor can a directory that is not a checkout
+        writeRecord(out, {Generator: {"version": "3.0.0", "git_hash": commits.first}});
+        assertEq(1, runTool(out, "", \log, "second", NOTHING, work), "a directory that is not a checkout fails: "
+            + log);
+        assertRegex("cannot be told whether", log, "without a checkout, the Qores are not ordered");
+
+        writeRecord(out, {Generator: {"version": "3.0.0", "git_hash": commits.second}});
+        assertEq(0, runTool(out, "", \log, "other", "--allow-other-qore"),
+            "a Qore on another branch writes with --allow-other-qore: " + log);
+        assertEq(commits.other, readRecord(out){Generator}.git_hash, "the other Qore is recorded");
+    }
+
+    #! A record whose entry for the tool does not name a Qore stops the tool before it writes
+    invalidRecordTest() {
+        string out = newOutput("invalid");
+        string log;
+        writeText(out + DirSep + RecordName, "[]\n");
+        assertEq(1, runTool(out, "", \log), "a record that is not a map fails: " + log);
+        assertRegex("QORE-GENERATOR-ERROR: .*\\.qore-generator\\.json is not a map", log, "the record is named");
+        assertFalse(exists rootCatalogOrNothing(out), "nothing is written");
+
+        writeRecord(out, {Generator: {"version": "3.0.0"}});
+        assertEq(1, runTool(out, "", \log), "an entry without a git hash fails: " + log);
+        assertRegex("does not record a Qore for qore-data-provider-i18n", log, "the entry is named");
+        assertFalse(exists rootCatalogOrNothing(out), "nothing is written");
+    }
+
+    #! --record-qore records the installed Qore for catalogs that a check finds current, and for no others
+    recordQoreTest() {
+        string out = newOutput("record-qore");
+        string log;
+        assertEq(0, runTool(out, "", \log), "extraction succeeds: " + log);
+        string other_hash = "fedcba9876543210fedcba9876543210fedcba98";
+        hash<auto> other = {"version": "2.9.9", "git_hash": other_hash};
+        writeRecord(out, {Generator: other, "qorus-catalogs": {"version": "8.0.0", "git_hash": "0123456789abcdef"}});
+
+        assertEq(1, runTool(out, "--record-qore", \log), "--record-qore without a check is refused: " + log);
+        assertRegex("--record-qore requires --check, --check-tree or --check-source-tree", log,
+            "the refusal names the check modes");
+        assertEq(1, runTool(out, "--check --record-qore -a QoreTestPatternProvider", \log),
+            "--record-qore of some apps of a directory is refused: " + log);
+        assertEq(other, readRecord(out){Generator}, "a refused --record-qore records nothing");
+
+        hash<auto> qore = installedQore();
+        foreach string mode in (("--check", "--check-source-tree", "--check-tree")) {
+            writeRecord(out, {Generator: other, "qorus-catalogs": {"version": "8.0.0",
+                "git_hash": "0123456789abcdef"}});
+            assertEq(0, runTool(out, mode + " --record-qore", \log),
+                sprintf("%s --record-qore of current catalogs succeeds: %s", mode, log));
+            hash<auto> record = readRecord(out);
+            assertEq(qore, record{Generator}, sprintf("%s --record-qore records the installed Qore", mode));
+            assertEq("0123456789abcdef", record."qorus-catalogs".git_hash,
+                sprintf("%s --record-qore keeps the records of other generators", mode));
+        }
+
+        string root_path = rootCatalog(out);
+        hash<auto> catalog = parse_json(ReadOnlyFile::readTextFile(root_path));
+        catalog.locales.root.messages{(keys catalog.locales.root.messages)[0]}.source = "outdated";
+        writeJson(root_path, catalog);
+        writeRecord(out, {Generator: other});
+        assertEq(OtherQoreExitCode, runTool(out, "--check --record-qore", \log),
+            "--record-qore of stale catalogs of another Qore fails as the check does: " + log);
+        assertEq(other, readRecord(out){Generator}, "--record-qore of stale catalogs records nothing");
+        unlink(out + DirSep + RecordName);
+        assertEq(2, runTool(out, "--check-source-tree --record-qore", \log),
+            "--record-qore of stale catalogs without a record fails as the check does: " + log);
+        assertFalse(is_file(out + DirSep + RecordName), "--record-qore of stale catalogs writes no record");
+    }
+
+    #! The record of a catalog directory says which Qore generated the catalogs in that directory
+    /** A tree with two catalog directories: a check reports another Qore only when every directory with stale
+        catalogs was generated by another Qore
+    */
+    catalogDirectoryTest() {
+        string tree = newOutput("tree");
+        string one = tree + DirSep + "one";
+        string two = tree + DirSep + "two";
+        string log;
+        assertEq(0, runTool(one, "", \log), "extraction into the first directory succeeds: " + log);
+        assertEq(0, runTool(two, "", \log, NOTHING, NOTHING, NOTHING, OtherOwnerModule),
+            "extraction into the second directory succeeds: " + log);
+        assertFalse(is_file(tree + DirSep + RecordName), "nothing is recorded above the catalog directories");
+
+        hash<auto> qore = installedQore();
+        hash<auto> other = {"version": "2.9.9", "git_hash": "fedcba9876543210fedcba9876543210fedcba98"};
+        writeRecord(one, {Generator: other});
+        writeRecord(two, {Generator: other});
+        assertEq(0, runTool(tree, "--check-tree --record-qore", \log), "the tree check succeeds: " + log);
+        assertEq(qore, readRecord(one){Generator}, "the tree check records the first directory");
+        assertEq(qore, readRecord(two){Generator}, "the tree check records the second directory");
+        assertFalse(is_file(tree + DirSep + RecordName), "the tree check records nothing above the directories");
+
+        # a stale translation in the first directory
+        string root_path = rootCatalog(one);
+        hash<auto> catalog = parse_json(ReadOnlyFile::readTextFile(root_path));
+        string message_id = (keys catalog.locales.root.messages)[0];
+        writeJson(dirname(root_path) + DirSep + "cs.json", {
+            "schema_version": catalog.schema_version,
+            "locales": {"cs": {"messages": {message_id: {"source": "older", "message": "starší"}}}},
+        });
+        writeRecord(one, {Generator: other});
+        assertEq(OtherQoreExitCode, runTool(tree, "--check-tree", \log),
+            "stale catalogs in a directory of another Qore are another Qore's: " + log);
+        assertRegex("OTHER-QORE: the catalogs in .*/one were generated with a different Qore", log,
+            "the directory of the other Qore is named");
+        assertNRegex("/two were", log, "the current directory is not named");
+
+        writeRecord(one, {Generator: qore});
+        writeRecord(two, {Generator: other});
+        assertEq(2, runTool(tree, "--check-tree", \log),
+            "stale catalogs in a directory of this Qore are stale, whatever Qore generated the others: " + log);
+        assertNRegex("OTHER-QORE", log, "a current directory of another Qore is not reported");
+    }
+
+    #! Runs the tool on the catalogs of the fixture owner module
+    /** @param output the output directory
+        @param mode the mode options
+        @param log the standard output and standard error of the tool
+        @param qore the commit of the fixture history that the Qore running the tool reports, or @ref nothing for
+        the real Qore
+        @param extra more options
+        @param qore_src the Qore checkout (QORE_SRC_DIR); the fixture history by default
+        @param owner_module the owner module of the catalogs
+
+        @return the exit status of the tool
+    */
+    private int runTool(string output, string mode, reference<string> log, *string qore, *string extra,
+            *string qore_src, string owner_module = OwnerModule) {
+        list<string> module_path = (root + DirSep + "qlib", get_script_dir());
+        string real_qore = realQore();
+        if (real_qore == root + DirSep + "build/qore") {
+            module_path += (root + DirSep + "build/modules/i18n", root + DirSep + "build/modules/json");
+        }
+        if (exists ENV.QORE_MODULE_DIR) {
+            module_path += ENV.QORE_MODULE_DIR;
+        }
+        string env = "QORE_MODULE_DIR=" + shellQuote(module_path.join(PathSep));
+        if (real_qore == root + DirSep + "build/qore") {
+            env += " LD_LIBRARY_PATH=" + shellQuote(ENV.LD_LIBRARY_PATH ?? (root + DirSep + "build"));
+        }
+        if (qore_src || history) {
+            env += " QORE_SRC_DIR=" + shellQuote(qore_src ?? history);
+        }
+        string qore_bin = qore ? fakeQore(qore) : real_qore;
+        int rc;
+        # --check-tree loads no provider module
+        string owner = mode =~ /^--check-tree/ ? "" : "--owner " + owner_module;
+        log = backquote(sprintf("%s %s %s -C %s -o %s %s %s 2>&1", env, shellQuote(qore_bin),
+            shellQuote(root + DirSep + "bin/qore-data-provider-i18n"), mode, shellQuote(output), owner,
+            extra ?? ""), \rc);
+        return rc;
+    }
+
+    #! Returns the Qore that runs the tool: the built qore if there is one, as for the other tests of the tool
+    private string realQore() {
+        string build_qore = root + DirSep + "build/qore";
+        return is_executable(build_qore) ? build_qore : QORE_ARGV[0];
+    }
+
+    #! Returns a Qore that runs the real Qore but reports the identity of a commit of the fixture history
+    /** The wrapper runs the real Qore with its own path as the program name, so that the tool asks the wrapper
+        for the identity of the Qore that runs it.
+    */
+    private string fakeQore(string name) {
+        string path = work + DirSep + "qore-" + name;
+        if (!is_file(path)) {
+            writeText(path, sprintf("#!/usr/bin/env bash\n"
+                "if [ \"$1\" = \"--version\" ]; then\n"
+                "    printf 'QORE for test (64-bit build)\\nversion 3.0.0 (builtin features: test)\\n"
+                "  git hash: %s\\n'\n"
+                "    exit 0\n"
+                "fi\n"
+                "exec -a \"$0\" %s \"$@\"\n", commits{name}, shellQuote(realQore())));
+            chmod(path, 0755);
+        }
+        return path;
+    }
+
+    #! Makes the fixture history: "second" and "other" are children of "first"
+    private makeHistory() {
+        history = work + DirSep + "qore-history";
+        mkdir(history);
+        string git = sprintf("git -C %s -c user.name=test -c user.email=test@example.com -c commit.gpgsign=false "
+            "-c core.hooksPath=/dev/null", shellQuote(history));
+        gitRun(sprintf("git init -q %s", shellQuote(history)));
+        gitRun(git + " commit -q --allow-empty -m first");
+        commits.first = gitRun(git + " rev-parse HEAD");
+        gitRun(git + " commit -q --allow-empty -m second");
+        commits.second = gitRun(git + " rev-parse HEAD");
+        gitRun(git + " checkout -q -b other-branch " + commits.first);
+        gitRun(git + " commit -q --allow-empty -m other");
+        commits.other = gitRun(git + " rev-parse HEAD");
+    }
+
+    #! Runs a git command and returns its trimmed output
+    private string gitRun(string cmd) {
+        int rc;
+        string out = backquote(cmd + " 2>&1", \rc);
+        if (rc) {
+            throw "TEST-ERROR", sprintf("%s: exit %d: %s", cmd, rc, out);
+        }
+        return trim(out);
+    }
+
+    #! Skips a test case that needs the fixture history when git is not available
+    private bool checkGit() {
+        if (!have_git) {
+            testSkip("git is not available to make the fixture Qore history");
+            return False;
+        }
+        return True;
+    }
+
+    #! Returns the identity of the real Qore that runs the tool
+    private hash<auto> installedQore() {
+        string out = backquote(shellQuote(realQore()) + " --version 2>&1");
+        return {
+            "version": (out =~ x/\bversion ([0-9][^ ]*)/)[0],
+            "git_hash": (out =~ x/git hash: ([0-9a-f]{7,40})/)[0],
+        };
+    }
+
+    #! Returns a new, empty output directory
+    private string newOutput(string name) {
+        string path = work + DirSep + name;
+        mkdir(path);
+        return path;
+    }
+
+    #! Returns the root catalog of the fixture owner in an output directory
+    private string rootCatalog(string output) {
+        *string path = rootCatalogOrNothing(output);
+        if (!path) {
+            throw "TEST-ERROR", sprintf("no root catalog in %y", output);
+        }
+        return path;
+    }
+
+    private *string rootCatalogOrNothing(string output) {
+        Dir dir();
+        if (!dir.chdir(output)) {
+            return;
+        }
+        foreach string domain in (dir.listDirs()) {
+            string path = join_paths(output, domain, "root.json");
+            if (is_file(path)) {
+                return path;
+            }
+        }
+    }
+
+    private hash<auto> readRecord(string output) {
+        return parse_json(ReadOnlyFile::readTextFile(output + DirSep + RecordName));
+    }
+
+    private writeRecord(string output, hash<auto> record) {
+        writeText(output + DirSep + RecordName, make_json(record, JGF_ADD_FORMATTING) + "\n");
+    }
+
+    private writeJson(string path, auto value) {
+        writeText(path, make_json(value, JGF_ADD_FORMATTING) + "\n");
+    }
+
+    private writeText(string path, string text) {
+        File file();
+        file.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        file.write(text);
+        file.close();
+    }
+
+    private string sourceRoot() {
+        string path = normalize_dir(dirname(get_script_path()));
+        while (path.val()) {
+            if (is_file(path + DirSep + "CMakeLists.txt") && is_dir(path + DirSep + "qlib/DataProvider")) {
+                return path;
+            }
+            string parent = dirname(path);
+            if (parent == path) {
+                break;
+            }
+            path = parent;
+        }
+        throw "TEST-ERROR", sprintf("cannot find the source tree above %y", get_script_path());
+    }
+
+    private string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+}

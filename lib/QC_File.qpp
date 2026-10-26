@@ -1158,7 +1158,17 @@ nothing File::redirect(Qore::File[File] target_file) [flags=NAMED_ARGS] {
 static hash<PipeInfo> File::getPipe() {
 #ifndef _Q_WINDOWS
     int pipefd[2];
-    if (pipe(pipefd)) {
+    // the ends of the pipe are not inherited by programs the process starts; on Linux, the flag is set atomically
+#ifdef __linux__
+    int prc = pipe2(pipefd, O_CLOEXEC);
+#else
+    int prc = pipe(pipefd);
+    if (!prc) {
+        fcntl(pipefd[0], F_SETFD, FD_CLOEXEC);
+        fcntl(pipefd[1], F_SETFD, FD_CLOEXEC);
+    }
+#endif
+    if (prc) {
         xsink->raiseErrnoException("PIPE-ERROR", errno, "failed to create pipe");
         return QoreValue();
     }

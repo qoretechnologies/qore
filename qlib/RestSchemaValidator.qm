@@ -82,6 +82,12 @@ module RestSchemaValidator {
     @section restschemavalidator_relnotes RestSchemaValidator Module Release Notes
 
     @subsection restschemavalidator_2_5 RestSchemaValidator v2.5
+    - a required property that a schema does not declare is a required field of type \c any (see
+      @ref RestSchemaValidator::AbstractRestSchemaObject::undeclared_required "undeclared_required"), and a required
+      field of type \c any is marked required and preselected, as its type accepts no value
+    - an enumeration can have array and object values, as JSON Schema allows
+      (@ref RestSchemaValidator::AbstractSchemaBase::enumValueList "AbstractSchemaBase::enumValueList"); an array or
+      object value is valid when it is equal to one of them, and they are the allowed values of the field
     - the \c default of a schema is the remote default value of its field
       (@ref DataProvider::AbstractDataField::getRemoteDefaultValue() "AbstractDataField::getRemoteDefaultValue()"),
       which is shown and never applied or sent (see @ref dataprovider_remote_default_values)
@@ -445,6 +451,17 @@ public namespace RestSchemaValidator {
             */
             hash<string, bool> enumValues;
 
+            #! Every value of the enumeration in declared order, when one of them is a list or a hash
+            /** The values of an enumeration can be of any type, including arrays and objects
+                (<a href="https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.5.1">JSON Schema
+                Validation section 5.5.1</a>), and a value is valid when it is equal to one of them.  A list or
+                hash value cannot be a key of @ref enumValues, which holds the other values; when the enumeration
+                has one, this holds every value, and a list or hash validates when it is equal to one of them.
+
+                @since RestSchemaValidator 2.5
+            */
+            *list<auto> enumValueList;
+
             #! Multiple-of constraint
             /** @see https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.1.1
             */
@@ -662,10 +679,10 @@ public namespace RestSchemaValidator {
                 throw "SCHEMA-VALIDATION-ERROR",
                     sprintf("Parameter %y for %s %y and %s %y does not fit the parameter string pattern "
                         "(pattern: %y, value: %y)", name, pl, path, ml, method, pattern, value);
-            if (enumValues && !enumValues{value})
+            if ((enumValues || enumValueList) && !enumValues{value})
                 throw "SCHEMA-VALIDATION-ERROR",
                     sprintf("Parameter %y for %s %y and %s %y does not fit the enumerated values (enum: %y, "
-                        "actual: %y)", name, pl, path, ml, method, keys enumValues, value);
+                        "actual: %y)", name, pl, path, ml, method, enumValueList ?? keys enumValues, value);
         }
 
         private checkIntern(bool serialize, bool request, string type, *string format, string path, string method,
@@ -673,6 +690,7 @@ public namespace RestSchemaValidator {
             if (type != "list" && type != "any")
                 throw "SCHEMA-VALIDATION-ERROR", sprintf("Parameter %y for %s %y and %s %y is an array (%y), but "
                     "the expected type is %y", name, getPathLabel(), path, getMethodLabel(), method, v, type);
+            checkEnumValueList(path, method, name, v);
         }
 
         private checkIntern(bool serialize, bool request, string type, *string format, string path, string method,
@@ -680,6 +698,39 @@ public namespace RestSchemaValidator {
             if (type != "file" && type != "any" && type != "object")
                 throw "SCHEMA-VALIDATION-ERROR", sprintf("Parameter %y for %s %y and %s %y is an object (%y), but "
                     "the expected type is %y", name, getPathLabel(), path, getMethodLabel(), method, v, type);
+            checkEnumValueList(path, method, name, v);
+        }
+
+        #! Returns True if a list or hash value is equal to a value of the enumeration, or if it has no list or hash
+        /** @param value the list or hash value to check
+
+            @return True if the enumeration has no list or hash value (see @ref enumValueList), or if \a value is
+            equal to one of its values, False if not
+
+            @since RestSchemaValidator 2.5
+        */
+        bool enumValueListAccepts(auto value) {
+            if (!enumValueList) {
+                return True;
+            }
+            string key = AbstractSchemaBaseValidator::uniqueValueKey(value);
+            foreach auto v in (enumValueList) {
+                if (AbstractSchemaBaseValidator::uniqueValueKey(v) == key) {
+                    return True;
+                }
+            }
+            return False;
+        }
+
+        #! Checks a list or hash value against an enumeration that has a list or hash value
+        /** @throw SCHEMA-VALIDATION-ERROR the value is not equal to any value of the enumeration
+        */
+        private checkEnumValueList(string path, string method, string name, auto value) {
+            if (!enumValueListAccepts(value)) {
+                throw "SCHEMA-VALIDATION-ERROR", sprintf("Parameter %y for %s %y and %s %y does not fit the "
+                    "enumerated values (enum: %y, actual: %y)", name, getPathLabel(), path, getMethodLabel(), method,
+                    enumValueList, value);
+            }
         }
 
         private checkIntern(bool serialize, bool request, string type, *string format, string path, string method,
@@ -749,10 +800,10 @@ public namespace RestSchemaValidator {
                             name, pl, path, ml, method, exclusiveMinValue, value);
             }
 
-            if (enumValues && !enumValues{value})
+            if ((enumValues || enumValueList) && !enumValues{value})
                 throw "SCHEMA-VALIDATION-ERROR",
                     sprintf("Parameter %y for %s %y and %s %y does not fit the enumerated values (enum: %y, "
-                        "actual: %d)", name, pl, path, ml, method, keys enumValues, value);
+                        "actual: %d)", name, pl, path, ml, method, enumValueList ?? keys enumValues, value);
         }
 
         private checkIntern(bool serialize, bool request, string type, *string format, string path, string method,
@@ -822,10 +873,10 @@ public namespace RestSchemaValidator {
                             name, pl, path, ml, method, exclusiveMinValue, value);
             }
 
-            if (enumValues && !enumValues{value}) {
+            if ((enumValues || enumValueList) && !enumValues{value}) {
                 throw "SCHEMA-VALIDATION-ERROR",
                     sprintf("Parameter %y for %s %y and %s %y does not fit the enumerated values (enum: %y, "
-                        "actual: %f)", name, pl, path, ml, method, keys enumValues, value);
+                        "actual: %f)", name, pl, path, ml, method, enumValueList ?? keys enumValues, value);
             }
 
             switch (format) {
@@ -967,10 +1018,10 @@ public namespace RestSchemaValidator {
             if (type != "boolean" && type != "any") {
                 throwInvalidType(name, "boolean", type, v);
             }
-            if (enumValues && !enumValues{value.toString()}) {
+            if ((enumValues || enumValueList) && !enumValues{value.toString()}) {
                 throw "SCHEMA-VALIDATION-ERROR", sprintf("Parameter %y for %s %y and %s %y does not fit the "
                     "enumerated values (enum: %y, actual: %y)", name, getPathLabel(), path, getMethodLabel(),
-                    method, keys enumValues, value);
+                    method, enumValueList ?? keys enumValues, value);
             }
         }
 
@@ -1003,6 +1054,8 @@ public namespace RestSchemaValidator {
             if (!value) {
                 return;
             }
+
+            checkEnumValueList(path, method, name, value);
 
             hash<string, bool> seen;
             foreach auto val in (\value) {
@@ -1326,6 +1379,18 @@ public namespace RestSchemaValidator {
 
             #! Extension to allow properties to be nullable
             hash<string, bool> nullable_properties;
+
+            #! The required properties that the schema does not declare, which accept any value
+            /** \c required asserts only that a member is present
+                (<a href="https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.4.3">JSON Schema
+                Validation section 5.4.3</a>); it does not require the member to be declared in \c properties.  A
+                required name that neither the schema nor any schema it composes with \c allOf declares is therefore
+                a property with the empty schema: a required field of type \c any.  Such a property is in
+                @ref properties and is named here; a declaration of the name in a composed schema replaces it.
+
+                @since RestSchemaValidator 2.5
+            */
+            hash<string, bool> undeclared_required;
 
             #! Additional properties - MUST be a bool or an AbstractSchemaObject
             auto additionalProperties;
@@ -1947,6 +2012,8 @@ public namespace RestSchemaValidator {
         /** A use requiring such a field marks it required and preselected.  A required use of a nullable schema
             has the value type of an optional use, because only the presence of the property is required and an
             explicit \c null is valid, so for it these attributes are the only thing saying the field is required.
+            The same holds for a schema of type \c any, whose type accepts no value, such as a required property
+            that the schema does not declare (see @ref AbstractRestSchemaObject::undeclared_required).
 
             getFieldIntern() and decorateField() both take the attributes from here, so that a field is the same
             whichever use built the canonical field.
@@ -1958,7 +2025,9 @@ public namespace RestSchemaValidator {
             @since RestSchemaValidator 2.5
         */
         private *hash<auto> getFieldPresenceInfo(bool required) {
-            if (required && (nullable || type == "object" || hasSchemaCompositionFeatures())) {
+            # a field of type "any" accepts no value, so as with a nullable one, only these attributes say that it
+            # is required
+            if (required && (nullable || type == "object" || type == "any" || hasSchemaCompositionFeatures())) {
                 return {
                     "attr": {
                         "preselected": True,
@@ -2000,7 +2069,8 @@ public namespace RestSchemaValidator {
             each value's declared scalar type after the placeholder field is constructed.
         */
         private *list<auto> getFieldEnumValues() {
-            return keys enumValues;
+            # the values of an enumeration with a list or hash value are the values themselves
+            return enumValueList ?? keys enumValues;
         }
 
         #! Returns schema examples followed by the default

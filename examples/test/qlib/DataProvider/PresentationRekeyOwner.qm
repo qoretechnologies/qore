@@ -60,6 +60,10 @@ module PresentationRekeyOwner {
                 "type": new QoreStringDataType(),
             }),
         });
+        # a test can give the address type a schema identity, so that its presentation identity names no class
+        if (*string schema_identity = ENV.QORE_TEST_REKEY_SCHEMA_IDENTITY) {
+            address.setSchemaIdentity(schema_identity);
+        }
         QoreDataField sender("sender", "Sender", new HashDataType("RekeySender", {
             "address": new QoreDataField("address", "Address", address),
         }));

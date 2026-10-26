@@ -15,9 +15,10 @@
 # members, static variables and hashdecl members and the default arguments of their functions and methods, and it is
 # rebuilt when the aggregate contract of one of its sources moves.  That contract did not cover member declarations or
 # any default: a source that only changed a member initializer was recompiled, but the aggregate was not, and the
-# linked program ran the old default.  Each case compiles a source, changes one element on its line, compiles it again,
-# and checks which of the source object's contracts moved: the aggregate contract for everything the aggregate embeds,
-# the compile contract only for what the consumers of the object compile against.
+# linked program ran the old default.  Each case compiles a source, changes one element, compiles it again, and
+# checks which of the source object's three declaration-level contracts moved: the aggregate contract for everything
+# the aggregate embeds, and the declaration and compile contracts, which consumers depend on, only for what consumers
+# compile against.
 class AOTAggregateContractDefaultsTest inherits QUnit::Test {
     private {
         string qcc_bin;
@@ -39,6 +40,7 @@ class AOTAggregateContractDefaultsTest inherits QUnit::Test {
         addTestCase("a base class constructor argument moves the aggregate contract", \bcaTest());
         addTestCase("a member type moves both contracts", \memberTypeTest());
         addTestCase("a new member moves both contracts", \memberAddTest());
+        addTestCase("a declaration moved to another line moves only the aggregate contract", \lineMoveTest());
         addTestCase("a method body does not move the aggregate contract", \bodyTest());
         set_return_value(main());
     }
@@ -57,22 +59,32 @@ class AOTAggregateContractDefaultsTest inherits QUnit::Test {
     private hash<auto> compile(string dir, string src) {
         string obj = dir + "/src.qo";
         string out = run(sprintf("%s %s -c --parse-option=PO_MODERN --aggregate-contract-stamp=%s.aggregate "
-            "--compile-contract-stamp=%s.compile -o %s %s", env, qcc_bin, obj, obj, obj, src));
+            "--declaration-contract-stamp=%s.declaration --compile-contract-stamp=%s.compile -o %s %s", env, qcc_bin,
+            obj, obj, obj, obj, src));
         assertTrue(is_file(obj + ".aggregate"), "the aggregate contract is written: " + out);
+        assertTrue(is_file(obj + ".declaration"), "the declaration contract is written: " + out);
         assertTrue(is_file(obj + ".compile"), "the compile contract is written: " + out);
         return {
             "aggregate": ReadOnlyFile::readTextFile(obj + ".aggregate"),
+            "declaration": ReadOnlyFile::readTextFile(obj + ".declaration"),
             "compile": ReadOnlyFile::readTextFile(obj + ".compile"),
         };
     }
 
     #! compiles the source before and after the change and checks which contracts moved
-    /** @param compile_moves whether the compile contract moves; NOTHING leaves it unchecked
+    /** @param aggregate_moves whether the aggregate contract moves
+        @param consumer_moves whether the declaration contract, which consumers depend on, moves
+        @param compile_moves whether the compile contract moves; NOTHING leaves it unchecked
+        @param same_lines whether the change must keep every line in its place
     */
-    private check(string before, string after, bool aggregate_moves, *bool compile_moves) {
+    private check(string before, string after, bool aggregate_moves, bool consumer_moves, *bool compile_moves,
+            bool same_lines = True) {
         TmpDir tmp("qore-aot-aggregate-contract-");
         string src = tmp.path + "/src.qc";
-        assertEq(before.split("\n").size(), after.split("\n").size(), "the change keeps every line in its place");
+        if (same_lines) {
+            assertEq(before.split("\n").size(), after.split("\n").size(),
+                "the change keeps every line in its place");
+        }
         write(src, before);
         hash<auto> c1 = compile(tmp.path, src);
         write(src, after);
@@ -81,6 +93,11 @@ class AOTAggregateContractDefaultsTest inherits QUnit::Test {
             assertNeq(c1.aggregate, c2.aggregate, "the aggregate contract moves");
         } else {
             assertEq(c1.aggregate, c2.aggregate, "the aggregate contract does not move");
+        }
+        if (consumer_moves) {
+            assertNeq(c1.declaration, c2.declaration, "the declaration contract moves");
+        } else {
+            assertEq(c1.declaration, c2.declaration, "the declaration contract does not move");
         }
         if (!exists compile_moves) {
             return;
@@ -94,47 +111,54 @@ class AOTAggregateContractDefaultsTest inherits QUnit::Test {
 
     memberInitTest() {
         check("class C {\n    public {\n        int n = 1;\n    }\n}\n",
-            "class C {\n    public {\n        int n = 2;\n    }\n}\n", True, False);
+            "class C {\n    public {\n        int n = 2;\n    }\n}\n", True, False, False);
     }
 
     memberInitExprTest() {
         check("class C {\n    public {\n        list<string> l = (\"a\",) + (\"b\",);\n    }\n}\n",
-            "class C {\n    public {\n        list<string> l = (\"a\",) + (\"c\",);\n    }\n}\n", True, False);
+            "class C {\n    public {\n        list<string> l = (\"a\",) + (\"c\",);\n    }\n}\n", True, False, False);
     }
 
     staticInitTest() {
         check("class C {\n    public {\n        static string s = \"one\";\n    }\n}\n",
-            "class C {\n    public {\n        static string s = \"two\";\n    }\n}\n", True, False);
+            "class C {\n    public {\n        static string s = \"two\";\n    }\n}\n", True, False, False);
     }
 
     hashdeclDefaultTest() {
-        check("hashdecl H {\n    int n = 1;\n}\n", "hashdecl H {\n    int n = 2;\n}\n", True, False);
+        check("hashdecl H {\n    int n = 1;\n}\n", "hashdecl H {\n    int n = 2;\n}\n", True, False, False);
     }
 
     defaultArgTest() {
         check("class C {\n    int f(int n = 1) { return n; }\n}\n",
-            "class C {\n    int f(int n = 2) { return n; }\n}\n", True, False);
+            "class C {\n    int f(int n = 2) { return n; }\n}\n", True, False, False);
     }
 
     bcaTest() {
         check("class B {\n    constructor(int n) {}\n}\nclass C inherits B {\n    constructor() : B(1) {}\n}\n",
             "class B {\n    constructor(int n) {}\n}\nclass C inherits B {\n    constructor() : B(2) {}\n}\n", True,
-            False);
+            False, False);
     }
 
     memberTypeTest() {
         check("class C {\n    public {\n        int n;\n    }\n}\n",
-            "class C {\n    public {\n        *int n;\n    }\n}\n", True, True);
+            "class C {\n    public {\n        *int n;\n    }\n}\n", True, True, True);
     }
 
     memberAddTest() {
         check("class C {\n    public {\n        int n;\n    }\n}\n",
-            "class C {\n    public {\n        int n; int m;\n    }\n}\n", True, True);
+            "class C {\n    public {\n        int n; int m;\n    }\n}\n", True, True, True);
+    }
+
+    #! a declaration that only moved to another line rebuilds the aggregate, which records where it is
+    lineMoveTest() {
+        check("class C {\n    public {\n        int n = 1;\n    }\n    int f(int a = 1) { return a; }\n}\n",
+            "\n\nclass C {\n    public {\n        int n = 1;\n    }\n    int f(int a = 1) { return a; }\n}\n",
+            True, False, NOTHING, False);
     }
 
     #! the body is not embedded in the aggregate; the compile contract covers what the body's native code exports
     bodyTest() {
         check("class C {\n    int f() { return 1; }\n}\n",
-            "class C {\n    int f() { return 2; }\n}\n", False);
+            "class C {\n    int f() { return 2; }\n}\n", False, False);
     }
 }

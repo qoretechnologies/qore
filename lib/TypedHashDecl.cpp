@@ -886,8 +886,22 @@ int typed_hash_decl_private::initHashIntern(QoreHashNode* h, const QoreHashNode*
             QoreValue& v = h_priv->getValueRef(i.first);
             assert(v.isNothing());
 
-            ValueEvalOptimizedRefHolder val(i.second->exp, xsink);
-            if (*xsink) {
+            // the caller can give no sink, as QoreHashNode(hd, nullptr) does for the builtin hashdecls that Qore
+            // fills itself (CallStackInfo for a new exception, for example): the initializer is then evaluated with a
+            // local sink, and an exception that it raises is reported as unhandled when the local sink is destroyed.
+            // The local sink is created only here, so that the initialization of a hashdecl without initializers
+            // (such as CallStackInfo while a stack limit exception is raised) runs no stack check of its own.
+            ExceptionSink local_xsink;
+            ExceptionSink* sink = xsink ? xsink : &local_xsink;
+            // describes an exception that has no caller sink to be described in (see initHash())
+            auto describe_local = [&]() {
+                if (!xsink && local_xsink) {
+                    local_xsink.appendLastDescription(" (while initializing hashdecl '%s')", name.c_str());
+                }
+            };
+            ValueEvalOptimizedRefHolder val(i.second->exp, sink);
+            if (*sink) {
+                describe_local();
                 return -1;
             }
 
@@ -898,10 +912,13 @@ int typed_hash_decl_private::initHashIntern(QoreHashNode* h, const QoreHashNode*
             // explicit filter maps
             val.ensureReferencedValue();
             // see the acceptInputKey() call above
-            ScopedTypeCheckSink ts(xsink);
-            QoreTypeInfo::acceptInputMember(i.second->getTypeInfo(), i.first, *val, *ts);
-            if (ts.raised()) {
-                return -1;
+            {
+                ScopedTypeCheckSink ts(sink);
+                QoreTypeInfo::acceptInputMember(i.second->getTypeInfo(), i.first, *val, *ts);
+                if (ts.raised()) {
+                    describe_local();
+                    return -1;
+                }
             }
 
             v = val.takeReferencedValue();

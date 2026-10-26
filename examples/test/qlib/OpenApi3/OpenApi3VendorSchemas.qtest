@@ -1,0 +1,381 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Tests valid OpenAPI constructs found in vendor schemas: paths that differ only by a trailing slash,
+# enumerations with array and object values, and object query parameters
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires json
+%requires yaml
+
+%requires QUnit
+%requires DataProvider
+%requires RestSchemaValidator
+%requires OpenApi3
+%requires OpenApi3DataProvider
+
+%exec-class OpenApi3VendorSchemasTest
+
+class OpenApi3VendorSchemasTest inherits QUnit::Test {
+    constructor() : Test("OpenApi3VendorSchemasTest", "1.0", \ARGV) {
+        addTestCase("trailing slash paths", \trailingSlashPaths());
+        addTestCase("trailing slash fallback", \trailingSlashFallback());
+        addTestCase("path operation hash prefixes", \pathOperationHashPrefixes());
+        addTestCase("trailing slash data provider", \trailingSlashDataProvider());
+        addTestCase("duplicate template paths", \duplicateTemplatePaths());
+        addTestCase("array enumeration values", \arrayEnumValues());
+        addTestCase("object enumeration values", \objectEnumValues());
+        addTestCase("scalar value of a structured enumeration", \scalarValueOfStructuredEnum());
+        addTestCase("object query parameter", \objectQueryParameter());
+        addTestCase("undeclared required property", \undeclaredRequiredProperty());
+        addTestCase("undeclared required property in a composition", \undeclaredRequiredComposition());
+        set_return_value(main());
+    }
+
+    #! returns an OpenAPI 3 schema with the given paths
+    private static OpenApi3Schema getSchema(hash<auto> paths, *hash<auto> schemas) {
+        hash<auto> h = {
+            "openapi": "3.0.3",
+            "info": {"title": "vendor", "version": "1"},
+            "paths": paths,
+        };
+        if (schemas) {
+            h.components.schemas = schemas;
+        }
+        return OpenApi3Loader::fromString(make_json(h));
+    }
+
+    #! returns an operation with the given operation ID, parameters and request body
+    private static hash<auto> getOp(string id, *list<auto> params, *hash<auto> body_schema) {
+        hash<auto> rv = {
+            "operationId": id,
+            "responses": {"200": {"description": "ok"}},
+        };
+        if (params) {
+            rv.parameters = params;
+        }
+        if (body_schema) {
+            rv.requestBody = {"content": {"application/json": {"schema": body_schema}}};
+        }
+        return rv;
+    }
+
+    #! returns the operation ID that matches the given method and URI path
+    private static *string getOpId(OpenApi3Schema s, string method, string path) {
+        return s.paths.match(path).getOperation(method, path).operationId;
+    }
+
+    #! Pipedrive's "/oauth/token" and "/oauth/token/" are two operations
+    trailingSlashPaths() {
+        OpenApi3Schema s = getSchema({
+            "/oauth/token": {"post": getOp("get-tokens")},
+            "/oauth/token/": {"post": getOp("refresh-tokens")},
+            "/": {"get": getOp("root")},
+        });
+        assertEq({"oauth/token": ("post",), "oauth/token/": ("post",), "": ("get",)},
+            s.getPathOperationHash());
+        assertEq("get-tokens", getOpId(s, "post", "/oauth/token"));
+        assertEq("refresh-tokens", getOpId(s, "post", "/oauth/token/"));
+        assertEq("refresh-tokens", getOpId(s, "post", "/oauth/token/?a=1"));
+        assertEq("root", getOpId(s, "get", "/"));
+        assertEq("refresh-tokens", s.paths.tryMatch("/oauth/token/").getOperation("post", "/oauth/token/")
+            .operationId);
+
+        # a server matches an incoming request to the operation of its own path
+        hash<auto> hdr;
+        hash<RestRequestServerInfo> req = s.parseRequest("POST", "/oauth/token/", NOTHING, \hdr);
+        assertEq("/oauth/token/", req.path);
+        assertEq("refresh-tokens", getOpId(s, "post", req.path));
+    }
+
+    #! a URI path that differs from the only declared path by a trailing slash still matches it
+    trailingSlashFallback() {
+        OpenApi3Schema s = getSchema({
+            "/a": {"get": getOp("a")},
+            "/b/": {"get": getOp("b-slash")},
+            "/x": {"get": getOp("x")},
+            "/x/{id}": {"get": getOp("x-id", ({"name": "id", "in": "path", "required": True,
+                "schema": {"type": "string"}},))},
+            "/f/file-{name}.json/": {"get": getOp("f-slash", ({"name": "name", "in": "path", "required": True,
+                "schema": {"type": "string"}},))},
+        });
+        assertEq("a", getOpId(s, "get", "/a"));
+        assertEq("a", getOpId(s, "get", "/a/"));
+        assertEq("b-slash", getOpId(s, "get", "/b/"));
+        assertEq("b-slash", getOpId(s, "get", "/b"));
+        # an empty last segment is a trailing slash, not a value of the template
+        assertEq("x", getOpId(s, "get", "/x/"));
+        assertEq("x-id", getOpId(s, "get", "/x/1"));
+        assertEq("f-slash", getOpId(s, "get", "/f/file-a.json/"));
+        assertEq("f-slash", getOpId(s, "get", "/f/file-a.json"));
+        assertThrows("SCHEMA-VALIDATION-ERROR", \s.paths.match(), "/c/");
+        assertThrows("SCHEMA-VALIDATION-ERROR", \s.paths.match(), "/a/b");
+    }
+
+    #! each path of the operation hash is its own, whatever the order of the paths in the document
+    pathOperationHashPrefixes() {
+        OpenApi3Schema s = getSchema({
+            "/a/b": {"get": getOp("a-b")},
+            "/a": {"post": getOp("a")},
+            "/a/b/c/": {"put": getOp("a-b-c-slash")},
+        });
+        assertEq({"a/b": ("get",), "a": ("post",), "a/b/c/": ("put",)}, s.getPathOperationHash());
+    }
+
+    #! the operation of a path with a trailing slash is the child of an empty segment
+    trailingSlashDataProvider() {
+        OpenApi3Schema s = getSchema({
+            "/oauth/token": {"post": getOp("get-tokens")},
+            "/oauth/token/": {"post": getOp("refresh-tokens")},
+            "/dir/": {"get": getOp("dir")},
+            "/dir//sub": {"get": getOp("dir-sub")},
+        });
+        OpenApi3DataProvider dp(s);
+        AbstractDataProvider token = dp.getChildProviderPath("oauth/token");
+        assertEq(("", "POST"), token.getChildProviderNames());
+        AbstractDataProvider slash = token.getChildProviderEx("");
+        assertEq("", slash.getName());
+        assertEq(("POST",), slash.getChildProviderNames());
+
+        OpenApi3RequestDataProvider req = cast<OpenApi3RequestDataProvider>(
+            dp.getChildProviderPath("oauth/token/POST"));
+        assertEq("get-tokens", req.op.operationId);
+        assertEq("/oauth/token", req.uri_path);
+        req = cast<OpenApi3RequestDataProvider>(dp.getChildProviderPath("oauth/token//POST"));
+        assertEq("refresh-tokens", req.op.operationId);
+        assertEq("/oauth/token/", req.uri_path);
+
+        # a segment after an empty one keeps it
+        req = cast<OpenApi3RequestDataProvider>(dp.getChildProviderPath("dir//sub/GET"));
+        assertEq("dir-sub", req.op.operationId);
+        assertEq("/dir//sub", req.uri_path);
+        req = cast<OpenApi3RequestDataProvider>(dp.getChildProviderPath("dir//GET"));
+        assertEq("dir", req.op.operationId);
+        assertEq("/dir/", req.uri_path);
+    }
+
+    #! two templates of the same path are still the same path
+    duplicateTemplatePaths() {
+        assertThrows("INVALID-PATH-COMPONENT", "Cannot terminate path", \OpenApi3VendorSchemasTest::getSchema(), ({
+            "/x/{id}/": {"get": getOp("a", ({"name": "id", "in": "path", "required": True,
+                "schema": {"type": "string"}},))},
+            "/x/{other}/": {"get": getOp("b", ({"name": "other", "in": "path", "required": True,
+                "schema": {"type": "string"}},))},
+        },));
+    }
+
+    #! an array query parameter whose enumeration values are arrays
+    arrayEnumValues() {
+        OpenApi3Schema s = getSchema({
+            "/activity": {"get": getOp("activity", ({
+                "name": "action",
+                "in": "query",
+                "style": "form",
+                "explode": False,
+                "schema": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "enum": (("abuse",), ("bounce",), ("click", "open")),
+                },
+            },))},
+        });
+        hash<auto> hdr;
+        # an array is valid when it is equal to one of the values
+        hash<RestRequestServerInfo> req = s.parseRequest("GET", "/activity?action=abuse", NOTHING, \hdr);
+        assertEq(("abuse",), req.query.action);
+        req = s.parseRequest("GET", "/activity?action=click,open", NOTHING, \hdr);
+        assertEq(("click", "open"), req.query.action);
+        assertThrows("SCHEMA-VALIDATION-ERROR", "does not fit the enumerated values", \s.parseRequest(),
+            ("GET", "/activity?action=abuse,click", NOTHING, \hdr));
+        assertThrows("SCHEMA-VALIDATION-ERROR", "does not fit the enumerated values", \s.parseRequest(),
+            ("GET", "/activity?action=open,click", NOTHING, \hdr));
+
+        # the operation can be browsed and its request type built
+        OpenApi3DataProvider dp(s);
+        AbstractDataProvider op = dp.getChildProviderPath("activity/GET");
+        AbstractDataField action = op.getRequestType().getField("query").getType().getField("action");
+        assertEq(NT_LIST, action.getType().getBaseTypeCode());
+    }
+
+    #! an object whose enumeration values are objects
+    objectEnumValues() {
+        OpenApi3Schema s = getSchema({
+            "/settings": {"post": getOp("settings", NOTHING, {
+                "type": "object",
+                "properties": {
+                    "mode": {
+                        "type": "object",
+                        "enum": ({"level": 1}, {"level": 2, "fast": True}, NULL),
+                        "nullable": True,
+                    },
+                    "tags": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "enum": (("a",), ("a", "b")),
+                    },
+                },
+            })},
+        });
+        hash<auto> hdr = {"content-type": "application/json"};
+        hash<RestRequestServerInfo> req = s.parseRequest("POST", "/settings",
+            make_json({"mode": {"fast": True, "level": 2}}), \hdr);
+        assertEq({"fast": True, "level": 2}, req.body.mode);
+        assertThrows("SCHEMA-VALIDATION-ERROR", "does not fit the enumerated values", \s.parseRequest(),
+            ("POST", "/settings", make_json({"mode": {"level": 3}}), \hdr));
+        # numbers are equal by value, as in JSON
+        req = s.parseRequest("POST", "/settings", "{\"mode\": {\"level\": 1.0}}", \hdr);
+        assertEq(NT_FLOAT, req.body.mode.level.typeCode());
+        assertEq(1.0, req.body.mode.level);
+        # an array property is compared with its array values
+        req = s.parseRequest("POST", "/settings", make_json({"tags": ("a", "b")}), \hdr);
+        assertEq(("a", "b"), req.body.tags);
+        assertThrows("SCHEMA-VALIDATION-ERROR", "does not fit the enumerated values", \s.parseRequest(),
+            ("POST", "/settings", make_json({"tags": ("b", "a")}), \hdr));
+
+        # the values are the allowed values of the fields; a null value is what "nullable" says
+        OpenApi3DataProvider dp(s);
+        AbstractDataProvider op = dp.getChildProviderPath("settings/POST");
+        AbstractDataProviderType body = op.getRequestType().getField("body").getType();
+        assertEq(({"level": 1}, {"level": 2, "fast": True}), map $1.value, body.getField("mode").getAllowedValues());
+        assertEq((("a",), ("a", "b")), map $1.value, body.getField("tags").getAllowedValues());
+    }
+
+    #! a scalar is never equal to an array or object value of an enumeration
+    scalarValueOfStructuredEnum() {
+        OpenApi3Schema s = getSchema({
+            "/odd": {"get": getOp("odd", ({
+                "name": "v",
+                "in": "query",
+                "schema": {
+                    "type": "string",
+                    "enum": (("a",), "b"),
+                },
+            },))},
+        });
+        hash<auto> hdr;
+        hash<RestRequestServerInfo> req = s.parseRequest("GET", "/odd?v=b", NOTHING, \hdr);
+        assertEq("b", req.query.v);
+        assertThrows("SCHEMA-VALIDATION-ERROR", "does not fit the enumerated values", \s.parseRequest(),
+            ("GET", "/odd?v=a", NOTHING, \hdr));
+    }
+
+    #! OpenAPI 3 allows an object query parameter, which Swagger 2.0 does not (Trello's "fields")
+    objectQueryParameter() {
+        OpenApi3Schema s = getSchema({
+            "/boards": {"get": getOp("boards", ({
+                "name": "fields",
+                "in": "query",
+                "schema": {"type": "object"},
+            },))},
+        });
+        OpenApi3DataProvider dp(s);
+        AbstractDataProvider op = dp.getChildProviderPath("boards/GET");
+        assertEq("boards", cast<OpenApi3RequestDataProvider>(op).op.operationId);
+        AbstractDataField fields = op.getRequestType().getField("query").getType().getField("fields");
+        assertEq(NT_HASH, fields.getType().getBaseTypeCode());
+    }
+
+    #! Pipedrive's PUT /subscriptions/installment/{id}: the body requires "id", which it does not declare
+    undeclaredRequiredProperty() {
+        OpenApi3Schema s = getSchema({
+            "/installment": {"put": getOp("update", NOTHING, {
+                "type": "object",
+                "properties": {
+                    "payments": {"type": "array", "items": {"type": "object"}},
+                },
+                "required": ("id", "payments"),
+            })},
+        });
+        hash<auto> hdr = {"content-type": "application/json"};
+        # the property is required and accepts any value
+        hash<RestRequestServerInfo> req = s.parseRequest("PUT", "/installment",
+            make_json({"id": 5, "payments": ()}), \hdr);
+        assertEq(5, req.body.id);
+        req = s.parseRequest("PUT", "/installment", make_json({"id": {"x": "y"}, "payments": ()}), \hdr);
+        assertEq({"x": "y"}, req.body.id);
+        assertThrows("SCHEMA-VALIDATION-ERROR", "id", \s.parseRequest(),
+            ("PUT", "/installment", make_json({"payments": ()}), \hdr));
+
+        # it is a required field of type "any"
+        OpenApi3DataProvider dp(s);
+        AbstractDataProviderType body = dp.getChildProviderPath("installment/PUT").getRequestType()
+            .getField("body").getType();
+        AbstractDataField id = body.getField("id");
+        # a field of type "any" accepts no value, so its attributes say that it is required
+        assertEq({"preselected": True, "required": True}, id.getConfigInfo().attr);
+        assertEq("any", id.getType().getName());
+        assertEq(("payments", "id"), keys body.getFields());
+
+        # additional properties accept it without a property of its own
+        OpenApi3Schema open = getSchema({}, {"Open": {
+            "type": "object",
+            "properties": {"a": {"type": "string"}},
+            "additionalProperties": {"type": "integer"},
+            "required": ("b",),
+        }});
+        assertEq(("a",), keys open.components.schemas.Open.properties);
+        assertEq(0, open.components.schemas.Open.undeclared_required.size());
+
+        # when additional properties are forbidden, no value can have the property
+        assertThrows("INVALID-FIELD-VALUE", "\"additionalProperties\" is false, so no value can have them: "
+            "\\[\"b\"\\]", \OpenApi3VendorSchemasTest::getSchema(), ({}, {"Closed": {
+                "type": "object",
+                "properties": {"a": {"type": "string"}},
+                "additionalProperties": False,
+                "required": ("b",),
+            }}));
+    }
+
+    #! a property that a composed schema declares replaces one that only a "required" list gave
+    undeclaredRequiredComposition() {
+        OpenApi3Schema s = getSchema({}, {
+            # requires "b", which it does not declare
+            "A": {"type": "object", "properties": {"a": {"type": "string"}}, "required": ("a", "b")},
+            # declares "b"
+            "C": {"type": "object", "properties": {"b": {"type": "integer"}}},
+            "AC": {"allOf": ({"$ref": "#/components/schemas/A"}, {"$ref": "#/components/schemas/C"})},
+            "CA": {"allOf": ({"$ref": "#/components/schemas/C"}, {"$ref": "#/components/schemas/A"})},
+            # declares "b" itself
+            "OwnB": {
+                "type": "object",
+                "properties": {"b": {"type": "boolean"}},
+                "allOf": ({"$ref": "#/components/schemas/A"},),
+            },
+            # an inline "allOf" member requires "z", which nothing declares: the composing schema has it
+            "Inline": {
+                "type": "object",
+                "properties": {"x": {"type": "string"}},
+                "allOf": ({"type": "object", "properties": {"a": {"type": "string"}}, "required": ("a", "z")},),
+            },
+            # Pinecone's idiom: an "anyOf" branch requires a property that the composing schema declares
+            "Branches": {
+                "type": "object",
+                "properties": {"type": {"type": "string"}, "vec": {"type": "string"}},
+                "anyOf": ({"required": ("vec",)},),
+            },
+        });
+        hash<string, SchemaObject> c = s.components.schemas;
+        assertEq({"b": True}, c.A.undeclared_required);
+        assertEq("any", c.A.properties.b.type);
+        foreach string n in ("AC", "CA") {
+            assertEq("integer", c{n}.properties.b.type, n);
+            assertEq(0, c{n}.undeclared_required.size(), n);
+        }
+        assertEq("boolean", c.OwnB.properties.b.type);
+        assertEq(0, c.OwnB.undeclared_required.size());
+
+        assertEq({"z": True}, c.Inline.undeclared_required);
+        assertEq("any", c.Inline.properties.z.type);
+        assertEq(0, c.Inline.allOf[0].undeclared_required.size());
+        assertFalse(c.Inline.allOf[0].properties.hasKey("z"));
+
+        assertEq(0, c.Branches.undeclared_required.size());
+        assertEq(0, c.Branches.anyOf[0].undeclared_required.size());
+        assertEq(0, c.Branches.anyOf[0].properties.size());
+        assertEq("string", c.Branches.properties.vec.type);
+    }
+}

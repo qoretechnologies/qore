@@ -77,6 +77,26 @@ its overlay, not by module code).
       `short_desc`, `desc` or an option's or field's `validation_regex_desc`) changes; the test compares the committed
       tree against what the module currently produces. Note the check only reaches an app once its factory is
       in `FactoryMap`, so a module missing both fails silently until the factory is added.
+- [ ] **The generating Qore is recorded and is not older than the last one.** Every write of the tool (extraction,
+      `--update-source-tree`, `--rekey-source-tree` without `--dry-run`) records the Qore that ran it, version and
+      git hash, under `qore-data-provider-i18n` in `.qore-generator.json` in each catalog directory it writes (the
+      directory of the catalog domains: `qlib/<Module>/i18n` or `qlib/<Module>.i18n`), keeping the entries of other
+      generators (the shape Qorus's catalog generators write, so one reader reads both). **Commit the record with
+      the catalogs**; it is not a catalog and is not installed. When a newer Qore generates the same catalogs, record
+      it without writing a catalog with `--record-qore` and a check, for the whole tree:
+      ```
+      QORE_MODULE_DIR=qlib qore bin/qore-data-provider-i18n -C --check-source-tree --record-qore -o . \
+        --require-standard-locales --require-complete-locales
+      ```
+      it records only when every checked catalog is current. A check (`--check`, `--check-tree`,
+      `--check-source-tree`) that finds catalogs stale exits **3** with `OTHER-QORE:` instead of 2 when another Qore
+      generated every directory with stale catalogs: the difference may be only what that Qore generates, so
+      regenerate with the newer Qore rather than editing the catalogs. A stale catalog in a directory of the
+      installed Qore, or without a record, is drift (2). A write over the catalogs of a newer Qore is refused. The
+      order of two Qores is their git ancestry in the Qore checkout named by `QORE_SRC_DIR` (or the checkout the tool
+      is run from); two Qores that cannot be ordered there (another branch, a commit the checkout does not have, no
+      checkout) are refused unless `--allow-other-qore` is given. Tests:
+      `examples/test/qlib/DataProvider/I18nGeneratorRecord.qtest`.
 - [ ] `registerApp()` called with correct fields
 - [ ] `groups` includes at least one `AppGroup` enum value (enforced at runtime by `RequiredAppKeys`)
 - [ ] `groups` uses only `AppGroup` enum values from `qlib/DataProvider/AppGroup.qc` (not raw strings)

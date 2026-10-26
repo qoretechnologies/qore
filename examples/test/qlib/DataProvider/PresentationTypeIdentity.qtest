@@ -1,0 +1,126 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Tests the presentation identity of a provider type: the class that implements a type with a path or a schema
+# identity is not part of it, and a type with neither is still identified by its class
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires DataProvider
+
+%exec-class PresentationTypeIdentityTest
+
+#! Another implementation of a hash type, as a producer can replace the class it builds a type with
+class OtherHashDataType inherits DataProvider::HashDataType {
+    constructor(string name, hash<string, AbstractDataField> fields) : HashDataType(name, fields) {
+    }
+}
+
+class PresentationTypeIdentityTest inherits QUnit::Test {
+    constructor() : Test("PresentationTypeIdentityTest", "1.0", \ARGV) {
+        addTestCase("class of a schema type", \schemaTypeClass());
+        addTestCase("class of a type with a path", \pathTypeClass());
+        addTestCase("class of a field type", \fieldTypeClass());
+        addTestCase("pathless and schemaless types", \pathlessSchemalessTypes());
+        addTestCase("schema identity", \schemaIdentity());
+        set_return_value(main());
+    }
+
+    #! Returns the fields of an address type
+    private static hash<string, AbstractDataField> addressFields() {
+        return {
+            "city": new QoreDataField("city", "The city", StringType),
+            "street": new QoreDataField("street", "The street", StringType),
+        };
+    }
+
+    #! Returns an address type of the given class, with the given schema identity and path
+    private static HashDataType addressType(bool other_class, *string schema_identity, *string path,
+            string name = "Address") {
+        HashDataType rv = other_class
+            ? new OtherHashDataType(name, PresentationTypeIdentityTest::addressFields())
+            : new HashDataType(name, PresentationTypeIdentityTest::addressFields());
+        if (schema_identity) {
+            rv.setSchemaIdentity(schema_identity);
+        }
+        if (path) {
+            rv.setPath(path);
+        }
+        return rv;
+    }
+
+    #! A type built from a schema has the same identity, and its texts the same ids, whatever class implements it
+    schemaTypeClass() {
+        HashDataType plain = addressType(False, "#/definitions/Address");
+        HashDataType other = addressType(True, "#/definitions/Address");
+        string id = DataProviderPresentation::typePresentationIdentity(plain);
+        assertEq(id, DataProviderPresentation::typePresentationIdentity(other));
+        assertRegex("^Address#[0-9a-f]{64}$", id, "the identity names the type, not its class");
+        string action_id = DataProviderPresentation::actionTypePresentationIdentity("send", plain);
+        assertEq(action_id, DataProviderPresentation::actionTypePresentationIdentity("send", other));
+        assertEq(DataProviderPresentation::typeFieldMessageId("app", action_id, "city", "display_name"),
+            DataProviderPresentation::typeFieldMessageId("app",
+                DataProviderPresentation::actionTypePresentationIdentity("send", other), "city", "display_name"));
+    }
+
+    #! A type with a path in the type cache has the same identity whatever class implements it
+    pathTypeClass() {
+        assertEq(DataProviderPresentation::typePresentationIdentity(addressType(False, NOTHING, "types/Address")),
+            DataProviderPresentation::typePresentationIdentity(addressType(True, NOTHING, "types/Address")));
+        # the path is still part of the identity
+        assertNeq(DataProviderPresentation::typePresentationIdentity(addressType(False, NOTHING, "types/Address")),
+            DataProviderPresentation::typePresentationIdentity(addressType(False, NOTHING, "types/Location")));
+    }
+
+    #! The class of a field's schema type is not part of the identity of the type that has the field
+    fieldTypeClass() {
+        code customer = HashDataType sub (bool other_class) {
+            return new HashDataType("Customer", {
+                "address": new QoreDataField("address", "The address",
+                    PresentationTypeIdentityTest::addressType(other_class, "#/definitions/Address")),
+            });
+        };
+        assertEq(DataProviderPresentation::typePresentationIdentity(customer(False)),
+            DataProviderPresentation::typePresentationIdentity(customer(True)));
+
+        # the class of a field type with neither a path nor a schema identity still is
+        code anonymous = HashDataType sub (bool other_class) {
+            return new HashDataType("Customer", {
+                "address": new QoreDataField("address", "The address",
+                    PresentationTypeIdentityTest::addressType(other_class, NOTHING, NOTHING, "hash<auto>")),
+            });
+        };
+        assertNeq(DataProviderPresentation::typePresentationIdentity(anonymous(False)),
+            DataProviderPresentation::typePresentationIdentity(anonymous(True)));
+    }
+
+    #! Types with neither a path nor a schema identity are told apart by their class, as before
+    pathlessSchemalessTypes() {
+        HashDataType plain = addressType(False, NOTHING, NOTHING, "hash<auto>");
+        HashDataType other = addressType(True, NOTHING, NOTHING, "hash<auto>");
+        string plain_id = DataProviderPresentation::typePresentationIdentity(plain);
+        string other_id = DataProviderPresentation::typePresentationIdentity(other);
+        assertNeq(plain_id, other_id);
+        assertRegex("^HashDataType:hash<auto>#[0-9a-f]{64}$", plain_id);
+        assertRegex("^OtherHashDataType:hash<auto>#[0-9a-f]{64}$", other_id);
+        # and by their fields
+        HashDataType fewer = new HashDataType("hash<auto>", {
+            "city": new QoreDataField("city", "The city", StringType),
+        });
+        assertNeq(plain_id, DataProviderPresentation::typePresentationIdentity(fewer));
+    }
+
+    #! Types of the same name and class built from different schemas have different identities
+    schemaIdentity() {
+        assertNeq(DataProviderPresentation::typePresentationIdentity(addressType(False, "#/definitions/Address")),
+            DataProviderPresentation::typePresentationIdentity(addressType(False, "#/definitions/Location")));
+        # a type with a schema identity and one without it are different
+        assertNeq(DataProviderPresentation::typePresentationIdentity(addressType(False, "#/definitions/Address")),
+            DataProviderPresentation::typePresentationIdentity(addressType(False)));
+    }
+}

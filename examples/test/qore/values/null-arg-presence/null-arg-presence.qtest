@@ -1,0 +1,174 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# A builtin reads its arguments in C++, where NULL is a value and NOTHING is none (QoreValue::operator bool()), as
+# with the AST interpreter.  The IR and JIT engines pass a NULL literal inline in the QoreValue rather than as the
+# QoreNullNode; it must still read as a value, or a DBI driver drops a NULL bind argument in a function (module-odbc:
+# "[07002] The # of IPD parameters 1 < 2 the # of parameter markers" with IR and JIT only).
+#
+# The dbg_arg_presence() hook is registered only by a debug build of the Qore library, so the suite runs only when
+# the QoreDebug parse define is set, and skips with a reason otherwise.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%ifdef QoreDebug
+%include null-arg-presence-checks.qi
+%endif
+
+%exec-class NullArgPresenceTest
+
+#! the output and the native compilation trace of a worker
+hashdecl WorkerResult {
+    #! the lines printed on stdout, followed by any error output
+    string out;
+    #! the native compilation trace (QORE_JIT_TIMING)
+    list<string> trace;
+}
+
+#! Tests that a builtin reads a NULL argument as a value and NOTHING as none in every execution mode
+class NullArgPresenceTest inherits QUnit::Test {
+    public {
+        #! the results of the checks in NullArgPresenceChecks: 3 checks in each of 4 callers
+        const Expected = (
+            "ok function: literal NULL",
+            "ok function: literal NOTHING",
+            "ok function: NULL in a variable",
+            "ok method: literal NULL",
+            "ok method: literal NOTHING",
+            "ok method: NULL in a variable",
+            "ok static method: literal NULL",
+            "ok static method: literal NOTHING",
+            "ok static method: NULL in a variable",
+            "ok closure: literal NULL",
+            "ok closure: literal NOTHING",
+            "ok closure: NULL in a variable",
+        );
+
+        #! the lines printed by a worker: the top-level checks and the checks in NullArgPresenceChecks, twice
+        const WorkerExpected = (
+            "ok top level: literal NULL",
+            "ok top level: literal NOTHING",
+            "ok top level: NULL in a variable",
+        ) + Expected + (
+            "ok top level: literal NULL",
+            "ok top level: literal NOTHING",
+            "ok top level: NULL in a variable",
+        ) + Expected;
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        #! the results of the checks in this program
+        list<string> expected;
+    }
+
+    constructor() : QUnit::Test("NullArgPresenceTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+%ifndef QoreDebug
+        addTestCase("NULL arguments", \testRequiresDebugBuild());
+%endif
+%ifdef QoreDebug
+        addTestCase("C++ QoreValue unit tests", \testUnitTests());
+        addTestCase("in this program", \testInProcess());
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("a compiled module", \testCompiledModule());
+%endif
+        set_return_value(main());
+    }
+
+%ifndef QoreDebug
+    private testRequiresDebugBuild() {
+        testSkip("these tests require a debug build of the Qore library: dbg_arg_presence() and "
+            "run_debug_unit_tests() are registered by init_debug_functions(), which is only called when the "
+            "library is built with DEBUG");
+    }
+%endif
+
+%ifdef QoreDebug
+    globalSetUp() {
+        expected = NullArgPresenceChecks::get_results();
+    }
+
+    testUnitTests() {
+        # the C++ side: both NULL representations read the same with every QoreValue accessor, operator bool
+        # included
+        hash<auto> res = run_debug_unit_tests();
+        assertGt(0, res.test_count, "the C++ unit tests ran");
+        assertEq(0, res.fail_count, sprintf("all %d C++ unit test assertions passed", res.test_count));
+    }
+
+    testInProcess() {
+        assertEq(Expected, expected, "the checks in this program");
+    }
+
+    testExecModes() {
+        # the results of every mode are compared at once, so that a failure shows each mode that differs
+        hash<string, list<string>> results = {};
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<WorkerResult> r = runWorker("null-arg-presence-worker.q", get_script_dir(), "--exec-mode=" + mode);
+            results{mode} = getWorkerResults(r.out);
+            checkEngine(mode, r.trace);
+        }
+        hash<string, list<string>> expected_results = map {$1: WorkerExpected}, ExecModeHarness::ExecModes;
+        assertEq(expected_results, results, "the checks in each execution mode");
+    }
+
+    testCompiledModule() {
+        TmpDir tmp("qore-null-arg-presence-");
+        string qmod_path = tmp.path + DirSep + "NullArgPresenceChecks.qmod";
+        string src_path = get_script_dir() + DirSep + "NullArgPresenceChecks.qm";
+        string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile-module --strip-source --output "
+            "%s %s 2>&1", libqore_dir, qore_bin, qmod_path, src_path));
+        assertTrue(is_file(qmod_path), "compiled checks module: " + compile_out);
+
+        # the directory holds only the compiled module, so the worker cannot load the source instead
+        assertEq(WorkerExpected, getWorkerResults(runWorker("null-arg-presence-module-worker.q", tmp.path).out),
+            "the checks from the compiled module");
+    }
+
+    #! runs a worker with the given module directory and options and returns its output and compilation trace
+    /** The worker runs the checks twice.  ExecModeHarness runs it with synchronous native compilation that follows
+        the first call of a function, so with --exec-mode=jit or tiered the first pass runs with the IR interpreter
+        and the second one as native code, and checks the compilation trace.  Any other output on stderr is added to
+        the output, where it fails the checks.
+    */
+    private hash<WorkerResult> runWorker(string worker_name, string module_dir, string opts = "") {
+        string worker = get_script_dir() + DirSep + worker_name;
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s "
+            "DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s %s", libqore_dir, libqore_dir, module_dir, qore_bin,
+            opts, worker));
+        if (r.mode) {
+            ExecModeHarness::check_native(r, ExecModeHarness::NativeCheck::JitAndTiered);
+        }
+        return <WorkerResult>{
+            "out": r.out,
+            "trace": r.trace,
+        };
+    }
+
+    #! checks that a worker ran the checks with the engine named by its execution mode
+    private checkEngine(string mode, list<string> trace) {
+        if (mode == "ast" || mode == "ir") {
+            assertEq((), trace, mode + ": no code is compiled to native code");
+        } else {
+            list<string> promoted = select trace, $1 =~ /promoted/ && $1 =~ /'null_arg_function@/;
+            assertTrue(promoted.size() > 0, mode + ": the checks run as native code: " + trace.join("\n"));
+        }
+    }
+
+    #! returns the lines printed by a worker
+    private list<string> getWorkerResults(string out) {
+        return select out.split("\n"), $1.val();
+    }
+%endif
+}

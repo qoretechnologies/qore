@@ -1592,6 +1592,11 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
     @section dataprovider_relnotes Release Notes
 
     @subsection dataprovider_v3_11 DataProvider v3.11
+    - the presentation identity of a type with a path or a schema identity no longer names the class that implements
+      it (@ref DataProvider::DataProviderPresentation::typePresentationIdentity()
+      "DataProviderPresentation::typePresentationIdentity()"), so building a type with another class keeps the message
+      IDs of its texts; catalogs with the previous IDs are moved to the new ones, carrying their translations, with
+      \c qore-data-provider-i18n \c --rekey-source-tree
     - fields and options describe the value that the remote system assumes when they are not given, as
       @ref DataProvider::DataFieldInfo::remote_default_value "remote_default_value", which is shown and never applied,
       pre-filled or sent (see @ref dataprovider_remote_default_values)

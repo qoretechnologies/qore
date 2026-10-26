@@ -254,7 +254,13 @@ struct qore_qf_private {
 
         do_open_event_unlocked(fn, flags, mode, cs);
 
+        // a file opened by the library is never inherited by a program the process starts (with system(),
+        // backquote(), fork() and exec(), or a module)
+#ifdef O_CLOEXEC
+        fd = ::open(fn, flags | O_CLOEXEC, mode);
+#else
         fd = ::open(fn, flags, mode);
+#endif
         if (fd < 0)
             return fd;
 
