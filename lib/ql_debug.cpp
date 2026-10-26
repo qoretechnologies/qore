@@ -1613,6 +1613,91 @@ static void ut_aot_prepared_local_reload(UnitTestCounters& c) {
             == expected_slot(thread_try_find_lvar(&typed.var)), "typed read-only storage can be read");
         locals[0] = &local.var;
     }
+    // Immediate reloads must evaluate and own the same live value whether the
+    // invocation slot was prepared or ordinary lookup is required.
+    for (void* prepared : {static_cast<void*>(nullptr), static_cast<void*>(slot)}) {
+        auto load = [&]() {
+            QoreSimpleValue raw;
+            raw.setRawBits(qore_rt_load_prepared_local_aot_v1(&context, 0, prepared, &xsink));
+            return QoreValue(raw);
+        };
+        slot->syncValue(QoreValue(int64_t{27}), &xsink);
+        {
+            ValueHolder value(load(), &xsink);
+            UT_ASSERT(c, value->isInt() && value->getInt() == 27,
+                "immediate load returns the live primitive");
+        }
+        slot->syncValue(QoreValue(std::numeric_limits<int64_t>::max()), &xsink);
+        {
+            ValueHolder value(load(), &xsink);
+            UT_ASSERT_EQ(c, std::numeric_limits<int64_t>::max(), value->getAsBigInt(),
+                "immediate load retains all wide integer bits");
+        }
+        ReferenceHolder<QoreStringNode> owner(new QoreStringNode("immediate reload ownership"), &xsink);
+        slot->syncValue(QoreValue(owner->refSelf()), &xsink);
+        {
+            ValueHolder value(load(), &xsink);
+            UT_ASSERT(c, value->getType() == NT_STRING && value->get<QoreStringNode>() == *owner
+                && owner->reference_count() == 3, "immediate node load returns exactly one owned reference");
+        }
+        UT_ASSERT_EQ(c, 2, owner->reference_count(), "discarding an immediate result releases its own reference");
+        xsink.raiseException("RELOAD-PENDING", "preserve generic pending-sink evaluation");
+        {
+            ValueHolder value(load(), &xsink);
+            UT_ASSERT(c, xsink && value->getType() == NT_STRING && owner->reference_count() == 3,
+                "pending sink retains the ordinary load's result and ownership");
+        }
+        xsink.clear();
+        ReferenceHolder<QoreListNode> strong_owner(new QoreListNode(bigIntTypeInfo), &xsink);
+        strong_owner->push(QoreValue(int64_t{31}), &xsink);
+        slot->syncValue(QoreValue(strong_owner->listRefSelf()), &xsink);
+        {
+            ValueHolder value(load(), &xsink);
+            UT_ASSERT(c, !xsink && value->get<QoreListNode>() == *strong_owner
+                && strong_owner->reference_count() == 3,
+                "immediate strong-list load acquires exactly one owner of the live node");
+        }
+        UT_ASSERT_EQ(c, 2, strong_owner->reference_count(), "strong-list result releases its own reference");
+        xsink.raiseException("RELOAD-PENDING", "strong-list ownership with a pending exception");
+        {
+            ValueHolder value(load(), &xsink);
+            UT_ASSERT(c, xsink && value->get<QoreListNode>() == *strong_owner
+                && strong_owner->reference_count() == 3,
+                "pending sink retains the ordinary strong-list result and ownership");
+        }
+        xsink.clear();
+        qore_list_private::get(**strong_owner)->valid = false;
+        {
+            ValueHolder value(load(), &xsink);
+            UT_ASSERT(c, !xsink && value->get<QoreListNode>() == *strong_owner
+                && strong_owner->reference_count() == 3,
+                "local loading does not evaluate or validate a stored strong list");
+        }
+        qore_list_private::get(**strong_owner)->valid = true;
+        ReferenceHolder<QoreListNode> weak_owner(new QoreListNode(bigIntTypeInfo), &xsink);
+        weak_owner->push(QoreValue(int64_t{17}), &xsink);
+        slot->syncValue(QoreValue(new WeakListReferenceNode(*weak_owner)), &xsink);
+        UT_ASSERT_EQ(c, 1, strong_owner->reference_count(), "replacement releases the strong-list local owner");
+        UT_ASSERT_EQ(c, 1, owner->reference_count(), "live replacement releases the previous local owner");
+        {
+            ValueHolder value(load(), &xsink);
+            UT_ASSERT(c, value->getType() == NT_LIST && value->get<QoreListNode>() == *weak_owner
+                && weak_owner->reference_count() == 2, "immediate weak load promotes its borrowed target once");
+        }
+        UT_ASSERT_EQ(c, 1, weak_owner->reference_count(), "discarding the weak read releases the promoted owner");
+        slot->del(&xsink);
+        {
+            ValueHolder value(load(), &xsink);
+            UT_ASSERT(c, value->isNothing(), "immediate read observes a cleared block slot");
+        }
+        slot->syncValue(QoreValue(false), &xsink);
+        {
+            ValueHolder value(load(), &xsink);
+            UT_ASSERT(c, value->isBool() && !value->getBool(),
+                "immediate read observes reassignment of the same block slot");
+        }
+        UT_ASSERT(c, !xsink, "immediate-load checks leave no unexpected exception");
+    }
     // Force the non-null helper itself even when testing the getter's disabled
     // control: matching results from the generic fallback alone are insufficient.
     for (int prepared : {0, 1, 2}) {

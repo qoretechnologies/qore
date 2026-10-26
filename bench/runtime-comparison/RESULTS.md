@@ -23716,3 +23716,50 @@ All 6360 Qore reference checks and 675 Java checks pass; 45 Java kernels pass C2
 The next investigation is prepared immediate local reload after mutation. Current native code retains generic local lookup and general indexed reads after the prepared update; changes must preserve owned-value evaluation, reflection, deferred destruction, recursive/block-local lifetime and cancellation. Further choices will use these fresh results; Java parity or maximum performance is not assumed.
 
 [Raw evidence](results-post-indexed-module-macos-arm64.json); [all 62 audit checks](audit-post-indexed-checkpoint.md).
+
+## Prepared immediate local reload (2026-10-26)
+
+AOT immediate reloads reuse invocation-owned prepared storage for eligible body locals. Actual assigned strong-list node storage returns the same node with exactly one acquired owner, omitting ordinary local lookup and two evaluator calls. A null prepared slot keeps generic lookup; references, weak references and all other representations retain the existing live evaluator and loaded-reference ownership protocol. No pending-exception early exit or list-validity check changes load semantics. Old tracker/deferred owners are captured before loading; cache/tracker/deferred publication, deferred release and epoch publication keep their order. Parameters, captures, self, top-level and IR-only exclusions remain. No public calling-convention or IR/JIT lowering change.
+
+Optimized baseline b8d1fc2a9e and parent aa471fd56c have identical production sources; the intervening commit contains only the recorded Java/develop checkpoint. Fresh private-module before/after runs use Release -O3 -DNDEBUG with allocation tracking off, qcc -O3/LLVM 22.1.8, Apple M4 Pro/macOS 27.0.1. Both variants compile identical sources with equal explicit RPATH; exact loaded images are checked. The 67-workload screen has three forks; confirmation has five. Each uses default/reverse/shuffle-487 layouts, 4096 items, one warmup and three 150 ms samples. The prospective gate requires at least 5% mutation improvement and improvement in every layout in both phases; controls follow the user-approved broader tradeoff. Values are whole-kernel ns/item.
+
+|!Confirmed workload|!Before ns/item|!Candidate ns/item|!Change
+|micro:list_mutate|149.953661|138.148504|-7.87%
+|micro:list_build|29.506592|29.295277|-0.72%
+|micro:list_read|2.976833|2.978393|+0.05%
+|float:typed_local_int_unary|1.203787|1.200822|-0.25%
+|micro:indirect_call|63.757668|63.389066|-0.58%
+|micro:closure_call|19.426148|19.828503|+2.07%
+|micro:closure_capture|25.073877|25.459506|+1.54%
+|mixed:csv_report|973.292301|981.128358|+0.81%
+|mixed:object_orders|1848.027886|1841.080729|-0.38%
+|mixed:callback_pipeline|127.719558|128.153612|+0.34%
+|mixed:text_index|1521.225179|1516.221110|-0.33%
+
+Retain under the user-approved broader workload tradeoff: mutation improves 7.54% in screening and 7.87% in confirmation, with gains in every layout. This is not a universal improvement. Ordinary closures cost 2.071% (+0.402356 ns/item) and captured closures 1.538% (+0.385629 ns/item) in the confirmed aggregate. Captured closures also have a repeated disjoint-range default-layout regression: 6.401% screen and 5.939% confirmation (+1.502222 ns/item confirmed). All seven closure/indirect-call LLVM bodies are exactly unchanged in each layout, but the cause of the cost is not established and it is not dismissed as noise. The four mixed controls confirm -0.376% orders, -0.329% text, +0.805% CSV (screen improved) and +0.340% callback pipeline (repeated). Mutation improves 0.919% at count1 and 3.381% at count16. Short controls cost 0.630%/0.722% for list construction and 1.225%/0.011% for typed integer calls at counts1/16. The retention gate applies to long screen/confirmation; short results include dispatch/setup/cleanup and all costs are disclosed. No weighted application-wide benefit or performance ceiling is claimed.
+
+|!Repeated aggregate control cost|!Screen change|!Confirmation change|!Confirmation ns/item cost
+|micro:closure_call|+1.131%|+2.071%|+0.402356
+|micro:monomorphic_float_call|+2.190%|+1.778%|+0.077946
+|micro:closure_capture|+0.799%|+1.538%|+0.385629
+|float:direct_loop_float_return|+0.317%|+0.377%|+0.022361
+|mixed:callback_pipeline|+0.078%|+0.340%|+0.434054
+|micro:indirect_float|+0.040%|+0.279%|+0.171183
+|micro:boxed_int_method_effect|+0.684%|+0.215%|+0.195802
+|micro:method_call|+0.135%|+0.036%|+0.000617
+
+|!Short target/control|!Count|!Before ns/item|!Candidate ns/item
+|micro:list_mutate|1|3434.962991|3403.399624
+|micro:list_build|1|3060.255901|3079.545639
+|float:typed_local_int_unary|1|713.983286|722.732508
+|micro:list_mutate|16|361.614094|349.389479
+|micro:list_build|16|221.277067|222.873582
+|float:typed_local_int_unary|16|45.440624|45.445730
+
+Short invocations include dispatch, setup and cleanup. The compile-time QORE_DISABLE_AOT_PREPARED_IMMEDIATE_RELOAD control and existing compile/runtime QORE_DISABLE_AOT_PREPARED_LOCAL_RELOAD control exercise fallback behavior. Separate profiles observe generic local loading before and prepared loading after. Across three layouts the complete mutation function grows from 827 to 833 ARM64 instructions; its optimized LLVM differs only at the immediate-load call. The runtime helper directly retains a strong list while preserving normal node-ref rules; all other values retain evaluation. Static sizes and sampling do not estimate speed or exact hit counts.
+
+The 391 standard-library qmods total 344803496 bytes before and 344922552 after (+119056 bytes); 365 modules import the new helper. All hashes change with internal-header identity. Selection coverage and size changes do not establish per-module speedups. Release 52 cases/6804 assertions, Debug 43 cases/8252 assertions, 2220 native checks, 1110 standard and 7704 comparison reference results pass. The documented Release-only DGC skip passes in Debug. All 391 Release aliases/hashes are restored. All 2064 timing jobs/6192 measured windows are independently replayed. Shared host without affinity/frequency/thermal controls; no owned build/test/profile overlaps timing. No new Java/develop ratio or weighted production-wide speedup is inferred.
+
+The first prepared-load implementation retained both evaluator calls. Its completed 67-workload screen measured 149.650431 to 145.401303 ns/item (-2.84%), missing the 5% gate; a captured-closure layout was also flagged, without confirmation. That source and all 1206 jobs/3618 windows are preserved and are not pooled with this refinement. The refined source was freshly qualified and timed. Earlier qualification preserved a bad auxiliary test-path failure, then verified same-source Release receipts and reran corrected tests; refined qualification reruns everything. An initial machine-review assertion expected an out-of-line generic loader; inspection established that the compiler inlined it. These driver corrections do not change measurements.
+
+[Audit](audit-aot-prepared-immediate-reload.md); [evidence](results-aot-prepared-immediate-reload-macos-arm64.json).

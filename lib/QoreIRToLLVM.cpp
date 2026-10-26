@@ -6256,11 +6256,20 @@ void QoreIRToLLVM::reloadLocalFromRuntime(const void* key, llvm::Module& module,
     // Load new value from runtime stack
     llvm::Value* reloaded = owned_value;
     if (!reloaded && aot_mode) {
-        auto load_fn = module.getOrInsertFunction("qore_rt_load_local_aot",
-                llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
         int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
-        reloaded = builder->CreateCall(load_fn, {aot_ctx_arg,
+        llvm::Value* prepared = q_env_is_set("QORE_DISABLE_AOT_PREPARED_IMMEDIATE_RELOAD")
+            ? nullptr : getAOTReloadLocalSlot(static_cast<const LocalVar*>(key), module, llvm_func);
+        if (prepared) {
+            auto load_fn = module.getOrInsertFunction("qore_rt_load_prepared_local_aot_v1",
+                llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type, ptr_type}, false));
+            reloaded = builder->CreateCall(load_fn, {aot_ctx_arg,
+                llvm::ConstantInt::get(i32_type, slot), prepared, xsink_arg});
+        } else {
+            auto load_fn = module.getOrInsertFunction("qore_rt_load_local_aot",
+                llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
+            reloaded = builder->CreateCall(load_fn, {aot_ctx_arg,
                 llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+        }
     } else if (!reloaded) {
         auto load_fn = module.getOrInsertFunction("qore_rt_load_local",
                 llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));

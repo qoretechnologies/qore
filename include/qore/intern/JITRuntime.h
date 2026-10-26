@@ -1943,6 +1943,20 @@ struct QoreAOTContext;
 //! Load from a local variable via AOT context slot
 uint64_t qore_rt_load_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
 
+//! Load an owned value through invocation-local prepared storage.
+/** @param ctx current AOT context
+    @param idx compiler-proven ordinary body-local index
+    @param prepared_slot borrowed result of qore_rt_get_reload_local_slot_aot_v1 in this invocation,
+        or nullptr to retain ordinary local lookup
+    @param xsink exception sink, including reference evaluation failures
+    @return the same owned value as qore_rt_load_local_aot
+    @note Prepared storage omits local lookup; actual strong-list storage returns its owned node
+        directly. Weak/reference evaluation and pending-exception behavior remain unchanged;
+        caller cache publication and deferred cleanup still follow the load.
+*/
+uint64_t qore_rt_load_prepared_local_aot_v1(QoreAOTContext* ctx, int32_t idx,
+    void* prepared_slot, ExceptionSink* xsink);
+
 //! Acquire the invalidation epoch for a compiler-proven read-only strong class parameter.
 //! @param ctx current AOT context
 //! @param idx parameter local slot

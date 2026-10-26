@@ -374,6 +374,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_raise_typed_foreach_nothing",
         reinterpret_cast<void*>(&qore_rt_raise_typed_foreach_nothing) },
     { "qore_rt_load_local_aot", reinterpret_cast<void*>(&qore_rt_load_local_aot) },
+    { "qore_rt_load_prepared_local_aot_v1", reinterpret_cast<void*>(&qore_rt_load_prepared_local_aot_v1) },
     { "qore_rt_get_class_param_epoch_aot_v1", reinterpret_cast<void*>(&qore_rt_get_class_param_epoch_aot_v1) },
     { "qore_rt_cleanup_run_allocas", reinterpret_cast<void*>(&qore_rt_cleanup_run_allocas) },
     { "qore_rt_iterator_cleanup_allocas", reinterpret_cast<void*>(&qore_rt_iterator_cleanup_allocas) },
@@ -13525,6 +13526,29 @@ extern "C" DLLEXPORT CaseNodeRegex* qore_rt_get_regex_case_aot(QoreAOTContext* c
 extern "C" DLLEXPORT uint64_t qore_rt_load_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_locals);
     return qore_rt_load_local(ctx->locals[idx], xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_load_prepared_local_aot_v1(QoreAOTContext* ctx,
+        int32_t idx, void* prepared_slot, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    if (!prepared_slot) {
+        return qore_rt_load_local(ctx->locals[idx], xsink);
+    }
+    auto* slot = static_cast<LocalVarValue*>(prepared_slot);
+    assert(slot->local_var == ctx->locals[idx] && !slot->frame_boundary);
+    // Ordinary strong lists are returned unevaluated by LocalVarValue::eval;
+    // loaded-reference handling then acquires exactly one owner. Do that here
+    // without the two evaluator calls, including when an exception is pending.
+    // Weak lists and references retain the complete evaluation path below.
+    if (slot->val.assigned && slot->val.type == QV_Node && slot->val.v.n
+            && slot->val.v.n->getType() == NT_LIST) {
+        return toBits(QoreValue(static_cast<QoreListNode*>(slot->val.v.n)->listRefSelf()));
+    }
+    // As in prepared stale reloads, evaluate the current storage and preserve
+    // the ordinary owned-result protocol. Evaluation may reenter Qore.
+    bool needs_deref = true;
+    QoreValue result = slot->eval(needs_deref, xsink);
+    return toBits(qore_rt_deref_loaded_var_value(result, needs_deref, xsink));
 }
 
 extern "C" DLLEXPORT const uint64_t* qore_rt_get_class_param_epoch_aot_v1(QoreAOTContext* ctx,
