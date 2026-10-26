@@ -17166,8 +17166,10 @@ bool QoreAOTBinaryDeserializer::resolveTypedefs(std::string& error) {
             std::string temp_error;
             const QoreTypeInfo* ti = type_resolver->resolve(pt.type_path.c_str(), temp_error);
             if (temp_error.empty() && ti) {
+                // the location names the source of the object, so that a parse that uses the typedef records that
+                // source as its dependency, as it does for a typedef that it parses itself
                 ns_list[pt.ns_idx]->typedefMap[pt.name.c_str()] =
-                    new TypedefEntry(nullptr, ti, nullptr, pt.is_pub);
+                    new TypedefEntry(getBlobLocation(), ti, nullptr, pt.is_pub);
                 ++resolved_count;
                 printd(5, "AOT deser: created typedef '%s'\n", pt.name.c_str());
             } else {

@@ -1406,13 +1406,16 @@ which two builders can still race to restore.
   comment-only provider edit leaves it byte-identical, and that a changed value does not;
   folded enum members in both compile modes; the body-contract rows a consumer records;
   that a preloaded object's module loads in a program a `--stub` parse left mid-parse; and
-  that a preloaded object's code that cannot load at parse commit exits 78 while a failure
+  that a typedef of another source is a dependency in either compile mode (a typedef is expanded where
+  it is used, so a standalone compile of its consumer must preload its source); that a preloaded object's code that cannot load at parse commit exits 78 while a failure
   in the compiled source's own initializer exits 1; and that a static class variable another
   source declares is imported the same way by a batch and a standalone compile, whether it is
   folded into a constant, read in a body or written
 - `examples/test/ir/AOTSccIncrementalDriver.qtest` — the driver and coordinator
   against a compiler that rewrites another member's depfile mid-compile; also the
-  coordinator's pass loop: a cascade walked to convergence, a pass that changes
+  coordinator's pass loop: a stale component whose compile moves no contract compiled
+  without parsing the group, and one whose compile moves a widely followed contract
+  parsing the group after that compile, a cascade walked to convergence, a pass that changes
   nothing escalating instead of lapping, a compile that gains an edge to a current
   provider converging in one pass (and one that closes a cycle keeping the frozen
   graph's record for the parse to replace), the external-input depfile the coordinator

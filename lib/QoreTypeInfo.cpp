@@ -5256,6 +5256,15 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveClass(const QoreProgramLocation* l
     // check for typedef first (both simple names and scoped names)
     TypedefEntry* td = qore_root_ns_private::parseFindTypedef(cscope);
     if (td) {
+        // A typedef is expanded where it is used, so the code that uses it is compiled against the type it names:
+        // unlike a class, which a type annotation names and the program resolves when it is loaded, a typedef cannot
+        // be deferred, and a standalone compile of the consumer must preload the source that declares it.  It is
+        // therefore a dependency of the consumer, as a folded constant is (narrowed to the provider's declaration
+        // contract, which names the type of each typedef).
+        // (A typedef imported from a module is covered by the dependency on the module.)
+        if (!td->mod_imported) {
+            qore_aot_note_referenced_decl(td->loc, loc);
+        }
         // the typedef's underlying type, resolved in the namespace that declares the typedef
         const QoreTypeInfo* rv = td->parseResolve(cscope.ostr, err);
 
