@@ -23395,3 +23395,84 @@ Short invocations include fixed dispatch, setup and cleanup costs. Static disass
 All 391 standard-library qmods total 344786872 bytes before and 344786872 after; 0 hashes change. Release 52 cases/7498 assertions; Debug 30 cases/7388 assertions, plus non-QUnit/native checks. All 391 Release aliases/hashes are restored. All 1722 timing jobs/5166 windows are separately replayed. Shared host, without affinity/frequency/thermal controls; no owned build/test/profile overlaps timing. No fresh Java/develop comparison, production-wide weighted speedup or global performance ceiling claim.
 
 [Audit](audit-aot-explicit-native-context.md); [evidence](results-aot-explicit-native-context-macos-arm64.json).
+
+## Optimized module checkpoint after explicit context reuse (2026-10-26)
+
+Performance branch 5825d409b4 versus unmodified develop 5a787725d4, both matching Release -O3 -DNDEBUG builds, allocation tracking off, LLVM 22.1.8, and qcc -O3 stripped modules on Apple M4 Pro/macOS 27.0.1 arm64. The branch is fetched/merged and installed before this checkpoint. It includes native module-reference binding, finite-key selector elimination and explicit native context reuse. Namespace-level helper functions are public in the identical sources supplied to both compilers because pure develop lacks the private-reference correctness fix. No function body or develop production code is patched. Sources match the previous public-module checkpoint; these values must not be pooled with private-module experiments.
+
+All 53 Qore workloads run in default/reverse/shuffle-487 module layouts, three forks per layout, three warmups and three 150 ms samples, 4096 items and seed 7. Qore and Java jobs are interleaved within randomized kernel/fork blocks. Qore aggregation takes median fork means per layout and then the median of layouts. Java has three independent JVM forks per kernel, five warmups and three 300 ms samples; its aggregate is the median fork mean. Java does not have Qore layout variants. All times are whole-kernel ns/item, not isolated call latencies. Speedup is develop/branch; Qore/Java is branch time divided by Java time.
+
+|!Mixed CPU workload|!Develop ns/item|!Branch ns/item|!Speedup
+|mixed:csv_report|1078.578199|925.249295|1.166x
+|mixed:object_orders|2021.473667|1750.985018|1.154x
+|mixed:callback_pipeline|326.247061|125.930945|2.591x
+|mixed:text_index|1683.741714|1455.060096|1.157x
+
+The mixed scenarios include parsing, allocation, transformation, aggregation and formatting, with untimed input generation. They compare Qore builds only and are synthetic CPU workloads, without application-frequency weighting or a single overall score.
+
+|!Every workload|!Develop ns/item|!Branch ns/item|!Develop/branch|!Java ns/item|!Qore/Java
+|float:direct_local_float_return|76.385837|0.802032|95.240x|0.553310|1.450x
+|float:callback_local_float_return|335.476776|0.847613|395.790x|0.474156|1.788x
+|float:direct_local_float_result|74.452726|0.738460|100.822x|0.442528|1.669x
+|float:callback_local_float_result|230.407366|0.820025|280.976x|0.444861|1.843x
+|float:direct_loop_float_return|369.669859|5.798351|63.754x|0.590960|9.812x
+|float:callback_loop_float_return|543.013648|5.046062|107.611x|1.413413|3.570x
+|float:direct_float_add|62.788623|0.814395|77.098x|N/A|N/A
+|float:static_float_add|62.748161|0.790565|79.371x|N/A|N/A
+|float:typed_local_int_unary|236.653162|1.157645|204.426x|0.887497|1.304x
+|float:typed_local_float_unary|234.956665|0.876193|268.156x|N/A|N/A
+|float:result_float_add|215.234628|0.818695|262.900x|N/A|N/A
+|float:typed_local_int_result|129.500861|0.784377|165.100x|0.000212|3694.596x
+|micro:arithmetic|11.512781|1.564833|7.357x|0.893948|1.750x
+|micro:direct_call|20.379643|1.567052|13.005x|0.884798|1.771x
+|micro:method_call|11.702132|1.649304|7.095x|0.886871|1.860x
+|micro:indirect_call|264.497258|65.277525|4.052x|1.660976|39.301x
+|micro:polymorphic_call|294.986055|23.363850|12.626x|2.518515|9.277x
+|micro:polymorphic_expression_call|125.242047|11.128280|11.254x|2.520872|4.414x
+|micro:monomorphic_call|17.283463|4.125637|4.189x|1.649286|2.501x
+|micro:optional_method_call|190.342194|10.876545|17.500x|1.652433|6.582x
+|micro:polymorphic_float_call|309.562584|24.015066|12.890x|2.548275|9.424x
+|micro:polymorphic_float_expression_call|134.863522|11.295492|11.940x|2.546082|4.436x
+|micro:monomorphic_float_call|17.236895|4.219770|4.085x|1.651838|2.555x
+|micro:optional_float_method_call|193.572268|11.169819|17.330x|1.643053|6.798x
+|micro:boxed_float_method_call|218.391229|20.297624|10.759x|2.556766|7.939x
+|micro:dynamic_int_result_call|181.064984|11.223742|16.132x|3.068256|3.658x
+|micro:dynamic_int_result_fallback|400.194396|20.625287|19.403x|2.977989|6.926x
+|micro:boxed_int_method_call|207.481896|17.016268|12.193x|2.530301|6.725x
+|micro:boxed_int_method_fallback|252.753922|33.618146|7.518x|2.533807|13.268x
+|micro:boxed_float_method_fallback|286.071441|34.913981|8.194x|2.520116|13.854x
+|micro:boxed_int_method_effect|352.561248|90.939487|3.877x|1.867077|48.707x
+|micro:dynamic_float_result_call|193.930009|12.199614|15.896x|3.456456|3.530x
+|micro:indirect_wide|310.052949|65.356544|4.744x|1.694179|38.577x
+|micro:indirect_float|268.563236|63.742805|4.213x|1.649106|38.653x
+|micro:indirect_int_result|240.747741|64.881194|3.711x|1.879643|34.518x
+|micro:indirect_float_result|242.656255|63.801531|3.803x|2.719115|23.464x
+|micro:indirect_tagged_float|316.496334|63.683800|4.970x|1.631349|39.038x
+|micro:indirect_branch_float|276.650881|64.200351|4.309x|1.648421|38.947x
+|micro:indirect_affine|266.624869|65.000093|4.102x|1.621911|40.076x
+|micro:indirect_affine_wide|315.258161|65.336314|4.825x|1.628012|40.133x
+|micro:indirect_branch_int|267.066508|64.774290|4.123x|1.650526|39.245x
+|micro:dispatch_control|12.081788|1.909411|6.327x|0.961980|1.985x
+|micro:list_read|21.177450|2.869767|7.380x|0.283992|10.105x
+|micro:list_build|117.371745|28.949202|4.054x|2.529215|11.446x
+|micro:list_mutate|236.192621|191.618666|1.233x|3.989003|48.037x
+|micro:temporary_list|145.041665|1.675100|86.587x|1.167456|1.435x
+|micro:temporary_hash|328.501717|1.668547|196.879x|14.286794|0.117x
+|micro:closure_call|145.090659|18.904224|7.675x|1.664269|11.359x
+|micro:closure_capture|164.416851|24.837609|6.620x|1.738843|14.284x
+|mixed:csv_report|1078.578199|925.249295|1.166x|N/A|N/A
+|mixed:object_orders|2021.473667|1750.985018|1.154x|N/A|N/A
+|mixed:callback_pipeline|326.247061|125.930945|2.591x|N/A|N/A
+|mixed:text_index|1683.741714|1455.060096|1.157x|N/A|N/A
+
+The constant-result integer callback row is a loop-optimization comparison: Java is 0.000212304 ns/item (0.869597 ns per 4096-item invocation), versus Qore 0.784377 ns/item. A separate C2 machine-code diagnostic and decoded instructions are retained. An optimized constant reduction does not execute 4096 physical callbacks, so the normalized value must not be interpreted as callback latency. Qore retains per-iteration cancellation and exception bookkeeping.
+
+Layouts with >3% branch cost and disjoint observed fork ranges: none. Overlapping ranges do not establish equality or erase costs; every layout and fork is retained in the evidence.
+
+Java uses Temurin 25.0.2+10/JMH 1.37 with ordinary optimized execution, checked separately for C2 compilation of each benchmark or its generated measured loop. Known integer and floating callbacks allow ordinary inlining and loop optimization. Existing RuntimeBench indirect and closure targets retain DONT_INLINE controls; these are dynamic-boundary controls, not best-case Java inlining numbers. Qore uses its native language values and containers, while Java uses primitive arithmetic and its existing ArrayList/HashMap/object implementations. This is a workload comparison, not identical object representation. The Qore harness performs a clock read and string dispatch per 4096-item kernel invocation; JMH calls the Java benchmark method and consumes its result. Harness costs are amortized and retained, not subtracted, which matters most for sub-nanosecond kernels.
+
+All 6360 Qore reference checks and 675 Java checks pass; 45 Java kernels pass C2 diagnostics. All 1089 timing jobs/3267 windows are independently replayed. The host is shared, without affinity, frequency or thermal control; no owned build/test/profile runs overlap the measurements. These results do not establish startup, memory or IR/JIT improvements, production-wide speedup, universal Java parity or a global performance ceiling. The incremental costs recorded in the individual optimization experiments remain valid; cumulative branch/develop gains do not erase them.
+
+The next investigation is the redundant Program thread-data map lookup. Active-ancestor lifetime reuse remains a separate hypothesis: skipping count updates can change the public Program::getThreadCount result and teardown behavior, so it is not an accepted fast path. Further choices will use these fresh results; Java parity or maximum performance is not assumed.
+
+[Raw evidence](results-post-context-module-macos-arm64.json); [all 62 audit checks](audit-post-context-checkpoint.md).

@@ -4931,3 +4931,9 @@ Short invocations include fixed dispatch, setup and cleanup costs. Static disass
 All 391 standard-library qmods total 344786872 bytes before and 344786872 after; 0 hashes change. Release 52 cases/7498 assertions; Debug 30 cases/7388 assertions, plus non-QUnit/native checks. All 391 Release aliases/hashes are restored. All 1722 timing jobs/5166 windows are separately replayed. Shared host, without affinity/frequency/thermal controls; no owned build/test/profile overlaps timing. No fresh Java/develop comparison, production-wide weighted speedup or global performance ceiling claim.
 
 [Audit](../bench/runtime-comparison/audit-aot-explicit-native-context.md); [evidence](../bench/runtime-comparison/results-aot-explicit-native-context-macos-arm64.json).
+
+## Optimized module checkpoint after explicit context reuse (2026-10-26)
+
+Installed branch 5825d409b4 is compared with pure develop 5a787725d4 using matching optimized Release builds and 53 identical public-module kernels across three layouts. Fresh optimized Java covers 45 kernels. All 6360 Qore and 675 Java reference checks pass, with C2 diagnostics and independent replay of 1089 jobs/3267 measured windows. Whole-kernel results, layout costs, Java inlining policy and limitations are retained in the [checkpoint evidence](../bench/runtime-comparison/results-post-context-module-macos-arm64.json) and [62-check audit](../bench/runtime-comparison/audit-post-context-checkpoint.md). No universal Java parity or overall performance ceiling is inferred.
+
+Next evaluate the redundant Program-data map lookup. Any broader ancestor-context reuse must preserve observable thread counts and teardown behavior.
