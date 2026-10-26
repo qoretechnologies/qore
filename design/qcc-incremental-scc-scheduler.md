@@ -32,10 +32,9 @@ processes can agree on them.
 
 ## The graph has two halves, and only one of them is stable
 
-| Half | Derived from | Changes when |
-|---|---|---|
-| Summary edges | Static analysis of source content | A source is edited |
-| Contract edges | The `.compile-contract.stamp` entries in each member's `.qo.d` | **The build itself compiles something** |
+|!Half|!Derived from|!Changes when
+|Summary edges|Static analysis of source content|A source is edited
+|Contract edges|The `.compile-contract.stamp` entries in each member's `.qo.d`|**The build itself compiles something**
 
 The second half is the whole problem. `qcc` records the compile contract of every
 provider a source was actually compiled against, and the scheduler promotes those
@@ -50,11 +49,10 @@ Read live, that graph is not the same from one helper invocation to the next.
 Conflating any two of these produces a diagnostic that blames the wrong agent,
 which is worse than no diagnostic at all.
 
-| Identity | Covers | Answers |
-|---|---|---|
-| Source token | The member sources' content digests | "Did something outside the build edit my sources while qcc was reading them?" |
-| Generation token | Member sources **plus** the published compile contract of every direct predecessor member | "Is this component's published artifact set still valid?" |
-| Graph generation | The depfile-derived contract edge set | "Is this still the dependency graph I planned against?" |
+|!Identity|!Covers|!Answers
+|Source token|The member sources' content digests|"Did something outside the build edit my sources while qcc was reading them?"
+|Generation token|Member sources **plus** the published compile contract of every direct predecessor member|"Is this component's published artifact set still valid?"
+|Graph generation|The depfile-derived contract edge set|"Is this still the dependency graph I planned against?"
 
 Consequences worth stating explicitly:
 
@@ -153,12 +151,11 @@ qore-qo-source-order --scc-publish --expect SOURCE_TOKEN \
     --expect-graph GRAPH_GENERATION CONTEXT COMPONENT_KEY
 ```
 
-| Exit | Meaning | Response |
-|---|---|---|
-| 0 | Published | — |
-| 75 | A member source moved away from `--expect` | An agent outside the build edited it. Rebuild the component once; a second occurrence is reported as external interference |
-| 76 | The graph moved away from `--expect-graph`, or the key no longer resolves | The build's own doing. Re-resolve identity from the current graph and rebuild once; never blame anything outside the build |
-| 1 | Anything else, including an incomplete artifact set | Real failure |
+|!Exit|!Meaning|!Response
+|0|Published|—
+|75|A member source moved away from `--expect`|An agent outside the build edited it. Rebuild the component once; a second occurrence is reported as external interference
+|76|The graph moved away from `--expect-graph`, or the key no longer resolves|The build's own doing. Re-resolve identity from the current graph and rebuild once; never blame anything outside the build
+|1|Anything else, including an incomplete artifact set|Real failure
 
 Source movement is checked before the graph, so a build whose sources really were
 edited is never told to look at its own scheduler instead.
