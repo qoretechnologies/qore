@@ -3529,6 +3529,12 @@ extern "C" DLLEXPORT void qore_rt_bind_function_call_ref_typed_v1(uint64_t ref_b
             || metadata.num_params > 1) {
         return;
     }
+    // A different body owner is admitted only through the compiler's complete
+    // context-independent native-body proof, published by the generic binder.
+    if (metadata.uvb->pgm != ref->getProgram()
+            && (!ref->getNativeEntry() || ref->getNormalEntry() != normal)) {
+        return;
+    }
     unsigned param_kind = signature >> 2;
     if (param_kind != metadata.scalar_params || metadata.num_params != (param_kind ? 1u : 0u)) {
         return;
@@ -7166,6 +7172,27 @@ static const FunctionCallReferenceNode* getExactFunctionRef(const AbstractQoreNo
         ? static_cast<const FunctionCallReferenceNode*>(node) : nullptr;
 }
 
+// evalTiered() observes the body owner's debugger even when an imported
+// function executes with the reference's captured caller Program.
+static bool functionRefOwnerHasDebugger(const UserVariantBase* uvb, QoreProgram* pgm) {
+    return uvb->pgm != pgm && qore_program_private::get(*uvb->pgm)->hasDebuggerAttached();
+}
+
+// Imported native bodies need the same caller-option override as eval(), even
+// when the reference's captured Program is already current. Keep an enclosing
+// override untouched for the existing same-owner path.
+class FunctionRefParseOptionsOverride {
+public:
+    FunctionRefParseOptionsOverride(const UserVariantBase* uvb, QoreProgram* pgm) {
+        if (uvb->pgm != pgm) {
+            override.emplace(get_user_variant_runtime_po_override_mask(), pgm->getParseOptions());
+        }
+    }
+
+private:
+    std::optional<RuntimeParseOptionsOverrideHelper> override;
+};
+
 // Signature eligibility is immutable metadata; program/debugger/tier state and
 // actual argument compatibility remain dynamic checks on every invocation.
 static bool tryExecFunctionRef(const AbstractQoreNode* node, uint64_t* args,
@@ -7191,6 +7218,11 @@ static bool tryExecFunctionRef(const AbstractQoreNode* node, uint64_t* args,
             || (!uvb->hasCachedFunction() && !uvb->getCachedIR())) {
         return false;
     }
+    bool native_binding = ref->getNativeEntry()
+        && ref->getNormalEntry() == uvb->getCachedAOTFunction();
+    if (functionRefOwnerHasDebugger(uvb, pgm) || (uvb->pgm != pgm && !native_binding)) {
+        return false;
+    }
     for (int i = 0; i < nargs; ++i) {
         QoreValue value = fromBits(args[i]);
         unsigned kind = (metadata.scalar_params >> (2 * i)) & 3;
@@ -7208,8 +7240,7 @@ static bool tryExecFunctionRef(const AbstractQoreNode* node, uint64_t* args,
     // Match evalFunction's caller-program context even when no program switch
     // is needed. Method references and foreign-program references never enter.
     ProgramCallContextHelper pcch(ref->getProgram());
-    uint64_t bits = ref->getNativeEntry()
-            && ref->getNormalEntry() == uvb->getCachedAOTFunction()
+    uint64_t bits = native_binding
         ? execFunctionRefNative(ref, uvb, args, xsink)
         : qore_rt_call_fast(ref->getFunction(), metadata.variant, pgm, args, nargs, xsink);
     ValueHolder value(fromBits(bits), xsink);
@@ -10444,6 +10475,7 @@ static auto execFunctionRefNativeContext(const FunctionCallReferenceNode* ref,
         const UserVariantBase* uvb, ExceptionSink* xsink, Exec&& exec)
         -> decltype(exec(static_cast<QoreAOTContext*>(nullptr))) {
     using Result = decltype(exec(static_cast<QoreAOTContext*>(nullptr)));
+    FunctionRefParseOptionsOverride po_override(uvb, ref->getProgram());
     const std::string& name = ref->getFunction()->getNameStr();
     if (!uvb->ensureAOTContext(name.c_str(), xsink)) {
         return Result{};
@@ -10518,7 +10550,8 @@ static const FunctionCallReferenceNode* getTypedFunctionRef(uint64_t ref_bits, u
         return nullptr;
     }
     const UserVariantBase* uvb = ref->getFastCallMetadata().uvb;
-    return uvb && ref->getNormalEntry() == uvb->getCachedAOTFunction() ? ref : nullptr;
+    return uvb && !functionRefOwnerHasDebugger(uvb, pgm)
+        && ref->getNormalEntry() == uvb->getCachedAOTFunction() ? ref : nullptr;
 }
 
 template <typename Result, uint32_t Signature, typename... Args>
@@ -11201,14 +11234,19 @@ static __attribute__((noinline)) bool prepareTypedFunctionRefMiss(RuntimeConfig&
 static bool prepareTypedFunctionRef(RuntimeConfig& rc, uint64_t ref_bits, uint32_t signature,
         QorePreparedFunctionRefV3& cache, ExceptionSink* xsink) {
     if (cache.owner && cache.owner == ref_bits) {
-        // No argument/type/RTTI decoding on a positive hit. These three facts
+        // No argument/type/RTTI decoding on a positive hit. These live facts
         // are NOT immutable and must still be checked on every call.
         return cache.pgm == RuntimeConfigNativeAccess::getProgram(rc)
             && !qore_program_private::get(*cache.pgm)->hasDebuggerAttached()
+            && !functionRefOwnerHasDebugger(cache.uvb, cache.pgm)
             && cache.ref->getNormalEntry() == cache.uvb->getCachedAOTFunction();
     }
     return prepareTypedFunctionRefMiss(rc, ref_bits, signature, cache, xsink);
 }
+
+template <typename Result, uint32_t Signature, typename... Args>
+static int tryCrossProgramFunctionRef(RuntimeConfig& rc, uint64_t ref_bits, Result* result,
+        ExceptionSink* xsink, Args... args);
 
 template <typename Result, uint32_t Signature, typename... Args>
 static int tryTypedFunctionRefExplicit(RuntimeConfig& rc, uint64_t ref_bits, Result* result,
@@ -11216,13 +11254,14 @@ static int tryTypedFunctionRefExplicit(RuntimeConfig& rc, uint64_t ref_bits, Res
     const FunctionCallReferenceNode* ref = getTypedFunctionRef(ref_bits, Signature,
         RuntimeConfigNativeAccess::getProgram(rc));
     if (!ref) {
-        return 0;
+        return tryCrossProgramFunctionRef<Result, Signature>(rc, ref_bits, result, xsink, args...);
     }
     *result = Result{};
     if (RuntimeConfigNativeAccess::checkStack(rc, xsink)) {
         return 1;
     }
     const UserVariantBase* uvb = ref->getFastCallMetadata().uvb;
+    FunctionRefParseOptionsOverride po_override(uvb, ref->getProgram());
     QoreAOTContext* ctx = uvb->getCachedAOTContext();
     // Preserve lazy failure timing: constructing an unused reference must not
     // materialize its body. Once published, reuse the fully reconstructed context.
@@ -11258,6 +11297,45 @@ static int tryTypedFunctionRefExplicit(RuntimeConfig& rc, uint64_t ref_bits, Res
     return 1;
 }
 
+// A module loop can call a reference captured by its importing Program. Keep
+// the full Program transition, including lifetime/TLPD/debugger handling; only
+// generic argument and variant setup is bypassed. Never cache this transition.
+template <typename Result, uint32_t Signature, typename... Args>
+static __attribute__((noinline)) int tryCrossProgramFunctionRef(RuntimeConfig& rc,
+        uint64_t ref_bits, Result* result, ExceptionSink* xsink, Args... args) {
+    static constinit QoreEnvFlag disabled_env("QORE_DISABLE_AOT_CROSS_PROGRAM_FUNCREF_FAST_CALL");
+    if (disabled_env.get() || fromBits(ref_bits).getType() != NT_FUNCREF) {
+        return 0;
+    }
+    const auto* ref = getExactFunctionRef(fromBits(ref_bits).getInternalNode());
+    QoreProgram* current = RuntimeConfigNativeAccess::getProgram(rc);
+    if (!ref || ref->getProgram() == current || !ref->getNativeEntry()) {
+        return 0;
+    }
+    const UserVariantBase* uvb = ref->getFastCallMetadata().uvb;
+    // Limit this route to callbacks into the currently executing module body.
+    // Arbitrary foreign references retain ordinary invocation. Reuse the full
+    // typed binding, debugger and live-body checks with the captured Program.
+    if (!uvb || uvb->pgm != current
+            || getTypedFunctionRef(ref_bits, Signature, ref->getProgram()) != ref) {
+        return 0;
+    }
+    if (*xsink || RuntimeConfigNativeAccess::checkStack(rc, xsink)) {
+        *result = Result{};
+        return 1;
+    }
+    ProgramThreadCountContextHelper context(xsink, ref->getProgram(), true);
+    if (*xsink) {
+        *result = Result{};
+        return 1;
+    }
+    // Program entry has established the same live context required by v2. A
+    // concurrent debugger change can still cause a miss; RAII restores the
+    // caller before its ordinary fallback. The nested miss cannot reenter this
+    // transition because the captured Program is now current.
+    return tryTypedFunctionRefExplicit<Result, Signature>(rc, ref_bits, result, xsink, args...);
+}
+
 // ProbeClosure=false is only valid immediately after a live nonclosure tag check,
 // without intervening Qore execution. Legacy v3 entries keep the default behavior.
 template <typename Result, uint32_t Signature, bool ProbeClosure = true, typename... Args>
@@ -11278,6 +11356,9 @@ static int tryPreparedFunctionRef(RuntimeConfig& rc, QorePreparedFunctionRefV3& 
         }
     }
     if (!prepareTypedFunctionRef(rc, ref_bits, Signature, cache, xsink)) {
+        if (tryCrossProgramFunctionRef<Result, Signature>(rc, ref_bits, result, xsink, args...)) {
+            return 1;
+        }
         if constexpr (ProbeClosure && Signature == (1 | (1 << 2))) {
             return tryNativeClosureContinuation(rc, ref_bits, result, xsink, args...);
         }
@@ -11289,6 +11370,7 @@ static int tryPreparedFunctionRef(RuntimeConfig& rc, QorePreparedFunctionRefV3& 
     }
     // Context readiness remains live; preserve v2's lazy failure timing and
     // Program context setup on first use, including stripped source artifacts.
+    FunctionRefParseOptionsOverride po_override(cache.uvb, cache.pgm);
     QoreAOTContext* ctx = cache.uvb->getCachedAOTContext();
     if (!ctx) {
         ProgramCallContextHelper pcch(cache.pgm);
@@ -11405,6 +11487,7 @@ __attribute__((always_inline)) static int tryReusableFunctionRef(RuntimeConfig& 
     if (*xsink || RuntimeConfigNativeAccess::checkStack(rc, xsink)) {
         return 1;
     }
+    FunctionRefParseOptionsOverride po_override(cache.uvb, cache.pgm);
     auto* reusable = static_cast<QoreReusableFunctionRefFrame*>(frame_slot->frame);
     if (!reusable) {
         reusable = initReusableFunctionRefFrame(rc, cache, *frame_slot);
@@ -11434,6 +11517,7 @@ __attribute__((always_inline)) static int tryInvariantFunctionRef(RuntimeConfig&
     assert(cache.owner && cache.owner == ref_bits);
     if (cache.pgm != RuntimeConfigNativeAccess::getProgram(rc)
             || qore_program_private::get(*cache.pgm)->hasDebuggerAttached()
+            || functionRefOwnerHasDebugger(cache.uvb, cache.pgm)
             || cache.ref->getNormalEntry() != cache.uvb->getCachedAOTFunction()) {
         return Legacy(ref_bits, args..., result, xsink, &rc, &cache);
     }
@@ -11451,6 +11535,7 @@ __attribute__((always_inline)) static int tryInvariantFunctionRef(RuntimeConfig&
     if (*xsink || RuntimeConfigNativeAccess::checkStackForPreparedCallback(rc, xsink)) {
         return 1;
     }
+    FunctionRefParseOptionsOverride po_override(cache.uvb, cache.pgm);
     auto* reusable = static_cast<QoreReusableFunctionRefFrame*>(frame_slot->frame);
     // One initialization per lifetime; keep its argument spills off repeated hits.
     if (!reusable) [[unlikely]] {

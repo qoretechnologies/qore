@@ -45,7 +45,9 @@ class UserVariantBase;
 class UserSignature;
 
 // Immutable once the reference is published. Only finalized single-variant
-// functions with ordinary exact binding can populate this descriptor.
+// functions with ordinary exact binding can populate this descriptor. A body
+// with a different Program owner additionally requires a live exact native
+// binding at dispatch; these signature facts never authorize an owner switch.
 struct QoreFunctionRefCallMetadata {
     const AbstractQoreFunctionVariant* variant = nullptr;
     const UserVariantBase* uvb = nullptr;

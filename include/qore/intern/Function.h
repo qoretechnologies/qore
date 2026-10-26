@@ -56,6 +56,9 @@ struct QoreAOTLazyFunctionIR;
 using JitFunctionPtr = uint64_t (*)(ExceptionSink*);
 using AotFunctionPtr = uint64_t (*)(QoreAOTContext*, ExceptionSink*);
 
+//! Parse-option fields taken from the execution Program when a user body has a different owner.
+DLLLOCAL QoreParseOptions get_user_variant_runtime_po_override_mask();
+
 // these data structures are all private to the library
 
 class LocalVar;

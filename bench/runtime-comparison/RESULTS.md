@@ -23298,3 +23298,37 @@ All 6360 Qore reference checks and 675 Java checks pass; 45 Java kernels pass C2
 The next candidate is native binding admission for module-owned function references. An untimed native diagnostic finds private, forwarded and public module references capture the current caller Program and have an exact native body binding, but lack typed fast metadata because the body has a distinct owner. The broad micro module already emits native binding calls. Any change must retain caller Program matching, exact current native body identity, owner/caller debugger handling and ordinary fallback when the binding is absent. No gain from that prospective candidate is included here.
 
 [Raw evidence](results-current-module-macos-arm64.json); [all 62 audit checks](audit-current-module-checkpoint.md).
+
+## Native scalar module callbacks with full Program context (2026-10-26)
+
+AOT module references capture the importing Program while their body belongs to the module Program. Exact zero/unary scalar references can now use compiler-published native bindings. Calls inside the owning module enter the captured importing Program with the existing full thread-count/TLPD/context helper, invoke the typed native body, and restore the caller. Cross-program calls never populate the prepared cache. Caller and body debugger checks, live normal-body identity, diagnostic publication, physical stack checks and fallback remain. Every different-owner native invocation applies the same caller parse-option override as ordinary evaluation, including calls whose captured Program is already current. QORE_DISABLE_AOT_MODULE_FUNCREF_FAST_CALL disables metadata admission; QORE_DISABLE_AOT_CROSS_PROGRAM_FUNCREF_FAST_CALL disables cross-program dispatch. Both disable switches are sampled on first use through the existing process-cached QoreEnvFlag mechanism. No public ABI or cache layout change.
+
+Before is optimized production d09dc74b15 (repository parent b9afd33296 is documentation only). Both use Release -O3 -DNDEBUG, allocation tracking off, qcc -O3/LLVM 22.1.8 and actual stripped private modules on Apple M4 Pro/macOS 27.0.1. The unchanged 53 kernels use default/reverse/shuffled layouts and randomized paired runs: 4096 items, one warmup, three 150 ms samples per fork, three screening and five confirmation forks. Each target must improve at least 10% in every layout in both phases. These are whole-kernel ns/item, not isolated call latency.
+
+|!Confirmed target|!Before ns/item|!Candidate ns/item|!Change
+|micro:indirect_call|242.408031|67.649498|-72.09%
+|micro:indirect_float|239.949652|65.735602|-72.60%
+|micro:indirect_wide|316.887035|68.298120|-78.45%
+|micro:indirect_affine_wide|317.578409|68.201052|-78.52%
+
+Retain under the authorized broader-workload tradeoff. All four targets pass the 10% gate in every layout in both phases; confirmation improves them by 72.1–78.5%. The mixed callback pipeline improves 47.9% (245.854817 to 128.112013 ns/item). Other confirmed mixed workloads change by -0.41% (CSV), -0.23% (orders) and -0.05% (text). Repeated aggregate costs are direct local float result (+4.79% screen, +1.12% confirmation; +0.008274 ns/item confirmed), polymorphic float expression (+1.70%, +1.42%; +0.158748 ns/item confirmed), known integer unary (+0.46%, +0.07%) and direct float loop (+0.13%, +0.29%). No >3% disjoint-range layout flag repeats between phases. Confirmation alone flags typed local integer result/default (+5.11%) and closure/reverse (+3.85%); the former has an aggregate +8.16% cost (+0.063609 ns/item), while aggregate closure time improves 1.25%. Monomorphic float has +3.35% aggregate confirmation cost after -2.34% in screening. Preserve all results rather than treating these as proven zero-cost paths. Short indirect calls improve 7.61% at count 1 and 44.28% at count 16; the count-1 result is below 10%, as allowed by the prospective short-call characterization plan. The known-integer short control changes +1.35% at count 1 (+9.240452 ns/invocation) and -0.44% at count 16 (-3.093845 ns/invocation), with no disjoint-range flags. This removes the prior candidate's repeated roughly 100 ns setup cost without pooling measurement epochs. The full Program transition remains material overhead; these results do not establish Java parity.
+
+|!Same candidate binary, default layout|!Enabled ns/item|!Cross path disabled ns/item
+|micro:indirect_call|67.847782|243.118974
+|micro:indirect_float|65.850049|238.901774
+|micro:indirect_wide|68.325805|316.167802
+|micro:indirect_affine_wide|67.346337|318.260592
+
+|!Short-call target/control|!Count|!Before ns/item|!Candidate ns/item|!Change
+|micro:indirect_call|1|2677.604570|2473.761521|-7.61%
+|float:typed_local_int_unary|1|683.545974|692.786426|+1.35%
+|micro:indirect_call|16|393.892218|219.477218|-44.28%
+|float:typed_local_int_unary|16|43.610594|43.417229|-0.44%
+
+Short invocations include fixed harness, dispatch, reference construction and cleanup costs. The internal header change updates the AOT runtime identity, so matching modules are rebuilt: 391 standard-library qmods total 344786872 bytes before and 344786872 after; 391 hashes change. Old identity rejection was preserved. Default benchmark module sizes (before/candidate): float 185560/185560, micro 475720/475720, mixed 180424/180424 bytes.
+
+The first metadata-only candidate failed all four target gates in 954 jobs/2862 windows. Actual-workload interposition then showed that the module loop and captured callback are different Programs. The accepted candidate retains the full transition and the diagnostic confirms native handling and Program restoration. Before timing, review also found a missing caller-option override on the newly admitted same-Program path; that was fixed and covered by native fixture instrumentation. A complete 1740-job/5220-window intermediate candidate confirmed the callback gains but exposed about 100 ns per-invocation overhead in the known-integer short control. That candidate is retained separately in evidence; the final candidate replaces a locked environment lookup on every reference construction with the existing first-use cached flag and is measured in fresh runs. Earlier helper compilation/parse-order failures, a stale-qmod identity rejection and the intentionally stopped obsolete Debug build remain in evidence.
+
+Release: 46 cases/7224 assertions; Debug: 27 cases/6263 assertions, plus native checks and no skips or source fallback in accepted checks. The focused fixture has 199 QUnit assertions in each build plus native assertions. All 391 Release aliases/hashes are restored; 1110 standard, 780 additional module and 6360 prepared references pass. All 1710 timing jobs/5130 windows are separately replayed. No owned build/test/profile overlaps timing. Shared host without affinity/thermal/frequency control. No fresh Java/develop comparison or global ceiling claim.
+
+[Audit](audit-aot-module-function-reference-context.md); [evidence](results-aot-module-function-reference-context-macos-arm64.json).

@@ -1118,13 +1118,24 @@ FunctionCallReferenceNode::FunctionCallReferenceNode(const QoreProgramLocation* 
     }
     const AbstractQoreFunctionVariant* variant = uf->first();
     const UserVariantBase* uvb = variant->getUserVariantBase();
-    if (!uvb || uvb->pgm != pgm || variant->getFunctionality()) {
+    if (!uvb || variant->getFunctionality()) {
         return;
     }
     const UserSignature* sig = uvb->getUserSignature();
     unsigned count = sig->numParams();
     // Bound all signature scans before checking static eligibility.
     if (count > 16 || !uvb->isStaticallyFastCallEligible()) {
+        return;
+    }
+    // A module reference captures the importing caller, while its body belongs
+    // to the module Program. Signature facts alone do not authorize execution:
+    // a different owner must also have an exact compiler-published native
+    // binding at dispatch. Keep ordinary IR/AST references on their old path.
+    bool different_owner = uvb->pgm != pgm;
+    static constinit QoreEnvFlag disable_module_env("QORE_DISABLE_AOT_MODULE_FUNCREF_FAST_CALL");
+    if (different_owner && (!uvb->hasCachedAOT() || count > 1
+            || !qore_function_ref_scalar_kind(sig->getReturnTypeInfo())
+            || disable_module_env.get())) {
         return;
     }
     uint32_t scalar_params = 0;
@@ -1135,6 +1146,9 @@ FunctionCallReferenceNode::FunctionCallReferenceNode(const QoreProgramLocation* 
         }
         unsigned kind = qore_function_ref_scalar_kind(ti);
         scalar_params |= kind << (2 * i);
+    }
+    if (different_owner && count && !scalar_params) {
+        return;
     }
     fast_call = {variant, uvb, sig, count, scalar_params};
 }
