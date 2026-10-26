@@ -53,6 +53,7 @@ enum class QoreAOTSourceSymbolKind : unsigned char {
     HashDecl,
     Function,
     Global,
+    Typedef,
 };
 
 using QoreAOTSourceSymbolMap = std::unordered_map<std::string, std::unordered_set<std::string>>;
@@ -72,9 +73,10 @@ struct QoreAOTSourceSymbolManifest {
     QoreAOTSourceSymbolMap hashdecls;
     QoreAOTSourceSymbolMap functions;
     QoreAOTSourceSymbolMap globals;
+    QoreAOTSourceSymbolMap typedefs;
 
     bool empty() const {
-        return classes.empty() && hashdecls.empty() && functions.empty() && globals.empty();
+        return classes.empty() && hashdecls.empty() && functions.empty() && globals.empty() && typedefs.empty();
     }
 };
 

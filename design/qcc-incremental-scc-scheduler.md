@@ -190,6 +190,24 @@ concurrently, which is the fan-out the coordinator exists to replace.
 
 ## How much of the group one pass parses
 
+### A first typedef use cannot depend on the previous depfile
+
+The source-symbol manifest records typedefs alongside classes, hashdecls, functions and globals.
+The source summary also records their declarations and mentions, including aliases inside nested
+type arguments. A mention adds a required edge to its typedef provider: the alias must be expanded
+while parsing, so a deferred class placeholder cannot stand in for it. Qualified names select the
+exact provider; otherwise a leaf name must identify one source among typedef declarations. Other
+symbol kinds do not make a typedef ambiguous. The ordinary preload closure then follows typedef
+chains as it follows every other required dependency.
+
+This works before a consumer has ever recorded a typedef dependency -- both for a newly added use
+and for an existing depfile that omits the typedef provider (#5540). The graph
+and manifest caches have new versions so an unchanged provider is rescanned as well. No speculative
+failed compile or whole-group retry is needed for these uses. Typedefs are never deferred by the
+manifest: their expanded types still come from the preloaded provider.
+
+### Choosing the parse size
+
 A shared parse used to mean the whole group, so the coordinator's only choices
 were "compile stale components one at a time" and "reparse every source". With
 `qcc -c --output-dir=DIR -L <object dir>` a parse can cover **part** of a group:

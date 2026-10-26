@@ -56,6 +56,8 @@ class AOTSccGenerationTest inherits QUnit::Test {
             \testConvexSubset());
         addTestCase("a declaration of another kind does not hide a class from its subclass",
             \testKindSpecificProviders());
+        addTestCase("typedef mentions preload their providers without an existing depfile",
+            \testTypedefProviders());
         addTestCase("a regex literal does not hide the namespace of what follows it",
             \testRegexLiteralNamespaceTracking());
 
@@ -678,6 +680,30 @@ class AOTSccGenerationTest inherits QUnit::Test {
             "and preloads it: " + join(", ", preload));
         assertEq((), componentFor(decomposition, "dupuser.qo").predecessors,
             "two classes of the same name leave the mention unresolved");
+    }
+
+    testTypedefProviders() {
+        TmpDir tmp("qore-aot-scc-typedefs-");
+        string context_path = writeContext(tmp.path, (
+            "types": "namespace Metrics { typedef Measurements = hash<string, int>; }\n",
+            "alias": "typedef Values = list<Metrics::Measurements>;\n",
+            "user": "auto sub values(list<Values> value) { return value; }\n",
+            "decoy": "class Decoy { public { const Measurements = 0; } }\n",
+            "other": "namespace Other { typedef Measurements = string; }\n",
+            "masked": "# Metrics::Measurements\nconst Text = \"Values\";\n",
+        ));
+        hash<auto> decomposition = componentMap(context_path);
+        string types = componentFor(decomposition, "types.qo").scc;
+        string alias = componentFor(decomposition, "alias.qo").scc;
+        hash<auto> user = componentFor(decomposition, "user.qo");
+        assertEq((types,), componentFor(decomposition, "alias.qo").predecessors,
+            "a qualified alias selects its provider despite another namespace's same-name typedef");
+        assertEq((alias,), user.predecessors, "an alias used inside nested types is a required dependency");
+        list<string> preload = (map basename(trim($1)),
+            order(context_path, ("--scc-preload", user.scc)).split("\n"), trim($1));
+        assertEq(("alias.qo", "types.qo"), sort(preload), "the preload closure includes chained typedefs");
+        assertEq((), componentFor(decomposition, "masked.qo").predecessors,
+            "comments and strings do not introduce typedef dependencies");
     }
 
     testGenerationIdentity() {
