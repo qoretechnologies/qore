@@ -384,6 +384,9 @@ message(STATUS \"qore cmake dir: ${QORE_CMAKE_DIR}\")
         mkdir(catalog_dir);
         write(catalog_dir + "/root.json",
             "{\"schema_version\":1,\"locales\":{\"root\":{\"messages\":{}}}}\n");
+        # the record of the Qore that generated the catalogs (qore-data-provider-i18n) is beside them
+        write(src_dir + "/catalogs/.qore-generator.json",
+            "{\"qore-data-provider-i18n\":{\"version\":\"3.0.0\",\"git_hash\":\"0123456789abcdef\"}}\n");
         write(src_dir + "/CMakeLists.txt",
 "cmake_minimum_required(VERSION 3.16)
 project(QoreDownstreamCatalogInstall NONE)
@@ -407,6 +410,10 @@ QORE_INSTALL_USER_MODULE_CATALOGS(OutsideModule
             "catalog installs below the downstream prefix: " + install);
         assertEq(read(catalog_dir + "/root.json"), read(installed),
             "installed downstream catalog preserves its content");
+        list<string> installed_files = filesBelow(install_dir);
+        assertEq(("share/downstream/i18n/provider.example/root/OutsideModule.json",),
+            installed_files,
+            "the generator record is not a catalog and is not installed");
 
         string install_script = read(build_dir + "/cmake_install.cmake");
         assertTrue(install_script.find("share/downstream/i18n") != -1,
@@ -484,6 +491,22 @@ find_package(Qore REQUIRED)
     }
 
     #! The fragment paths recorded in an installed catalog manifest
+    #! Returns the paths of the files below a directory, relative to it, sorted
+    private list<string> filesBelow(string dir, string prefix = "") {
+        list<string> rv = ();
+        Dir d();
+        if (!d.chdir(dir)) {
+            return rv;
+        }
+        foreach string file in (d.listFiles()) {
+            rv += prefix + file;
+        }
+        foreach string sub_dir in (d.listDirs()) {
+            rv += filesBelow(dir + "/" + sub_dir, prefix + sub_dir + "/");
+        }
+        return sort(rv);
+    }
+
     private list<string> manifestEntries(string path) {
         list<string> rv = ();
         foreach string line in (read(path).split("\n")) {

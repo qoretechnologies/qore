@@ -3239,6 +3239,11 @@ while (*binary chunk = input.read(65536)) {
         compose those shared-domain contributions without duplicating source text between repositories; when message
         identities change, \c --rekey-source-tree moves a source tree's catalogs to the new identities, carrying
         each translation whose text is unchanged, and reports conflicting texts, missing translations and new texts
+      - \c qore-data-provider-i18n records the Qore that generated the catalogs it writes (version and git hash, in
+        \c .qore-generator.json in each catalog directory); a check of stale catalogs that another Qore generated
+        exits with 3 instead of 2, catalogs generated with a newer Qore are not overwritten by an older one
+        (\c --allow-other-qore allows Qores whose order cannot be determined), and \c --record-qore records the
+        installed Qore for catalogs that a check finds current; the record is not installed with the catalogs
       - the user-module catalog install helper accepts explicit source directories, package components, and install
         destinations, allowing products with nonstandard module layouts and installation prefixes to install the
         same owner-qualified, composable catalog fragments as Qore and external modules

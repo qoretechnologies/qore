@@ -2107,7 +2107,13 @@ class DataProviderPresentationTest inherits QUnit::Test {
         assertFalse(regex(out, "(?m)^loading provider module " + RekeyOwnerModule + "$"),
             "the other owner is not loaded: " + out);
         hash<string, string> after_module = readTreeFiles(selected);
-        assertEq(after_owner - pattern_root, after_module - pattern_root,
+        # the generator record of a catalog directory is written with its catalogs (I18nGeneratorRecord.qtest)
+        string rekey_record = join_paths("qlib", RekeyOwnerModule + ".i18n", ".qore-generator.json");
+        string pattern_record = join_paths("qlib", PatternOwnerModule + ".i18n", ".qore-generator.json");
+        assertTrue(exists after_owner{rekey_record}, "re-keying records the Qore in the selected owner's directory");
+        assertFalse(exists after_owner{pattern_record}, "re-keying records nothing in the other owner's directory");
+        assertTrue(exists after_module{pattern_record}, "re-keying records the Qore in the module's directory");
+        assertEq(after_owner - pattern_root, after_module - (pattern_root, pattern_record),
             "the files of the other owner are left as they are");
         assertEq(pattern_catalog, parse_json(after_module{pattern_root}), "the module's catalog is re-keyed");
 

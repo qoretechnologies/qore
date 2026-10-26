@@ -51,6 +51,8 @@ class QoreDataProviderI18nCmd {
             "dry_run": "dry-run",
             "require_standard_locales": "require-standard-locales",
             "require_complete_locales": "require-complete-locales",
+            "allow_other_qore": "allow-other-qore",
+            "record_qore": "record-qore",
             "verbose": "v,verbose:i+",
             "help":    "h,help",
         };
@@ -58,6 +60,10 @@ class QoreDataProviderI18nCmd {
 
     private {
         Util::TerminalColor color;
+        #! True to write catalogs over those of a Qore that cannot be ordered with this one (--allow-other-qore)
+        bool allow_other_qore;
+        #! True to record this Qore for the catalogs that a check finds current (--record-qore)
+        bool record_qore;
         bool connection_catalogs_ready;
         hash<string, hash<auto>> connection_catalogs;
         hash<string, bool> unprepared_connection_owners;
@@ -78,6 +84,8 @@ class QoreDataProviderI18nCmd {
         if (!opt.output.val()) {
             fail("--output is required");
         }
+        allow_other_qore = opt.allow_other_qore ?? False;
+        record_qore = opt.record_qore ?? False;
 
         try {
             run(opt);
@@ -93,6 +101,10 @@ class QoreDataProviderI18nCmd {
                 && !opt.check
                 && !opt.check_tree && !opt.check_source_tree) {
             fail("--require-standard-locales and --require-complete-locales require a check mode");
+        }
+        if (record_qore && ((!opt.check && !opt.check_tree && !opt.check_source_tree) || opt.app)) {
+            fail("--record-qore requires --check, --check-tree or --check-source-tree, and cannot be combined "
+                "with --app");
         }
         list<string> required_locales = opt.require_standard_locales
             ? DataProviderPresentation::StandardTranslationLocales : ();
@@ -210,6 +222,8 @@ class QoreDataProviderI18nCmd {
         }
 
         int stale = 0;
+        # the generating Qore is checked once, before the first catalog is written
+        bool checked_generator = False;
         foreach string domain in (sort(keys catalogs)) {
             # Reuse the native validation boundary before treating a domain as
             # a directory name. An empty search path performs no file access.
@@ -235,6 +249,10 @@ class QoreDataProviderI18nCmd {
                     required_locales);
                 continue;
             }
+            if (!checked_generator) {
+                QoreCatalogGeneratorRecord::checkRegeneration((opt.output,), allow_other_qore);
+                checked_generator = True;
+            }
             mkdir_ex(dirname(path), 0755, True);
             writeFile(path, data);
             if (opt.verbose) {
@@ -246,7 +264,11 @@ class QoreDataProviderI18nCmd {
             stale += checkOrphanedCatalogs(opt.output, catalogs);
         }
         if (stale) {
-            exit(2);
+            staleExit((opt.output,));
+        }
+        # written or verified with this Qore
+        if (!opt.check || record_qore) {
+            QoreCatalogGeneratorRecord::writeRecords((opt.output,));
         }
         printf("%s %d app(s), %d catalog domain(s)\n",
             opt.check ? "verified" : "extracted", app_names.size(),
@@ -269,7 +291,12 @@ class QoreDataProviderI18nCmd {
         foreach hash<auto> root in (roots) {
             domain_roots{root.domain} += root;
         }
+        # the catalog directories of the stale catalogs
+        hash<string, bool> stale_dirs;
+        # the catalog directories checked
+        hash<string, bool> checked_dirs;
         foreach string domain in (sort(keys domain_roots)) {
+            int domain_stale = stale;
             hash<auto> root_messages;
             list<string> search_roots = ();
             hash<string, bool> seen_search_roots;
@@ -322,9 +349,16 @@ class QoreDataProviderI18nCmd {
                 stale += checkRequiredTranslationLocales(domain,
                     search_root, required_locales);
             }
+            map checked_dirs{$1} = True, search_roots;
+            if (stale > domain_stale) {
+                map stale_dirs{$1} = True, search_roots;
+            }
         }
         if (stale) {
-            exit(2);
+            staleExit(keys stale_dirs);
+        }
+        if (record_qore) {
+            QoreCatalogGeneratorRecord::writeRecords(keys checked_dirs);
         }
         printf("verified %d catalog domain(s), %d translation(s)\n",
             domain_roots.size(), translation_count);
@@ -395,7 +429,16 @@ class QoreDataProviderI18nCmd {
         int stale = 0;
         int translation_count = 0;
         hash<string, hash<string, bool>> seen;
+        # the catalog directories of the stale catalogs
+        hash<string, bool> stale_dirs;
+        # the catalog directories checked
+        hash<string, bool> checked_dirs;
         foreach hash<auto> root in (owned_roots) {
+            checked_dirs{root.search_root} = True;
+            int root_stale = stale;
+            on_exit if (stale > root_stale) {
+                stale_dirs{root.search_root} = True;
+            }
             if (seen{root.owner}{root.domain}) {
                 ++stale;
                 stderr.printf("%s %s: duplicate catalog domain %y for owner module %y\n",
@@ -455,12 +498,22 @@ class QoreDataProviderI18nCmd {
                     ++stale;
                     stderr.printf("%s owner module %y catalog domain %y\n",
                         color.error("MISSING:"), owner, domain);
+                    # a missing catalog is stale in the directory it belongs in
+                    try {
+                        stale_dirs{dirname(dirname(newCatalogPath(source_roots, owner, domain)))} = True;
+                    } catch (hash<ExceptionInfo> ex) {
+                        # no one directory: the catalog cannot be what another Qore generated
+                        stale_dirs{output} = True;
+                    }
                 }
             }
         }
 
         if (stale) {
-            exit(2);
+            staleExit(keys stale_dirs);
+        }
+        if (record_qore) {
+            QoreCatalogGeneratorRecord::writeRecords(keys checked_dirs);
         }
         printf("verified %d owner module(s), %d catalog domain(s), %d translation(s)\n",
             owner_modules.size(), roots.size(), translation_count);
@@ -540,10 +593,13 @@ class QoreDataProviderI18nCmd {
             foreach string domain in (sort(keys owner_catalogs{owner})) {
                 if (!seen{owner}{domain}) {
                     string path = newCatalogPath(source_roots, owner, domain);
-                    roots_by_path{path} = {"path": path, "owner": owner, "domain": domain};
+                    roots_by_path{path} = {"path": path, "owner": owner, "domain": domain,
+                        "search_root": dirname(dirname(path))};
                 }
             }
         }
+        *list<string> catalog_dirs = keys (map {$1.search_root: True}, roots_by_path.iterator());
+        QoreCatalogGeneratorRecord::checkRegeneration(catalog_dirs, allow_other_qore);
         int written = 0;
         foreach string path in (sort(keys roots_by_path)) {
             hash<auto> root = roots_by_path{path};
@@ -558,6 +614,7 @@ class QoreDataProviderI18nCmd {
                     owner_catalogs{root.owner}{root.domain}.locales.root.messages.size());
             }
         }
+        QoreCatalogGeneratorRecord::writeRecords(catalog_dirs);
         printf("updated %d owner module(s), %d catalog domain(s)\n",
             owner_modules.size(), written);
     }
@@ -732,6 +789,8 @@ class QoreDataProviderI18nCmd {
 
         # path -> the catalog to write there
         hash<string, hash<auto>> writes = {};
+        # the catalog directories written
+        hash<string, bool> write_dirs;
         hash<string, int> totals = {
             "domains": 0, "changed": 0, "before": 0, "after": 0, "conflicts": 0, "carried": 0, "variants": 0,
             "matched": 0, "reused": 0, "missing": 0, "new_texts": 0,
@@ -930,12 +989,15 @@ class QoreDataProviderI18nCmd {
             }
             writes{root.path} = new_catalog;
             map writes{dir + DirSep + $1.key + ".json"} = $1.value, locale_catalogs.pairIterator();
+            write_dirs{root.search_root} = True;
         }
         # nothing is written if any domain has a conflict
         if (!dry_run && !totals.conflicts) {
+            QoreCatalogGeneratorRecord::checkRegeneration(keys write_dirs, allow_other_qore);
             foreach hash<auto> entry in (writes.pairIterator()) {
                 writeFile(entry.key, make_json(entry.value, JGF_ADD_FORMATTING) + "\n");
             }
+            QoreCatalogGeneratorRecord::writeRecords(keys write_dirs);
         }
         printf("%s %d domain(s), %d re-keyed; %d -> %d message(s); %d conflict(s); translations carried %d, "
             "matched by type %d, variants %d, reused by text %d, missing %d; new texts %d%s\n",
@@ -1449,6 +1511,33 @@ class QoreDataProviderI18nCmd {
         return no_color;
     }
 
+    #! Exits for stale catalogs: with OtherQoreExitCode if another Qore generated all of them, otherwise with 2
+    /** @param stale_dirs the catalog directories of the stale catalogs
+
+        A stale catalog in a directory that this Qore generated, or that has no record, is a change of the sources,
+        whatever Qore generated the other directories
+    */
+    private staleExit(*list<string> stale_dirs) {
+        list<string> others = ();
+        foreach string dir in (sort(stale_dirs ?? ())) {
+            *string other = QoreCatalogGeneratorRecord::otherQore(dir);
+            if (!other) {
+                exit(2);
+            }
+            others += sprintf("the catalogs in %s were %s", dir, other);
+        }
+        if (others) {
+            foreach string other in (others) {
+                stderr.printf("%s %s\n", color.error("OTHER-QORE:"), other);
+            }
+            stderr.printf("%s the stale catalogs can differ from the sources only by what that Qore generates: "
+                "regenerate them with the installed Qore if it is the newer one, or with the newer Qore\n",
+                color.error("OTHER-QORE:"));
+            exit(QoreCatalogGeneratorRecord::OtherQoreExitCode);
+        }
+        exit(2);
+    }
+
     private fail(string message) {
         stderr.printf("%s %s\n\n", color.error("ERROR:"), message);
         usage();
@@ -1465,7 +1554,8 @@ class QoreDataProviderI18nCmd {
         printf("  -m, --module=MOD   Load provider module; repeatable\n");
         printf("      --owner=MOD    Extract only contributions owned by module; repeatable\n");
         printf("  -a, --app=APP      Extract exact app identifier; repeatable\n");
-        printf("      --check        Exit 2 if any generated root or translation is stale\n");
+        printf("      --check        Exit 2 if any generated root or translation is stale, or 3 if\n");
+        printf("                     another Qore generated the stale catalogs (see GENERATING QORE)\n");
         printf("      --check-tree   Recursively verify catalogs without loading providers\n");
         printf("      --check-source-tree\n");
         printf("                     Load source owners and verify roots and translations\n");
@@ -1482,8 +1572,230 @@ class QoreDataProviderI18nCmd {
         printf("                     Require every standard translation locale in a check\n");
         printf("      --require-complete-locales\n");
         printf("                     Require every checked locale to cover every root message\n");
+        printf("      --allow-other-qore\n");
+        printf("                     Write catalogs that a Qore generated which cannot be ordered with\n");
+        printf("                     this one (see GENERATING QORE)\n");
+        printf("      --record-qore  With a check: if every checked catalog is current, record the\n");
+        printf("                     installed Qore for them without writing a catalog\n");
         printf("  -v, --verbose      Show loaded modules and written files\n");
         printf("  -C, --no-color     Disable colored output\n");
-        printf("  -h, --help         Show this help\n");
+        printf("  -h, --help         Show this help\n\n");
+        printf("%s\n", color.bold("GENERATING QORE"));
+        printf("  Every write records the Qore that generated the catalogs (version and git hash) in\n");
+        printf("  %s in each catalog directory it writes (the directory of the catalog\n",
+            QoreCatalogGeneratorRecord::RecordName);
+        printf("  domains, such as qlib/<Module>/i18n), beside the records of other generators.\n");
+        printf("  A check that finds catalogs stale exits %d instead of 2 when another Qore generated every\n",
+            QoreCatalogGeneratorRecord::OtherQoreExitCode);
+        printf("  directory with stale catalogs: they can differ from the sources only by what that Qore\n");
+        printf("  generates; --record-qore records the installed Qore when it generates the same\n");
+        printf("  catalogs.  A write over the catalogs of a newer Qore is refused; the two Qores are\n");
+        printf("  ordered in a Qore checkout (%s, or the checkout this tool is in), and Qores that\n",
+            QoreCatalogGeneratorRecord::QoreSourceEnv);
+        printf("  cannot be ordered are refused unless --allow-other-qore is given.\n");
+    }
+}
+
+#! The Qore that generated derived catalogs, recorded beside them
+/** The catalogs are generated by the Qore that runs this tool: catalogs generated with another Qore can differ from
+    the sources only by what that Qore generates.  The record has the shape of the one that Qorus's catalog
+    generators write (a map of generator name to \c version and \c git_hash), so that one reader reads both.
+*/
+class QoreCatalogGeneratorRecord {
+    public {
+        #! The file in a catalog directory that records, per generator, the Qore it generated with
+        const RecordName = ".qore-generator.json";
+        #! The name of this generator in the record
+        const Generator = "qore-data-provider-i18n";
+        #! The exit code of a check that finds the catalogs stale, which another Qore generated
+        const OtherQoreExitCode = 3;
+        #! The environment variable naming a Qore source checkout, whose history orders two Qore commits
+        const QoreSourceEnv = "QORE_SRC_DIR";
+    }
+
+    private {
+        #! the identity of the Qore that runs the tool, once it is known (the tool runs in one thread)
+        static *hash<auto> installed;
+    }
+
+    #! Returns the identity of a Qore from its version output (qore --version)
+    /** @throw QORE-GENERATOR-ERROR the output gives no version or no git hash
+    */
+    static hash<auto> parseQoreVersion(string output) {
+        *string version = (output =~ x/\bversion ([0-9][^ ]*)/)[0];
+        *string git_hash = (output =~ x/git hash: ([0-9a-f]{7,40})/)[0];
+        if (!version || !git_hash) {
+            throw "QORE-GENERATOR-ERROR", "the Qore version and git hash are not given by \"qore --version\"";
+        }
+        return {"version": version, "git_hash": git_hash};
+    }
+
+    #! Returns the identity of the Qore that runs this tool
+    static hash<auto> installedQore() {
+        if (!installed) {
+            string qore = QORE_ARGV[0] ?? "qore";
+            installed = parseQoreVersion(backquote(sprintf("'%s' --version 2>&1", replace(qore, "'", "'\"'\"'"))));
+        }
+        return installed;
+    }
+
+    #! Returns the Qore that this generator recorded for the catalogs of a catalog directory, if it recorded one
+    /** @param dir the catalog directory
+
+        @return the recorded \c version and \c git_hash, or @ref nothing if this generator recorded none
+
+        @throw QORE-GENERATOR-ERROR the record is not a map, or its entry for this generator names no Qore
+    */
+    static *hash<auto> readRecord(string dir) {
+        string path = dir + DirSep + RecordName;
+        if (!is_readable(path)) {
+            return;
+        }
+        auto record = parse_json(ReadOnlyFile::readTextFile(path));
+        if (record.typeCode() != NT_HASH) {
+            throw "QORE-GENERATOR-ERROR", sprintf("%s is not a map", path);
+        }
+        auto entry = record{Generator};
+        if (exists entry && (entry.typeCode() != NT_HASH || entry.git_hash.typeCode() != NT_STRING)) {
+            throw "QORE-GENERATOR-ERROR", sprintf("%s does not record a Qore for %s", path, Generator);
+        }
+        return entry;
+    }
+
+    #! Records the Qore that runs this tool in each of the given catalog directories
+    static writeRecords(*list<string> dirs) {
+        foreach string dir in (dirs) {
+            writeRecord(dir);
+        }
+    }
+
+    #! Records the Qore that runs this tool for the catalogs of a catalog directory
+    /** The records of the other generators in the file are kept; the file is replaced atomically
+
+        @param dir the catalog directory
+    */
+    static writeRecord(string dir) {
+        string path = dir + DirSep + RecordName;
+        hash<auto> record = {};
+        if (is_readable(path)) {
+            auto current = parse_json(ReadOnlyFile::readTextFile(path));
+            if (current.typeCode() == NT_HASH) {
+                record = current;
+            }
+        }
+        record{Generator} = installedQore(){"version", "git_hash"};
+        string temporary = path + sprintf(".tmp.%d", getpid());
+        on_exit {
+            if (is_file(temporary)) {
+                unlink(temporary);
+            }
+        }
+        mkdir_ex(dir, 0755, True);
+        File f();
+        f.open2(temporary, O_WRONLY | O_CREAT | O_EXCL, 0644);
+        f.write(make_json(record, JGF_ADD_FORMATTING) + "\n");
+        f.close();
+        rename(temporary, path);
+    }
+
+    #! Returns why stale catalogs may not be a change of the sources, or nothing if this Qore generated them
+    /** @param dir the catalog directory
+
+        @return a message naming both Qores when another Qore generated the catalogs
+    */
+    static *string otherQore(string dir) {
+        *hash<auto> recorded = readRecord(dir);
+        hash<auto> qore = installedQore();
+        if (!recorded || recorded.git_hash == qore.git_hash) {
+            return;
+        }
+        return sprintf("generated with a different Qore (%s %s, installed %s %s)", recorded.version ?? "",
+            recorded.git_hash, qore.version, qore.git_hash);
+    }
+
+    #! Refuses to replace catalogs that a newer Qore generated in any of the given catalog directories
+    /** @param dirs the catalog directories
+        @param allow_other True to replace the catalogs when it cannot be told which Qore is newer
+
+        @throw QORE-GENERATOR-ERROR see checkRegeneration(string, bool)
+    */
+    static checkRegeneration(*list<string> dirs, bool allow_other) {
+        foreach string dir in (dirs) {
+            checkRegeneration(dir, allow_other);
+        }
+    }
+
+    #! Refuses to replace catalogs that a newer Qore generated
+    /** @param dir the catalog directory
+        @param allow_other True to replace the catalogs when it cannot be told which Qore is newer
+
+        @throw QORE-GENERATOR-ERROR this Qore is older than the one that generated the catalogs, or it cannot be told
+        which is newer and \a allow_other is not set
+    */
+    static checkRegeneration(string dir, bool allow_other) {
+        *hash<auto> recorded = readRecord(dir);
+        hash<auto> qore = installedQore();
+        if (!recorded || recorded.git_hash == qore.git_hash) {
+            return;
+        }
+        if (gitIsAncestor(qore.git_hash, recorded.git_hash)) {
+            throw "QORE-GENERATOR-ERROR", sprintf("the catalogs in %s were generated with a newer Qore (%s) than "
+                "this one (%s); use that Qore or a newer one to regenerate them", dir, recorded.git_hash,
+                qore.git_hash);
+        }
+        if (gitIsAncestor(recorded.git_hash, qore.git_hash)) {
+            return;
+        }
+        if (!allow_other) {
+            throw "QORE-GENERATOR-ERROR", sprintf("the catalogs in %s were generated with Qore %s, and it cannot be "
+                "told whether this Qore %s is newer; set %s to a Qore checkout that has both, or pass "
+                "--allow-other-qore", dir, recorded.git_hash, qore.git_hash, QoreSourceEnv);
+        }
+    }
+
+    #! Returns the Qore checkout that orders two Qore commits: QORE_SRC_DIR, or the checkout this tool is in
+    static *string qoreCheckout() {
+        *string repo = ENV{QoreSourceEnv};
+        if (!repo) {
+            *string script_dir = get_script_dir();
+            if (script_dir) {
+                repo = dirname(script_dir);
+            }
+        }
+        if (!repo || (!is_dir(repo + "/.git") && !is_file(repo + "/.git"))) {
+            return;
+        }
+        return repo;
+    }
+
+    #! Tells whether a Qore commit is an ancestor of another in the Qore checkout
+    /** @param older the commit that may be the ancestor
+        @param newer the commit that may be the descendant
+
+        @return True or False, or @ref nothing if there is no checkout or it does not have both commits
+    */
+    static *bool gitIsAncestor(string older, string newer) {
+        *string repo = qoreCheckout();
+        if (!repo) {
+            return;
+        }
+        foreach string commit in ((older, newer)) {
+            if (commit !~ /^[0-9a-f]{7,40}$/) {
+                return;
+            }
+            int rc;
+            backquote(sprintf("git -C '%s' cat-file -e %s^{commit} 2>/dev/null", replace(repo, "'", "'\"'\"'"),
+                commit), \rc);
+            if (rc) {
+                return;
+            }
+        }
+        int rc;
+        backquote(sprintf("git -C '%s' merge-base --is-ancestor %s %s 2>/dev/null", replace(repo, "'", "'\"'\"'"),
+            older, newer), \rc);
+        if (!rc) {
+            return True;
+        }
+        return rc == 1 ? False : NOTHING;
     }
 }

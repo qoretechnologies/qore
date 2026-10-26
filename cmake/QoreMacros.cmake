@@ -3203,6 +3203,10 @@ FUNCTION (QORE_INSTALL_USER_MODULE_CATALOGS _module_name)
         foreach (_qore_flat_catalog_file IN LISTS _qore_flat_catalog_files)
             get_filename_component(_qore_flat_catalog_name
                 "${_qore_flat_catalog_file}" NAME)
+            # the record of the Qore that generated the catalogs is not a catalog, and is not installed
+            if (_qore_flat_catalog_name STREQUAL ".qore-generator.json")
+                continue()
+            endif()
             if (NOT _qore_flat_catalog_name MATCHES
                     "^(.+)\\.([^.]+)\\.json$")
                 message(FATAL_ERROR
