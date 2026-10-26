@@ -79,6 +79,8 @@ class CMakeBuildHelpersTest inherits QUnit::Test {
             \testCyclicComponentBuilds());
         addTestCase("an incremental compile preloads the owner of a sibling's aliased constant",
             \testIncrementalConstantOwnerPreload());
+        addTestCase("an incremental compile preloads a newly referenced typedef",
+            \testIncrementalTypedefPreload());
         addTestCase("a group watches what its members read from outside it through one depfile",
             \testGroupExternalInputsDepfile());
         # one case per kind of reference, so a failure in one does not hide the others
@@ -2470,6 +2472,75 @@ add_dependencies(qo-objects ${QO_ORDER_TARGETS})
         string converged = run(sprintf("cmake --build %s -- -j9", build_dir));
         assertEq(0, occurrences(converged, "qcc: script-context .qo"),
             "the build after the incremental compile converges: " + converged);
+    }
+
+    #! A newly named typedef has no depfile edge yet and must be found from the source summary.
+    testIncrementalTypedefPreload() {
+        TmpDir tmp("qore-cmake-qcc-typedef-");
+        string src_dir = tmp.path + "/src";
+        string build_dir = tmp.path + "/build";
+        mkdir(src_dir);
+        write(src_dir + "/types.qc", "%modern\n"
+            "public namespace Metrics {\n"
+            "public typedef Measurements = hash<string, int>;\n"
+            "}\n");
+        string consumer = src_dir + "/consumer.qc";
+        write(consumer, "%modern\nint sub measurement() { return 42; }\n");
+        write(src_dir + "/CMakeLists.txt",
+"cmake_minimum_required(VERSION 3.16)
+project(QoreQoTypedef NONE)
+find_package(Qore REQUIRED)
+qore_qcc_compile_objects(QO_OBJECTS
+    GROUP typedefs
+    OUTPUT_DIR \"${CMAKE_BINARY_DIR}/qo\"
+    SCRIPT_DIR \"${CMAKE_BINARY_DIR}/qo-scripts\"
+    SOURCES \"${CMAKE_SOURCE_DIR}/types.qc\" \"${CMAKE_SOURCE_DIR}/consumer.qc\"
+    PARSE_OPTIONS PO_MODERN
+    WARNINGS_ARE_ERRORS
+    STAMPS_VAR QO_STAMPS
+    ORDER_TARGETS_VAR QO_ORDER_TARGETS)
+add_custom_target(qo-objects ALL DEPENDS ${QO_STAMPS})
+add_dependencies(qo-objects ${QO_ORDER_TARGETS})
+");
+        string configure = run(sprintf("cmake -S %s -B %s%s", src_dir, build_dir,
+            qore_dir ? " -DQore_DIR=" + qore_dir : ""));
+        assertTrue(is_file(build_dir + "/qo-scripts/scc-map.cmake"), "configured: " + configure);
+        string clean = run(sprintf("cmake --build %s -- -j4", build_dir));
+        assertEq(2, occurrences(clean, "qcc: script-context .qo"), "clean group parse: " + clean);
+        string depfile = glob(build_dir + "/qo/*consumer_qc.qo.d")[0];
+        string old_depfile = read(depfile);
+        assertEq(-1, old_depfile.find("types_qc"), "the old depfile has no typedef edge");
+
+        # Nested type arguments are not caught by the declaration-type regex.  The alias must be
+        # expanded during this parse; a deferred class placeholder cannot accept the hash value.
+        write(consumer, "%modern\nint sub measurement() {\n"
+            "    list<Metrics::Measurements> values = ({\"size\": 42},);\n"
+            "    return values[0].size;\n}\n");
+        string edited = run(sprintf("cmake --build %s -- -j4", build_dir));
+        assertEq(-1, edited.find("Error"), "the new typedef use compiles: " + edited);
+        assertEq(1, occurrences(edited, "qcc: script-context .qo"),
+            "only the edited consumer compiles: " + edited);
+        string manifest = read(build_dir + "/qo-scripts/source-symbols.manifest");
+        assertTrue(manifest.find("typedef\tMetrics::Measurements\t") >= 0,
+            "the manifest records the qualified alias: " + manifest);
+        # Simulate a consumer compiled before typedef dependency attribution: its existing alias use
+        # still has to work even though that old depfile omitted the provider.
+        write(depfile, old_depfile);
+        write(consumer, read(consumer) + "# rebuild with a legacy depfile\n");
+        string legacy = run(sprintf("cmake --build %s -- -j4", build_dir));
+        assertEq(-1, legacy.find("Error"), "an existing use with an old depfile also compiles: " + legacy);
+        assertEq(1, occurrences(legacy, "qcc: script-context .qo"),
+            "the legacy depfile does not require a group parse: " + legacy);
+        write(src_dir + "/types.qc", "%modern\n"
+            "public namespace Metrics {\n"
+            "public typedef Measurements = hash<string, auto>;\n"
+            "}\n");
+        string changed = run(sprintf("cmake --build %s -- -j4", build_dir));
+        assertEq(-1, changed.find("Error"), "a changed alias rebuilds successfully: " + changed);
+        assertEq(2, occurrences(changed, "qcc: script-context .qo"),
+            "the source dependency rebuilds both the provider and its consumer: " + changed);
+        string converged = run(sprintf("cmake --build %s -- -j4", build_dir));
+        assertEq(0, occurrences(converged, "qcc: script-context .qo"), "the next build is current: " + converged);
     }
 
     #! An incremental compile must be preloaded with everything a preloaded sibling's code reaches at parse commit.
