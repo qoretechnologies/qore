@@ -1301,6 +1301,7 @@ class CMakeQoStatusHolder {
     private {
         hash<CMakeQoStatus> status();
     }
+    string get() { hash<CMakeQoStatus> fresh(); return status.status + \":\" + fresh.status; }
 }
 ");
         write(enum_provider,
@@ -1441,11 +1442,12 @@ int sub main() {
     CMakeQoEnumConsumer enum_consumer();
     CMakeQoCallRefConsumer callref_consumer();
     CMakeQoChild child();
+    CMakeQoStatusHolder status_holder();
     callref callback = callref_consumer.get();
-    printf(\"%s:%s:%s:%s:%d:%s:%s:%s:%s\\n\",
+    printf(\"%s:%s:%s:%s:%d:%s:%s:%s:%s:%s\\n\",
         consumer.run(), hash_consumer.get().label, enum_consumer.get(), callback(),
         CMakeQoConstInitConsumer::Limit, CMakeQoConstHashConsumer::Values.value,
-        CMakeQoGlobalConsumer::get(), child.child(), CMakeQoSiblingConstConsumer::get());
+        CMakeQoGlobalConsumer::get(), child.child(), CMakeQoSiblingConstConsumer::get(), status_holder.get());
     return 0;
 }
 ");
@@ -1457,6 +1459,8 @@ int sub main() {
 %include srcs/child.qc
 %include srcs/hashdeclprovider.qc
 %include srcs/hashdeclconsumer.qc
+%include srcs/statusprovider.qc
+%include srcs/statusholder.qc
 %include srcs/enumprovider.qc
 %include srcs/enumconsumer.qc
 %include srcs/callrefprovider.qc
@@ -1836,7 +1840,7 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
         string source_out = run(sprintf("cd %s && %s %s", src_dir, source_qore, source_runner));
         string static_out = run(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s",
             qore_build_dir, build_dir + "/late-modules", build_dir + "/qo-static-host"));
-        assertEq("provider:state:tag:provider:state:provider:state:provider:state:hash:slow:callref:42:const:global:first,second:5000:23:NOTHING:object:base:one,two\n",
+        assertEq("provider:state:tag:provider:state:provider:state:provider:state:hash:slow:callref:42:const:global:first,second:5000:23:NOTHING:object:base:one,two:queued:queued\n",
             source_out, "source-mode fixture output");
         assertEq(source_out, static_out,
             "statically linked AOT aggregate is load-equivalent to parsed source");
@@ -2333,9 +2337,11 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
 
         # The script aggregate embeds the declarations of its sources, with the defaults of their members, and the
         # linked program initializes an object's members from them.  A source that changes only a member initializer
-        # must therefore rebuild the aggregate; its compile contract, which its consumers compile against, does not
-        # move.
+        # must therefore rebuild the aggregate, while its consumers, which depend on its declaration and compile
+        # contracts and do not compile against the default, keep their objects.
         date member_default_aggregate_mtime = mtime(build_dir + "/script-aggregate.qo");
+        date member_default_consumer_mtime = mtime(consumer_object);
+        string member_default_declaration_contract = read(provider_object + ".declaration-contract.stamp");
         string member_default_compile_contract = read(provider_object + ".compile-contract.stamp");
         string member_default_aggregate_contract = read(provider_object + ".aggregate-contract.stamp");
         string tagged_provider = read(provider);
@@ -2345,8 +2351,12 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
         string member_default_change = run(sprintf("cmake --build %s -- -j33", build_dir));
         assertEq(member_default_compile_contract, read(provider_object + ".compile-contract.stamp"),
             "a member initializer does not move the provider's compile contract: " + member_default_change);
+        assertEq(member_default_declaration_contract, read(provider_object + ".declaration-contract.stamp"),
+            "a member initializer does not move the provider's declaration contract: " + member_default_change);
         assertNeq(member_default_aggregate_contract, read(provider_object + ".aggregate-contract.stamp"),
             "a member initializer moves the provider's aggregate contract: " + member_default_change);
+        assertEq(member_default_consumer_mtime, mtime(consumer_object),
+            "a member initializer preserves the consumer object: " + member_default_change);
         assertNeq(member_default_aggregate_mtime, mtime(build_dir + "/script-aggregate.qo"),
             "a member initializer rebuilds the script aggregate: " + member_default_change);
         string member_default_source_out = run(sprintf("cd %s && %s %s", src_dir, source_qore, source_runner));
@@ -2356,6 +2366,48 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
             "the parsed source sees the new member default: " + member_default_source_out);
         assertEq(member_default_source_out, member_default_static_out,
             "the statically linked program sees the new member default");
+
+        # A hashdecl member default is embedded the same way, and initializes a hash of the type wherever it is
+        # created, also in the code of another source, which therefore keeps its object
+        string status_holder_object = "";
+        foreach string object_path in (object_paths) {
+            if (object_path.endsWith("_statusholder_qc.qo")) {
+                status_holder_object = object_path;
+            }
+        }
+        assertTrue(status_holder_object != "", "the hashdecl consumer is in the object list");
+        date hashdecl_default_aggregate_mtime = mtime(build_dir + "/script-aggregate.qo");
+        date hashdecl_default_consumer_mtime = mtime(status_holder_object);
+        write(status_provider, replace(read(status_provider), "string status = \"queued\";",
+            "string status = \"started\";"));
+        string hashdecl_default_change = run(sprintf("cmake --build %s -- -j33", build_dir));
+        assertNeq(hashdecl_default_aggregate_mtime, mtime(build_dir + "/script-aggregate.qo"),
+            "a hashdecl member default rebuilds the script aggregate: " + hashdecl_default_change);
+        assertEq(hashdecl_default_consumer_mtime, mtime(status_holder_object),
+            "a hashdecl member default preserves the object that creates a hash of the type: "
+                + hashdecl_default_change);
+        string hashdecl_default_source_out = run(sprintf("cd %s && %s %s", src_dir, source_qore, source_runner));
+        assertTrue(hashdecl_default_source_out.find(":started:started") != -1,
+            "the parsed source sees the new hashdecl default: " + hashdecl_default_source_out);
+        assertEq(hashdecl_default_source_out, run(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s",
+            qore_build_dir, build_dir + "/late-modules", build_dir + "/qo-static-host")),
+            "the statically linked program sees the new hashdecl default");
+        member_default_source_out = hashdecl_default_source_out;
+
+        # A member's type is what consumers compile against, so changing it rebuilds both the aggregate and the
+        # consumer.
+        date member_type_aggregate_mtime = mtime(build_dir + "/script-aggregate.qo");
+        date member_type_consumer_mtime = mtime(consumer_object);
+        string retagged_provider = read(provider);
+        write(provider, replace(retagged_provider, "string tag = \"retagged\";", "*string tag = \"retagged\";"));
+        string member_type_change = run(sprintf("cmake --build %s -- -j33", build_dir));
+        assertNeq(member_type_aggregate_mtime, mtime(build_dir + "/script-aggregate.qo"),
+            "a member type change rebuilds the script aggregate: " + member_type_change);
+        assertNeq(member_type_consumer_mtime, mtime(consumer_object),
+            "a member type change rebuilds the consumer object: " + member_type_change);
+        assertEq(member_default_source_out, run(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s",
+            qore_build_dir, build_dir + "/late-modules", build_dir + "/qo-static-host")),
+            "the statically linked program runs the same after a member type change");
     }
 
     #! A source whose body takes a call reference to each named function.

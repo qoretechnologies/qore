@@ -292,7 +292,7 @@ endfunction()
 function(QORE_QCC_SIDECAR_PATHS _output)
     set(options)
     set(oneValueArgs DEPFILE INDEX_JSON STATUS_JSON SUCCESS_STAMP CONTENT_STAMP
-        COMPILE_CONTRACT_STAMP AGGREGATE_CONTRACT_STAMP MANIFEST_JSON)
+        COMPILE_CONTRACT_STAMP AGGREGATE_CONTRACT_STAMP DECLARATION_CONTRACT_STAMP MANIFEST_JSON)
     cmake_parse_arguments(_QORE_QSP "${options}" "${oneValueArgs}" "" ${ARGN})
 
     if (_QORE_QSP_DEPFILE)
@@ -318,6 +318,10 @@ function(QORE_QCC_SIDECAR_PATHS _output)
         set(${_QORE_QSP_AGGREGATE_CONTRACT_STAMP}
             "${_output}.aggregate-contract.stamp" PARENT_SCOPE)
     endif ()
+    if (_QORE_QSP_DECLARATION_CONTRACT_STAMP)
+        set(${_QORE_QSP_DECLARATION_CONTRACT_STAMP}
+            "${_output}.declaration-contract.stamp" PARENT_SCOPE)
+    endif ()
     if (_QORE_QSP_MANIFEST_JSON)
         set(${_QORE_QSP_MANIFEST_JSON} "${_output}.source.manifest.json" PARENT_SCOPE)
     endif ()
@@ -325,7 +329,7 @@ endfunction()
 
 function(QORE_QCC_SIDECAR_FLAGS _out_var _output)
     set(options ALL DEPFILE INDEX_JSON STATUS_JSON SUCCESS_STAMP CONTENT_STAMP
-        COMPILE_CONTRACT_STAMP AGGREGATE_CONTRACT_STAMP MANIFEST_JSON
+        COMPILE_CONTRACT_STAMP AGGREGATE_CONTRACT_STAMP DECLARATION_CONTRACT_STAMP MANIFEST_JSON
         SKIP_IF_MANIFEST_CURRENT
         QO_INPUT_CONTENT_STAMPS COMPILE_CONTRACT_DEPENDENCIES
         SCRIPT_AGGREGATE_NATIVE_REGISTERS)
@@ -340,6 +344,7 @@ function(QORE_QCC_SIDECAR_FLAGS _out_var _output)
         set(_QORE_QSF_CONTENT_STAMP TRUE)
         set(_QORE_QSF_COMPILE_CONTRACT_STAMP TRUE)
         set(_QORE_QSF_AGGREGATE_CONTRACT_STAMP TRUE)
+        set(_QORE_QSF_DECLARATION_CONTRACT_STAMP TRUE)
         set(_QORE_QSF_COMPILE_CONTRACT_DEPENDENCIES TRUE)
         set(_QORE_QSF_MANIFEST_JSON TRUE)
         set(_QORE_QSF_SKIP_IF_MANIFEST_CURRENT TRUE)
@@ -371,6 +376,10 @@ function(QORE_QCC_SIDECAR_FLAGS _out_var _output)
     if (_QORE_QSF_AGGREGATE_CONTRACT_STAMP)
         list(APPEND _flags
             "--aggregate-contract-stamp=${_output}.aggregate-contract.stamp")
+    endif ()
+    if (_QORE_QSF_DECLARATION_CONTRACT_STAMP)
+        list(APPEND _flags
+            "--declaration-contract-stamp=${_output}.declaration-contract.stamp")
     endif ()
     if (_QORE_QSF_COMPILE_CONTRACT_DEPENDENCIES)
         list(APPEND _flags "--depfile-compile-contract-stamps")
@@ -499,6 +508,7 @@ function(_QORE_QCC_OBJECT_ARTIFACT_PATHS _out_var _output)
         "${_output}.content.stamp"
         "${_output}.compile-contract.stamp"
         "${_output}.aggregate-contract.stamp"
+        "${_output}.declaration-contract.stamp"
         # Published like the other contracts, but not required to exist: a build
         # configured without --depfile-declaration-contract-stamps never asks for
         # one, and an object that publishes no body contract still writes an empty
@@ -962,7 +972,7 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
             ${_qore_qcc_manifest_input_flags})
         set(_qore_qcc_single_cmd "${_qore_qcc_single_cmd} '${_qore_qcc_arg}'")
     endforeach()
-    set(_qore_qcc_single_cmd "${_qore_qcc_single_cmd} -c -L \"$preload_dir\" --manifest-skip-qo-library-inputs \"$@\" --depfile=\"$out.d\" --depfile-target=\"$out.stamp\" --depfile-compile-contract-stamps --depfile-declaration-contract-stamps --depfile-source-content-map='${_qore_qcc_source_content_map}' --write-index-json=\"$out.idx.json\" --write-status-json=\"$out.status.json\" --success-stamp=\"$out.stamp\" --content-stamp=\"$out.content.stamp\" --compile-contract-stamp=\"$out.compile-contract.stamp\" --aggregate-contract-stamp=\"$out.aggregate-contract.stamp\" --body-contract-stamp=\"$out.body-contract.stamp\" --write-manifest=\"$out.source.manifest.json\" --skip-if-manifest-current -o \"$out\" \"$src\"\n")
+    set(_qore_qcc_single_cmd "${_qore_qcc_single_cmd} -c -L \"$preload_dir\" --manifest-skip-qo-library-inputs \"$@\" --depfile=\"$out.d\" --depfile-target=\"$out.stamp\" --depfile-compile-contract-stamps --depfile-declaration-contract-stamps --depfile-source-content-map='${_qore_qcc_source_content_map}' --write-index-json=\"$out.idx.json\" --write-status-json=\"$out.status.json\" --success-stamp=\"$out.stamp\" --content-stamp=\"$out.content.stamp\" --compile-contract-stamp=\"$out.compile-contract.stamp\" --aggregate-contract-stamp=\"$out.aggregate-contract.stamp\" --declaration-contract-stamp=\"$out.declaration-contract.stamp\" --body-contract-stamp=\"$out.body-contract.stamp\" --write-manifest=\"$out.source.manifest.json\" --skip-if-manifest-current -o \"$out\" \"$src\"\n")
     QORE_WRITE_IF_CHANGED("${_qore_qcc_single_script}" "${_qore_qcc_single_cmd}")
 
     list(LENGTH _qore_qcc_abs_sources _qore_qcc_count)
@@ -1311,6 +1321,11 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
             # the always-touched object success stamp as a timestamp input.
             add_custom_command(
                 OUTPUT ${_qore_qcc_output}.aggregate-contract.stamp
+                COMMAND ${CMAKE_COMMAND} -E true
+                VERBATIM)
+            # The declaration contract consumers depend on, the same way.
+            add_custom_command(
+                OUTPUT ${_qore_qcc_output}.declaration-contract.stamp
                 COMMAND ${CMAKE_COMMAND} -E true
                 VERBATIM)
         endforeach()

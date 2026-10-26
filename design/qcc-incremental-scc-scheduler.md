@@ -840,7 +840,7 @@ widely required source rebuilds every object that folded any constant from it.
 
 **Channel 1 — the depfile edge, which is what the build tool reads.**
 `--depfile-declaration-contract-stamps` rewrites those source dependencies to the provider's
-`.qo.aggregate-contract.stamp`, after the pass that narrows *imported* providers to their
+`.qo.declaration-contract.stamp`, after the pass that narrows *imported* providers to their
 compile-contract stamp and before the one that would otherwise reduce them to source digests.
 Two things are deliberately not narrowed: a source the object also defines into (its own bytes
 are what must rebuild it), and a provider it imports with a recorded body-contract hash (the
@@ -901,13 +901,13 @@ the declaration contract every member must publish before any depfile is rewritt
 in the pre-pass that already wrote the compile contracts, and the narrowing itself reads the
 symbol index the passes around it already read.
 
-### What the aggregate contract covers
+### What the aggregate contract covers, and why consumers do not watch it
 
 The native-registration script aggregate is compiled from the group's sources in one parse,
-but it is rebuilt only when the aggregate contract of one of its members moves, so that
-contract has to cover everything the aggregate embeds from a member: its declaration rows, the
-declaration locations (`aggregate_declaration_location_v1`), and the values the declaration
-sections carry that no consumer compiles against -- the defaults of instance members, static
+but it is rebuilt only when the aggregate contract (`.qo.aggregate-contract.stamp`) of one of
+its members moves, so that contract has to cover everything the aggregate embeds from a member:
+its declaration rows, the declaration locations (`aggregate_declaration_location_v1`), and the
+values the declaration sections carry that no consumer compiles against -- the defaults of instance members, static
 variables and hashdecl members, the default arguments of functions and methods, and the
 arguments a constructor passes to its base classes.  The linked program initializes members and
 fills in omitted arguments from those values, so a member that only changed an initializer was
@@ -916,10 +916,20 @@ recompiled while the aggregate kept, and the program ran, the old default.
 Each such value is written a second time to a writer of its own and hashed
 (`aotRecordAggregateDeclarationDigest()`), so the digest follows the value and not the offsets
 its strings take in the object's string pool, which move with every edit of the source.  The
-digests are symbol-index context rows whose keys start with `aggregate_`; the compile contract
-leaves out every such row.  The declaration contract is the same stamp, so a consumer whose
-generation follows it is recompiled when an embedded default moves, as it already was when a
-declaration only moved to another line.
+digests are symbol-index context rows whose keys start with `aggregate_`.
+
+Consumers do not depend on those rows, so they watch a different stamp.  The declaration
+contract (`.qo.declaration-contract.stamp`) is the aggregate contract without the `aggregate_`
+rows; it is what channel 1 narrows a folded-value dependency to and what channel 2's generation
+token digests for a predecessor (`DeclarationContractSuffix` in `qore-qo-source-order`), and the
+compile contract leaves the rows out as well.  So a declaration that only moved to another line,
+or a member default, default argument or base class argument that only changed its value,
+rebuilds the script aggregate and no consumer; a change to what a declaration is (a member's
+type, a new member, a signature) moves all three.  Before the two were split the declaration
+contract was the aggregate stamp itself, and every consumer that folded a value from or followed
+a provider was recompiled for a line shift.  A depfile written before the split names the
+provider's `.aggregate-contract.stamp`; it is still recognised as a declaration-contract
+dependency until that object is rebuilt.
 A class row also names the class's own instance members (name, type, access, transient), which
 consumers do compile against, so adding a member or changing its type moves both contracts.
 

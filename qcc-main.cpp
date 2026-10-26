@@ -864,6 +864,7 @@ static const char* aggregate_contract_stamp_path = nullptr;
 // consumer's recorded import against.  Kept apart from the declaration contract so a
 // consumer can depend on one without depending on the other.
 static const char* body_contract_stamp_path = nullptr;
+static const char* declaration_contract_stamp_path = nullptr;
 
 //! Exit status of a -c compile that failed loading or resolving the objects it preloaded with -L
 /** Such a failure concerns the preload set the build chose, not the sources compiled -- a parse of the
@@ -1181,10 +1182,17 @@ static void print_usage(const char* prog) {
            "                         one records it as a dependency, so that a\n"
            "                         provider whose declarations did not change but\n"
            "                         whose bodies did still rebuilds it.\n");
+    printf("      --declaration-contract-stamp=FILE\n"
+           "                         Write the content-stable contract over the\n"
+           "                         declarations the consumers of the generated object\n"
+           "                         resolve against: the aggregate contract without\n"
+           "                         what only a script aggregate embeds (declaration\n"
+           "                         locations and the values of member defaults,\n"
+           "                         default arguments and base class arguments)\n");
     printf("      --depfile-declaration-contract-stamps\n"
            "                         Replace the source dependencies left by folded\n"
            "                         compile-time values and resolved types with the\n"
-           "                         provider .qo.aggregate-contract.stamp sidecar, so a\n"
+           "                         provider .qo.declaration-contract.stamp sidecar, so a\n"
            "                         provider edit that changes no declaration does not\n"
            "                         recompile the consumers that folded its constants.\n"
            "                         Requires --depfile-source-content-map=FILE.\n");
@@ -1422,6 +1430,7 @@ static struct option long_options[] = {
     {"depfile-declaration-contract-stamps", no_argument, nullptr, 0x128},
     {"body-contract-stamp", required_argument, nullptr, 0x129},
     {"file-prefix-map", required_argument, nullptr, 0x12a},
+    {"declaration-contract-stamp", required_argument, nullptr, 0x12b},
     {"from-objects",      no_argument,       nullptr, 'F'},
     {"archive",           no_argument,       nullptr, 'a'},
     {"entry",             required_argument, nullptr, 'e'},
@@ -1653,6 +1662,9 @@ static int parse_options_cmdline(int argc, char** argv) {
                 break;
             case 0x129:  // --body-contract-stamp
                 body_contract_stamp_path = optarg;
+                break;
+            case 0x12b:  // --declaration-contract-stamp
+                declaration_contract_stamp_path = optarg;
                 break;
             case 'F':
                 from_objects = true;
@@ -6106,9 +6118,20 @@ static bool write_aot_compile_contract_stamp_file(const char* stamp_path,
 static bool read_file_required(const std::string& path, std::string& content,
     std::string& error);
 
+//! Builds the declaration contract of an object from its symbol index
+/** @param index the object's symbol index
+    @param content receives the contract
+    @param contract_hash receives the contract's hash
+    @param error receives the reason on failure
+    @param aggregate_rows whether the rows only a script aggregate depends on are included: the declaration
+    locations and the digests of the values its declaration records embed (context keys starting with
+    \c aggregate_); the aggregate contract includes them, the declaration contract consumers depend on does not
+
+    @return true on success, false if the operation was cancelled
+*/
 static bool build_aot_declaration_contract_content(
         const QoreAOTSymbolIndex& index, std::string& content,
-        std::string& contract_hash, std::string& error) {
+        std::string& contract_hash, std::string& error, bool aggregate_rows) {
     std::vector<std::string> rows;
     rows.reserve(index.context.size() + index.defined.size());
     std::set<std::string> required_namespaces;
@@ -6141,6 +6164,12 @@ static bool build_aot_declaration_contract_content(
         // for the same reason -- keeping it made a batch compile and an equivalent standalone compile
         // spuriously disagree, which is what this contract exists not to do.
         if (index.context[i].first == "feature_flags") {
+            continue;
+        }
+        // A consumer resolves against what a declaration is, not where it is or what values the aggregate
+        // carries for it: a declaration that only moved to another line, or a member default, a default argument
+        // or a base class argument that only changed its value, rebuilds the script aggregate and no consumer.
+        if (!aggregate_rows && !index.context[i].first.compare(0, 10, "aggregate_")) {
             continue;
         }
         std::string row = "context\t";
@@ -6210,7 +6239,7 @@ static bool build_aot_aggregate_contract_content(
     std::string declaration_content;
     std::string declaration_hash;
     if (!build_aot_declaration_contract_content(index, declaration_content,
-            declaration_hash, error)) {
+            declaration_hash, error, true)) {
         return false;
     }
 
@@ -6263,6 +6292,34 @@ static bool write_aot_aggregate_contract_stamp_file(const char* stamp_path,
         return false;
     }
     return write_generated_file_if_changed(stamp_path, contract_content, error);
+}
+
+//! Writes the declaration contract the consumers of an object depend on
+/** This is the aggregate contract without the rows only the script aggregate depends on (see
+    build_aot_declaration_contract_content()), so a declaration that only moved to another line, or a value
+    that only the aggregate embeds, rebuilds the aggregate and no consumer.  Written with
+    write_generated_file_if_changed(), so an unchanged contract keeps its mtime.
+
+    @param stamp_path the stamp to write
+    @param object_path the generated `.qo`
+    @param error receives the reason on failure
+
+    @return true on success, false with @a error set on failure
+*/
+static bool write_aot_declaration_contract_stamp_file(const char* stamp_path,
+        const char* object_path, std::string& error) {
+    QOLinkInputInfo input;
+    if (!collect_qo_link_input(object_path, input, error)) {
+        return false;
+    }
+    std::string declaration_content;
+    std::string declaration_hash;
+    if (!build_aot_declaration_contract_content(input.index, declaration_content,
+            declaration_hash, error, false)) {
+        return false;
+    }
+    return write_generated_file_if_changed(stamp_path,
+        "format=1\ndeclarations\t" + declaration_hash + "\n", error);
 }
 
 //! Builds the body-contract half of an object's published interface.
@@ -7413,7 +7470,10 @@ static bool add_aot_compile_contract_depfile_inputs(
     // prerequisite already present in the depfile, even when the current invocation no longer
     // emits declaration-contract dependencies: a depfile from an earlier configuration remains
     // authoritative until this invocation has actually rebuilt and replaced it.
-    static constexpr const char declaration_suffix[] = ".aggregate-contract.stamp";
+    static constexpr const char declaration_suffix[] = ".declaration-contract.stamp";
+    // the suffix consumers recorded before the declaration contract left out what only the script aggregate
+    // depends on
+    static constexpr const char legacy_declaration_suffix[] = ".aggregate-contract.stamp";
     std::vector<std::string> deps;
     read_make_depfile_inputs(depfile, deps);
     for (size_t i = 0; i < deps.size(); ++i) {
@@ -7427,9 +7487,12 @@ static bool add_aot_compile_contract_depfile_inputs(
             inputs.push_back(deps[i]);
             continue;
         }
-        if (deps[i].size() >= sizeof(declaration_suffix) - 1
-                && deps[i].compare(deps[i].size() - (sizeof(declaration_suffix) - 1),
-                    sizeof(declaration_suffix) - 1, declaration_suffix) == 0) {
+        if ((deps[i].size() >= sizeof(declaration_suffix) - 1
+                    && deps[i].compare(deps[i].size() - (sizeof(declaration_suffix) - 1),
+                        sizeof(declaration_suffix) - 1, declaration_suffix) == 0)
+                || (deps[i].size() >= sizeof(legacy_declaration_suffix) - 1
+                    && deps[i].compare(deps[i].size() - (sizeof(legacy_declaration_suffix) - 1),
+                        sizeof(legacy_declaration_suffix) - 1, legacy_declaration_suffix) == 0)) {
             inputs.push_back(deps[i]);
         }
     }
@@ -8091,6 +8154,11 @@ static bool write_requested_sidecars(const QCCBuildManifest& manifest,
                 body_contract_stamp_path, manifest.output.c_str(), error)) {
         return false;
     }
+    if (declaration_contract_stamp_path
+            && !write_aot_declaration_contract_stamp_file(
+                declaration_contract_stamp_path, manifest.output.c_str(), error)) {
+        return false;
+    }
     return write_qcc_manifest_file(manifest, argv0, error);
 }
 
@@ -8117,6 +8185,12 @@ static QCCFinishResult finish_qcc_build(const QCCBuildManifest& manifest, const 
             && !is_file(aggregate_contract_stamp_path)
             && !write_aot_aggregate_contract_stamp_file(
                 aggregate_contract_stamp_path, manifest.output.c_str(), error)) {
+        return QCCFinishResult::Error;
+    }
+    if (skipped && declaration_contract_stamp_path
+            && !is_file(declaration_contract_stamp_path)
+            && !write_aot_declaration_contract_stamp_file(
+                declaration_contract_stamp_path, manifest.output.c_str(), error)) {
         return QCCFinishResult::Error;
     }
     if (skipped && body_contract_stamp_path
@@ -8562,11 +8636,13 @@ static bool rewrite_aot_compile_contract_depfile(
     rebuild this object when the value changes -- but SOURCE-BYTE granularity is wrong for it:
     appending a comment to a provider rebuilds every object that folded any constant from it, and
     the consumer closure of a widely included source is most of the group.  The provider's
-    aggregate (declaration) contract is the content-preserving description of exactly what such a
-    reference consumes: build_aot_declaration_contract_content() carries a value_hash for every
-    constant the provider defines and a signature/declaration hash for every type it declares, and
-    omits the lowering artifacts -- native rows, body contracts, the feature bitset -- that make
-    the same source's COMPILE contract differ between a whole-group parse and a standalone one.
+    declaration contract (`.declaration-contract.stamp`) is the content-preserving description of
+    exactly what such a reference consumes: build_aot_declaration_contract_content() carries a
+    value_hash for every constant the provider defines and a signature/declaration hash for every
+    type it declares, and omits the lowering artifacts -- native rows, body contracts, the feature
+    bitset -- that make the same source's COMPILE contract differ between a whole-group parse and a
+    standalone one, and the rows only the script aggregate depends on (declaration locations,
+    embedded default values), which the provider's `.aggregate-contract.stamp` adds.
 
     Two classes of dependency are deliberately left alone:
 
@@ -8648,7 +8724,7 @@ static bool rewrite_aot_declaration_contract_depfile(
     }
 
     static const std::string compile_suffix = ".compile-contract.stamp";
-    static const std::string declaration_suffix = ".aggregate-contract.stamp";
+    static const std::string declaration_suffix = ".declaration-contract.stamp";
 
     std::vector<std::string> deps;
     read_make_depfile_inputs(depfile, deps);
@@ -10689,6 +10765,8 @@ int main(int argc, char** argv) {
                 compile_contract_stamp_path;
             const char* saved_aggregate_contract_stamp_path =
                 aggregate_contract_stamp_path;
+            const char* saved_declaration_contract_stamp_path =
+                declaration_contract_stamp_path;
             for (size_t i = 0; i < batch_objects.size(); ++i) {
                 if (i && !(i % 100)
                         && qcc_check_cancel(
@@ -10714,9 +10792,18 @@ int main(int argc, char** argv) {
                 // consumer narrow or not narrow according to whether the provider happened to
                 // be earlier in the batch -- or, on a clean tree, according to nothing at all.
                 if (depfile_declaration_contract_stamps) {
-                    std::string declaration_stamp = batch_objects[i]
+                    std::string aggregate_stamp = batch_objects[i]
                         + ".aggregate-contract.stamp";
                     if (!write_aot_aggregate_contract_stamp_file(
+                            aggregate_stamp.c_str(), batch_objects[i].c_str(),
+                            error)) {
+                        fprintf(stderr, "error: %s\n", error.c_str());
+                        qore_cleanup();
+                        return 1;
+                    }
+                    std::string declaration_stamp = batch_objects[i]
+                        + ".declaration-contract.stamp";
+                    if (!write_aot_declaration_contract_stamp_file(
                             declaration_stamp.c_str(), batch_objects[i].c_str(),
                             error)) {
                         fprintf(stderr, "error: %s\n", error.c_str());
@@ -10761,6 +10848,8 @@ int main(int argc, char** argv) {
                     + ".compile-contract.stamp";
                 std::string aggregate_contract_stamp = object
                     + ".aggregate-contract.stamp";
+                std::string declaration_contract_stamp = object
+                    + ".declaration-contract.stamp";
                 size_t slash = object.find_last_of("/\\");
                 std::string object_basename = slash == std::string::npos
                     ? object : object.substr(slash + 1);
@@ -10775,6 +10864,8 @@ int main(int argc, char** argv) {
                     compile_contract_stamp.c_str();
                 aggregate_contract_stamp_path =
                     aggregate_contract_stamp.c_str();
+                declaration_contract_stamp_path =
+                    declaration_contract_stamp.c_str();
 
                 if (!add_aot_import_provider_depfile_inputs(object, depfile,
                         object + ".stamp", error)) {
@@ -10848,6 +10939,8 @@ int main(int argc, char** argv) {
             compile_contract_stamp_path = aggregate_compile_contract_stamp_path;
             aggregate_contract_stamp_path =
                 saved_aggregate_contract_stamp_path;
+            declaration_contract_stamp_path =
+                saved_declaration_contract_stamp_path;
         }
         if (batch_script_aggregate_output) {
             QCCBuildManifest manifest;

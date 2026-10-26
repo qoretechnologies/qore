@@ -27,7 +27,9 @@ const BATCH_PUBLICATION_SUFFIX = ".publication";
     right thing for both a folded-constant dependency edge and the planner's
     generation token to watch, and both do.
 */
-const DeclarationContractSuffix = ".aggregate-contract.stamp";
+const DeclarationContractSuffix = ".declaration-contract.stamp";
+#! The suffix consumers recorded for a declaration contract before it left out what only the script aggregate needs
+const LegacyDeclarationContractSuffix = ".aggregate-contract.stamp";
 #! The sidecar carrying the body contracts a member publishes.
 /** What the declaration contract deliberately leaves out, and the only reason
     leaving it out is safe.  `--link-qo` compares a consumer's recorded import hash
@@ -1368,10 +1370,13 @@ class SourceOrderEngine {
             `.sha256` is the provider's source-content digest, which is what qcc
             records for a provider outside the build group -- or for any provider
             at all without `--depfile-declaration-contract-stamps`.
-            `.qo.aggregate-contract.stamp` is the provider's DECLARATION contract,
+            `.qo.declaration-contract.stamp` is the provider's DECLARATION contract,
             which that option records for a group member instead: a folded constant
             consumes the provider's declarations and nothing else, so watching its
-            source bytes rebuilt every consumer for a comment.
+            source bytes rebuilt every consumer for a comment.  (A depfile written
+            before the declaration contract left out what only the script aggregate
+            depends on names the provider's `.qo.aggregate-contract.stamp` instead,
+            which is recognised the same way until that object is rebuilt.)
 
             Neither may be spelled `.compile-contract.stamp`: that suffix is how
             collectDepfileContractEdges() recognises a REQUIRED edge, and reusing
@@ -1380,7 +1385,7 @@ class SourceOrderEngine {
             group as 820 components becoming 435, one of them with 441 members.
         */
         Regex source_content_re = new Regex(
-            "((?:\\\\[\\s\\S]|[^\\s])+(?:\\.sha256|\\.aggregate-contract\\.stamp))",
+            "((?:\\\\[\\s\\S]|[^\\s])+(?:\\.sha256|\\.declaration-contract\\.stamp|\\.aggregate-contract\\.stamp))",
             RE_Global);
         #! Every provider body contract a depfile names.
         /** Recorded only by a consumer that baked a provider's body-contract hash,
@@ -2022,8 +2027,9 @@ class SourceOrderEngine {
     #! The group members whose content \a outputs were compiled against.
     /** Maps each content prerequisite back to the member it names: a
         `<mangled source>.sha256` digest sidecar by its mangled stem, and a
-        `<member object>.aggregate-contract.stamp` declaration contract by the
-        member object it is a sidecar of.  Entries naming files outside the group
+        `<member object>.declaration-contract.stamp` declaration contract (or the
+        `.aggregate-contract.stamp` an older depfile names) by the member object it is a
+        sidecar of.  Entries naming files outside the group
         (the toolchain, loaded modules, stubs) are skipped rather than guessed at.
     */
     list<string> contentDependencyOutputs(hash<SourceOrderContext> context_info,
@@ -2048,6 +2054,9 @@ class SourceOrderEngine {
                 if (stem.endsWith(DeclarationContractSuffix)) {
                     stem = stem.substr(0,
                         stem.size() - DeclarationContractSuffix.size());
+                } else if (stem.endsWith(LegacyDeclarationContractSuffix)) {
+                    stem = stem.substr(0,
+                        stem.size() - LegacyDeclarationContractSuffix.size());
                 } else {
                     stem = stem.substr(0, stem.size() - 7) + ".qo";
                 }
@@ -3477,6 +3486,7 @@ class SourceOrderEngine {
         }
         string result = "";
         foreach string path in ((output + DeclarationContractSuffix,
+                output + LegacyDeclarationContractSuffix,
                 output + ".compile-contract.stamp",
                 output + ".content.stamp")) {
             if (is_file(path)) {
@@ -3794,6 +3804,9 @@ class SourceOrderEngine {
                 # for one, and every generation published before it existed is still
                 # complete.
                 push paths, context_info.outputs[index] + BodyContractSuffix;
+                # The declaration contract consumers depend on, for the same reasons: its content is in
+                # the generation token, and a generation published before it existed is complete.
+                push paths, context_info.outputs[index] + DeclarationContractSuffix;
                 push paths, context_info.inputs[index];
                 if (context_info.source_content_digests) {
                     push paths, context_info.source_content_digests[index];

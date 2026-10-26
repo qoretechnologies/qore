@@ -182,12 +182,13 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
             "%new-style\nclass UseDc { static int f() { return DCVAL * 3 + 1; } }\n");
 
         string prov_obj = lib_dir + "/dck.qo";
-        string decl_stamp = prov_obj + ".aggregate-contract.stamp";
+        string decl_stamp = prov_obj + ".declaration-contract.stamp";
         string compile_stamp = prov_obj + ".compile-contract.stamp";
         code compileProvider = sub () {
             string out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN"
-                + " --compile-contract-stamp=%s --aggregate-contract-stamp=%s -o %s %s",
-                env, qcc_bin, lib_dir, compile_stamp, decl_stamp, prov_obj, prov_src));
+                + " --compile-contract-stamp=%s --aggregate-contract-stamp=%s.aggregate-contract.stamp"
+                + " --declaration-contract-stamp=%s -o %s %s",
+                env, qcc_bin, lib_dir, compile_stamp, prov_obj, decl_stamp, prov_obj, prov_src));
             assertTrue(is_file(prov_obj), "compiled the constant provider: " + out);
             assertTrue(is_file(decl_stamp), "emitted the declaration contract: " + out);
         };
@@ -215,7 +216,7 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
         string plain = File::readTextFile(plain_dep);
         assertTrue(plain.find("dck.qc.sha256") != -1,
             "without the option the folded constant is a source-byte dependency: " + plain);
-        assertEq(-1, plain.find("dck.qo.aggregate-contract.stamp"),
+        assertEq(-1, plain.find("dck.qo.declaration-contract.stamp"),
             "without the option no declaration contract is recorded: " + plain);
 
         # NARROWED: the same compile with the option records the declaration contract instead
@@ -226,8 +227,10 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
             env, qcc_bin, lib_dir, dep_file, map_file, lib_dir, cons_src));
         assertTrue(is_file(lib_dir + "/use_dc.qo"), "compiled the folding consumer: " + cons_out);
         string dep = File::readTextFile(dep_file);
-        assertTrue(dep.find("dck.qo.aggregate-contract.stamp") != -1,
+        assertTrue(dep.find("dck.qo.declaration-contract.stamp") != -1,
             "the folded-constant edge narrows to the provider's declaration contract: " + dep);
+        assertEq(-1, dep.find("dck.qo.aggregate-contract.stamp"),
+            "the folded-constant edge does not name the provider's aggregate contract: " + dep);
         assertEq(-1, dep.find("dck.qc.sha256"),
             "the provider's source-byte edge is replaced, not merely accompanied: " + dep);
         # the consumer's OWN source must stay a source-byte dependency: its own bytes are what
@@ -1308,10 +1311,10 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
         write(cons_src, "%new-style\nclass UseDe { static DE::Mode f() { return DE::Mode::Off; } }\n");
 
         string prov_obj = lib_dir + "/dce.qo";
-        string decl_stamp = prov_obj + ".aggregate-contract.stamp";
+        string decl_stamp = prov_obj + ".declaration-contract.stamp";
         code compileProvider = sub () {
             string out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN"
-                + " --compile-contract-stamp=%s.compile-contract.stamp --aggregate-contract-stamp=%s -o %s %s",
+                + " --compile-contract-stamp=%s.compile-contract.stamp --declaration-contract-stamp=%s -o %s %s",
                 env, qcc_bin, lib_dir, prov_obj, decl_stamp, prov_obj, prov_src));
             assertTrue(is_file(decl_stamp), "emitted the enum's declaration contract: " + out);
         };
@@ -1331,7 +1334,7 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
             + " --depfile-source-content-map=%s -o %s/use_dce.qo %s",
             env, qcc_bin, lib_dir, dep_file, map_file, lib_dir, cons_src));
         string dep = File::readTextFile(dep_file);
-        assertTrue(dep.find("dce.qo.aggregate-contract.stamp") != -1,
+        assertTrue(dep.find("dce.qo.declaration-contract.stamp") != -1,
             "the folded enum member narrows to the provider's declaration contract: " + dep + out);
         assertEq(-1, dep.find("/dce.qc.sha256"),
             "the provider's source-byte edge is replaced, not merely accompanied: " + dep);
