@@ -434,159 +434,159 @@
           "source": "Where the index runs.  Defaults to serverless on AWS in `us-east-1` when omitted.\n\n- `{\"deployment_type\": \"managed\", \"cloud\": \"aws\", \"region\": \"us-east-1\"}` — serverless, managed by Pinecone\n- `{\"deployment_type\": \"byoc\", ...}` — bring your own compute\n\n`cloud` is one of `aws`, `gcp` or `azure`; for the regions each one offers see [Regions](https://docs.pinecone.io/guides/index-data/create-an-index#cloud-regions).",
           "message": "Wo der Index ausgeführt wird.  Ohne Angabe standardmäßig Serverless auf AWS in `us-east-1`.\n\n- `{\"deployment_type\": \"managed\", \"cloud\": \"aws\", \"region\": \"us-east-1\"}` – serverless, von Pinecone verwaltet\n- `{\"deployment_type\": \"byoc\", ...}` – eigene Compute-Ressourcen\n\n`cloud` ist `aws`, `gcp` oder `azure`; die jeweils angebotenen Regionen finden Sie unter [Regions](https://docs.pinecone.io/guides/index-data/create-an-index#cloud-regions)."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.Y2xvdWQ.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.Kk1hbmFnZWREZXBsb3ltZW50IzNkY2M2OGNmMmZlYzdlMWM0YTU5N2E5M2NkMTdlMDVjMGE4YWRjNGY2NDFlOThkY2UwYTUyNzQ4MjgyNjE1ZWI.field.Y2xvdWQ.display_name": {
           "source": "Cloud",
           "message": "Cloud"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.Y2xvdWQ.short_desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.Kk1hbmFnZWREZXBsb3ltZW50IzNkY2M2OGNmMmZlYzdlMWM0YTU5N2E5M2NkMTdlMDVjMGE4YWRjNGY2NDFlOThkY2UwYTUyNzQ4MjgyNjE1ZWI.field.Y2xvdWQ.short_desc": {
           "source": "The public cloud to host the index on",
           "message": "Die Public Cloud, in der der Index gehostet wird"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.Y2xvdWQ.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.Kk1hbmFnZWREZXBsb3ltZW50IzNkY2M2OGNmMmZlYzdlMWM0YTU5N2E5M2NkMTdlMDVjMGE4YWRjNGY2NDFlOThkY2UwYTUyNzQ4MjgyNjE1ZWI.field.Y2xvdWQ.desc": {
           "source": "The public cloud where the index is hosted.\nPossible values: `gcp`, `aws`, or `azure`.",
           "message": "Die öffentliche Cloud, in der der Index gehostet wird.\nMögliche Werte: `gcp`, `aws` oder `azure`."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.Y2xvdWQ.allowed-value.c3RyaW5nOmF3cw.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.Kk1hbmFnZWREZXBsb3ltZW50IzNkY2M2OGNmMmZlYzdlMWM0YTU5N2E5M2NkMTdlMDVjMGE4YWRjNGY2NDFlOThkY2UwYTUyNzQ4MjgyNjE1ZWI.field.Y2xvdWQ.allowed-value.c3RyaW5nOmF3cw.display_name": {
           "source": "AWS",
           "message": "AWS"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.Y2xvdWQ.allowed-value.c3RyaW5nOmF3cw.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.Kk1hbmFnZWREZXBsb3ltZW50IzNkY2M2OGNmMmZlYzdlMWM0YTU5N2E5M2NkMTdlMDVjMGE4YWRjNGY2NDFlOThkY2UwYTUyNzQ4MjgyNjE1ZWI.field.Y2xvdWQ.allowed-value.c3RyaW5nOmF3cw.desc": {
           "source": "Amazon Web Services.",
           "message": "Amazon Web Services."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.Y2xvdWQ.allowed-value.c3RyaW5nOmdjcA.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.Kk1hbmFnZWREZXBsb3ltZW50IzNkY2M2OGNmMmZlYzdlMWM0YTU5N2E5M2NkMTdlMDVjMGE4YWRjNGY2NDFlOThkY2UwYTUyNzQ4MjgyNjE1ZWI.field.Y2xvdWQ.allowed-value.c3RyaW5nOmdjcA.display_name": {
           "source": "Google Cloud",
           "message": "Google Cloud"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.Y2xvdWQ.allowed-value.c3RyaW5nOmdjcA.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.Kk1hbmFnZWREZXBsb3ltZW50IzNkY2M2OGNmMmZlYzdlMWM0YTU5N2E5M2NkMTdlMDVjMGE4YWRjNGY2NDFlOThkY2UwYTUyNzQ4MjgyNjE1ZWI.field.Y2xvdWQ.allowed-value.c3RyaW5nOmdjcA.desc": {
           "source": "Google Cloud Platform.",
           "message": "Google Cloud Platform."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.Y2xvdWQ.allowed-value.c3RyaW5nOmF6dXJl.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.Kk1hbmFnZWREZXBsb3ltZW50IzNkY2M2OGNmMmZlYzdlMWM0YTU5N2E5M2NkMTdlMDVjMGE4YWRjNGY2NDFlOThkY2UwYTUyNzQ4MjgyNjE1ZWI.field.Y2xvdWQ.allowed-value.c3RyaW5nOmF6dXJl.display_name": {
           "source": "Azure",
           "message": "Azure"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.Y2xvdWQ.allowed-value.c3RyaW5nOmF6dXJl.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.Kk1hbmFnZWREZXBsb3ltZW50IzNkY2M2OGNmMmZlYzdlMWM0YTU5N2E5M2NkMTdlMDVjMGE4YWRjNGY2NDFlOThkY2UwYTUyNzQ4MjgyNjE1ZWI.field.Y2xvdWQ.allowed-value.c3RyaW5nOmF6dXJl.desc": {
           "source": "Microsoft Azure.",
           "message": "Microsoft Azure."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.ZGVwbG95bWVudF90eXBl.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.Kk1hbmFnZWREZXBsb3ltZW50IzNkY2M2OGNmMmZlYzdlMWM0YTU5N2E5M2NkMTdlMDVjMGE4YWRjNGY2NDFlOThkY2UwYTUyNzQ4MjgyNjE1ZWI.field.ZGVwbG95bWVudF90eXBl.display_name": {
           "source": "Deployment Type",
           "message": "Bereitstellungstyp"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.ZGVwbG95bWVudF90eXBl.short_desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.Kk1hbmFnZWREZXBsb3ltZW50IzNkY2M2OGNmMmZlYzdlMWM0YTU5N2E5M2NkMTdlMDVjMGE4YWRjNGY2NDFlOThkY2UwYTUyNzQ4MjgyNjE1ZWI.field.ZGVwbG95bWVudF90eXBl.short_desc": {
           "source": "Identifies this as a managed (serverless) deployment",
           "message": "Identifiziert diese Bereitstellung als verwaltete (serverlose) Bereitstellung"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.ZGVwbG95bWVudF90eXBl.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.Kk1hbmFnZWREZXBsb3ltZW50IzNkY2M2OGNmMmZlYzdlMWM0YTU5N2E5M2NkMTdlMDVjMGE4YWRjNGY2NDFlOThkY2UwYTUyNzQ4MjgyNjE1ZWI.field.ZGVwbG95bWVudF90eXBl.desc": {
           "source": "Identifies this as a managed (serverless) deployment. Must be `managed`.",
           "message": "Identifiziert diese Bereitstellung als verwaltete (serverlose) Bereitstellung. Muss `managed` sein."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.ZGVwbG95bWVudF90eXBl.allowed-value.c3RyaW5nOm1hbmFnZWQ.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.Kk1hbmFnZWREZXBsb3ltZW50IzNkY2M2OGNmMmZlYzdlMWM0YTU5N2E5M2NkMTdlMDVjMGE4YWRjNGY2NDFlOThkY2UwYTUyNzQ4MjgyNjE1ZWI.field.ZGVwbG95bWVudF90eXBl.allowed-value.c3RyaW5nOm1hbmFnZWQ.display_name": {
           "source": "managed",
           "message": "verwaltet"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.cmVnaW9u.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.Kk1hbmFnZWREZXBsb3ltZW50IzNkY2M2OGNmMmZlYzdlMWM0YTU5N2E5M2NkMTdlMDVjMGE4YWRjNGY2NDFlOThkY2UwYTUyNzQ4MjgyNjE1ZWI.field.cmVnaW9u.display_name": {
           "source": "Region",
           "message": "Region"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.cmVnaW9u.short_desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.Kk1hbmFnZWREZXBsb3ltZW50IzNkY2M2OGNmMmZlYzdlMWM0YTU5N2E5M2NkMTdlMDVjMGE4YWRjNGY2NDFlOThkY2UwYTUyNzQ4MjgyNjE1ZWI.field.cmVnaW9u.short_desc": {
           "source": "The region to host the index in",
           "message": "Die Region, in der der Index gehostet wird"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.cmVnaW9u.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.Kk1hbmFnZWREZXBsb3ltZW50IzNkY2M2OGNmMmZlYzdlMWM0YTU5N2E5M2NkMTdlMDVjMGE4YWRjNGY2NDFlOThkY2UwYTUyNzQ4MjgyNjE1ZWI.field.cmVnaW9u.desc": {
           "source": "The region to host the index in.  A region belongs to one cloud, so it has to match the **Cloud** chosen beside it: `us-east-1` exists on AWS and not on Google Cloud, and Pinecone refuses the pair rather than the value.\n\nThe list is Pinecone's published set at the time of writing and a region it has opened since can still be typed in; see [Available cloud regions](https://docs.pinecone.io/troubleshooting/available-cloud-regions).",
           "message": "Die Region, in der der Index gehostet wird.  Eine Region gehört zu genau einer Cloud und muss daher zur daneben gewählten **Cloud** passen: `us-east-1` gibt es bei AWS und nicht bei Google Cloud, und Pinecone weist das Paar zurück, nicht den einzelnen Wert.\n\nDie Liste ist der zum Zeitpunkt der Erstellung von Pinecone veröffentlichte Satz; eine seither eröffnete Region kann weiterhin von Hand eingegeben werden, siehe [Available cloud regions](https://docs.pinecone.io/troubleshooting/available-cloud-regions)."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.cmVnaW9u.allowed-value.c3RyaW5nOnVzLWVhc3QtMQ.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.Kk1hbmFnZWREZXBsb3ltZW50IzNkY2M2OGNmMmZlYzdlMWM0YTU5N2E5M2NkMTdlMDVjMGE4YWRjNGY2NDFlOThkY2UwYTUyNzQ4MjgyNjE1ZWI.field.cmVnaW9u.allowed-value.c3RyaW5nOnVzLWVhc3QtMQ.display_name": {
           "source": "AWS · Virginia",
           "message": "AWS · Virginia"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.cmVnaW9u.allowed-value.c3RyaW5nOnVzLWVhc3QtMQ.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.Kk1hbmFnZWREZXBsb3ltZW50IzNkY2M2OGNmMmZlYzdlMWM0YTU5N2E5M2NkMTdlMDVjMGE4YWRjNGY2NDFlOThkY2UwYTUyNzQ4MjgyNjE1ZWI.field.cmVnaW9u.allowed-value.c3RyaW5nOnVzLWVhc3QtMQ.desc": {
           "source": "AWS `us-east-1`, in Virginia.  The only region available on the Starter plan.",
           "message": "AWS `us-east-1`, in Virginia.  Die einzige im Starter-Tarif verfügbare Region."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.cmVnaW9u.allowed-value.c3RyaW5nOnVzLXdlc3QtMg.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.Kk1hbmFnZWREZXBsb3ltZW50IzNkY2M2OGNmMmZlYzdlMWM0YTU5N2E5M2NkMTdlMDVjMGE4YWRjNGY2NDFlOThkY2UwYTUyNzQ4MjgyNjE1ZWI.field.cmVnaW9u.allowed-value.c3RyaW5nOnVzLXdlc3QtMg.display_name": {
           "source": "AWS · Oregon",
           "message": "AWS · Oregon"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.cmVnaW9u.allowed-value.c3RyaW5nOnVzLXdlc3QtMg.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.Kk1hbmFnZWREZXBsb3ltZW50IzNkY2M2OGNmMmZlYzdlMWM0YTU5N2E5M2NkMTdlMDVjMGE4YWRjNGY2NDFlOThkY2UwYTUyNzQ4MjgyNjE1ZWI.field.cmVnaW9u.allowed-value.c3RyaW5nOnVzLXdlc3QtMg.desc": {
           "source": "AWS `us-west-2`, in Oregon.",
           "message": "AWS `us-west-2`, in Oregon."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.cmVnaW9u.allowed-value.c3RyaW5nOmV1LXdlc3QtMQ.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.Kk1hbmFnZWREZXBsb3ltZW50IzNkY2M2OGNmMmZlYzdlMWM0YTU5N2E5M2NkMTdlMDVjMGE4YWRjNGY2NDFlOThkY2UwYTUyNzQ4MjgyNjE1ZWI.field.cmVnaW9u.allowed-value.c3RyaW5nOmV1LXdlc3QtMQ.display_name": {
           "source": "AWS · Ireland",
           "message": "AWS · Irland"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.cmVnaW9u.allowed-value.c3RyaW5nOmV1LXdlc3QtMQ.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.Kk1hbmFnZWREZXBsb3ltZW50IzNkY2M2OGNmMmZlYzdlMWM0YTU5N2E5M2NkMTdlMDVjMGE4YWRjNGY2NDFlOThkY2UwYTUyNzQ4MjgyNjE1ZWI.field.cmVnaW9u.allowed-value.c3RyaW5nOmV1LXdlc3QtMQ.desc": {
           "source": "AWS `eu-west-1`, in Ireland.",
           "message": "AWS `eu-west-1`, in Irland."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.cmVnaW9u.allowed-value.c3RyaW5nOmV1LWNlbnRyYWwtMQ.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.Kk1hbmFnZWREZXBsb3ltZW50IzNkY2M2OGNmMmZlYzdlMWM0YTU5N2E5M2NkMTdlMDVjMGE4YWRjNGY2NDFlOThkY2UwYTUyNzQ4MjgyNjE1ZWI.field.cmVnaW9u.allowed-value.c3RyaW5nOmV1LWNlbnRyYWwtMQ.display_name": {
           "source": "AWS · Frankfurt",
           "message": "AWS · Frankfurt"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.cmVnaW9u.allowed-value.c3RyaW5nOmV1LWNlbnRyYWwtMQ.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.Kk1hbmFnZWREZXBsb3ltZW50IzNkY2M2OGNmMmZlYzdlMWM0YTU5N2E5M2NkMTdlMDVjMGE4YWRjNGY2NDFlOThkY2UwYTUyNzQ4MjgyNjE1ZWI.field.cmVnaW9u.allowed-value.c3RyaW5nOmV1LWNlbnRyYWwtMQ.desc": {
           "source": "AWS `eu-central-1`, in Frankfurt.",
           "message": "AWS `eu-central-1`, in Frankfurt."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.cmVnaW9u.allowed-value.c3RyaW5nOmFwLXNvdXRoZWFzdC0x.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.Kk1hbmFnZWREZXBsb3ltZW50IzNkY2M2OGNmMmZlYzdlMWM0YTU5N2E5M2NkMTdlMDVjMGE4YWRjNGY2NDFlOThkY2UwYTUyNzQ4MjgyNjE1ZWI.field.cmVnaW9u.allowed-value.c3RyaW5nOmFwLXNvdXRoZWFzdC0x.display_name": {
           "source": "AWS · Singapore",
           "message": "AWS · Singapur"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.cmVnaW9u.allowed-value.c3RyaW5nOmFwLXNvdXRoZWFzdC0x.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.Kk1hbmFnZWREZXBsb3ltZW50IzNkY2M2OGNmMmZlYzdlMWM0YTU5N2E5M2NkMTdlMDVjMGE4YWRjNGY2NDFlOThkY2UwYTUyNzQ4MjgyNjE1ZWI.field.cmVnaW9u.allowed-value.c3RyaW5nOmFwLXNvdXRoZWFzdC0x.desc": {
           "source": "AWS `ap-southeast-1`, in Singapore.",
           "message": "AWS `ap-southeast-1`, in Singapur."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.cmVnaW9u.allowed-value.c3RyaW5nOnVzLWNlbnRyYWwx.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.Kk1hbmFnZWREZXBsb3ltZW50IzNkY2M2OGNmMmZlYzdlMWM0YTU5N2E5M2NkMTdlMDVjMGE4YWRjNGY2NDFlOThkY2UwYTUyNzQ4MjgyNjE1ZWI.field.cmVnaW9u.allowed-value.c3RyaW5nOnVzLWNlbnRyYWwx.display_name": {
           "source": "Google Cloud · Iowa",
           "message": "Google Cloud · Iowa"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.cmVnaW9u.allowed-value.c3RyaW5nOnVzLWNlbnRyYWwx.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.Kk1hbmFnZWREZXBsb3ltZW50IzNkY2M2OGNmMmZlYzdlMWM0YTU5N2E5M2NkMTdlMDVjMGE4YWRjNGY2NDFlOThkY2UwYTUyNzQ4MjgyNjE1ZWI.field.cmVnaW9u.allowed-value.c3RyaW5nOnVzLWNlbnRyYWwx.desc": {
           "source": "Google Cloud `us-central1`, in Iowa.",
           "message": "Google Cloud `us-central1`, in Iowa."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.cmVnaW9u.allowed-value.c3RyaW5nOmV1cm9wZS13ZXN0NA.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.Kk1hbmFnZWREZXBsb3ltZW50IzNkY2M2OGNmMmZlYzdlMWM0YTU5N2E5M2NkMTdlMDVjMGE4YWRjNGY2NDFlOThkY2UwYTUyNzQ4MjgyNjE1ZWI.field.cmVnaW9u.allowed-value.c3RyaW5nOmV1cm9wZS13ZXN0NA.display_name": {
           "source": "Google Cloud · Netherlands",
           "message": "Google Cloud · Niederlande"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.cmVnaW9u.allowed-value.c3RyaW5nOmV1cm9wZS13ZXN0NA.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.Kk1hbmFnZWREZXBsb3ltZW50IzNkY2M2OGNmMmZlYzdlMWM0YTU5N2E5M2NkMTdlMDVjMGE4YWRjNGY2NDFlOThkY2UwYTUyNzQ4MjgyNjE1ZWI.field.cmVnaW9u.allowed-value.c3RyaW5nOmV1cm9wZS13ZXN0NA.desc": {
           "source": "Google Cloud `europe-west4`, in the Netherlands.",
           "message": "Google Cloud `europe-west4`, in den Niederlanden."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.cmVnaW9u.allowed-value.c3RyaW5nOmVhc3R1czI.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.Kk1hbmFnZWREZXBsb3ltZW50IzNkY2M2OGNmMmZlYzdlMWM0YTU5N2E5M2NkMTdlMDVjMGE4YWRjNGY2NDFlOThkY2UwYTUyNzQ4MjgyNjE1ZWI.field.cmVnaW9u.allowed-value.c3RyaW5nOmVhc3R1czI.display_name": {
           "source": "Azure · Virginia",
           "message": "Azure · Virginia"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.cmVnaW9u.allowed-value.c3RyaW5nOmVhc3R1czI.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.Kk1hbmFnZWREZXBsb3ltZW50IzNkY2M2OGNmMmZlYzdlMWM0YTU5N2E5M2NkMTdlMDVjMGE4YWRjNGY2NDFlOThkY2UwYTUyNzQ4MjgyNjE1ZWI.field.cmVnaW9u.allowed-value.c3RyaW5nOmVhc3R1czI.desc": {
           "source": "Azure `eastus2`, in Virginia.",
           "message": "Azure `eastus2`, in Virginia."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.SGFzaERhdGFUeXBlOipCeW9jRGVwbG95bWVudCMxZjU4MzA2OWJkNmY1OWQ0MDdmMzdjOGU1ZWE2Y2M4N2ViMTVlYmViZTU2N2ZmM2YzYzg3MDRiOGIyOWFkMzA0.field.ZGVwbG95bWVudF90eXBl.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.KkJ5b2NEZXBsb3ltZW50IzA4MTg0MmM2NzlkYTZmYWU2MTkzNDk1MDJhZTM2YjE4YzYwZjc3ZGIyYzFhYzA2M2NmYjcwYjJkZDZiNTAwNjU.field.ZGVwbG95bWVudF90eXBl.display_name": {
           "source": "Deployment Type",
           "message": "Bereitstellungstyp"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.SGFzaERhdGFUeXBlOipCeW9jRGVwbG95bWVudCMxZjU4MzA2OWJkNmY1OWQ0MDdmMzdjOGU1ZWE2Y2M4N2ViMTVlYmViZTU2N2ZmM2YzYzg3MDRiOGIyOWFkMzA0.field.ZGVwbG95bWVudF90eXBl.short_desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.KkJ5b2NEZXBsb3ltZW50IzA4MTg0MmM2NzlkYTZmYWU2MTkzNDk1MDJhZTM2YjE4YzYwZjc3ZGIyYzFhYzA2M2NmYjcwYjJkZDZiNTAwNjU.field.ZGVwbG95bWVudF90eXBl.short_desc": {
           "source": "Identifies this as a BYOC deployment",
           "message": "Identifiziert diese Bereitstellung als BYOC-Bereitstellung"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.SGFzaERhdGFUeXBlOipCeW9jRGVwbG95bWVudCMxZjU4MzA2OWJkNmY1OWQ0MDdmMzdjOGU1ZWE2Y2M4N2ViMTVlYmViZTU2N2ZmM2YzYzg3MDRiOGIyOWFkMzA0.field.ZGVwbG95bWVudF90eXBl.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.KkJ5b2NEZXBsb3ltZW50IzA4MTg0MmM2NzlkYTZmYWU2MTkzNDk1MDJhZTM2YjE4YzYwZjc3ZGIyYzFhYzA2M2NmYjcwYjJkZDZiNTAwNjU.field.ZGVwbG95bWVudF90eXBl.desc": {
           "source": "Identifies this as a BYOC deployment. Must be `byoc`.",
           "message": "Identifiziert diese Bereitstellung als BYOC-Bereitstellung. Muss `byoc` sein."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.SGFzaERhdGFUeXBlOipCeW9jRGVwbG95bWVudCMxZjU4MzA2OWJkNmY1OWQ0MDdmMzdjOGU1ZWE2Y2M4N2ViMTVlYmViZTU2N2ZmM2YzYzg3MDRiOGIyOWFkMzA0.field.ZGVwbG95bWVudF90eXBl.allowed-value.c3RyaW5nOmJ5b2M.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.KkJ5b2NEZXBsb3ltZW50IzA4MTg0MmM2NzlkYTZmYWU2MTkzNDk1MDJhZTM2YjE4YzYwZjc3ZGIyYzFhYzA2M2NmYjcwYjJkZDZiNTAwNjU.field.ZGVwbG95bWVudF90eXBl.allowed-value.c3RyaW5nOmJ5b2M.display_name": {
           "source": "byoc",
           "message": "byoc"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.SGFzaERhdGFUeXBlOipCeW9jRGVwbG95bWVudCMxZjU4MzA2OWJkNmY1OWQ0MDdmMzdjOGU1ZWE2Y2M4N2ViMTVlYmViZTU2N2ZmM2YzYzg3MDRiOGIyOWFkMzA0.field.ZW52aXJvbm1lbnQ.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.KkJ5b2NEZXBsb3ltZW50IzA4MTg0MmM2NzlkYTZmYWU2MTkzNDk1MDJhZTM2YjE4YzYwZjc3ZGIyYzFhYzA2M2NmYjcwYjJkZDZiNTAwNjU.field.ZW52aXJvbm1lbnQ.display_name": {
           "source": "Environment",
           "message": "Umgebung"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.SGFzaERhdGFUeXBlOipCeW9jRGVwbG95bWVudCMxZjU4MzA2OWJkNmY1OWQ0MDdmMzdjOGU1ZWE2Y2M4N2ViMTVlYmViZTU2N2ZmM2YzYzg3MDRiOGIyOWFkMzA0.field.ZW52aXJvbm1lbnQ.short_desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.KkJ5b2NEZXBsb3ltZW50IzA4MTg0MmM2NzlkYTZmYWU2MTkzNDk1MDJhZTM2YjE4YzYwZjc3ZGIyYzFhYzA2M2NmYjcwYjJkZDZiNTAwNjU.field.ZW52aXJvbm1lbnQ.short_desc": {
           "source": "The BYOC environment where the index is hosted",
           "message": "Die BYOC-Umgebung, in der der Index gehostet wird"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.SGFzaERhdGFUeXBlOipCeW9jRGVwbG95bWVudCMxZjU4MzA2OWJkNmY1OWQ0MDdmMzdjOGU1ZWE2Y2M4N2ViMTVlYmViZTU2N2ZmM2YzYzg3MDRiOGIyOWFkMzA0.field.ZW52aXJvbm1lbnQ.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.KkJ5b2NEZXBsb3ltZW50IzA4MTg0MmM2NzlkYTZmYWU2MTkzNDk1MDJhZTM2YjE4YzYwZjc3ZGIyYzFhYzA2M2NmYjcwYjJkZDZiNTAwNjU.field.ZW52aXJvbm1lbnQ.desc": {
           "source": "The BYOC environment where the index is hosted.",
           "message": "Die BYOC-Umgebung, in der der Index gehostet wird."
         },
@@ -654,131 +654,131 @@
           "source": "How reads are served.\n\n- `{\"mode\": \"OnDemand\"}` — the default; you are billed for what you read.\n- `{\"mode\": \"Dedicated\", \"node_type\": ..., \"scaling\": ...}` — dedicated read nodes for a predictable workload.\n\nA BYOC index must set `Dedicated` explicitly: it does not support on-demand, and omitting this defaults to on-demand and is rejected.",
           "message": "Wie Lesevorgänge bedient werden.\n\n- `{\"mode\": \"OnDemand\"}` – der Standard; abgerechnet wird, was Sie lesen.\n- `{\"mode\": \"Dedicated\", \"node_type\": ..., \"scaling\": ...}` – dedizierte Leseknoten für eine vorhersehbare Last.\n\nEin BYOC-Index muss `Dedicated` ausdrücklich setzen: er unterstützt kein On-Demand, und ein Weglassen führt zum Standard On-Demand und wird abgelehnt."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eU9uRGVtYW5kU3BlYyM4MmIwNTgzOTQ2OWJmNzZjMDAxZWZiNThiNWMzMWNkYTc4YjJjYjg4M2ZjM2FhMWI1MmU3MmU5YmQwNjcyMGIz.field.bW9kZQ.display_name": {
           "source": "Read Capacity Mode",
           "message": "Lese-Kapazitätsmodus"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.short_desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eU9uRGVtYW5kU3BlYyM4MmIwNTgzOTQ2OWJmNzZjMDAxZWZiNThiNWMzMWNkYTc4YjJjYjg4M2ZjM2FhMWI1MmU3MmU5YmQwNjcyMGIz.field.bW9kZQ.short_desc": {
           "source": "On-demand reads or dedicated read nodes",
           "message": "On-Demand-Lesevorgänge oder dedizierte Lese-Knoten"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eU9uRGVtYW5kU3BlYyM4MmIwNTgzOTQ2OWJmNzZjMDAxZWZiNThiNWMzMWNkYTc4YjJjYjg4M2ZjM2FhMWI1MmU3MmU5YmQwNjcyMGIz.field.bW9kZQ.desc": {
           "source": "The mode of the index. Possible values: `OnDemand` or `Dedicated`. Defaults to `OnDemand`. If set to `Dedicated`, `dedicated.node_type`, and `dedicated.scaling` must be specified.",
           "message": "Der Modus des Index. Mögliche Werte: `OnDemand` oder `Dedicated`. Standardwert ist `OnDemand`. Wenn auf `Dedicated` gesetzt wird, müssen `dedicated.node_type` und `dedicated.scaling` angegeben werden."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eU9uRGVtYW5kU3BlYyM4MmIwNTgzOTQ2OWJmNzZjMDAxZWZiNThiNWMzMWNkYTc4YjJjYjg4M2ZjM2FhMWI1MmU3MmU5YmQwNjcyMGIz.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.display_name": {
           "source": "On demand",
           "message": "Auf Abruf"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eU9uRGVtYW5kU3BlYyM4MmIwNTgzOTQ2OWJmNzZjMDAxZWZiNThiNWMzMWNkYTc4YjJjYjg4M2ZjM2FhMWI1MmU3MmU5YmQwNjcyMGIz.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.desc": {
           "source": "Reads are served without dedicated nodes and billed by use.  The default, and not available on a BYOC index.",
           "message": "Lesevorgänge werden ohne dedizierte Knoten bedient und nach Nutzung abgerechnet. Der Standardwert, nicht verfügbar bei BYOC-Index."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eU9uRGVtYW5kU3BlYyM4MmIwNTgzOTQ2OWJmNzZjMDAxZWZiNThiNWMzMWNkYTc4YjJjYjg4M2ZjM2FhMWI1MmU3MmU5YmQwNjcyMGIz.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.display_name": {
           "source": "Dedicated nodes",
           "message": "Dedizierte Knoten"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eU9uRGVtYW5kU3BlYyM4MmIwNTgzOTQ2OWJmNzZjMDAxZWZiNThiNWMzMWNkYTc4YjJjYjg4M2ZjM2FhMWI1MmU3MmU5YmQwNjcyMGIz.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.desc": {
           "source": "Reads are served by dedicated nodes, for a predictable workload.  Requires `node_type` and `scaling` beside it.",
           "message": "Lesevorgänge werden von dedizierten Knoten bedient, für eine vorhersehbare Last. Erfordert `node_type` und `scaling` neben ihm."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.ZGVkaWNhdGVk.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eURlZGljYXRlZFNwZWMjYjk0ZWU4NTQ3ZTUwMjkzN2ZlM2U3MTZlYzQzYzUwMTg2ZTU0NGUwNGJhNjg0MWY3NDFhZWZkZWVhZDQ3Yjg0Yw.field.ZGVkaWNhdGVk.display_name": {
           "source": "Dedicated",
           "message": "Dediziert"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.ZGVkaWNhdGVk.short_desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eURlZGljYXRlZFNwZWMjYjk0ZWU4NTQ3ZTUwMjkzN2ZlM2U3MTZlYzQzYzUwMTg2ZTU0NGUwNGJhNjg0MWY3NDFhZWZkZWVhZDQ3Yjg0Yw.field.ZGVkaWNhdGVk.short_desc": {
           "source": "Configuration for dedicated read capacity",
           "message": "Konfiguration für dedizierte Lesekapazität"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.ZGVkaWNhdGVk.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eURlZGljYXRlZFNwZWMjYjk0ZWU4NTQ3ZTUwMjkzN2ZlM2U3MTZlYzQzYzUwMTg2ZTU0NGUwNGJhNjg0MWY3NDFhZWZkZWVhZDQ3Yjg0Yw.field.ZGVkaWNhdGVk.desc": {
           "source": "Configuration for dedicated read capacity. See  [this guide](https://docs.pinecone.io/guides/index-data/dedicated-read-nodes) for more details on  how to configure dedicated read capacity.",
           "message": "Konfiguration für dedizierte Lesekapazität. Siehe [this guide](https://docs.pinecone.io/guides/index-data/dedicated-read-nodes) für weitere Details zur Konfiguration dedizierter Lesekapazität."
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6SGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZENvbmZpZyMzMzEzMTNhODJjNWQ1MDUxYmU1ZWFlYTA5MDI4N2I0YWEwYWU2NmZhMWI2NGFmYmUzMWI3NWRkYjgwNDQ0ODcz.field.bWFudWFs.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6UmVhZENhcGFjaXR5RGVkaWNhdGVkQ29uZmlnIzNlNzVkODkxZjE5NTA5NTFkNTdmYTFkNTIwZWFlOGEyOWEzZGM0ZjhlNDQ1NWExMWY5NTllNDJjYzQzMGE4MWQ.field.bWFudWFs.display_name": {
           "source": "Manual",
           "message": "Manuell"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6SGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZENvbmZpZyMzMzEzMTNhODJjNWQ1MDUxYmU1ZWFlYTA5MDI4N2I0YWEwYWU2NmZhMWI2NGFmYmUzMWI3NWRkYjgwNDQ0ODcz.field.bWFudWFs.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6UmVhZENhcGFjaXR5RGVkaWNhdGVkQ29uZmlnIzNlNzVkODkxZjE5NTA5NTFkNTdmYTFkNTIwZWFlOGEyOWEzZGM0ZjhlNDQ1NWExMWY5NTllNDJjYzQzMGE4MWQ.field.bWFudWFs.short_desc": {
           "source": "The config to use for manual read capacity scaling",
           "message": "Die Konfiguration für die manuelle Skalierung der Lesekapazität"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6SGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZENvbmZpZyMzMzEzMTNhODJjNWQ1MDUxYmU1ZWFlYTA5MDI4N2I0YWEwYWU2NmZhMWI2NGFmYmUzMWI3NWRkYjgwNDQ0ODcz.field.bWFudWFs.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6UmVhZENhcGFjaXR5RGVkaWNhdGVkQ29uZmlnIzNlNzVkODkxZjE5NTA5NTFkNTdmYTFkNTIwZWFlOGEyOWEzZGM0ZjhlNDQ1NWExMWY5NTllNDJjYzQzMGE4MWQ.field.bWFudWFs.desc": {
           "source": "The config to use for manual read capacity scaling.",
           "message": "Die Konfiguration für die manuelle Skalierung der Lesekapazität."
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6SGFzaERhdGFUeXBlOlNjYWxpbmdDb25maWdNYW51YWwjYjI0ZjhmMjJhOTQ1NDNjOTQ1YTRiNWFmZWQ4YmMxOTdlZjEwYWQ1NTE3Y2QwZmU0NDkyYWFkMjZlY2Y3YmZlOQ.field.cmVwbGljYXM.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6U2NhbGluZ0NvbmZpZ01hbnVhbCMxOWJmMmRjNzM3Nzg5NGJlNzhjZTZiZDI0OTZlZjU5NzEwZGFiMGUxZjNhNjgzMzQwZjEwYWRjMDRlOTIzZDA1.field.cmVwbGljYXM.display_name": {
           "source": "Replicas",
           "message": "Replikate"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6SGFzaERhdGFUeXBlOlNjYWxpbmdDb25maWdNYW51YWwjYjI0ZjhmMjJhOTQ1NDNjOTQ1YTRiNWFmZWQ4YmMxOTdlZjEwYWQ1NTE3Y2QwZmU0NDkyYWFkMjZlY2Y3YmZlOQ.field.cmVwbGljYXM.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6U2NhbGluZ0NvbmZpZ01hbnVhbCMxOWJmMmRjNzM3Nzg5NGJlNzhjZTZiZDI0OTZlZjU5NzEwZGFiMGUxZjNhNjgzMzQwZjEwYWRjMDRlOTIzZDA1.field.cmVwbGljYXM.short_desc": {
           "source": "The number of replicas to use",
           "message": "Die Anzahl der Replikate, die verwendet werden sollen"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6SGFzaERhdGFUeXBlOlNjYWxpbmdDb25maWdNYW51YWwjYjI0ZjhmMjJhOTQ1NDNjOTQ1YTRiNWFmZWQ4YmMxOTdlZjEwYWQ1NTE3Y2QwZmU0NDkyYWFkMjZlY2Y3YmZlOQ.field.cmVwbGljYXM.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6U2NhbGluZ0NvbmZpZ01hbnVhbCMxOWJmMmRjNzM3Nzg5NGJlNzhjZTZiZDI0OTZlZjU5NzEwZGFiMGUxZjNhNjgzMzQwZjEwYWRjMDRlOTIzZDA1.field.cmVwbGljYXM.desc": {
           "source": "The number of replicas to use. Replicas duplicate the compute resources and data of an index, allowing higher query throughput and availability. Setting replicas to 0 disables the index but can be used to reduce costs while usage is paused.",
           "message": "Die Anzahl der Replikate, die verwendet werden sollen. Replikate duplizieren die Rechenressourcen und Daten eines Index und ermöglichen eine höhere Abfrage-Durchsatzrate und Verfügbarkeit. Die Einstellung auf 0 deaktiviert den Index, kann aber verwendet werden, um die Kosten zu senken, während die Nutzung pausiert ist."
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6SGFzaERhdGFUeXBlOlNjYWxpbmdDb25maWdNYW51YWwjYjI0ZjhmMjJhOTQ1NDNjOTQ1YTRiNWFmZWQ4YmMxOTdlZjEwYWQ1NTE3Y2QwZmU0NDkyYWFkMjZlY2Y3YmZlOQ.field.c2hhcmRz.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6U2NhbGluZ0NvbmZpZ01hbnVhbCMxOWJmMmRjNzM3Nzg5NGJlNzhjZTZiZDI0OTZlZjU5NzEwZGFiMGUxZjNhNjgzMzQwZjEwYWRjMDRlOTIzZDA1.field.c2hhcmRz.display_name": {
           "source": "Shards",
           "message": "Shards"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6SGFzaERhdGFUeXBlOlNjYWxpbmdDb25maWdNYW51YWwjYjI0ZjhmMjJhOTQ1NDNjOTQ1YTRiNWFmZWQ4YmMxOTdlZjEwYWQ1NTE3Y2QwZmU0NDkyYWFkMjZlY2Y3YmZlOQ.field.c2hhcmRz.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6U2NhbGluZ0NvbmZpZ01hbnVhbCMxOWJmMmRjNzM3Nzg5NGJlNzhjZTZiZDI0OTZlZjU5NzEwZGFiMGUxZjNhNjgzMzQwZjEwYWRjMDRlOTIzZDA1.field.c2hhcmRz.short_desc": {
           "source": "The number of shards to use",
           "message": "Die Anzahl der Shards, die verwendet werden sollen"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6SGFzaERhdGFUeXBlOlNjYWxpbmdDb25maWdNYW51YWwjYjI0ZjhmMjJhOTQ1NDNjOTQ1YTRiNWFmZWQ4YmMxOTdlZjEwYWQ1NTE3Y2QwZmU0NDkyYWFkMjZlY2Y3YmZlOQ.field.c2hhcmRz.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6U2NhbGluZ0NvbmZpZ01hbnVhbCMxOWJmMmRjNzM3Nzg5NGJlNzhjZTZiZDI0OTZlZjU5NzEwZGFiMGUxZjNhNjgzMzQwZjEwYWRjMDRlOTIzZDA1.field.c2hhcmRz.desc": {
           "source": "The number of shards to use. Shards determine the storage capacity of an index, with each shard providing 250 GB of storage.",
           "message": "Die Anzahl der Shards, die verwendet werden sollen. Shards bestimmen die Speicherkapazität eines Index, wobei jeder Shard 250 GB Speicherplatz bereitstellt."
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6SGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZENvbmZpZyMzMzEzMTNhODJjNWQ1MDUxYmU1ZWFlYTA5MDI4N2I0YWEwYWU2NmZhMWI2NGFmYmUzMWI3NWRkYjgwNDQ0ODcz.field.bm9kZV90eXBl.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6UmVhZENhcGFjaXR5RGVkaWNhdGVkQ29uZmlnIzNlNzVkODkxZjE5NTA5NTFkNTdmYTFkNTIwZWFlOGEyOWEzZGM0ZjhlNDQ1NWExMWY5NTllNDJjYzQzMGE4MWQ.field.bm9kZV90eXBl.display_name": {
           "source": "Node Type",
           "message": "Knotentyp"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6SGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZENvbmZpZyMzMzEzMTNhODJjNWQ1MDUxYmU1ZWFlYTA5MDI4N2I0YWEwYWU2NmZhMWI2NGFmYmUzMWI3NWRkYjgwNDQ0ODcz.field.bm9kZV90eXBl.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6UmVhZENhcGFjaXR5RGVkaWNhdGVkQ29uZmlnIzNlNzVkODkxZjE5NTA5NTFkNTdmYTFkNTIwZWFlOGEyOWEzZGM0ZjhlNDQ1NWExMWY5NTllNDJjYzQzMGE4MWQ.field.bm9kZV90eXBl.short_desc": {
           "source": "The type of machines to use",
           "message": "Der Typ der zu verwendenden Maschinen"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6SGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZENvbmZpZyMzMzEzMTNhODJjNWQ1MDUxYmU1ZWFlYTA5MDI4N2I0YWEwYWU2NmZhMWI2NGFmYmUzMWI3NWRkYjgwNDQ0ODcz.field.bm9kZV90eXBl.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6UmVhZENhcGFjaXR5RGVkaWNhdGVkQ29uZmlnIzNlNzVkODkxZjE5NTA5NTFkNTdmYTFkNTIwZWFlOGEyOWEzZGM0ZjhlNDQ1NWExMWY5NTllNDJjYzQzMGE4MWQ.field.bm9kZV90eXBl.desc": {
           "source": "The type of machines to use. Available options: `b1` and `t1`. `t1` includes increased processing power and memory.",
           "message": "Der Typ der zu verwendenden Maschinen. Verfügbare Optionen: `b1` und `t1`. `t1` beinhaltet erhöhte Verarbeitungskapazität und Speicher."
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6SGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZENvbmZpZyMzMzEzMTNhODJjNWQ1MDUxYmU1ZWFlYTA5MDI4N2I0YWEwYWU2NmZhMWI2NGFmYmUzMWI3NWRkYjgwNDQ0ODcz.field.c2NhbGluZw.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6UmVhZENhcGFjaXR5RGVkaWNhdGVkQ29uZmlnIzNlNzVkODkxZjE5NTA5NTFkNTdmYTFkNTIwZWFlOGEyOWEzZGM0ZjhlNDQ1NWExMWY5NTllNDJjYzQzMGE4MWQ.field.c2NhbGluZw.display_name": {
           "source": "Scaling",
           "message": "Skalierung"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6SGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZENvbmZpZyMzMzEzMTNhODJjNWQ1MDUxYmU1ZWFlYTA5MDI4N2I0YWEwYWU2NmZhMWI2NGFmYmUzMWI3NWRkYjgwNDQ0ODcz.field.c2NhbGluZw.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6UmVhZENhcGFjaXR5RGVkaWNhdGVkQ29uZmlnIzNlNzVkODkxZjE5NTA5NTFkNTdmYTFkNTIwZWFlOGEyOWEzZGM0ZjhlNDQ1NWExMWY5NTllNDJjYzQzMGE4MWQ.field.c2NhbGluZw.short_desc": {
           "source": "The type of scaling strategy to use",
           "message": "Der Typ der Skalierungsstrategie, die verwendet werden soll"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6SGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZENvbmZpZyMzMzEzMTNhODJjNWQ1MDUxYmU1ZWFlYTA5MDI4N2I0YWEwYWU2NmZhMWI2NGFmYmUzMWI3NWRkYjgwNDQ0ODcz.field.c2NhbGluZw.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjQ6UmVhZENhcGFjaXR5RGVkaWNhdGVkQ29uZmlnIzNlNzVkODkxZjE5NTA5NTFkNTdmYTFkNTIwZWFlOGEyOWEzZGM0ZjhlNDQ1NWExMWY5NTllNDJjYzQzMGE4MWQ.field.c2NhbGluZw.desc": {
           "source": "The type of scaling strategy to use.",
           "message": "Der Typ der Skalierungsstrategie, die verwendet werden soll."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.bW9kZQ.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eURlZGljYXRlZFNwZWMjYjk0ZWU4NTQ3ZTUwMjkzN2ZlM2U3MTZlYzQzYzUwMTg2ZTU0NGUwNGJhNjg0MWY3NDFhZWZkZWVhZDQ3Yjg0Yw.field.bW9kZQ.display_name": {
           "source": "Read Capacity Mode",
           "message": "Lese-Kapazitätsmodus"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.bW9kZQ.short_desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eURlZGljYXRlZFNwZWMjYjk0ZWU4NTQ3ZTUwMjkzN2ZlM2U3MTZlYzQzYzUwMTg2ZTU0NGUwNGJhNjg0MWY3NDFhZWZkZWVhZDQ3Yjg0Yw.field.bW9kZQ.short_desc": {
           "source": "On-demand reads or dedicated read nodes",
           "message": "On-Demand-Lesevorgänge oder dedizierte Lese-Knoten"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.bW9kZQ.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eURlZGljYXRlZFNwZWMjYjk0ZWU4NTQ3ZTUwMjkzN2ZlM2U3MTZlYzQzYzUwMTg2ZTU0NGUwNGJhNjg0MWY3NDFhZWZkZWVhZDQ3Yjg0Yw.field.bW9kZQ.desc": {
           "source": "The mode of the index. Possible values: `OnDemand` or `Dedicated`. Defaults to `OnDemand`. If set to `Dedicated`, `dedicated.node_type`, and `dedicated.scaling` must be specified.",
           "message": "Der Modus des Index. Mögliche Werte: `OnDemand` oder `Dedicated`. Standardwert ist `OnDemand`. Wenn auf `Dedicated` gesetzt wird, müssen `dedicated.node_type` und `dedicated.scaling` angegeben werden."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eURlZGljYXRlZFNwZWMjYjk0ZWU4NTQ3ZTUwMjkzN2ZlM2U3MTZlYzQzYzUwMTg2ZTU0NGUwNGJhNjg0MWY3NDFhZWZkZWVhZDQ3Yjg0Yw.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.display_name": {
           "source": "On demand",
           "message": "Auf Abruf"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eURlZGljYXRlZFNwZWMjYjk0ZWU4NTQ3ZTUwMjkzN2ZlM2U3MTZlYzQzYzUwMTg2ZTU0NGUwNGJhNjg0MWY3NDFhZWZkZWVhZDQ3Yjg0Yw.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.desc": {
           "source": "Reads are served without dedicated nodes and billed by use.  The default, and not available on a BYOC index.",
           "message": "Lesevorgänge werden ohne dedizierte Knoten bedient und nach Nutzung abgerechnet. Der Standardwert, nicht verfügbar bei BYOC-Index."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eURlZGljYXRlZFNwZWMjYjk0ZWU4NTQ3ZTUwMjkzN2ZlM2U3MTZlYzQzYzUwMTg2ZTU0NGUwNGJhNjg0MWY3NDFhZWZkZWVhZDQ3Yjg0Yw.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.display_name": {
           "source": "Dedicated nodes",
           "message": "Dedizierte Knoten"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eURlZGljYXRlZFNwZWMjYjk0ZWU4NTQ3ZTUwMjkzN2ZlM2U3MTZlYzQzYzUwMTg2ZTU0NGUwNGJhNjg0MWY3NDFhZWZkZWVhZDQ3Yjg0Yw.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.desc": {
           "source": "Reads are served by dedicated nodes, for a predictable workload.  Requires `node_type` and `scaling` beside it.",
           "message": "Lesevorgänge werden von dedizierten Knoten bedient, für eine vorhersehbare Last. Erfordert `node_type` und `scaling` neben ihm."
         },
@@ -1054,131 +1054,131 @@
           "source": "How reads are served.\n\n- `{\"mode\": \"OnDemand\"}` — the default; you are billed for what you read.\n- `{\"mode\": \"Dedicated\", \"node_type\": ..., \"scaling\": ...}` — dedicated read nodes for a predictable workload.\n\nA BYOC index must set `Dedicated` explicitly: it does not support on-demand, and omitting this defaults to on-demand and is rejected.",
           "message": "Wie Lesevorgänge bedient werden.\n\n- `{\"mode\": \"OnDemand\"}` – der Standard; abgerechnet wird, was Sie lesen.\n- `{\"mode\": \"Dedicated\", \"node_type\": ..., \"scaling\": ...}` – dedizierte Leseknoten für eine vorhersehbare Last.\n\nEin BYOC-Index muss `Dedicated` ausdrücklich setzen: er unterstützt kein On-Demand, und ein Weglassen führt zum Standard On-Demand und wird abgelehnt."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eU9uRGVtYW5kU3BlYyM4MmIwNTgzOTQ2OWJmNzZjMDAxZWZiNThiNWMzMWNkYTc4YjJjYjg4M2ZjM2FhMWI1MmU3MmU5YmQwNjcyMGIz.field.bW9kZQ.display_name": {
           "source": "Read Capacity Mode",
           "message": "Lese-Kapazitätsmodus"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.short_desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eU9uRGVtYW5kU3BlYyM4MmIwNTgzOTQ2OWJmNzZjMDAxZWZiNThiNWMzMWNkYTc4YjJjYjg4M2ZjM2FhMWI1MmU3MmU5YmQwNjcyMGIz.field.bW9kZQ.short_desc": {
           "source": "On-demand reads or dedicated read nodes",
           "message": "On-Demand-Lesevorgänge oder dedizierte Lese-Knoten"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eU9uRGVtYW5kU3BlYyM4MmIwNTgzOTQ2OWJmNzZjMDAxZWZiNThiNWMzMWNkYTc4YjJjYjg4M2ZjM2FhMWI1MmU3MmU5YmQwNjcyMGIz.field.bW9kZQ.desc": {
           "source": "The mode of the index. Possible values: `OnDemand` or `Dedicated`. Defaults to `OnDemand`. If set to `Dedicated`, `dedicated.node_type`, and `dedicated.scaling` must be specified.",
           "message": "Der Modus des Index. Mögliche Werte: `OnDemand` oder `Dedicated`. Standardwert ist `OnDemand`. Wenn auf `Dedicated` gesetzt wird, müssen `dedicated.node_type` und `dedicated.scaling` angegeben werden."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eU9uRGVtYW5kU3BlYyM4MmIwNTgzOTQ2OWJmNzZjMDAxZWZiNThiNWMzMWNkYTc4YjJjYjg4M2ZjM2FhMWI1MmU3MmU5YmQwNjcyMGIz.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.display_name": {
           "source": "On demand",
           "message": "Auf Abruf"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eU9uRGVtYW5kU3BlYyM4MmIwNTgzOTQ2OWJmNzZjMDAxZWZiNThiNWMzMWNkYTc4YjJjYjg4M2ZjM2FhMWI1MmU3MmU5YmQwNjcyMGIz.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.desc": {
           "source": "Reads are served without dedicated nodes and billed by use.  The default, and not available on a BYOC index.",
           "message": "Lesevorgänge werden ohne dedizierte Knoten bedient und nach Nutzung abgerechnet. Der Standardwert, nicht verfügbar bei BYOC-Index."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eU9uRGVtYW5kU3BlYyM4MmIwNTgzOTQ2OWJmNzZjMDAxZWZiNThiNWMzMWNkYTc4YjJjYjg4M2ZjM2FhMWI1MmU3MmU5YmQwNjcyMGIz.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.display_name": {
           "source": "Dedicated nodes",
           "message": "Dedizierte Knoten"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eU9uRGVtYW5kU3BlYyM4MmIwNTgzOTQ2OWJmNzZjMDAxZWZiNThiNWMzMWNkYTc4YjJjYjg4M2ZjM2FhMWI1MmU3MmU5YmQwNjcyMGIz.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.desc": {
           "source": "Reads are served by dedicated nodes, for a predictable workload.  Requires `node_type` and `scaling` beside it.",
           "message": "Lesevorgänge werden von dedizierten Knoten bedient, für eine vorhersehbare Last. Erfordert `node_type` und `scaling` neben ihm."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.ZGVkaWNhdGVk.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eURlZGljYXRlZFNwZWMjYjk0ZWU4NTQ3ZTUwMjkzN2ZlM2U3MTZlYzQzYzUwMTg2ZTU0NGUwNGJhNjg0MWY3NDFhZWZkZWVhZDQ3Yjg0Yw.field.ZGVkaWNhdGVk.display_name": {
           "source": "Dedicated",
           "message": "Dediziert"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.ZGVkaWNhdGVk.short_desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eURlZGljYXRlZFNwZWMjYjk0ZWU4NTQ3ZTUwMjkzN2ZlM2U3MTZlYzQzYzUwMTg2ZTU0NGUwNGJhNjg0MWY3NDFhZWZkZWVhZDQ3Yjg0Yw.field.ZGVkaWNhdGVk.short_desc": {
           "source": "Configuration for dedicated read capacity",
           "message": "Konfiguration für dedizierte Lesekapazität"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.ZGVkaWNhdGVk.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eURlZGljYXRlZFNwZWMjYjk0ZWU4NTQ3ZTUwMjkzN2ZlM2U3MTZlYzQzYzUwMTg2ZTU0NGUwNGJhNjg0MWY3NDFhZWZkZWVhZDQ3Yjg0Yw.field.ZGVkaWNhdGVk.desc": {
           "source": "Configuration for dedicated read capacity. See  [this guide](https://docs.pinecone.io/guides/index-data/dedicated-read-nodes) for more details on  how to configure dedicated read capacity.",
           "message": "Konfiguration für dedizierte Lesekapazität. Siehe [this guide](https://docs.pinecone.io/guides/index-data/dedicated-read-nodes) für weitere Details zur Konfiguration dedizierter Lesekapazität."
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpIYXNoRGF0YVR5cGU6UmVhZENhcGFjaXR5RGVkaWNhdGVkQ29uZmlnIzMzMTMxM2E4MmM1ZDUwNTFiZTVlYWVhMDkwMjg3YjRhYTBhZTY2ZmExYjY0YWZiZTMxYjc1ZGRiODA0NDQ4NzM.field.bWFudWFs.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRDb25maWcjM2U3NWQ4OTFmMTk1MDk1MWQ1N2ZhMWQ1MjBlYWU4YTI5YTNkYzRmOGU0NDU1YTExZjk1OWU0MmNjNDMwYTgxZA.field.bWFudWFs.display_name": {
           "source": "Manual",
           "message": "Manuell"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpIYXNoRGF0YVR5cGU6UmVhZENhcGFjaXR5RGVkaWNhdGVkQ29uZmlnIzMzMTMxM2E4MmM1ZDUwNTFiZTVlYWVhMDkwMjg3YjRhYTBhZTY2ZmExYjY0YWZiZTMxYjc1ZGRiODA0NDQ4NzM.field.bWFudWFs.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRDb25maWcjM2U3NWQ4OTFmMTk1MDk1MWQ1N2ZhMWQ1MjBlYWU4YTI5YTNkYzRmOGU0NDU1YTExZjk1OWU0MmNjNDMwYTgxZA.field.bWFudWFs.short_desc": {
           "source": "The config to use for manual read capacity scaling",
           "message": "Die Konfiguration für die manuelle Skalierung der Lesekapazität"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpIYXNoRGF0YVR5cGU6UmVhZENhcGFjaXR5RGVkaWNhdGVkQ29uZmlnIzMzMTMxM2E4MmM1ZDUwNTFiZTVlYWVhMDkwMjg3YjRhYTBhZTY2ZmExYjY0YWZiZTMxYjc1ZGRiODA0NDQ4NzM.field.bWFudWFs.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRDb25maWcjM2U3NWQ4OTFmMTk1MDk1MWQ1N2ZhMWQ1MjBlYWU4YTI5YTNkYzRmOGU0NDU1YTExZjk1OWU0MmNjNDMwYTgxZA.field.bWFudWFs.desc": {
           "source": "The config to use for manual read capacity scaling.",
           "message": "Die Konfiguration für die manuelle Skalierung der Lesekapazität."
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpIYXNoRGF0YVR5cGU6U2NhbGluZ0NvbmZpZ01hbnVhbCNiMjRmOGYyMmE5NDU0M2M5NDVhNGI1YWZlZDhiYzE5N2VmMTBhZDU1MTdjZDBmZTQ0OTJhYWQyNmVjZjdiZmU5.field.cmVwbGljYXM.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpTY2FsaW5nQ29uZmlnTWFudWFsIzE5YmYyZGM3Mzc3ODk0YmU3OGNlNmJkMjQ5NmVmNTk3MTBkYWIwZTFmM2E2ODMzNDBmMTBhZGMwNGU5MjNkMDU.field.cmVwbGljYXM.display_name": {
           "source": "Replicas",
           "message": "Replikate"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpIYXNoRGF0YVR5cGU6U2NhbGluZ0NvbmZpZ01hbnVhbCNiMjRmOGYyMmE5NDU0M2M5NDVhNGI1YWZlZDhiYzE5N2VmMTBhZDU1MTdjZDBmZTQ0OTJhYWQyNmVjZjdiZmU5.field.cmVwbGljYXM.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpTY2FsaW5nQ29uZmlnTWFudWFsIzE5YmYyZGM3Mzc3ODk0YmU3OGNlNmJkMjQ5NmVmNTk3MTBkYWIwZTFmM2E2ODMzNDBmMTBhZGMwNGU5MjNkMDU.field.cmVwbGljYXM.short_desc": {
           "source": "The number of replicas to use",
           "message": "Die Anzahl der Replikate, die verwendet werden sollen"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpIYXNoRGF0YVR5cGU6U2NhbGluZ0NvbmZpZ01hbnVhbCNiMjRmOGYyMmE5NDU0M2M5NDVhNGI1YWZlZDhiYzE5N2VmMTBhZDU1MTdjZDBmZTQ0OTJhYWQyNmVjZjdiZmU5.field.cmVwbGljYXM.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpTY2FsaW5nQ29uZmlnTWFudWFsIzE5YmYyZGM3Mzc3ODk0YmU3OGNlNmJkMjQ5NmVmNTk3MTBkYWIwZTFmM2E2ODMzNDBmMTBhZGMwNGU5MjNkMDU.field.cmVwbGljYXM.desc": {
           "source": "The number of replicas to use. Replicas duplicate the compute resources and data of an index, allowing higher query throughput and availability. Setting replicas to 0 disables the index but can be used to reduce costs while usage is paused.",
           "message": "Die Anzahl der Replikate, die verwendet werden sollen. Replikate duplizieren die Rechenressourcen und Daten eines Index und ermöglichen eine höhere Abfrage-Durchsatzrate und Verfügbarkeit. Die Einstellung auf 0 deaktiviert den Index, kann aber verwendet werden, um die Kosten zu senken, während die Nutzung pausiert ist."
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpIYXNoRGF0YVR5cGU6U2NhbGluZ0NvbmZpZ01hbnVhbCNiMjRmOGYyMmE5NDU0M2M5NDVhNGI1YWZlZDhiYzE5N2VmMTBhZDU1MTdjZDBmZTQ0OTJhYWQyNmVjZjdiZmU5.field.c2hhcmRz.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpTY2FsaW5nQ29uZmlnTWFudWFsIzE5YmYyZGM3Mzc3ODk0YmU3OGNlNmJkMjQ5NmVmNTk3MTBkYWIwZTFmM2E2ODMzNDBmMTBhZGMwNGU5MjNkMDU.field.c2hhcmRz.display_name": {
           "source": "Shards",
           "message": "Shards"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpIYXNoRGF0YVR5cGU6U2NhbGluZ0NvbmZpZ01hbnVhbCNiMjRmOGYyMmE5NDU0M2M5NDVhNGI1YWZlZDhiYzE5N2VmMTBhZDU1MTdjZDBmZTQ0OTJhYWQyNmVjZjdiZmU5.field.c2hhcmRz.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpTY2FsaW5nQ29uZmlnTWFudWFsIzE5YmYyZGM3Mzc3ODk0YmU3OGNlNmJkMjQ5NmVmNTk3MTBkYWIwZTFmM2E2ODMzNDBmMTBhZGMwNGU5MjNkMDU.field.c2hhcmRz.short_desc": {
           "source": "The number of shards to use",
           "message": "Die Anzahl der Shards, die verwendet werden sollen"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpIYXNoRGF0YVR5cGU6U2NhbGluZ0NvbmZpZ01hbnVhbCNiMjRmOGYyMmE5NDU0M2M5NDVhNGI1YWZlZDhiYzE5N2VmMTBhZDU1MTdjZDBmZTQ0OTJhYWQyNmVjZjdiZmU5.field.c2hhcmRz.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpTY2FsaW5nQ29uZmlnTWFudWFsIzE5YmYyZGM3Mzc3ODk0YmU3OGNlNmJkMjQ5NmVmNTk3MTBkYWIwZTFmM2E2ODMzNDBmMTBhZGMwNGU5MjNkMDU.field.c2hhcmRz.desc": {
           "source": "The number of shards to use. Shards determine the storage capacity of an index, with each shard providing 250 GB of storage.",
           "message": "Die Anzahl der Shards, die verwendet werden sollen. Shards bestimmen die Speicherkapazität eines Index, wobei jeder Shard 250 GB Speicherplatz bereitstellt."
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpIYXNoRGF0YVR5cGU6UmVhZENhcGFjaXR5RGVkaWNhdGVkQ29uZmlnIzMzMTMxM2E4MmM1ZDUwNTFiZTVlYWVhMDkwMjg3YjRhYTBhZTY2ZmExYjY0YWZiZTMxYjc1ZGRiODA0NDQ4NzM.field.bm9kZV90eXBl.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRDb25maWcjM2U3NWQ4OTFmMTk1MDk1MWQ1N2ZhMWQ1MjBlYWU4YTI5YTNkYzRmOGU0NDU1YTExZjk1OWU0MmNjNDMwYTgxZA.field.bm9kZV90eXBl.display_name": {
           "source": "Node Type",
           "message": "Knotentyp"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpIYXNoRGF0YVR5cGU6UmVhZENhcGFjaXR5RGVkaWNhdGVkQ29uZmlnIzMzMTMxM2E4MmM1ZDUwNTFiZTVlYWVhMDkwMjg3YjRhYTBhZTY2ZmExYjY0YWZiZTMxYjc1ZGRiODA0NDQ4NzM.field.bm9kZV90eXBl.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRDb25maWcjM2U3NWQ4OTFmMTk1MDk1MWQ1N2ZhMWQ1MjBlYWU4YTI5YTNkYzRmOGU0NDU1YTExZjk1OWU0MmNjNDMwYTgxZA.field.bm9kZV90eXBl.short_desc": {
           "source": "The type of machines to use",
           "message": "Der Typ der zu verwendenden Maschinen"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpIYXNoRGF0YVR5cGU6UmVhZENhcGFjaXR5RGVkaWNhdGVkQ29uZmlnIzMzMTMxM2E4MmM1ZDUwNTFiZTVlYWVhMDkwMjg3YjRhYTBhZTY2ZmExYjY0YWZiZTMxYjc1ZGRiODA0NDQ4NzM.field.bm9kZV90eXBl.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRDb25maWcjM2U3NWQ4OTFmMTk1MDk1MWQ1N2ZhMWQ1MjBlYWU4YTI5YTNkYzRmOGU0NDU1YTExZjk1OWU0MmNjNDMwYTgxZA.field.bm9kZV90eXBl.desc": {
           "source": "The type of machines to use. Available options: `b1` and `t1`. `t1` includes increased processing power and memory.",
           "message": "Der Typ der zu verwendenden Maschinen. Verfügbare Optionen: `b1` und `t1`. `t1` beinhaltet erhöhte Verarbeitungskapazität und Speicher."
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpIYXNoRGF0YVR5cGU6UmVhZENhcGFjaXR5RGVkaWNhdGVkQ29uZmlnIzMzMTMxM2E4MmM1ZDUwNTFiZTVlYWVhMDkwMjg3YjRhYTBhZTY2ZmExYjY0YWZiZTMxYjc1ZGRiODA0NDQ4NzM.field.c2NhbGluZw.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRDb25maWcjM2U3NWQ4OTFmMTk1MDk1MWQ1N2ZhMWQ1MjBlYWU4YTI5YTNkYzRmOGU0NDU1YTExZjk1OWU0MmNjNDMwYTgxZA.field.c2NhbGluZw.display_name": {
           "source": "Scaling",
           "message": "Skalierung"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpIYXNoRGF0YVR5cGU6UmVhZENhcGFjaXR5RGVkaWNhdGVkQ29uZmlnIzMzMTMxM2E4MmM1ZDUwNTFiZTVlYWVhMDkwMjg3YjRhYTBhZTY2ZmExYjY0YWZiZTMxYjc1ZGRiODA0NDQ4NzM.field.c2NhbGluZw.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRDb25maWcjM2U3NWQ4OTFmMTk1MDk1MWQ1N2ZhMWQ1MjBlYWU4YTI5YTNkYzRmOGU0NDU1YTExZjk1OWU0MmNjNDMwYTgxZA.field.c2NhbGluZw.short_desc": {
           "source": "The type of scaling strategy to use",
           "message": "Der Typ der Skalierungsstrategie, die verwendet werden soll"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpIYXNoRGF0YVR5cGU6UmVhZENhcGFjaXR5RGVkaWNhdGVkQ29uZmlnIzMzMTMxM2E4MmM1ZDUwNTFiZTVlYWVhMDkwMjg3YjRhYTBhZTY2ZmExYjY0YWZiZTMxYjc1ZGRiODA0NDQ4NzM.field.c2NhbGluZw.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p2Y2kxdGIyUmxiQTpSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRDb25maWcjM2U3NWQ4OTFmMTk1MDk1MWQ1N2ZhMWQ1MjBlYWU4YTI5YTNkYzRmOGU0NDU1YTExZjk1OWU0MmNjNDMwYTgxZA.field.c2NhbGluZw.desc": {
           "source": "The type of scaling strategy to use.",
           "message": "Der Typ der Skalierungsstrategie, die verwendet werden soll."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.bW9kZQ.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eURlZGljYXRlZFNwZWMjYjk0ZWU4NTQ3ZTUwMjkzN2ZlM2U3MTZlYzQzYzUwMTg2ZTU0NGUwNGJhNjg0MWY3NDFhZWZkZWVhZDQ3Yjg0Yw.field.bW9kZQ.display_name": {
           "source": "Read Capacity Mode",
           "message": "Lese-Kapazitätsmodus"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.bW9kZQ.short_desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eURlZGljYXRlZFNwZWMjYjk0ZWU4NTQ3ZTUwMjkzN2ZlM2U3MTZlYzQzYzUwMTg2ZTU0NGUwNGJhNjg0MWY3NDFhZWZkZWVhZDQ3Yjg0Yw.field.bW9kZQ.short_desc": {
           "source": "On-demand reads or dedicated read nodes",
           "message": "On-Demand-Lesevorgänge oder dedizierte Lese-Knoten"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.bW9kZQ.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eURlZGljYXRlZFNwZWMjYjk0ZWU4NTQ3ZTUwMjkzN2ZlM2U3MTZlYzQzYzUwMTg2ZTU0NGUwNGJhNjg0MWY3NDFhZWZkZWVhZDQ3Yjg0Yw.field.bW9kZQ.desc": {
           "source": "The mode of the index. Possible values: `OnDemand` or `Dedicated`. Defaults to `OnDemand`. If set to `Dedicated`, `dedicated.node_type`, and `dedicated.scaling` must be specified.",
           "message": "Der Modus des Index. Mögliche Werte: `OnDemand` oder `Dedicated`. Standardwert ist `OnDemand`. Wenn auf `Dedicated` gesetzt wird, müssen `dedicated.node_type` und `dedicated.scaling` angegeben werden."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eURlZGljYXRlZFNwZWMjYjk0ZWU4NTQ3ZTUwMjkzN2ZlM2U3MTZlYzQzYzUwMTg2ZTU0NGUwNGJhNjg0MWY3NDFhZWZkZWVhZDQ3Yjg0Yw.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.display_name": {
           "source": "On demand",
           "message": "Auf Abruf"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eURlZGljYXRlZFNwZWMjYjk0ZWU4NTQ3ZTUwMjkzN2ZlM2U3MTZlYzQzYzUwMTg2ZTU0NGUwNGJhNjg0MWY3NDFhZWZkZWVhZDQ3Yjg0Yw.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.desc": {
           "source": "Reads are served without dedicated nodes and billed by use.  The default, and not available on a BYOC index.",
           "message": "Lesevorgänge werden ohne dedizierte Knoten bedient und nach Nutzung abgerechnet. Der Standardwert, nicht verfügbar bei BYOC-Index."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eURlZGljYXRlZFNwZWMjYjk0ZWU4NTQ3ZTUwMjkzN2ZlM2U3MTZlYzQzYzUwMTg2ZTU0NGUwNGJhNjg0MWY3NDFhZWZkZWVhZDQ3Yjg0Yw.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.display_name": {
           "source": "Dedicated nodes",
           "message": "Dedizierte Knoten"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZvci1tb2RlbA.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eURlZGljYXRlZFNwZWMjYjk0ZWU4NTQ3ZTUwMjkzN2ZlM2U3MTZlYzQzYzUwMTg2ZTU0NGUwNGJhNjg0MWY3NDFhZWZkZWVhZDQ3Yjg0Yw.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.desc": {
           "source": "Reads are served by dedicated nodes, for a predictable workload.  Requires `node_type` and `scaling` beside it.",
           "message": "Lesevorgänge werden von dedizierten Knoten bedient, für eine vorhersehbare Last. Erfordert `node_type` und `scaling` neben ihm."
         },
@@ -1354,131 +1354,131 @@
           "source": "How reads are served.\n\n- `{\"mode\": \"OnDemand\"}` — the default; you are billed for what you read.\n- `{\"mode\": \"Dedicated\", \"node_type\": ..., \"scaling\": ...}` — dedicated read nodes for a predictable workload.\n\nA BYOC index must set `Dedicated` explicitly: it does not support on-demand, and omitting this defaults to on-demand and is rejected.",
           "message": "Wie Lesevorgänge bedient werden.\n\n- `{\"mode\": \"OnDemand\"}` – der Standard; abgerechnet wird, was Sie lesen.\n- `{\"mode\": \"Dedicated\", \"node_type\": ..., \"scaling\": ...}` – dedizierte Leseknoten für eine vorhersehbare Last.\n\nEin BYOC-Index muss `Dedicated` ausdrücklich setzen: er unterstützt kein On-Demand, und ein Weglassen führt zum Standard On-Demand und wird abgelehnt."
         },
-        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.display_name": {
+        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eU9uRGVtYW5kU3BlYyM4MmIwNTgzOTQ2OWJmNzZjMDAxZWZiNThiNWMzMWNkYTc4YjJjYjg4M2ZjM2FhMWI1MmU3MmU5YmQwNjcyMGIz.field.bW9kZQ.display_name": {
           "source": "Read Capacity Mode",
           "message": "Lese-Kapazitätsmodus"
         },
-        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.short_desc": {
+        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eU9uRGVtYW5kU3BlYyM4MmIwNTgzOTQ2OWJmNzZjMDAxZWZiNThiNWMzMWNkYTc4YjJjYjg4M2ZjM2FhMWI1MmU3MmU5YmQwNjcyMGIz.field.bW9kZQ.short_desc": {
           "source": "On-demand reads or dedicated read nodes",
           "message": "On-Demand-Lesevorgänge oder dedizierte Lese-Knoten"
         },
-        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.desc": {
+        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eU9uRGVtYW5kU3BlYyM4MmIwNTgzOTQ2OWJmNzZjMDAxZWZiNThiNWMzMWNkYTc4YjJjYjg4M2ZjM2FhMWI1MmU3MmU5YmQwNjcyMGIz.field.bW9kZQ.desc": {
           "source": "The mode of the index. Possible values: `OnDemand` or `Dedicated`. Defaults to `OnDemand`. If set to `Dedicated`, `dedicated.node_type`, and `dedicated.scaling` must be specified.",
           "message": "Der Modus des Index. Mögliche Werte: `OnDemand` oder `Dedicated`. Standardwert ist `OnDemand`. Wenn auf `Dedicated` gesetzt wird, müssen `dedicated.node_type` und `dedicated.scaling` angegeben werden."
         },
-        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.display_name": {
+        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eU9uRGVtYW5kU3BlYyM4MmIwNTgzOTQ2OWJmNzZjMDAxZWZiNThiNWMzMWNkYTc4YjJjYjg4M2ZjM2FhMWI1MmU3MmU5YmQwNjcyMGIz.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.display_name": {
           "source": "On demand",
           "message": "Auf Abruf"
         },
-        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.desc": {
+        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eU9uRGVtYW5kU3BlYyM4MmIwNTgzOTQ2OWJmNzZjMDAxZWZiNThiNWMzMWNkYTc4YjJjYjg4M2ZjM2FhMWI1MmU3MmU5YmQwNjcyMGIz.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.desc": {
           "source": "Reads are served without dedicated nodes and billed by use.  The default, and not available on a BYOC index.",
           "message": "Lesevorgänge werden ohne dedizierte Knoten bedient und nach Nutzung abgerechnet. Der Standardwert, nicht verfügbar bei BYOC-Index."
         },
-        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.display_name": {
+        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eU9uRGVtYW5kU3BlYyM4MmIwNTgzOTQ2OWJmNzZjMDAxZWZiNThiNWMzMWNkYTc4YjJjYjg4M2ZjM2FhMWI1MmU3MmU5YmQwNjcyMGIz.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.display_name": {
           "source": "Dedicated nodes",
           "message": "Dedizierte Knoten"
         },
-        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.desc": {
+        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eU9uRGVtYW5kU3BlYyM4MmIwNTgzOTQ2OWJmNzZjMDAxZWZiNThiNWMzMWNkYTc4YjJjYjg4M2ZjM2FhMWI1MmU3MmU5YmQwNjcyMGIz.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.desc": {
           "source": "Reads are served by dedicated nodes, for a predictable workload.  Requires `node_type` and `scaling` beside it.",
           "message": "Lesevorgänge werden von dedizierten Knoten bedient, für eine vorhersehbare Last. Erfordert `node_type` und `scaling` neben ihm."
         },
-        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRQYXRjaFNwZWMjNTM4Y2M0ZmFjNGJjYjdlMGVhNzBiZmQzZTU4YTAyNmMyZDJiMjY1NWQyNzE2YTkyMzc1Zjk3YWQ0N2EzZTQ1YQ.field.ZGVkaWNhdGVk.display_name": {
+        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoU3BlYyNhMTQ0YzY2OGZlNTRhYjU3MGRmY2E3MzdiM2VhYjg1ZDgyYzYwYzExZDk1MTU5OWYzN2IyMDg4OWUzNTA5Nzg2.field.ZGVkaWNhdGVk.display_name": {
           "source": "Dedicated",
           "message": "Dediziert"
         },
-        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRQYXRjaFNwZWMjNTM4Y2M0ZmFjNGJjYjdlMGVhNzBiZmQzZTU4YTAyNmMyZDJiMjY1NWQyNzE2YTkyMzc1Zjk3YWQ0N2EzZTQ1YQ.field.ZGVkaWNhdGVk.short_desc": {
+        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoU3BlYyNhMTQ0YzY2OGZlNTRhYjU3MGRmY2E3MzdiM2VhYjg1ZDgyYzYwYzExZDk1MTU5OWYzN2IyMDg4OWUzNTA5Nzg2.field.ZGVkaWNhdGVk.short_desc": {
           "source": "Changes to the dedicated read capacity of an index",
           "message": "Änderungen der dedizierten Lesekapazität eines Index"
         },
-        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRQYXRjaFNwZWMjNTM4Y2M0ZmFjNGJjYjdlMGVhNzBiZmQzZTU4YTAyNmMyZDJiMjY1NWQyNzE2YTkyMzc1Zjk3YWQ0N2EzZTQ1YQ.field.ZGVkaWNhdGVk.desc": {
+        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoU3BlYyNhMTQ0YzY2OGZlNTRhYjU3MGRmY2E3MzdiM2VhYjg1ZDgyYzYwYzExZDk1MTU5OWYzN2IyMDg4OWUzNTA5Nzg2.field.ZGVkaWNhdGVk.desc": {
           "source": "Changes to the dedicated read capacity of an index. Every field is optional; omitted fields keep their current value. `scaling` and `manual` go together and must be sent as a pair: `scaling: Manual` without `manual` is rejected, and a `manual` block without `scaling: Manual` is not accepted by this schema (the service would silently ignore it). An index moving from `OnDemand` to `Dedicated` must supply `node_type`, `scaling`, and `manual`.",
           "message": "Änderungen der dedizierten Lesekapazität eines Index. Jedes Feld ist optional; ausgelassene Felder behalten ihren aktuellen Wert. `scaling` und `manual` gehören zusammen und müssen als Paar gesendet werden: `scaling: Manual` ohne `manual` wird abgelehnt, und ein `manual`-Block ohne `scaling: Manual` wird von diesem Schema nicht akzeptiert (der Dienst würde ihn stillschweigend ignorieren). Ein Index, der von `OnDemand` nach `Dedicated` wechselt, muss `node_type`, `scaling` und `manual` bereitstellen."
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0Ok9wZW5BcGkzSGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoQ29uZmlnIzhhN2NlMzE0MTk0NjI4ZmQ5M2MzYTYwMzVkNTAwYTcwNDk1NGE0ZjllZjIyZTRjMjdkMzE3Mzk0NDVhOTk2NTg.field.bWFudWFs.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0OlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoQ29uZmlnIzJiYzhhMzU2YmZkODQ3MTQ4OTliYTAxNDYyZDFjYTlmMWE4OTRhMjBjYzZjMmE0Mjg1OTBkZTYwYmMyMWYwYzg.field.bWFudWFs.display_name": {
           "source": "Manual",
           "message": "Manuell"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0Ok9wZW5BcGkzSGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoQ29uZmlnIzhhN2NlMzE0MTk0NjI4ZmQ5M2MzYTYwMzVkNTAwYTcwNDk1NGE0ZjllZjIyZTRjMjdkMzE3Mzk0NDVhOTk2NTg.field.bWFudWFs.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0OlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoQ29uZmlnIzJiYzhhMzU2YmZkODQ3MTQ4OTliYTAxNDYyZDFjYTlmMWE4OTRhMjBjYzZjMmE0Mjg1OTBkZTYwYmMyMWYwYzg.field.bWFudWFs.short_desc": {
           "source": "Manual scaling changes",
           "message": "Manuelle Skalierungsänderungen"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0Ok9wZW5BcGkzSGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoQ29uZmlnIzhhN2NlMzE0MTk0NjI4ZmQ5M2MzYTYwMzVkNTAwYTcwNDk1NGE0ZjllZjIyZTRjMjdkMzE3Mzk0NDVhOTk2NTg.field.bWFudWFs.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0OlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoQ29uZmlnIzJiYzhhMzU2YmZkODQ3MTQ4OTliYTAxNDYyZDFjYTlmMWE4OTRhMjBjYzZjMmE0Mjg1OTBkZTYwYmMyMWYwYzg.field.bWFudWFs.desc": {
           "source": "Manual scaling changes. Omitted fields keep their current value.",
           "message": "Manuelle Skalierungsänderungen. Ausgelassene Felder behalten ihren aktuellen Wert."
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0Okhhc2hEYXRhVHlwZToqU2NhbGluZ0NvbmZpZ01hbnVhbFBhdGNoI2U5YzIwODJiOWZhOGQ2YTljZjhjMWYwNjcxNmRlYjEwMzEwYmUwM2QyM2RlMTM3MTFmYzNlZDllN2VmOGVmYjU.field.cmVwbGljYXM.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0OipTY2FsaW5nQ29uZmlnTWFudWFsUGF0Y2gjYjI0ZWUxZDY1NjdmNDVhN2ZjZjRlNTNmZDllYTRmOGY4Y2Y2NGYwNTg1NGRjNGMwOTlmMWM3ZTdiYmVlYWExMA.field.cmVwbGljYXM.display_name": {
           "source": "Replicas",
           "message": "Replikate"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0Okhhc2hEYXRhVHlwZToqU2NhbGluZ0NvbmZpZ01hbnVhbFBhdGNoI2U5YzIwODJiOWZhOGQ2YTljZjhjMWYwNjcxNmRlYjEwMzEwYmUwM2QyM2RlMTM3MTFmYzNlZDllN2VmOGVmYjU.field.cmVwbGljYXM.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0OipTY2FsaW5nQ29uZmlnTWFudWFsUGF0Y2gjYjI0ZWUxZDY1NjdmNDVhN2ZjZjRlNTNmZDllYTRmOGY4Y2Y2NGYwNTg1NGRjNGMwOTlmMWM3ZTdiYmVlYWExMA.field.cmVwbGljYXM.short_desc": {
           "source": "The number of replicas",
           "message": "Die Anzahl der Replikate"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0Okhhc2hEYXRhVHlwZToqU2NhbGluZ0NvbmZpZ01hbnVhbFBhdGNoI2U5YzIwODJiOWZhOGQ2YTljZjhjMWYwNjcxNmRlYjEwMzEwYmUwM2QyM2RlMTM3MTFmYzNlZDllN2VmOGVmYjU.field.cmVwbGljYXM.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0OipTY2FsaW5nQ29uZmlnTWFudWFsUGF0Y2gjYjI0ZWUxZDY1NjdmNDVhN2ZjZjRlNTNmZDllYTRmOGY4Y2Y2NGYwNTg1NGRjNGMwOTlmMWM3ZTdiYmVlYWExMA.field.cmVwbGljYXM.desc": {
           "source": "The number of replicas.",
           "message": "Die Anzahl der Replikate."
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0Okhhc2hEYXRhVHlwZToqU2NhbGluZ0NvbmZpZ01hbnVhbFBhdGNoI2U5YzIwODJiOWZhOGQ2YTljZjhjMWYwNjcxNmRlYjEwMzEwYmUwM2QyM2RlMTM3MTFmYzNlZDllN2VmOGVmYjU.field.c2hhcmRz.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0OipTY2FsaW5nQ29uZmlnTWFudWFsUGF0Y2gjYjI0ZWUxZDY1NjdmNDVhN2ZjZjRlNTNmZDllYTRmOGY4Y2Y2NGYwNTg1NGRjNGMwOTlmMWM3ZTdiYmVlYWExMA.field.c2hhcmRz.display_name": {
           "source": "Shards",
           "message": "Shards"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0Okhhc2hEYXRhVHlwZToqU2NhbGluZ0NvbmZpZ01hbnVhbFBhdGNoI2U5YzIwODJiOWZhOGQ2YTljZjhjMWYwNjcxNmRlYjEwMzEwYmUwM2QyM2RlMTM3MTFmYzNlZDllN2VmOGVmYjU.field.c2hhcmRz.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0OipTY2FsaW5nQ29uZmlnTWFudWFsUGF0Y2gjYjI0ZWUxZDY1NjdmNDVhN2ZjZjRlNTNmZDllYTRmOGY4Y2Y2NGYwNTg1NGRjNGMwOTlmMWM3ZTdiYmVlYWExMA.field.c2hhcmRz.short_desc": {
           "source": "The number of shards",
           "message": "Die Anzahl der Shards"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0Okhhc2hEYXRhVHlwZToqU2NhbGluZ0NvbmZpZ01hbnVhbFBhdGNoI2U5YzIwODJiOWZhOGQ2YTljZjhjMWYwNjcxNmRlYjEwMzEwYmUwM2QyM2RlMTM3MTFmYzNlZDllN2VmOGVmYjU.field.c2hhcmRz.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0OipTY2FsaW5nQ29uZmlnTWFudWFsUGF0Y2gjYjI0ZWUxZDY1NjdmNDVhN2ZjZjRlNTNmZDllYTRmOGY4Y2Y2NGYwNTg1NGRjNGMwOTlmMWM3ZTdiYmVlYWExMA.field.c2hhcmRz.desc": {
           "source": "The number of shards.",
           "message": "Die Anzahl der Shards."
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0Ok9wZW5BcGkzSGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoQ29uZmlnIzhhN2NlMzE0MTk0NjI4ZmQ5M2MzYTYwMzVkNTAwYTcwNDk1NGE0ZjllZjIyZTRjMjdkMzE3Mzk0NDVhOTk2NTg.field.bm9kZV90eXBl.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0OlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoQ29uZmlnIzJiYzhhMzU2YmZkODQ3MTQ4OTliYTAxNDYyZDFjYTlmMWE4OTRhMjBjYzZjMmE0Mjg1OTBkZTYwYmMyMWYwYzg.field.bm9kZV90eXBl.display_name": {
           "source": "Node Type",
           "message": "Knotentyp"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0Ok9wZW5BcGkzSGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoQ29uZmlnIzhhN2NlMzE0MTk0NjI4ZmQ5M2MzYTYwMzVkNTAwYTcwNDk1NGE0ZjllZjIyZTRjMjdkMzE3Mzk0NDVhOTk2NTg.field.bm9kZV90eXBl.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0OlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoQ29uZmlnIzJiYzhhMzU2YmZkODQ3MTQ4OTliYTAxNDYyZDFjYTlmMWE4OTRhMjBjYzZjMmE0Mjg1OTBkZTYwYmMyMWYwYzg.field.bm9kZV90eXBl.short_desc": {
           "source": "The type of machines to use",
           "message": "Der Typ der zu verwendenden Maschinen"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0Ok9wZW5BcGkzSGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoQ29uZmlnIzhhN2NlMzE0MTk0NjI4ZmQ5M2MzYTYwMzVkNTAwYTcwNDk1NGE0ZjllZjIyZTRjMjdkMzE3Mzk0NDVhOTk2NTg.field.bm9kZV90eXBl.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0OlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoQ29uZmlnIzJiYzhhMzU2YmZkODQ3MTQ4OTliYTAxNDYyZDFjYTlmMWE4OTRhMjBjYzZjMmE0Mjg1OTBkZTYwYmMyMWYwYzg.field.bm9kZV90eXBl.desc": {
           "source": "The type of machines to use. Available options: `b1` and `t1`.",
           "message": "Der Typ der zu verwendenden Maschinen. Verfügbare Optionen: `b1` und `t1`."
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0Ok9wZW5BcGkzSGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoQ29uZmlnIzhhN2NlMzE0MTk0NjI4ZmQ5M2MzYTYwMzVkNTAwYTcwNDk1NGE0ZjllZjIyZTRjMjdkMzE3Mzk0NDVhOTk2NTg.field.c2NhbGluZw.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0OlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoQ29uZmlnIzJiYzhhMzU2YmZkODQ3MTQ4OTliYTAxNDYyZDFjYTlmMWE4OTRhMjBjYzZjMmE0Mjg1OTBkZTYwYmMyMWYwYzg.field.c2NhbGluZw.display_name": {
           "source": "Scaling",
           "message": "Skalierung"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0Ok9wZW5BcGkzSGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoQ29uZmlnIzhhN2NlMzE0MTk0NjI4ZmQ5M2MzYTYwMzVkNTAwYTcwNDk1NGE0ZjllZjIyZTRjMjdkMzE3Mzk0NDVhOTk2NTg.field.c2NhbGluZw.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0OlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoQ29uZmlnIzJiYzhhMzU2YmZkODQ3MTQ4OTliYTAxNDYyZDFjYTlmMWE4OTRhMjBjYzZjMmE0Mjg1OTBkZTYwYmMyMWYwYzg.field.c2NhbGluZw.short_desc": {
           "source": "The scaling strategy",
           "message": "Die Skalierungsstrategie"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0Ok9wZW5BcGkzSGFzaERhdGFUeXBlOlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoQ29uZmlnIzhhN2NlMzE0MTk0NjI4ZmQ5M2MzYTYwMzVkNTAwYTcwNDk1NGE0ZjllZjIyZTRjMjdkMzE3Mzk0NDVhOTk2NTg.field.c2NhbGluZw.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkyOXVabWxuZFhKbExXbHVaR1Y0OlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoQ29uZmlnIzJiYzhhMzU2YmZkODQ3MTQ4OTliYTAxNDYyZDFjYTlmMWE4OTRhMjBjYzZjMmE0Mjg1OTBkZTYwYmMyMWYwYzg.field.c2NhbGluZw.desc": {
           "source": "The scaling strategy. Only `Manual` is supported. Required whenever `manual` is set.",
           "message": "Die Skalierungsstrategie. Nur `Manual` wird unterstützt. Erforderlich, wenn `manual` gesetzt ist."
         },
-        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRQYXRjaFNwZWMjNTM4Y2M0ZmFjNGJjYjdlMGVhNzBiZmQzZTU4YTAyNmMyZDJiMjY1NWQyNzE2YTkyMzc1Zjk3YWQ0N2EzZTQ1YQ.field.bW9kZQ.display_name": {
+        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoU3BlYyNhMTQ0YzY2OGZlNTRhYjU3MGRmY2E3MzdiM2VhYjg1ZDgyYzYwYzExZDk1MTU5OWYzN2IyMDg4OWUzNTA5Nzg2.field.bW9kZQ.display_name": {
           "source": "Read Capacity Mode",
           "message": "Lese-Kapazitätsmodus"
         },
-        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRQYXRjaFNwZWMjNTM4Y2M0ZmFjNGJjYjdlMGVhNzBiZmQzZTU4YTAyNmMyZDJiMjY1NWQyNzE2YTkyMzc1Zjk3YWQ0N2EzZTQ1YQ.field.bW9kZQ.short_desc": {
+        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoU3BlYyNhMTQ0YzY2OGZlNTRhYjU3MGRmY2E3MzdiM2VhYjg1ZDgyYzYwYzExZDk1MTU5OWYzN2IyMDg4OWUzNTA5Nzg2.field.bW9kZQ.short_desc": {
           "source": "On-demand reads or dedicated read nodes",
           "message": "On-Demand-Lesevorgänge oder dedizierte Lese-Knoten"
         },
-        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRQYXRjaFNwZWMjNTM4Y2M0ZmFjNGJjYjdlMGVhNzBiZmQzZTU4YTAyNmMyZDJiMjY1NWQyNzE2YTkyMzc1Zjk3YWQ0N2EzZTQ1YQ.field.bW9kZQ.desc": {
+        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoU3BlYyNhMTQ0YzY2OGZlNTRhYjU3MGRmY2E3MzdiM2VhYjg1ZDgyYzYwYzExZDk1MTU5OWYzN2IyMDg4OWUzNTA5Nzg2.field.bW9kZQ.desc": {
           "source": "Must be `Dedicated`.",
           "message": "Muss `Dedicated` sein."
         },
-        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRQYXRjaFNwZWMjNTM4Y2M0ZmFjNGJjYjdlMGVhNzBiZmQzZTU4YTAyNmMyZDJiMjY1NWQyNzE2YTkyMzc1Zjk3YWQ0N2EzZTQ1YQ.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.display_name": {
+        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoU3BlYyNhMTQ0YzY2OGZlNTRhYjU3MGRmY2E3MzdiM2VhYjg1ZDgyYzYwYzExZDk1MTU5OWYzN2IyMDg4OWUzNTA5Nzg2.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.display_name": {
           "source": "On demand",
           "message": "Auf Abruf"
         },
-        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRQYXRjaFNwZWMjNTM4Y2M0ZmFjNGJjYjdlMGVhNzBiZmQzZTU4YTAyNmMyZDJiMjY1NWQyNzE2YTkyMzc1Zjk3YWQ0N2EzZTQ1YQ.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.desc": {
+        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoU3BlYyNhMTQ0YzY2OGZlNTRhYjU3MGRmY2E3MzdiM2VhYjg1ZDgyYzYwYzExZDk1MTU5OWYzN2IyMDg4OWUzNTA5Nzg2.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.desc": {
           "source": "Reads are served without dedicated nodes and billed by use.  The default, and not available on a BYOC index.",
           "message": "Lesevorgänge werden ohne dedizierte Knoten bedient und nach Nutzung abgerechnet. Der Standardwert, nicht verfügbar bei BYOC-Index."
         },
-        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRQYXRjaFNwZWMjNTM4Y2M0ZmFjNGJjYjdlMGVhNzBiZmQzZTU4YTAyNmMyZDJiMjY1NWQyNzE2YTkyMzc1Zjk3YWQ0N2EzZTQ1YQ.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.display_name": {
+        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoU3BlYyNhMTQ0YzY2OGZlNTRhYjU3MGRmY2E3MzdiM2VhYjg1ZDgyYzYwYzExZDk1MTU5OWYzN2IyMDg4OWUzNTA5Nzg2.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.display_name": {
           "source": "Dedicated nodes",
           "message": "Dedizierte Knoten"
         },
-        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRQYXRjaFNwZWMjNTM4Y2M0ZmFjNGJjYjdlMGVhNzBiZmQzZTU4YTAyNmMyZDJiMjY1NWQyNzE2YTkyMzc1Zjk3YWQ0N2EzZTQ1YQ.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.desc": {
+        "app.UGluZWNvbmU.action.Y29uZmlndXJlLWluZGV4.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eURlZGljYXRlZFBhdGNoU3BlYyNhMTQ0YzY2OGZlNTRhYjU3MGRmY2E3MzdiM2VhYjg1ZDgyYzYwYzExZDk1MTU5OWYzN2IyMDg4OWUzNTA5Nzg2.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.desc": {
           "source": "Reads are served by dedicated nodes, for a predictable workload.  Requires `node_type` and `scaling` beside it.",
           "message": "Lesevorgänge werden von dedizierten Knoten bedient, für eine vorhersehbare Last. Erfordert `node_type` und `scaling` neben ihm."
         },
@@ -1786,131 +1786,131 @@
           "source": "How reads are served.\n\n- `{\"mode\": \"OnDemand\"}` — the default; you are billed for what you read.\n- `{\"mode\": \"Dedicated\", \"node_type\": ..., \"scaling\": ...}` — dedicated read nodes for a predictable workload.\n\nA BYOC index must set `Dedicated` explicitly: it does not support on-demand, and omitting this defaults to on-demand and is rejected.",
           "message": "Wie Lesevorgänge bedient werden.\n\n- `{\"mode\": \"OnDemand\"}` – der Standard; abgerechnet wird, was Sie lesen.\n- `{\"mode\": \"Dedicated\", \"node_type\": ..., \"scaling\": ...}` – dedizierte Leseknoten für eine vorhersehbare Last.\n\nEin BYOC-Index muss `Dedicated` ausdrücklich setzen: er unterstützt kein On-Demand, und ein Weglassen führt zum Standard On-Demand und wird abgelehnt."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eU9uRGVtYW5kU3BlYyM4MmIwNTgzOTQ2OWJmNzZjMDAxZWZiNThiNWMzMWNkYTc4YjJjYjg4M2ZjM2FhMWI1MmU3MmU5YmQwNjcyMGIz.field.bW9kZQ.display_name": {
           "source": "Read Capacity Mode",
           "message": "Lese-Kapazitätsmodus"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.short_desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eU9uRGVtYW5kU3BlYyM4MmIwNTgzOTQ2OWJmNzZjMDAxZWZiNThiNWMzMWNkYTc4YjJjYjg4M2ZjM2FhMWI1MmU3MmU5YmQwNjcyMGIz.field.bW9kZQ.short_desc": {
           "source": "On-demand reads or dedicated read nodes",
           "message": "On-Demand-Lesevorgänge oder dedizierte Lese-Knoten"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eU9uRGVtYW5kU3BlYyM4MmIwNTgzOTQ2OWJmNzZjMDAxZWZiNThiNWMzMWNkYTc4YjJjYjg4M2ZjM2FhMWI1MmU3MmU5YmQwNjcyMGIz.field.bW9kZQ.desc": {
           "source": "The mode of the index. Possible values: `OnDemand` or `Dedicated`. Defaults to `OnDemand`. If set to `Dedicated`, `dedicated.node_type`, and `dedicated.scaling` must be specified.",
           "message": "Der Modus des Index. Mögliche Werte: `OnDemand` oder `Dedicated`. Standardwert ist `OnDemand`. Wenn auf `Dedicated` gesetzt wird, müssen `dedicated.node_type` und `dedicated.scaling` angegeben werden."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eU9uRGVtYW5kU3BlYyM4MmIwNTgzOTQ2OWJmNzZjMDAxZWZiNThiNWMzMWNkYTc4YjJjYjg4M2ZjM2FhMWI1MmU3MmU5YmQwNjcyMGIz.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.display_name": {
           "source": "On demand",
           "message": "Auf Abruf"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eU9uRGVtYW5kU3BlYyM4MmIwNTgzOTQ2OWJmNzZjMDAxZWZiNThiNWMzMWNkYTc4YjJjYjg4M2ZjM2FhMWI1MmU3MmU5YmQwNjcyMGIz.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.desc": {
           "source": "Reads are served without dedicated nodes and billed by use.  The default, and not available on a BYOC index.",
           "message": "Lesevorgänge werden ohne dedizierte Knoten bedient und nach Nutzung abgerechnet. Der Standardwert, nicht verfügbar bei BYOC-Index."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eU9uRGVtYW5kU3BlYyM4MmIwNTgzOTQ2OWJmNzZjMDAxZWZiNThiNWMzMWNkYTc4YjJjYjg4M2ZjM2FhMWI1MmU3MmU5YmQwNjcyMGIz.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.display_name": {
           "source": "Dedicated nodes",
           "message": "Dedizierte Knoten"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlPbkRlbWFuZFNwZWMjY2Y1ZmNjODBhMGFlZjY1OWUwNzU0MWY1OTk1ZWY1YzY3MzQyN2YwZGVjMTZiNDlkYjlmYWUzNmMxOWZmYjExOQ.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eU9uRGVtYW5kU3BlYyM4MmIwNTgzOTQ2OWJmNzZjMDAxZWZiNThiNWMzMWNkYTc4YjJjYjg4M2ZjM2FhMWI1MmU3MmU5YmQwNjcyMGIz.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.desc": {
           "source": "Reads are served by dedicated nodes, for a predictable workload.  Requires `node_type` and `scaling` beside it.",
           "message": "Lesevorgänge werden von dedizierten Knoten bedient, für eine vorhersehbare Last. Erfordert `node_type` und `scaling` neben ihm."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.ZGVkaWNhdGVk.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eURlZGljYXRlZFNwZWMjYjk0ZWU4NTQ3ZTUwMjkzN2ZlM2U3MTZlYzQzYzUwMTg2ZTU0NGUwNGJhNjg0MWY3NDFhZWZkZWVhZDQ3Yjg0Yw.field.ZGVkaWNhdGVk.display_name": {
           "source": "Dedicated",
           "message": "Dediziert"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.ZGVkaWNhdGVk.short_desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eURlZGljYXRlZFNwZWMjYjk0ZWU4NTQ3ZTUwMjkzN2ZlM2U3MTZlYzQzYzUwMTg2ZTU0NGUwNGJhNjg0MWY3NDFhZWZkZWVhZDQ3Yjg0Yw.field.ZGVkaWNhdGVk.short_desc": {
           "source": "Configuration for dedicated read capacity",
           "message": "Konfiguration für dedizierte Lesekapazität"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.ZGVkaWNhdGVk.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eURlZGljYXRlZFNwZWMjYjk0ZWU4NTQ3ZTUwMjkzN2ZlM2U3MTZlYzQzYzUwMTg2ZTU0NGUwNGJhNjg0MWY3NDFhZWZkZWVhZDQ3Yjg0Yw.field.ZGVkaWNhdGVk.desc": {
           "source": "Configuration for dedicated read capacity. See  [this guide](https://docs.pinecone.io/guides/index-data/dedicated-read-nodes) for more details on  how to configure dedicated read capacity.",
           "message": "Konfiguration für dedizierte Lesekapazität. Siehe [this guide](https://docs.pinecone.io/guides/index-data/dedicated-read-nodes) für weitere Details zur Konfiguration dedizierter Lesekapazität."
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3Okhhc2hEYXRhVHlwZTpSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRDb25maWcjMzMxMzEzYTgyYzVkNTA1MWJlNWVhZWEwOTAyODdiNGFhMGFlNjZmYTFiNjRhZmJlMzFiNzVkZGI4MDQ0NDg3Mw.field.bWFudWFs.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3OlJlYWRDYXBhY2l0eURlZGljYXRlZENvbmZpZyMzZTc1ZDg5MWYxOTUwOTUxZDU3ZmExZDUyMGVhZThhMjlhM2RjNGY4ZTQ0NTVhMTFmOTU5ZTQyY2M0MzBhODFk.field.bWFudWFs.display_name": {
           "source": "Manual",
           "message": "Manuell"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3Okhhc2hEYXRhVHlwZTpSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRDb25maWcjMzMxMzEzYTgyYzVkNTA1MWJlNWVhZWEwOTAyODdiNGFhMGFlNjZmYTFiNjRhZmJlMzFiNzVkZGI4MDQ0NDg3Mw.field.bWFudWFs.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3OlJlYWRDYXBhY2l0eURlZGljYXRlZENvbmZpZyMzZTc1ZDg5MWYxOTUwOTUxZDU3ZmExZDUyMGVhZThhMjlhM2RjNGY4ZTQ0NTVhMTFmOTU5ZTQyY2M0MzBhODFk.field.bWFudWFs.short_desc": {
           "source": "The config to use for manual read capacity scaling",
           "message": "Die Konfiguration für die manuelle Skalierung der Lesekapazität"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3Okhhc2hEYXRhVHlwZTpSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRDb25maWcjMzMxMzEzYTgyYzVkNTA1MWJlNWVhZWEwOTAyODdiNGFhMGFlNjZmYTFiNjRhZmJlMzFiNzVkZGI4MDQ0NDg3Mw.field.bWFudWFs.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3OlJlYWRDYXBhY2l0eURlZGljYXRlZENvbmZpZyMzZTc1ZDg5MWYxOTUwOTUxZDU3ZmExZDUyMGVhZThhMjlhM2RjNGY4ZTQ0NTVhMTFmOTU5ZTQyY2M0MzBhODFk.field.bWFudWFs.desc": {
           "source": "The config to use for manual read capacity scaling.",
           "message": "Die Konfiguration für die manuelle Skalierung der Lesekapazität."
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3Okhhc2hEYXRhVHlwZTpTY2FsaW5nQ29uZmlnTWFudWFsI2IyNGY4ZjIyYTk0NTQzYzk0NWE0YjVhZmVkOGJjMTk3ZWYxMGFkNTUxN2NkMGZlNDQ5MmFhZDI2ZWNmN2JmZTk.field.cmVwbGljYXM.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3OlNjYWxpbmdDb25maWdNYW51YWwjMTliZjJkYzczNzc4OTRiZTc4Y2U2YmQyNDk2ZWY1OTcxMGRhYjBlMWYzYTY4MzM0MGYxMGFkYzA0ZTkyM2QwNQ.field.cmVwbGljYXM.display_name": {
           "source": "Replicas",
           "message": "Replikate"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3Okhhc2hEYXRhVHlwZTpTY2FsaW5nQ29uZmlnTWFudWFsI2IyNGY4ZjIyYTk0NTQzYzk0NWE0YjVhZmVkOGJjMTk3ZWYxMGFkNTUxN2NkMGZlNDQ5MmFhZDI2ZWNmN2JmZTk.field.cmVwbGljYXM.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3OlNjYWxpbmdDb25maWdNYW51YWwjMTliZjJkYzczNzc4OTRiZTc4Y2U2YmQyNDk2ZWY1OTcxMGRhYjBlMWYzYTY4MzM0MGYxMGFkYzA0ZTkyM2QwNQ.field.cmVwbGljYXM.short_desc": {
           "source": "The number of replicas to use",
           "message": "Die Anzahl der Replikate, die verwendet werden sollen"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3Okhhc2hEYXRhVHlwZTpTY2FsaW5nQ29uZmlnTWFudWFsI2IyNGY4ZjIyYTk0NTQzYzk0NWE0YjVhZmVkOGJjMTk3ZWYxMGFkNTUxN2NkMGZlNDQ5MmFhZDI2ZWNmN2JmZTk.field.cmVwbGljYXM.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3OlNjYWxpbmdDb25maWdNYW51YWwjMTliZjJkYzczNzc4OTRiZTc4Y2U2YmQyNDk2ZWY1OTcxMGRhYjBlMWYzYTY4MzM0MGYxMGFkYzA0ZTkyM2QwNQ.field.cmVwbGljYXM.desc": {
           "source": "The number of replicas to use. Replicas duplicate the compute resources and data of an index, allowing higher query throughput and availability. Setting replicas to 0 disables the index but can be used to reduce costs while usage is paused.",
           "message": "Die Anzahl der Replikate, die verwendet werden sollen. Replikate duplizieren die Rechenressourcen und Daten eines Index und ermöglichen eine höhere Abfrage-Durchsatzrate und Verfügbarkeit. Die Einstellung auf 0 deaktiviert den Index, kann aber verwendet werden, um die Kosten zu senken, während die Nutzung pausiert ist."
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3Okhhc2hEYXRhVHlwZTpTY2FsaW5nQ29uZmlnTWFudWFsI2IyNGY4ZjIyYTk0NTQzYzk0NWE0YjVhZmVkOGJjMTk3ZWYxMGFkNTUxN2NkMGZlNDQ5MmFhZDI2ZWNmN2JmZTk.field.c2hhcmRz.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3OlNjYWxpbmdDb25maWdNYW51YWwjMTliZjJkYzczNzc4OTRiZTc4Y2U2YmQyNDk2ZWY1OTcxMGRhYjBlMWYzYTY4MzM0MGYxMGFkYzA0ZTkyM2QwNQ.field.c2hhcmRz.display_name": {
           "source": "Shards",
           "message": "Shards"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3Okhhc2hEYXRhVHlwZTpTY2FsaW5nQ29uZmlnTWFudWFsI2IyNGY4ZjIyYTk0NTQzYzk0NWE0YjVhZmVkOGJjMTk3ZWYxMGFkNTUxN2NkMGZlNDQ5MmFhZDI2ZWNmN2JmZTk.field.c2hhcmRz.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3OlNjYWxpbmdDb25maWdNYW51YWwjMTliZjJkYzczNzc4OTRiZTc4Y2U2YmQyNDk2ZWY1OTcxMGRhYjBlMWYzYTY4MzM0MGYxMGFkYzA0ZTkyM2QwNQ.field.c2hhcmRz.short_desc": {
           "source": "The number of shards to use",
           "message": "Die Anzahl der Shards, die verwendet werden sollen"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3Okhhc2hEYXRhVHlwZTpTY2FsaW5nQ29uZmlnTWFudWFsI2IyNGY4ZjIyYTk0NTQzYzk0NWE0YjVhZmVkOGJjMTk3ZWYxMGFkNTUxN2NkMGZlNDQ5MmFhZDI2ZWNmN2JmZTk.field.c2hhcmRz.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3OlNjYWxpbmdDb25maWdNYW51YWwjMTliZjJkYzczNzc4OTRiZTc4Y2U2YmQyNDk2ZWY1OTcxMGRhYjBlMWYzYTY4MzM0MGYxMGFkYzA0ZTkyM2QwNQ.field.c2hhcmRz.desc": {
           "source": "The number of shards to use. Shards determine the storage capacity of an index, with each shard providing 250 GB of storage.",
           "message": "Die Anzahl der Shards, die verwendet werden sollen. Shards bestimmen die Speicherkapazität eines Index, wobei jeder Shard 250 GB Speicherplatz bereitstellt."
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3Okhhc2hEYXRhVHlwZTpSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRDb25maWcjMzMxMzEzYTgyYzVkNTA1MWJlNWVhZWEwOTAyODdiNGFhMGFlNjZmYTFiNjRhZmJlMzFiNzVkZGI4MDQ0NDg3Mw.field.bm9kZV90eXBl.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3OlJlYWRDYXBhY2l0eURlZGljYXRlZENvbmZpZyMzZTc1ZDg5MWYxOTUwOTUxZDU3ZmExZDUyMGVhZThhMjlhM2RjNGY4ZTQ0NTVhMTFmOTU5ZTQyY2M0MzBhODFk.field.bm9kZV90eXBl.display_name": {
           "source": "Node Type",
           "message": "Knotentyp"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3Okhhc2hEYXRhVHlwZTpSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRDb25maWcjMzMxMzEzYTgyYzVkNTA1MWJlNWVhZWEwOTAyODdiNGFhMGFlNjZmYTFiNjRhZmJlMzFiNzVkZGI4MDQ0NDg3Mw.field.bm9kZV90eXBl.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3OlJlYWRDYXBhY2l0eURlZGljYXRlZENvbmZpZyMzZTc1ZDg5MWYxOTUwOTUxZDU3ZmExZDUyMGVhZThhMjlhM2RjNGY4ZTQ0NTVhMTFmOTU5ZTQyY2M0MzBhODFk.field.bm9kZV90eXBl.short_desc": {
           "source": "The type of machines to use",
           "message": "Der Typ der zu verwendenden Maschinen"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3Okhhc2hEYXRhVHlwZTpSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRDb25maWcjMzMxMzEzYTgyYzVkNTA1MWJlNWVhZWEwOTAyODdiNGFhMGFlNjZmYTFiNjRhZmJlMzFiNzVkZGI4MDQ0NDg3Mw.field.bm9kZV90eXBl.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3OlJlYWRDYXBhY2l0eURlZGljYXRlZENvbmZpZyMzZTc1ZDg5MWYxOTUwOTUxZDU3ZmExZDUyMGVhZThhMjlhM2RjNGY4ZTQ0NTVhMTFmOTU5ZTQyY2M0MzBhODFk.field.bm9kZV90eXBl.desc": {
           "source": "The type of machines to use. Available options: `b1` and `t1`. `t1` includes increased processing power and memory.",
           "message": "Der Typ der zu verwendenden Maschinen. Verfügbare Optionen: `b1` und `t1`. `t1` beinhaltet erhöhte Verarbeitungskapazität und Speicher."
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3Okhhc2hEYXRhVHlwZTpSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRDb25maWcjMzMxMzEzYTgyYzVkNTA1MWJlNWVhZWEwOTAyODdiNGFhMGFlNjZmYTFiNjRhZmJlMzFiNzVkZGI4MDQ0NDg3Mw.field.c2NhbGluZw.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3OlJlYWRDYXBhY2l0eURlZGljYXRlZENvbmZpZyMzZTc1ZDg5MWYxOTUwOTUxZDU3ZmExZDUyMGVhZThhMjlhM2RjNGY4ZTQ0NTVhMTFmOTU5ZTQyY2M0MzBhODFk.field.c2NhbGluZw.display_name": {
           "source": "Scaling",
           "message": "Skalierung"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3Okhhc2hEYXRhVHlwZTpSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRDb25maWcjMzMxMzEzYTgyYzVkNTA1MWJlNWVhZWEwOTAyODdiNGFhMGFlNjZmYTFiNjRhZmJlMzFiNzVkZGI4MDQ0NDg3Mw.field.c2NhbGluZw.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3OlJlYWRDYXBhY2l0eURlZGljYXRlZENvbmZpZyMzZTc1ZDg5MWYxOTUwOTUxZDU3ZmExZDUyMGVhZThhMjlhM2RjNGY4ZTQ0NTVhMTFmOTU5ZTQyY2M0MzBhODFk.field.c2NhbGluZw.short_desc": {
           "source": "The type of scaling strategy to use",
           "message": "Der Typ der Skalierungsstrategie, die verwendet werden soll"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3Okhhc2hEYXRhVHlwZTpSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRDb25maWcjMzMxMzEzYTgyYzVkNTA1MWJlNWVhZWEwOTAyODdiNGFhMGFlNjZmYTFiNjRhZmJlMzFiNzVkZGI4MDQ0NDg3Mw.field.c2NhbGluZw.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOlkzSmxZWFJsTFdsdVpHVjRMV1p5YjIwdFltRmphM1Z3OlJlYWRDYXBhY2l0eURlZGljYXRlZENvbmZpZyMzZTc1ZDg5MWYxOTUwOTUxZDU3ZmExZDUyMGVhZThhMjlhM2RjNGY4ZTQ0NTVhMTFmOTU5ZTQyY2M0MzBhODFk.field.c2NhbGluZw.desc": {
           "source": "The type of scaling strategy to use.",
           "message": "Der Typ der Skalierungsstrategie, die verwendet werden soll."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.bW9kZQ.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eURlZGljYXRlZFNwZWMjYjk0ZWU4NTQ3ZTUwMjkzN2ZlM2U3MTZlYzQzYzUwMTg2ZTU0NGUwNGJhNjg0MWY3NDFhZWZkZWVhZDQ3Yjg0Yw.field.bW9kZQ.display_name": {
           "source": "Read Capacity Mode",
           "message": "Lese-Kapazitätsmodus"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.bW9kZQ.short_desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eURlZGljYXRlZFNwZWMjYjk0ZWU4NTQ3ZTUwMjkzN2ZlM2U3MTZlYzQzYzUwMTg2ZTU0NGUwNGJhNjg0MWY3NDFhZWZkZWVhZDQ3Yjg0Yw.field.bW9kZQ.short_desc": {
           "source": "On-demand reads or dedicated read nodes",
           "message": "On-Demand-Lesevorgänge oder dedizierte Lese-Knoten"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.bW9kZQ.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eURlZGljYXRlZFNwZWMjYjk0ZWU4NTQ3ZTUwMjkzN2ZlM2U3MTZlYzQzYzUwMTg2ZTU0NGUwNGJhNjg0MWY3NDFhZWZkZWVhZDQ3Yjg0Yw.field.bW9kZQ.desc": {
           "source": "The mode of the index. Possible values: `OnDemand` or `Dedicated`. Defaults to `OnDemand`. If set to `Dedicated`, `dedicated.node_type`, and `dedicated.scaling` must be specified.",
           "message": "Der Modus des Index. Mögliche Werte: `OnDemand` oder `Dedicated`. Standardwert ist `OnDemand`. Wenn auf `Dedicated` gesetzt wird, müssen `dedicated.node_type` und `dedicated.scaling` angegeben werden."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eURlZGljYXRlZFNwZWMjYjk0ZWU4NTQ3ZTUwMjkzN2ZlM2U3MTZlYzQzYzUwMTg2ZTU0NGUwNGJhNjg0MWY3NDFhZWZkZWVhZDQ3Yjg0Yw.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.display_name": {
           "source": "On demand",
           "message": "Auf Abruf"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eURlZGljYXRlZFNwZWMjYjk0ZWU4NTQ3ZTUwMjkzN2ZlM2U3MTZlYzQzYzUwMTg2ZTU0NGUwNGJhNjg0MWY3NDFhZWZkZWVhZDQ3Yjg0Yw.field.bW9kZQ.allowed-value.c3RyaW5nOk9uRGVtYW5k.desc": {
           "source": "Reads are served without dedicated nodes and billed by use.  The default, and not available on a BYOC index.",
           "message": "Lesevorgänge werden ohne dedizierte Knoten bedient und nach Nutzung abgerechnet. Der Standardwert, nicht verfügbar bei BYOC-Index."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eURlZGljYXRlZFNwZWMjYjk0ZWU4NTQ3ZTUwMjkzN2ZlM2U3MTZlYzQzYzUwMTg2ZTU0NGUwNGJhNjg0MWY3NDFhZWZkZWVhZDQ3Yjg0Yw.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.display_name": {
           "source": "Dedicated nodes",
           "message": "Dedizierte Knoten"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.SGFzaERhdGFUeXBlOipSZWFkQ2FwYWNpdHlEZWRpY2F0ZWRTcGVjIzgyYmFhZTQwYzBiYThiZGQ1NDE4NTE1NDBiNTZkMjE4ZDJhMDJjOGEzZTg0Yzg2OTdlMGY2ZDk1NGI0ZmMyNzc.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4LWZyb20tYmFja3Vw.option.cmVhZF9jYXBhY2l0eQ.union.KlJlYWRDYXBhY2l0eURlZGljYXRlZFNwZWMjYjk0ZWU4NTQ3ZTUwMjkzN2ZlM2U3MTZlYzQzYzUwMTg2ZTU0NGUwNGJhNjg0MWY3NDFhZWZkZWVhZDQ3Yjg0Yw.field.bW9kZQ.allowed-value.c3RyaW5nOkRlZGljYXRlZA.desc": {
           "source": "Reads are served by dedicated nodes, for a predictable workload.  Requires `node_type` and `scaling` beside it.",
           "message": "Lesevorgänge werden von dedizierten Knoten bedient, für eine vorhersehbare Last. Erfordert `node_type` und `scaling` neben ihm."
         },
@@ -2726,27 +2726,27 @@
           "source": "Vector sparse data. Represented as a list of indices and a list of  corresponded values, which must be with the same length.",
           "message": "Vektor-sparse Daten. Dargestellt als Liste von Indizes und entsprechenden Werten, die die gleiche Länge haben müssen."
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOmRYQnpaWEowTFhabFkzUnZjbk06SGFzaERhdGFUeXBlOipTcGFyc2VWYWx1ZXMjYjUyMmZkYTUwMjc4NDcwN2VmNTc4ZDA3MDMwYzUxZjAzMzg3NzMxM2ZlNTEwNjk2MTdiZTIxZGM2MmE5ZmE4NA.field.aW5kaWNlcw.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOmRYQnpaWEowTFhabFkzUnZjbk06KlNwYXJzZVZhbHVlcyNmZGQzN2E3YjgzMjk2NjNiY2U3OTY2ZjE1ODc0MzU5MTNjYTYwMGY1MDNhNWUwYjBmNDBlY2QwYjQzZGRiZGRm.field.aW5kaWNlcw.display_name": {
           "source": "Indices",
           "message": "Indizes"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOmRYQnpaWEowTFhabFkzUnZjbk06SGFzaERhdGFUeXBlOipTcGFyc2VWYWx1ZXMjYjUyMmZkYTUwMjc4NDcwN2VmNTc4ZDA3MDMwYzUxZjAzMzg3NzMxM2ZlNTEwNjk2MTdiZTIxZGM2MmE5ZmE4NA.field.aW5kaWNlcw.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOmRYQnpaWEowTFhabFkzUnZjbk06KlNwYXJzZVZhbHVlcyNmZGQzN2E3YjgzMjk2NjNiY2U3OTY2ZjE1ODc0MzU5MTNjYTYwMGY1MDNhNWUwYjBmNDBlY2QwYjQzZGRiZGRm.field.aW5kaWNlcw.short_desc": {
           "source": "The indices of the sparse data",
           "message": "Die Indizes der sparsen Daten"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOmRYQnpaWEowTFhabFkzUnZjbk06SGFzaERhdGFUeXBlOipTcGFyc2VWYWx1ZXMjYjUyMmZkYTUwMjc4NDcwN2VmNTc4ZDA3MDMwYzUxZjAzMzg3NzMxM2ZlNTEwNjk2MTdiZTIxZGM2MmE5ZmE4NA.field.aW5kaWNlcw.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOmRYQnpaWEowTFhabFkzUnZjbk06KlNwYXJzZVZhbHVlcyNmZGQzN2E3YjgzMjk2NjNiY2U3OTY2ZjE1ODc0MzU5MTNjYTYwMGY1MDNhNWUwYjBmNDBlY2QwYjQzZGRiZGRm.field.aW5kaWNlcw.desc": {
           "source": "The indices of the sparse data.",
           "message": "Die Indizes der sparsen Daten."
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOmRYQnpaWEowTFhabFkzUnZjbk06SGFzaERhdGFUeXBlOipTcGFyc2VWYWx1ZXMjYjUyMmZkYTUwMjc4NDcwN2VmNTc4ZDA3MDMwYzUxZjAzMzg3NzMxM2ZlNTEwNjk2MTdiZTIxZGM2MmE5ZmE4NA.field.dmFsdWVz.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOmRYQnpaWEowTFhabFkzUnZjbk06KlNwYXJzZVZhbHVlcyNmZGQzN2E3YjgzMjk2NjNiY2U3OTY2ZjE1ODc0MzU5MTNjYTYwMGY1MDNhNWUwYjBmNDBlY2QwYjQzZGRiZGRm.field.dmFsdWVz.display_name": {
           "source": "Values",
           "message": "Werte"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOmRYQnpaWEowTFhabFkzUnZjbk06SGFzaERhdGFUeXBlOipTcGFyc2VWYWx1ZXMjYjUyMmZkYTUwMjc4NDcwN2VmNTc4ZDA3MDMwYzUxZjAzMzg3NzMxM2ZlNTEwNjk2MTdiZTIxZGM2MmE5ZmE4NA.field.dmFsdWVz.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOmRYQnpaWEowTFhabFkzUnZjbk06KlNwYXJzZVZhbHVlcyNmZGQzN2E3YjgzMjk2NjNiY2U3OTY2ZjE1ODc0MzU5MTNjYTYwMGY1MDNhNWUwYjBmNDBlY2QwYjQzZGRiZGRm.field.dmFsdWVz.short_desc": {
           "source": "The corresponding values of the sparse data, which must be with the same…",
           "message": "Die entsprechenden Werte der spärlichen Daten, die die gleiche Länge wie die… haben müssen."
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOmRYQnpaWEowTFhabFkzUnZjbk06SGFzaERhdGFUeXBlOipTcGFyc2VWYWx1ZXMjYjUyMmZkYTUwMjc4NDcwN2VmNTc4ZDA3MDMwYzUxZjAzMzg3NzMxM2ZlNTEwNjk2MTdiZTIxZGM2MmE5ZmE4NA.field.dmFsdWVz.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOmRYQnpaWEowTFhabFkzUnZjbk06KlNwYXJzZVZhbHVlcyNmZGQzN2E3YjgzMjk2NjNiY2U3OTY2ZjE1ODc0MzU5MTNjYTYwMGY1MDNhNWUwYjBmNDBlY2QwYjQzZGRiZGRm.field.dmFsdWVz.desc": {
           "source": "The corresponding values of the sparse data, which must be with the same length as the indices.",
           "message": "Die entsprechenden Werte der spärlichen Daten, die die gleiche Länge wie die Indizes haben müssen."
         },
@@ -3826,27 +3826,27 @@
           "source": "Vector sparse data. Represented as a list of indices and a list of  corresponded values, which must be with the same length.",
           "message": "Vektor-sparse Daten. Dargestellt als Liste von Indizes und entsprechenden Werten, die die gleiche Länge haben müssen."
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOmMyVmhjbU5vTFdSdlkzVnRaVzUwY3c6SGFzaERhdGFUeXBlOipTcGFyc2VWYWx1ZXMjYjUyMmZkYTUwMjc4NDcwN2VmNTc4ZDA3MDMwYzUxZjAzMzg3NzMxM2ZlNTEwNjk2MTdiZTIxZGM2MmE5ZmE4NA.field.aW5kaWNlcw.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOmMyVmhjbU5vTFdSdlkzVnRaVzUwY3c6KlNwYXJzZVZhbHVlcyNmZGQzN2E3YjgzMjk2NjNiY2U3OTY2ZjE1ODc0MzU5MTNjYTYwMGY1MDNhNWUwYjBmNDBlY2QwYjQzZGRiZGRm.field.aW5kaWNlcw.display_name": {
           "source": "Indices",
           "message": "Indizes"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOmMyVmhjbU5vTFdSdlkzVnRaVzUwY3c6SGFzaERhdGFUeXBlOipTcGFyc2VWYWx1ZXMjYjUyMmZkYTUwMjc4NDcwN2VmNTc4ZDA3MDMwYzUxZjAzMzg3NzMxM2ZlNTEwNjk2MTdiZTIxZGM2MmE5ZmE4NA.field.aW5kaWNlcw.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOmMyVmhjbU5vTFdSdlkzVnRaVzUwY3c6KlNwYXJzZVZhbHVlcyNmZGQzN2E3YjgzMjk2NjNiY2U3OTY2ZjE1ODc0MzU5MTNjYTYwMGY1MDNhNWUwYjBmNDBlY2QwYjQzZGRiZGRm.field.aW5kaWNlcw.short_desc": {
           "source": "The indices of the sparse data",
           "message": "Die Indizes der sparsen Daten"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOmMyVmhjbU5vTFdSdlkzVnRaVzUwY3c6SGFzaERhdGFUeXBlOipTcGFyc2VWYWx1ZXMjYjUyMmZkYTUwMjc4NDcwN2VmNTc4ZDA3MDMwYzUxZjAzMzg3NzMxM2ZlNTEwNjk2MTdiZTIxZGM2MmE5ZmE4NA.field.aW5kaWNlcw.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOmMyVmhjbU5vTFdSdlkzVnRaVzUwY3c6KlNwYXJzZVZhbHVlcyNmZGQzN2E3YjgzMjk2NjNiY2U3OTY2ZjE1ODc0MzU5MTNjYTYwMGY1MDNhNWUwYjBmNDBlY2QwYjQzZGRiZGRm.field.aW5kaWNlcw.desc": {
           "source": "The indices of the sparse data.",
           "message": "Die Indizes der sparsen Daten."
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOmMyVmhjbU5vTFdSdlkzVnRaVzUwY3c6SGFzaERhdGFUeXBlOipTcGFyc2VWYWx1ZXMjYjUyMmZkYTUwMjc4NDcwN2VmNTc4ZDA3MDMwYzUxZjAzMzg3NzMxM2ZlNTEwNjk2MTdiZTIxZGM2MmE5ZmE4NA.field.dmFsdWVz.display_name": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOmMyVmhjbU5vTFdSdlkzVnRaVzUwY3c6KlNwYXJzZVZhbHVlcyNmZGQzN2E3YjgzMjk2NjNiY2U3OTY2ZjE1ODc0MzU5MTNjYTYwMGY1MDNhNWUwYjBmNDBlY2QwYjQzZGRiZGRm.field.dmFsdWVz.display_name": {
           "source": "Values",
           "message": "Werte"
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOmMyVmhjbU5vTFdSdlkzVnRaVzUwY3c6SGFzaERhdGFUeXBlOipTcGFyc2VWYWx1ZXMjYjUyMmZkYTUwMjc4NDcwN2VmNTc4ZDA3MDMwYzUxZjAzMzg3NzMxM2ZlNTEwNjk2MTdiZTIxZGM2MmE5ZmE4NA.field.dmFsdWVz.short_desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOmMyVmhjbU5vTFdSdlkzVnRaVzUwY3c6KlNwYXJzZVZhbHVlcyNmZGQzN2E3YjgzMjk2NjNiY2U3OTY2ZjE1ODc0MzU5MTNjYTYwMGY1MDNhNWUwYjBmNDBlY2QwYjQzZGRiZGRm.field.dmFsdWVz.short_desc": {
           "source": "The corresponding values of the sparse data, which must be with the same…",
           "message": "Die entsprechenden Werte der spärlichen Daten, die die gleiche Länge wie die… haben müssen."
         },
-        "app.UGluZWNvbmU.type.YWN0aW9uOmMyVmhjbU5vTFdSdlkzVnRaVzUwY3c6SGFzaERhdGFUeXBlOipTcGFyc2VWYWx1ZXMjYjUyMmZkYTUwMjc4NDcwN2VmNTc4ZDA3MDMwYzUxZjAzMzg3NzMxM2ZlNTEwNjk2MTdiZTIxZGM2MmE5ZmE4NA.field.dmFsdWVz.desc": {
+        "app.UGluZWNvbmU.type.YWN0aW9uOmMyVmhjbU5vTFdSdlkzVnRaVzUwY3c6KlNwYXJzZVZhbHVlcyNmZGQzN2E3YjgzMjk2NjNiY2U3OTY2ZjE1ODc0MzU5MTNjYTYwMGY1MDNhNWUwYjBmNDBlY2QwYjQzZGRiZGRm.field.dmFsdWVz.desc": {
           "source": "The corresponding values of the sparse data, which must be with the same length as the indices.",
           "message": "Die entsprechenden Werte der spärlichen Daten, die die gleiche Länge wie die Indizes haben müssen."
         },

@@ -2071,31 +2071,31 @@
           "source": "An array of access levels allowed to merge",
           "message": "Un tableau de niveaux d’accès autorisés à fusionner"
         },
-        "app.R2l0bGFi.type.YWN0aW9uOmNHOXpkRUZ3YVZZMFIzSnZkWEJ6Okhhc2hEYXRhVHlwZTppdGVtcyNlMDNlNmMwNzE4NDI1YmIxZDdhNTYyYjJjZmEwOGQxZjAzMjgxZWEzYWQ5OWIxZDI5NDVkZjZjNWIwOTliNWZj.field.YWNjZXNzX2xldmVs.display_name": {
+        "app.R2l0bGFi.type.YWN0aW9uOmNHOXpkRUZ3YVZZMFIzSnZkWEJ6Oml0ZW1zI2RhNTI1YTkyNDE4NDVhODlmMjJkYWYyNjcxMjA3YTQ2MzdhODQ0ZTc2MzFiZWU4MDA2NzZjYzgzZDY3ODBjOTM.field.YWNjZXNzX2xldmVs.display_name": {
           "source": "Access Level",
           "message": "Niveau d'accès"
         },
-        "app.R2l0bGFi.type.YWN0aW9uOmNHOXpkRUZ3YVZZMFIzSnZkWEJ6Okhhc2hEYXRhVHlwZTppdGVtcyNlMDNlNmMwNzE4NDI1YmIxZDdhNTYyYjJjZmEwOGQxZjAzMjgxZWEzYWQ5OWIxZDI5NDVkZjZjNWIwOTliNWZj.field.YWNjZXNzX2xldmVs.short_desc": {
+        "app.R2l0bGFi.type.YWN0aW9uOmNHOXpkRUZ3YVZZMFIzSnZkWEJ6Oml0ZW1zI2RhNTI1YTkyNDE4NDVhODlmMjJkYWYyNjcxMjA3YTQ2MzdhODQ0ZTc2MzFiZWU4MDA2NzZjYzgzZDY3ODBjOTM.field.YWNjZXNzX2xldmVs.short_desc": {
           "source": "A valid access level",
           "message": "Un niveau d'accès valide"
         },
-        "app.R2l0bGFi.type.YWN0aW9uOmNHOXpkRUZ3YVZZMFIzSnZkWEJ6Okhhc2hEYXRhVHlwZTppdGVtcyNlMDNlNmMwNzE4NDI1YmIxZDdhNTYyYjJjZmEwOGQxZjAzMjgxZWEzYWQ5OWIxZDI5NDVkZjZjNWIwOTliNWZj.field.YWNjZXNzX2xldmVs.desc": {
+        "app.R2l0bGFi.type.YWN0aW9uOmNHOXpkRUZ3YVZZMFIzSnZkWEJ6Oml0ZW1zI2RhNTI1YTkyNDE4NDVhODlmMjJkYWYyNjcxMjA3YTQ2MzdhODQ0ZTc2MzFiZWU4MDA2NzZjYzgzZDY3ODBjOTM.field.YWNjZXNzX2xldmVs.desc": {
           "source": "A valid access level",
           "message": "Un niveau d'accès valide"
         },
-        "app.R2l0bGFi.type.YWN0aW9uOmNHOXpkRUZ3YVZZMFIzSnZkWEJ6Okhhc2hEYXRhVHlwZTppdGVtcyNlMDNlNmMwNzE4NDI1YmIxZDdhNTYyYjJjZmEwOGQxZjAzMjgxZWEzYWQ5OWIxZDI5NDVkZjZjNWIwOTliNWZj.field.YWNjZXNzX2xldmVs.allowed-value.aW50OjMw.display_name": {
+        "app.R2l0bGFi.type.YWN0aW9uOmNHOXpkRUZ3YVZZMFIzSnZkWEJ6Oml0ZW1zI2RhNTI1YTkyNDE4NDVhODlmMjJkYWYyNjcxMjA3YTQ2MzdhODQ0ZTc2MzFiZWU4MDA2NzZjYzgzZDY3ODBjOTM.field.YWNjZXNzX2xldmVs.allowed-value.aW50OjMw.display_name": {
           "source": "30",
           "message": "30"
         },
-        "app.R2l0bGFi.type.YWN0aW9uOmNHOXpkRUZ3YVZZMFIzSnZkWEJ6Okhhc2hEYXRhVHlwZTppdGVtcyNlMDNlNmMwNzE4NDI1YmIxZDdhNTYyYjJjZmEwOGQxZjAzMjgxZWEzYWQ5OWIxZDI5NDVkZjZjNWIwOTliNWZj.field.YWNjZXNzX2xldmVs.allowed-value.aW50OjQw.display_name": {
+        "app.R2l0bGFi.type.YWN0aW9uOmNHOXpkRUZ3YVZZMFIzSnZkWEJ6Oml0ZW1zI2RhNTI1YTkyNDE4NDVhODlmMjJkYWYyNjcxMjA3YTQ2MzdhODQ0ZTc2MzFiZWU4MDA2NzZjYzgzZDY3ODBjOTM.field.YWNjZXNzX2xldmVs.allowed-value.aW50OjQw.display_name": {
           "source": "40",
           "message": "40"
         },
-        "app.R2l0bGFi.type.YWN0aW9uOmNHOXpkRUZ3YVZZMFIzSnZkWEJ6Okhhc2hEYXRhVHlwZTppdGVtcyNlMDNlNmMwNzE4NDI1YmIxZDdhNTYyYjJjZmEwOGQxZjAzMjgxZWEzYWQ5OWIxZDI5NDVkZjZjNWIwOTliNWZj.field.YWNjZXNzX2xldmVs.allowed-value.aW50OjYw.display_name": {
+        "app.R2l0bGFi.type.YWN0aW9uOmNHOXpkRUZ3YVZZMFIzSnZkWEJ6Oml0ZW1zI2RhNTI1YTkyNDE4NDVhODlmMjJkYWYyNjcxMjA3YTQ2MzdhODQ0ZTc2MzFiZWU4MDA2NzZjYzgzZDY3ODBjOTM.field.YWNjZXNzX2xldmVs.allowed-value.aW50OjYw.display_name": {
           "source": "60",
           "message": "60"
         },
-        "app.R2l0bGFi.type.YWN0aW9uOmNHOXpkRUZ3YVZZMFIzSnZkWEJ6Okhhc2hEYXRhVHlwZTppdGVtcyNlMDNlNmMwNzE4NDI1YmIxZDdhNTYyYjJjZmEwOGQxZjAzMjgxZWEzYWQ5OWIxZDI5NDVkZjZjNWIwOTliNWZj.field.YWNjZXNzX2xldmVs.allowed-value.aW50OjA.display_name": {
+        "app.R2l0bGFi.type.YWN0aW9uOmNHOXpkRUZ3YVZZMFIzSnZkWEJ6Oml0ZW1zI2RhNTI1YTkyNDE4NDVhODlmMjJkYWYyNjcxMjA3YTQ2MzdhODQ0ZTc2MzFiZWU4MDA2NzZjYzgzZDY3ODBjOTM.field.YWNjZXNzX2xldmVs.allowed-value.aW50OjA.display_name": {
           "source": "0",
           "message": "0"
         },
@@ -3255,31 +3255,31 @@
           "source": "An array of access levels allowed to merge",
           "message": "Un tableau de niveaux d’accès autorisés à fusionner"
         },
-        "app.R2l0bGFi.type.YWN0aW9uOmNIVjBRWEJwVmpSSGNtOTFjSE5KWkE6SGFzaERhdGFUeXBlOml0ZW1zI2UwM2U2YzA3MTg0MjViYjFkN2E1NjJiMmNmYTA4ZDFmMDMyODFlYTNhZDk5YjFkMjk0NWRmNmM1YjA5OWI1ZmM.field.YWNjZXNzX2xldmVs.display_name": {
+        "app.R2l0bGFi.type.YWN0aW9uOmNIVjBRWEJwVmpSSGNtOTFjSE5KWkE6aXRlbXMjZGE1MjVhOTI0MTg0NWE4OWYyMmRhZjI2NzEyMDdhNDYzN2E4NDRlNzYzMWJlZTgwMDY3NmNjODNkNjc4MGM5Mw.field.YWNjZXNzX2xldmVs.display_name": {
           "source": "Access Level",
           "message": "Niveau d'accès"
         },
-        "app.R2l0bGFi.type.YWN0aW9uOmNIVjBRWEJwVmpSSGNtOTFjSE5KWkE6SGFzaERhdGFUeXBlOml0ZW1zI2UwM2U2YzA3MTg0MjViYjFkN2E1NjJiMmNmYTA4ZDFmMDMyODFlYTNhZDk5YjFkMjk0NWRmNmM1YjA5OWI1ZmM.field.YWNjZXNzX2xldmVs.short_desc": {
+        "app.R2l0bGFi.type.YWN0aW9uOmNIVjBRWEJwVmpSSGNtOTFjSE5KWkE6aXRlbXMjZGE1MjVhOTI0MTg0NWE4OWYyMmRhZjI2NzEyMDdhNDYzN2E4NDRlNzYzMWJlZTgwMDY3NmNjODNkNjc4MGM5Mw.field.YWNjZXNzX2xldmVs.short_desc": {
           "source": "A valid access level",
           "message": "Un niveau d'accès valide"
         },
-        "app.R2l0bGFi.type.YWN0aW9uOmNIVjBRWEJwVmpSSGNtOTFjSE5KWkE6SGFzaERhdGFUeXBlOml0ZW1zI2UwM2U2YzA3MTg0MjViYjFkN2E1NjJiMmNmYTA4ZDFmMDMyODFlYTNhZDk5YjFkMjk0NWRmNmM1YjA5OWI1ZmM.field.YWNjZXNzX2xldmVs.desc": {
+        "app.R2l0bGFi.type.YWN0aW9uOmNIVjBRWEJwVmpSSGNtOTFjSE5KWkE6aXRlbXMjZGE1MjVhOTI0MTg0NWE4OWYyMmRhZjI2NzEyMDdhNDYzN2E4NDRlNzYzMWJlZTgwMDY3NmNjODNkNjc4MGM5Mw.field.YWNjZXNzX2xldmVs.desc": {
           "source": "A valid access level",
           "message": "Un niveau d'accès valide"
         },
-        "app.R2l0bGFi.type.YWN0aW9uOmNIVjBRWEJwVmpSSGNtOTFjSE5KWkE6SGFzaERhdGFUeXBlOml0ZW1zI2UwM2U2YzA3MTg0MjViYjFkN2E1NjJiMmNmYTA4ZDFmMDMyODFlYTNhZDk5YjFkMjk0NWRmNmM1YjA5OWI1ZmM.field.YWNjZXNzX2xldmVs.allowed-value.aW50OjMw.display_name": {
+        "app.R2l0bGFi.type.YWN0aW9uOmNIVjBRWEJwVmpSSGNtOTFjSE5KWkE6aXRlbXMjZGE1MjVhOTI0MTg0NWE4OWYyMmRhZjI2NzEyMDdhNDYzN2E4NDRlNzYzMWJlZTgwMDY3NmNjODNkNjc4MGM5Mw.field.YWNjZXNzX2xldmVs.allowed-value.aW50OjMw.display_name": {
           "source": "30",
           "message": "30"
         },
-        "app.R2l0bGFi.type.YWN0aW9uOmNIVjBRWEJwVmpSSGNtOTFjSE5KWkE6SGFzaERhdGFUeXBlOml0ZW1zI2UwM2U2YzA3MTg0MjViYjFkN2E1NjJiMmNmYTA4ZDFmMDMyODFlYTNhZDk5YjFkMjk0NWRmNmM1YjA5OWI1ZmM.field.YWNjZXNzX2xldmVs.allowed-value.aW50OjQw.display_name": {
+        "app.R2l0bGFi.type.YWN0aW9uOmNIVjBRWEJwVmpSSGNtOTFjSE5KWkE6aXRlbXMjZGE1MjVhOTI0MTg0NWE4OWYyMmRhZjI2NzEyMDdhNDYzN2E4NDRlNzYzMWJlZTgwMDY3NmNjODNkNjc4MGM5Mw.field.YWNjZXNzX2xldmVs.allowed-value.aW50OjQw.display_name": {
           "source": "40",
           "message": "40"
         },
-        "app.R2l0bGFi.type.YWN0aW9uOmNIVjBRWEJwVmpSSGNtOTFjSE5KWkE6SGFzaERhdGFUeXBlOml0ZW1zI2UwM2U2YzA3MTg0MjViYjFkN2E1NjJiMmNmYTA4ZDFmMDMyODFlYTNhZDk5YjFkMjk0NWRmNmM1YjA5OWI1ZmM.field.YWNjZXNzX2xldmVs.allowed-value.aW50OjYw.display_name": {
+        "app.R2l0bGFi.type.YWN0aW9uOmNIVjBRWEJwVmpSSGNtOTFjSE5KWkE6aXRlbXMjZGE1MjVhOTI0MTg0NWE4OWYyMmRhZjI2NzEyMDdhNDYzN2E4NDRlNzYzMWJlZTgwMDY3NmNjODNkNjc4MGM5Mw.field.YWNjZXNzX2xldmVs.allowed-value.aW50OjYw.display_name": {
           "source": "60",
           "message": "60"
         },
-        "app.R2l0bGFi.type.YWN0aW9uOmNIVjBRWEJwVmpSSGNtOTFjSE5KWkE6SGFzaERhdGFUeXBlOml0ZW1zI2UwM2U2YzA3MTg0MjViYjFkN2E1NjJiMmNmYTA4ZDFmMDMyODFlYTNhZDk5YjFkMjk0NWRmNmM1YjA5OWI1ZmM.field.YWNjZXNzX2xldmVs.allowed-value.aW50OjA.display_name": {
+        "app.R2l0bGFi.type.YWN0aW9uOmNIVjBRWEJwVmpSSGNtOTFjSE5KWkE6aXRlbXMjZGE1MjVhOTI0MTg0NWE4OWYyMmRhZjI2NzEyMDdhNDYzN2E4NDRlNzYzMWJlZTgwMDY3NmNjODNkNjc4MGM5Mw.field.YWNjZXNzX2xldmVs.allowed-value.aW50OjA.display_name": {
           "source": "0",
           "message": "0"
         },
@@ -4259,39 +4259,39 @@
           "source": "Object containing through namespace information",
           "message": "Objet contenant les informations d'espace de noms"
         },
-        "app.R2l0bGFi.type.YWN0aW9uOmNIVjBRWEJwVmpSSGNtOTFjSE5KWkE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KnRocm91Z2hfbmFtZXNwYWNlIzJhNTA3ZDM4NzAzNzMyY2I2MjFmNWUxMTQ0YjVmY2UxYTQ2MWZkM2IxODgxMGYzMWRjMTgyMjAzMWY2ZTc0NmI.field.ZnVsbF9wYXRo.display_name": {
+        "app.R2l0bGFi.type.YWN0aW9uOmNIVjBRWEJwVmpSSGNtOTFjSE5KWkE6KnRocm91Z2hfbmFtZXNwYWNlIzIxZTkzNDQ1M2RlMTQxYTlhODE3YjRiODY5ZGQyZDY1MTE1YzkwNDE5ZjQ3MTQ4NDE0NmZiMDUxMWU0ZmQyNmQ.field.ZnVsbF9wYXRo.display_name": {
           "source": "Full Path",
           "message": "Chemin complet"
         },
-        "app.R2l0bGFi.type.YWN0aW9uOmNIVjBRWEJwVmpSSGNtOTFjSE5KWkE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KnRocm91Z2hfbmFtZXNwYWNlIzJhNTA3ZDM4NzAzNzMyY2I2MjFmNWUxMTQ0YjVmY2UxYTQ2MWZkM2IxODgxMGYzMWRjMTgyMjAzMWY2ZTc0NmI.field.ZnVsbF9wYXRo.short_desc": {
+        "app.R2l0bGFi.type.YWN0aW9uOmNIVjBRWEJwVmpSSGNtOTFjSE5KWkE6KnRocm91Z2hfbmFtZXNwYWNlIzIxZTkzNDQ1M2RlMTQxYTlhODE3YjRiODY5ZGQyZDY1MTE1YzkwNDE5ZjQ3MTQ4NDE0NmZiMDUxMWU0ZmQyNmQ.field.ZnVsbF9wYXRo.short_desc": {
           "source": "Full path of the through namespace",
           "message": "Chemin complet de l'espace de noms"
         },
-        "app.R2l0bGFi.type.YWN0aW9uOmNIVjBRWEJwVmpSSGNtOTFjSE5KWkE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KnRocm91Z2hfbmFtZXNwYWNlIzJhNTA3ZDM4NzAzNzMyY2I2MjFmNWUxMTQ0YjVmY2UxYTQ2MWZkM2IxODgxMGYzMWRjMTgyMjAzMWY2ZTc0NmI.field.ZnVsbF9wYXRo.desc": {
+        "app.R2l0bGFi.type.YWN0aW9uOmNIVjBRWEJwVmpSSGNtOTFjSE5KWkE6KnRocm91Z2hfbmFtZXNwYWNlIzIxZTkzNDQ1M2RlMTQxYTlhODE3YjRiODY5ZGQyZDY1MTE1YzkwNDE5ZjQ3MTQ4NDE0NmZiMDUxMWU0ZmQyNmQ.field.ZnVsbF9wYXRo.desc": {
           "source": "Full path of the through namespace",
           "message": "Chemin complet de l'espace de noms"
         },
-        "app.R2l0bGFi.type.YWN0aW9uOmNIVjBRWEJwVmpSSGNtOTFjSE5KWkE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KnRocm91Z2hfbmFtZXNwYWNlIzJhNTA3ZDM4NzAzNzMyY2I2MjFmNWUxMTQ0YjVmY2UxYTQ2MWZkM2IxODgxMGYzMWRjMTgyMjAzMWY2ZTc0NmI.field.aWQ.display_name": {
+        "app.R2l0bGFi.type.YWN0aW9uOmNIVjBRWEJwVmpSSGNtOTFjSE5KWkE6KnRocm91Z2hfbmFtZXNwYWNlIzIxZTkzNDQ1M2RlMTQxYTlhODE3YjRiODY5ZGQyZDY1MTE1YzkwNDE5ZjQ3MTQ4NDE0NmZiMDUxMWU0ZmQyNmQ.field.aWQ.display_name": {
           "source": "ID",
           "message": "ID"
         },
-        "app.R2l0bGFi.type.YWN0aW9uOmNIVjBRWEJwVmpSSGNtOTFjSE5KWkE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KnRocm91Z2hfbmFtZXNwYWNlIzJhNTA3ZDM4NzAzNzMyY2I2MjFmNWUxMTQ0YjVmY2UxYTQ2MWZkM2IxODgxMGYzMWRjMTgyMjAzMWY2ZTc0NmI.field.aWQ.short_desc": {
+        "app.R2l0bGFi.type.YWN0aW9uOmNIVjBRWEJwVmpSSGNtOTFjSE5KWkE6KnRocm91Z2hfbmFtZXNwYWNlIzIxZTkzNDQ1M2RlMTQxYTlhODE3YjRiODY5ZGQyZDY1MTE1YzkwNDE5ZjQ3MTQ4NDE0NmZiMDUxMWU0ZmQyNmQ.field.aWQ.short_desc": {
           "source": "ID of the through namespace",
           "message": "ID de l'espace de noms intermédiaire"
         },
-        "app.R2l0bGFi.type.YWN0aW9uOmNIVjBRWEJwVmpSSGNtOTFjSE5KWkE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KnRocm91Z2hfbmFtZXNwYWNlIzJhNTA3ZDM4NzAzNzMyY2I2MjFmNWUxMTQ0YjVmY2UxYTQ2MWZkM2IxODgxMGYzMWRjMTgyMjAzMWY2ZTc0NmI.field.aWQ.desc": {
+        "app.R2l0bGFi.type.YWN0aW9uOmNIVjBRWEJwVmpSSGNtOTFjSE5KWkE6KnRocm91Z2hfbmFtZXNwYWNlIzIxZTkzNDQ1M2RlMTQxYTlhODE3YjRiODY5ZGQyZDY1MTE1YzkwNDE5ZjQ3MTQ4NDE0NmZiMDUxMWU0ZmQyNmQ.field.aWQ.desc": {
           "source": "ID of the through namespace",
           "message": "ID de l'espace de noms intermédiaire"
         },
-        "app.R2l0bGFi.type.YWN0aW9uOmNIVjBRWEJwVmpSSGNtOTFjSE5KWkE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KnRocm91Z2hfbmFtZXNwYWNlIzJhNTA3ZDM4NzAzNzMyY2I2MjFmNWUxMTQ0YjVmY2UxYTQ2MWZkM2IxODgxMGYzMWRjMTgyMjAzMWY2ZTc0NmI.field.bmFtZQ.display_name": {
+        "app.R2l0bGFi.type.YWN0aW9uOmNIVjBRWEJwVmpSSGNtOTFjSE5KWkE6KnRocm91Z2hfbmFtZXNwYWNlIzIxZTkzNDQ1M2RlMTQxYTlhODE3YjRiODY5ZGQyZDY1MTE1YzkwNDE5ZjQ3MTQ4NDE0NmZiMDUxMWU0ZmQyNmQ.field.bmFtZQ.display_name": {
           "source": "Name",
           "message": "Nom"
         },
-        "app.R2l0bGFi.type.YWN0aW9uOmNIVjBRWEJwVmpSSGNtOTFjSE5KWkE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KnRocm91Z2hfbmFtZXNwYWNlIzJhNTA3ZDM4NzAzNzMyY2I2MjFmNWUxMTQ0YjVmY2UxYTQ2MWZkM2IxODgxMGYzMWRjMTgyMjAzMWY2ZTc0NmI.field.bmFtZQ.short_desc": {
+        "app.R2l0bGFi.type.YWN0aW9uOmNIVjBRWEJwVmpSSGNtOTFjSE5KWkE6KnRocm91Z2hfbmFtZXNwYWNlIzIxZTkzNDQ1M2RlMTQxYTlhODE3YjRiODY5ZGQyZDY1MTE1YzkwNDE5ZjQ3MTQ4NDE0NmZiMDUxMWU0ZmQyNmQ.field.bmFtZQ.short_desc": {
           "source": "Name of the through namespace",
           "message": "Nom de l'espace de noms intermédiaire"
         },
-        "app.R2l0bGFi.type.YWN0aW9uOmNIVjBRWEJwVmpSSGNtOTFjSE5KWkE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KnRocm91Z2hfbmFtZXNwYWNlIzJhNTA3ZDM4NzAzNzMyY2I2MjFmNWUxMTQ0YjVmY2UxYTQ2MWZkM2IxODgxMGYzMWRjMTgyMjAzMWY2ZTc0NmI.field.bmFtZQ.desc": {
+        "app.R2l0bGFi.type.YWN0aW9uOmNIVjBRWEJwVmpSSGNtOTFjSE5KWkE6KnRocm91Z2hfbmFtZXNwYWNlIzIxZTkzNDQ1M2RlMTQxYTlhODE3YjRiODY5ZGQyZDY1MTE1YzkwNDE5ZjQ3MTQ4NDE0NmZiMDUxMWU0ZmQyNmQ.field.bmFtZQ.desc": {
           "source": "Name of the through namespace",
           "message": "Nom de l'espace de noms intermédiaire"
         },

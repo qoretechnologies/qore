@@ -555,87 +555,87 @@
           "source": "The content itself.\n\n`representation` says how `value` is written - `storage` for Confluence's XHTML storage format, or `atlas_doc_format` for the JSON document format. Getting this wrong is usually why content appears as escaped markup rather than as a rendered page.",
           "message": "Сам вміст.\n\n`representation` вказує, як записано `value` — `storage` для формату зберігання XHTML Confluence або `atlas_doc_format` для формату документів JSON. Помилка тут зазвичай призводить до того, що вміст відображається як екранована розмітка, а не як відрендерена сторінка."
         },
-        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.Ym9keQ.union.SGFzaERhdGFUeXBlOipQYWdlQm9keVdyaXRlI2U1MzY3NmFjMjJiZWU2N2YzM2MzMmI3YWEyYmNmMzQzNjUyY2E4MTUxYmQwNTYwOTY1M2Q2NTQ2YjA0YmVjNDg.field.cmVwcmVzZW50YXRpb24.display_name": {
+        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.Ym9keQ.union.KlBhZ2VCb2R5V3JpdGUjNWRkYWNlOTViMmExZjc1N2I3NWM2ZDg3ZTMxYjRmYjMxOGE3ZGI0ZjljY2ZmYzA0MTNiZThlODliZjUyZWJlNA.field.cmVwcmVzZW50YXRpb24.display_name": {
           "source": "Representation",
           "message": "Представлення"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.Ym9keQ.union.SGFzaERhdGFUeXBlOipQYWdlQm9keVdyaXRlI2U1MzY3NmFjMjJiZWU2N2YzM2MzMmI3YWEyYmNmMzQzNjUyY2E4MTUxYmQwNTYwOTY1M2Q2NTQ2YjA0YmVjNDg.field.cmVwcmVzZW50YXRpb24.short_desc": {
+        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.Ym9keQ.union.KlBhZ2VCb2R5V3JpdGUjNWRkYWNlOTViMmExZjc1N2I3NWM2ZDg3ZTMxYjRmYjMxOGE3ZGI0ZjljY2ZmYzA0MTNiZThlODliZjUyZWJlNA.field.cmVwcmVzZW50YXRpb24.short_desc": {
           "source": "Type of content representation used for the value field",
           "message": "Тип представлення вмісту, що використовується для поля значення"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.Ym9keQ.union.SGFzaERhdGFUeXBlOipQYWdlQm9keVdyaXRlI2U1MzY3NmFjMjJiZWU2N2YzM2MzMmI3YWEyYmNmMzQzNjUyY2E4MTUxYmQwNTYwOTY1M2Q2NTQ2YjA0YmVjNDg.field.cmVwcmVzZW50YXRpb24.desc": {
+        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.Ym9keQ.union.KlBhZ2VCb2R5V3JpdGUjNWRkYWNlOTViMmExZjc1N2I3NWM2ZDg3ZTMxYjRmYjMxOGE3ZGI0ZjljY2ZmYzA0MTNiZThlODliZjUyZWJlNA.field.cmVwcmVzZW50YXRpb24.desc": {
           "source": "Type of content representation used for the value field.",
           "message": "Тип представлення вмісту, що використовується для поля значення."
         },
-        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.Ym9keQ.union.SGFzaERhdGFUeXBlOipQYWdlQm9keVdyaXRlI2U1MzY3NmFjMjJiZWU2N2YzM2MzMmI3YWEyYmNmMzQzNjUyY2E4MTUxYmQwNTYwOTY1M2Q2NTQ2YjA0YmVjNDg.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOnN0b3JhZ2U.display_name": {
+        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.Ym9keQ.union.KlBhZ2VCb2R5V3JpdGUjNWRkYWNlOTViMmExZjc1N2I3NWM2ZDg3ZTMxYjRmYjMxOGE3ZGI0ZjljY2ZmYzA0MTNiZThlODliZjUyZWJlNA.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOnN0b3JhZ2U.display_name": {
           "source": "storage",
           "message": "storage"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.Ym9keQ.union.SGFzaERhdGFUeXBlOipQYWdlQm9keVdyaXRlI2U1MzY3NmFjMjJiZWU2N2YzM2MzMmI3YWEyYmNmMzQzNjUyY2E4MTUxYmQwNTYwOTY1M2Q2NTQ2YjA0YmVjNDg.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOmF0bGFzX2RvY19mb3JtYXQ.display_name": {
+        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.Ym9keQ.union.KlBhZ2VCb2R5V3JpdGUjNWRkYWNlOTViMmExZjc1N2I3NWM2ZDg3ZTMxYjRmYjMxOGE3ZGI0ZjljY2ZmYzA0MTNiZThlODliZjUyZWJlNA.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOmF0bGFzX2RvY19mb3JtYXQ.display_name": {
           "source": "atlas_doc_format",
           "message": "atlas_doc_format"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.Ym9keQ.union.SGFzaERhdGFUeXBlOipQYWdlQm9keVdyaXRlI2U1MzY3NmFjMjJiZWU2N2YzM2MzMmI3YWEyYmNmMzQzNjUyY2E4MTUxYmQwNTYwOTY1M2Q2NTQ2YjA0YmVjNDg.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOndpa2k.display_name": {
+        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.Ym9keQ.union.KlBhZ2VCb2R5V3JpdGUjNWRkYWNlOTViMmExZjc1N2I3NWM2ZDg3ZTMxYjRmYjMxOGE3ZGI0ZjljY2ZmYzA0MTNiZThlODliZjUyZWJlNA.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOndpa2k.display_name": {
           "source": "wiki",
           "message": "вікі"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.Ym9keQ.union.SGFzaERhdGFUeXBlOipQYWdlQm9keVdyaXRlI2U1MzY3NmFjMjJiZWU2N2YzM2MzMmI3YWEyYmNmMzQzNjUyY2E4MTUxYmQwNTYwOTY1M2Q2NTQ2YjA0YmVjNDg.field.dmFsdWU.display_name": {
+        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.Ym9keQ.union.KlBhZ2VCb2R5V3JpdGUjNWRkYWNlOTViMmExZjc1N2I3NWM2ZDg3ZTMxYjRmYjMxOGE3ZGI0ZjljY2ZmYzA0MTNiZThlODliZjUyZWJlNA.field.dmFsdWU.display_name": {
           "source": "Value",
           "message": "Значення"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.Ym9keQ.union.SGFzaERhdGFUeXBlOipQYWdlQm9keVdyaXRlI2U1MzY3NmFjMjJiZWU2N2YzM2MzMmI3YWEyYmNmMzQzNjUyY2E4MTUxYmQwNTYwOTY1M2Q2NTQ2YjA0YmVjNDg.field.dmFsdWU.short_desc": {
+        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.Ym9keQ.union.KlBhZ2VCb2R5V3JpdGUjNWRkYWNlOTViMmExZjc1N2I3NWM2ZDg3ZTMxYjRmYjMxOGE3ZGI0ZjljY2ZmYzA0MTNiZThlODliZjUyZWJlNA.field.dmFsdWU.short_desc": {
           "source": "Body of the page, in the format found in the representation field",
           "message": "Тіло сторінки у форматі, як у полі представлення"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.Ym9keQ.union.SGFzaERhdGFUeXBlOipQYWdlQm9keVdyaXRlI2U1MzY3NmFjMjJiZWU2N2YzM2MzMmI3YWEyYmNmMzQzNjUyY2E4MTUxYmQwNTYwOTY1M2Q2NTQ2YjA0YmVjNDg.field.dmFsdWU.desc": {
+        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.Ym9keQ.union.KlBhZ2VCb2R5V3JpdGUjNWRkYWNlOTViMmExZjc1N2I3NWM2ZDg3ZTMxYjRmYjMxOGE3ZGI0ZjljY2ZmYzA0MTNiZThlODliZjUyZWJlNA.field.dmFsdWU.desc": {
           "source": "Body of the page, in the format found in the representation field.",
           "message": "Тіло сторінки у форматі, як у полі представлення."
         },
-        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.Ym9keQ.union.SGFzaERhdGFUeXBlOipQYWdlTmVzdGVkQm9keVdyaXRlI2VmZjczZGYzZTI4NzMwODllYTQ4NjYzNTY5YjIwMzJkMWEyMTJjNDFkMzVmNjRmYzU4ZTEwNTJlMjY0ZmE3YjE.field.YXRsYXNfZG9jX2Zvcm1hdA.display_name": {
+        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.Ym9keQ.union.KlBhZ2VOZXN0ZWRCb2R5V3JpdGUjNDJiMWE4NmVjYzc4ZjQyY2FkMjk4N2Q2NmMyZTkyZjZjMjNhODJiZTA0YWExYjkzMzc3ZGIyMDAyMTQ0YjZlOQ.field.YXRsYXNfZG9jX2Zvcm1hdA.display_name": {
           "source": "Atlas Doc Format",
           "message": "Формат документа Atlas"
         },
-        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOlkzSmxZWFJsVUdGblpROkhhc2hEYXRhVHlwZToqUGFnZUJvZHlXcml0ZSNlNTM2NzZhYzIyYmVlNjdmMzNjMzJiN2FhMmJjZjM0MzY1MmNhODE1MWJkMDU2MDk2NTNkNjU0NmIwNGJlYzQ4.field.cmVwcmVzZW50YXRpb24.display_name": {
+        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOlkzSmxZWFJsVUdGblpROipQYWdlQm9keVdyaXRlIzVkZGFjZTk1YjJhMWY3NTdiNzVjNmQ4N2UzMWI0ZmIzMThhN2RiNGY5Y2NmZmMwNDEzYmU4ZTg5YmY1MmViZTQ.field.cmVwcmVzZW50YXRpb24.display_name": {
           "source": "Representation",
           "message": "Представлення"
         },
-        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOlkzSmxZWFJsVUdGblpROkhhc2hEYXRhVHlwZToqUGFnZUJvZHlXcml0ZSNlNTM2NzZhYzIyYmVlNjdmMzNjMzJiN2FhMmJjZjM0MzY1MmNhODE1MWJkMDU2MDk2NTNkNjU0NmIwNGJlYzQ4.field.cmVwcmVzZW50YXRpb24.short_desc": {
+        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOlkzSmxZWFJsVUdGblpROipQYWdlQm9keVdyaXRlIzVkZGFjZTk1YjJhMWY3NTdiNzVjNmQ4N2UzMWI0ZmIzMThhN2RiNGY5Y2NmZmMwNDEzYmU4ZTg5YmY1MmViZTQ.field.cmVwcmVzZW50YXRpb24.short_desc": {
           "source": "Type of content representation used for the value field",
           "message": "Тип представлення вмісту, що використовується для поля значення"
         },
-        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOlkzSmxZWFJsVUdGblpROkhhc2hEYXRhVHlwZToqUGFnZUJvZHlXcml0ZSNlNTM2NzZhYzIyYmVlNjdmMzNjMzJiN2FhMmJjZjM0MzY1MmNhODE1MWJkMDU2MDk2NTNkNjU0NmIwNGJlYzQ4.field.cmVwcmVzZW50YXRpb24.desc": {
+        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOlkzSmxZWFJsVUdGblpROipQYWdlQm9keVdyaXRlIzVkZGFjZTk1YjJhMWY3NTdiNzVjNmQ4N2UzMWI0ZmIzMThhN2RiNGY5Y2NmZmMwNDEzYmU4ZTg5YmY1MmViZTQ.field.cmVwcmVzZW50YXRpb24.desc": {
           "source": "Type of content representation used for the value field.",
           "message": "Тип представлення вмісту, що використовується для поля значення."
         },
-        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOlkzSmxZWFJsVUdGblpROkhhc2hEYXRhVHlwZToqUGFnZUJvZHlXcml0ZSNlNTM2NzZhYzIyYmVlNjdmMzNjMzJiN2FhMmJjZjM0MzY1MmNhODE1MWJkMDU2MDk2NTNkNjU0NmIwNGJlYzQ4.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOnN0b3JhZ2U.display_name": {
+        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOlkzSmxZWFJsVUdGblpROipQYWdlQm9keVdyaXRlIzVkZGFjZTk1YjJhMWY3NTdiNzVjNmQ4N2UzMWI0ZmIzMThhN2RiNGY5Y2NmZmMwNDEzYmU4ZTg5YmY1MmViZTQ.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOnN0b3JhZ2U.display_name": {
           "source": "storage",
           "message": "storage"
         },
-        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOlkzSmxZWFJsVUdGblpROkhhc2hEYXRhVHlwZToqUGFnZUJvZHlXcml0ZSNlNTM2NzZhYzIyYmVlNjdmMzNjMzJiN2FhMmJjZjM0MzY1MmNhODE1MWJkMDU2MDk2NTNkNjU0NmIwNGJlYzQ4.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOmF0bGFzX2RvY19mb3JtYXQ.display_name": {
+        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOlkzSmxZWFJsVUdGblpROipQYWdlQm9keVdyaXRlIzVkZGFjZTk1YjJhMWY3NTdiNzVjNmQ4N2UzMWI0ZmIzMThhN2RiNGY5Y2NmZmMwNDEzYmU4ZTg5YmY1MmViZTQ.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOmF0bGFzX2RvY19mb3JtYXQ.display_name": {
           "source": "atlas_doc_format",
           "message": "atlas_doc_format"
         },
-        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOlkzSmxZWFJsVUdGblpROkhhc2hEYXRhVHlwZToqUGFnZUJvZHlXcml0ZSNlNTM2NzZhYzIyYmVlNjdmMzNjMzJiN2FhMmJjZjM0MzY1MmNhODE1MWJkMDU2MDk2NTNkNjU0NmIwNGJlYzQ4.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOndpa2k.display_name": {
+        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOlkzSmxZWFJsVUdGblpROipQYWdlQm9keVdyaXRlIzVkZGFjZTk1YjJhMWY3NTdiNzVjNmQ4N2UzMWI0ZmIzMThhN2RiNGY5Y2NmZmMwNDEzYmU4ZTg5YmY1MmViZTQ.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOndpa2k.display_name": {
           "source": "wiki",
           "message": "вікі"
         },
-        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOlkzSmxZWFJsVUdGblpROkhhc2hEYXRhVHlwZToqUGFnZUJvZHlXcml0ZSNlNTM2NzZhYzIyYmVlNjdmMzNjMzJiN2FhMmJjZjM0MzY1MmNhODE1MWJkMDU2MDk2NTNkNjU0NmIwNGJlYzQ4.field.dmFsdWU.display_name": {
+        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOlkzSmxZWFJsVUdGblpROipQYWdlQm9keVdyaXRlIzVkZGFjZTk1YjJhMWY3NTdiNzVjNmQ4N2UzMWI0ZmIzMThhN2RiNGY5Y2NmZmMwNDEzYmU4ZTg5YmY1MmViZTQ.field.dmFsdWU.display_name": {
           "source": "Value",
           "message": "Значення"
         },
-        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOlkzSmxZWFJsVUdGblpROkhhc2hEYXRhVHlwZToqUGFnZUJvZHlXcml0ZSNlNTM2NzZhYzIyYmVlNjdmMzNjMzJiN2FhMmJjZjM0MzY1MmNhODE1MWJkMDU2MDk2NTNkNjU0NmIwNGJlYzQ4.field.dmFsdWU.short_desc": {
+        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOlkzSmxZWFJsVUdGblpROipQYWdlQm9keVdyaXRlIzVkZGFjZTk1YjJhMWY3NTdiNzVjNmQ4N2UzMWI0ZmIzMThhN2RiNGY5Y2NmZmMwNDEzYmU4ZTg5YmY1MmViZTQ.field.dmFsdWU.short_desc": {
           "source": "Body of the page, in the format found in the representation field",
           "message": "Тіло сторінки у форматі, як у полі представлення"
         },
-        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOlkzSmxZWFJsVUdGblpROkhhc2hEYXRhVHlwZToqUGFnZUJvZHlXcml0ZSNlNTM2NzZhYzIyYmVlNjdmMzNjMzJiN2FhMmJjZjM0MzY1MmNhODE1MWJkMDU2MDk2NTNkNjU0NmIwNGJlYzQ4.field.dmFsdWU.desc": {
+        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOlkzSmxZWFJsVUdGblpROipQYWdlQm9keVdyaXRlIzVkZGFjZTk1YjJhMWY3NTdiNzVjNmQ4N2UzMWI0ZmIzMThhN2RiNGY5Y2NmZmMwNDEzYmU4ZTg5YmY1MmViZTQ.field.dmFsdWU.desc": {
           "source": "Body of the page, in the format found in the representation field.",
           "message": "Тіло сторінки у форматі, як у полі представлення."
         },
-        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.Ym9keQ.union.SGFzaERhdGFUeXBlOipQYWdlTmVzdGVkQm9keVdyaXRlI2VmZjczZGYzZTI4NzMwODllYTQ4NjYzNTY5YjIwMzJkMWEyMTJjNDFkMzVmNjRmYzU4ZTEwNTJlMjY0ZmE3YjE.field.c3RvcmFnZQ.display_name": {
+        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.Ym9keQ.union.KlBhZ2VOZXN0ZWRCb2R5V3JpdGUjNDJiMWE4NmVjYzc4ZjQyY2FkMjk4N2Q2NmMyZTkyZjZjMjNhODJiZTA0YWExYjkzMzc3ZGIyMDAyMTQ0YjZlOQ.field.c3RvcmFnZQ.display_name": {
           "source": "Storage",
           "message": "Сховище"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.Ym9keQ.union.SGFzaERhdGFUeXBlOipQYWdlTmVzdGVkQm9keVdyaXRlI2VmZjczZGYzZTI4NzMwODllYTQ4NjYzNTY5YjIwMzJkMWEyMTJjNDFkMzVmNjRmYzU4ZTEwNTJlMjY0ZmE3YjE.field.d2lraQ.display_name": {
+        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.Ym9keQ.union.KlBhZ2VOZXN0ZWRCb2R5V3JpdGUjNDJiMWE4NmVjYzc4ZjQyY2FkMjk4N2Q2NmMyZTkyZjZjMjNhODJiZTA0YWExYjkzMzc3ZGIyMDAyMTQ0YjZlOQ.field.d2lraQ.display_name": {
           "source": "Wiki",
           "message": "Вікі"
         },
@@ -991,87 +991,87 @@
           "source": "The content itself.\n\n`representation` says how `value` is written - `storage` for Confluence's XHTML storage format, or `atlas_doc_format` for the JSON document format. Getting this wrong is usually why content appears as escaped markup rather than as a rendered page.",
           "message": "Сам вміст.\n\n`representation` вказує, як записано `value` — `storage` для формату зберігання XHTML Confluence або `atlas_doc_format` для формату документів JSON. Помилка тут зазвичай призводить до того, що вміст відображається як екранована розмітка, а не як відрендерена сторінка."
         },
-        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.option.Ym9keQ.union.SGFzaERhdGFUeXBlOlBhZ2VCb2R5V3JpdGUjYmU5NTFlOWJmMmI5MzlkYWIwZDExMGUyMDBiN2JjYTJjMjY3NjMwYjQwNzAwZTRjZmJmNzViMDI5NjVmZTIyYQ.field.cmVwcmVzZW50YXRpb24.display_name": {
+        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.option.Ym9keQ.union.UGFnZUJvZHlXcml0ZSMxYjQzMTY1ZWMxZDE0NDgzNDM3MTdjNTFkMzFiMjI2NGEzMmU5ZjBmOTRkMjJjMTM5MjJjYWZjMWRlZTMxZDQ3.field.cmVwcmVzZW50YXRpb24.display_name": {
           "source": "Representation",
           "message": "Представлення"
         },
-        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.option.Ym9keQ.union.SGFzaERhdGFUeXBlOlBhZ2VCb2R5V3JpdGUjYmU5NTFlOWJmMmI5MzlkYWIwZDExMGUyMDBiN2JjYTJjMjY3NjMwYjQwNzAwZTRjZmJmNzViMDI5NjVmZTIyYQ.field.cmVwcmVzZW50YXRpb24.short_desc": {
+        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.option.Ym9keQ.union.UGFnZUJvZHlXcml0ZSMxYjQzMTY1ZWMxZDE0NDgzNDM3MTdjNTFkMzFiMjI2NGEzMmU5ZjBmOTRkMjJjMTM5MjJjYWZjMWRlZTMxZDQ3.field.cmVwcmVzZW50YXRpb24.short_desc": {
           "source": "Type of content representation used for the value field",
           "message": "Тип представлення вмісту, що використовується для поля значення"
         },
-        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.option.Ym9keQ.union.SGFzaERhdGFUeXBlOlBhZ2VCb2R5V3JpdGUjYmU5NTFlOWJmMmI5MzlkYWIwZDExMGUyMDBiN2JjYTJjMjY3NjMwYjQwNzAwZTRjZmJmNzViMDI5NjVmZTIyYQ.field.cmVwcmVzZW50YXRpb24.desc": {
+        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.option.Ym9keQ.union.UGFnZUJvZHlXcml0ZSMxYjQzMTY1ZWMxZDE0NDgzNDM3MTdjNTFkMzFiMjI2NGEzMmU5ZjBmOTRkMjJjMTM5MjJjYWZjMWRlZTMxZDQ3.field.cmVwcmVzZW50YXRpb24.desc": {
           "source": "Type of content representation used for the value field.",
           "message": "Тип представлення вмісту, що використовується для поля значення."
         },
-        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.option.Ym9keQ.union.SGFzaERhdGFUeXBlOlBhZ2VCb2R5V3JpdGUjYmU5NTFlOWJmMmI5MzlkYWIwZDExMGUyMDBiN2JjYTJjMjY3NjMwYjQwNzAwZTRjZmJmNzViMDI5NjVmZTIyYQ.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOnN0b3JhZ2U.display_name": {
+        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.option.Ym9keQ.union.UGFnZUJvZHlXcml0ZSMxYjQzMTY1ZWMxZDE0NDgzNDM3MTdjNTFkMzFiMjI2NGEzMmU5ZjBmOTRkMjJjMTM5MjJjYWZjMWRlZTMxZDQ3.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOnN0b3JhZ2U.display_name": {
           "source": "storage",
           "message": "storage"
         },
-        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.option.Ym9keQ.union.SGFzaERhdGFUeXBlOlBhZ2VCb2R5V3JpdGUjYmU5NTFlOWJmMmI5MzlkYWIwZDExMGUyMDBiN2JjYTJjMjY3NjMwYjQwNzAwZTRjZmJmNzViMDI5NjVmZTIyYQ.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOmF0bGFzX2RvY19mb3JtYXQ.display_name": {
+        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.option.Ym9keQ.union.UGFnZUJvZHlXcml0ZSMxYjQzMTY1ZWMxZDE0NDgzNDM3MTdjNTFkMzFiMjI2NGEzMmU5ZjBmOTRkMjJjMTM5MjJjYWZjMWRlZTMxZDQ3.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOmF0bGFzX2RvY19mb3JtYXQ.display_name": {
           "source": "atlas_doc_format",
           "message": "atlas_doc_format"
         },
-        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.option.Ym9keQ.union.SGFzaERhdGFUeXBlOlBhZ2VCb2R5V3JpdGUjYmU5NTFlOWJmMmI5MzlkYWIwZDExMGUyMDBiN2JjYTJjMjY3NjMwYjQwNzAwZTRjZmJmNzViMDI5NjVmZTIyYQ.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOndpa2k.display_name": {
+        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.option.Ym9keQ.union.UGFnZUJvZHlXcml0ZSMxYjQzMTY1ZWMxZDE0NDgzNDM3MTdjNTFkMzFiMjI2NGEzMmU5ZjBmOTRkMjJjMTM5MjJjYWZjMWRlZTMxZDQ3.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOndpa2k.display_name": {
           "source": "wiki",
           "message": "вікі"
         },
-        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.option.Ym9keQ.union.SGFzaERhdGFUeXBlOlBhZ2VCb2R5V3JpdGUjYmU5NTFlOWJmMmI5MzlkYWIwZDExMGUyMDBiN2JjYTJjMjY3NjMwYjQwNzAwZTRjZmJmNzViMDI5NjVmZTIyYQ.field.dmFsdWU.display_name": {
+        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.option.Ym9keQ.union.UGFnZUJvZHlXcml0ZSMxYjQzMTY1ZWMxZDE0NDgzNDM3MTdjNTFkMzFiMjI2NGEzMmU5ZjBmOTRkMjJjMTM5MjJjYWZjMWRlZTMxZDQ3.field.dmFsdWU.display_name": {
           "source": "Value",
           "message": "Значення"
         },
-        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.option.Ym9keQ.union.SGFzaERhdGFUeXBlOlBhZ2VCb2R5V3JpdGUjYmU5NTFlOWJmMmI5MzlkYWIwZDExMGUyMDBiN2JjYTJjMjY3NjMwYjQwNzAwZTRjZmJmNzViMDI5NjVmZTIyYQ.field.dmFsdWU.short_desc": {
+        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.option.Ym9keQ.union.UGFnZUJvZHlXcml0ZSMxYjQzMTY1ZWMxZDE0NDgzNDM3MTdjNTFkMzFiMjI2NGEzMmU5ZjBmOTRkMjJjMTM5MjJjYWZjMWRlZTMxZDQ3.field.dmFsdWU.short_desc": {
           "source": "Body of the page, in the format found in the representation field",
           "message": "Тіло сторінки у форматі, як у полі представлення"
         },
-        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.option.Ym9keQ.union.SGFzaERhdGFUeXBlOlBhZ2VCb2R5V3JpdGUjYmU5NTFlOWJmMmI5MzlkYWIwZDExMGUyMDBiN2JjYTJjMjY3NjMwYjQwNzAwZTRjZmJmNzViMDI5NjVmZTIyYQ.field.dmFsdWU.desc": {
+        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.option.Ym9keQ.union.UGFnZUJvZHlXcml0ZSMxYjQzMTY1ZWMxZDE0NDgzNDM3MTdjNTFkMzFiMjI2NGEzMmU5ZjBmOTRkMjJjMTM5MjJjYWZjMWRlZTMxZDQ3.field.dmFsdWU.desc": {
           "source": "Body of the page, in the format found in the representation field.",
           "message": "Тіло сторінки у форматі, як у полі представлення."
         },
-        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.option.Ym9keQ.union.SGFzaERhdGFUeXBlOlBhZ2VOZXN0ZWRCb2R5V3JpdGUjMTRkNWE1YWMyYzNjNDhiMWI2MjYwYjFhNWQ5YmZjMWI5ZWU3Yjc2MjIxYWMxN2I5NDNlNWM1MTVlMDc0MTA0Yw.field.YXRsYXNfZG9jX2Zvcm1hdA.display_name": {
+        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.option.Ym9keQ.union.UGFnZU5lc3RlZEJvZHlXcml0ZSNjOGYxNWViMWFjMzc0ZDI2ZjJlODc3MWNiZjNiZTkzYmNkZmE3ZTE4YmRlOGMwNjQ0YTRhNWFiM2EzZjFmN2Rm.field.YXRsYXNfZG9jX2Zvcm1hdA.display_name": {
           "source": "Atlas Doc Format",
           "message": "Формат документа Atlas"
         },
-        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOmRYQmtZWFJsVUdGblpROkhhc2hEYXRhVHlwZToqUGFnZUJvZHlXcml0ZSNlNTM2NzZhYzIyYmVlNjdmMzNjMzJiN2FhMmJjZjM0MzY1MmNhODE1MWJkMDU2MDk2NTNkNjU0NmIwNGJlYzQ4.field.cmVwcmVzZW50YXRpb24.display_name": {
+        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOmRYQmtZWFJsVUdGblpROipQYWdlQm9keVdyaXRlIzVkZGFjZTk1YjJhMWY3NTdiNzVjNmQ4N2UzMWI0ZmIzMThhN2RiNGY5Y2NmZmMwNDEzYmU4ZTg5YmY1MmViZTQ.field.cmVwcmVzZW50YXRpb24.display_name": {
           "source": "Representation",
           "message": "Представлення"
         },
-        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOmRYQmtZWFJsVUdGblpROkhhc2hEYXRhVHlwZToqUGFnZUJvZHlXcml0ZSNlNTM2NzZhYzIyYmVlNjdmMzNjMzJiN2FhMmJjZjM0MzY1MmNhODE1MWJkMDU2MDk2NTNkNjU0NmIwNGJlYzQ4.field.cmVwcmVzZW50YXRpb24.short_desc": {
+        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOmRYQmtZWFJsVUdGblpROipQYWdlQm9keVdyaXRlIzVkZGFjZTk1YjJhMWY3NTdiNzVjNmQ4N2UzMWI0ZmIzMThhN2RiNGY5Y2NmZmMwNDEzYmU4ZTg5YmY1MmViZTQ.field.cmVwcmVzZW50YXRpb24.short_desc": {
           "source": "Type of content representation used for the value field",
           "message": "Тип представлення вмісту, що використовується для поля значення"
         },
-        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOmRYQmtZWFJsVUdGblpROkhhc2hEYXRhVHlwZToqUGFnZUJvZHlXcml0ZSNlNTM2NzZhYzIyYmVlNjdmMzNjMzJiN2FhMmJjZjM0MzY1MmNhODE1MWJkMDU2MDk2NTNkNjU0NmIwNGJlYzQ4.field.cmVwcmVzZW50YXRpb24.desc": {
+        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOmRYQmtZWFJsVUdGblpROipQYWdlQm9keVdyaXRlIzVkZGFjZTk1YjJhMWY3NTdiNzVjNmQ4N2UzMWI0ZmIzMThhN2RiNGY5Y2NmZmMwNDEzYmU4ZTg5YmY1MmViZTQ.field.cmVwcmVzZW50YXRpb24.desc": {
           "source": "Type of content representation used for the value field.",
           "message": "Тип представлення вмісту, що використовується для поля значення."
         },
-        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOmRYQmtZWFJsVUdGblpROkhhc2hEYXRhVHlwZToqUGFnZUJvZHlXcml0ZSNlNTM2NzZhYzIyYmVlNjdmMzNjMzJiN2FhMmJjZjM0MzY1MmNhODE1MWJkMDU2MDk2NTNkNjU0NmIwNGJlYzQ4.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOnN0b3JhZ2U.display_name": {
+        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOmRYQmtZWFJsVUdGblpROipQYWdlQm9keVdyaXRlIzVkZGFjZTk1YjJhMWY3NTdiNzVjNmQ4N2UzMWI0ZmIzMThhN2RiNGY5Y2NmZmMwNDEzYmU4ZTg5YmY1MmViZTQ.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOnN0b3JhZ2U.display_name": {
           "source": "storage",
           "message": "storage"
         },
-        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOmRYQmtZWFJsVUdGblpROkhhc2hEYXRhVHlwZToqUGFnZUJvZHlXcml0ZSNlNTM2NzZhYzIyYmVlNjdmMzNjMzJiN2FhMmJjZjM0MzY1MmNhODE1MWJkMDU2MDk2NTNkNjU0NmIwNGJlYzQ4.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOmF0bGFzX2RvY19mb3JtYXQ.display_name": {
+        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOmRYQmtZWFJsVUdGblpROipQYWdlQm9keVdyaXRlIzVkZGFjZTk1YjJhMWY3NTdiNzVjNmQ4N2UzMWI0ZmIzMThhN2RiNGY5Y2NmZmMwNDEzYmU4ZTg5YmY1MmViZTQ.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOmF0bGFzX2RvY19mb3JtYXQ.display_name": {
           "source": "atlas_doc_format",
           "message": "atlas_doc_format"
         },
-        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOmRYQmtZWFJsVUdGblpROkhhc2hEYXRhVHlwZToqUGFnZUJvZHlXcml0ZSNlNTM2NzZhYzIyYmVlNjdmMzNjMzJiN2FhMmJjZjM0MzY1MmNhODE1MWJkMDU2MDk2NTNkNjU0NmIwNGJlYzQ4.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOndpa2k.display_name": {
+        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOmRYQmtZWFJsVUdGblpROipQYWdlQm9keVdyaXRlIzVkZGFjZTk1YjJhMWY3NTdiNzVjNmQ4N2UzMWI0ZmIzMThhN2RiNGY5Y2NmZmMwNDEzYmU4ZTg5YmY1MmViZTQ.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOndpa2k.display_name": {
           "source": "wiki",
           "message": "вікі"
         },
-        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOmRYQmtZWFJsVUdGblpROkhhc2hEYXRhVHlwZToqUGFnZUJvZHlXcml0ZSNlNTM2NzZhYzIyYmVlNjdmMzNjMzJiN2FhMmJjZjM0MzY1MmNhODE1MWJkMDU2MDk2NTNkNjU0NmIwNGJlYzQ4.field.dmFsdWU.display_name": {
+        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOmRYQmtZWFJsVUdGblpROipQYWdlQm9keVdyaXRlIzVkZGFjZTk1YjJhMWY3NTdiNzVjNmQ4N2UzMWI0ZmIzMThhN2RiNGY5Y2NmZmMwNDEzYmU4ZTg5YmY1MmViZTQ.field.dmFsdWU.display_name": {
           "source": "Value",
           "message": "Значення"
         },
-        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOmRYQmtZWFJsVUdGblpROkhhc2hEYXRhVHlwZToqUGFnZUJvZHlXcml0ZSNlNTM2NzZhYzIyYmVlNjdmMzNjMzJiN2FhMmJjZjM0MzY1MmNhODE1MWJkMDU2MDk2NTNkNjU0NmIwNGJlYzQ4.field.dmFsdWU.short_desc": {
+        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOmRYQmtZWFJsVUdGblpROipQYWdlQm9keVdyaXRlIzVkZGFjZTk1YjJhMWY3NTdiNzVjNmQ4N2UzMWI0ZmIzMThhN2RiNGY5Y2NmZmMwNDEzYmU4ZTg5YmY1MmViZTQ.field.dmFsdWU.short_desc": {
           "source": "Body of the page, in the format found in the representation field",
           "message": "Тіло сторінки у форматі, як у полі представлення"
         },
-        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOmRYQmtZWFJsVUdGblpROkhhc2hEYXRhVHlwZToqUGFnZUJvZHlXcml0ZSNlNTM2NzZhYzIyYmVlNjdmMzNjMzJiN2FhMmJjZjM0MzY1MmNhODE1MWJkMDU2MDk2NTNkNjU0NmIwNGJlYzQ4.field.dmFsdWU.desc": {
+        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOmRYQmtZWFJsVUdGblpROipQYWdlQm9keVdyaXRlIzVkZGFjZTk1YjJhMWY3NTdiNzVjNmQ4N2UzMWI0ZmIzMThhN2RiNGY5Y2NmZmMwNDEzYmU4ZTg5YmY1MmViZTQ.field.dmFsdWU.desc": {
           "source": "Body of the page, in the format found in the representation field.",
           "message": "Тіло сторінки у форматі, як у полі представлення."
         },
-        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.option.Ym9keQ.union.SGFzaERhdGFUeXBlOlBhZ2VOZXN0ZWRCb2R5V3JpdGUjMTRkNWE1YWMyYzNjNDhiMWI2MjYwYjFhNWQ5YmZjMWI5ZWU3Yjc2MjIxYWMxN2I5NDNlNWM1MTVlMDc0MTA0Yw.field.c3RvcmFnZQ.display_name": {
+        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.option.Ym9keQ.union.UGFnZU5lc3RlZEJvZHlXcml0ZSNjOGYxNWViMWFjMzc0ZDI2ZjJlODc3MWNiZjNiZTkzYmNkZmE3ZTE4YmRlOGMwNjQ0YTRhNWFiM2EzZjFmN2Rm.field.c3RvcmFnZQ.display_name": {
           "source": "Storage",
           "message": "Сховище"
         },
-        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.option.Ym9keQ.union.SGFzaERhdGFUeXBlOlBhZ2VOZXN0ZWRCb2R5V3JpdGUjMTRkNWE1YWMyYzNjNDhiMWI2MjYwYjFhNWQ5YmZjMWI5ZWU3Yjc2MjIxYWMxN2I5NDNlNWM1MTVlMDc0MTA0Yw.field.d2lraQ.display_name": {
+        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.option.Ym9keQ.union.UGFnZU5lc3RlZEJvZHlXcml0ZSNjOGYxNWViMWFjMzc0ZDI2ZjJlODc3MWNiZjNiZTkzYmNkZmE3ZTE4YmRlOGMwNjQ0YTRhNWFiM2EzZjFmN2Rm.field.d2lraQ.display_name": {
           "source": "Wiki",
           "message": "Вікі"
         },
@@ -1739,87 +1739,87 @@
           "source": "The content itself.\n\n`representation` says how `value` is written - `storage` for Confluence's XHTML storage format, or `atlas_doc_format` for the JSON document format. Getting this wrong is usually why content appears as escaped markup rather than as a rendered page.",
           "message": "Сам вміст.\n\n`representation` вказує, як записано `value` — `storage` для формату зберігання XHTML Confluence або `atlas_doc_format` для формату документів JSON. Помилка тут зазвичай призводить до того, що вміст відображається як екранована розмітка, а не як відрендерена сторінка."
         },
-        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.SGFzaERhdGFUeXBlOipCbG9nUG9zdEJvZHlXcml0ZSM0ZWZkYzlmZjM5OWEzNmNhOWQ1OGYzMTBjMzNlMmFiMDE0NzVjNzUzMmMyNTk2ODUyZmZlYWIyMDIyN2RiMDU1.field.cmVwcmVzZW50YXRpb24.display_name": {
+        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.KkJsb2dQb3N0Qm9keVdyaXRlIzNlNzdjNzBmNTM5MDE2MmJmNGY4M2RkNjM5MjBhMWRmZDE2NDJhZmQxNDljNWZmMTQyNTFhYWZiYzEyY2EzNTM.field.cmVwcmVzZW50YXRpb24.display_name": {
           "source": "Representation",
           "message": "Представлення"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.SGFzaERhdGFUeXBlOipCbG9nUG9zdEJvZHlXcml0ZSM0ZWZkYzlmZjM5OWEzNmNhOWQ1OGYzMTBjMzNlMmFiMDE0NzVjNzUzMmMyNTk2ODUyZmZlYWIyMDIyN2RiMDU1.field.cmVwcmVzZW50YXRpb24.short_desc": {
+        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.KkJsb2dQb3N0Qm9keVdyaXRlIzNlNzdjNzBmNTM5MDE2MmJmNGY4M2RkNjM5MjBhMWRmZDE2NDJhZmQxNDljNWZmMTQyNTFhYWZiYzEyY2EzNTM.field.cmVwcmVzZW50YXRpb24.short_desc": {
           "source": "Type of content representation used for the value field",
           "message": "Тип представлення вмісту, що використовується для поля значення"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.SGFzaERhdGFUeXBlOipCbG9nUG9zdEJvZHlXcml0ZSM0ZWZkYzlmZjM5OWEzNmNhOWQ1OGYzMTBjMzNlMmFiMDE0NzVjNzUzMmMyNTk2ODUyZmZlYWIyMDIyN2RiMDU1.field.cmVwcmVzZW50YXRpb24.desc": {
+        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.KkJsb2dQb3N0Qm9keVdyaXRlIzNlNzdjNzBmNTM5MDE2MmJmNGY4M2RkNjM5MjBhMWRmZDE2NDJhZmQxNDljNWZmMTQyNTFhYWZiYzEyY2EzNTM.field.cmVwcmVzZW50YXRpb24.desc": {
           "source": "Type of content representation used for the value field.",
           "message": "Тип представлення вмісту, що використовується для поля значення."
         },
-        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.SGFzaERhdGFUeXBlOipCbG9nUG9zdEJvZHlXcml0ZSM0ZWZkYzlmZjM5OWEzNmNhOWQ1OGYzMTBjMzNlMmFiMDE0NzVjNzUzMmMyNTk2ODUyZmZlYWIyMDIyN2RiMDU1.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOnN0b3JhZ2U.display_name": {
+        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.KkJsb2dQb3N0Qm9keVdyaXRlIzNlNzdjNzBmNTM5MDE2MmJmNGY4M2RkNjM5MjBhMWRmZDE2NDJhZmQxNDljNWZmMTQyNTFhYWZiYzEyY2EzNTM.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOnN0b3JhZ2U.display_name": {
           "source": "storage",
           "message": "storage"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.SGFzaERhdGFUeXBlOipCbG9nUG9zdEJvZHlXcml0ZSM0ZWZkYzlmZjM5OWEzNmNhOWQ1OGYzMTBjMzNlMmFiMDE0NzVjNzUzMmMyNTk2ODUyZmZlYWIyMDIyN2RiMDU1.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOmF0bGFzX2RvY19mb3JtYXQ.display_name": {
+        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.KkJsb2dQb3N0Qm9keVdyaXRlIzNlNzdjNzBmNTM5MDE2MmJmNGY4M2RkNjM5MjBhMWRmZDE2NDJhZmQxNDljNWZmMTQyNTFhYWZiYzEyY2EzNTM.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOmF0bGFzX2RvY19mb3JtYXQ.display_name": {
           "source": "atlas_doc_format",
           "message": "atlas_doc_format"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.SGFzaERhdGFUeXBlOipCbG9nUG9zdEJvZHlXcml0ZSM0ZWZkYzlmZjM5OWEzNmNhOWQ1OGYzMTBjMzNlMmFiMDE0NzVjNzUzMmMyNTk2ODUyZmZlYWIyMDIyN2RiMDU1.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOndpa2k.display_name": {
+        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.KkJsb2dQb3N0Qm9keVdyaXRlIzNlNzdjNzBmNTM5MDE2MmJmNGY4M2RkNjM5MjBhMWRmZDE2NDJhZmQxNDljNWZmMTQyNTFhYWZiYzEyY2EzNTM.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOndpa2k.display_name": {
           "source": "wiki",
           "message": "вікі"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.SGFzaERhdGFUeXBlOipCbG9nUG9zdEJvZHlXcml0ZSM0ZWZkYzlmZjM5OWEzNmNhOWQ1OGYzMTBjMzNlMmFiMDE0NzVjNzUzMmMyNTk2ODUyZmZlYWIyMDIyN2RiMDU1.field.dmFsdWU.display_name": {
+        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.KkJsb2dQb3N0Qm9keVdyaXRlIzNlNzdjNzBmNTM5MDE2MmJmNGY4M2RkNjM5MjBhMWRmZDE2NDJhZmQxNDljNWZmMTQyNTFhYWZiYzEyY2EzNTM.field.dmFsdWU.display_name": {
           "source": "Value",
           "message": "Значення"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.SGFzaERhdGFUeXBlOipCbG9nUG9zdEJvZHlXcml0ZSM0ZWZkYzlmZjM5OWEzNmNhOWQ1OGYzMTBjMzNlMmFiMDE0NzVjNzUzMmMyNTk2ODUyZmZlYWIyMDIyN2RiMDU1.field.dmFsdWU.short_desc": {
+        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.KkJsb2dQb3N0Qm9keVdyaXRlIzNlNzdjNzBmNTM5MDE2MmJmNGY4M2RkNjM5MjBhMWRmZDE2NDJhZmQxNDljNWZmMTQyNTFhYWZiYzEyY2EzNTM.field.dmFsdWU.short_desc": {
           "source": "Body of the blog post, in the format found in the representation field",
           "message": "Тіло блог-запису у форматі, як у полі представлення"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.SGFzaERhdGFUeXBlOipCbG9nUG9zdEJvZHlXcml0ZSM0ZWZkYzlmZjM5OWEzNmNhOWQ1OGYzMTBjMzNlMmFiMDE0NzVjNzUzMmMyNTk2ODUyZmZlYWIyMDIyN2RiMDU1.field.dmFsdWU.desc": {
+        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.KkJsb2dQb3N0Qm9keVdyaXRlIzNlNzdjNzBmNTM5MDE2MmJmNGY4M2RkNjM5MjBhMWRmZDE2NDJhZmQxNDljNWZmMTQyNTFhYWZiYzEyY2EzNTM.field.dmFsdWU.desc": {
           "source": "Body of the blog post, in the format found in the representation field.",
           "message": "Тіло блог-запису у форматі, як у полі представлення."
         },
-        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.SGFzaERhdGFUeXBlOipCbG9nUG9zdE5lc3RlZEJvZHlXcml0ZSNiMjQzN2RhYzZmODdiNjQ5YzEyZGM3Y2Q4MDE5OTRkYjk1M2JlZWUyYjAxZjQwYTczNWI1MmJmMjNkNTRkZjIz.field.YXRsYXNfZG9jX2Zvcm1hdA.display_name": {
+        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.KkJsb2dQb3N0TmVzdGVkQm9keVdyaXRlI2U3YWZhZGNjN2U0YzA2ODZmODUzZTMxZDVmY2MxYzNmYWQzOWVhYTE5ZmY0Yjc3YTE3ZTQxNzQ5N2JiZWJjYzg.field.YXRsYXNfZG9jX2Zvcm1hdA.display_name": {
           "source": "Atlas Doc Format",
           "message": "Формат документа Atlas"
         },
-        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOlkzSmxZWFJsUW14dloxQnZjM1E6SGFzaERhdGFUeXBlOipCbG9nUG9zdEJvZHlXcml0ZSM0ZWZkYzlmZjM5OWEzNmNhOWQ1OGYzMTBjMzNlMmFiMDE0NzVjNzUzMmMyNTk2ODUyZmZlYWIyMDIyN2RiMDU1.field.cmVwcmVzZW50YXRpb24.display_name": {
+        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOlkzSmxZWFJsUW14dloxQnZjM1E6KkJsb2dQb3N0Qm9keVdyaXRlIzNlNzdjNzBmNTM5MDE2MmJmNGY4M2RkNjM5MjBhMWRmZDE2NDJhZmQxNDljNWZmMTQyNTFhYWZiYzEyY2EzNTM.field.cmVwcmVzZW50YXRpb24.display_name": {
           "source": "Representation",
           "message": "Представлення"
         },
-        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOlkzSmxZWFJsUW14dloxQnZjM1E6SGFzaERhdGFUeXBlOipCbG9nUG9zdEJvZHlXcml0ZSM0ZWZkYzlmZjM5OWEzNmNhOWQ1OGYzMTBjMzNlMmFiMDE0NzVjNzUzMmMyNTk2ODUyZmZlYWIyMDIyN2RiMDU1.field.cmVwcmVzZW50YXRpb24.short_desc": {
+        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOlkzSmxZWFJsUW14dloxQnZjM1E6KkJsb2dQb3N0Qm9keVdyaXRlIzNlNzdjNzBmNTM5MDE2MmJmNGY4M2RkNjM5MjBhMWRmZDE2NDJhZmQxNDljNWZmMTQyNTFhYWZiYzEyY2EzNTM.field.cmVwcmVzZW50YXRpb24.short_desc": {
           "source": "Type of content representation used for the value field",
           "message": "Тип представлення вмісту, що використовується для поля значення"
         },
-        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOlkzSmxZWFJsUW14dloxQnZjM1E6SGFzaERhdGFUeXBlOipCbG9nUG9zdEJvZHlXcml0ZSM0ZWZkYzlmZjM5OWEzNmNhOWQ1OGYzMTBjMzNlMmFiMDE0NzVjNzUzMmMyNTk2ODUyZmZlYWIyMDIyN2RiMDU1.field.cmVwcmVzZW50YXRpb24.desc": {
+        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOlkzSmxZWFJsUW14dloxQnZjM1E6KkJsb2dQb3N0Qm9keVdyaXRlIzNlNzdjNzBmNTM5MDE2MmJmNGY4M2RkNjM5MjBhMWRmZDE2NDJhZmQxNDljNWZmMTQyNTFhYWZiYzEyY2EzNTM.field.cmVwcmVzZW50YXRpb24.desc": {
           "source": "Type of content representation used for the value field.",
           "message": "Тип представлення вмісту, що використовується для поля значення."
         },
-        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOlkzSmxZWFJsUW14dloxQnZjM1E6SGFzaERhdGFUeXBlOipCbG9nUG9zdEJvZHlXcml0ZSM0ZWZkYzlmZjM5OWEzNmNhOWQ1OGYzMTBjMzNlMmFiMDE0NzVjNzUzMmMyNTk2ODUyZmZlYWIyMDIyN2RiMDU1.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOnN0b3JhZ2U.display_name": {
+        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOlkzSmxZWFJsUW14dloxQnZjM1E6KkJsb2dQb3N0Qm9keVdyaXRlIzNlNzdjNzBmNTM5MDE2MmJmNGY4M2RkNjM5MjBhMWRmZDE2NDJhZmQxNDljNWZmMTQyNTFhYWZiYzEyY2EzNTM.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOnN0b3JhZ2U.display_name": {
           "source": "storage",
           "message": "storage"
         },
-        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOlkzSmxZWFJsUW14dloxQnZjM1E6SGFzaERhdGFUeXBlOipCbG9nUG9zdEJvZHlXcml0ZSM0ZWZkYzlmZjM5OWEzNmNhOWQ1OGYzMTBjMzNlMmFiMDE0NzVjNzUzMmMyNTk2ODUyZmZlYWIyMDIyN2RiMDU1.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOmF0bGFzX2RvY19mb3JtYXQ.display_name": {
+        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOlkzSmxZWFJsUW14dloxQnZjM1E6KkJsb2dQb3N0Qm9keVdyaXRlIzNlNzdjNzBmNTM5MDE2MmJmNGY4M2RkNjM5MjBhMWRmZDE2NDJhZmQxNDljNWZmMTQyNTFhYWZiYzEyY2EzNTM.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOmF0bGFzX2RvY19mb3JtYXQ.display_name": {
           "source": "atlas_doc_format",
           "message": "atlas_doc_format"
         },
-        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOlkzSmxZWFJsUW14dloxQnZjM1E6SGFzaERhdGFUeXBlOipCbG9nUG9zdEJvZHlXcml0ZSM0ZWZkYzlmZjM5OWEzNmNhOWQ1OGYzMTBjMzNlMmFiMDE0NzVjNzUzMmMyNTk2ODUyZmZlYWIyMDIyN2RiMDU1.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOndpa2k.display_name": {
+        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOlkzSmxZWFJsUW14dloxQnZjM1E6KkJsb2dQb3N0Qm9keVdyaXRlIzNlNzdjNzBmNTM5MDE2MmJmNGY4M2RkNjM5MjBhMWRmZDE2NDJhZmQxNDljNWZmMTQyNTFhYWZiYzEyY2EzNTM.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOndpa2k.display_name": {
           "source": "wiki",
           "message": "вікі"
         },
-        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOlkzSmxZWFJsUW14dloxQnZjM1E6SGFzaERhdGFUeXBlOipCbG9nUG9zdEJvZHlXcml0ZSM0ZWZkYzlmZjM5OWEzNmNhOWQ1OGYzMTBjMzNlMmFiMDE0NzVjNzUzMmMyNTk2ODUyZmZlYWIyMDIyN2RiMDU1.field.dmFsdWU.display_name": {
+        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOlkzSmxZWFJsUW14dloxQnZjM1E6KkJsb2dQb3N0Qm9keVdyaXRlIzNlNzdjNzBmNTM5MDE2MmJmNGY4M2RkNjM5MjBhMWRmZDE2NDJhZmQxNDljNWZmMTQyNTFhYWZiYzEyY2EzNTM.field.dmFsdWU.display_name": {
           "source": "Value",
           "message": "Значення"
         },
-        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOlkzSmxZWFJsUW14dloxQnZjM1E6SGFzaERhdGFUeXBlOipCbG9nUG9zdEJvZHlXcml0ZSM0ZWZkYzlmZjM5OWEzNmNhOWQ1OGYzMTBjMzNlMmFiMDE0NzVjNzUzMmMyNTk2ODUyZmZlYWIyMDIyN2RiMDU1.field.dmFsdWU.short_desc": {
+        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOlkzSmxZWFJsUW14dloxQnZjM1E6KkJsb2dQb3N0Qm9keVdyaXRlIzNlNzdjNzBmNTM5MDE2MmJmNGY4M2RkNjM5MjBhMWRmZDE2NDJhZmQxNDljNWZmMTQyNTFhYWZiYzEyY2EzNTM.field.dmFsdWU.short_desc": {
           "source": "Body of the blog post, in the format found in the representation field",
           "message": "Тіло блог-запису у форматі, як у полі представлення"
         },
-        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOlkzSmxZWFJsUW14dloxQnZjM1E6SGFzaERhdGFUeXBlOipCbG9nUG9zdEJvZHlXcml0ZSM0ZWZkYzlmZjM5OWEzNmNhOWQ1OGYzMTBjMzNlMmFiMDE0NzVjNzUzMmMyNTk2ODUyZmZlYWIyMDIyN2RiMDU1.field.dmFsdWU.desc": {
+        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOlkzSmxZWFJsUW14dloxQnZjM1E6KkJsb2dQb3N0Qm9keVdyaXRlIzNlNzdjNzBmNTM5MDE2MmJmNGY4M2RkNjM5MjBhMWRmZDE2NDJhZmQxNDljNWZmMTQyNTFhYWZiYzEyY2EzNTM.field.dmFsdWU.desc": {
           "source": "Body of the blog post, in the format found in the representation field.",
           "message": "Тіло блог-запису у форматі, як у полі представлення."
         },
-        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.SGFzaERhdGFUeXBlOipCbG9nUG9zdE5lc3RlZEJvZHlXcml0ZSNiMjQzN2RhYzZmODdiNjQ5YzEyZGM3Y2Q4MDE5OTRkYjk1M2JlZWUyYjAxZjQwYTczNWI1MmJmMjNkNTRkZjIz.field.c3RvcmFnZQ.display_name": {
+        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.KkJsb2dQb3N0TmVzdGVkQm9keVdyaXRlI2U3YWZhZGNjN2U0YzA2ODZmODUzZTMxZDVmY2MxYzNmYWQzOWVhYTE5ZmY0Yjc3YTE3ZTQxNzQ5N2JiZWJjYzg.field.c3RvcmFnZQ.display_name": {
           "source": "Storage",
           "message": "Сховище"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.SGFzaERhdGFUeXBlOipCbG9nUG9zdE5lc3RlZEJvZHlXcml0ZSNiMjQzN2RhYzZmODdiNjQ5YzEyZGM3Y2Q4MDE5OTRkYjk1M2JlZWUyYjAxZjQwYTczNWI1MmJmMjNkNTRkZjIz.field.d2lraQ.display_name": {
+        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.KkJsb2dQb3N0TmVzdGVkQm9keVdyaXRlI2U3YWZhZGNjN2U0YzA2ODZmODUzZTMxZDVmY2MxYzNmYWQzOWVhYTE5ZmY0Yjc3YTE3ZTQxNzQ5N2JiZWJjYzg.field.d2lraQ.display_name": {
           "source": "Wiki",
           "message": "Вікі"
         },
@@ -2123,87 +2123,87 @@
           "source": "The content itself.\n\n`representation` says how `value` is written - `storage` for Confluence's XHTML storage format, or `atlas_doc_format` for the JSON document format. Getting this wrong is usually why content appears as escaped markup rather than as a rendered page.",
           "message": "Сам вміст.\n\n`representation` вказує, як записано `value` — `storage` для формату зберігання XHTML Confluence або `atlas_doc_format` для формату документів JSON. Помилка тут зазвичай призводить до того, що вміст відображається як екранована розмітка, а не як відрендерена сторінка."
         },
-        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.SGFzaERhdGFUeXBlOkJsb2dQb3N0Qm9keVdyaXRlI2EyZmNkMTY3N2YyMGYwNDYxMjFhY2FlZmM2NjkzOTk0ZTg5YWE3ODQ3OTYwYjRlNDVjZjQ4NmY5M2U2N2U4MWY.field.cmVwcmVzZW50YXRpb24.display_name": {
+        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.QmxvZ1Bvc3RCb2R5V3JpdGUjMGU1MThjOTdiNjMyODQ3ZDhmODFlYWFlMmY3ZmU1MzRlNmQ1ZWFiNDg3NDVjY2ZiZDQwN2RjNTFhOTJlMTUxOA.field.cmVwcmVzZW50YXRpb24.display_name": {
           "source": "Representation",
           "message": "Представлення"
         },
-        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.SGFzaERhdGFUeXBlOkJsb2dQb3N0Qm9keVdyaXRlI2EyZmNkMTY3N2YyMGYwNDYxMjFhY2FlZmM2NjkzOTk0ZTg5YWE3ODQ3OTYwYjRlNDVjZjQ4NmY5M2U2N2U4MWY.field.cmVwcmVzZW50YXRpb24.short_desc": {
+        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.QmxvZ1Bvc3RCb2R5V3JpdGUjMGU1MThjOTdiNjMyODQ3ZDhmODFlYWFlMmY3ZmU1MzRlNmQ1ZWFiNDg3NDVjY2ZiZDQwN2RjNTFhOTJlMTUxOA.field.cmVwcmVzZW50YXRpb24.short_desc": {
           "source": "Type of content representation used for the value field",
           "message": "Тип представлення вмісту, що використовується для поля значення"
         },
-        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.SGFzaERhdGFUeXBlOkJsb2dQb3N0Qm9keVdyaXRlI2EyZmNkMTY3N2YyMGYwNDYxMjFhY2FlZmM2NjkzOTk0ZTg5YWE3ODQ3OTYwYjRlNDVjZjQ4NmY5M2U2N2U4MWY.field.cmVwcmVzZW50YXRpb24.desc": {
+        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.QmxvZ1Bvc3RCb2R5V3JpdGUjMGU1MThjOTdiNjMyODQ3ZDhmODFlYWFlMmY3ZmU1MzRlNmQ1ZWFiNDg3NDVjY2ZiZDQwN2RjNTFhOTJlMTUxOA.field.cmVwcmVzZW50YXRpb24.desc": {
           "source": "Type of content representation used for the value field.",
           "message": "Тип представлення вмісту, що використовується для поля значення."
         },
-        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.SGFzaERhdGFUeXBlOkJsb2dQb3N0Qm9keVdyaXRlI2EyZmNkMTY3N2YyMGYwNDYxMjFhY2FlZmM2NjkzOTk0ZTg5YWE3ODQ3OTYwYjRlNDVjZjQ4NmY5M2U2N2U4MWY.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOnN0b3JhZ2U.display_name": {
+        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.QmxvZ1Bvc3RCb2R5V3JpdGUjMGU1MThjOTdiNjMyODQ3ZDhmODFlYWFlMmY3ZmU1MzRlNmQ1ZWFiNDg3NDVjY2ZiZDQwN2RjNTFhOTJlMTUxOA.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOnN0b3JhZ2U.display_name": {
           "source": "storage",
           "message": "storage"
         },
-        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.SGFzaERhdGFUeXBlOkJsb2dQb3N0Qm9keVdyaXRlI2EyZmNkMTY3N2YyMGYwNDYxMjFhY2FlZmM2NjkzOTk0ZTg5YWE3ODQ3OTYwYjRlNDVjZjQ4NmY5M2U2N2U4MWY.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOmF0bGFzX2RvY19mb3JtYXQ.display_name": {
+        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.QmxvZ1Bvc3RCb2R5V3JpdGUjMGU1MThjOTdiNjMyODQ3ZDhmODFlYWFlMmY3ZmU1MzRlNmQ1ZWFiNDg3NDVjY2ZiZDQwN2RjNTFhOTJlMTUxOA.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOmF0bGFzX2RvY19mb3JtYXQ.display_name": {
           "source": "atlas_doc_format",
           "message": "atlas_doc_format"
         },
-        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.SGFzaERhdGFUeXBlOkJsb2dQb3N0Qm9keVdyaXRlI2EyZmNkMTY3N2YyMGYwNDYxMjFhY2FlZmM2NjkzOTk0ZTg5YWE3ODQ3OTYwYjRlNDVjZjQ4NmY5M2U2N2U4MWY.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOndpa2k.display_name": {
+        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.QmxvZ1Bvc3RCb2R5V3JpdGUjMGU1MThjOTdiNjMyODQ3ZDhmODFlYWFlMmY3ZmU1MzRlNmQ1ZWFiNDg3NDVjY2ZiZDQwN2RjNTFhOTJlMTUxOA.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOndpa2k.display_name": {
           "source": "wiki",
           "message": "вікі"
         },
-        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.SGFzaERhdGFUeXBlOkJsb2dQb3N0Qm9keVdyaXRlI2EyZmNkMTY3N2YyMGYwNDYxMjFhY2FlZmM2NjkzOTk0ZTg5YWE3ODQ3OTYwYjRlNDVjZjQ4NmY5M2U2N2U4MWY.field.dmFsdWU.display_name": {
+        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.QmxvZ1Bvc3RCb2R5V3JpdGUjMGU1MThjOTdiNjMyODQ3ZDhmODFlYWFlMmY3ZmU1MzRlNmQ1ZWFiNDg3NDVjY2ZiZDQwN2RjNTFhOTJlMTUxOA.field.dmFsdWU.display_name": {
           "source": "Value",
           "message": "Значення"
         },
-        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.SGFzaERhdGFUeXBlOkJsb2dQb3N0Qm9keVdyaXRlI2EyZmNkMTY3N2YyMGYwNDYxMjFhY2FlZmM2NjkzOTk0ZTg5YWE3ODQ3OTYwYjRlNDVjZjQ4NmY5M2U2N2U4MWY.field.dmFsdWU.short_desc": {
+        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.QmxvZ1Bvc3RCb2R5V3JpdGUjMGU1MThjOTdiNjMyODQ3ZDhmODFlYWFlMmY3ZmU1MzRlNmQ1ZWFiNDg3NDVjY2ZiZDQwN2RjNTFhOTJlMTUxOA.field.dmFsdWU.short_desc": {
           "source": "Body of the blog post, in the format found in the representation field",
           "message": "Тіло блог-запису у форматі, як у полі представлення"
         },
-        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.SGFzaERhdGFUeXBlOkJsb2dQb3N0Qm9keVdyaXRlI2EyZmNkMTY3N2YyMGYwNDYxMjFhY2FlZmM2NjkzOTk0ZTg5YWE3ODQ3OTYwYjRlNDVjZjQ4NmY5M2U2N2U4MWY.field.dmFsdWU.desc": {
+        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.QmxvZ1Bvc3RCb2R5V3JpdGUjMGU1MThjOTdiNjMyODQ3ZDhmODFlYWFlMmY3ZmU1MzRlNmQ1ZWFiNDg3NDVjY2ZiZDQwN2RjNTFhOTJlMTUxOA.field.dmFsdWU.desc": {
           "source": "Body of the blog post, in the format found in the representation field.",
           "message": "Тіло блог-запису у форматі, як у полі представлення."
         },
-        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.SGFzaERhdGFUeXBlOkJsb2dQb3N0TmVzdGVkQm9keVdyaXRlIzM1NWJhNzM0YWMwYjZlMzAzNDZmOGY0NWVmMDI4YTA4ZDZiNjBjMTdkMjhlZWY2YjEwZWRhNDkxNDM3NmIzNGI.field.YXRsYXNfZG9jX2Zvcm1hdA.display_name": {
+        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.QmxvZ1Bvc3ROZXN0ZWRCb2R5V3JpdGUjYzBkYzZmODEzYzEwMDc0YmIzYTQwNjRiMTRmZjhiOTNjNTM1ZmVlNjEwMTc0MTA1MDgzNTlhZDYzZDEwZTJjOQ.field.YXRsYXNfZG9jX2Zvcm1hdA.display_name": {
           "source": "Atlas Doc Format",
           "message": "Формат документа Atlas"
         },
-        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOmRYQmtZWFJsUW14dloxQnZjM1E6SGFzaERhdGFUeXBlOipCbG9nUG9zdEJvZHlXcml0ZSM0ZWZkYzlmZjM5OWEzNmNhOWQ1OGYzMTBjMzNlMmFiMDE0NzVjNzUzMmMyNTk2ODUyZmZlYWIyMDIyN2RiMDU1.field.cmVwcmVzZW50YXRpb24.display_name": {
+        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOmRYQmtZWFJsUW14dloxQnZjM1E6KkJsb2dQb3N0Qm9keVdyaXRlIzNlNzdjNzBmNTM5MDE2MmJmNGY4M2RkNjM5MjBhMWRmZDE2NDJhZmQxNDljNWZmMTQyNTFhYWZiYzEyY2EzNTM.field.cmVwcmVzZW50YXRpb24.display_name": {
           "source": "Representation",
           "message": "Представлення"
         },
-        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOmRYQmtZWFJsUW14dloxQnZjM1E6SGFzaERhdGFUeXBlOipCbG9nUG9zdEJvZHlXcml0ZSM0ZWZkYzlmZjM5OWEzNmNhOWQ1OGYzMTBjMzNlMmFiMDE0NzVjNzUzMmMyNTk2ODUyZmZlYWIyMDIyN2RiMDU1.field.cmVwcmVzZW50YXRpb24.short_desc": {
+        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOmRYQmtZWFJsUW14dloxQnZjM1E6KkJsb2dQb3N0Qm9keVdyaXRlIzNlNzdjNzBmNTM5MDE2MmJmNGY4M2RkNjM5MjBhMWRmZDE2NDJhZmQxNDljNWZmMTQyNTFhYWZiYzEyY2EzNTM.field.cmVwcmVzZW50YXRpb24.short_desc": {
           "source": "Type of content representation used for the value field",
           "message": "Тип представлення вмісту, що використовується для поля значення"
         },
-        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOmRYQmtZWFJsUW14dloxQnZjM1E6SGFzaERhdGFUeXBlOipCbG9nUG9zdEJvZHlXcml0ZSM0ZWZkYzlmZjM5OWEzNmNhOWQ1OGYzMTBjMzNlMmFiMDE0NzVjNzUzMmMyNTk2ODUyZmZlYWIyMDIyN2RiMDU1.field.cmVwcmVzZW50YXRpb24.desc": {
+        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOmRYQmtZWFJsUW14dloxQnZjM1E6KkJsb2dQb3N0Qm9keVdyaXRlIzNlNzdjNzBmNTM5MDE2MmJmNGY4M2RkNjM5MjBhMWRmZDE2NDJhZmQxNDljNWZmMTQyNTFhYWZiYzEyY2EzNTM.field.cmVwcmVzZW50YXRpb24.desc": {
           "source": "Type of content representation used for the value field.",
           "message": "Тип представлення вмісту, що використовується для поля значення."
         },
-        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOmRYQmtZWFJsUW14dloxQnZjM1E6SGFzaERhdGFUeXBlOipCbG9nUG9zdEJvZHlXcml0ZSM0ZWZkYzlmZjM5OWEzNmNhOWQ1OGYzMTBjMzNlMmFiMDE0NzVjNzUzMmMyNTk2ODUyZmZlYWIyMDIyN2RiMDU1.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOnN0b3JhZ2U.display_name": {
+        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOmRYQmtZWFJsUW14dloxQnZjM1E6KkJsb2dQb3N0Qm9keVdyaXRlIzNlNzdjNzBmNTM5MDE2MmJmNGY4M2RkNjM5MjBhMWRmZDE2NDJhZmQxNDljNWZmMTQyNTFhYWZiYzEyY2EzNTM.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOnN0b3JhZ2U.display_name": {
           "source": "storage",
           "message": "storage"
         },
-        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOmRYQmtZWFJsUW14dloxQnZjM1E6SGFzaERhdGFUeXBlOipCbG9nUG9zdEJvZHlXcml0ZSM0ZWZkYzlmZjM5OWEzNmNhOWQ1OGYzMTBjMzNlMmFiMDE0NzVjNzUzMmMyNTk2ODUyZmZlYWIyMDIyN2RiMDU1.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOmF0bGFzX2RvY19mb3JtYXQ.display_name": {
+        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOmRYQmtZWFJsUW14dloxQnZjM1E6KkJsb2dQb3N0Qm9keVdyaXRlIzNlNzdjNzBmNTM5MDE2MmJmNGY4M2RkNjM5MjBhMWRmZDE2NDJhZmQxNDljNWZmMTQyNTFhYWZiYzEyY2EzNTM.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOmF0bGFzX2RvY19mb3JtYXQ.display_name": {
           "source": "atlas_doc_format",
           "message": "atlas_doc_format"
         },
-        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOmRYQmtZWFJsUW14dloxQnZjM1E6SGFzaERhdGFUeXBlOipCbG9nUG9zdEJvZHlXcml0ZSM0ZWZkYzlmZjM5OWEzNmNhOWQ1OGYzMTBjMzNlMmFiMDE0NzVjNzUzMmMyNTk2ODUyZmZlYWIyMDIyN2RiMDU1.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOndpa2k.display_name": {
+        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOmRYQmtZWFJsUW14dloxQnZjM1E6KkJsb2dQb3N0Qm9keVdyaXRlIzNlNzdjNzBmNTM5MDE2MmJmNGY4M2RkNjM5MjBhMWRmZDE2NDJhZmQxNDljNWZmMTQyNTFhYWZiYzEyY2EzNTM.field.cmVwcmVzZW50YXRpb24.allowed-value.c3RyaW5nOndpa2k.display_name": {
           "source": "wiki",
           "message": "вікі"
         },
-        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOmRYQmtZWFJsUW14dloxQnZjM1E6SGFzaERhdGFUeXBlOipCbG9nUG9zdEJvZHlXcml0ZSM0ZWZkYzlmZjM5OWEzNmNhOWQ1OGYzMTBjMzNlMmFiMDE0NzVjNzUzMmMyNTk2ODUyZmZlYWIyMDIyN2RiMDU1.field.dmFsdWU.display_name": {
+        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOmRYQmtZWFJsUW14dloxQnZjM1E6KkJsb2dQb3N0Qm9keVdyaXRlIzNlNzdjNzBmNTM5MDE2MmJmNGY4M2RkNjM5MjBhMWRmZDE2NDJhZmQxNDljNWZmMTQyNTFhYWZiYzEyY2EzNTM.field.dmFsdWU.display_name": {
           "source": "Value",
           "message": "Значення"
         },
-        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOmRYQmtZWFJsUW14dloxQnZjM1E6SGFzaERhdGFUeXBlOipCbG9nUG9zdEJvZHlXcml0ZSM0ZWZkYzlmZjM5OWEzNmNhOWQ1OGYzMTBjMzNlMmFiMDE0NzVjNzUzMmMyNTk2ODUyZmZlYWIyMDIyN2RiMDU1.field.dmFsdWU.short_desc": {
+        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOmRYQmtZWFJsUW14dloxQnZjM1E6KkJsb2dQb3N0Qm9keVdyaXRlIzNlNzdjNzBmNTM5MDE2MmJmNGY4M2RkNjM5MjBhMWRmZDE2NDJhZmQxNDljNWZmMTQyNTFhYWZiYzEyY2EzNTM.field.dmFsdWU.short_desc": {
           "source": "Body of the blog post, in the format found in the representation field",
           "message": "Тіло блог-запису у форматі, як у полі представлення"
         },
-        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOmRYQmtZWFJsUW14dloxQnZjM1E6SGFzaERhdGFUeXBlOipCbG9nUG9zdEJvZHlXcml0ZSM0ZWZkYzlmZjM5OWEzNmNhOWQ1OGYzMTBjMzNlMmFiMDE0NzVjNzUzMmMyNTk2ODUyZmZlYWIyMDIyN2RiMDU1.field.dmFsdWU.desc": {
+        "app.Q29uZmx1ZW5jZQ.type.YWN0aW9uOmRYQmtZWFJsUW14dloxQnZjM1E6KkJsb2dQb3N0Qm9keVdyaXRlIzNlNzdjNzBmNTM5MDE2MmJmNGY4M2RkNjM5MjBhMWRmZDE2NDJhZmQxNDljNWZmMTQyNTFhYWZiYzEyY2EzNTM.field.dmFsdWU.desc": {
           "source": "Body of the blog post, in the format found in the representation field.",
           "message": "Тіло блог-запису у форматі, як у полі представлення."
         },
-        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.SGFzaERhdGFUeXBlOkJsb2dQb3N0TmVzdGVkQm9keVdyaXRlIzM1NWJhNzM0YWMwYjZlMzAzNDZmOGY0NWVmMDI4YTA4ZDZiNjBjMTdkMjhlZWY2YjEwZWRhNDkxNDM3NmIzNGI.field.c3RvcmFnZQ.display_name": {
+        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.QmxvZ1Bvc3ROZXN0ZWRCb2R5V3JpdGUjYzBkYzZmODEzYzEwMDc0YmIzYTQwNjRiMTRmZjhiOTNjNTM1ZmVlNjEwMTc0MTA1MDgzNTlhZDYzZDEwZTJjOQ.field.c3RvcmFnZQ.display_name": {
           "source": "Storage",
           "message": "Сховище"
         },
-        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.SGFzaERhdGFUeXBlOkJsb2dQb3N0TmVzdGVkQm9keVdyaXRlIzM1NWJhNzM0YWMwYjZlMzAzNDZmOGY0NWVmMDI4YTA4ZDZiNjBjMTdkMjhlZWY2YjEwZWRhNDkxNDM3NmIzNGI.field.d2lraQ.display_name": {
+        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.option.Ym9keQ.union.QmxvZ1Bvc3ROZXN0ZWRCb2R5V3JpdGUjYzBkYzZmODEzYzEwMDc0YmIzYTQwNjRiMTRmZjhiOTNjNTM1ZmVlNjEwMTc0MTA1MDgzNTlhZDYzZDEwZTJjOQ.field.d2lraQ.display_name": {
           "source": "Wiki",
           "message": "Вікі"
         },

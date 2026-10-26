@@ -635,39 +635,39 @@
           "source": "Adapters to apply; selected page ranges must not overlap.",
           "message": "Adaptéry na použitie; vybrané rozsahy strán sa nesmú prekrývať."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjYTlmMGNjNWNiMWQ5ZjA0YzE3MjVhNzUyZjM3NjhiYjA5Njk4MTI2MzVmODMwYzVhN2I0YjA2MmIzNzU1MGZkMw.field.QWRhcHRlcklk.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6QWRhcHRlciMzMjViNTZjY2QyNjI3NGZkZGY3NDZiMzQyZWE3ZGNiNGQ2ODkyOWYxODY4OGMyOGZiZTM0ZDNmNmFkNWVlYzlk.field.QWRhcHRlcklk.display_name": {
           "source": "Adapter ID",
           "message": "ID adaptéra"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjYTlmMGNjNWNiMWQ5ZjA0YzE3MjVhNzUyZjM3NjhiYjA5Njk4MTI2MzVmODMwYzVhN2I0YjA2MmIzNzU1MGZkMw.field.QWRhcHRlcklk.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6QWRhcHRlciMzMjViNTZjY2QyNjI3NGZkZGY3NDZiMzQyZWE3ZGNiNGQ2ODkyOWYxODY4OGMyOGZiZTM0ZDNmNmFkNWVlYzlk.field.QWRhcHRlcklk.short_desc": {
           "source": "Adapter in the connection's AWS account and region",
           "message": "Adaptér v účte AWS a regióne pripojenia"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjYTlmMGNjNWNiMWQ5ZjA0YzE3MjVhNzUyZjM3NjhiYjA5Njk4MTI2MzVmODMwYzVhN2I0YjA2MmIzNzU1MGZkMw.field.QWRhcHRlcklk.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6QWRhcHRlciMzMjViNTZjY2QyNjI3NGZkZGY3NDZiMzQyZWE3ZGNiNGQ2ODkyOWYxODY4OGMyOGZiZTM0ZDNmNmFkNWVlYzlk.field.QWRhcHRlcklk.desc": {
           "source": "Adapter in the connection's AWS account and region.",
           "message": "Adaptér v účte AWS a regióne pripojenia."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjYTlmMGNjNWNiMWQ5ZjA0YzE3MjVhNzUyZjM3NjhiYjA5Njk4MTI2MzVmODMwYzVhN2I0YjA2MmIzNzU1MGZkMw.field.UGFnZXM.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6QWRhcHRlciMzMjViNTZjY2QyNjI3NGZkZGY3NDZiMzQyZWE3ZGNiNGQ2ODkyOWYxODY4OGMyOGZiZTM0ZDNmNmFkNWVlYzlk.field.UGFnZXM.display_name": {
           "source": "Pages",
           "message": "Stránky"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjYTlmMGNjNWNiMWQ5ZjA0YzE3MjVhNzUyZjM3NjhiYjA5Njk4MTI2MzVmODMwYzVhN2I0YjA2MmIzNzU1MGZkMw.field.UGFnZXM.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6QWRhcHRlciMzMjViNTZjY2QyNjI3NGZkZGY3NDZiMzQyZWE3ZGNiNGQ2ODkyOWYxODY4OGMyOGZiZTM0ZDNmNmFkNWVlYzlk.field.UGFnZXM.short_desc": {
           "source": "Page selectors such as '1', '1-3', or '4-*'",
           "message": "Prepínače stránok, ako napríklad „1“, „1-3“ alebo „4-*“"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjYTlmMGNjNWNiMWQ5ZjA0YzE3MjVhNzUyZjM3NjhiYjA5Njk4MTI2MzVmODMwYzVhN2I0YjA2MmIzNzU1MGZkMw.field.UGFnZXM.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6QWRhcHRlciMzMjViNTZjY2QyNjI3NGZkZGY3NDZiMzQyZWE3ZGNiNGQ2ODkyOWYxODY4OGMyOGZiZTM0ZDNmNmFkNWVlYzlk.field.UGFnZXM.desc": {
           "source": "Page selectors such as `1`, `1-3`, or `4-*`; use only `*` for all pages.",
           "message": "voliče stránok, ako napríklad `1`, `1-3` alebo `4-*`; pre všetky strany používajte iba `*`."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjYTlmMGNjNWNiMWQ5ZjA0YzE3MjVhNzUyZjM3NjhiYjA5Njk4MTI2MzVmODMwYzVhN2I0YjA2MmIzNzU1MGZkMw.field.VmVyc2lvbg.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6QWRhcHRlciMzMjViNTZjY2QyNjI3NGZkZGY3NDZiMzQyZWE3ZGNiNGQ2ODkyOWYxODY4OGMyOGZiZTM0ZDNmNmFkNWVlYzlk.field.VmVyc2lvbg.display_name": {
           "source": "Version",
           "message": "Verzia"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjYTlmMGNjNWNiMWQ5ZjA0YzE3MjVhNzUyZjM3NjhiYjA5Njk4MTI2MzVmODMwYzVhN2I0YjA2MmIzNzU1MGZkMw.field.VmVyc2lvbg.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6QWRhcHRlciMzMjViNTZjY2QyNjI3NGZkZGY3NDZiMzQyZWE3ZGNiNGQ2ODkyOWYxODY4OGMyOGZiZTM0ZDNmNmFkNWVlYzlk.field.VmVyc2lvbg.short_desc": {
           "source": "Version of the selected resource",
           "message": "Verzia vybratého zdroja"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjYTlmMGNjNWNiMWQ5ZjA0YzE3MjVhNzUyZjM3NjhiYjA5Njk4MTI2MzVmODMwYzVhN2I0YjA2MmIzNzU1MGZkMw.field.VmVyc2lvbg.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6QWRhcHRlciMzMjViNTZjY2QyNjI3NGZkZGY3NDZiMzQyZWE3ZGNiNGQ2ODkyOWYxODY4OGMyOGZiZTM0ZDNmNmFkNWVlYzlk.field.VmVyc2lvbg.desc": {
           "source": "Version of the selected resource.",
           "message": "Verzia vybratého zdroja."
         },
@@ -907,39 +907,39 @@
           "source": "Manifest S3Object",
           "message": "Objekt S3 s manifestom"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.QnVja2V0.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpTM09iamVjdCMyOGQzNjM4Nzg4ZmFhN2QwODA2ODk3N2M4YjAyNGY3ZTE5ZWU3ZDc4Zjc3YWQ2MjZlY2FlNDc1NzJhMGUwNmQw.field.QnVja2V0.display_name": {
           "source": "Bucket",
           "message": "Bucket"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.QnVja2V0.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpTM09iamVjdCMyOGQzNjM4Nzg4ZmFhN2QwODA2ODk3N2M4YjAyNGY3ZTE5ZWU3ZDc4Zjc3YWQ2MjZlY2FlNDc1NzJhMGUwNmQw.field.QnVja2V0.short_desc": {
           "source": "Name of the S3 bucket containing the source document",
           "message": "Názov skupiny S3 obsahujúcej zdrojový dokument"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.QnVja2V0.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpTM09iamVjdCMyOGQzNjM4Nzg4ZmFhN2QwODA2ODk3N2M4YjAyNGY3ZTE5ZWU3ZDc4Zjc3YWQ2MjZlY2FlNDc1NzJhMGUwNmQw.field.QnVja2V0.desc": {
           "source": "Name of the S3 bucket containing the source document.",
           "message": "Názov skupiny S3 obsahujúcej zdrojový dokument."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.TmFtZQ.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpTM09iamVjdCMyOGQzNjM4Nzg4ZmFhN2QwODA2ODk3N2M4YjAyNGY3ZTE5ZWU3ZDc4Zjc3YWQ2MjZlY2FlNDc1NzJhMGUwNmQw.field.TmFtZQ.display_name": {
           "source": "Name",
           "message": "Názov"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.TmFtZQ.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpTM09iamVjdCMyOGQzNjM4Nzg4ZmFhN2QwODA2ODk3N2M4YjAyNGY3ZTE5ZWU3ZDc4Zjc3YWQ2MjZlY2FlNDc1NzJhMGUwNmQw.field.TmFtZQ.short_desc": {
           "source": "Object key inside the S3 bucket, for example 'invoices/sample.pdf'",
           "message": "Kľúč objektu vo vnútri skupiny S3, napríklad 'faktúry/vzor.pdf'"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.TmFtZQ.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpTM09iamVjdCMyOGQzNjM4Nzg4ZmFhN2QwODA2ODk3N2M4YjAyNGY3ZTE5ZWU3ZDc4Zjc3YWQ2MjZlY2FlNDc1NzJhMGUwNmQw.field.TmFtZQ.desc": {
           "source": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
           "message": "Kľúč objektu vo vnútri vedra S3, napríklad `invoices/sample.pdf`."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.VmVyc2lvbg.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpTM09iamVjdCMyOGQzNjM4Nzg4ZmFhN2QwODA2ODk3N2M4YjAyNGY3ZTE5ZWU3ZDc4Zjc3YWQ2MjZlY2FlNDc1NzJhMGUwNmQw.field.VmVyc2lvbg.display_name": {
           "source": "Version",
           "message": "Verzia"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.VmVyc2lvbg.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpTM09iamVjdCMyOGQzNjM4Nzg4ZmFhN2QwODA2ODk3N2M4YjAyNGY3ZTE5ZWU3ZDc4Zjc3YWQ2MjZlY2FlNDc1NzJhMGUwNmQw.field.VmVyc2lvbg.short_desc": {
           "source": "Version of the selected resource",
           "message": "Verzia vybratého zdroja"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.VmVyc2lvbg.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpTM09iamVjdCMyOGQzNjM4Nzg4ZmFhN2QwODA2ODk3N2M4YjAyNGY3ZTE5ZWU3ZDc4Zjc3YWQ2MjZlY2FlNDc1NzJhMGUwNmQw.field.VmVyc2lvbg.desc": {
           "source": "Version of the selected resource.",
           "message": "Verzia vybratého zdroja."
         },
@@ -1671,39 +1671,39 @@
           "source": "Queries",
           "message": "Dopyty"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5I2NjOTQzZjZiYmIxNjk1YzhjMzlmODJiYzUxZDcyY2VjNzEzYjdjZWI3NWVmYTIwM2FhMDE2MDE5MjRkM2VjYWQ.field.QWxpYXM.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06UXVlcnkjM2QwZGZiYzgxMTUxZTgyMGIzYzE5Nzk0MGU0ZDEwMmY4YWMyODA2YWIyNDZhY2RhMzViZDZkMjVhZDRhYjEyMA.field.QWxpYXM.display_name": {
           "source": "Alias",
           "message": "Alias"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5I2NjOTQzZjZiYmIxNjk1YzhjMzlmODJiYzUxZDcyY2VjNzEzYjdjZWI3NWVmYTIwM2FhMDE2MDE5MjRkM2VjYWQ.field.QWxpYXM.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06UXVlcnkjM2QwZGZiYzgxMTUxZTgyMGIzYzE5Nzk0MGU0ZDEwMmY4YWMyODA2YWIyNDZhY2RhMzViZDZkMjVhZDRhYjEyMA.field.QWxpYXM.short_desc": {
           "source": "A short name for locating this question in the results",
           "message": "Krátky názov na nájdenie tejto otázky vo výsledkoch"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5I2NjOTQzZjZiYmIxNjk1YzhjMzlmODJiYzUxZDcyY2VjNzEzYjdjZWI3NWVmYTIwM2FhMDE2MDE5MjRkM2VjYWQ.field.QWxpYXM.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06UXVlcnkjM2QwZGZiYzgxMTUxZTgyMGIzYzE5Nzk0MGU0ZDEwMmY4YWMyODA2YWIyNDZhY2RhMzViZDZkMjVhZDRhYjEyMA.field.QWxpYXM.desc": {
           "source": "A short name for locating this question in the results.",
           "message": "Krátky názov na nájdenie tejto otázky vo výsledkoch."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5I2NjOTQzZjZiYmIxNjk1YzhjMzlmODJiYzUxZDcyY2VjNzEzYjdjZWI3NWVmYTIwM2FhMDE2MDE5MjRkM2VjYWQ.field.UGFnZXM.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06UXVlcnkjM2QwZGZiYzgxMTUxZTgyMGIzYzE5Nzk0MGU0ZDEwMmY4YWMyODA2YWIyNDZhY2RhMzViZDZkMjVhZDRhYjEyMA.field.UGFnZXM.display_name": {
           "source": "Pages",
           "message": "Stránky"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5I2NjOTQzZjZiYmIxNjk1YzhjMzlmODJiYzUxZDcyY2VjNzEzYjdjZWI3NWVmYTIwM2FhMDE2MDE5MjRkM2VjYWQ.field.UGFnZXM.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06UXVlcnkjM2QwZGZiYzgxMTUxZTgyMGIzYzE5Nzk0MGU0ZDEwMmY4YWMyODA2YWIyNDZhY2RhMzViZDZkMjVhZDRhYjEyMA.field.UGFnZXM.short_desc": {
           "source": "Page selectors such as '1', '1-3', or '4-*'",
           "message": "Prepínače stránok, ako napríklad „1“, „1-3“ alebo „4-*“"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5I2NjOTQzZjZiYmIxNjk1YzhjMzlmODJiYzUxZDcyY2VjNzEzYjdjZWI3NWVmYTIwM2FhMDE2MDE5MjRkM2VjYWQ.field.UGFnZXM.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06UXVlcnkjM2QwZGZiYzgxMTUxZTgyMGIzYzE5Nzk0MGU0ZDEwMmY4YWMyODA2YWIyNDZhY2RhMzViZDZkMjVhZDRhYjEyMA.field.UGFnZXM.desc": {
           "source": "Page selectors such as `1`, `1-3`, or `4-*`; use only `*` for all pages.",
           "message": "voliče stránok, ako napríklad `1`, `1-3` alebo `4-*`; pre všetky strany používajte iba `*`."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5I2NjOTQzZjZiYmIxNjk1YzhjMzlmODJiYzUxZDcyY2VjNzEzYjdjZWI3NWVmYTIwM2FhMDE2MDE5MjRkM2VjYWQ.field.VGV4dA.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06UXVlcnkjM2QwZGZiYzgxMTUxZTgyMGIzYzE5Nzk0MGU0ZDEwMmY4YWMyODA2YWIyNDZhY2RhMzViZDZkMjVhZDRhYjEyMA.field.VGV4dA.display_name": {
           "source": "Text",
           "message": "Text"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5I2NjOTQzZjZiYmIxNjk1YzhjMzlmODJiYzUxZDcyY2VjNzEzYjdjZWI3NWVmYTIwM2FhMDE2MDE5MjRkM2VjYWQ.field.VGV4dA.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06UXVlcnkjM2QwZGZiYzgxMTUxZTgyMGIzYzE5Nzk0MGU0ZDEwMmY4YWMyODA2YWIyNDZhY2RhMzViZDZkMjVhZDRhYjEyMA.field.VGV4dA.short_desc": {
           "source": "Question to answer, for example 'What is the invoice total?'",
           "message": "Otázka na zodpovedanie, napríklad „Aká je celková suma faktúry?“"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5I2NjOTQzZjZiYmIxNjk1YzhjMzlmODJiYzUxZDcyY2VjNzEzYjdjZWI3NWVmYTIwM2FhMDE2MDE5MjRkM2VjYWQ.field.VGV4dA.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06UXVlcnkjM2QwZGZiYzgxMTUxZTgyMGIzYzE5Nzk0MGU0ZDEwMmY4YWMyODA2YWIyNDZhY2RhMzViZDZkMjVhZDRhYjEyMA.field.VGV4dA.desc": {
           "source": "Question to answer, for example `What is the invoice total?`.",
           "message": "Otázka na zodpovedanie, napríklad `What is the invoice total?`."
         },
@@ -1731,39 +1731,39 @@
           "source": "Adapters to apply; selected page ranges must not overlap.",
           "message": "Adaptéry na použitie; vybrané rozsahy strán sa nesmú prekrývať."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjYTlmMGNjNWNiMWQ5ZjA0YzE3MjVhNzUyZjM3NjhiYjA5Njk4MTI2MzVmODMwYzVhN2I0YjA2MmIzNzU1MGZkMw.field.QWRhcHRlcklk.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06QWRhcHRlciMzMjViNTZjY2QyNjI3NGZkZGY3NDZiMzQyZWE3ZGNiNGQ2ODkyOWYxODY4OGMyOGZiZTM0ZDNmNmFkNWVlYzlk.field.QWRhcHRlcklk.display_name": {
           "source": "Adapter ID",
           "message": "ID adaptéra"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjYTlmMGNjNWNiMWQ5ZjA0YzE3MjVhNzUyZjM3NjhiYjA5Njk4MTI2MzVmODMwYzVhN2I0YjA2MmIzNzU1MGZkMw.field.QWRhcHRlcklk.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06QWRhcHRlciMzMjViNTZjY2QyNjI3NGZkZGY3NDZiMzQyZWE3ZGNiNGQ2ODkyOWYxODY4OGMyOGZiZTM0ZDNmNmFkNWVlYzlk.field.QWRhcHRlcklk.short_desc": {
           "source": "Adapter in the connection's AWS account and region",
           "message": "Adaptér v účte AWS a regióne pripojenia"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjYTlmMGNjNWNiMWQ5ZjA0YzE3MjVhNzUyZjM3NjhiYjA5Njk4MTI2MzVmODMwYzVhN2I0YjA2MmIzNzU1MGZkMw.field.QWRhcHRlcklk.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06QWRhcHRlciMzMjViNTZjY2QyNjI3NGZkZGY3NDZiMzQyZWE3ZGNiNGQ2ODkyOWYxODY4OGMyOGZiZTM0ZDNmNmFkNWVlYzlk.field.QWRhcHRlcklk.desc": {
           "source": "Adapter in the connection's AWS account and region.",
           "message": "Adaptér v účte AWS a regióne pripojenia."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjYTlmMGNjNWNiMWQ5ZjA0YzE3MjVhNzUyZjM3NjhiYjA5Njk4MTI2MzVmODMwYzVhN2I0YjA2MmIzNzU1MGZkMw.field.UGFnZXM.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06QWRhcHRlciMzMjViNTZjY2QyNjI3NGZkZGY3NDZiMzQyZWE3ZGNiNGQ2ODkyOWYxODY4OGMyOGZiZTM0ZDNmNmFkNWVlYzlk.field.UGFnZXM.display_name": {
           "source": "Pages",
           "message": "Stránky"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjYTlmMGNjNWNiMWQ5ZjA0YzE3MjVhNzUyZjM3NjhiYjA5Njk4MTI2MzVmODMwYzVhN2I0YjA2MmIzNzU1MGZkMw.field.UGFnZXM.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06QWRhcHRlciMzMjViNTZjY2QyNjI3NGZkZGY3NDZiMzQyZWE3ZGNiNGQ2ODkyOWYxODY4OGMyOGZiZTM0ZDNmNmFkNWVlYzlk.field.UGFnZXM.short_desc": {
           "source": "Page selectors such as '1', '1-3', or '4-*'",
           "message": "Prepínače stránok, ako napríklad „1“, „1-3“ alebo „4-*“"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjYTlmMGNjNWNiMWQ5ZjA0YzE3MjVhNzUyZjM3NjhiYjA5Njk4MTI2MzVmODMwYzVhN2I0YjA2MmIzNzU1MGZkMw.field.UGFnZXM.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06QWRhcHRlciMzMjViNTZjY2QyNjI3NGZkZGY3NDZiMzQyZWE3ZGNiNGQ2ODkyOWYxODY4OGMyOGZiZTM0ZDNmNmFkNWVlYzlk.field.UGFnZXM.desc": {
           "source": "Page selectors such as `1`, `1-3`, or `4-*`; use only `*` for all pages.",
           "message": "voliče stránok, ako napríklad `1`, `1-3` alebo `4-*`; pre všetky strany používajte iba `*`."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjYTlmMGNjNWNiMWQ5ZjA0YzE3MjVhNzUyZjM3NjhiYjA5Njk4MTI2MzVmODMwYzVhN2I0YjA2MmIzNzU1MGZkMw.field.VmVyc2lvbg.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06QWRhcHRlciMzMjViNTZjY2QyNjI3NGZkZGY3NDZiMzQyZWE3ZGNiNGQ2ODkyOWYxODY4OGMyOGZiZTM0ZDNmNmFkNWVlYzlk.field.VmVyc2lvbg.display_name": {
           "source": "Version",
           "message": "Verzia"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjYTlmMGNjNWNiMWQ5ZjA0YzE3MjVhNzUyZjM3NjhiYjA5Njk4MTI2MzVmODMwYzVhN2I0YjA2MmIzNzU1MGZkMw.field.VmVyc2lvbg.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06QWRhcHRlciMzMjViNTZjY2QyNjI3NGZkZGY3NDZiMzQyZWE3ZGNiNGQ2ODkyOWYxODY4OGMyOGZiZTM0ZDNmNmFkNWVlYzlk.field.VmVyc2lvbg.short_desc": {
           "source": "Version of the selected resource",
           "message": "Verzia vybratého zdroja"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjYTlmMGNjNWNiMWQ5ZjA0YzE3MjVhNzUyZjM3NjhiYjA5Njk4MTI2MzVmODMwYzVhN2I0YjA2MmIzNzU1MGZkMw.field.VmVyc2lvbg.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06QWRhcHRlciMzMjViNTZjY2QyNjI3NGZkZGY3NDZiMzQyZWE3ZGNiNGQ2ODkyOWYxODY4OGMyOGZiZTM0ZDNmNmFkNWVlYzlk.field.VmVyc2lvbg.desc": {
           "source": "Version of the selected resource.",
           "message": "Verzia vybratého zdroja."
         },
@@ -2315,239 +2315,239 @@
           "source": "Disabled",
           "message": "Zakázané"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOipIdW1hbkxvb3BEYXRhQXR0cmlidXRlcyM3YmZiNGJiZDAzNGUxZmEwOWRkMTg3OTY1MGQzODAwMTdkZTViYmIwYTFmM2VjOGYxOTkyOWM3YWFmMTI1MDUy.field.Q29udGVudENsYXNzaWZpZXJz.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6Kkh1bWFuTG9vcERhdGFBdHRyaWJ1dGVzI2U3Y2ViODg5NzI0OTRjNTMxNzY1NTJjZDY2MjYxYzExYjYzZTE0NTc5M2FmOTRmOTNhNGY3NDE4ODY5ZDZkMDU.field.Q29udGVudENsYXNzaWZpZXJz.display_name": {
           "source": "Content Classifiers",
           "message": "Klasifikátory obsahu"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOipIdW1hbkxvb3BEYXRhQXR0cmlidXRlcyM3YmZiNGJiZDAzNGUxZmEwOWRkMTg3OTY1MGQzODAwMTdkZTViYmIwYTFmM2VjOGYxOTkyOWM3YWFmMTI1MDUy.field.Q29udGVudENsYXNzaWZpZXJz.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6Kkh1bWFuTG9vcERhdGFBdHRyaWJ1dGVzI2U3Y2ViODg5NzI0OTRjNTMxNzY1NTJjZDY2MjYxYzExYjYzZTE0NTc5M2FmOTRmOTNhNGY3NDE4ODY5ZDZkMDU.field.Q29udGVudENsYXNzaWZpZXJz.short_desc": {
           "source": "Content declarations for the human review workflow",
           "message": "Deklarácie obsahu pre pracovný postup kontroly človekom"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOipIdW1hbkxvb3BEYXRhQXR0cmlidXRlcyM3YmZiNGJiZDAzNGUxZmEwOWRkMTg3OTY1MGQzODAwMTdkZTViYmIwYTFmM2VjOGYxOTkyOWM3YWFmMTI1MDUy.field.Q29udGVudENsYXNzaWZpZXJz.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6Kkh1bWFuTG9vcERhdGFBdHRyaWJ1dGVzI2U3Y2ViODg5NzI0OTRjNTMxNzY1NTJjZDY2MjYxYzExYjYzZTE0NTc5M2FmOTRmOTNhNGY3NDE4ODY5ZDZkMDU.field.Q29udGVudENsYXNzaWZpZXJz.desc": {
           "source": "Content declarations for the human review workflow.",
           "message": "Deklarácie obsahu pre pracovný postup kontroly človekom."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOipIdW1hbkxvb3BEYXRhQXR0cmlidXRlcyM3YmZiNGJiZDAzNGUxZmEwOWRkMTg3OTY1MGQzODAwMTdkZTViYmIwYTFmM2VjOGYxOTkyOWM3YWFmMTI1MDUy.field.Q29udGVudENsYXNzaWZpZXJz.element-allowed-value.c3RyaW5nOkZyZWVPZlBlcnNvbmFsbHlJZGVudGlmaWFibGVJbmZvcm1hdGlvbg.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6Kkh1bWFuTG9vcERhdGFBdHRyaWJ1dGVzI2U3Y2ViODg5NzI0OTRjNTMxNzY1NTJjZDY2MjYxYzExYjYzZTE0NTc5M2FmOTRmOTNhNGY3NDE4ODY5ZDZkMDU.field.Q29udGVudENsYXNzaWZpZXJz.element-allowed-value.c3RyaW5nOkZyZWVPZlBlcnNvbmFsbHlJZGVudGlmaWFibGVJbmZvcm1hdGlvbg.display_name": {
           "source": "Free of Personally Identifiable Information",
           "message": "Bez osobných identifikačných údajov"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOipIdW1hbkxvb3BEYXRhQXR0cmlidXRlcyM3YmZiNGJiZDAzNGUxZmEwOWRkMTg3OTY1MGQzODAwMTdkZTViYmIwYTFmM2VjOGYxOTkyOWM3YWFmMTI1MDUy.field.Q29udGVudENsYXNzaWZpZXJz.element-allowed-value.c3RyaW5nOkZyZWVPZkFkdWx0Q29udGVudA.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6Kkh1bWFuTG9vcERhdGFBdHRyaWJ1dGVzI2U3Y2ViODg5NzI0OTRjNTMxNzY1NTJjZDY2MjYxYzExYjYzZTE0NTc5M2FmOTRmOTNhNGY3NDE4ODY5ZDZkMDU.field.Q29udGVudENsYXNzaWZpZXJz.element-allowed-value.c3RyaW5nOkZyZWVPZkFkdWx0Q29udGVudA.display_name": {
           "source": "Free of Adult Content",
           "message": "Bez obsahu pre dospelých"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOkhhc2hEYXRhVHlwZToqUzNPYmplY3QjMWQ2YTJmMDY2NjIxOTRhZWJmZDBhOWIzNjViY2M4OTE1ODgwZjY0NDgwMWEzY2NhY2E3YWIwOTE3Y2I0OTY1Zg.field.QnVja2V0.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOipTM09iamVjdCM0OGMwZjFiNWQ2N2M4M2U4OTFjZjVkZGNiYmE4MWY0Yjc4ZjhkYThkZjU2MmJhZTc5MWI4ZWFjOWQzZjA3NzRl.field.QnVja2V0.display_name": {
           "source": "Bucket",
           "message": "Bucket"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOkhhc2hEYXRhVHlwZToqUzNPYmplY3QjMWQ2YTJmMDY2NjIxOTRhZWJmZDBhOWIzNjViY2M4OTE1ODgwZjY0NDgwMWEzY2NhY2E3YWIwOTE3Y2I0OTY1Zg.field.QnVja2V0.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOipTM09iamVjdCM0OGMwZjFiNWQ2N2M4M2U4OTFjZjVkZGNiYmE4MWY0Yjc4ZjhkYThkZjU2MmJhZTc5MWI4ZWFjOWQzZjA3NzRl.field.QnVja2V0.short_desc": {
           "source": "Name of the S3 bucket containing the source document",
           "message": "Názov skupiny S3 obsahujúcej zdrojový dokument"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOkhhc2hEYXRhVHlwZToqUzNPYmplY3QjMWQ2YTJmMDY2NjIxOTRhZWJmZDBhOWIzNjViY2M4OTE1ODgwZjY0NDgwMWEzY2NhY2E3YWIwOTE3Y2I0OTY1Zg.field.QnVja2V0.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOipTM09iamVjdCM0OGMwZjFiNWQ2N2M4M2U4OTFjZjVkZGNiYmE4MWY0Yjc4ZjhkYThkZjU2MmJhZTc5MWI4ZWFjOWQzZjA3NzRl.field.QnVja2V0.desc": {
           "source": "Name of the S3 bucket containing the source document.",
           "message": "Názov skupiny S3 obsahujúcej zdrojový dokument."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOkhhc2hEYXRhVHlwZToqUzNPYmplY3QjMWQ2YTJmMDY2NjIxOTRhZWJmZDBhOWIzNjViY2M4OTE1ODgwZjY0NDgwMWEzY2NhY2E3YWIwOTE3Y2I0OTY1Zg.field.TmFtZQ.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOipTM09iamVjdCM0OGMwZjFiNWQ2N2M4M2U4OTFjZjVkZGNiYmE4MWY0Yjc4ZjhkYThkZjU2MmJhZTc5MWI4ZWFjOWQzZjA3NzRl.field.TmFtZQ.display_name": {
           "source": "Name",
           "message": "Názov"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOkhhc2hEYXRhVHlwZToqUzNPYmplY3QjMWQ2YTJmMDY2NjIxOTRhZWJmZDBhOWIzNjViY2M4OTE1ODgwZjY0NDgwMWEzY2NhY2E3YWIwOTE3Y2I0OTY1Zg.field.TmFtZQ.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOipTM09iamVjdCM0OGMwZjFiNWQ2N2M4M2U4OTFjZjVkZGNiYmE4MWY0Yjc4ZjhkYThkZjU2MmJhZTc5MWI4ZWFjOWQzZjA3NzRl.field.TmFtZQ.short_desc": {
           "source": "Object key inside the S3 bucket, for example 'invoices/sample.pdf'",
           "message": "Kľúč objektu vo vnútri skupiny S3, napríklad 'faktúry/vzor.pdf'"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOkhhc2hEYXRhVHlwZToqUzNPYmplY3QjMWQ2YTJmMDY2NjIxOTRhZWJmZDBhOWIzNjViY2M4OTE1ODgwZjY0NDgwMWEzY2NhY2E3YWIwOTE3Y2I0OTY1Zg.field.TmFtZQ.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOipTM09iamVjdCM0OGMwZjFiNWQ2N2M4M2U4OTFjZjVkZGNiYmE4MWY0Yjc4ZjhkYThkZjU2MmJhZTc5MWI4ZWFjOWQzZjA3NzRl.field.TmFtZQ.desc": {
           "source": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
           "message": "Kľúč objektu vo vnútri vedra S3, napríklad `invoices/sample.pdf`."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOkhhc2hEYXRhVHlwZToqUzNPYmplY3QjMWQ2YTJmMDY2NjIxOTRhZWJmZDBhOWIzNjViY2M4OTE1ODgwZjY0NDgwMWEzY2NhY2E3YWIwOTE3Y2I0OTY1Zg.field.VmVyc2lvbg.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOipTM09iamVjdCM0OGMwZjFiNWQ2N2M4M2U4OTFjZjVkZGNiYmE4MWY0Yjc4ZjhkYThkZjU2MmJhZTc5MWI4ZWFjOWQzZjA3NzRl.field.VmVyc2lvbg.display_name": {
           "source": "Version",
           "message": "Verzia"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOkhhc2hEYXRhVHlwZToqUzNPYmplY3QjMWQ2YTJmMDY2NjIxOTRhZWJmZDBhOWIzNjViY2M4OTE1ODgwZjY0NDgwMWEzY2NhY2E3YWIwOTE3Y2I0OTY1Zg.field.VmVyc2lvbg.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOipTM09iamVjdCM0OGMwZjFiNWQ2N2M4M2U4OTFjZjVkZGNiYmE4MWY0Yjc4ZjhkYThkZjU2MmJhZTc5MWI4ZWFjOWQzZjA3NzRl.field.VmVyc2lvbg.short_desc": {
           "source": "Version of the selected resource",
           "message": "Verzia vybratého zdroja"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOkhhc2hEYXRhVHlwZToqUzNPYmplY3QjMWQ2YTJmMDY2NjIxOTRhZWJmZDBhOWIzNjViY2M4OTE1ODgwZjY0NDgwMWEzY2NhY2E3YWIwOTE3Y2I0OTY1Zg.field.VmVyc2lvbg.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOipTM09iamVjdCM0OGMwZjFiNWQ2N2M4M2U4OTFjZjVkZGNiYmE4MWY0Yjc4ZjhkYThkZjU2MmJhZTc5MWI4ZWFjOWQzZjA3NzRl.field.VmVyc2lvbg.desc": {
           "source": "Version of the selected resource.",
           "message": "Verzia vybratého zdroja."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOkhhc2hEYXRhVHlwZToqUzNPYmplY3QjMWQ2YTJmMDY2NjIxOTRhZWJmZDBhOWIzNjViY2M4OTE1ODgwZjY0NDgwMWEzY2NhY2E3YWIwOTE3Y2I0OTY1Zg.field.QnVja2V0.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOipTM09iamVjdCM0OGMwZjFiNWQ2N2M4M2U4OTFjZjVkZGNiYmE4MWY0Yjc4ZjhkYThkZjU2MmJhZTc5MWI4ZWFjOWQzZjA3NzRl.field.QnVja2V0.display_name": {
           "source": "Bucket",
           "message": "Bucket"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOkhhc2hEYXRhVHlwZToqUzNPYmplY3QjMWQ2YTJmMDY2NjIxOTRhZWJmZDBhOWIzNjViY2M4OTE1ODgwZjY0NDgwMWEzY2NhY2E3YWIwOTE3Y2I0OTY1Zg.field.QnVja2V0.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOipTM09iamVjdCM0OGMwZjFiNWQ2N2M4M2U4OTFjZjVkZGNiYmE4MWY0Yjc4ZjhkYThkZjU2MmJhZTc5MWI4ZWFjOWQzZjA3NzRl.field.QnVja2V0.short_desc": {
           "source": "Name of the S3 bucket containing the source document",
           "message": "Názov skupiny S3 obsahujúcej zdrojový dokument"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOkhhc2hEYXRhVHlwZToqUzNPYmplY3QjMWQ2YTJmMDY2NjIxOTRhZWJmZDBhOWIzNjViY2M4OTE1ODgwZjY0NDgwMWEzY2NhY2E3YWIwOTE3Y2I0OTY1Zg.field.QnVja2V0.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOipTM09iamVjdCM0OGMwZjFiNWQ2N2M4M2U4OTFjZjVkZGNiYmE4MWY0Yjc4ZjhkYThkZjU2MmJhZTc5MWI4ZWFjOWQzZjA3NzRl.field.QnVja2V0.desc": {
           "source": "Name of the S3 bucket containing the source document.",
           "message": "Názov skupiny S3 obsahujúcej zdrojový dokument."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOkhhc2hEYXRhVHlwZToqUzNPYmplY3QjMWQ2YTJmMDY2NjIxOTRhZWJmZDBhOWIzNjViY2M4OTE1ODgwZjY0NDgwMWEzY2NhY2E3YWIwOTE3Y2I0OTY1Zg.field.TmFtZQ.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOipTM09iamVjdCM0OGMwZjFiNWQ2N2M4M2U4OTFjZjVkZGNiYmE4MWY0Yjc4ZjhkYThkZjU2MmJhZTc5MWI4ZWFjOWQzZjA3NzRl.field.TmFtZQ.display_name": {
           "source": "Name",
           "message": "Názov"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOkhhc2hEYXRhVHlwZToqUzNPYmplY3QjMWQ2YTJmMDY2NjIxOTRhZWJmZDBhOWIzNjViY2M4OTE1ODgwZjY0NDgwMWEzY2NhY2E3YWIwOTE3Y2I0OTY1Zg.field.TmFtZQ.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOipTM09iamVjdCM0OGMwZjFiNWQ2N2M4M2U4OTFjZjVkZGNiYmE4MWY0Yjc4ZjhkYThkZjU2MmJhZTc5MWI4ZWFjOWQzZjA3NzRl.field.TmFtZQ.short_desc": {
           "source": "Object key inside the S3 bucket, for example 'invoices/sample.pdf'",
           "message": "Kľúč objektu vo vnútri skupiny S3, napríklad 'faktúry/vzor.pdf'"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOkhhc2hEYXRhVHlwZToqUzNPYmplY3QjMWQ2YTJmMDY2NjIxOTRhZWJmZDBhOWIzNjViY2M4OTE1ODgwZjY0NDgwMWEzY2NhY2E3YWIwOTE3Y2I0OTY1Zg.field.TmFtZQ.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOipTM09iamVjdCM0OGMwZjFiNWQ2N2M4M2U4OTFjZjVkZGNiYmE4MWY0Yjc4ZjhkYThkZjU2MmJhZTc5MWI4ZWFjOWQzZjA3NzRl.field.TmFtZQ.desc": {
           "source": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
           "message": "Kľúč objektu vo vnútri vedra S3, napríklad `invoices/sample.pdf`."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOkhhc2hEYXRhVHlwZToqUzNPYmplY3QjMWQ2YTJmMDY2NjIxOTRhZWJmZDBhOWIzNjViY2M4OTE1ODgwZjY0NDgwMWEzY2NhY2E3YWIwOTE3Y2I0OTY1Zg.field.VmVyc2lvbg.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOipTM09iamVjdCM0OGMwZjFiNWQ2N2M4M2U4OTFjZjVkZGNiYmE4MWY0Yjc4ZjhkYThkZjU2MmJhZTc5MWI4ZWFjOWQzZjA3NzRl.field.VmVyc2lvbg.display_name": {
           "source": "Version",
           "message": "Verzia"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOkhhc2hEYXRhVHlwZToqUzNPYmplY3QjMWQ2YTJmMDY2NjIxOTRhZWJmZDBhOWIzNjViY2M4OTE1ODgwZjY0NDgwMWEzY2NhY2E3YWIwOTE3Y2I0OTY1Zg.field.VmVyc2lvbg.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOipTM09iamVjdCM0OGMwZjFiNWQ2N2M4M2U4OTFjZjVkZGNiYmE4MWY0Yjc4ZjhkYThkZjU2MmJhZTc5MWI4ZWFjOWQzZjA3NzRl.field.VmVyc2lvbg.short_desc": {
           "source": "Version of the selected resource",
           "message": "Verzia vybratého zdroja"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOkhhc2hEYXRhVHlwZToqUzNPYmplY3QjMWQ2YTJmMDY2NjIxOTRhZWJmZDBhOWIzNjViY2M4OTE1ODgwZjY0NDgwMWEzY2NhY2E3YWIwOTE3Y2I0OTY1Zg.field.VmVyc2lvbg.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOipTM09iamVjdCM0OGMwZjFiNWQ2N2M4M2U4OTFjZjVkZGNiYmE4MWY0Yjc4ZjhkYThkZjU2MmJhZTc5MWI4ZWFjOWQzZjA3NzRl.field.VmVyc2lvbg.desc": {
           "source": "Version of the selected resource.",
           "message": "Verzia vybratého zdroja."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlMzT2JqZWN0I2M2YjkyMGYxNzg2NWRkNGJlY2M1YWNlZTdmOTlkYzEwNmE4NDAxOWEzZjIxMDAxZjI4ODkzMjMzYjhiMTIxMTk.field.QnVja2V0.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06UzNPYmplY3QjMjhkMzYzODc4OGZhYTdkMDgwNjg5NzdjOGIwMjRmN2UxOWVlN2Q3OGY3N2FkNjI2ZWNhZTQ3NTcyYTBlMDZkMA.field.QnVja2V0.display_name": {
           "source": "Bucket",
           "message": "Bucket"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlMzT2JqZWN0I2M2YjkyMGYxNzg2NWRkNGJlY2M1YWNlZTdmOTlkYzEwNmE4NDAxOWEzZjIxMDAxZjI4ODkzMjMzYjhiMTIxMTk.field.QnVja2V0.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06UzNPYmplY3QjMjhkMzYzODc4OGZhYTdkMDgwNjg5NzdjOGIwMjRmN2UxOWVlN2Q3OGY3N2FkNjI2ZWNhZTQ3NTcyYTBlMDZkMA.field.QnVja2V0.short_desc": {
           "source": "Name of the S3 bucket containing the source document",
           "message": "Názov skupiny S3 obsahujúcej zdrojový dokument"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlMzT2JqZWN0I2M2YjkyMGYxNzg2NWRkNGJlY2M1YWNlZTdmOTlkYzEwNmE4NDAxOWEzZjIxMDAxZjI4ODkzMjMzYjhiMTIxMTk.field.QnVja2V0.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06UzNPYmplY3QjMjhkMzYzODc4OGZhYTdkMDgwNjg5NzdjOGIwMjRmN2UxOWVlN2Q3OGY3N2FkNjI2ZWNhZTQ3NTcyYTBlMDZkMA.field.QnVja2V0.desc": {
           "source": "Name of the S3 bucket containing the source document.",
           "message": "Názov skupiny S3 obsahujúcej zdrojový dokument."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlMzT2JqZWN0I2M2YjkyMGYxNzg2NWRkNGJlY2M1YWNlZTdmOTlkYzEwNmE4NDAxOWEzZjIxMDAxZjI4ODkzMjMzYjhiMTIxMTk.field.TmFtZQ.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06UzNPYmplY3QjMjhkMzYzODc4OGZhYTdkMDgwNjg5NzdjOGIwMjRmN2UxOWVlN2Q3OGY3N2FkNjI2ZWNhZTQ3NTcyYTBlMDZkMA.field.TmFtZQ.display_name": {
           "source": "Name",
           "message": "Názov"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlMzT2JqZWN0I2M2YjkyMGYxNzg2NWRkNGJlY2M1YWNlZTdmOTlkYzEwNmE4NDAxOWEzZjIxMDAxZjI4ODkzMjMzYjhiMTIxMTk.field.TmFtZQ.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06UzNPYmplY3QjMjhkMzYzODc4OGZhYTdkMDgwNjg5NzdjOGIwMjRmN2UxOWVlN2Q3OGY3N2FkNjI2ZWNhZTQ3NTcyYTBlMDZkMA.field.TmFtZQ.short_desc": {
           "source": "Object key inside the S3 bucket, for example 'invoices/sample.pdf'",
           "message": "Kľúč objektu vo vnútri skupiny S3, napríklad 'faktúry/vzor.pdf'"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlMzT2JqZWN0I2M2YjkyMGYxNzg2NWRkNGJlY2M1YWNlZTdmOTlkYzEwNmE4NDAxOWEzZjIxMDAxZjI4ODkzMjMzYjhiMTIxMTk.field.TmFtZQ.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06UzNPYmplY3QjMjhkMzYzODc4OGZhYTdkMDgwNjg5NzdjOGIwMjRmN2UxOWVlN2Q3OGY3N2FkNjI2ZWNhZTQ3NTcyYTBlMDZkMA.field.TmFtZQ.desc": {
           "source": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
           "message": "Kľúč objektu vo vnútri vedra S3, napríklad `invoices/sample.pdf`."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlMzT2JqZWN0I2M2YjkyMGYxNzg2NWRkNGJlY2M1YWNlZTdmOTlkYzEwNmE4NDAxOWEzZjIxMDAxZjI4ODkzMjMzYjhiMTIxMTk.field.VmVyc2lvbg.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06UzNPYmplY3QjMjhkMzYzODc4OGZhYTdkMDgwNjg5NzdjOGIwMjRmN2UxOWVlN2Q3OGY3N2FkNjI2ZWNhZTQ3NTcyYTBlMDZkMA.field.VmVyc2lvbg.display_name": {
           "source": "Version",
           "message": "Verzia"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlMzT2JqZWN0I2M2YjkyMGYxNzg2NWRkNGJlY2M1YWNlZTdmOTlkYzEwNmE4NDAxOWEzZjIxMDAxZjI4ODkzMjMzYjhiMTIxMTk.field.VmVyc2lvbg.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06UzNPYmplY3QjMjhkMzYzODc4OGZhYTdkMDgwNjg5NzdjOGIwMjRmN2UxOWVlN2Q3OGY3N2FkNjI2ZWNhZTQ3NTcyYTBlMDZkMA.field.VmVyc2lvbg.short_desc": {
           "source": "Version of the selected resource",
           "message": "Verzia vybratého zdroja"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlMzT2JqZWN0I2M2YjkyMGYxNzg2NWRkNGJlY2M1YWNlZTdmOTlkYzEwNmE4NDAxOWEzZjIxMDAxZjI4ODkzMjMzYjhiMTIxMTk.field.VmVyc2lvbg.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06UzNPYmplY3QjMjhkMzYzODc4OGZhYTdkMDgwNjg5NzdjOGIwMjRmN2UxOWVlN2Q3OGY3N2FkNjI2ZWNhZTQ3NTcyYTBlMDZkMA.field.VmVyc2lvbg.desc": {
           "source": "Version of the selected resource.",
           "message": "Verzia vybratého zdroja."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.QnVja2V0.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpTM09iamVjdCMyOGQzNjM4Nzg4ZmFhN2QwODA2ODk3N2M4YjAyNGY3ZTE5ZWU3ZDc4Zjc3YWQ2MjZlY2FlNDc1NzJhMGUwNmQw.field.QnVja2V0.display_name": {
           "source": "Bucket",
           "message": "Bucket"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.QnVja2V0.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpTM09iamVjdCMyOGQzNjM4Nzg4ZmFhN2QwODA2ODk3N2M4YjAyNGY3ZTE5ZWU3ZDc4Zjc3YWQ2MjZlY2FlNDc1NzJhMGUwNmQw.field.QnVja2V0.short_desc": {
           "source": "Name of the S3 bucket containing the source document",
           "message": "Názov skupiny S3 obsahujúcej zdrojový dokument"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.QnVja2V0.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpTM09iamVjdCMyOGQzNjM4Nzg4ZmFhN2QwODA2ODk3N2M4YjAyNGY3ZTE5ZWU3ZDc4Zjc3YWQ2MjZlY2FlNDc1NzJhMGUwNmQw.field.QnVja2V0.desc": {
           "source": "Name of the S3 bucket containing the source document.",
           "message": "Názov skupiny S3 obsahujúcej zdrojový dokument."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.TmFtZQ.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpTM09iamVjdCMyOGQzNjM4Nzg4ZmFhN2QwODA2ODk3N2M4YjAyNGY3ZTE5ZWU3ZDc4Zjc3YWQ2MjZlY2FlNDc1NzJhMGUwNmQw.field.TmFtZQ.display_name": {
           "source": "Name",
           "message": "Názov"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.TmFtZQ.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpTM09iamVjdCMyOGQzNjM4Nzg4ZmFhN2QwODA2ODk3N2M4YjAyNGY3ZTE5ZWU3ZDc4Zjc3YWQ2MjZlY2FlNDc1NzJhMGUwNmQw.field.TmFtZQ.short_desc": {
           "source": "Object key inside the S3 bucket, for example 'invoices/sample.pdf'",
           "message": "Kľúč objektu vo vnútri skupiny S3, napríklad 'faktúry/vzor.pdf'"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.TmFtZQ.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpTM09iamVjdCMyOGQzNjM4Nzg4ZmFhN2QwODA2ODk3N2M4YjAyNGY3ZTE5ZWU3ZDc4Zjc3YWQ2MjZlY2FlNDc1NzJhMGUwNmQw.field.TmFtZQ.desc": {
           "source": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
           "message": "Kľúč objektu vo vnútri vedra S3, napríklad `invoices/sample.pdf`."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.VmVyc2lvbg.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpTM09iamVjdCMyOGQzNjM4Nzg4ZmFhN2QwODA2ODk3N2M4YjAyNGY3ZTE5ZWU3ZDc4Zjc3YWQ2MjZlY2FlNDc1NzJhMGUwNmQw.field.VmVyc2lvbg.display_name": {
           "source": "Version",
           "message": "Verzia"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.VmVyc2lvbg.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpTM09iamVjdCMyOGQzNjM4Nzg4ZmFhN2QwODA2ODk3N2M4YjAyNGY3ZTE5ZWU3ZDc4Zjc3YWQ2MjZlY2FlNDc1NzJhMGUwNmQw.field.VmVyc2lvbg.short_desc": {
           "source": "Version of the selected resource",
           "message": "Verzia vybratého zdroja"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.VmVyc2lvbg.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpTM09iamVjdCMyOGQzNjM4Nzg4ZmFhN2QwODA2ODk3N2M4YjAyNGY3ZTE5ZWU3ZDc4Zjc3YWQ2MjZlY2FlNDc1NzJhMGUwNmQw.field.VmVyc2lvbg.desc": {
           "source": "Version of the selected resource.",
           "message": "Verzia vybratého zdroja."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.QnVja2V0.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpTM09iamVjdCMyOGQzNjM4Nzg4ZmFhN2QwODA2ODk3N2M4YjAyNGY3ZTE5ZWU3ZDc4Zjc3YWQ2MjZlY2FlNDc1NzJhMGUwNmQw.field.QnVja2V0.display_name": {
           "source": "Bucket",
           "message": "Bucket"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.QnVja2V0.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpTM09iamVjdCMyOGQzNjM4Nzg4ZmFhN2QwODA2ODk3N2M4YjAyNGY3ZTE5ZWU3ZDc4Zjc3YWQ2MjZlY2FlNDc1NzJhMGUwNmQw.field.QnVja2V0.short_desc": {
           "source": "Name of the S3 bucket containing the source document",
           "message": "Názov skupiny S3 obsahujúcej zdrojový dokument"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.QnVja2V0.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpTM09iamVjdCMyOGQzNjM4Nzg4ZmFhN2QwODA2ODk3N2M4YjAyNGY3ZTE5ZWU3ZDc4Zjc3YWQ2MjZlY2FlNDc1NzJhMGUwNmQw.field.QnVja2V0.desc": {
           "source": "Name of the S3 bucket containing the source document.",
           "message": "Názov skupiny S3 obsahujúcej zdrojový dokument."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.TmFtZQ.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpTM09iamVjdCMyOGQzNjM4Nzg4ZmFhN2QwODA2ODk3N2M4YjAyNGY3ZTE5ZWU3ZDc4Zjc3YWQ2MjZlY2FlNDc1NzJhMGUwNmQw.field.TmFtZQ.display_name": {
           "source": "Name",
           "message": "Názov"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.TmFtZQ.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpTM09iamVjdCMyOGQzNjM4Nzg4ZmFhN2QwODA2ODk3N2M4YjAyNGY3ZTE5ZWU3ZDc4Zjc3YWQ2MjZlY2FlNDc1NzJhMGUwNmQw.field.TmFtZQ.short_desc": {
           "source": "Object key inside the S3 bucket, for example 'invoices/sample.pdf'",
           "message": "Kľúč objektu vo vnútri skupiny S3, napríklad 'faktúry/vzor.pdf'"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.TmFtZQ.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpTM09iamVjdCMyOGQzNjM4Nzg4ZmFhN2QwODA2ODk3N2M4YjAyNGY3ZTE5ZWU3ZDc4Zjc3YWQ2MjZlY2FlNDc1NzJhMGUwNmQw.field.TmFtZQ.desc": {
           "source": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
           "message": "Kľúč objektu vo vnútri vedra S3, napríklad `invoices/sample.pdf`."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.VmVyc2lvbg.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpTM09iamVjdCMyOGQzNjM4Nzg4ZmFhN2QwODA2ODk3N2M4YjAyNGY3ZTE5ZWU3ZDc4Zjc3YWQ2MjZlY2FlNDc1NzJhMGUwNmQw.field.VmVyc2lvbg.display_name": {
           "source": "Version",
           "message": "Verzia"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.VmVyc2lvbg.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpTM09iamVjdCMyOGQzNjM4Nzg4ZmFhN2QwODA2ODk3N2M4YjAyNGY3ZTE5ZWU3ZDc4Zjc3YWQ2MjZlY2FlNDc1NzJhMGUwNmQw.field.VmVyc2lvbg.short_desc": {
           "source": "Version of the selected resource",
           "message": "Verzia vybratého zdroja"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.VmVyc2lvbg.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpTM09iamVjdCMyOGQzNjM4Nzg4ZmFhN2QwODA2ODk3N2M4YjAyNGY3ZTE5ZWU3ZDc4Zjc3YWQ2MjZlY2FlNDc1NzJhMGUwNmQw.field.VmVyc2lvbg.desc": {
           "source": "Version of the selected resource.",
           "message": "Verzia vybratého zdroja."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.QnVja2V0.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpTM09iamVjdCMyOGQzNjM4Nzg4ZmFhN2QwODA2ODk3N2M4YjAyNGY3ZTE5ZWU3ZDc4Zjc3YWQ2MjZlY2FlNDc1NzJhMGUwNmQw.field.QnVja2V0.display_name": {
           "source": "Bucket",
           "message": "Bucket"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.QnVja2V0.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpTM09iamVjdCMyOGQzNjM4Nzg4ZmFhN2QwODA2ODk3N2M4YjAyNGY3ZTE5ZWU3ZDc4Zjc3YWQ2MjZlY2FlNDc1NzJhMGUwNmQw.field.QnVja2V0.short_desc": {
           "source": "Name of the S3 bucket containing the source document",
           "message": "Názov skupiny S3 obsahujúcej zdrojový dokument"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.QnVja2V0.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpTM09iamVjdCMyOGQzNjM4Nzg4ZmFhN2QwODA2ODk3N2M4YjAyNGY3ZTE5ZWU3ZDc4Zjc3YWQ2MjZlY2FlNDc1NzJhMGUwNmQw.field.QnVja2V0.desc": {
           "source": "Name of the S3 bucket containing the source document.",
           "message": "Názov skupiny S3 obsahujúcej zdrojový dokument."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.TmFtZQ.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpTM09iamVjdCMyOGQzNjM4Nzg4ZmFhN2QwODA2ODk3N2M4YjAyNGY3ZTE5ZWU3ZDc4Zjc3YWQ2MjZlY2FlNDc1NzJhMGUwNmQw.field.TmFtZQ.display_name": {
           "source": "Name",
           "message": "Názov"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.TmFtZQ.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpTM09iamVjdCMyOGQzNjM4Nzg4ZmFhN2QwODA2ODk3N2M4YjAyNGY3ZTE5ZWU3ZDc4Zjc3YWQ2MjZlY2FlNDc1NzJhMGUwNmQw.field.TmFtZQ.short_desc": {
           "source": "Object key inside the S3 bucket, for example 'invoices/sample.pdf'",
           "message": "Kľúč objektu vo vnútri skupiny S3, napríklad 'faktúry/vzor.pdf'"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.TmFtZQ.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpTM09iamVjdCMyOGQzNjM4Nzg4ZmFhN2QwODA2ODk3N2M4YjAyNGY3ZTE5ZWU3ZDc4Zjc3YWQ2MjZlY2FlNDc1NzJhMGUwNmQw.field.TmFtZQ.desc": {
           "source": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
           "message": "Kľúč objektu vo vnútri vedra S3, napríklad `invoices/sample.pdf`."
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.VmVyc2lvbg.display_name": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpTM09iamVjdCMyOGQzNjM4Nzg4ZmFhN2QwODA2ODk3N2M4YjAyNGY3ZTE5ZWU3ZDc4Zjc3YWQ2MjZlY2FlNDc1NzJhMGUwNmQw.field.VmVyc2lvbg.display_name": {
           "source": "Version",
           "message": "Verzia"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.VmVyc2lvbg.short_desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpTM09iamVjdCMyOGQzNjM4Nzg4ZmFhN2QwODA2ODk3N2M4YjAyNGY3ZTE5ZWU3ZDc4Zjc3YWQ2MjZlY2FlNDc1NzJhMGUwNmQw.field.VmVyc2lvbg.short_desc": {
           "source": "Version of the selected resource",
           "message": "Verzia vybratého zdroja"
         },
-        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjYzZiOTIwZjE3ODY1ZGQ0YmVjYzVhY2VlN2Y5OWRjMTA2YTg0MDE5YTNmMjEwMDFmMjg4OTMyMzNiOGIxMjExOQ.field.VmVyc2lvbg.desc": {
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpTM09iamVjdCMyOGQzNjM4Nzg4ZmFhN2QwODA2ODk3N2M4YjAyNGY3ZTE5ZWU3ZDc4Zjc3YWQ2MjZlY2FlNDc1NzJhMGUwNmQw.field.VmVyc2lvbg.desc": {
           "source": "Version of the selected resource.",
           "message": "Verzia vybratého zdroja."
         }

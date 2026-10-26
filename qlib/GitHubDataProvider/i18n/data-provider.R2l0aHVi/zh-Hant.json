@@ -527,15 +527,15 @@
           "source": "Use the `status` property to enable or disable GitHub Advanced Security for this repository.\nFor more information, see \"[About GitHub Advanced\nSecurity](/github/getting-started-with-github/learning-about-github/about-github-advanced-security).\"\n\nFor standalone Code Scanning or Secret Protection products, this parameter cannot be used.",
           "message": "使用 `status` 屬性來啟用或停用此儲存庫的 GitHub 高級安全功能。\n如需更多資訊，請參閱「[關於 GitHub 高級安全](/github/getting-started-with-github/learning-about-github/about-github-advanced-security)」。\n\n對於獨立的程式碼掃描或秘密保護產品，此參數無法使用。"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOiphZHZhbmNlZF9zZWN1cml0eSNlNjE5NTFmZWNjNTY1OTE4ODc2MjcxNDFkYzU1ZDQwYWRjYzA0ZTMxZjdlNGNmODliMzEyMWM4OTBjN2I3N2E3.field.c3RhdHVz.display_name": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6KmFkdmFuY2VkX3NlY3VyaXR5I2I2ODcxOTVhNzY4ZWQ3YzcxMTg0MThmM2RhNDk2MGY3MmEzOWQ5ZDE3NTJmMWY2OTU0Njk5MjAyODRiYTc4Njc.field.c3RhdHVz.display_name": {
           "source": "Status",
           "message": "狀態"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOiphZHZhbmNlZF9zZWN1cml0eSNlNjE5NTFmZWNjNTY1OTE4ODc2MjcxNDFkYzU1ZDQwYWRjYzA0ZTMxZjdlNGNmODliMzEyMWM4OTBjN2I3N2E3.field.c3RhdHVz.short_desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6KmFkdmFuY2VkX3NlY3VyaXR5I2I2ODcxOTVhNzY4ZWQ3YzcxMTg0MThmM2RhNDk2MGY3MmEzOWQ5ZDE3NTJmMWY2OTU0Njk5MjAyODRiYTc4Njc.field.c3RhdHVz.short_desc": {
           "source": "Can be 'enabled' or 'disabled'",
           "message": "可為 '啟用' 或 '停用'"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOiphZHZhbmNlZF9zZWN1cml0eSNlNjE5NTFmZWNjNTY1OTE4ODc2MjcxNDFkYzU1ZDQwYWRjYzA0ZTMxZjdlNGNmODliMzEyMWM4OTBjN2I3N2E3.field.c3RhdHVz.desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6KmFkdmFuY2VkX3NlY3VyaXR5I2I2ODcxOTVhNzY4ZWQ3YzcxMTg0MThmM2RhNDk2MGY3MmEzOWQ5ZDE3NTJmMWY2OTU0Njk5MjAyODRiYTc4Njc.field.c3RhdHVz.desc": {
           "source": "Can be `enabled` or `disabled`.",
           "message": "可為 `enabled` 或 `disabled`。"
         },
@@ -551,15 +551,15 @@
           "source": "Use the `status` property to enable or disable GitHub Code Security for this repository.",
           "message": "使用 `status` 屬性來啟用或停用此儲存庫的 GitHub 程式碼安全功能。"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipjb2RlX3NlY3VyaXR5IzJkZTQ2MGY5NjY1NDljM2YzMWIyYjE0ZTkwOGQ4Nzk1ZGQ4ZDQ0NzVkYzhlN2IwODZlNTAxZWNhYjFiODU4MDk.field.c3RhdHVz.display_name": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6KmNvZGVfc2VjdXJpdHkjZmJhYTU5MDU2ZTMxZDgyNjZjN2U0OWEzNjk5NjJmNWViY2E2NTQwN2M0NzhkYWNhNzNhN2UxYjM5MTE3ODVmYQ.field.c3RhdHVz.display_name": {
           "source": "Status",
           "message": "狀態"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipjb2RlX3NlY3VyaXR5IzJkZTQ2MGY5NjY1NDljM2YzMWIyYjE0ZTkwOGQ4Nzk1ZGQ4ZDQ0NzVkYzhlN2IwODZlNTAxZWNhYjFiODU4MDk.field.c3RhdHVz.short_desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6KmNvZGVfc2VjdXJpdHkjZmJhYTU5MDU2ZTMxZDgyNjZjN2U0OWEzNjk5NjJmNWViY2E2NTQwN2M0NzhkYWNhNzNhN2UxYjM5MTE3ODVmYQ.field.c3RhdHVz.short_desc": {
           "source": "Can be 'enabled' or 'disabled'",
           "message": "可為 '啟用' 或 '停用'"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipjb2RlX3NlY3VyaXR5IzJkZTQ2MGY5NjY1NDljM2YzMWIyYjE0ZTkwOGQ4Nzk1ZGQ4ZDQ0NzVkYzhlN2IwODZlNTAxZWNhYjFiODU4MDk.field.c3RhdHVz.desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6KmNvZGVfc2VjdXJpdHkjZmJhYTU5MDU2ZTMxZDgyNjZjN2U0OWEzNjk5NjJmNWViY2E2NTQwN2M0NzhkYWNhNzNhN2UxYjM5MTE3ODVmYQ.field.c3RhdHVz.desc": {
           "source": "Can be `enabled` or `disabled`.",
           "message": "可為 `enabled` 或 `disabled`。"
         },
@@ -575,15 +575,15 @@
           "source": "Use the `status` property to enable or disable secret scanning for this repository. For more information, see \"[About secret scanning](/code-security/secret-security/about-secret-scanning).\"",
           "message": "使用 `status` 屬性來啟用或停用此儲存庫的秘密掃描功能。如需更多資訊，請參閱「[關於秘密掃描](/code-security/secret-security/about-secret-scanning)」。"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmcjZWY2ZTNhMWMzZTAyYmQ3MGY0M2Q2MzI2N2MxOTA4OTQ1MzBiYjhmZTc2OTlhM2RhMmE2YTExMDZmNGFiMTNmNA.field.c3RhdHVz.display_name": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6KnNlY3JldF9zY2FubmluZyM4NDYyOTQwMDY2ZTE2OTg0NzUwN2Q4ZDNjMDM0YTQzYmI2MGM5MDViMzYzYThkNmNkZWU0ZTg0NDg5Nzk3YjE0.field.c3RhdHVz.display_name": {
           "source": "Status",
           "message": "狀態"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmcjZWY2ZTNhMWMzZTAyYmQ3MGY0M2Q2MzI2N2MxOTA4OTQ1MzBiYjhmZTc2OTlhM2RhMmE2YTExMDZmNGFiMTNmNA.field.c3RhdHVz.short_desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6KnNlY3JldF9zY2FubmluZyM4NDYyOTQwMDY2ZTE2OTg0NzUwN2Q4ZDNjMDM0YTQzYmI2MGM5MDViMzYzYThkNmNkZWU0ZTg0NDg5Nzk3YjE0.field.c3RhdHVz.short_desc": {
           "source": "Can be 'enabled' or 'disabled'",
           "message": "可為 '啟用' 或 '停用'"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmcjZWY2ZTNhMWMzZTAyYmQ3MGY0M2Q2MzI2N2MxOTA4OTQ1MzBiYjhmZTc2OTlhM2RhMmE2YTExMDZmNGFiMTNmNA.field.c3RhdHVz.desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6KnNlY3JldF9zY2FubmluZyM4NDYyOTQwMDY2ZTE2OTg0NzUwN2Q4ZDNjMDM0YTQzYmI2MGM5MDViMzYzYThkNmNkZWU0ZTg0NDg5Nzk3YjE0.field.c3RhdHVz.desc": {
           "source": "Can be `enabled` or `disabled`.",
           "message": "可為 `enabled` 或 `disabled`。"
         },
@@ -599,15 +599,15 @@
           "source": "Use the `status` property to enable or disable secret scanning AI detection for this repository. For more information, see \"[Responsible detection of generic secrets with AI](https://docs.github.com/code-security/secret-scanning/using-advanced-secret-scanning-and-push-protection-features/generic-secret-detection/responsible-ai-generic-secrets).\"",
           "message": "使用 `status` 屬性來啟用或停用此儲存庫的秘密掃描 AI 檢測。如需更多資訊，請參閱「[使用 AI 負責任地偵測通用秘密](https://docs.github.com/code-security/secret-scanning/using-advanced-secret-scanning-and-push-protection-features/generic-secret-detection/responsible-ai-generic-secrets)」。"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfYWlfZGV0ZWN0aW9uIzJiYzBhZWUzYzdmZjY4ZTg1MGMwNzViZTBmNzdhYTQxMGI3MmRhMWIzMGY4NTBiNTIyMTQ2YzVhNzg0ODNhOWQ.field.c3RhdHVz.display_name": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6KnNlY3JldF9zY2FubmluZ19haV9kZXRlY3Rpb24jYzlkM2Q3N2JlY2E5MzA4MGY5ODU3ODZjMDRjOWI0MDkzMjFlNTc2OTcyMTRlYWVmNjU3NjYxNjU4OGM1M2JhZg.field.c3RhdHVz.display_name": {
           "source": "Status",
           "message": "狀態"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfYWlfZGV0ZWN0aW9uIzJiYzBhZWUzYzdmZjY4ZTg1MGMwNzViZTBmNzdhYTQxMGI3MmRhMWIzMGY4NTBiNTIyMTQ2YzVhNzg0ODNhOWQ.field.c3RhdHVz.short_desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6KnNlY3JldF9zY2FubmluZ19haV9kZXRlY3Rpb24jYzlkM2Q3N2JlY2E5MzA4MGY5ODU3ODZjMDRjOWI0MDkzMjFlNTc2OTcyMTRlYWVmNjU3NjYxNjU4OGM1M2JhZg.field.c3RhdHVz.short_desc": {
           "source": "Can be 'enabled' or 'disabled'",
           "message": "可為 '啟用' 或 '停用'"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfYWlfZGV0ZWN0aW9uIzJiYzBhZWUzYzdmZjY4ZTg1MGMwNzViZTBmNzdhYTQxMGI3MmRhMWIzMGY4NTBiNTIyMTQ2YzVhNzg0ODNhOWQ.field.c3RhdHVz.desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6KnNlY3JldF9zY2FubmluZ19haV9kZXRlY3Rpb24jYzlkM2Q3N2JlY2E5MzA4MGY5ODU3ODZjMDRjOWI0MDkzMjFlNTc2OTcyMTRlYWVmNjU3NjYxNjU4OGM1M2JhZg.field.c3RhdHVz.desc": {
           "source": "Can be `enabled` or `disabled`.",
           "message": "可為 `enabled` 或 `disabled`。"
         },
@@ -623,15 +623,15 @@
           "source": "Use the `status` property to enable or disable secret scanning delegated alert dismissal for this repository.",
           "message": "使用 `status` 屬性來啟用或停用此儲存庫的秘密掃描委託警示取消功能。"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfZGVsZWdhdGVkX2FsZXJ0X2Rpc21pc3NhbCM3ZmUzNDczNzk4ZWVhNTRlYWFiNTYxNGU5OGM0NTIxMGY1MWNjNjJlM2U4MjU4MDg4OGE5YzBlOWYwM2M1YzU5.field.c3RhdHVz.display_name": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6KnNlY3JldF9zY2FubmluZ19kZWxlZ2F0ZWRfYWxlcnRfZGlzbWlzc2FsI2FmMDU2MDE5ODI2NDk2NGRlNDg4Mjc5MTJmOTYyYzg5YjczNzZmODA4NmNlZGU5MDNhOWRjM2Y0Y2Y3ZjdjNTY.field.c3RhdHVz.display_name": {
           "source": "Status",
           "message": "狀態"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfZGVsZWdhdGVkX2FsZXJ0X2Rpc21pc3NhbCM3ZmUzNDczNzk4ZWVhNTRlYWFiNTYxNGU5OGM0NTIxMGY1MWNjNjJlM2U4MjU4MDg4OGE5YzBlOWYwM2M1YzU5.field.c3RhdHVz.short_desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6KnNlY3JldF9zY2FubmluZ19kZWxlZ2F0ZWRfYWxlcnRfZGlzbWlzc2FsI2FmMDU2MDE5ODI2NDk2NGRlNDg4Mjc5MTJmOTYyYzg5YjczNzZmODA4NmNlZGU5MDNhOWRjM2Y0Y2Y3ZjdjNTY.field.c3RhdHVz.short_desc": {
           "source": "Can be 'enabled' or 'disabled'",
           "message": "可為 '啟用' 或 '停用'"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfZGVsZWdhdGVkX2FsZXJ0X2Rpc21pc3NhbCM3ZmUzNDczNzk4ZWVhNTRlYWFiNTYxNGU5OGM0NTIxMGY1MWNjNjJlM2U4MjU4MDg4OGE5YzBlOWYwM2M1YzU5.field.c3RhdHVz.desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6KnNlY3JldF9zY2FubmluZ19kZWxlZ2F0ZWRfYWxlcnRfZGlzbWlzc2FsI2FmMDU2MDE5ODI2NDk2NGRlNDg4Mjc5MTJmOTYyYzg5YjczNzZmODA4NmNlZGU5MDNhOWRjM2Y0Y2Y3ZjdjNTY.field.c3RhdHVz.desc": {
           "source": "Can be `enabled` or `disabled`.",
           "message": "可為 `enabled` 或 `disabled`。"
         },
@@ -647,15 +647,15 @@
           "source": "Use the `status` property to enable or disable secret scanning delegated bypass for this repository.",
           "message": "使用 `status` 屬性來啟用或停用此儲存庫的秘密掃描委託繞過功能。"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfZGVsZWdhdGVkX2J5cGFzcyMzZWJjMDk1NWQ3NTI4ZThhMjE5MGE3MTQ0ZTM2ZTQ5ODRhNmNlZWIyMmUwYTBjNDhiMDcwNjhlNGQ3ZTg5MTQ4.field.c3RhdHVz.display_name": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6KnNlY3JldF9zY2FubmluZ19kZWxlZ2F0ZWRfYnlwYXNzIzY3ZjU2YjM2YjM5ZGI4NGVmNzlmYWY5NDE0ODgxYTRjY2RiNWIzZWI1NTM0MzgyN2QxOTQxMDY2OTdiZGMyZjg.field.c3RhdHVz.display_name": {
           "source": "Status",
           "message": "狀態"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfZGVsZWdhdGVkX2J5cGFzcyMzZWJjMDk1NWQ3NTI4ZThhMjE5MGE3MTQ0ZTM2ZTQ5ODRhNmNlZWIyMmUwYTBjNDhiMDcwNjhlNGQ3ZTg5MTQ4.field.c3RhdHVz.short_desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6KnNlY3JldF9zY2FubmluZ19kZWxlZ2F0ZWRfYnlwYXNzIzY3ZjU2YjM2YjM5ZGI4NGVmNzlmYWY5NDE0ODgxYTRjY2RiNWIzZWI1NTM0MzgyN2QxOTQxMDY2OTdiZGMyZjg.field.c3RhdHVz.short_desc": {
           "source": "Can be 'enabled' or 'disabled'",
           "message": "可為 '啟用' 或 '停用'"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfZGVsZWdhdGVkX2J5cGFzcyMzZWJjMDk1NWQ3NTI4ZThhMjE5MGE3MTQ0ZTM2ZTQ5ODRhNmNlZWIyMmUwYTBjNDhiMDcwNjhlNGQ3ZTg5MTQ4.field.c3RhdHVz.desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6KnNlY3JldF9zY2FubmluZ19kZWxlZ2F0ZWRfYnlwYXNzIzY3ZjU2YjM2YjM5ZGI4NGVmNzlmYWY5NDE0ODgxYTRjY2RiNWIzZWI1NTM0MzgyN2QxOTQxMDY2OTdiZGMyZjg.field.c3RhdHVz.desc": {
           "source": "Can be `enabled` or `disabled`.",
           "message": "可為 `enabled` 或 `disabled`。"
         },
@@ -671,67 +671,67 @@
           "source": "Feature options for secret scanning delegated bypass.\nThis object is only honored when `security_and_analysis.secret_scanning_delegated_bypass.status` is set to `enabled`.\nYou can send this object in the same request as `secret_scanning_delegated_bypass`, or update just the options in a separate request.",
           "message": "秘密掃描委派繞過的功能選項。\n僅當 `security_and_analysis.secret_scanning_delegated_bypass.status` 設定為 `enabled` 時才會被尊重。\n您可以在與 `secret_scanning_delegated_bypass` 相同的請求中傳送此物件，或在獨立請求中僅更新選項。"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfZGVsZWdhdGVkX2J5cGFzc19vcHRpb25zI2ExNjI5NTdiYThiNTFlOGY1MmJiOTNkODVjYWYyOTU1ZTU0ZjE1NzU1MjA2Y2RmZGI2MzNlNDY4NDVlZGNhYzU.field.cmV2aWV3ZXJz.display_name": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6KnNlY3JldF9zY2FubmluZ19kZWxlZ2F0ZWRfYnlwYXNzX29wdGlvbnMjNWM3ZjQwNjNkMWE4MmU1OWM3MTRmZjIzN2IwYjAxMGMwYTY2MmIwMmE3YTM3NjgxMGE0YWEzMThlNjZkNWYyOQ.field.cmV2aWV3ZXJz.display_name": {
           "source": "Reviewers",
           "message": "審查者"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfZGVsZWdhdGVkX2J5cGFzc19vcHRpb25zI2ExNjI5NTdiYThiNTFlOGY1MmJiOTNkODVjYWYyOTU1ZTU0ZjE1NzU1MjA2Y2RmZGI2MzNlNDY4NDVlZGNhYzU.field.cmV2aWV3ZXJz.short_desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6KnNlY3JldF9zY2FubmluZ19kZWxlZ2F0ZWRfYnlwYXNzX29wdGlvbnMjNWM3ZjQwNjNkMWE4MmU1OWM3MTRmZjIzN2IwYjAxMGMwYTY2MmIwMmE3YTM3NjgxMGE0YWEzMThlNjZkNWYyOQ.field.cmV2aWV3ZXJz.short_desc": {
           "source": "The bypass reviewers for secret scanning delegated bypass",
           "message": "用於秘密掃描委託繞過的繞過審核者"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfZGVsZWdhdGVkX2J5cGFzc19vcHRpb25zI2ExNjI5NTdiYThiNTFlOGY1MmJiOTNkODVjYWYyOTU1ZTU0ZjE1NzU1MjA2Y2RmZGI2MzNlNDY4NDVlZGNhYzU.field.cmV2aWV3ZXJz.desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6KnNlY3JldF9zY2FubmluZ19kZWxlZ2F0ZWRfYnlwYXNzX29wdGlvbnMjNWM3ZjQwNjNkMWE4MmU1OWM3MTRmZjIzN2IwYjAxMGMwYTY2MmIwMmE3YTM3NjgxMGE0YWEzMThlNjZkNWYyOQ.field.cmV2aWV3ZXJz.desc": {
           "source": "The bypass reviewers for secret scanning delegated bypass.\nIf you omit this field, the existing set of reviewers is unchanged.",
           "message": "用於秘密掃描委託繞過的繞過審核者。\n若省略此欄位，則保留現有的審核者清單不變。"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOml0ZW1zIzg5YWU0Y2FiYTFhOGMwMTJjNWYxNTNkZmNmN2I5NGFiMzM4ZjU3OTk2NWVlMWUzMDE4MTk4MTM0OWE0ZmUyOWE.field.bW9kZQ.display_name": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6aXRlbXMjNDkyZjFjMzlkZmRlMTM4NDlmZmZhYTU5ODBiMWZhODJhNGQxZTVhOGFiZWU3MzhhMjU3NmE1M2I1ODNmZGM3MA.field.bW9kZQ.display_name": {
           "source": "Mode",
           "message": "模式"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOml0ZW1zIzg5YWU0Y2FiYTFhOGMwMTJjNWYxNTNkZmNmN2I5NGFiMzM4ZjU3OTk2NWVlMWUzMDE4MTk4MTM0OWE0ZmUyOWE.field.bW9kZQ.short_desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6aXRlbXMjNDkyZjFjMzlkZmRlMTM4NDlmZmZhYTU5ODBiMWZhODJhNGQxZTVhOGFiZWU3MzhhMjU3NmE1M2I1ODNmZGM3MA.field.bW9kZQ.short_desc": {
           "source": "The bypass mode for the reviewer",
           "message": "審核者的繞過模式"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOml0ZW1zIzg5YWU0Y2FiYTFhOGMwMTJjNWYxNTNkZmNmN2I5NGFiMzM4ZjU3OTk2NWVlMWUzMDE4MTk4MTM0OWE0ZmUyOWE.field.bW9kZQ.desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6aXRlbXMjNDkyZjFjMzlkZmRlMTM4NDlmZmZhYTU5ODBiMWZhODJhNGQxZTVhOGFiZWU3MzhhMjU3NmE1M2I1ODNmZGM3MA.field.bW9kZQ.desc": {
           "source": "The bypass mode for the reviewer",
           "message": "審核者的繞過模式"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOml0ZW1zIzg5YWU0Y2FiYTFhOGMwMTJjNWYxNTNkZmNmN2I5NGFiMzM4ZjU3OTk2NWVlMWUzMDE4MTk4MTM0OWE0ZmUyOWE.field.bW9kZQ.allowed-value.c3RyaW5nOkFMV0FZUw.display_name": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6aXRlbXMjNDkyZjFjMzlkZmRlMTM4NDlmZmZhYTU5ODBiMWZhODJhNGQxZTVhOGFiZWU3MzhhMjU3NmE1M2I1ODNmZGM3MA.field.bW9kZQ.allowed-value.c3RyaW5nOkFMV0FZUw.display_name": {
           "source": "ALWAYS",
           "message": "ALWAYS"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOml0ZW1zIzg5YWU0Y2FiYTFhOGMwMTJjNWYxNTNkZmNmN2I5NGFiMzM4ZjU3OTk2NWVlMWUzMDE4MTk4MTM0OWE0ZmUyOWE.field.bW9kZQ.allowed-value.c3RyaW5nOkVYRU1QVA.display_name": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6aXRlbXMjNDkyZjFjMzlkZmRlMTM4NDlmZmZhYTU5ODBiMWZhODJhNGQxZTVhOGFiZWU3MzhhMjU3NmE1M2I1ODNmZGM3MA.field.bW9kZQ.allowed-value.c3RyaW5nOkVYRU1QVA.display_name": {
           "source": "EXEMPT",
           "message": "免稅"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOml0ZW1zIzg5YWU0Y2FiYTFhOGMwMTJjNWYxNTNkZmNmN2I5NGFiMzM4ZjU3OTk2NWVlMWUzMDE4MTk4MTM0OWE0ZmUyOWE.field.cmV2aWV3ZXJfaWQ.display_name": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6aXRlbXMjNDkyZjFjMzlkZmRlMTM4NDlmZmZhYTU5ODBiMWZhODJhNGQxZTVhOGFiZWU3MzhhMjU3NmE1M2I1ODNmZGM3MA.field.cmV2aWV3ZXJfaWQ.display_name": {
           "source": "Reviewer ID",
           "message": "審核者 ID"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOml0ZW1zIzg5YWU0Y2FiYTFhOGMwMTJjNWYxNTNkZmNmN2I5NGFiMzM4ZjU3OTk2NWVlMWUzMDE4MTk4MTM0OWE0ZmUyOWE.field.cmV2aWV3ZXJfaWQ.short_desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6aXRlbXMjNDkyZjFjMzlkZmRlMTM4NDlmZmZhYTU5ODBiMWZhODJhNGQxZTVhOGFiZWU3MzhhMjU3NmE1M2I1ODNmZGM3MA.field.cmV2aWV3ZXJfaWQ.short_desc": {
           "source": "The ID of the team or role selected as a bypass reviewer",
           "message": "選定的繞過審核者團隊或角色 ID"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOml0ZW1zIzg5YWU0Y2FiYTFhOGMwMTJjNWYxNTNkZmNmN2I5NGFiMzM4ZjU3OTk2NWVlMWUzMDE4MTk4MTM0OWE0ZmUyOWE.field.cmV2aWV3ZXJfaWQ.desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6aXRlbXMjNDkyZjFjMzlkZmRlMTM4NDlmZmZhYTU5ODBiMWZhODJhNGQxZTVhOGFiZWU3MzhhMjU3NmE1M2I1ODNmZGM3MA.field.cmV2aWV3ZXJfaWQ.desc": {
           "source": "The ID of the team or role selected as a bypass reviewer",
           "message": "選定的繞過審核者團隊或角色 ID"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOml0ZW1zIzg5YWU0Y2FiYTFhOGMwMTJjNWYxNTNkZmNmN2I5NGFiMzM4ZjU3OTk2NWVlMWUzMDE4MTk4MTM0OWE0ZmUyOWE.field.cmV2aWV3ZXJfdHlwZQ.display_name": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6aXRlbXMjNDkyZjFjMzlkZmRlMTM4NDlmZmZhYTU5ODBiMWZhODJhNGQxZTVhOGFiZWU3MzhhMjU3NmE1M2I1ODNmZGM3MA.field.cmV2aWV3ZXJfdHlwZQ.display_name": {
           "source": "Reviewer Type",
           "message": "審核者類型"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOml0ZW1zIzg5YWU0Y2FiYTFhOGMwMTJjNWYxNTNkZmNmN2I5NGFiMzM4ZjU3OTk2NWVlMWUzMDE4MTk4MTM0OWE0ZmUyOWE.field.cmV2aWV3ZXJfdHlwZQ.short_desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6aXRlbXMjNDkyZjFjMzlkZmRlMTM4NDlmZmZhYTU5ODBiMWZhODJhNGQxZTVhOGFiZWU3MzhhMjU3NmE1M2I1ODNmZGM3MA.field.cmV2aWV3ZXJfdHlwZQ.short_desc": {
           "source": "The type of the bypass reviewer",
           "message": "繞過審核者類型"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOml0ZW1zIzg5YWU0Y2FiYTFhOGMwMTJjNWYxNTNkZmNmN2I5NGFiMzM4ZjU3OTk2NWVlMWUzMDE4MTk4MTM0OWE0ZmUyOWE.field.cmV2aWV3ZXJfdHlwZQ.desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6aXRlbXMjNDkyZjFjMzlkZmRlMTM4NDlmZmZhYTU5ODBiMWZhODJhNGQxZTVhOGFiZWU3MzhhMjU3NmE1M2I1ODNmZGM3MA.field.cmV2aWV3ZXJfdHlwZQ.desc": {
           "source": "The type of the bypass reviewer",
           "message": "繞過審核者類型"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOml0ZW1zIzg5YWU0Y2FiYTFhOGMwMTJjNWYxNTNkZmNmN2I5NGFiMzM4ZjU3OTk2NWVlMWUzMDE4MTk4MTM0OWE0ZmUyOWE.field.cmV2aWV3ZXJfdHlwZQ.allowed-value.c3RyaW5nOlRFQU0.display_name": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6aXRlbXMjNDkyZjFjMzlkZmRlMTM4NDlmZmZhYTU5ODBiMWZhODJhNGQxZTVhOGFiZWU3MzhhMjU3NmE1M2I1ODNmZGM3MA.field.cmV2aWV3ZXJfdHlwZQ.allowed-value.c3RyaW5nOlRFQU0.display_name": {
           "source": "TEAM",
           "message": "團隊"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOml0ZW1zIzg5YWU0Y2FiYTFhOGMwMTJjNWYxNTNkZmNmN2I5NGFiMzM4ZjU3OTk2NWVlMWUzMDE4MTk4MTM0OWE0ZmUyOWE.field.cmV2aWV3ZXJfdHlwZQ.allowed-value.c3RyaW5nOlJPTEU.display_name": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6aXRlbXMjNDkyZjFjMzlkZmRlMTM4NDlmZmZhYTU5ODBiMWZhODJhNGQxZTVhOGFiZWU3MzhhMjU3NmE1M2I1ODNmZGM3MA.field.cmV2aWV3ZXJfdHlwZQ.allowed-value.c3RyaW5nOlJPTEU.display_name": {
           "source": "ROLE",
           "message": "ROLE"
         },
@@ -747,15 +747,15 @@
           "source": "Use the `status` property to enable or disable secret scanning non-provider patterns for this repository. For more information, see \"[Supported secret scanning patterns](/code-security/secret-scanning/introduction/supported-secret-scanning-patterns#supported-secrets).\"",
           "message": "使用 `status` 屬性來啟用或停用此儲存庫的秘密掃描非提供者模式。如需更多資訊，請參閱「[支援的秘密掃描模式](/code-security/secret-scanning/introduction/supported-secret-scanning-patterns#supported-secrets)」。"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfbm9uX3Byb3ZpZGVyX3BhdHRlcm5zIzQ2ZjRmZGU1MmVlZDIzMjQ1OGY0MzkxNTBlNzk5ZWEyMzA3MjhhNTBiYWQ1YzI0MGFhNzg5MGRlZDhiZTU0YWY.field.c3RhdHVz.display_name": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6KnNlY3JldF9zY2FubmluZ19ub25fcHJvdmlkZXJfcGF0dGVybnMjYThlOGM4MmRiYzAwY2IxNWYxMWE4MGFhZDRlZjYzNGUwY2M3ZjMwNmRiMDU3ZmVkZDMxNjQ2YzhjMTAxNmY5ZQ.field.c3RhdHVz.display_name": {
           "source": "Status",
           "message": "狀態"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfbm9uX3Byb3ZpZGVyX3BhdHRlcm5zIzQ2ZjRmZGU1MmVlZDIzMjQ1OGY0MzkxNTBlNzk5ZWEyMzA3MjhhNTBiYWQ1YzI0MGFhNzg5MGRlZDhiZTU0YWY.field.c3RhdHVz.short_desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6KnNlY3JldF9zY2FubmluZ19ub25fcHJvdmlkZXJfcGF0dGVybnMjYThlOGM4MmRiYzAwY2IxNWYxMWE4MGFhZDRlZjYzNGUwY2M3ZjMwNmRiMDU3ZmVkZDMxNjQ2YzhjMTAxNmY5ZQ.field.c3RhdHVz.short_desc": {
           "source": "Can be 'enabled' or 'disabled'",
           "message": "可為 '啟用' 或 '停用'"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfbm9uX3Byb3ZpZGVyX3BhdHRlcm5zIzQ2ZjRmZGU1MmVlZDIzMjQ1OGY0MzkxNTBlNzk5ZWEyMzA3MjhhNTBiYWQ1YzI0MGFhNzg5MGRlZDhiZTU0YWY.field.c3RhdHVz.desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6KnNlY3JldF9zY2FubmluZ19ub25fcHJvdmlkZXJfcGF0dGVybnMjYThlOGM4MmRiYzAwY2IxNWYxMWE4MGFhZDRlZjYzNGUwY2M3ZjMwNmRiMDU3ZmVkZDMxNjQ2YzhjMTAxNmY5ZQ.field.c3RhdHVz.desc": {
           "source": "Can be `enabled` or `disabled`.",
           "message": "可為 `enabled` 或 `disabled`。"
         },
@@ -771,15 +771,15 @@
           "source": "Use the `status` property to enable or disable secret scanning push protection for this repository. For more information, see \"[Protecting pushes with secret scanning](/code-security/secret-scanning/protecting-pushes-with-secret-scanning).\"",
           "message": "使用 `status` 屬性來啟用或停用此儲存庫的秘密掃描推送保護功能。如需更多資訊，請參閱「[使用秘密掃描保護推送](/code-security/secret-scanning/protecting-pushes-with-secret-scanning)」。"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfcHVzaF9wcm90ZWN0aW9uIzNlZjgwMmY2MjJiYzFjOGQ2ZDM5OWU5NWY1MjQyN2ZlY2U2NDFkMzNkODc4ZjhmNGMxOTRjODgwOWRmMDAwYzU.field.c3RhdHVz.display_name": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6KnNlY3JldF9zY2FubmluZ19wdXNoX3Byb3RlY3Rpb24jZTgwZDlkZmY2NjcwZDMwN2RmNDFiMzdkNzZmYzgyNDdhMTk3MjJlYTIwZDFkYmFiODFiOGQwMjIxM2E4Y2MwYw.field.c3RhdHVz.display_name": {
           "source": "Status",
           "message": "狀態"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfcHVzaF9wcm90ZWN0aW9uIzNlZjgwMmY2MjJiYzFjOGQ2ZDM5OWU5NWY1MjQyN2ZlY2U2NDFkMzNkODc4ZjhmNGMxOTRjODgwOWRmMDAwYzU.field.c3RhdHVz.short_desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6KnNlY3JldF9zY2FubmluZ19wdXNoX3Byb3RlY3Rpb24jZTgwZDlkZmY2NjcwZDMwN2RmNDFiMzdkNzZmYzgyNDdhMTk3MjJlYTIwZDFkYmFiODFiOGQwMjIxM2E4Y2MwYw.field.c3RhdHVz.short_desc": {
           "source": "Can be 'enabled' or 'disabled'",
           "message": "可為 '啟用' 或 '停用'"
         },
-        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6SGFzaERhdGFUeXBlOipzZWNyZXRfc2Nhbm5pbmdfcHVzaF9wcm90ZWN0aW9uIzNlZjgwMmY2MjJiYzFjOGQ2ZDM5OWU5NWY1MjQyN2ZlY2U2NDFkMzNkODc4ZjhmNGMxOTRjODgwOWRmMDAwYzU.field.c3RhdHVz.desc": {
+        "app.R2l0aHVi.type.YWN0aW9uOmNtVndiM010ZFhCa1lYUmw6KnNlY3JldF9zY2FubmluZ19wdXNoX3Byb3RlY3Rpb24jZTgwZDlkZmY2NjcwZDMwN2RmNDFiMzdkNzZmYzgyNDdhMTk3MjJlYTIwZDFkYmFiODFiOGQwMjIxM2E4Y2MwYw.field.c3RhdHVz.desc": {
           "source": "Can be `enabled` or `disabled`.",
           "message": "可為 `enabled` 或 `disabled`。"
         },
@@ -3339,19 +3339,19 @@
           "source": "Label names. A label that does not exist in the repository is created by GitHub when it is applied.",
           "message": "標籤名稱。若儲存庫中不存在該標籤，GitHub 會在套用時自動建立。"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLWNyZWF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjYWUwNDcyYzAxYThiYzYxOGE3MDkwMjAxZTU4ZmEyOTM2YzRjOTJlMzZhODIyZDIyMTkyMzA3ZGEzYzcyMzc1Nw.field.Y29sb3I.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLWNyZWF0ZQ.option.bGFiZWxz.union.aXRlbXNPbmVPZiMxM2ZiNjVlMmUxYjYyODc4YzVkYzkwMDUwNWQzNzMwNmQ3NmE2YTlkNmE5N2Q5NzQ4YjY5ODgxNTM5ZmUwMmE1.field.Y29sb3I.display_name": {
           "source": "Color",
           "message": "顏色"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLWNyZWF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjYWUwNDcyYzAxYThiYzYxOGE3MDkwMjAxZTU4ZmEyOTM2YzRjOTJlMzZhODIyZDIyMTkyMzA3ZGEzYzcyMzc1Nw.field.ZGVzY3JpcHRpb24.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLWNyZWF0ZQ.option.bGFiZWxz.union.aXRlbXNPbmVPZiMxM2ZiNjVlMmUxYjYyODc4YzVkYzkwMDUwNWQzNzMwNmQ3NmE2YTlkNmE5N2Q5NzQ4YjY5ODgxNTM5ZmUwMmE1.field.ZGVzY3JpcHRpb24.display_name": {
           "source": "Description",
           "message": "描述"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLWNyZWF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjYWUwNDcyYzAxYThiYzYxOGE3MDkwMjAxZTU4ZmEyOTM2YzRjOTJlMzZhODIyZDIyMTkyMzA3ZGEzYzcyMzc1Nw.field.aWQ.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLWNyZWF0ZQ.option.bGFiZWxz.union.aXRlbXNPbmVPZiMxM2ZiNjVlMmUxYjYyODc4YzVkYzkwMDUwNWQzNzMwNmQ3NmE2YTlkNmE5N2Q5NzQ4YjY5ODgxNTM5ZmUwMmE1.field.aWQ.display_name": {
           "source": "ID",
           "message": "ID"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLWNyZWF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjYWUwNDcyYzAxYThiYzYxOGE3MDkwMjAxZTU4ZmEyOTM2YzRjOTJlMzZhODIyZDIyMTkyMzA3ZGEzYzcyMzc1Nw.field.bmFtZQ.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLWNyZWF0ZQ.option.bGFiZWxz.union.aXRlbXNPbmVPZiMxM2ZiNjVlMmUxYjYyODc4YzVkYzkwMDUwNWQzNzMwNmQ3NmE2YTlkNmE5N2Q5NzQ4YjY5ODgxNTM5ZmUwMmE1.field.bmFtZQ.display_name": {
           "source": "Name",
           "message": "名稱"
         },
@@ -3551,55 +3551,55 @@
           "source": "GitHub only accepts assignees with **push access** to the repository and silently ignores the rest, so this dropdown lists the repository's collaborators.",
           "message": "GitHub 僅接受對儲存庫具有**推送權限**的指派對象，並會忽略其餘人員，因此下拉式選單會列出該儲存庫的協作者。"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjODRlZDgzOWRjOTM5MjU5NzIyODFjODFlMjAwMjcyOTM5OTU4MWFlMWRlY2E1ZmE0Mjc4ODliYTJhOWQ5NzMwMw.field.Y29uZmlkZW5jZQ.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.aXRlbXNPbmVPZiM1NDcxOGNiZTMwNDVhZDI0YzA1YmRjYzQxNDg4YmI3NzgwZTkzYjAxZDA3MTg2YzIxZTdjZTMzOTYwZmEyOGM1.field.Y29uZmlkZW5jZQ.display_name": {
           "source": "Confidence",
           "message": "信心度"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjODRlZDgzOWRjOTM5MjU5NzIyODFjODFlMjAwMjcyOTM5OTU4MWFlMWRlY2E1ZmE0Mjc4ODliYTJhOWQ5NzMwMw.field.Y29uZmlkZW5jZQ.short_desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.aXRlbXNPbmVPZiM1NDcxOGNiZTMwNDVhZDI0YzA1YmRjYzQxNDg4YmI3NzgwZTkzYjAxZDA3MTg2YzIxZTdjZTMzOTYwZmEyOGM1.field.Y29uZmlkZW5jZQ.short_desc": {
           "source": "The confidence level for this assignee choice",
           "message": "此指派選擇的置信度"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjODRlZDgzOWRjOTM5MjU5NzIyODFjODFlMjAwMjcyOTM5OTU4MWFlMWRlY2E1ZmE0Mjc4ODliYTJhOWQ5NzMwMw.field.Y29uZmlkZW5jZQ.desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.aXRlbXNPbmVPZiM1NDcxOGNiZTMwNDVhZDI0YzA1YmRjYzQxNDg4YmI3NzgwZTkzYjAxZDA3MTg2YzIxZTdjZTMzOTYwZmEyOGM1.field.Y29uZmlkZW5jZQ.desc": {
           "source": "The confidence level for this assignee choice.",
           "message": "此指派選擇的置信度。"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjODRlZDgzOWRjOTM5MjU5NzIyODFjODFlMjAwMjcyOTM5OTU4MWFlMWRlY2E1ZmE0Mjc4ODliYTJhOWQ5NzMwMw.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOmxvdw.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.aXRlbXNPbmVPZiM1NDcxOGNiZTMwNDVhZDI0YzA1YmRjYzQxNDg4YmI3NzgwZTkzYjAxZDA3MTg2YzIxZTdjZTMzOTYwZmEyOGM1.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOmxvdw.display_name": {
           "source": "low",
           "message": "低"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjODRlZDgzOWRjOTM5MjU5NzIyODFjODFlMjAwMjcyOTM5OTU4MWFlMWRlY2E1ZmE0Mjc4ODliYTJhOWQ5NzMwMw.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.aXRlbXNPbmVPZiM1NDcxOGNiZTMwNDVhZDI0YzA1YmRjYzQxNDg4YmI3NzgwZTkzYjAxZDA3MTg2YzIxZTdjZTMzOTYwZmEyOGM1.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
           "source": "medium",
           "message": "中"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjODRlZDgzOWRjOTM5MjU5NzIyODFjODFlMjAwMjcyOTM5OTU4MWFlMWRlY2E1ZmE0Mjc4ODliYTJhOWQ5NzMwMw.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.aXRlbXNPbmVPZiM1NDcxOGNiZTMwNDVhZDI0YzA1YmRjYzQxNDg4YmI3NzgwZTkzYjAxZDA3MTg2YzIxZTdjZTMzOTYwZmEyOGM1.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
           "source": "high",
           "message": "高"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjODRlZDgzOWRjOTM5MjU5NzIyODFjODFlMjAwMjcyOTM5OTU4MWFlMWRlY2E1ZmE0Mjc4ODliYTJhOWQ5NzMwMw.field.bG9naW4.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.aXRlbXNPbmVPZiM1NDcxOGNiZTMwNDVhZDI0YzA1YmRjYzQxNDg4YmI3NzgwZTkzYjAxZDA3MTg2YzIxZTdjZTMzOTYwZmEyOGM1.field.bG9naW4.display_name": {
           "source": "Login",
           "message": "登入"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjODRlZDgzOWRjOTM5MjU5NzIyODFjODFlMjAwMjcyOTM5OTU4MWFlMWRlY2E1ZmE0Mjc4ODliYTJhOWQ5NzMwMw.field.cmF0aW9uYWxl.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.aXRlbXNPbmVPZiM1NDcxOGNiZTMwNDVhZDI0YzA1YmRjYzQxNDg4YmI3NzgwZTkzYjAxZDA3MTg2YzIxZTdjZTMzOTYwZmEyOGM1.field.cmF0aW9uYWxl.display_name": {
           "source": "Rationale",
           "message": "理由"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjODRlZDgzOWRjOTM5MjU5NzIyODFjODFlMjAwMjcyOTM5OTU4MWFlMWRlY2E1ZmE0Mjc4ODliYTJhOWQ5NzMwMw.field.cmF0aW9uYWxl.short_desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.aXRlbXNPbmVPZiM1NDcxOGNiZTMwNDVhZDI0YzA1YmRjYzQxNDg4YmI3NzgwZTkzYjAxZDA3MTg2YzIxZTdjZTMzOTYwZmEyOGM1.field.cmF0aW9uYWxl.short_desc": {
           "source": "Optional reasoning for selecting this assignee",
           "message": "可選的選擇此指派者的理由"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjODRlZDgzOWRjOTM5MjU5NzIyODFjODFlMjAwMjcyOTM5OTU4MWFlMWRlY2E1ZmE0Mjc4ODliYTJhOWQ5NzMwMw.field.cmF0aW9uYWxl.desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.aXRlbXNPbmVPZiM1NDcxOGNiZTMwNDVhZDI0YzA1YmRjYzQxNDg4YmI3NzgwZTkzYjAxZDA3MTg2YzIxZTdjZTMzOTYwZmEyOGM1.field.cmF0aW9uYWxl.desc": {
           "source": "Optional reasoning for selecting this assignee.",
           "message": "可選的選擇此指派者的理由。"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjODRlZDgzOWRjOTM5MjU5NzIyODFjODFlMjAwMjcyOTM5OTU4MWFlMWRlY2E1ZmE0Mjc4ODliYTJhOWQ5NzMwMw.field.c3VnZ2VzdA.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.aXRlbXNPbmVPZiM1NDcxOGNiZTMwNDVhZDI0YzA1YmRjYzQxNDg4YmI3NzgwZTkzYjAxZDA3MTg2YzIxZTdjZTMzOTYwZmEyOGM1.field.c3VnZ2VzdA.display_name": {
           "source": "Suggest",
           "message": "建議"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjODRlZDgzOWRjOTM5MjU5NzIyODFjODFlMjAwMjcyOTM5OTU4MWFlMWRlY2E1ZmE0Mjc4ODliYTJhOWQ5NzMwMw.field.c3VnZ2VzdA.short_desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.aXRlbXNPbmVPZiM1NDcxOGNiZTMwNDVhZDI0YzA1YmRjYzQxNDg4YmI3NzgwZTkzYjAxZDA3MTg2YzIxZTdjZTMzOTYwZmEyOGM1.field.c3VnZ2VzdA.short_desc": {
           "source": "If 'true', the change is stored as a pending suggestion for human review…",
           "message": "如果為 'true'，則變更會作為待審核的建議儲存…"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjODRlZDgzOWRjOTM5MjU5NzIyODFjODFlMjAwMjcyOTM5OTU4MWFlMWRlY2E1ZmE0Mjc4ODliYTJhOWQ5NzMwMw.field.c3VnZ2VzdA.desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.YXNzaWduZWVz.union.aXRlbXNPbmVPZiM1NDcxOGNiZTMwNDVhZDI0YzA1YmRjYzQxNDg4YmI3NzgwZTkzYjAxZDA3MTg2YzIxZTdjZTMzOTYwZmEyOGM1.field.c3VnZ2VzdA.desc": {
           "source": "If `true`, the change is stored as a pending suggestion for human review rather than applied directly.",
           "message": "如果 `true`，變更將作為待審核的建議儲存，而非直接應用。"
         },
@@ -3615,67 +3615,67 @@
           "source": "Label names. A label that does not exist in the repository is created by GitHub when it is applied.",
           "message": "標籤名稱。若儲存庫中不存在該標籤，GitHub 會在套用時自動建立。"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNjRhNGRjOWQ5NGFmODk2ZjM1ZjhjYzUwM2M1MTEyNmQxZjBkM2FlNDZjZjczYWExNjNjMWRjYmVhYjJkYjVhNQ.field.Y29sb3I.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.aXRlbXNPbmVPZiNlYTMzN2U1ZWQwNzRiYzk5ZDEzMWNjMWEwNWU1MzczY2I3ZGVlYjIwNjE3YTljYzIwMDEyZDIwMzBjZGJmM2Rk.field.Y29sb3I.display_name": {
           "source": "Color",
           "message": "顏色"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNjRhNGRjOWQ5NGFmODk2ZjM1ZjhjYzUwM2M1MTEyNmQxZjBkM2FlNDZjZjczYWExNjNjMWRjYmVhYjJkYjVhNQ.field.Y29uZmlkZW5jZQ.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.aXRlbXNPbmVPZiNlYTMzN2U1ZWQwNzRiYzk5ZDEzMWNjMWEwNWU1MzczY2I3ZGVlYjIwNjE3YTljYzIwMDEyZDIwMzBjZGJmM2Rk.field.Y29uZmlkZW5jZQ.display_name": {
           "source": "Confidence",
           "message": "信心度"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNjRhNGRjOWQ5NGFmODk2ZjM1ZjhjYzUwM2M1MTEyNmQxZjBkM2FlNDZjZjczYWExNjNjMWRjYmVhYjJkYjVhNQ.field.Y29uZmlkZW5jZQ.short_desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.aXRlbXNPbmVPZiNlYTMzN2U1ZWQwNzRiYzk5ZDEzMWNjMWEwNWU1MzczY2I3ZGVlYjIwNjE3YTljYzIwMDEyZDIwMzBjZGJmM2Rk.field.Y29uZmlkZW5jZQ.short_desc": {
           "source": "The confidence level for this label choice",
           "message": "此標籤選擇的置信度"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNjRhNGRjOWQ5NGFmODk2ZjM1ZjhjYzUwM2M1MTEyNmQxZjBkM2FlNDZjZjczYWExNjNjMWRjYmVhYjJkYjVhNQ.field.Y29uZmlkZW5jZQ.desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.aXRlbXNPbmVPZiNlYTMzN2U1ZWQwNzRiYzk5ZDEzMWNjMWEwNWU1MzczY2I3ZGVlYjIwNjE3YTljYzIwMDEyZDIwMzBjZGJmM2Rk.field.Y29uZmlkZW5jZQ.desc": {
           "source": "The confidence level for this label choice.",
           "message": "此標籤選擇的置信度。"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNjRhNGRjOWQ5NGFmODk2ZjM1ZjhjYzUwM2M1MTEyNmQxZjBkM2FlNDZjZjczYWExNjNjMWRjYmVhYjJkYjVhNQ.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOmxvdw.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.aXRlbXNPbmVPZiNlYTMzN2U1ZWQwNzRiYzk5ZDEzMWNjMWEwNWU1MzczY2I3ZGVlYjIwNjE3YTljYzIwMDEyZDIwMzBjZGJmM2Rk.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOmxvdw.display_name": {
           "source": "low",
           "message": "低"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNjRhNGRjOWQ5NGFmODk2ZjM1ZjhjYzUwM2M1MTEyNmQxZjBkM2FlNDZjZjczYWExNjNjMWRjYmVhYjJkYjVhNQ.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.aXRlbXNPbmVPZiNlYTMzN2U1ZWQwNzRiYzk5ZDEzMWNjMWEwNWU1MzczY2I3ZGVlYjIwNjE3YTljYzIwMDEyZDIwMzBjZGJmM2Rk.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
           "source": "medium",
           "message": "中"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNjRhNGRjOWQ5NGFmODk2ZjM1ZjhjYzUwM2M1MTEyNmQxZjBkM2FlNDZjZjczYWExNjNjMWRjYmVhYjJkYjVhNQ.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.aXRlbXNPbmVPZiNlYTMzN2U1ZWQwNzRiYzk5ZDEzMWNjMWEwNWU1MzczY2I3ZGVlYjIwNjE3YTljYzIwMDEyZDIwMzBjZGJmM2Rk.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
           "source": "high",
           "message": "高"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNjRhNGRjOWQ5NGFmODk2ZjM1ZjhjYzUwM2M1MTEyNmQxZjBkM2FlNDZjZjczYWExNjNjMWRjYmVhYjJkYjVhNQ.field.ZGVzY3JpcHRpb24.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.aXRlbXNPbmVPZiNlYTMzN2U1ZWQwNzRiYzk5ZDEzMWNjMWEwNWU1MzczY2I3ZGVlYjIwNjE3YTljYzIwMDEyZDIwMzBjZGJmM2Rk.field.ZGVzY3JpcHRpb24.display_name": {
           "source": "Description",
           "message": "描述"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNjRhNGRjOWQ5NGFmODk2ZjM1ZjhjYzUwM2M1MTEyNmQxZjBkM2FlNDZjZjczYWExNjNjMWRjYmVhYjJkYjVhNQ.field.aWQ.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.aXRlbXNPbmVPZiNlYTMzN2U1ZWQwNzRiYzk5ZDEzMWNjMWEwNWU1MzczY2I3ZGVlYjIwNjE3YTljYzIwMDEyZDIwMzBjZGJmM2Rk.field.aWQ.display_name": {
           "source": "ID",
           "message": "ID"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNjRhNGRjOWQ5NGFmODk2ZjM1ZjhjYzUwM2M1MTEyNmQxZjBkM2FlNDZjZjczYWExNjNjMWRjYmVhYjJkYjVhNQ.field.bmFtZQ.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.aXRlbXNPbmVPZiNlYTMzN2U1ZWQwNzRiYzk5ZDEzMWNjMWEwNWU1MzczY2I3ZGVlYjIwNjE3YTljYzIwMDEyZDIwMzBjZGJmM2Rk.field.bmFtZQ.display_name": {
           "source": "Name",
           "message": "名稱"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNjRhNGRjOWQ5NGFmODk2ZjM1ZjhjYzUwM2M1MTEyNmQxZjBkM2FlNDZjZjczYWExNjNjMWRjYmVhYjJkYjVhNQ.field.cmF0aW9uYWxl.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.aXRlbXNPbmVPZiNlYTMzN2U1ZWQwNzRiYzk5ZDEzMWNjMWEwNWU1MzczY2I3ZGVlYjIwNjE3YTljYzIwMDEyZDIwMzBjZGJmM2Rk.field.cmF0aW9uYWxl.display_name": {
           "source": "Rationale",
           "message": "理由"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNjRhNGRjOWQ5NGFmODk2ZjM1ZjhjYzUwM2M1MTEyNmQxZjBkM2FlNDZjZjczYWExNjNjMWRjYmVhYjJkYjVhNQ.field.cmF0aW9uYWxl.short_desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.aXRlbXNPbmVPZiNlYTMzN2U1ZWQwNzRiYzk5ZDEzMWNjMWEwNWU1MzczY2I3ZGVlYjIwNjE3YTljYzIwMDEyZDIwMzBjZGJmM2Rk.field.cmF0aW9uYWxl.short_desc": {
           "source": "Optional reasoning for selecting this label",
           "message": "選擇此標籤的可選理由"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNjRhNGRjOWQ5NGFmODk2ZjM1ZjhjYzUwM2M1MTEyNmQxZjBkM2FlNDZjZjczYWExNjNjMWRjYmVhYjJkYjVhNQ.field.cmF0aW9uYWxl.desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.aXRlbXNPbmVPZiNlYTMzN2U1ZWQwNzRiYzk5ZDEzMWNjMWEwNWU1MzczY2I3ZGVlYjIwNjE3YTljYzIwMDEyZDIwMzBjZGJmM2Rk.field.cmF0aW9uYWxl.desc": {
           "source": "Optional reasoning for selecting this label.",
           "message": "選擇此標籤的可選理由。"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNjRhNGRjOWQ5NGFmODk2ZjM1ZjhjYzUwM2M1MTEyNmQxZjBkM2FlNDZjZjczYWExNjNjMWRjYmVhYjJkYjVhNQ.field.c3VnZ2VzdA.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.aXRlbXNPbmVPZiNlYTMzN2U1ZWQwNzRiYzk5ZDEzMWNjMWEwNWU1MzczY2I3ZGVlYjIwNjE3YTljYzIwMDEyZDIwMzBjZGJmM2Rk.field.c3VnZ2VzdA.display_name": {
           "source": "Suggest",
           "message": "建議"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNjRhNGRjOWQ5NGFmODk2ZjM1ZjhjYzUwM2M1MTEyNmQxZjBkM2FlNDZjZjczYWExNjNjMWRjYmVhYjJkYjVhNQ.field.c3VnZ2VzdA.short_desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.aXRlbXNPbmVPZiNlYTMzN2U1ZWQwNzRiYzk5ZDEzMWNjMWEwNWU1MzczY2I3ZGVlYjIwNjE3YTljYzIwMDEyZDIwMzBjZGJmM2Rk.field.c3VnZ2VzdA.short_desc": {
           "source": "If 'true', the change is stored as a pending suggestion for human review…",
           "message": "如果為 'true'，則變更會作為待審核的建議儲存…"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjNjRhNGRjOWQ5NGFmODk2ZjM1ZjhjYzUwM2M1MTEyNmQxZjBkM2FlNDZjZjczYWExNjNjMWRjYmVhYjJkYjVhNQ.field.c3VnZ2VzdA.desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.bGFiZWxz.union.aXRlbXNPbmVPZiNlYTMzN2U1ZWQwNzRiYzk5ZDEzMWNjMWEwNWU1MzczY2I3ZGVlYjIwNjE3YTljYzIwMDEyZDIwMzBjZGJmM2Rk.field.c3VnZ2VzdA.desc": {
           "source": "If `true`, the change is stored as a pending suggestion for human review rather than applied directly.",
           "message": "如果 `true`，變更將作為待審核的建議儲存，而非直接應用。"
         },
@@ -3803,63 +3803,63 @@
           "source": "The issue type to associate with this issue. Only users with push access can set the type for issues. Without push access to the repository, type changes are silently dropped.",
           "message": "要與此議題關聯的議題類型。只有具備推送權限的使用者才能設定議題類型。若沒有存放庫的推送權限，類型變更將會被預設略過。"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.SGFzaERhdGFUeXBlOip0eXBlT25lT2YjNGZkMDFiYjcxNWI0MGY5MjRhYWFhOGJhYzI2MGE0YzY2NzRiMjU3YzlkZmJlZWMxMTRjODQ2ZGZkMDQzNDY3Yg.field.Y29uZmlkZW5jZQ.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.KnR5cGVPbmVPZiM0Y2Q0Y2NjMzQ0OTQ3NjBhZmJjMGRmNWFlOGM5OTkxNDU0YmRmNGI1ZjE2Mzc4ZmVlNTRlODcxZmY3NjZjY2Q3.field.Y29uZmlkZW5jZQ.display_name": {
           "source": "Confidence",
           "message": "信心度"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.SGFzaERhdGFUeXBlOip0eXBlT25lT2YjNGZkMDFiYjcxNWI0MGY5MjRhYWFhOGJhYzI2MGE0YzY2NzRiMjU3YzlkZmJlZWMxMTRjODQ2ZGZkMDQzNDY3Yg.field.Y29uZmlkZW5jZQ.short_desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.KnR5cGVPbmVPZiM0Y2Q0Y2NjMzQ0OTQ3NjBhZmJjMGRmNWFlOGM5OTkxNDU0YmRmNGI1ZjE2Mzc4ZmVlNTRlODcxZmY3NjZjY2Q3.field.Y29uZmlkZW5jZQ.short_desc": {
           "source": "The confidence level for this type choice",
           "message": "此類型選擇的置信度"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.SGFzaERhdGFUeXBlOip0eXBlT25lT2YjNGZkMDFiYjcxNWI0MGY5MjRhYWFhOGJhYzI2MGE0YzY2NzRiMjU3YzlkZmJlZWMxMTRjODQ2ZGZkMDQzNDY3Yg.field.Y29uZmlkZW5jZQ.desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.KnR5cGVPbmVPZiM0Y2Q0Y2NjMzQ0OTQ3NjBhZmJjMGRmNWFlOGM5OTkxNDU0YmRmNGI1ZjE2Mzc4ZmVlNTRlODcxZmY3NjZjY2Q3.field.Y29uZmlkZW5jZQ.desc": {
           "source": "The confidence level for this type choice.",
           "message": "此類型選擇的置信度。"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.SGFzaERhdGFUeXBlOip0eXBlT25lT2YjNGZkMDFiYjcxNWI0MGY5MjRhYWFhOGJhYzI2MGE0YzY2NzRiMjU3YzlkZmJlZWMxMTRjODQ2ZGZkMDQzNDY3Yg.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOmxvdw.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.KnR5cGVPbmVPZiM0Y2Q0Y2NjMzQ0OTQ3NjBhZmJjMGRmNWFlOGM5OTkxNDU0YmRmNGI1ZjE2Mzc4ZmVlNTRlODcxZmY3NjZjY2Q3.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOmxvdw.display_name": {
           "source": "low",
           "message": "低"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.SGFzaERhdGFUeXBlOip0eXBlT25lT2YjNGZkMDFiYjcxNWI0MGY5MjRhYWFhOGJhYzI2MGE0YzY2NzRiMjU3YzlkZmJlZWMxMTRjODQ2ZGZkMDQzNDY3Yg.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.KnR5cGVPbmVPZiM0Y2Q0Y2NjMzQ0OTQ3NjBhZmJjMGRmNWFlOGM5OTkxNDU0YmRmNGI1ZjE2Mzc4ZmVlNTRlODcxZmY3NjZjY2Q3.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
           "source": "medium",
           "message": "中"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.SGFzaERhdGFUeXBlOip0eXBlT25lT2YjNGZkMDFiYjcxNWI0MGY5MjRhYWFhOGJhYzI2MGE0YzY2NzRiMjU3YzlkZmJlZWMxMTRjODQ2ZGZkMDQzNDY3Yg.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.KnR5cGVPbmVPZiM0Y2Q0Y2NjMzQ0OTQ3NjBhZmJjMGRmNWFlOGM5OTkxNDU0YmRmNGI1ZjE2Mzc4ZmVlNTRlODcxZmY3NjZjY2Q3.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
           "source": "high",
           "message": "高"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.SGFzaERhdGFUeXBlOip0eXBlT25lT2YjNGZkMDFiYjcxNWI0MGY5MjRhYWFhOGJhYzI2MGE0YzY2NzRiMjU3YzlkZmJlZWMxMTRjODQ2ZGZkMDQzNDY3Yg.field.cmF0aW9uYWxl.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.KnR5cGVPbmVPZiM0Y2Q0Y2NjMzQ0OTQ3NjBhZmJjMGRmNWFlOGM5OTkxNDU0YmRmNGI1ZjE2Mzc4ZmVlNTRlODcxZmY3NjZjY2Q3.field.cmF0aW9uYWxl.display_name": {
           "source": "Rationale",
           "message": "理由"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.SGFzaERhdGFUeXBlOip0eXBlT25lT2YjNGZkMDFiYjcxNWI0MGY5MjRhYWFhOGJhYzI2MGE0YzY2NzRiMjU3YzlkZmJlZWMxMTRjODQ2ZGZkMDQzNDY3Yg.field.cmF0aW9uYWxl.short_desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.KnR5cGVPbmVPZiM0Y2Q0Y2NjMzQ0OTQ3NjBhZmJjMGRmNWFlOGM5OTkxNDU0YmRmNGI1ZjE2Mzc4ZmVlNTRlODcxZmY3NjZjY2Q3.field.cmF0aW9uYWxl.short_desc": {
           "source": "Optional reasoning for selecting this type",
           "message": "選擇此類型的可選理由"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.SGFzaERhdGFUeXBlOip0eXBlT25lT2YjNGZkMDFiYjcxNWI0MGY5MjRhYWFhOGJhYzI2MGE0YzY2NzRiMjU3YzlkZmJlZWMxMTRjODQ2ZGZkMDQzNDY3Yg.field.cmF0aW9uYWxl.desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.KnR5cGVPbmVPZiM0Y2Q0Y2NjMzQ0OTQ3NjBhZmJjMGRmNWFlOGM5OTkxNDU0YmRmNGI1ZjE2Mzc4ZmVlNTRlODcxZmY3NjZjY2Q3.field.cmF0aW9uYWxl.desc": {
           "source": "Optional reasoning for selecting this type.",
           "message": "選擇此類型的可選理由。"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.SGFzaERhdGFUeXBlOip0eXBlT25lT2YjNGZkMDFiYjcxNWI0MGY5MjRhYWFhOGJhYzI2MGE0YzY2NzRiMjU3YzlkZmJlZWMxMTRjODQ2ZGZkMDQzNDY3Yg.field.c3VnZ2VzdA.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.KnR5cGVPbmVPZiM0Y2Q0Y2NjMzQ0OTQ3NjBhZmJjMGRmNWFlOGM5OTkxNDU0YmRmNGI1ZjE2Mzc4ZmVlNTRlODcxZmY3NjZjY2Q3.field.c3VnZ2VzdA.display_name": {
           "source": "Suggest",
           "message": "建議"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.SGFzaERhdGFUeXBlOip0eXBlT25lT2YjNGZkMDFiYjcxNWI0MGY5MjRhYWFhOGJhYzI2MGE0YzY2NzRiMjU3YzlkZmJlZWMxMTRjODQ2ZGZkMDQzNDY3Yg.field.c3VnZ2VzdA.short_desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.KnR5cGVPbmVPZiM0Y2Q0Y2NjMzQ0OTQ3NjBhZmJjMGRmNWFlOGM5OTkxNDU0YmRmNGI1ZjE2Mzc4ZmVlNTRlODcxZmY3NjZjY2Q3.field.c3VnZ2VzdA.short_desc": {
           "source": "If 'true', the change is stored as a pending suggestion for human review…",
           "message": "如果為 'true'，則變更會作為待審核的建議儲存…"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.SGFzaERhdGFUeXBlOip0eXBlT25lT2YjNGZkMDFiYjcxNWI0MGY5MjRhYWFhOGJhYzI2MGE0YzY2NzRiMjU3YzlkZmJlZWMxMTRjODQ2ZGZkMDQzNDY3Yg.field.c3VnZ2VzdA.desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.KnR5cGVPbmVPZiM0Y2Q0Y2NjMzQ0OTQ3NjBhZmJjMGRmNWFlOGM5OTkxNDU0YmRmNGI1ZjE2Mzc4ZmVlNTRlODcxZmY3NjZjY2Q3.field.c3VnZ2VzdA.desc": {
           "source": "If `true`, the change is stored as a pending suggestion for human review rather than applied directly.",
           "message": "如果 `true`，變更將作為待審核的建議儲存，而非直接應用。"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.SGFzaERhdGFUeXBlOip0eXBlT25lT2YjNGZkMDFiYjcxNWI0MGY5MjRhYWFhOGJhYzI2MGE0YzY2NzRiMjU3YzlkZmJlZWMxMTRjODQ2ZGZkMDQzNDY3Yg.field.dmFsdWU.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.KnR5cGVPbmVPZiM0Y2Q0Y2NjMzQ0OTQ3NjBhZmJjMGRmNWFlOGM5OTkxNDU0YmRmNGI1ZjE2Mzc4ZmVlNTRlODcxZmY3NjZjY2Q3.field.dmFsdWU.display_name": {
           "source": "Value",
           "message": "值"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.SGFzaERhdGFUeXBlOip0eXBlT25lT2YjNGZkMDFiYjcxNWI0MGY5MjRhYWFhOGJhYzI2MGE0YzY2NzRiMjU3YzlkZmJlZWMxMTRjODQ2ZGZkMDQzNDY3Yg.field.dmFsdWU.short_desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.KnR5cGVPbmVPZiM0Y2Q0Y2NjMzQ0OTQ3NjBhZmJjMGRmNWFlOGM5OTkxNDU0YmRmNGI1ZjE2Mzc4ZmVlNTRlODcxZmY3NjZjY2Q3.field.dmFsdWU.short_desc": {
           "source": "The name of the issue type to associate with this issue, or 'null' to remove…",
           "message": "要關聯的問題類型名稱，或使用 'null' 移除…"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.SGFzaERhdGFUeXBlOip0eXBlT25lT2YjNGZkMDFiYjcxNWI0MGY5MjRhYWFhOGJhYzI2MGE0YzY2NzRiMjU3YzlkZmJlZWMxMTRjODQ2ZGZkMDQzNDY3Yg.field.dmFsdWU.desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.dHlwZQ.union.KnR5cGVPbmVPZiM0Y2Q0Y2NjMzQ0OTQ3NjBhZmJjMGRmNWFlOGM5OTkxNDU0YmRmNGI1ZjE2Mzc4ZmVlNTRlODcxZmY3NjZjY2Q3.field.dmFsdWU.desc": {
           "source": "The name of the issue type to associate with this issue, or `null` to remove the current issue type.",
           "message": "要關聯的問題類型名稱，或使用 `null` 移除目前的問題類型。"
         },
@@ -3923,63 +3923,63 @@
           "source": "GitHub only accepts assignees with **push access** to the repository and silently ignores the rest, so this dropdown lists the repository's collaborators.",
           "message": "GitHub 僅接受對儲存庫具有**推送權限**的指派對象，並會忽略其餘人員，因此下拉式選單會列出該儲存庫的協作者。"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjN2NlYzE3ZDUyNjc3YzA1Mjc2NmQxYjhkYjhkNzdkZGIxM2JiZTJiMDRkYTQ1ZWVmM2RlNjNkZmU2ZDhhNGQzOQ.field.Y29uZmlkZW5jZQ.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.aXRlbXNPbmVPZiNlOTM4NDBjN2U0YTk1YWIxZTk3NzllMGVkZmM5YTJjMWQzZDZiNTZlMzBmNTJiMjEyODQxYWU1ZTgxNzlmMTUz.field.Y29uZmlkZW5jZQ.display_name": {
           "source": "Confidence",
           "message": "信心度"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjN2NlYzE3ZDUyNjc3YzA1Mjc2NmQxYjhkYjhkNzdkZGIxM2JiZTJiMDRkYTQ1ZWVmM2RlNjNkZmU2ZDhhNGQzOQ.field.Y29uZmlkZW5jZQ.short_desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.aXRlbXNPbmVPZiNlOTM4NDBjN2U0YTk1YWIxZTk3NzllMGVkZmM5YTJjMWQzZDZiNTZlMzBmNTJiMjEyODQxYWU1ZTgxNzlmMTUz.field.Y29uZmlkZW5jZQ.short_desc": {
           "source": "The confidence level for this assignee choice",
           "message": "此指派選擇的置信度"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjN2NlYzE3ZDUyNjc3YzA1Mjc2NmQxYjhkYjhkNzdkZGIxM2JiZTJiMDRkYTQ1ZWVmM2RlNjNkZmU2ZDhhNGQzOQ.field.Y29uZmlkZW5jZQ.desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.aXRlbXNPbmVPZiNlOTM4NDBjN2U0YTk1YWIxZTk3NzllMGVkZmM5YTJjMWQzZDZiNTZlMzBmNTJiMjEyODQxYWU1ZTgxNzlmMTUz.field.Y29uZmlkZW5jZQ.desc": {
           "source": "The confidence level for this assignee choice.",
           "message": "此指派選擇的置信度。"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjN2NlYzE3ZDUyNjc3YzA1Mjc2NmQxYjhkYjhkNzdkZGIxM2JiZTJiMDRkYTQ1ZWVmM2RlNjNkZmU2ZDhhNGQzOQ.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOmxvdw.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.aXRlbXNPbmVPZiNlOTM4NDBjN2U0YTk1YWIxZTk3NzllMGVkZmM5YTJjMWQzZDZiNTZlMzBmNTJiMjEyODQxYWU1ZTgxNzlmMTUz.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOmxvdw.display_name": {
           "source": "low",
           "message": "低"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjN2NlYzE3ZDUyNjc3YzA1Mjc2NmQxYjhkYjhkNzdkZGIxM2JiZTJiMDRkYTQ1ZWVmM2RlNjNkZmU2ZDhhNGQzOQ.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.aXRlbXNPbmVPZiNlOTM4NDBjN2U0YTk1YWIxZTk3NzllMGVkZmM5YTJjMWQzZDZiNTZlMzBmNTJiMjEyODQxYWU1ZTgxNzlmMTUz.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
           "source": "medium",
           "message": "中"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjN2NlYzE3ZDUyNjc3YzA1Mjc2NmQxYjhkYjhkNzdkZGIxM2JiZTJiMDRkYTQ1ZWVmM2RlNjNkZmU2ZDhhNGQzOQ.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.aXRlbXNPbmVPZiNlOTM4NDBjN2U0YTk1YWIxZTk3NzllMGVkZmM5YTJjMWQzZDZiNTZlMzBmNTJiMjEyODQxYWU1ZTgxNzlmMTUz.field.Y29uZmlkZW5jZQ.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
           "source": "high",
           "message": "高"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjN2NlYzE3ZDUyNjc3YzA1Mjc2NmQxYjhkYjhkNzdkZGIxM2JiZTJiMDRkYTQ1ZWVmM2RlNjNkZmU2ZDhhNGQzOQ.field.bG9naW4.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.aXRlbXNPbmVPZiNlOTM4NDBjN2U0YTk1YWIxZTk3NzllMGVkZmM5YTJjMWQzZDZiNTZlMzBmNTJiMjEyODQxYWU1ZTgxNzlmMTUz.field.bG9naW4.display_name": {
           "source": "Login",
           "message": "登入"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjN2NlYzE3ZDUyNjc3YzA1Mjc2NmQxYjhkYjhkNzdkZGIxM2JiZTJiMDRkYTQ1ZWVmM2RlNjNkZmU2ZDhhNGQzOQ.field.bG9naW4.short_desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.aXRlbXNPbmVPZiNlOTM4NDBjN2U0YTk1YWIxZTk3NzllMGVkZmM5YTJjMWQzZDZiNTZlMzBmNTJiMjEyODQxYWU1ZTgxNzlmMTUz.field.bG9naW4.short_desc": {
           "source": "The login of the user to assign",
           "message": "要指派的使用者登入名稱"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjN2NlYzE3ZDUyNjc3YzA1Mjc2NmQxYjhkYjhkNzdkZGIxM2JiZTJiMDRkYTQ1ZWVmM2RlNjNkZmU2ZDhhNGQzOQ.field.bG9naW4.desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.aXRlbXNPbmVPZiNlOTM4NDBjN2U0YTk1YWIxZTk3NzllMGVkZmM5YTJjMWQzZDZiNTZlMzBmNTJiMjEyODQxYWU1ZTgxNzlmMTUz.field.bG9naW4.desc": {
           "source": "The login of the user to assign.",
           "message": "要指派的使用者登入名稱"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjN2NlYzE3ZDUyNjc3YzA1Mjc2NmQxYjhkYjhkNzdkZGIxM2JiZTJiMDRkYTQ1ZWVmM2RlNjNkZmU2ZDhhNGQzOQ.field.cmF0aW9uYWxl.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.aXRlbXNPbmVPZiNlOTM4NDBjN2U0YTk1YWIxZTk3NzllMGVkZmM5YTJjMWQzZDZiNTZlMzBmNTJiMjEyODQxYWU1ZTgxNzlmMTUz.field.cmF0aW9uYWxl.display_name": {
           "source": "Rationale",
           "message": "理由"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjN2NlYzE3ZDUyNjc3YzA1Mjc2NmQxYjhkYjhkNzdkZGIxM2JiZTJiMDRkYTQ1ZWVmM2RlNjNkZmU2ZDhhNGQzOQ.field.cmF0aW9uYWxl.short_desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.aXRlbXNPbmVPZiNlOTM4NDBjN2U0YTk1YWIxZTk3NzllMGVkZmM5YTJjMWQzZDZiNTZlMzBmNTJiMjEyODQxYWU1ZTgxNzlmMTUz.field.cmF0aW9uYWxl.short_desc": {
           "source": "Optional reasoning for adding this assignee",
           "message": "可選的新增此指派者的理由"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjN2NlYzE3ZDUyNjc3YzA1Mjc2NmQxYjhkYjhkNzdkZGIxM2JiZTJiMDRkYTQ1ZWVmM2RlNjNkZmU2ZDhhNGQzOQ.field.cmF0aW9uYWxl.desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.aXRlbXNPbmVPZiNlOTM4NDBjN2U0YTk1YWIxZTk3NzllMGVkZmM5YTJjMWQzZDZiNTZlMzBmNTJiMjEyODQxYWU1ZTgxNzlmMTUz.field.cmF0aW9uYWxl.desc": {
           "source": "Optional reasoning for adding this assignee.",
           "message": "可選的新增此指派者的理由。"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjN2NlYzE3ZDUyNjc3YzA1Mjc2NmQxYjhkYjhkNzdkZGIxM2JiZTJiMDRkYTQ1ZWVmM2RlNjNkZmU2ZDhhNGQzOQ.field.c3VnZ2VzdA.display_name": {
+        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.aXRlbXNPbmVPZiNlOTM4NDBjN2U0YTk1YWIxZTk3NzllMGVkZmM5YTJjMWQzZDZiNTZlMzBmNTJiMjEyODQxYWU1ZTgxNzlmMTUz.field.c3VnZ2VzdA.display_name": {
           "source": "Suggest",
           "message": "建議"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjN2NlYzE3ZDUyNjc3YzA1Mjc2NmQxYjhkYjhkNzdkZGIxM2JiZTJiMDRkYTQ1ZWVmM2RlNjNkZmU2ZDhhNGQzOQ.field.c3VnZ2VzdA.short_desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.aXRlbXNPbmVPZiNlOTM4NDBjN2U0YTk1YWIxZTk3NzllMGVkZmM5YTJjMWQzZDZiNTZlMzBmNTJiMjEyODQxYWU1ZTgxNzlmMTUz.field.c3VnZ2VzdA.short_desc": {
           "source": "If 'true', the assignee is stored as a pending suggestion for human review…",
           "message": "如果為 'true'，則受讓人會作為待審核的建議儲存…"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.SGFzaERhdGFUeXBlOml0ZW1zT25lT2YjN2NlYzE3ZDUyNjc3YzA1Mjc2NmQxYjhkYjhkNzdkZGIxM2JiZTJiMDRkYTQ1ZWVmM2RlNjNkZmU2ZDhhNGQzOQ.field.c3VnZ2VzdA.desc": {
+        "app.R2l0aHVi.action.aXNzdWVzLWFkZC1hc3NpZ25lZXM.option.YXNzaWduZWVz.union.aXRlbXNPbmVPZiNlOTM4NDBjN2U0YTk1YWIxZTk3NzllMGVkZmM5YTJjMWQzZDZiNTZlMzBmNTJiMjEyODQxYWU1ZTgxNzlmMTUz.field.c3VnZ2VzdA.desc": {
           "source": "If `true`, the assignee is stored as a pending suggestion for human review rather than applied directly.",
           "message": "如果 `true`，指派對象將作為待審核的建議儲存，而非直接應用。"
         },
