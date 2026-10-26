@@ -3725,13 +3725,21 @@ ProgramThreadCountContextHelper::ProgramThreadCountContextHelper(ExceptionSink* 
     set(xsink, pgm, runtime);
 }
 
+ProgramThreadCountContextHelper::ProgramThreadCountContextHelper(RuntimeConfig& rc, ExceptionSink* xsink,
+        QoreProgram* pgm, bool runtime) {
+    if (pgm) {
+        setWithThreadData(RuntimeConfigNativeAccess::getThreadData(rc), xsink, pgm, runtime);
+    }
+}
+
 ProgramThreadCountContextHelper::~ProgramThreadCountContextHelper() {
     if (!restore) {
         printd(5, "ProgramThreadCountContextHelper::~ProgramThreadCountContextHelper() this:%p cur_ctx:%p no restore\n", this, old_ctx);
         return;
     }
     // restore thread stacks
-    ThreadData* td = thread_data.get();
+    ThreadData* td = context_td;
+    assert(td);
 
     QoreProgram* pgm = td->current_pgm;
     printd(5, "ProgramThreadCountContextHelper::~ProgramThreadCountContextHelper() this: %p current_pgm: %p " \
@@ -3758,9 +3766,14 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
     if (!pgm) {
         return;
     }
+    setWithThreadData(thread_data.get(), xsink, pgm, runtime);
+}
+
+void ProgramThreadCountContextHelper::setWithThreadData(ThreadData* td, ExceptionSink* xsink,
+        QoreProgram* pgm, bool runtime) {
+    assert(td && pgm);
     assert(!old_pgm);
 
-    ThreadData* td = thread_data.get();
     // ProgramRuntimeParseContextHelper can set current_pgm without setting
     // tlpd.  User-code execution still needs tlpd for local and closure
     // variable access, so only skip setup when the current program already has
@@ -3768,6 +3781,7 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
     if (pgm == td->current_pgm && td->tlpd) {
         return;
     }
+    context_td = td;
     old_pgm = td->current_pgm;
     old_tlpd = td->tlpd;
     old_frameCount = old_tlpd ? old_tlpd->lvstack.getFrameCount() : -1;
@@ -4490,8 +4504,18 @@ QoreParseOptions runtime_get_parse_options() {
 }
 
 RuntimeParseOptionsOverrideHelper::RuntimeParseOptionsOverrideHelper(const QoreParseOptions& mask,
-        const QoreParseOptions& value) {
-    ThreadData* td = thread_data.get();
+        const QoreParseOptions& value)
+        : RuntimeParseOptionsOverrideHelper(thread_data.get(), mask, value) {
+}
+
+RuntimeParseOptionsOverrideHelper::RuntimeParseOptionsOverrideHelper(RuntimeConfig& rc,
+        const QoreParseOptions& mask, const QoreParseOptions& value)
+        : RuntimeParseOptionsOverrideHelper(RuntimeConfigNativeAccess::getThreadData(rc), mask, value) {
+}
+
+RuntimeParseOptionsOverrideHelper::RuntimeParseOptionsOverrideHelper(ThreadData* td,
+        const QoreParseOptions& mask, const QoreParseOptions& value) : td(td) {
+    assert(td);
     old_mask = td->runtime_po_override_mask;
     old_value = td->runtime_po_override_value;
     old_po = td->runtime_po;
@@ -4501,7 +4525,6 @@ RuntimeParseOptionsOverrideHelper::RuntimeParseOptionsOverrideHelper(const QoreP
 }
 
 RuntimeParseOptionsOverrideHelper::~RuntimeParseOptionsOverrideHelper() {
-    ThreadData* td = thread_data.get();
     td->runtime_po_override_mask = old_mask;
     td->runtime_po_override_value = old_value;
     td->runtime_po = old_po;

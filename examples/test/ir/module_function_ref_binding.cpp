@@ -18,6 +18,7 @@
 #include <cstring>
 #include <initializer_list>
 #include <limits>
+#include <thread>
 
 #if defined(__aarch64__)
 #include <qore/macros-aarch64.h>
@@ -397,7 +398,18 @@ static void check(bool enabled) {
 int main(int argc, char** argv) {
     CHECK(argc == 2);
     qore_init(QL_MIT, "UTF-8", true, QLO_DISABLE_SIGNAL_HANDLING);
-    check(std::atoi(argv[1]) != 0);
+    bool enabled = std::atoi(argv[1]) != 0;
+    check(enabled);
+    // Reacquire native contexts after each foreign-thread registration. All
+    // probes are serial, so the unshared binding/debugger instrumentation and
+    // assertion counter cannot race with another probe.
+    std::thread worker([enabled]() {
+        for (unsigned i = 0; i < 3; ++i) {
+            QoreForeignThreadHelper foreign;
+            check(enabled);
+        }
+    });
+    worker.join();
     qore_cleanup();
     std::printf("module-funcref-binding: %u checks passed\n", checks);
 }

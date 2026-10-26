@@ -4899,3 +4899,35 @@ Short invocations include fixed dispatch, setup and cleanup costs. The separatel
 All 391 rebuilt standard-library qmods total 344786872 bytes before and 344786872 after; 391 hashes change. Release 36 cases/5291 assertions; Debug 9 cases/5053 assertions, plus non-QUnit/native checks. The focused fixture has 512 assertions per build. All 391 Release aliases/hashes are restored. All 2574 broad timing jobs/7722 windows and 24 diagnostic jobs/72 windows are separately replayed. Shared host, without affinity/frequency/thermal controls; no owned build/test/profile overlaps timing. No fresh Java/develop comparison, production-wide weighted speedup or global performance ceiling claim.
 
 [Audit](../bench/runtime-comparison/audit-aot-finite-key-selector-revisit.md); [evidence](../bench/runtime-comparison/results-aot-finite-key-selector-revisit-macos-arm64.json); [historical rejection](../bench/runtime-comparison/results-aot-finite-key-selector-rejected-macos-arm64.json).
+
+## Explicit native call context reuse (2026-10-26)
+
+Native scalar function-reference paths now pass their existing RuntimeConfig to Program-entry and parse-option scopes. Both helpers retain their same-thread ThreadData for restoration. Generic entry still acquires the current thread context normally. Full Program locking, thread counts, local-data initialization, debugger behavior, caller parse options, stack checks and cancellation remain. Each internal helper gains one pointer; the public ABI is unchanged. Program snapshot synchronization still uses TLS, so this does not make cross-Program calls TLS-free.
+
+Fresh optimized before/after measurements use parent 334dd7e622, Release -O3 -DNDEBUG with allocation tracking off, qcc -O3/LLVM 22.1.8 on Apple M4 Pro/macOS 27.0.1. All 53 actual private-module kernels are unchanged. Paired randomized runs use default/reverse/shuffle-487 layouts, 4096 items, one warmup and three 150 ms samples, three screening forks and five confirmation forks. At least two of four predeclared indirect-call targets must improve at least 2% in aggregate and improve in every layout in both phases. Values are whole-kernel ns/item, not isolated call latency.
+
+|!Confirmed workload|!Before ns/item|!Candidate ns/item|!Change
+|micro:indirect_call|68.685881|65.507456|-4.63%
+|micro:indirect_float|65.885714|63.938988|-2.95%
+|micro:indirect_wide|68.230406|65.405699|-4.14%
+|micro:indirect_affine_wide|67.875093|65.361728|-3.70%
+|mixed:csv_report|940.960433|938.906104|-0.22%
+|mixed:object_orders|1742.197364|1743.591925|+0.08%
+|mixed:callback_pipeline|129.421262|126.236229|-2.46%
+|mixed:text_index|1466.082357|1453.444261|-0.86%
+
+Retain under the user-approved broader workload tradeoff. All four predeclared targets pass the >=2% aggregate and every-layout improvement gate in both phases; confirmation saves 1.95-3.18 ns/item (2.95-4.63%). The mixed callback pipeline improves 2.31% in screening and 2.46% in confirmation (3.19 ns/item); closures improve 4.78%/5.44% and captured closures 2.34%/2.51%. Costs are retained: boxed integer method calls increase 5.50%/2.82% (+0.932070 ns/item in confirmation), boxed float method calls 3.26%/2.13% (+0.729674), list building 1.05%/2.45% (+0.690015), monomorphic float calls 0.71%/4.13% (+0.172687), known unary integer callbacks 0.34%/0.17% (+0.001925), and direct method calls 0.16%/0.02% (+0.000314). Historical boxed-fallback kernel names now exercise guarded scalar-member entries; these are real costs, not evidence that only cold fallback is affected. Boxed-integer disjoint-range flags occur in both phases but different layouts; list-building flags do not repeat, and boxed-float flags appear only in confirmation. No single global workload-weighted speedup is inferred. Source and static machine review verify the intended lookup removals; all nine paired qmod code sections are byte-identical. Runtime code layout or the larger internal helpers may contribute to control costs, but no root cause is established. Count-1 and count-16 targets and the known-integer control have no >3% disjoint-range regression flags; fixed invocation costs dilute the gain. No per-call diagnostic flag is introduced.
+
+|!Short-call target/control|!Count|!Before ns/item|!Candidate ns/item
+|micro:indirect_call|1|2475.248849|2469.802888
+|micro:indirect_float|1|2549.088130|2520.740733
+|float:typed_local_int_unary|1|690.840686|687.244650
+|micro:indirect_call|16|219.527690|215.723837
+|micro:indirect_float|16|221.085431|218.340690
+|float:typed_local_int_unary|16|44.182859|44.115182
+
+Short invocations include fixed dispatch, setup and cleanup costs. Static disassembly shows parse-option restoration reduced from 50 instructions with direct/indirect calls to 10 instructions without calls; full Program restoration remains and falls from 96 to 41 instructions. These instruction counts are not timing estimates.
+
+All 391 standard-library qmods total 344786872 bytes before and 344786872 after; 0 hashes change. Release 52 cases/7498 assertions; Debug 30 cases/7388 assertions, plus non-QUnit/native checks. All 391 Release aliases/hashes are restored. All 1722 timing jobs/5166 windows are separately replayed. Shared host, without affinity/frequency/thermal controls; no owned build/test/profile overlaps timing. No fresh Java/develop comparison, production-wide weighted speedup or global performance ceiling claim.
+
+[Audit](../bench/runtime-comparison/audit-aot-explicit-native-context.md); [evidence](../bench/runtime-comparison/results-aot-explicit-native-context-macos-arm64.json).

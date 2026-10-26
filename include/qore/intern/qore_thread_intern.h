@@ -555,9 +555,15 @@ DLLLOCAL bool runtime_check_parse_option(const QoreParseOptions& o);
 class RuntimeParseOptionsOverrideHelper {
 public:
     DLLLOCAL RuntimeParseOptionsOverrideHelper(const QoreParseOptions& mask, const QoreParseOptions& value);
+    //! Use an already acquired same-thread native context for this scope.
+    DLLLOCAL RuntimeParseOptionsOverrideHelper(RuntimeConfig& rc, const QoreParseOptions& mask,
+        const QoreParseOptions& value);
     DLLLOCAL ~RuntimeParseOptionsOverrideHelper();
 
 private:
+    DLLLOCAL RuntimeParseOptionsOverrideHelper(ThreadData* td, const QoreParseOptions& mask,
+        const QoreParseOptions& value);
+    ThreadData* td;
     QoreParseOptions old_mask;
     QoreParseOptions old_value;
     QoreParseOptions old_po;
@@ -1204,6 +1210,9 @@ class ProgramThreadCountContextHelper {
 public:
     DLLLOCAL ProgramThreadCountContextHelper() = default;
     DLLLOCAL ProgramThreadCountContextHelper(ExceptionSink* xsink, QoreProgram* pgm, bool runtime);
+    //! Preserve full Program entry using a live native context from this thread.
+    DLLLOCAL ProgramThreadCountContextHelper(RuntimeConfig& rc, ExceptionSink* xsink, QoreProgram* pgm,
+        bool runtime);
     DLLLOCAL ~ProgramThreadCountContextHelper();
 
     DLLLOCAL void set(ExceptionSink* xsink, QoreProgram* pgm, bool runtime);
@@ -1223,6 +1232,8 @@ public:
     }
 
 protected:
+    //! Borrowed only for this scope; all entry and restoration occurs on the same thread.
+    ThreadData* context_td = nullptr;
     QoreProgram* old_pgm = nullptr;
     ThreadLocalProgramData* old_tlpd = nullptr;
     ProgramThreadCountContextHelper* old_ctx = nullptr;
@@ -1232,6 +1243,9 @@ protected:
     bool restore = false;
     bool init_tlpd = false;
     bool thread_count_incremented = false;
+
+private:
+    DLLLOCAL void setWithThreadData(ThreadData* td, ExceptionSink* xsink, QoreProgram* pgm, bool runtime);
 };
 
 class ProgramRuntimeParseContextHelper {

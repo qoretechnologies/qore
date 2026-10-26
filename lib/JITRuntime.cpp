@@ -7183,9 +7183,13 @@ static bool functionRefOwnerHasDebugger(const UserVariantBase* uvb, QoreProgram*
 // override untouched for the existing same-owner path.
 class FunctionRefParseOptionsOverride {
 public:
-    FunctionRefParseOptionsOverride(const UserVariantBase* uvb, QoreProgram* pgm) {
+    FunctionRefParseOptionsOverride(const UserVariantBase* uvb, QoreProgram* pgm, RuntimeConfig* rc = nullptr) {
         if (uvb->pgm != pgm) {
-            override.emplace(get_user_variant_runtime_po_override_mask(), pgm->getParseOptions());
+            if (rc) {
+                override.emplace(*rc, get_user_variant_runtime_po_override_mask(), pgm->getParseOptions());
+            } else {
+                override.emplace(get_user_variant_runtime_po_override_mask(), pgm->getParseOptions());
+            }
         }
     }
 
@@ -11261,7 +11265,7 @@ static int tryTypedFunctionRefExplicit(RuntimeConfig& rc, uint64_t ref_bits, Res
         return 1;
     }
     const UserVariantBase* uvb = ref->getFastCallMetadata().uvb;
-    FunctionRefParseOptionsOverride po_override(uvb, ref->getProgram());
+    FunctionRefParseOptionsOverride po_override(uvb, ref->getProgram(), &rc);
     QoreAOTContext* ctx = uvb->getCachedAOTContext();
     // Preserve lazy failure timing: constructing an unused reference must not
     // materialize its body. Once published, reuse the fully reconstructed context.
@@ -11324,7 +11328,7 @@ static __attribute__((noinline)) int tryCrossProgramFunctionRef(RuntimeConfig& r
         *result = Result{};
         return 1;
     }
-    ProgramThreadCountContextHelper context(xsink, ref->getProgram(), true);
+    ProgramThreadCountContextHelper context(rc, xsink, ref->getProgram(), true);
     if (*xsink) {
         *result = Result{};
         return 1;
@@ -11370,7 +11374,7 @@ static int tryPreparedFunctionRef(RuntimeConfig& rc, QorePreparedFunctionRefV3& 
     }
     // Context readiness remains live; preserve v2's lazy failure timing and
     // Program context setup on first use, including stripped source artifacts.
-    FunctionRefParseOptionsOverride po_override(cache.uvb, cache.pgm);
+    FunctionRefParseOptionsOverride po_override(cache.uvb, cache.pgm, &rc);
     QoreAOTContext* ctx = cache.uvb->getCachedAOTContext();
     if (!ctx) {
         ProgramCallContextHelper pcch(cache.pgm);
@@ -11487,7 +11491,7 @@ __attribute__((always_inline)) static int tryReusableFunctionRef(RuntimeConfig& 
     if (*xsink || RuntimeConfigNativeAccess::checkStack(rc, xsink)) {
         return 1;
     }
-    FunctionRefParseOptionsOverride po_override(cache.uvb, cache.pgm);
+    FunctionRefParseOptionsOverride po_override(cache.uvb, cache.pgm, &rc);
     auto* reusable = static_cast<QoreReusableFunctionRefFrame*>(frame_slot->frame);
     if (!reusable) {
         reusable = initReusableFunctionRefFrame(rc, cache, *frame_slot);
@@ -11535,7 +11539,7 @@ __attribute__((always_inline)) static int tryInvariantFunctionRef(RuntimeConfig&
     if (*xsink || RuntimeConfigNativeAccess::checkStackForPreparedCallback(rc, xsink)) {
         return 1;
     }
-    FunctionRefParseOptionsOverride po_override(cache.uvb, cache.pgm);
+    FunctionRefParseOptionsOverride po_override(cache.uvb, cache.pgm, &rc);
     auto* reusable = static_cast<QoreReusableFunctionRefFrame*>(frame_slot->frame);
     // One initialization per lifetime; keep its argument spills off repeated hits.
     if (!reusable) [[unlikely]] {
