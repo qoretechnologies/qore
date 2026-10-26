@@ -2233,7 +2233,7 @@ public:
             return true;
         }
 
-        ThreadLocalProgramData* tlpd = pgm_data_map[td];
+        ThreadLocalProgramData* tlpd = i->second;
         new_tlpd = tlpd;
 
         sl.unlock();

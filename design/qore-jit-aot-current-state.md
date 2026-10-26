@@ -4937,3 +4937,45 @@ All 391 standard-library qmods total 344786872 bytes before and 344786872 after;
 Installed branch 5825d409b4 is compared with pure develop 5a787725d4 using matching optimized Release builds and 53 identical public-module kernels across three layouts. Fresh optimized Java covers 45 kernels. All 6360 Qore and 675 Java reference checks pass, with C2 diagnostics and independent replay of 1089 jobs/3267 measured windows. Whole-kernel results, layout costs, Java inlining policy and limitations are retained in the [checkpoint evidence](../bench/runtime-comparison/results-post-context-module-macos-arm64.json) and [62-check audit](../bench/runtime-comparison/audit-post-context-checkpoint.md). No universal Java parity or overall performance ceiling is inferred.
 
 Next evaluate the redundant Program-data map lookup. Any broader ancestor-context reuse must preserve observable thread counts and teardown behavior.
+
+## Program thread-data lookup reuse (2026-10-26)
+
+Program context entry now uses the iterator already found under tlock when its thread-local data exists, avoiding a second linear vector_map search. Initial creation, locking, clearing waits, top-level catch-up, thread counts, debugger behavior, cancellation and context restoration remain unchanged. The production change is one line and adds no public API, ABI or per-call diagnostic flag.
+
+Fresh optimized before/after measurements use installed parent b328d3b129, Release -O3 -DNDEBUG with allocation tracking off, qcc -O3/LLVM 22.1.8 on Apple M4 Pro/macOS 27.0.1. All 53 actual private-module kernels are unchanged. Paired randomized runs use default/reverse/shuffle-487 layouts, 4096 items, one warmup and three 150 ms samples, three screening forks and five confirmation forks. The prospective gate requires at least two ordinary call targets to improve at least 1% in aggregate and improve in every layout in both phases, or both 64-worker diagnostic targets to improve at least 5% in every layout in both phases. Values are whole-kernel ns/item, not isolated call latency.
+
+|!Confirmed ordinary workload|!Before ns/item|!Candidate ns/item|!Change
+|micro:indirect_call|65.279846|64.788426|-0.75%
+|micro:indirect_float|64.143809|63.019310|-1.75%
+|micro:indirect_wide|65.478552|64.972614|-0.77%
+|micro:indirect_affine_wide|65.385013|64.611916|-1.18%
+|mixed:csv_report|932.574463|928.047689|-0.49%
+|mixed:object_orders|1733.908561|1736.943233|+0.18%
+|mixed:callback_pipeline|125.460719|126.116494|+0.52%
+|mixed:text_index|1457.886994|1451.140575|-0.46%
+
+Retain under the user-approved broader workload tradeoff. The same two ordinary targets (indirect_float and indirect_affine_wide) satisfy the prospective 1% aggregate/every-layout gate in both phases; both 64-worker targets satisfy the separate 5% every-layout gate in both phases. All four ordinary targets improve in confirmation by 0.75-1.75%; 16-worker diagnostic reductions are 6.95-7.07%, and 64-worker reductions are 12.38-12.88%. Repeated ordinary aggregate costs are boxed_float_method_fallback +0.016/+0.238% (confirmation +0.082873 ns/item), list_mutate +0.799/+0.525% (+1.017717 ns/item), temporary_hash +0.180/+0.299% (+0.004995 ns/item), and mixed callback_pipeline +0.588/+0.523% (+0.655774 ns/item), screen/confirmation respectively. The floating-add screen flag does not repeat; confirmation, both diagnostic phases and both short-call phases have no greater-than-3% disjoint-range regression flag. Short calls show mixed changes below 1%, including count-1 indirect integer +0.335%, so no general short-call speedup is claimed. These measurements support the small lookup optimization despite those costs; they do not establish zero regression, statistical equivalence of controls, a weighted production-wide gain, or Java parity.
+
+The separate native harness holds 0, 16 or 64 registered workers asleep in Program context and starts the benchmark thread last. Its map index is verified before timing (1, 17 or 65). Workers remain idle during samples and are joined before cleanup. The same unchanged module kernels run; setup and teardown are outside their timed windows. This measures a larger existing map, not actively contending-worker throughput, and is not pooled with the ordinary harness.
+
+|!Confirmed diagnostic|!Before ns/item|!Candidate ns/item|!Change
+|workers-0:micro:indirect_call|65.767543|65.014943|-1.14%
+|workers-16:micro:indirect_call|85.062892|79.152582|-6.95%
+|workers-64:micro:indirect_call|130.603685|114.438226|-12.38%
+|workers-0:micro:indirect_float|64.397445|63.005402|-2.16%
+|workers-16:micro:indirect_float|83.012250|77.142314|-7.07%
+|workers-64:micro:indirect_float|128.463183|111.913428|-12.88%
+
+|!Short-call target/control|!Count|!Before ns/item|!Candidate ns/item
+|micro:indirect_call|1|2449.646328|2457.863497
+|micro:indirect_float|1|2527.667852|2515.097633
+|float:typed_local_int_unary|1|685.768887|683.519313
+|micro:indirect_call|16|216.164785|214.855411
+|micro:indirect_float|16|219.727826|219.906725
+|float:typed_local_int_unary|16|43.725884|43.727303
+
+Short invocations include fixed dispatch, setup and cleanup costs. Static disassembly shows the successful-entry second scan is absent and the complete function decreases from 261 to 247 instructions. These instruction counts are not timing estimates.
+
+All 391 standard-library qmods total 344786872 bytes before and 344786872 after; 0 hashes change. Release 52 cases/7498 assertions; Debug 30 cases/7388 assertions, plus non-QUnit/native checks. All 391 Release aliases/hashes are restored. All 2100 timing jobs/6300 windows are separately replayed. Shared host, without affinity/frequency/thermal controls; no owned build/test/profile overlaps timing. No fresh Java/develop comparison, production-wide weighted speedup or global performance ceiling claim.
+
+[Audit](../bench/runtime-comparison/audit-aot-program-data-lookup.md); [evidence](../bench/runtime-comparison/results-aot-program-data-lookup-macos-arm64.json).

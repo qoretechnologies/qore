@@ -240,6 +240,8 @@
     by local promotion, avoiding redundant boxing and dynamic dispatch while retaining guards for optional values.
     AOT and IR can eliminate private temporary integer hashes and selector strings when branch-selected
     literal keys and all uses are proven at compile time, retaining ordinary lookup for unsupported cases.
+    Program context entry reuses its existing thread-data lookup result, reducing repeated searches
+    while preserving locking, initialization, thread accounting and context restoration.
     Native scalar function-reference calls reuse their explicit runtime context for Program and parse-option
     scopes, reducing repeated thread-local lookup while preserving complete context setup and restoration.
     AOT module function references can use exact native scalar bindings, including calls from their owning
