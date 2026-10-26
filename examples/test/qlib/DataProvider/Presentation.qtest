@@ -141,7 +141,9 @@ class DataProviderPresentationTest inherits QUnit::Test {
         addTestCase("qore-data-provider-i18n carries the translations of a renamed type from its action",
             \rekeyRenamedTypeToolTest());
         addTestCase("qore-data-provider-i18n carries the translations of a type whose class changed",
-            \rekeyChangedTypeClassToolTest());
+            \rekeyChangedTypeClassToolTest(), (False,));
+        addTestCase("qore-data-provider-i18n carries the translations of a schema type whose identity named its class",
+            \rekeyChangedTypeClassToolTest(), (True,));
         addTestCase("qore-data-provider-i18n re-keys only the catalogs of the owners it is given",
             \rekeySelectedOwnerToolTest());
         addTestCase("qore-data-provider-i18n re-keys nothing when texts conflict",
@@ -2047,11 +2049,18 @@ class DataProviderPresentationTest inherits QUnit::Test {
         old id of each text differs from the new one only in its type identity, and the translation is carried for
         the same text of the same field of the same action.
     */
-    rekeyChangedTypeClassToolTest() {
+    rekeyChangedTypeClassToolTest(bool schema_identity) {
         string root = sourceRoot();
         string work = make_tmp_dir("data-provider-i18n-rekey-class-");
         on_exit remove_tree(work);
+        # with a schema identity, the type's new identity names no class, while its old one did
+        if (schema_identity) {
+            setenv("QORE_TEST_REKEY_SCHEMA_IDENTITY", "#/components/schemas/RekeyAddress");
+        }
+        on_exit unsetenv("QORE_TEST_REKEY_SCHEMA_IDENTITY");
         hash<auto> fx = rekeyFixture(root, work);
+        assertEq(schema_identity, parse_base64_url_string_to_string(fx.city.split(".")[3]) !~ /DataType:RekeyAddress#/,
+            "the identity of a schema type names no class");
         hash<auto> messages = fx.root_catalog.locales.root.messages;
 
         # the old root has the texts of the address type under an identity naming another class
@@ -2061,15 +2070,18 @@ class DataProviderPresentationTest inherits QUnit::Test {
         # every text is translated; those of the type under their old ids
         hash<auto> cs = map {$1.key: {"source": $1.value.source, "message": $1.value.source + " (cs)"}},
             old_messages.pairIterator();
+        # another type of the same action translates the same text of the same field otherwise, so the text alone
+        # does not tell which translation is the type's
+        cs{unrelatedTypeMessageId(changedClassMessageId(fx.street))} = {"source": "Street", "message": "Třída"};
         string tree = join_paths(work, "tree");
         writeRekeyTree(tree, fx, old_messages, {"cs": cs});
 
         string out;
         assertEq(0, runI18nTool(root, sprintf("--rekey-source-tree -o %s --owner %s", shellQuote(tree),
                 RekeyOwnerModule), \out), "re-keying succeeds: " + out);
-        assertRegex("(?m)^REKEY: .*root\\.json: 27 -> 27 message\\(s\\); translations carried 24, matched by type 0, "
-            "variants 0, reused by text 3, missing 0; new texts 0$", out,
-            "every translation of the type is carried: " + out);
+        assertRegex("(?m)^REKEY: .*root\\.json: 27 -> 27 message\\(s\\); translations carried 24, matched by type 3, "
+            "variants 0, reused by text 0, missing 0; new texts 0$", out,
+            "every translation of the type is carried as that of the same type: " + out);
         hash<auto> cs_messages = parse_json(ReadOnlyFile::readTextFile(join_paths(tree, fx.domain, "cs.json")))
             .locales.cs.messages;
         assertEq(messages.size(), cs_messages.size(), "no translation is dropped");
@@ -2467,8 +2479,15 @@ class DataProviderPresentationTest inherits QUnit::Test {
     #! Returns the id of a text of the fixture's address type under an identity naming another implementing class
     private static string changedClassMessageId(string id) {
         return changeTypeIdentity(id, string sub (string identity) {
-            return regex_subst(identity, "^(action:[A-Za-z0-9_-]+:)[A-Za-z]+DataType:RekeyAddress#[0-9a-f]{64}$",
+            return regex_subst(identity, "^(action:[A-Za-z0-9_-]+:)(?:[A-Za-z]+DataType:)?RekeyAddress#[0-9a-f]{64}$",
                 "$1SchemaHashDataType:RekeyAddress#" + strmul("2", 64));
+        });
+    }
+
+    #! Returns the id of a text of another type of the same action, of another name
+    private static string unrelatedTypeMessageId(string id) {
+        return changeTypeIdentity(id, string sub (string identity) {
+            return regex_subst(identity, ":RekeyAddress#[0-9a-f]{64}$", ":RekeyParcel#" + strmul("3", 64));
         });
     }
 

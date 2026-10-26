@@ -681,8 +681,8 @@ class QoreDataProviderI18nCmd {
         is kept for the new id of its old id if the new root has the same source text there; translations of one text
         that differ are reported as variants, and the most frequent one (the first one in the file for a tie) is
         kept.  A new root message without such a translation takes the translation of the same text of the same
-        field and member of a type with the same class and name in the same action, whose id changed with its shape
-        or schema identity (see digestFreeMessageId()), chosen in the same way; otherwise the translation that the
+        field and member of a type with the same name in the same action, whose id changed with its shape, its schema
+        identity or the class that implements it (see digestFreeMessageId()), chosen in the same way; otherwise the translation that the
         locale gives the same text for the same field and member in the same action, if there is exactly one, which
         carries the texts of a type that has a new name, such as a property type that now has the name of the schema
         it refers to; and otherwise the translation that the locale gives the same text for the same field and
@@ -1025,14 +1025,17 @@ class QoreDataProviderI18nCmd {
         return best;
     }
 
-    #! Returns a message id with the digests of its type identities removed
+    #! Returns a message id with the digests and implementing classes of its type identities removed
     /** The type and union identities of a message id end with a digest of the type's technical shape and schema
         identity (see DataProviderPresentation::typePresentationIdentity()), and a per-option identity with the
-        option and path; what remains is the action, class and name of the type.  Two ids that are equal without
-        them name the same field and member of a type with the same class and name in the same action.
+        option and path; what remains is the action and name of the type, with the class that implements it before
+        the name in an identity that names it.  Catalogs written before the identity of a type with a path or a schema
+        identity stopped naming its class have it there, so the class is removed too.  Two ids that are equal without
+        them name the same field and member of a type with the same name in the same action.
 
         @param id a message id
-        @return the id with each type and union identity reduced to the text before its \c "#", decoded
+        @return the id with each type and union identity reduced to the text before its \c "#", decoded, without the
+        class before the type's name
     */
     static string digestFreeMessageId(string id) {
         list<string> parts = id.split(".");
@@ -1045,8 +1048,16 @@ class QoreDataProviderI18nCmd {
                 string identity = parse_base64_url_string_to_string(parts[i + 1]);
                 int digest = identity.find("#");
                 if (digest > 0) {
-                    parts[i + 1] = identity.substr(0, digest);
+                    identity = identity.substr(0, digest);
                 }
+                # the class before the name: "[action:<action>:]<Class>:<name>"; a name can contain "::"
+                string scope = "";
+                if (*list<*string> action = regex_extract(identity, "^(action:[A-Za-z0-9_-]+:)")) {
+                    scope = action[0];
+                    identity = identity.substr(scope.length());
+                }
+                identity =~ s/^[A-Za-z_][A-Za-z0-9_]*:(?!:)//;
+                parts[i + 1] = scope + identity;
             } catch (hash<ExceptionInfo> ex) {
                 # a segment that does not decode is kept as it is
             }
