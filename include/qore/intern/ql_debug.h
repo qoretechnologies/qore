@@ -136,6 +136,13 @@ DLLLOCAL extern std::atomic<int> qore_dbg_cares_lost_query_count;
 */
 DLLLOCAL std::string qore_dbg_cares_set_servers(const std::string& servers);
 
+//! Sets the hosts file that the name lookups started from now on read, as with the c-ares ARES_OPT_HOSTS_FILE option
+/** @param path the hosts file; empty for the system's hosts file
+
+    @return the previous setting
+*/
+DLLLOCAL std::string qore_dbg_cares_set_hosts_file(const std::string& path);
+
 //! returns true if the current thread holds the environment lock (not the environment change lock); see
 //! SystemEnvironment.cpp
 DLLLOCAL bool qore_dbg_env_lock_held_by_current_thread();

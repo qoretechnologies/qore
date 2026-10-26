@@ -1958,7 +1958,11 @@ val = "string";      # OK
     with callback API compatibility restored in 1.34.8. c-ares 1.34.7 and 1.34.8 can lose a query when a lookup's
     next query (for the next search domain, for example) is given the id of the query that just completed, so that
     the lookup never completes (c-ares issue 1280): the statically linked c-ares is patched, and a lookup with a
-    system c-ares that lost its query is started again. The source-build dependencies also include
+    system c-ares that lost its query is started again. A localhost name (RFC 6761) resolves to the addresses that
+    the hosts file gives it, as with the system resolver, although c-ares also adds the loopback address of each
+    address family that the hosts file does not give the name; a server bound to \c "localhost" therefore listens
+    where the system's other programs connect, also in a container whose hosts file maps \c "localhost" to
+    \c 127.0.0.1 only. The source-build dependencies also include
     Apache Arrow/Parquet 25.0.1, tree-sitter 0.26.13 and jemalloc 5.4.0 (musl targets).
     Every source archive the build may download is listed once, with its version and SHA-256, in
     \c cmake/third-party-sources.cmake, and its SHA-256 is verified whichever source is used;

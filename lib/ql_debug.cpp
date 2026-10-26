@@ -13840,6 +13840,19 @@ static QoreValue f_dbg_cares_set_servers(const QoreListNode* params, RuntimeConf
     return new QoreStringNode(qore_dbg_cares_set_servers(servers->c_str()));
 }
 
+//! makes the name lookups started from now on read the given hosts file instead of the system's
+/** c-ares reads the file, and so does the check of the addresses that c-ares adds to the answer for a localhost name
+    (RFC 6761), so that a test controls what the hosts file gives \c "localhost".
+
+    @param path the hosts file; an empty string restores the system's hosts file
+
+    @return the previous setting
+*/
+static QoreValue f_dbg_cares_set_hosts_file(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    HARD_QORE_VALUE_PARAM(path, const QoreStringNode, params, 0);
+    return new QoreStringNode(qore_dbg_cares_set_hosts_file(path->c_str()));
+}
+
 namespace {
 //! the state of dbg_fork_lock_cycle_arm(): a stand-in for the lock of the dynamic linker, and what the forking thread
 //! and a thread creating a c-ares channel hold and wait for
@@ -14388,6 +14401,8 @@ void init_debug_functions(QoreNamespace& qns) {
         bigIntTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "count");
     qns.addBuiltinVariant("dbg_cares_set_servers", f_dbg_cares_set_servers, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         stringTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "servers");
+    qns.addBuiltinVariant("dbg_cares_set_hosts_file", f_dbg_cares_set_hosts_file, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        stringTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "path");
     qns.addBuiltinVariant("dbg_fork_lock_cycle_arm", f_dbg_fork_lock_cycle_arm, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 1, QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "entered");
     qns.addBuiltinVariant("dbg_fork_lock_cycle_result", f_dbg_fork_lock_cycle_result, QCF_NO_FLAGS,

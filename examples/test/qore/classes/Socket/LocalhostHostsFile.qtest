@@ -1,0 +1,325 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires ../../../../../qlib/QUnit.qm
+%requires ../../../../../qlib/Util.qm
+%requires ../../../../../qlib/HttpServerUtil.qm
+%requires ../../../../../qlib/HttpServer.qm
+
+%exec-class LocalhostHostsFileTest
+
+#! A localhost name resolves to the addresses that the hosts file gives it, as with the system resolver
+/** c-ares answers a localhost name (RFC 6761 section 6.3) with the hosts file's addresses and adds the loopback
+    address of each address family that the file does not give the name.  The system resolver (getaddrinfo() of glibc
+    and musl) answers with the file's addresses only.  With a hosts file that maps \c "localhost" to \c 127.0.0.1 only,
+    as in a podman container, a server bound to \c "localhost" was bound on \c ::1, the address that c-ares sorts
+    first, and a client of the system resolver connecting to \c 127.0.0.1 was refused.
+
+    The cases with a hosts file of the test's own use dbg_cares_set_hosts_file() (debug builds); the case of the
+    system's hosts file compares the answer of the system resolver, from \c getent, where it is available.
+*/
+class LocalhostHostsFileTest inherits QUnit::Test {
+    public {
+        #! the hosts file of a podman container: localhost is IPv4 only, ::1 has other names
+        const HostsIpv4Only = "127.0.0.1\tlocalhost\n"
+            "::1\tip6-localhost ip6-loopback\n"
+            "fe00::0\tip6-localnet\n";
+
+        #! a hosts file that gives localhost its IPv6 loopback address only
+        const HostsIpv6Only = "::1\tlocalhost ip6-localhost\n"
+            "127.0.0.1\tqore-hosts-probe\n";
+
+        #! a hosts file that gives localhost both loopback addresses
+        const HostsBoth = "127.0.0.1\tlocalhost\n"
+            "::1\tlocalhost ip6-localhost ip6-loopback\n";
+
+        #! a hosts file without localhost
+        const HostsNoLocalhost = "127.0.0.1\tqore-hosts-probe\n";
+
+        #! a hosts file with comments, an alias, a name in another case and a subdomain of localhost
+        const HostsAliases = "# ::1 localhost\n"
+            "127.0.0.1\tqore-hosts-probe LocalHost  # a comment\n"
+            "  #127.0.0.3 localhost\n"
+            "127.0.0.2\tapp.localhost\n"
+            "not-an-address localhost\n";
+    }
+
+    private {
+        #! the hosts files written by the test
+        list<string> files = ();
+
+        #! true if the IPv6 loopback address can be bound
+        bool have_ipv6_loopback;
+    }
+
+    constructor() : QUnit::Test("LocalhostHostsFileTest", "1.0", \ARGV) {
+        have_ipv6_loopback = LocalhostHostsFileTest::canBindIpv6Loopback();
+
+        addTestCase("a hosts file that gives localhost only 127.0.0.1", \ipv4OnlyTest());
+        addTestCase("a hosts file that gives localhost only ::1", \ipv6OnlyTest());
+        addTestCase("a hosts file that gives localhost both loopback addresses", \bothTest());
+        addTestCase("a hosts file without localhost", \noLocalhostTest());
+        addTestCase("comments, aliases, case and subdomains of localhost", \aliasesTest());
+        addTestCase("a dual-stack server is reachable at every address of localhost", \dualStackTest());
+        addTestCase("the system resolver's answer for localhost", \systemResolverTest());
+        addTestCase("negative: other names and numeric requests are unchanged", \negativeTest());
+        on_exit {
+            map unlink($1), files;
+        }
+        set_return_value(main());
+    }
+
+    ipv4OnlyTest() {
+        useHostsFile(HostsIpv4Only);
+        on_exit restoreHostsFile();
+
+        assertEq(("127.0.0.1",), resolve("localhost"), "the hosts file's address only");
+        assertEq(("127.0.0.1",), resolve("localhost", AF_UNSPEC, AI_PASSIVE), "the same for a bind");
+        list<hash<auto>> l = getaddrinfo_async("localhost", "0", AF_UNSPEC).get(10s);
+        assertEq(("127.0.0.1",), (map $1.address, l), "the same asynchronously");
+        assertEq(("127.0.0.1",), resolve("localhost", AF_INET), "IPv4");
+        # the file gives localhost no IPv6 address, so the loopback address is the answer (RFC 6761 section 6.3)
+        assertEq(("::1",), resolve("localhost", AF_INET6), "IPv6: the loopback address");
+
+        # the server listens where a client of the system resolver connects
+        assertServerReachable(("127.0.0.1",), AF_INET);
+        assertHttpListener(AF_INET);
+    }
+
+    ipv6OnlyTest() {
+        useHostsFile(HostsIpv6Only);
+        on_exit restoreHostsFile();
+
+        assertEq(("::1",), resolve("localhost"), "the hosts file's address only");
+        assertEq(("::1",), resolve("localhost", AF_UNSPEC, AI_PASSIVE), "the same for a bind");
+        assertEq(("127.0.0.1",), resolve("localhost", AF_INET), "IPv4: the loopback address");
+
+        if (!have_ipv6_loopback) {
+            testSkip("the IPv6 loopback address cannot be bound");
+        }
+        assertServerReachable(("::1",), AF_INET6);
+        assertHttpListener(AF_INET6);
+    }
+
+    bothTest() {
+        useHostsFile(HostsBoth);
+        on_exit restoreHostsFile();
+
+        list<string> addrs = resolve("localhost");
+        assertEq(("127.0.0.1", "::1"), sort(addrs), "both addresses");
+        assertEq(("127.0.0.1", "::1"), sort(resolve("localhost", AF_UNSPEC, AI_PASSIVE)), "the same for a bind");
+        if (!have_ipv6_loopback) {
+            testSkip("the IPv6 loopback address cannot be bound");
+        }
+        # the server is bound on the first address, where a client of the name connects first
+        int family = addrs[0] == "::1" ? AF_INET6 : AF_INET;
+        assertServerReachable(addrs, family);
+        # and so is a client that tries the addresses in the other order, as the system resolver may sort them
+        assertServerReachable(reverse(addrs), family);
+    }
+
+    noLocalhostTest() {
+        useHostsFile(HostsNoLocalhost);
+        on_exit restoreHostsFile();
+        # without an entry, localhost resolves to the loopback addresses (RFC 6761 section 6.3)
+        assertEq(("127.0.0.1", "::1"), sort(resolve("localhost")), "the loopback addresses");
+
+        # and so it does without a hosts file
+        string missing = sprintf("%s%sqore-no-hosts-%d-%d", tmp_location(), DirSep, getpid(), gettid());
+        call_function("dbg_cares_set_hosts_file", missing);
+        assertEq(("127.0.0.1", "::1"), sort(resolve("localhost")), "no hosts file: the loopback addresses");
+    }
+
+    aliasesTest() {
+        useHostsFile(HostsAliases);
+        on_exit restoreHostsFile();
+
+        assertEq(("127.0.0.1",), resolve("localhost"), "an alias in another case; comments are ignored");
+        assertEq(("127.0.0.1",), resolve("LOCALHOST"), "the name looked up in another case");
+        assertEq(("127.0.0.2",), resolve("app.localhost"), "a subdomain of localhost in the file");
+        assertEq(("127.0.0.1", "::1"), sort(resolve("other.localhost")),
+            "a subdomain of localhost not in the file: the loopback addresses");
+    }
+
+    dualStackTest() {
+        if (!have_ipv6_loopback) {
+            testSkip("the IPv6 loopback address cannot be bound");
+        }
+        # a server bound on all interfaces is one dual-stack socket
+        Socket s();
+        on_exit s.close();
+        s.bindINET(NOTHING, 0, True);
+        s.listen();
+        int port = s.getSocketInfo(False).port;
+
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            foreach string hosts in ((HostsIpv4Only, HostsIpv6Only, HostsBoth)) {
+                useHostsFile(hosts);
+                on_exit restoreHostsFile();
+                list<string> addrs = resolve("localhost");
+                foreach string addr in (addrs) {
+                    assertTrue(connects(addr, port), sprintf("%s:%d is reachable with hosts file %y", addr, port,
+                        hosts));
+                }
+            }
+        }
+        *list<string> sys = LocalhostHostsFileTest::systemAddresses();
+        if (!sys) {
+            if (!Option::HAVE_LIBRARY_DEBUGGING) {
+                testSkip("neither the debug hooks nor the system resolver's answer (getent) are available");
+            }
+            return;
+        }
+        foreach string addr in (sys) {
+            assertTrue(connects(addr, port), sprintf("%s:%d (system resolver) is reachable", addr, port));
+        }
+    }
+
+    systemResolverTest() {
+        *list<string> sys = LocalhostHostsFileTest::systemAddresses();
+        if (!sys) {
+            testSkip("the system resolver's answer for localhost is not available (no getent ahosts)");
+        }
+        # a server bound to localhost in any address family, as HttpServer::addListener() binds it
+        Socket s();
+        on_exit s.close();
+        s.bindINET("localhost", 0, True);
+        s.listen();
+        hash<auto> info = s.getSocketInfo(False);
+        # a client that tries the system resolver's addresses in order connects
+        assertTrue(connectsAny(sys, info.port), sprintf("a client of the system resolver %y reaches %y port %d",
+            sys, info.address, info.port));
+        assertTrue(inlist(info.address, sys), sprintf("the bound address %y is one of the system resolver's %y",
+            info.address, sys));
+
+        assertEq(sort(sys), sort(resolve("localhost")), "the addresses of the system resolver");
+        assertEq(sort(sys), sort(resolve("localhost", AF_UNSPEC, AI_PASSIVE)), "the same for a bind");
+    }
+
+    negativeTest() {
+        # a numeric-only request for localhost is still refused
+        assertThrows("QOREADDRINFO-GETINFO-ERROR", \getaddrinfo(), ("localhost", "0", AF_UNSPEC, AI_NUMERICHOST));
+        # a numeric address is not filtered by the hosts file
+        assertEq(("::1",), resolve("::1"), "a numeric IPv6 address");
+
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("hosts files of the test's own need a debug build");
+        }
+        useHostsFile(HostsIpv6Only);
+        on_exit restoreHostsFile();
+        # a name that is not a localhost name is answered from the file only, as before
+        assertEq(("127.0.0.1",), resolve("qore-hosts-probe"), "an ordinary name in the file");
+        # and an explicit address family that the file does not give a localhost name still has its loopback address
+        assertEq(("127.0.0.1",), resolve("localhost", AF_INET), "IPv4: the loopback address");
+    }
+
+    #! makes the name lookups read a hosts file with the given content; skips the test without the debug hooks
+    private useHostsFile(string content) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("hosts files of the test's own need a debug build (dbg_cares_set_hosts_file())");
+        }
+        string path = sprintf("%s%sqore-hosts-%d-%d-%d", tmp_location(), DirSep, getpid(), gettid(), files.size());
+        File f();
+        f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(content);
+        f.close();
+        files += path;
+        call_function("dbg_cares_set_hosts_file", path);
+    }
+
+    #! makes the name lookups read the system's hosts file again
+    private restoreHostsFile() {
+        call_function("dbg_cares_set_hosts_file", "");
+    }
+
+    #! returns the addresses that the name resolves to, in order
+    private list<string> resolve(string name, int family = AF_UNSPEC, int flags = 0) {
+        return map $1.address, getaddrinfo(name, "0", family, flags);
+    }
+
+    #! asserts that a socket bound to localhost in any address family is bound in the given family, and that a client
+    #! trying the addresses in order connects
+    /** Socket::bind() with \c "localhost:0" is not checked: it binds a name without brackets as IPv4.
+    */
+    private assertServerReachable(list<string> client_addrs, int family) {
+        Socket s();
+        on_exit s.close();
+        s.bindINET("localhost", 0, True);
+        s.listen();
+        hash<auto> info = s.getSocketInfo(False);
+        assertEq(family, info.family, sprintf("Socket::bindINET() binds %y", info.address));
+        assertTrue(connectsAny(client_addrs, info.port), sprintf("a client of %y reaches port %d",
+            client_addrs, info.port));
+    }
+
+    #! asserts that an HTTP server listener added for localhost listens in the given address family
+    private assertHttpListener(int family) {
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit server.stop();
+        hash<auto> info = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0});
+        assertEq(family, info.family, sprintf("the HTTP listener for localhost is %y", info.address_desc));
+        string addr = family == AF_INET6 ? "::1" : "127.0.0.1";
+        assertTrue(connects(addr, info.port), sprintf("the HTTP listener is reachable at %s:%d", addr, info.port));
+    }
+
+    #! returns true if a connection to the address and port is made, false if it is refused
+    private static bool connects(string addr, int port) {
+        Socket c();
+        on_exit c.close();
+        try {
+            c.connectINET(addr, port, 10s, addr =~ /:/ ? AF_INET6 : AF_INET);
+            return True;
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "SOCKET-CONNECT-ERROR") {
+                rethrow;
+            }
+            return False;
+        }
+    }
+
+    #! returns true if a client trying the addresses in order connects to one of them, as getaddrinfo() clients do
+    private static bool connectsAny(list<string> addrs, int port) {
+        foreach string addr in (addrs) {
+            if (LocalhostHostsFileTest::connects(addr, port)) {
+                return True;
+            }
+        }
+        return False;
+    }
+
+    #! returns the addresses of localhost from the system resolver (getaddrinfo() of the C library), if available
+    private static *list<string> systemAddresses() {
+        if (PlatformOS != "Linux") {
+            return;
+        }
+        int rc;
+        string out = backquote("getent ahosts localhost 2>/dev/null", \rc);
+        if (rc) {
+            return;
+        }
+        list<string> addrs = ();
+        foreach string line in (out.split("\n")) {
+            *string addr = (line =~ x/^(\S+)\s+STREAM\b/)[0];
+            if (addr && !inlist(addr, addrs)) {
+                addrs += addr;
+            }
+        }
+        return addrs ?: NOTHING;
+    }
+
+    #! returns true if the IPv6 loopback address can be bound
+    private static bool canBindIpv6Loopback() {
+        Socket s();
+        on_exit s.close();
+        try {
+            s.bindINET("::1", 0, False, AF_INET6);
+            return True;
+        } catch (hash<ExceptionInfo> ex) {
+            return False;
+        }
+    }
+}

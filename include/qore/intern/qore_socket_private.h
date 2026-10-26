@@ -626,6 +626,13 @@ struct SocketResolvedAddrInfo {
     std::string canonname;
 };
 
+//! An address that the hosts file gives a name
+struct QoreHostsFileAddress {
+    int family = AF_UNSPEC;
+    //! the IPv4 (the first 4 bytes) or IPv6 address
+    unsigned char addr[16] = {};
+};
+
 class QoreCaresAddrInfoResolver {
 public:
     DLLLOCAL QoreCaresAddrInfoResolver(std::string host, std::string service, int family, int type, int protocol,
@@ -653,6 +660,8 @@ private:
     DLLLOCAL void process(ExceptionSink* xsink);
     DLLLOCAL void updateFd(ares_socket_t socket_fd, int readable, int writable);
     DLLLOCAL void complete(int new_status, struct ares_addrinfo* res);
+    //! Removes the loopback addresses that c-ares added to the hosts file's answer for a localhost name
+    DLLLOCAL void keepHostsFileAddresses() noexcept;
     DLLLOCAL int raiseError(ExceptionSink* xsink) const;
 
     DLLLOCAL static void callback(void* arg, int status, int, struct ares_addrinfo* res);
@@ -669,6 +678,8 @@ private:
     ares_channel_t* channel = nullptr;
     struct ares_addrinfo* result = nullptr;
     std::vector<SocketResolvedAddrInfo> addrs;
+    //! the addresses that the hosts file gives a localhost name (RFC 6761), if it has the name
+    std::vector<QoreHostsFileAddress> hosts_file_addrs;
     std::unordered_map<int, int> fd_events;
     int status = ARES_SUCCESS;
     //! the number of times the lookup was started again after c-ares lost its query

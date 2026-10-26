@@ -45,6 +45,7 @@
 #include <memory>
 #include <mutex>
 #include <new>
+#include <fstream>
 #include <qore/Qore.h>
 #include <qore/QoreSocket.h>
 #include <qore/QoreSocketObject.h>
@@ -6731,7 +6732,138 @@ std::string qore_dbg_cares_set_servers(const std::string& servers) {
     qore_dbg_cares_servers = servers;
     return prev;
 }
+
+//! guards @ref qore_dbg_cares_hosts_file
+static std::mutex qore_dbg_cares_hosts_file_lock;
+//! the hosts file of the name lookups started from now on; empty for the system's hosts file
+static std::string qore_dbg_cares_hosts_file;
+
+std::string qore_dbg_cares_set_hosts_file(const std::string& path) {
+    std::lock_guard<std::mutex> lg(qore_dbg_cares_hosts_file_lock);
+    std::string prev = std::move(qore_dbg_cares_hosts_file);
+    qore_dbg_cares_hosts_file = path;
+    return prev;
+}
 #endif
+
+//! Returns the hosts file that dbg_cares_set_hosts_file() set for the name lookups started from now on, if any
+static std::string qore_cares_debug_hosts_file() {
+#ifdef DEBUG
+    std::lock_guard<std::mutex> lg(qore_dbg_cares_hosts_file_lock);
+    return qore_dbg_cares_hosts_file;
+#else
+    return std::string();
+#endif
+}
+
+//! Returns the hosts file that c-ares reads, or an empty string if it is not a file with a fixed path
+/** c-ares reads the file named by the channel's \c ARES_OPT_HOSTS_FILE option if set, otherwise \c /etc/hosts
+    (\c CARES_HOSTS is read only with \c ARES_AI_ENVHOSTS, which %Qore does not use).  On Windows, c-ares finds the
+    file in the registry.
+
+    @param debug_hosts_file the file set with dbg_cares_set_hosts_file(), if any
+*/
+static std::string qore_cares_hosts_file(const std::string& debug_hosts_file) {
+    if (!debug_hosts_file.empty()) {
+        return debug_hosts_file;
+    }
+#ifdef _Q_WINDOWS
+    return std::string();
+#else
+    return "/etc/hosts";
+#endif
+}
+
+//! Returns true if the name is a localhost name (RFC 6761 section 6.3), as c-ares ares_is_localhost() decides
+static bool qore_is_localhost_name(const std::string& name) {
+    static constexpr char suffix[] = ".localhost";
+    static constexpr size_t suffix_len = sizeof(suffix) - 1;
+    return !strcasecmp(name.c_str(), "localhost")
+        || (name.size() >= suffix_len && !strcasecmp(name.c_str() + name.size() - suffix_len, suffix));
+}
+
+//! Reads the addresses that a hosts file gives a name
+/** Each line of a hosts file is an address followed by its names, separated by blanks; a \c '#' starts a comment.
+    Names are compared without regard to case, as c-ares and the system resolver do.  A file that cannot be read gives
+    no addresses.
+
+    @param path the hosts file
+    @param name the name looked up
+    @param addrs the addresses of the name, in the order of the file
+*/
+static void qore_hosts_file_addresses(const std::string& path, const std::string& name,
+        std::vector<QoreHostsFileAddress>& addrs) {
+    std::ifstream f(path);
+    if (!f) {
+        return;
+    }
+    static constexpr char blanks[] = " \t\r\v\f";
+    std::string line;
+    while (std::getline(f, line)) {
+        size_t comment = line.find('#');
+        if (comment != std::string::npos) {
+            line.erase(comment);
+        }
+        size_t start = line.find_first_not_of(blanks);
+        if (start == std::string::npos) {
+            continue;
+        }
+        size_t end = line.find_first_of(blanks, start);
+        std::string addr_str = line.substr(start, end == std::string::npos ? std::string::npos : end - start);
+        // an IPv6 address may have a zone index, which does not change the address compared
+        size_t zone = addr_str.find('%');
+        if (zone != std::string::npos) {
+            addr_str.erase(zone);
+        }
+        QoreHostsFileAddress a;
+        if (inet_pton(AF_INET, addr_str.c_str(), a.addr) == 1) {
+            a.family = AF_INET;
+        } else if (inet_pton(AF_INET6, addr_str.c_str(), a.addr) == 1) {
+            a.family = AF_INET6;
+        } else {
+            continue;
+        }
+        while (end != std::string::npos) {
+            start = line.find_first_not_of(blanks, end);
+            if (start == std::string::npos) {
+                break;
+            }
+            end = line.find_first_of(blanks, start);
+            size_t len = (end == std::string::npos ? line.size() : end) - start;
+            if (len == name.size() && !strncasecmp(line.c_str() + start, name.c_str(), len)) {
+                addrs.push_back(a);
+                break;
+            }
+        }
+    }
+}
+
+//! Returns true if a resolved address is one that the hosts file gives the name
+static bool qore_hosts_file_has_address(const std::vector<QoreHostsFileAddress>& hosts_addrs,
+        const SocketResolvedAddrInfo& ai) noexcept {
+    const unsigned char* addr;
+    int family = ai.family;
+    if (family == AF_INET) {
+        addr = reinterpret_cast<const unsigned char*>(&reinterpret_cast<const struct sockaddr_in*>(&ai.addr)->sin_addr);
+    } else if (family == AF_INET6) {
+        const struct in6_addr* a6 = &reinterpret_cast<const struct sockaddr_in6*>(&ai.addr)->sin6_addr;
+        addr = reinterpret_cast<const unsigned char*>(a6);
+        // an IPv4-mapped address (AI_V4MAPPED) is the IPv4 address of the file
+        if (IN6_IS_ADDR_V4MAPPED(a6)) {
+            family = AF_INET;
+            addr += 12;
+        }
+    } else {
+        return false;
+    }
+    size_t len = family == AF_INET ? 4 : 16;
+    for (const QoreHostsFileAddress& h : hosts_addrs) {
+        if (h.family == family && !memcmp(h.addr, addr, len)) {
+            return true;
+        }
+    }
+    return false;
+}
 
 //! Returns the DNS servers that dbg_cares_set_servers() set for new c-ares channels, if any
 /** With servers set, the channel is also given a timeout of a second and three tries, so that a lookup that a test
@@ -7175,6 +7307,22 @@ int QoreCaresAddrInfoResolver::start(ExceptionSink* xsink) {
     options.sock_state_cb_data = this;
     int optmask = ARES_OPT_SOCK_STATE_CB;
     std::string debug_servers = qore_cares_debug_servers(options, optmask);
+    std::string debug_hosts_file = qore_cares_debug_hosts_file();
+    if (!debug_hosts_file.empty()) {
+        options.hosts_path = &debug_hosts_file[0];
+        optmask |= ARES_OPT_HOSTS_FILE;
+    }
+
+    // c-ares answers a localhost name with the addresses of the hosts file and adds the loopback address of each
+    // address family that the file does not give it (RFC 6761 section 6.3); the system resolver answers with the
+    // hosts file's addresses only, and those are kept (see keepHostsFileAddresses())
+    hosts_file_addrs.clear();
+    if (has_host && qore_is_localhost_name(host)) {
+        std::string hosts_file = qore_cares_hosts_file(debug_hosts_file);
+        if (!hosts_file.empty()) {
+            qore_hosts_file_addresses(hosts_file, host, hosts_file_addrs);
+        }
+    }
 
     int rc = qore_cares_init_channel(&channel, &options, optmask);
     if (rc != ARES_SUCCESS) {
@@ -7327,11 +7475,29 @@ void QoreCaresAddrInfoResolver::complete(int new_status, struct ares_addrinfo* r
             addrs.push_back(ai);
             first = false;
         }
+        keepHostsFileAddresses();
         if (addrs.empty()) {
             status = ARES_ENODATA;
         }
     }
     done = true;
+}
+
+void QoreCaresAddrInfoResolver::keepHostsFileAddresses() noexcept {
+    // the loopback address of an address family that the hosts file does not give the name is the only answer of
+    // a lookup in that family (RFC 6761 section 6.3), and is kept
+    if (hosts_file_addrs.empty() || addrs.empty()
+            || std::none_of(addrs.begin(), addrs.end(), [this] (const SocketResolvedAddrInfo& ai) {
+                return qore_hosts_file_has_address(hosts_file_addrs, ai);
+            })) {
+        return;
+    }
+    // the canonical name belongs to the first address
+    std::string canonname = std::move(addrs.front().canonname);
+    addrs.erase(std::remove_if(addrs.begin(), addrs.end(), [this] (const SocketResolvedAddrInfo& ai) {
+        return !qore_hosts_file_has_address(hosts_file_addrs, ai);
+    }), addrs.end());
+    addrs.front().canonname = std::move(canonname);
 }
 
 int QoreCaresAddrInfoResolver::raiseError(ExceptionSink* xsink) const {

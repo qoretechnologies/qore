@@ -31,6 +31,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
+%requires Util
 
 %exec-class SocketBindNameReservationTest
 
@@ -40,7 +41,26 @@ class SocketBindNameReservationTest inherits QUnit::Test {
         const MaxPortAttempts = 1024;
     }
 
+    private {
+        #! the hosts file that gives "localhost" both loopback addresses, in debug builds
+        *string hosts_file;
+    }
+
     constructor() : Test("SocketBindNameReservationTest", "1.0") {
+        # "localhost" resolves to the addresses that the hosts file gives it; a hosts file of the test's own gives it
+        # both loopback addresses, also where the system's gives it one, as in a podman container
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            hosts_file = sprintf("%s%sqore-reservation-hosts-%d", tmp_location(), DirSep, getpid());
+            File f();
+            f.open2(hosts_file, O_CREAT | O_TRUNC | O_WRONLY);
+            f.write("127.0.0.1\tlocalhost\n::1\tlocalhost\n");
+            f.close();
+            call_function("dbg_cares_set_hosts_file", hosts_file);
+        }
+        on_exit if (hosts_file) {
+            call_function("dbg_cares_set_hosts_file", "");
+            unlink(hosts_file);
+        }
         addTestCase("the port is held in the other address family", \reservationTest());
         addTestCase("a client of the name reaches the socket", \connectByNameTest());
         addTestCase("closing the socket releases the port", \closeTest());
