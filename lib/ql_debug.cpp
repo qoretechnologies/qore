@@ -1432,8 +1432,12 @@ static void ut_aot_first_public_base(UnitTestCounters& c) {
     UT_ASSERT(c, !xsink, "first-public-base native checks raise no unexpected exception");
 }
 
-static void ut_indexed_read_policy(UnitTestCounters& c, RuntimeConfig& rc) {
+enum class IndexedReadTestEntry { Compatibility, LiveContext, NullContext };
+
+static void ut_indexed_read_policy(UnitTestCounters& c, RuntimeConfig& rc,
+        IndexedReadTestEntry entry = IndexedReadTestEntry::Compatibility) {
     ExceptionSink xsink;
+    RuntimeConfig read_context(RuntimeConfigNativeAccess::getCurrent());
     ReferenceHolder<QoreListNode> list(new QoreListNode(bigIntTypeInfo), &xsink);
     for (int64_t value : {3, 7, 11}) {
         list->push(QoreValue(value), &xsink);
@@ -1444,12 +1448,18 @@ static void ut_indexed_read_policy(UnitTestCounters& c, RuntimeConfig& rc) {
     binary->append(bytes, sizeof(bytes));
     auto read = [&](QoreValue container, int64_t index) {
         QoreSimpleValue raw;
-        raw.setRawBits(qore_rt_list_index_access_compat(container.rawBits(), index, 1, &xsink));
+        raw.setRawBits(entry == IndexedReadTestEntry::Compatibility
+            ? qore_rt_list_index_access_compat(container.rawBits(), index, 1, &xsink)
+            : qore_rt_list_index_access_context_v1(container.rawBits(), index, 1, &xsink,
+                entry == IndexedReadTestEntry::LiveContext ? &read_context : nullptr));
         return QoreValue(raw);
     };
     for (bool enabled : {false, true}) {
         RuntimeParseOptionsOverrideHelper policy(rc, PO_NEGATIVE_OFFSETS,
             enabled ? PO_NEGATIVE_OFFSETS : QoreParseOptions());
+        // Deliberately stale snapshot: native reads must use the live thread
+        // view, including the override above, rather than this copied field.
+        read_context.setParseOptions(enabled ? QoreParseOptions() : PO_NEGATIVE_OFFSETS);
         for (int64_t index : {std::numeric_limits<int64_t>::min(), int64_t{-4}, int64_t{-3},
                 int64_t{-1}, int64_t{0}, int64_t{2}, int64_t{3}, std::numeric_limits<int64_t>::max()}) {
             int64_t normalized = enabled && index < 0 ? index + 3 : index;
@@ -13846,6 +13856,8 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_aot_prepared_local_reload(c);
     ut_aot_prepared_indexed_int_add(c);
     ut_indexed_read_policy(c, rc);
+    ut_indexed_read_policy(c, rc, IndexedReadTestEntry::LiveContext);
+    ut_indexed_read_policy(c, rc, IndexedReadTestEntry::NullContext);
     ut_qorevalue_operator_bool_null(c);
     ut_qorevalue_null_representations(c);
     ut_string_data_helper(c);
@@ -13873,6 +13885,8 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_aot_prepared_local_reload(c);
     ut_aot_prepared_indexed_int_add(c);
     ut_indexed_read_policy(c, rc);
+    ut_indexed_read_policy(c, rc, IndexedReadTestEntry::LiveContext);
+    ut_indexed_read_policy(c, rc, IndexedReadTestEntry::NullContext);
 
     ut_qorevalue_operator_bool_null(c);
     ut_qorevalue_null_representations(c);

@@ -35976,15 +35976,24 @@ bool QoreIRToLLVM::tryEmitListIndexAccess(const QoreIRInstruction* inst, llvm::M
         return false;  // Can't determine index type
     }
 
-    auto helper = module.getOrInsertFunction(
-        "qore_rt_list_index_access_compat",
-        llvm::FunctionType::get(i64_type,
-            {i64_type, i64_type, i32_type, ptr_type}, false));
-    values[inst->result.id] = builder->CreateCall(
-        helper, {list_boxed, idx_int,
-         llvm::ConstantInt::get(i32_type,
-             sq_brackets->hasStringIndexChar() ? 1 : 0),
-         xsink_arg});
+    // Both views dominate this operation and remain live for this invocation.
+    // Do not acquire a context solely for a read; short/non-loop callers keep
+    // the ordinary entry. The helper reads current policy after evaluation.
+    llvm::Value* read_context = native_runtime_config ? native_runtime_config : loop_runtime_config;
+    llvm::Value* string_index_char = llvm::ConstantInt::get(i32_type,
+        sq_brackets->hasStringIndexChar() ? 1 : 0);
+    if (read_context && !q_env_is_set("QORE_DISABLE_LLVM_INDEX_RUNTIME_CONFIG")) {
+        auto helper = module.getOrInsertFunction("qore_rt_list_index_access_context_v1",
+            llvm::FunctionType::get(i64_type,
+                {i64_type, i64_type, i32_type, ptr_type, ptr_type}, false));
+        values[inst->result.id] = builder->CreateCall(helper,
+            {list_boxed, idx_int, string_index_char, xsink_arg, read_context});
+    } else {
+        auto helper = module.getOrInsertFunction("qore_rt_list_index_access_compat",
+            llvm::FunctionType::get(i64_type, {i64_type, i64_type, i32_type, ptr_type}, false));
+        values[inst->result.id] = builder->CreateCall(helper,
+            {list_boxed, idx_int, string_index_char, xsink_arg});
+    }
     return true;
 }
 

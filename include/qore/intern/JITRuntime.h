@@ -1797,6 +1797,18 @@ uint64_t qore_rt_list_index_access(uint64_t list_val, int64_t index, ExceptionSi
 uint64_t qore_rt_list_index_access_compat(uint64_t list_val, int64_t index, int32_t string_index_char,
         ExceptionSink* xsink);
 
+//! Index an evaluated container using an already available live runtime context.
+/** @param list_val borrowed NaN-boxed container, evaluated before reading the runtime policy
+    @param index signed index, normalized according to the current negative-offset policy
+    @param string_index_char nonzero for character indexing; zero for substring indexing
+    @param xsink exception sink used by the ordinary indexed-read operation
+    @param rc borrowed same-thread invocation view, valid through evaluation; nullptr uses the compatibility path
+    @return owned NaN-boxed result, or NOTHING for unsupported containers/out-of-range indices
+    @note Reads live thread policy through rc, not its compatibility snapshot; ownership and evaluation are unchanged.
+*/
+uint64_t qore_rt_list_index_access_context_v1(uint64_t list_val, int64_t index, int32_t string_index_char,
+        ExceptionSink* xsink, RuntimeConfig* rc);
+
 //! Extract the value assigned to one LHS entry in a list assignment.
 uint64_t qore_rt_list_assignment_value(uint64_t value, int64_t index, ExceptionSink* xsink);
 uint64_t qore_rt_list_assignment_value_throwing(uint64_t value, int64_t index, ExceptionSink* xsink);

@@ -336,6 +336,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_hash_map_two_keys_prehashed) },
     { "qore_rt_list_index_access", reinterpret_cast<void*>(&qore_rt_list_index_access) },
     { "qore_rt_list_index_access_compat", reinterpret_cast<void*>(&qore_rt_list_index_access_compat) },
+    { "qore_rt_list_index_access_context_v1", reinterpret_cast<void*>(&qore_rt_list_index_access_context_v1) },
     { "qore_rt_string_concat", reinterpret_cast<void*>(&qore_rt_string_concat) },
     { "qore_rt_string_equals_cstr",
         reinterpret_cast<void*>(&qore_rt_string_equals_cstr) },
@@ -6563,8 +6564,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
     return val_bits;
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_list_index_access_compat(uint64_t list_val, int64_t index,
-        int32_t string_index_char, ExceptionSink* xsink) {
+template <bool WithContext>
+static QORE_ALWAYS_INLINE uint64_t qore_rt_list_index_access_impl(uint64_t list_val, int64_t index,
+        int32_t string_index_char, ExceptionSink* xsink, RuntimeConfig* rc) {
     QoreValue raw_v = fromBits(list_val);
     ValueEvalOptimizedRefHolder vh(raw_v, xsink);
     if (xsink && *xsink) {
@@ -6573,7 +6575,15 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_access_compat(uint64_t list_val
     QoreValue v = *vh;
     // Nonnegative indices cannot use the negative-offset policy. Keep the
     // current runtime policy lookup after evaluation for negative indices.
-    bool negative_offsets = index < 0 && runtime_check_parse_option(PO_NEGATIVE_OFFSETS);
+    bool negative_offsets = false;
+    if (index < 0) {
+        if constexpr (WithContext) {
+            negative_offsets = (RuntimeConfigNativeAccess::getParseOptions(*rc) & PO_NEGATIVE_OFFSETS)
+                == PO_NEGATIVE_OFFSETS;
+        } else {
+            negative_offsets = runtime_check_parse_option(PO_NEGATIVE_OFFSETS);
+        }
+    }
     int64 qindex = static_cast<int64>(index);
     if (v.getType() == NT_LIST) {
         const QoreListNode* l = v.get<const QoreListNode>();
@@ -6605,6 +6615,19 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_access_compat(uint64_t list_val
     }
     // Unsupported container type or index out of bounds: return NOTHING.
     return toBits(QoreValue());
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_list_index_access_compat(uint64_t list_val, int64_t index,
+        int32_t string_index_char, ExceptionSink* xsink) {
+    return qore_rt_list_index_access_impl<false>(list_val, index, string_index_char, xsink, nullptr);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_list_index_access_context_v1(uint64_t list_val, int64_t index,
+        int32_t string_index_char, ExceptionSink* xsink, RuntimeConfig* rc) {
+    if (!rc) {
+        return qore_rt_list_index_access_compat(list_val, index, string_index_char, xsink);
+    }
+    return qore_rt_list_index_access_impl<true>(list_val, index, string_index_char, xsink, rc);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_list_index_access(uint64_t list_val, int64_t index, ExceptionSink* xsink) {

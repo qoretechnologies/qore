@@ -5225,3 +5225,89 @@ All 391 standard-library qmods are byte-identical before/after (344922552 bytes)
 Shared host without affinity/frequency/thermal controls; no owned build/test/profile overlaps timing. No fresh Java/develop ratio or weighted application-wide speedup is inferred. The next experiment will reuse an available live RuntimeConfig for negative reads while retaining legacy entry points and null-context fallback.
 
 [Audit](../bench/runtime-comparison/audit-aot-indexed-read-policy.md); [evidence](../bench/runtime-comparison/results-aot-indexed-read-policy-macos-arm64.json).
+
+## Indexed reads with an existing live runtime context (2026-10-26)
+
+JIT/AOT lowering passes an existing native or loop RuntimeConfig to a versioned internal indexed-read helper. It acquires no context solely for a read. Negative indices read current ThreadData policy through that view after container evaluation and pending-exception handling. Nonnegative indices still omit policy lookup. The compatibility entry and null-context fallback preserve existing behavior; QORE_DISABLE_LLVM_INDEX_RUNTIME_CONFIG selects the legacy entry at compile time. Container dispatch, signed bounds, ownership, weak references, strings, cancellation and cleanup remain unchanged. The private helper ABI is additive; no public calling convention changes. Actual optimized AOT modules are measured; no separate IR/JIT timing claim.
+
+The frozen installed baseline is 75fc3c08f5. Both variants use Release -O3 -DNDEBUG with allocation tracking off, fresh corresponding qcc -O3/LLVM 22.1.8 native modules from identical sources and equal explicit RPATHs, on Apple M4 Pro/macOS 27.0.1. Loaded images, dependencies and hashes are verified. The 73-workload screen uses three forks; 34-workload confirmation uses five. Default/reverse/shuffle-487 layouts use 4096 items, one warmup and three 150 ms samples. The prospective gate requires at least one negative-read target to improve >=3% aggregate and in every layout in both phases. All three pass. Values are whole-kernel ns/item, not isolated call latency.
+
+|!Confirmed workload|!Before ns/item|!Candidate ns/item|!Change
+|float:callback_local_float_result|0.836942|0.832073|-0.58%
+|float:callback_local_float_return|0.875591|0.877121|+0.17%
+|float:callback_loop_float_return|5.186970|5.213218|+0.51%
+|float:direct_loop_float_return|5.936663|5.962985|+0.44%
+|float:typed_local_int_result|0.810842|0.803756|-0.87%
+|float:typed_local_int_unary|1.201429|1.201043|-0.03%
+|index:binary_negative|9.353709|8.298802|-11.28%
+|index:binary_positive|7.794119|7.696115|-1.26%
+|index:buffer_negative|16.270001|15.158883|-6.83%
+|index:buffer_positive|15.142781|15.194391|+0.34%
+|index:list_negative|10.408925|9.265543|-10.98%
+|index:list_positive|9.292664|9.336514|+0.47%
+|micro:boxed_float_method_fallback|34.814794|35.477210|+1.90%
+|micro:boxed_int_method_effect|91.489524|92.913768|+1.56%
+|micro:boxed_int_method_fallback|33.630720|33.810618|+0.53%
+|micro:closure_call|19.739115|19.508390|-1.17%
+|micro:closure_capture|25.370648|25.241328|-0.51%
+|micro:dynamic_int_result_call|11.730832|11.253120|-4.07%
+|micro:dynamic_int_result_fallback|21.477529|22.019421|+2.52%
+|micro:indirect_call|63.747559|64.281169|+0.84%
+|micro:indirect_float|61.384549|61.996909|+1.00%
+|micro:list_build|28.613697|28.680112|+0.23%
+|micro:list_mutate|137.043435|137.249844|+0.15%
+|micro:list_read|2.970901|2.985562|+0.49%
+|micro:method_call|1.693549|1.695225|+0.10%
+|micro:monomorphic_call|4.271318|3.962312|-7.23%
+|micro:monomorphic_float_call|4.503318|4.263762|-5.32%
+|micro:optional_method_call|11.563693|11.594826|+0.27%
+|micro:temporary_hash|1.722569|1.726425|+0.22%
+|micro:temporary_list|1.719165|1.719285|+0.01%
+|mixed:callback_pipeline|128.493435|129.799466|+1.02%
+|mixed:csv_report|980.903492|970.062791|-1.11%
+|mixed:object_orders|1839.276220|1859.330241|+1.09%
+|mixed:text_index|1519.988064|1513.387994|-0.43%
+
+Retain under the authorized broader workload tradeoff. All three negative-read targets pass the prospective >=3% and every-layout gate in screen and confirmation. Confirmed negative list/binary/buffer time improves 10.98%/11.28%/6.83%; positive reads change +0.47%/-1.26%/+0.34%. Dynamic-int-result fallback has a repeated reverse-layout regression with disjoint fork ranges: +3.84% screen and +3.55% confirmation (+0.762598 ns/item), with +2.52% confirmed aggregate cost. Boxed-float fallback costs +1.90% aggregate and is flagged in the reverse layout only in confirmation (+3.51%). Eight selected call-control LLVM bodies, including these fallbacks and observed gain cases, are byte-identical before/after in every layout; timing changes are observed, their cause is not established and they are not dismissed as noise. Mixed workloads confirm CSV -1.11%, text -0.43%, callback pipeline +1.02%, orders +1.09%; the last two are repeated costs. Short count1 negative-list time costs0.93%, while negative binary/buffer improve2.71%/2.20%; count16 negative list/binary/buffer improve2.64%/4.15%/2.55%. Short mutation costs1.03%/0.94% at counts1/16, with a count16 shuffle-layout flag(+3.22%). Every repeated positive aggregate change and short result is reported. No weighted application-wide, universal zero-regression, fresh Java/develop ratio or performance-ceiling claim. Next refresh the optimized cumulative Java/develop checkpoint, then investigate generic scalar list-entry ownership overhead.
+
+|!Repeated aggregate cost|!Screen change|!Confirmation change|!Confirmation ns/item cost
+|micro:dynamic_int_result_fallback|+1.037%|+2.523%|+0.541892
+|micro:boxed_float_method_fallback|+2.202%|+1.903%|+0.662416
+|micro:boxed_int_method_effect|+2.153%|+1.557%|+1.424245
+|mixed:object_orders|+0.071%|+1.090%|+20.054021
+|mixed:callback_pipeline|+1.237%|+1.016%|+1.306031
+|micro:indirect_float|+1.065%|+0.998%|+0.612360
+|micro:indirect_call|+1.938%|+0.837%|+0.533609
+|micro:boxed_int_method_fallback|+0.887%|+0.535%|+0.179898
+|float:callback_loop_float_return|+0.144%|+0.506%|+0.026248
+|micro:list_read|+0.257%|+0.493%|+0.014661
+|index:list_positive|+0.831%|+0.472%|+0.043850
+|float:direct_loop_float_return|+0.120%|+0.443%|+0.026322
+|micro:optional_method_call|+1.105%|+0.269%|+0.031132
+|micro:temporary_hash|+0.246%|+0.224%|+0.003857
+|micro:method_call|+0.749%|+0.099%|+0.001676
+|micro:temporary_list|+0.069%|+0.007%|+0.000120
+
+|!Short target/control|!Count|!Before ns/item|!Candidate ns/item
+|index:list_negative|1|494.877518|499.477812
+|index:binary_negative|1|508.567294|494.786624
+|index:buffer_negative|1|526.215209|514.657530
+|index:list_positive|1|496.335735|491.113240
+|index:binary_positive|1|506.320089|500.117727
+|index:buffer_positive|1|505.983435|506.784648
+|micro:list_mutate|1|3449.633572|3485.166783
+|index:list_negative|16|41.297978|40.209402
+|index:binary_negative|16|40.851047|39.155299
+|index:buffer_negative|16|48.286122|47.056294
+|index:list_positive|16|40.704604|39.520055
+|index:binary_positive|16|39.586616|38.727280
+|index:buffer_positive|16|46.423512|46.216388
+|micro:list_mutate|16|347.426351|350.690355
+
+Short invocations include dispatch, setup and cleanup. Separate profiles observe the intended helper and loaded images. In all six selected positive/negative fast bodies, LLVM text is identical after replacing only the helper call and adding the existing context argument. ARM64 function sizes grow by one instruction for the extra argument load; existing context acquisition and cancellation remain unchanged. Full helper instruction/static-call counts are 333/50 before, 341/50 candidate compatibility, and 318/46 explicit context; these are not hot-path counts or speed estimates. Only the explicit negative-policy lookup avoids TLS discovery; nested evaluation and other helper work may still use TLS. Eight selected call-control LLVM bodies are identical across variants and layouts; their timing changes have no established cause.
+
+All 391 standard-library qmods change hash with the internal header identity; total bytes grow from 344922552 to 344952008 (+29456). No import-coverage or per-module speed claim. Release 111 reported cases/2560 assertions include eight Linux-only RSS skips and one Debug-only DGC skip; Debug 102 cases/4008 assertions include eight RSS skips. Case totals include skips. Native checks pass 2388/2388. An additional 196 assertions compare legacy substring indexing and explicit result types against AST in Release and Debug, both offset policies and all fixture modes. Generated supplementary sources are archived; measured sources/runtimes stay unchanged. Standard 1110 and prepared 8424 reference results pass. All Release aliases/hashes restored; all 2586 timing jobs/7758 measured windows independently replayed.
+
+Shared host without affinity/frequency/thermal controls; no owned build/test/profile overlaps timing. No fresh Java/develop ratio or weighted application-wide speedup is inferred. Next refresh the optimized cumulative Java/develop checkpoint, then investigate generic scalar list-entry ownership overhead.
+
+[Audit](../bench/runtime-comparison/audit-aot-indexed-read-context.md); [evidence](../bench/runtime-comparison/results-aot-indexed-read-context-macos-arm64.json).
