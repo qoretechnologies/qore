@@ -10534,6 +10534,19 @@ static uint64_t execFunctionRefNative(const FunctionCallReferenceNode* ref,
     });
 }
 
+// The caller has already established the exact reference type and captured
+// Program. Keep these binding facts live even when decoding can be reused.
+static __attribute__((always_inline)) bool hasTypedFunctionRefBinding(const FunctionCallReferenceNode* ref,
+        uint32_t signature,
+        QoreProgram* pgm) {
+    if (!ref->getTypedEntry(signature) || qore_program_private::get(*pgm)->hasDebuggerAttached()) {
+        return false;
+    }
+    const UserVariantBase* uvb = ref->getFastCallMetadata().uvb;
+    return uvb && !functionRefOwnerHasDebugger(uvb, pgm)
+        && ref->getNormalEntry() == uvb->getCachedAOTFunction();
+}
+
 static const FunctionCallReferenceNode* getTypedFunctionRef(uint64_t ref_bits, uint32_t signature,
         QoreProgram* current_pgm) {
     if (isFunctionRefFastCallDisabled()) {
@@ -10549,13 +10562,7 @@ static const FunctionCallReferenceNode* getTypedFunctionRef(uint64_t ref_bits, u
         return nullptr;
     }
     const auto* ref = getExactFunctionRef(node);
-    if (!ref || !ref->getTypedEntry(signature)
-            || qore_program_private::get(*pgm)->hasDebuggerAttached()) {
-        return nullptr;
-    }
-    const UserVariantBase* uvb = ref->getFastCallMetadata().uvb;
-    return uvb && !functionRefOwnerHasDebugger(uvb, pgm)
-        && ref->getNormalEntry() == uvb->getCachedAOTFunction() ? ref : nullptr;
+    return ref && hasTypedFunctionRefBinding(ref, signature, pgm) ? ref : nullptr;
 }
 
 template <typename Result, uint32_t Signature, typename... Args>
@@ -11318,10 +11325,12 @@ static __attribute__((noinline)) int tryCrossProgramFunctionRef(RuntimeConfig& r
     }
     const UserVariantBase* uvb = ref->getFastCallMetadata().uvb;
     // Limit this route to callbacks into the currently executing module body.
-    // Arbitrary foreign references retain ordinary invocation. Reuse the full
-    // typed binding, debugger and live-body checks with the captured Program.
+    // Arbitrary foreign references retain ordinary invocation. No Qore code or
+    // context transition has run since exact reference decoding, so reuse it
+    // while keeping the fast-call flag, typed binding and debugger checks live.
     if (!uvb || uvb->pgm != current
-            || getTypedFunctionRef(ref_bits, Signature, ref->getProgram()) != ref) {
+            || isFunctionRefFastCallDisabled()
+            || !hasTypedFunctionRefBinding(ref, Signature, ref->getProgram())) {
         return 0;
     }
     if (*xsink || RuntimeConfigNativeAccess::checkStack(rc, xsink)) {

@@ -23518,3 +23518,69 @@ Short invocations include fixed dispatch, setup and cleanup costs. Static disass
 All 391 standard-library qmods total 344786872 bytes before and 344786872 after; 0 hashes change. Release 52 cases/7498 assertions; Debug 30 cases/7388 assertions, plus non-QUnit/native checks. All 391 Release aliases/hashes are restored. All 2100 timing jobs/6300 windows are separately replayed. Shared host, without affinity/frequency/thermal controls; no owned build/test/profile overlaps timing. No fresh Java/develop comparison, production-wide weighted speedup or global performance ceiling claim.
 
 [Audit](audit-aot-program-data-lookup.md); [evidence](results-aot-program-data-lookup-macos-arm64.json).
+
+## Pre-entry function-reference decoding reuse (2026-10-26)
+
+The native cross-Program callback path reuses its already decoded exact function reference for the immediately following pre-entry binding check. The generic decoder retains flag, tag, captured-Program and RTTI checks; a shared inlined helper preserves typed-entry, debugger, metadata and live-body checks. Full Program entry and the complete post-entry decoder remain. No live metadata is reused across entry; no public ABI, calling convention or compiler eligibility rule changes.
+
+Fresh optimized before/after measurements use installed parent 8bc8015683, Release -O3 -DNDEBUG with allocation tracking off, qcc -O3/LLVM 22.1.8 on Apple M4 Pro/macOS 27.0.1. All 53 actual private-module kernels are unchanged. Each before/candidate pair uses exactly the same optimized module file, with the frozen runtime selected and its loaded path verified separately. Paired randomized runs use default/reverse/shuffle-487 layouts, 4096 items, one warmup and three 150 ms samples, three screening forks and five confirmation forks. The prospective gate requires the same two or more indirect targets to improve at least 1% in aggregate and improve in every layout in both phases. Values are whole-kernel ns/item, not isolated call latency.
+
+|!Confirmed workload|!Before ns/item|!Candidate ns/item|!Change
+|micro:indirect_call|66.807328|63.736720|-4.60%
+|micro:indirect_float|65.781224|62.204317|-5.44%
+|micro:indirect_wide|66.026978|63.538779|-3.77%
+|micro:indirect_affine_wide|66.630249|63.297025|-5.00%
+|mixed:csv_report|984.777213|985.122760|+0.04%
+|mixed:object_orders|1743.767368|1740.328438|-0.20%
+|mixed:callback_pipeline|128.787645|128.127342|-0.51%
+|mixed:text_index|1518.425293|1513.727214|-0.31%
+
+Retain under the user-approved broader workload tradeoff. All four targets pass the unchanged prospective 1% aggregate/every-layout gate in both common-module phases and both initial phases. With identical module binaries, confirmation saves 3.77-5.44% (2.49-3.58 ns/item) across those calls. The common-module screen floating-add flag does not repeat; confirmation and both short-call phases have no greater-than-3% disjoint-range regression flag. This does not establish zero cost or equivalence of controls. Every repeated positive common-module aggregate cost is listed below.
+
+|!Repeated common-module cost|!Screen change|!Confirmation change|!Confirmation ns/item cost
+|float:callback_local_float_return|+1.493%|+0.009%|+0.000077
+|float:direct_loop_float_return|+0.212%|+0.164%|+0.009759
+|micro:boxed_int_method_fallback|+0.839%|+0.484%|+0.167207
+|micro:closure_call|+1.358%|+1.134%|+0.213786
+|micro:closure_capture|+1.262%|+0.635%|+0.159664
+|micro:dynamic_int_result_fallback|+1.661%|+1.534%|+0.320304
+|micro:list_mutate|+0.528%|+0.394%|+0.790876
+|micro:monomorphic_call|+0.297%|+0.187%|+0.008065
+
+The largest repeated percentage cost is dynamic_int_result_fallback (+1.53%, +0.320304 ns/item); ordinary and captured closures cost +1.13%/+0.64% (+0.213786/+0.159664 ns/item). List mutation costs +0.39% (+0.790876 ns/item). Mixed confirmation changes are callback_pipeline -0.51%, CSV +0.04%, orders -0.20%, and text -0.31%; no weighted production-wide improvement is inferred. Short count-1 integer calls improve 0.57%, while float calls cost 0.61% and the known-integer control costs 0.24%. Count-16 integer/float aggregates improve 1.04%/1.30%, but not every individual layout improves, so no universal short-call gain is claimed. The initial captured-closure reverse-layout cost remains recorded separately; its absence from common-module flags does not prove the runtime-path layout difference was its sole cause. The repeatable call gains and smaller measured control costs justify retaining this narrow change; Java parity and a global performance ceiling remain unestablished.
+
+|!Short-call target/control|!Count|!Before ns/item|!Candidate ns/item
+|micro:indirect_call|1|2572.509482|2557.803962
+|micro:indirect_float|1|2603.970189|2619.872133
+|float:typed_local_int_unary|1|722.125648|723.870446
+|micro:indirect_call|16|222.369489|220.065820
+|micro:indirect_float|16|226.408747|223.472170
+|float:typed_local_int_unary|16|45.832617|45.495215
+
+Short invocations include fixed dispatch, setup and cleanup costs. Static disassembly verifies removal of the repeated pre-entry decoder call and retention of complete post-entry validation. Function sizes alone do not estimate executed instruction counts or speedups.
+
+All 391 standard-library qmods total 344786872 bytes before and 344786872 after; 0 hashes change. Release 52 cases/7498 assertions; Debug 30 cases/7388 assertions, plus non-QUnit/native checks. All 391 Release aliases/hashes restored. All 1962 timing jobs/5886 windows separately replayed. Shared host, without affinity/frequency/thermal controls; no owned build/test/profile overlaps timing. No fresh Java/develop comparison, production-wide weighted speedup or global performance ceiling claim.
+
+An initial separately linked module campaign is preserved separately. Its optimized LLVM matched in all nine module pairs, but LC_RPATH command sizes were 120 versus 128 bytes, shifting text-section addresses by 8-16 bytes. The common-module follow-up was declared before its timing and retains the original thresholds and all three layouts. Initial and common-module observations are not pooled.
+
+|!Initial confirmation target (unequal runtime-path layout)|!Before ns/item|!Candidate ns/item|!Change
+|micro:indirect_call|64.662564|61.575312|-4.77%
+|micro:indirect_float|63.445994|59.584210|-6.09%
+|micro:indirect_wide|64.091159|61.698083|-3.73%
+|micro:indirect_affine_wide|65.090126|61.639910|-5.30%
+
+All four initial targets pass both phases, with 3.73-6.09% lower confirmation time per item. Captured-closure reverse-layout costs repeat (+5.99/+5.66%); all aggregate costs and short-call observations are retained. All nine optimized LLVM dumps match, but LC_RPATH sizes of 120/128 bytes shift module code. The separate common-module campaign is required before attributing gains/costs to the runtime change or retaining it.
+
+|!Repeated initial aggregate cost|!Screen change|!Confirmation change|!Confirmation ns/item cost
+|float:callback_local_float_return|+0.249%|+0.481%|+0.004072
+|float:callback_loop_float_return|+0.763%|+0.020%|+0.000988
+|float:direct_loop_float_return|+0.337%|+0.005%|+0.000301
+|micro:boxed_int_method_call|+1.124%|+0.448%|+0.077660
+|micro:boxed_int_method_fallback|+1.591%|+0.451%|+0.152683
+|micro:closure_call|+2.755%|+1.035%|+0.196067
+|micro:closure_capture|+0.737%|+2.646%|+0.643108
+|mixed:object_orders|+0.050%|+0.336%|+5.837885
+
+The initial campaign contains 1812 jobs/5436 windows, independently replayed and retained alongside the common-module campaign. Static layout differences do not establish the cause of any timing change.
+
+[Audit](audit-aot-cross-decode.md); [evidence](results-aot-cross-decode-macos-arm64.json).
