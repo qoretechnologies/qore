@@ -86,6 +86,12 @@
     origin-absolute targets address a path from the host root. Existing HTTPClient and RestClient string methods
     retain their contracts (<a href="https://github.com/qoretechnologies/qore/issues/5485">issue 5485</a>).
 
+    The \c rest command preserves full endpoint URL paths and queries, including repeated leading slashes,
+    and excludes URL fragments from HTTP requests. Paths supplied with named connections remain relative
+    to the configured API root. Failed requests now return a nonzero exit status; \c --ignore-errors still
+    permits HTTP error responses. Schema-relative endpoint paths are resolved against the schema URL when
+    they do not name a connection.
+
     The new @ref discard_statement "@@discard(expression);" statement explicitly discards an expression's
     result without an unused-result warning or a dummy local variable. It preserves evaluation, exceptions,
     and temporary-value cleanup in all execution modes and remains active when debugging is disabled.

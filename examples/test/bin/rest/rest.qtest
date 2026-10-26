@@ -1,0 +1,172 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# MIT License
+%modern
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/FsUtil.qm
+%requires json
+%exec-class RestCommandTest
+
+class RestCommandHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(cx.raw_path == "/failure" ? 503 : 200, make_json({
+            "path": cx.raw_path, "method": hdr.method,
+            "body": body ? parse_json(string(body)) : NOTHING,
+            "authorization": hdr.authorization,
+        }), {"Content-Type": "application/json"});
+    }
+}
+
+class RestCommandTest inherits QUnit::Test {
+    private {
+        TmpDir tmp;
+        HttpServer server;
+        string origin;
+        string command;
+    }
+
+    constructor() : Test("rest command URL targets", "1.0", \ARGV) {
+        addTestCase("full endpoint path and query", \endpointTest());
+        addTestCase("origin and query-only URLs", \rootTest());
+        addTestCase("fragments are excluded", \fragmentTest());
+        addTestCase("encoding and authentication", \encodingTest());
+        addTestCase("methods and structured bodies", \methodTest());
+        addTestCase("named connection paths remain API-relative", \connectionTest());
+        addTestCase("Swagger paths are composed only once", \schemaTest());
+        addTestCase("HTTP errors and ignore-errors status", \errorTest());
+        addTestCase("invalid targets and URLs fail", \invalidTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        tmp = new TmpDir("rest-command-");
+        server = new HttpServer(<HttpServerOptionInfo>{});
+        server.setDefaultHandler("echo", new RestCommandHandler());
+        origin = sprintf("http://127.0.0.1:%d", server.addListener(
+            <HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port);
+        string root = normalize_dir(get_script_dir() + "/../../../..");
+        File provider();
+        provider.open2(tmp.path + "/RestCommandConnections.qm", O_CREAT | O_WRONLY, 0600);
+        provider.write(sprintf("%%modern\n%%requires %s/qlib/RestClient.qm\n", root));
+        provider.write("module RestCommandConnections { version = \"1.0\"; desc = \"test connections\";\n"
+            + "author = \"Qore Technologies\"; url = \"https://qore.org\"; }\n"
+            + "public namespace RestCommandConnections {\n"
+            + "public ConnectionProvider::AbstractConnection sub get_mod_connection(string name) {\n"
+            + "if (name != \"test-server\") { throw \"CONNECTION-ERROR\", name; }\n"
+            + sprintf("return new RestConnection(name, \"test\", %y);\n", origin + "/api/root")
+            + "}\npublic *hash<auto> sub get_mod_connections() {}\n}\n");
+        provider.close();
+        command = "env QORE_MODULE_DIR=" + quote(root + "/qlib:" + (ENV.QORE_MODULE_DIR ?? ""))
+            + " QORE_CONNECTION_PROVIDERS=" + quote(tmp.path + "/RestCommandConnections.qm")
+            + " " + quote(QORE_ARGV[0]) + " --enable-debug " + quote(root + "/bin/rest") + " -C -A 1.1";
+    }
+
+    globalTearDown() {
+        if (server) {
+            server.stop();
+            delete server;
+        }
+        delete tmp;
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+
+    private hash<auto> run(list<string> args) {
+        int rc;
+        string output = backquote(command + " -o " + quote(tmp.path + "/response.json") + " "
+            + (map quote($1), args).join(" ") + " 2>&1", \rc);
+        return {"rc": rc, "output": output};
+    }
+
+    private hash<auto> request(list<string> args) {
+        hash<auto> result = run(args);
+        assertEq(0, result.rc, result.output);
+        assertFalse(result.output =~ /warning:/i, result.output);
+        return parse_json(ReadOnlyFile::readTextFile(tmp.path + "/response.json"));
+    }
+
+    endpointTest() {
+        foreach string path in (("/items", "/items/", "//items//part/?x=1&x=2", "/items?",
+                "/api/root/items?value=%2F")) {
+            assertEq(path, request((origin + path,)).path);
+        }
+    }
+
+    rootTest() {
+        assertEq("/", request((origin,)).path);
+        assertEq("/", request((origin + "/",)).path);
+        assertEq("/?x=1", request((origin + "?x=1",)).path);
+        assertEq("/?", request((origin + "?",)).path);
+    }
+
+    fragmentTest() {
+        foreach string suffix in (("#fragment", "#fragment?not=query", "?x=1#fragment")) {
+            assertEq(suffix.startsWith("?") ? "/items?x=1" : "/items", request((origin + "/items" + suffix,)).path);
+        }
+        assertEq("/", request((origin + "#fragment",)).path);
+        assertEq("/items?hash=%23", request((origin + "/items?hash=%23#fragment",)).path);
+    }
+
+    encodingTest() {
+        assertEq("/items?value=a%2Fb%20c&literal=%25",
+            request((origin + "/items?value=a%2Fb c&literal=%",)).path);
+        hash<auto> response = request(("-u", "test-user:test-password", origin + "//items?x=1"));
+        assertEq("//items?x=1", response.path);
+        assertEq("Basic dGVzdC11c2VyOnRlc3QtcGFzc3dvcmQ=", response.authorization);
+    }
+
+    methodTest() {
+        hash<auto> response = request(("put", origin + "//items/?action=update#unused", "value=42"));
+        assertEq("PUT", response.method);
+        assertEq("//items/?action=update", response.path);
+        assertEq({"value": 42}, response.body);
+        assertEq("DELETE", request(("del", origin + "/items?id=1",)).method);
+    }
+
+    connectionTest() {
+        foreach string path in (("items?x=1", "/items?x=1")) {
+            assertEq("/api/root/items?x=1", request(("test-server", path)).path);
+        }
+        assertEq("/api/root?x=1", request(("test-server", "?x=1")).path);
+        assertEq("/api/root/api/root/items", request(("test-server", "/api/root/items")).path);
+        hash<auto> response = request(("-c", "test-server", "put", "unused", "items?x=1", "value=42"));
+        assertEq("/api/root/items?x=1", response.path);
+        assertEq({"value": 42}, response.body);
+    }
+
+    schemaTest() {
+        string path = tmp.path + "/swagger.json";
+        File schema();
+        schema.open2(path, O_CREAT | O_WRONLY, 0600);
+        schema.write(make_json({"swagger": "2.0", "info": {"title": "test", "version": "1"},
+            "host": origin.substr(7), "schemes": ("http",), "basePath": "/api/schema",
+            "produces": ("application/json",), "paths": {"/items": {"get": {
+                "responses": {"200": {"description": "echo", "schema": {"type": "object"}}},
+            }}}}));
+        schema.close();
+        assertEq("/api/schema/items", request(("-s", path, "items")).path);
+        assertEq("/api/schema/items", request(("-s", path, origin + "/api/schema/items")).path);
+        hash<auto> result = run(("-s", path, origin + "/wrong/items"));
+        assertNeq(0, result.rc, result.output);
+    }
+
+    errorTest() {
+        foreach list<string> args in (((origin + "/failure",), ("-E", origin + "/failure"))) {
+            hash<auto> result = run(args);
+            assertNeq(0, result.rc, result.output);
+            assertRegex("503", result.output);
+        }
+        assertEq("/failure", request(("-i", origin + "/failure")).path);
+    }
+
+    invalidTest() {
+        hash<auto> result = run(("test-server", "items#invalid-target"));
+        assertNeq(0, result.rc, result.output);
+        assertRegex("REST-REQUEST-TARGET-ERROR", result.output);
+        result = run(("http:///missing-host",));
+        assertNeq(0, result.rc, result.output);
+    }
+}

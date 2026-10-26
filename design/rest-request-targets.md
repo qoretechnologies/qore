@@ -24,6 +24,14 @@ a leading slash and never interprets a host or changes the connection origin.
 Full URLs and fragments are rejected. Redirects continue to use the shared URI
 resolver; API-root composition is never applied to a redirect target.
 
+The `rest` command accepts full endpoint URLs at its CLI boundary. It removes
+the fragment before parsing, separates the connection origin from the path and
+query, and dispatches that target as `OriginAbsolute`. An absent path becomes
+`/`; repeated slashes and empty queries are retained. Named-connection request
+paths remain `ApiRelative`. Request exceptions produce a nonzero exit status;
+`--ignore-errors` still allows HTTP error responses through the normal output
+path.
+
 ## Composition and configuration
 
 The pure `rest_request_path()` function normalizes only the joining boundary.

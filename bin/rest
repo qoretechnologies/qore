@@ -184,15 +184,27 @@ class RestCmd {
 
         if (!opt.conn) {
             string orig_url = url;
-            url = get_connection_url(url);
-            if (url != orig_url) {
-                printf("%s %y url: %y\n", color.info("using connection:"), orig_url, url);
-                opt.conn = orig_url;
+            try {
+                url = get_connection_url(url);
+                if (url != orig_url) {
+                    printf("%s %y url: %y\n", color.info("using connection:"), orig_url, url);
+                    opt.conn = orig_url;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                # With a schema, an argument that is not a connection name can be an endpoint path.
+                if (!opts.validator || ex.err != "CONNECTION-ERROR") {
+                    rethrow;
+                }
             }
         }
 
         if (opts.validator && url !~ /^[a-z]+:\/\//) {
             url = opts.validator.getTargetUrl() + (url !~ /^\// ? "/" : "") + url;
+        }
+
+        if (!opt.conn) {
+            # Remove fragments before parsing the authority as well (e.g. http://host:port#section).
+            url =~ s/#.*$//;
         }
 
         # get URI path
@@ -239,6 +251,10 @@ class RestCmd {
             }
         } else {
             request_path = url_info.path ?? "";
+            # A full URL identifies an endpoint, including its query. Fragments are local to the caller.
+            if (!request_path.val() || request_path[0] != "/") {
+                request_path = "/" + request_path;
+            }
 
             opts.url = sprintf("%s://", url_info.protocol);
             if (url_info.username && url_info.password) {
@@ -347,7 +363,10 @@ class RestCmd {
             rest.setSendEncoding(opt.sendenc);
         }
 
-        doRequest(rest, meth, request_path, body, rest_url);
+        doRequest(rest, meth, <RestClient::RestRequestTarget>{
+            "mode": opt.conn ? RestClient::RestPathMode::ApiRelative : RestClient::RestPathMode::OriginAbsolute,
+            "path": request_path,
+        }, body, rest_url);
     }
 
     #! Idempotently percent-encodes characters illegal as-is in a URI request
@@ -383,18 +402,18 @@ class RestCmd {
     }
 
     #! Performs a REST request using RestClientIo (fully async)
-    private doRequest(RestClientIo::RestClientIo rest, string meth, string request_path,
+    private doRequest(RestClientIo::RestClientIo rest, string meth, hash<RestClient::RestRequestTarget> target,
             auto body, string rest_url) {
         # HTTP/2 and HTTP/3 mandate percent-encoded URIs at the protocol level
         # (RestClientIo sends the path verbatim); idempotently encode the
         # user-supplied request path/query (no-op if already encoded).
-        request_path = RestCmd::encodeUriRequestSafe(request_path);
+        string request_path = target.path = RestCmd::encodeUriRequestSafe(target.path);
 
         hash<RestClient::RestResponseInfo> h;
         try {
             on_error rethrow $1.err, sprintf("%s (using url: %y request path: %y)", $1.desc,
                 rest_url, request_path ?? "");
-            h = rest.restDoRequest(meth, request_path ?? "", body);
+            h = rest.restDoRequestTarget(meth, target, body);
 
             # Show literal request/response if -l flag set
             if (opt.lit) {
@@ -424,6 +443,7 @@ class RestCmd {
                 }
             }
         } catch (hash<ExceptionInfo> ex) {
+            set_return_value(1);
             if (opt.fullex) {
                 stderr.printf("%s\n", get_exception_string(ex));
             } else if (ex.err == "DESERIALIZATION-ERROR"
@@ -734,6 +754,10 @@ class RestCmd {
         printf("connections with automatic protocol selection and connection multiplexing\n");
         printf("on HTTP/2 and HTTP/3. Use -l (--literal) for verbose HTTP request/response\n");
         printf("output.\n\n");
+        printf("Full URLs preserve their path and query; URL fragments are not sent.\n");
+        printf("Paths used with named connections are relative to the connection's API root.\n");
+        printf("Example: rest 'https://example.com//items/?page=2#section'\n");
+        printf("Request failures return a nonzero exit status; -i permits HTTP error responses.\n\n");
         printf("%s Request bodies accept YAML / JSON-compatible YAML, legacy Qore values,\n",
             color.dim("Body:"));
         printf("%s, and file references such as %s.\n",
