@@ -39,6 +39,7 @@ class SandboxCapabilityFilesystemTest inherits QUnit::Test {
         addTestCase("every global filesystem function runs in a capability and is denied outside it",
             \functionsTest());
         addTestCase("a capability does not lift the sandbox from the code that calls it", \callerTest());
+        addTestCase("the arguments of a capability are evaluated by the code that calls it", \argumentTest());
         addTestCase("every sandbox manager helper in the source tree names its purpose", \purposeTest());
         set_return_value(main());
     }
@@ -201,6 +202,43 @@ class SandboxCapabilityFilesystemTest inherits QUnit::Test {
         });
         assertEq("REGULAR", p.callFunction("through", direct, back, fx.file),
             "the capability's own code is allowed");
+    }
+
+    #! The sandboxed caller's local variables and references are its arguments, whatever the capability is
+    /** A capability runs in the Program that registered it; its arguments are expressions of the caller, so they
+        are evaluated in the caller's context before the capability's Program is entered, as for any call into
+        another Program
+    */
+    argumentTest() {
+        Program p(PO_MODERN);
+        SandboxManager manager();
+        manager.setFilesystemDefaultPolicy(False);
+        p.setSandboxManager(manager);
+        p.parse("auto sub through(code c, string path) { return c(path); }"
+            "auto sub expression(code c, string path) { return c(path + '/' + path.size()); }"
+            "int sub update(code c) { int v = 1; c(\\v); return v; }"
+            "auto sub nested(code c, string path) { code inner = auto sub (string s) { return c(s); }; "
+            "return inner(path); }", "sandbox-arguments");
+        code closure = SandboxManager::createSystemPolicyCall(auto sub (string path) {
+            return path + ":" + hstat(path).type;
+        });
+        code method = SandboxManager::createSystemPolicyCall(\SandboxCapabilityFilesystemTest::describe());
+        foreach code cap in ((closure, method)) {
+            assertEq(fx.file + ":REGULAR", p.callFunction("through", cap, fx.file),
+                "a local variable of the caller is the argument of a capability");
+            assertEq(fx.file + ":REGULAR", p.callFunction("nested", cap, fx.file),
+                "a local variable of a closure in the caller is the argument of a capability");
+        }
+        code length = SandboxManager::createSystemPolicyCall(auto sub (string s) { return s; });
+        assertEq("abc/3", p.callFunction("expression", length, "abc"),
+            "an expression of the caller's variables is evaluated by the caller");
+        code assign = SandboxManager::createSystemPolicyCall(sub (reference<int> r) { r = 2; });
+        assertEq(2, p.callFunction("update", assign), "a reference to a local variable of the caller is updated");
+    }
+
+    #! Describes a file, as a capability that is a static method
+    static string describe(string path) {
+        return path + ":" + hstat(path).type;
     }
 
     #! A helper without a purpose resolves the governing sandbox, which is wrong for a policy check in a capability

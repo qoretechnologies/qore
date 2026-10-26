@@ -46,6 +46,8 @@
     sandboxed caller's policy instead.  The C++ API's \c QoreSandboxManagerHelper constructor without a purpose is
     deprecated: a module names \c QoreSandboxManagerHelper::Policy for a policy check and
     \c QoreSandboxManagerHelper::All for interrupts and limits.
+    The arguments of a call to a capability are evaluated by its caller: a sandboxed caller's local variables,
+    including those of its closures, could raise LVALUE-ERROR when passed to a capability.
 
     Connection schemes, their setup messages, connection options and allowed values now have source-owned
     translation catalogs. Unchanged HTTP options reused by REST and other schemes share their original

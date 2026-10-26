@@ -30,6 +30,7 @@
 */
 
 #include "qore/Qore.h"
+#include "qore/intern/QoreListNodeEvalOptionalRefHolder.h"
 #include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/qore_program_private.h"
@@ -1212,12 +1213,19 @@ public:
             return QoreValue();
         }
         if (trusted) {
+            // the arguments are expressions of the caller: they are evaluated in the caller's context, before the
+            // Program that registered the capability is entered, as the arguments of any call into another Program
+            // are; evaluated there, the caller's local variables are not found
+            QoreListNodeEvalOptionalRefHolder evaluated(args, xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
             ProgramThreadCountContextHelper registration_context(xsink, trusted_program, true);
             if (*xsink) {
                 return QoreValue();
             }
             QoreSandboxTrustedPolicyHelper privilege;
-            return callback->invoke(args, xsink);
+            return callback->invoke(*evaluated, xsink);
         }
         return callback->invoke(args, xsink);
     }
