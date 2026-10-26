@@ -23633,3 +23633,86 @@ All 391 standard-library qmods total 344786872 bytes before and 344803496 after 
 Preparation history is retained: an initial compile cast correction, an added fixture expectation corrected against AST behavior, recognition of the documented Release-only DGC skip, and a pre-timing helper refinement removing redundant generic integer conversions/setter/type calls. The final source was requalified from scratch. An initial module preparation passed correctness but failed the equal-RPATH preflight because libdir is not an AOTLinkConfig field. All comparison modules were freshly recompiled with emit_rpath=0 and an explicit common RPATH before any timing. No timing from failed preparations is pooled. Probe controls were adapted from a historical standalone fixture by namespace qualification and exporting three dynamic targets; their current module timings are not numerically compared with historical standalone runs.
 
 [Audit](audit-aot-prepared-indexed-int-add.md); [evidence](results-aot-prepared-indexed-int-add-macos-arm64.json).
+
+## Optimized module checkpoint after prepared indexed integer addition (2026-10-26)
+
+Performance branch b8d1fc2a9e versus unmodified develop 5a787725d4, both matching Release -O3 -DNDEBUG builds, allocation tracking off, LLVM 22.1.8, and qcc -O3 stripped modules on Apple M4 Pro/macOS 27.0.1 arm64. The branch is fetched/merged and installed before this checkpoint. It includes native module-reference binding, finite-key selector elimination, explicit native context reuse, Program-data lookup reuse, pre-entry reference decode reuse and prepared indexed integer addition. Namespace-level helper functions are public in the identical sources supplied to both compilers because pure develop lacks the private-reference correctness fix. No function body or develop production code is patched. Both variants are freshly linked with emit_rpath=0 and an identical explicit RPATH, verified for every module. Qore timings execute the loaded AOT modules; the small host uses IR to load and invoke them, and the actual module/runtime images are verified. These values must not be pooled with private-module experiments or older timing campaigns.
+
+All 53 Qore workloads run in default/reverse/shuffle-487 module layouts, three forks per layout, three warmups and three 150 ms samples, 4096 items and seed 7. Qore and Java jobs are interleaved within randomized kernel/fork blocks. Qore aggregation takes median fork means per layout and then the median of layouts. Java has three independent JVM forks per kernel, five warmups and three 300 ms samples; its aggregate is the median fork mean. Java does not have Qore layout variants. All times are whole-kernel ns/item, not isolated call latencies. Speedup is develop/branch; Qore/Java is branch time divided by Java time.
+
+|!Mixed CPU workload|!Develop ns/item|!Branch ns/item|!Speedup
+|mixed:csv_report|1081.803933|955.503718|1.132x
+|mixed:object_orders|2048.795049|1781.384048|1.150x
+|mixed:callback_pipeline|328.966870|123.947413|2.654x
+|mixed:text_index|1720.758612|1476.256761|1.166x
+
+The mixed scenarios include parsing, allocation, transformation, aggregation and formatting, with untimed input generation. They compare Qore builds only and are synthetic CPU workloads, without application-frequency weighting or a single overall score.
+
+|!Every workload|!Develop ns/item|!Branch ns/item|!Develop/branch|!Java ns/item|!Qore/Java
+|float:direct_local_float_return|78.061589|0.795553|98.122x|0.621837|1.279x
+|float:callback_local_float_return|346.838040|0.876061|395.906x|0.541097|1.619x
+|float:direct_local_float_result|75.685788|0.741066|102.131x|0.498549|1.486x
+|float:callback_local_float_result|232.899457|0.827912|281.309x|0.501681|1.650x
+|float:direct_loop_float_return|371.988588|5.863811|63.438x|0.660389|8.879x
+|float:callback_loop_float_return|546.559196|5.099768|107.173x|1.590900|3.206x
+|float:direct_float_add|64.310890|0.810059|79.390x|N/A|N/A
+|float:static_float_add|64.543957|0.797722|80.910x|N/A|N/A
+|float:typed_local_int_unary|238.383731|1.165569|204.521x|0.972233|1.199x
+|float:typed_local_float_unary|237.023694|0.900019|263.354x|N/A|N/A
+|float:result_float_add|220.580340|0.870331|253.444x|N/A|N/A
+|float:typed_local_int_result|133.198151|0.826220|161.214x|0.000213|3871.867x
+|micro:arithmetic|11.669884|1.571608|7.425x|0.940985|1.670x
+|micro:direct_call|21.494855|1.590645|13.513x|1.001198|1.589x
+|micro:method_call|11.836505|1.677565|7.056x|1.002068|1.674x
+|micro:indirect_call|271.917617|62.884885|4.324x|1.685146|37.317x
+|micro:polymorphic_call|299.649460|23.936802|12.518x|2.559452|9.352x
+|micro:polymorphic_expression_call|126.610398|11.195805|11.309x|2.580234|4.339x
+|micro:monomorphic_call|17.733452|4.205489|4.217x|1.686349|2.494x
+|micro:optional_method_call|193.037560|11.020945|17.516x|1.655332|6.658x
+|micro:polymorphic_float_call|311.402823|23.550965|13.223x|2.559124|9.203x
+|micro:polymorphic_float_expression_call|136.217552|11.310465|12.043x|2.581188|4.382x
+|micro:monomorphic_float_call|17.421327|4.433920|3.929x|1.662301|2.667x
+|micro:optional_float_method_call|198.822957|11.379546|17.472x|1.673168|6.801x
+|micro:boxed_float_method_call|232.260615|20.936629|11.094x|2.617287|7.999x
+|micro:dynamic_int_result_call|184.902762|11.473028|16.116x|3.130213|3.665x
+|micro:dynamic_int_result_fallback|402.999960|21.331713|18.892x|3.044087|7.008x
+|micro:boxed_int_method_call|210.626542|17.131515|12.295x|2.555138|6.705x
+|micro:boxed_int_method_fallback|252.492685|33.299948|7.582x|2.584260|12.886x
+|micro:boxed_float_method_fallback|293.271486|35.293841|8.309x|2.565657|13.756x
+|micro:boxed_int_method_effect|370.455006|89.107302|4.157x|1.886139|47.243x
+|micro:dynamic_float_result_call|196.750058|12.037231|16.345x|3.511511|3.428x
+|micro:indirect_wide|317.699211|63.316646|5.018x|1.694493|37.366x
+|micro:indirect_float|271.617003|60.471425|4.492x|1.665187|36.315x
+|micro:indirect_int_result|245.756759|62.421044|3.937x|1.910169|32.678x
+|micro:indirect_float_result|241.762811|59.157702|4.087x|2.907121|20.349x
+|micro:indirect_tagged_float|322.835487|59.950380|5.385x|1.648557|36.365x
+|micro:indirect_branch_float|278.331506|59.693042|4.663x|1.658173|35.999x
+|micro:indirect_affine|266.992339|62.424770|4.277x|1.638891|38.090x
+|micro:indirect_affine_wide|314.457223|62.753193|5.011x|1.657181|37.867x
+|micro:indirect_branch_int|273.365261|62.909860|4.345x|1.691175|37.199x
+|micro:dispatch_control|12.311074|1.930113|6.378x|1.007481|1.916x
+|micro:list_read|22.296581|2.924109|7.625x|0.289583|10.098x
+|micro:list_build|120.127577|28.795249|4.172x|2.586954|11.131x
+|micro:list_mutate|244.052615|147.945504|1.650x|4.567509|32.391x
+|micro:temporary_list|149.011970|1.697295|87.794x|1.199030|1.416x
+|micro:temporary_hash|332.528813|1.699034|195.716x|14.514119|0.117x
+|micro:closure_call|147.784405|19.042004|7.761x|1.688427|11.278x
+|micro:closure_capture|166.565484|24.799272|6.717x|1.777015|13.956x
+|mixed:csv_report|1081.803933|955.503718|1.132x|N/A|N/A
+|mixed:object_orders|2048.795049|1781.384048|1.150x|N/A|N/A
+|mixed:callback_pipeline|328.966870|123.947413|2.654x|N/A|N/A
+|mixed:text_index|1720.758612|1476.256761|1.166x|N/A|N/A
+
+The constant-result integer callback row is a loop-optimization comparison: Java is 0.000213391 ns/item (0.874048 ns per 4096-item invocation), versus Qore 0.826220 ns/item. A separate C2 machine-code diagnostic and decoded instructions are retained. An optimized constant reduction does not execute 4096 physical callbacks, so the normalized value must not be interpreted as callback latency. Qore retains per-iteration cancellation and exception bookkeeping.
+
+Inspection of the optimized Qore known-integer companions confirms that their callback dispatch is already eliminated. The constant-result companion computes count*17 outside the loop, but retains the loop for source-location publication, cancellation, pending-exception and thread-exit checks. The remaining constant-row gap therefore does not measure a physical callback call sequence.
+
+Layouts with >3% branch cost and disjoint observed fork ranges: none. Overlapping ranges do not establish equality or erase costs; every layout and fork is retained in the evidence.
+
+Java uses Temurin 25.0.2+10/JMH 1.37 with ordinary optimized execution, checked separately for C2 compilation of each benchmark or its generated measured loop. Known integer and floating callbacks allow ordinary inlining and loop optimization. Existing RuntimeBench indirect and closure targets retain DONT_INLINE controls; these are dynamic-boundary controls, not best-case Java inlining numbers. Qore uses its native language values and containers, while Java uses primitive arithmetic and its existing ArrayList/HashMap/object implementations. This is a workload comparison, not identical object representation. The Qore harness performs a clock read and string dispatch per 4096-item kernel invocation; JMH calls the Java benchmark method and consumes its result. Harness costs are amortized and retained, not subtracted, which matters most for sub-nanosecond kernels.
+
+All 6360 Qore reference checks and 675 Java checks pass; 45 Java kernels pass C2 diagnostics. All 1089 timing jobs/3267 windows are independently replayed. The host is shared, without affinity, frequency or thermal control; no owned build/test/profile runs overlap the measurements. These results do not establish startup, memory or IR/JIT improvements, production-wide speedup, universal Java parity or a global performance ceiling. The incremental costs recorded in the individual optimization experiments remain valid; cumulative branch/develop gains do not erase them.
+
+The next investigation is prepared immediate local reload after mutation. Current native code retains generic local lookup and general indexed reads after the prepared update; changes must preserve owned-value evaluation, reflection, deferred destruction, recursive/block-local lifetime and cancellation. Further choices will use these fresh results; Java parity or maximum performance is not assumed.
+
+[Raw evidence](results-post-indexed-module-macos-arm64.json); [all 62 audit checks](audit-post-indexed-checkpoint.md).
