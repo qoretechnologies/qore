@@ -5025,6 +5025,13 @@ while (*binary chunk = input.read(65536)) {
       left the code, as it is while another thread runs it, and is cleared then: the code that it ran crashed the
       process when it returned, and a deletion while a background thread ran the Program's code and waited for the
       deleting thread deadlocked (<a href="https://github.com/qoretechnologies/qore/issues/5538">issue 5538</a>)
+    - a builtin function or method gets a \c NULL argument as a value in every execution mode: with
+      <tt>--exec-mode=ir</tt>, \c jit and \c tiered and in compiled (AOT) code, C++ code testing a \c NULL
+      argument in a boolean context (<tt>QoreValue::operator bool()</tt>) took it for no value, as if it were
+      \c NOTHING, so that for example the \c odbc driver dropped a \c NULL bind argument given in a function or
+      method; \c NULL is a value however it is held, as with the AST interpreter and in %Qore 2.  The operator is
+      inline in the public header, so binary modules and compiled (AOT) \c .qmod files built against older 3.0
+      development headers keep the old behavior until they are rebuilt
     - zoneinfo files are read with their 64-bit data and the time zone rule at the end of the file, as RFC 9636
       describes: local times were UTC with "slim" zoneinfo files, which \c zic writes by default, and with all
       zoneinfo files, local times after 2037 had no daylight saving time, and many local times before 1970 had the

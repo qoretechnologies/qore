@@ -141,11 +141,12 @@ struct QoreSimpleValue {
     //! Set raw bits directly (for deserialization)
     DLLLOCAL void setRawBits(uint64_t b) noexcept { bits = b; }
 
-    //! Explicit bool conversion - true if not Nothing (bits != 0) and not Null
-    /** Note: This is a quick check, not a full type analysis */
+    //! Explicit bool conversion - true if the value is not NOTHING; NULL is a value
+    /** The same as QoreValue::operator bool(): NOTHING is encoded as 0 in every representation, and NULL is a value
+        however it is held (inline, or as the QoreNullNode)
+    */
     DLLLOCAL explicit operator bool() const noexcept {
-        // Nothing is 0, Null is 0xFFFB000000000001
-        return bits != 0 && bits != 0xFFFB000000000001ULL;
+        return bits != 0;
     }
 };
 
@@ -1221,8 +1222,14 @@ public:
     //! Assignment operator (trivial - just copies bits)
     QoreValue& operator=(const QoreValue& n) noexcept = default;
 
-    //! Returns true if the value is neither NOTHING nor NULL
-    DLLLOCAL explicit operator bool() const { return bits != VAL_NOTHING && bits != VAL_NULL; }
+    //! Returns true if the value is not NOTHING; NULL is a value
+    /** NULL gives the same result whether it is held inline (makeNull(), as the IR and JIT engines hold it) or as the
+        QoreNullNode (as the AST interpreter mostly holds it), so C++ code reading a value, such as a builtin reading
+        its arguments, sees the same value in every execution mode.  A value is NOTHING only as VAL_NOTHING: every
+        constructor and setter stores a null pointer and the QoreNothingNode as VAL_NOTHING.  Use isNullOrNothing()
+        to also exclude NULL, and getAsBool() for the value in a Qore boolean context.
+    */
+    DLLLOCAL explicit operator bool() const { return bits != VAL_NOTHING; }
 
     // ========================================================================
     // Raw access (for debugging and low-level operations)
@@ -1382,7 +1389,7 @@ public:
         return v;
     }
 
-    //! returns true if the value is neither NOTHING nor NULL
+    //! returns true if the value is not NOTHING; NULL is a value
     DLLLOCAL operator bool() const {
         return (bool)v;
     }
@@ -1418,7 +1425,7 @@ public:
             needs_deref = false;
     }
 
-    //! returns true if the value is neither NOTHING nor NULL
+    //! returns true if the value is not NOTHING; NULL is a value
     DLLLOCAL operator bool() const {
         return (bool)v;
     }

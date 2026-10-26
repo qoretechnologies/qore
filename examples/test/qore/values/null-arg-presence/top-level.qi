@@ -1,0 +1,14 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# the checks from the top-level code of a worker, then the checks from NullArgPresenceChecks, each printed on a line;
+# they run twice: when native compilation follows the first call of a function, the first pass runs with the IR
+# interpreter and the second one as native code with --exec-mode=jit or tiered
+
+for (int i = 0; i < 2; ++i) {
+    NullArgPresenceChecks::Checker c();
+    auto n = NULL;
+    c.checkContext("top level", dbg_arg_presence(NULL, 2), dbg_arg_presence(NOTHING, 2), dbg_arg_presence(n, 2));
+    foreach string line in (c.getResults() + NullArgPresenceChecks::get_results()) {
+        printf("%s\n", line);
+    }
+}

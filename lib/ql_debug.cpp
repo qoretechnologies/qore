@@ -459,13 +459,36 @@ static void ut_qorevalue_operator_bool_null(UnitTestCounters& c) {
     QoreValue zero(0);
     QoreValue false_value(false);
 
+    QoreValue null_node(&Null);
+
+    // C++ bool context tells if there is a value: NOTHING is none, and NULL is a value however it is held, as with
+    // the AST interpreter (a DBI driver binds a NULL argument only if it is present)
     UT_ASSERT(c, !(bool)nothing, "QoreValue NOTHING is false in C++ bool context");
-    UT_ASSERT(c, !(bool)null_value, "QoreValue NULL is false in C++ bool context");
+    UT_ASSERT(c, (bool)null_value, "QoreValue inline NULL is a present value in C++ bool context");
+    UT_ASSERT(c, (bool)null_node, "QoreValue QoreNullNode is a present value in C++ bool context");
     UT_ASSERT(c, (bool)zero, "QoreValue int zero remains a present value in C++ bool context");
     UT_ASSERT(c, (bool)false_value, "QoreValue False remains a present value in C++ bool context");
+    UT_ASSERT(c, !(bool)QoreValue(static_cast<AbstractQoreNode*>(nullptr)), "a null node pointer is NOTHING");
+    UT_ASSERT(c, !(bool)QoreValue(static_cast<const AbstractQoreNode*>(&Nothing)), "the QoreNothingNode is NOTHING");
 
+    QoreSimpleValue simple_nothing(nothing);
     QoreSimpleValue simple_null(null_value);
-    UT_ASSERT(c, !(bool)simple_null, "QoreSimpleValue NULL is false in C++ bool context");
+    QoreSimpleValue simple_null_node(null_node);
+    UT_ASSERT(c, !(bool)simple_nothing, "QoreSimpleValue NOTHING is false in C++ bool context");
+    UT_ASSERT(c, (bool)simple_null, "QoreSimpleValue inline NULL is a present value in C++ bool context");
+    UT_ASSERT(c, (bool)simple_null_node, "QoreSimpleValue QoreNullNode is a present value in C++ bool context");
+
+    // the holders give the same result as the value they hold
+    ExceptionSink xsink;
+    {
+        ValueHolder h(QoreValue::makeNull(), &xsink);
+        UT_ASSERT(c, (bool)h, "ValueHolder NULL is a present value in C++ bool context");
+        ValueHolder hn(&xsink);
+        UT_ASSERT(c, !(bool)hn, "ValueHolder NOTHING is false in C++ bool context");
+        ValueOptionalRefHolder oh(QoreValue(&Null), false, &xsink);
+        UT_ASSERT(c, (bool)oh, "ValueOptionalRefHolder NULL is a present value in C++ bool context");
+    }
+    UT_ASSERT(c, !xsink, "no exception from the holders");
 }
 
 //! verifies that NULL held inline in a QoreValue is the same value as the QoreNullNode
@@ -485,6 +508,7 @@ static void ut_qorevalue_null_representations(UnitTestCounters& c) {
         UT_ASSERT(c, v.getType() == NT_NULL, (label + "getType()").c_str());
         UT_ASSERT(c, !strcmp(v.getTypeName(), "NULL"), (label + "getTypeName()").c_str());
         UT_ASSERT(c, v.isNull() && v.isNullOrNothing() && !v.isNothing(), (label + "isNull()").c_str());
+        UT_ASSERT(c, (bool)v && (bool)QoreSimpleValue(v), (label + "operator bool()").c_str());
         UT_ASSERT(c, v.getTypeInfo() == nullTypeInfo, (label + "getTypeInfo()").c_str());
         UT_ASSERT(c, v.getFullTypeInfo() == nullTypeInfo, (label + "getFullTypeInfo()").c_str());
         UT_ASSERT(c, !strcmp(v.getFullTypeName(), "NULL"), (label + "getFullTypeName()").c_str());
@@ -12831,6 +12855,28 @@ static QoreValue f_dbg_ref_set_unique_remove_key(const QoreListNode* params, Run
     return rv.release();
 }
 
+//! returns, for each argument, whether it holds a value in a C++ boolean context, and how it is held
+/** For each argument passed, a hash with the result of QoreValue::operator bool() for it ("present"), the type name
+    ("type"), and whether it is held inline in the QoreValue rather than as a node pointer ("inline").  C++ code such
+    as a DBI driver reads the arguments of a builtin with these accessors; tests use this to check that an argument
+    reads the same in every execution mode, whichever representation the engine passes.
+*/
+static QoreValue f_dbg_arg_presence(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    size_t count = params ? params->size() : 0;
+    for (size_t i = 0; i < count; ++i) {
+        QoreValue v = params->retrieveEntry(i);
+        QoreSimpleValue sv(v);
+        ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+        h->setKeyValue("present", (bool)v, xsink);
+        h->setKeyValue("simple_present", (bool)sv, xsink);
+        h->setKeyValue("type", new QoreStringNode(v.getTypeName()), xsink);
+        h->setKeyValue("inline", !v.isNothing() && !v.isPointer(), xsink);
+        rv->push(h.release(), xsink);
+    }
+    return rv.release();
+}
+
 //! returns True if the argument is stored in inline short string storage
 static QoreValue f_dbg_is_short_string(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return get_param_value(params, 0).isShortString();
@@ -14200,6 +14246,8 @@ void init_debug_functions(QoreNamespace& qns) {
         stringTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "value");
     qns.addBuiltinVariant("dbg_is_short_string", f_dbg_is_short_string, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         boolTypeInfo, 1, autoTypeInfo, QORE_PARAM_NO_ARG, "value");
+    qns.addBuiltinVariant("dbg_arg_presence", f_dbg_arg_presence, QCF_USES_EXTRA_ARGS, QDOM_DEBUG_HOOK,
+        listTypeInfo);
     qns.addBuiltinVariant("dbg_get_lvalue_scan_count", f_dbg_get_lvalue_scan_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_scan_object_count", f_dbg_get_scan_object_count, QCF_NO_FLAGS,
