@@ -24808,3 +24808,106 @@ All 2766 jobs/8298 windows are retained and independently replayed. No owned bui
 No fresh Java/develop ratio, IR/JIT speed estimate, weighted application gain, full-suite/sanitizer/Linux result or global ceiling. The preceding cumulative optimized checkpoint remains separately identified by its measured revisions. Next investigate whether stronger invocation-lifetime and binding proofs can remove repeated closure admission work, or whether reusable state is beneficial after inlining; never retain closures merely to cache them or skip live Program/cancellation checks.
 
 [Audit](audit-closure-inline.md); [evidence](results-closure-inline-macos-arm64.json).
+
+## Closure context admission at binding: rejected (2026-10-27)
+
+The candidate validates immutable AOT context uses_self/uses_argv flags in the existing v1/v2 companion binders before release-CAS publication, then relies on that proof in scalar calls with a Debug invariant. Live body, Program, debugger, stack, exception, ownership and capture checks remain. This is runtime binding-time validation, not a new compile-time proof or ABI. Both modified C++ files and the 20 added admission assertions are restored to c583a53ac6; the candidate was never installed.
+
+The source-bound baseline is the validated optimized c583a53ac6 installation, including develop 55a10023c2 and retained frame inlining ae315f495b. Both runtimes use Release -O3 -DNDEBUG with allocation tracking off, LLVM 22.1.8 and the same 15 freshly compiled qcc -O3 native modules. The 73-workload screen uses three forks, default/reverse/shuffle-487 layouts, 4096 items, one warmup and three 150 ms measured windows. Both targets must improve at least 1% aggregate and improve in every layout to continue. Values below are whole-kernel ns/item, not isolated call latency.
+
+Reject the candidate under the prospective sustained-call gate. Plain closures improve only 0.446% aggregate (14.604366 to 14.539198 ns/item), below the required 1%; captured closures change +0.002% (20.225536 to 20.226016), with a small default-layout cost. Plain closures improve in all three layouts, but neither target passes the aggregate threshold. No confirmation, short-call or populated-context timing is run after this failed screen, as planned. All 73 workloads, 1314 jobs and 3942 measured windows remain available. The candidate passes correctness qualification, but removing four hot-path instructions does not establish a useful speedup.
+
+|!Screen workload|!Before ns/item|!Candidate ns/item|!Change
+|float:direct_local_float_return|0.801625|0.789309|-1.536%
+|float:callback_local_float_return|0.862996|0.859474|-0.408%
+|float:direct_local_float_result|0.750256|0.762462|+1.627%
+|float:callback_local_float_result|0.809706|0.817740|+0.992%
+|float:direct_loop_float_return|5.816605|5.815247|-0.023%
+|float:callback_loop_float_return|5.082732|5.083901|+0.023%
+|float:direct_float_add|0.841590|0.824936|-1.979%
+|float:static_float_add|0.809812|0.821850|+1.486%
+|float:typed_local_int_unary|1.194236|1.191787|-0.205%
+|float:typed_local_float_unary|0.892112|0.898463|+0.712%
+|float:result_float_add|0.844379|0.862869|+2.190%
+|float:typed_local_int_result|0.822582|0.838521|+1.938%
+|micro:arithmetic|1.586383|1.594377|+0.504%
+|micro:direct_call|1.593204|1.594402|+0.075%
+|micro:method_call|1.661227|1.668173|+0.418%
+|micro:indirect_call|58.083825|58.810239|+1.251%
+|micro:polymorphic_call|23.688178|23.651523|-0.155%
+|micro:polymorphic_expression_call|11.320263|11.192642|-1.127%
+|micro:monomorphic_call|3.885596|3.947257|+1.587%
+|micro:optional_method_call|11.030456|11.138396|+0.979%
+|micro:polymorphic_float_call|23.937292|24.174531|+0.991%
+|micro:polymorphic_float_expression_call|11.593622|11.623630|+0.259%
+|micro:monomorphic_float_call|4.211582|4.221488|+0.235%
+|micro:optional_float_method_call|11.584918|11.413574|-1.479%
+|micro:boxed_float_method_call|21.054647|20.574298|-2.281%
+|micro:dynamic_int_result_call|11.298383|11.221916|-0.677%
+|micro:dynamic_int_result_fallback|20.961902|21.102426|+0.670%
+|micro:boxed_int_method_call|17.025056|16.926052|-0.582%
+|micro:boxed_int_method_fallback|33.653583|33.176348|-1.418%
+|micro:boxed_float_method_fallback|34.978125|34.627713|-1.002%
+|micro:boxed_int_method_effect|89.903032|89.534909|-0.409%
+|micro:dynamic_float_result_call|12.271055|12.399081|+1.043%
+|micro:indirect_wide|58.594093|59.317228|+1.234%
+|micro:indirect_float|58.277798|59.253424|+1.674%
+|micro:indirect_int_result|58.497159|58.705973|+0.357%
+|micro:indirect_float_result|57.925014|58.595345|+1.157%
+|micro:indirect_tagged_float|59.002940|59.882255|+1.490%
+|micro:indirect_branch_float|58.913235|59.016101|+0.175%
+|micro:indirect_affine|58.545502|58.798773|+0.433%
+|micro:indirect_affine_wide|58.453749|58.930464|+0.816%
+|micro:indirect_branch_int|58.431731|59.018160|+1.004%
+|micro:dispatch_control|1.983272|1.993832|+0.532%
+|micro:list_read|2.959097|2.963957|+0.164%
+|micro:list_build|28.514166|28.633416|+0.418%
+|micro:list_mutate|133.808962|134.113676|+0.228%
+|micro:temporary_list|1.779284|1.788410|+0.513%
+|micro:temporary_hash|1.746562|1.761429|+0.851%
+|micro:closure_call|14.604366|14.539198|-0.446%
+|micro:closure_capture|20.225536|20.226016|+0.002%
+|mixed:csv_report|931.645633|930.190023|-0.156%
+|mixed:object_orders|1765.473865|1776.064918|+0.600%
+|mixed:callback_pipeline|121.119159|121.576122|+0.377%
+|mixed:text_index|1466.605569|1456.996945|-0.655%
+|probe:object_loop|400.467724|397.180663|-0.821%
+|probe:object_short|1598.119763|1583.770457|-0.898%
+|probe:float_loop|431.688729|434.842526|+0.731%
+|probe:float_short|1610.825691|1609.088400|-0.108%
+|probe:string_loop|360.622854|362.233063|+0.447%
+|probe:string_short|1484.254182|1459.852389|-1.644%
+|probe:effect_loop|447.047551|457.395791|+2.315%
+|probe:effect_short|1668.320486|1644.294186|-1.440%
+|probe:two_read_loop|488.452761|490.838759|+0.488%
+|probe:two_read_short|1665.271302|1675.196792|+0.596%
+|probe:default_loop|761.618374|764.644666|+0.397%
+|probe:default_short|1982.143469|1977.085047|-0.255%
+|probe:string_result_loop|515.138597|516.820375|+0.326%
+|probe:string_result_short|1734.244298|1730.422423|-0.220%
+|index:list_positive|8.846860|8.860163|+0.150%
+|index:list_negative|8.810811|8.888615|+0.883%
+|index:binary_positive|8.554556|8.536042|-0.216%
+|index:binary_negative|9.077562|9.035810|-0.460%
+|index:buffer_positive|15.759206|15.955498|+1.246%
+|index:buffer_negative|15.914627|15.768665|-0.917%
+
+|!Closure target|!Layout|!Before ns/item|!Candidate ns/item|!Change
+|micro:closure_call|default|14.642927|14.635341|-0.052%
+|micro:closure_call|reverse|14.604366|14.423073|-1.241%
+|micro:closure_call|shuffle-487|14.576626|14.539198|-0.257%
+|micro:closure_capture|default|20.225536|20.231727|+0.031%
+|micro:closure_capture|reverse|20.046932|19.738535|-1.538%
+|micro:closure_capture|shuffle-487|20.548759|20.226016|-1.571%
+
+Screen costs include indirect integer +1.251%, indirect float +1.674%, orders +0.600% and callback pipeline +0.377%; CSV changes -0.156% and text indexing -0.655%. The effect-loop shuffle layout has a +3.169% adverse flag with disjoint fork ranges; its aggregate cost is +2.315%. These are screening observations without independent confirmation, not established repeated regressions. No aggregate cost reaches 3%. All results, including small changes, remain in the table and evidence.
+
+Release and Debug each pass 30 QUnit fixtures/198 cases/8117 assertions and three standalone fixtures, with no skips. Native checks increase 2917 to 2937 for the rejected candidate. Standard 1110, fresh baseline 4212, paired 8424 and new-compiler 1053 reference checks pass. All 391 Release qmod links/hashes are restored after Debug. New tests cover both binders, all context-flag combinations, invalid/missing normal bodies or entries, first-entry preservation and independent entry versions. Context flags are initialized before context publication; only the checked binders publish the companion entries.
+
+Actual ARM64 code moves two ldrb/tbnz pairs from the scalar helper into each binder. Helper static instructions change 300 to 296, binders 12 to 17; helper stack stays 352 bytes, miss dispatcher 139 instructions and exports 9035 names. Normal and exceptional frame restoration, stack-reader completion and live guards remain. Four separate profiles verify the selected native closure paths and images; neither profiles nor static sizes are speed estimates. New-compiler LLVM and runtime identity match, and all timing variants use byte-identical modules.
+
+All 1314 jobs/3942 measured windows are independently replayed, with actual process completion receipts and dependency checks. No owned build/test/profile or heavy archival scan overlaps timing. Shared-host startup activity includes corespotlightd at 105.5% and a Chrome renderer at 106.0% CPU; this snapshot does not locate activity in individual windows. No affinity, frequency, thermal control or host exclusivity is claimed. No samples are discarded or timing phase rerun. The gated confirmation/control drivers were prepared but not executed.
+
+The installed c583a53ac6 runtime remains the validated baseline. This result does not update the separately measured Java/develop ratios or establish maximum performance. Next inspect a nonvirtual owning-Program lookup for closures, beginning with complete lifetime/Program-writer, private-layout and compile-only allocation/code-shape checks. Preserve the live Program equality check and existing ownership; no new Program-pointer candidate is implemented or measured here.
+
+[Audit](audit-closure-context-admission.md); [evidence](results-closure-context-admission-macos-arm64.json).
