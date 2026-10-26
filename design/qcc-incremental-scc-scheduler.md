@@ -901,6 +901,32 @@ the declaration contract every member must publish before any depfile is rewritt
 in the pre-pass that already wrote the compile contracts, and the narrowing itself reads the
 symbol index the passes around it already read.
 
+### What the aggregate contract covers
+
+The native-registration script aggregate is compiled from the group's sources in one parse,
+but it is rebuilt only when the aggregate contract of one of its members moves, so that
+contract has to cover everything the aggregate embeds from a member: its declaration rows, the
+declaration locations (`aggregate_declaration_location_v1`), and the values the declaration
+sections carry that no consumer compiles against -- the defaults of instance members, static
+variables and hashdecl members, the default arguments of functions and methods, and the
+arguments a constructor passes to its base classes.  The linked program initializes members and
+fills in omitted arguments from those values, so a member that only changed an initializer was
+recompiled while the aggregate kept, and the program ran, the old default.
+
+Each such value is written a second time to a writer of its own and hashed
+(`aotRecordAggregateDeclarationDigest()`), so the digest follows the value and not the offsets
+its strings take in the object's string pool, which move with every edit of the source.  The
+digests are symbol-index context rows whose keys start with `aggregate_`; the compile contract
+leaves out every such row.  The declaration contract is the same stamp, so a consumer whose
+generation follows it is recompiled when an embedded default moves, as it already was when a
+declaration only moved to another line.
+A class row also names the class's own instance members (name, type, access, transient), which
+consumers do compile against, so adding a member or changing its type moves both contracts.
+
+Global variable initializers, pending constant initializers and executable bodies are not in the
+aggregate: the linked per-source object runs them.  Enum member values, typedef types and literal
+constant values are already declaration rows.
+
 ## Compiling a component is not what makes it stale
 
 A generation token names a component's members **and its prerequisite components**, so it is
@@ -1409,7 +1435,11 @@ which two builders can still race to restore.
   left, that code a preloaded sibling runs at parse commit finds what it calls -- a static
   method, a function and a construction -- after its caller was compiled standalone, and that a
   partial parse's constant initializers run a preloaded provider's body on every build, not every
-  other one
+  other one, and that a changed member initializer rebuilds the script aggregate, not the
+  consumers, and the linked program sees the new default
+- `examples/test/ir/AOTAggregateContractDefaults.qtest` — which of a source object's contracts a
+  member initializer, a static or hashdecl default, a default argument, a base class constructor
+  argument, a member type, a new member and a method body move
 - `examples/test/qore/misc/static-var-deferred-init.qtest` -- a static variable initializer is
   deferred only at parse commit: reads report what is still pending, a failure is reported by
   every read, and initializers are classified from their own exceptions

@@ -1209,10 +1209,11 @@ class CMakeQoProvider {
     public {
         const StaticConst = \"provider\";
         static string StaticText = \"state\";
+        string tag = \"tag\";
     }
     constructor() {}
     static string label() { return StaticConst + \":\" + StaticText; }
-    string get() { return label(); }
+    string get() { return label() + \":\" + tag; }
 }
 string sub cmakeQoFreeFunction() { return CMakeQoProvider::label(); }
 ");
@@ -1812,7 +1813,7 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
         string source_out = run(sprintf("cd %s && %s %s", src_dir, source_qore, source_runner));
         string static_out = run(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s",
             qore_build_dir, build_dir + "/late-modules", build_dir + "/qo-static-host"));
-        assertEq("provider:state:provider:state:provider:state:provider:state:hash:slow:callref:42:const:global:first,second:5000:23:NOTHING:object:base:one,two\n",
+        assertEq("provider:state:tag:provider:state:provider:state:provider:state:hash:slow:callref:42:const:global:first,second:5000:23:NOTHING:object:base:one,two\n",
             source_out, "source-mode fixture output");
         assertEq(source_out, static_out,
             "statically linked AOT aggregate is load-equivalent to parsed source");
@@ -2306,6 +2307,32 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
         string same_content = run(sprintf("cmake --build %s -- -j33", build_dir));
         assertEq(link_content_stamp, read(build_dir + "/linked.qo.content.stamp"),
             "same-content source mtime rebuild does not relink aggregate: " + same_content);
+
+        # The script aggregate embeds the declarations of its sources, with the defaults of their members, and the
+        # linked program initializes an object's members from them.  A source that changes only a member initializer
+        # must therefore rebuild the aggregate; its compile contract, which its consumers compile against, does not
+        # move.
+        date member_default_aggregate_mtime = mtime(build_dir + "/script-aggregate.qo");
+        string member_default_compile_contract = read(provider_object + ".compile-contract.stamp");
+        string member_default_aggregate_contract = read(provider_object + ".aggregate-contract.stamp");
+        string tagged_provider = read(provider);
+        assertTrue(tagged_provider.find("string tag = \"tag\";") != -1,
+            "the provider declares the member initializer the fixture changes");
+        write(provider, replace(tagged_provider, "string tag = \"tag\";", "string tag = \"retagged\";"));
+        string member_default_change = run(sprintf("cmake --build %s -- -j33", build_dir));
+        assertEq(member_default_compile_contract, read(provider_object + ".compile-contract.stamp"),
+            "a member initializer does not move the provider's compile contract: " + member_default_change);
+        assertNeq(member_default_aggregate_contract, read(provider_object + ".aggregate-contract.stamp"),
+            "a member initializer moves the provider's aggregate contract: " + member_default_change);
+        assertNeq(member_default_aggregate_mtime, mtime(build_dir + "/script-aggregate.qo"),
+            "a member initializer rebuilds the script aggregate: " + member_default_change);
+        string member_default_source_out = run(sprintf("cd %s && %s %s", src_dir, source_qore, source_runner));
+        string member_default_static_out = run(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s",
+            qore_build_dir, build_dir + "/late-modules", build_dir + "/qo-static-host"));
+        assertTrue(member_default_source_out.find(":retagged:") != -1,
+            "the parsed source sees the new member default: " + member_default_source_out);
+        assertEq(member_default_source_out, member_default_static_out,
+            "the statically linked program sees the new member default");
     }
 
     #! A source whose body takes a call reference to each named function.

@@ -6006,9 +6006,11 @@ static bool build_aot_contract_content(const QoreAOTSymbolIndex& index,
             error = "operation cancelled during AOT context compile-contract collection";
             return false;
         }
-        // Declaration locations affect the native-registration aggregate, not
-        // the independently compiled source object's consumer contract.
-        if (index.context[i].first == "aggregate_declaration_location_v1") {
+        // Aggregate-only rows (declaration locations, digests of the declaration
+        // records with their embedded defaults) affect the native-registration
+        // aggregate, not the independently compiled source object's consumer
+        // contract.
+        if (!index.context[i].first.compare(0, 10, "aggregate_")) {
             continue;
         }
         std::string row = "context\t";

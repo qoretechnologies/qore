@@ -26693,6 +26693,8 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
     bool split_codegen = false;
     {
         QoreAOTBinaryWriter writer;
+        // the object's aggregate contract covers what an aggregate built from it embeds from its declaration records
+        writer.emit_aggregate_declaration_digests = true;
         QoreAOTBinaryHeader hdr{};
         hdr.magic = QORE_AOT_BINARY_MAGIC;
         hdr.version = QORE_AOT_BINARY_VERSION;
@@ -29522,6 +29524,8 @@ bool QoreAOT::compileScriptFile(const char* target_file,
     bool split_codegen = false;
     {
         QoreAOTBinaryWriter writer;
+        // the object's aggregate contract covers what an aggregate built from it embeds from its declaration records
+        writer.emit_aggregate_declaration_digests = true;
         QoreAOTBinaryHeader hdr{};
         hdr.magic = QORE_AOT_BINARY_MAGIC;
         hdr.version = QORE_AOT_BINARY_VERSION;
@@ -30112,6 +30116,8 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
         std::vector<AOTCompiledFuncWithSlots> func_slots;
         {
             QoreAOTBinaryWriter writer;
+            // the object's aggregate contract covers what an aggregate built from it embeds from its declaration records
+            writer.emit_aggregate_declaration_digests = true;
             QoreAOTBinaryHeader hdr{};
             hdr.magic = QORE_AOT_BINARY_MAGIC;
             hdr.version = QORE_AOT_BINARY_VERSION;

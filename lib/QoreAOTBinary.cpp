@@ -7064,6 +7064,19 @@ static std::string aotClassDeclHash(const AOTSerializeState::ClassInfo& ci) {
             parts.push_back(base && base->is_virtual ? "virtual" : "non-virtual");
         }
     }
+    // the class's own instance members: consumers compile member accesses against their names, types and access
+    if (priv) {
+        for (auto& mi : priv->members.member_list) {
+            if (!mi.second->local()) {
+                continue;
+            }
+            parts.push_back("member");
+            parts.push_back(mi.first ? mi.first : "");
+            parts.push_back(aotTypePathString(mi.second->getTypeInfo()));
+            parts.push_back(aotVisibility(mi.second->access));
+            parts.push_back(mi.second->getTransient() ? "transient" : "persistent");
+        }
+    }
     return aotHashParts(parts);
 }
 
@@ -8729,6 +8742,17 @@ bool serializeSymbolIndex(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
         }));
     }
 
+    // Native-registration aggregates also embed the defaults and base class constructor arguments of the
+    // declarations; serializeNamespaceTree() recorded a digest of each one as an aggregate-only row.
+    for (size_t i = 0; i < writer.aggregate_declaration_digests.size(); ++i) {
+        if (!aotCheckSymbolIndexCancel(i, error, "AOT aggregate declaration-digest collection")) {
+            writer.aggregate_declaration_digests.clear();
+            return false;
+        }
+        context.push_back(std::move(writer.aggregate_declaration_digests[i]));
+    }
+    writer.aggregate_declaration_digests.clear();
+
     uint32_t sec_idx = writer.beginSection(QoreAOTSectionType::SYMBOL_INDEX);
     writer.writeU16(QORE_AOT_SYMBOL_INDEX_VERSION);
     writer.writeU16(0);
@@ -10220,6 +10244,95 @@ static void writePendingConstantParseValue(QoreAOTBinaryWriter& writer, const Co
     }
 }
 
+//! Returns true if the variant's signature declares a default argument
+static bool aotVariantHasDefaultArgs(const AbstractQoreFunctionVariant* v) {
+    const AbstractFunctionSignature* sig = const_cast<AbstractQoreFunctionVariant*>(v)->getSignature();
+    if (!sig) {
+        return false;
+    }
+    for (unsigned i = 0, e = sig->numParams(); i < e; ++i) {
+        if (sig->hasDefaultArg(i)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+//! Records a digest of a default or base class constructor argument that a script aggregate embeds
+/** A native-registration script aggregate embeds the declarations of its sources with the defaults of their class
+    members, static variables and hashdecl members, the default arguments of their functions and methods and the
+    arguments their constructors pass to base classes, and it is rebuilt only when the aggregate contract of one of
+    its sources moves.  The symbol index records what the consumers of a source compile against, which none of these
+    are, so a source that changed only a member initializer was recompiled while the aggregate kept the old default.
+
+    This writes the payload a second time to a writer of its own and hashes the result, so the digest depends only on
+    the payload and not on where its strings and type paths land in this blob's tables, which move with every edit
+    of the source.  The digest becomes an aggregate-only row of the symbol index, which the aggregate (declaration)
+    contract covers and the compile contract leaves out, as no consumer compiles against an embedded default.
+
+    @param writer the writer of the object; does nothing unless its emit_aggregate_declaration_digests flag is set
+    @param key the row key, naming the kind of payload
+    @param owner the declaration the payload belongs to
+    @param name the member, variant or argument the payload belongs to
+    @param error receives the reason on failure
+    @param write_payload writes the payload to the writer passed to it, returning false on failure; it already
+    succeeded for @a writer
+
+    @return true on success, false if writing the payload failed (only if the operation was cancelled)
+*/
+template <typename WritePayload>
+static bool aotRecordAggregateDeclarationDigest(QoreAOTBinaryWriter& writer, const char* key,
+        const std::string& owner, const std::string& name, std::string& error, WritePayload&& write_payload) {
+    if (!writer.emit_aggregate_declaration_digests) {
+        return true;
+    }
+    QoreAOTBinaryWriter digest_writer;
+    digest_writer.const_reverse_map = writer.const_reverse_map;
+    digest_writer.feature_flags = writer.feature_flags;
+    digest_writer.emit_parse_constant_values = writer.emit_parse_constant_values;
+    digest_writer.current_blob_const_fqns = writer.current_blob_const_fqns;
+    digest_writer.available_const_ref_fqns = writer.available_const_ref_fqns;
+    digest_writer.ir_local_binding_source = writer.ir_local_binding_source;
+    digest_writer.serialization_program = writer.serialization_program;
+    digest_writer.serialization_module_name = writer.serialization_module_name;
+    digest_writer.serialization_keep_modules = writer.serialization_keep_modules;
+    if (!writer.type_path_table.empty()) {
+        // variant signatures use the type table only once it has been started
+        digest_writer.internTypePath(nullptr);
+    }
+
+    // the payload already reported any diagnostic it had through the object's own writer; keep that state
+    std::string pending_expr_error;
+    bool has_pending_expr_error = qoreAOTTakeExprSerializationError(pending_expr_error);
+    std::string payload_error;
+    bool ok = write_payload(digest_writer, payload_error);
+    qoreAOTClearExprSerializationError();
+    if (has_pending_expr_error) {
+        qoreAOTSetExprSerializationError(std::move(pending_expr_error));
+    }
+    if (!ok) {
+        error = payload_error.empty() ? std::string("operation cancelled during AOT declaration digest") : payload_error;
+        return false;
+    }
+
+    const std::vector<uint8_t>& bytes = digest_writer.getBuffer();
+    const std::vector<char>& strings = digest_writer.strings.getData();
+    std::string type_paths;
+    for (const std::string& type_path : digest_writer.type_path_table) {
+        type_paths += type_path;
+        type_paths += '\0';
+    }
+    writer.aggregate_declaration_digests.emplace_back(key, aotHashParts({
+        key,
+        aotStripLeadingColons(owner),
+        name,
+        std::string(bytes.begin(), bytes.end()),
+        std::string(strings.begin(), strings.end()),
+        type_paths,
+    }));
+    return true;
+}
+
 //! Write CLASSES section
 static bool writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeState& state,
         std::string& error) {
@@ -10360,7 +10473,13 @@ static bool writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                 writer.writeU8(1);
                 if (!writeMemberDefaultValue(writer, mi.second->exp, "class",
                         priv->path.c_str(), mi.first, error, nullptr,
-                        &member_default_locals)) {
+                        &member_default_locals)
+                        || !aotRecordAggregateDeclarationDigest(writer, "aggregate_member_default_v1", priv->path,
+                            mi.first, error,
+                            [&](QoreAOTBinaryWriter& digest_writer, std::string& digest_error) {
+                                return writeMemberDefaultValue(digest_writer, mi.second->exp, "class",
+                                    priv->path.c_str(), mi.first, digest_error, nullptr, &member_default_locals);
+                            })) {
                     return false;
                 }
             } else {
@@ -10385,7 +10504,13 @@ static bool writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
             if (vi.second->exp) {
                 writer.writeU8(1);
                 if (!writeMemberDefaultValue(writer, vi.second->exp, "class",
-                        priv->path.c_str(), vi.first, error)) {
+                        priv->path.c_str(), vi.first, error)
+                        || !aotRecordAggregateDeclarationDigest(writer, "aggregate_static_default_v1", priv->path,
+                            vi.first, error,
+                            [&](QoreAOTBinaryWriter& digest_writer, std::string& digest_error) {
+                                return writeMemberDefaultValue(digest_writer, vi.second->exp, "class",
+                                    priv->path.c_str(), vi.first, digest_error);
+                            })) {
                     return false;
                 }
             } else {
@@ -10549,7 +10674,13 @@ static bool writeHashDeclsSection(QoreAOTBinaryWriter& writer, const AOTSerializ
                 if (mi.second->exp) {
                     writer.writeU8(1);
                     if (!writeMemberDefaultValue(writer, mi.second->exp, "hashdecl",
-                            nspath.c_str(), mi.first, error)) {
+                            nspath.c_str(), mi.first, error)
+                            || !aotRecordAggregateDeclarationDigest(writer, "aggregate_hashdecl_default_v1", nspath,
+                                mi.first, error,
+                                [&](QoreAOTBinaryWriter& digest_writer, std::string& digest_error) {
+                                    return writeMemberDefaultValue(digest_writer, mi.second->exp, "hashdecl",
+                                        nspath.c_str(), mi.first, digest_error);
+                                })) {
                         return false;
                     }
                 } else {
@@ -10815,6 +10946,15 @@ static bool writeFunctionsSection(QoreAOTBinaryWriter& writer, const AOTSerializ
                     }
                     writer.writeU8(vflags);
                     if (!writeVariantSignature(writer, v, error)) {
+                        return false;
+                    }
+                    // the signature embeds the default arguments, which the aggregate contract must cover
+                    if (aotVariantHasDefaultArgs(v)
+                            && !aotRecordAggregateDeclarationDigest(writer, "aggregate_default_args_v1",
+                                fi.entry->getName(), std::to_string(variant_index), error,
+                                [v](QoreAOTBinaryWriter& digest_writer, std::string& digest_error) {
+                                    return writeVariantSignature(digest_writer, v, digest_error);
+                                })) {
                         return false;
                     }
                 }
@@ -11143,6 +11283,16 @@ static bool writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                     if (!writeVariantSignature(writer, v, error)) {
                         return false;
                     }
+                    // the signature embeds the default arguments, which the aggregate contract must cover
+                    if (aotVariantHasDefaultArgs(v)
+                            && !aotRecordAggregateDeclarationDigest(writer, "aggregate_default_args_v1",
+                                qore_aot_encode_class_ref(method->getClass()) + "::" + method->getName(),
+                                std::to_string(variant_index), error,
+                                [v](QoreAOTBinaryWriter& digest_writer, std::string& digest_error) {
+                                    return writeVariantSignature(digest_writer, v, digest_error);
+                                })) {
+                        return false;
+                    }
 
                     // Serialize BCA (Base Class Constructor Arguments) for constructors
                     if (is_constructor) {
@@ -11232,7 +11382,15 @@ static bool writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                                     QoreValue arg_val = aotBCAArgValue(bca, ai);
                                     if (!writeNativeBCAArgBlob(writer, arg_val, bca_locals, program_crm,
                                             method_class_path, method->getName(), base_path, bca_index, ai,
-                                            bca->loc, error)) {
+                                            bca->loc, error)
+                                            || !aotRecordAggregateDeclarationDigest(writer,
+                                                "aggregate_base_constructor_arg_v1", method_class_path,
+                                                base_path + "#" + std::to_string(ai), error,
+                                                [&](QoreAOTBinaryWriter& digest_writer, std::string& digest_error) {
+                                                    return writeNativeBCAArgBlob(digest_writer, arg_val, bca_locals,
+                                                        program_crm, method_class_path, method->getName(),
+                                                        base_path, bca_index, ai, bca->loc, digest_error);
+                                                })) {
                                         return false;
                                     }
                                 }
@@ -19507,6 +19665,7 @@ bool serializeNamespaceTree(QoreAOTBinaryWriter& writer, qore_ns_private* root_n
     } constant_reverse_map_scope(writer, program_crm);
 
     // Phase 2: Write each section
+    writer.aggregate_declaration_digests.clear();
     writeNamespacesSection(writer, state);
     std::string section_error;
     if (!writeClassesSection(writer, state, section_error)) {

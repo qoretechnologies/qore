@@ -45,6 +45,7 @@
 #include <memory>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 #include <qore/QoreValue.h>
 #include <qore/QoreEnumDecl.h>
@@ -852,6 +853,15 @@ public:
     //! this build-only cache, which can contain source directories and schema dates.
     bool emit_parse_constant_values = true;
 
+    //! Record a digest of each class, hashdecl, function and method record the declaration sections write.
+    //! Incremental object writers set this: the digests become aggregate-only rows of the symbol index, so the
+    //! aggregate contract moves when anything a script aggregate embeds from the object's records moves.
+    bool emit_aggregate_declaration_digests = false;
+
+    //! The digests recorded when emit_aggregate_declaration_digests is set, as symbol-index context rows;
+    //! consumed by serializeSymbolIndex()
+    std::vector<std::pair<std::string, std::string>> aggregate_declaration_digests;
+
     //! Fully-qualified constant currently being serialized. Used to avoid
     //! encoding self-referential VT_CONST_REF values when a top-level constant's
     //! own container node appears in the program reverse map.
@@ -1040,6 +1050,9 @@ public:
 
     //! Get current write position in buffer
     uint32_t position() const { return static_cast<uint32_t>(buffer.size()); }
+
+    //! Get the bytes written so far
+    const std::vector<uint8_t>& getBuffer() const { return buffer; }
 
     //! Overwrite a U32 at a previously recorded position (for patching size fields)
     void patchU32(uint32_t pos, uint32_t v) {
