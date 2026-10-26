@@ -6692,6 +6692,9 @@ static QoreAOTSourceSymbolMap* source_symbol_map_for_kind(QoreAOTSourceSymbolMan
     if (kind == "global") {
         return &manifest.globals;
     }
+    if (kind == "typedef") {
+        return &manifest.typedefs;
+    }
     return nullptr;
 }
 

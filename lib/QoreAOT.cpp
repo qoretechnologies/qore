@@ -338,6 +338,8 @@ static const QoreAOTSourceSymbolMap& qore_aot_source_symbol_map(QoreAOTSourceSym
             return aot_source_symbol_manifest->functions;
         case QoreAOTSourceSymbolKind::Global:
             return aot_source_symbol_manifest->globals;
+        case QoreAOTSourceSymbolKind::Typedef:
+            return aot_source_symbol_manifest->typedefs;
     }
     return aot_source_symbol_manifest->classes;
 }

@@ -41,6 +41,8 @@ class AOTSymbolIndexTest inherits QUnit::Test {
             \testSourceSymbolManifestDefersShadowedLoadedClasses());
         addTestCase("source symbol manifest records exact callable providers",
             \testSourceSymbolManifestRecordsExactCallableProviders());
+        addTestCase("source symbol manifest records typedefs and refreshes old caches",
+            \testSourceSymbolManifestTypedefs());
         addTestCase("source symbol manifest preserves namespaces across scanner edge tokens",
             \testSourceSymbolManifestPreservesNamespacesAcrossListIndexToken());
         addTestCase("source-order cache incrementally refreshes changed providers and consumers",
@@ -1171,6 +1173,43 @@ class AOTSymbolIndexTest inherits QUnit::Test {
         string out = run(sprintf("%s %s", env, app));
         assertEq("method:function:method\n", out,
             "linked executable preserves deferred inherited-method, call-reference, and function semantics");
+    }
+
+    testSourceSymbolManifestTypedefs() {
+        TmpDir tmp = initDirs();
+        string source = tmp_dir + "/types.qc";
+        string context_file = tmp_dir + "/.qcc-context";
+        string manifest = tmp_dir + "/symbols.manifest";
+        write(source, "%modern\npublic namespace Metrics {\n"
+            "public typedef Measurements = hash<string, int>;\n"
+            "typedef Nested::Count = int;\n"
+            "typedef ::RootCount = int;\n"
+            "# typedef Comment = string;\n"
+            "const Text = \"typedef Quoted = int;\";\n"
+            "%ifndef ENABLED_ALIAS\ntypedef Disabled = int;\n%endif\n"
+            "}\n");
+        write(context_file, "format=1\nkind=qcc-object-group\ngroup=typedefs\nparse_define=ENABLED_ALIAS\ninput=" + source
+            + "\noutput=" + tmp_dir + "/types.qo\n");
+        string command = sprintf("%s --source-symbol-manifest %s %s",
+            getSourceOrderCommand(), manifest, context_file);
+        run(command);
+        string first = ReadOnlyFile::readTextFile(manifest);
+        foreach string name in (("Metrics::Measurements", "Metrics::Nested::Count", "RootCount")) {
+            assertTrue(first.find("typedef\t" + name + "\t" + source + "\n") >= 0,
+                "the alias has its declared namespace: " + first);
+        }
+        foreach string name in (("Comment", "Quoted", "Disabled")) {
+            assertEq(-1, first.find(name), "masked text is not a declaration: " + first);
+        }
+        # A version-1 cache has no typedef list, even if no source content has moved.
+        string cache = ReadOnlyFile::readTextFile(manifest + ".cache");
+        cache = regex_subst(cache, "\"version\"\\s*:\\s*[0-9]+", "\"version\":1");
+        cache = regex_subst(cache, "\"typedefs\"\\s*:\\s*\\[[^]]*\\]", "\"typedefs\":[]");
+        write(manifest + ".cache", cache);
+        run(command);
+        assertEq(first, ReadOnlyFile::readTextFile(manifest), "old caches are rescanned for aliases");
+        run(command);
+        assertEq(first, ReadOnlyFile::readTextFile(manifest), "a current cache preserves aliases");
     }
 
     testSourceSymbolManifestPreservesNamespacesAcrossListIndexToken() {

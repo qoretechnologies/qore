@@ -12,7 +12,7 @@
 # contract.  Bump it whenever source summaries or graph construction change;
 # command/output and orchestration-only edits must not make every large consumer
 # rescan all of its sources on the next otherwise-no-op build.
-const CACHE_VERSION = 39;
+const CACHE_VERSION = 40;
 #! The sidecar beside a batch stamp that dates the group's last shared parse.
 /** The batch stamp cannot date it: the build tool also uses the stamp for
     ordering, so recipes that publish nothing touch it.  qore-qo-batch-bootstrap
@@ -59,13 +59,15 @@ const BodyContractImportsSuffix = ".body-contract-imports";
     provider source), and a preload set is closed over it as well as over the depfiles.
 */
 const LoadRequiresSuffix = ".load-requires";
-const SOURCE_SYMBOL_CACHE_VERSION = 1;
+const SOURCE_SYMBOL_CACHE_VERSION = 2;
 const SOURCE_SUMMARY_KEYS = (
     "provides",
     "classes",
     "enums",
     "hashdecls",
     "functions",
+    "typedefs",
+    "typedef_mentions",
     "parse_defines",
     "inheritance_mentions",
     "hard_mentions",
@@ -130,6 +132,8 @@ class SourceSymbolManifestGenerator {
         Regex enum_re = new Regex(
             "\\b(?:public\\s+|private\\s+)*enum\\s+([A-Za-z_][A-Za-z0-9_]*)\\b", RE_Global);
         Regex hashdecl_re = new Regex("\\bhashdecl\\s+([A-Za-z_][A-Za-z0-9_]*)\\b", RE_Global);
+        Regex typedef_re = new Regex(
+            "\\btypedef\\s+((?:::)?[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)\\s*=", RE_Global);
         Regex sub_re = new Regex("\\b(?:[\\w:*<>]+\\s+)*sub\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*\\(", RE_Global);
         Regex const_re = new Regex("\\bconst\\s+([A-Za-z_][A-Za-z0-9_]*)\\b", RE_Global);
         Regex const_init_re = new Regex(
@@ -502,6 +506,9 @@ class SourceSymbolManifestGenerator {
     }
 
     private string qualify(string namespace_name, string name) {
+        if (name.startsWith("::")) {
+            return name.substr(2);
+        }
         return namespace_name ? namespace_name + "::" + name : name;
     }
 
@@ -965,6 +972,10 @@ class SourceSymbolManifestGenerator {
             "enums": sort(captureSet(enum_re, code).keys()),
             "hashdecls": sort(captureSet(hashdecl_re, code).keys()),
             "functions": sort(captureSet(sub_re, code).keys()),
+            "typedefs": sort(qualifiedCaptures(typedef_re, code, namespaceRanges(code))),
+            # An alias can occur inside any nested type expression, not only a declaration's first token.
+            # Keep qualified names so the graph can prefer an exact provider before trying a unique leaf.
+            "typedef_mentions": sort(captureSet(qual_re, code).keys()),
             "parse_defines": sort(captureSet(parse_define_re, code).keys()),
             "inheritance_mentions": sort(inheritance.keys()),
             "hard_mentions": sort(hard.keys()),
@@ -1032,10 +1043,12 @@ class SourceSymbolManifestGenerator {
         list<string> hashdecls = ();
         list<string> functions = ();
         list<string> globals = ();
+        list<string> typedefs = ();
         list<hash<auto>> ranges = namespaceRanges(code);
         classes = qualifiedCaptures(class_re, code, ranges);
         hashdecls = qualifiedCaptures(hashdecl_re, code, ranges);
         functions = qualifiedCaptures(sub_re, code, ranges);
+        typedefs = qualifiedCaptures(typedef_re, code, ranges);
         foreach hash<auto> info in (globalNames(code)) {
             push globals, qualify(namespaceAt(ranges, info.offset), info.name);
         }
@@ -1045,6 +1058,7 @@ class SourceSymbolManifestGenerator {
             "hashdecls": hashdecls,
             "functions": functions,
             "globals": globals,
+            "typedefs": typedefs,
             "timing": (
                 "read": read_done - started,
                 "mask": mask_done - read_done,
@@ -1130,7 +1144,7 @@ class SourceSymbolManifestGenerator {
         if (!exists result.source || result.source.typeCode() != NT_STRING) {
             return False;
         }
-        foreach string key in (("classes", "hashdecls", "functions", "globals")) {
+        foreach string key in (("classes", "hashdecls", "functions", "globals", "typedefs")) {
             if (!exists result{key} || result{key}.typeCode() != NT_LIST) {
                 return False;
             }
@@ -1148,6 +1162,7 @@ class SourceSymbolManifestGenerator {
         hash<string, hash<string, bool>> hashdecls = {};
         hash<string, hash<string, bool>> functions = {};
         hash<string, hash<string, bool>> globals = {};
+        hash<string, hash<string, bool>> typedefs = {};
         foreach hash<auto> result in (results) {
             foreach string name in (result.classes) {
                 addProvider(\classes, name, result.source);
@@ -1161,12 +1176,16 @@ class SourceSymbolManifestGenerator {
             foreach string name in (result.globals) {
                 addProvider(\globals, name, result.source);
             }
+            foreach string name in (result.typedefs) {
+                addProvider(\typedefs, name, result.source);
+            }
         }
         list<string> lines = ("format=1",);
         foreach hash<auto> kind in (("name": "class", "providers": classes),
                 ("name": "hashdecl", "providers": hashdecls),
                 ("name": "function", "providers": functions),
-                ("name": "global", "providers": globals)) {
+                ("name": "global", "providers": globals),
+                ("name": "typedef", "providers": typedefs)) {
             foreach string symbol in (sort(kind.providers.keys())) {
                 list<string> sources = sort(kind.providers{symbol}.keys());
                 if (sources.size() == 1) {
@@ -1559,6 +1578,8 @@ class SourceOrderEngine {
         hash<string, list<int>> enum_provider_sources = {};
         hash<string, list<int>> hashdecl_provider_sources = {};
         hash<string, list<int>> function_provider_sources = {};
+        hash<string, list<int>> typedef_provider_sources = {};
+        hash<string, list<int>> typedef_leaf_provider_sources = {};
         hash<string, list<int>> parse_define_provider_sources = {};
 
         for (int index = 0; index < count; ++index) {
@@ -1579,6 +1600,10 @@ class SourceOrderEngine {
             }
             foreach string symbol in (summary.functions) {
                 addProvider(\function_provider_sources, symbol, index);
+            }
+            foreach string symbol in (summary.typedefs) {
+                addProvider(\typedef_provider_sources, symbol, index);
+                addProvider(\typedef_leaf_provider_sources, symbol.split("::")[-1], index);
             }
             foreach string symbol in (summary.parse_defines) {
                 addProvider(\parse_define_provider_sources, symbol, index);
@@ -1601,6 +1626,8 @@ class SourceOrderEngine {
         hash<string, int> unique_enums = uniqueKindProviders(enum_provider_sources);
         hash<string, int> unique_hashdecls = uniqueKindProviders(hashdecl_provider_sources);
         hash<string, int> unique_functions = uniqueKindProviders(function_provider_sources);
+        hash<string, int> unique_typedefs = uniqueKindProviders(typedef_provider_sources);
+        hash<string, int> unique_typedef_leaves = uniqueKindProviders(typedef_leaf_provider_sources);
         # a type name can be a class or a hashdecl, and only one source may declare either
         hash<string, int> unique_class_or_hashdecl = uniqueKindProviders(class_provider_sources,
             hashdecl_provider_sources);
@@ -1628,6 +1655,16 @@ class SourceOrderEngine {
         for (int consumer = 0; consumer < count; ++consumer) {
             hash<string, list<string>> summary = summaries[consumer];
             hash<string, bool> local_provides = provides_by_source[consumer];
+
+            # Typedefs expand during parsing, so even a first use needs its provider preloaded.  An old
+            # depfile cannot supply that edge.  Prefer an exact qualified name; otherwise use a leaf only
+            # when one source provides it, as with the other kind-specific source-summary edges.
+            foreach string symbol in (summary.typedef_mentions) {
+                *int provider = unique_typedefs{symbol} ?? unique_typedef_leaves{symbol.split("::")[-1]};
+                if (exists provider) {
+                    addEdge(\outgoing, \incoming, \required, provider, consumer, True);
+                }
+            }
 
             addKindEdges(\outgoing, \incoming, \required, consumer, summary.inheritance_mentions,
                 unique_classes, True);
