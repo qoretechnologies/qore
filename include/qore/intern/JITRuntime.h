@@ -2342,6 +2342,10 @@ uint64_t qore_rt_lv_path_compound_aot(QoreAOTContext* ctx, int32_t slot, uint64_
     uint64_t rhs_bits, ExceptionSink* xsink);
 uint64_t qore_rt_lv_path_compound_consume_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
     uint64_t rhs_bits, ExceptionSink* xsink);
+// Compiler-proved local/list-index AddAssign; the index is a native integer.
+// The invocation-owned slot is borrowed. A nonzero consume_rhs transfers RHS ownership in every case.
+uint64_t qore_rt_lv_path_int_add_prepared_aot_v1(QoreAOTContext* ctx, int32_t slot, int64_t index,
+    uint64_t rhs_bits, void* prepared_slot, int32_t consume_rhs, ExceptionSink* xsink);
 uint64_t qore_rt_lv_path_unary_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
     ExceptionSink* xsink);
 uint64_t qore_rt_lv_path_binary_mut_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,

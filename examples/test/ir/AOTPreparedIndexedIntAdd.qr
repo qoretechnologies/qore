@@ -1,0 +1,135 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%allow-debugger
+
+int sub indexedAddLoop(int count, int seed) {
+    list<int> values = ();
+    for (int i = 0; i < count; ++i) {
+        push values, seed + i;
+    }
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        values[i] += 1;
+        sum += values[i];
+    }
+    return sum;
+}
+
+string sub indexedAddValue(int old, auto delta, int index, bool shared) {
+    list<int> values = (old, old + 1);
+    list<int> alias;
+    if (shared) {
+        alias = values;
+    }
+    try {
+        auto result = values[index] += delta;
+        return sprintf("%y:%y:%y", result, values, alias);
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf("%s:%y:%y", ex.err, values, alias);
+    }
+}
+
+list<int> sub indexedAddSparse(int index, int value) {
+    list<int> values = ();
+    values[index] += value;
+    return values;
+}
+
+list<int> sub indexedAddParameter(list<int> values, int index) {
+    values[index] += 1;
+    return values;
+}
+
+int sub indexedAddRecursive(int depth) {
+    list<int> values = (depth,);
+    int child = depth ? indexedAddRecursive(depth - 1) : 0;
+    values[0] += child;
+    return values[0];
+}
+
+string sub indexedAddReference(int value) {
+    list<int> values = (value,);
+    reference<list<int>> ref = \values;
+    ref[0] += 2;
+    code<int()> update = int sub () { values[0] += 3; return values[0]; };
+    int result = update();
+    return sprintf("%d:%y", result, values);
+}
+
+sub replaceIndexedLocal(int kind) {
+    if (kind == 0) {
+        list<float> replacement = (4.5,);
+        set_local_var_value(1, "values", replacement);
+    } else if (kind == 1) {
+        list replacement = ("x",);
+        set_local_var_value(1, "values", replacement);
+    } else {
+        set_local_var_value(1, "values", NOTHING);
+    }
+}
+
+string sub indexedAddReflected(int kind) {
+    list<int> values = (1,);
+    call_function("replaceIndexedLocal", kind);
+    auto result = values[0] += 2;
+    return sprintf("%y:%y:%s", result, values, values.fullType());
+}
+
+string sub indexedAddNested(int value) {
+    list<list<int>> values = ((value,),);
+    values[0][0] += 2;
+    return sprintf("%y", values);
+}
+
+auto sub indexedOwnedDelta(int kind) {
+    if (!kind) {
+        return 140737488355328;
+    }
+    return sprintf("%d", kind);
+}
+
+string sub indexedAddOwned(int kind) {
+    list<int> values = (7,);
+    auto result = values[0] += indexedOwnedDelta(kind);
+    return sprintf("%y:%y", result, values);
+}
+
+string sub indexedAddNativeNegative() {
+    list<int> values = (7, 8);
+    values[-1] += 2;
+    return sprintf("%y", values);
+}
+
+foreach int count in ((0, 1, 16, 1024)) {
+    int expected = count * 8 + count * (count - 1) / 2;
+    if (indexedAddLoop(count, 7) != expected) {
+        throw "INDEXED-ADD-TEST", "incorrect loop result";
+    }
+}
+foreach int old in ((0, -3, 140737488355327, -140737488355328,
+        140737488355328, -140737488355329, 9223372036854775806, -9223372036854775807)) {
+    foreach auto delta in ((0, 1, -1, 2.5, "3", 140737488355328)) {
+        foreach int index in ((0, 1, -1, -4, 4)) {
+            foreach bool shared in ((False, True)) {
+                printf("value:%d:%y:%d:%y:%s\n", old, delta, index, shared,
+                    indexedAddValue(old, delta, index, shared));
+            }
+        }
+    }
+}
+printf("sparse:%y\n", indexedAddSparse(3, 7));
+list<int> input = (4, 8);
+printf("parameter:%y:%y\n", indexedAddParameter(input, 0), input);
+printf("recursive:%d\n", indexedAddRecursive(10));
+printf("reference:%s\n", indexedAddReference(4));
+printf("nested:%s\n", indexedAddNested(4));
+foreach int kind in ((0, 2)) {
+    printf("owned:%d:%s\n", kind, indexedAddOwned(kind));
+}
+printf("native-negative:%s\n", indexedAddNativeNegative());
+foreach int kind in ((0, 1, 2)) {
+    printf("reflect:%d:%s\n", kind, call_function("indexedAddReflected", kind));
+}
+printf("indexed-int-add: ok\n");

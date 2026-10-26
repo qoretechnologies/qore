@@ -35317,6 +35317,37 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* direct_member_ptr = direct_self_mutation
                 ? qore_ir_create_global_string_ptr(builder, *direct_self_member) : nullptr;
 
+            const void* local_key = findLVPathRootLocalKey(path_inst);
+            llvm::Value* indexed_int_slot = nullptr;
+            llvm::Value* indexed_native_index = nullptr;
+            if (aot_slots && !direct_self_mutation && local_key
+                    && inst->opcode == QoreIROpcode::LValuePathCompound
+                    && path_inst->compound_op == LVCompoundOp::AddAssign
+                    && path_inst->path.size() == 2
+                    && path_inst->path[0].kind == LVPathStepKind::LocalVar
+                    && path_inst->path[1].kind == LVPathStepKind::ListIndex
+                    && !q_env_is_set("QORE_DISABLE_AOT_PREPARED_INDEXED_INT_ADD")) {
+                const auto* local = static_cast<const LocalVar*>(local_key);
+                const auto& index = path_inst->path[1];
+                if (!local->isReadOnly()
+                        && local->getTypeInfo() == qore_get_complex_list_type(bigIntTypeInfo)) {
+                    if (index.operand_idx == UINT32_MAX) {
+                        indexed_native_index = llvm::ConstantInt::get(i64_type, index.index);
+                    } else if (!nanboxed_values.count(index.operand_idx)) {
+                        auto* value = getVal(index.operand_idx, error);
+                        if (!value) { return false; }
+                        if (value->getType() == i64_type) {
+                            indexed_native_index = value;
+                        }
+                    }
+                    if (indexed_native_index) {
+                        // Resolves after instantiation and excludes parameters,
+                        // captured locals and other non-invocation-owned storage.
+                        indexed_int_slot = getAOTReloadLocalSlot(local, module, llvm_func);
+                    }
+                }
+            }
+
             // Count dynamic operands (single-value steps with operand_idx != UINT32_MAX,
             // plus each SSA id inside slice steps)
             int num_dyn = 0;
@@ -35333,7 +35364,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
             // Build dynamic operands array (alloca in entry block)
             llvm::Value* dyn_array;
-            if (num_dyn > 0) {
+            if (num_dyn > 0 && !indexed_int_slot) {
                 llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(),
                         llvm_func->getEntryBlock().begin());
                 dyn_array = ab.CreateAlloca(i64_type,
@@ -35365,7 +35396,6 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 dyn_array = llvm::ConstantPointerNull::get(llvm::PointerType::get(ctx, 0));
             }
 
-            const void* local_key = findLVPathRootLocalKey(path_inst);
             // an assignment can be the first write of a closure-use local of this function: it is created in this
             // frame first, as for StoreLValue; a variable of another scope (a top-level local or a variable that a
             // closure captures) already exists and must not be shadowed in this frame
@@ -35565,6 +35595,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                              llvm::ConstantInt::get(i32_type,
                                 static_cast<int32_t>(path_inst->compound_op)),
                              rhs_boxed, xsink_arg},
+                            module, llvm_func, inst);
+                    } else if (indexed_int_slot) {
+                        auto ft = llvm::FunctionType::get(i64_type,
+                            {ptr_type, i32_type, i64_type, i64_type, ptr_type, i32_type, ptr_type}, false);
+                        auto fn = module.getOrInsertFunction("qore_rt_lv_path_int_add_prepared_aot_v1", ft);
+                        auto fn_throwing = module.getOrInsertFunction(
+                            "qore_rt_lv_path_int_add_prepared_aot_throwing_v1", ft);
+                        result_val = emitMaybeInvoke(fn, fn_throwing,
+                            {aot_ctx_arg, llvm::ConstantInt::get(i32_type, aot_slot),
+                             indexed_native_index, rhs_boxed, indexed_int_slot,
+                             llvm::ConstantInt::get(i32_type, consume), xsink_arg},
                             module, llvm_func, inst);
                     } else if (aot_slots) {
                         auto ft = llvm::FunctionType::get(i64_type,

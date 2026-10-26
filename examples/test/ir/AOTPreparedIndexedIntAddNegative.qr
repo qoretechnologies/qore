@@ -1,0 +1,58 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%no-negative-offsets
+%allow-weak-references
+
+sub negativeIndexedAdd(int index, int value) {
+    list<int> values = (value,);
+    try {
+        auto result = values[index] += 2;
+        printf("negative:%d:%y:%y\n", index, result, values);
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err != "NEGATIVE-LIST-INDEX" || values[0] != value) {
+            rethrow;
+        }
+        printf("negative:%d:%s:%y\n", index, ex.err, values);
+    }
+}
+
+sub weakIndexedAdd(int value) {
+    list<int> owner = (value,);
+    list<int> values := owner;
+    # Updating the strong owner must remain visible through a weak observer.
+    owner[0] += 2;
+    printf("weak:%y:%y\n", owner, values);
+}
+
+sub scopedIndexedAdd(int value) {
+    int sum = 0;
+    for (int i = 0; i < 4; ++i) {
+        list<int> values = (value + i,);
+        values[0] += 1;
+        sum += values[0];
+    }
+    if (sum != value * 4 + 10) {
+        throw "INDEXED-TEST", "block-local slot reused incorrectly";
+    }
+}
+
+sub literalNegativeIndexedAdd() {
+    list<int> values = (7,);
+    try {
+        values[-9] += 2;
+        throw "INDEXED-TEST", "negative index unexpectedly accepted";
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err != "NEGATIVE-LIST-INDEX" || values[0] != 7) {
+            rethrow;
+        }
+    }
+}
+
+negativeIndexedAdd(-1, 7);
+negativeIndexedAdd(-9, 7);
+weakIndexedAdd(7);
+scopedIndexedAdd(7);
+literalNegativeIndexedAdd();
+printf("indexed-negative: ok\n");

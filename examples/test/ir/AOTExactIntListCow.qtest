@@ -65,8 +65,8 @@ class AOTExactIntListCowTest inherits QUnit::Test {
                             "runtime publication remains present " + prefix + level);
                         assertTrue(regex(body, "(?:call|invoke) i64 @qore_rt_coerce_value_aot"),
                             "ordinary paired-store coercion remains present");
-                        assertTrue(regex(body, "(?:call|invoke) i64 @qore_rt_lv_path_compound_aot"),
-                            "indexed mutation still uses the ordinary lvalue path");
+                        assertTrue(regex(body, "(?:call|invoke) i64 @qore_rt_lv_path_(?:compound_aot|int_add_prepared_aot_(?:throwing_)?v1)"),
+                            "indexed mutation retains a checked lvalue path");
                     }
                     assertEq(expected, run((executable,)), fixture + prefix + level);
                     if (fixture == "AOTExactIntListCow") {

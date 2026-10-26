@@ -41,6 +41,7 @@
 #include "qore/intern/QoreIRInterpreter.h"
 #include "qore/intern/ql_type.h"
 #include "qore/intern/qore_string_private.h"
+#include "qore/intern/qore_list_private.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
 #include "qore/intern/LocalVar.h"
 #include "qore/intern/Variable.h"
@@ -1429,6 +1430,143 @@ static void ut_aot_first_public_base(UnitTestCounters& c) {
         slot->val.closure_lent = false;
     }
     UT_ASSERT(c, !xsink, "first-public-base native checks raise no unexpected exception");
+}
+
+static void ut_aot_prepared_indexed_int_add(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    struct LocalScope {
+        LocalVar var;
+        ExceptionSink& xsink;
+        LocalScope(const char* name, ExceptionSink& sink)
+                : var(name, qore_get_complex_list_type(bigIntTypeInfo)), xsink(sink) {
+            var.instantiate(QoreValue());
+        }
+        ~LocalScope() { var.uninstantiate(&xsink); }
+    } local("native_indexed_int_add", xsink);
+    LocalVarValue* slot = thread_try_find_lvar(&local.var);
+    UT_ASSERT(c, slot, "indexed addition has invocation-owned storage");
+    if (!slot) {
+        return;
+    }
+    QoreIRLValuePathInstruction inst(QoreIROpcode::LValuePathCompound);
+    LVPathStep root;
+    root.kind = LVPathStepKind::LocalVar;
+    root.ref_ptr = &local.var;
+    LVPathStep index;
+    index.kind = LVPathStepKind::ListIndex;
+    index.operand_idx = 0;
+    inst.path = {root, index};
+    QoreIRLValuePathInstruction* paths[] = {&inst};
+    struct BorrowedPathContext : QoreAOTContext {
+        ~BorrowedPathContext() { lv_path_insts = nullptr; }
+    } context;
+    context.lv_path_insts = paths;
+    context.num_lv_path_insts = 1;
+    auto reset = [&](const QoreTypeInfo* type, QoreValue value) {
+        ReferenceHolder<QoreListNode> list(new QoreListNode(type), &xsink);
+        list->push(value.refSelf(), &xsink);
+        UT_ASSERT(c, !xsink, "indexed fixture list is initialized");
+        slot->syncValue(QoreValue(list.release()), &xsink);
+        UT_ASSERT(c, !xsink, "indexed fixture publishes its sole list owner");
+        return slot->val.getValue().get<QoreListNode>();
+    };
+    auto add = [&](int64_t i, QoreValue rhs, void* prepared, bool consume = false) {
+        QoreSimpleValue result;
+        result.setRawBits(qore_rt_lv_path_int_add_prepared_aot_v1(
+            &context, 0, i, rhs.rawBits(), prepared, consume, &xsink));
+        return QoreValue(result);
+    };
+    auto* list = reset(bigIntTypeInfo, QoreValue(int64_t{7}));
+    {
+        ValueHolder result(add(0, QoreValue(int64_t{2}), slot), &xsink);
+        UT_ASSERT(c, !xsink && result->isInt() && result->getAsBigInt() == 9,
+            "unique inline addition returns the updated integer");
+        UT_ASSERT(c, slot->val.v.n == list && list->reference_count() == 1
+            && list->retrieveEntry(0).getAsBigInt() == 9,
+            "inline addition preserves the container and its sole owner");
+    }
+    xsink.raiseException("INDEXED-PENDING", "pending exception must prevent mutation");
+    {
+        ValueHolder result(add(0, QoreValue(int64_t{2}), slot), &xsink);
+        UT_ASSERT(c, xsink && result->isNothing() && list->retrieveEntry(0).getAsBigInt() == 9,
+            "pending exception leaves the list unchanged");
+    }
+    xsink.clear();
+    {
+        ReferenceHolder<QoreListNode> alias(list->listRefSelf(), &xsink);
+        ValueHolder result(add(0, QoreValue(int64_t{2}), slot), &xsink);
+        UT_ASSERT(c, !xsink && result->getAsBigInt() == 11 && list->retrieveEntry(0).getAsBigInt() == 9,
+            "shared-list fallback preserves the alias");
+        UT_ASSERT(c, slot->val.v.n != list && alias->reference_count() == 1,
+            "shared-list fallback publishes a copy and releases only the old local owner");
+    }
+    list = reset(bigIntTypeInfo, QoreValue(int64_t{7}));
+    {
+        ValueHolder result(add(0, QoreValue(int64_t{2}), nullptr), &xsink);
+        UT_ASSERT(c, !xsink && result->getAsBigInt() == 9, "null prepared slot uses generic navigation");
+    }
+    {
+        LocalScope other("native_indexed_other", xsink);
+        LocalVarValue* other_slot = thread_try_find_lvar(&other.var);
+        ValueHolder result(add(0, QoreValue(int64_t{2}), other_slot), &xsink);
+        UT_ASSERT(c, other_slot && !xsink && result->getAsBigInt() == 11
+            && other_slot->val.getValue().isNothing(),
+            "wrong local identity cannot redirect an update");
+    }
+    for (const QoreTypeInfo* type : {bigIntTypeInfo, autoTypeInfo, static_cast<const QoreTypeInfo*>(nullptr)}) {
+        list = reset(type, QoreValue(QoreValue::InlineIntMax));
+        ValueHolder result(add(0, QoreValue(int64_t{1}), slot), &xsink);
+        UT_ASSERT(c, !xsink && result->getAsBigInt() == QoreValue::InlineIntMax + 1
+            && list->retrieveEntry(0).getAsBigInt() == QoreValue::InlineIntMax + 1,
+            "wide-result fallback retains all integer bits");
+        UT_ASSERT(c, list->getTypeInfo() == (type ? qore_get_complex_list_type(type) : listTypeInfo),
+            "fallback preserves actual list metadata independently of the declaration");
+    }
+    list = reset(floatTypeInfo, QoreValue(4.5));
+    {
+        ValueHolder result(add(0, QoreValue(int64_t{2}), slot), &xsink);
+        UT_ASSERT(c, !xsink && result->getType() == NT_FLOAT && result->getAsFloat() == 6.5
+            && list->retrieveEntry(0).getAsFloat() == 6.5, "live floating metadata retains floating addition");
+    }
+    list = reset(bigIntTypeInfo, QoreValue(int64_t{7}));
+    qore_list_private::get(*list)->valid = false;
+    {
+        ValueHolder result(add(0, QoreValue(int64_t{2}), slot), &xsink);
+        UT_ASSERT(c, xsink && result->isNothing() && list->retrieveEntry(0).getAsBigInt() == 7,
+            "invalid-list fallback raises without modifying the entry");
+    }
+    qore_list_private::get(*list)->valid = true;
+    xsink.clear();
+    list = reset(bigIntTypeInfo, QoreValue(int64_t{7}));
+    {
+        ReferenceHolder<QoreStringNode> delta(new QoreStringNode("2"), &xsink);
+        ValueHolder result(add(0, QoreValue(delta->refSelf()), slot, true), &xsink);
+        UT_ASSERT(c, !xsink && result->getAsBigInt() == 9 && delta->reference_count() == 1,
+            "consumed heap RHS is released once on the generic path");
+        ValueHolder borrowed(add(0, QoreValue(*delta), slot), &xsink);
+        UT_ASSERT(c, !xsink && borrowed->getAsBigInt() == 11 && delta->reference_count() == 1,
+            "borrowed heap RHS retains the caller's reference");
+        xsink.raiseException("INDEXED-PENDING", "pending exception prevents consumed mutation");
+        ValueHolder pending(add(0, QoreValue(delta->refSelf()), slot, true), &xsink);
+        UT_ASSERT(c, xsink && pending->isNothing() && delta->reference_count() == 1
+            && list->retrieveEntry(0).getAsBigInt() == 11,
+            "pending exception releases the consumed heap RHS without updating");
+        xsink.clear();
+        QoreSimpleValue raw;
+        raw.setRawBits(qore_rt_lv_path_int_add_prepared_aot_v1(
+            &context, -1, 0, QoreValue(delta->refSelf()).rawBits(), slot, 1, &xsink));
+        ValueHolder invalid(QoreValue(raw), &xsink);
+        UT_ASSERT(c, xsink && invalid->isNothing() && delta->reference_count() == 1,
+            "invalid context slot releases the transferred RHS");
+        xsink.clear();
+    }
+    local.var.setReadOnly();
+    {
+        ValueHolder result(add(0, QoreValue(int64_t{2}), slot), &xsink);
+        UT_ASSERT(c, xsink && result->isNothing() && list->retrieveEntry(0).getAsBigInt() == 11,
+            "read-only root retains its generic runtime violation");
+    }
+    xsink.clear();
 }
 
 static void ut_aot_prepared_local_reload(UnitTestCounters& c) {
@@ -13576,6 +13714,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_aot_scalar_local_store(c);
     ut_aot_first_public_base(c);
     ut_aot_prepared_local_reload(c);
+    ut_aot_prepared_indexed_int_add(c);
     ut_qorevalue_operator_bool_null(c);
     ut_qorevalue_null_representations(c);
     ut_string_data_helper(c);
@@ -13601,6 +13740,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_aot_scalar_local_store(c);
     ut_aot_first_public_base(c);
     ut_aot_prepared_local_reload(c);
+    ut_aot_prepared_indexed_int_add(c);
 
     ut_qorevalue_operator_bool_null(c);
     ut_qorevalue_null_representations(c);

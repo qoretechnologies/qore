@@ -608,6 +608,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_lv_path_assign_consume_aot", reinterpret_cast<void*>(&qore_rt_lv_path_assign_consume_aot) },
     { "qore_rt_lv_path_compound_aot", reinterpret_cast<void*>(&qore_rt_lv_path_compound_aot) },
     { "qore_rt_lv_path_compound_consume_aot", reinterpret_cast<void*>(&qore_rt_lv_path_compound_consume_aot) },
+    { "qore_rt_lv_path_int_add_prepared_aot_v1", reinterpret_cast<void*>(&qore_rt_lv_path_int_add_prepared_aot_v1) },
     { "qore_rt_lv_path_unary_aot", reinterpret_cast<void*>(&qore_rt_lv_path_unary_aot) },
     { "qore_rt_lv_path_binary_mut_aot", reinterpret_cast<void*>(&qore_rt_lv_path_binary_mut_aot) },
     { "qore_rt_lv_path_binary_mut_consume_aot",
@@ -16610,6 +16611,64 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_compound_consume_aot(
     return qore_rt_lv_path_compound_consume(ctx->lv_path_insts[slot], dyn_vals, rhs_bits, xsink);
 }
 
+extern "C" DLLEXPORT uint64_t qore_rt_lv_path_int_add_prepared_aot_v1(
+        QoreAOTContext* ctx, int32_t slot, int64_t index, uint64_t rhs_bits,
+        void* prepared_slot, int32_t consume_rhs, ExceptionSink* xsink) {
+    QoreValue rhs = fromBits(rhs_bits);
+    if (!ctx || slot < 0 || slot >= ctx->num_lv_path_insts) {
+        if (consume_rhs) {
+            rhs.discard(xsink);
+        }
+        xsink->raiseException("AOT-INTERNAL-ERROR",
+            "LValuePath op: slot %d out of range (num_lv_path_insts=%d)",
+            slot, ctx ? ctx->num_lv_path_insts : -1);
+        return toBits(QoreValue());
+    }
+    if (*xsink) {
+        if (consume_rhs) {
+            rhs.discard(xsink);
+        }
+        return toBits(QoreValue());
+    }
+    auto* inst = ctx->lv_path_insts[slot];
+    // These facts are established by the compiler, independently of the live
+    // local value. No declaration or runtime container pointer is embedded.
+    assert(inst && inst->compound_op == LVCompoundOp::AddAssign && inst->path.size() == 2
+        && inst->path[0].kind == LVPathStepKind::LocalVar && inst->path[0].ref_ptr
+        && inst->path[1].kind == LVPathStepKind::ListIndex);
+    assert(inst->path[1].operand_idx != UINT32_MAX || index == inst->path[1].index);
+    auto* local = static_cast<LocalVarValue*>(prepared_slot);
+    if (local && local->local_var == inst->path[0].ref_ptr
+            && !static_cast<const LocalVar*>(local->local_var)->isReadOnly()
+            && !local->finalized && !local->frame_boundary && !local->block_cleared
+            && local->val.assigned && !local->val.static_assignment && !local->val.is_closure
+            && local->val.type == QV_Node && local->val.v.n
+            && local->val.v.n->getType() == NT_LIST && rhs.isInt()) {
+        auto* list = static_cast<QoreListNode*>(local->val.v.n);
+        auto* priv = qore_list_private::get(*list);
+        if (index >= 0 && static_cast<uint64_t>(index) < priv->length
+                && list->reference_count() == 1 && priv->valid && !priv->finalized
+                && priv->getValueTypeInfo() == bigIntTypeInfo && priv->entry[index].isInt()) {
+            // Both operands are signed inline integers, so their sum fits int64_t.
+            // Keep wide results and their allocation/ownership on the ordinary path.
+            int64_t value = priv->entry[index].getInt() + rhs.getInt();
+            if (QoreValue::fitsInline(value)) {
+                // Replacing an inline integer neither changes references nor DGC
+                // scan counts. Consuming the inline RHS requires no release.
+                QoreValue result(value);
+                priv->entry[index] = result;
+                return toBits(result);
+            }
+        }
+    }
+    // Construct the boxed index only on a miss. Preserve the existing generic
+    // path and its RHS handover rules, including reflection to a non-int list.
+    ValueHolder rhs_holder(consume_rhs ? rhs : rhs.refSelf(), xsink);
+    ValueHolder dynamic_index(QoreValue(index), xsink);
+    uint64_t dyn_vals[] = {dynamic_index->rawBits()};
+    return qore_rt_lv_path_compound_impl(inst, dyn_vals, rhs_holder, xsink);
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary_aot(
         QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
         ExceptionSink* xsink) {
@@ -16975,6 +17034,17 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lv_path_compound
     uint64_t result = qore_rt_lv_path_compound_consume_aot(ctx, slot, dyn_vals, rhs_bits, xsink);
     if (xsink && *xsink) {
         fromBits(result).discard(xsink);
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lv_path_int_add_prepared_aot_throwing_v1(
+        QoreAOTContext* ctx, int32_t slot, int64_t index, uint64_t rhs_bits,
+        void* prepared_slot, int32_t consume_rhs, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_lv_path_int_add_prepared_aot_v1(
+        ctx, slot, index, rhs_bits, prepared_slot, consume_rhs, xsink);
+    if (xsink && *xsink) {
         throw QoreJITException();
     }
     return result;

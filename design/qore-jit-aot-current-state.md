@@ -5045,3 +5045,52 @@ All four initial targets pass both phases, with 3.73-6.09% lower confirmation ti
 The initial campaign contains 1812 jobs/5436 windows, independently replayed and retained alongside the common-module campaign. Static layout differences do not establish the cause of any timing change.
 
 [Audit](../bench/runtime-comparison/audit-aot-cross-decode.md); [evidence](../bench/runtime-comparison/results-aot-cross-decode-macos-arm64.json).
+
+## Prepared indexed integer addition (2026-10-26)
+
+AOT compilation selects a versioned prepared helper for a two-step local/list-index += on an invocation-owned noncaptured body-local list<int> with a literal or native integer index. The compiler proves the operation shape; runtime still checks current slot identity/lifetime, readonly state, list type/validity/uniqueness, actual element metadata, bounds and inline operands/result. Inline success updates the existing entry without a new owner or scan-count change. Every miss uses the ordinary compound implementation with the original borrowed/consumed RHS rules. Root reload, exception dispatch, cleanup, debugger reflection and cancellation remain. Parameters, captured/reference roots, nested paths, boxed indices and other operations retain their existing lowering. IR/JIT lowering is unchanged.
+
+Fresh optimized before/after measurements use parent 052e1afb5d, Release -O3 -DNDEBUG with allocation tracking off, qcc -O3/LLVM 22.1.8 on Apple M4 Pro/macOS 27.0.1. All 67 actual-module kernels use identical source before/after, frozen compiler/runtime sets and the same explicit RPATH. Paired randomized runs use default/reverse/shuffle-487 layouts, 4096 items, one warmup and three 150 ms samples, three screening forks and five confirmation forks. The prospective gate requires list mutation to improve at least 5% in aggregate and improve in every layout in both phases; control costs are assessed under the user-approved broader tradeoff. Values are whole-kernel ns/item, not isolated operation latency.
+
+|!Confirmed workload|!Before ns/item|!Candidate ns/item|!Change
+|micro:list_mutate|195.930282|143.523896|-26.75%
+|micro:list_build|29.382242|28.967207|-1.41%
+|micro:list_read|2.922190|2.926492|+0.15%
+|micro:indirect_call|62.629475|63.043597|+0.66%
+|micro:closure_call|19.356970|19.377864|+0.11%
+|mixed:csv_report|954.531799|950.681562|-0.40%
+|mixed:object_orders|1761.703249|1748.780178|-0.73%
+|mixed:callback_pipeline|124.646089|125.853718|+0.97%
+|mixed:text_index|1477.094601|1480.205078|+0.21%
+|probe:effect_loop|454.053409|458.216224|+0.92%
+|probe:two_read_loop|495.139802|496.524863|+0.28%
+
+Retain under the user-approved broader tradeoff. List mutation improves 26.04% in screening and 26.75% in confirmation, in every layout in both phases; confirmation saves 52.406386 ns/item (195.930282 to 143.523896). Short one-item and 16-item invocations improve 2.66% and 12.38%; the 5% gate applies to the long screening/confirmation phases, not the short diagnostic. Repeated positive aggregate control changes are all disclosed below and range from 0.108% to 1.953% in confirmation. The largest percentage cost is object_loop (+7.742320 ns/item, 1.953%); effect_loop adds 4.162815 ns/item (0.917%), two_read_loop 1.385061 ns/item (0.280%), and callback_pipeline 1.207630 ns/item (0.969%). These are observed costs, not established as noise or attributed to a specific layout effect. Other mixed workloads change by -0.403% (CSV), -0.734% (orders), and +0.211% (text). At count 16, list_build adds 0.442608 ns/item (0.205%) and typed_local_int_unary adds 0.509422 ns/item (1.175%); both improve at count 1. No layout in any phase meets the predeclared >3% disjoint-fork-range flag. The large repeatable targeted gain and modest measured control costs justify this narrow path, without claiming an overall weighted application gain, Java parity or a performance ceiling.
+
+|!Repeated aggregate control cost|!Screen change|!Confirmation change|!Confirmation ns/item cost
+|float:callback_local_float_result|+0.318%|+0.980%|+0.008014
+|float:typed_local_int_result|+0.224%|+0.157%|+0.001249
+|micro:closure_call|+0.335%|+0.108%|+0.020895
+|micro:monomorphic_call|+0.057%|+0.126%|+0.005339
+|mixed:callback_pipeline|+0.595%|+0.969%|+1.207630
+|mixed:text_index|+1.336%|+0.211%|+3.110477
+|probe:effect_loop|+1.113%|+0.917%|+4.162815
+|probe:object_loop|+0.478%|+1.953%|+7.742320
+|probe:two_read_loop|+1.244%|+0.280%|+1.385061
+|probe:two_read_short|+0.435%|+0.163%|+2.733635
+
+|!Short target/control|!Count|!Before ns/item|!Candidate ns/item
+|micro:list_mutate|1|3463.719192|3371.427055
+|micro:list_build|1|3031.961165|3019.819144
+|float:typed_local_int_unary|1|712.599345|702.988884
+|micro:list_mutate|16|400.105026|350.584429
+|micro:list_build|16|216.071482|216.514090
+|float:typed_local_int_unary|16|43.362635|43.872057
+
+Short invocations include fixed dispatch, setup and cleanup costs. Separate profiles observe generic mutation/navigation before and the prepared helper after; sampling does not establish exact hit counts. All three full machine functions shrink from 849 to 827 instructions, retaining root reload and cancellation sites; function sizes are not executed instruction counts or speed estimates. The final helper keeps one actual-element-type query on success. Compile-time QORE_DISABLE_AOT_PREPARED_INDEXED_INT_ADD and compile/runtime QORE_DISABLE_AOT_PREPARED_LOCAL_RELOAD controls qualify the ordinary path.
+
+All 391 standard-library qmods total 344786872 bytes before and 344803496 after (+16624 bytes); all hashes change with the internal header identity, which does not imply 391 performance gains. Only QUnit imports this narrow helper in this standard-library build. Release 45 cases/2075 assertions, Debug 36 cases/3523 assertions, 2188 native checks, 1110 standard and 7704 prepared numerical references pass. One Release-only deterministic-DGC-wait skip runs successfully in Debug. All 391 Release aliases/hashes restored. All 2244 timing jobs/6732 windows independently replayed. Shared host, without affinity/frequency/thermal controls; no owned build/test/profile overlaps timing. No fresh Java/develop comparison, production-wide weighted speedup or global performance ceiling claim.
+
+Preparation history is retained: an initial compile cast correction, an added fixture expectation corrected against AST behavior, recognition of the documented Release-only DGC skip, and a pre-timing helper refinement removing redundant generic integer conversions/setter/type calls. The final source was requalified from scratch. An initial module preparation passed correctness but failed the equal-RPATH preflight because libdir is not an AOTLinkConfig field. All comparison modules were freshly recompiled with emit_rpath=0 and an explicit common RPATH before any timing. No timing from failed preparations is pooled. Probe controls were adapted from a historical standalone fixture by namespace qualification and exporting three dynamic targets; their current module timings are not numerically compared with historical standalone runs.
+
+[Audit](../bench/runtime-comparison/audit-aot-prepared-indexed-int-add.md); [evidence](../bench/runtime-comparison/results-aot-prepared-indexed-int-add-macos-arm64.json).

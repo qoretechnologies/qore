@@ -240,6 +240,8 @@
     by local promotion, avoiding redundant boxing and dynamic dispatch while retaining guards for optional values.
     AOT and IR can eliminate private temporary integer hashes and selector strings when branch-selected
     literal keys and all uses are proven at compile time, retaining ordinary lookup for unsupported cases.
+    AOT indexed integer addition uses prepared local storage when eligible, preserving live ownership,
+    bounds, type, reflection and exception checks with the ordinary compound operation as fallback.
     Native cross-Program scalar callbacks reuse pre-entry reference decoding while preserving live binding
     checks and complete validation after Program entry.
     Program context entry reuses its existing thread-data lookup result, reducing repeated searches
