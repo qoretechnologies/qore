@@ -30,6 +30,7 @@ class SwaggerVendorSchemasTest inherits QUnit::Test {
         addTestCase("array enumeration values", \arrayEnumValues());
         addTestCase("object enumeration values", \objectEnumValues());
         addTestCase("scalar value of a structured enumeration", \scalarValueOfStructuredEnum());
+        addTestCase("multiple path parameters", \multiplePathParameters());
         set_return_value(main());
     }
 
@@ -231,6 +232,36 @@ class SwaggerVendorSchemasTest inherits QUnit::Test {
         HashDataType body = cast<HashDataType>(op.getRequestType().getField("body").getType());
         assertEq(({"level": 1}, {"level": 2, "fast": True}), map $1.value, body.getField("mode").getAllowedValues());
         assertEq((("a",), ("a", "b")), map $1.value, body.getField("tags").getAllowedValues());
+    }
+
+    #! each path parameter of an operation with several of them has its own value
+    multiplePathParameters() {
+        list<hash<auto>> params = (
+            {"name": "list_id", "in": "path", "required": True, "type": "string"},
+            {"name": "n", "in": "path", "required": True, "type": "integer"},
+        );
+        SwaggerSchema s = getSchema({
+            "/lists/{list_id}/members/{n}/activity": {"get": getOp("activity", params)},
+        });
+        hash<auto> hdr;
+        hash<RestRequestServerInfo> req = s.parseRequest("GET", "/v1/lists/a%20b/members/42/activity", NOTHING,
+            \hdr);
+        assertEq({"list_id": "a b", "n": 42}, req.path_args);
+        # the path without the trailing slash matches it
+        req = s.parseRequest("GET", "/v1/lists/x/members/7/activity/", NOTHING, \hdr);
+        assertEq({"list_id": "x", "n": 7}, req.path_args);
+        # a path parameter that the operation does not define is refused
+        SwaggerSchema bad = getSchema({
+            "/lists/{list_id}/members/{m}": {"get": getOp("bad", params)},
+        });
+        assertThrows("SCHEMA-VALIDATION-ERROR", "No path parameter \"m\"", \bad.parseRequest(),
+            ("GET", "/v1/lists/x/members/1", NOTHING, \hdr));
+
+        # the client validates the request it sends
+        hash<RestRequestClientInfo> info = s.processRequest("GET", "/lists/1/members/2/activity", NOTHING, {});
+        assertEq("/v1/lists/1/members/2/activity", info.uri_path);
+        info = s.processRequest("GET", "/lists/a%20b/members/3/activity/", NOTHING, {});
+        assertEq("/v1/lists/a%20b/members/3/activity/", info.uri_path);
     }
 
     #! a scalar is never equal to an array or object value of an enumeration

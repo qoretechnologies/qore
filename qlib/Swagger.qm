@@ -151,6 +151,9 @@ RestHandler handler(NOTHING, swagger);
     - an enumeration (\c enum) can have array and object values, as JSON Schema allows; Mailchimp's schema failed to
       load with \c INVALID-FIELD-TYPE.  An array or object value is valid when it is equal to one of them, and they
       are the allowed values of the field
+    - an operation with more than one path parameter is validated on the client and on the server; the value of each
+      parameter was extracted with a pattern that still had the templates of the others, and every request failed
+      with \c RUNTIME-OVERLOAD-ERROR
     - a schema object whose document has been destroyed throws \c SCHEMA-DOCUMENT-DESTROYED when it is asked to build
       a type, instead of failing with an unrelated error; the types it has already built keep working (see
       @ref Swagger::SchemaObject "SchemaObject")
@@ -2428,6 +2431,29 @@ public class PathComponent inherits Qore::Serializable {
         if (wildcard)
             wildcard.getPathOperationHash(\h);
     }
+
+    #! Returns an anchored pattern for a path template that captures the value of each of its parameters
+    /** @param path the path template; each parameter is delimited by braces
+        @return an anchored regular expression with all literal path characters escaped, capturing the value of
+        each parameter in template order
+
+        @throw INVALID-PATH-COMPONENT an empty or unterminated parameter was encountered
+    */
+    static string getTemplatePattern(string path) {
+        string pattern = "^";
+        int offset = 0;
+        int start;
+        while ((start = index(path, "{", offset)) >= 0) {
+            int end = index(path, "}", start + 1);
+            if (end <= start + 1) {
+                throw "INVALID-PATH-COMPONENT", sprintf("Invalid path template %y", path);
+            }
+            pattern += Util::regex_escape(path.substr(offset, start - offset));
+            pattern += "([^/]*)";
+            offset = end + 1;
+        }
+        return pattern + Util::regex_escape(path.substr(offset)) + "$";
+    }
 }
 
 #! This class stores the path tree for URI path matching
@@ -2979,16 +3005,31 @@ public class OperationObject inherits ParameterGroup, RestSchemaValidator::Abstr
         }
 
         # check path parameters
-        foreach string param in (path =~ x/{([^}]+)}/g) {
+        *list<string> path_names = path =~ x/{([^}]+)}/g;
+        *list<string> path_values;
+        if (path_names) {
+            string actual_path = h.method.startsWith("/") ? h.method : "/" + h.method;
+            # a path that differs from the template only by a trailing slash matches it (see PathComponent)
+            if (actual_path =~ /.\/$/ && path !~ /\/$/) {
+                splice actual_path, -1;
+            } else if (actual_path !~ /\/$/ && path =~ /.\/$/) {
+                actual_path += "/";
+            }
+            # every template is replaced in the pattern, so each value is that of its own parameter
+            path_values = regex_extract(actual_path, PathComponent::getTemplatePattern(path));
+            if (path_values.size() != path_names.size()) {
+                error("SCHEMA-VALIDATION-ERROR", "Request path %y does not match path template %y for %s",
+                    actual_path, path, method.upr());
+            }
+        }
+        foreach string param in (path_names) {
             *OtherParameter po = parameters{param} ?? pio.parameters{param};
             if (!po) {
                 error("SCHEMA-VALIDATION-ERROR", "No path parameter %y defined for %s %s (%y); known "
                     "parameters: %y", param, method.upr(), path, keys (parameters + pio.parameters));
             }
 
-            string pattern = replace(path, "{" + param + "}", "(.*)");
-            pattern =~ s/^\//\/?/;
-            auto val = decode_url(regex_extract(h.method, pattern)[0]);
+            auto val = decode_url(path_values[$#]);
 
             # convert string to actual type
             switch (po.type) {
