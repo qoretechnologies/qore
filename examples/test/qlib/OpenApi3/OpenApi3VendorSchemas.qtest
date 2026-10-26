@@ -3,7 +3,8 @@
 
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
-# Tests valid OpenAPI constructs found in vendor schemas: paths that differ only by a trailing slash
+# Tests valid OpenAPI constructs found in vendor schemas: paths that differ only by a trailing slash,
+# enumerations with array and object values, and object query parameters
 
 %modern
 
@@ -26,6 +27,10 @@ class OpenApi3VendorSchemasTest inherits QUnit::Test {
         addTestCase("path operation hash prefixes", \pathOperationHashPrefixes());
         addTestCase("trailing slash data provider", \trailingSlashDataProvider());
         addTestCase("duplicate template paths", \duplicateTemplatePaths());
+        addTestCase("array enumeration values", \arrayEnumValues());
+        addTestCase("object enumeration values", \objectEnumValues());
+        addTestCase("scalar value of a structured enumeration", \scalarValueOfStructuredEnum());
+        addTestCase("object query parameter", \objectQueryParameter());
         set_return_value(main());
     }
 
@@ -155,5 +160,116 @@ class OpenApi3VendorSchemasTest inherits QUnit::Test {
             "/x/{other}/": {"get": getOp("b", ({"name": "other", "in": "path", "required": True,
                 "schema": {"type": "string"}},))},
         },));
+    }
+
+    #! an array query parameter whose enumeration values are arrays
+    arrayEnumValues() {
+        OpenApi3Schema s = getSchema({
+            "/activity": {"get": getOp("activity", ({
+                "name": "action",
+                "in": "query",
+                "style": "form",
+                "explode": False,
+                "schema": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "enum": (("abuse",), ("bounce",), ("click", "open")),
+                },
+            },))},
+        });
+        hash<auto> hdr;
+        # an array is valid when it is equal to one of the values
+        hash<RestRequestServerInfo> req = s.parseRequest("GET", "/activity?action=abuse", NOTHING, \hdr);
+        assertEq(("abuse",), req.query.action);
+        req = s.parseRequest("GET", "/activity?action=click,open", NOTHING, \hdr);
+        assertEq(("click", "open"), req.query.action);
+        assertThrows("SCHEMA-VALIDATION-ERROR", "does not fit the enumerated values", \s.parseRequest(),
+            ("GET", "/activity?action=abuse,click", NOTHING, \hdr));
+        assertThrows("SCHEMA-VALIDATION-ERROR", "does not fit the enumerated values", \s.parseRequest(),
+            ("GET", "/activity?action=open,click", NOTHING, \hdr));
+
+        # the operation can be browsed and its request type built
+        OpenApi3DataProvider dp(s);
+        AbstractDataProvider op = dp.getChildProviderPath("activity/GET");
+        AbstractDataField action = op.getRequestType().getField("query").getType().getField("action");
+        assertEq(NT_LIST, action.getType().getBaseTypeCode());
+    }
+
+    #! an object whose enumeration values are objects
+    objectEnumValues() {
+        OpenApi3Schema s = getSchema({
+            "/settings": {"post": getOp("settings", NOTHING, {
+                "type": "object",
+                "properties": {
+                    "mode": {
+                        "type": "object",
+                        "enum": ({"level": 1}, {"level": 2, "fast": True}, NULL),
+                        "nullable": True,
+                    },
+                    "tags": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "enum": (("a",), ("a", "b")),
+                    },
+                },
+            })},
+        });
+        hash<auto> hdr = {"content-type": "application/json"};
+        hash<RestRequestServerInfo> req = s.parseRequest("POST", "/settings",
+            make_json({"mode": {"fast": True, "level": 2}}), \hdr);
+        assertEq({"fast": True, "level": 2}, req.body.mode);
+        assertThrows("SCHEMA-VALIDATION-ERROR", "does not fit the enumerated values", \s.parseRequest(),
+            ("POST", "/settings", make_json({"mode": {"level": 3}}), \hdr));
+        # numbers are equal by value, as in JSON
+        req = s.parseRequest("POST", "/settings", "{\"mode\": {\"level\": 1.0}}", \hdr);
+        assertEq(NT_FLOAT, req.body.mode.level.typeCode());
+        assertEq(1.0, req.body.mode.level);
+        # an array property is compared with its array values
+        req = s.parseRequest("POST", "/settings", make_json({"tags": ("a", "b")}), \hdr);
+        assertEq(("a", "b"), req.body.tags);
+        assertThrows("SCHEMA-VALIDATION-ERROR", "does not fit the enumerated values", \s.parseRequest(),
+            ("POST", "/settings", make_json({"tags": ("b", "a")}), \hdr));
+
+        # the values are the allowed values of the fields; a null value is what "nullable" says
+        OpenApi3DataProvider dp(s);
+        AbstractDataProvider op = dp.getChildProviderPath("settings/POST");
+        AbstractDataProviderType body = op.getRequestType().getField("body").getType();
+        assertEq(({"level": 1}, {"level": 2, "fast": True}), map $1.value, body.getField("mode").getAllowedValues());
+        assertEq((("a",), ("a", "b")), map $1.value, body.getField("tags").getAllowedValues());
+    }
+
+    #! a scalar is never equal to an array or object value of an enumeration
+    scalarValueOfStructuredEnum() {
+        OpenApi3Schema s = getSchema({
+            "/odd": {"get": getOp("odd", ({
+                "name": "v",
+                "in": "query",
+                "schema": {
+                    "type": "string",
+                    "enum": (("a",), "b"),
+                },
+            },))},
+        });
+        hash<auto> hdr;
+        hash<RestRequestServerInfo> req = s.parseRequest("GET", "/odd?v=b", NOTHING, \hdr);
+        assertEq("b", req.query.v);
+        assertThrows("SCHEMA-VALIDATION-ERROR", "does not fit the enumerated values", \s.parseRequest(),
+            ("GET", "/odd?v=a", NOTHING, \hdr));
+    }
+
+    #! OpenAPI 3 allows an object query parameter, which Swagger 2.0 does not (Trello's "fields")
+    objectQueryParameter() {
+        OpenApi3Schema s = getSchema({
+            "/boards": {"get": getOp("boards", ({
+                "name": "fields",
+                "in": "query",
+                "schema": {"type": "object"},
+            },))},
+        });
+        OpenApi3DataProvider dp(s);
+        AbstractDataProvider op = dp.getChildProviderPath("boards/GET");
+        assertEq("boards", cast<OpenApi3RequestDataProvider>(op).op.operationId);
+        AbstractDataField fields = op.getRequestType().getField("query").getType().getField("fields");
+        assertEq(NT_HASH, fields.getType().getBaseTypeCode());
     }
 }

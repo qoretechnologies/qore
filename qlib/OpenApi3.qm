@@ -479,6 +479,12 @@ class SchemaBase inherits RestSchemaValidator::AbstractSchemaBaseValidator {
         optional_field(obj_type, oh, "minItems", NT_INT, \minItems);
         optional_field(obj_type, oh, "uniqueItems", NT_BOOLEAN, \uniqueItems);
         optional_field(obj_type, oh, "enum", OpenApi3ListToAnySet, \enumValues);
+        # the values of an enumeration can be of any type; one that is a list or a hash cannot be a key of
+        # enumValues, so the enumeration is kept as declared too
+        if (oh."enum".typeCode() == NT_LIST && (select oh."enum", inlist($1.typeCode(), (NT_LIST, NT_HASH)))) {
+            # a null value says that the value is nullable, as for the set (see get_value())
+            enumValueList = select oh."enum", exists $1;
+        }
         optional_field(obj_type, oh, "multipleOf", (NT_FLOAT: True, NT_INT: True), \multipleOf);
     }
 
@@ -488,7 +494,7 @@ class SchemaBase inherits RestSchemaValidator::AbstractSchemaBaseValidator {
             "maximum", "minimum", "exclusiveMax", "exclusiveMin",
             "exclusiveMaxValue", "exclusiveMinValue",
             "maxLength", "minLength", "pattern", "maxItems", "minItems",
-            "uniqueItems", "enumValues", "multipleOf"), exists other.$1;
+            "uniqueItems", "enumValues", "enumValueList", "multipleOf"), exists other.$1;
     }
 
     #! Private constructor
@@ -5078,7 +5084,14 @@ public class OpenApi3HashDataType inherits HashDataType {
         # because "multiple" declares no required properties and does not forbid additional ones.  Without
         # this, both alternatives matched every single-filter query and every search was rejected as
         # ambiguous before the request was sent
-        if (prop.enumValues && !prop.enumValues{value.toString()}) {
+        if (prop.enumValueList) {
+            # an enumeration with a list or hash value: a list or hash is compared with its values
+            if (inlist(value.typeCode(), (NT_LIST, NT_HASH))
+                ? !prop.enumValueListAccepts(value)
+                : !prop.enumValues{value.toString()}) {
+                return False;
+            }
+        } else if (prop.enumValues && !prop.enumValues{value.toString()}) {
             return False;
         }
 
@@ -6803,6 +6816,9 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         if (!exists items) {
             items = source.items;
         }
+        if (!enumValues && !enumValueList && source.enumValueList) {
+            enumValueList = source.enumValueList;
+        }
         if (!enumValues && source.enumValues) {
             enumValues = source.enumValues;
             foreach string key in (("x-enumNames", "x-enum-descriptions")) {
@@ -7104,6 +7120,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         if (type != "object" && type != "any") {
             throwInvalidType(name, "object", type, v);
         }
+        checkEnumValueList(path, method, name, v);
 
         if (discriminatorMapping && !oneOf && !anyOf && !no_check_others) {
             if (value{discriminator}.typeCode() != NT_STRING || !discriminatorMapping.hasKey(value{discriminator})) {
@@ -7368,6 +7385,10 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         length are ignored. Values remain strings until updateFieldType() restores their type.
     */
     private *list<auto> getFieldEnumValues() {
+        # the values of an enumeration with a list or hash value are the values themselves
+        if (enumValueList) {
+            return enumValueList;
+        }
         if (!enumValues) {
             # a nullable enumeration, {anyOf: [{enum: [...]}, {type: "null"}]}, has the choices of the enumeration
             *SchemaObject wrapped = getWrappedEnumeration();
@@ -7845,6 +7866,10 @@ namespace Priv {
                 # rejected.  Bitbucket's description uses this form, and refusing it would fail the whole
                 # document over a construct that is merely saying the field is optional
                 if (!exists v) {
+                    continue;
+                }
+                # a list or hash value cannot be a key of the set; SchemaBase keeps the list of values that has one
+                if (inlist(v.typeCode(), (NT_LIST, NT_HASH))) {
                     continue;
                 }
                 if (!v.strp())

@@ -3,7 +3,8 @@
 
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
-# Tests valid Swagger 2.0 constructs found in vendor schemas: paths that differ only by a trailing slash
+# Tests valid Swagger 2.0 constructs found in vendor schemas: paths that differ only by a trailing slash, and
+# enumerations with array and object values
 
 %modern
 
@@ -26,6 +27,9 @@ class SwaggerVendorSchemasTest inherits QUnit::Test {
         addTestCase("path operation hash prefixes", \pathOperationHashPrefixes());
         addTestCase("trailing slash data provider", \trailingSlashDataProvider());
         addTestCase("duplicate template paths", \duplicateTemplatePaths());
+        addTestCase("array enumeration values", \arrayEnumValues());
+        addTestCase("object enumeration values", \objectEnumValues());
+        addTestCase("scalar value of a structured enumeration", \scalarValueOfStructuredEnum());
         set_return_value(main());
     }
 
@@ -147,5 +151,102 @@ class SwaggerVendorSchemasTest inherits QUnit::Test {
             "/x/{other}/": {"get": getOp("b", ({"name": "other", "in": "path", "required": True,
                 "type": "string"},))},
         },));
+    }
+
+    #! Mailchimp's "action" query parameter: an array whose enumeration values are arrays
+    arrayEnumValues() {
+        SwaggerSchema s = getSchema({
+            "/activity": {"get": getOp("activity", ({
+                "name": "action",
+                "in": "query",
+                "type": "array",
+                "items": {"type": "string"},
+                "collectionFormat": "csv",
+                "enum": (("abuse",), ("bounce",), ("click", "open")),
+            },))},
+        });
+        hash<auto> hdr;
+        # an array is valid when it is equal to one of the values
+        hash<RestRequestServerInfo> req = s.parseRequest("GET", "/v1/activity?action=abuse", NOTHING, \hdr);
+        assertEq(("abuse",), req.query.action);
+        req = s.parseRequest("GET", "/v1/activity?action=click,open", NOTHING, \hdr);
+        assertEq(("click", "open"), req.query.action);
+        assertThrows("SCHEMA-VALIDATION-ERROR", "does not fit the enumerated values", \s.parseRequest(),
+            ("GET", "/v1/activity?action=abuse,click", NOTHING, \hdr));
+        assertThrows("SCHEMA-VALIDATION-ERROR", "does not fit the enumerated values", \s.parseRequest(),
+            ("GET", "/v1/activity?action=open,click", NOTHING, \hdr));
+        # the client validates the request it sends
+        assertThrows("SCHEMA-VALIDATION-ERROR", "does not fit the enumerated values", \s.processRequest(),
+            ("GET", "/activity?action=sent", NOTHING, {}));
+
+        # the operation can be browsed and its request type built
+        SwaggerDataProvider dp(s);
+        AbstractDataProvider op = dp.getChildProviderPath("activity/GET");
+        AbstractDataField action = op.getRequestType().getField("query").getType().getField("action");
+        assertEq(NT_LIST, action.getType().getBaseTypeCode());
+    }
+
+    #! an object whose enumeration values are objects
+    objectEnumValues() {
+        SwaggerSchema s = getSchema({
+            "/settings": {"post": getOp("settings", ({
+                "name": "body",
+                "in": "body",
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "mode": {
+                            "type": "object",
+                            "additionalProperties": True,
+                            "enum": ({"level": 1}, {"level": 2, "fast": True}),
+                        },
+                        "tags": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "enum": (("a",), ("a", "b")),
+                        },
+                    },
+                },
+            },))},
+        }, {"consumes": ("application/json",)});
+        hash<auto> hdr = {"content-type": "application/json"};
+        hash<RestRequestServerInfo> req = s.parseRequest("POST", "/v1/settings",
+            make_json({"mode": {"fast": True, "level": 2}}), \hdr);
+        assertEq({"fast": True, "level": 2}, req.body.mode);
+        assertThrows("SCHEMA-VALIDATION-ERROR", "does not fit the enumerated values", \s.parseRequest(),
+            ("POST", "/v1/settings", make_json({"mode": {"level": 3}}), \hdr));
+        # numbers are equal by value, as in JSON
+        req = s.parseRequest("POST", "/v1/settings", "{\"mode\": {\"level\": 1.0}}", \hdr);
+        assertEq(NT_FLOAT, req.body.mode.level.typeCode());
+        assertEq(1.0, req.body.mode.level);
+        # an array property is compared with its array values
+        req = s.parseRequest("POST", "/v1/settings", make_json({"tags": ("a", "b")}), \hdr);
+        assertEq(("a", "b"), req.body.tags);
+        assertThrows("SCHEMA-VALIDATION-ERROR", "does not fit the enumerated values", \s.parseRequest(),
+            ("POST", "/v1/settings", make_json({"tags": ("b", "a")}), \hdr));
+
+        # the values are the allowed values of the fields
+        SwaggerDataProvider dp(s);
+        AbstractDataProvider op = dp.getChildProviderPath("settings/POST");
+        HashDataType body = cast<HashDataType>(op.getRequestType().getField("body").getType());
+        assertEq(({"level": 1}, {"level": 2, "fast": True}), map $1.value, body.getField("mode").getAllowedValues());
+        assertEq((("a",), ("a", "b")), map $1.value, body.getField("tags").getAllowedValues());
+    }
+
+    #! a scalar is never equal to an array or object value of an enumeration
+    scalarValueOfStructuredEnum() {
+        SwaggerSchema s = getSchema({
+            "/odd": {"get": getOp("odd", ({
+                "name": "v",
+                "in": "query",
+                "type": "string",
+                "enum": (("a",), "b"),
+            },))},
+        });
+        hash<auto> hdr;
+        hash<RestRequestServerInfo> req = s.parseRequest("GET", "/v1/odd?v=b", NOTHING, \hdr);
+        assertEq("b", req.query.v);
+        assertThrows("SCHEMA-VALIDATION-ERROR", "does not fit the enumerated values", \s.parseRequest(),
+            ("GET", "/v1/odd?v=a", NOTHING, \hdr));
     }
 }
