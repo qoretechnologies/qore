@@ -75,6 +75,9 @@ module SwaggerDataProvider {
     @section swaggerdataprovider_relnotes Release Notes
 
     @subsection swaggerdataprovider_v1_4 SwaggerDataProvider v1.4
+    - the operations of a path ending in a slash, such as \c /oauth/token/, are under a child provider whose name is
+      the empty segment after the slash (\c "oauth/token//POST"), while those of \c /oauth/token are under
+      \c "oauth/token/POST"
     - the request type of an operation has no field for a \c readOnly property of its schema, which its response
       type has
     - the description of a data provider without a REST client gives the URL from its schema; it raised a

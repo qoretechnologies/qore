@@ -1,0 +1,151 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Tests valid Swagger 2.0 constructs found in vendor schemas: paths that differ only by a trailing slash
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires json
+%requires yaml
+
+%requires QUnit
+%requires DataProvider
+%requires RestSchemaValidator
+%requires Swagger
+%requires SwaggerDataProvider
+
+%exec-class SwaggerVendorSchemasTest
+
+class SwaggerVendorSchemasTest inherits QUnit::Test {
+    constructor() : Test("SwaggerVendorSchemasTest", "1.0", \ARGV) {
+        addTestCase("trailing slash paths", \trailingSlashPaths());
+        addTestCase("trailing slash fallback", \trailingSlashFallback());
+        addTestCase("path operation hash prefixes", \pathOperationHashPrefixes());
+        addTestCase("trailing slash data provider", \trailingSlashDataProvider());
+        addTestCase("duplicate template paths", \duplicateTemplatePaths());
+        set_return_value(main());
+    }
+
+    #! returns a Swagger 2.0 schema with the given paths and options
+    private static SwaggerSchema getSchema(hash<auto> paths, *hash<auto> extra) {
+        hash<auto> h = {
+            "swagger": "2.0",
+            "info": {"title": "vendor", "version": "1"},
+            "basePath": "/v1",
+            "paths": paths,
+        } + extra;
+        return SwaggerLoader::fromString(make_json(h));
+    }
+
+    #! returns a GET operation with the given operation ID and parameters
+    private static hash<auto> getOp(string id, *list<auto> params) {
+        hash<auto> rv = {
+            "operationId": id,
+            "responses": {"200": {"description": "ok"}},
+        };
+        if (params) {
+            rv.parameters = params;
+        }
+        return rv;
+    }
+
+    #! returns the operation ID that matches the given method and URI path
+    private static *string getOpId(SwaggerSchema s, string method, string path) {
+        return s.paths.match(path).getOperation(method, path).operationId;
+    }
+
+    #! Pipedrive's "/oauth/token" and "/oauth/token/" are two operations
+    trailingSlashPaths() {
+        SwaggerSchema s = getSchema({
+            "/oauth/token": {"post": getOp("get-tokens")},
+            "/oauth/token/": {"post": getOp("refresh-tokens")},
+            "/": {"get": getOp("root")},
+        });
+        assertEq({"oauth/token": ("post",), "oauth/token/": ("post",), "": ("get",)},
+            s.getPathOperationHash());
+        assertEq("get-tokens", getOpId(s, "post", "/oauth/token"));
+        assertEq("refresh-tokens", getOpId(s, "post", "/oauth/token/"));
+        assertEq("refresh-tokens", getOpId(s, "post", "/oauth/token/?a=1"));
+        assertEq("root", getOpId(s, "get", "/"));
+        assertEq("refresh-tokens", s.paths.tryMatch("/oauth/token/").getOperation("post", "/oauth/token/")
+            .operationId);
+
+        # a server matches an incoming request to the operation of its own path
+        hash<auto> hdr;
+        hash<RestRequestServerInfo> req = s.parseRequest("POST", "/v1/oauth/token/", NOTHING, \hdr);
+        assertEq("/oauth/token/", req.path);
+        assertEq("refresh-tokens", getOpId(s, "post", req.path));
+    }
+
+    #! a URI path that differs from the only declared path by a trailing slash still matches it
+    trailingSlashFallback() {
+        SwaggerSchema s = getSchema({
+            "/a": {"get": getOp("a")},
+            "/b/": {"get": getOp("b-slash")},
+            "/x": {"get": getOp("x")},
+            "/x/{id}": {"get": getOp("x-id", ({"name": "id", "in": "path", "required": True, "type": "string"},))},
+        });
+        assertEq("a", getOpId(s, "get", "/a"));
+        assertEq("a", getOpId(s, "get", "/a/"));
+        assertEq("b-slash", getOpId(s, "get", "/b/"));
+        assertEq("b-slash", getOpId(s, "get", "/b"));
+        # an empty last segment is a trailing slash, not a value of the template
+        assertEq("x", getOpId(s, "get", "/x/"));
+        assertEq("x-id", getOpId(s, "get", "/x/1"));
+        assertThrows("SCHEMA-VALIDATION-ERROR", \s.paths.match(), "/c/");
+        assertThrows("SCHEMA-VALIDATION-ERROR", \s.paths.match(), "/a/b");
+    }
+
+    #! each path of the operation hash is its own, whatever the order of the paths in the document
+    pathOperationHashPrefixes() {
+        SwaggerSchema s = getSchema({
+            "/a/b": {"get": getOp("a-b")},
+            "/a": {"post": getOp("a")},
+            "/a/b/c/": {"put": getOp("a-b-c-slash")},
+        });
+        assertEq({"a/b": ("get",), "a": ("post",), "a/b/c/": ("put",)}, s.getPathOperationHash());
+    }
+
+    #! the operation of a path with a trailing slash is the child of an empty segment
+    trailingSlashDataProvider() {
+        SwaggerSchema s = getSchema({
+            "/oauth/token": {"post": getOp("get-tokens")},
+            "/oauth/token/": {"post": getOp("refresh-tokens")},
+            "/dir/": {"get": getOp("dir")},
+            "/dir//sub": {"get": getOp("dir-sub")},
+        });
+        SwaggerDataProvider dp(s);
+        AbstractDataProvider token = dp.getChildProviderPath("oauth/token");
+        assertEq(("", "POST"), token.getChildProviderNames());
+        AbstractDataProvider slash = token.getChildProviderEx("");
+        assertEq("", slash.getName());
+        assertEq(("POST",), slash.getChildProviderNames());
+
+        SwaggerRequestDataProvider req = cast<SwaggerRequestDataProvider>(dp.getChildProviderPath("oauth/token/POST"));
+        assertEq("get-tokens", req.op.operationId);
+        assertEq("/oauth/token", req.uri_path);
+        req = cast<SwaggerRequestDataProvider>(dp.getChildProviderPath("oauth/token//POST"));
+        assertEq("refresh-tokens", req.op.operationId);
+        assertEq("/oauth/token/", req.uri_path);
+
+        # a segment after an empty one keeps it
+        req = cast<SwaggerRequestDataProvider>(dp.getChildProviderPath("dir//sub/GET"));
+        assertEq("dir-sub", req.op.operationId);
+        assertEq("/dir//sub", req.uri_path);
+        req = cast<SwaggerRequestDataProvider>(dp.getChildProviderPath("dir//GET"));
+        assertEq("dir", req.op.operationId);
+        assertEq("/dir/", req.uri_path);
+    }
+
+    #! two templates of the same path are still the same path
+    duplicateTemplatePaths() {
+        assertThrows("INVALID-PATH-COMPONENT", "Cannot terminate path", \SwaggerVendorSchemasTest::getSchema(), ({
+            "/x/{id}/": {"get": getOp("a", ({"name": "id", "in": "path", "required": True, "type": "string"},))},
+            "/x/{other}/": {"get": getOp("b", ({"name": "other", "in": "path", "required": True,
+                "type": "string"},))},
+        },));
+    }
+}

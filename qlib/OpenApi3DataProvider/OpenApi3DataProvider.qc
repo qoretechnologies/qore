@@ -148,7 +148,8 @@ public class OpenApi3DataProvider inherits OpenApi3DataProviderCommon {
         self.uri_path = uri_path;
         self.schema = schema;
 
-        display_name = uri_path.split("/").last();
+        # the name of the child for a path's trailing slash is the empty segment after it
+        display_name = OpenApi3::PathComponent::splitPath(uri_path).last() ?? "";
     }
 
     #! Creates the object from the arguments
@@ -293,7 +294,8 @@ public class OpenApi3DataProvider inherits OpenApi3DataProviderCommon {
                 do_ref(\ref{path_element}, path_elements, offset);
             };
 
-            do_ref(\path_tree, i.key.split("/"));
+            # a path ending in a slash has a child for its empty last segment: "/a/" is not "/a"
+            do_ref(\path_tree, OpenApi3::PathComponent::splitPath(i.key));
         }
     }
 
@@ -345,11 +347,8 @@ public class OpenApi3DataProvider inherits OpenApi3DataProviderCommon {
 
     #! Returns the child provider for the given path component
     private AbstractDataProvider getChildIntern(string name, *string real_name) {
-        string new_uri_path = uri_path;
-        if (new_uri_path !~ /\/$/) {
-            new_uri_path += "/";
-        }
-        new_uri_path += real_name ?? name;
+        # every component adds a segment, including the empty one after a trailing slash
+        string new_uri_path = (uri_path == "/" ? "" : uri_path) + "/" + (real_name ?? name);
         return new OpenApi3DataProvider(path_tree{name}, new_uri_path, schema, rest);
     }
 

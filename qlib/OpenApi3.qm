@@ -2592,18 +2592,40 @@ public class PathComponent inherits Qore::Serializable {
             if (!pfx.val() && h.key !~ /^\//) {
                 throw "INVALID-FIELD-FORMAT", sprintf("Paths Object: root path %y does not begin with a slash", h.key);
             }
-            list<string> l = h.key.split("/");
+            list<string> l = PathComponent::splitPath(h.key);
             shift l;
             add(h.key, l, 0, h.value, openapi3);
         }
     }
 
     #! private constructor
+    /** @param full_path the path being added
+        @param l the segments of the path after its leading slash
+        @param offset the number of segments of \a l that lead to this component, including its own
+        @param oh the Path Item Object of the path being added
+    */
     private constructor(string full_path, list<auto> l, int offset, hash<auto> oh) {
+        # the prefix is the path to this component; the path being added can continue past it
         list<auto> l0 = l;
-        splice l0, offset + 1;
+        splice l0, offset;
         pfx = l0.join("/");
         name = l[offset - 1];
+    }
+
+    #! Splits a URI path into its segments
+    /** @param path the URI path to split, beginning with a slash
+
+        @return the segments of the path; the first is the empty string before the leading slash, and a path
+        ending in a slash ends with an empty segment, so that \c "/a" and \c "/a/" are different paths, as they
+        are different URIs (<a href="https://www.rfc-editor.org/rfc/rfc3986#section-3.3">RFC 3986 section 3.3</a>)
+    */
+    static list<string> splitPath(string path) {
+        list<string> rv = path.split("/");
+        # split() drops one trailing empty field; the root path "/" has no segment after its slash
+        if (path.size() > 1 && path =~ /\/$/) {
+            push rv, "";
+        }
+        return rv;
     }
 
     #! adds a component or a Path Item Object to the tree
@@ -2670,7 +2692,11 @@ public class PathComponent inherits Qore::Serializable {
     */
     *PathItemObject tryMatch(list<auto> path) {
         PathComponent w = self;
-        for (int i = 1; i < path.size(); ++i) {
+        int size = path.size();
+        for (int i = 1; i < size; ++i) {
+            if (i == (size - 1) && path[i] === "") {
+                return w.matchTrailingSlash();
+            }
             *PathComponent next = w.paths{path[i]};
             if (!next) {
                 foreach hash<auto> entry in (w.templates.pairIterator()) {
@@ -2694,7 +2720,28 @@ public class PathComponent inherits Qore::Serializable {
             }
             w = next;
         }
-        return w.pio;
+        return w.matchNoTrailingSlash();
+    }
+
+    #! Returns the Path Item Object of a URI path that ends in a slash, whose last component is this one
+    /** A path declared with the trailing slash is the one that matches it.  Otherwise the path without it
+        does, so a URI path given with a trailing slash still matches the schema's path without one.
+    */
+    private *PathItemObject matchTrailingSlash() {
+        *PathComponent slash = paths{""};
+        return (slash ? slash.pio : NOTHING) ?? pio;
+    }
+
+    #! Returns the Path Item Object of a URI path that ends in this component without a trailing slash
+    /** A path declared without a trailing slash is the one that matches it.  Otherwise the path with it does,
+        so a URI path given without a trailing slash still matches the schema's path with one.
+    */
+    private *PathItemObject matchNoTrailingSlash() {
+        if (pio) {
+            return pio;
+        }
+        *PathComponent slash = paths{""};
+        return slash ? slash.pio : NOTHING;
     }
 
     #! populates a hash of URI paths as keys with values as lists of supported HTTP methods
@@ -2741,7 +2788,7 @@ public class PathsObject inherits ObjectBase {
         }
         # strip query from path before matching
         path =~ s/\?.*//g;
-        return paths.match(path.split("/"));
+        return paths.match(PathComponent::splitPath(path));
     }
 
     #! matches a URI path with a PathItemObject
@@ -2751,7 +2798,7 @@ public class PathsObject inherits ObjectBase {
         if (!path.equalPartial("/")) {
             path = "/" + path;
         }
-        return paths.tryMatch(path.split("/"));
+        return paths.tryMatch(PathComponent::splitPath(path));
     }
 
     #! returns a hash of URI paths as keys with values as lists of supported HTTP methods
