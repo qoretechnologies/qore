@@ -1,0 +1,86 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class OwnScopeOperandTest
+
+#! Tests that the value of the operand of a change to a member outlives the temporaries of the operand
+/** The operand of a change to a member, the value of a switch statement and the list of a foreach statement are
+    evaluated as statements of their own, whose temporaries are released before the value is used.  A cast holds the
+    value that it converts as a temporary, and returned that same value without a reference of its own when it
+    already had the type of the cast, so the value was released with the temporaries and then used: the AST
+    interpreter destroyed the documents of the list that it assigned, and the member was empty (in a large program
+    the reference count of the freed value ran away, and the process aborted).  Each case of
+    own-scope-operand-worker.q prints the documents that it sees and the documents destroyed, before and after the
+    value that holds them goes out of scope.
+*/
+class OwnScopeOperandTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+
+        #! no document is destroyed before the hash that holds it goes out of scope
+        const Expected = "list: [] [\"a\", \"b\"]; after: [\"~a\", \"~b\"]\n"
+            "hashdecl: [] \"c\"; after: [\"~c\"]\n"
+            "complex hash: [] [\"d\", \"e\"]; after: [\"~d\", \"~e\"]\n"
+            "push: [] [\"f\"]; after: [\"~f\"]\n"
+            "switch: []; after: [\"~g\"]\n"
+            "foreach: [] [\"h\", \"i\"]; after: [\"~h\", \"~i\"]\n"
+            "member chain: [] \"j\"; after: [\"~j\"]\n";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        *string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("OwnScopeOperandTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE;
+        if (!qcc_bin) {
+            foreach string dir in ((libqore_dir, dirname(qore_bin))) {
+                if (is_file(dir + DirSep + "qcc")) {
+                    qcc_bin = dir + DirSep + "qcc";
+                    break;
+                }
+            }
+        }
+
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("AOT program", \testAotProgram());
+
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        string worker = get_script_dir() + DirSep + "own-scope-operand-worker.q";
+        foreach string mode in (ExecModes) {
+            string out = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s",
+                libqore_dir, qore_bin, mode, worker));
+            assertEq(Expected, out, mode);
+        }
+    }
+
+    testAotProgram() {
+        if (!qcc_bin) {
+            testSkip("the in-tree qcc executable is not available; set QCC to test compiled code");
+        }
+        TmpDir tmp("qore-own-scope-operand-");
+        string exe = tmp.path + DirSep + "own-scope-operand";
+        string src = get_script_dir() + DirSep + "own-scope-operand-worker.q";
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -o %s %s 2>&1", libqore_dir,
+            libqore_dir, qcc_bin, exe, src));
+        assertTrue(is_file(exe), "compiled program: " + out);
+        assertEq(Expected, backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1", libqore_dir,
+            libqore_dir, exe)));
+    }
+}
