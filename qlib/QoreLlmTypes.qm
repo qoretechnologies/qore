@@ -428,6 +428,18 @@ public hashdecl LlmRequestOptions {
     /** Overrides @ref LlmBackendConfig::max_retries. A value of zero disables
         transport retries while preserving the initial request. */
     *int max_retries;
+    #! Maximum retries of an HTTP 429 (rate limit) answer on this call
+    /** Overrides @ref max_retries for a 429 alone; when not given, a 429 is retried as any other transient error.
+        Zero returns a 429 at once, for a caller that asks again itself after a wait of its own choosing.
+    */
+    *int rate_limit_retries;
+    #! The time by which this call, with every retry and repair request it makes, must be done
+    /** @ref AbstractLlmProvider::getRequestTimeoutMs() gives each transport request only the time left before it,
+        and @ref AbstractLlmProvider::withRetry() makes no retry whose wait would not end before it, so the call's
+        timeout bounds the whole call rather than each request in it.  @ref QoreLlmUtils::LlmBackend "LlmBackend"
+        sets it from the call's timeout when a call starts, unless the caller gives it.
+    */
+    *date deadline;
     #! JSON schema to request structured output when the backend supports it
     *hash<auto> output_schema;
     #! Provider-specific request body fields merged into the generated body
@@ -1275,10 +1287,32 @@ public class AbstractLlmProvider {
     /** @param opts optional per-call request overrides
 
         @return per-call timeout in milliseconds when supplied, otherwise the
-            backend configuration default
+            backend configuration default; with a @ref LlmRequestOptions::deadline, at most the time left before it
+
+        @throw HTTPCLIENT-TIMEOUT the call's @ref LlmRequestOptions::deadline has passed
     */
     int getRequestTimeoutMs(*hash<LlmRequestOptions> opts) {
-        return opts.timeout_ms ?? config_h.timeout_ms;
+        int timeout_ms = opts.timeout_ms ?? config_h.timeout_ms;
+        if (opts.deadline) {
+            int remaining_ms = (opts.deadline - now_us()).durationMilliseconds();
+            if (remaining_ms <= 0) {
+                throw "HTTPCLIENT-TIMEOUT", "LLM call deadline exhausted";
+            }
+            if (remaining_ms < timeout_ms) {
+                timeout_ms = remaining_ms;
+            }
+        }
+        return timeout_ms;
+    }
+
+    #! Resolves the HTTP 429 retry budget for a single call
+    /** @param opts optional per-call request overrides
+
+        @return @ref LlmRequestOptions::rate_limit_retries when supplied, otherwise the call's transient-error
+            retry budget (@ref getRequestMaxRetries())
+    */
+    int getRequestRateLimitRetries(*hash<LlmRequestOptions> opts) {
+        return opts.rate_limit_retries ?? getRequestMaxRetries(opts);
     }
 
     #! Resolves the transient-error retry budget for a single call
@@ -1399,11 +1433,21 @@ deliverStreamEvent(callback, <ChatStreamEvent>{"done": True}, opts);
     }
 
     #! Retries the given call with exponential backoff on transient errors
-    /** Retries on HTTP 429 (rate limit) and 5xx (server error) responses up
-        to @ref LlmRequestOptions::max_retries when supplied, otherwise
-        @ref LlmBackendConfig::max_retries. Initial delay is
-        @ref LlmBackendConfig::retry_delay_ms and doubles on each attempt;
-        respects \c Retry-After when present on 429 responses.
+    /** Retries on HTTP 429 (rate limit) and 5xx (server error) responses: a 429 up to
+        @ref LlmRequestOptions::rate_limit_retries, any other up to @ref LlmRequestOptions::max_retries (each when
+        supplied, otherwise @ref LlmBackendConfig::max_retries). Initial delay is @ref LlmBackendConfig::retry_delay_ms
+        and doubles on each attempt; a @c Retry-After the response gives is taken instead.
+
+        No wait is made, and the error is raised at once so that the caller can fail over, when the wait would not
+        end before the call's @ref LlmRequestOptions::deadline, or when a @c Retry-After asks for longer than the
+        request timeout (@ref LlmRequestOptions::timeout_ms or @ref LlmBackendConfig::timeout_ms).
+
+        Every attempt is recorded: @c attempts (the requests made), @c waits_ms (each wait taken), @c failures (for
+        each failed request its @c status, the provider's @c provider_code, whether the provider gave a
+        @c quota_detail and the @c retry_after_ms it asked for) and, for a call that ends with an error, @c stopped:
+        why no further request was made (@c not_retryable, @c retries_spent, @c deadline or
+        @c retry_after_too_long).  \a retry_info receives the record whether the call succeeds or fails, and the
+        error a call ends with carries it as @c retry in its argument when the argument is a hash.
 
         When @ref LlmRequestOptions::cancellation is set, the call is not made
         once the token is cancelled, a backoff wait ends as soon as it is
@@ -1412,46 +1456,70 @@ deliverStreamEvent(callback, <ChatStreamEvent>{"done": True}, opts);
 
         @param call a callable that performs the request and returns the response
         @param opts optional per-call request overrides
+        @param retry_info receives the record of the call's attempts
 
         @return the response from the successful call
 
         @throw LLM-CANCELLED @ref LlmRequestOptions::cancellation was cancelled
         @throw any non-retryable exception is rethrown; a retryable exception
-        is rethrown after retries are exhausted
+        is rethrown after retries are exhausted, with its record as @c retry in its argument
+
+        @par Example
+        A Vertex AI call answered with HTTP 429 three times and then 200 returns the response, and \a retry_info
+        holds @c attempts 4, the three waits taken and the three failures, each with its @c provider_code
+        (@c RESOURCE_EXHAUSTED).
     */
-    auto withRetry(code call, *hash<LlmRequestOptions> opts = NOTHING) {
+    auto withRetry(code call, *hash<LlmRequestOptions> opts = NOTHING, *reference<hash<auto>> retry_info) {
         int attempt = 0;
         int max_retries = getRequestMaxRetries(opts);
+        int rate_limit_retries = getRequestRateLimitRetries(opts);
+        int request_timeout_ms = opts.timeout_ms ?? config_h.timeout_ms;
+        hash<auto> record = {"attempts": 0, "waits_ms": (), "failures": ()};
         while (True) {
+            ++record.attempts;
             try {
-                return callCancellable(call, opts);
+                auto rv = callCancellable(call, opts);
+                retry_info = record;
+                return rv;
             } catch (hash<ExceptionInfo> ex) {
-                bool retryable = False;
-                if (ex.arg.typeCode() == NT_HASH) {
-                    int status = ex.arg.status_code ?? 0;
-                    if (status == 429 || status >= 500) {
-                        retryable = True;
-                    }
-                }
-
-                if (!retryable || attempt >= max_retries) {
+                if (ex.err == "LLM-CANCELLED") {
+                    retry_info = record;
                     rethrow;
                 }
-
-                ++attempt;
-                int delay = config_h.retry_delay_ms * (1 << (attempt - 1));
-
-                if (ex.arg.typeCode() == NT_HASH
-                        && ex.arg.headers."retry-after".val()) {
-                    int retry_after = ex.arg.headers."retry-after".toInt();
-                    if (retry_after > 0) {
-                        delay = retry_after * 1000;
+                hash<auto> failure = getRetryFailureEvidence(ex);
+                record.failures += failure;
+                int status = failure.status ?? 0;
+                *string stopped;
+                if (status != 429 && status < 500) {
+                    stopped = "not_retryable";
+                } else if (attempt >= (status == 429 ? rate_limit_retries : max_retries)) {
+                    stopped = "retries_spent";
+                }
+                int delay;
+                if (!stopped) {
+                    delay = exists failure.retry_after_ms
+                        ? failure.retry_after_ms
+                        : config_h.retry_delay_ms * (1 << attempt);
+                    if (exists failure.retry_after_ms && failure.retry_after_ms > request_timeout_ms) {
+                        stopped = "retry_after_too_long";
+                    } else if (opts.deadline && now_us() + milliseconds(delay) >= opts.deadline) {
+                        stopped = "deadline";
                     }
                 }
-
+                if (stopped) {
+                    record.stopped = stopped;
+                    retry_info = record;
+                    if (ex.arg.typeCode() == NT_HASH) {
+                        throw ex.err, ex.desc, ex.arg + {"retry": record};
+                    }
+                    rethrow;
+                }
+                ++attempt;
+                record.waits_ms += delay;
                 if (opts.cancellation) {
                     # a cancellation ends the wait at once
                     if (opts.cancellation.waitCancelled(delay)) {
+                        retry_info = record;
                         opts.cancellation.check();
                     }
                 } else {
@@ -1459,6 +1527,54 @@ deliverStreamEvent(callback, <ChatStreamEvent>{"done": True}, opts);
                 }
             }
         }
+    }
+
+    #! Returns the evidence of a failed request that @ref withRetry() records
+    /** @param ex the request's error
+
+        @return @c status (the HTTP status, if the error has one), @c provider_code (the provider's own error code:
+        a Google @c error.status such as @c RESOURCE_EXHAUSTED, else an @c error.code or @c error.type string),
+        @c quota_detail (True when the provider's error details include a @c QuotaFailure) and @c retry_after_ms
+        (a positive @c Retry-After in seconds, as milliseconds); each only when present
+    */
+    static hash<auto> getRetryFailureEvidence(hash<ExceptionInfo> ex) {
+        hash<auto> rv = {};
+        if (ex.arg.typeCode() != NT_HASH) {
+            return rv;
+        }
+        if (exists ex.arg.status_code) {
+            rv.status = ex.arg.status_code.toInt();
+        }
+        auto body = ex.arg.body;
+        if (body.typeCode() == NT_LIST && body[0].typeCode() == NT_HASH) {
+            body = body[0];
+        }
+        if (body.typeCode() == NT_HASH && body.error.typeCode() == NT_HASH) {
+            hash<auto> error = body.error;
+            if (error.status.typeCode() == NT_STRING && error.status.val()) {
+                rv.provider_code = error.status;
+            } else if (error.code.typeCode() == NT_STRING && error.code.val()) {
+                rv.provider_code = error.code;
+            } else if (error.type.typeCode() == NT_STRING && error.type.val()) {
+                rv.provider_code = error.type;
+            }
+            if (error.details.typeCode() == NT_LIST) {
+                foreach auto detail in (error.details) {
+                    if (detail.typeCode() == NT_HASH && detail."@type".typeCode() == NT_STRING
+                            && detail."@type" =~ /QuotaFailure$/) {
+                        rv.quota_detail = True;
+                        break;
+                    }
+                }
+            }
+        }
+        if (ex.arg.headers.typeCode() == NT_HASH && ex.arg.headers."retry-after".val()) {
+            int retry_after = ex.arg.headers."retry-after".toInt();
+            if (retry_after > 0) {
+                rv.retry_after_ms = retry_after * 1000;
+            }
+        }
+        return rv;
     }
 
     #! OpenAI-facade hook: adapts an OpenAI tool_choice to provider-native form

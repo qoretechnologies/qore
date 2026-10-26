@@ -852,6 +852,17 @@ public class LlmBackend {
         }
     }
 
+    #! Returns the options of a non-streaming call with its deadline: the time by which the call, with every retry
+    #! and repair request in it, must be done (LlmRequestOptions::deadline), set from the call's timeout unless given
+    #! (a stream is bounded by its own read timeouts instead, and may run longer than one request timeout)
+    private hash<LlmRequestOptions> withCallDeadline(*hash<LlmRequestOptions> opts) {
+        hash<LlmRequestOptions> rv = opts ?? <LlmRequestOptions>{};
+        if (!rv.deadline) {
+            rv.deadline = now_us() + milliseconds(provider.getRequestTimeoutMs(rv));
+        }
+        return rv;
+    }
+
     #! Multi-turn chat with optional tool calling
     /** Sends a list of messages (including conversation history and tool
         results) to the LLM, optionally with tool definitions that the LLM
@@ -868,6 +879,7 @@ public class LlmBackend {
     hash<ChatResponse> chat(list<hash<ChatMessage>> messages,
             *list<hash<ToolDefinition>> tools, *hash<LlmRequestOptions> opts) {
         date started = now_us();
+        opts = withCallDeadline(opts);
         *hash<LlmTelemetryObserver> observer = getTelemetryObserver(opts);
         hash<auto> request = LlmTelemetry::chatRequestSummary(messages, tools,
             opts, False);
@@ -1126,8 +1138,9 @@ if (resp.stop_reason == "tool_use") {
             cast<list<hash<ChatMessage>>>(parsed.messages);
         *list<hash<ToolDefinition>> tools =
             cast<*list<hash<ToolDefinition>>>(parsed.tools);
-        hash<LlmRequestOptions> options =
-            cast<hash<LlmRequestOptions>>(parsed.options);
+        # one deadline for the whole call: its repair requests get only the time left
+        hash<LlmRequestOptions> options = withCallDeadline(
+            cast<hash<LlmRequestOptions>>(parsed.options));
         *string forced_tool_name = getForcedOpenAiToolName(body, tools);
         hash<ChatResponse> response = chat(messages, tools, options);
         hash<auto> rv = synthesizeOpenAiForcedToolCall(chatResponseToOpenAi(
@@ -1380,6 +1393,12 @@ if (resp.stop_reason == "tool_use") {
         }
         if (exists body.max_retries) {
             options_h.max_retries = body.max_retries;
+        }
+        if (exists body.rate_limit_retries) {
+            options_h.rate_limit_retries = body.rate_limit_retries;
+        }
+        if (body.deadline.typeCode() == NT_DATE) {
+            options_h.deadline = body.deadline;
         }
         if (body.cached_content.val()) {
             options_h.cached_content = body.cached_content;
@@ -1917,8 +1936,10 @@ if (resp.stop_reason == "tool_use") {
     private hash<LlmRequestOptions> makeForcedToolJsonRetryOptions(
             hash<LlmRequestOptions> options, hash<auto> output_schema) {
         hash<LlmRequestOptions> retry_options = <LlmRequestOptions>{};
+        # the repair is part of the call: it keeps the call's deadline, timeout, retry budgets and cancellation
         foreach string key in (("model", "temperature",
-                "telemetry_observer", "telemetry_context")) {
+                "telemetry_observer", "telemetry_context", "deadline", "timeout_ms", "max_retries",
+                "rate_limit_retries", "cancellation")) {
             if (exists options{key}
                     && options{key}.typeCode() != NT_NOTHING) {
                 retry_options{key} = options{key};

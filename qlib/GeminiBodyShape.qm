@@ -2626,6 +2626,10 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
         hash<QoreLlmUtils::ChatResponse> rv = GeminiBodyShape::parseChatResponse(resp.body,
             exists request.body.cachedContent, request.stringified_arguments);
         rv.model = getModelName(opts);
+        # a response that took more than one request reports them (AbstractLlmProvider::withRetry())
+        if (resp.retry.attempts > 1) {
+            rv.provider_diagnostics = (rv.provider_diagnostics ?? {}) + {"retry": resp.retry};
+        }
         return rv;
     }
 
@@ -3028,11 +3032,13 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
         ensureRestClient();
         string path = getRequestPath(opts);
         *hash<auto> hdr = getRequestHeaders(opts);
+        hash<auto> retry_info;
         try {
-            return withRetry(hash<auto> sub () {
+            hash<auto> resp = withRetry(hash<auto> sub () {
                 return rest_client.restPostWithTimeout(path, body, hdr,
                     getRequestTimeoutMs(opts));
-            }, opts);
+            }, opts, \retry_info);
+            return resp + {"retry": retry_info};
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "LLM-CANCELLED") {
                 rethrow;
