@@ -23864,8 +23864,15 @@ static __attribute__((noinline)) int tryKnownClosureIntUnaryMiss(
     // Borrow the live argument only for this call. No ownership change or user
     // code occurs between the tag check and the unchanged native admission.
     const auto* closure = static_cast<const QoreClosureBase*>(node);
-    const auto* function = static_cast<const UserClosureFunction*>(closure->getFunction());
-    const auto* uvb = function->first()->getUserVariantBase();
+    // Parsing and AOT reconstruction both create one UserClosureVariant. The
+    // retained parse node owns this immutable metadata; native admission below
+    // still checks the live Program, body and context state.
+    const auto* function = closure->getClosureParseNode()->getFunction();
+    const auto* variant = function->first();
+    assert(function == closure->getFunction());
+    assert(dynamic_cast<const UserClosureVariant*>(variant));
+    const UserVariantBase* uvb = static_cast<const UserClosureVariant*>(variant);
+    assert(uvb == variant->getUserVariantBase());
     return tryExecNativeIntClosureScalar(*rc, closure, uvb, arg, *result, xsink);
 }
 

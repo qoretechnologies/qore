@@ -260,6 +260,8 @@
     literal keys and all uses are proven at compile time, retaining ordinary lookup for unsupported cases.
     JIT/AOT indexed reads reuse an existing live RuntimeConfig for negative-offset policy checks,
     retaining the compatibility entry and all indexed-read semantics.
+    Native closure call dispatch reuses concrete parse/AOT metadata, avoiding two virtual lookups
+    while retaining live Program, body, context and stack checks.
     Native closure call dispatch decodes its live closure node once, reducing repeated-call overhead
     while preserving value representation handling, context and live admission checks.
     Callback context guards avoid an empty-context helper call while preserving context lookup and

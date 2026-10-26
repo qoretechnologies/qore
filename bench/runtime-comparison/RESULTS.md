@@ -24523,3 +24523,90 @@ ARM64 review verifies pointer decoding bypasses both general accessors while non
 No fresh Java/develop ratio, IR/JIT speed estimate, weighted application gain, full-suite/sanitizer/Linux result or global ceiling. Next inspect immutable closure metadata lookup against historical experiments before making another isolated candidate. The stack-limit-only closure-v3 convention was already rejected at 609a53eb; it is not a new untested proposal.
 
 [Audit](audit-closure-node-decode.md); [evidence](results-closure-node-decode-macos-arm64.json).
+
+## Concrete closure metadata lookup (2026-10-26)
+
+Known-closure miss dispatch reads the retained parse node and its UserClosureFunction directly, then uses the sole UserClosureVariant already established by parsing and both AOT reconstruction paths. Existing nonvirtual accessors replace getFunction dispatch; a concrete cast replaces getUserVariantBase dispatch. Debug checks the original function identity, concrete variant type and adjusted base identity. The live closure retains all metadata through synchronous admission. No field, cache, ownership, public ABI or compiler change. Value decoding, disabled routes, generic fallback and every live native admission check remain.
+
+The baseline is installed d12755787c. Both runtimes use Release -O3 -DNDEBUG, allocation tracking off, LLVM 22.1.8 and the same 15 qcc-O3 native modules. The 73-workload screen has three forks. Confirmation has five forks and 35 workloads: the 33 declared mandatory controls plus static_float_add and buffer_positive selected by screen costs. Default/reverse/shuffle-487 layouts use 4096 items, one warmup and three 150 ms samples. Both closure targets must improve at least 1% in aggregate and improve in every layout in both phases. These are whole-kernel ns/item, not isolated call latency.
+
+Retain under the user-authorized broader workload tradeoff. Ordinary plain/captured closures improve 5.974%/6.366% in confirmation, after screen gains 5.419%/4.186%; both improve in every layout in both phases. This is not a universal gain: populated-context plain/captured closures have repeated costs, with confirmation 0.795%/0.136%, and populated indirect floating calls cost 2.506%. Main repeated costs include buffer reads 1.113%, negative/positive list indexing 1.044%/1.814%, boxed integer fallback 1.424%, indirect floating calls 2.029%, monomorphic floating calls 0.953%, callback pipeline 0.083% and text indexing 0.816%. Ordinary indirect integer calls improve 1.431%, CSV 0.864% and order processing 1.021%. The static-float screen cost does not repeat; the buffer shuffle-layout flag does not repeat, though its smaller aggregate cost does. Callback local float result costs 3.783% (0.031354 ns/item) in confirmation after a screen gain; this remains reported. Short closure results do not pass the cross-layout target gate. Retain the repeated ordinary-closure gains with these measured costs, without claiming a weighted application improvement or attributing unrelated costs to placement.
+
+|!Confirmed workload|!Before ns/item|!Candidate ns/item|!Change
+|float:callback_local_float_result|0.828847|0.860201|+3.783%
+|float:callback_local_float_return|0.896176|0.887175|-1.004%
+|float:callback_loop_float_return|5.423858|5.393771|-0.555%
+|float:direct_loop_float_return|6.234509|6.233636|-0.014%
+|float:static_float_add|0.844690|0.840937|-0.444%
+|float:typed_local_int_result|0.863081|0.865299|+0.257%
+|float:typed_local_int_unary|1.222416|1.206635|-1.291%
+|index:buffer_positive|15.145206|15.313769|+1.113%
+|index:list_negative|8.170915|8.256207|+1.044%
+|index:list_positive|8.013632|8.158996|+1.814%
+|micro:boxed_float_method_call|20.966876|20.985845|+0.090%
+|micro:boxed_float_method_fallback|35.921700|35.717399|-0.569%
+|micro:boxed_int_method_call|17.237140|17.009016|-1.323%
+|micro:boxed_int_method_fallback|33.053984|33.524778|+1.424%
+|micro:closure_call|16.465029|15.481463|-5.974%
+|micro:closure_capture|22.791513|21.340563|-6.366%
+|micro:direct_call|1.654447|1.647520|-0.419%
+|micro:indirect_affine_wide|61.996525|61.577109|-0.677%
+|micro:indirect_call|61.654376|60.772315|-1.431%
+|micro:indirect_float|61.173760|62.415277|+2.029%
+|micro:indirect_float_result|60.377560|60.023815|-0.586%
+|micro:indirect_wide|60.332789|61.045624|+1.182%
+|micro:list_build|27.417045|27.623050|+0.751%
+|micro:list_mutate|135.715888|137.226590|+1.113%
+|micro:list_read|3.083245|3.064787|-0.599%
+|micro:method_call|1.782780|1.775561|-0.405%
+|micro:monomorphic_call|4.060460|4.044547|-0.392%
+|micro:monomorphic_float_call|4.335834|4.377147|+0.953%
+|micro:polymorphic_call|24.359629|24.329133|-0.125%
+|micro:polymorphic_float_call|24.565065|24.638965|+0.301%
+|micro:temporary_hash|1.866929|1.844587|-1.197%
+|mixed:callback_pipeline|127.801225|127.906969|+0.083%
+|mixed:csv_report|962.030458|953.714532|-0.864%
+|mixed:object_orders|1866.894531|1847.837224|-1.021%
+|mixed:text_index|1477.236328|1489.287485|+0.816%
+
+|!Repeated aggregate cost|!Screen change|!Confirmation change|!Confirmation ns/item cost
+|index:buffer_positive|+4.078%|+1.113%|+0.168563
+|index:list_negative|+0.790%|+1.044%|+0.085292
+|index:list_positive|+0.982%|+1.814%|+0.145364
+|micro:boxed_int_method_fallback|+0.373%|+1.424%|+0.470795
+|micro:indirect_float|+0.074%|+2.029%|+1.241517
+|micro:monomorphic_float_call|+0.025%|+0.953%|+0.041313
+|mixed:callback_pipeline|+1.779%|+0.083%|+0.105744
+|mixed:text_index|+2.054%|+0.816%|+12.051157
+
+The populated-context supplement runs the same native module from a child Program with a SandboxManager; setup precedes measured windows. Native diagnostics verify empty/populated states and both runtimes pass 3330 reference outputs. Six callbacks use three screen and five confirmation forks in each layout.
+
+|!Populated-context workload|!Before ns/item|!Candidate ns/item|!Screen change|!Confirmation change
+|context:closure_call|30.688987|30.932959|+1.198%|+0.795%
+|context:closure_capture|36.618946|36.668606|+1.267%|+0.136%
+|context:indirect_affine_wide|366.693110|365.620877|-4.018%|-0.292%
+|context:indirect_call|282.006632|283.212809|-0.558%|+0.428%
+|context:indirect_float|280.219305|287.242498|+0.884%|+2.506%
+|context:indirect_wide|361.362759|365.420800|-0.452%|+1.123%
+
+|!Short workload|!Items|!Before ns/item|!Candidate ns/item
+|micro:closure_call|1|2558.201016|2515.425232
+|micro:closure_capture|1|2568.663890|2565.626846
+|micro:indirect_call|1|2603.802674|2588.354448
+|micro:direct_call|1|2493.982736|2454.423471
+|micro:closure_call|16|174.111550|174.429058
+|micro:closure_capture|16|180.574969|180.377557
+|micro:indirect_call|16|219.889032|218.591648
+|micro:direct_call|16|155.348249|155.294884
+
+Neither short closure target passes the cross-layout gate. One-item plain/captured aggregate changes are -1.672%/-0.118%; 16-item changes are +0.182%/-0.109%. Setup and cleanup are included. The screen flags buffer_positive shuffle-487 at +9.947%; confirmation has no adverse layout flags, while its aggregate cost remains +1.113%. The historical indirect_float_result control is mandatory in both phases and improves 0.078%/0.586%. No samples are removed or rerun.
+
+The source-bound baseline reuses the prior completed 33-fixture qualification with matching production/fixture hashes and fresh 4212 reference outputs. Candidate Release/Debug each pass 30 QUnit fixtures/198 cases/8117 assertions plus three standalone fixtures, no skips. Native 2906, standard 1110, paired-module 8424, new-compiler 1053 and populated 3330 reference checks pass. All 391 Release qmod links/hashes are restored after Debug.
+
+ARM64 review verifies that both metadata indirect calls disappear and the compiler supplies the correct 0x30 base adjustment. Miss-dispatch instructions 155→139 include 14→8 alignment nops; executable counts are 141→131 and the 96-byte frame is unchanged. Native admission remains 242 normalized instructions with its 352-byte frame. Library size 21596336 bytes and 9035 exported names match. These counts do not estimate speed. Four diagnostic profiles precede timing and verify native paths/images. New compiler LLVM differs only in verified informational Git metadata/initialization size; runtime identity and kernel instructions match.
+
+All 2796 jobs/8388 windows are retained and independently replayed. The profile supervisor initially saved a successful terminal receipt one directory above the reviewer expectation; the identical receipt was copied into the expected location and only the reviewer rerun, before timing. The failed review and correction are preserved. No owned build/test/profile or heavy archival scan overlaps timing. The shared host has no affinity/frequency/thermal control.
+
+No fresh Java/develop ratio, IR/JIT speed estimate, weighted application gain, full-suite/sanitizer/Linux result or global ceiling. Refresh the optimized branch/develop/Java checkpoint next. A possible later lead is invocation-owned reusable closure-frame storage, subject to lifetime/ABA, per-call publication, fallback and context proofs; do not retain closures just to cache metadata.
+
+[Audit](audit-closure-metadata.md); [evidence](results-closure-metadata-macos-arm64.json).
