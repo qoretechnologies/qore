@@ -3413,7 +3413,22 @@ tc.constraint_name, c1.ordinal_position", schema, name);
         @since MssqlSqlUtilBase 1.1
     */
     string getAliasSqlName(string alias) {
+        # an alias given as a delimited identifier is used as given (issue #2163), once its name is checked as any
+        # other alias, which refuses the characters that database drivers read in a delimited identifier
+        *string name = getDelimitedAliasName(alias);
+        if (exists name) {
+            mssql_get_sql_alias(name);
+            return alias;
+        }
         return mssql_get_sql_alias(alias);
+    }
+
+    #! returns the name in an alias given as one complete identifier in double quotes or brackets, or @ref nothing
+    /** @since MssqlSqlUtilBase 1.1
+    */
+    *string getDelimitedAliasName(string alias) {
+        return AbstractTable::getDelimitedName(alias, "[", "]") ?? AbstractTable::getDelimitedName(alias, "\"",
+            "\"");
     }
 
     private bool emptyImpl() {

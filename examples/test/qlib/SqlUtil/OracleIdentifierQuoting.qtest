@@ -303,6 +303,17 @@ class OracleIdentifierQuotingTest inherits QUnit::Test {
             t.getSelectSql({"columns": (cop_as("id", "a; drop table x --"),)}, \args));
         assertThrows("IDENTIFIER-ERROR", "double quote", \t.getSelectSql(),
             ({"columns": (cop_as("id", "a\" from dual; --"),)}, \args));
+        # an alias given as a double-quoted identifier (issue #2163) is used as given, and can be referenced by the
+        # name that it gives
+        assertEq("select id as \"user-interaction\" from qore.alias_t order by id",
+            t.getSelectSql({"columns": (cop_as("id", "\"user-interaction\""),), "orderby": "user-interaction"},
+                \args));
+        assertEq("select id as \"user-interaction\" from qore.alias_t",
+            t.getSelectSql({"columns": (cop_as("id", "user-interaction"),)}, \args));
+        assertEq("\"MixedCase\"", t.getAliasSqlName("\"MixedCase\""));
+        # Oracle has no escaped double quote in an identifier, so a quoted alias with one is refused
+        assertThrows("IDENTIFIER-ERROR", "double quote", \t.getAliasSqlName(), "\"a\"\"b\"");
+        assertThrows("IDENTIFIER-ERROR", "double quote", \t.getAliasSqlName(), "\"a\" from dual --\"");
 %endif
     }
 
@@ -373,6 +384,9 @@ class OracleIdentifierQuotingTest inherits QUnit::Test {
             cop_as("id", "order"), cop_as("id", "My Total"), cop_as("my col; drop table x --", "a; b")),
             "where": {"id": 1}});
         assertEq({"total": 1, "total2": 1, "order": 1, "my total": 1, "a; b": "m"}, arow);
+        # an alias given as a double-quoted identifier (issue #2163) names the key as an alias that needs quotes
+        assertEq({"user-interaction": 1}, t.selectRow({"columns": (cop_as("id", "\"user-interaction\""),),
+            "where": {"id": 1}}));
         assertThrows("IDENTIFIER-ERROR", "double quote", \t.selectRow(),
             {"columns": (cop_as("id", "x\" from dual --"),)});
         assertEq(1, t.del({"x%s": "w"}));

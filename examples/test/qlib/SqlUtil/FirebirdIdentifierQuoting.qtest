@@ -359,5 +359,19 @@ class FirebirdIdentifierQuotingTest inherits QUnit::Test {
             };
             assertEq("select id as " + i.value + " from orders", t.getSelectSql({"columns": (exp,)}, \args), i.key);
         }
+        # an alias given as a double-quoted identifier (issue #2163) is used as given, not quoted again, and can be
+        # referenced by the name that it gives
+        list<auto> args;
+        foreach string alias in (("\"user-interaction\"", "\"TotalCount\"", "\"a\"\"b\"")) {
+            assertEq("select id as " + alias + " from orders", t.getSelectSql({"columns": cop_as("id", alias)}, \args),
+                alias);
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": COP_AS,
+                "args": (<DataProviderFieldReference>{"field": "id"}, alias),
+            };
+            assertEq("select id as " + alias + " from orders", t.getSelectSql({"columns": (exp,)}, \args), alias);
+        }
+        assertEq("select id as \"user-interaction\" from orders order by id",
+            t.getSelectSql({"columns": cop_as("id", "\"user-interaction\""), "orderby": "user-interaction"}, \args));
     }
 }

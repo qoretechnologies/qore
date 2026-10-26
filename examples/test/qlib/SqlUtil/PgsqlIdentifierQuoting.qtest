@@ -45,6 +45,7 @@ public class PgsqlIdentifierQuotingTest inherits QUnit::Test {
         addTestCase("generated SQL quotes hostile names", \generatedSql());
         addTestCase("ordinary names are unchanged", \ordinaryNames());
         addTestCase("live hostile round trip", \liveRoundTrip());
+        addTestCase("a pre-quoted alias names its result key", \quotedAlias());
         set_return_value(main());
     }
 
@@ -120,6 +121,49 @@ public class PgsqlIdentifierQuotingTest inherits QUnit::Test {
 
         hash<SqlCommandInfo> upd = t.getUpdateSql({"val": "x"}, {"id": 1});
         assertEq("update " + t.getSqlName() + " set val = %v where id = %v", upd.sql);
+    }
+
+    #! an alias given as a double-quoted identifier (issue #2163) is used as given, and names the result key without
+    #! its quotes; an alias that needs quotes is quoted
+    quotedAlias() {
+        Datasource ds = connectOrSkip();
+        PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, "PgsqlIdentifierQuoting");
+        m_live = True;
+        on_exit ds.rollback();
+
+        PgsqlTable t(ds, "alias_probe");
+        t.setupTable({"columns": {"id": {"qore_type": "integer", "notnull": True},
+            "user_interaction": {"qore_type": "string", "size": 80}}});
+        t.create();
+        t.insert({"id": 1, "user_interaction": "x"});
+        ds.commit();
+
+        assertEq("\"user-interaction\"", t.getAliasSqlName("\"user-interaction\""));
+        assertEq("\"a\"\"b\"", t.getAliasSqlName("\"a\"\"b\""));
+        assertEq("\"user-interaction\"", t.getAliasSqlName("user-interaction"));
+        # a quote that is not doubled ends the identifier, so the alias is not one delimited identifier
+        assertEq("\"\"\"a\"\" b\"\"\"", t.getAliasSqlName("\"a\" b\""));
+
+        list<auto> args;
+        assertEq("select user_interaction as \"user-interaction\" from " + t.getSqlName()
+            + " order by user_interaction",
+            t.getSelectSql({"columns": (cop_as("user_interaction", "\"user-interaction\""),),
+                "orderby": "user-interaction"}, \args));
+
+        assertEq({"user-interaction": "x"}, t.selectRow({"columns": (cop_as("user_interaction",
+            "\"user-interaction\""),), "where": {"id": 1}}));
+        assertEq({"user-interaction": "x"}, t.selectRow({"columns": (cop_as("user_interaction",
+            "user-interaction"),), "where": {"id": 1}}));
+        assertEq({"a\"b": "x"}, t.selectRow({"columns": (cop_as("user_interaction", "\"a\"\"b\""),),
+            "where": {"id": 1}}));
+        # a pre-quoted alias in mixed case keeps its case, as PostgreSQL does not fold a quoted name
+        assertEq({"MixedCase": "x"}, t.selectRow({"columns": (cop_as("user_interaction", "\"MixedCase\""),),
+            "where": {"id": 1}}));
+        # the expression form
+        assertEq({"user-interaction": "x"}, t.selectRow({"columns": (<DataProviderExpression>{
+            "exp": COP_AS,
+            "args": (<DataProviderFieldReference>{"field": "user_interaction"}, "\"user-interaction\""),
+        },), "where": {"id": 1}}));
     }
 
     private Datasource connectOrSkip() {

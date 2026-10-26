@@ -5887,6 +5887,11 @@ string sql = table.getSelectSql(sh, \args);
                             }
                             if (info.query_hash.superquery && cv.cop == COP_AS && cv.arg) {
                                 subquery_column_map{cv.arg} = True;
+                                # an alias given as a delimited identifier (issue #2163) is also known by its name
+                                *string name = getDelimitedAliasName(cv.arg);
+                                if (exists name) {
+                                    subquery_column_map{name} = True;
+                                }
                             }
                         }
                         break;
@@ -12046,6 +12051,10 @@ string sql = table.getAlignSqlString(table2);
         quoted name in upper case, as unquoted names are stored), which returns it quoted in the exact case given, so
         that an alias that works with the database gives the same result key as before
 
+        An alias that is already one complete delimited identifier for the database (see
+        @ref getDelimitedAliasName()), such as \c "\"a-b\"" (issue #2163), is returned as given, after its name is
+        checked as any other alias, so that it names the same result key as before (\c a-b), and is not quoted again
+
         @param alias the alias, as for @ref SqlUtil::cop_as() "cop_as()"
 
         @return the alias as an SQL identifier
@@ -12055,7 +12064,60 @@ string sql = table.getAlignSqlString(table2);
         @since SqlUtil 3.11.0
     */
     string getAliasSqlName(string alias) {
+        *string name = getDelimitedAliasName(alias);
+        if (exists name) {
+            # the name in the delimiters must be a valid identifier for the database, as any other alias
+            getColumnSqlName(name);
+            return alias;
+        }
         return getColumnSqlName(alias);
+    }
+
+    #! returns the name in an alias given as one complete delimited identifier for the database, or @ref nothing
+    /** By default an identifier in double quotes, in which each double quote is doubled, as standard SQL delimits an
+        identifier, is recognized; a driver whose database delimits identifiers in other ways (such as backticks or
+        brackets) overrides this method
+
+        @par Example:
+        @code{.py}
+# returns "a-b"
+*string name = table.getDelimitedAliasName("\"a-b\"");
+        @endcode
+
+        @param alias the alias, as for @ref SqlUtil::cop_as() "cop_as()"
+
+        @return the name that the delimited identifier gives, which is the key of the result that the alias names,
+        with each doubled delimiter in it given once; @ref nothing if the alias is not one complete delimited
+        identifier
+
+        @since SqlUtil 3.11.0
+    */
+    *string getDelimitedAliasName(string alias) {
+        return AbstractTable::getDelimitedName(alias, "\"", "\"");
+    }
+
+    #! returns the name given by an identifier in the given delimiters, or @ref nothing
+    /** @param id the identifier
+        @param open the opening delimiter, such as \c "\"", \c "`" or \c "["
+        @param close the closing delimiter, such as \c "\"", \c "`" or \c "]", which is doubled in the
+        identifier for each occurrence in the name
+
+        @return the name, with each doubled closing delimiter given once; @ref nothing if @a id is not one complete
+        non-empty identifier in the delimiters
+
+        @since SqlUtil 3.11.0
+    */
+    static *string getDelimitedName(string id, string open, string close) {
+        if (id.size() < 3 || id.substr(0, 1) != open || id.substr(-1) != close) {
+            return;
+        }
+        string body = id.substr(1, -1);
+        # every closing delimiter in the name must be doubled, or the identifier ends before the end of the alias
+        string single = replace(body, close + close, "");
+        if (single.find(close) >= 0) {
+            return;
+        }
+        return replace(body, close + close, close);
     }
 
     #! returns a list of column names for use in SQL strings

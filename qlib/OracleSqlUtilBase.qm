@@ -3929,6 +3929,26 @@ public class OracleTable inherits SqlUtil::AbstractTable {
         @since OracleSqlUtilBase 1.7
     */
     string getAliasSqlName(string alias) {
+        # an alias given as a double-quoted identifier is used as given (issue #2163), once its name is checked
+        *string name = getDelimitedAliasName(alias);
+        if (exists name) {
+            getAliasSqlNameIntern(name);
+            return alias;
+        }
+        return getAliasSqlNameIntern(alias);
+    }
+
+    #! returns the name in an alias given as one complete double-quoted identifier, or @ref nothing
+    /** An Oracle identifier cannot have a double quote, so a double quote in the quotes is not a name
+
+        @since OracleSqlUtilBase 1.7
+    */
+    *string getDelimitedAliasName(string alias) {
+        return alias =~ /\A"[^"]+"\z/ ? alias.substr(1, -1) : NOTHING;
+    }
+
+    #! returns an alias that is not given as a delimited identifier for SQL
+    private string getAliasSqlNameIntern(string alias) {
         if (alias =~ /\A\p{L}[\p{L}\p{N}_$#]*\z/) {
             return oracle_get_sql_identifier(alias);
         }

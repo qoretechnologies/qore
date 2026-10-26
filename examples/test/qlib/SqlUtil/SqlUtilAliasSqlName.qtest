@@ -41,6 +41,8 @@ class SqlUtilAliasSqlNameTest inherits QUnit::Test {
     constructor() : Test("SqlUtilAliasSqlName", "1.0", \ARGV) {
         addTestCase("cop_as() aliases are given by getAliasSqlName()", \copAs());
         addTestCase("the default keeps the result key of a working alias", \defaultAlias());
+        addTestCase("a pre-quoted alias names its result key", \quotedAlias());
+        addTestCase("delimited alias names", \delimitedNames());
         set_return_value(main());
     }
 
@@ -82,5 +84,48 @@ class SqlUtilAliasSqlNameTest inherits QUnit::Test {
         *hash<auto> row = t.selectRow({"columns": (cop_as("val", "v1"),), "where": {"id": 1}});
         assertEq({"v1": "a"}, row);
         assertEq("v1", t.getAliasSqlName("v1"));
+    }
+
+    #! an alias given as a delimited identifier (issue #2163) is used as given, names the result key without its
+    #! delimiters, and can be referenced by that name; an alias that needs quotes is quoted
+    quotedAlias() {
+        Datasource ds = getDatasource();
+        Sqlite3Table t(ds, "t");
+        foreach string alias in (("\"user-interaction\"", "`user-interaction`", "[user-interaction]")) {
+            assertEq(alias, t.getAliasSqlName(alias));
+            list<auto> args;
+            assertEq("select val as " + alias + " from t order by val", t.getSelectSql({"columns":
+                (cop_as("val", alias),), "orderby": "user-interaction"}, \args), alias);
+            assertEq({"user-interaction": "a"}, t.selectRow({"columns": (cop_as("val", alias),), "where": {"id": 1}}),
+                alias);
+        }
+        assertEq("\"user-interaction\"", t.getAliasSqlName("user-interaction"));
+        assertEq({"user-interaction": "a"}, t.selectRow({"columns": (cop_as("val", "user-interaction"),),
+            "where": {"id": 1}}));
+        assertEq({"a\"b": "a"}, t.selectRow({"columns": (cop_as("val", "\"a\"\"b\""),), "where": {"id": 1}}));
+        # SQLite has no escape in brackets, so a bracketed alias with a "]" is quoted
+        assertEq("\"[a]]b]\"", t.getAliasSqlName("[a]]b]"));
+        # the expression form
+        assertEq({"user-interaction": "a"}, t.selectRow({"columns": (<DataProviderExpression>{
+            "exp": COP_AS,
+            "args": (<DataProviderFieldReference>{"field": "val"}, "\"user-interaction\""),
+        },), "where": {"id": 1}}));
+    }
+
+    #! the name that a delimited identifier gives, as a driver recognizes it
+    delimitedNames() {
+        assertEq("a-b", AbstractTable::getDelimitedName("\"a-b\"", "\"", "\""));
+        assertEq("a\"b", AbstractTable::getDelimitedName("\"a\"\"b\"", "\"", "\""));
+        assertEq("a]b", AbstractTable::getDelimitedName("[a]]b]", "[", "]"));
+        # a closing delimiter that is not doubled ends the identifier before the end of the alias
+        assertEq(NOTHING, AbstractTable::getDelimitedName("\"a\" b\"", "\"", "\""));
+        assertEq(NOTHING, AbstractTable::getDelimitedName("\"a\"\"", "\"", "\""));
+        # a doubled delimiter before the closing one is part of the name
+        assertEq("a\"", AbstractTable::getDelimitedName("\"a\"\"\"", "\"", "\""));
+        # empty, unterminated, and undelimited aliases
+        assertEq(NOTHING, AbstractTable::getDelimitedName("\"\"", "\"", "\""));
+        assertEq(NOTHING, AbstractTable::getDelimitedName("\"a", "\"", "\""));
+        assertEq(NOTHING, AbstractTable::getDelimitedName("a-b", "\"", "\""));
+        assertEq(NOTHING, AbstractTable::getDelimitedName("\"", "\"", "\""));
     }
 }

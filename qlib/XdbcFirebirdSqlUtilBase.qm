@@ -1821,6 +1821,12 @@ string sql = db.getSqlIdentifier("Order Date");
                             AbstractDataProviderTypeMap."any");
                         string arg = args[1];
                         info.pseudo_column_map{arg} = exp;
+                        # an alias given as a delimited identifier (issue #2163) is also known by the name it gives,
+                        # which is the key of the result
+                        *string name = info.table.getDelimitedAliasName(arg);
+                        if (exists name) {
+                            info.pseudo_column_map{name} = exp;
+                        }
                         # an alias is always given in double quotes, so the result key has its case, and is escaped,
                         # so it cannot change the SQL
                         return sprintf("%s as %s", exp, info.table.getAliasSqlName(arg));
@@ -2714,6 +2720,12 @@ string sql = db.getSqlIdentifier("Order Date");
             @since XdbcFirebirdSqlUtilBase 0.2
         */
         string getAliasSqlName(string alias) {
+            # an alias given as a double-quoted identifier is used as given (issue #2163), once its name is checked
+            *string name = getDelimitedAliasName(alias);
+            if (exists name) {
+                AbstractSqlUtilBase::checkIdentifier(name, "Firebird");
+                return alias;
+            }
             return AbstractSqlUtilBase::getDelimitedIdentifier(alias, "\"", "\"", "Firebird");
         }
 

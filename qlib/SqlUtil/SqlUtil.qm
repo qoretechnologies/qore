@@ -138,7 +138,10 @@ module SqlUtil {
     A driver whose quoting changes the case of a name (Oracle and Firebird quote in upper case, as unquoted names
     are stored in upper case) returns a column alias (see @ref SqlUtil::cop_as() "cop_as()") in its exact case
     through @ref SqlUtil::AbstractTable::getAliasSqlName() "getAliasSqlName()", so that an alias that works with the
-    database names the same result key as before.
+    database names the same result key as before.  An alias that is already given as one complete delimited
+    identifier for the database (ex: <tt>cop_as("user_interaction", "\"user-interaction\"")</tt>, issue #2163) is used
+    as given, after the name in its delimiters is checked as any other alias, and names the result key without its
+    delimiters (\c user-interaction), as before.
 
     @note Only driver-correct identifiers are quoted; a value is always bound, never pasted into SQL.  Code that
     builds SQL itself, outside the per-database modules, and passes names to it is responsible for using
@@ -155,8 +158,11 @@ module SqlUtil {
       not ordinary names, or refused with \c IDENTIFIER-ERROR when the database cannot represent them, so that a
       name from untrusted data can never change the SQL statement that it is part of; the SQL generated for
       ordinary names is unchanged, so existing schemas and alignment do not change (see @ref sql_identifiers).
-      Added @ref SqlUtil::AbstractSqlUtilBase::getSqlIdentifier() "getSqlIdentifier()" and
-      @ref SqlUtil::AbstractTable::getAliasSqlName() "getAliasSqlName()"
+      An alias given as a delimited identifier (ex: <tt>cop_as("c", "\"a-b\"")</tt>) is used as given and names the
+      same result key as before (\c a-b).
+      Added @ref SqlUtil::AbstractSqlUtilBase::getSqlIdentifier() "getSqlIdentifier()",
+      @ref SqlUtil::AbstractTable::getAliasSqlName() "getAliasSqlName()" and
+      @ref SqlUtil::AbstractTable::getDelimitedAliasName() "getDelimitedAliasName()"
     - Added @ref SqlUtil::AbstractDatabase::getCurrentSchemaPhysicalSize()
       "AbstractDatabase::getCurrentSchemaPhysicalSize()", which measures the physical size of the schema that
       unqualified names resolve to on the connection, without the cost of measuring the whole database, on
@@ -3131,12 +3137,14 @@ public namespace SqlUtil {
             "arg": Type::String,
             "withalias": True,
             "code": string sub (string cve, string arg, reference<hash<auto>> aliases) {
-                # issue #2163: make sure the unquoted alias is inserted in the map
-                if (arg =~ /^(".*"|`.*`)$/) {
-                    aliases{arg.substr(1, -1)} = cve;
-                } else {
-                    aliases{arg} = cve;
-                }
+                # issue #2163: make sure the alias is inserted in the map by the name it gives, which is the key of
+                # the result: the alias is given for SQL by AbstractTable::getAliasSqlName(), as a delimited
+                # identifier (in double quotes, backticks or brackets, with each closing delimiter doubled) or as an
+                # ordinary name
+                *string name = AbstractTable::getDelimitedName(arg, "\"", "\"")
+                    ?? AbstractTable::getDelimitedName(arg, "`", "`")
+                    ?? AbstractTable::getDelimitedName(arg, "[", "]");
+                aliases{name ?? arg} = cve;
                 return sprintf("%s as %s", cve, arg);
             },
         ),
@@ -5365,6 +5373,12 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 string exp = info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."any");
                 string arg = args[1];
                 info.pseudo_column_map{arg} = exp;
+                # an alias given as a delimited identifier (issue #2163) is also known by the name it gives, which is
+                # the key of the result
+                *string name = info.table.getDelimitedAliasName(arg);
+                if (exists name) {
+                    info.pseudo_column_map{name} = exp;
+                }
                 return sprintf("%s as %s", exp, info.table.getAliasSqlName(arg));
             },
         },
