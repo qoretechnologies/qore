@@ -11113,11 +11113,14 @@ private:
 
 class QoreDeferredNativeClosureStackLocationV2 : public QoreStackLocation {
 public:
-    QoreDeferredNativeClosureStackLocationV2(RuntimeConfig& rc, const UserVariantBase* uvb,
+    // Keep per-call publication and restoration beside native admission.
+    __attribute__((always_inline)) QoreDeferredNativeClosureStackLocationV2(RuntimeConfig& rc,
+            const UserVariantBase* uvb,
             const QoreClosureBase* closure)
         : name(closureName()), statements(uvb->getStatementBlock()), pgm(uvb->pgm),
           context(rc, closure, uvb), helper(rc, this, loc, context) {
     }
+    __attribute__((always_inline)) ~QoreDeferredNativeClosureStackLocationV2() override = default;
     const QoreProgramLocation& getLocation() const override { return loc ? *loc : loc_builtin; }
     const std::string& getCallName() const override { return name; }
     qore_call_t getCallType() const override { return CT_USER; }

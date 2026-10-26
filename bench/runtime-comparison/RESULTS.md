@@ -24715,3 +24715,96 @@ All 8424 Qore reference checks and 675 Java checks pass; 45 Java kernels pass C2
 Next probe reusable invocation-owned closure-frame storage for the existing factory-created dynamic callback boundary. First inspect lifetime/ABA, per-call publication and cleanup invariants and compile-only code shape. Preserve old helper ABIs and all live checks; do not retain closures or bypass synchronized capture reads. Prior persistent-method-frame and automatic-storage failures remain relevant controls. Any compiler prototype requires new before/candidate modules, Release/Debug qualification and broad/short/populated measurements. Local-literal specialization is a distinct unproven lead and would not directly cover these factory-created controls. No Java parity or maximum-performance claim.
 
 [Raw evidence](results-post-closure-metadata-module-macos-arm64.json); [all 62 audit checks](audit-post-closure-metadata-checkpoint.md).
+
+## Inline automatic closure frames (2026-10-26)
+
+The existing QoreDeferredNativeClosureStackLocationV2 constructor and destructor are explicitly inlined. The destructor remains defaulted. Every field, initializer, live admission guard, publication/readers handshake, fallback and exception cleanup is retained. No public ABI, helper signature, compiler source, ownership or caller-storage change. The same optimized native modules benefit through the shared runtime.
+
+The before runtime is the validated installed 004be48136; source HEAD 48434ef1ef differs only in checkpoint documentation. The candidate is that source plus the recorded five-line diff. Both use Release -O3 -DNDEBUG, allocation tracking off, LLVM 22.1.8 and the identical 15 qcc-O3 modules from the fresh cumulative checkpoint. The 73-workload screen uses three forks. Confirmation uses five forks and 34 workloads: all 33 mandatory controls plus probe:float_loop selected by its screen flag. Default/reverse/shuffle-487 layouts use 4096 items, one warmup and three 150 ms windows. Both closure targets must improve at least 1% in aggregate and in every layout in both phases. Numbers are whole-kernel ns/item.
+
+Retain under the user-authorized broader workload tradeoff. Ordinary plain/captured closures improve 3.699%/4.197% in independent confirmation, after screen gains 4.335%/3.514%; both improve in every layout in both phases. Populated plain/captured closures improve 0.520%/2.458% in confirmation after 2.408%/2.888% in screen. Costs remain: ordinary indirect floating calls are 1.248% slower and CSV 1.100% slower in confirmation, both repeated from screen. Other repeated aggregate costs are listed below, including text indexing 0.491% and monomorphic calls 0.607%. The callback pipeline improves 0.429%; order processing costs 0.326% after a screen gain. Four adverse individual-layout screen flags do not repeat in confirmation, but this does not imply every control improves. One-item plain/captured closures cost 1.191%/0.894%; 16-item costs are 0.144%/0.662%. No short closure target passes its cross-layout gain gate. Populated indirect wide calls cost 1.388% in confirmation after a screen gain; populated floating calls cost 0.191% after a screen gain. Retain the repeated sustained-closure gains with these costs, without claiming a weighted application improvement or explaining unrelated costs by code placement.
+
+|!Confirmed workload|!Before ns/item|!Candidate ns/item|!Change
+|float:callback_local_float_result|0.807617|0.813399|+0.716%
+|float:callback_local_float_return|0.866478|0.864744|-0.200%
+|float:callback_loop_float_return|5.086140|5.098116|+0.235%
+|float:direct_loop_float_return|5.801983|5.824955|+0.396%
+|float:typed_local_int_result|0.860186|0.832446|-3.225%
+|float:typed_local_int_unary|1.192481|1.193846|+0.114%
+|index:list_negative|7.832869|7.845191|+0.157%
+|index:list_positive|7.843623|7.854709|+0.141%
+|micro:boxed_float_method_call|20.585803|20.416137|-0.824%
+|micro:boxed_float_method_fallback|34.135410|34.449196|+0.919%
+|micro:boxed_int_method_call|16.870346|16.761112|-0.647%
+|micro:boxed_int_method_fallback|32.826622|32.764421|-0.189%
+|micro:closure_call|14.971908|14.418149|-3.699%
+|micro:closure_capture|20.962366|20.082634|-4.197%
+|micro:direct_call|1.588466|1.592601|+0.260%
+|micro:indirect_affine_wide|59.096391|59.349790|+0.429%
+|micro:indirect_call|59.226122|59.471783|+0.415%
+|micro:indirect_float|57.778735|58.499959|+1.248%
+|micro:indirect_float_result|58.799390|59.169056|+0.629%
+|micro:indirect_wide|59.628663|59.686064|+0.096%
+|micro:list_build|26.292950|26.326639|+0.128%
+|micro:list_mutate|133.527759|132.882629|-0.483%
+|micro:list_read|2.992300|2.965923|-0.882%
+|micro:method_call|1.666511|1.665370|-0.068%
+|micro:monomorphic_call|3.838879|3.862177|+0.607%
+|micro:monomorphic_float_call|4.166210|4.222325|+1.347%
+|micro:polymorphic_call|23.624753|23.728372|+0.439%
+|micro:polymorphic_float_call|24.409997|24.304499|-0.432%
+|micro:temporary_hash|1.750154|1.760867|+0.612%
+|mixed:callback_pipeline|122.931943|122.404576|-0.429%
+|mixed:csv_report|920.545426|930.674235|+1.100%
+|mixed:object_orders|1771.433997|1777.215867|+0.326%
+|mixed:text_index|1450.567783|1457.683043|+0.491%
+|probe:float_loop|436.108330|436.519824|+0.094%
+
+|!Repeated aggregate cost|!Screen change|!Confirmation change|!Confirmation ns/item cost
+|float:callback_loop_float_return|+0.087%|+0.235%|+0.011976
+|float:typed_local_int_unary|+0.287%|+0.114%|+0.001365
+|index:list_positive|+0.697%|+0.141%|+0.011086
+|micro:indirect_affine_wide|+0.848%|+0.429%|+0.253399
+|micro:indirect_float|+0.694%|+1.248%|+0.721224
+|micro:indirect_float_result|+0.600%|+0.629%|+0.369666
+|micro:indirect_wide|+1.088%|+0.096%|+0.057401
+|micro:list_build|+0.751%|+0.128%|+0.033689
+|micro:monomorphic_call|+0.002%|+0.607%|+0.023298
+|micro:polymorphic_call|+1.446%|+0.439%|+0.103619
+|mixed:csv_report|+0.598%|+1.100%|+10.128809
+|mixed:text_index|+0.079%|+0.491%|+7.115259
+|probe:float_loop|+0.709%|+0.094%|+0.411494
+
+The populated-context supplement uses the same native module from a child Program with a SandboxManager; setup precedes timing. Native probes verify both context states and 3330 reference outputs. Six callbacks use three screen and five confirmation forks per layout.
+
+|!Populated-context workload|!Before ns/item|!Candidate ns/item|!Screen change|!Confirmation change
+|context:closure_call|29.609346|29.455289|-2.408%|-0.520%
+|context:closure_capture|35.944458|35.060888|-2.888%|-2.458%
+|context:indirect_affine_wide|346.174567|344.322958|+0.657%|-0.535%
+|context:indirect_call|269.253205|269.097750|-0.252%|-0.058%
+|context:indirect_float|272.603687|273.123029|-0.944%|+0.191%
+|context:indirect_wide|340.721253|345.448911|-1.640%|+1.388%
+
+|!Short workload|!Items|!Before ns/item|!Candidate ns/item|!Change
+|micro:closure_call|1|2480.758231|2510.300786|+1.191%
+|micro:closure_capture|1|2499.081908|2521.432514|+0.894%
+|micro:indirect_call|1|2499.159627|2535.887005|+1.470%
+|micro:direct_call|1|2405.302192|2408.436011|+0.130%
+|micro:closure_call|16|169.100329|169.344488|+0.144%
+|micro:closure_capture|16|175.719207|176.883188|+0.662%
+|micro:indirect_call|16|214.882101|216.020309|+0.530%
+|micro:direct_call|16|150.887008|151.716803|+0.550%
+
+Neither short closure target passes the cross-layout gain gate; setup and cleanup are included. Four screen layout flags are preserved: callback_local_float_return reverse+3.335%, typed_local_int_result default+8.947%, monomorphic_call shuffle-487+3.914%, and probe:float_loop default+4.115%. Confirmation has no adverse disjoint layout flags. The historical indirect_float_result control remains mandatory and costs 0.629% in confirmation after a smaller screen cost. No samples are removed or rerun.
+
+The source-bound baseline matches 1662 production/fixture/tool hashes from the completed merged installation, with fresh 4212 reference outputs. Candidate Release/Debug each pass 30 QUnit fixtures/198 cases/8117 assertions plus 3 standalone fixtures, no skips. Native 2906, standard 1110, paired 8424, new-compiler 1053 and populated 3330 checks pass. All 391 Release qmod links/hashes are restored after Debug.
+
+Linked ARM64 code removes both per-call constructor/destructor calls. The scalar helper grows 242 to 300 static instructions because their bodies move into it; the old constructor/destructor contain 51/41 instructions. The helper stack remains 352 bytes, the miss dispatcher remains 139 instructions, and all 9035 exported names match. Source reversal proves only inlining attributes and the explicitly defaulted destructor change. Four separate diagnostic profiles verify native paths/images before timing. Recompiled kernel LLVM differs only in validated informational Git metadata/initialization size; runtime identity and kernel instructions match. Static counts and profiles are not speed estimates.
+
+An isolated compile-only alternative explored a reusable closure frame with refreshed/cleared borrowed metadata and an explicit union/discriminator preserving the old v4 member type. Its 240-byte slot adds 32 bytes over the old 208; three transformed caller probes grow 496 to 528 bytes, while the closure helper shrinks 352 to 144. The initial assertions-enabled layout failed because 216 bytes exceeded 208-byte storage. The corrected probe uses the existing non-null Program snapshot as its active-scope invariant and passes assertions-enabled syntax/layout checking. Neither prototype object was linked, executed or installed. Automatic inlining was selected for runtime testing because it adds no caller storage or ABI. This is not a performance rejection or qualification of reusable frames.
+
+All 2766 jobs/8298 windows are retained and independently replayed. No owned build/test/profile or heavy archival scan overlaps timing. The shared-host snapshot before timing had no process at 25% CPU or higher, which does not establish host exclusivity throughout the run; no affinity/frequency/thermal control is claimed. All actual terminal receipts are included.
+
+No fresh Java/develop ratio, IR/JIT speed estimate, weighted application gain, full-suite/sanitizer/Linux result or global ceiling. The preceding cumulative optimized checkpoint remains separately identified by its measured revisions. Next investigate whether stronger invocation-lifetime and binding proofs can remove repeated closure admission work, or whether reusable state is beneficial after inlining; never retain closures merely to cache them or skip live Program/cancellation checks.
+
+[Audit](audit-closure-inline.md); [evidence](results-closure-inline-macos-arm64.json).
