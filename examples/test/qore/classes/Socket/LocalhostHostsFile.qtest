@@ -20,7 +20,8 @@
     first, and a client of the system resolver connecting to \c 127.0.0.1 was refused.
 
     The cases with a hosts file of the test's own use dbg_cares_set_hosts_file() (debug builds); the case of the
-    system's hosts file compares the answer of the system resolver, from \c getent, where it is available.
+    system's hosts file compares the answer of the system resolver, from \c getent on Linux and from Python's
+    \c socket.getaddrinfo() on macOS, where it is available.
 */
 class LocalhostHostsFileTest inherits QUnit::Test {
     public {
@@ -170,7 +171,7 @@ class LocalhostHostsFileTest inherits QUnit::Test {
         *list<string> sys = LocalhostHostsFileTest::systemAddresses();
         if (!sys) {
             if (!Option::HAVE_LIBRARY_DEBUGGING) {
-                testSkip("neither the debug hooks nor the system resolver's answer (getent) are available");
+                testSkip("neither the debug hooks nor the system resolver's answer (getent or python3) are available");
             }
             return;
         }
@@ -182,7 +183,7 @@ class LocalhostHostsFileTest inherits QUnit::Test {
     systemResolverTest() {
         *list<string> sys = LocalhostHostsFileTest::systemAddresses();
         if (!sys) {
-            testSkip("the system resolver's answer for localhost is not available (no getent ahosts)");
+            testSkip("the system resolver's answer for localhost is not available (no getent ahosts or python3)");
         }
         # a server bound to localhost in any address family, as HttpServer::addListener() binds it
         Socket s();
@@ -293,11 +294,18 @@ class LocalhostHostsFileTest inherits QUnit::Test {
 
     #! returns the addresses of localhost from the system resolver (getaddrinfo() of the C library), if available
     private static *list<string> systemAddresses() {
-        if (PlatformOS != "Linux") {
+        int rc;
+        string out;
+        if (PlatformOS == "Linux") {
+            out = backquote("getent ahosts localhost 2>/dev/null", \rc);
+        } else if (PlatformOS == "Darwin") {
+            # macOS has no getent: Python's socket.getaddrinfo() calls the getaddrinfo() of the C library, and its
+            # answer is printed in the format of getent ahosts
+            out = backquote("python3 -I -c 'import socket\nfor r in socket.getaddrinfo(\"localhost\", None, "
+                "socket.AF_UNSPEC, socket.SOCK_STREAM): print(r[4][0] + \" STREAM localhost\")' 2>/dev/null", \rc);
+        } else {
             return;
         }
-        int rc;
-        string out = backquote("getent ahosts localhost 2>/dev/null", \rc);
         if (rc) {
             return;
         }
