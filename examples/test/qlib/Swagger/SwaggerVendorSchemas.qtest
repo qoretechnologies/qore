@@ -31,18 +31,21 @@ class SwaggerVendorSchemasTest inherits QUnit::Test {
         addTestCase("object enumeration values", \objectEnumValues());
         addTestCase("scalar value of a structured enumeration", \scalarValueOfStructuredEnum());
         addTestCase("multiple path parameters", \multiplePathParameters());
+        addTestCase("object parameter outside the body", \objectNonBodyParameter());
         set_return_value(main());
     }
 
     #! returns a Swagger 2.0 schema with the given paths and options
-    private static SwaggerSchema getSchema(hash<auto> paths, *hash<auto> extra) {
+    private static SwaggerSchema getSchema(hash<auto> paths, *hash<auto> extra, *int parse_flags) {
         hash<auto> h = {
             "swagger": "2.0",
             "info": {"title": "vendor", "version": "1"},
             "basePath": "/v1",
             "paths": paths,
         } + extra;
-        return SwaggerLoader::fromString(make_json(h));
+        return SwaggerLoader::fromString(make_json(h), NOTHING, exists parse_flags
+            ? {"parse_flags": parse_flags}
+            : NOTHING);
     }
 
     #! returns a GET operation with the given operation ID and parameters
@@ -262,6 +265,41 @@ class SwaggerVendorSchemasTest inherits QUnit::Test {
         assertEq("/v1/lists/1/members/2/activity", info.uri_path);
         info = s.processRequest("GET", "/lists/a%20b/members/3/activity/", NOTHING, {});
         assertEq("/v1/lists/a%20b/members/3/activity/", info.uri_path);
+    }
+
+    #! Trello's "fields" query parameter: Swagger 2.0 allows "object" only for a body parameter
+    objectNonBodyParameter() {
+        hash<auto> paths = {
+            "/boards": {"get": getOp("boards", ({"name": "fields", "in": "query", "type": "object"},))},
+        };
+        # refused by default, with the error naming the parse option that accepts it
+        assertThrows("INVALID-FIELD-VALUE", "LM_ACCEPT_QUERY_OBJECTS.*\"lax_parsing\".*\"swagger_lax_parsing\"",
+            \SwaggerVendorSchemasTest::getSchema(), (paths,));
+        assertThrows("INVALID-FIELD-VALUE", "invalid parameter type value passed: \"object\"",
+            \SwaggerVendorSchemasTest::getSchema(), (paths,));
+        # the parse option accepts it
+        SwaggerSchema s = getSchema(paths, NOTHING, LM_ACCEPT_QUERY_OBJECTS);
+        assertEq({"boards": ("get",)}, s.getPathOperationHash());
+        # as does the lax parsing option of the data provider
+        SwaggerDataProvider dp({"schema": make_json({
+            "swagger": "2.0",
+            "info": {"title": "vendor", "version": "1"},
+            "paths": paths,
+        }), "lax_parsing": True});
+        assertEq(("boards",), dp.getChildProviderNames());
+
+        # another invalid type is refused without naming the option, which would not accept it
+        hash<auto> bad = {
+            "/boards": {"get": getOp("boards", ({"name": "fields", "in": "query", "type": "map"},))},
+        };
+        *string desc;
+        try {
+            getSchema(bad);
+        } catch (hash<ExceptionInfo> ex) {
+            desc = ex.err + ": " + ex.desc;
+        }
+        assertRegex("^INVALID-FIELD-VALUE: .*invalid parameter type value passed: \"map\"", desc);
+        assertNRegex("LM_ACCEPT_QUERY_OBJECTS", desc);
     }
 
     #! a scalar is never equal to an array or object value of an enumeration

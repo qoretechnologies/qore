@@ -154,6 +154,9 @@ RestHandler handler(NOTHING, swagger);
     - an operation with more than one path parameter is validated on the client and on the server; the value of each
       parameter was extracted with a pattern that still had the templates of the others, and every request failed
       with \c RUNTIME-OVERLOAD-ERROR
+    - the error for a parameter outside the body with type \c "object", which Swagger 2.0 does not allow, names the
+      parse option that accepts it (@ref Swagger::LM_ACCEPT_QUERY_OBJECTS "LM_ACCEPT_QUERY_OBJECTS"), which the
+      \c lax_parsing option of a Swagger data provider and the \c swagger_lax_parsing option of a REST connection set
     - a schema object whose document has been destroyed throws \c SCHEMA-DOCUMENT-DESTROYED when it is asked to build
       a type, instead of failing with an unrelated error; the types it has already built keep working (see
       @ref Swagger::SchemaObject "SchemaObject")
@@ -3761,8 +3764,15 @@ public class OtherParameter inherits TypedParameter {
         if (!exists type) {
             type = "any";
         } else if (!ParameterTypes{type} && (type != "object" || !(swagger.getParseFlags() & LM_ACCEPT_QUERY_OBJECTS))) {
+            # Swagger 2.0 limits a parameter outside the body to simple types; a schema that declares an object
+            # anyway can only be accepted with the parse option that allows it, which the error names
             throw "INVALID-FIELD-VALUE", sprintf("Parameter Object (%s) %y: invalid parameter type value passed: %y, "
-                "expecting one of: %y", inLoc, name, type, keys ParameterTypes);
+                "expecting one of: %y%s", inLoc, name, type, keys ParameterTypes, type == "object"
+                    ? "; Swagger 2.0 allows \"object\" only for a \"body\" parameter; the parse flag "
+                        "LM_ACCEPT_QUERY_OBJECTS accepts it as an object serialized as one query argument per "
+                        "member; it is set by the \"lax_parsing\" option of a Swagger data provider and the "
+                        "\"swagger_lax_parsing\" option of a REST connection"
+                    : "");
         }
     }
 }
