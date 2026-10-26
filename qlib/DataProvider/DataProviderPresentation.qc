@@ -347,22 +347,28 @@ public class DataProviderPresentation {
     }
 
     #! Returns the stable presentation identity for a provider type
-    /** Provider type names can intentionally expose only their underlying Qore type (for example several generated
-        schema types can all be named \c hash<auto> or \c *data). The identity therefore combines class and type
-        name with a deterministic digest of the type's path in the type cache and the identity of the schema it was
-        built from (@ref DataProvider::AbstractDataProviderType::getSchemaIdentity()
-        "AbstractDataProviderType::getSchemaIdentity()"), when available, and the immediate technical field/type
-        shape. Presentation text is deliberately excluded, so changing a label does not change its message ID.
+    /** The identity combines the type's technical name with a deterministic digest of the type's path in the type
+        cache and the identity of the schema it was built from (see
+        @ref DataProvider::AbstractDataProviderType::getSchemaIdentity() "getSchemaIdentity()"), when available, and
+        the immediate technical field/type shape.  Presentation text is deliberately excluded, so changing a label does
+        not change its message ID.
+
+        The class that implements a type is not part of the identity of a type that has a path or a schema identity:
+        those identify what the type describes, while the class is an implementation detail, and replacing it (for
+        example building a REST schema type as a specialized hash type) must not move its texts to new message IDs.
+        Provider type names can intentionally expose only their underlying Qore type (for example several generated
+        types can all be named \c hash<auto> or \c *data), so a type with neither a path nor a schema identity is
+        still identified by its class with its name.  The same rule names the field and element types in the shape.
         Distinct objects with the same complete technical identity are still compared for conflicting source text
         during extraction.
 
         @param type provider type to identify
-        @return stable class, type-name, and technical-shape identity
+        @return stable type-name and technical-shape identity
 
         @since %DataProvider 3.8
     */
     static string typePresentationIdentity(AbstractDataProviderType type) {
-        string base_identity = type.className() + ":" + type.getName();
+        string base_identity = DataProviderPresentation::typeShapeName(type);
         list<string> technical_shape = (base_identity,);
         if (*string type_path = type.getPath()) {
             technical_shape += "path:" + identitySegment(type_path);
@@ -375,16 +381,30 @@ public class DataProviderPresentation {
                 AbstractDataProviderType field_type
                     = fields{field_name}.getDeclaredType();
                 technical_shape += sprintf("field:%s:%s",
-                    identitySegment(field_name), identitySegment(
-                        field_type.className() + ":" + field_type.getName()));
+                    identitySegment(field_name), identitySegment(DataProviderPresentation::typeShapeName(field_type)));
             }
         }
         if (*AbstractDataProviderType element_type = type.getElementType()) {
-            technical_shape += "element:" + identitySegment(
-                element_type.className() + ":" + element_type.getName());
+            technical_shape += "element:" + identitySegment(DataProviderPresentation::typeShapeName(element_type));
         }
         return base_identity + "#" + digest("sha256",
             technical_shape.join("|")).toHex();
+    }
+
+    #! Returns the name of a type in its presentation identity
+    /** A type with a path or a schema identity is named by its name alone; a type with neither is named by its class
+        and its name, as its name may only be that of its underlying Qore type; see typePresentationIdentity()
+
+        @param type provider type to name
+        @return the name of the type in a presentation identity
+
+        @since %DataProvider 3.11
+    */
+    private static string typeShapeName(AbstractDataProviderType type) {
+        if (type.getPath() || type.getSchemaIdentity()) {
+            return type.getName();
+        }
+        return type.className() + ":" + type.getName();
     }
 
     #! Returns the stable presentation identity of a type reached below the options of an action

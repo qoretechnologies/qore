@@ -376,9 +376,12 @@ An option's `display_name`, `short_desc`, and `desc` are not the end of its pres
 Fields reachable through its structured type, list elements, union alternatives, and their finite
 values are also user-visible. The catalog generator walks this graph with cycle detection. First-layer
 fields retain action/option context; the fields of deeper reusable structures use stable app/action/type/field
-identities (`DataProviderPresentation::actionTypePresentationIdentity()`): the type segment is the class and name
-of the type, its explicit producer schema path and schema identity when available, and a digest of its immediate
-technical field/type shape, scoped to the action. A REST schema producer gives each object type it builds the
+identities (`DataProviderPresentation::actionTypePresentationIdentity()`): the type segment is the name of the
+type, its explicit producer schema path and schema identity when available, and a digest of its immediate
+technical field/type shape, scoped to the action. The class that implements a type is part of the identity only for
+a type that has neither a path nor a schema identity, whose name may be only that of its Qore type (such as
+`hash<auto>`); the class is an implementation detail, and a producer that builds a schema's type with another class
+must not give its texts new message IDs. The field and element types in the shape are named by the same rule. A REST schema producer gives each object type it builds the
 location of its schema in the document as its schema identity (`AbstractDataProviderType::getSchemaIdentity()`):
 an OpenAPI component or Swagger definition by its name, a schema that adds to one schema it refers to (`allOf` of one
 `$ref`) by the schema it refers to, and a schema declared in place by its location. A property that only describes its
