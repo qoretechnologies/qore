@@ -6589,8 +6589,14 @@ static QORE_ALWAYS_INLINE uint64_t qore_rt_list_index_access_impl(uint64_t list_
         const QoreListNode* l = v.get<const QoreListNode>();
         if (QoreSquareBracketsOperatorNode::normalizeIndex(qindex, static_cast<int64>(l->size()),
                 negative_offsets)) {
-            QoreValue rv = l->getReferencedEntry(static_cast<size_t>(qindex));
-            qore_rt_evaluate_owned_list_element(rv, xsink);
+            QoreValue rv = l->retrieveEntry(static_cast<size_t>(qindex));
+            // Inline values need neither ownership nor weak-reference normalization.
+            // needsRef() also includes enum declarations and opaque node owners.
+            if (rv.needsRef()) {
+                // Preserve the existing entry read around virtual reference handlers.
+                rv = l->getReferencedEntry(static_cast<size_t>(qindex));
+                qore_rt_evaluate_owned_list_element(rv, xsink);
+            }
             return toBits(rv);
         }
     } else if (v.getType() == NT_STRING) {

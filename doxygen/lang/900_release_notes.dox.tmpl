@@ -242,6 +242,8 @@
     literal keys and all uses are proven at compile time, retaining ordinary lookup for unsupported cases.
     JIT/AOT indexed reads reuse an existing live RuntimeConfig for negative-offset policy checks,
     retaining the compatibility entry and all indexed-read semantics.
+    JIT/AOT indexed reads return non-owning inline list elements without reference or weak-type work,
+    while enum declarations, opaque values and other owned entries retain their existing lifetime handling.
     JIT/AOT nonnegative indexed reads skip the unused negative-offset policy lookup, while negative
     indices retain the current runtime policy and all indexed-read semantics remain unchanged.
     AOT immediate local reloads reuse prepared body-local storage, with direct owned reads for strong

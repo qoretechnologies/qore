@@ -24010,3 +24010,85 @@ All 6360 Qore reference checks and 675 Java checks pass; 45 Java kernels pass C2
 The next investigation is generic scalar list-entry ownership overhead. The common indexed-read helper still performs unconditional reference acquisition and weak-type normalization for inline values; changes must preserve enum, opaque, node and weak-reference ownership, evaluated-container lifetime, bounds and pending exceptions. Further choices will use these fresh results; Java parity or maximum performance is not assumed.
 
 [Raw evidence](results-post-live-index-module-macos-arm64.json); [all 62 audit checks](audit-post-live-index-checkpoint.md).
+
+## Inline scalar indexed reads (2026-10-26)
+
+The common JIT/AOT indexed-read helper borrows the actual list entry to test needsRef(). Inline non-owning values return directly without element reference acquisition or weak-type normalization. Enum declarations, opaque values and all other owners retain the original getReferencedEntry protocol, including its entry reread after virtual reference handlers, then existing weak normalization. The evaluated container remains owned throughout; pending sinks, live negative-offset policy, signed bounds, strings, binary/buffer dispatch and cleanup are unchanged. No compiler/header/helper ABI change. Measurements use actual optimized AOT modules; no separate IR/JIT timing claim.
+
+The frozen installed baseline is 223ff981c9; parent 0405d53d93 differs only in checkpoint evidence. Both variants use Release -O3 -DNDEBUG, allocation tracking off, and exactly the same 15 qcc -O3/LLVM22.1.8 native modules on Apple M4 Pro/macOS 27.0.1. Exact images and dependencies are verified. The 73-workload screen uses 3 forks; confirmation uses 5 forks with prospectively selected controls plus screen flags and aggregate costs. Default/reverse/shuffle-487 layouts use 4096 items, 1 warmup and 3 x 150 ms measured windows. Acceptance requires at least one target improve >=3% aggregate AND >=3% in EACH layout in screen and confirmation. Values are whole-kernel ns/item, not isolated call latency.
+
+|!Confirmed workload|!Before ns/item|!Candidate ns/item|!Change
+|float:callback_local_float_result|0.825009|0.831005|+0.73%
+|float:callback_local_float_return|0.869862|0.862610|-0.83%
+|float:callback_loop_float_return|5.034913|5.034901|-0.00%
+|float:direct_loop_float_return|5.779125|5.779921|+0.01%
+|float:typed_local_int_result|0.801383|0.788302|-1.63%
+|float:typed_local_int_unary|1.162359|1.164001|+0.14%
+|index:binary_negative|8.085100|8.066249|-0.23%
+|index:binary_positive|7.571499|7.595129|+0.31%
+|index:buffer_negative|14.789445|14.869517|+0.54%
+|index:buffer_positive|14.873287|14.727715|-0.98%
+|index:list_negative|9.095301|7.819649|-14.03%
+|index:list_positive|9.102430|7.832448|-13.95%
+|micro:boxed_float_method_call|20.557954|21.228604|+3.26%
+|micro:boxed_float_method_fallback|34.033686|34.981898|+2.79%
+|micro:boxed_int_method_call|16.995486|17.824134|+4.88%
+|micro:boxed_int_method_effect|90.165855|89.717573|-0.50%
+|micro:boxed_int_method_fallback|33.620851|33.374418|-0.73%
+|micro:closure_call|19.123257|18.962549|-0.84%
+|micro:closure_capture|24.685207|24.529348|-0.63%
+|micro:dynamic_int_result_fallback|21.564335|21.411209|-0.71%
+|micro:indirect_call|62.168315|61.465156|-1.13%
+|micro:indirect_float|59.986186|59.184509|-1.34%
+|micro:list_build|27.442122|26.157716|-4.68%
+|micro:list_mutate|133.083272|132.410440|-0.51%
+|micro:list_read|2.894585|2.883782|-0.37%
+|micro:method_call|1.652237|1.657228|+0.30%
+|micro:monomorphic_call|3.891511|3.899745|+0.21%
+|micro:monomorphic_float_call|4.147237|4.119168|-0.68%
+|micro:temporary_hash|1.679408|1.679366|-0.00%
+|micro:temporary_list|1.679536|1.670356|-0.55%
+|mixed:callback_pipeline|125.211366|123.437713|-1.42%
+|mixed:csv_report|933.328430|938.655129|+0.57%
+|mixed:object_orders|1740.164444|1743.421414|+0.19%
+|mixed:text_index|1453.998272|1438.748873|-1.05%
+|probe:string_loop|368.066029|363.678591|-1.19%
+
+Retain the actual-representation scalar skip under the authorized broader workload tradeoff. Both generic list targets pass >=3% aggregate AND >=3% in every layout in screen and confirmation. Confirmation reduces positive/negative read time by 13.95%/14.03%. The boxed-integer method control has a repeated aggregate cost of 4.88% (+0.828648 ns/item), with reverse/shuffle disjoint fork ranges in both phases and all layouts flagged in confirmation. Boxed-float method calls also have a repeated 3.26% aggregate cost (+0.670650 ns/item), although they do not meet the disjoint-range flag. These are retained costs, not dismissed as noise. All benchmark modules and compiler/header sources are identical across runtimes; boxed-method bodies do not call the changed indexed-read helper. Their cost mechanism is unresolved. List construction improves 4.68%, indirect integer/float calls 1.13%/1.34%, callback pipeline 1.42% and text index 1.05%; these broader observations are not attributed to removed scalar helper work. CSV has a repeated 0.57% cost; orders +0.19% does not repeat its screen direction. Every repeated aggregate cost is tabulated without a significance claim. Short count 1 list changes range -0.04% to -1.12%, and count 16 gains are 3.51%/3.85% aggregate without meeting the >=3% every-layout gate; short controls have no disjoint-range flags. No universal, zero-regression, weighted application, fresh Java-ratio or performance-ceiling claim. Next inspect remaining cross-Program RuntimeConfig synchronization with a fresh post-merge baseline.
+
+|!Repeated aggregate cost|!Screen change|!Confirmation change|!Confirmation ns/item cost
+|micro:boxed_int_method_call|+6.339%|+4.876%|+0.828648
+|micro:boxed_float_method_call|+3.296%|+3.262%|+0.670650
+|micro:boxed_float_method_fallback|+0.355%|+2.786%|+0.948212
+|float:callback_local_float_result|+0.588%|+0.727%|+0.005996
+|mixed:csv_report|+0.066%|+0.571%|+5.326700
+|index:buffer_negative|+1.900%|+0.541%|+0.080073
+|index:binary_positive|+0.655%|+0.312%|+0.023630
+|micro:method_call|+0.713%|+0.302%|+0.004991
+|float:typed_local_int_unary|+0.028%|+0.141%|+0.001642
+
+|!Short target/control|!Count|!Before ns/item|!Candidate ns/item
+|index:list_negative|1|468.455986|468.264329
+|index:binary_negative|1|471.721477|471.419378
+|index:buffer_negative|1|482.677295|484.549743
+|index:list_positive|1|468.511363|463.276499
+|index:binary_positive|1|464.634142|469.503039
+|index:buffer_positive|1|485.564156|477.709209
+|micro:list_mutate|1|3287.322921|3293.747131
+|index:list_negative|16|38.003257|36.540878
+|index:binary_negative|16|37.443819|37.571213
+|index:buffer_negative|16|44.936664|44.472885
+|index:list_positive|16|37.587154|36.268408
+|index:binary_positive|16|36.666229|36.605333
+|index:buffer_positive|16|44.349145|44.060009
+|micro:list_mutate|16|336.638507|333.438518
+
+Short invocations include dispatch, setup and cleanup. Separate profiles observe the live-context helper on both runtimes. Native machine review confirms scalar entries skip element ref/getType, while owners retain actual-entry ref/reread/type normalization. Full compatibility helper instructions increase 341 to 351 and context helper 318 to 328, with static call counts unchanged 50/46; these are neither hot-path counts nor speed estimates. The baseline already inlines getReferencedEntry. The separate typed inline-list-data lowering is a control, not a presumed beneficiary.
+
+All 391 standard-library qmods are byte-identical (344952008 bytes). Release 117 reported cases/3299 assertions include 8 Linux-only RSS skips and 1 Debug-only DGC skip; Debug 108 cases/4747 assertions include 8 RSS skips. Case totals include skips. Native 2604 checks and standalone optimized baseline/candidate 216 checks each pass. Standard 1110 and prepared 8424 references pass; all Release aliases/hashes restored. All 2616 timing jobs/7848 windows independently replayed.
+
+The initial baseline input used reserved identifier elements; renaming it preceded production edits. Initial native qualification had 6 failures because normal list insertion normalizes opaque tags; both runtimes exhibited the same behavior. Corrected fixtures explicitly store opaque representations and verify stored bits. Two diagnostic harness compile attempts lacked internal declarations; a Release builtin attempt found the Debug-only registration unavailable. All failures and corrections are archived. An unmeasured first implementation referenced a copied owned value; final code preserves the original getReferencedEntry protocol around virtual customRef. Only the final candidate is timed.
+
+Shared host without affinity/frequency/thermal control; no owned build/test/profile overlaps timing. No fresh Java/develop ratio or weighted application speedup is inferred from this experiment. The separate post-live-index checkpoint compares 223ff against develop/Java. Dynamic and cross-Program calls remain optimization leads; neither Java parity nor a maximum-performance ceiling is established.
+
+[Audit](audit-aot-indexed-read-scalar.md); [evidence](results-aot-indexed-read-scalar-macos-arm64.json).

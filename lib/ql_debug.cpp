@@ -1485,6 +1485,110 @@ static void ut_indexed_read_policy(UnitTestCounters& c, RuntimeConfig& rc,
         }
         xsink.clear();
     }
+
+    for (QoreValue value : {QoreValue(), QoreValue(false), QoreValue(true), QoreValue(int64_t{17}),
+            QoreValue(QoreValue::InlineIntMin), QoreValue(QoreValue::InlineIntMax), QoreValue(1.25),
+            QoreValue(-0.0), QoreValue(std::numeric_limits<double>::quiet_NaN()),
+            QoreValue::makeChar(0xe9), QoreValue::makeShortString("short", 5)}) {
+        UT_ASSERT(c, !value.needsRef(), "inline indexed fixture has no owner");
+        ReferenceHolder<QoreListNode> container(new QoreListNode(autoTypeInfo), &xsink);
+        container->push(value, &xsink);
+        ValueHolder result(read(QoreValue(*container), 0), &xsink);
+        UT_ASSERT(c, !xsink && result->rawBits() == value.rawBits(),
+            "inline indexed read preserves exact value bits");
+    }
+
+    auto check_owned = [&](QoreValue value, const AbstractQoreNode* node) {
+        UT_ASSERT(c, node && value.needsRef(), "owned indexed fixture has a node owner");
+        if (!node) {
+            return;
+        }
+        int initial_refs = node->reference_count();
+        ValueHolder survivor(&xsink);
+        {
+            ReferenceHolder<QoreListNode> container(new QoreListNode(autoTypeInfo), &xsink);
+            // Ordinary push normalizes opaque values. Store the actual representation
+            // to exercise ownership of an opaque entry as well as ordinary nodes.
+            qore_list_private::get(**container)->pushIntern(value.refSelf());
+            UT_ASSERT_EQ(c, value.rawBits(), container->retrieveEntry(0).rawBits(),
+                "owned indexed fixture retains its actual representation");
+            UT_ASSERT_EQ(c, initial_refs + 1, node->reference_count(), "list acquires one element owner");
+            xsink.raiseException("INDEX-PENDING", "pending exception must not acquire an element owner");
+            {
+                ValueHolder pending(read(QoreValue(*container), 0), &xsink);
+                UT_ASSERT(c, xsink && pending->isNothing() && node->reference_count() == initial_refs + 1,
+                    "pending indexed read preserves existing ownership");
+            }
+            xsink.clear();
+            survivor = read(QoreValue(*container), 0);
+            UT_ASSERT(c, !xsink && survivor->rawBits() == value.rawBits()
+                && node->reference_count() == initial_refs + 2,
+                "node or opaque indexed read acquires exactly one result owner");
+        }
+        UT_ASSERT_EQ(c, initial_refs + 1, node->reference_count(), "result outlives its source list");
+        survivor = QoreValue();
+        UT_ASSERT_EQ(c, initial_refs, node->reference_count(), "discarding the result balances ownership");
+    };
+    {
+        ReferenceHolder<QoreStringNode> owner(new QoreStringNode("owned indexed string"), &xsink);
+        check_owned(QoreValue(*owner), *owner);
+    }
+    {
+        ValueHolder owner(QoreValue(std::numeric_limits<int64_t>::max()), &xsink);
+        check_owned(*owner, owner->getInternalNode());
+    }
+    {
+        // This finite double collides with an opaque tag when encoded inline.
+        ValueHolder owner(QoreValue(-4.4942328371557898e307), &xsink);
+        check_owned(*owner, owner->getInternalNode());
+    }
+    {
+        ReferenceHolder<QoreHashNode> owner(new QoreHashNode(autoTypeInfo), &xsink);
+        ValueHolder opaque(QoreValue::makeOpaqueHash(*owner), &xsink);
+        check_owned(*opaque, *owner);
+    }
+    {
+        ReferenceHolder<QoreListNode> owner(new QoreListNode(autoTypeInfo), &xsink);
+        check_owned(QoreValue(*owner), *owner);
+        ValueHolder opaque(QoreValue::makeOpaqueList(*owner), &xsink);
+        check_owned(*opaque, *owner);
+    }
+    {
+        ReferenceHolder<QoreStringNode> member_value(new QoreStringNode("indexed enum member owner"), &xsink);
+        ValueHolder survivor(&xsink);
+        {
+            QoreEnumDeclHolder decl(new QoreEnumDecl("IndexedEnum", "IndexedEnum", stringTypeInfo));
+            decl->addMember("Member", member_value->refSelf());
+            ReferenceHolder<QoreListNode> container(new QoreListNode(autoTypeInfo), &xsink);
+            container->push(QoreValue::makeEnum(decl->findMember("Member")), &xsink);
+            survivor = read(QoreValue(*container), 0);
+            UT_ASSERT(c, !xsink && survivor->isEnum() && survivor->needsRef(),
+                "inline enum indexed result retains declaration ownership");
+        }
+        UT_ASSERT_EQ(c, 2, member_value->reference_count(),
+            "indexed enum result outlives its list and original declaration owner");
+        survivor = QoreValue();
+        UT_ASSERT_EQ(c, 1, member_value->reference_count(), "enum result releases its declaration exactly once");
+    }
+    {
+        ReferenceHolder<QoreListNode> target(new QoreListNode(autoTypeInfo), &xsink);
+        ReferenceHolder<WeakListReferenceNode> weak_value(new WeakListReferenceNode(*target), &xsink);
+        ValueHolder survivor(&xsink);
+        {
+            ReferenceHolder<QoreListNode> container(new QoreListNode(autoTypeInfo), &xsink);
+            container->push(QoreValue(*weak_value).refSelf(), &xsink);
+            survivor = read(QoreValue(*container), 0);
+            UT_ASSERT(c, !xsink && survivor->getType() == NT_LIST
+                && survivor->get<QoreListNode>() == *target && target->reference_count() == 2,
+                "indexed weak element promotes exactly one target owner");
+            UT_ASSERT_EQ(c, 2, weak_value->reference_count(), "normalization releases its temporary weak owner");
+        }
+        UT_ASSERT(c, target->reference_count() == 2 && weak_value->reference_count() == 1,
+            "promoted result survives source-list destruction");
+        survivor = QoreValue();
+        UT_ASSERT_EQ(c, 1, target->reference_count(), "promoted result releases its target owner");
+    }
+    UT_ASSERT(c, !xsink, "indexed ownership checks leave no exception");
 }
 
 static void ut_aot_prepared_indexed_int_add(UnitTestCounters& c) {
