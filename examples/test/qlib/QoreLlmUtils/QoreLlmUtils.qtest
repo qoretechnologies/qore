@@ -41,6 +41,11 @@ class FakeGeminiLlmHandler inherits AbstractHttpRequestHandler {
     hash handleRequest(hash cx, hash hdr, *data body) {
         m.lock();
         on_exit m.unlock();
+        *hash<auto> held;
+        # a held reply reports when the handler has finished, so that a test can wait for it deterministically
+        on_exit if (held.done) {
+            held.done.push(True);
+        }
         hash<auto> parsed = body.val() ? parse_json(body) : {};
         push requests, {
             "path": cx.raw_path,
@@ -64,6 +69,11 @@ class FakeGeminiLlmHandler inherits AbstractHttpRequestHandler {
         }
         if (resp.delay_ms > 0) {
             usleep(resp.delay_ms * 1000);
+        }
+        # a reply held by a gate is sent only when the test opens the gate
+        if (resp.gate) {
+            held = resp;
+            resp.gate.get(600s);
         }
         int code = resp.code ?? 200;
         if (resp.sse.typeCode() == NT_LIST) {
@@ -1295,10 +1305,14 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
 
     providerPerCallRequestTimeoutTest() {
         checkGeminiModule();
+        Queue gate();
+        Queue handler_done();
         installGeminiHandler({
             "/v1beta/models/gemini-2.5-flash:generateContent": {
                 "code": 200,
-                "delay_ms": 200,
+                # the reply is held until the call has ended, so only a deadline can end the call
+                "gate": gate,
+                "done": handler_done,
                 "body": {
                     "candidates": ({
                         "finishReason": "STOP",
@@ -1313,10 +1327,10 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "url": "http://localhost:" + port,
             "model": "gemini-2.5-flash",
             "api_key": "gemini-test-key",
-            "timeout_ms": 1000,
+            # longer than any test run: only the per-call timeout can end the call
+            "timeout_ms": 3600000,
             "max_retries": 0,
         });
-        date started = now_us();
         *hash<ExceptionInfo> timeout_ex;
         try {
             llm.chatCompletions({
@@ -1327,7 +1341,9 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         } catch (hash<ExceptionInfo> ex) {
             timeout_ex = ex;
         }
-        int elapsed_ms = (now_us() - started).durationMilliseconds();
+        # the call has ended: the held reply is released, and the handler finishes before the next test
+        gate.push(True);
+        handler_done.get(30s);
         assertNeq(NOTHING, timeout_ex,
             "the call-local deadline aborts the delayed provider request");
         if (!timeout_ex) {
@@ -1337,14 +1353,10 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "the facade preserves its stable error identity");
         assertEq("HTTPCLIENT-TIMEOUT", timeout_ex.arg.err,
             "the structured cause preserves the transport timeout identity");
-        assertLt(500, elapsed_ms,
-            "the per-call timeout overrides the longer backend timeout");
         assertEq(1, gemini_handler.requests.size(),
             "the timed-out call sends only one provider request");
         assertFalse(gemini_handler.requests[0].body.hasKey("timeout_ms"),
             "the facade timeout extension is not sent in the native body");
-        # Let the loopback handler finish before the following test replaces it.
-        usleep(200000);
     }
 
     geminiToolCallResponseTest() {

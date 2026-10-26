@@ -44,7 +44,7 @@ public class AssemblyAiTranscribeRequestDataType inherits HashDataType {
             },
         };
         #! Schema fields and polling controls, preserving nested type metadata
-        static hash<string, AbstractDataField> Fields;
+        static hash<string, AbstractDataField> Fields = {};
     }
     private {
         static Mutex field_lock();
@@ -70,7 +70,7 @@ public class AssemblyAiTranscribeRequestDataType inherits HashDataType {
 public class AssemblyAiTranscribeResponseDataType inherits HashDataType {
     private {
         #! Full transcript response fields from the committed schema
-        static hash<string, AbstractDataField> Fields;
+        static hash<string, AbstractDataField> Fields = {};
         static Mutex field_lock();
     }
     #! Constructs the transcript response type

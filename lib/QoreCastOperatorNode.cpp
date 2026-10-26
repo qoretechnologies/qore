@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/QoreClassIntern.h"
@@ -746,6 +747,8 @@ QoreValue QoreHashDeclCastOperatorNode::evalImpl(bool& needs_deref, ExceptionSin
     if (*xsink) {
         return QoreValue();
     }
+    // a temporary converted lives until the end of the statement, as in the other execution modes
+    QoreStatementTempScope::holdReceiver(exp, rv, xsink);
 
     if (QoreHashDeclCastOperatorNode::checkValue(xsink, *rv, false)) {
         return -1;
@@ -764,15 +767,23 @@ QoreValue QoreHashDeclCastOperatorNode::evalImpl(bool& needs_deref, ExceptionSin
     }
 
     if (!target_hd) {
-        if (!vhd && !h->getValueTypeInfo())
-            return rv.takeValue(needs_deref);
+        if (!vhd && !h->getValueTypeInfo()) {
+            // the value can be the temporary held above, which the scope releases, so it is returned with a
+            // reference of its own
+            needs_deref = true;
+            return rv.takeReferencedValue();
+        }
         needs_deref = true;
         return qore_hash_private::getPlainHash(rv.takeReferencedNode<QoreHashNode>());
     }
 
     // if we already have the expected type, then there's nothing more to do
-    if (vhd && typed_hash_decl_private::get(*vhd)->equal(*typed_hash_decl_private::get(*target_hd)))
-        return rv.takeValue(needs_deref);
+    if (vhd && typed_hash_decl_private::get(*vhd)->equal(*typed_hash_decl_private::get(*target_hd))) {
+        // the value can be the temporary held above, which the scope releases, so it is returned with a reference
+        // of its own
+        needs_deref = true;
+        return rv.takeReferencedValue();
+    }
 
     // do the runtime cast
     QoreValue result = typed_hash_decl_private::get(*target_hd)->newHash(h, true, xsink);
@@ -840,6 +851,8 @@ QoreValue QoreComplexHashCastOperatorNode::evalImpl(bool& needs_deref, Exception
     if (*xsink) {
         return QoreValue();
     }
+    // a temporary converted lives until the end of the statement, as in the other execution modes
+    QoreStatementTempScope::holdReceiver(exp, rv, xsink);
 
     if (QoreComplexHashCastOperatorNode::checkValue(xsink, *rv, false)) {
         return QoreValue();
@@ -917,6 +930,8 @@ QoreValue QoreComplexListCastOperatorNode::evalImpl(bool& needs_deref, Exception
     if (*xsink) {
         return QoreValue();
     }
+    // a temporary converted lives until the end of the statement, as in the other execution modes
+    QoreStatementTempScope::holdReceiver(exp, rv, xsink);
 
     if (checkValue(xsink, *rv, false)) {
         return QoreValue();
@@ -943,7 +958,10 @@ QoreValue QoreComplexListCastOperatorNode::evalImpl(bool& needs_deref, Exception
     const QoreTypeInfo* ti = rv->getFullTypeInfo();
     if ((!typeInfo && (ti == listTypeInfo))
         || (typeInfo && ti == typeInfo)) {
-        return rv.takeValue(needs_deref);
+        // the value can be the temporary held above, which the scope that holds it can release before the caller
+        // uses the value (the operand of a change to a member is a statement of its own), so it is returned with a
+        // reference of its own
+        return rv.takeReferencedValue();
     }
 
     // do the runtime cast

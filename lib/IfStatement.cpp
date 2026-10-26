@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/IfStatement.h"
 #include "qore/intern/QoreHashObjectDereferenceOperatorNode.h"
 #include "qore/intern/StatementBlock.h"
@@ -50,13 +51,14 @@ int IfStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
     // instantiate local variables
     LVListInstantiator lvi(xsink, lvars, pwo.parse_options);
 
-    ValueEvalOptimizedRefHolder val(cond, xsink);
-    if (*xsink) {
+    // the condition and its temporaries are released before the branch runs
+    bool b;
+    if (qore_eval_condition(cond, b, xsink)) {
         return 0;
     }
 
     int rc = 0;
-    if (val->getAsBool()) {
+    if (b) {
         if (if_code) {
             rc = if_code->execImpl(return_value, xsink);
         }
@@ -73,13 +75,14 @@ int IfStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionS
     // instantiate local variables
     LVListInstantiator lvi(xsink, lvars, pwo.parse_options);
 
-    ValueEvalRefHolder val(rc, cond, xsink);
-    if (*xsink) {
+    // the condition and its temporaries are released before the branch runs
+    bool b;
+    if (qore_eval_condition(cond, b, xsink, rc)) {
         return 0;
     }
 
     int rc_state = 0;
-    if (val->getAsBool()) {
+    if (b) {
         if (if_code) {
             rc_state = if_code->execImpl(rc, return_value, xsink);
         }

@@ -113,7 +113,8 @@ int HttpClientConnectionBase::getPendingStreamCount() [flags=RET_VALUE_ONLY] {
 }
 
 //! Blocks until the connection becomes ready or fails
-/** @param timeout_ms wait budget in milliseconds (0 = wait forever)
+/** @param timeout_ms wait budget in milliseconds; 0 returns at once if the connection is not ready yet, and a
+    negative value waits without a limit
     @return True if the connection is ready; False on timeout
     @throw HTTPCLIENT-CONNECT-ERROR if closed with an error
 */

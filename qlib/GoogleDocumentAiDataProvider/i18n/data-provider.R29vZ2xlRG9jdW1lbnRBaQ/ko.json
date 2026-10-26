@@ -2091,30 +2091,6 @@
           "source": "The processor version to be created.",
           "message": "생성할 프로세서 버전입니다."
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.Y3JlYXRlVGltZQ.display_name": {
-          "source": "Create Time",
-          "message": "시간 만들기"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.Y3JlYXRlVGltZQ.short_desc": {
-          "source": "The time the processor version was created",
-          "message": "프로세서 버전이 생성된 시간"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.Y3JlYXRlVGltZQ.desc": {
-          "source": "The time the processor version was created.",
-          "message": "프로세서 버전이 생성된 시간입니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.ZGVwcmVjYXRpb25JbmZv.display_name": {
-          "source": "Deprecation Info",
-          "message": "지원 중단 정보"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.ZGVwcmVjYXRpb25JbmZv.short_desc": {
-          "source": "If set, information about the eventual deprecation of this version",
-          "message": "설정된 경우 이 버전의 최종 지원 중단에 대한 정보"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.ZGVwcmVjYXRpb25JbmZv.desc": {
-          "source": "If set, information about the eventual deprecation of this version.",
-          "message": "설정된 경우 이 버전의 최종 지원 중단에 대한 정보입니다."
-        },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.ZGlzcGxheU5hbWU.display_name": {
           "source": "Display Name",
           "message": "표시 이름"
@@ -2127,114 +2103,6 @@
           "source": "The display name of the processor version.",
           "message": "프로세서 버전의 표시 이름입니다."
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.ZG9jdW1lbnRTY2hlbWE.display_name": {
-          "source": "Document Schema",
-          "message": "문서 스키마"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.ZG9jdW1lbnRTY2hlbWE.short_desc": {
-          "source": "The schema of the processor version",
-          "message": "프로세서 버전의 스키마"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.ZG9jdW1lbnRTY2hlbWE.desc": {
-          "source": "The schema of the processor version. Describes the output.",
-          "message": "프로세서 버전의 스키마입니다. 출력에 대해 설명합니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.Z2VuQWlNb2RlbEluZm8.display_name": {
-          "source": "Gen AI Model Info",
-          "message": "Gen AI 모델 정보"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.Z2VuQWlNb2RlbEluZm8.short_desc": {
-          "source": "Information about Generative AI model-based processor versions",
-          "message": "Generative AI 모델 기반 프로세서 버전에 대한 정보"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.Z2VuQWlNb2RlbEluZm8.desc": {
-          "source": "Information about Generative AI model-based processor versions.",
-          "message": "Generative AI 모델 기반 프로세서 버전에 대한 정보입니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.Z29vZ2xlTWFuYWdlZA.display_name": {
-          "source": "Google Managed",
-          "message": "Google 관리형"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.Z29vZ2xlTWFuYWdlZA.short_desc": {
-          "source": "Denotes that this 'ProcessorVersion' is managed by Google",
-          "message": "이 'ProcessorVersion'이 Google에서 관리됨을 나타냅니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.Z29vZ2xlTWFuYWdlZA.desc": {
-          "source": "Denotes that this `ProcessorVersion` is managed by Google.",
-          "message": "이 `ProcessorVersion`는 Google에서 관리함을 나타냅니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.a21zS2V5TmFtZQ.display_name": {
-          "source": "Kms Key Name",
-          "message": "Kms 키 이름"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.a21zS2V5TmFtZQ.short_desc": {
-          "source": "The KMS key name used for encryption",
-          "message": "암호화에 사용되는 KMS 키 이름"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.a21zS2V5TmFtZQ.desc": {
-          "source": "The KMS key name used for encryption.",
-          "message": "암호화에 사용되는 KMS 키 이름입니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.a21zS2V5VmVyc2lvbk5hbWU.display_name": {
-          "source": "Kms Key Version Name",
-          "message": "Kms 키 버전 이름"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.a21zS2V5VmVyc2lvbk5hbWU.short_desc": {
-          "source": "The KMS key version with which data is encrypted",
-          "message": "데이터가 암호화되는 KMS 키 버전"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.a21zS2V5VmVyc2lvbk5hbWU.desc": {
-          "source": "The KMS key version with which data is encrypted.",
-          "message": "데이터가 암호화되는 KMS 키 버전입니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.bGF0ZXN0RXZhbHVhdGlvbg.display_name": {
-          "source": "Latest Evaluation",
-          "message": "최신 평가"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.bGF0ZXN0RXZhbHVhdGlvbg.short_desc": {
-          "source": "The most recently invoked evaluation for the processor version",
-          "message": "프로세서 버전에 대해 가장 최근에 호출된 평가입니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.bGF0ZXN0RXZhbHVhdGlvbg.desc": {
-          "source": "The most recently invoked evaluation for the processor version.",
-          "message": "프로세서 버전에 대해 가장 최근에 호출된 평가입니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.bW9kZWxUeXBl.display_name": {
-          "source": "Model Type",
-          "message": "모델 유형"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.bW9kZWxUeXBl.short_desc": {
-          "source": "The model type of this processor version",
-          "message": "이 프로세서 버전의 모델 유형"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.bW9kZWxUeXBl.desc": {
-          "source": "The model type of this processor version.",
-          "message": "이 프로세서 버전의 모델 유형입니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.bW9kZWxUeXBl.allowed-value.c3RyaW5nOk1PREVMX1RZUEVfVU5TUEVDSUZJRUQ.display_name": {
-          "source": "Model Type Unspecified",
-          "message": "모델 유형 미지정"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.bW9kZWxUeXBl.allowed-value.c3RyaW5nOk1PREVMX1RZUEVfVU5TUEVDSUZJRUQ.desc": {
-          "source": "The processor version has unspecified model type.",
-          "message": "프로세서 버전에 지정되지 않은 모델 유형이 있습니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.bW9kZWxUeXBl.allowed-value.c3RyaW5nOk1PREVMX1RZUEVfR0VORVJBVElWRQ.display_name": {
-          "source": "Model Type Generative",
-          "message": "모델 유형 생성"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.bW9kZWxUeXBl.allowed-value.c3RyaW5nOk1PREVMX1RZUEVfR0VORVJBVElWRQ.desc": {
-          "source": "The processor version has generative model type.",
-          "message": "프로세서 버전에는 생성 모델 유형이 있습니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.bW9kZWxUeXBl.allowed-value.c3RyaW5nOk1PREVMX1RZUEVfQ1VTVE9N.display_name": {
-          "source": "Model Type Custom",
-          "message": "모델 유형 사용자 정의"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.bW9kZWxUeXBl.allowed-value.c3RyaW5nOk1PREVMX1RZUEVfQ1VTVE9N.desc": {
-          "source": "The processor version has custom model type.",
-          "message": "프로세서 버전에는 사용자 정의 모델 유형이 있습니다."
-        },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.bmFtZQ.display_name": {
           "source": "Name",
           "message": "이름"
@@ -2246,114 +2114,6 @@
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.bmFtZQ.desc": {
           "source": "Identifier. The resource name of the processor version. Format: `projects/{project}/locations/{location}/processors/{processor}/processorVersions/{processor_version}`",
           "message": "식별자. 프로세서 버전의 리소스 이름입니다. 형식: `projects/{project}/locations/{location}/processors/{processor}/processorVersions/{processor_version}`"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c2F0aXNmaWVzUHpp.display_name": {
-          "source": "Satisfies Pzi",
-          "message": "Pzi를 만족시킵니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c2F0aXNmaWVzUHpp.short_desc": {
-          "source": "Reserved for future use",
-          "message": "향후 사용을 위해 예약됨"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c2F0aXNmaWVzUHpp.desc": {
-          "source": "Reserved for future use.",
-          "message": "향후 사용을 위해 예약되었습니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c2F0aXNmaWVzUHpz.display_name": {
-          "source": "Satisfies Pzs",
-          "message": "Pzs 만족"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c2F0aXNmaWVzUHpz.short_desc": {
-          "source": "Reserved for future use",
-          "message": "향후 사용을 위해 예약됨"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c2F0aXNmaWVzUHpz.desc": {
-          "source": "Reserved for future use.",
-          "message": "향후 사용을 위해 예약되었습니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c3RhdGU.display_name": {
-          "source": "State",
-          "message": "상태"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c3RhdGU.short_desc": {
-          "source": "The state of the processor version",
-          "message": "프로세서 버전 상태"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c3RhdGU.desc": {
-          "source": "The state of the processor version.",
-          "message": "프로세서 버전의 상태입니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c3RhdGU.allowed-value.c3RyaW5nOlNUQVRFX1VOU1BFQ0lGSUVE.display_name": {
-          "source": "State Unspecified",
-          "message": "상태 미지정"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c3RhdGU.allowed-value.c3RyaW5nOlNUQVRFX1VOU1BFQ0lGSUVE.desc": {
-          "source": "The processor version is in an unspecified state.",
-          "message": "프로세서 버전이 지정되지 않은 상태입니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c3RhdGU.allowed-value.c3RyaW5nOkRFUExPWUVE.display_name": {
-          "source": "Deployed",
-          "message": "배포됨"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c3RhdGU.allowed-value.c3RyaW5nOkRFUExPWUVE.desc": {
-          "source": "The processor version is deployed and can be used for processing.",
-          "message": "프로세서 버전이 배포되어 처리에 사용될 수 있습니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c3RhdGU.allowed-value.c3RyaW5nOkRFUExPWUlORw.display_name": {
-          "source": "Deploying",
-          "message": "배포 중"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c3RhdGU.allowed-value.c3RyaW5nOkRFUExPWUlORw.desc": {
-          "source": "The processor version is being deployed.",
-          "message": "프로세서 버전을 배포하는 중입니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c3RhdGU.allowed-value.c3RyaW5nOlVOREVQTE9ZRUQ.display_name": {
-          "source": "Undeployed",
-          "message": "배포되지 않음"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c3RhdGU.allowed-value.c3RyaW5nOlVOREVQTE9ZRUQ.desc": {
-          "source": "The processor version is not deployed and cannot be used for processing.",
-          "message": "프로세서 버전이 배포되지 않았으며 처리에 사용할 수 없습니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c3RhdGU.allowed-value.c3RyaW5nOlVOREVQTE9ZSU5H.display_name": {
-          "source": "Undeploying",
-          "message": "배포 취소 중"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c3RhdGU.allowed-value.c3RyaW5nOlVOREVQTE9ZSU5H.desc": {
-          "source": "The processor version is being undeployed.",
-          "message": "프로세서 버전을 배포 취소하는 중입니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c3RhdGU.allowed-value.c3RyaW5nOkNSRUFUSU5H.display_name": {
-          "source": "Creating",
-          "message": "생성 중"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c3RhdGU.allowed-value.c3RyaW5nOkNSRUFUSU5H.desc": {
-          "source": "The processor version is being created.",
-          "message": "프로세서 버전을 생성하는 중입니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c3RhdGU.allowed-value.c3RyaW5nOkRFTEVUSU5H.display_name": {
-          "source": "Deleting",
-          "message": "삭제 중"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c3RhdGU.allowed-value.c3RyaW5nOkRFTEVUSU5H.desc": {
-          "source": "The processor version is being deleted.",
-          "message": "프로세서 버전을 삭제하는 중입니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c3RhdGU.allowed-value.c3RyaW5nOkZBSUxFRA.display_name": {
-          "source": "Failed",
-          "message": "실패"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c3RhdGU.allowed-value.c3RyaW5nOkZBSUxFRA.desc": {
-          "source": "The processor version failed and is in an indeterminate state.",
-          "message": "프로세서 버전이 실패하여 알 수 없는 상태입니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c3RhdGU.allowed-value.c3RyaW5nOklNUE9SVElORw.display_name": {
-          "source": "Importing",
-          "message": "가져오기"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c3RhdGU.allowed-value.c3RyaW5nOklNUE9SVElORw.desc": {
-          "source": "The processor version is being imported.",
-          "message": "프로세서 버전을 가져오는 중입니다."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZGVwbG95LXByb2Nlc3Nvci12ZXJzaW9u.display_name": {
           "source": "Deploy Processor Version",
@@ -11179,366 +10939,6 @@
           "source": "The URI prefix.",
           "message": "URI 접두사."
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25EZXByZWNhdGlvbkluZm8jOTlkZDFlNzMxYzVkNDVkMmUwMTk3Njc4ZTVhOWYwNTcxNzJjYjc4MGZlY2FjMDg3ODRiZDIyZGJjNDhkMDI0Ng.field.ZGVwcmVjYXRpb25UaW1l.display_name": {
-          "source": "Deprecation Time",
-          "message": "지원 중단 시간"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25EZXByZWNhdGlvbkluZm8jOTlkZDFlNzMxYzVkNDVkMmUwMTk3Njc4ZTVhOWYwNTcxNzJjYjc4MGZlY2FjMDg3ODRiZDIyZGJjNDhkMDI0Ng.field.ZGVwcmVjYXRpb25UaW1l.short_desc": {
-          "source": "The time at which this processor version will be deprecated",
-          "message": "이 프로세서 버전이 더 이상 사용되지 않는 시점"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25EZXByZWNhdGlvbkluZm8jOTlkZDFlNzMxYzVkNDVkMmUwMTk3Njc4ZTVhOWYwNTcxNzJjYjc4MGZlY2FjMDg3ODRiZDIyZGJjNDhkMDI0Ng.field.ZGVwcmVjYXRpb25UaW1l.desc": {
-          "source": "The time at which this processor version will be deprecated.",
-          "message": "이 프로세서 버전이 더 이상 사용되지 않는 시간입니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25EZXByZWNhdGlvbkluZm8jOTlkZDFlNzMxYzVkNDVkMmUwMTk3Njc4ZTVhOWYwNTcxNzJjYjc4MGZlY2FjMDg3ODRiZDIyZGJjNDhkMDI0Ng.field.cmVwbGFjZW1lbnRQcm9jZXNzb3JWZXJzaW9u.display_name": {
-          "source": "Replacement Processor Version",
-          "message": "교체 프로세서 버전"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25EZXByZWNhdGlvbkluZm8jOTlkZDFlNzMxYzVkNDVkMmUwMTk3Njc4ZTVhOWYwNTcxNzJjYjc4MGZlY2FjMDg3ODRiZDIyZGJjNDhkMDI0Ng.field.cmVwbGFjZW1lbnRQcm9jZXNzb3JWZXJzaW9u.short_desc": {
-          "source": "If set, the processor version that will be used as a replacement",
-          "message": "설정된 경우 교체용으로 사용될 프로세서 버전"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25EZXByZWNhdGlvbkluZm8jOTlkZDFlNzMxYzVkNDVkMmUwMTk3Njc4ZTVhOWYwNTcxNzJjYjc4MGZlY2FjMDg3ODRiZDIyZGJjNDhkMDI0Ng.field.cmVwbGFjZW1lbnRQcm9jZXNzb3JWZXJzaW9u.desc": {
-          "source": "If set, the processor version that will be used as a replacement.",
-          "message": "설정된 경우 교체용으로 사용될 프로세서 버전입니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMURvY3VtZW50U2NoZW1hIzE1NTg0ZDA1OTFmZWNjZmEzZDg2ZGNlZDgwY2Y0YmQzODc5ZmJmNGYwMGQzN2I1MTQ1ZjRhYTlhZWEyODI5OGM.field.ZGVzY3JpcHRpb24.display_name": {
-          "source": "Description",
-          "message": "설명"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMURvY3VtZW50U2NoZW1hIzE1NTg0ZDA1OTFmZWNjZmEzZDg2ZGNlZDgwY2Y0YmQzODc5ZmJmNGYwMGQzN2I1MTQ1ZjRhYTlhZWEyODI5OGM.field.ZGVzY3JpcHRpb24.short_desc": {
-          "source": "Description of the schema",
-          "message": "스키마 설명"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMURvY3VtZW50U2NoZW1hIzE1NTg0ZDA1OTFmZWNjZmEzZDg2ZGNlZDgwY2Y0YmQzODc5ZmJmNGYwMGQzN2I1MTQ1ZjRhYTlhZWEyODI5OGM.field.ZGVzY3JpcHRpb24.desc": {
-          "source": "Description of the schema.",
-          "message": "스키마 설명"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMURvY3VtZW50U2NoZW1hIzE1NTg0ZDA1OTFmZWNjZmEzZDg2ZGNlZDgwY2Y0YmQzODc5ZmJmNGYwMGQzN2I1MTQ1ZjRhYTlhZWEyODI5OGM.field.ZGlzcGxheU5hbWU.display_name": {
-          "source": "Display Name",
-          "message": "표시 이름"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMURvY3VtZW50U2NoZW1hIzE1NTg0ZDA1OTFmZWNjZmEzZDg2ZGNlZDgwY2Y0YmQzODc5ZmJmNGYwMGQzN2I1MTQ1ZjRhYTlhZWEyODI5OGM.field.ZGlzcGxheU5hbWU.short_desc": {
-          "source": "Display name to show users",
-          "message": "사용자에게 표시할 표시 이름"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMURvY3VtZW50U2NoZW1hIzE1NTg0ZDA1OTFmZWNjZmEzZDg2ZGNlZDgwY2Y0YmQzODc5ZmJmNGYwMGQzN2I1MTQ1ZjRhYTlhZWEyODI5OGM.field.ZGlzcGxheU5hbWU.desc": {
-          "source": "Display name to show users.",
-          "message": "사용자에게 표시할 표시 이름입니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMURvY3VtZW50U2NoZW1hIzE1NTg0ZDA1OTFmZWNjZmEzZDg2ZGNlZDgwY2Y0YmQzODc5ZmJmNGYwMGQzN2I1MTQ1ZjRhYTlhZWEyODI5OGM.field.ZG9jdW1lbnRQcm9tcHQ.display_name": {
-          "source": "Document Prompt",
-          "message": "문서 프롬프트"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMURvY3VtZW50U2NoZW1hIzE1NTg0ZDA1OTFmZWNjZmEzZDg2ZGNlZDgwY2Y0YmQzODc5ZmJmNGYwMGQzN2I1MTQ1ZjRhYTlhZWEyODI5OGM.field.ZG9jdW1lbnRQcm9tcHQ.short_desc": {
-          "source": "Document-level prompt provided by the user",
-          "message": "사용자가 제공하는 문서 수준 프롬프트"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMURvY3VtZW50U2NoZW1hIzE1NTg0ZDA1OTFmZWNjZmEzZDg2ZGNlZDgwY2Y0YmQzODc5ZmJmNGYwMGQzN2I1MTQ1ZjRhYTlhZWEyODI5OGM.field.ZG9jdW1lbnRQcm9tcHQ.desc": {
-          "source": "Document-level prompt provided by the user. This custom text is injected into the AI model's prompt to provide extra, document-wide guidance for processing.",
-          "message": "사용자가 제공하는 문서 수준 프롬프트입니다. 이 사용자 정의 텍스트는 처리를 위한 추가 문서 전체 지침을 제공하기 위해 AI 모델의 프롬프트에 삽입됩니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMURvY3VtZW50U2NoZW1hIzE1NTg0ZDA1OTFmZWNjZmEzZDg2ZGNlZDgwY2Y0YmQzODc5ZmJmNGYwMGQzN2I1MTQ1ZjRhYTlhZWEyODI5OGM.field.ZW50aXR5VHlwZXM.display_name": {
-          "source": "Entity Types",
-          "message": "엔터티 유형"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMURvY3VtZW50U2NoZW1hIzE1NTg0ZDA1OTFmZWNjZmEzZDg2ZGNlZDgwY2Y0YmQzODc5ZmJmNGYwMGQzN2I1MTQ1ZjRhYTlhZWEyODI5OGM.field.ZW50aXR5VHlwZXM.short_desc": {
-          "source": "Entity types of the schema",
-          "message": "스키마의 항목 유형"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMURvY3VtZW50U2NoZW1hIzE1NTg0ZDA1OTFmZWNjZmEzZDg2ZGNlZDgwY2Y0YmQzODc5ZmJmNGYwMGQzN2I1MTQ1ZjRhYTlhZWEyODI5OGM.field.ZW50aXR5VHlwZXM.desc": {
-          "source": "Entity types of the schema.",
-          "message": "스키마의 엔터티 유형입니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMURvY3VtZW50U2NoZW1hIzE1NTg0ZDA1OTFmZWNjZmEzZDg2ZGNlZDgwY2Y0YmQzODc5ZmJmNGYwMGQzN2I1MTQ1ZjRhYTlhZWEyODI5OGM.field.bWV0YWRhdGE.display_name": {
-          "source": "Metadata",
-          "message": "메타데이터"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMURvY3VtZW50U2NoZW1hIzE1NTg0ZDA1OTFmZWNjZmEzZDg2ZGNlZDgwY2Y0YmQzODc5ZmJmNGYwMGQzN2I1MTQ1ZjRhYTlhZWEyODI5OGM.field.bWV0YWRhdGE.short_desc": {
-          "source": "Metadata of the schema",
-          "message": "스키마의 메타데이터"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMURvY3VtZW50U2NoZW1hIzE1NTg0ZDA1OTFmZWNjZmEzZDg2ZGNlZDgwY2Y0YmQzODc5ZmJmNGYwMGQzN2I1MTQ1ZjRhYTlhZWEyODI5OGM.field.bWV0YWRhdGE.desc": {
-          "source": "Metadata of the schema.",
-          "message": "스키마의 메타데이터입니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mbyNjNjEwNDc0MDk3NTdkMzEyMzdiMTM5NDQ2OTM1MGQyYjVjOWRiNjU5MGE0ZDY1NjRlODQ0YzBjNGM0OGU3ZWJl.field.Y3VzdG9tR2VuQWlNb2RlbEluZm8.display_name": {
-          "source": "Custom Gen AI Model Info",
-          "message": "맞춤형 Gen AI 모델 정보"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mbyNjNjEwNDc0MDk3NTdkMzEyMzdiMTM5NDQ2OTM1MGQyYjVjOWRiNjU5MGE0ZDY1NjRlODQ0YzBjNGM0OGU3ZWJl.field.Y3VzdG9tR2VuQWlNb2RlbEluZm8.short_desc": {
-          "source": "Information for a custom Generative AI model created by the user",
-          "message": "사용자가 생성한 맞춤형 Generative AI 모델에 대한 정보"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mbyNjNjEwNDc0MDk3NTdkMzEyMzdiMTM5NDQ2OTM1MGQyYjVjOWRiNjU5MGE0ZDY1NjRlODQ0YzBjNGM0OGU3ZWJl.field.Y3VzdG9tR2VuQWlNb2RlbEluZm8.desc": {
-          "source": "Information for a custom Generative AI model created by the user.",
-          "message": "사용자가 생성한 맞춤형 Generative AI 모델에 대한 정보입니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mb0N1c3RvbUdlbkFpTW9kZWxJbmZvI2QyYTFlNzJkZDRkNTY5NTAzNjIzYmY2ZDM2MjcxYTNhODgzY2FkOTEzZWZmZmFjOTlkYWEyODRmMDE5M2EzYTA.field.YmFzZVByb2Nlc3NvclZlcnNpb25JZA.display_name": {
-          "source": "Base Processor Version ID",
-          "message": "기본 프로세서 버전 ID"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mb0N1c3RvbUdlbkFpTW9kZWxJbmZvI2QyYTFlNzJkZDRkNTY5NTAzNjIzYmY2ZDM2MjcxYTNhODgzY2FkOTEzZWZmZmFjOTlkYWEyODRmMDE5M2EzYTA.field.YmFzZVByb2Nlc3NvclZlcnNpb25JZA.short_desc": {
-          "source": "The base processor version ID for the custom model",
-          "message": "커스텀 모델의 기본 프로세서 버전 ID"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mb0N1c3RvbUdlbkFpTW9kZWxJbmZvI2QyYTFlNzJkZDRkNTY5NTAzNjIzYmY2ZDM2MjcxYTNhODgzY2FkOTEzZWZmZmFjOTlkYWEyODRmMDE5M2EzYTA.field.YmFzZVByb2Nlc3NvclZlcnNpb25JZA.desc": {
-          "source": "The base processor version ID for the custom model.",
-          "message": "사용자 정의 모델의 기본 프로세서 버전 ID입니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mb0N1c3RvbUdlbkFpTW9kZWxJbmZvI2QyYTFlNzJkZDRkNTY5NTAzNjIzYmY2ZDM2MjcxYTNhODgzY2FkOTEzZWZmZmFjOTlkYWEyODRmMDE5M2EzYTA.field.Y3VzdG9tTW9kZWxUeXBl.display_name": {
-          "source": "Custom Model Type",
-          "message": "사용자 정의 모델 유형"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mb0N1c3RvbUdlbkFpTW9kZWxJbmZvI2QyYTFlNzJkZDRkNTY5NTAzNjIzYmY2ZDM2MjcxYTNhODgzY2FkOTEzZWZmZmFjOTlkYWEyODRmMDE5M2EzYTA.field.Y3VzdG9tTW9kZWxUeXBl.short_desc": {
-          "source": "The type of custom model created by the user",
-          "message": "사용자가 생성한 커스텀 모델 유형"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mb0N1c3RvbUdlbkFpTW9kZWxJbmZvI2QyYTFlNzJkZDRkNTY5NTAzNjIzYmY2ZDM2MjcxYTNhODgzY2FkOTEzZWZmZmFjOTlkYWEyODRmMDE5M2EzYTA.field.Y3VzdG9tTW9kZWxUeXBl.desc": {
-          "source": "The type of custom model created by the user.",
-          "message": "사용자가 만든 사용자 정의 모델의 유형입니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mb0N1c3RvbUdlbkFpTW9kZWxJbmZvI2QyYTFlNzJkZDRkNTY5NTAzNjIzYmY2ZDM2MjcxYTNhODgzY2FkOTEzZWZmZmFjOTlkYWEyODRmMDE5M2EzYTA.field.Y3VzdG9tTW9kZWxUeXBl.allowed-value.c3RyaW5nOkNVU1RPTV9NT0RFTF9UWVBFX1VOU1BFQ0lGSUVE.display_name": {
-          "source": "Custom Model Type Unspecified",
-          "message": "맞춤 모델 유형이 지정되지 않음"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mb0N1c3RvbUdlbkFpTW9kZWxJbmZvI2QyYTFlNzJkZDRkNTY5NTAzNjIzYmY2ZDM2MjcxYTNhODgzY2FkOTEzZWZmZmFjOTlkYWEyODRmMDE5M2EzYTA.field.Y3VzdG9tTW9kZWxUeXBl.allowed-value.c3RyaW5nOkNVU1RPTV9NT0RFTF9UWVBFX1VOU1BFQ0lGSUVE.desc": {
-          "source": "The model type is unspecified.",
-          "message": "모델 유형이 지정되지 않았습니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mb0N1c3RvbUdlbkFpTW9kZWxJbmZvI2QyYTFlNzJkZDRkNTY5NTAzNjIzYmY2ZDM2MjcxYTNhODgzY2FkOTEzZWZmZmFjOTlkYWEyODRmMDE5M2EzYTA.field.Y3VzdG9tTW9kZWxUeXBl.allowed-value.c3RyaW5nOlZFUlNJT05FRF9GT1VOREFUSU9O.display_name": {
-          "source": "Versioned Foundation",
-          "message": "버전이 지정된 재단"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mb0N1c3RvbUdlbkFpTW9kZWxJbmZvI2QyYTFlNzJkZDRkNTY5NTAzNjIzYmY2ZDM2MjcxYTNhODgzY2FkOTEzZWZmZmFjOTlkYWEyODRmMDE5M2EzYTA.field.Y3VzdG9tTW9kZWxUeXBl.allowed-value.c3RyaW5nOlZFUlNJT05FRF9GT1VOREFUSU9O.desc": {
-          "source": "The model is a versioned foundation model.",
-          "message": "모델은 버전이 지정된 기본 모델입니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mb0N1c3RvbUdlbkFpTW9kZWxJbmZvI2QyYTFlNzJkZDRkNTY5NTAzNjIzYmY2ZDM2MjcxYTNhODgzY2FkOTEzZWZmZmFjOTlkYWEyODRmMDE5M2EzYTA.field.Y3VzdG9tTW9kZWxUeXBl.allowed-value.c3RyaW5nOkZJTkVfVFVORUQ.display_name": {
-          "source": "Fine Tuned",
-          "message": "미세 조정"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mb0N1c3RvbUdlbkFpTW9kZWxJbmZvI2QyYTFlNzJkZDRkNTY5NTAzNjIzYmY2ZDM2MjcxYTNhODgzY2FkOTEzZWZmZmFjOTlkYWEyODRmMDE5M2EzYTA.field.Y3VzdG9tTW9kZWxUeXBl.allowed-value.c3RyaW5nOkZJTkVfVFVORUQ.desc": {
-          "source": "The model is a finetuned foundation model.",
-          "message": "모델은 미세 조정된 기초 모델입니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mbyNjNjEwNDc0MDk3NTdkMzEyMzdiMTM5NDQ2OTM1MGQyYjVjOWRiNjU5MGE0ZDY1NjRlODQ0YzBjNGM0OGU3ZWJl.field.Zm91bmRhdGlvbkdlbkFpTW9kZWxJbmZv.display_name": {
-          "source": "Foundation Gen AI Model Info",
-          "message": "Foundation Gen AI 모델 정보"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mbyNjNjEwNDc0MDk3NTdkMzEyMzdiMTM5NDQ2OTM1MGQyYjVjOWRiNjU5MGE0ZDY1NjRlODQ0YzBjNGM0OGU3ZWJl.field.Zm91bmRhdGlvbkdlbkFpTW9kZWxJbmZv.short_desc": {
-          "source": "Information for a pretrained Google-managed foundation model",
-          "message": "사전 학습된 Google 관리 기반 모델에 대한 정보"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mbyNjNjEwNDc0MDk3NTdkMzEyMzdiMTM5NDQ2OTM1MGQyYjVjOWRiNjU5MGE0ZDY1NjRlODQ0YzBjNGM0OGU3ZWJl.field.Zm91bmRhdGlvbkdlbkFpTW9kZWxJbmZv.desc": {
-          "source": "Information for a pretrained Google-managed foundation model.",
-          "message": "사전 학습된 Google 관리 기반 모델에 대한 정보입니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mb0ZvdW5kYXRpb25HZW5BaU1vZGVsSW5mbyNiNDUwNTMyOGEyZjZlMTY3NDhlNGE5MWQyMTI1NGMzMTcxMWM2Y2YzNTE4NzQwMWYxNzgzOGM1YWZlNzA0NTg3.field.ZmluZXR1bmluZ0FsbG93ZWQ.display_name": {
-          "source": "Finetuning Allowed",
-          "message": "미세 조정 허용"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mb0ZvdW5kYXRpb25HZW5BaU1vZGVsSW5mbyNiNDUwNTMyOGEyZjZlMTY3NDhlNGE5MWQyMTI1NGMzMTcxMWM2Y2YzNTE4NzQwMWYxNzgzOGM1YWZlNzA0NTg3.field.ZmluZXR1bmluZ0FsbG93ZWQ.short_desc": {
-          "source": "Whether fine tuning is allowed for this base processor version",
-          "message": "이 기본 프로세서 버전에 미세 조정이 허용되는지 여부"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mb0ZvdW5kYXRpb25HZW5BaU1vZGVsSW5mbyNiNDUwNTMyOGEyZjZlMTY3NDhlNGE5MWQyMTI1NGMzMTcxMWM2Y2YzNTE4NzQwMWYxNzgzOGM1YWZlNzA0NTg3.field.ZmluZXR1bmluZ0FsbG93ZWQ.desc": {
-          "source": "Whether fine tuning is allowed for this base processor version.",
-          "message": "이 기본 프로세서 버전에 미세 조정이 허용되는지 여부입니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mb0ZvdW5kYXRpb25HZW5BaU1vZGVsSW5mbyNiNDUwNTMyOGEyZjZlMTY3NDhlNGE5MWQyMTI1NGMzMTcxMWM2Y2YzNTE4NzQwMWYxNzgzOGM1YWZlNzA0NTg3.field.bWluVHJhaW5MYWJlbGVkRG9jdW1lbnRz.display_name": {
-          "source": "Min Train Labeled Documents",
-          "message": "최소 열차 라벨이 붙은 문서"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mb0ZvdW5kYXRpb25HZW5BaU1vZGVsSW5mbyNiNDUwNTMyOGEyZjZlMTY3NDhlNGE5MWQyMTI1NGMzMTcxMWM2Y2YzNTE4NzQwMWYxNzgzOGM1YWZlNzA0NTg3.field.bWluVHJhaW5MYWJlbGVkRG9jdW1lbnRz.short_desc": {
-          "source": "The minimum number of labeled documents in the training dataset required for…",
-          "message": "학습 데이터 세트에 필요한 최소 레이블이 지정된 문서 수는 다음과 같습니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mb0ZvdW5kYXRpb25HZW5BaU1vZGVsSW5mbyNiNDUwNTMyOGEyZjZlMTY3NDhlNGE5MWQyMTI1NGMzMTcxMWM2Y2YzNTE4NzQwMWYxNzgzOGM1YWZlNzA0NTg3.field.bWluVHJhaW5MYWJlbGVkRG9jdW1lbnRz.desc": {
-          "source": "The minimum number of labeled documents in the training dataset required for fine tuning.",
-          "message": "미세 조정에 필요한 학습 데이터세트의 라벨이 지정된 최소 문서 수입니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25SZWZlcmVuY2UjZGZlNmUxZDkxNjAyNmE5YTZiZTU0NjU3MTMyYzJlYjcwNDAzZGMyNmJiMDgwODQ5NTg3ZGMyNGE1NTMzYmI4Ng.field.YWdncmVnYXRlTWV0cmljcw.display_name": {
-          "source": "Aggregate Metrics",
-          "message": "집계 측정항목"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25SZWZlcmVuY2UjZGZlNmUxZDkxNjAyNmE5YTZiZTU0NjU3MTMyYzJlYjcwNDAzZGMyNmJiMDgwODQ5NTg3ZGMyNGE1NTMzYmI4Ng.field.YWdncmVnYXRlTWV0cmljcw.short_desc": {
-          "source": "An aggregate of the statistics for the evaluation with fuzzy matching on",
-          "message": "퍼지 매칭을 사용한 평가를 위한 통계 집계"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25SZWZlcmVuY2UjZGZlNmUxZDkxNjAyNmE5YTZiZTU0NjU3MTMyYzJlYjcwNDAzZGMyNmJiMDgwODQ5NTg3ZGMyNGE1NTMzYmI4Ng.field.YWdncmVnYXRlTWV0cmljcw.desc": {
-          "source": "An aggregate of the statistics for the evaluation with fuzzy matching on.",
-          "message": "퍼지 매칭을 켠 평가에 대한 통계 집계입니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.ZjFTY29yZQ.display_name": {
-          "source": "F1Score",
-          "message": "F1점수"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.ZjFTY29yZQ.short_desc": {
-          "source": "The calculated F1 score",
-          "message": "계산된 F1 점수"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.ZjFTY29yZQ.desc": {
-          "source": "The calculated F1 score.",
-          "message": "계산된 F1 점수입니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.ZmFsc2VOZWdhdGl2ZXNDb3VudA.display_name": {
-          "source": "False Negatives Count",
-          "message": "False 부정수"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.ZmFsc2VOZWdhdGl2ZXNDb3VudA.short_desc": {
-          "source": "The amount of false negatives",
-          "message": "위음성의 양"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.ZmFsc2VOZWdhdGl2ZXNDb3VudA.desc": {
-          "source": "The amount of false negatives.",
-          "message": "거짓음성의 양."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.ZmFsc2VQb3NpdGl2ZXNDb3VudA.display_name": {
-          "source": "False Positives Count",
-          "message": "False 긍정 개수"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.ZmFsc2VQb3NpdGl2ZXNDb3VudA.short_desc": {
-          "source": "The amount of false positives",
-          "message": "오탐지의 양"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.ZmFsc2VQb3NpdGl2ZXNDb3VudA.desc": {
-          "source": "The amount of false positives.",
-          "message": "거짓 긍정의 양."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.Z3JvdW5kVHJ1dGhEb2N1bWVudENvdW50.display_name": {
-          "source": "Ground Truth Document Count",
-          "message": "Ground Truth 문서 수"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.Z3JvdW5kVHJ1dGhEb2N1bWVudENvdW50.short_desc": {
-          "source": "The amount of documents with a ground truth occurrence",
-          "message": "Ground Truth가 발생한 문서의 양"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.Z3JvdW5kVHJ1dGhEb2N1bWVudENvdW50.desc": {
-          "source": "The amount of documents with a ground truth occurrence.",
-          "message": "Ground Truth가 발생한 문서의 양입니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.Z3JvdW5kVHJ1dGhPY2N1cnJlbmNlc0NvdW50.display_name": {
-          "source": "Ground Truth Occurrences Count",
-          "message": "Ground Truth 발생 횟수"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.Z3JvdW5kVHJ1dGhPY2N1cnJlbmNlc0NvdW50.short_desc": {
-          "source": "The amount of occurrences in ground truth documents",
-          "message": "Ground Truth 문서의 발생 횟수"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.Z3JvdW5kVHJ1dGhPY2N1cnJlbmNlc0NvdW50.desc": {
-          "source": "The amount of occurrences in ground truth documents.",
-          "message": "Ground Truth 문서의 발생 횟수입니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.cHJlY2lzaW9u.display_name": {
-          "source": "Precision",
-          "message": "정밀도"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.cHJlY2lzaW9u.short_desc": {
-          "source": "The calculated precision",
-          "message": "계산된 정밀도"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.cHJlY2lzaW9u.desc": {
-          "source": "The calculated precision.",
-          "message": "계산된 정밀도입니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.cHJlZGljdGVkRG9jdW1lbnRDb3VudA.display_name": {
-          "source": "Predicted Document Count",
-          "message": "예상 문서 수"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.cHJlZGljdGVkRG9jdW1lbnRDb3VudA.short_desc": {
-          "source": "The amount of documents with a predicted occurrence",
-          "message": "발생이 예상되는 문서의 양"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.cHJlZGljdGVkRG9jdW1lbnRDb3VudA.desc": {
-          "source": "The amount of documents with a predicted occurrence.",
-          "message": "발생이 예측된 문서의 양입니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.cHJlZGljdGVkT2NjdXJyZW5jZXNDb3VudA.display_name": {
-          "source": "Predicted Occurrences Count",
-          "message": "예측된 발생 횟수"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.cHJlZGljdGVkT2NjdXJyZW5jZXNDb3VudA.short_desc": {
-          "source": "The amount of occurrences in predicted documents",
-          "message": "예측 문서의 발생량"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.cHJlZGljdGVkT2NjdXJyZW5jZXNDb3VudA.desc": {
-          "source": "The amount of occurrences in predicted documents.",
-          "message": "예측 문서의 발생 횟수입니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.cmVjYWxs.display_name": {
-          "source": "Recall",
-          "message": "리콜"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.cmVjYWxs.short_desc": {
-          "source": "The calculated recall",
-          "message": "계산된 리콜"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.cmVjYWxs.desc": {
-          "source": "The calculated recall.",
-          "message": "계산된 리콜입니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.dG90YWxEb2N1bWVudHNDb3VudA.display_name": {
-          "source": "Total Documents Count",
-          "message": "총 문서 수"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.dG90YWxEb2N1bWVudHNDb3VudA.short_desc": {
-          "source": "The amount of documents that had an occurrence of this label",
-          "message": "이 라벨이 발생한 문서의 양"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.dG90YWxEb2N1bWVudHNDb3VudA.desc": {
-          "source": "The amount of documents that had an occurrence of this label.",
-          "message": "이 레이블이 발생한 문서의 양입니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.dHJ1ZVBvc2l0aXZlc0NvdW50.display_name": {
-          "source": "True Positives Count",
-          "message": "True 긍정 개수"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.dHJ1ZVBvc2l0aXZlc0NvdW50.short_desc": {
-          "source": "The amount of true positives",
-          "message": "참양성의 양"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.dHJ1ZVBvc2l0aXZlc0NvdW50.desc": {
-          "source": "The amount of true positives.",
-          "message": "참양성(true positive)의 양입니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25SZWZlcmVuY2UjZGZlNmUxZDkxNjAyNmE5YTZiZTU0NjU3MTMyYzJlYjcwNDAzZGMyNmJiMDgwODQ5NTg3ZGMyNGE1NTMzYmI4Ng.field.YWdncmVnYXRlTWV0cmljc0V4YWN0.display_name": {
-          "source": "Aggregate Metrics Exact",
-          "message": "정확한 집계 측정항목"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25SZWZlcmVuY2UjZGZlNmUxZDkxNjAyNmE5YTZiZTU0NjU3MTMyYzJlYjcwNDAzZGMyNmJiMDgwODQ5NTg3ZGMyNGE1NTMzYmI4Ng.field.YWdncmVnYXRlTWV0cmljc0V4YWN0.short_desc": {
-          "source": "An aggregate of the statistics for the evaluation with fuzzy matching off",
-          "message": "퍼지 매칭이 꺼진 평가를 위한 통계 집계"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25SZWZlcmVuY2UjZGZlNmUxZDkxNjAyNmE5YTZiZTU0NjU3MTMyYzJlYjcwNDAzZGMyNmJiMDgwODQ5NTg3ZGMyNGE1NTMzYmI4Ng.field.YWdncmVnYXRlTWV0cmljc0V4YWN0.desc": {
-          "source": "An aggregate of the statistics for the evaluation with fuzzy matching off.",
-          "message": "퍼지 매칭을 끈 상태에서 평가를 위한 통계의 집계입니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25SZWZlcmVuY2UjZGZlNmUxZDkxNjAyNmE5YTZiZTU0NjU3MTMyYzJlYjcwNDAzZGMyNmJiMDgwODQ5NTg3ZGMyNGE1NTMzYmI4Ng.field.ZXZhbHVhdGlvbg.display_name": {
-          "source": "Evaluation",
-          "message": "평가"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25SZWZlcmVuY2UjZGZlNmUxZDkxNjAyNmE5YTZiZTU0NjU3MTMyYzJlYjcwNDAzZGMyNmJiMDgwODQ5NTg3ZGMyNGE1NTMzYmI4Ng.field.ZXZhbHVhdGlvbg.short_desc": {
-          "source": "The resource name of the evaluation",
-          "message": "평가의 리소스 이름"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25SZWZlcmVuY2UjZGZlNmUxZDkxNjAyNmE5YTZiZTU0NjU3MTMyYzJlYjcwNDAzZGMyNmJiMDgwODQ5NTg3ZGMyNGE1NTMzYmI4Ng.field.ZXZhbHVhdGlvbg.desc": {
-          "source": "The resource name of the evaluation.",
-          "message": "평가의 리소스 이름입니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25SZWZlcmVuY2UjZGZlNmUxZDkxNjAyNmE5YTZiZTU0NjU3MTMyYzJlYjcwNDAzZGMyNmJiMDgwODQ5NTg3ZGMyNGE1NTMzYmI4Ng.field.b3BlcmF0aW9u.display_name": {
-          "source": "Operation",
-          "message": "작업"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25SZWZlcmVuY2UjZGZlNmUxZDkxNjAyNmE5YTZiZTU0NjU3MTMyYzJlYjcwNDAzZGMyNmJiMDgwODQ5NTg3ZGMyNGE1NTMzYmI4Ng.field.b3BlcmF0aW9u.short_desc": {
-          "source": "The resource name of the Long Running Operation for the evaluation",
-          "message": "평가를 위한 장기 실행 작업의 리소스 이름"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25SZWZlcmVuY2UjZGZlNmUxZDkxNjAyNmE5YTZiZTU0NjU3MTMyYzJlYjcwNDAzZGMyNmJiMDgwODQ5NTg3ZGMyNGE1NTMzYmI4Ng.field.b3BlcmF0aW9u.desc": {
-          "source": "The resource name of the Long Running Operation for the evaluation.",
-          "message": "평가를 위한 장기 실행 작업의 리소스 이름입니다."
-        },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOlpYWmhiSFZoZEdVdGNISnZZMlZ6YzI5eUxYWmxjbk5wYjI0Okhhc2hEYXRhVHlwZToqR29vZ2xlQ2xvdWREb2N1bWVudGFpVjFHY3NEb2N1bWVudHMjZjhkNjBjNjc3Y2I5MWU3M2E4OWViNjY0ZDAxOWNlNzVjY2JjODBhZGQ2Yjg1MDExZDQzYTgxNjI1YzI4NDkxNA.field.ZG9jdW1lbnRz.display_name": {
           "source": "Documents",
           "message": "문서"
@@ -11695,63 +11095,51 @@
           "source": "Previous prompt-answers in a chronological order.",
           "message": "이전 프롬프트-시간순으로 답변합니다."
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiNiNTM0YmEwZWUyOWVkMGEwOTY2MDQ1YTkyMDNjZjk2NTZhYTIyMGQ2ZjI2Yzk3MDI4YjUyZmNmNTY3OGM3YTAx.field.Y3JlYXRlVGltZQ.display_name": {
-          "source": "Create Time",
-          "message": "시간 만들기"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiNiNTM0YmEwZWUyOWVkMGEwOTY2MDQ1YTkyMDNjZjk2NTZhYTIyMGQ2ZjI2Yzk3MDI4YjUyZmNmNTY3OGM3YTAx.field.Y3JlYXRlVGltZQ.short_desc": {
-          "source": "The time when the SchemaVersion was created",
-          "message": "SchemaVersion이 생성된 시간"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiNiNTM0YmEwZWUyOWVkMGEwOTY2MDQ1YTkyMDNjZjk2NTZhYTIyMGQ2ZjI2Yzk3MDI4YjUyZmNmNTY3OGM3YTAx.field.Y3JlYXRlVGltZQ.desc": {
-          "source": "The time when the SchemaVersion was created.",
-          "message": "SchemaVersion이 생성된 시간입니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiNiNTM0YmEwZWUyOWVkMGEwOTY2MDQ1YTkyMDNjZjk2NTZhYTIyMGQ2ZjI2Yzk3MDI4YjUyZmNmNTY3OGM3YTAx.field.ZGlzcGxheU5hbWU.display_name": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiM1MzM1ZjA1NGI5MTJjNGRmMTI0YTBlYTYyZTJkZWYyMDc2YThiYWJjZTNjN2Y0Y2U0NTY0MDIwMTdhNjk4ZDZm.field.ZGlzcGxheU5hbWU.display_name": {
           "source": "Display Name",
           "message": "표시 이름"
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiNiNTM0YmEwZWUyOWVkMGEwOTY2MDQ1YTkyMDNjZjk2NTZhYTIyMGQ2ZjI2Yzk3MDI4YjUyZmNmNTY3OGM3YTAx.field.ZGlzcGxheU5hbWU.short_desc": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiM1MzM1ZjA1NGI5MTJjNGRmMTI0YTBlYTYyZTJkZWYyMDc2YThiYWJjZTNjN2Y0Y2U0NTY0MDIwMTdhNjk4ZDZm.field.ZGlzcGxheU5hbWU.short_desc": {
           "source": "The user-defined name of the SchemaVersion",
           "message": "SchemaVersion의 사용자 정의 이름"
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiNiNTM0YmEwZWUyOWVkMGEwOTY2MDQ1YTkyMDNjZjk2NTZhYTIyMGQ2ZjI2Yzk3MDI4YjUyZmNmNTY3OGM3YTAx.field.ZGlzcGxheU5hbWU.desc": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiM1MzM1ZjA1NGI5MTJjNGRmMTI0YTBlYTYyZTJkZWYyMDc2YThiYWJjZTNjN2Y0Y2U0NTY0MDIwMTdhNjk4ZDZm.field.ZGlzcGxheU5hbWU.desc": {
           "source": "The user-defined name of the SchemaVersion.",
           "message": "SchemaVersion의 사용자 정의 이름입니다."
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiNiNTM0YmEwZWUyOWVkMGEwOTY2MDQ1YTkyMDNjZjk2NTZhYTIyMGQ2ZjI2Yzk3MDI4YjUyZmNmNTY3OGM3YTAx.field.bGFiZWxz.display_name": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiM1MzM1ZjA1NGI5MTJjNGRmMTI0YTBlYTYyZTJkZWYyMDc2YThiYWJjZTNjN2Y0Y2U0NTY0MDIwMTdhNjk4ZDZm.field.bGFiZWxz.display_name": {
           "source": "Labels",
           "message": "라벨"
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiNiNTM0YmEwZWUyOWVkMGEwOTY2MDQ1YTkyMDNjZjk2NTZhYTIyMGQ2ZjI2Yzk3MDI4YjUyZmNmNTY3OGM3YTAx.field.bGFiZWxz.short_desc": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiM1MzM1ZjA1NGI5MTJjNGRmMTI0YTBlYTYyZTJkZWYyMDc2YThiYWJjZTNjN2Y0Y2U0NTY0MDIwMTdhNjk4ZDZm.field.bGFiZWxz.short_desc": {
           "source": "The {{gcp_name_short}} labels for the SchemaVersion",
           "message": "SchemaVersion의 {{gcp_name_short}} 라벨"
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiNiNTM0YmEwZWUyOWVkMGEwOTY2MDQ1YTkyMDNjZjk2NTZhYTIyMGQ2ZjI2Yzk3MDI4YjUyZmNmNTY3OGM3YTAx.field.bGFiZWxz.desc": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiM1MzM1ZjA1NGI5MTJjNGRmMTI0YTBlYTYyZTJkZWYyMDc2YThiYWJjZTNjN2Y0Y2U0NTY0MDIwMTdhNjk4ZDZm.field.bGFiZWxz.desc": {
           "source": "The {{gcp_name_short}} labels for the SchemaVersion.",
           "message": "SchemaVersion의 {{gcp_name_short}} 라벨입니다."
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiNiNTM0YmEwZWUyOWVkMGEwOTY2MDQ1YTkyMDNjZjk2NTZhYTIyMGQ2ZjI2Yzk3MDI4YjUyZmNmNTY3OGM3YTAx.field.bmFtZQ.display_name": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiM1MzM1ZjA1NGI5MTJjNGRmMTI0YTBlYTYyZTJkZWYyMDc2YThiYWJjZTNjN2Y0Y2U0NTY0MDIwMTdhNjk4ZDZm.field.bmFtZQ.display_name": {
           "source": "Name",
           "message": "이름"
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiNiNTM0YmEwZWUyOWVkMGEwOTY2MDQ1YTkyMDNjZjk2NTZhYTIyMGQ2ZjI2Yzk3MDI4YjUyZmNmNTY3OGM3YTAx.field.bmFtZQ.short_desc": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiM1MzM1ZjA1NGI5MTJjNGRmMTI0YTBlYTYyZTJkZWYyMDc2YThiYWJjZTNjN2Y0Y2U0NTY0MDIwMTdhNjk4ZDZm.field.bmFtZQ.short_desc": {
           "source": "Identifier",
           "message": "식별자"
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiNiNTM0YmEwZWUyOWVkMGEwOTY2MDQ1YTkyMDNjZjk2NTZhYTIyMGQ2ZjI2Yzk3MDI4YjUyZmNmNTY3OGM3YTAx.field.bmFtZQ.desc": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiM1MzM1ZjA1NGI5MTJjNGRmMTI0YTBlYTYyZTJkZWYyMDc2YThiYWJjZTNjN2Y0Y2U0NTY0MDIwMTdhNjk4ZDZm.field.bmFtZQ.desc": {
           "source": "Identifier. The resource name of the SchemaVersion. Format: `projects/{project}/locations/{location}/schemas/{schema}/schemaVersions/{schema_version}`",
           "message": "식별자. SchemaVersion의 리소스 이름입니다. 형식: `projects/{project}/locations/{location}/schemas/{schema}/schemaVersions/{schema_version}`"
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiNiNTM0YmEwZWUyOWVkMGEwOTY2MDQ1YTkyMDNjZjk2NTZhYTIyMGQ2ZjI2Yzk3MDI4YjUyZmNmNTY3OGM3YTAx.field.c2NoZW1h.display_name": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiM1MzM1ZjA1NGI5MTJjNGRmMTI0YTBlYTYyZTJkZWYyMDc2YThiYWJjZTNjN2Y0Y2U0NTY0MDIwMTdhNjk4ZDZm.field.c2NoZW1h.display_name": {
           "source": "Schema",
           "message": "스키마"
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiNiNTM0YmEwZWUyOWVkMGEwOTY2MDQ1YTkyMDNjZjk2NTZhYTIyMGQ2ZjI2Yzk3MDI4YjUyZmNmNTY3OGM3YTAx.field.c2NoZW1h.short_desc": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiM1MzM1ZjA1NGI5MTJjNGRmMTI0YTBlYTYyZTJkZWYyMDc2YThiYWJjZTNjN2Y0Y2U0NTY0MDIwMTdhNjk4ZDZm.field.c2NoZW1h.short_desc": {
           "source": "The schema of the SchemaVersion",
           "message": "SchemaVersion의 스키마"
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiNiNTM0YmEwZWUyOWVkMGEwOTY2MDQ1YTkyMDNjZjk2NTZhYTIyMGQ2ZjI2Yzk3MDI4YjUyZmNmNTY3OGM3YTAx.field.c2NoZW1h.desc": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiM1MzM1ZjA1NGI5MTJjNGRmMTI0YTBlYTYyZTJkZWYyMDc2YThiYWJjZTNjN2Y0Y2U0NTY0MDIwMTdhNjk4ZDZm.field.c2NoZW1h.desc": {
           "source": "The schema of the SchemaVersion.",
           "message": "SchemaVersion의 스키마입니다."
         },
@@ -11875,63 +11263,51 @@
           "source": "If set, this will skip the naming format validation in the schema. So the string values in `DocumentSchema.EntityType.name` and `DocumentSchema.EntityType.Property.name` will not be checked.",
           "message": "설정된 경우 스키마에서 명명 형식 유효성 검사를 건너뜁니다. 따라서 `DocumentSchema.EntityType.name` 및 `DocumentSchema.EntityType.Property.name`의 문자열 값은 확인되지 않습니다."
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzliZDk2ODg3NGQ0YWE4M2VkY2EyMTIxMDk0YTU1ZGM5ODAxMGNhOTM1YjM2Y2EyMGQ4ZmU4NjEyMjg3ZDMxZWM.field.Y3JlYXRlVGltZQ.display_name": {
-          "source": "Create Time",
-          "message": "시간 만들기"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzliZDk2ODg3NGQ0YWE4M2VkY2EyMTIxMDk0YTU1ZGM5ODAxMGNhOTM1YjM2Y2EyMGQ4ZmU4NjEyMjg3ZDMxZWM.field.Y3JlYXRlVGltZQ.short_desc": {
-          "source": "The time when the SchemaVersion was created",
-          "message": "SchemaVersion이 생성된 시간"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzliZDk2ODg3NGQ0YWE4M2VkY2EyMTIxMDk0YTU1ZGM5ODAxMGNhOTM1YjM2Y2EyMGQ4ZmU4NjEyMjg3ZDMxZWM.field.Y3JlYXRlVGltZQ.desc": {
-          "source": "The time when the SchemaVersion was created.",
-          "message": "SchemaVersion이 생성된 시간입니다."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzliZDk2ODg3NGQ0YWE4M2VkY2EyMTIxMDk0YTU1ZGM5ODAxMGNhOTM1YjM2Y2EyMGQ4ZmU4NjEyMjg3ZDMxZWM.field.ZGlzcGxheU5hbWU.display_name": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzc1ZjNiZjBjYzg2NjYzMzQ5M2NmYThiMmFlYmIyNGU1OWI4YTUxZDZlNWI4Mzk5MmMxMDQ1ZjA4MDhmODJhNzU.field.ZGlzcGxheU5hbWU.display_name": {
           "source": "Display Name",
           "message": "표시 이름"
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzliZDk2ODg3NGQ0YWE4M2VkY2EyMTIxMDk0YTU1ZGM5ODAxMGNhOTM1YjM2Y2EyMGQ4ZmU4NjEyMjg3ZDMxZWM.field.ZGlzcGxheU5hbWU.short_desc": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzc1ZjNiZjBjYzg2NjYzMzQ5M2NmYThiMmFlYmIyNGU1OWI4YTUxZDZlNWI4Mzk5MmMxMDQ1ZjA4MDhmODJhNzU.field.ZGlzcGxheU5hbWU.short_desc": {
           "source": "The user-defined name of the SchemaVersion",
           "message": "SchemaVersion의 사용자 정의 이름"
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzliZDk2ODg3NGQ0YWE4M2VkY2EyMTIxMDk0YTU1ZGM5ODAxMGNhOTM1YjM2Y2EyMGQ4ZmU4NjEyMjg3ZDMxZWM.field.ZGlzcGxheU5hbWU.desc": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzc1ZjNiZjBjYzg2NjYzMzQ5M2NmYThiMmFlYmIyNGU1OWI4YTUxZDZlNWI4Mzk5MmMxMDQ1ZjA4MDhmODJhNzU.field.ZGlzcGxheU5hbWU.desc": {
           "source": "The user-defined name of the SchemaVersion.",
           "message": "SchemaVersion의 사용자 정의 이름입니다."
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzliZDk2ODg3NGQ0YWE4M2VkY2EyMTIxMDk0YTU1ZGM5ODAxMGNhOTM1YjM2Y2EyMGQ4ZmU4NjEyMjg3ZDMxZWM.field.bGFiZWxz.display_name": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzc1ZjNiZjBjYzg2NjYzMzQ5M2NmYThiMmFlYmIyNGU1OWI4YTUxZDZlNWI4Mzk5MmMxMDQ1ZjA4MDhmODJhNzU.field.bGFiZWxz.display_name": {
           "source": "Labels",
           "message": "라벨"
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzliZDk2ODg3NGQ0YWE4M2VkY2EyMTIxMDk0YTU1ZGM5ODAxMGNhOTM1YjM2Y2EyMGQ4ZmU4NjEyMjg3ZDMxZWM.field.bGFiZWxz.short_desc": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzc1ZjNiZjBjYzg2NjYzMzQ5M2NmYThiMmFlYmIyNGU1OWI4YTUxZDZlNWI4Mzk5MmMxMDQ1ZjA4MDhmODJhNzU.field.bGFiZWxz.short_desc": {
           "source": "The {{gcp_name_short}} labels for the SchemaVersion",
           "message": "SchemaVersion의 {{gcp_name_short}} 라벨"
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzliZDk2ODg3NGQ0YWE4M2VkY2EyMTIxMDk0YTU1ZGM5ODAxMGNhOTM1YjM2Y2EyMGQ4ZmU4NjEyMjg3ZDMxZWM.field.bGFiZWxz.desc": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzc1ZjNiZjBjYzg2NjYzMzQ5M2NmYThiMmFlYmIyNGU1OWI4YTUxZDZlNWI4Mzk5MmMxMDQ1ZjA4MDhmODJhNzU.field.bGFiZWxz.desc": {
           "source": "The {{gcp_name_short}} labels for the SchemaVersion.",
           "message": "SchemaVersion의 {{gcp_name_short}} 라벨입니다."
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzliZDk2ODg3NGQ0YWE4M2VkY2EyMTIxMDk0YTU1ZGM5ODAxMGNhOTM1YjM2Y2EyMGQ4ZmU4NjEyMjg3ZDMxZWM.field.bmFtZQ.display_name": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzc1ZjNiZjBjYzg2NjYzMzQ5M2NmYThiMmFlYmIyNGU1OWI4YTUxZDZlNWI4Mzk5MmMxMDQ1ZjA4MDhmODJhNzU.field.bmFtZQ.display_name": {
           "source": "Name",
           "message": "이름"
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzliZDk2ODg3NGQ0YWE4M2VkY2EyMTIxMDk0YTU1ZGM5ODAxMGNhOTM1YjM2Y2EyMGQ4ZmU4NjEyMjg3ZDMxZWM.field.bmFtZQ.short_desc": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzc1ZjNiZjBjYzg2NjYzMzQ5M2NmYThiMmFlYmIyNGU1OWI4YTUxZDZlNWI4Mzk5MmMxMDQ1ZjA4MDhmODJhNzU.field.bmFtZQ.short_desc": {
           "source": "Identifier",
           "message": "식별자"
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzliZDk2ODg3NGQ0YWE4M2VkY2EyMTIxMDk0YTU1ZGM5ODAxMGNhOTM1YjM2Y2EyMGQ4ZmU4NjEyMjg3ZDMxZWM.field.bmFtZQ.desc": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzc1ZjNiZjBjYzg2NjYzMzQ5M2NmYThiMmFlYmIyNGU1OWI4YTUxZDZlNWI4Mzk5MmMxMDQ1ZjA4MDhmODJhNzU.field.bmFtZQ.desc": {
           "source": "Identifier. The resource name of the SchemaVersion. Format: `projects/{project}/locations/{location}/schemas/{schema}/schemaVersions/{schema_version}`",
           "message": "식별자. SchemaVersion의 리소스 이름입니다. 형식: `projects/{project}/locations/{location}/schemas/{schema}/schemaVersions/{schema_version}`"
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzliZDk2ODg3NGQ0YWE4M2VkY2EyMTIxMDk0YTU1ZGM5ODAxMGNhOTM1YjM2Y2EyMGQ4ZmU4NjEyMjg3ZDMxZWM.field.c2NoZW1h.display_name": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzc1ZjNiZjBjYzg2NjYzMzQ5M2NmYThiMmFlYmIyNGU1OWI4YTUxZDZlNWI4Mzk5MmMxMDQ1ZjA4MDhmODJhNzU.field.c2NoZW1h.display_name": {
           "source": "Schema",
           "message": "스키마"
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzliZDk2ODg3NGQ0YWE4M2VkY2EyMTIxMDk0YTU1ZGM5ODAxMGNhOTM1YjM2Y2EyMGQ4ZmU4NjEyMjg3ZDMxZWM.field.c2NoZW1h.short_desc": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzc1ZjNiZjBjYzg2NjYzMzQ5M2NmYThiMmFlYmIyNGU1OWI4YTUxZDZlNWI4Mzk5MmMxMDQ1ZjA4MDhmODJhNzU.field.c2NoZW1h.short_desc": {
           "source": "The schema of the SchemaVersion",
           "message": "SchemaVersion의 스키마"
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzliZDk2ODg3NGQ0YWE4M2VkY2EyMTIxMDk0YTU1ZGM5ODAxMGNhOTM1YjM2Y2EyMGQ4ZmU4NjEyMjg3ZDMxZWM.field.c2NoZW1h.desc": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzc1ZjNiZjBjYzg2NjYzMzQ5M2NmYThiMmFlYmIyNGU1OWI4YTUxZDZlNWI4Mzk5MmMxMDQ1ZjA4MDhmODJhNzU.field.c2NoZW1h.desc": {
           "source": "The schema of the SchemaVersion.",
           "message": "SchemaVersion의 스키마입니다."
         },

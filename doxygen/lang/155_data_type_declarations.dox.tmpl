@@ -1926,6 +1926,25 @@ typedef AliasInt = MyInt;
 typedef AnotherAlias = AliasInt;  # Still resolves to int
     @endcode
 
+    @par Type Resolution
+    The type of a typedef is resolved where the typedef is declared, as the types of classes and
+    @ref hashdecl "hashdecls" are: a name in the type refers to what it refers to in the namespace that declares the
+    typedef, wherever the typedef is used, and a module exports the resolved type of each of its public typedefs,
+    also when the module does not use them itself (an AOT module as well).  A typedef whose type cannot be resolved,
+    or that refers to itself, directly or through other typedefs, is a parse error of the Program that declares it,
+    also when the typedef is not used:
+    @code{.py}
+namespace Orders {
+    public class Item {
+    }
+    # Orders::ItemList is a list of Orders::Item wherever it is used, also where another class Item is visible
+    public typedef ItemList = list<Item>;
+}
+
+typedef Broken = NoSuchType;  # parse error: reference to undefined type 'NoSuchType'
+typedef Loop = list<Loop>;    # parse error: typedef 'Loop' refers to itself
+    @endcode
+
     @par Disabling typedef
     The \c typedef keyword can be disabled with:
     - Parse directive: \c %%no-typedef

@@ -10778,6 +10778,91 @@ static void ut_manager_new_connection_closed_before_reservation(UnitTestCounters
     xsink.clear();
 }
 
+// When the async I/O controller drives an HTTP client operation that follows a redirect, a callback worker acquires the
+// connection for the redirect target in a task, and the I/O thread takes the error of the acquisition from the request
+// state's sink.  That sink was counted as a sink of the thread that raised into it: the error stayed counted on the
+// worker, whose thread ended with an active exception at process exit (the assertion in q_run_thread()), and the I/O
+// thread's count went below zero when it handled the error.  The redirect target here is a port with no listener, and
+// qore_http_manager_new_connection_hook waits until its connect has failed, so that the error is raised in the task;
+// a thread whose count would go below zero now fails the assertion in inc_active_exceptions() at once.
+static void ut_async_redirect_task_error_counted_on_driving_thread(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    int dead_port = ut_reserve_closed_port();
+    if (dead_port <= 0) {
+        UT_ASSERT(c, false, "reserve a port with no listener");
+        return;
+    }
+    QoreProgram* pgm = new QoreProgram(PO_NO_CHILD_PO_RESTRICTIONS);
+    pgm->parse("%modern\n"
+        "string sub redirect_to_dead_port(int port) {\n"
+        "    HTTPClient hc({\"url\": \"http://127.0.0.1:\" + port, \"timeout\": 30s, \"connect_timeout\": 30s});\n"
+        "    # the async I/O thread drives the operation, and a callback worker acquires the redirect connection\n"
+        "    hash<SocketPollResultInfo> result = AsyncIoController::exec(<SocketPollOperationInfo>{\"sock\": hc,\n"
+        "        \"spop\": hc.startPollSendRecv(\"GET\", \"/\"), \"owner\": \"ut-async-redirect\", \"to\": 30s});\n"
+        "    return result.ex ? result.ex.desc : \"no error\";\n"
+        "}\n",
+        "async-redirect-task-error", &xsink, nullptr, 0);
+    UT_ASSERT(c, !xsink, "the redirect program parses");
+    if (xsink) {
+        xsink.handleExceptions();
+        pgm->waitForTerminationAndDeref(&xsink);
+        xsink.clear();
+        return;
+    }
+    UtH1Server server;
+    if (server.start() != 0) {
+        UT_ASSERT(c, false, "redirect server bind/listen failed");
+        pgm->waitForTerminationAndDeref(&xsink);
+        xsink.clear();
+        return;
+    }
+    server.serveOnce([dead_port](int cfd) {
+        char buf[4096];
+        if (ut_read_request_headers(cfd, buf, sizeof(buf)) <= 0) {
+            return;
+        }
+        char resp[256];
+        snprintf(resp, sizeof(resp), "HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1:%d/target\r\n"
+            "Content-Length: 0\r\n\r\n", dead_port);
+        send(cfd, resp, strlen(resp), 0);
+        // the client closes the connection when its operation ends
+        char b;
+        while (recv(cfd, &b, 1, 0) > 0) {
+        }
+    });
+
+    UT_ASSERT(c, !q_active_exception(), "no exception is active on this thread before the request");
+    {
+        ut_new_connection_hook_calls = 0;
+        qore_http_manager_new_connection_hook = ut_wait_for_connect_failure;
+        ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), &xsink);
+        args->push((int64)server.port, &xsink);
+        ValueHolder rv(pgm->callFunction("redirect_to_dead_port", *args, &xsink), &xsink);
+        qore_http_manager_new_connection_hook = nullptr;
+        UT_ASSERT(c, !xsink, "the redirect function runs");
+        UT_ASSERT_EQ(c, 2, ut_new_connection_hook_calls.load(),
+            "the request and its redirect create a connection each");
+        QoreStringValueHelper desc(*rv);
+        UT_ASSERT(c, strstr(desc->c_str(), "refused") != nullptr,
+            (std::string("the redirect gets the refused connect's error: ") + desc->c_str()).c_str());
+    }
+    // the server's thread is joined when the test returns: a request that never reached it would leave it in accept()
+    {
+        int fd = socket(AF_INET, SOCK_STREAM, 0);
+        if (fd >= 0) {
+            sockaddr_in addr{};
+            addr.sin_family = AF_INET;
+            addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+            addr.sin_port = htons(server.port);
+            ::connect(fd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+            ::close(fd);
+        }
+    }
+    xsink.clear();
+    pgm->waitForTerminationAndDeref(&xsink);
+    xsink.clear();
+}
+
 static void ut_manager_acquire_first_request(UnitTestCounters& c) {
     ExceptionSink xsink;
 
@@ -14083,6 +14168,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_manager_streaming_does_not_repeat_unsafe_requests(c);
     ut_manager_streaming_abandon_releases_connection(c);
     ut_manager_new_connection_closed_before_reservation(c);
+    ut_async_redirect_task_error_counted_on_driving_thread(c);
     ut_manager_abandon_h1_evicts_connection(c);
     ut_manager_abandon_multiplexed_keeps_connection(c);
     ut_manager_abandon_completed_request_is_a_no_op(c);
@@ -14331,6 +14417,33 @@ static QoreValue f_dbg_get_cancel_check_count(const QoreListNode* params, Runtim
     return q_get_cancel_check_count();
 }
 
+//! returns the number of times a cancellation request woke a registered wait of a thread (default: the current one)
+/** A wait that a request wakes through the thread's registered condition or wakeup channel is counted once per
+    request, so a test can verify which path ended a cancelled wait: a wait that only noticed the request at a
+    periodic check is not counted.
+*/
+static QoreValue f_dbg_get_cancel_wake_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreValue tid = get_param_value(params, 0);
+    return q_get_cancel_wake_count(tid.isNothing() ? -1 : static_cast<int>(tid.getAsBigInt()));
+}
+
+//! waits until a thread has registered a cancellable wait; returns False if it has not in the given time
+/** A test makes a cancellation request after this returns, so the request is delivered to the wait under test and
+    not to the code before it, without sleeping for an arbitrary time.
+*/
+static QoreValue f_dbg_cancel_in_cancellable_wait(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreStringNode* reason = get_param_value(params, 1).get<const QoreStringNode>();
+    return q_cancel_in_cancellable_wait(static_cast<int>(get_param_value(params, 0).getAsBigInt()), reason->c_str(),
+        get_param_value(params, 2).getAsBigInt());
+}
+
+static QoreValue f_dbg_wait_for_cancellable_wait(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return q_wait_for_cancellable_wait(static_cast<int>(get_param_value(params, 0).getAsBigInt()),
+        get_param_value(params, 1).getAsBigInt());
+}
+
 //! returns the size of the innermost running IR-interpreter frame's temp cleanup vector on the current thread
 /** A break or continue that leaves a temp scope without draining it used to leave a sentinel on this vector every
     time it executed, so the vector grew without bound in a long-running loop and every later cleanup scan got
@@ -14339,6 +14452,18 @@ static QoreValue f_dbg_get_cancel_check_count(const QoreListNode* params, Runtim
 */
 static QoreValue f_dbg_get_ir_cleanup_entries(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return q_get_ir_innermost_cleanup_entries();
+}
+
+//! returns the number of entries in the innermost running IR-interpreter frame's list of the locals it has instantiated
+/** The list used to grow by every local that a loop body instantiated in every iteration, and a continue that
+    uninstantiated a local the iteration had not instantiated scanned all of it, so each later iteration of a loop
+    in the same frame was slower than the one before; a test reads this inside such a loop to verify the list no
+    longer grows.  Returns 0 outside the IR interpreter (for example under \c --exec-mode=ast or in JIT/AOT native
+    code, which have no such list).
+*/
+static QoreValue f_dbg_get_ir_instantiated_local_entries(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return q_get_ir_innermost_instantiated_local_entries();
 }
 
 //! returns the number of recursive sets that scans in the current thread have created
@@ -15870,8 +15995,18 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_cancel_check_count", f_dbg_get_cancel_check_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_get_cancel_wake_count", f_dbg_get_cancel_wake_count, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo, 1, bigIntOrNothingTypeInfo, QORE_PARAM_NO_ARG, "tid");
+    qns.addBuiltinVariant("dbg_cancel_in_cancellable_wait", f_dbg_cancel_in_cancellable_wait, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 3, bigIntTypeInfo, QORE_PARAM_NO_ARG, "tid", stringTypeInfo,
+        QORE_PARAM_NO_ARG, "reason", bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_wait_for_cancellable_wait", f_dbg_wait_for_cancellable_wait, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "tid", bigIntTypeInfo,
+        QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_get_ir_cleanup_entries", f_dbg_get_ir_cleanup_entries, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_get_ir_instantiated_local_entries", f_dbg_get_ir_instantiated_local_entries,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_rset_create_count", f_dbg_get_rset_create_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_rset_restart_count", f_dbg_get_rset_restart_count, QCF_NO_FLAGS,

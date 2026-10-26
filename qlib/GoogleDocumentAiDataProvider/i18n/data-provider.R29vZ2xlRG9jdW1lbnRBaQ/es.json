@@ -2091,30 +2091,6 @@
           "source": "The processor version to be created.",
           "message": "La versión del procesador que se creará."
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.Y3JlYXRlVGltZQ.display_name": {
-          "source": "Create Time",
-          "message": "Crear tiempo"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.Y3JlYXRlVGltZQ.short_desc": {
-          "source": "The time the processor version was created",
-          "message": "La hora en que se creó la versión del procesador."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.Y3JlYXRlVGltZQ.desc": {
-          "source": "The time the processor version was created.",
-          "message": "La hora en que se creó la versión del procesador."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.ZGVwcmVjYXRpb25JbmZv.display_name": {
-          "source": "Deprecation Info",
-          "message": "Información de obsolescencia"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.ZGVwcmVjYXRpb25JbmZv.short_desc": {
-          "source": "If set, information about the eventual deprecation of this version",
-          "message": "Si está configurado, información sobre la eventual desaprobación de esta versión."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.ZGVwcmVjYXRpb25JbmZv.desc": {
-          "source": "If set, information about the eventual deprecation of this version.",
-          "message": "Si está configurado, información sobre la eventual desaprobación de esta versión."
-        },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.ZGlzcGxheU5hbWU.display_name": {
           "source": "Display Name",
           "message": "Nombre para mostrar"
@@ -2127,114 +2103,6 @@
           "source": "The display name of the processor version.",
           "message": "El nombre para mostrar de la versión del procesador."
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.ZG9jdW1lbnRTY2hlbWE.display_name": {
-          "source": "Document Schema",
-          "message": "Esquema del documento"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.ZG9jdW1lbnRTY2hlbWE.short_desc": {
-          "source": "The schema of the processor version",
-          "message": "El esquema de la versión del procesador."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.ZG9jdW1lbnRTY2hlbWE.desc": {
-          "source": "The schema of the processor version. Describes the output.",
-          "message": "El esquema de la versión del procesador. Describe la salida."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.Z2VuQWlNb2RlbEluZm8.display_name": {
-          "source": "Gen AI Model Info",
-          "message": "Información del modelo de IA de generación"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.Z2VuQWlNb2RlbEluZm8.short_desc": {
-          "source": "Information about Generative AI model-based processor versions",
-          "message": "Información sobre las versiones de procesadores basados en modelos de IA generativa"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.Z2VuQWlNb2RlbEluZm8.desc": {
-          "source": "Information about Generative AI model-based processor versions.",
-          "message": "Información sobre las versiones de procesadores basados en modelos de IA generativa."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.Z29vZ2xlTWFuYWdlZA.display_name": {
-          "source": "Google Managed",
-          "message": "Gestionado por Google"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.Z29vZ2xlTWFuYWdlZA.short_desc": {
-          "source": "Denotes that this 'ProcessorVersion' is managed by Google",
-          "message": "Indica que esta 'Versión del procesador' es administrada por Google"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.Z29vZ2xlTWFuYWdlZA.desc": {
-          "source": "Denotes that this `ProcessorVersion` is managed by Google.",
-          "message": "Indica que este `ProcessorVersion` está administrado por Google."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.a21zS2V5TmFtZQ.display_name": {
-          "source": "Kms Key Name",
-          "message": "Nombre de la clave de kilómetros"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.a21zS2V5TmFtZQ.short_desc": {
-          "source": "The KMS key name used for encryption",
-          "message": "El nombre de la clave KMS utilizada para el cifrado"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.a21zS2V5TmFtZQ.desc": {
-          "source": "The KMS key name used for encryption.",
-          "message": "El nombre de la clave KMS utilizada para el cifrado."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.a21zS2V5VmVyc2lvbk5hbWU.display_name": {
-          "source": "Kms Key Version Name",
-          "message": "Nombre de la versión de la clave Kms"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.a21zS2V5VmVyc2lvbk5hbWU.short_desc": {
-          "source": "The KMS key version with which data is encrypted",
-          "message": "La versión de la clave KMS con la que se cifran los datos"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.a21zS2V5VmVyc2lvbk5hbWU.desc": {
-          "source": "The KMS key version with which data is encrypted.",
-          "message": "La versión de la clave KMS con la que se cifran los datos."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.bGF0ZXN0RXZhbHVhdGlvbg.display_name": {
-          "source": "Latest Evaluation",
-          "message": "Última evaluación"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.bGF0ZXN0RXZhbHVhdGlvbg.short_desc": {
-          "source": "The most recently invoked evaluation for the processor version",
-          "message": "La evaluación invocada más recientemente para la versión del procesador."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.bGF0ZXN0RXZhbHVhdGlvbg.desc": {
-          "source": "The most recently invoked evaluation for the processor version.",
-          "message": "La evaluación invocada más recientemente para la versión del procesador."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.bW9kZWxUeXBl.display_name": {
-          "source": "Model Type",
-          "message": "Tipo de modelo"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.bW9kZWxUeXBl.short_desc": {
-          "source": "The model type of this processor version",
-          "message": "El tipo de modelo de esta versión de procesador."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.bW9kZWxUeXBl.desc": {
-          "source": "The model type of this processor version.",
-          "message": "El tipo de modelo de esta versión de procesador."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.bW9kZWxUeXBl.allowed-value.c3RyaW5nOk1PREVMX1RZUEVfVU5TUEVDSUZJRUQ.display_name": {
-          "source": "Model Type Unspecified",
-          "message": "Tipo de modelo Sin especificar"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.bW9kZWxUeXBl.allowed-value.c3RyaW5nOk1PREVMX1RZUEVfVU5TUEVDSUZJRUQ.desc": {
-          "source": "The processor version has unspecified model type.",
-          "message": "La versión del procesador tiene un tipo de modelo no especificado."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.bW9kZWxUeXBl.allowed-value.c3RyaW5nOk1PREVMX1RZUEVfR0VORVJBVElWRQ.display_name": {
-          "source": "Model Type Generative",
-          "message": "Tipo de modelo generativo"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.bW9kZWxUeXBl.allowed-value.c3RyaW5nOk1PREVMX1RZUEVfR0VORVJBVElWRQ.desc": {
-          "source": "The processor version has generative model type.",
-          "message": "La versión del procesador tiene un tipo de modelo generativo."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.bW9kZWxUeXBl.allowed-value.c3RyaW5nOk1PREVMX1RZUEVfQ1VTVE9N.display_name": {
-          "source": "Model Type Custom",
-          "message": "Tipo de modelo personalizado"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.bW9kZWxUeXBl.allowed-value.c3RyaW5nOk1PREVMX1RZUEVfQ1VTVE9N.desc": {
-          "source": "The processor version has custom model type.",
-          "message": "La versión del procesador tiene un tipo de modelo personalizado."
-        },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.bmFtZQ.display_name": {
           "source": "Name",
           "message": "Nombre"
@@ -2246,114 +2114,6 @@
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.bmFtZQ.desc": {
           "source": "Identifier. The resource name of the processor version. Format: `projects/{project}/locations/{location}/processors/{processor}/processorVersions/{processor_version}`",
           "message": "Identificador. El nombre del recurso de la versión del procesador. Formato: `projects/{project}/locations/{location}/processors/{processor}/processorVersions/{processor_version}`"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c2F0aXNmaWVzUHpp.display_name": {
-          "source": "Satisfies Pzi",
-          "message": "Satisface Pzi"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c2F0aXNmaWVzUHpp.short_desc": {
-          "source": "Reserved for future use",
-          "message": "Reservado para uso futuro"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c2F0aXNmaWVzUHpp.desc": {
-          "source": "Reserved for future use.",
-          "message": "Reservado para uso futuro."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c2F0aXNmaWVzUHpz.display_name": {
-          "source": "Satisfies Pzs",
-          "message": "Satisface Pzs"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c2F0aXNmaWVzUHpz.short_desc": {
-          "source": "Reserved for future use",
-          "message": "Reservado para uso futuro"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c2F0aXNmaWVzUHpz.desc": {
-          "source": "Reserved for future use.",
-          "message": "Reservado para uso futuro."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c3RhdGU.display_name": {
-          "source": "State",
-          "message": "Estado"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c3RhdGU.short_desc": {
-          "source": "The state of the processor version",
-          "message": "El estado de la versión del procesador."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c3RhdGU.desc": {
-          "source": "The state of the processor version.",
-          "message": "El estado de la versión del procesador."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c3RhdGU.allowed-value.c3RyaW5nOlNUQVRFX1VOU1BFQ0lGSUVE.display_name": {
-          "source": "State Unspecified",
-          "message": "Estado no especificado"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c3RhdGU.allowed-value.c3RyaW5nOlNUQVRFX1VOU1BFQ0lGSUVE.desc": {
-          "source": "The processor version is in an unspecified state.",
-          "message": "La versión del procesador se encuentra en un estado no especificado."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c3RhdGU.allowed-value.c3RyaW5nOkRFUExPWUVE.display_name": {
-          "source": "Deployed",
-          "message": "Implementado"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c3RhdGU.allowed-value.c3RyaW5nOkRFUExPWUVE.desc": {
-          "source": "The processor version is deployed and can be used for processing.",
-          "message": "La versión del procesador está implementada y se puede utilizar para el procesamiento."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c3RhdGU.allowed-value.c3RyaW5nOkRFUExPWUlORw.display_name": {
-          "source": "Deploying",
-          "message": "Implementando"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c3RhdGU.allowed-value.c3RyaW5nOkRFUExPWUlORw.desc": {
-          "source": "The processor version is being deployed.",
-          "message": "Se está implementando la versión del procesador."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c3RhdGU.allowed-value.c3RyaW5nOlVOREVQTE9ZRUQ.display_name": {
-          "source": "Undeployed",
-          "message": "No desplegado"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c3RhdGU.allowed-value.c3RyaW5nOlVOREVQTE9ZRUQ.desc": {
-          "source": "The processor version is not deployed and cannot be used for processing.",
-          "message": "La versión del procesador no está implementada y no se puede utilizar para el procesamiento."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c3RhdGU.allowed-value.c3RyaW5nOlVOREVQTE9ZSU5H.display_name": {
-          "source": "Undeploying",
-          "message": "Despliegue"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c3RhdGU.allowed-value.c3RyaW5nOlVOREVQTE9ZSU5H.desc": {
-          "source": "The processor version is being undeployed.",
-          "message": "Se está anulando la implementación de la versión del procesador."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c3RhdGU.allowed-value.c3RyaW5nOkNSRUFUSU5H.display_name": {
-          "source": "Creating",
-          "message": "Creando"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c3RhdGU.allowed-value.c3RyaW5nOkNSRUFUSU5H.desc": {
-          "source": "The processor version is being created.",
-          "message": "Se está creando la versión del procesador."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c3RhdGU.allowed-value.c3RyaW5nOkRFTEVUSU5H.display_name": {
-          "source": "Deleting",
-          "message": "Eliminando"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c3RhdGU.allowed-value.c3RyaW5nOkRFTEVUSU5H.desc": {
-          "source": "The processor version is being deleted.",
-          "message": "Se está eliminando la versión del procesador."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c3RhdGU.allowed-value.c3RyaW5nOkZBSUxFRA.display_name": {
-          "source": "Failed",
-          "message": "Fallido"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c3RhdGU.allowed-value.c3RyaW5nOkZBSUxFRA.desc": {
-          "source": "The processor version failed and is in an indeterminate state.",
-          "message": "La versión del procesador falló y se encuentra en un estado indeterminado."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c3RhdGU.allowed-value.c3RyaW5nOklNUE9SVElORw.display_name": {
-          "source": "Importing",
-          "message": "Importando"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.action.dHJhaW4tcHJvY2Vzc29yLXZlcnNpb24.option.cHJvY2Vzc29yVmVyc2lvbg.field.c3RhdGU.allowed-value.c3RyaW5nOklNUE9SVElORw.desc": {
-          "source": "The processor version is being imported.",
-          "message": "Se está importando la versión del procesador."
         },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.action.ZGVwbG95LXByb2Nlc3Nvci12ZXJzaW9u.display_name": {
           "source": "Deploy Processor Version",
@@ -11179,366 +10939,6 @@
           "source": "The URI prefix.",
           "message": "El prefijo URI."
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25EZXByZWNhdGlvbkluZm8jOTlkZDFlNzMxYzVkNDVkMmUwMTk3Njc4ZTVhOWYwNTcxNzJjYjc4MGZlY2FjMDg3ODRiZDIyZGJjNDhkMDI0Ng.field.ZGVwcmVjYXRpb25UaW1l.display_name": {
-          "source": "Deprecation Time",
-          "message": "Tiempo de desuso"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25EZXByZWNhdGlvbkluZm8jOTlkZDFlNzMxYzVkNDVkMmUwMTk3Njc4ZTVhOWYwNTcxNzJjYjc4MGZlY2FjMDg3ODRiZDIyZGJjNDhkMDI0Ng.field.ZGVwcmVjYXRpb25UaW1l.short_desc": {
-          "source": "The time at which this processor version will be deprecated",
-          "message": "El momento en el que esta versión del procesador quedará obsoleta"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25EZXByZWNhdGlvbkluZm8jOTlkZDFlNzMxYzVkNDVkMmUwMTk3Njc4ZTVhOWYwNTcxNzJjYjc4MGZlY2FjMDg3ODRiZDIyZGJjNDhkMDI0Ng.field.ZGVwcmVjYXRpb25UaW1l.desc": {
-          "source": "The time at which this processor version will be deprecated.",
-          "message": "El momento en el que esta versión del procesador quedará obsoleta."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25EZXByZWNhdGlvbkluZm8jOTlkZDFlNzMxYzVkNDVkMmUwMTk3Njc4ZTVhOWYwNTcxNzJjYjc4MGZlY2FjMDg3ODRiZDIyZGJjNDhkMDI0Ng.field.cmVwbGFjZW1lbnRQcm9jZXNzb3JWZXJzaW9u.display_name": {
-          "source": "Replacement Processor Version",
-          "message": "Versión de procesador de reemplazo"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25EZXByZWNhdGlvbkluZm8jOTlkZDFlNzMxYzVkNDVkMmUwMTk3Njc4ZTVhOWYwNTcxNzJjYjc4MGZlY2FjMDg3ODRiZDIyZGJjNDhkMDI0Ng.field.cmVwbGFjZW1lbnRQcm9jZXNzb3JWZXJzaW9u.short_desc": {
-          "source": "If set, the processor version that will be used as a replacement",
-          "message": "Si se establece, la versión del procesador que se utilizará como reemplazo"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25EZXByZWNhdGlvbkluZm8jOTlkZDFlNzMxYzVkNDVkMmUwMTk3Njc4ZTVhOWYwNTcxNzJjYjc4MGZlY2FjMDg3ODRiZDIyZGJjNDhkMDI0Ng.field.cmVwbGFjZW1lbnRQcm9jZXNzb3JWZXJzaW9u.desc": {
-          "source": "If set, the processor version that will be used as a replacement.",
-          "message": "Si está configurada, la versión del procesador que se utilizará como reemplazo."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMURvY3VtZW50U2NoZW1hIzE1NTg0ZDA1OTFmZWNjZmEzZDg2ZGNlZDgwY2Y0YmQzODc5ZmJmNGYwMGQzN2I1MTQ1ZjRhYTlhZWEyODI5OGM.field.ZGVzY3JpcHRpb24.display_name": {
-          "source": "Description",
-          "message": "Descripción"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMURvY3VtZW50U2NoZW1hIzE1NTg0ZDA1OTFmZWNjZmEzZDg2ZGNlZDgwY2Y0YmQzODc5ZmJmNGYwMGQzN2I1MTQ1ZjRhYTlhZWEyODI5OGM.field.ZGVzY3JpcHRpb24.short_desc": {
-          "source": "Description of the schema",
-          "message": "Descripción del esquema"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMURvY3VtZW50U2NoZW1hIzE1NTg0ZDA1OTFmZWNjZmEzZDg2ZGNlZDgwY2Y0YmQzODc5ZmJmNGYwMGQzN2I1MTQ1ZjRhYTlhZWEyODI5OGM.field.ZGVzY3JpcHRpb24.desc": {
-          "source": "Description of the schema.",
-          "message": "Descripción del esquema"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMURvY3VtZW50U2NoZW1hIzE1NTg0ZDA1OTFmZWNjZmEzZDg2ZGNlZDgwY2Y0YmQzODc5ZmJmNGYwMGQzN2I1MTQ1ZjRhYTlhZWEyODI5OGM.field.ZGlzcGxheU5hbWU.display_name": {
-          "source": "Display Name",
-          "message": "Nombre para mostrar"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMURvY3VtZW50U2NoZW1hIzE1NTg0ZDA1OTFmZWNjZmEzZDg2ZGNlZDgwY2Y0YmQzODc5ZmJmNGYwMGQzN2I1MTQ1ZjRhYTlhZWEyODI5OGM.field.ZGlzcGxheU5hbWU.short_desc": {
-          "source": "Display name to show users",
-          "message": "Nombre para mostrar para mostrar a los usuarios"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMURvY3VtZW50U2NoZW1hIzE1NTg0ZDA1OTFmZWNjZmEzZDg2ZGNlZDgwY2Y0YmQzODc5ZmJmNGYwMGQzN2I1MTQ1ZjRhYTlhZWEyODI5OGM.field.ZGlzcGxheU5hbWU.desc": {
-          "source": "Display name to show users.",
-          "message": "Nombre para mostrar para mostrar a los usuarios."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMURvY3VtZW50U2NoZW1hIzE1NTg0ZDA1OTFmZWNjZmEzZDg2ZGNlZDgwY2Y0YmQzODc5ZmJmNGYwMGQzN2I1MTQ1ZjRhYTlhZWEyODI5OGM.field.ZG9jdW1lbnRQcm9tcHQ.display_name": {
-          "source": "Document Prompt",
-          "message": "Solicitud de documento"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMURvY3VtZW50U2NoZW1hIzE1NTg0ZDA1OTFmZWNjZmEzZDg2ZGNlZDgwY2Y0YmQzODc5ZmJmNGYwMGQzN2I1MTQ1ZjRhYTlhZWEyODI5OGM.field.ZG9jdW1lbnRQcm9tcHQ.short_desc": {
-          "source": "Document-level prompt provided by the user",
-          "message": "Aviso a nivel de documento proporcionado por el usuario"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMURvY3VtZW50U2NoZW1hIzE1NTg0ZDA1OTFmZWNjZmEzZDg2ZGNlZDgwY2Y0YmQzODc5ZmJmNGYwMGQzN2I1MTQ1ZjRhYTlhZWEyODI5OGM.field.ZG9jdW1lbnRQcm9tcHQ.desc": {
-          "source": "Document-level prompt provided by the user. This custom text is injected into the AI model's prompt to provide extra, document-wide guidance for processing.",
-          "message": "Aviso a nivel de documento proporcionado por el usuario. Este texto personalizado se inyecta en el mensaje del modelo de IA para proporcionar una guía adicional para el procesamiento en todo el documento."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMURvY3VtZW50U2NoZW1hIzE1NTg0ZDA1OTFmZWNjZmEzZDg2ZGNlZDgwY2Y0YmQzODc5ZmJmNGYwMGQzN2I1MTQ1ZjRhYTlhZWEyODI5OGM.field.ZW50aXR5VHlwZXM.display_name": {
-          "source": "Entity Types",
-          "message": "Tipos de entidad"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMURvY3VtZW50U2NoZW1hIzE1NTg0ZDA1OTFmZWNjZmEzZDg2ZGNlZDgwY2Y0YmQzODc5ZmJmNGYwMGQzN2I1MTQ1ZjRhYTlhZWEyODI5OGM.field.ZW50aXR5VHlwZXM.short_desc": {
-          "source": "Entity types of the schema",
-          "message": "Tipos de entidad del esquema"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMURvY3VtZW50U2NoZW1hIzE1NTg0ZDA1OTFmZWNjZmEzZDg2ZGNlZDgwY2Y0YmQzODc5ZmJmNGYwMGQzN2I1MTQ1ZjRhYTlhZWEyODI5OGM.field.ZW50aXR5VHlwZXM.desc": {
-          "source": "Entity types of the schema.",
-          "message": "Tipos de entidad del esquema."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMURvY3VtZW50U2NoZW1hIzE1NTg0ZDA1OTFmZWNjZmEzZDg2ZGNlZDgwY2Y0YmQzODc5ZmJmNGYwMGQzN2I1MTQ1ZjRhYTlhZWEyODI5OGM.field.bWV0YWRhdGE.display_name": {
-          "source": "Metadata",
-          "message": "Metadatos"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMURvY3VtZW50U2NoZW1hIzE1NTg0ZDA1OTFmZWNjZmEzZDg2ZGNlZDgwY2Y0YmQzODc5ZmJmNGYwMGQzN2I1MTQ1ZjRhYTlhZWEyODI5OGM.field.bWV0YWRhdGE.short_desc": {
-          "source": "Metadata of the schema",
-          "message": "Metadatos del esquema"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMURvY3VtZW50U2NoZW1hIzE1NTg0ZDA1OTFmZWNjZmEzZDg2ZGNlZDgwY2Y0YmQzODc5ZmJmNGYwMGQzN2I1MTQ1ZjRhYTlhZWEyODI5OGM.field.bWV0YWRhdGE.desc": {
-          "source": "Metadata of the schema.",
-          "message": "Metadatos del esquema."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mbyNjNjEwNDc0MDk3NTdkMzEyMzdiMTM5NDQ2OTM1MGQyYjVjOWRiNjU5MGE0ZDY1NjRlODQ0YzBjNGM0OGU3ZWJl.field.Y3VzdG9tR2VuQWlNb2RlbEluZm8.display_name": {
-          "source": "Custom Gen AI Model Info",
-          "message": "Información del modelo de IA de generación personalizada"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mbyNjNjEwNDc0MDk3NTdkMzEyMzdiMTM5NDQ2OTM1MGQyYjVjOWRiNjU5MGE0ZDY1NjRlODQ0YzBjNGM0OGU3ZWJl.field.Y3VzdG9tR2VuQWlNb2RlbEluZm8.short_desc": {
-          "source": "Information for a custom Generative AI model created by the user",
-          "message": "Información para un modelo de IA generativa personalizado creado por el usuario"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mbyNjNjEwNDc0MDk3NTdkMzEyMzdiMTM5NDQ2OTM1MGQyYjVjOWRiNjU5MGE0ZDY1NjRlODQ0YzBjNGM0OGU3ZWJl.field.Y3VzdG9tR2VuQWlNb2RlbEluZm8.desc": {
-          "source": "Information for a custom Generative AI model created by the user.",
-          "message": "Información para un modelo de IA generativa personalizado creado por el usuario."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mb0N1c3RvbUdlbkFpTW9kZWxJbmZvI2QyYTFlNzJkZDRkNTY5NTAzNjIzYmY2ZDM2MjcxYTNhODgzY2FkOTEzZWZmZmFjOTlkYWEyODRmMDE5M2EzYTA.field.YmFzZVByb2Nlc3NvclZlcnNpb25JZA.display_name": {
-          "source": "Base Processor Version ID",
-          "message": "ID de versión del procesador base"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mb0N1c3RvbUdlbkFpTW9kZWxJbmZvI2QyYTFlNzJkZDRkNTY5NTAzNjIzYmY2ZDM2MjcxYTNhODgzY2FkOTEzZWZmZmFjOTlkYWEyODRmMDE5M2EzYTA.field.YmFzZVByb2Nlc3NvclZlcnNpb25JZA.short_desc": {
-          "source": "The base processor version ID for the custom model",
-          "message": "El ID de versión del procesador base para el modelo personalizado."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mb0N1c3RvbUdlbkFpTW9kZWxJbmZvI2QyYTFlNzJkZDRkNTY5NTAzNjIzYmY2ZDM2MjcxYTNhODgzY2FkOTEzZWZmZmFjOTlkYWEyODRmMDE5M2EzYTA.field.YmFzZVByb2Nlc3NvclZlcnNpb25JZA.desc": {
-          "source": "The base processor version ID for the custom model.",
-          "message": "El ID de versión del procesador base para el modelo personalizado."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mb0N1c3RvbUdlbkFpTW9kZWxJbmZvI2QyYTFlNzJkZDRkNTY5NTAzNjIzYmY2ZDM2MjcxYTNhODgzY2FkOTEzZWZmZmFjOTlkYWEyODRmMDE5M2EzYTA.field.Y3VzdG9tTW9kZWxUeXBl.display_name": {
-          "source": "Custom Model Type",
-          "message": "Tipo de modelo personalizado"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mb0N1c3RvbUdlbkFpTW9kZWxJbmZvI2QyYTFlNzJkZDRkNTY5NTAzNjIzYmY2ZDM2MjcxYTNhODgzY2FkOTEzZWZmZmFjOTlkYWEyODRmMDE5M2EzYTA.field.Y3VzdG9tTW9kZWxUeXBl.short_desc": {
-          "source": "The type of custom model created by the user",
-          "message": "El tipo de modelo personalizado creado por el usuario."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mb0N1c3RvbUdlbkFpTW9kZWxJbmZvI2QyYTFlNzJkZDRkNTY5NTAzNjIzYmY2ZDM2MjcxYTNhODgzY2FkOTEzZWZmZmFjOTlkYWEyODRmMDE5M2EzYTA.field.Y3VzdG9tTW9kZWxUeXBl.desc": {
-          "source": "The type of custom model created by the user.",
-          "message": "El tipo de modelo personalizado creado por el usuario."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mb0N1c3RvbUdlbkFpTW9kZWxJbmZvI2QyYTFlNzJkZDRkNTY5NTAzNjIzYmY2ZDM2MjcxYTNhODgzY2FkOTEzZWZmZmFjOTlkYWEyODRmMDE5M2EzYTA.field.Y3VzdG9tTW9kZWxUeXBl.allowed-value.c3RyaW5nOkNVU1RPTV9NT0RFTF9UWVBFX1VOU1BFQ0lGSUVE.display_name": {
-          "source": "Custom Model Type Unspecified",
-          "message": "Tipo de modelo personalizado sin especificar"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mb0N1c3RvbUdlbkFpTW9kZWxJbmZvI2QyYTFlNzJkZDRkNTY5NTAzNjIzYmY2ZDM2MjcxYTNhODgzY2FkOTEzZWZmZmFjOTlkYWEyODRmMDE5M2EzYTA.field.Y3VzdG9tTW9kZWxUeXBl.allowed-value.c3RyaW5nOkNVU1RPTV9NT0RFTF9UWVBFX1VOU1BFQ0lGSUVE.desc": {
-          "source": "The model type is unspecified.",
-          "message": "El tipo de modelo no está especificado."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mb0N1c3RvbUdlbkFpTW9kZWxJbmZvI2QyYTFlNzJkZDRkNTY5NTAzNjIzYmY2ZDM2MjcxYTNhODgzY2FkOTEzZWZmZmFjOTlkYWEyODRmMDE5M2EzYTA.field.Y3VzdG9tTW9kZWxUeXBl.allowed-value.c3RyaW5nOlZFUlNJT05FRF9GT1VOREFUSU9O.display_name": {
-          "source": "Versioned Foundation",
-          "message": "Fundación versionada"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mb0N1c3RvbUdlbkFpTW9kZWxJbmZvI2QyYTFlNzJkZDRkNTY5NTAzNjIzYmY2ZDM2MjcxYTNhODgzY2FkOTEzZWZmZmFjOTlkYWEyODRmMDE5M2EzYTA.field.Y3VzdG9tTW9kZWxUeXBl.allowed-value.c3RyaW5nOlZFUlNJT05FRF9GT1VOREFUSU9O.desc": {
-          "source": "The model is a versioned foundation model.",
-          "message": "El modelo es un modelo básico versionado."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mb0N1c3RvbUdlbkFpTW9kZWxJbmZvI2QyYTFlNzJkZDRkNTY5NTAzNjIzYmY2ZDM2MjcxYTNhODgzY2FkOTEzZWZmZmFjOTlkYWEyODRmMDE5M2EzYTA.field.Y3VzdG9tTW9kZWxUeXBl.allowed-value.c3RyaW5nOkZJTkVfVFVORUQ.display_name": {
-          "source": "Fine Tuned",
-          "message": "Afinado"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mb0N1c3RvbUdlbkFpTW9kZWxJbmZvI2QyYTFlNzJkZDRkNTY5NTAzNjIzYmY2ZDM2MjcxYTNhODgzY2FkOTEzZWZmZmFjOTlkYWEyODRmMDE5M2EzYTA.field.Y3VzdG9tTW9kZWxUeXBl.allowed-value.c3RyaW5nOkZJTkVfVFVORUQ.desc": {
-          "source": "The model is a finetuned foundation model.",
-          "message": "El modelo es un modelo básico ajustado."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mbyNjNjEwNDc0MDk3NTdkMzEyMzdiMTM5NDQ2OTM1MGQyYjVjOWRiNjU5MGE0ZDY1NjRlODQ0YzBjNGM0OGU3ZWJl.field.Zm91bmRhdGlvbkdlbkFpTW9kZWxJbmZv.display_name": {
-          "source": "Foundation Gen AI Model Info",
-          "message": "Información del modelo Foundation Gen AI"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mbyNjNjEwNDc0MDk3NTdkMzEyMzdiMTM5NDQ2OTM1MGQyYjVjOWRiNjU5MGE0ZDY1NjRlODQ0YzBjNGM0OGU3ZWJl.field.Zm91bmRhdGlvbkdlbkFpTW9kZWxJbmZv.short_desc": {
-          "source": "Information for a pretrained Google-managed foundation model",
-          "message": "Información para un modelo básico previamente entrenado y administrado por Google"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mbyNjNjEwNDc0MDk3NTdkMzEyMzdiMTM5NDQ2OTM1MGQyYjVjOWRiNjU5MGE0ZDY1NjRlODQ0YzBjNGM0OGU3ZWJl.field.Zm91bmRhdGlvbkdlbkFpTW9kZWxJbmZv.desc": {
-          "source": "Information for a pretrained Google-managed foundation model.",
-          "message": "Información para un modelo básico previamente entrenado y administrado por Google."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mb0ZvdW5kYXRpb25HZW5BaU1vZGVsSW5mbyNiNDUwNTMyOGEyZjZlMTY3NDhlNGE5MWQyMTI1NGMzMTcxMWM2Y2YzNTE4NzQwMWYxNzgzOGM1YWZlNzA0NTg3.field.ZmluZXR1bmluZ0FsbG93ZWQ.display_name": {
-          "source": "Finetuning Allowed",
-          "message": "Ajuste permitido"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mb0ZvdW5kYXRpb25HZW5BaU1vZGVsSW5mbyNiNDUwNTMyOGEyZjZlMTY3NDhlNGE5MWQyMTI1NGMzMTcxMWM2Y2YzNTE4NzQwMWYxNzgzOGM1YWZlNzA0NTg3.field.ZmluZXR1bmluZ0FsbG93ZWQ.short_desc": {
-          "source": "Whether fine tuning is allowed for this base processor version",
-          "message": "Si se permite realizar ajustes finos para esta versión del procesador base"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mb0ZvdW5kYXRpb25HZW5BaU1vZGVsSW5mbyNiNDUwNTMyOGEyZjZlMTY3NDhlNGE5MWQyMTI1NGMzMTcxMWM2Y2YzNTE4NzQwMWYxNzgzOGM1YWZlNzA0NTg3.field.ZmluZXR1bmluZ0FsbG93ZWQ.desc": {
-          "source": "Whether fine tuning is allowed for this base processor version.",
-          "message": "Si se permite realizar ajustes finos para esta versión del procesador base."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mb0ZvdW5kYXRpb25HZW5BaU1vZGVsSW5mbyNiNDUwNTMyOGEyZjZlMTY3NDhlNGE5MWQyMTI1NGMzMTcxMWM2Y2YzNTE4NzQwMWYxNzgzOGM1YWZlNzA0NTg3.field.bWluVHJhaW5MYWJlbGVkRG9jdW1lbnRz.display_name": {
-          "source": "Min Train Labeled Documents",
-          "message": "Documentos etiquetados de tren mínimo"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mb0ZvdW5kYXRpb25HZW5BaU1vZGVsSW5mbyNiNDUwNTMyOGEyZjZlMTY3NDhlNGE5MWQyMTI1NGMzMTcxMWM2Y2YzNTE4NzQwMWYxNzgzOGM1YWZlNzA0NTg3.field.bWluVHJhaW5MYWJlbGVkRG9jdW1lbnRz.short_desc": {
-          "source": "The minimum number of labeled documents in the training dataset required for…",
-          "message": "La cantidad mínima de documentos etiquetados en el conjunto de datos de capacitación necesarios para..."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMVByb2Nlc3NvclZlcnNpb25HZW5BaU1vZGVsSW5mb0ZvdW5kYXRpb25HZW5BaU1vZGVsSW5mbyNiNDUwNTMyOGEyZjZlMTY3NDhlNGE5MWQyMTI1NGMzMTcxMWM2Y2YzNTE4NzQwMWYxNzgzOGM1YWZlNzA0NTg3.field.bWluVHJhaW5MYWJlbGVkRG9jdW1lbnRz.desc": {
-          "source": "The minimum number of labeled documents in the training dataset required for fine tuning.",
-          "message": "La cantidad mínima de documentos etiquetados en el conjunto de datos de entrenamiento necesarios para el ajuste fino."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25SZWZlcmVuY2UjZGZlNmUxZDkxNjAyNmE5YTZiZTU0NjU3MTMyYzJlYjcwNDAzZGMyNmJiMDgwODQ5NTg3ZGMyNGE1NTMzYmI4Ng.field.YWdncmVnYXRlTWV0cmljcw.display_name": {
-          "source": "Aggregate Metrics",
-          "message": "Métricas agregadas"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25SZWZlcmVuY2UjZGZlNmUxZDkxNjAyNmE5YTZiZTU0NjU3MTMyYzJlYjcwNDAzZGMyNmJiMDgwODQ5NTg3ZGMyNGE1NTMzYmI4Ng.field.YWdncmVnYXRlTWV0cmljcw.short_desc": {
-          "source": "An aggregate of the statistics for the evaluation with fuzzy matching on",
-          "message": "Un agregado de las estadísticas para la evaluación con concordancia difusa en"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25SZWZlcmVuY2UjZGZlNmUxZDkxNjAyNmE5YTZiZTU0NjU3MTMyYzJlYjcwNDAzZGMyNmJiMDgwODQ5NTg3ZGMyNGE1NTMzYmI4Ng.field.YWdncmVnYXRlTWV0cmljcw.desc": {
-          "source": "An aggregate of the statistics for the evaluation with fuzzy matching on.",
-          "message": "Un agregado de las estadísticas para la evaluación con coincidencia difusa activada."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.ZjFTY29yZQ.display_name": {
-          "source": "F1Score",
-          "message": "Puntuación F1"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.ZjFTY29yZQ.short_desc": {
-          "source": "The calculated F1 score",
-          "message": "La puntuación F1 calculada"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.ZjFTY29yZQ.desc": {
-          "source": "The calculated F1 score.",
-          "message": "La puntuación F1 calculada."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.ZmFsc2VOZWdhdGl2ZXNDb3VudA.display_name": {
-          "source": "False Negatives Count",
-          "message": "False Recuento de negativos"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.ZmFsc2VOZWdhdGl2ZXNDb3VudA.short_desc": {
-          "source": "The amount of false negatives",
-          "message": "La cantidad de falsos negativos"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.ZmFsc2VOZWdhdGl2ZXNDb3VudA.desc": {
-          "source": "The amount of false negatives.",
-          "message": "La cantidad de falsos negativos."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.ZmFsc2VQb3NpdGl2ZXNDb3VudA.display_name": {
-          "source": "False Positives Count",
-          "message": "False Recuento de positivos"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.ZmFsc2VQb3NpdGl2ZXNDb3VudA.short_desc": {
-          "source": "The amount of false positives",
-          "message": "La cantidad de falsos positivos"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.ZmFsc2VQb3NpdGl2ZXNDb3VudA.desc": {
-          "source": "The amount of false positives.",
-          "message": "La cantidad de falsos positivos."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.Z3JvdW5kVHJ1dGhEb2N1bWVudENvdW50.display_name": {
-          "source": "Ground Truth Document Count",
-          "message": "Recuento de documentos de verdad sobre el terreno"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.Z3JvdW5kVHJ1dGhEb2N1bWVudENvdW50.short_desc": {
-          "source": "The amount of documents with a ground truth occurrence",
-          "message": "La cantidad de documentos con una ocurrencia de verdad sobre el terreno."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.Z3JvdW5kVHJ1dGhEb2N1bWVudENvdW50.desc": {
-          "source": "The amount of documents with a ground truth occurrence.",
-          "message": "La cantidad de documentos con una ocurrencia de verdad sobre el terreno."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.Z3JvdW5kVHJ1dGhPY2N1cnJlbmNlc0NvdW50.display_name": {
-          "source": "Ground Truth Occurrences Count",
-          "message": "Recuento de sucesos reales sobre el terreno"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.Z3JvdW5kVHJ1dGhPY2N1cnJlbmNlc0NvdW50.short_desc": {
-          "source": "The amount of occurrences in ground truth documents",
-          "message": "La cantidad de ocurrencias en documentos de verdad sobre el terreno."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.Z3JvdW5kVHJ1dGhPY2N1cnJlbmNlc0NvdW50.desc": {
-          "source": "The amount of occurrences in ground truth documents.",
-          "message": "La cantidad de ocurrencias en documentos de verdad sobre el terreno."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.cHJlY2lzaW9u.display_name": {
-          "source": "Precision",
-          "message": "Precisión"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.cHJlY2lzaW9u.short_desc": {
-          "source": "The calculated precision",
-          "message": "La precisión calculada"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.cHJlY2lzaW9u.desc": {
-          "source": "The calculated precision.",
-          "message": "La precisión calculada."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.cHJlZGljdGVkRG9jdW1lbnRDb3VudA.display_name": {
-          "source": "Predicted Document Count",
-          "message": "Recuento de documentos previsto"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.cHJlZGljdGVkRG9jdW1lbnRDb3VudA.short_desc": {
-          "source": "The amount of documents with a predicted occurrence",
-          "message": "La cantidad de documentos con una ocurrencia prevista."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.cHJlZGljdGVkRG9jdW1lbnRDb3VudA.desc": {
-          "source": "The amount of documents with a predicted occurrence.",
-          "message": "La cantidad de documentos con una ocurrencia prevista."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.cHJlZGljdGVkT2NjdXJyZW5jZXNDb3VudA.display_name": {
-          "source": "Predicted Occurrences Count",
-          "message": "Recuento de sucesos previstos"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.cHJlZGljdGVkT2NjdXJyZW5jZXNDb3VudA.short_desc": {
-          "source": "The amount of occurrences in predicted documents",
-          "message": "La cantidad de ocurrencias en los documentos previstos."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.cHJlZGljdGVkT2NjdXJyZW5jZXNDb3VudA.desc": {
-          "source": "The amount of occurrences in predicted documents.",
-          "message": "La cantidad de ocurrencias en los documentos previstos."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.cmVjYWxs.display_name": {
-          "source": "Recall",
-          "message": "recordar"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.cmVjYWxs.short_desc": {
-          "source": "The calculated recall",
-          "message": "El retiro calculado"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.cmVjYWxs.desc": {
-          "source": "The calculated recall.",
-          "message": "El retiro calculado."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.dG90YWxEb2N1bWVudHNDb3VudA.display_name": {
-          "source": "Total Documents Count",
-          "message": "Recuento total de documentos"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.dG90YWxEb2N1bWVudHNDb3VudA.short_desc": {
-          "source": "The amount of documents that had an occurrence of this label",
-          "message": "La cantidad de documentos que tuvieron una aparición de esta etiqueta."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.dG90YWxEb2N1bWVudHNDb3VudA.desc": {
-          "source": "The amount of documents that had an occurrence of this label.",
-          "message": "La cantidad de documentos que tuvieron una aparición de esta etiqueta."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.dHJ1ZVBvc2l0aXZlc0NvdW50.display_name": {
-          "source": "True Positives Count",
-          "message": "True Recuento de positivos"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.dHJ1ZVBvc2l0aXZlc0NvdW50.short_desc": {
-          "source": "The amount of true positives",
-          "message": "La cantidad de verdaderos positivos."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25NZXRyaWNzIzY2ZTAyOWQ4MzdjNWYwM2UwMjZiNDU3OGFiMjJkMDlhYmQyN2FmOTliNGE3ZWFhZjFiMzAzZTU5ZDgzNzY3ZmY.field.dHJ1ZVBvc2l0aXZlc0NvdW50.desc": {
-          "source": "The amount of true positives.",
-          "message": "La cantidad de verdaderos positivos."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25SZWZlcmVuY2UjZGZlNmUxZDkxNjAyNmE5YTZiZTU0NjU3MTMyYzJlYjcwNDAzZGMyNmJiMDgwODQ5NTg3ZGMyNGE1NTMzYmI4Ng.field.YWdncmVnYXRlTWV0cmljc0V4YWN0.display_name": {
-          "source": "Aggregate Metrics Exact",
-          "message": "Métricas agregadas exactas"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25SZWZlcmVuY2UjZGZlNmUxZDkxNjAyNmE5YTZiZTU0NjU3MTMyYzJlYjcwNDAzZGMyNmJiMDgwODQ5NTg3ZGMyNGE1NTMzYmI4Ng.field.YWdncmVnYXRlTWV0cmljc0V4YWN0.short_desc": {
-          "source": "An aggregate of the statistics for the evaluation with fuzzy matching off",
-          "message": "Un agregado de las estadísticas para la evaluación con emparejamiento difuso."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25SZWZlcmVuY2UjZGZlNmUxZDkxNjAyNmE5YTZiZTU0NjU3MTMyYzJlYjcwNDAzZGMyNmJiMDgwODQ5NTg3ZGMyNGE1NTMzYmI4Ng.field.YWdncmVnYXRlTWV0cmljc0V4YWN0.desc": {
-          "source": "An aggregate of the statistics for the evaluation with fuzzy matching off.",
-          "message": "Un agregado de las estadísticas para la evaluación con emparejamiento difuso."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25SZWZlcmVuY2UjZGZlNmUxZDkxNjAyNmE5YTZiZTU0NjU3MTMyYzJlYjcwNDAzZGMyNmJiMDgwODQ5NTg3ZGMyNGE1NTMzYmI4Ng.field.ZXZhbHVhdGlvbg.display_name": {
-          "source": "Evaluation",
-          "message": "Evaluación"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25SZWZlcmVuY2UjZGZlNmUxZDkxNjAyNmE5YTZiZTU0NjU3MTMyYzJlYjcwNDAzZGMyNmJiMDgwODQ5NTg3ZGMyNGE1NTMzYmI4Ng.field.ZXZhbHVhdGlvbg.short_desc": {
-          "source": "The resource name of the evaluation",
-          "message": "El nombre del recurso de la evaluación."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25SZWZlcmVuY2UjZGZlNmUxZDkxNjAyNmE5YTZiZTU0NjU3MTMyYzJlYjcwNDAzZGMyNmJiMDgwODQ5NTg3ZGMyNGE1NTMzYmI4Ng.field.ZXZhbHVhdGlvbg.desc": {
-          "source": "The resource name of the evaluation.",
-          "message": "El nombre del recurso de la evaluación."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25SZWZlcmVuY2UjZGZlNmUxZDkxNjAyNmE5YTZiZTU0NjU3MTMyYzJlYjcwNDAzZGMyNmJiMDgwODQ5NTg3ZGMyNGE1NTMzYmI4Ng.field.b3BlcmF0aW9u.display_name": {
-          "source": "Operation",
-          "message": "Operación"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25SZWZlcmVuY2UjZGZlNmUxZDkxNjAyNmE5YTZiZTU0NjU3MTMyYzJlYjcwNDAzZGMyNmJiMDgwODQ5NTg3ZGMyNGE1NTMzYmI4Ng.field.b3BlcmF0aW9u.short_desc": {
-          "source": "The resource name of the Long Running Operation for the evaluation",
-          "message": "El nombre del recurso de la operación de larga duración para la evaluación."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOmRISmhhVzR0Y0hKdlkyVnpjMjl5TFhabGNuTnBiMjQ6SGFzaERhdGFUeXBlOipHb29nbGVDbG91ZERvY3VtZW50YWlWMUV2YWx1YXRpb25SZWZlcmVuY2UjZGZlNmUxZDkxNjAyNmE5YTZiZTU0NjU3MTMyYzJlYjcwNDAzZGMyNmJiMDgwODQ5NTg3ZGMyNGE1NTMzYmI4Ng.field.b3BlcmF0aW9u.desc": {
-          "source": "The resource name of the Long Running Operation for the evaluation.",
-          "message": "El nombre del recurso de la operación de larga duración para la evaluación."
-        },
         "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOlpYWmhiSFZoZEdVdGNISnZZMlZ6YzI5eUxYWmxjbk5wYjI0Okhhc2hEYXRhVHlwZToqR29vZ2xlQ2xvdWREb2N1bWVudGFpVjFHY3NEb2N1bWVudHMjZjhkNjBjNjc3Y2I5MWU3M2E4OWViNjY0ZDAxOWNlNzVjY2JjODBhZGQ2Yjg1MDExZDQzYTgxNjI1YzI4NDkxNA.field.ZG9jdW1lbnRz.display_name": {
           "source": "Documents",
           "message": "Documentos"
@@ -11695,63 +11095,51 @@
           "source": "Previous prompt-answers in a chronological order.",
           "message": "Respuestas previas en orden cronológico."
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiNiNTM0YmEwZWUyOWVkMGEwOTY2MDQ1YTkyMDNjZjk2NTZhYTIyMGQ2ZjI2Yzk3MDI4YjUyZmNmNTY3OGM3YTAx.field.Y3JlYXRlVGltZQ.display_name": {
-          "source": "Create Time",
-          "message": "Crear tiempo"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiNiNTM0YmEwZWUyOWVkMGEwOTY2MDQ1YTkyMDNjZjk2NTZhYTIyMGQ2ZjI2Yzk3MDI4YjUyZmNmNTY3OGM3YTAx.field.Y3JlYXRlVGltZQ.short_desc": {
-          "source": "The time when the SchemaVersion was created",
-          "message": "La hora en que se creó SchemaVersion"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiNiNTM0YmEwZWUyOWVkMGEwOTY2MDQ1YTkyMDNjZjk2NTZhYTIyMGQ2ZjI2Yzk3MDI4YjUyZmNmNTY3OGM3YTAx.field.Y3JlYXRlVGltZQ.desc": {
-          "source": "The time when the SchemaVersion was created.",
-          "message": "La hora en que se creó SchemaVersion."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiNiNTM0YmEwZWUyOWVkMGEwOTY2MDQ1YTkyMDNjZjk2NTZhYTIyMGQ2ZjI2Yzk3MDI4YjUyZmNmNTY3OGM3YTAx.field.ZGlzcGxheU5hbWU.display_name": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiM1MzM1ZjA1NGI5MTJjNGRmMTI0YTBlYTYyZTJkZWYyMDc2YThiYWJjZTNjN2Y0Y2U0NTY0MDIwMTdhNjk4ZDZm.field.ZGlzcGxheU5hbWU.display_name": {
           "source": "Display Name",
           "message": "Nombre para mostrar"
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiNiNTM0YmEwZWUyOWVkMGEwOTY2MDQ1YTkyMDNjZjk2NTZhYTIyMGQ2ZjI2Yzk3MDI4YjUyZmNmNTY3OGM3YTAx.field.ZGlzcGxheU5hbWU.short_desc": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiM1MzM1ZjA1NGI5MTJjNGRmMTI0YTBlYTYyZTJkZWYyMDc2YThiYWJjZTNjN2Y0Y2U0NTY0MDIwMTdhNjk4ZDZm.field.ZGlzcGxheU5hbWU.short_desc": {
           "source": "The user-defined name of the SchemaVersion",
           "message": "El nombre definido por el usuario de SchemaVersion."
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiNiNTM0YmEwZWUyOWVkMGEwOTY2MDQ1YTkyMDNjZjk2NTZhYTIyMGQ2ZjI2Yzk3MDI4YjUyZmNmNTY3OGM3YTAx.field.ZGlzcGxheU5hbWU.desc": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiM1MzM1ZjA1NGI5MTJjNGRmMTI0YTBlYTYyZTJkZWYyMDc2YThiYWJjZTNjN2Y0Y2U0NTY0MDIwMTdhNjk4ZDZm.field.ZGlzcGxheU5hbWU.desc": {
           "source": "The user-defined name of the SchemaVersion.",
           "message": "El nombre definido por el usuario de SchemaVersion."
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiNiNTM0YmEwZWUyOWVkMGEwOTY2MDQ1YTkyMDNjZjk2NTZhYTIyMGQ2ZjI2Yzk3MDI4YjUyZmNmNTY3OGM3YTAx.field.bGFiZWxz.display_name": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiM1MzM1ZjA1NGI5MTJjNGRmMTI0YTBlYTYyZTJkZWYyMDc2YThiYWJjZTNjN2Y0Y2U0NTY0MDIwMTdhNjk4ZDZm.field.bGFiZWxz.display_name": {
           "source": "Labels",
           "message": "Etiquetas"
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiNiNTM0YmEwZWUyOWVkMGEwOTY2MDQ1YTkyMDNjZjk2NTZhYTIyMGQ2ZjI2Yzk3MDI4YjUyZmNmNTY3OGM3YTAx.field.bGFiZWxz.short_desc": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiM1MzM1ZjA1NGI5MTJjNGRmMTI0YTBlYTYyZTJkZWYyMDc2YThiYWJjZTNjN2Y0Y2U0NTY0MDIwMTdhNjk4ZDZm.field.bGFiZWxz.short_desc": {
           "source": "The {{gcp_name_short}} labels for the SchemaVersion",
           "message": "Las etiquetas {{gcp_name_short}} para SchemaVersion"
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiNiNTM0YmEwZWUyOWVkMGEwOTY2MDQ1YTkyMDNjZjk2NTZhYTIyMGQ2ZjI2Yzk3MDI4YjUyZmNmNTY3OGM3YTAx.field.bGFiZWxz.desc": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiM1MzM1ZjA1NGI5MTJjNGRmMTI0YTBlYTYyZTJkZWYyMDc2YThiYWJjZTNjN2Y0Y2U0NTY0MDIwMTdhNjk4ZDZm.field.bGFiZWxz.desc": {
           "source": "The {{gcp_name_short}} labels for the SchemaVersion.",
           "message": "Las etiquetas {{gcp_name_short}} para SchemaVersion."
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiNiNTM0YmEwZWUyOWVkMGEwOTY2MDQ1YTkyMDNjZjk2NTZhYTIyMGQ2ZjI2Yzk3MDI4YjUyZmNmNTY3OGM3YTAx.field.bmFtZQ.display_name": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiM1MzM1ZjA1NGI5MTJjNGRmMTI0YTBlYTYyZTJkZWYyMDc2YThiYWJjZTNjN2Y0Y2U0NTY0MDIwMTdhNjk4ZDZm.field.bmFtZQ.display_name": {
           "source": "Name",
           "message": "Nombre"
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiNiNTM0YmEwZWUyOWVkMGEwOTY2MDQ1YTkyMDNjZjk2NTZhYTIyMGQ2ZjI2Yzk3MDI4YjUyZmNmNTY3OGM3YTAx.field.bmFtZQ.short_desc": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiM1MzM1ZjA1NGI5MTJjNGRmMTI0YTBlYTYyZTJkZWYyMDc2YThiYWJjZTNjN2Y0Y2U0NTY0MDIwMTdhNjk4ZDZm.field.bmFtZQ.short_desc": {
           "source": "Identifier",
           "message": "Identificador"
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiNiNTM0YmEwZWUyOWVkMGEwOTY2MDQ1YTkyMDNjZjk2NTZhYTIyMGQ2ZjI2Yzk3MDI4YjUyZmNmNTY3OGM3YTAx.field.bmFtZQ.desc": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiM1MzM1ZjA1NGI5MTJjNGRmMTI0YTBlYTYyZTJkZWYyMDc2YThiYWJjZTNjN2Y0Y2U0NTY0MDIwMTdhNjk4ZDZm.field.bmFtZQ.desc": {
           "source": "Identifier. The resource name of the SchemaVersion. Format: `projects/{project}/locations/{location}/schemas/{schema}/schemaVersions/{schema_version}`",
           "message": "Identificador. El nombre del recurso de SchemaVersion. Formato: `projects/{project}/locations/{location}/schemas/{schema}/schemaVersions/{schema_version}`"
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiNiNTM0YmEwZWUyOWVkMGEwOTY2MDQ1YTkyMDNjZjk2NTZhYTIyMGQ2ZjI2Yzk3MDI4YjUyZmNmNTY3OGM3YTAx.field.c2NoZW1h.display_name": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiM1MzM1ZjA1NGI5MTJjNGRmMTI0YTBlYTYyZTJkZWYyMDc2YThiYWJjZTNjN2Y0Y2U0NTY0MDIwMTdhNjk4ZDZm.field.c2NoZW1h.display_name": {
           "source": "Schema",
           "message": "esquema"
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiNiNTM0YmEwZWUyOWVkMGEwOTY2MDQ1YTkyMDNjZjk2NTZhYTIyMGQ2ZjI2Yzk3MDI4YjUyZmNmNTY3OGM3YTAx.field.c2NoZW1h.short_desc": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiM1MzM1ZjA1NGI5MTJjNGRmMTI0YTBlYTYyZTJkZWYyMDc2YThiYWJjZTNjN2Y0Y2U0NTY0MDIwMTdhNjk4ZDZm.field.c2NoZW1h.short_desc": {
           "source": "The schema of the SchemaVersion",
           "message": "El esquema de SchemaVersion"
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiNiNTM0YmEwZWUyOWVkMGEwOTY2MDQ1YTkyMDNjZjk2NTZhYTIyMGQ2ZjI2Yzk3MDI4YjUyZmNmNTY3OGM3YTAx.field.c2NoZW1h.desc": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kkdvb2dsZUNsb3VkRG9jdW1lbnRhaVYxU2NoZW1hVmVyc2lvbiM1MzM1ZjA1NGI5MTJjNGRmMTI0YTBlYTYyZTJkZWYyMDc2YThiYWJjZTNjN2Y0Y2U0NTY0MDIwMTdhNjk4ZDZm.field.c2NoZW1h.desc": {
           "source": "The schema of the SchemaVersion.",
           "message": "El esquema de SchemaVersion."
         },
@@ -11875,63 +11263,51 @@
           "source": "If set, this will skip the naming format validation in the schema. So the string values in `DocumentSchema.EntityType.name` and `DocumentSchema.EntityType.Property.name` will not be checked.",
           "message": "Si se establece, esto omitirá la validación del formato de nombre en el esquema. Por lo tanto, no se comprobarán los valores de cadena en `DocumentSchema.EntityType.name` y `DocumentSchema.EntityType.Property.name`."
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzliZDk2ODg3NGQ0YWE4M2VkY2EyMTIxMDk0YTU1ZGM5ODAxMGNhOTM1YjM2Y2EyMGQ4ZmU4NjEyMjg3ZDMxZWM.field.Y3JlYXRlVGltZQ.display_name": {
-          "source": "Create Time",
-          "message": "Crear tiempo"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzliZDk2ODg3NGQ0YWE4M2VkY2EyMTIxMDk0YTU1ZGM5ODAxMGNhOTM1YjM2Y2EyMGQ4ZmU4NjEyMjg3ZDMxZWM.field.Y3JlYXRlVGltZQ.short_desc": {
-          "source": "The time when the SchemaVersion was created",
-          "message": "La hora en que se creó SchemaVersion"
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzliZDk2ODg3NGQ0YWE4M2VkY2EyMTIxMDk0YTU1ZGM5ODAxMGNhOTM1YjM2Y2EyMGQ4ZmU4NjEyMjg3ZDMxZWM.field.Y3JlYXRlVGltZQ.desc": {
-          "source": "The time when the SchemaVersion was created.",
-          "message": "La hora en que se creó SchemaVersion."
-        },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzliZDk2ODg3NGQ0YWE4M2VkY2EyMTIxMDk0YTU1ZGM5ODAxMGNhOTM1YjM2Y2EyMGQ4ZmU4NjEyMjg3ZDMxZWM.field.ZGlzcGxheU5hbWU.display_name": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzc1ZjNiZjBjYzg2NjYzMzQ5M2NmYThiMmFlYmIyNGU1OWI4YTUxZDZlNWI4Mzk5MmMxMDQ1ZjA4MDhmODJhNzU.field.ZGlzcGxheU5hbWU.display_name": {
           "source": "Display Name",
           "message": "Nombre para mostrar"
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzliZDk2ODg3NGQ0YWE4M2VkY2EyMTIxMDk0YTU1ZGM5ODAxMGNhOTM1YjM2Y2EyMGQ4ZmU4NjEyMjg3ZDMxZWM.field.ZGlzcGxheU5hbWU.short_desc": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzc1ZjNiZjBjYzg2NjYzMzQ5M2NmYThiMmFlYmIyNGU1OWI4YTUxZDZlNWI4Mzk5MmMxMDQ1ZjA4MDhmODJhNzU.field.ZGlzcGxheU5hbWU.short_desc": {
           "source": "The user-defined name of the SchemaVersion",
           "message": "El nombre definido por el usuario de SchemaVersion."
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzliZDk2ODg3NGQ0YWE4M2VkY2EyMTIxMDk0YTU1ZGM5ODAxMGNhOTM1YjM2Y2EyMGQ4ZmU4NjEyMjg3ZDMxZWM.field.ZGlzcGxheU5hbWU.desc": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzc1ZjNiZjBjYzg2NjYzMzQ5M2NmYThiMmFlYmIyNGU1OWI4YTUxZDZlNWI4Mzk5MmMxMDQ1ZjA4MDhmODJhNzU.field.ZGlzcGxheU5hbWU.desc": {
           "source": "The user-defined name of the SchemaVersion.",
           "message": "El nombre definido por el usuario de SchemaVersion."
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzliZDk2ODg3NGQ0YWE4M2VkY2EyMTIxMDk0YTU1ZGM5ODAxMGNhOTM1YjM2Y2EyMGQ4ZmU4NjEyMjg3ZDMxZWM.field.bGFiZWxz.display_name": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzc1ZjNiZjBjYzg2NjYzMzQ5M2NmYThiMmFlYmIyNGU1OWI4YTUxZDZlNWI4Mzk5MmMxMDQ1ZjA4MDhmODJhNzU.field.bGFiZWxz.display_name": {
           "source": "Labels",
           "message": "Etiquetas"
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzliZDk2ODg3NGQ0YWE4M2VkY2EyMTIxMDk0YTU1ZGM5ODAxMGNhOTM1YjM2Y2EyMGQ4ZmU4NjEyMjg3ZDMxZWM.field.bGFiZWxz.short_desc": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzc1ZjNiZjBjYzg2NjYzMzQ5M2NmYThiMmFlYmIyNGU1OWI4YTUxZDZlNWI4Mzk5MmMxMDQ1ZjA4MDhmODJhNzU.field.bGFiZWxz.short_desc": {
           "source": "The {{gcp_name_short}} labels for the SchemaVersion",
           "message": "Las etiquetas {{gcp_name_short}} para SchemaVersion"
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzliZDk2ODg3NGQ0YWE4M2VkY2EyMTIxMDk0YTU1ZGM5ODAxMGNhOTM1YjM2Y2EyMGQ4ZmU4NjEyMjg3ZDMxZWM.field.bGFiZWxz.desc": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzc1ZjNiZjBjYzg2NjYzMzQ5M2NmYThiMmFlYmIyNGU1OWI4YTUxZDZlNWI4Mzk5MmMxMDQ1ZjA4MDhmODJhNzU.field.bGFiZWxz.desc": {
           "source": "The {{gcp_name_short}} labels for the SchemaVersion.",
           "message": "Las etiquetas {{gcp_name_short}} para SchemaVersion."
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzliZDk2ODg3NGQ0YWE4M2VkY2EyMTIxMDk0YTU1ZGM5ODAxMGNhOTM1YjM2Y2EyMGQ4ZmU4NjEyMjg3ZDMxZWM.field.bmFtZQ.display_name": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzc1ZjNiZjBjYzg2NjYzMzQ5M2NmYThiMmFlYmIyNGU1OWI4YTUxZDZlNWI4Mzk5MmMxMDQ1ZjA4MDhmODJhNzU.field.bmFtZQ.display_name": {
           "source": "Name",
           "message": "Nombre"
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzliZDk2ODg3NGQ0YWE4M2VkY2EyMTIxMDk0YTU1ZGM5ODAxMGNhOTM1YjM2Y2EyMGQ4ZmU4NjEyMjg3ZDMxZWM.field.bmFtZQ.short_desc": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzc1ZjNiZjBjYzg2NjYzMzQ5M2NmYThiMmFlYmIyNGU1OWI4YTUxZDZlNWI4Mzk5MmMxMDQ1ZjA4MDhmODJhNzU.field.bmFtZQ.short_desc": {
           "source": "Identifier",
           "message": "Identificador"
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzliZDk2ODg3NGQ0YWE4M2VkY2EyMTIxMDk0YTU1ZGM5ODAxMGNhOTM1YjM2Y2EyMGQ4ZmU4NjEyMjg3ZDMxZWM.field.bmFtZQ.desc": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzc1ZjNiZjBjYzg2NjYzMzQ5M2NmYThiMmFlYmIyNGU1OWI4YTUxZDZlNWI4Mzk5MmMxMDQ1ZjA4MDhmODJhNzU.field.bmFtZQ.desc": {
           "source": "Identifier. The resource name of the SchemaVersion. Format: `projects/{project}/locations/{location}/schemas/{schema}/schemaVersions/{schema_version}`",
           "message": "Identificador. El nombre del recurso de SchemaVersion. Formato: `projects/{project}/locations/{location}/schemas/{schema}/schemaVersions/{schema_version}`"
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzliZDk2ODg3NGQ0YWE4M2VkY2EyMTIxMDk0YTU1ZGM5ODAxMGNhOTM1YjM2Y2EyMGQ4ZmU4NjEyMjg3ZDMxZWM.field.c2NoZW1h.display_name": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzc1ZjNiZjBjYzg2NjYzMzQ5M2NmYThiMmFlYmIyNGU1OWI4YTUxZDZlNWI4Mzk5MmMxMDQ1ZjA4MDhmODJhNzU.field.c2NoZW1h.display_name": {
           "source": "Schema",
           "message": "esquema"
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzliZDk2ODg3NGQ0YWE4M2VkY2EyMTIxMDk0YTU1ZGM5ODAxMGNhOTM1YjM2Y2EyMGQ4ZmU4NjEyMjg3ZDMxZWM.field.c2NoZW1h.short_desc": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzc1ZjNiZjBjYzg2NjYzMzQ5M2NmYThiMmFlYmIyNGU1OWI4YTUxZDZlNWI4Mzk5MmMxMDQ1ZjA4MDhmODJhNzU.field.c2NoZW1h.short_desc": {
           "source": "The schema of the SchemaVersion",
           "message": "El esquema de SchemaVersion"
         },
-        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzliZDk2ODg3NGQ0YWE4M2VkY2EyMTIxMDk0YTU1ZGM5ODAxMGNhOTM1YjM2Y2EyMGQ4ZmU4NjEyMjg3ZDMxZWM.field.c2NoZW1h.desc": {
+        "app.R29vZ2xlRG9jdW1lbnRBaQ.type.YWN0aW9uOloyVnVaWEpoZEdVdGMyTm9aVzFoTFhabGNuTnBiMjQ6T3BlbkFwaTNIYXNoRGF0YVR5cGU6R29vZ2xlQ2xvdWREb2N1bWVudGFpVjFTY2hlbWFWZXJzaW9uIzc1ZjNiZjBjYzg2NjYzMzQ5M2NmYThiMmFlYmIyNGU1OWI4YTUxZDZlNWI4Mzk5MmMxMDQ1ZjA4MDhmODJhNzU.field.c2NoZW1h.desc": {
           "source": "The schema of the SchemaVersion.",
           "message": "El esquema de SchemaVersion."
         },

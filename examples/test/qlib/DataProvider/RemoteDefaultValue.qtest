@@ -1,0 +1,197 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/FsUtil.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ProviderIndex
+%requires ./RemoteDefaultFixture.qm
+
+%requires yaml
+
+%try-module msgpack
+%define NoMsgPack
+%endtry
+
+%exec-class RemoteDefaultValueTest
+
+#! A remote default value is shown, never applied, and survives every description of a field and an option
+public class RemoteDefaultValueTest inherits QUnit::Test {
+    constructor() : Test("Remote default values", "1.0", \ARGV) {
+        addTestCase("a remote default is described and never applied", \notAppliedTest());
+        addTestCase("a remote default is converted by the field type, or dropped", \conversionTest());
+        addTestCase("a remote default survives descriptions, type graphs and copies", \roundTripTest());
+        addTestCase("an action option has the remote default of its field", \optionTest());
+        addTestCase("an index restores remote defaults", \indexTest());
+        addTestCase("the routing digest changes when only a remote default changes", \digestTest());
+        set_return_value(main());
+    }
+
+    notAppliedTest() {
+        QoreDataField field({"name": "limit", "desc": "the page size", "type": IntOrNothingType,
+            "remote_default_value": 20});
+        assertEq(20, field.getRemoteDefaultValue());
+        assertEq(20, field.getInfo().remote_default_value);
+        assertEq(20, field.getLocalInfo().remote_default_value);
+        assertEq(20, field.getConfigInfo().remote_default_value);
+        # not the field's default, so nothing is pre-filled or sent
+        assertNothing(field.getDefaultValue());
+        assertNothing(field.getInfo().default_value);
+        assertNothing(field.acceptsValue(NOTHING));
+        HashDataType record("Page", {"limit": field});
+        assertEq({}, record.acceptsValue({}));
+        assertEq({"limit": 5}, record.acceptsValue({"limit": 5}));
+        # a value of its own is set separately and applied
+        field.setDefaultValue(10);
+        assertEq(10, field.getDefaultValue());
+        assertEq(20, field.getRemoteDefaultValue());
+        assertEq({"limit": 10}, record.acceptsValue({}));
+        # a mandatory field with a remote default still needs a value
+        QoreDataField mandatory({"name": "id", "type": IntType, "remote_default_value": 1});
+        assertThrows("RUNTIME-TYPE-ERROR", \mandatory.acceptsValue(), NOTHING);
+        # a field without one describes none
+        assertNothing(new QoreDataField({"name": "x", "type": StringType}).getInfo().remote_default_value);
+    }
+
+    conversionTest() {
+        # converted as the type converts a value
+        QoreDataField soft({"name": "n", "type": AbstractDataProviderType::get(SoftIntType),
+            "remote_default_value": "5"});
+        assertEq(5, soft.getRemoteDefaultValue());
+        # a value that the type refuses is dropped and does not fail the field
+        QoreDataField refused({"name": "n", "type": IntType, "remote_default_value": "many"});
+        assertNothing(refused.getRemoteDefaultValue());
+        assertNothing(refused.getInfo().remote_default_value);
+        # no value and null clear it
+        QoreDataField field({"name": "n", "type": IntOrNothingType, "remote_default_value": 3});
+        field.setRemoteDefaultValue(NULL);
+        assertNothing(field.getRemoteDefaultValue());
+        field.setRemoteDefaultValue(4);
+        assertEq(4, field.getRemoteDefaultValue());
+        field.setRemoteDefaultValue(NOTHING);
+        assertNothing(field.getRemoteDefaultValue());
+        # a field whose type is replaced keeps a default that the new type accepts, converted, and drops another
+        QoreDataField late({"name": "n", "type": AutoType, "remote_default_value": "7"});
+        assertEq("7", late.getRemoteDefaultValue());
+        late.updateFieldType(AbstractDataProviderType::get(SoftIntType));
+        assertEq(7, late.getRemoteDefaultValue());
+        QoreDataField dropped({"name": "n", "type": AutoType, "remote_default_value": "seven"});
+        dropped.updateFieldType(AbstractDataProviderType::get(IntType));
+        assertNothing(dropped.getRemoteDefaultValue());
+    }
+
+    roundTripTest() {
+        QoreDataField field({"name": "sort", "type": StringOrNothingType, "remote_default_value": "asc"});
+        HashDataType record("Sorted", {"sort": field});
+        AbstractDataProviderType restored = AbstractDataProviderType::get(record.getInfo());
+        assertEq("asc", restored.getFields().sort.getRemoteDefaultValue());
+        assertNothing(restored.getFields().sort.getDefaultValue());
+        AbstractDataProviderType from_graph = AbstractDataProviderType::getFromGraph(record.getInfoGraph());
+        assertEq("asc", from_graph.getFields().sort.getRemoteDefaultValue());
+        assertEq(record.getInfoGraph(), from_graph.getInfoGraph());
+        assertEq("asc", field.getOrNothingType().getRemoteDefaultValue());
+        assertEq("asc", field.getMandatoryType().getRemoteDefaultValue());
+        assertEq("asc", field.getSoftType().getRemoteDefaultValue());
+        assertEq("asc", field.getRenamedField("order").getRemoteDefaultValue());
+        assertEq("asc", new QoreDataField(field.getConfigInfo() + {"type": field.getType()})
+            .getRemoteDefaultValue());
+    }
+
+    optionTest() {
+        hash<string, hash<ActionOptionInfo>> options = DataProviderActionCatalog::getActionOptionFromFields({
+            "sort": new QoreDataField({"name": "sort", "type": StringOrNothingType, "remote_default_value": "asc"}),
+            "plain": new QoreDataField({"name": "plain", "type": StringOrNothingType}),
+        });
+        assertEq("asc", options.sort.remote_default_value);
+        assertNothing(options.sort.default_value);
+        assertNothing(options.plain.remote_default_value);
+        # and back to fields
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx(RemoteDefaultFixture::App,
+            "search");
+        assertEq("asc", action.options.order.remote_default_value);
+        assertNothing(action.options.order.default_value);
+        AbstractDataProviderType type = DataProviderActionCatalog::getTypeForActionOptions(action);
+        assertEq("asc", type.getFields().order.getRemoteDefaultValue());
+        assertNothing(type.getFields().order.getDefaultValue());
+    }
+
+    indexTest() {
+%ifdef NoMsgPack
+        testSkip("no MessagePack support");
+%endif
+        string dir = build();
+        on_exit remove_tree(dir);
+        code restore = useIndexDir(dir);
+        on_exit restore();
+        list<hash<auto>> actions = ProviderIndexUtil::tryGetActionMetadataForApp(RemoteDefaultFixture::App);
+        hash<auto> search = (map $1, actions, $1.action == "search")[0];
+        assertEq("asc", search.options.order.remote_default_value);
+        assertNothing(search.options.order.default_value);
+        AbstractDataProviderType query = AbstractDataProviderType::get(search.options.query.type_info);
+        assertEq(50, query.getFields().page_size.getRemoteDefaultValue());
+        assertNothing(query.getFields().page_size.getDefaultValue());
+        assertEq(RemoteDefaultFixture::QueryType.getInfoGraph(), query.getInfoGraph());
+    }
+
+    digestTest() {
+%ifdef NoMsgPack
+        testSkip("no MessagePack support");
+%endif
+        string first = build();
+        on_exit remove_tree(first);
+        string repeated = build();
+        on_exit remove_tree(repeated);
+        assertEq(routingDigest(first), routingDigest(repeated), "an unchanged index has the same identity");
+        # only the remote default of one field of the record option changes
+        RemoteDefaultFixture::PageSizeField.setRemoteDefaultValue(100);
+        on_exit RemoteDefaultFixture::PageSizeField.setRemoteDefaultValue(50);
+        string changed = build();
+        on_exit remove_tree(changed);
+        assertTrue(routingDigest(first) != routingDigest(changed), "a changed remote default changes the identity");
+        RemoteDefaultFixture::PageSizeField.setRemoteDefaultValue(50);
+        string restored = build();
+        on_exit remove_tree(restored);
+        assertEq(routingDigest(first), routingDigest(restored));
+    }
+
+    #! Builds the index of the fixture app in a new directory and returns the directory
+    private static string build() {
+        string dir = make_tmp_dir();
+        ProviderIndex::createDataProviderIndex(NOTHING, dir, <ProviderIndexCreateOptions>{
+            "load_known_factories": False,
+            "load_environment": False,
+            "load_typescript_actions": False,
+            "apps": (RemoteDefaultFixture::App,),
+        });
+        return dir;
+    }
+
+    #! Returns the digest of the routing index, which identifies the index
+    private static string routingDigest(string dir) {
+        return ReadOnlyFile::readBinaryFile(dir + DirSep + "qore-routing-index.yaml").toSHA256();
+    }
+
+    #! Makes the given directory the index directory; returns code that restores the previous directory
+    private static code useIndexDir(string dir) {
+        bool had_env = exists ENV{ProviderIndexEnvVar};
+        string old_env = had_env ? ENV{ProviderIndexEnvVar} : "";
+        ProviderIndexUtil::setEnvironmentVariable(dir);
+        ProviderIndexUtil::setBuildMode(True);
+        ProviderIndexUtil::setBuildMode(False);
+        return sub () {
+            if (had_env) {
+                ProviderIndexUtil::setEnvironmentVariable(old_env);
+            } else {
+                unsetenv(ProviderIndexEnvVar);
+                remove ENV{ProviderIndexEnvVar};
+            }
+            ProviderIndexUtil::setBuildMode(True);
+            ProviderIndexUtil::setBuildMode(False);
+        };
+    }
+}

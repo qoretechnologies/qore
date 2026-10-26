@@ -1,0 +1,79 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+%modern
+%allow-weak-references
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires ../../../../../qlib/QUnit.qm
+%exec-class DeadWeakReferenceTest
+
+#! The object that a holder refers to weakly
+class Target inherits Serializable {
+    public {
+        string name;
+    }
+
+    constructor(string name) {
+        self.name = name;
+    }
+}
+
+#! Refers to its target weakly, as a schema object refers to its document
+class Holder inherits Serializable {
+    public {
+        string label;
+        *Target target;
+        list<Holder> children = ();
+    }
+
+    constructor(string label, *Target target) {
+        self.label = label;
+        if (target) {
+            self.target := target;
+        }
+    }
+}
+
+#! A weak reference whose target no longer exists is serialized as no value
+class DeadWeakReferenceTest inherits QUnit::Test {
+    constructor() : Test("Serializing a dead weak reference", "1.0") {
+        addTestCase("a dead weak reference serializes as no value", \deadTest());
+        addTestCase("a live weak reference is still serialized as a reference", \liveTest());
+        addTestCase("dead weak references in nested objects", \nestedTest());
+        set_return_value(main());
+    }
+
+    deadTest() {
+        Holder holder = getHolder("h");
+        # the target has been destroyed when getHolder() returns; serializing the holder does not fail on it
+        Holder copy = Serializable::deserialize(Serializable::serialize(holder));
+        assertEq("h", copy.label);
+        assertNothing(copy.target);
+        hash<SerializationInfo> info = Serializable::serializeToData(holder);
+        assertEq(Type::Hash, info.type());
+    }
+
+    liveTest() {
+        Target target("t");
+        Holder holder("h", target);
+        # a live target that only the holder refers to, weakly: the serialized graph refers to it weakly too
+        list<Serializable> both = (holder, target);
+        list<auto> copy = Serializable::deserialize(Serializable::serialize(both));
+        assertEq("t", copy[0].target.name);
+        assertTrue(copy[0].target == copy[1], "the reference is to the deserialized target");
+    }
+
+    nestedTest() {
+        Holder root("root");
+        root.children += getHolder("a");
+        root.children += getHolder("b");
+        Holder copy = Serializable::deserialize(Serializable::serialize(root));
+        assertEq(("a", "b"), map $1.label, copy.children);
+        assertEq((NOTHING, NOTHING), map $1.target, copy.children);
+    }
+
+    #! Returns a holder whose target is destroyed when the function returns
+    private static Holder getHolder(string label) {
+        Target target("target of " + label);
+        return new Holder(label, target);
+    }
+}

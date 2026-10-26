@@ -108,6 +108,13 @@ public:
 //! so a test reads this inside a loop to prove the vector no longer grows.  See design/ir-loop-jump-temp-scope.md.
 DLLLOCAL int64 q_get_ir_innermost_cleanup_entries();
 
+//! Returns the number of entries in the innermost running IR-interpreter frame's list of the locals it has
+//! instantiated on this thread, or 0 when no IR frame is running.  Debug-only introspection
+//! (dbg_get_ir_instantiated_local_entries()): the list used to grow by every local that a loop body instantiated in
+//! every iteration, and a continue that uninstantiated a local the iteration had not instantiated scanned all of
+//! it, so a test reads this inside a loop to prove the list no longer grows.
+DLLLOCAL int64 q_get_ir_innermost_instantiated_local_entries();
+
 //! Compound +=/-= helpers — shared between IR interpreter and JIT runtime
 /** The value added holds a reference in \a right, which += takes when it stores the value - appended to a list or
     assigned to an lvalue with no value - as the AST interpreter does; a caller that does not use the value again

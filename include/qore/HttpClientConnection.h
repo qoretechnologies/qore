@@ -470,7 +470,8 @@ protected:
 public:
 
     //! Blocks until the connection transitions out of CONNECTING
-    /** @param timeout_ms wait budget in milliseconds (0 or negative = wait forever)
+    /** @param timeout_ms wait budget in milliseconds; 0 returns at once if the connection is not ready yet, and a
+            negative value waits without a limit
         @param xsink exception sink — set with a connection error if the
             connection transitioned to CLOSED with an error during the wait
 

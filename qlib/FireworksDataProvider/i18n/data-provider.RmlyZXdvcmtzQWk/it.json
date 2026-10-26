@@ -14935,6 +14935,18 @@
           "source": "Opt-in sampling mask metadata for generated tokens. When set to `\"count\"`, each generated token in the new logprobs format includes the number of token logits still eligible for sampling after filters such as top_p and top_k are applied. `\"non_zero_list\"` additionally returns active token IDs in `sampling_mask`; `\"non_zero_buffer\"` additionally returns a base64-encoded little-endian uint32 buffer of active token IDs. Non-zero payloads are omitted for positions with more active tokens than 1000.",
           "message": "Metadati della maschera di campionamento opzionale per i token generati. Quando impostato a `\"count\"`, ogni token generato nel nuovo formato logprobs include il numero di logit dei token ancora idonei al campionamento dopo l'applicazione di filtri come top_p e top_k. `\"non_zero_list\"` restituisce inoltre gli ID dei token attivi in `sampling_mask`; `\"non_zero_buffer\"` restituisce inoltre un buffer uint32 little-endian codificato in base64 degli ID dei token attivi. I payload non zero sono omessi per le posizioni con più di 1000 token attivi."
         },
+        "app.RmlyZXdvcmtzQWk.action.dGV4dC1jb21wbGV0aW9u.option.c2FtcGxpbmdfbWFzaw.allowed-value.c3RyaW5nOmNvdW50.display_name": {
+          "source": "count",
+          "message": "conteggio"
+        },
+        "app.RmlyZXdvcmtzQWk.action.dGV4dC1jb21wbGV0aW9u.option.c2FtcGxpbmdfbWFzaw.allowed-value.c3RyaW5nOm5vbl96ZXJvX2xpc3Q.display_name": {
+          "source": "non_zero_list",
+          "message": "elenco non nullo"
+        },
+        "app.RmlyZXdvcmtzQWk.action.dGV4dC1jb21wbGV0aW9u.option.c2FtcGxpbmdfbWFzaw.allowed-value.c3RyaW5nOm5vbl96ZXJvX2J1ZmZlcg.display_name": {
+          "source": "non_zero_buffer",
+          "message": "buffer non nullo"
+        },
         "app.RmlyZXdvcmtzQWk.action.dGV4dC1jb21wbGV0aW9u.option.ZWNobw.display_name": {
           "source": "Echo",
           "message": "Eco"
@@ -15298,6 +15310,10 @@
         "app.RmlyZXdvcmtzQWk.action.dGV4dC1jb21wbGV0aW9u.option.dGhpbmtpbmc.union.SGFzaERhdGFUeXBlOipUaGlua2luZ0NvbmZpZ0VuYWJsZWQjMGUwYWE2MzIzNTAzN2ZlNzY3NDE1YTRmYTQwYzNmMjJiODFhM2RlODZkYWJjYWFlMzMyM2FiYjc4MmJjYjFmNg.field.a2VlcA.desc": {
           "source": "Controls whether historical reasoning content is preserved in the prompt. When set to `\"all\"`, all previous assistant turns' reasoning_content is included in the rendered prompt (equivalent to `reasoning_history: \"preserved\"`). When omitted (null), the model uses its default history behavior. Only valid when `type` is `\"enabled\"`.",
           "message": "Controlla se il contenuto di ragionamento storico viene mantenuto nel prompt. Quando impostato su `\"all\"`, tutto il reasoning_content dei precedenti turni dell'assistente viene incluso nel prompt reso (equivalente a `reasoning_history: \"preserved\"`). Quando omesso (null), il modello usa il suo comportamento predefinito per la cronologia. Valido solo quando `type` è `\"enabled\"`."
+        },
+        "app.RmlyZXdvcmtzQWk.action.dGV4dC1jb21wbGV0aW9u.option.dGhpbmtpbmc.union.SGFzaERhdGFUeXBlOipUaGlua2luZ0NvbmZpZ0VuYWJsZWQjMGUwYWE2MzIzNTAzN2ZlNzY3NDE1YTRmYTQwYzNmMjJiODFhM2RlODZkYWJjYWFlMzMyM2FiYjc4MmJjYjFmNg.field.a2VlcA.allowed-value.c3RyaW5nOmFsbA.display_name": {
+          "source": "all",
+          "message": "tutti"
         },
         "app.RmlyZXdvcmtzQWk.action.dGV4dC1jb21wbGV0aW9u.option.dGhpbmtpbmc.union.SGFzaERhdGFUeXBlOipUaGlua2luZ0NvbmZpZ0VuYWJsZWQjMGUwYWE2MzIzNTAzN2ZlNzY3NDE1YTRmYTQwYzNmMjJiODFhM2RlODZkYWJjYWFlMzMyM2FiYjc4MmJjYjFmNg.field.dHlwZQ.display_name": {
           "source": "Type",
@@ -16135,6 +16151,18 @@
           "source": "Opt-in sampling mask metadata for generated tokens. When set to `\"count\"`, each generated token in the new logprobs format includes the number of token logits still eligible for sampling after filters such as top_p and top_k are applied. `\"non_zero_list\"` additionally returns active token IDs in `sampling_mask`; `\"non_zero_buffer\"` additionally returns a base64-encoded little-endian uint32 buffer of active token IDs. Non-zero payloads are omitted for positions with more active tokens than 1000.",
           "message": "Metadati della maschera di campionamento opzionale per i token generati. Quando impostato a `\"count\"`, ogni token generato nel nuovo formato logprobs include il numero di logit dei token ancora idonei al campionamento dopo l'applicazione di filtri come top_p e top_k. `\"non_zero_list\"` restituisce inoltre gli ID dei token attivi in `sampling_mask`; `\"non_zero_buffer\"` restituisce inoltre un buffer uint32 little-endian codificato in base64 degli ID dei token attivi. I payload non zero sono omessi per le posizioni con più di 1000 token attivi."
         },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.c2FtcGxpbmdfbWFzaw.allowed-value.c3RyaW5nOmNvdW50.display_name": {
+          "source": "count",
+          "message": "conteggio"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.c2FtcGxpbmdfbWFzaw.allowed-value.c3RyaW5nOm5vbl96ZXJvX2xpc3Q.display_name": {
+          "source": "non_zero_list",
+          "message": "elenco non nullo"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.c2FtcGxpbmdfbWFzaw.allowed-value.c3RyaW5nOm5vbl96ZXJvX2J1ZmZlcg.display_name": {
+          "source": "non_zero_buffer",
+          "message": "buffer non nullo"
+        },
         "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.ZWNobw.display_name": {
           "source": "Echo",
           "message": "Eco"
@@ -16334,6 +16362,10 @@
         "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.dGhpbmtpbmc.union.SGFzaERhdGFUeXBlOipUaGlua2luZ0NvbmZpZ0VuYWJsZWQjMGUwYWE2MzIzNTAzN2ZlNzY3NDE1YTRmYTQwYzNmMjJiODFhM2RlODZkYWJjYWFlMzMyM2FiYjc4MmJjYjFmNg.field.a2VlcA.desc": {
           "source": "Controls whether historical reasoning content is preserved in the prompt. When set to `\"all\"`, all previous assistant turns' reasoning_content is included in the rendered prompt (equivalent to `reasoning_history: \"preserved\"`). When omitted (null), the model uses its default history behavior. Only valid when `type` is `\"enabled\"`.",
           "message": "Controlla se il contenuto di ragionamento storico viene mantenuto nel prompt. Quando impostato su `\"all\"`, tutto il reasoning_content dei precedenti turni dell'assistente viene incluso nel prompt reso (equivalente a `reasoning_history: \"preserved\"`). Quando omesso (null), il modello usa il suo comportamento predefinito per la cronologia. Valido solo quando `type` è `\"enabled\"`."
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.dGhpbmtpbmc.union.SGFzaERhdGFUeXBlOipUaGlua2luZ0NvbmZpZ0VuYWJsZWQjMGUwYWE2MzIzNTAzN2ZlNzY3NDE1YTRmYTQwYzNmMjJiODFhM2RlODZkYWJjYWFlMzMyM2FiYjc4MmJjYjFmNg.field.a2VlcA.allowed-value.c3RyaW5nOmFsbA.display_name": {
+          "source": "all",
+          "message": "tutti"
         },
         "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.dGhpbmtpbmc.union.SGFzaERhdGFUeXBlOipUaGlua2luZ0NvbmZpZ0VuYWJsZWQjMGUwYWE2MzIzNTAzN2ZlNzY3NDE1YTRmYTQwYzNmMjJiODFhM2RlODZkYWJjYWFlMzMyM2FiYjc4MmJjYjFmNg.field.dHlwZQ.display_name": {
           "source": "Type",
@@ -17323,6 +17355,22 @@
           "source": "How much effort the model should put into its response. Higher effort levels may result in more thorough analysis but take longer.\n\nValid values are `low`, `medium`, `high`, or `max`.\n\n**Fireworks behavior:** The `effort` level is converted to Fireworks [`reasoning_effort`](/api-reference/post-chatcompletions). Values `low`, `medium`, and `high` map directly. `max` is mapped to `high` since Fireworks does not have a `max` effort level.",
           "message": "Quanto sforzo il modello dovrebbe impiegare nella sua risposta. I livelli di sforzo più elevati possono portare a un'analisi più approfondita ma richiedono più tempo.\n\nI valori validi sono `low`, `medium`, `high` o `max`.\n\n**Comportamento Fireworks:** Il livello `effort` viene convertito in Fireworks [`reasoning_effort`](/api-reference/post-chatcompletions). I valori `low`, `medium` e `high` vengono mappati direttamente. `max` viene mappato in `high` poiché Fireworks non dispone di un livello di sforzo `max`."
         },
+        "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLW1lc3NhZ2U.option.b3V0cHV0X2NvbmZpZw.field.ZWZmb3J0.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "low",
+          "message": "basso"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLW1lc3NhZ2U.option.b3V0cHV0X2NvbmZpZw.field.ZWZmb3J0.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "medium",
+          "message": "medio"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLW1lc3NhZ2U.option.b3V0cHV0X2NvbmZpZw.field.ZWZmb3J0.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "high",
+          "message": "alto"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLW1lc3NhZ2U.option.b3V0cHV0X2NvbmZpZw.field.ZWZmb3J0.allowed-value.c3RyaW5nOm1heA.display_name": {
+          "source": "max",
+          "message": "massimo"
+        },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLW1lc3NhZ2U.option.b3V0cHV0X2NvbmZpZw.field.Zm9ybWF0.display_name": {
           "source": "Format",
           "message": "Formato"
@@ -17631,6 +17679,10 @@
           "source": "Type",
           "message": "Tipo"
         },
+        "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLW1lc3NhZ2U.option.dG9vbHM.field.dHlwZQ.allowed-value.c3RyaW5nOmN1c3RvbQ.display_name": {
+          "source": "custom",
+          "message": "personalizzato"
+        },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLW1lc3NhZ2U.option.dG9wX2s.display_name": {
           "source": "Top K",
           "message": "Top K"
@@ -17854,6 +17906,30 @@
         "app.RmlyZXdvcmtzQWk.action.cmVyYW5r.option.dGFzaw.desc": {
           "source": "Optional instruction describing the relevance task.",
           "message": "Istruzione opzionale che descrive il compito di rilevanza."
+        },
+        "app.RmlyZXdvcmtzQWk.action.dGV4dC1jb21wbGV0aW9u.option.cmVhc29uaW5nX2hpc3Rvcnk.allowed-value.c3RyaW5nOmRpc2FibGVk.display_name": {
+          "source": "disabled",
+          "message": "disabilitato"
+        },
+        "app.RmlyZXdvcmtzQWk.action.dGV4dC1jb21wbGV0aW9u.option.cmVhc29uaW5nX2hpc3Rvcnk.allowed-value.c3RyaW5nOmludGVybGVhdmVk.display_name": {
+          "source": "interleaved",
+          "message": "intercalato"
+        },
+        "app.RmlyZXdvcmtzQWk.action.dGV4dC1jb21wbGV0aW9u.option.cmVhc29uaW5nX2hpc3Rvcnk.allowed-value.c3RyaW5nOnByZXNlcnZlZA.display_name": {
+          "source": "preserved",
+          "message": "conservato"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.cmVhc29uaW5nX2hpc3Rvcnk.allowed-value.c3RyaW5nOmRpc2FibGVk.display_name": {
+          "source": "disabled",
+          "message": "disabilitato"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.cmVhc29uaW5nX2hpc3Rvcnk.allowed-value.c3RyaW5nOmludGVybGVhdmVk.display_name": {
+          "source": "interleaved",
+          "message": "intercalato"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.cmVhc29uaW5nX2hpc3Rvcnk.allowed-value.c3RyaW5nOnByZXNlcnZlZA.display_name": {
+          "source": "preserved",
+          "message": "conservato"
         }
       }
     }

@@ -87,6 +87,13 @@ public class ProviderIndexInitializationFailureTest inherits QUnit::Test {
         # the failure is recorded in the published index
         ProviderIndexUtil::setBuildMode(True);
         ProviderIndexUtil::setBuildMode(False);
+        # the failures are recorded in the failure file of the index, which is written with MessagePack: without the
+        # msgpack module, the index is read from its canonical file and records no failures
+        # (ProviderIndexUtil::hasIndexedFailureInfo())
+        if (!ProviderIndexUtil::hasMessagePack()) {
+            assertFalse(ProviderIndexUtil::hasIndexedFailureInfo(), "no failures are recorded without MessagePack");
+            testSkip("no MessagePack support: the index records no failures");
+        }
         *hash<ProviderIndexFailureInfo> recorded = action
             ? ProviderIndexUtil::tryGetActionFailure(app, action)
             : ProviderIndexUtil::tryGetAppFailure(app);

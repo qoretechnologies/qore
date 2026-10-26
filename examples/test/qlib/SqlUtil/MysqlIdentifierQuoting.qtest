@@ -394,6 +394,17 @@ class MysqlIdentifierQuotingTest inherits QUnit::Test {
                 cop_as("v", "order"))}, \args));
         assertThrows("IDENTIFIER-ERROR", "mysql driver", \t.getSelectSql(),
             ({"columns": cop_as("v", "it's")}, \args));
+        # an alias given as a delimited identifier (issue #2163), in backticks or double quotes, is used as given and
+        # can be referenced by the name that it gives
+        assertEq("select v as `user-interaction`, v as \"a-b\" from mtest.t order by v",
+            t.getSelectSql({"columns": (cop_as("v", "`user-interaction`"), cop_as("v", "\"a-b\"")),
+                "orderby": "user-interaction"}, \args));
+        assertEq("select v as `user-interaction` from mtest.t",
+            t.getSelectSql({"columns": (cop_as("v", "user-interaction"),)}, \args));
+        assertEq("`a``b`", t.getAliasSqlName("`a``b`"));
+        # MySQL reads a backslash in double quotes as an escape character, so such an alias is not used as given, and
+        # is refused as any other name with a double quote
+        assertThrows("IDENTIFIER-ERROR", "mysql driver", \t.getAliasSqlName(), "\"a\\\\\"");
         # a query alias and a join alias
         MysqlTable t2 = getTable(ds, "t2", {"id": {"qore_type": "integer", "notnull": True}});
         assertEq("select * from mtest.t `my t` inner join mtest.t2 `other t` on (`my t`.id = `other t`.id)",
@@ -612,6 +623,9 @@ class MysqlIdentifierQuotingTest inherits QUnit::Test {
         # the mysql driver gives result column names in lower case, as it did for these aliases before, except
         # "My Total", which gave invalid SQL
         assertEq({"total": 7, "mixedcase": 7, "my total": 7, "order": 7}, row);
+        # an alias given as a delimited identifier (issue #2163) names the key without its delimiters
+        assertEq({"user-interaction": 7, "a-b": 7}, t.selectRow({"columns": (cop_as("id", "`user-interaction`"),
+            cop_as("id", "\"a-b\""))}));
         assertThrows("IDENTIFIER-ERROR", "mysql driver", sub () { t.selectRow({"columns": cop_as("id", "it's")}); });
     }
 

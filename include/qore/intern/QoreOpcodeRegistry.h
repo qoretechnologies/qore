@@ -57,7 +57,7 @@ struct OpcodeInfo {
 #define OPCODE_MIN_OPERANDS(n) (-(static_cast<int>(n) + 2))
 
 //! Registry of all IR opcodes (in enum ID order)
-constexpr OpcodeInfo OPCODE_REGISTRY[412] = {
+constexpr OpcodeInfo OPCODE_REGISTRY[414] = {
     { "ConstInt"                      , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 0
     { "ConstFloat"                    , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 1
     { "ConstBool"                     , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 2
@@ -470,12 +470,14 @@ constexpr OpcodeInfo OPCODE_REGISTRY[412] = {
     { "SnapshotInt"                    , false, true , false,  1, "Frame-lived exact integer snapshot", false, false, "ParseNode", true , false, true , false, false }, // 409
     { "SnapshotFloat"                  , false, true , false,  1, "Frame-lived exact float snapshot", false, false, "ParseNode", true , false, true , false, false }, // 410
     { "CheckReturnValue"               , false, false, false,  1, "Check the value of a return statement against the declared return type", false, true , "ReturnStatement", false, false, false, false, false }, // 411
+    { "IteratorRelease"                , false, false, false,  1, "Release the iterator of a foreach statement that a return or break leaves", true , true , "ForEachStatement", false, false, false, false, false }, // 412
+    { "ReleaseOwnedTemp"               , false, false, false,  1, "Release the temporary of an enclosing statement that a return leaves", true , true , "ParseNode", false, false, false, false, false }, // 413
 };
 
 //! Static assertion to verify registry completeness
 static_assert(
-    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 412,
-    "OPCODE_REGISTRY has incorrect entry count - should be exactly 412"
+    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 414,
+    "OPCODE_REGISTRY has incorrect entry count - should be exactly 414"
 );
 
 //! ============================================================================

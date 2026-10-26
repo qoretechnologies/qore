@@ -126,15 +126,14 @@ public class LlmCancellationTest inherits QUnit::Test {
         Queue result();
         background sub () {
             started.push(True);
-            date begin = now_us();
-            bool cancelled = cancellation.waitCancelled(600s);
-            result.push({"cancelled": cancelled, "ms": (now_us() - begin).durationMilliseconds()});
+            # a wait longer than any test run: it ends in time only on the cancellation
+            bool cancelled = cancellation.waitCancelled(3600s);
+            result.push({"cancelled": cancelled});
         }();
         started.get(30s);
         cancellation.cancel();
         hash<auto> rv = result.get(30s);
-        assertTrue(rv.cancelled);
-        assertLt(30000, rv.ms, "the wait ends on the cancellation, not on its timeout");
+        assertTrue(rv.cancelled, "the wait ends on the cancellation, not on its timeout");
         assertTrue(cancellation.waitCancelled(600s), "a cancelled token does not wait");
     }
 
@@ -268,8 +267,8 @@ public class LlmCancellationTest inherits QUnit::Test {
     }
 
     withRetryBackoffTest() {
-        # a backoff that would outlast the test
-        TestProvider provider(600000, 3);
+        # a backoff longer than any test run: only the cancellation can end the call
+        TestProvider provider(3600000, 3);
         LlmCancellation cancellation();
         Queue attempted();
         Counter canceller(1);
@@ -284,14 +283,12 @@ public class LlmCancellationTest inherits QUnit::Test {
             canceller.waitForZero();
         }
         int calls = 0;
-        date started = now_us();
         assertThrows("LLM-CANCELLED", "stopped", \provider.withRetry(), (sub () {
             ++calls;
             attempted.push(True);
             throw "HTTP-ERROR", "overloaded", {"status_code": 503};
         }, <LlmRequestOptions>{"cancellation": cancellation}));
         assertEq(1, calls, "the request is not retried after the cancellation");
-        assertLt(30000, (now_us() - started).durationMilliseconds());
     }
 
     withRetryRetriesTest() {

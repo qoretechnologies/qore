@@ -1,0 +1,176 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTModuleTypedefResolutionTest
+
+#! a module whose public typedef is not used in the module itself
+const TdA = "%modern
+module TdA { version = \"1.0\"; desc = \"an unused public typedef\"; author = \"Qore\"; license = \"MIT\"; }
+public namespace NT {
+public typedef T = hash<string, int>;
+}
+";
+
+#! a module that uses the typedef of TdA
+const TdB = "%modern
+%requires TdA
+module TdB { version = \"1.0\"; desc = \"uses the typedef of TdA\"; author = \"Qore\"; license = \"MIT\"; }
+public namespace NB {
+public NT::T sub make() {
+    return {\"b\": 2};
+}
+}
+";
+
+#! a module whose typedef names a class of its own namespace by its unqualified name
+const TdL = "%modern
+module TdL { version = \"1.0\"; desc = \"a typedef of a class of its namespace\"; author = \"Qore\";
+    license = \"MIT\"; }
+public namespace NL {
+public class Local {
+    string origin() {
+        return \"NL\";
+    }
+}
+public typedef T = Local;
+}
+";
+
+#! a module whose typedef names a type that does not exist
+const TdX = "%modern
+module TdX { version = \"1.0\"; desc = \"a typedef of an undefined type\"; author = \"Qore\"; license = \"MIT\"; }
+public namespace NX {
+public typedef T = NoSuchType;
+}
+";
+
+# The type of a typedef is resolved in the Program that declares it, in the namespace that declares it, when that
+# Program is parsed, as the types of classes and hashdecls are.  Before, a typedef was resolved where it was first
+# used: an AOT module serialized only the typedefs that it used itself, so a module that used a typedef that its AOT
+# dependency did not use could neither be loaded nor compiled against it, and a typedef of a type that does not exist
+# was only an error where it was used.
+class AOTModuleTypedefResolutionTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+    }
+
+    constructor() : QUnit::Test("AOTModuleTypedefResolutionTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+
+        addTestCase("an AOT module exports a public typedef that it does not use", \exportTest());
+        addTestCase("a module that uses the typedef of an AOT module is compiled and loaded", \compileTest());
+        addTestCase("a typedef names what its type names in the module that declares it", \contextTest());
+        addTestCase("a module with a typedef of an undefined type is not loaded", \undefinedTypeTest());
+        set_return_value(main());
+    }
+
+    private string run(string cmd) {
+        return backquote(cmd + " 2>&1");
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+    }
+
+    #! returns the module path for the given directories, followed by the module path of this process
+    private string modulePath(list<string> dirs) {
+        return (dirs + (ENV.QORE_MODULE_DIR ? (ENV.QORE_MODULE_DIR,) : ())).join(":");
+    }
+
+    #! compiles a module of the source directory into the given directory; returns the output of qcc
+    private string compile(string name, string src_dir, string out_dir, list<string> dirs) {
+        mkdir(out_dir, 0755, True);
+        return run(sprintf("%s QORE_MODULE_DIR=%s %s -m -o %s/%s.qmod %s/%s.qm", env, modulePath(dirs), qcc_bin,
+            out_dir, name, src_dir, name));
+    }
+
+    #! runs a script with the given module path; returns its output
+    private string runScript(string path, list<string> dirs) {
+        return trim(run(sprintf("%s QORE_MODULE_DIR=%s %s %s", env, modulePath(dirs), qore_bin, path)));
+    }
+
+    private TmpDir init(string src, hash<string, string> modules) {
+        TmpDir tmp("qore-aot-typedef-");
+        mkdir(tmp.path + "/" + src);
+        foreach hash<auto> i in (modules.pairIterator()) {
+            write(tmp.path + "/" + src + "/" + i.key + ".qm", i.value);
+        }
+        return tmp;
+    }
+
+    exportTest() {
+        TmpDir tmp = init("src", {"TdA": TdA});
+        string src = tmp.path + "/src";
+        string aot = tmp.path + "/aot";
+        string out = compile("TdA", src, aot, (src,));
+        assertTrue(is_file(aot + "/TdA.qmod"), "compiled TdA.qmod: " + out);
+        write(tmp.path + "/use.q", "%modern\n%requires TdA\nNT::T t = {\"a\": 1};\n"
+            "printf(\"%s %y\\n\", basename(get_module_hash().TdA.filename), t);\n");
+        assertEq("TdA.qm {a: 1}", runScript(tmp.path + "/use.q", (src,)));
+        assertEq("TdA.qmod {a: 1}", runScript(tmp.path + "/use.q", (aot, src)));
+    }
+
+    compileTest() {
+        TmpDir tmp = init("src", {"TdA": TdA, "TdB": TdB});
+        string src = tmp.path + "/src";
+        string aot = tmp.path + "/aot";
+        string out = compile("TdA", src, aot, (src,));
+        assertTrue(is_file(aot + "/TdA.qmod"), "compiled TdA.qmod: " + out);
+        # TdB is compiled against the AOT module TdA
+        out = compile("TdB", src, aot, (aot, src));
+        assertTrue(is_file(aot + "/TdB.qmod"), "compiled TdB.qmod against the AOT module TdA: " + out);
+        write(tmp.path + "/use.q", "%modern\n%requires TdB\n"
+            "printf(\"%s %s %y\\n\", basename(get_module_hash().TdA.filename), "
+            "basename(get_module_hash().TdB.filename), NB::make());\n");
+        # the source module TdB with the AOT module TdA, and both AOT modules
+        mkdir(tmp.path + "/aot-a");
+        assertEq(0, system(sprintf("cp '%s/TdA.qmod' '%s/aot-a/'", aot, tmp.path)), "copy TdA.qmod");
+        assertEq("TdA.qmod TdB.qm {b: 2}", runScript(tmp.path + "/use.q", (tmp.path + "/aot-a", src)));
+        assertEq("TdA.qmod TdB.qmod {b: 2}", runScript(tmp.path + "/use.q", (aot, src)));
+    }
+
+    contextTest() {
+        TmpDir tmp = init("src", {"TdL": TdL});
+        string src = tmp.path + "/src";
+        string aot = tmp.path + "/aot";
+        string out = compile("TdL", src, aot, (src,));
+        assertTrue(is_file(aot + "/TdL.qmod"), "compiled TdL.qmod: " + out);
+        # the importer has a class of the same name: the typedef names the class of the module, with the source module
+        # and with the AOT module, which exports the typedef although the module does not use it
+        write(tmp.path + "/use.q", "%modern\n%requires TdL\n"
+            "class Local {\n    string origin() {\n        return \"script\";\n    }\n}\n"
+            "NL::T t = new NL::Local();\n"
+            "printf(\"%s %s\\n\", basename(get_module_hash().TdL.filename), t.origin());\n");
+        assertEq("TdL.qm NL", runScript(tmp.path + "/use.q", (src,)));
+        assertEq("TdL.qmod NL", runScript(tmp.path + "/use.q", (aot, src)));
+    }
+
+    undefinedTypeTest() {
+        TmpDir tmp = init("src", {"TdX": TdX});
+        string src = tmp.path + "/src";
+        string aot = tmp.path + "/aot";
+        string out = compile("TdX", src, aot, (src,));
+        assertFalse(is_file(aot + "/TdX.qmod"), "TdX.qmod is not compiled: " + out);
+        assertRegex("reference to undefined type 'NoSuchType'", out);
+        write(tmp.path + "/use.q", "%modern\n%requires TdX\nprintf(\"loaded\\n\");\n");
+        out = runScript(tmp.path + "/use.q", (src,));
+        assertRegex("reference to undefined type 'NoSuchType'", out);
+        assertNRegex("loaded", out);
+    }
+}

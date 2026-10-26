@@ -783,11 +783,24 @@ private:
 /** Acquires a strong reference under lock to prevent use-after-free
     when the sandbox manager is cleared during program cleanup.
 
+    Every helper names its purpose, because the two purposes resolve differently inside a system-policy
+    capability (@ref QoreSandboxPolicyBarrierHelper, \c SandboxManager::createSystemPolicyCall()):
+    - @ref Policy for a filesystem, network or process policy check
+      (QoreSandboxManager::checkFilesystemAccess(), QoreSandboxManager::checkNetworkAccess(),
+      QoreSandboxManager::checkNetworkBind(), and the policy of filesystem() and network()): the capability is
+      subject to the system policy, not to its sandboxed caller's;
+    - @ref All for the governing sandbox: interrupts and force-termination, resource limits such as nesting depth,
+      and whether a sandbox governs the thread at all, none of which a capability suppresses.
+
     @par Example:
     @code{.cpp}
-    QoreSandboxManagerHelper smh;
-    if (smh) {
-        smh->checkIOInterrupt(xsink, "reading file");
+    QoreSandboxManagerHelper policy(QoreSandboxManagerHelper::Policy);
+    if (policy && !policy->checkFilesystemAccess(path, QSEC_READ, xsink)) {
+        return -1;
+    }
+    QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::All);
+    if (governing) {
+        governing->checkIOInterrupt(xsink, "reading file");
     }
     @endcode
 
@@ -797,13 +810,19 @@ class DLLEXPORT QoreSandboxManagerHelper {
 public:
     //! Selects which kind of check the resolved manager is for
     enum Purpose {
-        //! any check; resolution always walks out to enclosing callers
+        //! the governing sandbox (interrupts, resource limits, whether a sandbox is active); resolution always
+        //! walks out to enclosing callers, through any policy barrier
         All = 0,
-        //! a filesystem/network POLICY check; honors an active policy barrier
+        //! a filesystem, network or process POLICY check; honors an active policy barrier
         Policy = 1,
     };
 
-    //! Acquires a ref'd sandbox manager for the current program
+    //! Acquires a ref'd sandbox manager for the current program for the governing sandbox (@ref All)
+    /** @deprecated name the purpose: a policy check made through this constructor is made with the policy of a
+        system-policy capability's sandboxed caller instead of with the system policy; use
+        QoreSandboxManagerHelper(Purpose) with @ref Policy for filesystem, network and process policy checks and
+        @ref All for everything else (interrupts, cancel callbacks, resource limits, whether a sandbox is active)
+    */
     QoreSandboxManagerHelper();
 
     //! Acquires a ref'd sandbox manager for the current program for the given purpose

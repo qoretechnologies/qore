@@ -379,13 +379,13 @@ public class ValueMask {
 
     private {
         #! The time zones read, by region; access protected with zone_lock
-        static hash<string, TimeZone> zones;
+        static hash<string, TimeZone> zones = {};
 
         #! Protects zones
         static Mutex zone_lock();
 
         #! The masks read, by kind and mask; access protected with mask_lock
-        static hash<string, hash<auto>> masks;
+        static hash<string, hash<auto>> masks = {};
 
         #! Protects masks
         static Mutex mask_lock();

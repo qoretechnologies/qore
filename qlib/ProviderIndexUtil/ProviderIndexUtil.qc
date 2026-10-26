@@ -443,8 +443,8 @@ public class ProviderIndexUtil {
         static Condition init_cond();
 
         #! Serialized metadata retained until the corresponding app is requested
-        static hash<string, hash<auto>> raw_appinfomap;
-        static hash<string, hash<string, hash<auto>>> raw_actioninfomap;
+        static hash<string, hash<auto>> raw_appinfomap = {};
+        static hash<string, hash<string, hash<auto>>> raw_actioninfomap = {};
 
         #! Shared metadata deserialization context
         static *hash<MetadataDeserializeContext> metadata_context;
@@ -454,16 +454,16 @@ public class ProviderIndexUtil {
         static Condition metadata_init_cond();
 
         #! Per-app metadata materialization state
-        static hash<string, bool> app_metadata_initialized;
-        static hash<string, int> app_metadata_initializing;
-        static hash<string, bool> action_metadata_initialized;
-        static hash<string, int> action_metadata_initializing;
+        static hash<string, bool> app_metadata_initialized = {};
+        static hash<string, int> app_metadata_initializing = {};
+        static hash<string, bool> action_metadata_initialized = {};
+        static hash<string, int> action_metadata_initializing = {};
 
         #! Deferred full-index metadata loading state
         static bool raw_metadata_deferred;
         static bool raw_metadata_loading;
         static *int raw_metadata_loading_tid;
-        static hash<string, bool> raw_metadata_app_loaded;
+        static hash<string, bool> raw_metadata_app_loaded = {};
         #! Set when the info of every app has been loaded from the metadata cache; their actions are still deferred
         static bool raw_metadata_apps_loaded;
 
@@ -487,7 +487,7 @@ public class ProviderIndexUtil {
 
         #! Set of modules that have been successfully loaded; used to avoid calling load_module() which acquires
         #! the global module lock even when a module is already loaded
-        static hash<string, bool> loaded_module_cache;
+        static hash<string, bool> loaded_module_cache = {};
 
         #! The last error encountered when reading the published data provider index, if any
         /** This is set when the index exists but could not be read (ex: a permissions problem or a corrupt file);
@@ -523,13 +523,13 @@ public class ProviderIndexUtil {
         static *string reload_read_error;
 
         #! App info added to the cache by the process, kept when the index is reloaded
-        static hash<string, hash<auto>> live_appinfomap;
+        static hash<string, hash<auto>> live_appinfomap = {};
 
         #! Actions added to the cache by the process, as indexed actions, kept when the index is reloaded
-        static hash<string, hash<string, hash<auto>>> live_actioninfomap;
+        static hash<string, hash<string, hash<auto>>> live_actioninfomap = {};
 
         #! Apps removed from the cache by the process, whose indexed metadata stays hidden when the index is reloaded
-        static hash<string, bool> removed_apps;
+        static hash<string, bool> removed_apps = {};
 
         #! The action summaries of the indexed actions, by app and action; read when they are first needed
         /** Actions added to the cache by the process and apps removed from it are applied when the summaries are

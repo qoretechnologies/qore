@@ -1,0 +1,159 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.; MIT license (see COPYING.MIT).
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires OpenApi3
+%requires OpenApi3DataProvider
+%requires RestSchemaActions
+%requires json
+%exec-class OpenApi3ReadOnlyWriteOnlyTest
+
+#! A request has no read-only property and a response no write-only property, in every type a schema builds
+class OpenApi3ReadOnlyWriteOnlyTest inherits QUnit::Test {
+    public {
+        const Schemas = {
+            "Pet": {"type": "object", "required": ("id", "name"), "properties": {
+                "id": {"type": "integer", "readOnly": True},
+                "name": {"type": "string", "example": "Rex"},
+                "secret": {"type": "string", "writeOnly": True},
+                "tags": {"type": "array", "items": {"$ref": "#/components/schemas/Tag"}},
+                "owner": {"$ref": "#/components/schemas/Tag"},
+                "created": {"type": "string", "format": "date-time", "readOnly": True},
+            }},
+            "Tag": {"type": "object", "properties": {
+                "id": {"type": "integer", "readOnly": True},
+                "label": {"type": "string"},
+            }},
+            "Node": {"type": "object", "properties": {
+                "id": {"type": "integer", "readOnly": True},
+                "children": {"type": "array", "items": {"$ref": "#/components/schemas/Node"}},
+            }},
+        };
+    }
+
+    constructor() : Test("OpenAPI read-only and write-only properties", "1.0", \ARGV) {
+        addTestCase("a request type has no field for a read-only property", \requestTest());
+        addTestCase("a response type has the read-only properties and no write-only one", \responseTest());
+        addTestCase("an example has only the properties of its direction", \exampleTest());
+        addTestCase("a recursive type has its read-only properties at every depth of a response", \recursionTest());
+        addTestCase("action options and output types", \actionTest());
+        addTestCase("data provider request and response types", \providerTest());
+        addTestCase("a document without such properties gives a response its request types", \plainTest());
+        set_return_value(main());
+    }
+
+    requestTest() {
+        OpenApi3Schema doc = document();
+        AbstractDataProviderType pet = doc.components.schemas.Pet.getDataType();
+        assertEq(("name", "secret", "tags", "owner"), keys pet.getFields());
+        assertEq(("label",), keys pet.getFields().tags.getType().getElementType().getFields());
+        assertEq(("label",), keys pet.getFields().owner.getType().getFields());
+        # a request that gives a value for a read-only property is refused, as the schema refuses it
+        assertThrows("RUNTIME-TYPE-ERROR", "property \"id\" is read-only and cannot be included in a request",
+            \pet.acceptsValue(), {"id": 1, "name": "Rex"});
+        assertEq({"name": "Rex", "secret": "s"}, pet.acceptsValue({"name": "Rex", "secret": "s"}));
+    }
+
+    responseTest() {
+        OpenApi3Schema doc = document();
+        AbstractDataProviderType request = doc.components.schemas.Pet.getDataType();
+        AbstractDataProviderType response = doc.getResponseDataType(request);
+        # the fields are in the order of the schema's properties
+        assertEq(("id", "name", "tags", "owner", "created"), keys response.getFields());
+        assertTrue(response.getFields().id.isMandatory(), "a required read-only property is required in a response");
+        assertEq(("id", "label"), keys response.getFields().tags.getType().getElementType().getFields());
+        assertEq(("id", "label"), keys response.getFields().owner.getType().getFields());
+        # the request type is not changed by its response copy
+        assertEq(("name", "secret", "tags", "owner"), keys request.getFields());
+        hash<auto> value = {"id": 1, "name": "Rex", "tags": ({"id": 2, "label": "dog"},)};
+        assertEq(value, response.acceptsValue(value));
+        assertThrows("RUNTIME-TYPE-ERROR", "property \"secret\" is write-only and cannot be included in a response",
+            \response.acceptsValue(), {"id": 1, "name": "Rex", "secret": "s"});
+    }
+
+    exampleTest() {
+        OpenApi3Schema doc = document();
+        hash<auto> request = doc.getFieldFromSchema("body", NOTHING, doc.components.schemas.Pet).getExampleValue();
+        assertFalse(request.hasKey("id") || request.hasKey("created"), "a request example has no read-only property");
+        assertEq("Rex", request.name);
+        assertTrue(request.hasKey("secret"), "a request example has the write-only properties");
+        if (request.owner) {
+            assertFalse(request.owner.hasKey("id"), "nor has a nested object in it");
+        }
+        hash<auto> response = doc.getResponseFieldFromSchema("body", NOTHING, doc.components.schemas.Pet)
+            .getExampleValue();
+        assertFalse(response.hasKey("secret"), "a response example has no write-only property");
+        assertTrue(response.hasKey("id") && response.hasKey("created"),
+            "a response example has the read-only properties");
+    }
+
+    recursionTest() {
+        OpenApi3Schema doc = document();
+        AbstractDataProviderType node = doc.getResponseDataType(doc.components.schemas.Node.getDataType());
+        AbstractDataProviderType child = node.getFields().children.getType().getElementType();
+        AbstractDataProviderType grandchild = child.getFields().children.getType().getElementType();
+        assertEq(("id", "children"), keys child.getFields());
+        assertEq(("id", "children"), keys grandchild.getFields());
+        assertEq(("children",), keys doc.components.schemas.Node.getDataType().getFields());
+    }
+
+    actionTest() {
+        RestSchemaActionSet actions(document(), (
+            <RestSchemaActionInfo>{"action": "create-pet", "method": "POST", "path": "/pets",
+                "display_name": "Create Pet", "short_desc": "Creates a pet", "desc": "Creates a pet"},
+            <RestSchemaActionInfo>{"action": "list-pets", "method": "GET", "path": "/pets",
+                "display_name": "List Pets", "short_desc": "Lists pets", "desc": "Lists pets"},
+        ));
+        RestSchemaActionOperation create = actions.getOperationEx("create-pet");
+        assertEq(("name", "secret", "tags", "owner"), keys create.getRequestFields());
+        assertEq(("id", "name", "tags", "owner", "created"), keys create.getResponseType().getFields());
+        AbstractDataProviderType list = actions.getOperationEx("list-pets").getResponseType();
+        assertEq(("id", "name", "tags", "owner", "created"), keys list.getElementType().getFields());
+    }
+
+    providerTest() {
+        OpenApi3DataProvider provider(document());
+        AbstractDataProvider create = provider.getChildProviderPath("pets/POST");
+        assertEq(("name", "secret", "tags", "owner"),
+            keys create.getRequestType().getFields().body.getType().getFields());
+        assertEq(("id", "name", "tags", "owner", "created"),
+            keys create.getResponseType().getFields().body.getType().getFields());
+    }
+
+    plainTest() {
+        OpenApi3Schema doc = OpenApi3Loader::fromString(make_json({
+            "openapi": "3.0.3", "info": {"title": "Plain", "version": "1"}, "paths": {},
+            "components": {"schemas": {"Plain": {"type": "object", "properties": {"name": {"type": "string"}}}}},
+        }), True);
+        AbstractDataProviderType type = doc.components.schemas.Plain.getDataType();
+        assertTrue(doc.getResponseDataType(type) === type, "a response shares the request type");
+    }
+
+    #! Returns a document with a pet store whose pets have read-only and write-only properties
+    private static OpenApi3Schema document() {
+        hash<auto> pet = {"$ref": "#/components/schemas/Pet"};
+        return OpenApi3Loader::fromString(make_json({
+            "openapi": "3.0.3", "info": {"title": "Directions", "version": "1"},
+            "paths": {"/pets": {
+                "post": {
+                    "operationId": "createPet",
+                    "requestBody": {"required": True, "content": {"application/json": {"schema": pet}}},
+                    "responses": {"200": {"description": "The pet", "content": {
+                        "application/json": {"schema": pet},
+                    }}},
+                },
+                "get": {
+                    "operationId": "listPets",
+                    "responses": {"200": {"description": "The pets", "content": {
+                        "application/json": {"schema": {"type": "array", "items": pet}},
+                    }}},
+                },
+            }},
+            "components": {"schemas": Schemas},
+        }), True);
+    }
+}

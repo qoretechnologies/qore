@@ -14,10 +14,10 @@ public namespace AwsTextractDataProvider {
 public class AwsTextractSchema {
     private {
         static *OpenApi3::OpenApi3Schema schema;
-        static hash<string, AbstractDataProviderType> types;
+        static hash<string, AbstractDataProviderType> types = {};
         static Mutex lck();
         static Mutex legacy_lck();
-        static hash<string, HashDataType> legacy_types;
+        static hash<string, HashDataType> legacy_types = {};
     }
 
     #! Returns the compatible document action form with complete nested query and adapter types

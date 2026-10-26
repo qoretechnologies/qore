@@ -94,6 +94,8 @@ printf("%Y\n", ans.body);
       created without connecting to the server
     - the connection URL is no longer generated automatically; it depends on the Mews environment
       (ex: \c https://api.mews.com or \c https://api.mews-demo.com) and must be supplied by the user
+    - a client created with options that are all strings no longer fails with a \c RUNTIME-TYPE-ERROR: the options
+      it adds for the Mews schema are added to a copy of them
 
     @subsection Mewsrestclientv1_0 MewsRestClient v1.0
     - initial release
@@ -157,7 +159,10 @@ public class MewsRestClientBase {
     }
 
     #! returns options for @ref MewsRestClient::MewsRestClient::constructor()
-    static hash<auto> getOptions(hash<auto> opts) {
+    static hash<auto> getOptions(hash<auto> given_opts) {
+        # a copy that holds any values: the options given can be a hash of strings only, which the flags below,
+        # integers, cannot be added to
+        hash<auto> opts = {} + given_opts;
         if (!opts.swagger && !opts.validator) {
             string path = dirname(get_module_hash().MewsRestClient.filename)
                 + "/MewsRestDataProvider/mews-swagger-2.0.yaml";

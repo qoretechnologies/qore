@@ -11,10 +11,12 @@
 %exec-class StaticVarDefaultsTest
 
 #! The initial value of a variable that is declared without an initializer
-/** A static class variable of a non-optional hash or list type starts as an empty hash or list of its type, and one
-    of a hashdecl type as a hash with the hashdecl's member defaults; every other variable without an initializer
-    starts as NOTHING.  Qore before 3.0 started all of them as NOTHING (see the 3.0.0 release notes, "Static Class
-    Variables of Hash and List Types Start Empty").
+/** Every variable without an initializer starts as NOTHING, whatever its type: static class variables, instance
+    members, global and local variables alike.  A static class variable of a non-optional hash or list type, or of a
+    hashdecl type, started as an empty hash or list (or a hash with the hashdecl's member defaults) in Qore 3.0
+    development builds; it starts as NOTHING again, as in every released version, and gets a value with an
+    initializer such as <tt>= {}</tt> or <tt>()</tt>.  The checks run in this program and in a Program in each
+    execution mode.
 */
 
 hashdecl StaticVarDefaultsDecl {
@@ -31,11 +33,15 @@ class StaticVarDefaultsHolder {
         static list<auto> auto_list;
         static list plain_list;
         static hash<StaticVarDefaultsDecl> decl_hash;
+        static hash<StaticVarDefaultsDecl> decl_hash_init();
+        static hash<string, int> untouched_hash;
         static *hash<string, int> optional_hash;
         static *list<int> optional_list;
         static int scalar;
         static string str;
         static hash<string, int> initialized = {"z": 26};
+        static hash<string, int> initialized_empty = {};
+        static list<int> initialized_empty_list = ();
 
         hash<string, int> member_hash;
         list<int> member_list;
@@ -46,43 +52,54 @@ our hash<string, int> StaticVarDefaultsGlobalHash;
 our list<int> StaticVarDefaultsGlobalList;
 
 class StaticVarDefaultsTest inherits QUnit::Test {
+    public {
+        #! the execution modes the parsed Program is run in
+        const ExecModes = {
+            "ast": EM_AST,
+            "ir": EM_IR,
+            "jit": EM_JIT,
+            "tiered": EM_TIERED,
+        };
+    }
+
     constructor() : QUnit::Test("static variable defaults", "1.0", \ARGV) {
-        addTestCase("a static variable of a non-optional container type starts empty", \emptyContainers());
-        addTestCase("a static hashdecl hash starts with the member defaults", \hashdeclDefaults());
-        addTestCase("the empty container keeps the declared type", \typeEnforced());
+        addTestCase("a static variable of a container type starts as NOTHING", \containersNothing());
+        addTestCase("a static hashdecl hash starts as NOTHING", \hashdeclNothing());
+        addTestCase("the declared type applies to the first assignment", \typeEnforced());
         addTestCase("other variables without an initializer start as NOTHING", \nothingOtherwise());
         addTestCase("a static variable with an initializer has its value", \initializerWins());
-        addTestCase("a static variable in a parsed Program starts empty", \parsedProgram());
+        addTestCase("a static variable in a parsed Program starts as NOTHING in each mode", \parsedProgram());
         set_return_value(main());
     }
 
-    emptyContainers() {
-        assertEq({}, StaticVarDefaultsHolder::typed_hash);
-        assertEq("hash<string, int>", StaticVarDefaultsHolder::typed_hash.fullType());
-        assertEq((), StaticVarDefaultsHolder::typed_list);
-        assertEq("list<int>", StaticVarDefaultsHolder::typed_list.fullType());
-        assertEq({}, StaticVarDefaultsHolder::auto_hash);
-        assertEq(NT_HASH, StaticVarDefaultsHolder::plain_hash.typeCode());
-        assertEq(0, StaticVarDefaultsHolder::plain_hash.size());
-        assertEq((), StaticVarDefaultsHolder::auto_list);
-        assertEq(NT_LIST, StaticVarDefaultsHolder::plain_list.typeCode());
-        assertEq(0, StaticVarDefaultsHolder::plain_list.size());
-        # the change that existing code can notice
-        assertTrue(exists StaticVarDefaultsHolder::typed_hash, "the variable exists before it is assigned");
+    containersNothing() {
+        assertEq(NOTHING, StaticVarDefaultsHolder::typed_hash);
+        assertEq(NOTHING, StaticVarDefaultsHolder::typed_list);
+        assertEq(NOTHING, StaticVarDefaultsHolder::auto_hash);
+        assertEq(NOTHING, StaticVarDefaultsHolder::plain_hash);
+        assertEq(NOTHING, StaticVarDefaultsHolder::auto_list);
+        assertEq(NOTHING, StaticVarDefaultsHolder::plain_list);
+        assertFalse(exists StaticVarDefaultsHolder::untouched_hash, "the variable does not exist before it is assigned");
     }
 
-    hashdeclDefaults() {
-        assertEq({"a": 1, "b": "x"}, StaticVarDefaultsHolder::decl_hash);
-        assertEq("hash<StaticVarDefaultsDecl>", StaticVarDefaultsHolder::decl_hash.fullType());
+    hashdeclNothing() {
+        assertEq(NOTHING, StaticVarDefaultsHolder::decl_hash);
+        # the constructor form gives it the member defaults
+        assertEq({"a": 1, "b": "x"}, StaticVarDefaultsHolder::decl_hash_init);
+        assertEq("hash<StaticVarDefaultsDecl>", StaticVarDefaultsHolder::decl_hash_init.fullType());
     }
 
     typeEnforced() {
         StaticVarDefaultsHolder::typed_list += 1;
         assertEq((1,), StaticVarDefaultsHolder::typed_list);
+        assertEq("list<int>", StaticVarDefaultsHolder::typed_list.fullType());
+        StaticVarDefaultsHolder::typed_hash.k = 1;
+        assertEq({"k": 1}, StaticVarDefaultsHolder::typed_hash);
+        assertEq("hash<string, int>", StaticVarDefaultsHolder::typed_hash.fullType());
         # the value is not known at parse time, so the hash's element type refuses it at runtime
         auto value = "not an int";
-        assertThrows("RUNTIME-TYPE-ERROR", sub () { StaticVarDefaultsHolder::typed_hash.k = value; });
-        assertEq({}, StaticVarDefaultsHolder::typed_hash, "a refused assignment leaves the hash empty");
+        assertThrows("RUNTIME-TYPE-ERROR", sub () { StaticVarDefaultsHolder::typed_hash.j = value; });
+        assertEq({"k": 1}, StaticVarDefaultsHolder::typed_hash, "a refused assignment leaves the hash unchanged");
     }
 
     nothingOtherwise() {
@@ -103,25 +120,37 @@ class StaticVarDefaultsTest inherits QUnit::Test {
 
     initializerWins() {
         assertEq({"z": 26}, StaticVarDefaultsHolder::initialized);
+        assertEq({}, StaticVarDefaultsHolder::initialized_empty);
+        assertEq("hash<string, int>", StaticVarDefaultsHolder::initialized_empty.fullType());
+        assertEq((), StaticVarDefaultsHolder::initialized_empty_list);
+        assertEq("list<int>", StaticVarDefaultsHolder::initialized_empty_list.fullType());
     }
 
     parsedProgram() {
-        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
-        p.parse("
+        foreach hash<auto> i in (ExecModes.pairIterator()) {
+            string mode = i.key;
+            Program p(PO_MODERN);
+            p.setExecMode(i.value);
+            p.parse("
+hashdecl PD { int a = 1; }
 class P {
     public {
         static hash<string, int> h;
         static list<string> l;
         static *hash<string, int> oh;
+        static hash<PD> d;
+        static hash<auto> e = {};
     }
 }
-list<auto> sub get() { return (P::h, P::l, P::oh); }
+list<auto> sub get() { return (P::h, P::l, P::oh, P::d, P::e, exists P::h); }
 ", "static-var-defaults");
-        list<auto> l = p.callFunction("get");
-        assertEq({}, l[0]);
-        assertEq("hash<string, int>", l[0].fullType());
-        assertEq((), l[1]);
-        assertEq("list<string>", l[1].fullType());
-        assertEq(NOTHING, l[2]);
+            list<auto> l = p.callFunction("get");
+            assertEq(NOTHING, l[0], mode + ": hash");
+            assertEq(NOTHING, l[1], mode + ": list");
+            assertEq(NOTHING, l[2], mode + ": optional hash");
+            assertEq(NOTHING, l[3], mode + ": hashdecl hash");
+            assertEq({}, l[4], mode + ": initialized hash");
+            assertFalse(l[5], mode + ": exists");
+        }
     }
 }

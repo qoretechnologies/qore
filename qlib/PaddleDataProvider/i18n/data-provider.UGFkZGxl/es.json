@@ -3363,75 +3363,39 @@
           "source": "List of items to charge for. You can charge for items that you've added to your catalog by passing the Paddle ID of an existing price entity, or you can charge for non-catalog items by passing a price object.\n\nNon-catalog items can be for existing products, or you can pass a product object as part of your price to charge for a non-catalog product.",
           "message": "Lista de artículos a cobrar. Puedes cobrar por artículos que hayas agregado a tu catálogo pasando el ID de Paddle de una entidad de precio existente, o puedes cobrar por artículos fuera de catálogo pasando un objeto de precio.\n\nLos artículos fuera de catálogo pueden corresponder a productos existentes, o puedes pasar un objeto de producto como parte de tu precio para cobrar por un producto fuera de catálogo."
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cHJpY2VfaWQ.display_name": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjYWRiNGQ0OTcwNDYxZTI3YWY0NjU2MDdkMTY0ZjA3NWI0YWZkZTEyNDUwMWE3NzBjZmU5ZThmOWM2N2NkOTZhZQ.field.cHJpY2VfaWQ.display_name": {
           "source": "Price ID",
           "message": "ID de precio"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cHJpY2VfaWQ.short_desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjYWRiNGQ0OTcwNDYxZTI3YWY0NjU2MDdkMTY0ZjA3NWI0YWZkZTEyNDUwMWE3NzBjZmU5ZThmOWM2N2NkOTZhZQ.field.cHJpY2VfaWQ.short_desc": {
           "source": "Paddle ID of an existing catalog price to add to this transaction, prefixed…",
           "message": "ID de Paddle de un precio de catálogo existente para agregar a esta transacción, prefijado…"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cHJpY2VfaWQ.desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjYWRiNGQ0OTcwNDYxZTI3YWY0NjU2MDdkMTY0ZjA3NWI0YWZkZTEyNDUwMWE3NzBjZmU5ZThmOWM2N2NkOTZhZQ.field.cHJpY2VfaWQ.desc": {
           "source": "Paddle ID of an existing catalog price to add to this transaction, prefixed with `pri_`.",
           "message": "ID de Paddle de un precio de catálogo existente para agregar a esta transacción, prefijado con `pri_`."
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cHJvcmF0aW9u.display_name": {
-          "source": "Proration",
-          "message": "Prorrateo"
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cHJvcmF0aW9u.short_desc": {
-          "source": "How proration was calculated for this item",
-          "message": "Cómo se calculó la prorrateo para este artículo"
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cHJvcmF0aW9u.desc": {
-          "source": "How proration was calculated for this item. Populated when a transaction is created from a subscription change, where `proration_billing_mode` was `prorated_immediately` or `prorated_next_billing_period`. Set automatically by Paddle.",
-          "message": "Cómo se calculó la prorrateo para este artículo. Se rellena cuando se crea una transacción a partir de un cambio de suscripción, donde `proration_billing_mode` fue `prorated_immediately` o `prorated_next_billing_period`. Se establece automáticamente por Paddle."
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6KlRyYW5zYWN0aW9uSXRlbVByb3JhdGlvbiNiMjIzYzNhYTYyZWQyNjczOGFkOWYxZDQyZGM3MzhmM2JiNjc2MmEwNWU4YmM4ZjlkMzZjMzQ1NTJiMzlhNGQ2.field.YmlsbGluZ19wZXJpb2Q.display_name": {
-          "source": "Billing Period",
-          "message": "Período de facturación"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6KlRyYW5zYWN0aW9uSXRlbVByb3JhdGlvbiNiMjIzYzNhYTYyZWQyNjczOGFkOWYxZDQyZGM3MzhmM2JiNjc2MmEwNWU4YmM4ZjlkMzZjMzQ1NTJiMzlhNGQ2.field.YmlsbGluZ19wZXJpb2Q.short_desc": {
-          "source": "Billing period that proration is based on",
-          "message": "Periodo de facturación en el que se basa la prorrateo"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6KlRyYW5zYWN0aW9uSXRlbVByb3JhdGlvbiNiMjIzYzNhYTYyZWQyNjczOGFkOWYxZDQyZGM3MzhmM2JiNjc2MmEwNWU4YmM4ZjlkMzZjMzQ1NTJiMzlhNGQ2.field.YmlsbGluZ19wZXJpb2Q.desc": {
-          "source": "Billing period that proration is based on.",
-          "message": "Periodo de facturación en el que se basa la prorrateo."
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6KlRyYW5zYWN0aW9uSXRlbVByb3JhdGlvbiNiMjIzYzNhYTYyZWQyNjczOGFkOWYxZDQyZGM3MzhmM2JiNjc2MmEwNWU4YmM4ZjlkMzZjMzQ1NTJiMzlhNGQ2.field.cmF0ZQ.display_name": {
-          "source": "Rate",
-          "message": "Tarifa"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6KlRyYW5zYWN0aW9uSXRlbVByb3JhdGlvbiNiMjIzYzNhYTYyZWQyNjczOGFkOWYxZDQyZGM3MzhmM2JiNjc2MmEwNWU4YmM4ZjlkMzZjMzQ1NTJiMzlhNGQ2.field.cmF0ZQ.short_desc": {
-          "source": "Rate used to calculate proration",
-          "message": "Tasa utilizada para calcular el prorrateo"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6KlRyYW5zYWN0aW9uSXRlbVByb3JhdGlvbiNiMjIzYzNhYTYyZWQyNjczOGFkOWYxZDQyZGM3MzhmM2JiNjc2MmEwNWU4YmM4ZjlkMzZjMzQ1NTJiMzlhNGQ2.field.cmF0ZQ.desc": {
-          "source": "Rate used to calculate proration.",
-          "message": "Tasa utilizada para calcular el prorrateo."
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cXVhbnRpdHk.display_name": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjYWRiNGQ0OTcwNDYxZTI3YWY0NjU2MDdkMTY0ZjA3NWI0YWZkZTEyNDUwMWE3NzBjZmU5ZThmOWM2N2NkOTZhZQ.field.cXVhbnRpdHk.display_name": {
           "source": "Quantity",
           "message": "Cantidad"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cXVhbnRpdHk.short_desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjYWRiNGQ0OTcwNDYxZTI3YWY0NjU2MDdkMTY0ZjA3NWI0YWZkZTEyNDUwMWE3NzBjZmU5ZThmOWM2N2NkOTZhZQ.field.cXVhbnRpdHk.short_desc": {
           "source": "Quantity of this item on the transaction",
           "message": "Cantidad de este artículo en la transacción"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjNWIzYTFhYjEyODk5MjcxNTg2NzY4ZjgxNDcyNmZhMWI3NTEzYjc0M2QzNzczODk3YTM3NjJiYmMyYzk3MTY2NQ.field.cXVhbnRpdHk.desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlSWQjYWRiNGQ0OTcwNDYxZTI3YWY0NjU2MDdkMTY0ZjA3NWI0YWZkZTEyNDUwMWE3NzBjZmU5ZThmOWM2N2NkOTZhZQ.field.cXVhbnRpdHk.desc": {
           "source": "Quantity of this item on the transaction.",
           "message": "Cantidad de este artículo en la transacción."
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cHJpY2U.display_name": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlIzUxYWJlYmRkMjJlYWIxN2QzOGNlMzY4OTEwOTQxZDE2OWNmMWRjM2I2ZmZmYWI1OTBmMmI3OWQzNWU3YzVhZmY.field.cHJpY2U.display_name": {
           "source": "Price",
           "message": "Precio"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cHJpY2U.short_desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlIzUxYWJlYmRkMjJlYWIxN2QzOGNlMzY4OTEwOTQxZDE2OWNmMWRjM2I2ZmZmYWI1OTBmMmI3OWQzNWU3YzVhZmY.field.cHJpY2U.short_desc": {
           "source": "Price object for a non-catalog item to charge for",
           "message": "Objeto de precio para un artículo no catalogado a cobrar"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cHJpY2U.desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlIzUxYWJlYmRkMjJlYWIxN2QzOGNlMzY4OTEwOTQxZDE2OWNmMWRjM2I2ZmZmYWI1OTBmMmI3OWQzNWU3YzVhZmY.field.cHJpY2U.desc": {
           "source": "Price object for a non-catalog item to charge for. Include a `product_id` to relate this non-catalog price to an existing catalog price.",
           "message": "Objeto de precio para un artículo no catalogado a cobrar. Incluya un `product_id` para relacionar este precio no catalogado con un precio existente en el catálogo."
         },
@@ -3499,63 +3463,39 @@
           "source": "Override price. This price applies to customers located in the countries for this unit price override.",
           "message": "Precio de sustitución. Este precio se aplica a clientes ubicados en los países para este sobrescribir precio unitario."
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cHJvcmF0aW9u.display_name": {
-          "source": "Proration",
-          "message": "Prorrateo"
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cHJvcmF0aW9u.short_desc": {
-          "source": "How proration was calculated for this item",
-          "message": "Cómo se calculó la prorrateo para este artículo"
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cHJvcmF0aW9u.desc": {
-          "source": "How proration was calculated for this item. Populated when a transaction is created from a subscription change, where `proration_billing_mode` was `prorated_immediately` or `prorated_next_billing_period`. Set automatically by Paddle.",
-          "message": "Cómo se calculó la prorrateo para este artículo. Se rellena cuando se crea una transacción a partir de un cambio de suscripción, donde `proration_billing_mode` fue `prorated_immediately` o `prorated_next_billing_period`. Se establece automáticamente por Paddle."
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cXVhbnRpdHk.display_name": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlIzUxYWJlYmRkMjJlYWIxN2QzOGNlMzY4OTEwOTQxZDE2OWNmMWRjM2I2ZmZmYWI1OTBmMmI3OWQzNWU3YzVhZmY.field.cXVhbnRpdHk.display_name": {
           "source": "Quantity",
           "message": "Cantidad"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cXVhbnRpdHk.short_desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlIzUxYWJlYmRkMjJlYWIxN2QzOGNlMzY4OTEwOTQxZDE2OWNmMWRjM2I2ZmZmYWI1OTBmMmI3OWQzNWU3YzVhZmY.field.cXVhbnRpdHk.short_desc": {
           "source": "Quantity of this item on the transaction",
           "message": "Cantidad de este artículo en la transacción"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlI2ZiZjIwZjY3MmJjYWM1ZDE2NTE5YzY3MGNmNDYwOTkxYTRlY2NlMjRjY2QwZjZlZjNiZTAyOTkzNGNhNmIyYWY.field.cXVhbnRpdHk.desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlIzUxYWJlYmRkMjJlYWIxN2QzOGNlMzY4OTEwOTQxZDE2OWNmMWRjM2I2ZmZmYWI1OTBmMmI3OWQzNWU3YzVhZmY.field.cXVhbnRpdHk.desc": {
           "source": "Quantity of this item on the transaction.",
           "message": "Cantidad de este artículo en la transacción."
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cHJpY2U.display_name": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCNhZWFmNmYwOGJjZGVjN2FiMDA4NWJkNjg0MGQ5ZDQyM2I3ZWI0MzdlY2U0NDY1NjQwMzc1NDA4YWM3ZDlmODNl.field.cHJpY2U.display_name": {
           "source": "Price",
           "message": "Precio"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cHJpY2U.short_desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCNhZWFmNmYwOGJjZGVjN2FiMDA4NWJkNjg0MGQ5ZDQyM2I3ZWI0MzdlY2U0NDY1NjQwMzc1NDA4YWM3ZDlmODNl.field.cHJpY2U.short_desc": {
           "source": "Price object for a non-catalog item to charge for",
           "message": "Objeto de precio para un artículo no catalogado a cobrar"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cHJpY2U.desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCNhZWFmNmYwOGJjZGVjN2FiMDA4NWJkNjg0MGQ5ZDQyM2I3ZWI0MzdlY2U0NDY1NjQwMzc1NDA4YWM3ZDlmODNl.field.cHJpY2U.desc": {
           "source": "Price object for a non-catalog item to charge for. Include a `product` object to create a non-catalog product for this non-catalog price.",
           "message": "Objeto de precio para un artículo no catalogado a cobrar. Incluya un objeto `product` para crear un producto no catalogado para este precio no catalogado."
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cHJvcmF0aW9u.display_name": {
-          "source": "Proration",
-          "message": "Prorrateo"
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cHJvcmF0aW9u.short_desc": {
-          "source": "How proration was calculated for this item",
-          "message": "Cómo se calculó la prorrateo para este artículo"
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cHJvcmF0aW9u.desc": {
-          "source": "How proration was calculated for this item. Populated when a transaction is created from a subscription change, where `proration_billing_mode` was `prorated_immediately` or `prorated_next_billing_period`. Set automatically by Paddle.",
-          "message": "Cómo se calculó la prorrateo para este artículo. Se rellena cuando se crea una transacción a partir de un cambio de suscripción, donde `proration_billing_mode` fue `prorated_immediately` o `prorated_next_billing_period`. Se establece automáticamente por Paddle."
-        },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cXVhbnRpdHk.display_name": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCNhZWFmNmYwOGJjZGVjN2FiMDA4NWJkNjg0MGQ5ZDQyM2I3ZWI0MzdlY2U0NDY1NjQwMzc1NDA4YWM3ZDlmODNl.field.cXVhbnRpdHk.display_name": {
           "source": "Quantity",
           "message": "Cantidad"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cXVhbnRpdHk.short_desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCNhZWFmNmYwOGJjZGVjN2FiMDA4NWJkNjg0MGQ5ZDQyM2I3ZWI0MzdlY2U0NDY1NjQwMzc1NDA4YWM3ZDlmODNl.field.cXVhbnRpdHk.short_desc": {
           "source": "Quantity of this item on the transaction",
           "message": "Cantidad de este artículo en la transacción"
         },
-        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCM2MzQ4ZjJhOWVjZDZiNjZmOTc2Zjk2ZGRmYzZiMzVmYjQ2Zjg4MmI0MTg2MDk1Mzc2ODYzYTdkMjg5OTkxMWZj.field.cXVhbnRpdHk.desc": {
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25JdGVtQ3JlYXRlV2l0aFByaWNlQW5kUHJvZHVjdCNhZWFmNmYwOGJjZGVjN2FiMDA4NWJkNjg0MGQ5ZDQyM2I3ZWI0MzdlY2U0NDY1NjQwMzc1NDA4YWM3ZDlmODNl.field.cXVhbnRpdHk.desc": {
           "source": "Quantity of this item on the transaction.",
           "message": "Cantidad de este artículo en la transacción."
         },
@@ -4163,6 +4103,14 @@
           "source": "Operator to use when filtering. Valid when filtering by `updated_at`, `null` otherwise.",
           "message": "Operador a utilizar al filtrar. Válido al filtrar por `updated_at`, `null` en caso contrario."
         },
+        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNKbGNHOXlkQTpIYXNoRGF0YVR5cGU6UmVwb3J0RmlsdGVyQWRqdXN0bWVudHNDcmVhdGUjMDkyZDRkYmM3NTI4YjljNmJhM2Q5MjAwMGZhNjI0ODA5MDRjNjZlN2JmNjgxZDg1OGU5MjJmNjIyYmUyMjhjZQ.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOmx0.display_name": {
+          "source": "lt",
+          "message": "lt"
+        },
+        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNKbGNHOXlkQTpIYXNoRGF0YVR5cGU6UmVwb3J0RmlsdGVyQWRqdXN0bWVudHNDcmVhdGUjMDkyZDRkYmM3NTI4YjljNmJhM2Q5MjAwMGZhNjI0ODA5MDRjNjZlN2JmNjgxZDg1OGU5MjJmNjIyYmUyMjhjZQ.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOmd0ZQ.display_name": {
+          "source": "gte",
+          "message": "gte"
+        },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNKbGNHOXlkQTpIYXNoRGF0YVR5cGU6UmVwb3J0RmlsdGVyQWRqdXN0bWVudHNDcmVhdGUjMDkyZDRkYmM3NTI4YjljNmJhM2Q5MjAwMGZhNjI0ODA5MDRjNjZlN2JmNjgxZDg1OGU5MjJmNjIyYmUyMjhjZQ.field.dmFsdWU.display_name": {
           "source": "Value",
           "message": "Valor"
@@ -4250,6 +4198,14 @@
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNKbGNHOXlkQTpIYXNoRGF0YVR5cGU6UmVwb3J0RmlsdGVyVHJhbnNhY3Rpb25zQ3JlYXRlIzExN2IxODcwNjlkNjE5NDAzMGQxZTgxYzc3NjA4ZThmNmVlOTRkZDljM2RiYTA5OWQ1OTQ2YmIyNTMyNmEyYTk.field.b3BlcmF0b3I.desc": {
           "source": "Operator to use when filtering. Valid when filtering by `updated_at`, `null` otherwise.",
           "message": "Operador a utilizar al filtrar. Válido al filtrar por `updated_at`, `null` en caso contrario."
+        },
+        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNKbGNHOXlkQTpIYXNoRGF0YVR5cGU6UmVwb3J0RmlsdGVyVHJhbnNhY3Rpb25zQ3JlYXRlIzExN2IxODcwNjlkNjE5NDAzMGQxZTgxYzc3NjA4ZThmNmVlOTRkZDljM2RiYTA5OWQ1OTQ2YmIyNTMyNmEyYTk.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOmx0.display_name": {
+          "source": "lt",
+          "message": "lt"
+        },
+        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNKbGNHOXlkQTpIYXNoRGF0YVR5cGU6UmVwb3J0RmlsdGVyVHJhbnNhY3Rpb25zQ3JlYXRlIzExN2IxODcwNjlkNjE5NDAzMGQxZTgxYzc3NjA4ZThmNmVlOTRkZDljM2RiYTA5OWQ1OTQ2YmIyNTMyNmEyYTk.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOmd0ZQ.display_name": {
+          "source": "gte",
+          "message": "gte"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNKbGNHOXlkQTpIYXNoRGF0YVR5cGU6UmVwb3J0RmlsdGVyVHJhbnNhY3Rpb25zQ3JlYXRlIzExN2IxODcwNjlkNjE5NDAzMGQxZTgxYzc3NjA4ZThmNmVlOTRkZDljM2RiYTA5OWQ1OTQ2YmIyNTMyNmEyYTk.field.dmFsdWU.display_name": {
           "source": "Value",
@@ -4343,6 +4299,14 @@
           "source": "Operator to use when filtering. Valid when filtering by `updated_at`, `null` otherwise.",
           "message": "Operador a utilizar al filtrar. Válido al filtrar por `updated_at`, `null` en caso contrario."
         },
+        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNKbGNHOXlkQTpIYXNoRGF0YVR5cGU6UmVwb3J0RmlsdGVyUHJvZHVjdHNQcmljZXNDcmVhdGUjNWFjZjI2NjE4Y2IwM2ZjYmUzZDlkYWM4NmJkMmI2MTllYTk3NTA2NzgwMDBjZWYyZTViNTcxNDQ4N2I3MjQ0Nw.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOmx0.display_name": {
+          "source": "lt",
+          "message": "lt"
+        },
+        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNKbGNHOXlkQTpIYXNoRGF0YVR5cGU6UmVwb3J0RmlsdGVyUHJvZHVjdHNQcmljZXNDcmVhdGUjNWFjZjI2NjE4Y2IwM2ZjYmUzZDlkYWM4NmJkMmI2MTllYTk3NTA2NzgwMDBjZWYyZTViNTcxNDQ4N2I3MjQ0Nw.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOmd0ZQ.display_name": {
+          "source": "gte",
+          "message": "gte"
+        },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNKbGNHOXlkQTpIYXNoRGF0YVR5cGU6UmVwb3J0RmlsdGVyUHJvZHVjdHNQcmljZXNDcmVhdGUjNWFjZjI2NjE4Y2IwM2ZjYmUzZDlkYWM4NmJkMmI2MTllYTk3NTA2NzgwMDBjZWYyZTViNTcxNDQ4N2I3MjQ0Nw.field.dmFsdWU.display_name": {
           "source": "Value",
           "message": "Valor"
@@ -4419,6 +4383,14 @@
           "source": "Operator to use when filtering. Valid when filtering by `updated_at`, `null` otherwise.",
           "message": "Operador a utilizar al filtrar. Válido al filtrar por `updated_at`, `null` en caso contrario."
         },
+        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNKbGNHOXlkQTpIYXNoRGF0YVR5cGU6UmVwb3J0RmlsdGVyRGlzY291bnRzQ3JlYXRlIzU3YTdhMzc1Zjg5MTkxYTliNGVlY2Y0YjNiY2EwYTg0OWYxYWEwM2UwNmRmOWI2NzBkOGZjNDFmMjJmYTI3YWU.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOmx0.display_name": {
+          "source": "lt",
+          "message": "lt"
+        },
+        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNKbGNHOXlkQTpIYXNoRGF0YVR5cGU6UmVwb3J0RmlsdGVyRGlzY291bnRzQ3JlYXRlIzU3YTdhMzc1Zjg5MTkxYTliNGVlY2Y0YjNiY2EwYTg0OWYxYWEwM2UwNmRmOWI2NzBkOGZjNDFmMjJmYTI3YWU.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOmd0ZQ.display_name": {
+          "source": "gte",
+          "message": "gte"
+        },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNKbGNHOXlkQTpIYXNoRGF0YVR5cGU6UmVwb3J0RmlsdGVyRGlzY291bnRzQ3JlYXRlIzU3YTdhMzc1Zjg5MTkxYTliNGVlY2Y0YjNiY2EwYTg0OWYxYWEwM2UwNmRmOWI2NzBkOGZjNDFmMjJmYTI3YWU.field.dmFsdWU.display_name": {
           "source": "Value",
           "message": "Valor"
@@ -4486,6 +4458,14 @@
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNKbGNHOXlkQTpIYXNoRGF0YVR5cGU6UmVwb3J0RmlsdGVyQmFsYW5jZUNyZWF0ZSNlYzM4NGEyM2IwNjZlMTg0NTM1MDY2MzNmY2EyNjAwZjcwZTA1MGEyYTVhMjUyNmI2M2IzOWZlZmRkMWZjYmZi.field.b3BlcmF0b3I.desc": {
           "source": "Operator to use when filtering. Valid when filtering by `updated_at`, `null` otherwise.",
           "message": "Operador a utilizar al filtrar. Válido al filtrar por `updated_at`, `null` en caso contrario."
+        },
+        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNKbGNHOXlkQTpIYXNoRGF0YVR5cGU6UmVwb3J0RmlsdGVyQmFsYW5jZUNyZWF0ZSNlYzM4NGEyM2IwNjZlMTg0NTM1MDY2MzNmY2EyNjAwZjcwZTA1MGEyYTVhMjUyNmI2M2IzOWZlZmRkMWZjYmZi.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOmx0.display_name": {
+          "source": "lt",
+          "message": "lt"
+        },
+        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNKbGNHOXlkQTpIYXNoRGF0YVR5cGU6UmVwb3J0RmlsdGVyQmFsYW5jZUNyZWF0ZSNlYzM4NGEyM2IwNjZlMTg0NTM1MDY2MzNmY2EyNjAwZjcwZTA1MGEyYTVhMjUyNmI2M2IzOWZlZmRkMWZjYmZi.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOmd0ZQ.display_name": {
+          "source": "gte",
+          "message": "gte"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNKbGNHOXlkQTpIYXNoRGF0YVR5cGU6UmVwb3J0RmlsdGVyQmFsYW5jZUNyZWF0ZSNlYzM4NGEyM2IwNjZlMTg0NTM1MDY2MzNmY2EyNjAwZjcwZTA1MGEyYTVhMjUyNmI2M2IzOWZlZmRkMWZjYmZi.field.dmFsdWU.display_name": {
           "source": "Value",
@@ -4567,6 +4547,14 @@
           "source": "Operator to use when filtering. Valid when filtering by `transaction_updated_at` or `balance_movement_date`, must be `null` otherwise.",
           "message": "Operador a utilizar al filtrar. Válido al filtrar por `transaction_updated_at` o `balance_movement_date`, debe ser `null` en caso contrario."
         },
+        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNKbGNHOXlkQTpIYXNoRGF0YVR5cGU6UmVwb3J0RmlsdGVyUmVjb25jaWxpYXRpb25DcmVhdGUjYjA1ZWU3YjY2NzFhZmNmYjZkODU2OWQ2ODFiNjk0ZTA1MWZmZTE0NzM5NGZlNjMyMjFkNzhhZDQyZGVmNWFjMQ.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOmx0.display_name": {
+          "source": "lt",
+          "message": "lt"
+        },
+        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNKbGNHOXlkQTpIYXNoRGF0YVR5cGU6UmVwb3J0RmlsdGVyUmVjb25jaWxpYXRpb25DcmVhdGUjYjA1ZWU3YjY2NzFhZmNmYjZkODU2OWQ2ODFiNjk0ZTA1MWZmZTE0NzM5NGZlNjMyMjFkNzhhZDQyZGVmNWFjMQ.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOmd0ZQ.display_name": {
+          "source": "gte",
+          "message": "gte"
+        },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNKbGNHOXlkQTpIYXNoRGF0YVR5cGU6UmVwb3J0RmlsdGVyUmVjb25jaWxpYXRpb25DcmVhdGUjYjA1ZWU3YjY2NzFhZmNmYjZkODU2OWQ2ODFiNjk0ZTA1MWZmZTE0NzM5NGZlNjMyMjFkNzhhZDQyZGVmNWFjMQ.field.dmFsdWU.display_name": {
           "source": "Value",
           "message": "Valor"
@@ -4638,6 +4626,14 @@
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNKbGNHOXlkQTpIYXNoRGF0YVR5cGU6UmVwb3J0RmlsdGVyQ2hlY2tvdXRzQ3JlYXRlIzE1ZDNhNWQ5ZDA0ODg4MWI1NDQ5YmQxZTMzYjZjMjY4ODA3YjgyMGU0MTY0NzkzYjQwYjVkM2UzZTY2MWY1M2E.field.b3BlcmF0b3I.desc": {
           "source": "Operator to use when filtering. Valid when filtering by `checkout_created_at` (must be `gte` or `lt`), `null` otherwise.",
           "message": "Operador a utilizar al filtrar. Válido al filtrar por `checkout_created_at` (debe ser `gte` o `lt`), `null` en caso contrario."
+        },
+        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNKbGNHOXlkQTpIYXNoRGF0YVR5cGU6UmVwb3J0RmlsdGVyQ2hlY2tvdXRzQ3JlYXRlIzE1ZDNhNWQ5ZDA0ODg4MWI1NDQ5YmQxZTMzYjZjMjY4ODA3YjgyMGU0MTY0NzkzYjQwYjVkM2UzZTY2MWY1M2E.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOmx0.display_name": {
+          "source": "lt",
+          "message": "lt"
+        },
+        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNKbGNHOXlkQTpIYXNoRGF0YVR5cGU6UmVwb3J0RmlsdGVyQ2hlY2tvdXRzQ3JlYXRlIzE1ZDNhNWQ5ZDA0ODg4MWI1NDQ5YmQxZTMzYjZjMjY4ODA3YjgyMGU0MTY0NzkzYjQwYjVkM2UzZTY2MWY1M2E.field.b3BlcmF0b3I.allowed-value.c3RyaW5nOmd0ZQ.display_name": {
+          "source": "gte",
+          "message": "gte"
         },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNKbGNHOXlkQTpIYXNoRGF0YVR5cGU6UmVwb3J0RmlsdGVyQ2hlY2tvdXRzQ3JlYXRlIzE1ZDNhNWQ5ZDA0ODg4MWI1NDQ5YmQxZTMzYjZjMjY4ODA3YjgyMGU0MTY0NzkzYjQwYjVkM2UzZTY2MWY1M2E.field.dmFsdWU.display_name": {
           "source": "Value",
@@ -5627,30 +5623,6 @@
           "source": "ZAR",
           "message": "ZAR"
         },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6VGltZVBlcmlvZCMxOTAxMzIyZjBiYzA4NzE0YTU3YmY3MmY3MDdiY2Y2ZWVlM2YzZWRkMWNkYzM5NjJhMzBjM2Q2M2IxODJlNjRh.field.ZW5kc19hdA.display_name": {
-          "source": "Ends At",
-          "message": "Termina el"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6VGltZVBlcmlvZCMxOTAxMzIyZjBiYzA4NzE0YTU3YmY3MmY3MDdiY2Y2ZWVlM2YzZWRkMWNkYzM5NjJhMzBjM2Q2M2IxODJlNjRh.field.ZW5kc19hdA.short_desc": {
-          "source": "RFC 3339 datetime string of when this period ends",
-          "message": "Cadena de fecha y hora RFC 3339 cuando finaliza este período"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6VGltZVBlcmlvZCMxOTAxMzIyZjBiYzA4NzE0YTU3YmY3MmY3MDdiY2Y2ZWVlM2YzZWRkMWNkYzM5NjJhMzBjM2Q2M2IxODJlNjRh.field.ZW5kc19hdA.desc": {
-          "source": "RFC 3339 datetime string of when this period ends.",
-          "message": "Cadena de fecha y hora RFC 3339 cuando finaliza este período."
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6VGltZVBlcmlvZCMxOTAxMzIyZjBiYzA4NzE0YTU3YmY3MmY3MDdiY2Y2ZWVlM2YzZWRkMWNkYzM5NjJhMzBjM2Q2M2IxODJlNjRh.field.c3RhcnRzX2F0.display_name": {
-          "source": "Starts At",
-          "message": "Comienza el"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6VGltZVBlcmlvZCMxOTAxMzIyZjBiYzA4NzE0YTU3YmY3MmY3MDdiY2Y2ZWVlM2YzZWRkMWNkYzM5NjJhMzBjM2Q2M2IxODJlNjRh.field.c3RhcnRzX2F0.short_desc": {
-          "source": "RFC 3339 datetime string of when this period starts",
-          "message": "Cadena de fecha y hora RFC 3339 cuando comienza este período"
-        },
-        "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6VGltZVBlcmlvZCMxOTAxMzIyZjBiYzA4NzE0YTU3YmY3MmY3MDdiY2Y2ZWVlM2YzZWRkMWNkYzM5NjJhMzBjM2Q2M2IxODJlNjRh.field.c3RhcnRzX2F0.desc": {
-          "source": "RFC 3339 datetime string of when this period starts.",
-          "message": "Cadena de fecha y hora RFC 3339 cuando comienza este período."
-        },
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6VHJhbnNhY3Rpb25QcmljZUNyZWF0ZVdpdGhQcm9kdWN0SWQjMDIwY2RjNmQ3NGJhYzZmOTk2OTg2ZDExMDM5OTI1ZjI5OWRhNzRkNzE3MjZmNDE0N2VhM2MzMzUzOGEzZGM2YQ.field.YmlsbGluZ19jeWNsZQ.display_name": {
           "source": "Billing Cycle",
           "message": "Ciclo de facturación"
@@ -6238,6 +6210,138 @@
         "app.UGFkZGxl.type.YWN0aW9uOlkzSmxZWFJsWDNSeVlXNXpZV04wYVc5dTpIYXNoRGF0YVR5cGU6RHVyYXRpb24jMjRhZmRjZTU2ZjE3ZGFmYmVkMjNkZWUxMWYxNDU4YTRjMmQzNDQ3ZTBhZGY2NzRhYWJhNDg2YWUwZDkzM2I5OQ.field.aW50ZXJ2YWw.allowed-value.c3RyaW5nOnllYXI.display_name": {
           "source": "year",
           "message": "año"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.allowed-value.c3RyaW5nOlVTRA.display_name": {
+          "source": "USD",
+          "message": "USD"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.allowed-value.c3RyaW5nOkVVUg.display_name": {
+          "source": "EUR",
+          "message": "EUR"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.allowed-value.c3RyaW5nOkdCUA.display_name": {
+          "source": "GBP",
+          "message": "GBP"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.allowed-value.c3RyaW5nOkpQWQ.display_name": {
+          "source": "JPY",
+          "message": "JPY"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.allowed-value.c3RyaW5nOkFVRA.display_name": {
+          "source": "AUD",
+          "message": "AUD"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.allowed-value.c3RyaW5nOkNBRA.display_name": {
+          "source": "CAD",
+          "message": "CAD"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.allowed-value.c3RyaW5nOkNIRg.display_name": {
+          "source": "CHF",
+          "message": "CHF"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.allowed-value.c3RyaW5nOkhLRA.display_name": {
+          "source": "HKD",
+          "message": "HKD"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.allowed-value.c3RyaW5nOlNHRA.display_name": {
+          "source": "SGD",
+          "message": "SGD"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.allowed-value.c3RyaW5nOlNFSw.display_name": {
+          "source": "SEK",
+          "message": "SEK"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.allowed-value.c3RyaW5nOkFSUw.display_name": {
+          "source": "ARS",
+          "message": "ARS"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.allowed-value.c3RyaW5nOkJSTA.display_name": {
+          "source": "BRL",
+          "message": "BRL"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.allowed-value.c3RyaW5nOkNMUA.display_name": {
+          "source": "CLP",
+          "message": "CLP"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.allowed-value.c3RyaW5nOkNOWQ.display_name": {
+          "source": "CNY",
+          "message": "CNY"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.allowed-value.c3RyaW5nOkNPUA.display_name": {
+          "source": "COP",
+          "message": "COP"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.allowed-value.c3RyaW5nOkNaSw.display_name": {
+          "source": "CZK",
+          "message": "CZK"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.allowed-value.c3RyaW5nOkRLSw.display_name": {
+          "source": "DKK",
+          "message": "DKK"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.allowed-value.c3RyaW5nOkhVRg.display_name": {
+          "source": "HUF",
+          "message": "HUF"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.allowed-value.c3RyaW5nOklMUw.display_name": {
+          "source": "ILS",
+          "message": "ILS"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.allowed-value.c3RyaW5nOklOUg.display_name": {
+          "source": "INR",
+          "message": "INR"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.allowed-value.c3RyaW5nOktSVw.display_name": {
+          "source": "KRW",
+          "message": "KRW"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.allowed-value.c3RyaW5nOk1YTg.display_name": {
+          "source": "MXN",
+          "message": "MXN"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.allowed-value.c3RyaW5nOk5PSw.display_name": {
+          "source": "NOK",
+          "message": "NOK"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.allowed-value.c3RyaW5nOk5aRA.display_name": {
+          "source": "NZD",
+          "message": "NZD"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.allowed-value.c3RyaW5nOlBFTg.display_name": {
+          "source": "PEN",
+          "message": "PEN"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.allowed-value.c3RyaW5nOlBMTg.display_name": {
+          "source": "PLN",
+          "message": "PLN"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.allowed-value.c3RyaW5nOlJVQg.display_name": {
+          "source": "RUB",
+          "message": "RUB"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.allowed-value.c3RyaW5nOlRIQg.display_name": {
+          "source": "THB",
+          "message": "THB"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.allowed-value.c3RyaW5nOlRSWQ.display_name": {
+          "source": "TRY",
+          "message": "TRY"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.allowed-value.c3RyaW5nOlRXRA.display_name": {
+          "source": "TWD",
+          "message": "TWD"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.allowed-value.c3RyaW5nOlVBSA.display_name": {
+          "source": "UAH",
+          "message": "UAH"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.allowed-value.c3RyaW5nOlZORA.display_name": {
+          "source": "VND",
+          "message": "VND"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.allowed-value.c3RyaW5nOlpBUg.display_name": {
+          "source": "ZAR",
+          "message": "ZAR"
         }
       }
     }

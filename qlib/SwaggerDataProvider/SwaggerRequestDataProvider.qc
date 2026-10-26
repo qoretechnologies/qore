@@ -141,7 +141,7 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
     private *hash<string, AbstractDataField> getRecordTypeIntern() {
         *ResponseObject response = getSuccessResponse();
         if (response.schema) {
-            AbstractDataField response_field = schema.getFieldFromSchema("body", "REST response body argument",
+            AbstractDataField response_field = schema.getResponseFieldFromSchema("body", "REST response body argument",
                 response.schema);
             AbstractDataProviderType type = response_field.getType();
             *hash<string, AbstractDataField> rv = type.getFields();
@@ -236,7 +236,7 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
         label += " response";
         HashDataType rv();
         if (response.schema) {
-            rv.addField(schema.getFieldFromSchema("body", "REST " + label + " body argument", response.schema));
+            rv.addField(schema.getResponseFieldFromSchema("body", "REST " + label + " body argument", response.schema));
         }
         if (response.headers) {
             rv.addField(schema.getFieldForHeaders("headers", response.headers));

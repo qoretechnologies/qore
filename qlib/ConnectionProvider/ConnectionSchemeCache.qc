@@ -442,7 +442,7 @@ public class ConnectionSchemeCache {
         };
 
         #! Pending connection provider init handler map: scheme -> init handler
-        static hash<string, code> initmap;
+        static hash<string, code> initmap = {};
 
         #! Connection provider cache lock
         static Mutex lck();

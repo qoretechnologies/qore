@@ -2214,7 +2214,8 @@ string make_toon(auto data, *hash<auto> options) [flags=RET_VALUE_ONLY,NAMED_ARG
     }
 
     QoreStringNodeHolder str(new QoreStringNode(QCS_UTF8));
-    QoreSandboxManagerHelper smh;
+    // nesting and interrupt limits of the governing sandbox; not a policy check
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::All);
     ToonEncCtx ctx(*(*str), indent, tabular, sort_keys, smh.get(), xsink);
     if (toon_emit_document(ctx, data)) {
         return QoreValue();
@@ -2315,7 +2316,8 @@ auto parse_toon(string toon_str, *hash<auto> options) [flags=RET_VALUE_ONLY,NAME
         return QoreValue();
     }
 
-    QoreSandboxManagerHelper smh;
+    // nesting and interrupt limits of the governing sandbox; not a policy check
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::All);
     ToonParser parser(**utf8, strict, indent, smh.get(), xsink);
     QoreValue rv = parser.parse();
     if (*xsink) {

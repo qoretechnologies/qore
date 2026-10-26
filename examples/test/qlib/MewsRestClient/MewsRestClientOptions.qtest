@@ -1,0 +1,27 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.; MIT license (see COPYING.MIT).
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires MewsRestClient
+%exec-class MewsRestClientOptionsTest
+
+#! Offline checks of the options a Mews REST client is created with: no connection, credentials, or requests
+class MewsRestClientOptionsTest inherits QUnit::Test {
+    constructor() : Test("Mews REST client options", "1.0", \ARGV) {
+        addTestCase("a client is created from options that are all strings", \stringOptionsTest());
+        set_return_value(main());
+    }
+
+    stringOptionsTest() {
+        # a hash literal of strings only is a hash<string, string>, which no other value can be added to
+        MewsRestClient rest({"url": "https://api.mews-demo.com", "client_token": "client", "access_token": "access"},
+            True);
+        assertEq("SwaggerSchema", rest.getValidator().className(), "the client validates with the Mews schema");
+        MewsRestClientIo io({"url": "https://api.mews-demo.com", "client_token": "client",
+            "access_token": "access"});
+        assertEq("SwaggerSchema", io.getValidator().className());
+    }
+}

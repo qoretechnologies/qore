@@ -475,6 +475,18 @@
           "source": "Detail",
           "message": "Detail"
         },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJuWmxjbk5oZEdsdmJnOkhhc2hEYXRhVHlwZTpJbWFnZVVSTCNkYzk1MzUwMzRmZTQ4ZmQ4NGI4OTM4ZTA0MTA3M2M0YjA4ZTU2MTljNTA2ZDVhYjRhZDgzMjA1ZGY1NTVhNjJh.field.ZGV0YWls.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "low",
+          "message": "nízka"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJuWmxjbk5oZEdsdmJnOkhhc2hEYXRhVHlwZTpJbWFnZVVSTCNkYzk1MzUwMzRmZTQ4ZmQ4NGI4OTM4ZTA0MTA3M2M0YjA4ZTU2MTljNTA2ZDVhYjRhZDgzMjA1ZGY1NTVhNjJh.field.ZGV0YWls.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "auto",
+          "message": "automaticky"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJuWmxjbk5oZEdsdmJnOkhhc2hEYXRhVHlwZTpJbWFnZVVSTCNkYzk1MzUwMzRmZTQ4ZmQ4NGI4OTM4ZTA0MTA3M2M0YjA4ZTU2MTljNTA2ZDVhYjRhZDgzMjA1ZGY1NTVhNjJh.field.ZGV0YWls.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "high",
+          "message": "vysoká"
+        },
         "app.TWlzdHJhbEFp.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJuWmxjbk5oZEdsdmJnOkhhc2hEYXRhVHlwZTpJbWFnZVVSTCNkYzk1MzUwMzRmZTQ4ZmQ4NGI4OTM4ZTA0MTA3M2M0YjA4ZTU2MTljNTA2ZDVhYjRhZDgzMjA1ZGY1NTVhNjJh.field.dXJs.display_name": {
           "source": "URL",
           "message": "URL"
@@ -738,6 +750,18 @@
         "app.TWlzdHJhbEFp.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.option.aW5wdXRz.union.TGlzdERhdGFUeXBlOmxpc3Q8TWVzc2FnZUlucHV0RW50cnl8TWVzc2FnZU91dHB1dEVudHJ5fEZ1bmN0aW9uUmVzdWx0RW50cnl8RnVuY3Rpb25DYWxsRW50cnl8VG9vbEV4ZWN1dGlvbkVudHJ5fEFnZW50SGFuZG9mZkVudHJ5PiM4Y2JkNTk3ZGNmOGVkYTllNzE2ZTE5NTllMzM1MjY5ZmE2NDUwYzE2YTYzODc5NTI1NGVjODE5YTI4MWIxZDIx.union.SGFzaERhdGFUeXBlOkZ1bmN0aW9uQ2FsbEVudHJ5IzEzM2YzMWI1MzNiZDg4Y2ZjOTAwZDg1MDM2ZWJmMjA0OTNmZmFmOTJlM2JjNzM0MmQ2NWFhOWZkM2NhZGNmZDM.field.Y29uZmlybWF0aW9uX3N0YXR1cw.display_name": {
           "source": "Confirmation Status",
           "message": "Stav potvrdenia"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.option.aW5wdXRz.union.TGlzdERhdGFUeXBlOmxpc3Q8TWVzc2FnZUlucHV0RW50cnl8TWVzc2FnZU91dHB1dEVudHJ5fEZ1bmN0aW9uUmVzdWx0RW50cnl8RnVuY3Rpb25DYWxsRW50cnl8VG9vbEV4ZWN1dGlvbkVudHJ5fEFnZW50SGFuZG9mZkVudHJ5PiM4Y2JkNTk3ZGNmOGVkYTllNzE2ZTE5NTllMzM1MjY5ZmE2NDUwYzE2YTYzODc5NTI1NGVjODE5YTI4MWIxZDIx.union.SGFzaERhdGFUeXBlOkZ1bmN0aW9uQ2FsbEVudHJ5IzEzM2YzMWI1MzNiZDg4Y2ZjOTAwZDg1MDM2ZWJmMjA0OTNmZmFmOTJlM2JjNzM0MmQ2NWFhOWZkM2NhZGNmZDM.field.Y29uZmlybWF0aW9uX3N0YXR1cw.allowed-value.c3RyaW5nOnBlbmRpbmc.display_name": {
+          "source": "pending",
+          "message": "čakajúce"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.option.aW5wdXRz.union.TGlzdERhdGFUeXBlOmxpc3Q8TWVzc2FnZUlucHV0RW50cnl8TWVzc2FnZU91dHB1dEVudHJ5fEZ1bmN0aW9uUmVzdWx0RW50cnl8RnVuY3Rpb25DYWxsRW50cnl8VG9vbEV4ZWN1dGlvbkVudHJ5fEFnZW50SGFuZG9mZkVudHJ5PiM4Y2JkNTk3ZGNmOGVkYTllNzE2ZTE5NTllMzM1MjY5ZmE2NDUwYzE2YTYzODc5NTI1NGVjODE5YTI4MWIxZDIx.union.SGFzaERhdGFUeXBlOkZ1bmN0aW9uQ2FsbEVudHJ5IzEzM2YzMWI1MzNiZDg4Y2ZjOTAwZDg1MDM2ZWJmMjA0OTNmZmFmOTJlM2JjNzM0MmQ2NWFhOWZkM2NhZGNmZDM.field.Y29uZmlybWF0aW9uX3N0YXR1cw.allowed-value.c3RyaW5nOmFsbG93ZWQ.display_name": {
+          "source": "allowed",
+          "message": "povolené"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.option.aW5wdXRz.union.TGlzdERhdGFUeXBlOmxpc3Q8TWVzc2FnZUlucHV0RW50cnl8TWVzc2FnZU91dHB1dEVudHJ5fEZ1bmN0aW9uUmVzdWx0RW50cnl8RnVuY3Rpb25DYWxsRW50cnl8VG9vbEV4ZWN1dGlvbkVudHJ5fEFnZW50SGFuZG9mZkVudHJ5PiM4Y2JkNTk3ZGNmOGVkYTllNzE2ZTE5NTllMzM1MjY5ZmE2NDUwYzE2YTYzODc5NTI1NGVjODE5YTI4MWIxZDIx.union.SGFzaERhdGFUeXBlOkZ1bmN0aW9uQ2FsbEVudHJ5IzEzM2YzMWI1MzNiZDg4Y2ZjOTAwZDg1MDM2ZWJmMjA0OTNmZmFmOTJlM2JjNzM0MmQ2NWFhOWZkM2NhZGNmZDM.field.Y29uZmlybWF0aW9uX3N0YXR1cw.allowed-value.c3RyaW5nOmRlbmllZA.display_name": {
+          "source": "denied",
+          "message": "odmietnuté"
         },
         "app.TWlzdHJhbEFp.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.option.aW5wdXRz.union.TGlzdERhdGFUeXBlOmxpc3Q8TWVzc2FnZUlucHV0RW50cnl8TWVzc2FnZU91dHB1dEVudHJ5fEZ1bmN0aW9uUmVzdWx0RW50cnl8RnVuY3Rpb25DYWxsRW50cnl8VG9vbEV4ZWN1dGlvbkVudHJ5fEFnZW50SGFuZG9mZkVudHJ5PiM4Y2JkNTk3ZGNmOGVkYTllNzE2ZTE5NTllMzM1MjY5ZmE2NDUwYzE2YTYzODc5NTI1NGVjODE5YTI4MWIxZDIx.union.SGFzaERhdGFUeXBlOkZ1bmN0aW9uQ2FsbEVudHJ5IzEzM2YzMWI1MzNiZDg4Y2ZjOTAwZDg1MDM2ZWJmMjA0OTNmZmFmOTJlM2JjNzM0MmQ2NWFhOWZkM2NhZGNmZDM.field.Y3JlYXRlZF9hdA.display_name": {
           "source": "Created At",
@@ -1651,6 +1675,18 @@
           "source": "Detail",
           "message": "Detail"
         },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOllYQndaVzVrTFdOdmJuWmxjbk5oZEdsdmJnOkhhc2hEYXRhVHlwZTpJbWFnZVVSTCNkYzk1MzUwMzRmZTQ4ZmQ4NGI4OTM4ZTA0MTA3M2M0YjA4ZTU2MTljNTA2ZDVhYjRhZDgzMjA1ZGY1NTVhNjJh.field.ZGV0YWls.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "low",
+          "message": "nízka"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOllYQndaVzVrTFdOdmJuWmxjbk5oZEdsdmJnOkhhc2hEYXRhVHlwZTpJbWFnZVVSTCNkYzk1MzUwMzRmZTQ4ZmQ4NGI4OTM4ZTA0MTA3M2M0YjA4ZTU2MTljNTA2ZDVhYjRhZDgzMjA1ZGY1NTVhNjJh.field.ZGV0YWls.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "auto",
+          "message": "automaticky"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOllYQndaVzVrTFdOdmJuWmxjbk5oZEdsdmJnOkhhc2hEYXRhVHlwZTpJbWFnZVVSTCNkYzk1MzUwMzRmZTQ4ZmQ4NGI4OTM4ZTA0MTA3M2M0YjA4ZTU2MTljNTA2ZDVhYjRhZDgzMjA1ZGY1NTVhNjJh.field.ZGV0YWls.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "high",
+          "message": "vysoká"
+        },
         "app.TWlzdHJhbEFp.type.YWN0aW9uOllYQndaVzVrTFdOdmJuWmxjbk5oZEdsdmJnOkhhc2hEYXRhVHlwZTpJbWFnZVVSTCNkYzk1MzUwMzRmZTQ4ZmQ4NGI4OTM4ZTA0MTA3M2M0YjA4ZTU2MTljNTA2ZDVhYjRhZDgzMjA1ZGY1NTVhNjJh.field.dXJs.display_name": {
           "source": "URL",
           "message": "URL"
@@ -1914,6 +1950,18 @@
         "app.TWlzdHJhbEFp.action.YXBwZW5kLWNvbnZlcnNhdGlvbg.option.aW5wdXRz.union.TGlzdERhdGFUeXBlOipsaXN0PE1lc3NhZ2VJbnB1dEVudHJ5fE1lc3NhZ2VPdXRwdXRFbnRyeXxGdW5jdGlvblJlc3VsdEVudHJ5fEZ1bmN0aW9uQ2FsbEVudHJ5fFRvb2xFeGVjdXRpb25FbnRyeXxBZ2VudEhhbmRvZmZFbnRyeT4jZDU2NGE5NDgxMjZmZmQ0Y2IzODBjMDA2NjVmNTdhNzk3N2ExOTI4YTNmNTVhZGVmOTVlMTQ0ZWY0MGI0YTg0Mg.union.SGFzaERhdGFUeXBlOkZ1bmN0aW9uQ2FsbEVudHJ5IzEzM2YzMWI1MzNiZDg4Y2ZjOTAwZDg1MDM2ZWJmMjA0OTNmZmFmOTJlM2JjNzM0MmQ2NWFhOWZkM2NhZGNmZDM.field.Y29uZmlybWF0aW9uX3N0YXR1cw.display_name": {
           "source": "Confirmation Status",
           "message": "Stav potvrdenia"
+        },
+        "app.TWlzdHJhbEFp.action.YXBwZW5kLWNvbnZlcnNhdGlvbg.option.aW5wdXRz.union.TGlzdERhdGFUeXBlOipsaXN0PE1lc3NhZ2VJbnB1dEVudHJ5fE1lc3NhZ2VPdXRwdXRFbnRyeXxGdW5jdGlvblJlc3VsdEVudHJ5fEZ1bmN0aW9uQ2FsbEVudHJ5fFRvb2xFeGVjdXRpb25FbnRyeXxBZ2VudEhhbmRvZmZFbnRyeT4jZDU2NGE5NDgxMjZmZmQ0Y2IzODBjMDA2NjVmNTdhNzk3N2ExOTI4YTNmNTVhZGVmOTVlMTQ0ZWY0MGI0YTg0Mg.union.SGFzaERhdGFUeXBlOkZ1bmN0aW9uQ2FsbEVudHJ5IzEzM2YzMWI1MzNiZDg4Y2ZjOTAwZDg1MDM2ZWJmMjA0OTNmZmFmOTJlM2JjNzM0MmQ2NWFhOWZkM2NhZGNmZDM.field.Y29uZmlybWF0aW9uX3N0YXR1cw.allowed-value.c3RyaW5nOnBlbmRpbmc.display_name": {
+          "source": "pending",
+          "message": "čakajúce"
+        },
+        "app.TWlzdHJhbEFp.action.YXBwZW5kLWNvbnZlcnNhdGlvbg.option.aW5wdXRz.union.TGlzdERhdGFUeXBlOipsaXN0PE1lc3NhZ2VJbnB1dEVudHJ5fE1lc3NhZ2VPdXRwdXRFbnRyeXxGdW5jdGlvblJlc3VsdEVudHJ5fEZ1bmN0aW9uQ2FsbEVudHJ5fFRvb2xFeGVjdXRpb25FbnRyeXxBZ2VudEhhbmRvZmZFbnRyeT4jZDU2NGE5NDgxMjZmZmQ0Y2IzODBjMDA2NjVmNTdhNzk3N2ExOTI4YTNmNTVhZGVmOTVlMTQ0ZWY0MGI0YTg0Mg.union.SGFzaERhdGFUeXBlOkZ1bmN0aW9uQ2FsbEVudHJ5IzEzM2YzMWI1MzNiZDg4Y2ZjOTAwZDg1MDM2ZWJmMjA0OTNmZmFmOTJlM2JjNzM0MmQ2NWFhOWZkM2NhZGNmZDM.field.Y29uZmlybWF0aW9uX3N0YXR1cw.allowed-value.c3RyaW5nOmFsbG93ZWQ.display_name": {
+          "source": "allowed",
+          "message": "povolené"
+        },
+        "app.TWlzdHJhbEFp.action.YXBwZW5kLWNvbnZlcnNhdGlvbg.option.aW5wdXRz.union.TGlzdERhdGFUeXBlOipsaXN0PE1lc3NhZ2VJbnB1dEVudHJ5fE1lc3NhZ2VPdXRwdXRFbnRyeXxGdW5jdGlvblJlc3VsdEVudHJ5fEZ1bmN0aW9uQ2FsbEVudHJ5fFRvb2xFeGVjdXRpb25FbnRyeXxBZ2VudEhhbmRvZmZFbnRyeT4jZDU2NGE5NDgxMjZmZmQ0Y2IzODBjMDA2NjVmNTdhNzk3N2ExOTI4YTNmNTVhZGVmOTVlMTQ0ZWY0MGI0YTg0Mg.union.SGFzaERhdGFUeXBlOkZ1bmN0aW9uQ2FsbEVudHJ5IzEzM2YzMWI1MzNiZDg4Y2ZjOTAwZDg1MDM2ZWJmMjA0OTNmZmFmOTJlM2JjNzM0MmQ2NWFhOWZkM2NhZGNmZDM.field.Y29uZmlybWF0aW9uX3N0YXR1cw.allowed-value.c3RyaW5nOmRlbmllZA.display_name": {
+          "source": "denied",
+          "message": "odmietnuté"
         },
         "app.TWlzdHJhbEFp.action.YXBwZW5kLWNvbnZlcnNhdGlvbg.option.aW5wdXRz.union.TGlzdERhdGFUeXBlOipsaXN0PE1lc3NhZ2VJbnB1dEVudHJ5fE1lc3NhZ2VPdXRwdXRFbnRyeXxGdW5jdGlvblJlc3VsdEVudHJ5fEZ1bmN0aW9uQ2FsbEVudHJ5fFRvb2xFeGVjdXRpb25FbnRyeXxBZ2VudEhhbmRvZmZFbnRyeT4jZDU2NGE5NDgxMjZmZmQ0Y2IzODBjMDA2NjVmNTdhNzk3N2ExOTI4YTNmNTVhZGVmOTVlMTQ0ZWY0MGI0YTg0Mg.union.SGFzaERhdGFUeXBlOkZ1bmN0aW9uQ2FsbEVudHJ5IzEzM2YzMWI1MzNiZDg4Y2ZjOTAwZDg1MDM2ZWJmMjA0OTNmZmFmOTJlM2JjNzM0MmQ2NWFhOWZkM2NhZGNmZDM.field.Y3JlYXRlZF9hdA.display_name": {
           "source": "Created At",
@@ -2367,6 +2415,18 @@
           "source": "Detail",
           "message": "Detail"
         },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmNtVnpkR0Z5ZEMxamIyNTJaWEp6WVhScGIyNDpIYXNoRGF0YVR5cGU6SW1hZ2VVUkwjZGM5NTM1MDM0ZmU0OGZkODRiODkzOGUwNDEwNzNjNGIwOGU1NjE5YzUwNmQ1YWI0YWQ4MzIwNWRmNTU1YTYyYQ.field.ZGV0YWls.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "low",
+          "message": "nízka"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmNtVnpkR0Z5ZEMxamIyNTJaWEp6WVhScGIyNDpIYXNoRGF0YVR5cGU6SW1hZ2VVUkwjZGM5NTM1MDM0ZmU0OGZkODRiODkzOGUwNDEwNzNjNGIwOGU1NjE5YzUwNmQ1YWI0YWQ4MzIwNWRmNTU1YTYyYQ.field.ZGV0YWls.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "auto",
+          "message": "automaticky"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmNtVnpkR0Z5ZEMxamIyNTJaWEp6WVhScGIyNDpIYXNoRGF0YVR5cGU6SW1hZ2VVUkwjZGM5NTM1MDM0ZmU0OGZkODRiODkzOGUwNDEwNzNjNGIwOGU1NjE5YzUwNmQ1YWI0YWQ4MzIwNWRmNTU1YTYyYQ.field.ZGV0YWls.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "high",
+          "message": "vysoká"
+        },
         "app.TWlzdHJhbEFp.type.YWN0aW9uOmNtVnpkR0Z5ZEMxamIyNTJaWEp6WVhScGIyNDpIYXNoRGF0YVR5cGU6SW1hZ2VVUkwjZGM5NTM1MDM0ZmU0OGZkODRiODkzOGUwNDEwNzNjNGIwOGU1NjE5YzUwNmQ1YWI0YWQ4MzIwNWRmNTU1YTYyYQ.field.dXJs.display_name": {
           "source": "URL",
           "message": "URL"
@@ -2630,6 +2690,18 @@
         "app.TWlzdHJhbEFp.action.cmVzdGFydC1jb252ZXJzYXRpb24.option.aW5wdXRz.union.TGlzdERhdGFUeXBlOipsaXN0PE1lc3NhZ2VJbnB1dEVudHJ5fE1lc3NhZ2VPdXRwdXRFbnRyeXxGdW5jdGlvblJlc3VsdEVudHJ5fEZ1bmN0aW9uQ2FsbEVudHJ5fFRvb2xFeGVjdXRpb25FbnRyeXxBZ2VudEhhbmRvZmZFbnRyeT4jZDU2NGE5NDgxMjZmZmQ0Y2IzODBjMDA2NjVmNTdhNzk3N2ExOTI4YTNmNTVhZGVmOTVlMTQ0ZWY0MGI0YTg0Mg.union.SGFzaERhdGFUeXBlOkZ1bmN0aW9uQ2FsbEVudHJ5IzEzM2YzMWI1MzNiZDg4Y2ZjOTAwZDg1MDM2ZWJmMjA0OTNmZmFmOTJlM2JjNzM0MmQ2NWFhOWZkM2NhZGNmZDM.field.Y29uZmlybWF0aW9uX3N0YXR1cw.display_name": {
           "source": "Confirmation Status",
           "message": "Stav potvrdenia"
+        },
+        "app.TWlzdHJhbEFp.action.cmVzdGFydC1jb252ZXJzYXRpb24.option.aW5wdXRz.union.TGlzdERhdGFUeXBlOipsaXN0PE1lc3NhZ2VJbnB1dEVudHJ5fE1lc3NhZ2VPdXRwdXRFbnRyeXxGdW5jdGlvblJlc3VsdEVudHJ5fEZ1bmN0aW9uQ2FsbEVudHJ5fFRvb2xFeGVjdXRpb25FbnRyeXxBZ2VudEhhbmRvZmZFbnRyeT4jZDU2NGE5NDgxMjZmZmQ0Y2IzODBjMDA2NjVmNTdhNzk3N2ExOTI4YTNmNTVhZGVmOTVlMTQ0ZWY0MGI0YTg0Mg.union.SGFzaERhdGFUeXBlOkZ1bmN0aW9uQ2FsbEVudHJ5IzEzM2YzMWI1MzNiZDg4Y2ZjOTAwZDg1MDM2ZWJmMjA0OTNmZmFmOTJlM2JjNzM0MmQ2NWFhOWZkM2NhZGNmZDM.field.Y29uZmlybWF0aW9uX3N0YXR1cw.allowed-value.c3RyaW5nOnBlbmRpbmc.display_name": {
+          "source": "pending",
+          "message": "čakajúce"
+        },
+        "app.TWlzdHJhbEFp.action.cmVzdGFydC1jb252ZXJzYXRpb24.option.aW5wdXRz.union.TGlzdERhdGFUeXBlOipsaXN0PE1lc3NhZ2VJbnB1dEVudHJ5fE1lc3NhZ2VPdXRwdXRFbnRyeXxGdW5jdGlvblJlc3VsdEVudHJ5fEZ1bmN0aW9uQ2FsbEVudHJ5fFRvb2xFeGVjdXRpb25FbnRyeXxBZ2VudEhhbmRvZmZFbnRyeT4jZDU2NGE5NDgxMjZmZmQ0Y2IzODBjMDA2NjVmNTdhNzk3N2ExOTI4YTNmNTVhZGVmOTVlMTQ0ZWY0MGI0YTg0Mg.union.SGFzaERhdGFUeXBlOkZ1bmN0aW9uQ2FsbEVudHJ5IzEzM2YzMWI1MzNiZDg4Y2ZjOTAwZDg1MDM2ZWJmMjA0OTNmZmFmOTJlM2JjNzM0MmQ2NWFhOWZkM2NhZGNmZDM.field.Y29uZmlybWF0aW9uX3N0YXR1cw.allowed-value.c3RyaW5nOmFsbG93ZWQ.display_name": {
+          "source": "allowed",
+          "message": "povolené"
+        },
+        "app.TWlzdHJhbEFp.action.cmVzdGFydC1jb252ZXJzYXRpb24.option.aW5wdXRz.union.TGlzdERhdGFUeXBlOipsaXN0PE1lc3NhZ2VJbnB1dEVudHJ5fE1lc3NhZ2VPdXRwdXRFbnRyeXxGdW5jdGlvblJlc3VsdEVudHJ5fEZ1bmN0aW9uQ2FsbEVudHJ5fFRvb2xFeGVjdXRpb25FbnRyeXxBZ2VudEhhbmRvZmZFbnRyeT4jZDU2NGE5NDgxMjZmZmQ0Y2IzODBjMDA2NjVmNTdhNzk3N2ExOTI4YTNmNTVhZGVmOTVlMTQ0ZWY0MGI0YTg0Mg.union.SGFzaERhdGFUeXBlOkZ1bmN0aW9uQ2FsbEVudHJ5IzEzM2YzMWI1MzNiZDg4Y2ZjOTAwZDg1MDM2ZWJmMjA0OTNmZmFmOTJlM2JjNzM0MmQ2NWFhOWZkM2NhZGNmZDM.field.Y29uZmlybWF0aW9uX3N0YXR1cw.allowed-value.c3RyaW5nOmRlbmllZA.display_name": {
+          "source": "denied",
+          "message": "odmietnuté"
         },
         "app.TWlzdHJhbEFp.action.cmVzdGFydC1jb252ZXJzYXRpb24.option.aW5wdXRz.union.TGlzdERhdGFUeXBlOipsaXN0PE1lc3NhZ2VJbnB1dEVudHJ5fE1lc3NhZ2VPdXRwdXRFbnRyeXxGdW5jdGlvblJlc3VsdEVudHJ5fEZ1bmN0aW9uQ2FsbEVudHJ5fFRvb2xFeGVjdXRpb25FbnRyeXxBZ2VudEhhbmRvZmZFbnRyeT4jZDU2NGE5NDgxMjZmZmQ0Y2IzODBjMDA2NjVmNTdhNzk3N2ExOTI4YTNmNTVhZGVmOTVlMTQ0ZWY0MGI0YTg0Mg.union.SGFzaERhdGFUeXBlOkZ1bmN0aW9uQ2FsbEVudHJ5IzEzM2YzMWI1MzNiZDg4Y2ZjOTAwZDg1MDM2ZWJmMjA0OTNmZmFmOTJlM2JjNzM0MmQ2NWFhOWZkM2NhZGNmZDM.field.Y3JlYXRlZF9hdA.display_name": {
           "source": "Created At",
@@ -6051,6 +6123,18 @@
           "source": "Detail",
           "message": "Detail"
         },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okhhc2hEYXRhVHlwZTpJbWFnZVVSTCNkYzk1MzUwMzRmZTQ4ZmQ4NGI4OTM4ZTA0MTA3M2M0YjA4ZTU2MTljNTA2ZDVhYjRhZDgzMjA1ZGY1NTVhNjJh.field.ZGV0YWls.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "low",
+          "message": "nízka"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okhhc2hEYXRhVHlwZTpJbWFnZVVSTCNkYzk1MzUwMzRmZTQ4ZmQ4NGI4OTM4ZTA0MTA3M2M0YjA4ZTU2MTljNTA2ZDVhYjRhZDgzMjA1ZGY1NTVhNjJh.field.ZGV0YWls.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "auto",
+          "message": "automaticky"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okhhc2hEYXRhVHlwZTpJbWFnZVVSTCNkYzk1MzUwMzRmZTQ4ZmQ4NGI4OTM4ZTA0MTA3M2M0YjA4ZTU2MTljNTA2ZDVhYjRhZDgzMjA1ZGY1NTVhNjJh.field.ZGV0YWls.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "high",
+          "message": "vysoká"
+        },
         "app.TWlzdHJhbEFp.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okhhc2hEYXRhVHlwZTpJbWFnZVVSTCNkYzk1MzUwMzRmZTQ4ZmQ4NGI4OTM4ZTA0MTA3M2M0YjA4ZTU2MTljNTA2ZDVhYjRhZDgzMjA1ZGY1NTVhNjJh.field.dXJs.display_name": {
           "source": "URL",
           "message": "URL"
@@ -7079,6 +7163,18 @@
           "source": "Detail",
           "message": "Detail"
         },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmJXOWtaWEpoZEdVdFkyaGhkQTpIYXNoRGF0YVR5cGU6SW1hZ2VVUkwjZGM5NTM1MDM0ZmU0OGZkODRiODkzOGUwNDEwNzNjNGIwOGU1NjE5YzUwNmQ1YWI0YWQ4MzIwNWRmNTU1YTYyYQ.field.ZGV0YWls.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "low",
+          "message": "nízka"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmJXOWtaWEpoZEdVdFkyaGhkQTpIYXNoRGF0YVR5cGU6SW1hZ2VVUkwjZGM5NTM1MDM0ZmU0OGZkODRiODkzOGUwNDEwNzNjNGIwOGU1NjE5YzUwNmQ1YWI0YWQ4MzIwNWRmNTU1YTYyYQ.field.ZGV0YWls.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "auto",
+          "message": "automaticky"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOmJXOWtaWEpoZEdVdFkyaGhkQTpIYXNoRGF0YVR5cGU6SW1hZ2VVUkwjZGM5NTM1MDM0ZmU0OGZkODRiODkzOGUwNDEwNzNjNGIwOGU1NjE5YzUwNmQ1YWI0YWQ4MzIwNWRmNTU1YTYyYQ.field.ZGV0YWls.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "high",
+          "message": "vysoká"
+        },
         "app.TWlzdHJhbEFp.type.YWN0aW9uOmJXOWtaWEpoZEdVdFkyaGhkQTpIYXNoRGF0YVR5cGU6SW1hZ2VVUkwjZGM5NTM1MDM0ZmU0OGZkODRiODkzOGUwNDEwNzNjNGIwOGU1NjE5YzUwNmQ1YWI0YWQ4MzIwNWRmNTU1YTYyYQ.field.dXJs.display_name": {
           "source": "URL",
           "message": "URL"
@@ -7822,6 +7918,18 @@
         "app.TWlzdHJhbEFp.type.YWN0aW9uOlkyeGhjM05wWm5rdFkyaGhkQTpIYXNoRGF0YVR5cGU6SW1hZ2VVUkwjZGM5NTM1MDM0ZmU0OGZkODRiODkzOGUwNDEwNzNjNGIwOGU1NjE5YzUwNmQ1YWI0YWQ4MzIwNWRmNTU1YTYyYQ.field.ZGV0YWls.display_name": {
           "source": "Detail",
           "message": "Detail"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOlkyeGhjM05wWm5rdFkyaGhkQTpIYXNoRGF0YVR5cGU6SW1hZ2VVUkwjZGM5NTM1MDM0ZmU0OGZkODRiODkzOGUwNDEwNzNjNGIwOGU1NjE5YzUwNmQ1YWI0YWQ4MzIwNWRmNTU1YTYyYQ.field.ZGV0YWls.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "low",
+          "message": "nízka"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOlkyeGhjM05wWm5rdFkyaGhkQTpIYXNoRGF0YVR5cGU6SW1hZ2VVUkwjZGM5NTM1MDM0ZmU0OGZkODRiODkzOGUwNDEwNzNjNGIwOGU1NjE5YzUwNmQ1YWI0YWQ4MzIwNWRmNTU1YTYyYQ.field.ZGV0YWls.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "auto",
+          "message": "automaticky"
+        },
+        "app.TWlzdHJhbEFp.type.YWN0aW9uOlkyeGhjM05wWm5rdFkyaGhkQTpIYXNoRGF0YVR5cGU6SW1hZ2VVUkwjZGM5NTM1MDM0ZmU0OGZkODRiODkzOGUwNDEwNzNjNGIwOGU1NjE5YzUwNmQ1YWI0YWQ4MzIwNWRmNTU1YTYyYQ.field.ZGV0YWls.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "high",
+          "message": "vysoká"
         },
         "app.TWlzdHJhbEFp.type.YWN0aW9uOlkyeGhjM05wWm5rdFkyaGhkQTpIYXNoRGF0YVR5cGU6SW1hZ2VVUkwjZGM5NTM1MDM0ZmU0OGZkODRiODkzOGUwNDEwNzNjNGIwOGU1NjE5YzUwNmQ1YWI0YWQ4MzIwNWRmNTU1YTYyYQ.field.dXJs.display_name": {
           "source": "URL",

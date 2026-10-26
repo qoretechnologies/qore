@@ -189,7 +189,7 @@ public class RestSchemaRequestDataProvider inherits RestSchemaDataProviderBase {
         }
         *RestSchemaValidator::AbstractSchemaObject response_schema = response.getSchema();
         if (response_schema) {
-            AbstractDataField response_field = schema.getFieldFromSchema("body", "REST response body argument",
+            AbstractDataField response_field = schema.getResponseFieldFromSchema("body", "REST response body argument",
                 response_schema);
             AbstractDataProviderType type = response_field.getType();
             *hash<string, AbstractDataField> rv = type.getFields();
@@ -316,7 +316,7 @@ public class RestSchemaRequestDataProvider inherits RestSchemaDataProviderBase {
         HashDataType rv();
         *RestSchemaValidator::AbstractSchemaObject response_schema = response.getSchema();
         if (response_schema) {
-            rv.addField(schema.getFieldFromSchema("body", "REST " + label + " body argument", response_schema));
+            rv.addField(schema.getResponseFieldFromSchema("body", "REST " + label + " body argument", response_schema));
         }
         if (response.headers) {
             rv.addField(schema.getFieldForHeaders("headers", response.headers));

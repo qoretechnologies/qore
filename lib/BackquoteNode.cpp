@@ -245,7 +245,9 @@ QoreChildWaitResult qore_wait_child_process(pid_t pid, pid_t kill_target, int& s
 
 QoreStringNode* backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink) {
     rc = 0;
-    QoreSandboxManagerHelper smh;
+    // the child runs in its own process group when a sandbox governs the thread, so that interrupting the sandbox
+    // ends the whole command; this is not a policy check, and a system-policy capability does not change it
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::All);
     const bool use_pgroup = (bool)smh;
 #ifdef QORE_BACKQUOTE_POSIX_SPAWN
     {

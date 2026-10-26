@@ -1,0 +1,131 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.; MIT license (see COPYING.MIT).
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires OpenApi3
+%requires OpenApi3DataProvider
+%requires RestSchemaActions
+%requires json
+%exec-class OpenApi3NullableEnumTest
+
+#! A nullable enumeration has the choices of the enumeration it wraps, and still accepts null
+class OpenApi3NullableEnumTest inherits QUnit::Test {
+    public {
+        const Status = {"type": "string", "enum": ("open", "closed"), "x-enumNames": ("Open", "Closed")};
+
+        const Schemas = {
+            "Status": Status,
+            "Ticket": {"type": "object", "properties": {
+                # the OpenAPI 3.1 form of a nullable enumeration
+                "any_of": {"anyOf": (Status, {"type": "null"})},
+                "one_of": {"oneOf": ({"type": "null"}, Status)},
+                # a reference to a component enumeration, made nullable
+                "ref_any_of": {"anyOf": ({"$ref": "#/components/schemas/Status"}, {"type": "null"})},
+                # a single allOf member wrapped in a nullable composition
+                "nested": {"anyOf": ({"allOf": ({"$ref": "#/components/schemas/Status"},)}, {"type": "null"})},
+                "plain": Status,
+                # a choice between two enumerations is not one enumeration
+                "two": {"anyOf": (Status, {"type": "string", "enum": ("x", "y")})},
+                # nor is a nullable string without one
+                "free": {"anyOf": ({"type": "string"}, {"type": "null"})},
+            }},
+        };
+
+        const Nullable = ("any_of", "one_of", "ref_any_of", "nested");
+    }
+
+    private {
+        #! The document of the types under test
+        OpenApi3Schema doc;
+    }
+
+    constructor() : Test("OpenAPI nullable enumerations", "1.0", \ARGV) {
+        addTestCase("a nullable enumeration has the choices of the enumeration", \choicesTest());
+        addTestCase("a composition that is not one enumeration has no choices", \noChoicesTest());
+        addTestCase("a nullable enumeration accepts null and no value", \nullTest());
+        addTestCase("a nullable enumeration refuses a value that is not a choice", \refusalTest());
+        addTestCase("an action option has the choices", \actionTest());
+        set_return_value(main());
+    }
+
+    choicesTest() {
+        hash<string, AbstractDataField> fields = ticket().getFields();
+        list<hash<auto>> expected = (
+            {"value": "open", "display_name": "Open"},
+            {"value": "closed", "display_name": "Closed"},
+        );
+        foreach string name in (Nullable + ("plain",)) {
+            *list<hash<AllowedValueInfo>> choices = fields{name}.getAllowedValues();
+            assertEq(expected, map $1{"value", "display_name"}, choices, name);
+        }
+    }
+
+    noChoicesTest() {
+        hash<string, AbstractDataField> fields = ticket().getFields();
+        foreach string name in (("two", "free")) {
+            assertNothing(fields{name}.getAllowedValues(), name);
+        }
+    }
+
+    nullTest() {
+        AbstractDataProviderType type = ticket();
+        foreach string name in (Nullable) {
+            # the null of a JSON message has no value in Qore
+            hash<auto> value = type.acceptsValue({name: NULL});
+            assertTrue(value.hasKey(name) && !exists value{name}, name);
+            assertEq({name: "open"}, type.acceptsValue({name: "open"}), name);
+            AbstractDataField field = type.getFields(){name};
+            assertNothing(field.acceptsValue(NOTHING), name);
+            assertFalse(exists field.acceptsValue(NULL), name);
+        }
+        assertEq({}, type.acceptsValue({}));
+    }
+
+    refusalTest() {
+        AbstractDataProviderType type = ticket();
+        foreach string name in (Nullable) {
+            assertThrows("RUNTIME-TYPE-ERROR", "bogus", \type.acceptsValue(), {name: "bogus"}, name);
+        }
+    }
+
+    actionTest() {
+        RestSchemaActionSet actions(document(), (
+            <RestSchemaActionInfo>{"action": "create-ticket", "method": "POST", "path": "/tickets",
+                "display_name": "Create Ticket", "short_desc": "Creates a ticket", "desc": "Creates a ticket"},
+        ));
+        hash<auto> fields = actions.getOperationEx("create-ticket").getRequestFields();
+        foreach string name in (Nullable) {
+            assertEq(("open", "closed"), map $1.value, fields{name}.getAllowedValues(), name);
+            assertEq(("Open", "Closed"), map $1.display_name, fields{name}.getAllowedValues(), name);
+        }
+    }
+
+    #! Returns the request type of a ticket
+    /** The document is kept by the test: its schema objects refer to it weakly, so a type built from a temporary
+        document would lose it
+    */
+    private AbstractDataProviderType ticket() {
+        doc = document();
+        return doc.components.schemas.Ticket.getDataType();
+    }
+
+    #! Returns an OpenAPI 3.1 document with a ticket whose status is a nullable enumeration
+    private static OpenApi3Schema document() {
+        hash<auto> ticket = {"$ref": "#/components/schemas/Ticket"};
+        return OpenApi3Loader::fromString(make_json({
+            "openapi": "3.1.0", "info": {"title": "Nullable enumerations", "version": "1"},
+            "paths": {"/tickets": {"post": {
+                "operationId": "createTicket",
+                "requestBody": {"required": True, "content": {"application/json": {"schema": ticket}}},
+                "responses": {"200": {"description": "The ticket", "content": {
+                    "application/json": {"schema": ticket},
+                }}},
+            }}},
+            "components": {"schemas": Schemas},
+        }), True);
+    }
+}

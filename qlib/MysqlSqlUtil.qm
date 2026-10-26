@@ -2524,6 +2524,22 @@ end";
             return mysql_get_sql_identifier(name);
         }
 
+        #! returns the name in an alias given as one complete identifier in backticks or double quotes, or @ref nothing
+        /** MySQL delimits an identifier in backticks, and takes an alias in double quotes as the alias also when
+            \c ANSI_QUOTES is not set, so either is used as given (issue #2163); an alias in double quotes with a
+            backslash is not, as MySQL reads a backslash in a string in double quotes as an escape character
+
+            @since MysqlSqlUtil 1.6
+        */
+        *string getDelimitedAliasName(string alias) {
+            *string name = AbstractTable::getDelimitedName(alias, "`", "`");
+            if (exists name) {
+                return name;
+            }
+            name = AbstractTable::getDelimitedName(alias, "\"", "\"");
+            return exists name && name.find("\\") < 0 ? name : NOTHING;
+        }
+
         #! Converts generic date format codes to MySQL DATE_FORMAT() specifiers
         /** @param fmt the format string with generic codes: YYYY, YY, MM, DD, HH, mm, SS, us
             @return the format string with MySQL-specific codes: %Y, %y, %m, %d, %H, %i, %s, %f

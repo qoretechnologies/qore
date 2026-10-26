@@ -528,14 +528,11 @@ public class RestSchemaActionSetTest inherits QUnit::Test {
             assertThrows("REST-SCHEMA-ACTION-ERROR", \op.unflatten(), {"id": "server-id", "name": "Invoices"});
             hash<auto> input = {"name": "Invoices", "enabled": False};
             assertEq({"body": unwrap ? {"resource": input} : input}, op.unflatten(input).req);
+            # the request has no read-only declaration, so an overlay naming one names nothing
             foreach string name in ("id", "body.id") {
-                foreach bool ignore in (True, False) {
-                    info.fields = {name: <RestSchemaFieldOverlayInfo>{"ignore": ignore}};
-                    RestSchemaActionOperation overridden(local, info);
-                    assertEq(("name", "enabled"), keys overridden.getRequestFields(),
-                        "an existing overlay can address a read-only declaration without exposing it");
-                    assertEq({"body": unwrap ? {"resource": input} : input}, overridden.unflatten(input).req);
-                }
+                info.fields = {name: <RestSchemaFieldOverlayInfo>{"ignore": True}};
+                assertThrows("REST-SCHEMA-ACTION-ERROR", "overlay entry \"" + name + "\" does not name any value",
+                    sub () { new RestSchemaActionOperation(local, info).getRequestFields(); });
             }
         }
     }

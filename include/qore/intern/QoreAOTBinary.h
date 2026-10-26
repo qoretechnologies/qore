@@ -45,6 +45,7 @@
 #include <memory>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 #include <qore/QoreValue.h>
 #include <qore/QoreEnumDecl.h>
@@ -213,8 +214,9 @@ constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //!      a bound-variant flag and exact constructor signature for VT_NEW_OBJECT defaults. This uses a
 //!      fresh version because development versions 20 and 21 had different payloads on the performance branch.
 //!      Opcodes 409/410 retain SnapshotInt/SnapshotFloat. CheckReturnValue is 411;
-//!      the reader maps upstream v21 opcode 409 (header maximum 409) to it before
-//!      instruction dispatch; older performance files with maximum 410 retain snapshots.
+//!      IteratorRelease/ReleaseOwnedTemp are appended as 412/413. The reader maps upstream v21
+//!      opcode 409 (header maximum 409 or 411) to CheckReturnValue, and its 410/411 cleanup
+//!      opcodes (maximum 411) to 412/413. Older performance files with maximum 410 retain snapshots.
 constexpr uint16_t QORE_AOT_BINARY_VERSION = 22;
 constexpr uint16_t QORE_AOT_OBJECT_DEFAULT_VARIANT_VERSION = 22;
 constexpr uint16_t QORE_AOT_CLOSURE_ENTRY_VERSION = 22;
@@ -862,6 +864,15 @@ public:
     //! this build-only cache, which can contain source directories and schema dates.
     bool emit_parse_constant_values = true;
 
+    //! Record a digest of each class, hashdecl, function and method record the declaration sections write.
+    //! Incremental object writers set this: the digests become aggregate-only rows of the symbol index, so the
+    //! aggregate contract moves when anything a script aggregate embeds from the object's records moves.
+    bool emit_aggregate_declaration_digests = false;
+
+    //! The digests recorded when emit_aggregate_declaration_digests is set, as symbol-index context rows;
+    //! consumed by serializeSymbolIndex()
+    std::vector<std::pair<std::string, std::string>> aggregate_declaration_digests;
+
     //! Fully-qualified constant currently being serialized. Used to avoid
     //! encoding self-referential VT_CONST_REF values when a top-level constant's
     //! own container node appears in the program reverse map.
@@ -1050,6 +1061,9 @@ public:
 
     //! Get current write position in buffer
     uint32_t position() const { return static_cast<uint32_t>(buffer.size()); }
+
+    //! Get the bytes written so far
+    const std::vector<uint8_t>& getBuffer() const { return buffer; }
 
     //! Overwrite a U32 at a previously recorded position (for patching size fields)
     void patchU32(uint32_t pos, uint32_t v) {

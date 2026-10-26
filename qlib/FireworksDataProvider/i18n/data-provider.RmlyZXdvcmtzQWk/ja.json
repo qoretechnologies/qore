@@ -14935,6 +14935,18 @@
           "source": "Opt-in sampling mask metadata for generated tokens. When set to `\"count\"`, each generated token in the new logprobs format includes the number of token logits still eligible for sampling after filters such as top_p and top_k are applied. `\"non_zero_list\"` additionally returns active token IDs in `sampling_mask`; `\"non_zero_buffer\"` additionally returns a base64-encoded little-endian uint32 buffer of active token IDs. Non-zero payloads are omitted for positions with more active tokens than 1000.",
           "message": "生成トークン用のオプトインサンプリングマスクメタデータです。`\"count\"` を設定すると、新しいlogprobs形式の各生成トークンに、top_p や top_k などのフィルタ適用後にサンプリング可能なトークンロジット数が含まれます。`\"non_zero_list\"` はさらに `sampling_mask` にアクティブトークンIDを返し、`\"non_zero_buffer\"` はさらにアクティブトークンIDのリトルエンディアンuint32バッファ（Base64エンコード）を返します。アクティブトークンが1000を超える位置ではペイロードは省略されます。"
         },
+        "app.RmlyZXdvcmtzQWk.action.dGV4dC1jb21wbGV0aW9u.option.c2FtcGxpbmdfbWFzaw.allowed-value.c3RyaW5nOmNvdW50.display_name": {
+          "source": "count",
+          "message": "カウント"
+        },
+        "app.RmlyZXdvcmtzQWk.action.dGV4dC1jb21wbGV0aW9u.option.c2FtcGxpbmdfbWFzaw.allowed-value.c3RyaW5nOm5vbl96ZXJvX2xpc3Q.display_name": {
+          "source": "non_zero_list",
+          "message": "非ゼロリスト"
+        },
+        "app.RmlyZXdvcmtzQWk.action.dGV4dC1jb21wbGV0aW9u.option.c2FtcGxpbmdfbWFzaw.allowed-value.c3RyaW5nOm5vbl96ZXJvX2J1ZmZlcg.display_name": {
+          "source": "non_zero_buffer",
+          "message": "非ゼロバッファ"
+        },
         "app.RmlyZXdvcmtzQWk.action.dGV4dC1jb21wbGV0aW9u.option.ZWNobw.display_name": {
           "source": "Echo",
           "message": "エコー"
@@ -15298,6 +15310,10 @@
         "app.RmlyZXdvcmtzQWk.action.dGV4dC1jb21wbGV0aW9u.option.dGhpbmtpbmc.union.SGFzaERhdGFUeXBlOipUaGlua2luZ0NvbmZpZ0VuYWJsZWQjMGUwYWE2MzIzNTAzN2ZlNzY3NDE1YTRmYTQwYzNmMjJiODFhM2RlODZkYWJjYWFlMzMyM2FiYjc4MmJjYjFmNg.field.a2VlcA.desc": {
           "source": "Controls whether historical reasoning content is preserved in the prompt. When set to `\"all\"`, all previous assistant turns' reasoning_content is included in the rendered prompt (equivalent to `reasoning_history: \"preserved\"`). When omitted (null), the model uses its default history behavior. Only valid when `type` is `\"enabled\"`.",
           "message": "履歴推論コンテンツをプロンプトに保持するかを制御します。`\"all\"`に設定すると、以前のアシスタントの応答のreasoning_contentがレンダリングプロンプトに含まれます（`reasoning_history: \"preserved\"`と同等）。省略（null）すると、モデルはデフォルトの履歴動作を使用します。`type`が`\"enabled\"`のときのみ有効です。"
+        },
+        "app.RmlyZXdvcmtzQWk.action.dGV4dC1jb21wbGV0aW9u.option.dGhpbmtpbmc.union.SGFzaERhdGFUeXBlOipUaGlua2luZ0NvbmZpZ0VuYWJsZWQjMGUwYWE2MzIzNTAzN2ZlNzY3NDE1YTRmYTQwYzNmMjJiODFhM2RlODZkYWJjYWFlMzMyM2FiYjc4MmJjYjFmNg.field.a2VlcA.allowed-value.c3RyaW5nOmFsbA.display_name": {
+          "source": "all",
+          "message": "すべて"
         },
         "app.RmlyZXdvcmtzQWk.action.dGV4dC1jb21wbGV0aW9u.option.dGhpbmtpbmc.union.SGFzaERhdGFUeXBlOipUaGlua2luZ0NvbmZpZ0VuYWJsZWQjMGUwYWE2MzIzNTAzN2ZlNzY3NDE1YTRmYTQwYzNmMjJiODFhM2RlODZkYWJjYWFlMzMyM2FiYjc4MmJjYjFmNg.field.dHlwZQ.display_name": {
           "source": "Type",
@@ -16135,6 +16151,18 @@
           "source": "Opt-in sampling mask metadata for generated tokens. When set to `\"count\"`, each generated token in the new logprobs format includes the number of token logits still eligible for sampling after filters such as top_p and top_k are applied. `\"non_zero_list\"` additionally returns active token IDs in `sampling_mask`; `\"non_zero_buffer\"` additionally returns a base64-encoded little-endian uint32 buffer of active token IDs. Non-zero payloads are omitted for positions with more active tokens than 1000.",
           "message": "生成トークン用のオプトインサンプリングマスクメタデータです。`\"count\"` を設定すると、新しいlogprobs形式の各生成トークンに、top_p や top_k などのフィルタ適用後にサンプリング可能なトークンロジット数が含まれます。`\"non_zero_list\"` はさらに `sampling_mask` にアクティブトークンIDを返し、`\"non_zero_buffer\"` はさらにアクティブトークンIDのリトルエンディアンuint32バッファ（Base64エンコード）を返します。アクティブトークンが1000を超える位置ではペイロードは省略されます。"
         },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.c2FtcGxpbmdfbWFzaw.allowed-value.c3RyaW5nOmNvdW50.display_name": {
+          "source": "count",
+          "message": "カウント"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.c2FtcGxpbmdfbWFzaw.allowed-value.c3RyaW5nOm5vbl96ZXJvX2xpc3Q.display_name": {
+          "source": "non_zero_list",
+          "message": "非ゼロリスト"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.c2FtcGxpbmdfbWFzaw.allowed-value.c3RyaW5nOm5vbl96ZXJvX2J1ZmZlcg.display_name": {
+          "source": "non_zero_buffer",
+          "message": "非ゼロバッファ"
+        },
         "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.ZWNobw.display_name": {
           "source": "Echo",
           "message": "エコー"
@@ -16334,6 +16362,10 @@
         "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.dGhpbmtpbmc.union.SGFzaERhdGFUeXBlOipUaGlua2luZ0NvbmZpZ0VuYWJsZWQjMGUwYWE2MzIzNTAzN2ZlNzY3NDE1YTRmYTQwYzNmMjJiODFhM2RlODZkYWJjYWFlMzMyM2FiYjc4MmJjYjFmNg.field.a2VlcA.desc": {
           "source": "Controls whether historical reasoning content is preserved in the prompt. When set to `\"all\"`, all previous assistant turns' reasoning_content is included in the rendered prompt (equivalent to `reasoning_history: \"preserved\"`). When omitted (null), the model uses its default history behavior. Only valid when `type` is `\"enabled\"`.",
           "message": "履歴推論コンテンツをプロンプトに保持するかを制御します。`\"all\"`に設定すると、以前のアシスタントの応答のreasoning_contentがレンダリングプロンプトに含まれます（`reasoning_history: \"preserved\"`と同等）。省略（null）すると、モデルはデフォルトの履歴動作を使用します。`type`が`\"enabled\"`のときのみ有効です。"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.dGhpbmtpbmc.union.SGFzaERhdGFUeXBlOipUaGlua2luZ0NvbmZpZ0VuYWJsZWQjMGUwYWE2MzIzNTAzN2ZlNzY3NDE1YTRmYTQwYzNmMjJiODFhM2RlODZkYWJjYWFlMzMyM2FiYjc4MmJjYjFmNg.field.a2VlcA.allowed-value.c3RyaW5nOmFsbA.display_name": {
+          "source": "all",
+          "message": "すべて"
         },
         "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.dGhpbmtpbmc.union.SGFzaERhdGFUeXBlOipUaGlua2luZ0NvbmZpZ0VuYWJsZWQjMGUwYWE2MzIzNTAzN2ZlNzY3NDE1YTRmYTQwYzNmMjJiODFhM2RlODZkYWJjYWFlMzMyM2FiYjc4MmJjYjFmNg.field.dHlwZQ.display_name": {
           "source": "Type",
@@ -17323,6 +17355,22 @@
           "source": "How much effort the model should put into its response. Higher effort levels may result in more thorough analysis but take longer.\n\nValid values are `low`, `medium`, `high`, or `max`.\n\n**Fireworks behavior:** The `effort` level is converted to Fireworks [`reasoning_effort`](/api-reference/post-chatcompletions). Values `low`, `medium`, and `high` map directly. `max` is mapped to `high` since Fireworks does not have a `max` effort level.",
           "message": "モデルが応答にどれだけの努力を払うか。高い努力レベルはより包括的な分析をもたらす可能性がありますが、時間がかかります。\n\n有効な値は `low`、`medium`、`high`、または `max` です。\n\n**Fireworksの動作:** `effort` レベルは Fireworks [`reasoning_effort`](/api-reference/post-chatcompletions) に変換されます。`low`、`medium`、`high` は直接マッピングされます。Fireworksには `max` の努力レベルがないため、`max` は `high` にマッピングされます。"
         },
+        "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLW1lc3NhZ2U.option.b3V0cHV0X2NvbmZpZw.field.ZWZmb3J0.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "low",
+          "message": "低"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLW1lc3NhZ2U.option.b3V0cHV0X2NvbmZpZw.field.ZWZmb3J0.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "medium",
+          "message": "中"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLW1lc3NhZ2U.option.b3V0cHV0X2NvbmZpZw.field.ZWZmb3J0.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "high",
+          "message": "高"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLW1lc3NhZ2U.option.b3V0cHV0X2NvbmZpZw.field.ZWZmb3J0.allowed-value.c3RyaW5nOm1heA.display_name": {
+          "source": "max",
+          "message": "最大"
+        },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLW1lc3NhZ2U.option.b3V0cHV0X2NvbmZpZw.field.Zm9ybWF0.display_name": {
           "source": "Format",
           "message": "フォーマット"
@@ -17631,6 +17679,10 @@
           "source": "Type",
           "message": "タイプ"
         },
+        "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLW1lc3NhZ2U.option.dG9vbHM.field.dHlwZQ.allowed-value.c3RyaW5nOmN1c3RvbQ.display_name": {
+          "source": "custom",
+          "message": "カスタム"
+        },
         "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLW1lc3NhZ2U.option.dG9wX2s.display_name": {
           "source": "Top K",
           "message": "Top K"
@@ -17854,6 +17906,30 @@
         "app.RmlyZXdvcmtzQWk.action.cmVyYW5r.option.dGFzaw.desc": {
           "source": "Optional instruction describing the relevance task.",
           "message": "関連性タスクを記述するオプション指示です。"
+        },
+        "app.RmlyZXdvcmtzQWk.action.dGV4dC1jb21wbGV0aW9u.option.cmVhc29uaW5nX2hpc3Rvcnk.allowed-value.c3RyaW5nOmRpc2FibGVk.display_name": {
+          "source": "disabled",
+          "message": "無効"
+        },
+        "app.RmlyZXdvcmtzQWk.action.dGV4dC1jb21wbGV0aW9u.option.cmVhc29uaW5nX2hpc3Rvcnk.allowed-value.c3RyaW5nOmludGVybGVhdmVk.display_name": {
+          "source": "interleaved",
+          "message": "インターリーブ"
+        },
+        "app.RmlyZXdvcmtzQWk.action.dGV4dC1jb21wbGV0aW9u.option.cmVhc29uaW5nX2hpc3Rvcnk.allowed-value.c3RyaW5nOnByZXNlcnZlZA.display_name": {
+          "source": "preserved",
+          "message": "保持"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.cmVhc29uaW5nX2hpc3Rvcnk.allowed-value.c3RyaW5nOmRpc2FibGVk.display_name": {
+          "source": "disabled",
+          "message": "無効"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.cmVhc29uaW5nX2hpc3Rvcnk.allowed-value.c3RyaW5nOmludGVybGVhdmVk.display_name": {
+          "source": "interleaved",
+          "message": "インターリーブ"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.cmVhc29uaW5nX2hpc3Rvcnk.allowed-value.c3RyaW5nOnByZXNlcnZlZA.display_name": {
+          "source": "preserved",
+          "message": "保持"
         }
       }
     }

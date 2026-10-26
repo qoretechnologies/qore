@@ -38,6 +38,27 @@ public class ProviderIndexOptionTypesTest inherits QUnit::Test {
         set_return_value(main());
     }
 
+    #! packs test data with MessagePack, as the index files are written
+    /** The test cases that use it skip without the msgpack module (checkModules()), which this test only tries to
+        load, so that the test parses and reports the skip without it
+    */
+    private static binary packTestData(auto data) {
+%ifdef NoMsgPack
+        throw "MISSING-FEATURE-ERROR", "the msgpack module is not available";
+%else
+        return msgpack_pack(data, MSGPACK_QORE_MODE);
+%endif
+    }
+
+    #! unpacks MessagePack test data, as the index files are read; see packTestData()
+    private static auto unpackTestData(binary data) {
+%ifdef NoMsgPack
+        throw "MISSING-FEATURE-ERROR", "the msgpack module is not available";
+%else
+        return msgpack_unpack(data, MSGPACK_QORE_MODE);
+%endif
+    }
+
     private checkModules() {
 %ifdef NoMsgPack
         testSkip("no MessagePack support");
@@ -163,11 +184,11 @@ public class ProviderIndexOptionTypesTest inherits QUnit::Test {
     #! Returns the unpacked metadata cache chunk of the fixture app
     private static hash<auto> readChunk(string dir) {
         hash<auto> routing = parse_yaml(ReadOnlyFile::readTextFile(dir + DirSep + "qore-routing-index.yaml"));
-        hash<auto> manifest = msgpack_unpack(ReadOnlyFile::readBinaryFile(sprintf("%s%sqore-data-index-manifest-%s"
-            ".msgpack", dir, DirSep, routing.metadata_cache_sha256)), MSGPACK_QORE_MODE);
+        hash<auto> manifest = unpackTestData(ReadOnlyFile::readBinaryFile(sprintf("%s%sqore-data-index-manifest-%s"
+            ".msgpack", dir, DirSep, routing.metadata_cache_sha256)));
         string path = sprintf("%s%sqore-data-index-%s.msgpack", dir, DirSep,
             manifest.apps{ProviderIndexOptionTypeFixture::App}.sha256);
-        return msgpack_unpack(uncompress_to_binary(ReadOnlyFile::readBinaryFile(path)), MSGPACK_QORE_MODE);
+        return unpackTestData(uncompress_to_binary(ReadOnlyFile::readBinaryFile(path)));
     }
 
     #! Makes the given directory the index directory; returns code that restores the previous directory

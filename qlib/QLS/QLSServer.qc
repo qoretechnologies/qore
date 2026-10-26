@@ -351,13 +351,13 @@ public class QLSServer {
         hash<string, list<string>> metaPrefixIndex;
 
         #! Process-local cache for immutable standard module URI lists and lazily parsed documents
-        static hash<auto> stdModuleDocsCache;
+        static hash<auto> stdModuleDocsCache = {};
 
         #! Lock protecting standard module document cache initialization
         static Mutex stdModuleDocsCacheMutex();
 
         #! Process-local cache for immutable builtin metadata and lookup indexes
-        static hash<auto> builtinMetadataCache;
+        static hash<auto> builtinMetadataCache = {};
 
         #! Lock protecting builtin metadata cache initialization
         static Mutex builtinMetadataCacheMutex();

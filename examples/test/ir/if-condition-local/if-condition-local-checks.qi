@@ -1,0 +1,154 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# Shared checks for the lifetime of a local declared in the condition of an if statement: run in the test program
+# itself and in a worker in each execution mode.
+#
+# Such a local (if (*T v = ...)) belongs to the if statement: the AST interpreter instantiates it for the statement
+# and releases it when the statement ends, however it ends.  The IR tiers released it only when the function
+# returned, so an object it held was destroyed late: in a loop, one iteration late.  Each check records the events of
+# a function in order, with the destructions of the objects the locals hold, and returns them as a string; the
+# events are those of the AST interpreter.
+
+#! an object that records its construction and destruction
+class IclTracked {
+    public {
+        #! the events recorded
+        static list<string> events = ();
+    }
+
+    private {
+        string name;
+    }
+
+    constructor(string name) {
+        self.name = name;
+    }
+
+    destructor() {
+        events += "~" + name;
+    }
+
+    string getName() {
+        return name;
+    }
+}
+
+#! records an event
+sub icl_event(string event) {
+    IclTracked::events += event;
+}
+
+#! returns the events recorded since the last call, joined with spaces
+string sub icl_take_events() {
+    string rv = IclTracked::events.join(" ");
+    IclTracked::events = ();
+    return rv;
+}
+
+#! the local is released when the statement ends, before the statement after it
+string sub icl_plain() {
+    if (*IclTracked t = new IclTracked("a")) {
+        icl_event("then:" + t.getName());
+    }
+    icl_event("after");
+    return icl_take_events();
+}
+
+#! the else branch: the local is released after the else branch, before the statement after the if
+string sub icl_else() {
+    if ((IclTracked t = new IclTracked("b")).getName() == "x") {
+        icl_event("then");
+    } else {
+        icl_event("else:" + t.getName());
+    }
+    icl_event("after");
+    return icl_take_events();
+}
+
+#! a continue out of the branch releases the local before the next iteration
+string sub icl_continue() {
+    for (int i = 0; i < 3; ++i) {
+        icl_event("iter" + i);
+        if (*IclTracked t = new IclTracked("c" + i)) {
+            continue;
+        }
+    }
+    icl_event("after");
+    return icl_take_events();
+}
+
+#! a break out of the branch releases the local before the statement after the loop
+string sub icl_break() {
+    while (True) {
+        if (*IclTracked t = new IclTracked("d")) {
+            break;
+        }
+    }
+    icl_event("after");
+    return icl_take_events();
+}
+
+#! a return from the branch releases the local before the locals of the enclosing block
+sub icl_return_impl() {
+    IclTracked outer("outer");
+    if (*IclTracked t = new IclTracked("e")) {
+        icl_event("return");
+        return;
+    }
+}
+
+string sub icl_return() {
+    icl_return_impl();
+    icl_event("after");
+    return icl_take_events();
+}
+
+#! an exception out of the branch releases the local before the catch block runs
+string sub icl_exception() {
+    try {
+        if (*IclTracked t = new IclTracked("f")) {
+            throw "ICL-TEST", t.getName();
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        icl_event("catch:" + ex.desc);
+    }
+    icl_event("after");
+    return icl_take_events();
+}
+
+#! nested if statements release their locals innermost first, each at the end of its own statement
+string sub icl_nested() {
+    if (*IclTracked t = new IclTracked("g")) {
+        if (*IclTracked u = new IclTracked("h")) {
+            icl_event("inner:" + t.getName() + u.getName());
+        }
+        icl_event("outer");
+    }
+    icl_event("after");
+    return icl_take_events();
+}
+
+#! the events of each check, as the AST interpreter records them
+const IclExpected = {
+    "plain": "then:a ~a after",
+    "else": "else:b ~b after",
+    "continue": "iter0 ~c0 iter1 ~c1 iter2 ~c2 after",
+    "break": "~d after",
+    "return": "return ~e ~outer after",
+    "exception": "~f catch:f after",
+    "nested": "inner:gh ~h outer ~g after",
+};
+
+#! returns the events of each check
+hash<string, string> sub icl_results() {
+    return {
+        "plain": icl_plain(),
+        "else": icl_else(),
+        "continue": icl_continue(),
+        "break": icl_break(),
+        "return": icl_return(),
+        "exception": icl_exception(),
+        "nested": icl_nested(),
+    };
+}

@@ -7520,6 +7520,10 @@ public:
 
         //! Created by initRequest() on the thread that starts the request
         DLLLOCAL RequestState(const con_info& origin) : chain(origin), conn(origin) {
+            // the redirect task raises into task_xsink on a callback worker, and the thread that drives the operation
+            // takes the exceptions from it: they are counted on no thread while they are held here (see
+            // ExceptionSink::markExternallyManaged()), and counted on the driving thread when it takes them
+            task_xsink.markExternallyManaged();
         }
 
         DLLLOCAL ~RequestState() {

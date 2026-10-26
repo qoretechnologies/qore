@@ -117,4 +117,11 @@ protected:
     }
 };
 
+//! returns true if the value is a weak reference to an object that has been destroyed
+/** The AST interpreter evaluates such a reference as no value (WeakReferenceNode::evalImpl())
+*/
+DLLLOCAL inline bool qore_weak_reference_target_destroyed(const QoreValue& v) {
+    return v.getType() == NT_WEAKREF && !v.get<const WeakReferenceNode>()->get()->isValid();
+}
+
 #endif

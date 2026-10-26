@@ -681,7 +681,8 @@ binary make_cbor(auto data) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     bytes_sink<std::vector<uint8_t>> sink(buf);
     basic_cbor_encoder<bytes_sink<std::vector<uint8_t>>> encoder(std::move(sink));
 
-    QoreSandboxManagerHelper smh;
+    // nesting and interrupt limits of the governing sandbox; not a policy check
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::All);
     // the encoder throws an exception for errors such as exceeding its maximum nesting depth
     try {
         if (do_cbor_value(encoder, data, 0, smh.get(), xsink)) {
@@ -728,7 +729,8 @@ binary make_cbor(auto data) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     @since json 1.11
 */
 auto parse_cbor(binary cbor_data) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
-    QoreSandboxManagerHelper smh;
+    // nesting and interrupt limits of the governing sandbox; not a policy check
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::All);
     CborToQoreVisitor visitor(xsink, smh.get());
 
     try {

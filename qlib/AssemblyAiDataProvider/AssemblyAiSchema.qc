@@ -135,7 +135,7 @@ public class AssemblyAiSchema {
         };
     }
     private {
-        static hash<string, RestSchemaActionSet> action_sets;
+        static hash<string, RestSchemaActionSet> action_sets = {};
         static Mutex lck();
     }
 

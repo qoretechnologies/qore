@@ -428,6 +428,25 @@ DLLLOCAL int64 q_get_list_create_count();
     with that work, so tests use the count to verify how the work grows; see dbg_get_cancel_check_count().
 */
 DLLLOCAL int64 q_get_cancel_check_count();
+
+//! Returns the number of times a cancellation request woke a registered wait of the given thread (debug builds)
+/** A wait that a request wakes through its registered condition or wakeup channel is counted once per request; a
+    wait that only noticed a request at a periodic check would not be counted.  A negative TID means the current
+    thread; see dbg_get_cancel_wake_count().
+*/
+DLLLOCAL int64 q_get_cancel_wake_count(int tid);
+
+//! Waits until the given thread has registered a cancellable wait; returns false if it has not in \a timeout_ms
+/** Tests use it to make a cancellation request only once the thread is blocked in the wait under test, without
+    sleeping; see dbg_wait_for_cancellable_wait().
+*/
+DLLLOCAL bool q_wait_for_cancellable_wait(int tid, int64 timeout_ms);
+
+//! Requests the cancellation of a thread while it is blocked in a registered cancellable wait (debug builds)
+/** The thread cannot leave the wait before the request has been delivered to it, so a test that uses this can
+    assert that the request woke the wait; see dbg_cancel_in_cancellable_wait()
+*/
+DLLLOCAL bool q_cancel_in_cancellable_wait(int tid, const char* reason, int64 timeout_ms);
 #endif
 // increments or decrements the object count depending on the sign of the argument (cannot be 0)
 DLLLOCAL void inc_container_obj(const AbstractQoreNode* n, int dt);

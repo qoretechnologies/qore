@@ -895,6 +895,14 @@
           "source": "Role of the input: `query` for search queries, `document` for passages.",
           "message": "Ruolo dell'input: `query` per le query di ricerca, `document` per i passaggi."
         },
+        "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXRfdHlwZQ.allowed-value.c3RyaW5nOnF1ZXJ5.display_name": {
+          "source": "query",
+          "message": "query"
+        },
+        "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXRfdHlwZQ.allowed-value.c3RyaW5nOmRvY3VtZW50.display_name": {
+          "source": "document",
+          "message": "documento"
+        },
         "app.SmluYUFp.action.cmVyYW5r.display_name": {
           "source": "Rerank Documents",
           "message": "Riordina documenti"

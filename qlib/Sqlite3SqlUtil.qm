@@ -1593,6 +1593,17 @@ string sql = pk.getTableConstraintSql();
             return sqlite3_get_sql_identifier(name);
         }
 
+        #! returns the name in an alias given as one complete delimited identifier, or @ref nothing
+        /** SQLite delimits an identifier in double quotes or backticks, in which the delimiter is doubled, or in
+            brackets, which cannot have a \c "]", so each is used as given (issue #2163)
+
+            @since Sqlite3SqlUtil 1.2
+        */
+        *string getDelimitedAliasName(string alias) {
+            return AbstractTable::getDelimitedName(alias, "\"", "\"") ?? AbstractTable::getDelimitedName(alias, "`",
+                "`") ?? (alias =~ /\A\[[^\]]+\]\z/ ? alias.substr(1, -1) : NOTHING);
+        }
+
         #! returns the column operator map for this object
         private hash getColumnOperatorMapImpl() {
             return Sqlite3CopMap;

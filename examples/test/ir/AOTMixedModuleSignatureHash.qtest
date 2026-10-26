@@ -1,0 +1,168 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTMixedModuleSignatureHashTest
+
+#! the module sources
+const SigA = "%modern
+module SigA { version = \"1.0\"; desc = \"declarations used in the signatures of another module\"; author = \"Qore\";
+    license = \"MIT\"; }
+public namespace NA {
+public hashdecl H {
+    int x;
+}
+public class C {
+}
+public enum E {
+    X = 1,
+}
+}
+";
+
+const SigB = "%modern
+%requires SigA
+module SigB { version = \"1.0\"; desc = \"a class whose signatures use the declarations of SigA\"; author = \"Qore\";
+    license = \"MIT\"; }
+public namespace NB {
+public class D {
+    hash<NA::H> h(hash<NA::H> h) { return h; }
+    *hash<string, hash<NA::H>> hl(*hash<string, hash<NA::H>> h) { return h; }
+    NA::C c(NA::C c) { return c; }
+    list<NA::C> cl(list<NA::C> c) { return c; }
+    NA::E e(NA::E e) { return e; }
+
+    public {
+        *hash<NA::H> mh;
+        *NA::C mc;
+        *NA::E me;
+    }
+}
+}
+";
+
+#! prints the files that the modules were loaded from, the signature hash of NB::D and the type names of the
+#! parameters of its methods
+const Show = "%modern
+%requires reflection
+%requires SigA
+%requires SigB
+Class d = Class::forName(\"NB::D\");
+printf(\"%s %s\\n\", basename(get_module_hash().SigA.filename), basename(get_module_hash().SigB.filename));
+printf(\"%s\\n\", d.getHash().toHex());
+foreach string m in ((\"h\", \"hl\", \"c\", \"cl\", \"e\")) {
+    printf(\"%s: %s\\n\", m, d.getNormalMethod(m).getVariants()[0].getParamTypes()[0].getPathName());
+}
+";
+
+#! the type names of the method parameters, as the parser makes them
+const ParamTypes = (
+    "h: hash<::NA::H>",
+    "hl: *hash<string, hash<::NA::H>>",
+    "c: object<::NA::C>",
+    "cl: list<object<::NA::C>>",
+    "e: enum<::NA::E>",
+);
+
+# A class is identified across Program and module instances by the hash of its signature, which includes the type
+# names in its method signatures.  A module can be loaded as an AOT module or from its source, as when an AOT module
+# is out of date and its source is loaded instead; the modules that use its declarations are then loaded or were
+# compiled against either form.  The type name of a hashdecl from an AOT module was not rooted ("hash<NA::H>"), while
+# the parser and qpp root it ("hash<::NA::H>"), so a class whose methods take a hashdecl from another module had
+# another signature hash when that module was AOT: a second instance of the class, such as one loaded from its source
+# after an AOT instance, was not compatible with the first.
+class AOTMixedModuleSignatureHashTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+    }
+
+    constructor() : QUnit::Test("AOTMixedModuleSignatureHashTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+
+        addTestCase("a class has one signature hash whether its dependency is AOT or source", \signatureHashTest());
+        set_return_value(main());
+    }
+
+    private string run(string cmd) {
+        return backquote(cmd + " 2>&1");
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+    }
+
+    #! returns the module path for the given directories, followed by the module path of this process, which has the
+    #! reflection module
+    private string modulePath(list<string> dirs) {
+        return (dirs + (ENV.QORE_MODULE_DIR ? (ENV.QORE_MODULE_DIR,) : ())).join(":");
+    }
+
+    #! compiles a module of the source directory into the given directory with the given module path
+    private compile(string name, string src_dir, string out_dir, list<string> dirs) {
+        mkdir(out_dir, 0755, True);
+        string qmod = out_dir + "/" + name + ".qmod";
+        string out = run(sprintf("%s QORE_MODULE_DIR=%s %s -m -o %s %s/%s.qm", env, modulePath(dirs), qcc_bin, qmod,
+            src_dir, name));
+        assertTrue(is_file(qmod), sprintf("compiled %s.qmod: %s", name, out));
+    }
+
+    signatureHashTest() {
+        TmpDir tmp("qore-aot-mixed-signature-");
+        string src = tmp.path + "/src";
+        mkdir(src);
+        write(src + "/SigA.qm", SigA);
+        write(src + "/SigB.qm", SigB);
+        write(tmp.path + "/show.q", Show);
+
+        string aot_a = tmp.path + "/aot-a";
+        # SigB compiled against the AOT and against the source module SigA
+        string aot_b_on_aot_a = tmp.path + "/aot-b-on-aot-a";
+        string aot_b_on_src_a = tmp.path + "/aot-b-on-src-a";
+        compile("SigA", src, aot_a, (src,));
+        compile("SigB", src, aot_b_on_aot_a, (aot_a, src));
+        compile("SigB", src, aot_b_on_src_a, (src,));
+
+        # module path, expected module files
+        list<list<auto>> cases = (
+            ((src,), "SigA.qm SigB.qm"),
+            ((aot_a, src), "SigA.qmod SigB.qm"),
+            ((aot_b_on_aot_a, aot_a, src), "SigA.qmod SigB.qmod"),
+            ((aot_b_on_aot_a, src), "SigA.qm SigB.qmod"),
+            ((aot_b_on_src_a, src), "SigA.qm SigB.qmod"),
+            ((aot_b_on_src_a, aot_a, src), "SigA.qmod SigB.qmod"),
+        );
+        *string sig_hash;
+        foreach list<auto> c in (cases) {
+            string out = trim(run(sprintf("%s QORE_MODULE_DIR=%s %s %s/show.q", env, modulePath(c[0]), qore_bin,
+                tmp.path)));
+            list<string> lines = out.split("\n");
+            string label = replace(c[0].join(":"), tmp.path + "/", "");
+            assertEq(7, lines.size(), label + ": " + out);
+            if (lines.size() != 7) {
+                continue;
+            }
+            assertEq(c[1], lines[0], label + ": the modules are loaded in the forms of the case");
+            assertEq(ParamTypes, lines[2..], label + ": the type names in the signatures of NB::D");
+            if (!exists sig_hash) {
+                sig_hash = lines[1];
+            } else {
+                assertEq(sig_hash, lines[1], label + ": the signature hash of NB::D");
+            }
+        }
+    }
+}

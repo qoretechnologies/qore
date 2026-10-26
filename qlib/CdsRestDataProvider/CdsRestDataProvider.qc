@@ -50,7 +50,7 @@ public class CdsRestDataProvider inherits CdsRestDataProviderBase {
     }
 
     private {
-        static hash<string, code> dynamic_children;
+        static hash<string, code> dynamic_children = {};
 
         const ChildMap = {
             "tables": Class::forName("CdsRestDataProvider::CdsRestTablesDataProvider"),

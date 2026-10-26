@@ -5767,8 +5767,14 @@ public class OpenApi3Test inherits QUnit::Test {
         OpenApi3::PathItemObject path = schema.paths.match("/records");
         OpenApi3::OperationObject op = path.getOperation("post", "/records");
         AbstractDataProviderType type = op.getRequestBodyField(path).getType();
-        assertFalse(type.getFields().id.isMandatory());
+        # a request has no field for a read-only property, and has the write-only one
+        assertEq(("name", "secret"), keys type.getFields());
         assertTrue(type.getFields().secret.isMandatory());
+        # a response has the read-only property, as required, and no field for the write-only one
+        AbstractDataProviderType response = schema.getResponseFieldFromSchema("body", NOTHING,
+            op.getResponses().getResponses(){"200"}.getSchema()).getType();
+        assertEq(("id", "name"), keys response.getFields());
+        assertTrue(response.getFields().id.isMandatory());
         hash<auto> request = {"name": "Invoice archive", "secret": "test-secret"};
         assertEq(request, type.acceptsValue(request));
         assertTrue(exists schema.processRequest("POST", "/records", request));

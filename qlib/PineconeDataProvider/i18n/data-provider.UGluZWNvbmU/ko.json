@@ -434,143 +434,131 @@
           "source": "Where the index runs.  Defaults to serverless on AWS in `us-east-1` when omitted.\n\n- `{\"deployment_type\": \"managed\", \"cloud\": \"aws\", \"region\": \"us-east-1\"}` — serverless, managed by Pinecone\n- `{\"deployment_type\": \"byoc\", ...}` — bring your own compute\n\n`cloud` is one of `aws`, `gcp` or `azure`; for the regions each one offers see [Regions](https://docs.pinecone.io/guides/index-data/create-an-index#cloud-regions).",
           "message": "인덱스가 실행되는 위치입니다.  생략하면 기본값은 AWS `us-east-1` 의 서버리스입니다.\n\n- `{\"deployment_type\": \"managed\", \"cloud\": \"aws\", \"region\": \"us-east-1\"}` — 서버리스, Pinecone이 관리\n- `{\"deployment_type\": \"byoc\", ...}` — 자체 컴퓨팅 사용\n\n`cloud` 는 `aws`, `gcp`, `azure` 중 하나입니다. 각각이 제공하는 리전은 [Regions](https://docs.pinecone.io/guides/index-data/create-an-index#cloud-regions)를 참조하세요."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.Y2xvdWQ.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.Y2xvdWQ.display_name": {
           "source": "Cloud",
           "message": "클라우드"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.Y2xvdWQ.short_desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.Y2xvdWQ.short_desc": {
           "source": "The public cloud to host the index on",
           "message": "인덱스를 호스팅할 퍼블릭 클라우드"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.Y2xvdWQ.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.Y2xvdWQ.desc": {
           "source": "The public cloud where the index is hosted.\nPossible values: `gcp`, `aws`, or `azure`.",
           "message": "색인을 호스팅하는 공개 클라우드.\n가능한 값: `gcp`, `aws`, 또는 `azure`."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.Y2xvdWQ.allowed-value.c3RyaW5nOmF3cw.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.Y2xvdWQ.allowed-value.c3RyaW5nOmF3cw.display_name": {
           "source": "AWS",
           "message": "AWS"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.Y2xvdWQ.allowed-value.c3RyaW5nOmF3cw.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.Y2xvdWQ.allowed-value.c3RyaW5nOmF3cw.desc": {
           "source": "Amazon Web Services.",
           "message": "Amazon Web Services입니다."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.Y2xvdWQ.allowed-value.c3RyaW5nOmdjcA.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.Y2xvdWQ.allowed-value.c3RyaW5nOmdjcA.display_name": {
           "source": "Google Cloud",
           "message": "Google Cloud"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.Y2xvdWQ.allowed-value.c3RyaW5nOmdjcA.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.Y2xvdWQ.allowed-value.c3RyaW5nOmdjcA.desc": {
           "source": "Google Cloud Platform.",
           "message": "Google Cloud Platform입니다."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.Y2xvdWQ.allowed-value.c3RyaW5nOmF6dXJl.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.Y2xvdWQ.allowed-value.c3RyaW5nOmF6dXJl.display_name": {
           "source": "Azure",
           "message": "Azure"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.Y2xvdWQ.allowed-value.c3RyaW5nOmF6dXJl.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.Y2xvdWQ.allowed-value.c3RyaW5nOmF6dXJl.desc": {
           "source": "Microsoft Azure.",
           "message": "Microsoft Azure입니다."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.ZGVwbG95bWVudF90eXBl.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.ZGVwbG95bWVudF90eXBl.display_name": {
           "source": "Deployment Type",
           "message": "배포 유형"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.ZGVwbG95bWVudF90eXBl.short_desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.ZGVwbG95bWVudF90eXBl.short_desc": {
           "source": "Identifies this as a managed (serverless) deployment",
           "message": "관리형(서버리스) 배포임을 식별"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.ZGVwbG95bWVudF90eXBl.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.ZGVwbG95bWVudF90eXBl.desc": {
           "source": "Identifies this as a managed (serverless) deployment. Must be `managed`.",
           "message": "관리형(서버리스) 배포임을 식별. 반드시 `managed`이어야 함."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.ZGVwbG95bWVudF90eXBl.allowed-value.c3RyaW5nOm1hbmFnZWQ.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.ZGVwbG95bWVudF90eXBl.allowed-value.c3RyaW5nOm1hbmFnZWQ.display_name": {
           "source": "managed",
           "message": "관리됨"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.ZW52aXJvbm1lbnQ.display_name": {
-          "source": "Environment",
-          "message": "환경"
-        },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.ZW52aXJvbm1lbnQ.short_desc": {
-          "source": "The Pinecone environment hosting the index",
-          "message": "인덱스를 호스팅하는 Pinecone 환경"
-        },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.ZW52aXJvbm1lbnQ.desc": {
-          "source": "The Pinecone environment hosting the index. Returned in responses; do not set it when creating an index.",
-          "message": "인덱스를 호스팅하는 Pinecone 환경. 응답에서 반환되며, 인덱스를 생성할 때는 설정하지 마십시오."
-        },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.cmVnaW9u.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.cmVnaW9u.display_name": {
           "source": "Region",
           "message": "리전"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.cmVnaW9u.short_desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.cmVnaW9u.short_desc": {
           "source": "The region to host the index in",
           "message": "인덱스를 호스팅할 리전"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.cmVnaW9u.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.cmVnaW9u.desc": {
           "source": "The region to host the index in.  A region belongs to one cloud, so it has to match the **Cloud** chosen beside it: `us-east-1` exists on AWS and not on Google Cloud, and Pinecone refuses the pair rather than the value.\n\nThe list is Pinecone's published set at the time of writing and a region it has opened since can still be typed in; see [Available cloud regions](https://docs.pinecone.io/troubleshooting/available-cloud-regions).",
           "message": "인덱스를 호스팅할 리전입니다.  리전은 하나의 클라우드에 속하므로 옆에서 선택한 **클라우드** 와 일치해야 합니다. `us-east-1` 은 AWS에는 있고 Google Cloud에는 없으며, Pinecone은 값 자체가 아니라 조합을 거부합니다.\n\n이 목록은 작성 시점에 Pinecone이 공개한 집합이며, 이후 추가된 리전도 직접 입력할 수 있습니다. [Available cloud regions](https://docs.pinecone.io/troubleshooting/available-cloud-regions)를 참조하세요."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.cmVnaW9u.allowed-value.c3RyaW5nOnVzLWVhc3QtMQ.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.cmVnaW9u.allowed-value.c3RyaW5nOnVzLWVhc3QtMQ.display_name": {
           "source": "AWS · Virginia",
           "message": "AWS · 버지니아"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.cmVnaW9u.allowed-value.c3RyaW5nOnVzLWVhc3QtMQ.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.cmVnaW9u.allowed-value.c3RyaW5nOnVzLWVhc3QtMQ.desc": {
           "source": "AWS `us-east-1`, in Virginia.  The only region available on the Starter plan.",
           "message": "AWS `us-east-1`, 버지니아입니다.  Starter 요금제에서 사용할 수 있는 유일한 리전입니다."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.cmVnaW9u.allowed-value.c3RyaW5nOnVzLXdlc3QtMg.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.cmVnaW9u.allowed-value.c3RyaW5nOnVzLXdlc3QtMg.display_name": {
           "source": "AWS · Oregon",
           "message": "AWS · 오리건"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.cmVnaW9u.allowed-value.c3RyaW5nOnVzLXdlc3QtMg.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.cmVnaW9u.allowed-value.c3RyaW5nOnVzLXdlc3QtMg.desc": {
           "source": "AWS `us-west-2`, in Oregon.",
           "message": "AWS `us-west-2`, 오리건입니다."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.cmVnaW9u.allowed-value.c3RyaW5nOmV1LXdlc3QtMQ.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.cmVnaW9u.allowed-value.c3RyaW5nOmV1LXdlc3QtMQ.display_name": {
           "source": "AWS · Ireland",
           "message": "AWS · 아일랜드"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.cmVnaW9u.allowed-value.c3RyaW5nOmV1LXdlc3QtMQ.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.cmVnaW9u.allowed-value.c3RyaW5nOmV1LXdlc3QtMQ.desc": {
           "source": "AWS `eu-west-1`, in Ireland.",
           "message": "AWS `eu-west-1`, 아일랜드입니다."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.cmVnaW9u.allowed-value.c3RyaW5nOmV1LWNlbnRyYWwtMQ.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.cmVnaW9u.allowed-value.c3RyaW5nOmV1LWNlbnRyYWwtMQ.display_name": {
           "source": "AWS · Frankfurt",
           "message": "AWS · 프랑크푸르트"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.cmVnaW9u.allowed-value.c3RyaW5nOmV1LWNlbnRyYWwtMQ.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.cmVnaW9u.allowed-value.c3RyaW5nOmV1LWNlbnRyYWwtMQ.desc": {
           "source": "AWS `eu-central-1`, in Frankfurt.",
           "message": "AWS `eu-central-1`, 프랑크푸르트입니다."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.cmVnaW9u.allowed-value.c3RyaW5nOmFwLXNvdXRoZWFzdC0x.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.cmVnaW9u.allowed-value.c3RyaW5nOmFwLXNvdXRoZWFzdC0x.display_name": {
           "source": "AWS · Singapore",
           "message": "AWS · 싱가포르"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.cmVnaW9u.allowed-value.c3RyaW5nOmFwLXNvdXRoZWFzdC0x.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.cmVnaW9u.allowed-value.c3RyaW5nOmFwLXNvdXRoZWFzdC0x.desc": {
           "source": "AWS `ap-southeast-1`, in Singapore.",
           "message": "AWS `ap-southeast-1`, 싱가포르입니다."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.cmVnaW9u.allowed-value.c3RyaW5nOnVzLWNlbnRyYWwx.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.cmVnaW9u.allowed-value.c3RyaW5nOnVzLWNlbnRyYWwx.display_name": {
           "source": "Google Cloud · Iowa",
           "message": "Google Cloud · 아이오와"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.cmVnaW9u.allowed-value.c3RyaW5nOnVzLWNlbnRyYWwx.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.cmVnaW9u.allowed-value.c3RyaW5nOnVzLWNlbnRyYWwx.desc": {
           "source": "Google Cloud `us-central1`, in Iowa.",
           "message": "Google Cloud `us-central1`, 아이오와입니다."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.cmVnaW9u.allowed-value.c3RyaW5nOmV1cm9wZS13ZXN0NA.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.cmVnaW9u.allowed-value.c3RyaW5nOmV1cm9wZS13ZXN0NA.display_name": {
           "source": "Google Cloud · Netherlands",
           "message": "Google Cloud · 네덜란드"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.cmVnaW9u.allowed-value.c3RyaW5nOmV1cm9wZS13ZXN0NA.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.cmVnaW9u.allowed-value.c3RyaW5nOmV1cm9wZS13ZXN0NA.desc": {
           "source": "Google Cloud `europe-west4`, in the Netherlands.",
           "message": "Google Cloud `europe-west4`, 네덜란드입니다."
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.cmVnaW9u.allowed-value.c3RyaW5nOmVhc3R1czI.display_name": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.cmVnaW9u.allowed-value.c3RyaW5nOmVhc3R1czI.display_name": {
           "source": "Azure · Virginia",
           "message": "Azure · 버지니아"
         },
-        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50IzM0MDQwYTZjNDRlYWY1YmY5MWYwODg4NTk5MmU5ZjBkNjVkNjJjZmVhMTY2NTVhYmM2OTQwMDAwZmQwZjI5YWE.field.cmVnaW9u.allowed-value.c3RyaW5nOmVhc3R1czI.desc": {
+        "app.UGluZWNvbmU.action.Y3JlYXRlLWluZGV4.option.ZGVwbG95bWVudA.union.T3BlbkFwaTNIYXNoRGF0YVR5cGU6Kk1hbmFnZWREZXBsb3ltZW50I2FjNzIwOTVjZGY5MTM2YjhhMGYwMWZjYmJkNTg2MzljOThmYWY5NGY4OTZmNjM0OTIwYWUyNWVlNzk5ZjhjM2I.field.cmVnaW9u.allowed-value.c3RyaW5nOmVhc3R1czI.desc": {
           "source": "Azure `eastus2`, in Virginia.",
           "message": "Azure `eastus2`, 버지니아입니다."
         },

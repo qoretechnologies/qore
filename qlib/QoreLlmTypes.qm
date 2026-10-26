@@ -918,9 +918,9 @@ public class LlmProviderRegistry {
 
     private {
         #! Provider factories registered by mode string
-        static hash<string, AbstractLlmProviderFactory> factory_cache;
+        static hash<string, AbstractLlmProviderFactory> factory_cache = {};
         #! Tracks the module that registered each factory (by class name)
-        static hash<string, string> factory_module_map;
+        static hash<string, string> factory_module_map = {};
         #! Serializes access to the factory cache
         static Mutex factory_cache_lock();
     }

@@ -1,0 +1,25 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# a module whose code a Program that loads it calls: its functions run in the module's own Program
+
+%modern
+
+module CrossProgramSummary {
+    version = "1.0";
+    desc = "test module for JIT batches whose callees belong to another Program";
+    author = "David Nichols <david@qore.org>";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace CrossProgramSummary {
+    #! calls a function whose body is a constant expression, which the batch function summaries recognize
+    public int sub cps_outer() {
+        return cps_constant();
+    }
+
+    #! returns a constant
+    public int sub cps_constant() {
+        return 1;
+    }
+}

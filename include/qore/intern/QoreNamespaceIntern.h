@@ -66,6 +66,11 @@ struct TypedefEntry {
     bool pub = false;                            //!< is this typedef public?
     bool mod_imported = false;                   //!< copied in by importing a module; never exported again
     std::string from_module;                     //!< module that defined this typedef
+    //! the namespace that declares the typedef while the Program that declares it is parsed, in which its type is
+    //! resolved; not copied: a copy imported into another Program has the resolved type
+    qore_ns_private* parse_ns = nullptr;
+    //! true while the type is being resolved, so that a typedef that refers to itself is an error
+    bool resolving = false;
 
     //! Constructor for parse-time type info only
     DLLLOCAL TypedefEntry(const QoreProgramLocation* loc, QoreParseTypeInfo* pti, bool p = false)
@@ -96,6 +101,20 @@ struct TypedefEntry {
     DLLLOCAL ~TypedefEntry() {
         delete parseTypeInfo;
     }
+
+    //! Returns the type of the typedef, resolving it in the namespace that declares it the first time
+    /** The type of a typedef is resolved in the context of its declaration, as the types of classes and hashdecls
+        are: a name in it refers to what it refers to in the namespace of the typedef, wherever the typedef is used.
+        The Program that declares a typedef resolves it at the start of its 2nd stage of parsing (see
+        qore_ns_private::parseInitTypedefs()), so that a module exports, and an AOT module serializes, the resolved
+        type of each of its typedefs; a use of a typedef before then resolves it here.
+
+        @param name the name of the typedef, for errors
+        @param err set to -1 if the type cannot be resolved, or if the typedef refers to itself
+
+        @return the type of the typedef
+    */
+    DLLLOCAL const QoreTypeInfo* parseResolve(const char* name, int& err);
 
     //! Returns the module name where this typedef was defined
     DLLLOCAL const char* getModuleName() const {
@@ -614,6 +633,8 @@ public:
     DLLLOCAL void parseResolveHierarchy();
     DLLLOCAL void parseResolveClassMembers();
     DLLLOCAL void parseResolveAbstract();
+    //! resolves the typedefs declared in this parse, each in the namespace that declares it
+    DLLLOCAL int parseInitTypedefs();
     DLLLOCAL int parseInitConstants();
     DLLLOCAL void parseRollback(ExceptionSink* xsink, bool atomic_rollback = false);
     DLLLOCAL void parseCommit();

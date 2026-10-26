@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/ForEachStatement.h"
 #include "qore/intern/StatementBlock.h"
 #include "qore/intern/AbstractIteratorHelper.h"
@@ -56,7 +57,13 @@ int ForEachStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
 
     // get iterator object
     FunctionalOperator::FunctionalValueType value_type;
-    std::unique_ptr<FunctionalOperatorInterface> f(iterator_func ? iterator_func->getFunctionalIterator(value_type, xsink) : FunctionalOperatorInterface::getFunctionalIterator(value_type, list, true, "foreach statement", xsink));
+    // the list is a statement of its own: the value iterated is kept, but the temporaries created by its expression
+    // are released before the body runs
+    std::unique_ptr<FunctionalOperatorInterface> f;
+    {
+        QoreStatementTempScope temps(xsink);
+        f.reset(iterator_func ? iterator_func->getFunctionalIterator(value_type, xsink) : FunctionalOperatorInterface::getFunctionalIterator(value_type, list, true, "foreach statement", xsink));
+    }
     if (*xsink || value_type == FunctionalOperator::nothing || !code)
         return 0;
 
@@ -73,6 +80,9 @@ int ForEachStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
 
         {
             // get first value
+            // an element that a functional operator evaluates when the loop asks for it keeps its temporaries in
+            // the scope of the foreach statement: the expression that creates them again for the next element
+            // releases them, as the other execution modes do
             ValueOptionalRefHolder iv(xsink);
             if (f->getNext(iv, xsink))
                 break;
@@ -115,7 +125,13 @@ int ForEachStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, Excep
 
     // get iterator object
     FunctionalOperator::FunctionalValueType value_type;
-    std::unique_ptr<FunctionalOperatorInterface> f(iterator_func ? iterator_func->getFunctionalIterator(value_type, xsink) : FunctionalOperatorInterface::getFunctionalIterator(value_type, list, true, "foreach statement", xsink));
+    // the list is a statement of its own: the value iterated is kept, but the temporaries created by its expression
+    // are released before the body runs
+    std::unique_ptr<FunctionalOperatorInterface> f;
+    {
+        QoreStatementTempScope temps(xsink);
+        f.reset(iterator_func ? iterator_func->getFunctionalIterator(value_type, xsink) : FunctionalOperatorInterface::getFunctionalIterator(value_type, list, true, "foreach statement", xsink));
+    }
     if (*xsink || value_type == FunctionalOperator::nothing || !code)
         return 0;
 
@@ -132,6 +148,9 @@ int ForEachStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, Excep
 
         {
             // get first value
+            // an element that a functional operator evaluates when the loop asks for it keeps its temporaries in
+            // the scope of the foreach statement: the expression that creates them again for the next element
+            // releases them, as the other execution modes do
             ValueOptionalRefHolder iv(xsink);
             if (f->getNext(iv, xsink))
                 break;

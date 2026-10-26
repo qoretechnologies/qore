@@ -153,6 +153,13 @@ class ProviderIndexInventoryWarmupTest inherits QUnit::Test {
             assertEq(App + "/" + missing, unavailable[0].identity);
             assertEq("expected-inventory", unavailable[0].phase);
             assertTrue(exists ProviderIndexUtil::readDataProviderIndex().actioninfomap{App}{info.action});
+            # the failures are recorded in the failure file of the index, which is written with MessagePack: without the
+            # msgpack module, the index is read from its canonical file and records no failures
+            # (ProviderIndexUtil::hasIndexedFailureInfo())
+            if (!ProviderIndexUtil::hasMessagePack()) {
+                assertFalse(ProviderIndexUtil::hasIndexedFailureInfo(), "no failures are recorded without MessagePack");
+                testSkip("no MessagePack support: the index records no failures");
+            }
             assertEq("DATA-PROVIDER-EXPECTED-IDENTITY-MISSING",
                 ProviderIndexUtil::tryGetActionFailure(App, missing).error);
             return;

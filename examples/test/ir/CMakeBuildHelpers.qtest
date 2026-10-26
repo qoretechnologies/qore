@@ -47,6 +47,8 @@ class CMakeBuildHelpersTest inherits QUnit::Test {
         }
 
         addTestCase("exported Qore CMake build helpers", \testExportedHelpers());
+        addTestCase("a build tree reached through another path is reported, not loaded as an SDK",
+            \testMovedBuildTree());
         addTestCase("downstream catalog install root",
             \testDownstreamCatalogInstallRoot());
         addTestCase("catalog install reconciles obsolete owner fragments",
@@ -320,6 +322,55 @@ qore_user_modules(\"qlib/Fixture\")
         assertNeq(0, system(sprintf("cmake -DQORE_SOURCE_QLIB_DIR=%s -P %s > /dev/null 2>&1",
             shellQuote(source_qlib), shellQuote(remove_script))), "the cleanup refuses to run without a build tree");
         assertTrue(is_link(links.ModA), "a refused cleanup removes nothing");
+    }
+
+    #! a build tree's QoreConfig.cmake loaded from another real path says so, with both paths
+    /** The build tree's config records the paths it was configured at.  Loaded from another path, as from a moved
+        build tree or one mounted elsewhere in a container, those paths do not exist, and the config used to fall
+        through to the installed-SDK settings, which then failed to include a QoreMacros.cmake that only an install
+        has.  The config files copied to another directory stand in for a remount; a symlink to the build tree's
+        cmake directory resolves to the same real path, so it keeps working.
+    */
+    testMovedBuildTree() {
+        if (!qore_dir || !is_file(qore_dir + "/QoreBuildTree.cmake")) {
+            testSkip("the build tree's QoreConfig.cmake is not available for the build under test");
+        }
+        TmpDir tmp("qore-moved-build-tree-");
+        string src_dir = tmp.path + "/src";
+        string moved_dir = tmp.path + "/moved";
+        string link_dir = tmp.path + "/link";
+        mkdir(src_dir);
+        mkdir(moved_dir);
+        write(src_dir + "/CMakeLists.txt",
+"cmake_minimum_required(VERSION 3.16)
+project(QoreMovedBuildTree NONE)
+find_package(Qore REQUIRED)
+message(STATUS \"qore cmake dir: ${QORE_CMAKE_DIR}\")
+");
+        foreach string file in (("QoreConfig.cmake", "QoreConfigVersion.cmake", "QoreBuildTree.cmake")) {
+            write(moved_dir + "/" + file, read(qore_dir + "/" + file));
+        }
+        symlink(qore_dir, link_dir);
+
+        string linked = run(sprintf("cmake -S %s -B %s -DQore_DIR=%s", shellQuote(src_dir),
+            shellQuote(tmp.path + "/build-link"), shellQuote(link_dir)));
+        assertRegex("Configuring done", linked, "a symlink to the build tree's config configures: " + linked);
+        assertRegex("qore cmake dir: ", linked, "a symlink to the build tree's config loads it: " + linked);
+
+        string moved = run(sprintf("cmake -S %s -B %s -DQore_DIR=%s", shellQuote(src_dir),
+            shellQuote(tmp.path + "/build-moved"), shellQuote(moved_dir)));
+        # CMake wraps the reason given by the package, so the words are compared without the line breaks
+        string flat = (moved =~ s/\s+/ /g);
+        assertRegex("Configuring incomplete", moved, "a moved build tree does not configure: " + moved);
+        assertNeq(-1, flat.find("the Qore build tree was moved or remounted"),
+            "the reason is given: " + moved);
+        assertNeq(-1, flat.find("configured at \"" + realpath(qore_dir) + "\""),
+            "the path it was configured at is given: " + moved);
+        assertNeq(-1, flat.find("loaded from \"" + realpath(moved_dir) + "\""),
+            "the path it was loaded from is given: " + moved);
+        assertNeq(-1, flat.find("configure and build Qore again at the new path"),
+            "what to do is given: " + moved);
+        assertEq(-1, moved.find("QoreMacros.cmake"), "the installed-SDK settings are not loaded: " + moved);
     }
 
     testDownstreamCatalogInstallRoot() {
@@ -1158,10 +1209,11 @@ class CMakeQoProvider {
     public {
         const StaticConst = \"provider\";
         static string StaticText = \"state\";
+        string tag = \"tag\";
     }
     constructor() {}
     static string label() { return StaticConst + \":\" + StaticText; }
-    string get() { return label(); }
+    string get() { return label() + \":\" + tag; }
 }
 string sub cmakeQoFreeFunction() { return CMakeQoProvider::label(); }
 ");
@@ -1761,7 +1813,7 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
         string source_out = run(sprintf("cd %s && %s %s", src_dir, source_qore, source_runner));
         string static_out = run(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s",
             qore_build_dir, build_dir + "/late-modules", build_dir + "/qo-static-host"));
-        assertEq("provider:state:provider:state:provider:state:provider:state:hash:slow:callref:42:const:global:first,second:5000:23:NOTHING:object:base:one,two\n",
+        assertEq("provider:state:tag:provider:state:provider:state:provider:state:hash:slow:callref:42:const:global:first,second:5000:23:NOTHING:object:base:one,two\n",
             source_out, "source-mode fixture output");
         assertEq(source_out, static_out,
             "statically linked AOT aggregate is load-equivalent to parsed source");
@@ -2255,6 +2307,32 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
         string same_content = run(sprintf("cmake --build %s -- -j33", build_dir));
         assertEq(link_content_stamp, read(build_dir + "/linked.qo.content.stamp"),
             "same-content source mtime rebuild does not relink aggregate: " + same_content);
+
+        # The script aggregate embeds the declarations of its sources, with the defaults of their members, and the
+        # linked program initializes an object's members from them.  A source that changes only a member initializer
+        # must therefore rebuild the aggregate; its compile contract, which its consumers compile against, does not
+        # move.
+        date member_default_aggregate_mtime = mtime(build_dir + "/script-aggregate.qo");
+        string member_default_compile_contract = read(provider_object + ".compile-contract.stamp");
+        string member_default_aggregate_contract = read(provider_object + ".aggregate-contract.stamp");
+        string tagged_provider = read(provider);
+        assertTrue(tagged_provider.find("string tag = \"tag\";") != -1,
+            "the provider declares the member initializer the fixture changes");
+        write(provider, replace(tagged_provider, "string tag = \"tag\";", "string tag = \"retagged\";"));
+        string member_default_change = run(sprintf("cmake --build %s -- -j33", build_dir));
+        assertEq(member_default_compile_contract, read(provider_object + ".compile-contract.stamp"),
+            "a member initializer does not move the provider's compile contract: " + member_default_change);
+        assertNeq(member_default_aggregate_contract, read(provider_object + ".aggregate-contract.stamp"),
+            "a member initializer moves the provider's aggregate contract: " + member_default_change);
+        assertNeq(member_default_aggregate_mtime, mtime(build_dir + "/script-aggregate.qo"),
+            "a member initializer rebuilds the script aggregate: " + member_default_change);
+        string member_default_source_out = run(sprintf("cd %s && %s %s", src_dir, source_qore, source_runner));
+        string member_default_static_out = run(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s",
+            qore_build_dir, build_dir + "/late-modules", build_dir + "/qo-static-host"));
+        assertTrue(member_default_source_out.find(":retagged:") != -1,
+            "the parsed source sees the new member default: " + member_default_source_out);
+        assertEq(member_default_source_out, member_default_static_out,
+            "the statically linked program sees the new member default");
     }
 
     #! A source whose body takes a call reference to each named function.

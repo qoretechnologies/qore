@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreStatementTemps.h"
 
 QoreString QoreDivideEqualsOperatorNode::op_str("/= operator expression");
 
@@ -37,7 +38,8 @@ int QoreDivideEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext
 }
 
 QoreValue QoreDivideEqualsOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder res(right, xsink);
+    // the operand is a statement of its own where the other execution modes evaluate it so
+    QoreMutationOperandHolder res(left, right, false, xsink);
     if (*xsink)
         return QoreValue();
 

@@ -29,9 +29,11 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreStatementTemps.h"
 
 QoreValue QoreIntMinusEqualsOperatorNode::evalImpl(bool &needs_deref, ExceptionSink *xsink) const {
-    ValueEvalOptimizedRefHolder rh(right, xsink);
+    // the operand is a statement of its own where the other execution modes evaluate it so
+    QoreMutationOperandHolder rh(left, right, false, xsink);
     if (*xsink)
         return QoreValue();
 

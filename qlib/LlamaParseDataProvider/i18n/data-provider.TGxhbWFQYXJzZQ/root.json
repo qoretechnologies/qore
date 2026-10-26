@@ -1147,6 +1147,18 @@
           "source": "Enable specialized chart parsing with the specified mode",
           "message": "Enable specialized chart parsing with the specified mode"
         },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmNHRnljMlV0Wm1sc1pROkhhc2hEYXRhVHlwZTpBdXRvTW9kZVBhcnNpbmdDb25mI2I5OTRhMDIyYWNhNTQxZTI5NjM1NzQwMTQ3MmMzMjA2ZWFlOGFkZTRlNDY5ZDQyNThmYmExZWJkM2NiMjI4MDY.field.c3BlY2lhbGl6ZWRfY2hhcnRfcGFyc2luZw.allowed-value.c3RyaW5nOmFnZW50aWNfcGx1cw.display_name": {
+          "source": "agentic_plus",
+          "message": "agentic_plus"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmNHRnljMlV0Wm1sc1pROkhhc2hEYXRhVHlwZTpBdXRvTW9kZVBhcnNpbmdDb25mI2I5OTRhMDIyYWNhNTQxZTI5NjM1NzQwMTQ3MmMzMjA2ZWFlOGFkZTRlNDY5ZDQyNThmYmExZWJkM2NiMjI4MDY.field.c3BlY2lhbGl6ZWRfY2hhcnRfcGFyc2luZw.allowed-value.c3RyaW5nOmFnZW50aWM.display_name": {
+          "source": "agentic",
+          "message": "agentic"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmNHRnljMlV0Wm1sc1pROkhhc2hEYXRhVHlwZTpBdXRvTW9kZVBhcnNpbmdDb25mI2I5OTRhMDIyYWNhNTQxZTI5NjM1NzQwMTQ3MmMzMjA2ZWFlOGFkZTRlNDY5ZDQyNThmYmExZWJkM2NiMjI4MDY.field.c3BlY2lhbGl6ZWRfY2hhcnRfcGFyc2luZw.allowed-value.c3RyaW5nOmVmZmljaWVudA.display_name": {
+          "source": "efficient",
+          "message": "efficient"
+        },
         "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmNHRnljMlV0Wm1sc1pROkhhc2hEYXRhVHlwZTpBdXRvTW9kZVBhcnNpbmdDb25mI2I5OTRhMDIyYWNhNTQxZTI5NjM1NzQwMTQ3MmMzMjA2ZWFlOGFkZTRlNDY5ZDQyNThmYmExZWJkM2NiMjI4MDY.field.dGllcg.display_name": {
           "source": "Tier",
           "message": "Tier"
@@ -1158,6 +1170,22 @@
         "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmNHRnljMlV0Wm1sc1pROkhhc2hEYXRhVHlwZTpBdXRvTW9kZVBhcnNpbmdDb25mI2I5OTRhMDIyYWNhNTQxZTI5NjM1NzQwMTQ3MmMzMjA2ZWFlOGFkZTRlNDY5ZDQyNThmYmExZWJkM2NiMjI4MDY.field.dGllcg.desc": {
           "source": "Override the parsing tier for matched pages. Must be paired with version",
           "message": "Override the parsing tier for matched pages. Must be paired with version"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmNHRnljMlV0Wm1sc1pROkhhc2hEYXRhVHlwZTpBdXRvTW9kZVBhcnNpbmdDb25mI2I5OTRhMDIyYWNhNTQxZTI5NjM1NzQwMTQ3MmMzMjA2ZWFlOGFkZTRlNDY5ZDQyNThmYmExZWJkM2NiMjI4MDY.field.dGllcg.allowed-value.c3RyaW5nOmZhc3Q.display_name": {
+          "source": "fast",
+          "message": "fast"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmNHRnljMlV0Wm1sc1pROkhhc2hEYXRhVHlwZTpBdXRvTW9kZVBhcnNpbmdDb25mI2I5OTRhMDIyYWNhNTQxZTI5NjM1NzQwMTQ3MmMzMjA2ZWFlOGFkZTRlNDY5ZDQyNThmYmExZWJkM2NiMjI4MDY.field.dGllcg.allowed-value.c3RyaW5nOmNvc3RfZWZmZWN0aXZl.display_name": {
+          "source": "cost_effective",
+          "message": "cost_effective"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmNHRnljMlV0Wm1sc1pROkhhc2hEYXRhVHlwZTpBdXRvTW9kZVBhcnNpbmdDb25mI2I5OTRhMDIyYWNhNTQxZTI5NjM1NzQwMTQ3MmMzMjA2ZWFlOGFkZTRlNDY5ZDQyNThmYmExZWJkM2NiMjI4MDY.field.dGllcg.allowed-value.c3RyaW5nOmFnZW50aWM.display_name": {
+          "source": "agentic",
+          "message": "agentic"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmNHRnljMlV0Wm1sc1pROkhhc2hEYXRhVHlwZTpBdXRvTW9kZVBhcnNpbmdDb25mI2I5OTRhMDIyYWNhNTQxZTI5NjM1NzQwMTQ3MmMzMjA2ZWFlOGFkZTRlNDY5ZDQyNThmYmExZWJkM2NiMjI4MDY.field.dGllcg.allowed-value.c3RyaW5nOmFnZW50aWNfcGx1cw.display_name": {
+          "source": "agentic_plus",
+          "message": "agentic_plus"
         },
         "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmNHRnljMlV0Wm1sc1pROkhhc2hEYXRhVHlwZTpBdXRvTW9kZVBhcnNpbmdDb25mI2I5OTRhMDIyYWNhNTQxZTI5NjM1NzQwMTQ3MmMzMjA2ZWFlOGFkZTRlNDY5ZDQyNThmYmExZWJkM2NiMjI4MDY.field.dmVyc2lvbg.display_name": {
           "source": "Version",
@@ -1243,6 +1271,10 @@
           "source": "Confidence scoring effort. Omit for standard scoring. 'high': more accurate assessment of the parsing quality of every page, plus a document-level score in the result metadata; costs an additional 5 credits per page",
           "message": "Confidence scoring effort. Omit for standard scoring. 'high': more accurate assessment of the parsing quality of every page, plus a document-level score in the result metadata; costs an additional 5 credits per page"
         },
+        "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZmlsZQ.option.cHJvY2Vzc2luZ19vcHRpb25z.field.Y29uZmlkZW5jZV9zY29yZV9lZmZvcnQ.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "high",
+          "message": "high"
+        },
         "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZmlsZQ.option.cHJvY2Vzc2luZ19vcHRpb25z.field.Y29zdF9vcHRpbWl6ZXI.display_name": {
           "source": "Cost Optimizer",
           "message": "Cost Optimizer"
@@ -1290,6 +1322,14 @@
         "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZmlsZQ.option.cHJvY2Vzc2luZ19vcHRpb25z.field.Zm9ybXM.desc": {
           "source": "Beta: set to 'enrich' to run an additional AI form-analysis pass on pages detected as forms, producing a structured tree of the form's sections, fields, and fillable grids. Retrieve the result with expand=forms. 'default' (the default) applies standard parsing with no extra pass. Not available on the fast tier",
           "message": "Beta: set to 'enrich' to run an additional AI form-analysis pass on pages detected as forms, producing a structured tree of the form's sections, fields, and fillable grids. Retrieve the result with expand=forms. 'default' (the default) applies standard parsing with no extra pass. Not available on the fast tier"
+        },
+        "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZmlsZQ.option.cHJvY2Vzc2luZ19vcHRpb25z.field.Zm9ybXM.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "default",
+          "message": "default"
+        },
+        "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZmlsZQ.option.cHJvY2Vzc2luZ19vcHRpb25z.field.Zm9ybXM.allowed-value.c3RyaW5nOmVucmljaA.display_name": {
+          "source": "enrich",
+          "message": "enrich"
         },
         "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZmlsZQ.option.cHJvY2Vzc2luZ19vcHRpb25z.field.aWdub3Jl.display_name": {
           "source": "Ignore",
@@ -1375,6 +1415,18 @@
           "source": "Enable AI-powered chart analysis. Modes: 'efficient' (fast, lower cost), 'agentic' (balanced), 'agentic_plus' (highest accuracy). Automatically enables extract_layout and precise_bounding_box when set",
           "message": "Enable AI-powered chart analysis. Modes: 'efficient' (fast, lower cost), 'agentic' (balanced), 'agentic_plus' (highest accuracy). Automatically enables extract_layout and precise_bounding_box when set"
         },
+        "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZmlsZQ.option.cHJvY2Vzc2luZ19vcHRpb25z.field.c3BlY2lhbGl6ZWRfY2hhcnRfcGFyc2luZw.allowed-value.c3RyaW5nOmFnZW50aWNfcGx1cw.display_name": {
+          "source": "agentic_plus",
+          "message": "agentic_plus"
+        },
+        "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZmlsZQ.option.cHJvY2Vzc2luZ19vcHRpb25z.field.c3BlY2lhbGl6ZWRfY2hhcnRfcGFyc2luZw.allowed-value.c3RyaW5nOmFnZW50aWM.display_name": {
+          "source": "agentic",
+          "message": "agentic"
+        },
+        "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZmlsZQ.option.cHJvY2Vzc2luZ19vcHRpb25z.field.c3BlY2lhbGl6ZWRfY2hhcnRfcGFyc2luZw.allowed-value.c3RyaW5nOmVmZmljaWVudA.display_name": {
+          "source": "efficient",
+          "message": "efficient"
+        },
         "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZmlsZQ.option.ZmFzdF9vcHRpb25z.display_name": {
           "source": "Fast Options",
           "message": "Fast Options"
@@ -1458,6 +1510,14 @@
         "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZmlsZQ.option.d2ViaG9va19jb25maWd1cmF0aW9ucw.field.d2ViaG9va19vdXRwdXRfZm9ybWF0.desc": {
           "source": "Format of the webhook payload body. 'string' (default) sends the payload as a JSON-encoded string; 'json' sends it as a JSON object.",
           "message": "Format of the webhook payload body. 'string' (default) sends the payload as a JSON-encoded string; 'json' sends it as a JSON object."
+        },
+        "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZmlsZQ.option.d2ViaG9va19jb25maWd1cmF0aW9ucw.field.d2ViaG9va19vdXRwdXRfZm9ybWF0.allowed-value.c3RyaW5nOnN0cmluZw.display_name": {
+          "source": "string",
+          "message": "string"
+        },
+        "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZmlsZQ.option.d2ViaG9va19jb25maWd1cmF0aW9ucw.field.d2ViaG9va19vdXRwdXRfZm9ybWF0.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "json",
+          "message": "json"
         },
         "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZmlsZQ.option.d2ViaG9va19jb25maWd1cmF0aW9ucw.field.d2ViaG9va19zaWduaW5nX3NlY3JldA.display_name": {
           "source": "Webhook Signing Secret",
@@ -3150,6 +3210,22 @@
         "app.TGxhbWFQYXJzZQ.action.ZXh0cmFjdC1mcm9tLWRvY3VtZW50.option.Y29uZmlndXJhdGlvbg.field.cGFyc2VfdGllcg.desc": {
           "source": "Parse tier to use before extraction. Defaults to the extract tier if not specified. Turbo extract does not support parse configuration or produce a parse output; use another tier if your workflow requires parsed text.",
           "message": "Parse tier to use before extraction. Defaults to the extract tier if not specified. Turbo extract does not support parse configuration or produce a parse output; use another tier if your workflow requires parsed text."
+        },
+        "app.TGxhbWFQYXJzZQ.action.ZXh0cmFjdC1mcm9tLWRvY3VtZW50.option.Y29uZmlndXJhdGlvbg.field.cGFyc2VfdGllcg.allowed-value.c3RyaW5nOmZhc3Q.display_name": {
+          "source": "fast",
+          "message": "fast"
+        },
+        "app.TGxhbWFQYXJzZQ.action.ZXh0cmFjdC1mcm9tLWRvY3VtZW50.option.Y29uZmlndXJhdGlvbg.field.cGFyc2VfdGllcg.allowed-value.c3RyaW5nOmNvc3RfZWZmZWN0aXZl.display_name": {
+          "source": "cost_effective",
+          "message": "cost_effective"
+        },
+        "app.TGxhbWFQYXJzZQ.action.ZXh0cmFjdC1mcm9tLWRvY3VtZW50.option.Y29uZmlndXJhdGlvbg.field.cGFyc2VfdGllcg.allowed-value.c3RyaW5nOmFnZW50aWM.display_name": {
+          "source": "agentic",
+          "message": "agentic"
+        },
+        "app.TGxhbWFQYXJzZQ.action.ZXh0cmFjdC1mcm9tLWRvY3VtZW50.option.Y29uZmlndXJhdGlvbg.field.cGFyc2VfdGllcg.allowed-value.c3RyaW5nOmFnZW50aWNfcGx1cw.display_name": {
+          "source": "agentic_plus",
+          "message": "agentic_plus"
         },
         "app.TGxhbWFQYXJzZQ.action.ZXh0cmFjdC1mcm9tLWRvY3VtZW50.option.Y29uZmlndXJhdGlvbg.field.c2hlZXRfbmFtZXM.display_name": {
           "source": "Sheet Names",
@@ -5459,6 +5535,22 @@
           "source": "Parse tier to use before extraction. Defaults to the extract tier if not specified. Turbo extract does not support parse configuration or produce a parse output; use another tier if your workflow requires parsed text.",
           "message": "Parse tier to use before extraction. Defaults to the extract tier if not specified. Turbo extract does not support parse configuration or produce a parse output; use another tier if your workflow requires parsed text."
         },
+        "app.TGxhbWFQYXJzZQ.action.Y3JlYXRlLWNvbmZpZ3VyYXRpb24.option.cGFyYW1ldGVycw.union.SGFzaERhdGFUeXBlOkV4dHJhY3RWMlBhcmFtZXRlcnMjMzA2Y2IxZjFmZjZiZmM4YTQ5MzkzN2NkNDJhMDkwMzU3OWIwMWZhNzk1MjUyZTFiNDhkMGRmZDNhMTAzN2NlNw.field.cGFyc2VfdGllcg.allowed-value.c3RyaW5nOmZhc3Q.display_name": {
+          "source": "fast",
+          "message": "fast"
+        },
+        "app.TGxhbWFQYXJzZQ.action.Y3JlYXRlLWNvbmZpZ3VyYXRpb24.option.cGFyYW1ldGVycw.union.SGFzaERhdGFUeXBlOkV4dHJhY3RWMlBhcmFtZXRlcnMjMzA2Y2IxZjFmZjZiZmM4YTQ5MzkzN2NkNDJhMDkwMzU3OWIwMWZhNzk1MjUyZTFiNDhkMGRmZDNhMTAzN2NlNw.field.cGFyc2VfdGllcg.allowed-value.c3RyaW5nOmNvc3RfZWZmZWN0aXZl.display_name": {
+          "source": "cost_effective",
+          "message": "cost_effective"
+        },
+        "app.TGxhbWFQYXJzZQ.action.Y3JlYXRlLWNvbmZpZ3VyYXRpb24.option.cGFyYW1ldGVycw.union.SGFzaERhdGFUeXBlOkV4dHJhY3RWMlBhcmFtZXRlcnMjMzA2Y2IxZjFmZjZiZmM4YTQ5MzkzN2NkNDJhMDkwMzU3OWIwMWZhNzk1MjUyZTFiNDhkMGRmZDNhMTAzN2NlNw.field.cGFyc2VfdGllcg.allowed-value.c3RyaW5nOmFnZW50aWM.display_name": {
+          "source": "agentic",
+          "message": "agentic"
+        },
+        "app.TGxhbWFQYXJzZQ.action.Y3JlYXRlLWNvbmZpZ3VyYXRpb24.option.cGFyYW1ldGVycw.union.SGFzaERhdGFUeXBlOkV4dHJhY3RWMlBhcmFtZXRlcnMjMzA2Y2IxZjFmZjZiZmM4YTQ5MzkzN2NkNDJhMDkwMzU3OWIwMWZhNzk1MjUyZTFiNDhkMGRmZDNhMTAzN2NlNw.field.cGFyc2VfdGllcg.allowed-value.c3RyaW5nOmFnZW50aWNfcGx1cw.display_name": {
+          "source": "agentic_plus",
+          "message": "agentic_plus"
+        },
         "app.TGxhbWFQYXJzZQ.action.Y3JlYXRlLWNvbmZpZ3VyYXRpb24.option.cGFyYW1ldGVycw.union.SGFzaERhdGFUeXBlOkV4dHJhY3RWMlBhcmFtZXRlcnMjMzA2Y2IxZjFmZjZiZmM4YTQ5MzkzN2NkNDJhMDkwMzU3OWIwMWZhNzk1MjUyZTFiNDhkMGRmZDNhMTAzN2NlNw.field.cHJvZHVjdF90eXBl.display_name": {
           "source": "Product Type",
           "message": "Product Type"
@@ -7087,6 +7179,18 @@
           "source": "Enable specialized chart parsing with the specified mode",
           "message": "Enable specialized chart parsing with the specified mode"
         },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6QXV0b01vZGVQYXJzaW5nQ29uZiNiOTk0YTAyMmFjYTU0MWUyOTYzNTc0MDE0NzJjMzIwNmVhZThhZGU0ZTQ2OWQ0MjU4ZmJhMWViZDNjYjIyODA2.field.c3BlY2lhbGl6ZWRfY2hhcnRfcGFyc2luZw.allowed-value.c3RyaW5nOmFnZW50aWNfcGx1cw.display_name": {
+          "source": "agentic_plus",
+          "message": "agentic_plus"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6QXV0b01vZGVQYXJzaW5nQ29uZiNiOTk0YTAyMmFjYTU0MWUyOTYzNTc0MDE0NzJjMzIwNmVhZThhZGU0ZTQ2OWQ0MjU4ZmJhMWViZDNjYjIyODA2.field.c3BlY2lhbGl6ZWRfY2hhcnRfcGFyc2luZw.allowed-value.c3RyaW5nOmFnZW50aWM.display_name": {
+          "source": "agentic",
+          "message": "agentic"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6QXV0b01vZGVQYXJzaW5nQ29uZiNiOTk0YTAyMmFjYTU0MWUyOTYzNTc0MDE0NzJjMzIwNmVhZThhZGU0ZTQ2OWQ0MjU4ZmJhMWViZDNjYjIyODA2.field.c3BlY2lhbGl6ZWRfY2hhcnRfcGFyc2luZw.allowed-value.c3RyaW5nOmVmZmljaWVudA.display_name": {
+          "source": "efficient",
+          "message": "efficient"
+        },
         "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6QXV0b01vZGVQYXJzaW5nQ29uZiNiOTk0YTAyMmFjYTU0MWUyOTYzNTc0MDE0NzJjMzIwNmVhZThhZGU0ZTQ2OWQ0MjU4ZmJhMWViZDNjYjIyODA2.field.dGllcg.display_name": {
           "source": "Tier",
           "message": "Tier"
@@ -7098,6 +7202,22 @@
         "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6QXV0b01vZGVQYXJzaW5nQ29uZiNiOTk0YTAyMmFjYTU0MWUyOTYzNTc0MDE0NzJjMzIwNmVhZThhZGU0ZTQ2OWQ0MjU4ZmJhMWViZDNjYjIyODA2.field.dGllcg.desc": {
           "source": "Override the parsing tier for matched pages. Must be paired with version",
           "message": "Override the parsing tier for matched pages. Must be paired with version"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6QXV0b01vZGVQYXJzaW5nQ29uZiNiOTk0YTAyMmFjYTU0MWUyOTYzNTc0MDE0NzJjMzIwNmVhZThhZGU0ZTQ2OWQ0MjU4ZmJhMWViZDNjYjIyODA2.field.dGllcg.allowed-value.c3RyaW5nOmZhc3Q.display_name": {
+          "source": "fast",
+          "message": "fast"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6QXV0b01vZGVQYXJzaW5nQ29uZiNiOTk0YTAyMmFjYTU0MWUyOTYzNTc0MDE0NzJjMzIwNmVhZThhZGU0ZTQ2OWQ0MjU4ZmJhMWViZDNjYjIyODA2.field.dGllcg.allowed-value.c3RyaW5nOmNvc3RfZWZmZWN0aXZl.display_name": {
+          "source": "cost_effective",
+          "message": "cost_effective"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6QXV0b01vZGVQYXJzaW5nQ29uZiNiOTk0YTAyMmFjYTU0MWUyOTYzNTc0MDE0NzJjMzIwNmVhZThhZGU0ZTQ2OWQ0MjU4ZmJhMWViZDNjYjIyODA2.field.dGllcg.allowed-value.c3RyaW5nOmFnZW50aWM.display_name": {
+          "source": "agentic",
+          "message": "agentic"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6QXV0b01vZGVQYXJzaW5nQ29uZiNiOTk0YTAyMmFjYTU0MWUyOTYzNTc0MDE0NzJjMzIwNmVhZThhZGU0ZTQ2OWQ0MjU4ZmJhMWViZDNjYjIyODA2.field.dGllcg.allowed-value.c3RyaW5nOmFnZW50aWNfcGx1cw.display_name": {
+          "source": "agentic_plus",
+          "message": "agentic_plus"
         },
         "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6QXV0b01vZGVQYXJzaW5nQ29uZiNiOTk0YTAyMmFjYTU0MWUyOTYzNTc0MDE0NzJjMzIwNmVhZThhZGU0ZTQ2OWQ0MjU4ZmJhMWViZDNjYjIyODA2.field.dmVyc2lvbg.display_name": {
           "source": "Version",
@@ -7183,6 +7303,10 @@
           "source": "Confidence scoring effort. Omit for standard scoring. 'high': more accurate assessment of the parsing quality of every page, plus a document-level score in the result metadata; costs an additional 5 credits per page",
           "message": "Confidence scoring effort. Omit for standard scoring. 'high': more accurate assessment of the parsing quality of every page, plus a document-level score in the result metadata; costs an additional 5 credits per page"
         },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6KkxsYW1hUGFyc2VQcm9jZXNzaW5nT3B0aW9ucyMyZjM5MjYwZDFlNWVjNzA2YjcyZWRmZjQ2YmI1YjliNTAxZmVkNWEyN2FiNjRhNjk1YjBjZmRlMDBmZjI5ZjFi.field.Y29uZmlkZW5jZV9zY29yZV9lZmZvcnQ.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "high",
+          "message": "high"
+        },
         "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6KkxsYW1hUGFyc2VQcm9jZXNzaW5nT3B0aW9ucyMyZjM5MjYwZDFlNWVjNzA2YjcyZWRmZjQ2YmI1YjliNTAxZmVkNWEyN2FiNjRhNjk1YjBjZmRlMDBmZjI5ZjFi.field.Y29zdF9vcHRpbWl6ZXI.display_name": {
           "source": "Cost Optimizer",
           "message": "Cost Optimizer"
@@ -7230,6 +7354,14 @@
         "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6KkxsYW1hUGFyc2VQcm9jZXNzaW5nT3B0aW9ucyMyZjM5MjYwZDFlNWVjNzA2YjcyZWRmZjQ2YmI1YjliNTAxZmVkNWEyN2FiNjRhNjk1YjBjZmRlMDBmZjI5ZjFi.field.Zm9ybXM.desc": {
           "source": "Beta: set to 'enrich' to run an additional AI form-analysis pass on pages detected as forms, producing a structured tree of the form's sections, fields, and fillable grids. Retrieve the result with expand=forms. 'default' (the default) applies standard parsing with no extra pass. Not available on the fast tier",
           "message": "Beta: set to 'enrich' to run an additional AI form-analysis pass on pages detected as forms, producing a structured tree of the form's sections, fields, and fillable grids. Retrieve the result with expand=forms. 'default' (the default) applies standard parsing with no extra pass. Not available on the fast tier"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6KkxsYW1hUGFyc2VQcm9jZXNzaW5nT3B0aW9ucyMyZjM5MjYwZDFlNWVjNzA2YjcyZWRmZjQ2YmI1YjliNTAxZmVkNWEyN2FiNjRhNjk1YjBjZmRlMDBmZjI5ZjFi.field.Zm9ybXM.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "default",
+          "message": "default"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6KkxsYW1hUGFyc2VQcm9jZXNzaW5nT3B0aW9ucyMyZjM5MjYwZDFlNWVjNzA2YjcyZWRmZjQ2YmI1YjliNTAxZmVkNWEyN2FiNjRhNjk1YjBjZmRlMDBmZjI5ZjFi.field.Zm9ybXM.allowed-value.c3RyaW5nOmVucmljaA.display_name": {
+          "source": "enrich",
+          "message": "enrich"
         },
         "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6KkxsYW1hUGFyc2VQcm9jZXNzaW5nT3B0aW9ucyMyZjM5MjYwZDFlNWVjNzA2YjcyZWRmZjQ2YmI1YjliNTAxZmVkNWEyN2FiNjRhNjk1YjBjZmRlMDBmZjI5ZjFi.field.aWdub3Jl.display_name": {
           "source": "Ignore",
@@ -7314,6 +7446,18 @@
         "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6KkxsYW1hUGFyc2VQcm9jZXNzaW5nT3B0aW9ucyMyZjM5MjYwZDFlNWVjNzA2YjcyZWRmZjQ2YmI1YjliNTAxZmVkNWEyN2FiNjRhNjk1YjBjZmRlMDBmZjI5ZjFi.field.c3BlY2lhbGl6ZWRfY2hhcnRfcGFyc2luZw.desc": {
           "source": "Enable AI-powered chart analysis. Modes: 'efficient' (fast, lower cost), 'agentic' (balanced), 'agentic_plus' (highest accuracy). Automatically enables extract_layout and precise_bounding_box when set",
           "message": "Enable AI-powered chart analysis. Modes: 'efficient' (fast, lower cost), 'agentic' (balanced), 'agentic_plus' (highest accuracy). Automatically enables extract_layout and precise_bounding_box when set"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6KkxsYW1hUGFyc2VQcm9jZXNzaW5nT3B0aW9ucyMyZjM5MjYwZDFlNWVjNzA2YjcyZWRmZjQ2YmI1YjliNTAxZmVkNWEyN2FiNjRhNjk1YjBjZmRlMDBmZjI5ZjFi.field.c3BlY2lhbGl6ZWRfY2hhcnRfcGFyc2luZw.allowed-value.c3RyaW5nOmFnZW50aWNfcGx1cw.display_name": {
+          "source": "agentic_plus",
+          "message": "agentic_plus"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6KkxsYW1hUGFyc2VQcm9jZXNzaW5nT3B0aW9ucyMyZjM5MjYwZDFlNWVjNzA2YjcyZWRmZjQ2YmI1YjliNTAxZmVkNWEyN2FiNjRhNjk1YjBjZmRlMDBmZjI5ZjFi.field.c3BlY2lhbGl6ZWRfY2hhcnRfcGFyc2luZw.allowed-value.c3RyaW5nOmFnZW50aWM.display_name": {
+          "source": "agentic",
+          "message": "agentic"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6KkxsYW1hUGFyc2VQcm9jZXNzaW5nT3B0aW9ucyMyZjM5MjYwZDFlNWVjNzA2YjcyZWRmZjQ2YmI1YjliNTAxZmVkNWEyN2FiNjRhNjk1YjBjZmRlMDBmZjI5ZjFi.field.c3BlY2lhbGl6ZWRfY2hhcnRfcGFyc2luZw.allowed-value.c3RyaW5nOmVmZmljaWVudA.display_name": {
+          "source": "efficient",
+          "message": "efficient"
         },
         "app.TGxhbWFQYXJzZQ.action.Y3JlYXRlLWNvbmZpZ3VyYXRpb24.option.cGFyYW1ldGVycw.union.SGFzaERhdGFUeXBlOlBhcnNlVjJQYXJhbWV0ZXJzIzEzYWJiMzU5ZWE0YWQzMTRmNTNkMjZkNjM5ZTAyZTQ4ZmI1NDhlOTdiMWZmNTlhMmNlYmMwZTI5M2Q5NWU0NzA.field.cHJvZHVjdF90eXBl.display_name": {
           "source": "Product Type",
@@ -7430,6 +7574,14 @@
         "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6TGxhbWFQYXJzZVdlYmhvb2tDb25maWd1cmF0aW9uIzM0NDVmMDRkNGFlMDE2ZGJmZWQ4ZmI0MThiNzc1ZDUyNmZlMzVjMjBhYTQyYzk3YjAyYjk2NjhhYjljZDE4YWQ.field.d2ViaG9va19vdXRwdXRfZm9ybWF0.desc": {
           "source": "Format of the webhook payload body. 'string' (default) sends the payload as a JSON-encoded string; 'json' sends it as a JSON object.",
           "message": "Format of the webhook payload body. 'string' (default) sends the payload as a JSON-encoded string; 'json' sends it as a JSON object."
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6TGxhbWFQYXJzZVdlYmhvb2tDb25maWd1cmF0aW9uIzM0NDVmMDRkNGFlMDE2ZGJmZWQ4ZmI0MThiNzc1ZDUyNmZlMzVjMjBhYTQyYzk3YjAyYjk2NjhhYjljZDE4YWQ.field.d2ViaG9va19vdXRwdXRfZm9ybWF0.allowed-value.c3RyaW5nOnN0cmluZw.display_name": {
+          "source": "string",
+          "message": "string"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6TGxhbWFQYXJzZVdlYmhvb2tDb25maWd1cmF0aW9uIzM0NDVmMDRkNGFlMDE2ZGJmZWQ4ZmI0MThiNzc1ZDUyNmZlMzVjMjBhYTQyYzk3YjAyYjk2NjhhYjljZDE4YWQ.field.d2ViaG9va19vdXRwdXRfZm9ybWF0.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "json",
+          "message": "json"
         },
         "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOlkzSmxZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6TGxhbWFQYXJzZVdlYmhvb2tDb25maWd1cmF0aW9uIzM0NDVmMDRkNGFlMDE2ZGJmZWQ4ZmI0MThiNzc1ZDUyNmZlMzVjMjBhYTQyYzk3YjAyYjk2NjhhYjljZDE4YWQ.field.d2ViaG9va19zaWduaW5nX3NlY3JldA.display_name": {
           "source": "Webhook Signing Secret",
@@ -8062,6 +8214,22 @@
         "app.TGxhbWFQYXJzZQ.action.dXBkYXRlLWNvbmZpZ3VyYXRpb24.option.cGFyYW1ldGVycw.union.SGFzaERhdGFUeXBlOipFeHRyYWN0VjJQYXJhbWV0ZXJzI2M0YjI0NDU2MGFlMWZkMjJiYjc3YWZmZmZhNTAwZGUyMDExZmZhNjFkNTRiMzU4ZDIxNmU5MDRiOTNmMjc0M2Y.field.cGFyc2VfdGllcg.desc": {
           "source": "Parse tier to use before extraction. Defaults to the extract tier if not specified. Turbo extract does not support parse configuration or produce a parse output; use another tier if your workflow requires parsed text.",
           "message": "Parse tier to use before extraction. Defaults to the extract tier if not specified. Turbo extract does not support parse configuration or produce a parse output; use another tier if your workflow requires parsed text."
+        },
+        "app.TGxhbWFQYXJzZQ.action.dXBkYXRlLWNvbmZpZ3VyYXRpb24.option.cGFyYW1ldGVycw.union.SGFzaERhdGFUeXBlOipFeHRyYWN0VjJQYXJhbWV0ZXJzI2M0YjI0NDU2MGFlMWZkMjJiYjc3YWZmZmZhNTAwZGUyMDExZmZhNjFkNTRiMzU4ZDIxNmU5MDRiOTNmMjc0M2Y.field.cGFyc2VfdGllcg.allowed-value.c3RyaW5nOmZhc3Q.display_name": {
+          "source": "fast",
+          "message": "fast"
+        },
+        "app.TGxhbWFQYXJzZQ.action.dXBkYXRlLWNvbmZpZ3VyYXRpb24.option.cGFyYW1ldGVycw.union.SGFzaERhdGFUeXBlOipFeHRyYWN0VjJQYXJhbWV0ZXJzI2M0YjI0NDU2MGFlMWZkMjJiYjc3YWZmZmZhNTAwZGUyMDExZmZhNjFkNTRiMzU4ZDIxNmU5MDRiOTNmMjc0M2Y.field.cGFyc2VfdGllcg.allowed-value.c3RyaW5nOmNvc3RfZWZmZWN0aXZl.display_name": {
+          "source": "cost_effective",
+          "message": "cost_effective"
+        },
+        "app.TGxhbWFQYXJzZQ.action.dXBkYXRlLWNvbmZpZ3VyYXRpb24.option.cGFyYW1ldGVycw.union.SGFzaERhdGFUeXBlOipFeHRyYWN0VjJQYXJhbWV0ZXJzI2M0YjI0NDU2MGFlMWZkMjJiYjc3YWZmZmZhNTAwZGUyMDExZmZhNjFkNTRiMzU4ZDIxNmU5MDRiOTNmMjc0M2Y.field.cGFyc2VfdGllcg.allowed-value.c3RyaW5nOmFnZW50aWM.display_name": {
+          "source": "agentic",
+          "message": "agentic"
+        },
+        "app.TGxhbWFQYXJzZQ.action.dXBkYXRlLWNvbmZpZ3VyYXRpb24.option.cGFyYW1ldGVycw.union.SGFzaERhdGFUeXBlOipFeHRyYWN0VjJQYXJhbWV0ZXJzI2M0YjI0NDU2MGFlMWZkMjJiYjc3YWZmZmZhNTAwZGUyMDExZmZhNjFkNTRiMzU4ZDIxNmU5MDRiOTNmMjc0M2Y.field.cGFyc2VfdGllcg.allowed-value.c3RyaW5nOmFnZW50aWNfcGx1cw.display_name": {
+          "source": "agentic_plus",
+          "message": "agentic_plus"
         },
         "app.TGxhbWFQYXJzZQ.action.dXBkYXRlLWNvbmZpZ3VyYXRpb24.option.cGFyYW1ldGVycw.union.SGFzaERhdGFUeXBlOipFeHRyYWN0VjJQYXJhbWV0ZXJzI2M0YjI0NDU2MGFlMWZkMjJiYjc3YWZmZmZhNTAwZGUyMDExZmZhNjFkNTRiMzU4ZDIxNmU5MDRiOTNmMjc0M2Y.field.cHJvZHVjdF90eXBl.display_name": {
           "source": "Product Type",
@@ -9691,6 +9859,18 @@
           "source": "Enable specialized chart parsing with the specified mode",
           "message": "Enable specialized chart parsing with the specified mode"
         },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmRYQmtZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6QXV0b01vZGVQYXJzaW5nQ29uZiNiOTk0YTAyMmFjYTU0MWUyOTYzNTc0MDE0NzJjMzIwNmVhZThhZGU0ZTQ2OWQ0MjU4ZmJhMWViZDNjYjIyODA2.field.c3BlY2lhbGl6ZWRfY2hhcnRfcGFyc2luZw.allowed-value.c3RyaW5nOmFnZW50aWNfcGx1cw.display_name": {
+          "source": "agentic_plus",
+          "message": "agentic_plus"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmRYQmtZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6QXV0b01vZGVQYXJzaW5nQ29uZiNiOTk0YTAyMmFjYTU0MWUyOTYzNTc0MDE0NzJjMzIwNmVhZThhZGU0ZTQ2OWQ0MjU4ZmJhMWViZDNjYjIyODA2.field.c3BlY2lhbGl6ZWRfY2hhcnRfcGFyc2luZw.allowed-value.c3RyaW5nOmFnZW50aWM.display_name": {
+          "source": "agentic",
+          "message": "agentic"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmRYQmtZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6QXV0b01vZGVQYXJzaW5nQ29uZiNiOTk0YTAyMmFjYTU0MWUyOTYzNTc0MDE0NzJjMzIwNmVhZThhZGU0ZTQ2OWQ0MjU4ZmJhMWViZDNjYjIyODA2.field.c3BlY2lhbGl6ZWRfY2hhcnRfcGFyc2luZw.allowed-value.c3RyaW5nOmVmZmljaWVudA.display_name": {
+          "source": "efficient",
+          "message": "efficient"
+        },
         "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmRYQmtZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6QXV0b01vZGVQYXJzaW5nQ29uZiNiOTk0YTAyMmFjYTU0MWUyOTYzNTc0MDE0NzJjMzIwNmVhZThhZGU0ZTQ2OWQ0MjU4ZmJhMWViZDNjYjIyODA2.field.dGllcg.display_name": {
           "source": "Tier",
           "message": "Tier"
@@ -9702,6 +9882,22 @@
         "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmRYQmtZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6QXV0b01vZGVQYXJzaW5nQ29uZiNiOTk0YTAyMmFjYTU0MWUyOTYzNTc0MDE0NzJjMzIwNmVhZThhZGU0ZTQ2OWQ0MjU4ZmJhMWViZDNjYjIyODA2.field.dGllcg.desc": {
           "source": "Override the parsing tier for matched pages. Must be paired with version",
           "message": "Override the parsing tier for matched pages. Must be paired with version"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmRYQmtZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6QXV0b01vZGVQYXJzaW5nQ29uZiNiOTk0YTAyMmFjYTU0MWUyOTYzNTc0MDE0NzJjMzIwNmVhZThhZGU0ZTQ2OWQ0MjU4ZmJhMWViZDNjYjIyODA2.field.dGllcg.allowed-value.c3RyaW5nOmZhc3Q.display_name": {
+          "source": "fast",
+          "message": "fast"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmRYQmtZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6QXV0b01vZGVQYXJzaW5nQ29uZiNiOTk0YTAyMmFjYTU0MWUyOTYzNTc0MDE0NzJjMzIwNmVhZThhZGU0ZTQ2OWQ0MjU4ZmJhMWViZDNjYjIyODA2.field.dGllcg.allowed-value.c3RyaW5nOmNvc3RfZWZmZWN0aXZl.display_name": {
+          "source": "cost_effective",
+          "message": "cost_effective"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmRYQmtZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6QXV0b01vZGVQYXJzaW5nQ29uZiNiOTk0YTAyMmFjYTU0MWUyOTYzNTc0MDE0NzJjMzIwNmVhZThhZGU0ZTQ2OWQ0MjU4ZmJhMWViZDNjYjIyODA2.field.dGllcg.allowed-value.c3RyaW5nOmFnZW50aWM.display_name": {
+          "source": "agentic",
+          "message": "agentic"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmRYQmtZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6QXV0b01vZGVQYXJzaW5nQ29uZiNiOTk0YTAyMmFjYTU0MWUyOTYzNTc0MDE0NzJjMzIwNmVhZThhZGU0ZTQ2OWQ0MjU4ZmJhMWViZDNjYjIyODA2.field.dGllcg.allowed-value.c3RyaW5nOmFnZW50aWNfcGx1cw.display_name": {
+          "source": "agentic_plus",
+          "message": "agentic_plus"
         },
         "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmRYQmtZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6QXV0b01vZGVQYXJzaW5nQ29uZiNiOTk0YTAyMmFjYTU0MWUyOTYzNTc0MDE0NzJjMzIwNmVhZThhZGU0ZTQ2OWQ0MjU4ZmJhMWViZDNjYjIyODA2.field.dmVyc2lvbg.display_name": {
           "source": "Version",
@@ -9787,6 +9983,10 @@
           "source": "Confidence scoring effort. Omit for standard scoring. 'high': more accurate assessment of the parsing quality of every page, plus a document-level score in the result metadata; costs an additional 5 credits per page",
           "message": "Confidence scoring effort. Omit for standard scoring. 'high': more accurate assessment of the parsing quality of every page, plus a document-level score in the result metadata; costs an additional 5 credits per page"
         },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmRYQmtZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6KkxsYW1hUGFyc2VQcm9jZXNzaW5nT3B0aW9ucyMyZjM5MjYwZDFlNWVjNzA2YjcyZWRmZjQ2YmI1YjliNTAxZmVkNWEyN2FiNjRhNjk1YjBjZmRlMDBmZjI5ZjFi.field.Y29uZmlkZW5jZV9zY29yZV9lZmZvcnQ.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "high",
+          "message": "high"
+        },
         "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmRYQmtZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6KkxsYW1hUGFyc2VQcm9jZXNzaW5nT3B0aW9ucyMyZjM5MjYwZDFlNWVjNzA2YjcyZWRmZjQ2YmI1YjliNTAxZmVkNWEyN2FiNjRhNjk1YjBjZmRlMDBmZjI5ZjFi.field.Y29zdF9vcHRpbWl6ZXI.display_name": {
           "source": "Cost Optimizer",
           "message": "Cost Optimizer"
@@ -9834,6 +10034,14 @@
         "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmRYQmtZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6KkxsYW1hUGFyc2VQcm9jZXNzaW5nT3B0aW9ucyMyZjM5MjYwZDFlNWVjNzA2YjcyZWRmZjQ2YmI1YjliNTAxZmVkNWEyN2FiNjRhNjk1YjBjZmRlMDBmZjI5ZjFi.field.Zm9ybXM.desc": {
           "source": "Beta: set to 'enrich' to run an additional AI form-analysis pass on pages detected as forms, producing a structured tree of the form's sections, fields, and fillable grids. Retrieve the result with expand=forms. 'default' (the default) applies standard parsing with no extra pass. Not available on the fast tier",
           "message": "Beta: set to 'enrich' to run an additional AI form-analysis pass on pages detected as forms, producing a structured tree of the form's sections, fields, and fillable grids. Retrieve the result with expand=forms. 'default' (the default) applies standard parsing with no extra pass. Not available on the fast tier"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmRYQmtZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6KkxsYW1hUGFyc2VQcm9jZXNzaW5nT3B0aW9ucyMyZjM5MjYwZDFlNWVjNzA2YjcyZWRmZjQ2YmI1YjliNTAxZmVkNWEyN2FiNjRhNjk1YjBjZmRlMDBmZjI5ZjFi.field.Zm9ybXM.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "default",
+          "message": "default"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmRYQmtZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6KkxsYW1hUGFyc2VQcm9jZXNzaW5nT3B0aW9ucyMyZjM5MjYwZDFlNWVjNzA2YjcyZWRmZjQ2YmI1YjliNTAxZmVkNWEyN2FiNjRhNjk1YjBjZmRlMDBmZjI5ZjFi.field.Zm9ybXM.allowed-value.c3RyaW5nOmVucmljaA.display_name": {
+          "source": "enrich",
+          "message": "enrich"
         },
         "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmRYQmtZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6KkxsYW1hUGFyc2VQcm9jZXNzaW5nT3B0aW9ucyMyZjM5MjYwZDFlNWVjNzA2YjcyZWRmZjQ2YmI1YjliNTAxZmVkNWEyN2FiNjRhNjk1YjBjZmRlMDBmZjI5ZjFi.field.aWdub3Jl.display_name": {
           "source": "Ignore",
@@ -9918,6 +10126,18 @@
         "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmRYQmtZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6KkxsYW1hUGFyc2VQcm9jZXNzaW5nT3B0aW9ucyMyZjM5MjYwZDFlNWVjNzA2YjcyZWRmZjQ2YmI1YjliNTAxZmVkNWEyN2FiNjRhNjk1YjBjZmRlMDBmZjI5ZjFi.field.c3BlY2lhbGl6ZWRfY2hhcnRfcGFyc2luZw.desc": {
           "source": "Enable AI-powered chart analysis. Modes: 'efficient' (fast, lower cost), 'agentic' (balanced), 'agentic_plus' (highest accuracy). Automatically enables extract_layout and precise_bounding_box when set",
           "message": "Enable AI-powered chart analysis. Modes: 'efficient' (fast, lower cost), 'agentic' (balanced), 'agentic_plus' (highest accuracy). Automatically enables extract_layout and precise_bounding_box when set"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmRYQmtZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6KkxsYW1hUGFyc2VQcm9jZXNzaW5nT3B0aW9ucyMyZjM5MjYwZDFlNWVjNzA2YjcyZWRmZjQ2YmI1YjliNTAxZmVkNWEyN2FiNjRhNjk1YjBjZmRlMDBmZjI5ZjFi.field.c3BlY2lhbGl6ZWRfY2hhcnRfcGFyc2luZw.allowed-value.c3RyaW5nOmFnZW50aWNfcGx1cw.display_name": {
+          "source": "agentic_plus",
+          "message": "agentic_plus"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmRYQmtZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6KkxsYW1hUGFyc2VQcm9jZXNzaW5nT3B0aW9ucyMyZjM5MjYwZDFlNWVjNzA2YjcyZWRmZjQ2YmI1YjliNTAxZmVkNWEyN2FiNjRhNjk1YjBjZmRlMDBmZjI5ZjFi.field.c3BlY2lhbGl6ZWRfY2hhcnRfcGFyc2luZw.allowed-value.c3RyaW5nOmFnZW50aWM.display_name": {
+          "source": "agentic",
+          "message": "agentic"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmRYQmtZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6KkxsYW1hUGFyc2VQcm9jZXNzaW5nT3B0aW9ucyMyZjM5MjYwZDFlNWVjNzA2YjcyZWRmZjQ2YmI1YjliNTAxZmVkNWEyN2FiNjRhNjk1YjBjZmRlMDBmZjI5ZjFi.field.c3BlY2lhbGl6ZWRfY2hhcnRfcGFyc2luZw.allowed-value.c3RyaW5nOmVmZmljaWVudA.display_name": {
+          "source": "efficient",
+          "message": "efficient"
         },
         "app.TGxhbWFQYXJzZQ.action.dXBkYXRlLWNvbmZpZ3VyYXRpb24.option.cGFyYW1ldGVycw.union.SGFzaERhdGFUeXBlOipQYXJzZVYyUGFyYW1ldGVycyNkN2UzZjcxMWI3MjkyZDZhNmE1NjBhMmMyMjc0MTkyY2MxNmYwYzNhMTZmNGU0YzYzNGRhODAyYjJjNGIxNWM0.field.cHJvZHVjdF90eXBl.display_name": {
           "source": "Product Type",
@@ -10034,6 +10254,14 @@
         "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmRYQmtZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6TGxhbWFQYXJzZVdlYmhvb2tDb25maWd1cmF0aW9uIzM0NDVmMDRkNGFlMDE2ZGJmZWQ4ZmI0MThiNzc1ZDUyNmZlMzVjMjBhYTQyYzk3YjAyYjk2NjhhYjljZDE4YWQ.field.d2ViaG9va19vdXRwdXRfZm9ybWF0.desc": {
           "source": "Format of the webhook payload body. 'string' (default) sends the payload as a JSON-encoded string; 'json' sends it as a JSON object.",
           "message": "Format of the webhook payload body. 'string' (default) sends the payload as a JSON-encoded string; 'json' sends it as a JSON object."
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmRYQmtZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6TGxhbWFQYXJzZVdlYmhvb2tDb25maWd1cmF0aW9uIzM0NDVmMDRkNGFlMDE2ZGJmZWQ4ZmI0MThiNzc1ZDUyNmZlMzVjMjBhYTQyYzk3YjAyYjk2NjhhYjljZDE4YWQ.field.d2ViaG9va19vdXRwdXRfZm9ybWF0.allowed-value.c3RyaW5nOnN0cmluZw.display_name": {
+          "source": "string",
+          "message": "string"
+        },
+        "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmRYQmtZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6TGxhbWFQYXJzZVdlYmhvb2tDb25maWd1cmF0aW9uIzM0NDVmMDRkNGFlMDE2ZGJmZWQ4ZmI0MThiNzc1ZDUyNmZlMzVjMjBhYTQyYzk3YjAyYjk2NjhhYjljZDE4YWQ.field.d2ViaG9va19vdXRwdXRfZm9ybWF0.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "json",
+          "message": "json"
         },
         "app.TGxhbWFQYXJzZQ.type.YWN0aW9uOmRYQmtZWFJsTFdOdmJtWnBaM1Z5WVhScGIyNDpIYXNoRGF0YVR5cGU6TGxhbWFQYXJzZVdlYmhvb2tDb25maWd1cmF0aW9uIzM0NDVmMDRkNGFlMDE2ZGJmZWQ4ZmI0MThiNzc1ZDUyNmZlMzVjMjBhYTQyYzk3YjAyYjk2NjhhYjljZDE4YWQ.field.d2ViaG9va19zaWduaW5nX3NlY3JldA.display_name": {
           "source": "Webhook Signing Secret",
@@ -10422,6 +10650,18 @@
         "app.TGxhbWFQYXJzZQ.action.bGlzdC1kaXJlY3Rvcmllcw.option.dHlwZQ.desc": {
           "source": "Directory type to include.",
           "message": "Directory type to include."
+        },
+        "app.TGxhbWFQYXJzZQ.action.bGlzdC1kaXJlY3Rvcmllcw.option.dHlwZQ.allowed-value.c3RyaW5nOnVzZXI.display_name": {
+          "source": "user",
+          "message": "user"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bGlzdC1kaXJlY3Rvcmllcw.option.dHlwZQ.allowed-value.c3RyaW5nOmluZGV4.display_name": {
+          "source": "index",
+          "message": "index"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bGlzdC1kaXJlY3Rvcmllcw.option.dHlwZQ.allowed-value.c3RyaW5nOmVwaGVtZXJhbA.display_name": {
+          "source": "ephemeral",
+          "message": "ephemeral"
         },
         "app.TGxhbWFQYXJzZQ.action.bGlzdC1kaXJlY3Rvcmllcw.option.dHlwZXM.display_name": {
           "source": "Types",

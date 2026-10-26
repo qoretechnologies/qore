@@ -7,8 +7,15 @@ function(qore_configure_package_configs)
     set(_templates "${CMAKE_CURRENT_FUNCTION_LIST_DIR}")
     configure_file("${_templates}/QoreBuildTree.cmake.in"
         "${CMAKE_BINARY_DIR}/cmake/QoreBuildTree.cmake" @ONLY)
+    # a build tree loaded from another path is reported as not found, with the reason (see QoreBuildTree.cmake.in)
     set(QORE_CONFIG_BUILD_TREE_SETUP
-        "include(\"\${CMAKE_CURRENT_LIST_DIR}/QoreBuildTree.cmake\")")
+        "include(\"\${CMAKE_CURRENT_LIST_DIR}/QoreBuildTree.cmake\")
+if (_qore_build_tree_moved)
+    set(QORE_FOUND 0)
+    set(Qore_FOUND FALSE)
+    set(Qore_NOT_FOUND_MESSAGE \"\${_qore_build_tree_moved_message}\")
+    return()
+endif()")
     configure_file("${_templates}/QoreConfig.cmake.in"
         "${CMAKE_BINARY_DIR}/cmake/QoreConfig.cmake" @ONLY)
     set(QORE_CONFIG_BUILD_TREE_SETUP "")

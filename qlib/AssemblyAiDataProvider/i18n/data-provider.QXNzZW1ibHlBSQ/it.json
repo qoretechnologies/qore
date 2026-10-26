@@ -1683,6 +1683,14 @@
           "source": "The replacement logic for detected PII, can be `entity_name` or `hash`. See [PII redaction](https://www.assemblyai.com/docs/pii-redaction) for more details.",
           "message": "La logica di sostituzione per le PII rilevate può essere `entity_name` o `hash`. Consulta la [redazione PII](https://www.assemblyai.com/docs/pii-redaction) per ulteriori dettagli."
         },
+        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9zdWI.allowed-value.c3RyaW5nOmVudGl0eV9uYW1l.display_name": {
+          "source": "entity_name",
+          "message": "nome entità"
+        },
+        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9zdWI.allowed-value.c3RyaW5nOmhhc2g.display_name": {
+          "source": "hash",
+          "message": "hash"
+        },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9yZXR1cm5fdW5yZWRhY3RlZA.display_name": {
           "source": "Redact PII Return Unredacted",
           "message": "Restituire anche il testo originale"
@@ -2146,6 +2154,14 @@
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVtb3ZlX2F1ZGlvX3RhZ3M.desc": {
           "source": "Universal-3.5 Pro generates rich transcripts that can include inline annotations such as audio event markers and speaker cues. Set to `\"all\"` to remove all inline annotations, or `\"speaker\"` to remove only speaker cues while keeping other annotations. By default, all inline annotations are removed.\n\nNote: This parameter is only supported for the Universal-3.5 Pro model.\n",
           "message": "Universal-3.5 Pro genera trascrizioni ricche che possono includere annotazioni in linea come marcatori di eventi audio e segnali del relatore. Imposta su `\"all\"` per rimuovere tutte le annotazioni in linea o `\"speaker\"` per rimuovere solo i segnali del relatore mantenendo le altre annotazioni. Per impostazione predefinita, tutte le annotazioni in linea vengono rimosse.\n\nNota: questo parametro è supportato solo per il modello Universal-3.5 Pro."
+        },
+        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVtb3ZlX2F1ZGlvX3RhZ3M.allowed-value.c3RyaW5nOmFsbA.display_name": {
+          "source": "all",
+          "message": "tutti"
+        },
+        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVtb3ZlX2F1ZGlvX3RhZ3M.allowed-value.c3RyaW5nOnNwZWFrZXI.display_name": {
+          "source": "speaker",
+          "message": "interlocutore"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.dGVtcGVyYXR1cmU.display_name": {
           "source": "Temperature",
@@ -6963,6 +6979,14 @@
           "source": "The replacement logic for detected PII, can be `entity_name` or `hash`. See [PII redaction](https://www.assemblyai.com/docs/pii-redaction) for more details.",
           "message": "La logica di sostituzione per le PII rilevate può essere `entity_name` o `hash`. Consulta la [redazione PII](https://www.assemblyai.com/docs/pii-redaction) per ulteriori dettagli."
         },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9zdWI.allowed-value.c3RyaW5nOmVudGl0eV9uYW1l.display_name": {
+          "source": "entity_name",
+          "message": "nome entità"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9zdWI.allowed-value.c3RyaW5nOmhhc2g.display_name": {
+          "source": "hash",
+          "message": "hash"
+        },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9yZXR1cm5fdW5yZWRhY3RlZA.display_name": {
           "source": "Redact PII Return Unredacted",
           "message": "Restituire anche il testo originale"
@@ -7427,6 +7451,14 @@
           "source": "Universal-3.5 Pro generates rich transcripts that can include inline annotations such as audio event markers and speaker cues. Set to `\"all\"` to remove all inline annotations, or `\"speaker\"` to remove only speaker cues while keeping other annotations. By default, all inline annotations are removed.\n\nNote: This parameter is only supported for the Universal-3.5 Pro model.\n",
           "message": "Universal-3.5 Pro genera trascrizioni ricche che possono includere annotazioni in linea come marcatori di eventi audio e segnali del relatore. Imposta su `\"all\"` per rimuovere tutte le annotazioni in linea o `\"speaker\"` per rimuovere solo i segnali del relatore mantenendo le altre annotazioni. Per impostazione predefinita, tutte le annotazioni in linea vengono rimosse.\n\nNota: questo parametro è supportato solo per il modello Universal-3.5 Pro."
         },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVtb3ZlX2F1ZGlvX3RhZ3M.allowed-value.c3RyaW5nOmFsbA.display_name": {
+          "source": "all",
+          "message": "tutti"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVtb3ZlX2F1ZGlvX3RhZ3M.allowed-value.c3RyaW5nOnNwZWFrZXI.display_name": {
+          "source": "speaker",
+          "message": "interlocutore"
+        },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.dGVtcGVyYXR1cmU.display_name": {
           "source": "Temperature",
           "message": "Temperatura"
@@ -7534,6 +7566,22 @@
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.dHJhbnNjcmlwdGlvbl90aW1lb3V0.desc": {
           "source": "Positive polling time budget. Defaults to 30 minutes. A timeout leaves the server job running; use its ID to retrieve or delete it.",
           "message": "Budget positivo per il tempo di votazione. Il valore predefinito è 30 minuti. Un timeout lascia il lavoro del server in esecuzione; utilizzare il suo ID per recuperarlo o eliminarlo."
+        },
+        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlZWNoX21vZGVs.allowed-value.c3RyaW5nOnVuaXZlcnNhbC0zLTUtcHJv.display_name": {
+          "source": "universal-3-5-pro",
+          "message": "universal-3-5-pro"
+        },
+        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlZWNoX21vZGVs.allowed-value.c3RyaW5nOnVuaXZlcnNhbC0y.display_name": {
+          "source": "universal-2",
+          "message": "universal-2"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlZWNoX21vZGVs.allowed-value.c3RyaW5nOnVuaXZlcnNhbC0zLTUtcHJv.display_name": {
+          "source": "universal-3-5-pro",
+          "message": "universal-3-5-pro"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlZWNoX21vZGVs.allowed-value.c3RyaW5nOnVuaXZlcnNhbC0y.display_name": {
+          "source": "universal-2",
+          "message": "universal-2"
         }
       }
     }

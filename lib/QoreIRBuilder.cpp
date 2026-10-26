@@ -1594,6 +1594,20 @@ QoreIRInstruction* QoreIRBuilder::createCheckReturnValue(QoreIRValue value, cons
     return inst;
 }
 
+QoreIRInstruction* QoreIRBuilder::createIteratorRelease(QoreIRValue iterator, const QoreProgramLocation* loc) {
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::IteratorRelease);
+    inst->operands.push_back(iterator);
+    inst->loc = loc;
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createReleaseOwnedTemp(QoreIRValue value, const QoreProgramLocation* loc) {
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::ReleaseOwnedTemp);
+    inst->operands.push_back(value);
+    inst->loc = loc;
+    return inst;
+}
+
 QoreIRCallAOTHelperInstruction* QoreIRBuilder::createCallAOTHelper(
         const std::string& helper_name, const QoreProgramLocation* loc) {
     auto inst = append<QoreIRCallAOTHelperInstruction>(helper_name);

@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/ParseNode.h"
 
 QoreString QoreMinusEqualsOperatorNode::op_str("-= operator expression");
@@ -102,7 +103,8 @@ int QoreMinusEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext&
 }
 
 QoreValue QoreMinusEqualsOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder new_right(right, xsink);
+    // the operand is a statement of its own where the other execution modes evaluate it so
+    QoreMutationOperandHolder new_right(left, right, false, xsink);
     if (*xsink) {
         return QoreValue();
     }

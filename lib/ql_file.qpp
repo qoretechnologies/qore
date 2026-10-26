@@ -59,7 +59,7 @@ static bool check_stat(unsigned code, const QoreString& path, ExceptionSink* xsi
    if (q_check_path(path)) {
       return false;
    }
-   QoreSandboxManagerHelper smh;
+   QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
    if (smh && !smh->checkFilesystemAccess(path.c_str(), QSEC_READ, xsink)) {
       return false;
    }
@@ -73,7 +73,7 @@ static bool check_lstat(unsigned code, const QoreString& path, ExceptionSink* xs
    if (q_check_path(path)) {
       return false;
    }
-   QoreSandboxManagerHelper smh;
+   QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
    if (smh && !smh->checkFilesystemAccess(path.c_str(), QSEC_READ, xsink)) {
       return false;
    }
@@ -97,7 +97,7 @@ static bool is_writable_intern(const QoreStringNode* path, ExceptionSink* xsink)
    struct stat sbuf;
    int rc;
 
-   QoreSandboxManagerHelper smh;
+   QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
    if (smh && !smh->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink)) {
       return false;
    }
@@ -130,14 +130,14 @@ static bool is_writable_intern(const QoreStringNode* path, ExceptionSink* xsink)
    return false;
 
 #elif defined(HAVE_ACCESS) && defined(_Q_WINDOWS)
-   QoreSandboxManagerHelper smh;
+   QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
    if (smh && !smh->checkFilesystemAccess(path->c_str(), QSEC_WRITE, xsink)) {
       return false;
    }
    // only use access(2) on Windows
    return access(path->getBuffer(), W_OK) == 0;
 #elif defined _Q_WINDOWS
-   QoreSandboxManagerHelper smh;
+   QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
    if (smh && !smh->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink)) {
       return false;
    }
@@ -409,7 +409,7 @@ bool is_dev(string path) [flags=CONSTANT,NAMED_ARGS;dom=FILESYSTEM] {
    if (q_check_path(*path)) {
       return false;
    }
-   QoreSandboxManagerHelper smh;
+   QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
    if (smh && !smh->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink)) {
       return false;
    }
@@ -470,7 +470,7 @@ bool is_readable(string path) [flags=CONSTANT,NAMED_ARGS;dom=FILESYSTEM] {
    if (q_check_path(*path)) {
       return false;
    }
-   QoreSandboxManagerHelper smh;
+   QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
    if (smh && !smh->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink)) {
       return false;
    }
@@ -538,7 +538,7 @@ bool is_executable(string path) [flags=CONSTANT,NAMED_ARGS;dom=FILESYSTEM] {
    if (q_check_path(*path)) {
       return false;
    }
-   QoreSandboxManagerHelper smh;
+   QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
    if (smh && !smh->checkFilesystemAccess(path->c_str(), QSEC_READ | QSEC_EXECUTE, xsink)) {
       return false;
    }
@@ -596,7 +596,7 @@ nothing rename(string source_path, string target_path) [flags=NAMED_ARGS;dom=FIL
    }
 
    // Check sandbox security restrictions
-   QoreSandboxManagerHelper smh;
+   QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
    if (smh) {
       // Need delete access to source
       if (!smh->checkFilesystemAccess(source_path->c_str(), QSEC_DELETE, xsink)) {
@@ -638,7 +638,7 @@ nothing rename(string source_path, string target_path) [flags=NAMED_ARGS;dom=FIL
     if (q_check_path(*path)) {
         return QoreValue();
     }
-    QoreSandboxManagerHelper smh;
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     if (smh && !smh->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink)) {
         return QoreValue();
     }
@@ -676,7 +676,7 @@ if (!exists l)
     if (q_check_path(*path)) {
         return QoreValue();
     }
-    QoreSandboxManagerHelper smh;
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     if (smh && !smh->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink)) {
         return QoreValue();
     }
@@ -718,7 +718,7 @@ if (!exists l)
    if (q_check_path(*path)) {
       return QoreValue();
    }
-   QoreSandboxManagerHelper smh;
+   QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
    if (smh && !smh->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink)) {
       return QoreValue();
    }
@@ -763,7 +763,7 @@ if (!h)
    if (q_check_path(*path)) {
       return QoreValue();
    }
-   QoreSandboxManagerHelper smh;
+   QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
    if (smh && !smh->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink)) {
       return QoreValue();
    }
@@ -804,7 +804,7 @@ if (!exists h)
    if (q_check_path(*path)) {
       return QoreValue();
    }
-   QoreSandboxManagerHelper smh;
+   QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
    if (smh && !smh->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink)) {
       return QoreValue();
    }
@@ -849,7 +849,7 @@ if (!gl)
     if (q_check_path(*pattern)) {
         return QoreValue();
     }
-    QoreSandboxManagerHelper smh;
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     if (smh) {
         std::string check_path = get_glob_sandbox_path(pattern->c_str());
         if (!smh->checkFilesystemAccess(check_path.c_str(), QSEC_READ, xsink)) {
@@ -916,7 +916,7 @@ int unlink(string path) [flags=NAMED_ARGS;dom=FILESYSTEM] {
       return -1;
    }
    // Check sandbox security restrictions
-   QoreSandboxManagerHelper smh;
+   QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
    if (smh) {
       if (!smh->checkFilesystemAccess(path->c_str(), QSEC_DELETE, xsink)) {
          return -1;
@@ -987,7 +987,7 @@ int mkdir(string path, softint mode = 0777, bool parents = False) [flags=NAMED_A
         return -1;
     }
     // Check sandbox security restrictions (for non-parent case; parent case checked by QoreDir)
-    QoreSandboxManagerHelper smh;
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     if (smh && !parents) {
         if (!smh->checkFilesystemAccess(path->c_str(), QSEC_CREATE, xsink)) {
             return -1;
@@ -1059,7 +1059,7 @@ nothing mkdir_ex(string path, softint mode = 0777, bool parents = False) [flags=
         return QoreValue();
     }
 
-    QoreSandboxManagerHelper smh;
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     if (smh && !smh->checkFilesystemAccess(path->c_str(), QSEC_CREATE, xsink)) {
         return QoreValue();
     }
@@ -1096,7 +1096,7 @@ int rmdir(string path) [flags=NAMED_ARGS;dom=FILESYSTEM] {
       return -1;
    }
    // Check sandbox security restrictions
-   QoreSandboxManagerHelper smh;
+   QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
    if (smh) {
       if (!smh->checkFilesystemAccess(path->c_str(), QSEC_DELETE, xsink)) {
          return -1;
@@ -1125,7 +1125,7 @@ int chmod(string path, softint mode) [flags=NAMED_ARGS;dom=FILESYSTEM] {
       return -1;
    }
    // Check sandbox security restrictions
-   QoreSandboxManagerHelper smh;
+   QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
    if (smh) {
       if (!smh->checkFilesystemAccess(path->c_str(), QSEC_WRITE, xsink)) {
          return -1;
@@ -1156,7 +1156,7 @@ int chdir(string path) [flags=NAMED_ARGS;dom=PROCESS,FILESYSTEM] {
       return -1;
    }
    // Check sandbox security restrictions
-   QoreSandboxManagerHelper smh;
+   QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
    if (smh) {
       if (!smh->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink)) {
          return -1;
@@ -1221,7 +1221,7 @@ int mkfifo(string path, softint mode = 0600) [flags=NAMED_ARGS;dom=FILESYSTEM] {
       return -1;
    }
    // Check sandbox security restrictions
-   QoreSandboxManagerHelper smh;
+   QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
    if (smh) {
       if (!smh->checkFilesystemAccess(path->c_str(), QSEC_CREATE, xsink)) {
          return -1;
@@ -1260,7 +1260,7 @@ int chown(string path, softint owner = -1, softint group = -1) [flags=NAMED_ARGS
       return -1;
    }
    // Check sandbox security restrictions
-   QoreSandboxManagerHelper smh;
+   QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
    if (smh) {
       if (!smh->checkFilesystemAccess(path->c_str(), QSEC_WRITE, xsink)) {
          return -1;
@@ -1299,7 +1299,7 @@ int lchown(string path, softint owner = -1, softint group = -1) [flags=NAMED_ARG
       return -1;
    }
    // Check sandbox security restrictions
-   QoreSandboxManagerHelper smh;
+   QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
    if (smh) {
       if (!smh->checkFilesystemAccess(path->c_str(), QSEC_WRITE, xsink)) {
          return -1;
@@ -1332,7 +1332,7 @@ string readlink(string path) [flags=NAMED_ARGS;dom=FILESYSTEM] {
    if (q_check_path(*path, "READLINK-ERROR", xsink)) {
       return QoreValue();
    }
-   QoreSandboxManagerHelper smh;
+   QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
    if (smh && !smh->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink)) {
       return QoreValue();
    }
@@ -1382,7 +1382,7 @@ nothing symlink(string target_path, string link_path) [flags=NAMED_ARGS;dom=FILE
       return QoreValue();
    }
 
-   QoreSandboxManagerHelper smh;
+   QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
    if (smh && !smh->checkFilesystemAccess(link_path->c_str(), QSEC_CREATE, xsink)) {
       return QoreValue();
    }
@@ -1476,7 +1476,7 @@ string realpath(string path) [flags=NAMED_ARGS;dom=FILESYSTEM] {
    if (q_check_path(*path, "REALPATH-ERROR", xsink)) {
       return QoreValue();
    }
-   QoreSandboxManagerHelper smh;
+   QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
    if (smh && !smh->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink)) {
       return QoreValue();
    }

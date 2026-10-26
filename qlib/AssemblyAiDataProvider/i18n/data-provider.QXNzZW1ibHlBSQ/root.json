@@ -1683,6 +1683,14 @@
           "source": "The replacement logic for detected PII, can be `entity_name` or `hash`. See [PII redaction](https://www.assemblyai.com/docs/pii-redaction) for more details.",
           "message": "The replacement logic for detected PII, can be `entity_name` or `hash`. See [PII redaction](https://www.assemblyai.com/docs/pii-redaction) for more details."
         },
+        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9zdWI.allowed-value.c3RyaW5nOmVudGl0eV9uYW1l.display_name": {
+          "source": "entity_name",
+          "message": "entity_name"
+        },
+        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9zdWI.allowed-value.c3RyaW5nOmhhc2g.display_name": {
+          "source": "hash",
+          "message": "hash"
+        },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9yZXR1cm5fdW5yZWRhY3RlZA.display_name": {
           "source": "Redact PII Return Unredacted",
           "message": "Redact PII Return Unredacted"
@@ -2147,6 +2155,14 @@
           "source": "Universal-3.5 Pro generates rich transcripts that can include inline annotations such as audio event markers and speaker cues. Set to `\"all\"` to remove all inline annotations, or `\"speaker\"` to remove only speaker cues while keeping other annotations. By default, all inline annotations are removed.\n\nNote: This parameter is only supported for the Universal-3.5 Pro model.\n",
           "message": "Universal-3.5 Pro generates rich transcripts that can include inline annotations such as audio event markers and speaker cues. Set to `\"all\"` to remove all inline annotations, or `\"speaker\"` to remove only speaker cues while keeping other annotations. By default, all inline annotations are removed.\n\nNote: This parameter is only supported for the Universal-3.5 Pro model.\n"
         },
+        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVtb3ZlX2F1ZGlvX3RhZ3M.allowed-value.c3RyaW5nOmFsbA.display_name": {
+          "source": "all",
+          "message": "all"
+        },
+        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVtb3ZlX2F1ZGlvX3RhZ3M.allowed-value.c3RyaW5nOnNwZWFrZXI.display_name": {
+          "source": "speaker",
+          "message": "speaker"
+        },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.dGVtcGVyYXR1cmU.display_name": {
           "source": "Temperature",
           "message": "Temperature"
@@ -2218,6 +2234,14 @@
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlZWNoX21vZGVs.desc": {
           "source": "This parameter has been replaced with the `speech_models` parameter, learn more about the `speech_models` parameter [here](https://www.assemblyai.com/docs/pre-recorded-audio/select-the-speech-model).\n",
           "message": "This parameter has been replaced with the `speech_models` parameter, learn more about the `speech_models` parameter [here](https://www.assemblyai.com/docs/pre-recorded-audio/select-the-speech-model).\n"
+        },
+        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlZWNoX21vZGVs.allowed-value.c3RyaW5nOnVuaXZlcnNhbC0zLTUtcHJv.display_name": {
+          "source": "universal-3-5-pro",
+          "message": "universal-3-5-pro"
+        },
+        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlZWNoX21vZGVs.allowed-value.c3RyaW5nOnVuaXZlcnNhbC0y.display_name": {
+          "source": "universal-2",
+          "message": "universal-2"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.dG9waWNz.display_name": {
           "source": "Topics",
@@ -6963,6 +6987,14 @@
           "source": "The replacement logic for detected PII, can be `entity_name` or `hash`. See [PII redaction](https://www.assemblyai.com/docs/pii-redaction) for more details.",
           "message": "The replacement logic for detected PII, can be `entity_name` or `hash`. See [PII redaction](https://www.assemblyai.com/docs/pii-redaction) for more details."
         },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9zdWI.allowed-value.c3RyaW5nOmVudGl0eV9uYW1l.display_name": {
+          "source": "entity_name",
+          "message": "entity_name"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9zdWI.allowed-value.c3RyaW5nOmhhc2g.display_name": {
+          "source": "hash",
+          "message": "hash"
+        },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9yZXR1cm5fdW5yZWRhY3RlZA.display_name": {
           "source": "Redact PII Return Unredacted",
           "message": "Redact PII Return Unredacted"
@@ -7427,6 +7459,14 @@
           "source": "Universal-3.5 Pro generates rich transcripts that can include inline annotations such as audio event markers and speaker cues. Set to `\"all\"` to remove all inline annotations, or `\"speaker\"` to remove only speaker cues while keeping other annotations. By default, all inline annotations are removed.\n\nNote: This parameter is only supported for the Universal-3.5 Pro model.\n",
           "message": "Universal-3.5 Pro generates rich transcripts that can include inline annotations such as audio event markers and speaker cues. Set to `\"all\"` to remove all inline annotations, or `\"speaker\"` to remove only speaker cues while keeping other annotations. By default, all inline annotations are removed.\n\nNote: This parameter is only supported for the Universal-3.5 Pro model.\n"
         },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVtb3ZlX2F1ZGlvX3RhZ3M.allowed-value.c3RyaW5nOmFsbA.display_name": {
+          "source": "all",
+          "message": "all"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVtb3ZlX2F1ZGlvX3RhZ3M.allowed-value.c3RyaW5nOnNwZWFrZXI.display_name": {
+          "source": "speaker",
+          "message": "speaker"
+        },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.dGVtcGVyYXR1cmU.display_name": {
           "source": "Temperature",
           "message": "Temperature"
@@ -7498,6 +7538,14 @@
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlZWNoX21vZGVs.desc": {
           "source": "This parameter has been replaced with the `speech_models` parameter, learn more about the `speech_models` parameter [here](https://www.assemblyai.com/docs/pre-recorded-audio/select-the-speech-model).\n",
           "message": "This parameter has been replaced with the `speech_models` parameter, learn more about the `speech_models` parameter [here](https://www.assemblyai.com/docs/pre-recorded-audio/select-the-speech-model).\n"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlZWNoX21vZGVs.allowed-value.c3RyaW5nOnVuaXZlcnNhbC0zLTUtcHJv.display_name": {
+          "source": "universal-3-5-pro",
+          "message": "universal-3-5-pro"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlZWNoX21vZGVs.allowed-value.c3RyaW5nOnVuaXZlcnNhbC0y.display_name": {
+          "source": "universal-2",
+          "message": "universal-2"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.dG9waWNz.display_name": {
           "source": "Topics",

@@ -37,6 +37,18 @@
     previously only code defined in the sandboxed %Program was checked.  Trusted code under the barrier is
     unaffected (<a href="https://github.com/qoretechnologies/qore/issues/5514">issue 5514</a>).
 
+    Code run with the system policy (@ref Qore::SandboxManager::createSystemPolicyCall() and
+    @ref Qore::SandboxManager::callWithSystemPolicy()) can now use the global filesystem functions such as
+    @ref Qore::stat() "stat()", @ref Qore::is_writable() "is_writable()", @ref Qore::rename() "rename()",
+    @ref Qore::unlink() "unlink()" and @ref Qore::mkdir() "mkdir()", @ref Qore::system() "system()" and
+    @ref Qore::exec() "exec()", and the file access of the \c i18n, \c json and \c krb5 modules, as it can
+    @ref Qore::File "File", @ref Qore::Dir "Dir" and @ref Qore::Socket "Socket"; they were checked against the
+    sandboxed caller's policy instead.  The C++ API's \c QoreSandboxManagerHelper constructor without a purpose is
+    deprecated: a module names \c QoreSandboxManagerHelper::Policy for a policy check and
+    \c QoreSandboxManagerHelper::All for interrupts and limits.
+    The arguments of a call to a capability are evaluated by its caller: a sandboxed caller's local variables,
+    including those of its closures, could raise LVALUE-ERROR when passed to a capability.
+
     Connection schemes, their setup messages, connection options and allowed values now have source-owned
     translation catalogs. Unchanged HTTP options reused by REST and other schemes share their original
     identities; changing a default preserves the identity, while changing a field's wording gives it a new
@@ -73,6 +85,12 @@
     @ref restclientiointro "RestClientIo" module. API-relative endpoints are appended to the configured API root;
     origin-absolute targets address a path from the host root. Existing HTTPClient and RestClient string methods
     retain their contracts (<a href="https://github.com/qoretechnologies/qore/issues/5485">issue 5485</a>).
+
+    The \c rest command preserves full endpoint URL paths and queries, including repeated leading slashes,
+    and excludes URL fragments from HTTP requests. Paths supplied with named connections remain relative
+    to the configured API root. Failed requests now return a nonzero exit status; \c --ignore-errors still
+    permits HTTP error responses. Schema-relative endpoint paths are resolved against the schema URL when
+    they do not name a connection.
 
     The new @ref discard_statement "@@discard(expression);" statement explicitly discards an expression's
     result without an unused-result warning or a dummy local variable. It preserves evaluation, exceptions,
@@ -758,6 +776,33 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+
+    @par Temporary Values Live Until the End of Their Statement
+    @parblock
+    An object or other value that an expression creates and that nothing else refers to, such as the object that a
+    call returns or \c new creates in <tt>getDocument().components.schemas.Pet.getDataType()</tt> or
+    <tt>new MyClass().getClosure()()</tt>, now lives until the end of the statement that created it, so every part of
+    a chain of member accesses, element accesses, casts and method calls can use it: a weak reference to it, a
+    closure created by one of its methods and a call reference to one of its methods work until the statement ends.
+    Before, such a value was destroyed as soon as the member access, element access, cast or method call that used it
+    returned.  A value passed to a call as an argument is still released when the call returns.  This applies in every
+    @ref execution_modes "execution mode".
+
+    The condition of an \c if, \c while, \c do or \c for statement, the initializer and the iterator of a \c for
+    statement, the list of a \c foreach statement and the value of a \c switch statement are statements of their own:
+    their temporary values are destroyed before the code that they select or that follows them runs.  So are the
+    expression of a \c map whose value is not used, for each element, and the value assigned to a member or an
+    element of a container or combined with a variable by a compound assignment, \c push or \c unshift, whose
+    temporary values are destroyed before the container or variable is changed.
+
+    A \c foreach statement that a \c return, a \c break or an exception leaves releases the list that it iterates and
+    then its loop variables before the code after it runs, such as the \c on_exit and \c on_error handlers of the
+    enclosing blocks; in the IR, JIT, tiered and AOT execution modes, the list and the loop variables were released
+    after those handlers had run, or when the function returned.
+
+    Code that relied on a temporary object being destroyed before the rest of its statement ran, for example on its
+    destructor, must assign the object to a variable and release it in a separate statement.
+    @endparblock
 
     @par Data Provider Types Restored From Their Descriptions Can Be Cyclic and Shared
     @parblock
@@ -1485,19 +1530,7 @@ val = "string";      # OK
     <b>Impact:</b>
     - Code using @ref strict-types "%strict-types" will parse without error but the directive has no effect
     - Code checking \c PO_STRICT_TYPES will always evaluate to false
-    - Variables will not be auto-initialized with default values based on type, except static class variables of a
-      non-optional hash or list type (see below)
-    @endparblock
-
-    @par Static Class Variables of Hash and List Types Start Empty
-    @parblock
-    A static class variable declared with a non-optional hash or list type and no initializer, such as
-    <tt>static hash<string, int> counts;</tt> or <tt>static list<auto> items;</tt>, now starts as an empty hash or
-    list of its type, and one of a @ref hashdecl "hashdecl" type as a hash with the hashdecl's member defaults; it
-    started as @ref nothing "NOTHING", as other variables without an initializer still do.  Code that tests such a
-    variable with @ref exists "exists" or compares it with @ref nothing "NOTHING" to find out whether it has been
-    set must test whether it is empty instead.  Instance members, global and local variables, and variables of an
-    optional type (such as <tt>*hash<string, int></tt>) still start as @ref nothing "NOTHING".
+    - Variables will not be auto-initialized with default values based on type
     @endparblock
 
     @par C++20 Required
@@ -1906,6 +1939,35 @@ val = "string";      # OK
     than 4 characters) is now refused with a \c RUNTIME-TYPE-ERROR or \c TYPE-VALUE-ERROR exception before the
     request is made.  The soft (converting) equivalents of all data provider scalar types keep the constraints of the
     type.
+    @endparblock
+
+    @par REST Requests Have No Read-Only Properties
+    @parblock
+    The request types of REST schema data providers (Swagger and OpenAPI), such as the Mews tables' search requests,
+    have no field for a property that the schema declares \c readOnly, which a request cannot give a value for: a
+    request value with one is refused with a \c RUNTIME-TYPE-ERROR exception, where the request was refused when it
+    was sent.  Response and record types have the read-only properties, and an OpenAPI response type has no field for
+    a \c writeOnly property.  For example, the \c MaskedAccessToken and \c MaskedClientToken fields of the Mews
+    requests are no longer offered.
+    @endparblock
+
+    @par Documented API Defaults Are Shown, Never Sent
+    @parblock
+    Data provider fields and options describe the value that the remote system assumes when they are not given, as
+    \c remote_default_value, apart from their own default value; REST schema data providers (OpenAPI and Swagger)
+    give the \c default of each property and parameter this way.  It is shown beside the field and is never applied:
+    it does not pre-fill a form and it is never sent, so a request without the value still lets the API decide.  See
+    @ref dataprovider_remote_default_values.
+    @endparblock
+
+    @par Nullable Enumerations Offer Their Choices
+    @parblock
+    A REST schema property that is a nullable enumeration, which OpenAPI 3.1 writes as an \c anyOf or \c oneOf of
+    the enumeration and the \c null type, now offers the values of the enumeration as its choices, with the display
+    names that the schema gives them, as a plain enumeration does; for example, the \c schedule option of the
+    Unstructured \c create-workflow action and the reasoning effort options of the Mistral, Fireworks and Azure
+    OpenAI actions.  An optional data provider field, option or type with choices accepts no value and \c NULL; it
+    refused them with a \c FIELD-VALUE-ERROR or \c TYPE-VALUE-ERROR exception.
     @endparblock
 
     @par Records Whose Fields All Have Default Values Are Consistently Optional
@@ -5034,6 +5096,13 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - serializing an object with a weak reference whose target has been destroyed raised an
+      \c OBJECT-ALREADY-DELETED exception; the reference is now serialized as no value, as a weak reference to an
+      object that no longer exists has none (see @ref Qore::Serializable "Serializable")
+    - a @ref Qore::Program "Program" deleted while the current thread runs its code is kept until that thread has
+      left the code, as it is while another thread runs it, and is cleared then: the code that it ran crashed the
+      process when it returned, and a deletion while a background thread ran the Program's code and waited for the
+      deleting thread deadlocked (<a href="https://github.com/qoretechnologies/qore/issues/5538">issue 5538</a>)
     - zoneinfo files are read with their 64-bit data and the time zone rule at the end of the file, as RFC 9636
       describes: local times were UTC with "slim" zoneinfo files, which \c zic writes by default, and with all
       zoneinfo files, local times after 2037 had no daylight saving time, and many local times before 1970 had the
@@ -5935,8 +6004,13 @@ while (*binary chunk = input.read(65536)) {
       <tt>h.x.y</tt> left the whole path behind; the containers are now unchanged by a rejected assignment
     - Fixed class member and static class variable initializers and default argument values bypassing their
       declared types: container elements were not converted, for example \c list<softstring> initialized with
-      <tt>(1, 2)</tt>, and a value of another type was stored without an error; an uninitialized static class
-      variable of a @ref hashdecl type now receives the hashdecl's member defaults
+      <tt>(1, 2)</tt>, and a value of another type was stored without an error
+    - Fixed static class variables declared without an initializer starting with a value in 3.0 development builds:
+      one of a non-optional hash or list type started as an empty hash or list, and one of a @ref hashdecl "hashdecl"
+      type as a hash with the hashdecl's member defaults.  Like every other variable without an initializer, and as
+      in earlier releases, such a variable now starts as @ref nothing "NOTHING" in all execution modes; give it an
+      initializer such as <tt>static hash<string, int> counts = {};</tt> or <tt>static hash<MyDecl> h();</tt> to
+      start it with a value
     - Fixed @ref Qore::Serializable "Serializable" serializing a container as a reference to a different,
       previously serialized container when a container created during serialization was released and its
       memory was reused, for example containers returned by a \c serializeMembers() method. The serialized data

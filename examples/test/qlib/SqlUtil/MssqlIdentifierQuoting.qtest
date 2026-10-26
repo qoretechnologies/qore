@@ -254,6 +254,16 @@ class MssqlIdentifierQuotingTest inherits QUnit::Test {
         # an alias that is a reserved word can be referenced by name, which gives its definition (issue #2163)
         assertEq("select id as \"table\", * from dbo.[mssql iq] where id = id",
             t.getSelectSql({"columns": (cop_as("id", "table"), "*"), "where": {"table": op_ceq("id")}}, \args));
+        # an alias given as a delimited identifier (issue #2163), in double quotes or brackets, is used as given and
+        # can be referenced by the name that it gives
+        assertEq("select id as \"user-interaction\", id as [a]]b] from dbo.[mssql iq] order by id",
+            t.getSelectSql({"columns": (cop_as("id", "\"user-interaction\""), cop_as("id", "[a]]b]")),
+                "orderby": "user-interaction"}, \args));
+        assertEq("select id as \"user-interaction\" from dbo.[mssql iq]",
+            t.getSelectSql({"columns": (cop_as("id", "user-interaction"),)}, \args));
+        # the name in the delimiters is checked as any other alias
+        assertThrows("IDENTIFIER-ERROR", "cannot be an SQL identifier", \t.getAliasSqlName(), "[a%vb]");
+        assertThrows("IDENTIFIER-ERROR", "cannot be an SQL identifier", \t.getAliasSqlName(), "\"a--b\"");
     }
 
     sequenceSql() {
@@ -356,6 +366,9 @@ class MssqlIdentifierQuotingTest inherits QUnit::Test {
         assertEq({"lower": 2, "mixedcase": 2, "with space": 2, "order": 1},
             t.selectRow({"columns": (cop_as("order", "lower"), cop_as("order", "MixedCase"),
                 cop_as("order", "with space"), cop_as("id", "order")), "where": {"id": 1}}));
+        # an alias given as a delimited identifier (issue #2163) names the key without its delimiters
+        assertEq({"user-interaction": 1, "a b": 1}, t.selectRow({"columns": (cop_as("id", "\"user-interaction\""),
+            cop_as("id", "[a b]")), "where": {"id": 1}}));
         {
             on_success ds.commit();
             on_error ds.rollback();

@@ -3079,7 +3079,36 @@ void QoreProgram::waitForTermination() {
     priv->waitForAllThreadsToTerminate();
 }
 
+void qore_program_private::decThreadCount(QoreProgram& pgm, int tid, ExceptionSink* xsink) {
+    bool clear = false;
+    unsigned derefs = pgm.priv->decThreadCount(tid, clear);
+    if (!derefs) {
+        return;
+    }
+    // the thread deleted the Program while running its code, and has left it now: clear and dereference it as the
+    // deletion would have (see QoreProgram::waitForTerminationAndDeref())
+    ExceptionSink local_xsink;
+    if (clear) {
+        pgm.priv->waitForTerminationAndClear(&local_xsink);
+    }
+    while (derefs--) {
+        pgm.deref(&local_xsink);
+    }
+    if (local_xsink) {
+        if (xsink) {
+            xsink->assimilate(local_xsink);
+        } else {
+            local_xsink.handleExceptions();
+        }
+    }
+}
+
 void QoreProgram::waitForTerminationAndDeref(ExceptionSink* xsink) {
+    // a thread that runs the Program's code cannot wait for itself to leave it: the Program is kept until it has
+    // left it, as it is kept while another thread runs its code (issue #5538)
+    if (priv->deferDerefIfRunning()) {
+        return;
+    }
     if (xsink) {
         priv->waitForTerminationAndClear(xsink);
         deref(xsink);

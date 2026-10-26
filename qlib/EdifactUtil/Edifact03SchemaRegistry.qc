@@ -27,7 +27,7 @@ public namespace EdifactUtil {
     #! Registry for EDIFACT schemas by release
     public class EdifactSchemaRegistry {
         private {
-            static hash<string, EdifactSchema> registry;
+            static hash<string, EdifactSchema> registry = {};
         }
 
         #! Loads a schema for a release, using cache or a flat-file directory source

@@ -446,6 +446,12 @@ public:
     QoreCondition pcond;
     ptid_map_t tidmap;           // map of tids -> thread count in program object
     unsigned thread_count = 0;   // number of threads currently running in this Program
+    //! the references released by threads that deleted this Program while running its code: tid -> count
+    /** A thread that deletes the Program while it runs the Program's code cannot wait for itself to leave that code,
+        so the Program is kept until it has left it: the last of these threads to leave the code clears the Program,
+        and each releases its references then (see deferDerefIfRunning() and decThreadCount())
+    */
+    ptid_map_t deferred_derefs;
     unsigned thread_waiting = 0; // number of threads waiting on all threads to terminate or parsing to complete
     unsigned parse_count = 0;    // recursive parse count
     // thread with the parse lock; atomic because parsingLocked() reads it without plock,
@@ -1374,18 +1380,52 @@ public:
         ++thread_count;
     }
 
-    DLLLOCAL void decThreadCount(int tid) {
+    //! Decrements the thread count of the given thread
+    /** @param tid the thread that leaves the Program's code
+        @param clear set to true if the thread must clear the Program, as the last thread that deleted it while running
+        its code
+
+        @return the number of references that the thread released when it deleted the Program while running its code
+        and that it must release now that it has left the code; 0 if it did not delete the Program
+    */
+    DLLLOCAL unsigned decThreadCount(int tid, bool& clear) {
         // grab program-level lock
         AutoLocker al(plock);
 
+        unsigned derefs = 0;
         ptid_map_t::iterator i = tidmap.find(tid);
         assert(i != tidmap.end());
-        if (!--i->second)
+        if (!--i->second) {
             tidmap.erase(i);
+            ptid_map_t::iterator di = deferred_derefs.find(tid);
+            if (di != deferred_derefs.end()) {
+                derefs = di->second;
+                deferred_derefs.erase(di);
+                clear = deferred_derefs.empty();
+            }
+        }
 
         assert(thread_count > 0);
         if (!--thread_count && thread_waiting)
             pcond.broadcast();
+        return derefs;
+    }
+
+    //! Keeps the Program if the current thread runs its code; called when the Program is deleted
+    /** The deleting thread cannot wait for itself to leave the Program's code, as it waits for other threads; instead
+        the reference that it releases is kept until it has left the code, and the Program is then cleared and
+        dereferenced by decThreadCount(QoreProgram&, int, ExceptionSink*)
+
+        @return true if the current thread runs the Program's code and the deletion is deferred
+    */
+    DLLLOCAL bool deferDerefIfRunning() {
+        int tid = q_gettid();
+        AutoLocker al(plock);
+        if (tidmap.find(tid) == tidmap.end()) {
+            return false;
+        }
+        ++deferred_derefs[tid];
+        return true;
     }
 
     // gets a list of all thread IDs using this Program
@@ -3135,9 +3175,12 @@ public:
         return pgm.priv->incThreadCount(xsink);
     }
 
-    DLLLOCAL static void decThreadCount(QoreProgram& pgm, int tid) {
-        pgm.priv->decThreadCount(tid);
-    }
+    //! Decrements the thread count of the given thread; clears and dereferences a Program deleted while it ran
+    /** @param pgm the Program
+        @param tid the thread that leaves the Program's code
+        @param xsink exceptions raised while the Program is cleared are appended here; if null, they are handled
+    */
+    DLLLOCAL static void decThreadCount(QoreProgram& pgm, int tid, ExceptionSink* xsink);
 
     // locking is done by the signal manager
     DLLLOCAL static void addSignal(QoreProgram& pgm, int sig) {

@@ -30,6 +30,8 @@
 */
 
 #include "qore/Qore.h"
+#include "qore/intern/QoreListNodeEvalOptionalRefHolder.h"
+#include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreNamespaceIntern.h"
@@ -212,6 +214,9 @@ QoreValue CallReferenceCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, 
     if (*xsink) {
         return QoreValue();
     }
+    // a temporary call reference or closure that is called lives until the end of the statement, as a temporary
+    // receiver does
+    QoreStatementTempScope::holdReceiver(exp, lv, xsink);
 
     ResolvedCallReferenceNode* r = dynamic_cast<ResolvedCallReferenceNode*>(lv->getInternalNode());
     if (!r) {
@@ -372,11 +377,18 @@ QoreValue ParseObjectMethodReferenceNode::evalImpl(RuntimeConfig& rc, bool& need
     if (*xsink) {
         return QoreValue();
     }
+    // the reference holds its object weakly; a temporary object lives until the end of the statement, so the
+    // statement can call the reference
+    QoreStatementTempScope::holdReceiver(exp, lv, xsink);
 
-    QoreObject* o = lv->getType() == NT_OBJECT ? lv->get<QoreObject>() : nullptr;
+    return makeReference(*lv, xsink);
+}
+
+QoreValue ParseObjectMethodReferenceNode::makeReference(QoreValue val, ExceptionSink* xsink) const {
+    QoreObject* o = val.getType() == NT_OBJECT ? val.get<QoreObject>() : nullptr;
     if (!o) {
         xsink->raiseException(*loc, "OBJECT-METHOD-REFERENCE-ERROR", QoreValue(),
-                              "expression does not evaluate to an object; got type '%s' instead", lv->getTypeName());
+                              "expression does not evaluate to an object; got type '%s' instead", val.getTypeName());
         return QoreValue();
     }
 
@@ -1265,12 +1277,19 @@ public:
             return QoreValue();
         }
         if (trusted) {
+            // the arguments are expressions of the caller: they are evaluated in the caller's context, before the
+            // Program that registered the capability is entered, as the arguments of any call into another Program
+            // are; evaluated there, the caller's local variables are not found
+            QoreListNodeEvalOptionalRefHolder evaluated(args, xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
             ProgramThreadCountContextHelper registration_context(xsink, trusted_program, true);
             if (*xsink) {
                 return QoreValue();
             }
             QoreSandboxTrustedPolicyHelper privilege;
-            return callback->invoke(args, xsink);
+            return callback->invoke(*evaluated, xsink);
         }
         return callback->invoke(args, xsink);
     }
@@ -1305,7 +1324,8 @@ const ResolvedCallReferenceNode* qore_get_sandbox_bound_callback(const AbstractQ
 ResolvedCallReferenceNode* qore_bind_sandbox_call(const ResolvedCallReferenceNode* callback, bool trusted,
         ExceptionSink* xsink) {
     if (trusted) {
-        QoreSandboxManagerHelper governing;
+        // any governing sandbox, whatever policy barrier is active: a capability is registered by trusted code only
+        QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::All);
         if (governing) {
             xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "a system-policy callback must be registered "
                 "outside sandbox execution and must not have sandbox provenance");

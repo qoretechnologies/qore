@@ -12,10 +12,19 @@ set(_qore_build_cmake_dir "@CMAKE_BINARY_DIR@/cmake")
 # qore_* commands become undefined for build-tree consumers.
 get_filename_component(_qore_this_cmake_dir_real "${CMAKE_CURRENT_LIST_DIR}" REALPATH)
 get_filename_component(_qore_build_cmake_dir_real "${_qore_build_cmake_dir}" REALPATH)
+# This file is only next to the build tree's QoreConfig.cmake, so a different path means the build tree was moved or
+# reached through another mount: its recorded paths, which the settings below and the build's own outputs use, do
+# not exist there, and the installed-SDK settings do not apply to a build tree either.  QoreConfig.cmake reports
+# the package as not found with this message instead of loading either.
+set(_qore_build_tree_moved FALSE)
 if (_qore_this_cmake_dir_real STREQUAL _qore_build_cmake_dir_real)
     set(_qore_in_build_tree TRUE)
 else()
     set(_qore_in_build_tree FALSE)
+    set(_qore_build_tree_moved TRUE)
+    set(_qore_build_tree_moved_message "the Qore build tree was moved or remounted: it was configured at \
+\"${_qore_build_cmake_dir_real}\" but its QoreConfig.cmake was loaded from \"${_qore_this_cmake_dir_real}\"; \
+use it from the path it was configured at, or configure and build Qore again at the new path")
 endif()
 # Build-tree mode: point consumers at build outputs for local debugging without install.
 # Limitations: assumes single-config generators and default output dirs; multi-config/custom

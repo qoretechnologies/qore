@@ -1085,48 +1085,48 @@ public class DataProviderActionCatalog {
 
             @since DataProvider 3.5
         */
-        static hash<string, bool> pending_generic_api_call_apps;
+        static hash<string, bool> pending_generic_api_call_apps = {};
 
         #! Mutex for atomic operations
         static Mutex lck();
 
         #! Top-level master application cache keyed by application name
-        static hash<string, hash<DataProviderAppInfo>> appcache;
+        static hash<string, hash<DataProviderAppInfo>> appcache = {};
 
         #! Master action cache, the key is \c app/action
-        static hash<string, hash<DataProviderActionInfo>> top_actionmap;
+        static hash<string, hash<DataProviderActionInfo>> top_actionmap = {};
 
         #! Action cache, the key is the application key, the second key is the action string
-        static hash<string, hash<string, hash<DataProviderActionInfo>>> app_actionmap;
+        static hash<string, hash<string, hash<DataProviderActionInfo>>> app_actionmap = {};
 
         #! Scheme map; keys are connection schemes
-        static hash<string, list<hash<DataProviderActionInfo>>> smap;
+        static hash<string, list<hash<DataProviderActionInfo>>> smap = {};
 
         #! Actions whose output type is resolved on demand: app -> action -> state
         /** @ref True if the action's \c get_output_type callback has not been called yet, @ref False if it was called
             and failed; an action leaves the map when its output type is resolved
         */
-        static hash<string, hash<string, bool>> resolve_output_types;
+        static hash<string, hash<string, bool>> resolve_output_types = {};
 
         #! The callbacks that resolved output types: app -> action -> callback
         /** A registration of an action carrying the callback that resolved its output type is the same action
         */
-        static hash<string, hash<string, code>> resolved_output_type_callbacks;
+        static hash<string, hash<string, code>> resolved_output_type_callbacks = {};
 
         #! Pending application init handler map: app -> init handler
-        static hash<string, hash<auto>> initmap;
+        static hash<string, hash<auto>> initmap = {};
 
         #! Pending application action init handler map: app -> action -> init metadata
-        static hash<string, hash<string, hash<auto>>> initactionmap;
+        static hash<string, hash<string, hash<auto>>> initactionmap = {};
 
         #! Declared pending identities retained until the exact identity succeeds or is explicitly deregistered
         /** An empty action key represents the app itself. This registry makes a pending initializer that returns
             without registering or throwing remain visible to later discovery generations.
         */
-        static hash<string, hash<string, bool>> expected_initialization_map;
+        static hash<string, hash<string, bool>> expected_initialization_map = {};
 
         #! Retained initialization failures: app -> action (or an empty key for the app) -> failure
-        static hash<string, hash<string, hash<DataProviderInitializationFailureInfo>>> initialization_failure_map;
+        static hash<string, hash<string, hash<DataProviderInitializationFailureInfo>>> initialization_failure_map = {};
 
         #! Monotonically increasing revision of catalog and qualification state
         static int catalog_revision = 0;
@@ -1135,26 +1135,26 @@ public class DataProviderActionCatalog {
         static int discovery_generation = 0;
 
         #! Open discovery state keyed by generation
-        static hash<string, hash<DataProviderDiscoveryStateInfo>> discovery_map;
+        static hash<string, hash<DataProviderDiscoveryStateInfo>> discovery_map = {};
 
         #! Issued qualified-discovery handle keyed by generation
-        static hash<string, DataProviderQualifiedDiscovery> qualified_discovery_map;
+        static hash<string, DataProviderQualifiedDiscovery> qualified_discovery_map = {};
 
         #! Lazy expected-inventory providers keyed by a stable technical owner name
         static hash<string, code<list<hash<DataProviderDiscoveryExpectedIdentityInfo>>()>>
-            discovery_inventory_provider_map;
+            discovery_inventory_provider_map = {};
 
         #! Revision of registered inventory callbacks and their producer-owned identity content
         static int discovery_inventory_revision = 0;
 
         #! Maps apps to the modules that define them: app -> module path -> True
-        static hash<string, hash<string, bool>> appmodmap;
+        static hash<string, hash<string, bool>> appmodmap = {};
 
         #! Maps actions to the modules that define them: app -> action -> module path -> True
-        static hash<string, hash<string, hash<string, bool>>> actionmodmap;
+        static hash<string, hash<string, hash<string, bool>>> actionmodmap = {};
 
         #! File API map: app -> file API info
-        static hash<string, hash<DataProviderFileApiInfo>> app_fileapimap;
+        static hash<string, hash<DataProviderFileApiInfo>> app_fileapimap = {};
 
         #! Valid file API write formats
         /** @see @ref DataProviderFileWriteFormats
@@ -3651,7 +3651,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
             if (i.value instanceof AbstractDataField) {
                 hash<DataFieldInfo> info = i.value.getLocalInfo();
                 i.value = info{"display_name", "short_desc", "desc", "default_value", "example_value",
-                    "allowed_values", "allowed_values_creatable", "element_allowed_values",
+                    "remote_default_value", "allowed_values", "allowed_values_creatable", "element_allowed_values",
                     "element_allowed_values_creatable"} + {
                     "type": i.value.getType(),
                 };
@@ -3787,13 +3787,15 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
                 i.value.required = True;
             }
             if (i.value instanceof hash<DataProviderOptionInfo>) {
-                info += i.value{"default_value", "required", "sensitive", "example_value", "ref_data",
+                info += i.value{"default_value", "required", "sensitive", "example_value", "remote_default_value",
+                    "ref_data",
                     "element_ref_data", "preselected", "required_groups", "exclusive_with",
                     "depends_on", "has_dependents", "on_change", "metadata", "messages", "icon", "image",
                     "server_expression_handling", "ui_type", "input_field_names"}
                     + additional_fields;
             } else {
-                info += i.value{"default_value", "required", "sensitive", "example_value", "ref_data",
+                info += i.value{"default_value", "required", "sensitive", "example_value", "remote_default_value",
+                    "ref_data",
                     "element_ref_data", "preselected", "required_groups", "exclusive_with",
                     "validation_regex", "validation_regex_desc", "depends_on", "has_dependents", "on_change",
                     "metadata", "icon",
@@ -3895,7 +3897,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
             }
             hash<auto> fh = i.value{"display_name", "short_desc", "desc", "allowed_values",
                 "allowed_values_creatable", "element_allowed_values", "element_allowed_values_creatable",
-                "default_value", "example_value"} + {
+                "default_value", "example_value", "remote_default_value"} + {
                 "name": i.key,
                 "type": i.value.required ? i.value.type.getMandatoryType() : i.value.type.getOrNothingType(),
             };

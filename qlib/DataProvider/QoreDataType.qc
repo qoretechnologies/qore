@@ -341,7 +341,8 @@ public class QoreDataType inherits AbstractDataProviderType {
         }
         value = type.acceptsValue(value);
         string name = type.getName();
-        if (allowed_values && !allowed_values_creatable) {
+        # no value, or null, which an optional type accepts, is not one of its choices
+        if (allowed_values && !allowed_values_creatable && exists value && value.typeCode() != NT_NULL) {
             if (!DataProviderAllowedValueKeys::contains(allowed_values_map, value)) {
                 throw "TYPE-VALUE-ERROR", sprintf("Type %y does not accept value %y; allowed values: %y",
                     name, value, (map $1.value, allowed_values));

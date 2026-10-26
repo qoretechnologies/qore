@@ -1,0 +1,77 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# RemoteDefaultFixture.qm registers an app whose option and record field document a remote default
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%requires DataProvider
+
+module RemoteDefaultFixture {
+    version = "1.0";
+    desc = "ProviderIndex remote default value fixture";
+    author = "Qore Technologies";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        RemoteDefaultFixture::registerFixture();
+    };
+}
+
+#! The fixture's app and types
+public namespace RemoteDefaultFixture {
+#! The app of the fixture
+public const App = "QoreTestRemoteDefault";
+
+#! The field of the record type whose remote default the test changes
+public const PageSizeField = new QoreDataField({
+    "name": "page_size",
+    "desc": "the number of records in a page",
+    "type": AbstractDataProviderType::get(IntOrNothingType),
+    "remote_default_value": 50,
+});
+
+#! The record type of the fixture's action
+public const QueryType = new HashDataType("FixtureQuery", {
+    "page_size": PageSizeField,
+    "filter": new QoreDataField("filter", "the filter", AbstractDataProviderType::get(StringOrNothingType)),
+});
+
+#! Registers the fixture app and its action
+sub registerFixture() {
+    DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+        "name": App,
+        "display_name": App,
+        "short_desc": "remote default fixture",
+        "desc": "remote default fixture",
+        "groups": (AppGroup::DataTransformation,),
+        "logo": "fixture",
+        "logo_mime_type": "image/svg+xml",
+        "logo_file_name": "fixture.svg",
+    });
+    DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+        "app": App,
+        "action": "search",
+        "path": "/search",
+        "display_name": "search",
+        "short_desc": "remote default fixture action",
+        "desc": "remote default fixture action",
+        "action_code": DPAT_API,
+        "options": {
+            "order": <ActionOptionInfo>{
+                "display_name": "Order",
+                "short_desc": "the sort order",
+                "desc": "the sort order",
+                "type": AbstractDataProviderType::get(StringOrNothingType),
+                "remote_default_value": "asc",
+            },
+            "query": <ActionOptionInfo>{
+                "display_name": "Query",
+                "short_desc": "the query",
+                "desc": "the query",
+                "type": QueryType,
+            },
+        },
+        "output_type": AbstractDataProviderType::get(AutoHashType),
+    });
+}
+}

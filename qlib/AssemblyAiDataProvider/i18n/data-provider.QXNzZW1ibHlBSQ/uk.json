@@ -1683,6 +1683,14 @@
           "source": "The replacement logic for detected PII, can be `entity_name` or `hash`. See [PII redaction](https://www.assemblyai.com/docs/pii-redaction) for more details.",
           "message": "Логіка заміни для виявленої ідентифікаційної інформації може бути `entity_name` або `hash`. Щоб отримати докладнішу інформацію, перегляньте [редакцію ідентифікаційної інформації](https://www.assemblyai.com/docs/pii-redaction)."
         },
+        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9zdWI.allowed-value.c3RyaW5nOmVudGl0eV9uYW1l.display_name": {
+          "source": "entity_name",
+          "message": "назва сутності"
+        },
+        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9zdWI.allowed-value.c3RyaW5nOmhhc2g.display_name": {
+          "source": "hash",
+          "message": "хеш"
+        },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVkYWN0X3BpaV9yZXR1cm5fdW5yZWRhY3RlZA.display_name": {
           "source": "Redact PII Return Unredacted",
           "message": "Також повертати оригінальний текст"
@@ -2146,6 +2154,14 @@
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVtb3ZlX2F1ZGlvX3RhZ3M.desc": {
           "source": "Universal-3.5 Pro generates rich transcripts that can include inline annotations such as audio event markers and speaker cues. Set to `\"all\"` to remove all inline annotations, or `\"speaker\"` to remove only speaker cues while keeping other annotations. By default, all inline annotations are removed.\n\nNote: This parameter is only supported for the Universal-3.5 Pro model.\n",
           "message": "Universal-3.5 Pro generates rich transcripts that can include inline annotations such as audio event markers and speaker cues. Установіть значення `\"all\"`, щоб видалити всі вбудовані анотації, або `\"speaker\"`, щоб видалити лише підказки доповідача, зберігаючи інші анотації. За замовчуванням усі вбудовані анотації видаляються.\n\nПримітка. Цей параметр підтримується лише для моделі Universal-3.5 Pro."
+        },
+        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVtb3ZlX2F1ZGlvX3RhZ3M.allowed-value.c3RyaW5nOmFsbA.display_name": {
+          "source": "all",
+          "message": "усі"
+        },
+        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.cmVtb3ZlX2F1ZGlvX3RhZ3M.allowed-value.c3RyaW5nOnNwZWFrZXI.display_name": {
+          "source": "speaker",
+          "message": "мовець"
         },
         "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.dGVtcGVyYXR1cmU.display_name": {
           "source": "Temperature",
@@ -6963,6 +6979,14 @@
           "source": "The replacement logic for detected PII, can be `entity_name` or `hash`. See [PII redaction](https://www.assemblyai.com/docs/pii-redaction) for more details.",
           "message": "Логіка заміни для виявленої ідентифікаційної інформації може бути `entity_name` або `hash`. Щоб отримати докладнішу інформацію, перегляньте [редакцію ідентифікаційної інформації](https://www.assemblyai.com/docs/pii-redaction)."
         },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9zdWI.allowed-value.c3RyaW5nOmVudGl0eV9uYW1l.display_name": {
+          "source": "entity_name",
+          "message": "назва сутності"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9zdWI.allowed-value.c3RyaW5nOmhhc2g.display_name": {
+          "source": "hash",
+          "message": "хеш"
+        },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVkYWN0X3BpaV9yZXR1cm5fdW5yZWRhY3RlZA.display_name": {
           "source": "Redact PII Return Unredacted",
           "message": "Також повертати оригінальний текст"
@@ -7427,6 +7451,14 @@
           "source": "Universal-3.5 Pro generates rich transcripts that can include inline annotations such as audio event markers and speaker cues. Set to `\"all\"` to remove all inline annotations, or `\"speaker\"` to remove only speaker cues while keeping other annotations. By default, all inline annotations are removed.\n\nNote: This parameter is only supported for the Universal-3.5 Pro model.\n",
           "message": "Universal-3.5 Pro generates rich transcripts that can include inline annotations such as audio event markers and speaker cues. Установіть значення `\"all\"`, щоб видалити всі вбудовані анотації, або `\"speaker\"`, щоб видалити лише підказки доповідача, зберігаючи інші анотації. За замовчуванням усі вбудовані анотації видаляються.\n\nПримітка. Цей параметр підтримується лише для моделі Universal-3.5 Pro."
         },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVtb3ZlX2F1ZGlvX3RhZ3M.allowed-value.c3RyaW5nOmFsbA.display_name": {
+          "source": "all",
+          "message": "усі"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cmVtb3ZlX2F1ZGlvX3RhZ3M.allowed-value.c3RyaW5nOnNwZWFrZXI.display_name": {
+          "source": "speaker",
+          "message": "мовець"
+        },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.dGVtcGVyYXR1cmU.display_name": {
           "source": "Temperature",
           "message": "Температура"
@@ -7534,6 +7566,22 @@
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.dHJhbnNjcmlwdGlvbl90aW1lb3V0.desc": {
           "source": "Positive polling time budget. Defaults to 30 minutes. A timeout leaves the server job running; use its ID to retrieve or delete it.",
           "message": "Positive polling time budget. За замовчуванням 30 хвилин. Тайм-аут залишає завдання сервера запущеним; використовуйте його ідентифікатор, щоб отримати або видалити його."
+        },
+        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlZWNoX21vZGVs.allowed-value.c3RyaW5nOnVuaXZlcnNhbC0zLTUtcHJv.display_name": {
+          "source": "universal-3-5-pro",
+          "message": "universal-3-5-pro"
+        },
+        "app.QXNzZW1ibHlBSQ.action.Y3JlYXRlLXRyYW5zY3JpcHQ.option.c3BlZWNoX21vZGVs.allowed-value.c3RyaW5nOnVuaXZlcnNhbC0y.display_name": {
+          "source": "universal-2",
+          "message": "universal-2"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlZWNoX21vZGVs.allowed-value.c3RyaW5nOnVuaXZlcnNhbC0zLTUtcHJv.display_name": {
+          "source": "universal-3-5-pro",
+          "message": "universal-3-5-pro"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlZWNoX21vZGVs.allowed-value.c3RyaW5nOnVuaXZlcnNhbC0y.display_name": {
+          "source": "universal-2",
+          "message": "universal-2"
         }
       }
     }

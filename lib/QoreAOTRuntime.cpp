@@ -6719,11 +6719,18 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
         return nullptr;
     }
     uint16_t opcode_raw = QoreAOTBinaryReader::readU16(ptr);
-    // Upstream v21 with maximum opcode 409 used it for CheckReturnValue.
-    // Performance artifacts (including v20/v21) used 409/410 for snapshots and
-    // recorded maximum opcode 410. Distinguish both histories before dispatch.
-    if (reader.getHeader().version == 21 && reader.getHeader().max_opcode_id == 409 && opcode_raw == 409) {
-        opcode_raw = static_cast<uint16_t>(QoreIROpcode::CheckReturnValue);
+    // Upstream v21 used 409 for CheckReturnValue, then added both cleanup
+    // opcodes as 410/411. Performance v20/v21 used 409/410 for snapshots and
+    // recorded maximum 410. Preserve both histories before instruction dispatch.
+    uint16_t max_opcode = reader.getHeader().max_opcode_id;
+    if (reader.getHeader().version == 21 && (max_opcode == 409 || max_opcode == 411)) {
+        if (opcode_raw == 409) {
+            opcode_raw = static_cast<uint16_t>(QoreIROpcode::CheckReturnValue);
+        } else if (max_opcode == 411 && opcode_raw == 410) {
+            opcode_raw = static_cast<uint16_t>(QoreIROpcode::IteratorRelease);
+        } else if (max_opcode == 411 && opcode_raw == 411) {
+            opcode_raw = static_cast<uint16_t>(QoreIROpcode::ReleaseOwnedTemp);
+        }
     }
     auto opcode = static_cast<QoreIROpcode>(opcode_raw);
     if (!need(1, "instruction group")) {
@@ -14063,8 +14070,8 @@ static void preInitStaticVarsInNamespace(qore_ns_private* ns, ExceptionSink* xsi
                 // effect of AOT module namespace init.
                 continue;
             }
-            // Empty-exp path inside evalInit just calls init() (set typeinfo,
-            // create empty container for non-nullable hash/list) and marks
+            // Empty-exp path inside evalInit just calls init() (sets the value
+            // holder's type; the variable stays NOTHING) and marks
             // eval_init=true. AOT-deserialized vars without init functions do
             // not carry exp; those are the only vars this pass should touch.
             vi.second->evalInit(vi.first, xsink);

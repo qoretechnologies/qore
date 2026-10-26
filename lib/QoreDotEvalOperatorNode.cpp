@@ -31,6 +31,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreClassIntern.h"
+#include "qore/intern/QoreStatementTemps.h"
 
 QoreString QoreDotEvalOperatorNode::name("dot eval expression");
 
@@ -39,6 +40,9 @@ QoreValue QoreDotEvalOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xs
     if (*xsink) {
         return QoreValue();
     }
+    // a temporary receiver lives until the end of the statement, so the rest of the chain - and a closure or call
+    // reference that the method returns - can use it
+    QoreStatementTempScope::holdReceiver(left, op, xsink);
 
     return evalWithBase(*op, xsink);
 }

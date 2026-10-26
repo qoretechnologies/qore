@@ -25,6 +25,9 @@ class TypedefTest inherits QUnit::Test {
         addTestCase("Typedef class conflict error", \testTypedefClassConflict());
         addTestCase("Typedef hashdecl conflict error", \testTypedefHashdeclConflict());
         addTestCase("Typedef with namespace prefix", \testTypedefNamespacePrefix());
+        addTestCase("Typedef resolved where it is declared", \testTypedefDeclarationContext());
+        addTestCase("Typedef with an undefined type", \testTypedefUndefinedType());
+        addTestCase("Typedef that refers to itself", \testTypedefRefersToItself());
         set_return_value(main());
     }
 
@@ -259,5 +262,54 @@ class TypedefTest inherits QUnit::Test {
         list<auto> result = p.callFunction("test");
         assertEq(42, result[0]);
         assertEq("hello", result[1]);
+    }
+
+    testTypedefDeclarationContext() {
+        # a name in the type of a typedef refers to what it refers to in the namespace that declares the typedef, not
+        # to what it refers to where the typedef is used
+        Program p(PO_NEW_STYLE);
+        p.parse("
+            namespace Ns {
+                public class Local {
+                    string origin() { return 'Ns'; }
+                }
+                public typedef T = Local;
+            }
+
+            class Local {
+                string origin() { return 'root'; }
+            }
+
+            string sub test() {
+                Ns::T t = new Ns::Local();
+                return t.origin();
+            }
+        ", "test");
+        assertEq("Ns", p.callFunction("test"));
+    }
+
+    testTypedefUndefinedType() {
+        # a typedef whose type does not exist is an error where it is declared, also when it is not used
+        Program p(PO_NEW_STYLE);
+        assertThrows("PARSE-EXCEPTION", "reference to undefined type 'NoSuchType'", \p.parse(), ("
+            typedef Unused = NoSuchType;
+        ", "test"));
+
+        Program p2(PO_NEW_STYLE);
+        assertThrows("PARSE-EXCEPTION", "reference to undefined type 'NoSuchType'", \p2.parse(), ("
+            namespace Ns {
+                public typedef Unused = hash<string, NoSuchType>;
+            }
+        ", "test"));
+    }
+
+    testTypedefRefersToItself() {
+        # a typedef that refers to itself, directly or through another typedef, is an error; a use of one recursed
+        # without end
+        foreach string src in ("typedef A = A;", "typedef A = list<A>;", "typedef A = B; typedef B = A;",
+                "typedef A = A; A x = 1;") {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", "typedef '.*' refers to itself", \p.parse(), (src, "test"), src);
+        }
     }
 }

@@ -432,10 +432,10 @@ public class DataProvider {
 
     private {
         #! data provider factory cache
-        static hash<string, AbstractDataProviderFactory> factory_cache;
+        static hash<string, AbstractDataProviderFactory> factory_cache = {};
 
         #! data provider factory module map
-        static hash<string, string> factory_module_map;
+        static hash<string, string> factory_module_map = {};
 
         #! data provider factory cache lock
         static Gate factory_cache_lock();
@@ -444,7 +444,7 @@ public class DataProvider {
         static DataProviderTypeCache type_cache();
 
         #! data provider type module map
-        static hash<string, string> type_module_map;
+        static hash<string, string> type_module_map = {};
 
         #! flag to allow automatic configuration from environment variables
         /** must be set before any requests for types or factories are made
@@ -455,13 +455,13 @@ public class DataProvider {
         static bool env_config_locked = False;
 
         #! set of module already loaded
-        static hash<string, bool> mod_map;
+        static hash<string, bool> mod_map = {};
 
         #! Successfully completed environment registration maps
         /** Kept separate from provider-module loading so a module loaded for another purpose cannot cause its
             environment registration function to be skipped.
         */
-        static hash<string, bool> env_registration_module_map;
+        static hash<string, bool> env_registration_module_map = {};
 
         #! Leaf lock protecting environment-loader success caches
         /** The lock is held only while reading or updating the maps; module loads and registration callbacks always
@@ -470,13 +470,13 @@ public class DataProvider {
         static Mutex env_load_state_lock();
 
         #! Static initializer list
-        static list<code> ilist;
+        static list<code> ilist = ();
 
         #! Deferred static initializers
-        static list<*list<code>> ilist_save;
+        static list<*list<code>> ilist_save = ();
 
         #! Shutdown handlers; key -> handler
-        static hash<string, code> smap;
+        static hash<string, code> smap = {};
 
         #! Global options
         static int options = 0;

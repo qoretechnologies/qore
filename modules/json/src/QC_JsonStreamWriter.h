@@ -130,7 +130,8 @@ private:
     int iteration;
 
     //! Cached sandbox manager
-    QoreSandboxManagerHelper smh;
+    //! the governing sandbox, for its nesting and interrupt limits; not a policy check
+    QoreSandboxManagerHelper smh{QoreSandboxManagerHelper::All};
 };
 
 #endif // _QORE_QC_JSONSTREAMWRITER_H

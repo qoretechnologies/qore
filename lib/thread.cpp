@@ -32,6 +32,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreStatementTemps.h"
 #include <qore/QoreSandboxManager.h>
 #include <openssl/err.h>
 #include <limits>
@@ -1514,7 +1515,7 @@ public:
     DLLLOCAL void del() {
         // decrement program's thread count
         if (started) {
-            qore_program_private::decThreadCount(*pgm, tid);
+            qore_program_private::decThreadCount(*pgm, tid, nullptr);
             //printd(5, "BGThreadParams::del() this: %p pgm: %p\n", this, pgm);
             pgm->depDeref();
         } else if (registered) {
@@ -1795,7 +1796,9 @@ int q_check_stack(ExceptionSink* xsink) {
 void inc_active_exceptions(int diff) {
     ThreadData* td = thread_data.get();
     assert(diff == 1 || diff < 0);
-    assert(diff == 1 || ((td->active_exceptions + diff) >= 0));
+    // the count is unsigned: a thread cannot handle more exceptions than are counted on it, which a sink that hands
+    // its exceptions to another thread without ExceptionSink::markExternallyManaged() would do
+    assert(diff == 1 || td->active_exceptions >= static_cast<unsigned>(-diff));
     td->active_exceptions += diff;
 }
 
@@ -3758,7 +3761,7 @@ ProgramThreadCountContextHelper::~ProgramThreadCountContextHelper() {
     sync_runtime_config_program(td);
 
     if (thread_count_incremented) {
-        qore_program_private::decThreadCount(*pgm, td->tid);
+        qore_program_private::decThreadCount(*pgm, td->tid, xsink);
     }
 }
 
@@ -3792,6 +3795,7 @@ void ProgramThreadCountContextHelper::setWithThreadData(ThreadData* td, Exceptio
         old_pgm ? old_pgm->getProgramId() : -1, pgm, pgm?pgm->getProgramId():-1, old_tlpd, old_ctx,
         old_frameCount);
     qore_program_private* pp = qore_program_private::get(*pgm);
+    this->xsink = xsink;
     // ProgramRuntimeParseContextHelper locks a program for parsing without
     // creating tlpd. Nested cross-program calls can temporarily switch away
     // from that program while module init is still running; re-entering the
@@ -4459,7 +4463,8 @@ ProgramRuntimeExternalParseContextHelper::operator bool() const {
     return static_cast<bool>(pgm);
 }
 
-ProgramRuntimeParseAccessHelper::ProgramRuntimeParseAccessHelper(ExceptionSink* xsink, QoreProgram* pgm) : restore(false) {
+ProgramRuntimeParseAccessHelper::ProgramRuntimeParseAccessHelper(ExceptionSink* xsink, QoreProgram* pgm)
+        : xsink(xsink), restore(false) {
     ThreadData* td = thread_data.get();
     if (pgm != td->current_pgm) {
         if (qore_program_private::incThreadCount(*pgm, xsink))
@@ -4477,9 +4482,10 @@ ProgramRuntimeParseAccessHelper::~ProgramRuntimeParseAccessHelper() {
         return;
 
     ThreadData* td = thread_data.get();
-    qore_program_private::decThreadCount(*td->current_pgm, td->tid);
+    QoreProgram* pgm = td->current_pgm;
     td->current_pgm = old_pgm;
     sync_runtime_config_program(td);
+    qore_program_private::decThreadCount(*pgm, td->tid, xsink);
 }
 
 QoreProgram* getProgram() {
@@ -5206,8 +5212,12 @@ namespace {
                     if (tlpd) {
                         tlpd->dbgAttach(&xsink);
                     }
-                    // run thread expression
-                    rv = btp->exec(&xsink);
+                    // run thread expression; it is the statement of the thread, so its temporaries live until it
+                    // returns
+                    {
+                        QoreStatementTempScope temps(&xsink);
+                        rv = btp->exec(&xsink);
+                    }
                     // the thread expression has returned; everything from here on is teardown
                     end_thread_cancellation(true);
                     if (tlpd) {
@@ -6210,6 +6220,9 @@ void QoreThreadList::signalWaitingFd(int tid) {
 #ifdef HAVE_POLL
     int fd = entry[tid].waiting_fd.load(std::memory_order_seq_cst);
     if (fd >= 0) {
+#ifdef DEBUG
+        ++entry[tid].dbg_cancel_wakes;
+#endif
         qore_cancel_wakeup_signal(fd);
     }
 #endif
@@ -6245,9 +6258,82 @@ int QoreThreadList::getCancelWakeupFd(int tid) {
 
 void QoreThreadList::clearCurrentWaitingFd(int tid) {
     assert(tid >= 0 && tid < MAX_QORE_THREADS);
+#ifdef DEBUG
+    // before the registration is cleared and outside the lock: see unregisterCondWait()
+    dbgNoteWait(tid, false);
+#endif
     AutoLocker al(lck);
     entry[tid].waiting_fd.store(-1, std::memory_order_seq_cst);
 }
+
+#ifdef DEBUG
+void QoreThreadList::dbgNoteWait(int tid, bool in_wait) {
+    assert(tid >= 0 && tid < MAX_QORE_THREADS);
+    AutoLocker al(dbg_wait_lck);
+    entry[tid].dbg_in_wait.store(in_wait);
+    if (in_wait) {
+        dbg_wait_cond.broadcast();
+    }
+}
+
+bool QoreThreadList::dbgWaitForWait(int tid, int64 timeout_ms) {
+    assert(tid >= 0 && tid < MAX_QORE_THREADS);
+    int64 deadline_us = q_get_monotonic_us() + timeout_ms * 1000;
+    AutoLocker al(dbg_wait_lck);
+    while (!entry[tid].dbg_in_wait.load()) {
+        int64 remaining_ms = (deadline_us - q_get_monotonic_us()) / 1000;
+        if (remaining_ms <= 0
+            || dbg_wait_cond.wait(&dbg_wait_lck, static_cast<int>(std::min<int64>(remaining_ms, INT_MAX)))) {
+            if (!entry[tid].dbg_in_wait.load()) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+int64 q_get_cancel_wake_count(int tid) {
+    if (tid < 0) {
+        tid = q_gettid();
+    }
+    if (tid < 0 || tid >= MAX_QORE_THREADS) {
+        return 0;
+    }
+    return thread_list.dbgGetCancelWakes(tid);
+}
+
+bool QoreThreadList::dbgCancelInWait(int tid, const char* reason, int64 timeout_ms) {
+    assert(tid >= 0 && tid < MAX_QORE_THREADS);
+    int64 deadline_us = q_get_monotonic_us() + timeout_ms * 1000;
+    AutoLocker al(dbg_wait_lck);
+    while (!entry[tid].dbg_in_wait.load()) {
+        int64 remaining_ms = (deadline_us - q_get_monotonic_us()) / 1000;
+        if (remaining_ms <= 0
+            || dbg_wait_cond.wait(&dbg_wait_lck, static_cast<int>(std::min<int64>(remaining_ms, INT_MAX)))) {
+            if (!entry[tid].dbg_in_wait.load()) {
+                return false;
+            }
+        }
+    }
+    // the thread cannot leave its registered wait while the debug lock is held (it notes the end of the wait first),
+    // so the request is delivered to that wait
+    return !qore_cancel_thread(tid, reason);
+}
+
+bool q_cancel_in_cancellable_wait(int tid, const char* reason, int64 timeout_ms) {
+    if (tid < 0 || tid >= MAX_QORE_THREADS) {
+        return false;
+    }
+    return thread_list.dbgCancelInWait(tid, reason, timeout_ms);
+}
+
+bool q_wait_for_cancellable_wait(int tid, int64 timeout_ms) {
+    if (tid < 0 || tid >= MAX_QORE_THREADS) {
+        return false;
+    }
+    return thread_list.dbgWaitForWait(tid, timeout_ms);
+}
+#endif
 
 void QoreThreadList::wakeAllWaiters() {
     AutoLocker al(lck);
@@ -6526,20 +6612,31 @@ void qore_stop_cond_waker() {
 
 int QoreThreadList::registerCondWait(int tid, QoreCondition* cond, pthread_mutex_t* m) {
     assert(tid >= 0 && tid < MAX_QORE_THREADS);
-    AutoLocker al(cond_waker.lck);
-    // the waker must be available before the thread can be woken through it
-    if (cond_waker.ensureStarted()) {
-        return -1;
+    {
+        AutoLocker al(cond_waker.lck);
+        // the waker must be available before the thread can be woken through it
+        if (cond_waker.ensureStarted()) {
+            return -1;
+        }
+        ThreadEntry& te = entry[tid];
+        assert(!te.waiting_on && !te.wake_queued && !te.wake_busy);
+        te.waiting_on = cond;
+        te.waiting_mutex = m;
     }
-    ThreadEntry& te = entry[tid];
-    assert(!te.waiting_on && !te.wake_queued && !te.wake_busy);
-    te.waiting_on = cond;
-    te.waiting_mutex = m;
+#ifdef DEBUG
+    // noted outside the registry lock: dbgCancelInWait() requests the cancellation with the debug lock held
+    dbgNoteWait(tid, true);
+#endif
     return 0;
 }
 
 void QoreThreadList::unregisterCondWait(int tid, pthread_mutex_t* m) {
     assert(tid >= 0 && tid < MAX_QORE_THREADS);
+#ifdef DEBUG
+    // before the registration is cleared and outside the registry lock: a request that dbgCancelInWait() is making
+    // is delivered to the registered wait first
+    dbgNoteWait(tid, false);
+#endif
     SafeLocker sl(cond_waker.lck);
     ThreadEntry& te = entry[tid];
     assert(te.waiting_mutex == m);
@@ -6564,6 +6661,9 @@ void QoreThreadList::wakeCondWaiter(int tid) {
     if (!te.waiting_on) {
         return;
     }
+#ifdef DEBUG
+    ++te.dbg_cancel_wakes;
+#endif
     // the registration cannot be cleared while the registry lock is held, so the condition and mutex are alive
     if (!pthread_mutex_trylock(te.waiting_mutex)) {
         // the waiter is not between its check for the request and its wait
@@ -6742,7 +6842,7 @@ static __attribute__((noinline)) bool raise_thread_cancel(int tid, ExceptionSink
 static __attribute__((noinline)) bool check_pending_program_interrupt(ExceptionSink* xsink, const char* operation) {
     // Resolve the actual governing manager, including enclosing callers and
     // captured async contexts. Policy barriers do not suppress interruption.
-    QoreSandboxManagerHelper smh;
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::All);
     if (smh) {
         if (xsink) {
             if (smh->checkIOInterrupt(xsink, operation)) {

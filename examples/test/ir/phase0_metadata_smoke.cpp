@@ -48,8 +48,8 @@ static bool checkOpcodeRegistry() {
 }
 
 // Copyright 2026 Qore Technologies, s.r.o.
-// Upstream v21 assigned opcode 409 to the return check; performance v20-v22 used
-// 409/410 for snapshots. Exercise the actual serializer and reader for both histories.
+// Upstream v21 assigned 409 to the return check and 410/411 to temporary cleanup;
+// performance v20-v22 used 409/410 for snapshots. Round-trip both histories.
 static bool checkAOTOpcodeCompatibility() {
     ExceptionSink xsink;
     QoreProgramHelper pgm(xsink);
@@ -61,16 +61,23 @@ static bool checkAOTOpcodeCompatibility() {
         QoreIROpcode opcode;
         uint16_t version;
         uint16_t max_opcode;
-        bool legacy_return;
+        uint16_t wire_opcode; // zero keeps the current encoding
     } cases[] = {
-        {QoreIROpcode::CheckReturnValue, 21, 409, true},
-        {QoreIROpcode::CheckReturnValue, 22, 411, false},
-        {QoreIROpcode::SnapshotInt, 20, 410, false},
-        {QoreIROpcode::SnapshotFloat, 20, 410, false},
-        {QoreIROpcode::SnapshotInt, 21, 410, false},
-        {QoreIROpcode::SnapshotFloat, 21, 410, false},
-        {QoreIROpcode::SnapshotInt, 22, 410, false},
-        {QoreIROpcode::SnapshotFloat, 22, 410, false},
+        {QoreIROpcode::CheckReturnValue, 21, 409, 409},
+        {QoreIROpcode::CheckReturnValue, 21, 411, 409},
+        {QoreIROpcode::IteratorRelease, 21, 411, 410},
+        {QoreIROpcode::ReleaseOwnedTemp, 21, 411, 411},
+        {QoreIROpcode::CheckReturnValue, 22, 411, 0},
+        {QoreIROpcode::IteratorRelease, 22, 413, 0},
+        {QoreIROpcode::ReleaseOwnedTemp, 22, 413, 0},
+        {QoreIROpcode::SnapshotInt, 20, 410, 0},
+        {QoreIROpcode::SnapshotFloat, 20, 410, 0},
+        {QoreIROpcode::SnapshotInt, 21, 410, 0},
+        {QoreIROpcode::SnapshotFloat, 21, 410, 0},
+        {QoreIROpcode::SnapshotInt, 22, 410, 0},
+        {QoreIROpcode::SnapshotFloat, 22, 410, 0},
+        {QoreIROpcode::SnapshotInt, 22, 411, 0},
+        {QoreIROpcode::SnapshotFloat, 22, 411, 0},
     };
     for (const auto& test : cases) {
         QoreIRFunction func("opcode-compatibility");
@@ -81,6 +88,10 @@ static bool checkAOTOpcodeCompatibility() {
         QoreIRValue result = value->result;
         if (test.opcode == QoreIROpcode::CheckReturnValue) {
             builder.createCheckReturnValue(result, bigIntTypeInfo, nullptr, nullptr);
+        } else if (test.opcode == QoreIROpcode::IteratorRelease) {
+            builder.createIteratorRelease(result);
+        } else if (test.opcode == QoreIROpcode::ReleaseOwnedTemp) {
+            builder.createReleaseOwnedTemp(result);
         } else {
             result = builder.createUnaryOp(test.opcode, result)->result;
         }
@@ -125,21 +136,21 @@ static bool checkAOTOpcodeCompatibility() {
             std::cerr << "opcode compatibility section is outside its fixture\n";
             return false;
         }
-        if (test.legacy_return) {
+        if (test.wire_opcode) {
             size_t matches = 0;
-            auto opcode = static_cast<uint16_t>(QoreIROpcode::CheckReturnValue);
+            auto opcode = static_cast<uint16_t>(test.opcode);
             for (size_t i = section_offset; i + 1 < section_offset + data_section->size; ++i) {
                 if (i && i % 100 == 0 && qore_check_cancel(&xsink, "AOT opcode fixture")) {
                     return false;
                 }
                 if (blob[i] == (opcode & 255) && blob[i + 1] == (opcode >> 8)) {
-                    blob[i] = 409 & 255;
-                    blob[i + 1] = 409 >> 8;
+                    blob[i] = test.wire_opcode & 255;
+                    blob[i + 1] = test.wire_opcode >> 8;
                     ++matches;
                 }
             }
             if (matches != 1) {
-                std::cerr << "legacy opcode fixture did not identify one return check\n";
+                std::cerr << "legacy opcode fixture did not identify one target instruction\n";
                 return false;
             }
         }
