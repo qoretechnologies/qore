@@ -1,0 +1,117 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%new-style
+%require-types
+%strict-args
+%enable-all-warnings
+
+%requires QUnit
+%requires FsUtil
+
+%exec-class SignalsSigchldTest
+
+#! The signal thread of the library never waits for SIGCHLD
+/** No Qore-language handler can be set for SIGCHLD, so the signal thread discarded every SIGCHLD it accepted, and a
+    thread waiting for a signal with sigwait() can be given a process-directed signal instead of the threads that have
+    it unblocked: it took SIGCHLD from every component of the process that watches the end of its children through it.
+
+    A child qore process runs with signal-sigchld/sigwait-fixture.c preloaded, which records the signal sets that the
+    signal thread waits for; the child sets and removes a signal handler, so that the signal thread reloads its set,
+    and starts a child process, which raises SIGCHLD.
+*/
+class SignalsSigchldTest inherits QUnit::Test {
+    constructor() : QUnit::Test("SignalsSigchld", "1.0", \ARGV) {
+        addTestCase("the signal thread does not wait for SIGCHLD", \sigchldNotWaited());
+        addTestCase("a signal taken over by a module and released is restored as it was", \reassignReleaseTest());
+        set_return_value(main());
+    }
+
+    sigchldNotWaited() {
+        if (!HAVE_SIGNAL_HANDLING) {
+            testSkip("signal handling is not available (or disabled with -b)");
+        }
+        if (PlatformOS != "Linux" && PlatformOS != "Darwin") {
+            testSkip("the interposer supports only Linux and macOS");
+        }
+        if (system("command -v cc > /dev/null 2>&1")) {
+            testSkip("no C compiler");
+        }
+        TmpDir dir("qore-sigchld-");
+        string lib = dir.path + DirSep + "fixture" + (PlatformOS == "Darwin" ? ".dylib" : ".so");
+        string src = get_script_dir() + DirSep + "signal-sigchld" + DirSep + "sigwait-fixture.c";
+        string build = sprintf("cc -std=c11 -O2 -Wall -Wextra -Werror %s %s -o %s%s 2>&1",
+            PlatformOS == "Darwin" ? "-dynamiclib" : "-shared -fPIC", shellQuote(src), shellQuote(lib),
+            PlatformOS == "Darwin" ? "" : " -ldl");
+        string out = backquote(build);
+        assertEq("", out, "fixture build");
+        string report = dir.path + DirSep + "report.txt";
+        string preload = PlatformOS == "Darwin"
+            ? "DYLD_INSERT_LIBRARIES=" + shellQuote(lib)
+            : "LD_PRELOAD=" + shellQuote((ENV.LD_PRELOAD ? ENV.LD_PRELOAD + ":" : "") + lib);
+        string code = "set_signal_handler(SIGUSR1, sub (int sig) {}); remove_signal_handler(SIGUSR1); "
+            "if (system(\"exit 0\")) { throw \"TEST-ERROR\", \"system() failed\"; } print(\"done\");";
+        string cmd = sprintf("SIGWAIT_FIXTURE_REPORT=%s %s %s -ne %s 2>&1", shellQuote(report), preload,
+            shellQuote(getQoreExecutable()), shellQuote(code));
+        int rc;
+        out = backquote(cmd, \rc);
+        assertEq(0, rc, out);
+        assertEq("done", trim(out));
+        # one line for each process with the fixture: the child qore, and any process it runs that keeps it
+        string text = ReadOnlyFile::readTextFile(report);
+        int waits;
+        int sigchld_waits;
+        foreach string line in (text.split("\n")) {
+            list<string> fields = line.split(" ");
+            if (fields.size() == 2) {
+                waits += fields[0].toInt();
+                sigchld_waits += fields[1].toInt();
+            }
+        }
+        # the fixture was active: the signal thread waited at least once, and again after the reload
+        assertGt(1, waits, "waits recorded: " + text);
+        assertEq(0, sigchld_waits, "waits for SIGCHLD: " + text);
+    }
+
+    #! A signal that a module takes over (as the jni module takes SIGCHLD) and releases is as it was before
+    /** Before, a released signal was always added to the signals the signal thread waits for, and its reservation
+        by the library was dropped: a released SIGCHLD was taken by the signal thread again, a released signal
+        without a handler (SIGURG) was discarded by it, and Qore code could then set a handler for SIGCHLD
+    */
+    reassignReleaseTest() {
+%ifndef QoreDebug
+        testSkip("dbg_signal_reassign_release() is only in a debug build of the library");
+%endif
+%ifdef QoreDebug
+        if (!HAVE_SIGNAL_HANDLING) {
+            testSkip("signal handling is not available (or disabled with -b)");
+        }
+        hash<auto> h = dbg_signal_reassign_release(SIGCHLD, "test-module");
+        assertEq({"waited": False, "owner": "QORE (SIGCHLD for system())"}, h.before, "SIGCHLD before");
+        assertEq({"waited": False, "owner": "test-module"}, h.reassigned, "SIGCHLD taken over");
+        assertEq(h.before, h.released, "SIGCHLD released");
+
+        h = dbg_signal_reassign_release(SIGURG, "test-module");
+        assertEq({"waited": False, "owner": NOTHING}, h.before, "SIGURG before");
+        assertEq({"waited": False, "owner": "test-module"}, h.reassigned, "SIGURG taken over");
+        assertEq(h.before, h.released, "SIGURG released");
+
+        h = dbg_signal_reassign_release(SIGINT, "test-module");
+        assertTrue(h.before.waited, "SIGINT is waited for by default");
+        assertFalse(h.reassigned.waited, "SIGINT taken over");
+        assertEq(h.before, h.released, "SIGINT released");
+%endif
+    }
+
+    #! Returns the interpreter running this test as an absolute path, so a child process runs the same build
+    private static string getQoreExecutable() {
+        string qore = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        return absolute_path(qore) || qore !~ /[\/\\]/ ? qore : getcwd() + DirSep + qore;
+    }
+
+    #! Quotes a string as one word for the shell
+    private static string shellQuote(string str) {
+        return "'" + replace(str, "'", "'\\''") + "'";
+    }
+}

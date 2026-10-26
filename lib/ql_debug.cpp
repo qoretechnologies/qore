@@ -11993,6 +11993,54 @@ static QoreValue f_dbg_jobserver_acquire(const QoreListNode* params, RuntimeConf
     return qore_aot_dbg_jobserver_acquire(makeflags->c_str(), max);
 }
 
+//! the state of a signal in the signal manager, for f_dbg_signal_reassign_release()
+static void dbg_signal_state(QoreHashNode* h, const char* step, int sig, ExceptionSink* xsink) {
+    bool waited;
+    SimpleRefHolder<QoreStringNode> owner;
+    {
+        AutoLocker al(&QSM.mutex);
+        waited = sigismember(&QSM.mask, sig) == 1;
+        sig_map_t::const_iterator i = QSM.fmap.find(sig);
+        if (i != QSM.fmap.end()) {
+            owner = new QoreStringNode(i->second);
+        }
+    }
+    ReferenceHolder<QoreHashNode> state(new QoreHashNode(autoTypeInfo), xsink);
+    state->setKeyValue("waited", waited, xsink);
+    state->setKeyValue("owner", owner.release(), xsink);
+    h->setKeyValue(step, state.release(), xsink);
+}
+
+//! Debug-only: a module takes over a signal from the signal manager and releases it, as the jni module does
+/** @return a hash with the keys \c before, \c reassigned and \c released, each a hash with \c waited (whether
+    the signal thread waits for the signal) and \c owner (the name the signal is reserved under, or nothing).  DEBUG
+    builds only.
+*/
+static QoreValue f_dbg_signal_reassign_release(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int sig = static_cast<int>(get_param_value(params, 0).getAsBigInt());
+    QoreStringNodeValueHelper name(get_param_value(params, 1));
+    if (sig <= 0 || sig >= QORE_SIGNAL_MAX) {
+        return xsink->raiseException("DBG-ARGUMENT-ERROR", "invalid signal %d", sig);
+    }
+    if (!QSM.enabled()) {
+        return xsink->raiseException("DBG-ARGUMENT-ERROR", "signal handling is not enabled");
+    }
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    dbg_signal_state(*rv, "before", sig, xsink);
+    sig_vec_t sigs = {sig};
+    if (QoreStringNode* err = QSM.reassignSignals(sigs, name->c_str(), true)) {
+        SimpleRefHolder<QoreStringNode> holder(err);
+        return xsink->raiseException("DBG-SIGNAL-ERROR", holder.release());
+    }
+    dbg_signal_state(*rv, "reassigned", sig, xsink);
+    if (QSM.releaseSignals(sigs, name->c_str())) {
+        return xsink->raiseException("DBG-SIGNAL-ERROR", "signal %d could not be released", sig);
+    }
+    dbg_signal_state(*rv, "released", sig, xsink);
+    return rv.release();
+}
+
 //! Debug-only: creates a child process with fork() while another thread holds the lock of a registered fork handler
 /** The other thread takes the lock as the handler's prepare handler does, and releases it when the prepare handlers
     reach the handler, so fork() waits for it.  The child takes and releases the lock in the same way, runs the code
@@ -14363,6 +14411,9 @@ void init_debug_functions(QoreNamespace& qns) {
         "before_wait");
     qns.addBuiltinVariant("dbg_jobserver_acquire", f_dbg_jobserver_acquire, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "makeflags", bigIntTypeInfo, QORE_PARAM_NO_ARG, "max");
+    qns.addBuiltinVariant("dbg_signal_reassign_release", f_dbg_signal_reassign_release, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "sig", stringTypeInfo, QORE_PARAM_NO_ARG,
+        "name");
     qns.addBuiltinVariant("dbg_file_stream_io_flags", f_dbg_file_stream_io_flags, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         hashTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "fd", codeTypeInfo, QORE_PARAM_NO_ARG, "call");
     qns.addBuiltinVariant("dbg_fork_while_handler_held", f_dbg_fork_while_handler_held, QCF_NO_FLAGS,

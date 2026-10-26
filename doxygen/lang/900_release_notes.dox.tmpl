@@ -913,6 +913,17 @@
     faulting thread and are left to the operating system and to native handlers in the process.
     @endparblock
 
+    @par The Signal Thread No Longer Takes SIGCHLD
+    @parblock
+    The thread of the library that runs @ref signal_handling "signal handlers" no longer waits for \c SIGCHLD, for
+    which no %Qore-language handler can be set.  It discarded every \c SIGCHLD it accepted, and the operating system
+    can give a process-directed signal to that thread instead of the threads that have it unblocked, so components
+    that watch the end of their children through \c SIGCHLD (ex: the \c process module on macOS) could miss it and
+    wait for ever for a child that had ended.  A signal that a module takes over and releases is also restored as it
+    was: the signal thread waits for it again only if it did before, and a signal reserved by the library is reserved
+    again.
+    @endparblock
+
     @par An Empty String Is Found in Every String
     @parblock
     An empty string is contained in every string and is found at every position from the start to the end of a

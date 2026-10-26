@@ -63,6 +63,8 @@ void QoreSignalHandler::runHandler(const ResolvedCallReferenceNode& callback, in
 QoreSignalManager::QoreSignalManager() : is_enabled(false), tid(-1), block(false), waiting(0), num_handlers(0),
         thread_running(false), cmd(C_None), thread_joinable(false) {
     //printd(5, "QoreSignalManager::QoreSignalManager() QORE_SIGNAL_MAX: %d\n", QORE_SIGNAL_MAX);
+    sigemptyset(&mask);
+    sigemptyset(&default_wait_mask);
     // initilize handlers
     for (int i = 0; i < QORE_SIGNAL_MAX; ++i) {
         handlers[i].init();
@@ -135,13 +137,23 @@ void QoreSignalManager::init(bool disable_signal_mask) {
         // the signal thread would consume a SIGSEGV delivered to the process and no Qore-language handler can
         // be set for it in any case (it is reserved), so it would simply be ignored, and any handler installed
         // by another component in the process (ex: the JVM) would never see it
+        // NOTE: SIGCHLD is not included either.  No Qore-language handler can be set for it (it is reserved), so the
+        // signal thread would discard every SIGCHLD it accepts.  A process-directed SIGCHLD is delivered to one
+        // thread only, and a thread waiting for it with sigwait() is chosen like a thread that has it unblocked (on
+        // macOS, the first such thread in creation order, which is the signal thread whenever the main thread has
+        // SIGCHLD blocked, as while it runs a signal handler), so the signal thread took SIGCHLD from every component
+        // that watches the end of its children through it (ex: Boost.Asio in the process module), and a child whose
+        // SIGCHLD was taken was never seen to end.  SIGCHLD is unblocked in all threads (see setMask()) and its
+        // default action is to ignore it, so it needs no thread to wait for it.  SIGALRM stays: its default action
+        // ends the process.
         sigemptyset(&mask);
         sigaddset(&mask, QORE_STATUS_SIGNAL);
         sigaddset(&mask, SIGALRM);
-        sigaddset(&mask, SIGCHLD);
         sigaddset(&mask, SIGINT);
         sigaddset(&mask, SIGHUP);
         sigaddset(&mask, SIGTERM);
+        default_wait_mask = mask;
+        sys_fmap = fmap;
 
         ExceptionSink xsink;
         if (start_signal_thread(&xsink)) {
@@ -861,11 +873,25 @@ int QoreSignalManager::releaseSignal(int sig, const char* name) {
         return -1;
     }
 
-    fmap.erase(i);
-    sigaddset(&mask, sig);
+    releaseSignalUnlocked(i);
     reload();
 
     return 0;
+}
+
+void QoreSignalManager::releaseSignalUnlocked(sig_map_t::iterator i) {
+    int sig = i->first;
+    // a signal reserved by the library before a module took it over (with reuse_sys) is reserved again
+    sig_map_t::const_iterator si = sys_fmap.find(sig);
+    if (si != sys_fmap.end()) {
+        i->second = si->second;
+    } else {
+        fmap.erase(i);
+    }
+    // the signal thread waits for the signal again only if it did so before the module took it over
+    if (sigismember(&default_wait_mask, sig)) {
+        sigaddset(&mask, sig);
+    }
 }
 
 int QoreSignalManager::releaseSignals(const sig_vec_t& sig_vec, const char* name) {
@@ -882,9 +908,7 @@ int QoreSignalManager::releaseSignals(const sig_vec_t& sig_vec, const char* name
     }
 
     for (auto& sig : sig_vec) {
-        sig_map_t::iterator i = fmap.find(sig);
-        fmap.erase(i);
-        sigaddset(&mask, sig);
+        releaseSignalUnlocked(fmap.find(sig));
     }
     reload();
 
