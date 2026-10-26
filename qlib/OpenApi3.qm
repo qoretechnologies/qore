@@ -317,13 +317,6 @@ or a date, and a \c date-time string property of an object alternative a date
 
     @subsection openapi3_1_0 OpenApi3 v1.0
     - initial release
-    - a nullable enumeration, a composition whose only member that is not the \c null type is an enumeration or
-      wraps one, has the choices of the enumeration
-    - the \c default of a property or parameter schema is the remote default value of its field, which is shown and
-      never applied or sent (see @ref dataprovider_remote_default_values)
-    - a schema object whose document has been destroyed throws \c SCHEMA-DOCUMENT-DESTROYED when it is asked to build
-      a type or resolve a reference, instead of failing with an unrelated error; the types it has already built keep
-      working (see @ref OpenApi3::SchemaObject "SchemaObject")
 */
 
 #! main namespace for all public %OpenApi3 declarations
