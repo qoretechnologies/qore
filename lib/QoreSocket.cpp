@@ -12930,7 +12930,7 @@ static bool qore_socket_ipv4_port_used(int socktype, uint32_t address, int port,
     if (!qore_socket_bind_check_allowed(sandbox_manager, sin, socktype)) {
         return false;
     }
-    int fd = socket(AF_INET, socktype, 0);
+    int fd = qore_socket_cloexec(AF_INET, socktype, 0);
     if (fd == QORE_INVALID_SOCKET) {
         return false;
     }
@@ -12992,7 +12992,7 @@ static int qore_socket_bind_ipv4_free_port(int sock, const struct sockaddr* addr
         }
     } holders;
     for (unsigned n = 0; n < QORE_BIND_RESERVATION_MAX_PORTS; ++n) {
-        int fd = socket(AF_INET, socktype, 0);
+        int fd = qore_socket_cloexec(AF_INET, socktype, 0);
         if (fd == QORE_INVALID_SOCKET) {
             break;
         }
@@ -13358,7 +13358,7 @@ static int qore_socket_hold_port_by_connection(int lfd, int family, const struct
     if (::listen(lfd, 1) == QORE_SOCKET_ERROR) {
         return -1;
     }
-    int cfd = socket(family, SOCK_STREAM, 0);
+    int cfd = qore_socket_cloexec(family, SOCK_STREAM, 0);
     if (cfd == QORE_INVALID_SOCKET) {
         return -1;
     }
@@ -13388,7 +13388,7 @@ static int qore_socket_hold_port_by_connection(int lfd, int family, const struct
     }
     // reserved before the accept, so that adding the descriptors cannot fail (the caller reserves it in advance)
     held.reserve(held.size() + 2);
-    int afd = ::accept(lfd, nullptr, nullptr);
+    int afd = qore_accept_cloexec(lfd, nullptr, nullptr);
     if (afd == QORE_INVALID_SOCKET) {
         return -1;
     }
@@ -13408,7 +13408,7 @@ static int qore_socket_hold_port_by_connection(int lfd, int family, const struct
 */
 static int qore_socket_bind_reservation(const SocketResolvedAddrInfo& ai, const struct sockaddr_storage& addr,
         int& err) {
-    int fd = socket(ai.family, ai.socktype, ai.protocol);
+    int fd = qore_socket_cloexec(ai.family, ai.socktype, ai.protocol);
     if (fd == QORE_INVALID_SOCKET) {
         err = sock_get_raw_error();
         return QORE_INVALID_SOCKET;
@@ -13548,7 +13548,7 @@ static void qore_socket_bind_reserve_port(qore_socket_private* priv, const std::
     } rejected_ports;
     std::vector<int>& rejected = rejected_ports.fds;
     for (unsigned n = 1; n < QORE_BIND_RESERVATION_MAX_PORTS; ++n) {
-        int fd = socket(bound_ai.family, bound_ai.socktype, bound_ai.protocol);
+        int fd = qore_socket_cloexec(bound_ai.family, bound_ai.socktype, bound_ai.protocol);
         if (fd == QORE_INVALID_SOCKET) {
             return;
         }

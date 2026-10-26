@@ -275,11 +275,58 @@ DLLLOCAL int windows_set_errno();
 #define QORE_SOCKET_ERROR -1
 #endif
 
+//! Marks a descriptor close-on-exec, so that no program started by the process inherits it
+/** Does nothing on Windows, where sockets are not inherited unless explicitly requested
+*/
+DLLLOCAL inline void qore_set_cloexec(int fd) {
+#ifndef _Q_WINDOWS
+    int fl = fcntl(fd, F_GETFD);
+    if (fl != -1 && !(fl & FD_CLOEXEC)) {
+        fcntl(fd, F_SETFD, fl | FD_CLOEXEC);
+    }
+#endif
+}
+
+//! Creates a socket that is close-on-exec; returns QORE_INVALID_SOCKET on error (errno set)
+/** A socket created by the library is never inherited by a program the process starts (with system(), backquote(),
+    fork() and exec(), or a module); where the platform supports it (\c SOCK_CLOEXEC), the flag is set atomically, so
+    that a fork() in another thread cannot take the socket into a child between its creation and the flag
+*/
+DLLLOCAL inline int qore_socket_cloexec(int family, int type, int protocol) {
+#ifdef SOCK_CLOEXEC
+    int fd = socket(family, type | SOCK_CLOEXEC, protocol);
+    if (fd != QORE_INVALID_SOCKET || errno != EINVAL) {
+        return fd;
+    }
+    // a kernel without SOCK_CLOEXEC
+#endif
+    int fd2 = socket(family, type, protocol);
+    if (fd2 != QORE_INVALID_SOCKET) {
+        qore_set_cloexec(fd2);
+    }
+    return fd2;
+}
+
+//! Accepts a connection on a socket as a close-on-exec socket; returns QORE_INVALID_SOCKET on error (errno set)
+DLLLOCAL inline int qore_accept_cloexec(int fd, struct sockaddr* addr, socklen_t* size) {
+#if defined(__linux__) && defined(SOCK_CLOEXEC)
+    int rc = ::accept4(fd, addr, size, SOCK_CLOEXEC);
+    if (rc != QORE_INVALID_SOCKET || errno != ENOSYS) {
+        return rc;
+    }
+#endif
+    int rc2 = ::accept(fd, addr, size);
+    if (rc2 != QORE_INVALID_SOCKET) {
+        qore_set_cloexec(rc2);
+    }
+    return rc2;
+}
+
 //! Creates a socket and immediately sets it to non-blocking mode.
 /** Returns the socket descriptor, or QORE_INVALID_SOCKET on error (errno set).
 */
 DLLLOCAL inline int create_nonblocking_socket(int family, int type, int protocol) {
-    int fd = socket(family, type, protocol);
+    int fd = qore_socket_cloexec(family, type, protocol);
     if (fd == QORE_INVALID_SOCKET) {
         return QORE_INVALID_SOCKET;
     }
@@ -2602,7 +2649,7 @@ struct qore_socket_private : public QoreReferenceCounter {
         }
 
         while (true) {
-            int rc = ::accept(io_use.getDescriptor(), addr, size);
+            int rc = qore_accept_cloexec(io_use.getDescriptor(), addr, size);
             if (rc != QORE_INVALID_SOCKET) {
                 // The listener is non-blocking while owned by the async I/O controller.
                 // Some platforms propagate that flag to accepted sockets; return accepted
@@ -3195,7 +3242,7 @@ struct qore_socket_private : public QoreReferenceCounter {
             close();
 
         assert(sock == QORE_INVALID_SOCKET);
-        if ((sock = socket(AF_UNIX, sock_type, protocol)) == QORE_INVALID_SOCKET) {
+        if ((sock = qore_socket_cloexec(AF_UNIX, sock_type, protocol)) == QORE_INVALID_SOCKET) {
             return -1;
         }
         resetCloseInterrupt();
@@ -3214,7 +3261,7 @@ struct qore_socket_private : public QoreReferenceCounter {
             close();
 
         assert(sock == QORE_INVALID_SOCKET);
-        if ((sock = socket(family, sock_type, protocol)) == QORE_INVALID_SOCKET)
+        if ((sock = qore_socket_cloexec(family, sock_type, protocol)) == QORE_INVALID_SOCKET)
             return -1;
         resetCloseInterrupt();
 

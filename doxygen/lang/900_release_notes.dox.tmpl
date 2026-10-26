@@ -913,6 +913,18 @@
     faulting thread and are left to the operating system and to native handlers in the process.
     @endparblock
 
+    @par Programs Started by the Process Inherit No File, Socket or Pipe
+    @parblock
+    Files opened with @ref Qore::File "File" and @ref Qore::ReadOnlyFile "ReadOnlyFile", sockets created or accepted
+    by @ref Qore::Socket "Socket", and the pipes of @ref Qore::File::getPipe() "File::getPipe()" are now
+    close-on-exec: a program started with @ref Qore::system() "system()", @ref Qore::backquote() "backquote()",
+    @ref Qore::fork() "fork()" and @ref Qore::exec() "exec()", or by a module, no longer inherits them.  Before, it
+    could read and write them and kept them open as long as it ran (a listening socket stayed bound, and the end of a
+    pipe or connection was not seen).  The descriptors given to a child as its standard input and output are not
+    affected.  A program that passed one of these descriptors to a command by its number must now make it available
+    explicitly (for example as the command's standard input or output).
+    @endparblock
+
     @par The Signal Thread No Longer Takes SIGCHLD
     @parblock
     The thread of the library that runs @ref signal_handling "signal handlers" no longer waits for \c SIGCHLD, for

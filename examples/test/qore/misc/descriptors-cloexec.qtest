@@ -1,0 +1,73 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%new-style
+%require-types
+%strict-args
+%enable-all-warnings
+
+%requires QUnit
+%requires FsUtil
+
+%exec-class DescriptorsCloexecTest
+
+#! A program started by the process inherits none of the descriptors of its File and Socket objects
+/** A child started with system() or backquote() (or with fork() and exec(), or by a module that does not close the
+    descriptors itself) inherited every file, socket and pipe the process had open: it could read and write them, and
+    kept them open (a listening socket stayed bound, and the end of a pipe or connection was not seen) as long as it
+    ran.  Each test opens descriptors and checks in a child shell that none of them is open there.
+*/
+class DescriptorsCloexecTest inherits QUnit::Test {
+    constructor() : QUnit::Test("DescriptorsCloexec", "1.0", \ARGV) {
+        addTestCase("a file", \fileTest());
+        addTestCase("a listening socket, a connection and an accepted connection", \socketTest());
+        addTestCase("a pipe", \pipeTest());
+        set_return_value(main());
+    }
+
+    #! Returns the descriptors of @a fds that are open in a child started with backquote() and with system()
+    private list<int> openInChild(list<int> fds) {
+        if (PlatformOS == "Windows") {
+            testSkip("POSIX descriptors are required");
+        }
+        # /dev/fd/N is a device on macOS and a symbolic link (to a pipe or socket name, which is not a path) on Linux
+        string check = foldl $1 + "; " + $2,
+            (map sprintf("{ [ -e /dev/fd/%d ] || [ -L /dev/fd/%d ]; } && echo %d", $1, $1, $1), fds);
+        string out = backquote(check + "; true");
+        TmpDir dir("qore-cloexec-");
+        string path = dir.path + DirSep + "system.txt";
+        assertEq(0, system("(" + check + "; true) > '" + path + "'"));
+        out += ReadOnlyFile::readTextFile(path);
+        return map $1.toInt(), out.split("\n"), $1.val();
+    }
+
+    fileTest() {
+        TmpDir dir("qore-cloexec-");
+        File f();
+        f.open2(dir.path + DirSep + "file.txt", O_CREAT | O_WRONLY);
+        int fd = f.getPollableDescriptor();
+        assertGt(2, fd);
+        assertEq((), openInChild((fd,)));
+    }
+
+    socketTest() {
+        Socket listener();
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        int port = listener.getSocketInfo().port;
+        Socket client();
+        client.connect("127.0.0.1:" + port);
+        *Socket accepted = listener.accept(10s);
+        assertTrue(exists accepted);
+        list<int> fds = (listener.getSocket(), client.getSocket(), accepted.getSocket());
+        map assertGt(2, $1), fds;
+        assertEq((), openInChild(fds));
+    }
+
+    pipeTest() {
+        hash<PipeInfo> pipe = File::getPipe();
+        list<int> fds = (pipe.read.getPollableDescriptor(), pipe.write.getPollableDescriptor());
+        assertEq((), openInChild(fds));
+    }
+}
