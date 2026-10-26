@@ -50,7 +50,13 @@ class SignalsSigchldTest inherits QUnit::Test {
         string preload = PlatformOS == "Darwin"
             ? "DYLD_INSERT_LIBRARIES=" + shellQuote(lib)
             : "LD_PRELOAD=" + shellQuote((ENV.LD_PRELOAD ? ENV.LD_PRELOAD + ":" : "") + lib);
-        string code = "set_signal_handler(SIGUSR1, sub (int sig) {}); remove_signal_handler(SIGUSR1); "
+        # the child qore removes the preload variable from its environment before it starts its own child: the
+        # interposer is loaded at the start of the process under test and must reach no other program.  system()
+        # runs /bin/sh, a system binary that on macOS is arm64e: the fixture, built for arm64, cannot be loaded into
+        # it, and dyld ends the shell when it tries (as it does when System Integrity Protection does not strip the
+        # DYLD_* variables of system binaries, as on the macOS CI VMs)
+        string code = sprintf("unsetenv(%y); ", PlatformOS == "Darwin" ? "DYLD_INSERT_LIBRARIES" : "LD_PRELOAD")
+            + "set_signal_handler(SIGUSR1, sub (int sig) {}); remove_signal_handler(SIGUSR1); "
             "if (system(\"exit 0\")) { throw \"TEST-ERROR\", \"system() failed\"; } print(\"done\");";
         string cmd = sprintf("SIGWAIT_FIXTURE_REPORT=%s %s %s -ne %s 2>&1", shellQuote(report), preload,
             shellQuote(getQoreExecutable()), shellQuote(code));
@@ -58,7 +64,7 @@ class SignalsSigchldTest inherits QUnit::Test {
         out = backquote(cmd, \rc);
         assertEq(0, rc, out);
         assertEq("done", trim(out));
-        # one line for each process with the fixture: the child qore, and any process it runs that keeps it
+        # one line for each process with the fixture: the child qore only
         string text = ReadOnlyFile::readTextFile(report);
         int waits;
         int sigchld_waits;
