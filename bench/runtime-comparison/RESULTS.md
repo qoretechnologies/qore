@@ -24276,3 +24276,75 @@ All 8424 Qore reference checks and 675 Java checks pass; 45 Java kernels pass C2
 The next investigation revisits compiler-proven dynamic closure signatures under the user-authorized broader workload tradeoff. The earlier candidate improved closures but slowed list building and was rejected under the older rule. The new experiment will use the current baseline, identical native modules, fresh Release/Debug qualification and explicit list-building/mixed controls. Live guards, frames, synchronized captures and fallback lifetime remain. This checkpoint establishes neither Java parity nor maximum performance.
 
 [Raw evidence](results-post-program-tid-module-macos-arm64.json); [all 62 audit checks](audit-post-program-tid-checkpoint.md).
+
+## Compiler-proven AOT closure signatures (2026-10-26)
+
+Published native scalar closure companions carry the compiler proof of exact builtin int(int) without type substitution. Release dispatch now trusts that immutable proof; Debug asserts it, and QORE_DISABLE_AOT_CLOSURE_SIGNATURE_PROOF restores the original runtime predicates. Live body/readiness, Program, debugger, exception, stack, lexical context, synchronized captures and fallback checks remain. No fields, helper ABI, wire format or generated kernel instructions change. This measures AOT native companions, with no new IR speed claim.
+
+Baseline is cbd16d80f5 runtime; candidate is its evidence-only descendant c230cbff3b plus the two-file patch. Both use optimized Release -O3 -DNDEBUG, allocation tracking off, LLVM 22.1.8 and the same 15 qcc -O3 native modules. The 73-workload screen uses 3 forks; confirmation 32 workloads uses 5. Default/reverse/shuffle-487 layouts use 4096 items, one warmup and three 150 ms samples per fork. Whole-kernel ns/item include surrounding work, not isolated call latency. Both closure targets must improve at least 1% in aggregate and in every layout in screen and confirmation.
+
+Retain under the user-authorized broader workload tradeoff. Plain and captured closures improve 3.097% and 3.468% in confirmation, with gains in every layout in both phases. Polymorphic integer calls cost 1.847% (0.454 ns/item) and polymorphic float calls cost 4.599% (1.128 ns/item); both have repeated adverse reverse-layout flags. Ordinary indirect float/wide calls cost 0.661%/0.898%, and other repeated smaller costs are retained below. The historical list-building regression does not repeat: current confirmation improves 0.702%. Mixed workloads show small changes, including CSV +1.380% after a flat screen. This is a targeted closure improvement with observed costs, not a universal application speedup.
+
+|!Confirmed workload|!Before ns/item|!Candidate ns/item|!Change
+|float:callback_local_float_result|0.823295|0.827154|+0.469%
+|float:callback_local_float_return|0.874758|0.880963|+0.709%
+|float:callback_loop_float_return|5.223918|5.221118|-0.054%
+|float:direct_loop_float_return|5.974197|5.968521|-0.095%
+|float:typed_local_int_result|0.869794|0.856551|-1.523%
+|float:typed_local_int_unary|1.227088|1.231588|+0.367%
+|index:list_negative|7.990682|8.017248|+0.332%
+|index:list_positive|7.952081|7.987646|+0.447%
+|micro:boxed_float_method_call|21.145703|21.175843|+0.143%
+|micro:boxed_float_method_fallback|35.258692|35.493526|+0.666%
+|micro:boxed_int_method_call|17.260616|17.179328|-0.471%
+|micro:boxed_int_method_fallback|33.466996|33.237542|-0.686%
+|micro:closure_call|19.362211|18.762596|-3.097%
+|micro:closure_capture|25.596197|24.708542|-3.468%
+|micro:direct_call|1.637337|1.641662|+0.264%
+|micro:indirect_affine_wide|61.145271|61.140290|-0.008%
+|micro:indirect_call|61.516713|61.321545|-0.317%
+|micro:indirect_float|59.894822|60.290918|+0.661%
+|micro:indirect_wide|61.205181|61.754718|+0.898%
+|micro:list_build|27.401223|27.208921|-0.702%
+|micro:list_mutate|137.710058|136.565840|-0.831%
+|micro:list_read|3.045474|3.040165|-0.174%
+|micro:method_call|1.715173|1.715770|+0.035%
+|micro:monomorphic_call|3.920310|3.970961|+1.292%
+|micro:monomorphic_float_call|4.281999|4.281912|-0.002%
+|micro:polymorphic_call|24.586190|25.040370|+1.847%
+|micro:polymorphic_float_call|24.516342|25.643944|+4.599%
+|micro:temporary_hash|1.795039|1.796696|+0.092%
+|mixed:callback_pipeline|127.052178|126.336229|-0.564%
+|mixed:csv_report|971.389750|984.798686|+1.380%
+|mixed:object_orders|1865.323893|1866.308594|+0.053%
+|mixed:text_index|1518.108724|1516.507161|-0.105%
+
+|!Repeated aggregate cost|!Screen change|!Confirmation change|!Confirmation ns/item cost
+|index:list_negative|+0.989%|+0.332%|+0.026566
+|micro:boxed_float_method_fallback|+1.226%|+0.666%|+0.234834
+|micro:direct_call|+0.480%|+0.264%|+0.004326
+|micro:indirect_float|+0.580%|+0.661%|+0.396096
+|micro:indirect_wide|+0.838%|+0.898%|+0.549537
+|micro:polymorphic_call|+3.629%|+1.847%|+0.454179
+|micro:polymorphic_float_call|+4.219%|+4.599%|+1.127602
+|mixed:object_orders|+0.214%|+0.053%|+0.984701
+
+|!Short workload|!Items|!Before ns/item|!Candidate ns/item
+|micro:closure_call|1|2573.840181|2563.597184
+|micro:closure_capture|1|2599.354473|2612.372587
+|micro:indirect_call|1|2626.218132|2607.679317
+|micro:direct_call|1|2492.015446|2469.401294
+|micro:closure_call|16|178.781216|177.996821
+|micro:closure_capture|16|186.150717|185.518303
+|micro:indirect_call|16|224.380367|221.828157
+|micro:direct_call|16|157.071803|157.114836
+
+Short invocations include dispatch/setup/cleanup; no short-phase target gate passes. Count 1 captured closures cost 0.501%. All 2418 runs / 7254 sample windows are independently replayed. Release and Debug each pass 6778 assertions plus three standalone fixtures; native checks 2906, standard references 1110, paired module references 8424 and new-compiler references 1053 pass. All 391 Release aliases/hashes are restored after Debug.
+
+Preparation correction before any timing: comment-only edits in fingerprinted QoreAOT.h/.cpp changed runtime identity, so those comments were restored and the contract documented in JITRuntime.h/.cpp. A second preparation decoded compressed metadata and proved the only compiler-output difference was informational Git revision and its metadata size; runtime identity and generated kernel code match. All timed qmods are literally the same files. An initial preflight expected absent historical log filenames; a fresh driver inspected actual LC_RPATH values before timings. Failed preparation and drivers remain archived.
+
+Machine review verifies the default branch skips signature predicates while the recheck predicate retains them. Main entry 246→241 instructions, unchanged 352-byte frame, library +144 bytes and 9035 exported names unchanged; counts are not speed estimates. Separate sample profiles verify path/image usage and are excluded from timings.
+
+Shared macOS ARM64 host without affinity/frequency/thermal control. No owned build/test/profile overlaps timing. No fresh Java/develop ratio, application-weighted speedup, full-suite, sanitizer, Linux or global ceiling claim. The next isolated experiment is avoiding the empty callback-context apply call while preserving context lookup and populated-context behavior.
+
+[Audit](audit-aot-closure-signature-proof.md); [evidence](results-aot-closure-signature-proof-macos-arm64.json).

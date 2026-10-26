@@ -1301,6 +1301,8 @@ int qore_rt_try_load_member_float_internal_prehashed_v1(QoreObject* object, cons
 //! @param ctx runtime-owned context, without per-instance captured values
 //! @param normal body identity checked again at dispatch
 //! @param entry borrowed closure and live RuntimeConfig, accepted output, context and sink
+//! @note The compiler proves exact builtin int(int) without type substitution before emitting this binding.
+//! Publication carries that immutable signature proof; live body/Program/readiness guards remain at dispatch.
 void qore_rt_bind_closure_int_unary_v1(QoreAOTContext* ctx,
     uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
     int64_t (*entry)(int64_t, const QoreClosureBase*, RuntimeConfig*, int*, QoreAOTContext*, ExceptionSink*));
@@ -1309,6 +1311,7 @@ void qore_rt_bind_closure_int_unary_v1(QoreAOTContext* ctx,
 //! @param ctx runtime-owned context, without per-instance captured values
 //! @param normal exact normal body identity; v1 remains independently published
 //! @param entry context-independent scalar companion with a materializing live stack guard
+//! @note Retains v1's exact builtin int(int) signature proof without type substitution.
 void qore_rt_bind_closure_int_unary_v2(QoreAOTContext* ctx,
     uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
     int64_t (*entry)(int64_t, const QoreClosureBase*, RuntimeConfig*, int*, QoreAOTContext*, ExceptionSink*));

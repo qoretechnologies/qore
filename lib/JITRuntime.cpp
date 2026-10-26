@@ -11028,6 +11028,8 @@ extern "C" DLLEXPORT int qore_rt_try_load_member_float_internal_prehashed_v1(Qor
 extern "C" DLLEXPORT void qore_rt_bind_closure_int_unary_v1(QoreAOTContext* ctx,
         uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
         QoreAOTContext::NativeIntUnaryClosureEntry entry) {
+    // Only the compiler's exact int(int), non-substituted closure proof emits
+    // this binding. Publish that immutable ABI proof with the matching body.
     if (!ctx || !normal || !entry || ctx->native_body_fn != normal
             || ctx->native_int_unary_closure_entry.load(std::memory_order_relaxed)) {
         return;
@@ -11182,9 +11184,18 @@ static bool tryExecNativeIntClosureScalar(RuntimeConfig& rc, const QoreClosureBa
             || qore_program_private::get(*pgm)->hasDebuggerAttached()) {
         return false;
     }
-    const UserSignature* sig = uvb->getUserSignature();
-    if (sig->numParams() != 1 || sig->getParamTypeInfo(0) != bigIntTypeInfo
-            || sig->getReturnTypeInfo() != bigIntTypeInfo || sig->needsTypeParameterSubstitution()) {
+    // isAOTDynamicIntClosureEligible() proves this immutable signature before
+    // emitting the companion. Builtin type paths survive AOT deserialization
+    // unchanged; the live normal-body checks above bind that proof to this
+    // variant. Keep a Debug invariant and the original checks as a control.
+    const auto signature_matches = [uvb]() {
+        const UserSignature* sig = uvb->getUserSignature();
+        return sig->numParams() == 1 && sig->getParamTypeInfo(0) == bigIntTypeInfo
+            && sig->getReturnTypeInfo() == bigIntTypeInfo && !sig->needsTypeParameterSubstitution();
+    };
+    assert(signature_matches());
+    static constinit QoreEnvFlag recheck_signature("QORE_DISABLE_AOT_CLOSURE_SIGNATURE_PROOF");
+    if (recheck_signature.get() && !signature_matches()) {
         return false;
     }
     result = 0;

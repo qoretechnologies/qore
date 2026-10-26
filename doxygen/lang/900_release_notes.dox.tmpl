@@ -260,6 +260,8 @@
     literal keys and all uses are proven at compile time, retaining ordinary lookup for unsupported cases.
     JIT/AOT indexed reads reuse an existing live RuntimeConfig for negative-offset policy checks,
     retaining the compatibility entry and all indexed-read semantics.
+    Native AOT scalar closure calls reuse the compiler-proven signature while retaining live context,
+    body, lifetime and exception checks.
     Program entry reuses its live thread ID in parse-lock and thread-count checks, avoiding redundant
     TLS lookups while preserving Program lifetime, context and thread accounting.
     JIT/AOT indexed reads return non-owning inline list elements without reference or weak-type work,
