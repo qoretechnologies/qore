@@ -24348,3 +24348,96 @@ Machine review verifies the default branch skips signature predicates while the 
 Shared macOS ARM64 host without affinity/frequency/thermal control. No owned build/test/profile overlaps timing. No fresh Java/develop ratio, application-weighted speedup, full-suite, sanitizer, Linux or global ceiling claim. The next isolated experiment is avoiding the empty callback-context apply call while preserving context lookup and populated-context behavior.
 
 [Audit](audit-aot-closure-signature-proof.md); [evidence](results-aot-closure-signature-proof-macos-arm64.json).
+
+## Empty callback-context application (2026-10-26)
+
+Callback context construction still calls the existing provenance getter, but invokes apply only for a nonnull result. Null context previously entered an out-of-line helper that immediately returned after its prologue. The registry count/lock, context reference ownership, populated/trusted/nested context behavior, destruction and all live call guards remain. No header, field, public/helper ABI, serialized format or generated kernel instruction changes. This shared runtime path can serve IR and AOT; these timings measure optimized AOT modules.
+
+The baseline is installed b315c12369; candidate adds only the guard in lib/thread.cpp. Both use Release -O3 -DNDEBUG, allocation tracking off, LLVM 22.1.8 and the same 15 qcc -O3 native modules. The 73-workload screen has three forks; confirmation has 35 workloads and five forks. Default/reverse/shuffle-487 layouts use 4096 items, one warmup and three 150 ms samples. The prospective gate requires at least two of six callback targets to improve at least 1% in aggregate and improve in every layout in both phases. Values are whole-kernel ns/item, not isolated call latency.
+
+Retain under the user-authorized broader workload tradeoff. Plain/captured closures improve 3.395%/2.930% in confirmation; both improve in every layout in screen and confirmation. Polymorphic integer/float controls improve 3.771%/3.394%. Ordinary indirect call/float/wide/affine-wide controls cost 1.621%/0.657%/1.019%/1.735%, or 0.995/0.395/0.626/1.062 ns/item. Mixed confirmation changes are CSV -0.232%, orders +1.003%, callback pipeline +0.041% and text +0.527%; no weighted application gain is inferred. Populated-context confirmation has small repeated named-callback costs: 0.107% ordinary and 0.467% float; the screen captured-closure cost does not repeat. Retain the consistent empty-context closure and polymorphic improvements with these costs explicitly recorded. No causal claim is made that code placement explains the other workload changes.
+
+|!Confirmed workload|!Before ns/item|!Candidate ns/item|!Change
+|float:callback_local_float_result|0.826222|0.820434|-0.701%
+|float:callback_local_float_return|0.881541|0.872526|-1.023%
+|float:callback_loop_float_return|5.214889|5.211759|-0.060%
+|float:direct_local_float_result|0.743818|0.745078|+0.169%
+|float:direct_loop_float_return|5.968450|5.957710|-0.180%
+|float:typed_local_int_result|0.833110|0.838386|+0.633%
+|float:typed_local_int_unary|1.234236|1.227210|-0.569%
+|index:list_negative|8.059505|8.010084|-0.613%
+|index:list_positive|8.025328|8.001792|-0.293%
+|micro:boxed_float_method_call|20.927094|21.075675|+0.710%
+|micro:boxed_float_method_fallback|35.506747|35.449259|-0.162%
+|micro:boxed_int_method_call|17.287131|17.134821|-0.881%
+|micro:boxed_int_method_fallback|33.538307|33.622235|+0.250%
+|micro:closure_call|18.849065|18.209145|-3.395%
+|micro:closure_capture|24.524343|23.805768|-2.930%
+|micro:direct_call|1.636051|1.632033|-0.246%
+|micro:indirect_affine_wide|61.186517|62.248038|+1.735%
+|micro:indirect_call|61.396018|62.391060|+1.621%
+|micro:indirect_float|60.170661|60.565868|+0.657%
+|micro:indirect_wide|61.384183|62.009815|+1.019%
+|micro:list_build|27.116937|27.256371|+0.514%
+|micro:list_mutate|136.760542|137.859596|+0.804%
+|micro:list_read|3.029839|3.050831|+0.693%
+|micro:method_call|1.710181|1.715451|+0.308%
+|micro:monomorphic_call|3.979850|3.954906|-0.627%
+|micro:monomorphic_float_call|4.320706|4.309460|-0.260%
+|micro:polymorphic_call|25.166543|24.217424|-3.771%
+|micro:polymorphic_float_call|25.406402|24.544000|-3.394%
+|micro:temporary_hash|1.800120|1.808934|+0.490%
+|mixed:callback_pipeline|127.185015|127.237779|+0.041%
+|mixed:csv_report|970.223410|967.968816|-0.232%
+|mixed:object_orders|1856.608073|1875.236003|+1.003%
+|mixed:text_index|1511.966146|1519.938829|+0.527%
+|probe:effect_short|1708.044804|1720.551462|+0.732%
+|probe:string_result_loop|548.482480|548.446392|-0.007%
+
+|!Repeated aggregate cost|!Screen change|!Confirmation change|!Confirmation ns/item cost
+|float:direct_local_float_result|+2.825%|+0.169%|+0.001260
+|float:typed_local_int_result|+1.755%|+0.633%|+0.005276
+|micro:boxed_float_method_call|+0.379%|+0.710%|+0.148580
+|micro:boxed_int_method_fallback|+0.759%|+0.250%|+0.083928
+|micro:indirect_affine_wide|+1.928%|+1.735%|+1.061521
+|micro:indirect_call|+1.506%|+1.621%|+0.995041
+|micro:indirect_float|+1.108%|+0.657%|+0.395207
+|micro:indirect_wide|+1.919%|+1.019%|+0.625632
+|micro:list_mutate|+0.158%|+0.804%|+1.099054
+|micro:list_read|+0.059%|+0.693%|+0.020991
+|micro:method_call|+0.146%|+0.308%|+0.005270
+|micro:temporary_hash|+0.600%|+0.490%|+0.008814
+|mixed:callback_pipeline|+0.296%|+0.041%|+0.052765
+|mixed:object_orders|+0.937%|+1.003%|+18.627930
+|mixed:text_index|+0.029%|+0.527%|+7.972683
+|probe:effect_short|+1.285%|+0.732%|+12.506658
+
+The populated-context supplement runs the same module from a child Program with a SandboxManager. Setup precedes timing. A separate native probe confirms that plain/captured/named module callbacks carry context with a manager and are empty without one. Both runtimes pass all 3330 supplemented reference outputs. The six callbacks use the same layouts, three screen forks and five confirmation forks; all results remain controls, not target gates.
+
+|!Populated-context workload|!Before ns/item|!Candidate ns/item|!Screen change|!Confirmation change
+|context:closure_call|33.626183|33.278901|-0.286%|-1.033%
+|context:closure_capture|39.223587|39.161157|+1.430%|-0.159%
+|context:indirect_affine_wide|360.194853|357.435822|+0.731%|-0.766%
+|context:indirect_call|280.888663|281.189188|+1.561%|+0.107%
+|context:indirect_float|280.332330|281.642238|+0.597%|+0.467%
+|context:indirect_wide|361.166220|358.981391|+0.119%|-0.605%
+
+|!Short workload|!Items|!Before ns/item|!Candidate ns/item
+|micro:closure_call|1|2557.820857|2533.371860
+|micro:closure_capture|1|2592.111956|2581.752088
+|micro:indirect_call|1|2607.568396|2597.638292
+|micro:direct_call|1|2488.927029|2468.258062
+|micro:closure_call|16|178.065296|176.780152
+|micro:closure_capture|16|184.961275|183.587814
+|micro:indirect_call|16|222.658617|221.846201
+|micro:direct_call|16|154.889172|155.842513
+
+Short invocations include dispatch/setup/cleanup; the callback gains are below 1% and no short target gate passes. No disjoint >3% adverse layout flag repeats in confirmation; this does not erase the smaller repeated costs. All 2796 jobs/8388 sample windows are independently replayed.
+
+Baseline, Release and Debug each pass 7465 assertions across 29 QUnit fixtures/197 cases plus three standalone fixtures. Original/candidate native checks each pass 2906. Standard 1110, paired module 8424, new-compiler 1053 and populated-context 3330 reference checks pass. All 391 Release aliases/hashes are restored after Debug. The initial populated host lacked its explicit child module import; a V2 host fixed that setup error. The initial diagnostic accepted only NT_FUNCREF and failed on a legitimate runtime closure; its V2 accepts NT_RUNTIME_CLOSURE too. Neither required a production fix, and their failed records remain in the report.
+
+Machine review verifies null branches skip apply in both the constructor and inlined closure path. Constructor instructions 15→16, closure entry 241→242; frames remain 32/352 bytes, library size remains 21596336 bytes, and all 9035 exported names match. The existing 84-instruction apply body retains all branches; these counts are not speed estimates. Separate profiles verify executed paths/images and are excluded from timings. Recompiled kernel LLVM differs only in decoded informational Git revision metadata and its initialization size; runtime identity and kernel instructions match, and every timed qmod is literally the same file on both runtimes.
+
+Shared macOS ARM64 host without affinity/frequency/thermal control. No owned build/test/profile overlaps timing. No fresh Java/develop ratio, IR speed estimate, application-weighted gain, full-suite, sanitizer, Linux or global performance ceiling claim. The next separate experiment will decode the borrowed closure node once using existing value accessors, preserving fallback representations and all live guards.
+
+[Audit](audit-empty-callback-context.md); [evidence](results-empty-callback-context-macos-arm64.json).

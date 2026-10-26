@@ -4197,7 +4197,9 @@ void QoreSandboxProvenanceHelper::set(const QoreObject* object) {
 
 QoreSandboxProvenanceHelper::QoreSandboxProvenanceHelper(const ResolvedCallReferenceNode* callback) {
     if (callback) {
-        apply(qore_get_call_reference_provenance(callback));
+        if (auto* captured = qore_get_call_reference_provenance(callback)) {
+            apply(captured);
+        }
     }
 }
 
