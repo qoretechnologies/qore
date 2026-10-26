@@ -240,6 +240,8 @@
     by local promotion, avoiding redundant boxing and dynamic dispatch while retaining guards for optional values.
     AOT and IR can eliminate private temporary integer hashes and selector strings when branch-selected
     literal keys and all uses are proven at compile time, retaining ordinary lookup for unsupported cases.
+    JIT/AOT nonnegative indexed reads skip the unused negative-offset policy lookup, while negative
+    indices retain the current runtime policy and all indexed-read semantics remain unchanged.
     AOT immediate local reloads reuse prepared body-local storage, with direct owned reads for strong
     lists and unchanged reference, weak-reference, exception and cleanup behavior.
     AOT indexed integer addition uses prepared local storage when eligible, preserving live ownership,

@@ -23763,3 +23763,81 @@ The 391 standard-library qmods total 344803496 bytes before and 344922552 after 
 The first prepared-load implementation retained both evaluator calls. Its completed 67-workload screen measured 149.650431 to 145.401303 ns/item (-2.84%), missing the 5% gate; a captured-closure layout was also flagged, without confirmation. That source and all 1206 jobs/3618 windows are preserved and are not pooled with this refinement. The refined source was freshly qualified and timed. Earlier qualification preserved a bad auxiliary test-path failure, then verified same-source Release receipts and reran corrected tests; refined qualification reruns everything. An initial machine-review assertion expected an out-of-line generic loader; inspection established that the compiler inlined it. These driver corrections do not change measurements.
 
 [Audit](audit-aot-prepared-immediate-reload.md); [evidence](results-aot-prepared-immediate-reload-macos-arm64.json).
+
+## Nonnegative indexed-read policy lookup (2026-10-26)
+
+The common JIT/AOT indexed-read helper queries the live negative-offset policy only for negative indices. Nonnegative indices cannot use that policy in normalizeIndex. Evaluation and pending-exception handling still happen first; negative reads retain the current runtime policy. Container dispatch, bounds, owned element acquisition, weak-reference normalization, strings and cleanup remain unchanged. No compiler, header, ABI or public calling-convention change. Actual optimized AOT modules are measured here; no separate IR/JIT timing benefit is claimed.
+
+The frozen installed baseline is ccac5ed65e. Both variants use Release -O3 -DNDEBUG with allocation tracking off and exactly the same 15 native qmods compiled with qcc -O3/LLVM 22.1.8 on Apple M4 Pro/macOS 27.0.1. Exact loaded images, dependencies and module hashes are verified. The 73-workload screen has three forks; 33-workload confirmation has five. Default/reverse/shuffle-487 layouts use 4096 items, one warmup and three 150 ms samples. The prospective gate requires at least one positive-read target to improve >=3% aggregate and in every layout in both phases. All three pass. Values are whole-kernel ns/item, not isolated call latency.
+
+|!Confirmed workload|!Before ns/item|!Candidate ns/item|!Change
+|float:callback_local_float_result|0.826148|0.837652|+1.39%
+|float:callback_local_float_return|0.876601|0.885950|+1.07%
+|float:callback_loop_float_return|5.200551|5.219035|+0.36%
+|float:direct_loop_float_return|5.941258|5.959429|+0.31%
+|float:typed_local_int_result|0.813871|0.807593|-0.77%
+|float:typed_local_int_unary|1.200885|1.200270|-0.05%
+|index:binary_negative|8.513828|9.240150|+8.53%
+|index:binary_positive|8.518322|7.654027|-10.15%
+|index:buffer_negative|15.700107|15.821836|+0.78%
+|index:buffer_positive|16.010259|15.215062|-4.97%
+|index:list_negative|10.176419|10.339310|+1.60%
+|index:list_positive|10.075625|9.309175|-7.61%
+|micro:boxed_float_method_fallback|34.779262|34.399951|-1.09%
+|micro:boxed_int_method_effect|90.971713|91.079466|+0.12%
+|micro:boxed_int_method_fallback|33.466388|33.705716|+0.72%
+|micro:closure_call|19.283347|19.259468|-0.12%
+|micro:closure_capture|25.166528|25.437062|+1.07%
+|micro:dynamic_int_result_call|11.580826|11.655708|+0.65%
+|micro:indirect_call|61.569016|62.573758|+1.63%
+|micro:indirect_float|61.291890|61.300650|+0.01%
+|micro:list_build|29.420854|28.534753|-3.01%
+|micro:list_mutate|137.007539|136.143615|-0.63%
+|micro:list_read|2.977048|2.983287|+0.21%
+|micro:method_call|1.689008|1.694867|+0.35%
+|micro:monomorphic_call|4.295164|4.282003|-0.31%
+|micro:monomorphic_float_call|4.366121|4.467277|+2.32%
+|micro:optional_method_call|11.293221|11.473718|+1.60%
+|micro:temporary_hash|1.714266|1.715038|+0.05%
+|micro:temporary_list|1.715716|1.726585|+0.63%
+|mixed:callback_pipeline|127.239896|128.384572|+0.90%
+|mixed:csv_report|978.625919|964.899706|-1.40%
+|mixed:object_orders|1826.212178|1842.311702|+0.88%
+|mixed:text_index|1511.139323|1513.216146|+0.14%
+
+Retain as a targeted positive-index improvement under the authorized broader tradeoff. All three targets pass the prospective >=3% and every-layout gate in both phases. Confirmation reduces positive list/binary/buffer whole-kernel time by 7.61%/10.15%/4.97%. Negative binary reads regress 8.53% (+0.726322 ns/item), with disjoint fork ranges in all layouts in both phases; this is a confirmed cost, not dismissed as noise. Negative list/buffer reads also show smaller repeated aggregate costs (+1.60%/+0.78%). List construction improves 3.01% and CSV 1.40%, while other mixed workloads have repeated +0.14% to +0.90% costs. Every repeated positive aggregate change is tabulated without a significance claim. Short count-1 gains are under 1%; count-16 list/binary gains are about 3.3%, buffer under 1%, and the short list target is not better in every layout. No universal, zero-regression, workload-weighted, Java-parity or overall-performance-ceiling claim. Next measure an explicit live-context read path to remove negative-read TLS lookup; preserve ordinary compatibility entry points and live runtime policy.
+
+|!Repeated aggregate cost|!Screen change|!Confirmation change|!Confirmation ns/item cost
+|index:binary_negative|+9.335%|+8.531%|+0.726322
+|micro:monomorphic_float_call|+0.032%|+2.317%|+0.101156
+|index:list_negative|+2.952%|+1.601%|+0.162891
+|micro:optional_method_call|+2.393%|+1.598%|+0.180498
+|micro:closure_capture|+0.212%|+1.075%|+0.270534
+|mixed:callback_pipeline|+0.353%|+0.900%|+1.144676
+|mixed:object_orders|+0.147%|+0.882%|+16.099524
+|index:buffer_negative|+1.091%|+0.775%|+0.121729
+|micro:boxed_int_method_fallback|+0.799%|+0.715%|+0.239328
+|micro:dynamic_int_result_call|+3.063%|+0.647%|+0.074882
+|micro:temporary_list|+0.405%|+0.634%|+0.010869
+|float:callback_loop_float_return|+0.096%|+0.355%|+0.018484
+|micro:method_call|+0.308%|+0.347%|+0.005859
+|mixed:text_index|+0.252%|+0.137%|+2.076823
+|micro:temporary_hash|+0.198%|+0.045%|+0.000773
+
+|!Short target/control|!Count|!Before ns/item|!Candidate ns/item
+|index:list_positive|1|486.074483|485.297449
+|index:binary_positive|1|501.519278|496.762259
+|index:buffer_positive|1|513.130840|508.505215
+|micro:list_mutate|1|3445.032053|3428.325567
+|index:list_positive|16|40.359742|39.029313
+|index:binary_positive|16|39.597937|38.304081
+|index:buffer_positive|16|47.256504|46.909772
+|micro:list_mutate|16|348.507221|345.803621
+
+Short invocations include dispatch, setup and cleanup. Separate positive/negative profiles observe the intended compatibility helper on both runtimes. Machine review verifies the nonnegative branch bypasses the policy/TLS lookup; the negative branch retains it. The full helper changes from 327 to 333 ARM64 instructions; this is neither a hot-path count nor a speed estimate. The compiler already coalesces source-level container type queries into one call, so caching the type in source is not a further demonstrated optimization.
+
+All 391 standard-library qmods are byte-identical before/after (344922552 bytes). Release 110 reported cases/2462 assertions include eight documented Linux-only RSS skips and one Debug-only DGC skip; Debug 101 reported cases/3910 assertions include eight RSS skips. These reported case totals include skips. Native checks pass 2276/2276. Standard 1110 and common-module 8424 reference results pass. All Release aliases/hashes are restored. All 2448 timing jobs/7344 measured windows are independently replayed. The first baseline fixture used an invalid empty-binary literal; it was corrected to binary() and passed before production edits. The first qualification wrapper rejected documented platform skips despite successful child exits; v2 recognizes only those exact skips, verifies reused same-source Release receipts and runs remaining Release/all Debug checks. All failures remain archived.
+
+Shared host without affinity/frequency/thermal controls; no owned build/test/profile overlaps timing. No fresh Java/develop ratio or weighted application-wide speedup is inferred. The next experiment will reuse an available live RuntimeConfig for negative reads while retaining legacy entry points and null-context fallback.
+
+[Audit](audit-aot-indexed-read-policy.md); [evidence](results-aot-indexed-read-policy-macos-arm64.json).

@@ -1432,6 +1432,51 @@ static void ut_aot_first_public_base(UnitTestCounters& c) {
     UT_ASSERT(c, !xsink, "first-public-base native checks raise no unexpected exception");
 }
 
+static void ut_indexed_read_policy(UnitTestCounters& c, RuntimeConfig& rc) {
+    ExceptionSink xsink;
+    ReferenceHolder<QoreListNode> list(new QoreListNode(bigIntTypeInfo), &xsink);
+    for (int64_t value : {3, 7, 11}) {
+        list->push(QoreValue(value), &xsink);
+    }
+    ReferenceHolder<WeakListReferenceNode> weak(new WeakListReferenceNode(*list), &xsink);
+    ReferenceHolder<BinaryNode> binary(new BinaryNode, &xsink);
+    const unsigned char bytes[] = {3, 7, 11};
+    binary->append(bytes, sizeof(bytes));
+    auto read = [&](QoreValue container, int64_t index) {
+        QoreSimpleValue raw;
+        raw.setRawBits(qore_rt_list_index_access_compat(container.rawBits(), index, 1, &xsink));
+        return QoreValue(raw);
+    };
+    for (bool enabled : {false, true}) {
+        RuntimeParseOptionsOverrideHelper policy(rc, PO_NEGATIVE_OFFSETS,
+            enabled ? PO_NEGATIVE_OFFSETS : QoreParseOptions());
+        for (int64_t index : {std::numeric_limits<int64_t>::min(), int64_t{-4}, int64_t{-3},
+                int64_t{-1}, int64_t{0}, int64_t{2}, int64_t{3}, std::numeric_limits<int64_t>::max()}) {
+            int64_t normalized = enabled && index < 0 ? index + 3 : index;
+            for (QoreValue container : {QoreValue(*list), QoreValue(*weak), QoreValue(*binary)}) {
+                ValueHolder result(read(container, index), &xsink);
+                bool in_bounds = normalized >= 0 && normalized < 3;
+                UT_ASSERT(c, !xsink && (in_bounds
+                    ? result->isInt() && result->getInt() == bytes[normalized]
+                    : result->isNothing()), "indexed read preserves current negative-offset policy and bounds");
+            }
+        }
+        UT_ASSERT_EQ(c, 1, list->reference_count(), "strong and weak reads retain caller list ownership");
+        UT_ASSERT_EQ(c, 1, binary->reference_count(), "binary reads retain caller ownership");
+        {
+            ValueHolder result(read(QoreValue(int64_t{17}), 0), &xsink);
+            UT_ASSERT(c, !xsink && result->isNothing(), "unsupported indexed value remains Nothing");
+        }
+        xsink.raiseException("INDEX-PENDING", "pending exception prevents indexed reading");
+        {
+            ValueHolder result(read(QoreValue(*list), 0), &xsink);
+            UT_ASSERT(c, xsink && result->isNothing() && list->reference_count() == 1,
+                "pending exception retains indexed-read ownership and result");
+        }
+        xsink.clear();
+    }
+}
+
 static void ut_aot_prepared_indexed_int_add(UnitTestCounters& c) {
     ExceptionSink xsink;
     struct LocalScope {
@@ -13800,6 +13845,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_aot_first_public_base(c);
     ut_aot_prepared_local_reload(c);
     ut_aot_prepared_indexed_int_add(c);
+    ut_indexed_read_policy(c, rc);
     ut_qorevalue_operator_bool_null(c);
     ut_qorevalue_null_representations(c);
     ut_string_data_helper(c);
@@ -13826,6 +13872,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_aot_first_public_base(c);
     ut_aot_prepared_local_reload(c);
     ut_aot_prepared_indexed_int_add(c);
+    ut_indexed_read_policy(c, rc);
 
     ut_qorevalue_operator_bool_null(c);
     ut_qorevalue_null_representations(c);

@@ -6571,7 +6571,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_access_compat(uint64_t list_val
         return toBits(QoreValue());
     }
     QoreValue v = *vh;
-    bool negative_offsets = runtime_check_parse_option(PO_NEGATIVE_OFFSETS);
+    // Nonnegative indices cannot use the negative-offset policy. Keep the
+    // current runtime policy lookup after evaluation for negative indices.
+    bool negative_offsets = index < 0 && runtime_check_parse_option(PO_NEGATIVE_OFFSETS);
     int64 qindex = static_cast<int64>(index);
     if (v.getType() == NT_LIST) {
         const QoreListNode* l = v.get<const QoreListNode>();
