@@ -839,7 +839,8 @@ QoreValue parse_json(const QoreString* str, ExceptionSink* xsink) {
     }
 
     // Get sandbox manager for depth checks
-    QoreSandboxManagerHelper smh;
+    // nesting and interrupt limits of the governing sandbox; not a policy check
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::All);
 
     // ignore empty values; return NOTHIN in this case
     bool empty = false;
@@ -858,7 +859,8 @@ QoreValue parse_json(const QoreString* str, ExceptionSink* xsink) {
 
 QoreStringNode* make_json(QoreValue data, int format, const QoreEncoding* enc, ExceptionSink* xsink) {
     QoreStringNodeHolder str(new QoreStringNode(enc ? enc : QCS_UTF8));
-    QoreSandboxManagerHelper smh;
+    // nesting and interrupt limits of the governing sandbox; not a policy check
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::All);
     if (do_json_value(*str, data, format & JGF_ADD_FORMATTING ? 0 : -1, 0, smh.get(), xsink)) {
         return nullptr;
     }
@@ -866,13 +868,15 @@ QoreStringNode* make_json(QoreValue data, int format, const QoreEncoding* enc, E
 }
 
 int json_serialize_value(QoreString& str, QoreValue data, int indent, ExceptionSink* xsink) {
-    QoreSandboxManagerHelper smh;
+    // nesting and interrupt limits of the governing sandbox; not a policy check
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::All);
     return do_json_value(&str, data, indent, 0, smh.get(), xsink);
 }
 
 int json_serialize_list(QoreString& str, const QoreListNode* l, int indent, ExceptionSink* xsink,
         unsigned offset) {
     assert(l);
-    QoreSandboxManagerHelper smh;
+    // nesting and interrupt limits of the governing sandbox; not a policy check
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::All);
     return do_json_list(xsink, &str, l, indent, 0, smh.get(), offset);
 }

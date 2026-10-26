@@ -122,7 +122,8 @@ normally don't need these — use `qore_check_cancel()` instead.
 ```cpp
 // QoreSandboxManagerHelper — RAII access to the program's sandbox manager.
 // Acquires a strong reference under lock, preventing use-after-free.
-QoreSandboxManagerHelper smh;
+// Interrupts and cancel callbacks use the governing sandbox (All); policy checks use Policy.
+QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::All);
 if (smh) {
     smh->isInterruptRequested();          // non-throwing check
     smh->checkIOInterrupt(xsink, "op");   // throwing check
@@ -201,7 +202,7 @@ public:
         }
 
         // Register cancel callback (RAII)
-        QoreSandboxManagerHelper smh;
+        QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::All);
         if (smh) {
             smh->registerCancelCallback(this, [this]() -> bool {
                 db_cancel_query(handle);
@@ -227,7 +228,7 @@ For cleaner code, create an RAII helper class (as done in module-oracle, module-
 
 ```cpp
 class MyCancelHelper {
-    QoreSandboxManagerHelper smh;
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::All);
 
 public:
     MyCancelHelper(db_handle_t* handle) {
@@ -621,7 +622,7 @@ bool qore_check_cancel(ExceptionSink* xsink, const char* operation) {
     }
 
     // 2. Check program-level interrupt
-    QoreSandboxManagerHelper smh;
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::All);
     if (smh && smh->checkIOInterrupt(xsink, operation)) {
         return true;
     }

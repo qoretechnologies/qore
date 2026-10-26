@@ -37,6 +37,16 @@
     previously only code defined in the sandboxed %Program was checked.  Trusted code under the barrier is
     unaffected (<a href="https://github.com/qoretechnologies/qore/issues/5514">issue 5514</a>).
 
+    Code run with the system policy (@ref Qore::SandboxManager::createSystemPolicyCall() and
+    @ref Qore::SandboxManager::callWithSystemPolicy()) can now use the global filesystem functions such as
+    @ref Qore::stat() "stat()", @ref Qore::is_writable() "is_writable()", @ref Qore::rename() "rename()",
+    @ref Qore::unlink() "unlink()" and @ref Qore::mkdir() "mkdir()", @ref Qore::system() "system()" and
+    @ref Qore::exec() "exec()", and the file access of the \c i18n, \c json and \c krb5 modules, as it can
+    @ref Qore::File "File", @ref Qore::Dir "Dir" and @ref Qore::Socket "Socket"; they were checked against the
+    sandboxed caller's policy instead.  The C++ API's \c QoreSandboxManagerHelper constructor without a purpose is
+    deprecated: a module names \c QoreSandboxManagerHelper::Policy for a policy check and
+    \c QoreSandboxManagerHelper::All for interrupts and limits.
+
     Connection schemes, their setup messages, connection options and allowed values now have source-owned
     translation catalogs. Unchanged HTTP options reused by REST and other schemes share their original
     identities; changing a default preserves the identity, while changing a field's wording gives it a new

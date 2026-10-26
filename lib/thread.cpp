@@ -6318,8 +6318,8 @@ bool qore_check_cancel(ExceptionSink* xsink, const char* operation) {
         return true;
     }
 
-    // check program-level interrupt
-    QoreSandboxManagerHelper smh;
+    // check program-level interrupt: the governing sandbox, never suppressed by a policy barrier
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::All);
     if (smh) {
         if (xsink) {
             if (smh->checkIOInterrupt(xsink, operation)) {

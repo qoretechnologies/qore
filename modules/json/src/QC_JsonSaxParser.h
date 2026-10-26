@@ -74,7 +74,8 @@ private:
         int column;
         int depth;
         int iteration;              //!< counter for interrupt checks
-        QoreSandboxManagerHelper smh; //!< cached sandbox manager helper (RAII ref-counted)
+        //! the governing sandbox (RAII ref-counted), for its nesting and interrupt limits; not a policy check
+        QoreSandboxManagerHelper smh{QoreSandboxManagerHelper::All};
         class JsonStreamReader* reader;
         ResolvedCallReferenceNode* callback;
         ExceptionSink* xsink;

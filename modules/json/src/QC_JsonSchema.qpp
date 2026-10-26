@@ -319,16 +319,15 @@ static JsonSchema JsonSchema::load(string location) [flags=RET_VALUE_ONLY;dom=FI
         return QoreValue();
     }
 
-    // Check sandbox restrictions (only when sandbox active)
-    QoreSandboxManagerHelper smh;
-    if (smh) {
-        // Check for interrupt
-        if (qore_check_cancel(xsink, "loading JSON schema file")) {
-            return QoreValue();
-        }
-
-        // Check filesystem sandbox permissions
-        if (!smh->checkFilesystemAccess(location->c_str(), QSEC_READ, xsink)) {
+    // the limits of the governing sandbox (only when a sandbox is active)
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::All);
+    if (smh && qore_check_cancel(xsink, "loading JSON schema file")) {
+        return QoreValue();
+    }
+    // the filesystem policy, which a system-policy capability does not inherit from its sandboxed caller
+    {
+        QoreSandboxManagerHelper policy(QoreSandboxManagerHelper::Policy);
+        if (policy && !policy->checkFilesystemAccess(location->c_str(), QSEC_READ, xsink)) {
             return QoreValue();  // Exception already raised
         }
     }

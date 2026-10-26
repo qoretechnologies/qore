@@ -87,7 +87,25 @@ A Qore-language (`.qm`) module executes its functions/methods in the **module's 
 source constants and other initialization execute under the same policy. Compiled modules
 can have shared module Programs and therefore cannot retain one importing user's manager.
 
-For ordinary module calls, the no-arg `QoreSandboxManagerHelper smh;` also walks the
+Every `QoreSandboxManagerHelper` names its purpose; the no-argument constructor is deprecated, because the two
+purposes resolve differently inside a system-policy capability (`SandboxManager::createSystemPolicyCall()`, which
+pushes a policy barrier):
+
+- `QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy)` for every filesystem, network or process
+  **policy** check (`checkFilesystemAccess()`, `checkNetworkAccess()`, `checkNetworkBind()`, and the policy of
+  `filesystem()` and `network()`): resolution stops at the barrier, so a capability is subject to the system policy,
+  not to its sandboxed caller's; Programs entered inside the barrier (a callback into sandboxed code) are still
+  governed by their own managers;
+- `QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::All)` for the **governing** sandbox: interrupts and
+  force-termination, cancel callbacks, resource limits such as nesting depth, and whether a sandbox governs the
+  thread at all (for example, running a child process in its own process group), none of which a capability
+  suppresses.
+
+A policy check made with the governing manager denies a capability what the system policy allows; that is how
+`stat()`, `is_writable()`, `rename()` and the other global filesystem functions were denied in a capability while
+`File` and `Dir` were allowed (`examples/test/qore/security/sandbox-capability-filesystem.qtest`).
+
+For ordinary module calls, both purposes also walk the
 thread's **program-context (call) stack** from the innermost (current) program outward
 through each enclosing caller, and uses the first program that has an active manager. This
 is what makes the rule above hold for both source and compiled modules: when sandboxed
@@ -269,8 +287,8 @@ Search for these patterns that require filesystem security checks:
 #include <qore/QoreSandboxManager.h>
 
 int myFileOperation(const char* path, ExceptionSink* xsink) {
-    // Acquire sandbox manager (RAII, ref-counted, safe during program cleanup)
-    QoreSandboxManagerHelper smh;
+    // Acquire sandbox manager for a policy check (RAII, ref-counted, safe during program cleanup)
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
 
     if (smh) {
         QoreFilesystemSecurityManager* fs = smh->getFilesystemSecurityManager();
@@ -361,7 +379,7 @@ Search for these patterns that require network security checks:
 #include <qore/QoreSandboxManager.h>
 
 int myConnectOperation(const char* hostname, int port, ExceptionSink* xsink) {
-    QoreSandboxManagerHelper smh;
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
 
     if (smh) {
         QoreNetworkSecurityManager* net = smh->getNetworkSecurityManager();
@@ -495,7 +513,8 @@ Resource limits are enforced by the Qore runtime, but modules can contribute to 
 ```cpp
 // For tight loops that may run long, periodically check for timeout
 void processLargeDataset(ExceptionSink* xsink) {
-    QoreSandboxManagerHelper smh;
+    // the governing sandbox: its interrupts apply inside a system-policy capability too
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::All);
 
     int iteration = 0;
     for (auto& item : large_dataset) {
@@ -613,7 +632,7 @@ class DatabaseQuery {
 
 public:
     int execute(const char* sql, ExceptionSink* xsink) {
-        QoreSandboxManagerHelper smh;
+        QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::All);
 
         if (!smh) {
             return db_query_sync(handle, sql);  // Fast path
@@ -837,8 +856,9 @@ These are lower risk but should still be addressed for defense in depth:
 #include <qore/QoreSandboxManager.h>
 
 // RAII helper for safe, ref-counted access to the sandbox manager
-QoreSandboxManagerHelper smh;          // current program
-QoreSandboxManagerHelper smh(pgm);     // specific program
+QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);   // policy checks of the current thread
+QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::All);      // the governing sandbox (interrupts, limits)
+QoreSandboxManagerHelper smh(pgm);                                 // specific program
 
 // Convenience function for interrupt checking
 bool qore_check_cancel(ExceptionSink* xsink = nullptr);

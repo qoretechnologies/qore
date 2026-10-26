@@ -578,7 +578,7 @@ nothing exec(string command) [flags=NAMED_ARGS;dom=EXTERNAL_PROCESS,PROCESS] {
       return QoreValue();
    }
    ExecArgList exec_args(command->c_str());
-   QoreSandboxManagerHelper smh;
+   QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
    if (smh && !smh->checkFilesystemAccess(exec_args.getFile(), QSEC_EXECUTE, xsink)) {
       return QoreValue();
    }
@@ -632,9 +632,12 @@ int system(string command) [flags=NAMED_ARGS;dom=EXTERNAL_PROCESS] {
     if (q_check_no_nul(command->c_str(), command->size(), "command", "commands", "SYSTEM-ERROR", xsink)) {
         return -1;
     }
-    QoreSandboxManagerHelper smh;
-    const bool use_pgroup = (bool)smh;
+    // the child runs in its own process group when a sandbox governs the thread, so that interrupting the sandbox
+    // ends the whole command; this is not a policy check, and a system-policy capability does not change it
+    QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::All);
+    const bool use_pgroup = (bool)governing;
 #ifndef _Q_WINDOWS
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     if (smh && !smh->checkFilesystemAccess("/bin/sh", QSEC_EXECUTE, xsink)) {
         return -1;
     }

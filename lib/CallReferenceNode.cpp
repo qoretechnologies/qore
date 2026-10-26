@@ -1252,7 +1252,8 @@ const ResolvedCallReferenceNode* qore_get_sandbox_bound_callback(const AbstractQ
 ResolvedCallReferenceNode* qore_bind_sandbox_call(const ResolvedCallReferenceNode* callback, bool trusted,
         ExceptionSink* xsink) {
     if (trusted) {
-        QoreSandboxManagerHelper governing;
+        // any governing sandbox, whatever policy barrier is active: a capability is registered by trusted code only
+        QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::All);
         if (governing) {
             xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "a system-policy callback must be registered "
                 "outside sandbox execution and must not have sandbox provenance");

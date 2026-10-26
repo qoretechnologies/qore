@@ -390,7 +390,7 @@ static bool krb5_cache_backend_is_non_filesystem(const char* type) {
 
 static bool krb5_check_cache_access(krb5_context ctx, krb5_ccache cache, int mode, ExceptionSink* xsink,
         const char* context) {
-    QoreSandboxManagerHelper smh;
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     if (!smh) {
         return true;
     }
@@ -430,7 +430,7 @@ static const char* krb5_keytab_filesystem_path(const char* full_name) {
 
 static bool krb5_check_keytab_access(krb5_context ctx, krb5_keytab keytab, int mode, ExceptionSink* xsink,
         const char* context) {
-    QoreSandboxManagerHelper smh;
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     if (!smh) {
         return true;
     }
@@ -462,7 +462,7 @@ static bool krb5_check_keytab_access(krb5_context ctx, krb5_keytab keytab, int m
 }
 
 static bool krb5_network_sandbox_allows_unmanaged_library_io(ExceptionSink* xsink, const char* context) {
-    QoreSandboxManagerHelper smh;
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     if (!smh) {
         return true;
     }

@@ -1,0 +1,261 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires FsUtil
+%exec-class SandboxCapabilityFilesystemTest
+
+#! A system-policy capability called from a default-deny sandbox runs every global filesystem function
+/** Each function is run by the same trusted code twice from a sandboxed Program that denies all filesystem
+    access: through a capability (SandboxManager::createSystemPolicyCall()), where it is subject to the system policy
+    and succeeds, and directly, where it inherits the sandbox's policy and is denied.
+*/
+class SandboxCapabilityFilesystemTest inherits QUnit::Test {
+    private {
+        #! the fixture directory
+        string dir;
+        #! the paths of the fixture
+        hash<string, string> fx;
+        #! the trusted code, as a capability
+        code capability;
+        #! the default-deny sandbox
+        Program sandbox;
+        #! the working directory of the process
+        string cwd;
+    }
+
+    #! The functions run, and what each one returns in the fixture when it is allowed
+    const Functions = (
+        "is_file", "is_dir", "is_socket", "is_pipe", "is_cdev", "is_bdev", "is_dev", "is_link", "is_readable",
+        "is_writable", "is_writeable", "is_executable", "stat", "lstat", "hstat", "hlstat", "statvfs", "glob",
+        "realpath", "readlink", "chmod", "chown", "lchown", "chdir", "rename", "unlink", "mkdir", "mkdir_ex",
+        "rmdir", "mkfifo", "symlink", "system", "tmp_location",
+    );
+
+    constructor() : QUnit::Test("sandbox capability filesystem", "1.0", \ARGV) {
+        addTestCase("every global filesystem function runs in a capability and is denied outside it",
+            \functionsTest());
+        addTestCase("a capability does not lift the sandbox from the code that calls it", \callerTest());
+        addTestCase("every sandbox manager helper in the source tree names its purpose", \purposeTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        cwd = getcwd();
+        dir = make_tmp_dir("qore-capability-fs-");
+        fx = {
+            "file": dir + DirSep + "file",
+            "exec": dir + DirSep + "exec",
+            "link": dir + DirSep + "link",
+            "rename_from": dir + DirSep + "rename-from",
+            "rename_to": dir + DirSep + "rename-to",
+            "unlink": dir + DirSep + "unlink",
+            "mkdir": dir + DirSep + "mkdir",
+            "mkdir_ex": dir + DirSep + "mkdir-ex",
+            "rmdir": dir + DirSep + "rmdir",
+            "fifo": dir + DirSep + "fifo",
+            "symlink": dir + DirSep + "symlink",
+        };
+        foreach string name in (("file", "exec", "rename_from", "unlink")) {
+            File f();
+            f.open2(fx{name}, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(name + "\n");
+        }
+        chmod(fx.exec, 0755);
+        symlink(fx.file, fx.link);
+        mkdir(fx.rmdir);
+
+        capability = SandboxManager::createSystemPolicyCall(\SandboxCapabilityFilesystemTest::run());
+        SandboxManager manager();
+        manager.setFilesystemDefaultPolicy(False);
+        sandbox = new Program(PO_MODERN);
+        sandbox.setSandboxManager(manager);
+        sandbox.parse("auto sub run(code c, string name, hash<string, string> fx, string dir) { "
+            "return c(name, fx, dir); }", "sandbox");
+    }
+
+    globalTearDown() {
+        chdir(cwd);
+        remove_tree(dir);
+    }
+
+    #! Runs a filesystem function in the fixture
+    static auto run(string name, hash<string, string> fx, string dir) {
+        switch (name) {
+            case "is_file": return is_file(fx.file);
+            case "is_dir": return is_dir(dir);
+            case "is_socket": return is_socket(fx.file);
+            case "is_pipe": return is_pipe(fx.file);
+            case "is_cdev": return is_cdev(fx.file);
+            case "is_bdev": return is_bdev(fx.file);
+            case "is_dev": return is_dev(fx.file);
+            case "is_link": return is_link(fx.link);
+            case "is_readable": return is_readable(fx.file);
+            case "is_writable": return is_writable(dir);
+            case "is_writeable": return is_writeable(dir);
+            case "is_executable": return is_executable(fx.exec);
+            case "stat": return stat(fx.file)[7];
+            case "lstat": return lstat(fx.link)[7] != stat(fx.file)[7];
+            case "hstat": return hstat(fx.file).type;
+            case "hlstat": return hlstat(fx.link).type;
+            case "statvfs": return statvfs(dir).namemax > 0;
+            case "glob": return glob(dir + DirSep + "fil*");
+            case "realpath": return realpath(fx.link) == realpath(fx.file);
+            case "readlink": return readlink(fx.link);
+            case "chmod": return chmod(fx.file, 0640);
+            case "chown": return chown(fx.file);
+            case "lchown": return lchown(fx.link);
+            case "chdir": return chdir(dir);
+            case "rename": rename(fx.rename_from, fx.rename_to); return is_file(fx.rename_to);
+            case "unlink": return unlink(fx.unlink);
+            case "mkdir": return mkdir(fx.mkdir);
+            case "mkdir_ex": mkdir_ex(fx.mkdir_ex); return is_dir(fx.mkdir_ex);
+            case "rmdir": return rmdir(fx.rmdir);
+            case "mkfifo": return mkfifo(fx.fifo);
+            case "symlink": symlink(fx.file, fx.symlink); return is_link(fx.symlink);
+            case "system": return system("exit 0");
+            case "tmp_location": return tmp_location().val();
+        }
+        throw "TEST-ERROR", sprintf("unknown function %y", name);
+    }
+
+    #! What each function returns in the fixture when it is allowed
+    private hash<auto> expectedResults() {
+        return {
+            "is_file": True, "is_dir": True, "is_socket": False, "is_pipe": False, "is_cdev": False,
+            "is_bdev": False, "is_dev": False, "is_link": True, "is_readable": True, "is_writable": True,
+            "is_writeable": True, "is_executable": True, "stat": 5, "lstat": True, "hstat": "REGULAR",
+            "hlstat": "SYMBOLIC-LINK", "statvfs": True, "glob": (fx.file,), "realpath": True, "readlink": fx.file,
+            "chmod": 0, "chown": 0, "lchown": 0, "chdir": 0, "rename": True, "unlink": 0, "mkdir": 0,
+            "mkdir_ex": True, "rmdir": 0, "mkfifo": 0, "symlink": True, "system": 0, "tmp_location": True,
+        };
+    }
+
+    #! Every function is denied when the trusted code is called directly, and runs when it is called as a capability
+    functionsTest() {
+        hash<auto> want = expectedResults();
+        assertEq(sort(keys want), sort(Functions), "every function has an expected result");
+        foreach string name in (Functions) {
+            # the same trusted code, called directly from the sandbox: it inherits the sandbox's policy
+            assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING, \sandbox.callFunction(),
+                ("run", \SandboxCapabilityFilesystemTest::run(), name, fx, dir), name + " is denied outside");
+            # nothing was changed by the denied call
+            assertEq(cwd, getcwd(), name + ": the denied call does not change the working directory");
+        }
+        assertTrue(is_file(fx.rename_from), "the denied rename leaves the file");
+        assertTrue(is_file(fx.unlink), "the denied unlink leaves the file");
+        assertTrue(is_dir(fx.rmdir), "the denied rmdir leaves the directory");
+        assertFalse(is_dir(fx.mkdir), "the denied mkdir creates nothing");
+        assertFalse(is_dir(fx.mkdir_ex), "the denied mkdir_ex creates nothing");
+        assertFalse(is_link(fx.symlink), "the denied symlink creates nothing");
+        assertFalse(exists hlstat(fx.fifo), "the denied mkfifo creates nothing");
+
+        # every function is run before the results are compared, so that one report lists every failure
+        hash<string, auto> results;
+        list<string> errors = ();
+        string chdir_cwd;
+        foreach string name in (Functions) {
+            try {
+                results{name} = sandbox.callFunction("run", capability, name, fx, dir);
+            } catch (hash<ExceptionInfo> ex) {
+                errors += sprintf("%s: %s", name, ex.err);
+            }
+            if (name == "chdir") {
+                chdir_cwd = getcwd();
+                chdir(cwd);
+            }
+        }
+        assertEq((), errors, "no function raises an exception in a capability");
+        assertEq(want, results, "every function returns its result in a capability");
+        assertEq(realpath(dir), realpath(chdir_cwd), "chdir in a capability changes the working directory");
+        assertFalse(is_file(fx.rename_from), "rename in a capability moves the file");
+        assertFalse(is_file(fx.unlink), "unlink in a capability removes the file");
+        assertFalse(is_dir(fx.rmdir), "rmdir in a capability removes the directory");
+        assertTrue(is_dir(fx.mkdir), "mkdir in a capability creates the directory");
+        assertEq("FIFO", hlstat(fx.fifo).type, "mkfifo in a capability creates the pipe");
+        assertEq(0640, hstat(fx.file).mode & 0777, "chmod in a capability changes the mode");
+    }
+
+    #! Code that the sandbox runs itself, and code that a capability calls back into the sandbox, stays sandboxed
+    callerTest() {
+        Program p(PO_MODERN);
+        SandboxManager manager();
+        manager.setFilesystemDefaultPolicy(False);
+        p.setSandboxManager(manager);
+        p.parse("auto sub stat_it(string path) { return hstat(path); }"
+            "code sub ref() { return \\stat_it(); }"
+            "auto sub through(code c, code back, string path) { return c(back, path); }", "sandbox-caller");
+        assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING, \p.callFunction(), ("stat_it", fx.file),
+            "the sandbox's own code is denied");
+        code call_back = SandboxManager::createSystemPolicyCall(auto sub (code back, string path) {
+            return back(path);
+        });
+        code back = p.callFunction("ref");
+        assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING, \p.callFunction(), ("through", call_back, back, fx.file),
+            "sandboxed code that a capability calls back is denied");
+        code direct = SandboxManager::createSystemPolicyCall(auto sub (code back, string path) {
+            return hstat(path).type;
+        });
+        assertEq("REGULAR", p.callFunction("through", direct, back, fx.file),
+            "the capability's own code is allowed");
+    }
+
+    #! A helper without a purpose resolves the governing sandbox, which is wrong for a policy check in a capability
+    /** The no-argument constructor is deprecated in its documentation; this keeps the source tree free of it
+    */
+    purposeTest() {
+        string root = normalize_dir(get_script_dir() + "/../../../..");
+        if (!is_dir(root + "/lib") || !is_file(root + "/include/qore/QoreSandboxManager.h")) {
+            testSkip("the Qore source tree is not available");
+            return;
+        }
+        list<string> found = ();
+        int files = 0;
+        foreach string dir in ((root + "/lib", root + "/include/qore", root + "/modules")) {
+            foreach string file in (sourceFiles(dir)) {
+                ++files;
+                string text = ReadOnlyFile::readTextFile(file);
+                int line = 0;
+                foreach string l in (text.split("\n")) {
+                    ++line;
+                    # the declaration and definition of the deprecated constructor itself
+                    if (l =~ /QoreSandboxManagerHelper::QoreSandboxManagerHelper\(\)/
+                            || l =~ /^\s*QoreSandboxManagerHelper\(\);/) {
+                        continue;
+                    }
+                    if (l =~ /QoreSandboxManagerHelper\s+[A-Za-z_][A-Za-z_0-9]*\s*(;|\{\s*\}|\(\s*\))/
+                            || l =~ /(?<![~:])QoreSandboxManagerHelper\(\s*\)/) {
+                        found += sprintf("%s:%d: %s", file.substr(root.size() + 1), line, trim(l));
+                    }
+                }
+            }
+        }
+        assertGt(500, files, "the C++ sources of the library and the modules are scanned");
+        assertEq((), found, "every QoreSandboxManagerHelper names Policy or All");
+    }
+
+    #! Returns the C++ and qpp sources below a directory
+    private list<string> sourceFiles(string dir) {
+        list<string> rv = ();
+        Dir d();
+        if (!d.chdir(dir)) {
+            return rv;
+        }
+        foreach string file in (d.listFiles()) {
+            if (file =~ /\.(cpp|h|qpp|cc)$/) {
+                rv += dir + "/" + file;
+            }
+        }
+        foreach string sub_dir in (d.listDirs()) {
+            # build trees and fetched third-party sources are not Qore's
+            if (sub_dir =~ /^(build|third[-_]party|vendor|external|_deps)/) {
+                continue;
+            }
+            rv += sourceFiles(dir + "/" + sub_dir);
+        }
+        return rv;
+    }
+}

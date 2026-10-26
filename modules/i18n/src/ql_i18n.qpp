@@ -947,7 +947,7 @@ static std::string i18n_join_catalog_path(const std::string& dir, const std::str
 // back to the per-path checks it performs without an index, so an index never changes which catalog files a program
 // can see.
 static bool i18n_catalog_dir_readable(const std::string& dir) {
-    QoreSandboxManagerHelper smh;
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     if (!smh) {
         return true;
     }
@@ -960,7 +960,7 @@ static bool i18n_catalog_dir_readable(const std::string& dir) {
 
 static bool i18n_regular_file_exists(const std::string& dir, const std::string& name, const std::string& path,
         I18nCatalogDirIndex* index, ExceptionSink* xsink) {
-    QoreSandboxManagerHelper smh;
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     if (smh && !smh->checkFilesystemAccess(path.c_str(), QSEC_READ, xsink)) {
         return false;
     }
@@ -1003,7 +1003,7 @@ static bool i18n_append_indexed_fragment_files(std::vector<std::string>& files, 
     }
 
     // the snapshot returns names in filename order, which defines fragment precedence within one search root
-    QoreSandboxManagerHelper smh;
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     for (size_t i = 0; i < names.size(); ++i) {
         if (i && !(i % 100) && qore_check_cancel(xsink, "discovering i18n catalog fragments")) {
             return false;
@@ -1020,7 +1020,7 @@ static bool i18n_append_indexed_fragment_files(std::vector<std::string>& files, 
 
 static bool i18n_append_catalog_fragment_files(std::vector<std::string>& files, const std::string& path,
         I18nCatalogDirIndex* index, ExceptionSink* xsink) {
-    QoreSandboxManagerHelper smh;
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     if (smh && !smh->checkFilesystemAccess(path.c_str(), QSEC_READ, xsink)) {
         return false;
     }
@@ -1169,7 +1169,7 @@ static bool i18n_catalog_locale_filename(const std::string& raw, std::string& lo
 }
 
 static bool i18n_require_catalog_directory_access(const std::string& path, ExceptionSink* xsink) {
-    QoreSandboxManagerHelper smh;
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     return !smh || smh->checkFilesystemAccess(path.c_str(), QSEC_READ, xsink);
 }
 
