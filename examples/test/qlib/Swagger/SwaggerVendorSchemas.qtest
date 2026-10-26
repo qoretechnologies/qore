@@ -32,6 +32,8 @@ class SwaggerVendorSchemasTest inherits QUnit::Test {
         addTestCase("scalar value of a structured enumeration", \scalarValueOfStructuredEnum());
         addTestCase("multiple path parameters", \multiplePathParameters());
         addTestCase("object parameter outside the body", \objectNonBodyParameter());
+        addTestCase("undeclared required property", \undeclaredRequiredProperty());
+        addTestCase("undeclared required property in a composition", \undeclaredRequiredComposition());
         set_return_value(main());
     }
 
@@ -300,6 +302,90 @@ class SwaggerVendorSchemasTest inherits QUnit::Test {
         }
         assertRegex("^INVALID-FIELD-VALUE: .*invalid parameter type value passed: \"map\"", desc);
         assertNRegex("LM_ACCEPT_QUERY_OBJECTS", desc);
+    }
+
+    #! Pipedrive's PUT /subscriptions/installment/{id}: the body requires "id", which it does not declare
+    undeclaredRequiredProperty() {
+        SwaggerSchema s = getSchema({
+            "/installment": {"put": getOp("update", ({
+                "name": "body",
+                "in": "body",
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "payments": {"type": "array", "items": {"type": "object"}},
+                    },
+                    "required": ("id", "payments"),
+                },
+            },))},
+        }, {"consumes": ("application/json",)});
+        hash<auto> hdr = {"content-type": "application/json"};
+        # the property is required and accepts any value
+        hash<RestRequestServerInfo> req = s.parseRequest("PUT", "/v1/installment",
+            make_json({"id": 5, "payments": ()}), \hdr);
+        assertEq(5, req.body.id);
+        req = s.parseRequest("PUT", "/v1/installment", make_json({"id": {"x": "y"}, "payments": ()}), \hdr);
+        assertEq({"x": "y"}, req.body.id);
+        assertThrows("SCHEMA-VALIDATION-ERROR", "missing required properties.*id", \s.parseRequest(),
+            ("PUT", "/v1/installment", make_json({"payments": ()}), \hdr));
+
+        # it is a required field of type "any"
+        SwaggerDataProvider dp(s);
+        HashDataType body = cast<HashDataType>(dp.getChildProviderPath("installment/PUT").getRequestType()
+            .getField("body").getType());
+        AbstractDataField id = body.getField("id");
+        # a field of type "any" accepts no value, so its attributes say that it is required
+        assertEq({"preselected": True, "required": True}, id.getConfigInfo().attr);
+        assertEq("any", id.getType().getName());
+        assertNothing(body.getField("payments").getConfigInfo().attr);
+        assertEq(("payments", "id"), keys body.getFields());
+
+        # additional properties accept it without a property of its own
+        SwaggerSchema open = getSchema({}, {"definitions": {"Open": {
+            "type": "object",
+            "properties": {"a": {"type": "string"}},
+            "additionalProperties": {"type": "integer"},
+            "required": ("b",),
+        }}});
+        assertEq(("a",), keys open.definitions.Open.properties);
+        assertEq(0, open.definitions.Open.undeclared_required.size());
+
+        # when additional properties are forbidden, no value can have the property
+        assertThrows("INVALID-FIELD-VALUE", "\"additionalProperties\" is false, so no value can have them: "
+            "\\[\"b\"\\]", \SwaggerVendorSchemasTest::getSchema(), ({}, {"definitions": {"Closed": {
+                "type": "object",
+                "properties": {"a": {"type": "string"}},
+                "additionalProperties": False,
+                "required": ("b",),
+            }}}));
+    }
+
+    #! a property that a composed schema declares replaces one that only a "required" list gave
+    undeclaredRequiredComposition() {
+        hash<auto> definitions = {
+            # requires "b", which it does not declare
+            "A": {"type": "object", "properties": {"a": {"type": "string"}}, "required": ("a", "b")},
+            # declares "b"
+            "C": {"type": "object", "properties": {"b": {"type": "integer"}}},
+            "AC": {"allOf": ({"$ref": "#/definitions/A"}, {"$ref": "#/definitions/C"})},
+            "CA": {"allOf": ({"$ref": "#/definitions/C"}, {"$ref": "#/definitions/A"})},
+            # declares "b" itself
+            "OwnB": {
+                "type": "object",
+                "properties": {"b": {"type": "boolean"}},
+                "allOf": ({"$ref": "#/definitions/A"},),
+            },
+        };
+        SwaggerSchema s = getSchema({}, {"definitions": definitions});
+        assertEq({"b": True}, s.definitions.A.undeclared_required);
+        assertEq("any", s.definitions.A.properties.b.type);
+        foreach string n in ("AC", "CA") {
+            SchemaObject so = s.definitions{n};
+            assertEq("integer", so.properties.b.type, n);
+            assertEq(0, so.undeclared_required.size(), n);
+        }
+        assertEq("boolean", s.definitions.OwnB.properties.b.type);
+        assertEq(0, s.definitions.OwnB.undeclared_required.size());
     }
 
     #! a scalar is never equal to an array or object value of an enumeration

@@ -82,6 +82,9 @@ module RestSchemaValidator {
     @section restschemavalidator_relnotes RestSchemaValidator Module Release Notes
 
     @subsection restschemavalidator_2_5 RestSchemaValidator v2.5
+    - a required property that a schema does not declare is a required field of type \c any (see
+      @ref RestSchemaValidator::AbstractRestSchemaObject::undeclared_required "undeclared_required"), and a required
+      field of type \c any is marked required and preselected, as its type accepts no value
     - an enumeration can have array and object values, as JSON Schema allows
       (@ref RestSchemaValidator::AbstractSchemaBase::enumValueList "AbstractSchemaBase::enumValueList"); an array or
       object value is valid when it is equal to one of them, and they are the allowed values of the field
@@ -1377,6 +1380,18 @@ public namespace RestSchemaValidator {
             #! Extension to allow properties to be nullable
             hash<string, bool> nullable_properties;
 
+            #! The required properties that the schema does not declare, which accept any value
+            /** \c required asserts only that a member is present
+                (<a href="https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.4.3">JSON Schema
+                Validation section 5.4.3</a>); it does not require the member to be declared in \c properties.  A
+                required name that neither the schema nor any schema it composes with \c allOf declares is therefore
+                a property with the empty schema: a required field of type \c any.  Such a property is in
+                @ref properties and is named here; a declaration of the name in a composed schema replaces it.
+
+                @since RestSchemaValidator 2.5
+            */
+            hash<string, bool> undeclared_required;
+
             #! Additional properties - MUST be a bool or an AbstractSchemaObject
             auto additionalProperties;
 
@@ -1997,6 +2012,8 @@ public namespace RestSchemaValidator {
         /** A use requiring such a field marks it required and preselected.  A required use of a nullable schema
             has the value type of an optional use, because only the presence of the property is required and an
             explicit \c null is valid, so for it these attributes are the only thing saying the field is required.
+            The same holds for a schema of type \c any, whose type accepts no value, such as a required property
+            that the schema does not declare (see @ref AbstractRestSchemaObject::undeclared_required).
 
             getFieldIntern() and decorateField() both take the attributes from here, so that a field is the same
             whichever use built the canonical field.
@@ -2008,7 +2025,9 @@ public namespace RestSchemaValidator {
             @since RestSchemaValidator 2.5
         */
         private *hash<auto> getFieldPresenceInfo(bool required) {
-            if (required && (nullable || type == "object" || hasSchemaCompositionFeatures())) {
+            # a field of type "any" accepts no value, so as with a nullable one, only these attributes say that it
+            # is required
+            if (required && (nullable || type == "object" || type == "any" || hasSchemaCompositionFeatures())) {
                 return {
                     "attr": {
                         "preselected": True,

@@ -5920,21 +5920,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             if (!required && !openapi3.is31OrLater()) {
                 throw "INVALID-FIELD-FORMAT", sprintf("Schema Object %y: field 'required' is an empty list", name);
             }
-            # make sure all required properties are defined
-            #
-            # JSON Schema does not require a "required" name to appear in "properties" - the keyword asserts only
-            # that the member is present - so this is a lint that catches a typo in a document where "properties"
-            # is the complete declaration, and it is skipped where that premise does not hold.
-            #
-            # A composition member is exactly that case: refining a constraint by narrowing one property and
-            # requiring another, while the schema composing it declares them both, is the standard idiom.  Pinecone
-            # writes a document scoring method as an object declaring every property, plus an "anyOf" of four
-            # branches selecting a "type" and requiring the property that type needs; each branch names a property
-            # of its parent, and checking them in isolation rejects a valid document.
-            if (!composed && !additionalProperties && (*list<string> missing = keys (required - keys properties))) {
-                throw "INVALID-FIELD-VALUE", sprintf("Schema Object %y: the following required properties are not "
-                    "defined: %y", name, missing);
-            }
+            # a required name that no schema declares is given a property after "allOf" is merged, below
         }
 
         # OpenAPI 3.0 and 3.1 both define "discriminator" as an object: {propertyName, mapping}; the string form
@@ -6011,6 +5997,21 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
                     foreach hash<auto> i in (member.properties.pairIterator()) {
                         if (!exists properties{i.key}) {
                             properties{i.key} = i.value;
+                            if (member.undeclared_required{i.key}) {
+                                undeclared_required{i.key} = True;
+                            }
+                            continue;
+                        }
+                        # a declared property replaces one that only a "required" list gave, and is never
+                        # replaced by one (see undeclared_required)
+                        if (undeclared_required{i.key}) {
+                            if (!member.undeclared_required{i.key}) {
+                                properties{i.key} = i.value;
+                                remove undeclared_required{i.key};
+                            }
+                            continue;
+                        }
+                        if (member.undeclared_required{i.key}) {
                             continue;
                         }
                         # two members declaring the same *object* property compose it, rather than the
@@ -6033,6 +6034,30 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
                     # an example to a reusable scalar type -- would otherwise leave the schema unconstrained,
                     # discarding the referenced type entirely.
                     adoptScalarTypeFromAllOf();
+                }
+            }
+        }
+
+        # "required" asserts only that a member is present (JSON Schema Validation section 5.4.3); a name that
+        # neither "properties" nor an "allOf" member declares is a property with the empty schema, which accepts
+        # any value (see AbstractRestSchemaObject::undeclared_required).  Additional properties accept it anyway,
+        # unless they are explicitly forbidden, which no value could then satisfy.
+        #
+        # A member of a composition gives no property of its own: refining a constraint by requiring a property
+        # that the schema composing it declares is the standard idiom.  Pinecone writes a document scoring method
+        # as an object declaring every property, plus an "anyOf" of four branches selecting a "type" and requiring
+        # the property that type needs; the required names of "allOf" members are merged into this schema above
+        if (!composed && (*list<string> missing = keys (required - keys properties))) {
+            if (additionalProperties === False) {
+                throw "INVALID-FIELD-VALUE", sprintf("Schema Object %y: the following required properties are not "
+                    "defined, and \"additionalProperties\" is false, so no value can have them: %y", name, missing);
+            }
+            if (!additionalProperties) {
+                foreach string k in (missing) {
+                    properties{k} = SchemaObject::newSchemaObject(k, {}, openapi3, NOTHING, NOTHING,
+                        AbstractRestSchemaObject::childSchemaIdentity(
+                            AbstractRestSchemaObject::childSchemaIdentity(location, "properties"), k));
+                    undeclared_required{k} = True;
                 }
             }
         }

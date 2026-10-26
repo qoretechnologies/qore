@@ -157,6 +157,11 @@ RestHandler handler(NOTHING, swagger);
     - the error for a parameter outside the body with type \c "object", which Swagger 2.0 does not allow, names the
       parse option that accepts it (@ref Swagger::LM_ACCEPT_QUERY_OBJECTS "LM_ACCEPT_QUERY_OBJECTS"), which the
       \c lax_parsing option of a Swagger data provider and the \c swagger_lax_parsing option of a REST connection set
+    - a name in the \c required list of a schema that its \c properties do not declare, which JSON Schema allows, is a
+      required property of type \c any instead of making the schema fail to load with \c INVALID-FIELD-VALUE, as
+      with Pipedrive's subscription updates; a property that a schema composed with \c allOf declares replaces it,
+      and a schema whose \c additionalProperties is \c false is still refused, as no value could satisfy it (see
+      @ref RestSchemaValidator::AbstractRestSchemaObject::undeclared_required "undeclared_required")
     - a schema object whose document has been destroyed throws \c SCHEMA-DOCUMENT-DESTROYED when it is asked to build
       a type, instead of failing with an unrelated error; the types it has already built keep working (see
       @ref Swagger::SchemaObject "SchemaObject")
@@ -4341,7 +4346,20 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
                     }
                     if (so) {
                         allOf[allOf.size()] = so;
-                        map properties{$1.key} = $1.value, so.properties.pairIterator(), !properties.hasKey($1.key);
+                        # a property of the member is added unless this schema already has it; a declared one
+                        # replaces one that only a "required" list gave (see undeclared_required)
+                        foreach hash<auto> i in (so.properties.pairIterator()) {
+                            if (properties.hasKey(i.key)
+                                && (!undeclared_required{i.key} || so.undeclared_required{i.key})) {
+                                continue;
+                            }
+                            properties{i.key} = i.value;
+                            if (so.undeclared_required{i.key}) {
+                                undeclared_required{i.key} = True;
+                            } else {
+                                remove undeclared_required{i.key};
+                            }
+                        }
                         nullable_properties += so.nullable_properties;
                         if (!exists additionalProperties && exists so.additionalProperties) {
                             additionalProperties = so.additionalProperties;
@@ -4367,10 +4385,20 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         if (optional_field(objType, oh, "required", SwaggerListToStringSet, \required, opt_flags)) {
             if (!required)
                 throw "INVALID-FIELD-FORMAT", sprintf("Schema Object %y: field 'required' is an empty list", name);
-            # make sure all required properties are defined
-            if (!additionalProperties && (*list<string> missing = keys (required - keys properties))) {
-                throw "INVALID-FIELD-VALUE", sprintf("Schema Object %y: the following required properties are not "
-                    "defined: %y", name, missing);
+            # "required" asserts only that a member is present; a name that neither "properties" nor an "allOf"
+            # member declares is a property with the empty schema, which accepts any value (see
+            # AbstractRestSchemaObject::undeclared_required).  Additional properties accept it anyway, unless they
+            # are explicitly forbidden, which no value could then satisfy
+            if (*list<string> missing = keys (required - keys properties)) {
+                if (additionalProperties === False) {
+                    throw "INVALID-FIELD-VALUE", sprintf("Schema Object %y: the following required properties are "
+                        "not defined, and \"additionalProperties\" is false, so no value can have them: %y", name,
+                        missing);
+                }
+                if (!additionalProperties) {
+                    addProperties((map {$1: {}}, missing), opt_flags);
+                    map undeclared_required{$1} = True, missing;
+                }
             }
         }
 
@@ -4410,6 +4438,8 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             properties{k} = SchemaObject::newSchemaObject(k, val, swagger, NOTHING,
                 AbstractRestSchemaObject::childSchemaIdentity(
                     AbstractRestSchemaObject::childSchemaIdentity(schema_identity, "properties"), k));
+            # a declared property replaces one that only a "required" list gave
+            remove undeclared_required{k};
             if (!properties{k}.nullable && (val."x-nullable" || (opt_flags & LM_OPTIONAL_REF_PROPERTIES))) {
                 nullable_properties{k} = True;
             }

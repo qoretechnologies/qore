@@ -31,16 +31,22 @@ class OpenApi3VendorSchemasTest inherits QUnit::Test {
         addTestCase("object enumeration values", \objectEnumValues());
         addTestCase("scalar value of a structured enumeration", \scalarValueOfStructuredEnum());
         addTestCase("object query parameter", \objectQueryParameter());
+        addTestCase("undeclared required property", \undeclaredRequiredProperty());
+        addTestCase("undeclared required property in a composition", \undeclaredRequiredComposition());
         set_return_value(main());
     }
 
     #! returns an OpenAPI 3 schema with the given paths
-    private static OpenApi3Schema getSchema(hash<auto> paths) {
-        return OpenApi3Loader::fromString(make_json({
+    private static OpenApi3Schema getSchema(hash<auto> paths, *hash<auto> schemas) {
+        hash<auto> h = {
             "openapi": "3.0.3",
             "info": {"title": "vendor", "version": "1"},
             "paths": paths,
-        }));
+        };
+        if (schemas) {
+            h.components.schemas = schemas;
+        }
+        return OpenApi3Loader::fromString(make_json(h));
     }
 
     #! returns an operation with the given operation ID, parameters and request body
@@ -271,5 +277,105 @@ class OpenApi3VendorSchemasTest inherits QUnit::Test {
         assertEq("boards", cast<OpenApi3RequestDataProvider>(op).op.operationId);
         AbstractDataField fields = op.getRequestType().getField("query").getType().getField("fields");
         assertEq(NT_HASH, fields.getType().getBaseTypeCode());
+    }
+
+    #! Pipedrive's PUT /subscriptions/installment/{id}: the body requires "id", which it does not declare
+    undeclaredRequiredProperty() {
+        OpenApi3Schema s = getSchema({
+            "/installment": {"put": getOp("update", NOTHING, {
+                "type": "object",
+                "properties": {
+                    "payments": {"type": "array", "items": {"type": "object"}},
+                },
+                "required": ("id", "payments"),
+            })},
+        });
+        hash<auto> hdr = {"content-type": "application/json"};
+        # the property is required and accepts any value
+        hash<RestRequestServerInfo> req = s.parseRequest("PUT", "/installment",
+            make_json({"id": 5, "payments": ()}), \hdr);
+        assertEq(5, req.body.id);
+        req = s.parseRequest("PUT", "/installment", make_json({"id": {"x": "y"}, "payments": ()}), \hdr);
+        assertEq({"x": "y"}, req.body.id);
+        assertThrows("SCHEMA-VALIDATION-ERROR", "id", \s.parseRequest(),
+            ("PUT", "/installment", make_json({"payments": ()}), \hdr));
+
+        # it is a required field of type "any"
+        OpenApi3DataProvider dp(s);
+        AbstractDataProviderType body = dp.getChildProviderPath("installment/PUT").getRequestType()
+            .getField("body").getType();
+        AbstractDataField id = body.getField("id");
+        # a field of type "any" accepts no value, so its attributes say that it is required
+        assertEq({"preselected": True, "required": True}, id.getConfigInfo().attr);
+        assertEq("any", id.getType().getName());
+        assertEq(("payments", "id"), keys body.getFields());
+
+        # additional properties accept it without a property of its own
+        OpenApi3Schema open = getSchema({}, {"Open": {
+            "type": "object",
+            "properties": {"a": {"type": "string"}},
+            "additionalProperties": {"type": "integer"},
+            "required": ("b",),
+        }});
+        assertEq(("a",), keys open.components.schemas.Open.properties);
+        assertEq(0, open.components.schemas.Open.undeclared_required.size());
+
+        # when additional properties are forbidden, no value can have the property
+        assertThrows("INVALID-FIELD-VALUE", "\"additionalProperties\" is false, so no value can have them: "
+            "\\[\"b\"\\]", \OpenApi3VendorSchemasTest::getSchema(), ({}, {"Closed": {
+                "type": "object",
+                "properties": {"a": {"type": "string"}},
+                "additionalProperties": False,
+                "required": ("b",),
+            }}));
+    }
+
+    #! a property that a composed schema declares replaces one that only a "required" list gave
+    undeclaredRequiredComposition() {
+        OpenApi3Schema s = getSchema({}, {
+            # requires "b", which it does not declare
+            "A": {"type": "object", "properties": {"a": {"type": "string"}}, "required": ("a", "b")},
+            # declares "b"
+            "C": {"type": "object", "properties": {"b": {"type": "integer"}}},
+            "AC": {"allOf": ({"$ref": "#/components/schemas/A"}, {"$ref": "#/components/schemas/C"})},
+            "CA": {"allOf": ({"$ref": "#/components/schemas/C"}, {"$ref": "#/components/schemas/A"})},
+            # declares "b" itself
+            "OwnB": {
+                "type": "object",
+                "properties": {"b": {"type": "boolean"}},
+                "allOf": ({"$ref": "#/components/schemas/A"},),
+            },
+            # an inline "allOf" member requires "z", which nothing declares: the composing schema has it
+            "Inline": {
+                "type": "object",
+                "properties": {"x": {"type": "string"}},
+                "allOf": ({"type": "object", "properties": {"a": {"type": "string"}}, "required": ("a", "z")},),
+            },
+            # Pinecone's idiom: an "anyOf" branch requires a property that the composing schema declares
+            "Branches": {
+                "type": "object",
+                "properties": {"type": {"type": "string"}, "vec": {"type": "string"}},
+                "anyOf": ({"required": ("vec",)},),
+            },
+        });
+        hash<string, SchemaObject> c = s.components.schemas;
+        assertEq({"b": True}, c.A.undeclared_required);
+        assertEq("any", c.A.properties.b.type);
+        foreach string n in ("AC", "CA") {
+            assertEq("integer", c{n}.properties.b.type, n);
+            assertEq(0, c{n}.undeclared_required.size(), n);
+        }
+        assertEq("boolean", c.OwnB.properties.b.type);
+        assertEq(0, c.OwnB.undeclared_required.size());
+
+        assertEq({"z": True}, c.Inline.undeclared_required);
+        assertEq("any", c.Inline.properties.z.type);
+        assertEq(0, c.Inline.allOf[0].undeclared_required.size());
+        assertFalse(c.Inline.allOf[0].properties.hasKey("z"));
+
+        assertEq(0, c.Branches.undeclared_required.size());
+        assertEq(0, c.Branches.anyOf[0].undeclared_required.size());
+        assertEq(0, c.Branches.anyOf[0].properties.size());
+        assertEq("string", c.Branches.properties.vec.type);
     }
 }
