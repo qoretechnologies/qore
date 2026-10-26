@@ -23857,12 +23857,13 @@ static __attribute__((noinline)) int tryKnownClosureIntUnaryMiss(
         return qore_rt_try_funcref_int_int_v3(ref_bits, arg, result, xsink, rc, cache);
     }
     QoreValue ref = fromBits(ref_bits);
-    if (ref.getType() != NT_RUNTIME_CLOSURE) {
+    const AbstractQoreNode* node = ref.isPointer() ? ref.getPtr() : ref.getInternalNode();
+    if (!node || node->getType() != NT_RUNTIME_CLOSURE) {
         return tryPreparedNonClosureIntUnary(ref_bits, arg, result, xsink, rc, cache);
     }
     // Borrow the live argument only for this call. No ownership change or user
     // code occurs between the tag check and the unchanged native admission.
-    const auto* closure = static_cast<const QoreClosureBase*>(ref.getInternalNode());
+    const auto* closure = static_cast<const QoreClosureBase*>(node);
     const auto* function = static_cast<const UserClosureFunction*>(closure->getFunction());
     const auto* uvb = function->first()->getUserVariantBase();
     return tryExecNativeIntClosureScalar(*rc, closure, uvb, arg, *result, xsink);

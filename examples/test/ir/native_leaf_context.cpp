@@ -383,7 +383,7 @@ static void checkPreparedMisses(QoreProgram* program, const char* other_factory,
     uint64_t empty_bits;
     std::memcpy(&empty_bits, &empty, sizeof(empty_bits));
     const auto* saved_ref = cache.ref;
-    for (uint64_t invalid : {other_bits, empty_bits}) {
+    auto check_invalid = [&](uint64_t invalid) {
         QorePreparedFunctionRefV3 cold{};
         cold.owner = empty_bits;
         Result result = 123;
@@ -397,7 +397,31 @@ static void checkPreparedMisses(QoreProgram* program, const char* other_factory,
         }
         assert(call(valid_bits, arg, &result, xsink, rc, &cache) == 1);
         assert(!*xsink && result == expected && cache.owner == valid_bits && cache.ref == saved_ref);
+    };
+    check_invalid(other_bits);
+    check_invalid(empty_bits);
+    // A miss must preserve both the result and any retained target for every
+    // value representation, without treating an inline payload as a node.
+    for (QoreValue value : {QoreValue::makeNull(), QoreValue(true), QoreValue(int64_t{7}), QoreValue(1.25),
+            QoreValue::makeChar('x'), QoreValue::makeShortString("short", 5)}) {
+        check_invalid(value.rawBits());
     }
+    ValueHolder boxed_int(QoreValue(INT64_MAX), xsink);
+    ValueHolder boxed_float(QoreValue(-3.0e307), xsink);
+    assert(boxed_int->isPointer() && boxed_float->isPointer());
+    check_invalid(boxed_int->rawBits());
+    check_invalid(boxed_float->rawBits());
+    ValueHolder long_string(new QoreStringNode("not a callback reference"), xsink);
+    check_invalid(long_string->rawBits());
+    ValueHolder enumeration(program->callFunction("makeEnumProbe", nullptr, xsink), xsink);
+    assert(!*xsink && enumeration->isEnum());
+    check_invalid(enumeration->rawBits());
+    ValueHolder object(program->callFunction("makeMethodProbe", nullptr, xsink), xsink);
+    assert(!*xsink && object->getType() == NT_OBJECT);
+    check_invalid(object->rawBits());
+    ValueHolder opaque(QoreValue::makeOpaqueObject(object->get<QoreObject>()), xsink);
+    assert(opaque->isOpaqueObject() && opaque->isPointer());
+    check_invalid(opaque->rawBits());
 }
 
 // Invoked by parsed callers whose owned locals/closures are on the TLS stacks.
