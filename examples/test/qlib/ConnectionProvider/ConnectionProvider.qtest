@@ -1064,6 +1064,12 @@ class TestSslServer {
         Socket sock();
         Queue q();
         bool exit;
+        #! the last connection accepted, kept open until the next one is accepted (only used by the listener thread)
+        /** HTTPClient::connect() raises HTTP1-CONNECTION-CLOSED when the server closes the connection before the
+            client has finished connecting, so a connection closed right after the handshake made the case fail
+            under load
+        */
+        *Socket last;
     }
 
     constructor() {
@@ -1105,6 +1111,8 @@ class TestSslServer {
                     a.setPrivateKey(ReadOnlyFile::readTextFile(KeyPath), KeyPassword);
                     a.setSslVerifyMode(sock.getSslVerifyMode());
                     a.acceptAllCertificates(sock.getAcceptAllCertificates());
+                    # the previous connection is closed only now: the client is done with it
+                    last = a;
                     a.upgradeServerToSSL(30s);
                     #printf("got %y\n", a.verifyPeerCertificate());
                     q.push(a.verifyPeerCertificate());
