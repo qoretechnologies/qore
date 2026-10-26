@@ -5064,6 +5064,9 @@ while (*binary chunk = input.read(65536)) {
       method; \c NULL is a value however it is held, as with the AST interpreter and in %Qore 2.  The operator is
       inline in the public header, so binary modules and compiled (AOT) \c .qmod files built against older 3.0
       development headers keep the old behavior until they are rebuilt
+    - C++ code creating a hash of a hashdecl with member initializers without an \c ExceptionSink
+      (<tt>QoreHashNode(hd, nullptr)</tt>, as a binary module can) crashed the process; an exception raised by a
+      member initializer is now reported as unhandled, naming the hashdecl
     - zoneinfo files are read with their 64-bit data and the time zone rule at the end of the file, as RFC 9636
       describes: local times were UTC with "slim" zoneinfo files, which \c zic writes by default, and with all
       zoneinfo files, local times after 2037 had no daylight saving time, and many local times before 1970 had the
