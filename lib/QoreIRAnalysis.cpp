@@ -2326,6 +2326,10 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
         !q_env_is_set("QORE_DISABLE_IR_FIXED_AGGREGATE_RETURN_MATERIALIZATION");
     const bool enable_bounded_pair_reads =
         !q_env_is_set("QORE_DISABLE_IR_BOUNDED_PAIR_SCALAR_REPLACEMENT");
+    const bool enable_finite_hash_keys =
+        !q_env_is_set("QORE_DISABLE_IR_FINITE_HASH_KEY_SCALAR_REPLACEMENT");
+    const bool enable_finite_hash_selector_elision =
+        !q_env_is_set("QORE_DISABLE_IR_FINITE_HASH_KEY_SELECTOR_ELISION");
     if (!enable_lists && !enable_hashes) {
         return stats;
     }
@@ -2351,6 +2355,7 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
     // locals written by an instruction other than a StoreLocal, an InstantiateLocal or an UninstantiateLocal, such as
     // an IncrementLocalInt: their value is not the one stored
     std::unordered_set<const LocalVar*> otherwise_written_locals;
+    bool has_exception_edges = false;
     for (size_t block_id = 0; block_id < func.blocks.size(); ++block_id) {
         for (size_t offset = 0; offset < func.blocks[block_id]->instructions.size(); ++offset) {
             if (qore_ir_analysis_cancelled(check_count,
@@ -2358,6 +2363,11 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                 return {};
             }
             QoreIRInstruction* inst = func.blocks[block_id]->instructions[offset].get();
+            has_exception_edges = has_exception_edges || inst->exception_target;
+            if (inst->opcode == QoreIROpcode::Throw || inst->opcode == QoreIROpcode::Rethrow) {
+                has_exception_edges = has_exception_edges
+                    || static_cast<const QoreIRThrowInstruction*>(inst)->exception_target;
+            }
             positions.emplace(inst, InstructionPosition{inst, block_id, offset});
             if (inst->opcode != QoreIROpcode::StoreLocal && inst->opcode != QoreIROpcode::InstantiateLocal
                     && inst->opcode != QoreIROpcode::UninstantiateLocal) {
@@ -2660,6 +2670,7 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
         std::vector<std::pair<QoreIRValue, size_t>> incoming;
     };
     std::vector<ScalarizedAggregatePhi> scalarized_aggregate_phis;
+    std::unordered_set<const QoreIRPhiInstruction*> finite_hash_selectors;
     enum class ScalarizedAggregateMaterializationKind {
         List,
         Hash,
@@ -3134,6 +3145,7 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
             ScalarizedOwnedAggregateRead>
                 candidate_owned_aggregate_reads;
         std::vector<ScalarizedAggregatePhi> candidate_aggregate_phis;
+        std::unordered_set<const QoreIRPhiInstruction*> candidate_finite_hash_selectors;
         std::vector<ScalarizedAggregateMaterialization>
             candidate_aggregate_materializations;
         std::unordered_map<const QoreIRInstruction*,
@@ -3150,6 +3162,147 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                 hash_values[hash_keys[i]] = aggregate_values[i];
             }
         }
+        // A literal-key join can select the corresponding scalar on the same
+        // incoming edges. This proof only replaces the hash read and its
+        // private container. A separate complete-use proof below may remove
+        // the selector strings after all aggregate candidates are accepted.
+        // This pass receives a normal-flow CFG. Do not use it to prove a new
+        // edge projection in a function with exceptional reentry paths.
+        bool finite_hash_candidate = enable_finite_hash_keys && cross_block && !has_exception_edges
+            && hash_candidate && !hashdecl_type && !deferred_hashdecl_type
+            && element_type == bigIntTypeInfo && !retain_aggregate_owner;
+        if (finite_hash_candidate) {
+            // Validate the key set once, not once per dynamic read.
+            for (const std::string& key : hash_keys) {
+                if (qore_ir_analysis_cancelled(check_count,
+                        "IR finite hash key analysis")) {
+                    return {};
+                }
+                if (key.find('\0') != std::string::npos) {
+                    finite_hash_candidate = false;
+                    break;
+                }
+            }
+        }
+        bool finite_hash_read = false;
+        bool unused_hash_load = false;
+        auto resolve_finite_hash_key = [&](const QoreIRInstruction* read,
+                const InstructionPosition& read_pos) -> QoreIRValue {
+            if (!finite_hash_candidate
+                    || static_cast<const QoreIRExprInstruction*>(read)->has_ref_args) {
+                return QoreIRValue();
+            }
+            QoreIRValue selector = read->operands[1];
+            InstructionPosition consumer = read_pos;
+            const InstructionPosition* phi_pos = nullptr;
+            for (size_t depth = 0; depth <= 8; ++depth) {
+                auto definition = definitions.find(selector.id);
+                if (definition == definitions.end()
+                        || definition->second.inst->exception_target
+                        || !dominates(definition->second, consumer, true)) {
+                    return QoreIRValue();
+                }
+                const QoreIRInstruction* inst = definition->second.inst;
+                if (inst->opcode == QoreIROpcode::Phi) {
+                    phi_pos = &definition->second;
+                    break;
+                }
+                if (inst->opcode != QoreIROpcode::LoadLocal) {
+                    return QoreIRValue();
+                }
+                const auto* load = static_cast<const QoreIRLocalInstruction*>(inst);
+                auto assignment = constant_local_assignments.find(load->local);
+                if (assignment == constant_local_assignments.end()
+                        || load->is_closure || load->is_ref
+                        || load->local->getTypeInfo() != stringTypeInfo) {
+                    return QoreIRValue();
+                }
+                const auto* store = static_cast<const QoreIRLocalInstruction*>(
+                    assignment->second.store);
+                if (store->mode != AssignmentMode::Normal || store->is_closure
+                        || store->is_ref || store->exception_target) {
+                    return QoreIRValue();
+                }
+                consumer = positions.at(store);
+                selector = assignment->second.value;
+            }
+            if (!phi_pos || !dominates(*store_pos, *phi_pos, true)
+                    || !dominates(*phi_pos, read_pos, true)) {
+                return QoreIRValue();
+            }
+            const auto* selector_phi = static_cast<const QoreIRPhiInstruction*>(phi_pos->inst);
+            const auto& predecessors = cfg.predecessors[phi_pos->block];
+            if (selector_phi->value_kind != QoreIRPhiValueKind::QoreValue
+                    || predecessors.size() < 2 || predecessors.size() > 4
+                    || selector_phi->incoming.size() != predecessors.size()
+                    || selector_phi->operands.size() != predecessors.size()) {
+                return QoreIRValue();
+            }
+            ScalarizedAggregatePhi phi;
+            phi.block = phi_pos->block;
+            phi.value_kind = QoreIRPhiValueKind::NativeInt;
+            phi.facts.type_info = bigIntTypeInfo;
+            phi.facts.assigned_state = QoreIRAssignedState::Assigned;
+            phi.facts.representation = QoreIRValueRepresentation::NativeInt;
+            phi.facts.ownership = QoreIRValueOwnership::ReferenceFree;
+            phi.facts.never_nothing = true;
+            phi.facts.int_range_known = true;
+            std::unordered_set<size_t> seen;
+            for (size_t i = 0; i < selector_phi->incoming.size(); ++i) {
+                const auto& incoming = selector_phi->incoming[i];
+                auto block = cfg.block_ids.find(incoming.block);
+                auto literal = definitions.find(incoming.value.id);
+                if (block == cfg.block_ids.end() || !seen.insert(block->second).second
+                        || std::find(predecessors.begin(), predecessors.end(), block->second)
+                            == predecessors.end()
+                        || cfg.dominates(phi_pos->block, block->second)
+                        || incoming.value.id != selector_phi->operands[i].id
+                        || literal == definitions.end()
+                        || literal->second.inst->opcode != QoreIROpcode::ConstString
+                        || literal->second.inst->exception_target) {
+                    return QoreIRValue();
+                }
+                const auto& instructions = func.blocks[block->second]->instructions;
+                if (instructions.empty()) {
+                    return QoreIRValue();
+                }
+                const InstructionPosition& terminator = positions.at(instructions.back().get());
+                if (!dominates(literal->second, terminator, true)) {
+                    return QoreIRValue();
+                }
+                const auto* constant = static_cast<const QoreIRConstInstruction*>(literal->second.inst);
+                const std::string& key = constant->constant.string_value;
+                if (key.find('\0') != std::string::npos) {
+                    return QoreIRValue();
+                }
+                auto selected = hash_values.find(key);
+                if (selected == hash_values.end()) {
+                    return QoreIRValue();
+                }
+                auto value = definitions.find(selected->second.id);
+                int64_t low, high;
+                if (value == definitions.end()
+                        || !dominates(value->second, terminator, true)
+                        || !inline_int_bounds(selected->second, low, high, 0)) {
+                    return QoreIRValue();
+                }
+                if (phi.incoming.empty()) {
+                    phi.facts.int_range_min = low;
+                    phi.facts.int_range_max = high;
+                } else {
+                    phi.facts.int_range_min = std::min(phi.facts.int_range_min, low);
+                    phi.facts.int_range_max = std::max(phi.facts.int_range_max, high);
+                }
+                phi.incoming.push_back({selected->second, block->second});
+            }
+            phi.result = func.createValue();
+            func.max_value_id = std::max(func.max_value_id, phi.result.id);
+            QoreIRValue result = phi.result;
+            candidate_aggregate_phis.push_back(std::move(phi));
+            candidate_finite_hash_selectors.insert(selector_phi);
+            finite_hash_read = true;
+            return result;
+        };
         auto local_paths = local_path_operations.find(local);
         bool has_mutation = local_paths != local_path_operations.end()
             && !local_paths->second.empty();
@@ -4115,6 +4268,15 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                 }
                 auto load_uses = uses.find(load_pos->inst->result.id);
                 if (load_uses == uses.end() || load_uses->second.empty()) {
+                    // guardLValueBase can emit an unused load when the value
+                    // is already definitely assigned. A real guard remains a
+                    // use and is rejected below. Restrict this to a successful
+                    // finite-key projection, not general dead-load removal.
+                    const auto* load = static_cast<const QoreIRLocalInstruction*>(load_pos->inst);
+                    if (finite_hash_candidate && !load->is_ref && !load->is_closure) {
+                        unused_hash_load = true;
+                        continue;
+                    }
                     invalid = true;
                     break;
                 }
@@ -4163,6 +4325,12 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                                 == QoreIROpcode::HashDerefDynamic) {
                             if (!resolve_string_selector(
                                     use.inst->operands[1], key)) {
+                                replacement = resolve_finite_hash_key(use.inst, read_position->second);
+                                if (replacement.isValid()) {
+                                    candidate_replacements.emplace(use.inst->result.id, replacement);
+                                    reads.push_back(use.inst);
+                                    continue;
+                                }
                                 invalid = true;
                                 break;
                             }
@@ -4482,7 +4650,7 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                 }
             }
         }
-        if (invalid || (candidate_replacements.empty()
+        if (invalid || (unused_hash_load && !finite_hash_read) || (candidate_replacements.empty()
                 && candidate_path_operations.empty()
                 && candidate_literal_int_queries.empty()
                 && candidate_owned_aggregate_reads.empty()
@@ -4579,6 +4747,13 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
             candidate_literal_int_queries.end());
         scalarized_bounded_pair_reads.insert(candidate_bounded_pair_reads.begin(),
             candidate_bounded_pair_reads.end());
+        for (const QoreIRPhiInstruction* selector : candidate_finite_hash_selectors) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR finite hash selector candidate merge")) {
+                return {};
+            }
+            finite_hash_selectors.insert(selector);
+        }
         if (has_mutation && !retain_aggregate_owner) {
             scalarized_container_locals.insert(local);
         }
@@ -4593,6 +4768,128 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
     if (!scalarized) {
         return stats;
     }
+    // The numeric projections no longer consume their literal selectors. Remove
+    // a selector only when its complete boxed graph is private to those reads.
+    // Analyze every root against the same eliminated set: eligibility must not
+    // depend on unordered root iteration or a partially accepted selector.
+    std::unordered_set<const QoreIRInstruction*> eliminated_selectors;
+    if (enable_finite_hash_selector_elision) {
+        for (const QoreIRPhiInstruction* selector : finite_hash_selectors) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR finite hash selector analysis")) {
+                return {};
+            }
+            std::unordered_set<const QoreIRInstruction*> candidate;
+            bool removable = true;
+            // Projection already proves two to four exact literal edges. Each
+            // literal must belong exclusively to this PHI; do not repeatedly
+            // scan potentially large use lists for shared string constants.
+            for (const QoreIRPhiIncoming& incoming : selector->incoming) {
+                auto definition = definitions.find(incoming.value.id);
+                auto literal_uses = uses.find(incoming.value.id);
+                if (definition == definitions.end()
+                        || definition->second.inst->opcode != QoreIROpcode::ConstString
+                        || definition->second.inst->exception_target
+                        || literal_uses == uses.end() || literal_uses->second.size() != 1
+                        || literal_uses->second.front().inst != selector) {
+                    removable = false;
+                    break;
+                }
+                candidate.insert(definition->second.inst);
+            }
+            if (!removable) {
+                continue;
+            }
+            auto selector_uses = uses.find(selector->result.id);
+            if (selector_uses == uses.end() || selector_uses->second.empty()) {
+                continue;
+            }
+            for (const QoreIRScalarUse& use : selector_uses->second) {
+                if (qore_ir_analysis_cancelled(check_count,
+                        "IR finite hash selector use analysis")) {
+                    return {};
+                }
+                if (use.inst && eliminated.count(use.inst)) {
+                    continue;
+                }
+                if (!use.inst || use.inst->opcode != QoreIROpcode::StoreLocal
+                        || use.inst->operands.size() != 1
+                        || use.inst->operands.front().id != selector->result.id) {
+                    removable = false;
+                    break;
+                }
+                const auto* store = static_cast<const QoreIRLocalInstruction*>(use.inst);
+                auto assignment = constant_local_assignments.find(store->local);
+                auto accesses = local_accesses.find(store->local);
+                if (assignment == constant_local_assignments.end()
+                        || accesses == local_accesses.end()
+                        || assignment->second.store != store
+                        || assignment->second.value.id != selector->result.id
+                        || store->local->getTypeInfo() != stringTypeInfo) {
+                    removable = false;
+                    break;
+                }
+                // The existing single-store proof excludes escapes, opaque AST
+                // accesses, captures, references, lvalue paths and fused uses.
+                // Keep linked/copied locals conservative: a remaining store is
+                // an observable consumer, even if another root could remove it.
+                for (const InstructionPosition& access : accesses->second) {
+                    if (qore_ir_analysis_cancelled(check_count,
+                            "IR finite hash selector local analysis")) {
+                        return {};
+                    }
+                    const auto* local_inst = static_cast<const QoreIRLocalInstruction*>(access.inst);
+                    if (local_inst->is_closure || local_inst->is_ref
+                            || local_inst->mode != AssignmentMode::Normal
+                            || local_inst->exception_target
+                            || (local_inst->opcode == QoreIROpcode::StoreLocal
+                                ? local_inst != store : !local_inst->operands.empty())) {
+                        removable = false;
+                        break;
+                    }
+                    auto local_uses = uses.find(local_inst->result.id);
+                    if (local_uses != uses.end()) {
+                        for (const QoreIRScalarUse& local_use : local_uses->second) {
+                            if (qore_ir_analysis_cancelled(check_count,
+                                    "IR finite hash selector local use analysis")) {
+                                return {};
+                            }
+                            if (!local_use.inst || !eliminated.count(local_use.inst)) {
+                                removable = false;
+                                break;
+                            }
+                        }
+                    }
+                    if (!removable) {
+                        break;
+                    }
+                    candidate.insert(local_inst);
+                }
+                if (!removable) {
+                    break;
+                }
+            }
+            if (!removable) {
+                continue;
+            }
+            candidate.insert(selector);
+            for (const QoreIRInstruction* inst : candidate) {
+                if (qore_ir_analysis_cancelled(check_count,
+                        "IR finite hash selector removal analysis")) {
+                    return {};
+                }
+                eliminated_selectors.insert(inst);
+            }
+        }
+    }
+    for (const QoreIRInstruction* inst : eliminated_selectors) {
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR finite hash selector removal merge")) {
+            return {};
+        }
+        eliminated.insert(inst);
+    }
+
     for (const auto& [local, accesses] : local_accesses) {
         if (qore_ir_analysis_cancelled(check_count,
                 "IR fixed-aggregate dead constant-local analysis")) {

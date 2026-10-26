@@ -4868,3 +4868,34 @@ The first metadata-only candidate failed all four target gates in 954 jobs/2862 
 Release: 46 cases/7224 assertions; Debug: 27 cases/6263 assertions, plus native checks and no skips or source fallback in accepted checks. The focused fixture has 199 QUnit assertions in each build plus native assertions. All 391 Release aliases/hashes are restored; 1110 standard, 780 additional module and 6360 prepared references pass. All 1710 timing jobs/5130 windows are separately replayed. No owned build/test/profile overlaps timing. Shared host without affinity/thermal/frequency control. No fresh Java/develop comparison or global ceiling claim.
 
 [Audit](../bench/runtime-comparison/audit-aot-module-function-reference-context.md); [evidence](../bench/runtime-comparison/results-aot-module-function-reference-context-macos-arm64.json).
+
+## Finite literal hash keys revisited (2026-10-26)
+
+A private immutable plain integer hash can be replaced by scalar values when a key join has two to four literal incoming edges, every key is present and selected integers fit the inline representation. A separate complete-use proof removes selector strings only when their whole graph is private to eliminated reads. Observable, escaped, mutable, wide-integer and exceptional-reentry cases retain the existing path. Current otherwise-written-local exclusions are preserved. QORE_DISABLE_IR_FINITE_HASH_KEY_SCALAR_REPLACEMENT disables projection; QORE_DISABLE_IR_FINITE_HASH_KEY_SELECTOR_ELISION keeps projection but disables selector removal. These are compiler controls. Runtime context, lifetime synchronization, ABI and per-iteration cancellation remain unchanged.
+
+This is a fresh trial against 208e3b0bc2 after the native module callback optimization. The previous rejected finite-selector trial remains unchanged; this decision evaluates absolute costs and broader workload benefits as subsequently authorized. Both runtimes use Release -O3 -DNDEBUG, allocation tracking off and qcc -O3/LLVM 22.1.8 on Apple M4 Pro/macOS 27.0.1. Actual stripped private modules cover 53 unchanged kernels, randomized paired before/candidate/compile-disabled runs, default/reverse/shuffle-487 layouts, 4096 items, one warmup and three 150 ms samples, three screening forks and five confirmation forks. The target must improve at least 10% against both controls in every layout in both phases. Values are whole-kernel ns/item, not isolated call latency.
+
+|!Confirmed workload|!Before ns/item|!Candidate ns/item|!Compile-disabled ns/item|!Change vs before
+|micro:temporary_hash|329.384651|1.674527|326.554215|-99.49%
+|mixed:csv_report|938.548761|938.608056|941.698071|+0.01%
+|mixed:object_orders|1719.678474|1741.180640|1723.200546|+1.25%
+|mixed:callback_pipeline|127.841010|127.833241|127.746500|-0.01%
+|mixed:text_index|1462.068810|1456.330128|1465.098533|-0.39%
+
+Retain under the authorized broader-workload tradeoff. The target improves 99.49% against baseline (329.384651 to 1.674527 ns/item, 196.7x) and against the compile-disabled control (326.554215), passing the 10% gate in every layout in both phases. Closure costs repeat versus baseline: closure_call +5.36% screening/+5.47% confirmation (+1.043172 ns/item confirmed), and closure_capture +4.79%/+4.69% (+1.153187 ns/item). Confirmation flags closure/default and shuffle and captured closure/all three layouts; default captured closure was not flagged in screening. Similar closure costs appear with the optimization disabled in the candidate runtime; candidate versus disabled changes only +0.24% and +0.49% in confirmation. This suggests a runtime-build effect, but does not establish its cause or erase the baseline costs. Other repeated aggregate baseline costs are callback local float result (+0.27%/+1.36%, +0.011164 ns/item), callback local float return (+1.66%/+0.07%, +0.000624), boxed integer method call (+2.16%/+0.26%, +0.045548), boxed integer fallback (+0.14%/+0.70%, +0.227765), monomorphic call (+0.11%/+0.22%, +0.009098) and temporary list (+0.85%/+0.35%, +0.005766). Repeated costs against compile-disabled are callback local float result (+1.20%/+1.13%, +0.009296), result float add (+1.20%/+0.67%, +0.005548), and boxed float fallback (+0.28%/+0.07%, +0.022174). All individual forks/layouts remain in the evidence. Confirmed mixed workload changes versus baseline are CSV +0.006%, orders +1.25%, callback pipeline -0.006% and text -0.39%; the orders cost did not repeat its screening direction. This establishes a large benefit for eligible temporary hashes, not a measured overall application speedup. Short hash invocations improve 11.91% at count 1 and 66.38% at count 16; the known-integer control changes +0.44% and -0.05%, without flagged layout regressions. Existing module indirect integer and float performance remains near 67.8 and 65.5 ns/item in this campaign. Java parity and a global performance ceiling are not established.
+
+|!Short-call target/control|!Count|!Before ns/item|!Candidate ns/item|!Compile-disabled ns/item
+|micro:temporary_hash|1|3055.332859|2691.534139|3080.213469
+|float:typed_local_int_unary|1|686.556679|689.559972|691.031250
+|micro:temporary_hash|16|502.834672|169.042477|499.395838
+|float:typed_local_int_unary|16|43.471453|43.448178|43.804917
+
+Short invocations include fixed dispatch, setup and cleanup costs. The separately measured default-layout target diagnostic is not pooled with the three-layout campaign:
+
+|!Form|!Before|!Candidate|!Compile-disabled|!Projection only
+|standalone|330.531716|1.618685|333.853833|41.024727
+|module|327.549871|1.671943|323.384457|39.821696
+
+All 391 rebuilt standard-library qmods total 344786872 bytes before and 344786872 after; 391 hashes change. Release 36 cases/5291 assertions; Debug 9 cases/5053 assertions, plus non-QUnit/native checks. The focused fixture has 512 assertions per build. All 391 Release aliases/hashes are restored. All 2574 broad timing jobs/7722 windows and 24 diagnostic jobs/72 windows are separately replayed. Shared host, without affinity/frequency/thermal controls; no owned build/test/profile overlaps timing. No fresh Java/develop comparison, production-wide weighted speedup or global performance ceiling claim.
+
+[Audit](../bench/runtime-comparison/audit-aot-finite-key-selector-revisit.md); [evidence](../bench/runtime-comparison/results-aot-finite-key-selector-revisit-macos-arm64.json); [historical rejection](../bench/runtime-comparison/results-aot-finite-key-selector-rejected-macos-arm64.json).

@@ -238,6 +238,8 @@
     private locals after local promotion, enabling native direct and typed callback paths for eligible functions.
     AOT calls through known same-program function references can use native floating-point arguments established
     by local promotion, avoiding redundant boxing and dynamic dispatch while retaining guards for optional values.
+    AOT and IR can eliminate private temporary integer hashes and selector strings when branch-selected
+    literal keys and all uses are proven at compile time, retaining ordinary lookup for unsupported cases.
     AOT module function references can use exact native scalar bindings, including calls from their owning
     module into a captured importing Program, retaining full Program entry, caller options and fallback checks.
     Known integer callback calls can use exact native integer locals established by assignment analysis,
