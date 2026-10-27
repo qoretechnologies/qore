@@ -25508,3 +25508,113 @@ All 3612 jobs/10836 measured windows for the retained variant, plus 180/540 for 
 Next refresh the optimized branch/develop/Java checkpoint and investigate duplicated native admission in the typed closure fallback. Any continuation must preserve argument compatibility misses, full Program transitions, post-transition retry and cleanup; the current change introduces no new calling convention.
 
 [Audit](audit-closure-foreign-admission.md); [evidence](results-closure-foreign-admission-macos-arm64.json).
+
+## Optimized module checkpoint after native closure admission (2026-10-27)
+
+Installed performance branch 86c0d7759a versus unmodified develop 8dc8bdf6fb, with matching Release -O3 -DNDEBUG builds, allocation tracking off, LLVM 22.1.8 and qcc -O3 stripped modules on Apple M4 Pro/macOS ARM64. Fresh fetch/merge found develop already included. Since the previous checkpoint, the branch adds inline native closure frames, native retry after complete Program transition and pure foreign admission before temporary context setup. Exact unchanged public helper sources run in both variants; no develop code is patched. Each variant is freshly compiled and linked in default, reverse and shuffle-487 layouts with identical explicit RPATHs. Actual native modules and runtime images are verified; the IR host loads/invokes the AOT kernels.
+
+All 78 Qore workloads use three forks per layout, three warmups and three 150 ms samples, 4096 items and seed 7. The 45 Java counterparts use three JVM forks, five warmups and three 300 ms samples. Qore/Java jobs are interleaved in randomized kernel/fork blocks. Qore aggregation is the median of per-layout median fork means; Java uses median fork means and has no Qore layout variants. All numbers are whole-kernel ns/item, not isolated call latencies. Develop/branch is speedup; Qore/Java is branch time divided by Java time.
+
+All 78 branch aggregates are faster than unmodified develop, with no adverse disjoint-range layout flag. Mixed CSV, orders, callback pipeline and text workloads reduce time by 14.033%, 14.306%, 63.293% and 14.954%. Known integer callbacks take 1.181535 ns/item versus Java 0.891199 (1.326x); direct calls 1.573034 versus 0.893707 (1.760x). Same-Program plain/captured closure kernels take 14.277509/19.783361 versus Java 1.663967/1.731255 (8.580x/11.427x). Monomorphic methods take 3.814136 versus 1.670283 (2.284x); polymorphic methods 23.343311 versus 2.518512 (9.269x). Module indirect calls take 58.558954 versus develop 263.120766, but the fresh live-Program diagnostic confirms a cross-Program transition, so their 35.362x ordinary-Java ratio is not a same-Program overhead ratio. Live/deleted-object closure calls take 83.278397/83.488772 versus develop 222.033165/225.177469. List mutation remains 132.593188 versus develop 242.393260 and Java 4.253547. These are cumulative workload observations, not a weighted application score or evidence that all call categories approach Java. Incremental control costs from retained experiments remain documented.
+
+|!Mixed CPU workload|!Develop ns/item|!Branch ns/item|!Develop/branch
+|mixed:csv_report|1082.701303|930.769132|1.163x
+|mixed:object_orders|2018.096388|1729.392312|1.167x
+|mixed:callback_pipeline|329.614779|120.990607|2.724x
+|mixed:text_index|1710.205078|1454.459135|1.176x
+
+Mixed scenarios combine parsing, allocation, transformation, aggregation and formatting, with input generation outside timing. They compare Qore builds only and have no application-frequency weighting or single overall score. Lifecycle object-call controls cross QoreProgram boundaries and retain counts, locks, context and lifetime work; ordinary Java callback rows do not represent equivalent Program transitions. Module function references retain their importing Program while their body belongs to the module Program; the native module callback path preserves that Program transition as documented in the earlier module-reference-context experiment and confirmed by a fresh untimed interposition probe of the actual default-layout indirect_call workload. Five native-handled calls have captured Program different from current/body owner, an empty prepared cache and restored live Program afterward. The probe uses exported getProgram() live state, not the RuntimeConfig compatibility snapshot. Indirect module callback rows must not be labeled strict same-Program call latencies.
+
+|!Every workload|!Develop ns/item|!Branch ns/item|!Develop/branch|!Java ns/item|!Qore/Java
+|float:direct_local_float_return|78.179064|0.805995|96.997x|0.550844|1.463x
+|float:callback_local_float_return|335.264565|0.863830|388.114x|0.473807|1.823x
+|float:direct_local_float_result|75.600339|0.759673|99.517x|0.445016|1.707x
+|float:callback_local_float_result|229.345000|0.830739|276.073x|0.442814|1.876x
+|float:direct_loop_float_return|368.405762|5.780224|63.736x|0.583582|9.905x
+|float:callback_loop_float_return|541.412668|5.055743|107.089x|1.418868|3.563x
+|float:direct_float_add|63.389877|0.816641|77.623x|N/A|N/A
+|float:static_float_add|63.472647|0.815628|77.821x|N/A|N/A
+|float:typed_local_int_unary|229.255164|1.181535|194.032x|0.891199|1.326x
+|float:typed_local_float_unary|235.927510|0.875079|269.607x|N/A|N/A
+|float:result_float_add|216.647541|0.824239|262.846x|N/A|N/A
+|float:typed_local_int_result|127.515190|0.824667|154.626x|0.000212|3890.102x
+|micro:arithmetic|11.454369|1.567631|7.307x|0.886332|1.769x
+|micro:direct_call|20.476267|1.573034|13.017x|0.893707|1.760x
+|micro:method_call|11.504200|1.659027|6.934x|0.894541|1.855x
+|micro:indirect_call|263.120766|58.558954|4.493x|1.655964|35.362x
+|micro:polymorphic_call|296.476894|23.343311|12.701x|2.518512|9.269x
+|micro:polymorphic_expression_call|125.788314|11.231714|11.199x|2.520524|4.456x
+|micro:monomorphic_call|17.039077|3.814136|4.467x|1.670283|2.284x
+|micro:optional_method_call|190.457722|11.083039|17.185x|1.662252|6.667x
+|micro:polymorphic_float_call|307.760305|23.944979|12.853x|2.553112|9.379x
+|micro:polymorphic_float_expression_call|134.746730|11.710487|11.507x|2.559629|4.575x
+|micro:monomorphic_float_call|17.248215|4.202054|4.105x|1.635100|2.570x
+|micro:optional_float_method_call|194.855930|11.285604|17.266x|1.638126|6.889x
+|micro:boxed_float_method_call|221.977193|20.252165|10.961x|2.553518|7.931x
+|micro:dynamic_int_result_call|182.340239|10.907441|16.717x|3.070974|3.552x
+|micro:dynamic_int_result_fallback|399.993662|20.784775|19.245x|2.986461|6.960x
+|micro:boxed_int_method_call|209.041377|16.830954|12.420x|2.528403|6.657x
+|micro:boxed_int_method_fallback|247.181281|32.149830|7.688x|2.544571|12.635x
+|micro:boxed_float_method_fallback|296.472652|34.918135|8.491x|2.528027|13.812x
+|micro:boxed_int_method_effect|345.815459|89.153075|3.879x|1.868237|47.720x
+|micro:dynamic_float_result_call|194.994912|12.369111|15.765x|3.476751|3.558x
+|micro:indirect_wide|314.342131|58.712672|5.354x|1.665530|35.252x
+|micro:indirect_float|269.370807|58.699962|4.589x|1.632552|35.956x
+|micro:indirect_int_result|238.417955|58.350008|4.086x|1.882277|31.000x
+|micro:indirect_float_result|243.779181|59.458338|4.100x|2.855129|20.825x
+|micro:indirect_tagged_float|315.066180|59.291408|5.314x|1.620321|36.592x
+|micro:indirect_branch_float|278.385884|58.568937|4.753x|1.646513|35.572x
+|micro:indirect_affine|264.404671|59.121175|4.472x|1.619504|36.506x
+|micro:indirect_affine_wide|312.041850|58.909004|5.297x|1.639615|35.929x
+|micro:indirect_branch_int|263.462089|59.221671|4.449x|1.656115|35.759x
+|micro:dispatch_control|11.942571|1.971431|6.058x|0.960746|2.052x
+|micro:list_read|21.311831|2.932160|7.268x|0.284708|10.299x
+|micro:list_build|119.360173|28.282511|4.220x|2.536140|11.152x
+|micro:list_mutate|242.393260|132.593188|1.828x|4.253547|31.172x
+|micro:temporary_list|148.046440|1.740315|85.069x|1.162989|1.496x
+|micro:temporary_hash|327.927452|1.736842|188.807x|14.118298|0.123x
+|micro:closure_call|144.546928|14.277509|10.124x|1.663967|8.580x
+|micro:closure_capture|163.045748|19.783361|8.242x|1.731255|11.427x
+|mixed:csv_report|1082.701303|930.769132|1.163x|N/A|N/A
+|mixed:object_orders|2018.096388|1729.392312|1.167x|N/A|N/A
+|mixed:callback_pipeline|329.614779|120.990607|2.724x|N/A|N/A
+|mixed:text_index|1710.205078|1454.459135|1.176x|N/A|N/A
+|probe:object_loop|648.450743|396.776229|1.634x|N/A|N/A
+|probe:object_short|1793.073382|1581.469697|1.134x|N/A|N/A
+|probe:float_loop|670.930034|424.313842|1.581x|N/A|N/A
+|probe:float_short|1824.490017|1583.588089|1.152x|N/A|N/A
+|probe:string_loop|520.066364|365.367750|1.423x|N/A|N/A
+|probe:string_short|1574.900309|1454.137495|1.083x|N/A|N/A
+|probe:effect_loop|770.478990|450.432016|1.711x|N/A|N/A
+|probe:effect_short|1955.125240|1612.378991|1.213x|N/A|N/A
+|probe:two_read_loop|734.616340|488.999256|1.502x|N/A|N/A
+|probe:two_read_short|1865.543620|1662.247850|1.122x|N/A|N/A
+|probe:default_loop|931.104768|754.799771|1.234x|N/A|N/A
+|probe:default_short|2075.436598|1958.307634|1.060x|N/A|N/A
+|probe:string_result_loop|706.780259|513.910253|1.375x|N/A|N/A
+|probe:string_result_short|1874.967448|1694.199071|1.107x|N/A|N/A
+|index:list_positive|22.654829|8.715238|2.599x|N/A|N/A
+|index:list_negative|22.703509|8.665856|2.620x|N/A|N/A
+|index:binary_positive|21.026876|8.495214|2.475x|N/A|N/A
+|index:binary_negative|21.159530|8.893995|2.379x|N/A|N/A
+|index:buffer_positive|28.435569|15.436830|1.842x|N/A|N/A
+|index:buffer_negative|28.369419|15.718442|1.805x|N/A|N/A
+|lifecycle:object_closure_live|222.033165|83.278397|2.666x|N/A|N/A
+|lifecycle:object_closure_dead|225.177469|83.488772|2.697x|N/A|N/A
+|lifecycle:closure_create_plain|356.141425|321.207901|1.109x|N/A|N/A
+|lifecycle:closure_create_capture|712.015389|593.816966|1.199x|N/A|N/A
+|lifecycle:closure_create_object|1098.378010|843.332663|1.302x|N/A|N/A
+
+Adverse layout flags (>3% branch cost and disjoint observed fork ranges): none. All layout/fork/window data remain in the evidence. Cumulative gains do not erase incremental costs documented for individual retained changes.
+
+The Java constant-result callback is 0.000211991 ns/item (0.868315 ns per 4096-item invocation). Its separately inspected C2 code folds the constant reduction; that normalized value is not a physical callback latency. The Qore generated-code review is retained alongside it.
+
+The fresh Qore known-integer unary/result companion bodies match the previously reviewed bodies after source-path/debug-ID normalization. Callback dispatch is already absent: unary arithmetic is inline, and the constant-result companion computes count*17 outside its retained loop. Source-location publication, cancellation, pending-exception and thread-exit checks remain per iteration. Fresh C2 kernel and JMH-stub disassembly reduce the constant result in chunks up to2147483645 items; measured count4096 fits one chunk. The very large constant-row ratio measures different loop-observability work, not repeated physical calls.
+
+Java uses the archived Temurin version and JMH 1.37, with C2 verified separately for each benchmark or generated measurement loop. Known integer/floating callbacks allow ordinary inlining. Existing RuntimeBench indirect/closure targets retain DONT_INLINE controls: these measure dynamic call boundaries, not best-case inlined Java. Qore and Java use their native value/container representations. The Qore harness reads a clock and dispatches a kernel per 4096-item invocation; JMH calls its benchmark method and consumes results. Harness costs are retained, not subtracted.
+
+All 9024 Qore and 675 Java reference checks pass; 45 Java kernels pass C2 diagnostics. All 1539 jobs/4617 measured windows replay independently. No owned build/test/profile or heavy archive scan overlaps timing. Host process snapshots are retained; the shared host has no exclusive CPU, affinity, frequency or thermal control. No samples are discarded or historical epochs pooled. These observations do not establish startup, memory, IR/JIT gains, production-wide speedup, universal Java parity or a global performance ceiling.
+
+Next evaluate an additive AOT typed-callback fallback that omits duplicate optional native closure admission. Preserve argument-compatibility misses, full binding and Program entry, post-transition native retry, cleanup, stack/context and lifetime behavior. Compare separately compiled before/candidate modules, qualify Release/Debug, measure broader controls and audit before retaining code.
+
+[Evidence](results-post-foreign-admission-module-macos-arm64.json); [all 62 audit checks](audit-post-foreign-admission-checkpoint.md).
