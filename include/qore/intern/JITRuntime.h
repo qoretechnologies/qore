@@ -221,6 +221,17 @@ double qore_rt_div_float(double left, double right, ExceptionSink* xsink);
 //! Convert a QoreValue to int64_t
 int64_t qore_rt_to_int(uint64_t val);
 
+//! Check an exact boxed integer for a typed call without conversion or user-code evaluation.
+/** Runtime closures without an enabled, published native companion and function references without
+    a typed int(int) entry use ordinary argument binding.
+    This preliminary check does not replace the scalar entry's live admission checks.
+    @param ref_bits NaN-boxed borrowed callable; no pointer is retained.
+    @param val NaN-boxed borrowed argument; ownership is unchanged.
+    @param result Non-null scalar output, set to zero on any miss.
+    @return 1 for an exact NT_INT argument eligible for a scalar attempt, otherwise 0.
+*/
+int qore_rt_try_typed_int_argument_v1(uint64_t ref_bits, uint64_t val, int64_t* result);
+
 //! Convert a QoreValue accepted by the timeout type to milliseconds
 int64_t qore_rt_to_timeout(uint64_t val);
 

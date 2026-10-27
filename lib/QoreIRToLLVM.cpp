@@ -1073,6 +1073,9 @@ llvm::Value* QoreIRToLLVM::emitTypedFunctionRefCall(const QoreIRInstruction* ins
     bool native_continuation = (native_store != native_funcref_store_types.end()
         && native_store->second == callable->getReturnType())
         || native_call_conversion_results.count(inst->result.id);
+    llvm::AllocaInst* result_slot = nullptr;
+    bool explicit_context = !q_env_is_set("QORE_DISABLE_AOT_FUNCREF_RUNTIME_CONFIG");
+    bool prepared_target = explicit_context && !q_env_is_set("QORE_DISABLE_AOT_FUNCREF_PREPARED_TARGET");
     llvm::Value* arg = nullptr;
     llvm::Value* compatible = llvm::ConstantInt::getTrue(ctx);
     if (nargs) {
@@ -1116,6 +1119,40 @@ llvm::Value* QoreIRToLLVM::emitTypedFunctionRefCall(const QoreIRInstruction* ins
                 compatible = emitIsBoxedInt48(boxed);
                 arg = builder->CreateAShr(builder->CreateShl(boxed,
                     llvm::ConstantInt::get(i64_type, 16)), llvm::ConstantInt::get(i64_type, 16));
+                if (prepared_target && ret_kind == 1
+                        && !q_env_is_set("QORE_DISABLE_AOT_TYPED_BOXED_INT_ARGUMENT")) {
+                    // Keep inline integers on their existing path. A heap integer
+                    // can use the same scalar entry after exact, non-coercive
+                    // unboxing. Ineligible closures and other argument types
+                    // still use ordinary binding.
+                    auto* inline_block = builder->GetInsertBlock();
+                    auto* check_boxed = llvm::BasicBlock::Create(ctx, "typed_funcref_check_integer", llvm_func);
+                    auto* argument_merge = llvm::BasicBlock::Create(ctx, "typed_funcref_integer", llvm_func);
+                    llvm::IRBuilder<> arg_builder(&llvm_func->getEntryBlock(),
+                        llvm_func->getEntryBlock().begin());
+                    result_slot = arg_builder.CreateAlloca(i64_type, nullptr, "typed_funcref_result");
+                    builder->CreateCondBr(compatible, argument_merge, check_boxed);
+                    builder->SetInsertPoint(check_boxed);
+                    auto unbox = module.getOrInsertFunction("qore_rt_try_typed_int_argument_v1",
+                        llvm::FunctionType::get(i32_type, {i64_type, i64_type, ptr_type}, false));
+                    // The checked argument is loaded into SSA before the native
+                    // call writes its result, so both can share this scalar slot.
+                    llvm::Value* accepted = builder->CreateCall(unbox, {ref_boxed, boxed, result_slot});
+                    llvm::Value* scalar = builder->CreateLoad(i64_type, result_slot);
+                    llvm::Value* boxed_compatible = builder->CreateICmpNE(accepted,
+                        llvm::ConstantInt::get(i32_type, 0));
+                    builder->CreateBr(argument_merge);
+                    builder->SetInsertPoint(argument_merge);
+                    auto* scalar_arg = builder->CreatePHI(i64_type, 2, "typed_funcref_integer_value");
+                    scalar_arg->addIncoming(arg, inline_block);
+                    scalar_arg->addIncoming(scalar, check_boxed);
+                    auto* integer_compatible = builder->CreatePHI(i1_type, 2,
+                        "typed_funcref_integer_compatible");
+                    integer_compatible->addIncoming(llvm::ConstantInt::getTrue(ctx), inline_block);
+                    integer_compatible->addIncoming(boxed_compatible, check_boxed);
+                    arg = scalar_arg;
+                    compatible = integer_compatible;
+                }
             } else if (arg_kind == 2) {
                 compatible = emitIsBoxedFloat(boxed);
                 arg = builder->CreateBitCast(builder->CreateSub(boxed,
@@ -1135,7 +1172,9 @@ llvm::Value* QoreIRToLLVM::emitTypedFunctionRefCall(const QoreIRInstruction* ins
     llvm::Value* cleanups = buildArgCleanupArray(inst, 1, llvm_func, nargs, has_cleanups);
     llvm::Type* result_type = ret_kind == 2 ? double_type : i64_type;
     llvm::IRBuilder<> entry_builder(&llvm_func->getEntryBlock(), llvm_func->getEntryBlock().begin());
-    auto* result_slot = entry_builder.CreateAlloca(result_type, nullptr, "typed_funcref_result");
+    if (!result_slot) {
+        result_slot = entry_builder.CreateAlloca(result_type, nullptr, "typed_funcref_result");
+    }
     auto* attempt = llvm::BasicBlock::Create(ctx, "typed_funcref_try", llvm_func);
     auto* fast = llvm::BasicBlock::Create(ctx, "typed_funcref_fast", llvm_func);
     auto* fallback = llvm::BasicBlock::Create(ctx, "typed_funcref_fallback", llvm_func);
@@ -1143,8 +1182,6 @@ llvm::Value* QoreIRToLLVM::emitTypedFunctionRefCall(const QoreIRInstruction* ins
     builder->CreateCondBr(compatible, attempt, fallback);
     builder->SetInsertPoint(attempt);
     const char* names[] = {"0", "int", "float", "bool"};
-    bool explicit_context = !q_env_is_set("QORE_DISABLE_AOT_FUNCREF_RUNTIME_CONFIG");
-    bool prepared_target = explicit_context && !q_env_is_set("QORE_DISABLE_AOT_FUNCREF_PREPARED_TARGET");
     // Reuse only signatures with an existing non-reentrant scalar companion,
     // in loop regions where repeated calls can amortize initialization. Bound
     // caller scratch to 4 * 208 bytes and cleanup to at most four calls per exit.

@@ -260,6 +260,8 @@
     literal keys and all uses are proven at compile time, retaining ordinary lookup for unsupported cases.
     JIT/AOT indexed reads reuse an existing live RuntimeConfig for negative-offset policy checks,
     retaining the compatibility entry and all indexed-read semantics.
+    Typed AOT callbacks can pass exact heap-backed integer arguments through eligible native entries,
+    retaining ordinary binding for unsupported or unavailable entries and all live invocation checks.
     Prepared typed AOT closure calls avoid duplicate native admission after a missed attempt,
     preserving argument binding, wide-integer fast paths and full program transitions.
     Native scalar closure admission rejects foreign-program calls before temporary context setup,

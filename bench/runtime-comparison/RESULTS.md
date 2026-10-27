@@ -25875,3 +25875,381 @@ Linked legacy dispatch has 268 instructions versus 271 before; specialized dispa
 All 3636 candidate jobs/10908 measured windows and 288 superseded jobs/864 windows are independently replayed from child output and actual completion receipts. The shared host has no exclusive CPU, affinity, frequency or thermal control. No new Java/develop ratio, weighted application gain, full-suite/sanitizer/Linux or external binary-module result, or global performance ceiling is inferred. Next investigate checked boxed-wide argument admission and the remaining plain-closure cost, preserving lifetime, argument compatibility and full Program semantics.
 
 [Audit](audit-typed-closure-fallback.md); [raw evidence](results-typed-closure-fallback-macos-arm64.json).
+
+## Checked boxed integer arguments for typed AOT callbacks (2026-10-27)
+
+Retained after evaluating the broader workload tradeoff. Exact heap-backed integer
+arguments of unknown representation can now reach the existing prepared int(int)
+callback entry. Inline integers retain their original route. The new internal
+qore_rt_try_typed_int_argument_v1 helper checks the argument without coercion and
+requires an enabled, published native closure companion or an exact function
+reference with a typed entry. It borrows both values, allocates nothing, retains
+no pointer and does not evaluate Qore code. Its scalar output shares the existing
+result slot and is loaded before the native call overwrites that slot.
+
+This preliminary capability check does not replace live invocation admission.
+Missing/disabled entries, cold closures, other argument types and legacy v1/v2
+helpers keep ordinary binding. Actual scalar-attempt misses retain the existing
+typed fallback. Full Program entry, ownership, counts/locks/TLPD, debugger,
+stack, context, exception and capture checks remain. There is one additive
+versioned internal C export and no object/frame layout change.
+QORE_DISABLE_AOT_TYPED_BOXED_INT_ARGUMENT=1 selects the original compiler route.
+This is an AOT optimization; no IR/JIT speed improvement is inferred.
+
+The exact installed e16d3b41b7 runtime is the baseline. Both sides use Release
+-O3 -DNDEBUG, allocation tracking disabled and qcc -O3 on the same Apple M4 Pro,
+macOS 27.0.1 arm64 / LLVM 22.1.8 host. A third control uses the candidate runtime
+with the new compiler path disabled. Each workload runs in three independently
+linked layouts (default, reverse, shuffle-487), with three fresh processes per
+layout/variant in screens and five in confirmation, one warmup and three timed
+150 ms windows. Jobs are shuffled and sequential. Figures are whole-kernel
+ns/item, median of per-layout medians of process means, not isolated call latency.
+No owned build, test, profiler or measured-input mutation overlaps timing.
+
+Five-fork confirmation of same-Program wide arguments improves pure closures
+61.237936 to 56.726822 ns/item (-7.37%) and pure function references 84.204731 to
+49.907299 (-40.73%). For imported module function references whose captured
+Program differs from the current/body-owner Program, the wide kernel improves
+296.117671 to 106.170835 (-64.15%). Live probes verify these distinct identities;
+source inspection establishes that accepted module function calls retain full
+cross-Program context entry. The probe does not separately time that transition.
+Module closures miss direct scalar admission and use ordinary fallback. The
+module probe's inherited standalone caption is corrected in an archived context
+clarification; the original evidence is preserved.
+
+The gains have costs. Same-Program pure inline function calls are 2.26% slower
+(31.759742 to 32.477106 ns/item). Wide effectful closures are 2.54% slower
+(211.219091 to 216.585494), and wide effectful function references 3.46% slower
+(221.225297 to 228.885001); the latter cost repeats in all three layouts. The
+compiler-disabled controls are retained beside all measurements. Module effectful
+wide closures cost 2.30%, pure inline functions 2.00%, and effectful wide function
+references 1.87%. These measured costs are accepted explicitly in exchange for
+the larger eligible wide-argument gains; they are not dismissed as noise.
+
+The 78-workload broad screen ranges from -2.40% to +2.63%; captured-closure
+creation is the largest aggregate cost. Its 38-workload, five-fork confirmation
+has no disjoint-layout flags, and the largest aggregate cost is 1.92% for that
+creation workload. Four mixed workloads change +0.34% to +0.96% in confirmation
+versus -0.43% to +0.07% in the screen. All 18 before/candidate broad LLVM module
+pairs are equal after only runtime-identity normalization: these controls measure
+runtime/layout effects and do not exercise the new argument helper. No weighted
+application gain is inferred. The standalone count-one wide result changes only
+-0.50%; count-sixteen improves 4.53%. Neither passes the descriptive 5% /
+every-layout predicate, so neither establishes the sustained-call target at
+short counts. Native-disabled standalone wide arguments cost 1.65% versus the
+baseline and 2.83% versus the compiler-disabled control in confirmation.
+
+### Standalone pure closure — timing
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change|!Compiler-disabled ns/item
+|boxed_inline|38.927106|39.086360|+0.409%|39.217970
+|boxed_wide|61.556586|57.448449|-6.674%|62.626878
+
+### Standalone pure closure — confirmation
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change|!Compiler-disabled ns/item
+|boxed_inline|39.040183|39.237160|+0.505%|38.999394
+|boxed_wide|61.237936|56.726822|-7.367%|61.561604
+
+### Standalone pure closure — generic-screen
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change|!Compiler-disabled ns/item
+|boxed_inline|148.487558|148.174981|-0.211%|147.242030
+|boxed_wide|167.770947|172.197983|+2.639%|167.906233
+
+### Standalone pure closure — generic-confirmation
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change|!Compiler-disabled ns/item
+|boxed_inline|148.630698|147.664596|-0.650%|148.731160
+|boxed_wide|170.046788|172.848421|+1.648%|168.092849
+
+### Standalone pure closure — short1
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change|!Compiler-disabled ns/item
+|boxed_inline|658.216267|662.308540|+0.622%|665.829274
+|boxed_wide|757.404890|753.598267|-0.503%|765.549918
+
+### Standalone pure closure — short16
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change|!Compiler-disabled ns/item
+|boxed_inline|79.303332|79.048818|-0.321%|79.946932
+|boxed_wide|106.792607|101.951038|-4.534%|106.306923
+
+### Same-Program callback controls — timing
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change|!Compiler-disabled ns/item
+|closure_effect_inline|181.378469|181.136006|-0.134%|181.730318
+|closure_effect_wide|211.377632|220.352887|+4.246%|213.027281
+|function_plain_inline|31.723679|32.443071|+2.268%|32.093551
+|function_plain_wide|84.585091|50.349522|-40.475%|85.802435
+|function_effect_inline|206.962170|208.174106|+0.586%|210.883595
+|function_effect_wide|223.346694|229.273308|+2.654%|224.239862
+
+### Same-Program callback controls — confirmation
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change|!Compiler-disabled ns/item
+|closure_effect_inline|179.497512|181.181168|+0.938%|181.506025
+|closure_effect_wide|211.219091|216.585494|+2.541%|211.018173
+|function_plain_inline|31.759742|32.477106|+2.259%|32.107834
+|function_plain_wide|84.204731|49.907299|-40.731%|85.368519
+|function_effect_inline|206.975297|209.257760|+1.103%|210.616851
+|function_effect_wide|221.225297|228.885001|+3.462%|222.047637
+
+### Imported module / Program boundary — timing
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change|!Compiler-disabled ns/item
+|closure_plain_inline|142.566850|142.987434|+0.295%|143.677842
+|closure_plain_wide|177.314351|180.784729|+1.957%|177.606837
+|closure_effect_inline|178.812905|179.946277|+0.634%|180.167979
+|closure_effect_wide|210.073161|215.822582|+2.737%|212.849852
+|function_plain_inline|86.102094|87.436443|+1.550%|87.050431
+|function_plain_wide|295.063927|106.072708|-64.051%|296.830036
+|function_effect_inline|317.374638|319.337530|+0.618%|321.768457
+|function_effect_wide|339.913036|343.342688|+1.009%|335.230658
+
+### Imported module / Program boundary — confirmation
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change|!Compiler-disabled ns/item
+|closure_plain_inline|142.217362|142.615029|+0.280%|143.229485
+|closure_plain_wide|176.223731|178.308587|+1.183%|177.011324
+|closure_effect_inline|179.907381|181.016944|+0.617%|181.746085
+|closure_effect_wide|210.765727|215.607958|+2.297%|210.268929
+|function_plain_inline|85.630366|87.345741|+2.003%|87.165256
+|function_plain_wide|296.117671|106.170835|-64.146%|294.363827
+|function_effect_inline|321.122904|319.251688|-0.583%|318.930572
+|function_effect_wide|339.821945|346.189023|+1.874%|339.111035
+
+### Broad workload controls — broad
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change
+|float:direct_local_float_return|0.833011|0.830849|-0.260%
+|float:callback_local_float_return|0.879202|0.877186|-0.229%
+|float:direct_local_float_result|0.745409|0.734422|-1.474%
+|float:callback_local_float_result|0.843242|0.835716|-0.892%
+|float:direct_loop_float_return|6.004458|6.052671|+0.803%
+|float:callback_loop_float_return|5.281467|5.254808|-0.505%
+|float:direct_float_add|0.838004|0.837138|-0.103%
+|float:static_float_add|0.827007|0.831175|+0.504%
+|float:typed_local_int_unary|1.242556|1.233260|-0.748%
+|float:typed_local_float_unary|0.909918|0.923628|+1.507%
+|float:result_float_add|0.863510|0.870601|+0.821%
+|float:typed_local_int_result|0.851313|0.839186|-1.424%
+|micro:arithmetic|1.637674|1.637094|-0.035%
+|micro:direct_call|1.652062|1.654030|+0.119%
+|micro:method_call|1.724847|1.735292|+0.606%
+|micro:indirect_call|61.653840|61.280692|-0.605%
+|micro:polymorphic_call|24.032009|24.388581|+1.484%
+|micro:polymorphic_expression_call|11.526675|11.532032|+0.046%
+|micro:monomorphic_call|3.889141|3.893437|+0.110%
+|micro:optional_method_call|11.401433|11.435427|+0.298%
+|micro:polymorphic_float_call|24.332460|24.543839|+0.869%
+|micro:polymorphic_float_expression_call|11.937728|11.928060|-0.081%
+|micro:monomorphic_float_call|4.328362|4.355386|+0.624%
+|micro:optional_float_method_call|11.580614|11.633996|+0.461%
+|micro:boxed_float_method_call|21.165570|20.890305|-1.301%
+|micro:dynamic_int_result_call|11.413261|11.462561|+0.432%
+|micro:dynamic_int_result_fallback|22.269430|22.022952|-1.107%
+|micro:boxed_int_method_call|17.545292|17.366785|-1.017%
+|micro:boxed_int_method_fallback|33.900862|33.806311|-0.279%
+|micro:boxed_float_method_fallback|35.965724|35.265096|-1.948%
+|micro:boxed_int_method_effect|94.115705|91.851891|-2.405%
+|micro:dynamic_float_result_call|12.465041|12.422474|-0.341%
+|micro:indirect_wide|61.917698|61.660929|-0.415%
+|micro:indirect_float|61.053161|60.856355|-0.322%
+|micro:indirect_int_result|60.942651|60.658987|-0.465%
+|micro:indirect_float_result|60.962662|61.503776|+0.888%
+|micro:indirect_tagged_float|60.712708|60.787332|+0.123%
+|micro:indirect_branch_float|60.316147|60.443001|+0.210%
+|micro:indirect_affine|61.894124|61.122230|-1.247%
+|micro:indirect_affine_wide|61.229528|60.934172|-0.482%
+|micro:indirect_branch_int|61.711282|61.125011|-0.950%
+|micro:dispatch_control|2.102185|2.056358|-2.180%
+|micro:list_read|3.062084|3.109845|+1.560%
+|micro:list_build|29.764419|29.751148|-0.045%
+|micro:list_mutate|142.245399|141.066528|-0.829%
+|micro:temporary_list|1.804119|1.812821|+0.482%
+|micro:temporary_hash|1.801488|1.814058|+0.698%
+|micro:closure_call|14.926839|14.750513|-1.181%
+|micro:closure_capture|20.797284|20.516070|-1.352%
+|mixed:csv_report|976.215563|975.290399|-0.095%
+|mixed:object_orders|1895.467122|1887.386068|-0.426%
+|mixed:callback_pipeline|127.194257|126.919481|-0.216%
+|mixed:text_index|1517.025553|1518.014323|+0.065%
+|probe:object_loop|425.043247|418.368487|-1.570%
+|probe:object_short|1653.370652|1649.497855|-0.234%
+|probe:float_loop|449.033635|449.492889|+0.102%
+|probe:float_short|1694.709547|1689.786044|-0.291%
+|probe:string_loop|381.202514|380.261189|-0.247%
+|probe:string_short|1540.666368|1553.426107|+0.828%
+|probe:effect_loop|474.872350|471.250883|-0.763%
+|probe:effect_short|1729.388613|1696.533203|-1.900%
+|probe:two_read_loop|515.940237|516.435777|+0.096%
+|probe:two_read_short|1759.040954|1762.120367|+0.175%
+|probe:default_loop|798.169932|804.618504|+0.808%
+|probe:default_short|2086.023401|2052.872626|-1.589%
+|probe:string_result_loop|547.959779|542.332070|-1.027%
+|probe:string_result_short|1811.193848|1817.313058|+0.338%
+|index:list_positive|9.083217|9.063829|-0.213%
+|index:list_negative|8.982464|9.042447|+0.668%
+|index:binary_positive|8.780018|8.748820|-0.355%
+|index:binary_negative|9.399172|9.429645|+0.324%
+|index:buffer_positive|16.388287|16.278595|-0.669%
+|index:buffer_negative|16.303756|16.349198|+0.279%
+|lifecycle:object_closure_live|79.652945|77.753704|-2.384%
+|lifecycle:object_closure_dead|78.156369|76.941904|-1.554%
+|lifecycle:closure_create_plain|334.311566|328.241187|-1.816%
+|lifecycle:closure_create_capture|616.158040|632.333898|+2.625%
+|lifecycle:closure_create_object|917.321182|896.561785|-2.263%
+
+### Broad workload controls — confirmation
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change
+|float:callback_local_float_result|0.835644|0.827281|-1.001%
+|float:callback_local_float_return|0.887244|0.874983|-1.382%
+|float:callback_loop_float_return|5.152337|5.140677|-0.226%
+|float:direct_loop_float_return|6.010144|6.078821|+1.143%
+|float:typed_local_int_result|0.844089|0.847493|+0.403%
+|float:typed_local_int_unary|1.211157|1.206528|-0.382%
+|index:list_negative|8.909611|8.880952|-0.322%
+|index:list_positive|9.003357|8.951228|-0.579%
+|lifecycle:closure_create_capture|597.594623|609.048523|+1.917%
+|lifecycle:closure_create_object|891.851563|890.490642|-0.153%
+|lifecycle:closure_create_plain|329.652655|327.056827|-0.787%
+|lifecycle:object_closure_dead|77.784554|76.241522|-1.984%
+|lifecycle:object_closure_live|76.895037|76.366051|-0.688%
+|micro:boxed_float_method_call|20.696142|20.569485|-0.612%
+|micro:boxed_float_method_fallback|35.204319|34.607198|-1.696%
+|micro:boxed_int_method_call|17.198485|17.068055|-0.758%
+|micro:boxed_int_method_fallback|32.872265|33.358712|+1.480%
+|micro:closure_call|15.261815|14.741414|-3.410%
+|micro:closure_capture|21.068467|20.415679|-3.098%
+|micro:direct_call|1.602069|1.601255|-0.051%
+|micro:indirect_affine_wide|59.814663|59.506609|-0.515%
+|micro:indirect_call|61.333764|61.213979|-0.195%
+|micro:indirect_float|60.220334|60.476775|+0.426%
+|micro:indirect_float_result|59.507897|59.629313|+0.204%
+|micro:indirect_wide|61.753400|61.356446|-0.643%
+|micro:list_build|29.401640|29.619572|+0.741%
+|micro:list_mutate|136.537415|136.379938|-0.115%
+|micro:list_read|3.056360|3.077301|+0.685%
+|micro:method_call|1.674560|1.674482|-0.005%
+|micro:monomorphic_call|3.858661|3.802815|-1.447%
+|micro:monomorphic_float_call|4.221058|4.259749|+0.917%
+|micro:polymorphic_call|23.824261|24.036008|+0.889%
+|micro:polymorphic_float_call|23.926915|24.062969|+0.569%
+|micro:temporary_hash|1.801617|1.793988|-0.423%
+|mixed:callback_pipeline|124.929536|126.024742|+0.877%
+|mixed:csv_report|978.618421|981.943560|+0.340%
+|mixed:object_orders|1847.664388|1862.410482|+0.798%
+|mixed:text_index|1471.487255|1485.576172|+0.957%
+
+### Broad workload controls — short1
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change
+|micro:closure_call|2550.743114|2564.023010|+0.521%
+|micro:closure_capture|2577.701755|2581.557323|+0.150%
+|micro:indirect_call|2621.841970|2607.414522|-0.550%
+|micro:direct_call|2481.089316|2488.943682|+0.317%
+|lifecycle:object_closure_live|358.753522|354.549511|-1.172%
+|lifecycle:object_closure_dead|358.260947|365.305613|+1.966%
+|lifecycle:closure_create_plain|656.351626|662.149526|+0.883%
+|lifecycle:closure_create_capture|952.370537|951.613525|-0.079%
+|lifecycle:closure_create_object|1555.732320|1569.388948|+0.878%
+
+### Broad workload controls — short16
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change
+|micro:closure_call|174.139323|174.108635|-0.018%
+|micro:closure_capture|183.056164|183.092203|+0.020%
+|micro:indirect_call|222.931307|223.083611|+0.068%
+|micro:direct_call|154.858739|157.779873|+1.886%
+|lifecycle:object_closure_live|98.109460|97.085607|-1.044%
+|lifecycle:object_closure_dead|99.016539|97.585495|-1.445%
+|lifecycle:closure_create_plain|356.447289|355.581541|-0.243%
+|lifecycle:closure_create_capture|648.220854|661.094747|+1.986%
+|lifecycle:closure_create_object|967.823737|942.461680|-2.621%
+
+### Populated Program context — screen
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change
+|context_micro:closure_call|29.864940|29.469778|-1.323%
+|context_micro:closure_capture|35.194601|35.419997|+0.640%
+|context_micro:indirect_call|282.667505|282.327654|-0.120%
+|context_micro:indirect_float|280.680400|283.796372|+1.110%
+|context_micro:indirect_wide|362.442182|359.460704|-0.823%
+|context_micro:indirect_affine_wide|363.802259|364.103915|+0.083%
+|context_lifecycle:object_closure_live|107.229403|107.382488|+0.143%
+|context_lifecycle:object_closure_dead|107.365432|106.093932|-1.184%
+
+### Populated Program context — confirmation
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change
+|context_lifecycle:object_closure_dead|106.804441|106.589307|-0.201%
+|context_lifecycle:object_closure_live|107.768497|107.196283|-0.531%
+|context_micro:closure_call|30.077760|29.264060|-2.705%
+|context_micro:closure_capture|35.528472|35.444397|-0.237%
+|context_micro:indirect_affine_wide|364.776363|365.152848|+0.103%
+|context_micro:indirect_call|282.351767|283.924182|+0.557%
+|context_micro:indirect_float|281.579216|282.079728|+0.178%
+|context_micro:indirect_wide|361.622230|361.795347|+0.048%
+
+### Native closure entry disabled — screen
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change
+|generic_micro:closure_call|128.928977|123.298677|-4.367%
+|generic_micro:closure_capture|147.173938|145.245331|-1.310%
+|generic_lifecycle:object_closure_live|207.201377|209.903781|+1.304%
+|generic_lifecycle:object_closure_dead|207.838498|210.564157|+1.311%
+
+### Native closure entry disabled — confirmation
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change
+|generic_lifecycle:object_closure_dead|208.571522|206.133827|-1.169%
+|generic_lifecycle:object_closure_live|207.751477|206.178587|-0.757%
+|generic_micro:closure_call|123.925729|122.345721|-1.275%
+|generic_micro:closure_capture|146.550670|144.858098|-1.155%
+
+Earlier variants remain in the evidence. A separate argument output slot gained
+11.55% on wide closure arguments but cost 2.01% inline; sharing the slot gained
+12.12% on wide arguments but cost 11.60% when native closure entry was disabled.
+Adding closure capability checks reduced that problem, but an effectful function
+reference still regressed 8.39%. The retained variant also checks function-entry
+capability. An earlier alignment-only experiment failed its improvement predicate
+and was restored before this candidate. An intermediate build was cancelled and
+waited after review found the new route must exclude legacy helpers v1/v2. The
+first module diagnostic used a forbidden namespace thread-local initializer;
+a separately preserved corrected fixture passes the unchanged baseline. These
+failures, revisions, source snapshots and actual child completion receipts remain
+separate; no samples or phases are pooled or discarded.
+
+Release and Debug each pass 33 QUnit runs / 216 cases / 8491 assertions plus three
+standalone fixtures. The native test reports 2917 matching the baseline, and
+1110 standard references pass. Additional reference checks cover 432 standalone,
+1296 effectful/function, 1728 module, 9024 paired broad, 3780 populated and 3780
+native-disabled cases. The function-fast-path-disabled control passes 324
+references. All 391 Release qmod aliases/hashes are restored after Debug. New
+semantic cases cover int48 boundaries, signed 64-bit endpoints, effectful
+callbacks executing exactly once, unsupported values, ownership, exceptions,
+compiler-disabled and legacy paths. The dynamic closure fixture has 586 QUnit
+assertions; internal fixture checks are not added to that QUnit count.
+
+All 4848 current jobs / 14544 measured windows, 432 superseded jobs / 1296 windows
+and the rejected alignment experiment's 108 jobs / 324 windows are independently
+reconstructed from raw child output and actual waited process receipts. The
+archive includes executed drivers, benchmark sources, build/test/probe receipts,
+source/runtime hashes and deduplicated dependency manifests whose original JSON
+hashes are independently reconstructed. Native binaries, full LLVM and large
+compiler/build logs remain in the local archives; hashes and proof results are
+published. Shared-host CPU placement, thermal state and frequency are uncontrolled.
+There is no new Java/develop comparison, full-suite/sanitizer/Linux result,
+external binary-module result or global performance ceiling claim. The earlier
+optimized cumulative comparison remains the Java/develop reference; do not combine
+its denominators with this experiment as a fresh paired ratio.
+
+Next investigate a sole integer arithmetic consumer of a typed callback result:
+current generated code can box a successful scalar result and immediately unbox
+it for AddInt. Preserve conversion order, generic ownership and cleanup, dominance
+and complete use counting. Conditional caller-local invalidation is a separate,
+later investigation because deferred destructor effects must be accounted for.
+
+[Audit](audit-typed-boxed-int-argument.md); [raw evidence](results-typed-boxed-int-argument-macos-arm64.json).

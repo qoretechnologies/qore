@@ -7213,10 +7213,54 @@ static bool isFunctionRefFastCallDisabled() {
 // Only this internal concrete node implements the guarded convention. An exact
 // RTTI check avoids an inheritance walk; future subclasses keep virtual dispatch
 // rather than accidentally bypassing an overridden execValue(). Callers have
-// already established a non-null NT_FUNCREF node and the owning Program.
+// already established a non-null NT_FUNCREF node. Program admission remains
+// the caller's responsibility.
 static const FunctionCallReferenceNode* getExactFunctionRef(const AbstractQoreNode* node) {
     return typeid(*node) == typeid(FunctionCallReferenceNode)
         ? static_cast<const FunctionCallReferenceNode*>(node) : nullptr;
+}
+
+extern "C" DLLEXPORT int qore_rt_try_typed_int_argument_v1(uint64_t ref_bits, uint64_t val,
+        int64_t* result) {
+    *result = 0;
+    QoreValue argument = fromBits(val);
+    if (argument.getType() != NT_INT) {
+        return 0;
+    }
+    QoreValue ref = fromBits(ref_bits);
+    if (ref.getType() == NT_RUNTIME_CLOSURE) {
+        // A scalar attempt cannot help a disabled or unpublished closure entry.
+        // Reject without unboxing or entering prepared dispatch; the original
+        // fallback still performs binding and can materialize a cold entry.
+        if (!isDynamicClosureEntryEnabled()) {
+            return 0;
+        }
+        const auto* closure = static_cast<const QoreClosureBase*>(ref.getInternalNode());
+        const auto* function = closure->getClosureParseNode()->getFunction();
+        const auto* variant = function->first();
+        assert(dynamic_cast<const UserClosureVariant*>(variant));
+        const UserVariantBase* uvb = static_cast<const UserClosureVariant*>(variant);
+        if (!uvb->hasCachedAOT()) {
+            return 0;
+        }
+        QoreAOTContext* ctx = uvb->getCachedAOTContext();
+        if (!ctx || !ctx->native_int_unary_closure_entry.load(std::memory_order_acquire)) {
+            return 0;
+        }
+    } else {
+        // A function reference publishes its optional typed entry before it can
+        // be observed. Missing entries cannot benefit from prepared dispatch.
+        // Final binding, Program and debugger checks remain in the scalar call.
+        if (ref.getType() != NT_FUNCREF || isFunctionRefFastCallDisabled()) {
+            return 0;
+        }
+        const auto* function = getExactFunctionRef(ref.getInternalNode());
+        if (!function || !function->getTypedEntry(1 | (1 << 2))) {
+            return 0;
+        }
+    }
+    *result = argument.getAsBigInt();
+    return 1;
 }
 
 // evalTiered() observes the body owner's debugger even when an imported

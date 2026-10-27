@@ -36,6 +36,7 @@ class DynamicClosureEntryTest inherits QUnit::Test {
         TmpDir dir("qore-dynamic-closure-");
         foreach string prefix in (("", "QORE_AOT_EH=1 ",
                 "QORE_DISABLE_AOT_TYPED_CLOSURE_FALLBACK=1 ",
+                "QORE_DISABLE_AOT_TYPED_BOXED_INT_ARGUMENT=1 ",
                 "QORE_DISABLE_AOT_FUNCREF_RUNTIME_CONFIG=1 ",
                 "QORE_DISABLE_AOT_FUNCREF_PREPARED_TARGET=1 ",
                 "QORE_DISABLE_AOT_DYNAMIC_CLOSURE_ENTRY=1 ",
@@ -72,6 +73,8 @@ class DynamicClosureEntryTest inherits QUnit::Test {
                     "alternating loop exercises the prepared callback miss route");
                 bool typed_fallback = !prefix.startsWith("QORE_DISABLE_AOT_TYPED_CLOSURE_FALLBACK=")
                     && helper_version != "v1" && helper_version != "v2";
+                bool checked_boxed_argument = !prefix.startsWith("QORE_DISABLE_AOT_TYPED_BOXED_INT_ARGUMENT=")
+                    && helper_version != "v1" && helper_version != "v2";
                 foreach string helper in (("qore_rt_call_closure_typed_fallback_v1",
                         "qore_rt_call_closure_typed_fallback_consume_args_v1")) {
                     assertEq(typed_fallback, regex(ir, "(call|invoke) i64 @" + helper),
@@ -81,6 +84,9 @@ class DynamicClosureEntryTest inherits QUnit::Test {
                     *list<*string> body = regex_extract(ir,
                         "(?s)define [^\\n]*@" + function_name + "[^\\n]*\\{(.*?)\\n\\}");
                     assertTrue(!!body, "boxed argument caller found: " + function_name);
+                    assertEq(checked_boxed_argument,
+                        regex(body[0] ?? "", "call i32 @qore_rt_try_typed_int_argument_v1"),
+                        "checked boxed integer argument: " + function_name);
                     assertTrue(regex(body[0] ?? "", "(call|invoke) i64 @qore_rt_call_closure_fast"),
                         "argument-compatibility miss retains original native admission: " + function_name);
                 }

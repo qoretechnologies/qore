@@ -6,12 +6,17 @@
 int sub dynamicClosureCall(code<int(int)> callback, int value) {
     return callback(value);
 }
-# An unknown representation must keep argument binding on the typed fallback,
-# including wide integers that do not fit the inline integer tag.
+# Unknown arguments must retain binding semantics, including wide integers
+# that do not fit the inline integer tag and unsupported argument types.
 auto sub dynamicClosureAutoArg(code<int(int)> callback, auto value) {
     return callback(value);
 }
 thread_local int fallbackDestroyed = 0;
+thread_local int functionEffects = 0;
+int sub dynamicClosureEffectFunction(int value) {
+    ++functionEffects;
+    return value + 1;
+}
 class DynamicClosureOwnedArgument {
     destructor() { ++fallbackDestroyed; }
 }
@@ -103,10 +108,23 @@ for (int i = 0; i < 16; ++i) {
     checkValue(i + 1, dynamicClosureCall(effect, i), "effect fallback");
 }
 checkValue(16, effects, "effects exactly once");
+checkValue(1125899906842625, dynamicClosureAutoArg(effect, 1125899906842624),
+    "boxed wide argument to an effectful closure");
+checkValue(17, effects, "boxed effect exactly once");
+code<int(int)> effectFunction = \dynamicClosureEffectFunction();
+foreach int input in ((7, 1125899906842624, -1125899906842624,
+        9223372036854775807, -9223372036854775807 - 1)) {
+    functionEffects = 0;
+    checkValue(input + 1, dynamicClosureAutoArg(effectFunction, input), "boxed effectful function");
+    checkValue(1, functionEffects, "boxed function effect exactly once");
+}
 
-foreach int input in ((7, 140737488355327, 140737488355328, -140737488355329)) {
+foreach int input in ((7, 140737488355327, 140737488355328, -140737488355328,
+        -140737488355329, 9223372036854775807, -9223372036854775807 - 1)) {
     checkValue((input * 3 + 17) ^ 5, dynamicClosureAutoArg(first, input),
         "boxed argument compatibility fallback");
+    checkValue((input * 3 + 47) ^ 5, dynamicClosureAutoArg(function, input),
+        "boxed function reference argument");
 }
 checkValue((1125899906842624 * 3 + 17) ^ 5, dynamicClosureConsumedArg(first, False),
     "consumed wide argument");
