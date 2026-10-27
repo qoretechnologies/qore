@@ -1018,6 +1018,10 @@ class InputBuffer {
   int len;           // length of text in input buffer
   int pos;           // character position in buffer ( 0 <= pos <= len )
   int terminatingKeystroke;  // used by history search to pass back terminating key
+  // whether the line being edited uses the history provider, decided when the line starts: the internal history holds
+  // an entry for the line only when it does not, and a callback can set or remove the provider while the line is
+  // edited
+  bool lineUsesProvider;
 
   void clearScreen(PromptBase& pi);
   int incrementalHistorySearch(PromptBase& pi, int startChar);
@@ -1066,7 +1070,8 @@ class InputBuffer {
         buflen(bufferLen - 1),
         len(0),
         pos(0),
-        terminatingKeystroke(-1) {
+        terminatingKeystroke(-1),
+        lineUsesProvider(false) {
     buf32[0] = 0;
   }
   void preloadBuffer(const char* preloadText) {
@@ -2801,7 +2806,7 @@ int InputBuffer::incrementalHistorySearch(PromptBase& pi, int startChar) {
 
   // When using a history provider, we keep a local UTF-8 string for the
   // "current line" instead of using the internal history array.
-  bool useProvider = hasHistoryProvider() && historySearchCallback;
+  bool useProvider = lineUsesProvider && historySearchCallback;
   std::string providerLine;
 
   // if not already recalling, add the current line to the history list so we
@@ -2983,8 +2988,9 @@ int InputBuffer::incrementalHistorySearch(PromptBase& pi, int startChar) {
           unique_ptr<char[]> searchUtf8(new char[searchBufSize]);
           copyString32to8(searchUtf8.get(), searchBufSize, dp.searchText.get());
 
-          char* match = historySearchCallback(
-              searchUtf8.get(), dp.direction, historyProviderUserData);
+          // the provider can have been removed during the search
+          char* match = historySearchCallback
+              ? historySearchCallback(searchUtf8.get(), dp.direction, historyProviderUserData) : NULL;
           if (match) {
             providerLine = match;
             free(match);
@@ -3232,7 +3238,7 @@ void initDefaultBindings() {
 // --- Key handler implementations ---
 
 int InputBuffer::handleTimeout(PromptBase& pi, KillRing& killRing, int c) {
-  if (!hasHistoryProvider()) {
+  if (!lineUsesProvider) {
     --historyLen;
     free(history[historyLen]);
   }
@@ -3273,7 +3279,7 @@ int InputBuffer::handleAbort(PromptBase& pi, KillRing& killRing, int c) {
   killRing.lastAction = KillRing::actionOther;
   historyRecallMostRecent = false;
   errno = EAGAIN;
-  if (!hasHistoryProvider()) {
+  if (!lineUsesProvider) {
     --historyLen;
     free(history[historyLen]);
   }
@@ -3319,7 +3325,7 @@ int InputBuffer::handleDeleteOrExit(PromptBase& pi, KillRing& killRing, int c) {
     --len;
     refreshLine(pi);
   } else if (len == 0) {
-    if (!hasHistoryProvider()) {
+    if (!lineUsesProvider) {
       --historyLen;
       free(history[historyLen]);
     }
@@ -3420,7 +3426,7 @@ int InputBuffer::handleAcceptLine(PromptBase& pi, KillRing& killRing, int c) {
   // so we don't display the next prompt over the previous input line
   pos = len;  // pass len as pos for EOL
   refreshLine(pi);
-  if (hasHistoryProvider()) {
+  if (lineUsesProvider) {
     providerNavigating = false;
     providerSavedLine.clear();
   } else {
@@ -3469,7 +3475,7 @@ int InputBuffer::handleLowercaseWord(PromptBase& pi, KillRing& killRing, int c) 
 int InputBuffer::handleHistoryNavigate(PromptBase& pi, KillRing& killRing, int c) {
   killRing.lastAction = KillRing::actionOther;
 
-  if (hasHistoryProvider()) {
+  if (lineUsesProvider) {
     // History provider mode
     bool goingUp = (c == UP_ARROW_KEY || c == ctrlChar('P'));
 
@@ -3482,7 +3488,9 @@ int InputBuffer::handleHistoryNavigate(PromptBase& pi, KillRing& killRing, int c
         providerSavedLine = tempBuffer.get();
         providerNavigating = true;
       }
-      char* entry = historyPrevCallback(providerSavedLine.c_str(), historyProviderUserData);
+      // the provider can have been removed while the line is edited
+      char* entry = historyPrevCallback
+          ? historyPrevCallback(providerSavedLine.c_str(), historyProviderUserData) : NULL;
       if (entry) {
         size_t ucharCount = 0;
         copyString8to32(buf32, buflen, ucharCount, entry);
@@ -3495,7 +3503,8 @@ int InputBuffer::handleHistoryNavigate(PromptBase& pi, KillRing& killRing, int c
     } else {
       // Going down (newer)
       if (providerNavigating) {
-        char* entry = historyNextCallback(providerSavedLine.c_str(), historyProviderUserData);
+        char* entry = historyNextCallback
+            ? historyNextCallback(providerSavedLine.c_str(), historyProviderUserData) : NULL;
         if (entry) {
           size_t ucharCount = 0;
           copyString8to32(buf32, buflen, ucharCount, entry);
@@ -3555,7 +3564,7 @@ int InputBuffer::handleHistoryNavigate(PromptBase& pi, KillRing& killRing, int c
 }
 
 int InputBuffer::handleHistorySearch(PromptBase& pi, KillRing& killRing, int c) {
-  if (hasHistoryProvider() && !historySearchCallback) {
+  if (lineUsesProvider && !historySearchCallback) {
     // Provider set but no search callback
     beep();
     return 0;
@@ -3841,7 +3850,7 @@ int InputBuffer::handleBracketedPaste(PromptBase& pi, KillRing& killRing, int c)
 int InputBuffer::handleHistoryJump(PromptBase& pi, KillRing& killRing, int c) {
   killRing.lastAction = KillRing::actionOther;
 
-  if (hasHistoryProvider()) {
+  if (lineUsesProvider) {
     // No jump-to-start/end concept in provider API
     beep();
     return 0;
@@ -3904,7 +3913,8 @@ int InputBuffer::getInputLine(PromptBase& pi) {
   undoStack.clear();
 
   // The latest history entry is always our current buffer
-  if (hasHistoryProvider()) {
+  lineUsesProvider = hasHistoryProvider();
+  if (lineUsesProvider) {
     if (historyResetCallback) {
       historyResetCallback(historyProviderUserData);
     }

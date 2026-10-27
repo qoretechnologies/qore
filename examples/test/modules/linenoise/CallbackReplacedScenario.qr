@@ -1,0 +1,118 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Run by callback-replaced-in-callback.qtest in a terminal that script(1) creates, with the result file and the kind
+# of callback as arguments; the test types the input that runs the callback once the prompt is displayed.  The
+# callback replaces or removes itself while it runs, then uses what it captured.  Each callback captures (or, for the
+# history provider, is) a Witness object that records when it is destroyed: the module holds the only reference to
+# the callback, so the Witness must be destroyed only after the callback has returned.  In the "history-set" kind, a
+# key binding sets a history provider while a line that uses the internal history is edited.
+
+%requires linenoise
+
+our list<string> events = ();
+
+class Witness {
+    private {
+        string name;
+    }
+
+    constructor(string name) {
+        self.name = name;
+    }
+
+    destructor() {
+        events += "destroyed " + name;
+    }
+
+    string getName() {
+        return name;
+    }
+}
+
+class ReplacedProvider inherits Linenoise::AbstractHistoryProvider {
+    *string prev(string prefix) {
+        events += "start history";
+        Linenoise::set_history_provider();
+        events += "after replace history";
+        return "from the provider";
+    }
+
+    *string next(string prefix) {
+    }
+
+    reset() {
+    }
+
+    destructor() {
+        events += "destroyed history";
+    }
+}
+
+string result_path = ARGV[0];
+string kind = ARGV[1];
+
+# the callbacks are created in a function, so the module holds the only reference to each of them
+sub install(string kind) {
+    # the history provider kinds have no Witness: the provider object records its destruction itself
+    *Witness w = inlist(kind, ("history", "history-set")) ? NOTHING : new Witness(kind);
+    switch (kind) {
+        case "completion":
+            Linenoise::set_callback(list<string> sub (string input) {
+                events += "start completion";
+                Linenoise::set_callback(list<string> sub (string input) { return (); });
+                events += "after replace " + w.getName();
+                return ("abc",);
+            });
+            break;
+        case "hints":
+            Linenoise::set_hints_callback(*string sub (string input) {
+                events += "start hints";
+                Linenoise::set_hints_callback();
+                events += "after replace " + w.getName();
+                return " hint";
+            });
+            break;
+        case "syntax":
+            Linenoise::set_syntax_callback(*string sub (string input) {
+                events += "start syntax";
+                Linenoise::set_syntax_callback();
+                events += "after replace " + w.getName();
+                return input;
+            });
+            break;
+        case "key":
+            Linenoise::bind_key("ctrl-x", *hash<auto> sub (hash<auto> info) {
+                events += "start key";
+                Linenoise::unbind_key("ctrl-x");
+                events += "after replace " + w.getName();
+                return {"line": "key", "pos": 3};
+            });
+            break;
+        case "history":
+            Linenoise::set_history_provider(new ReplacedProvider());
+            break;
+        case "history-set":
+            # the line starts without a history provider, so it uses the internal history
+            Linenoise::bind_key("ctrl-x", *hash<auto> sub (hash<auto> info) {
+                Linenoise::set_history_provider(new ReplacedProvider());
+                events += "provider set";
+            });
+            break;
+        default:
+            throw "UNKNOWN-KIND", kind;
+    }
+}
+
+install(kind);
+
+*string line = Linenoise::line("replace> ");
+if (kind == "history-set") {
+    # the entry of the line being edited is removed from the internal history when the line ends
+    events += sprintf("history entries: %d", Linenoise::history().size());
+}
+File f();
+f.open2(result_path, O_CREAT | O_TRUNC | O_WRONLY);
+f.printf("line=%s\n", line ?? "<none>");
+map f.printf("%s\n", $1), events;

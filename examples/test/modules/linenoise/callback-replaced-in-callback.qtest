@@ -1,0 +1,183 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# A callback that replaces or removes itself while it runs (the completion, hints and syntax callbacks, a key binding
+# and the history provider) keeps running with everything it captured: the module holds a reference to the callback
+# while it calls it.  The callbacks run with the module lock held, and the lock is recursive, so the callback can
+# call the function that replaces it; without the reference, the function released the callback that was running,
+# and the callback continued in freed memory (its captured values were destroyed before it returned).
+#
+# A line decides when it starts whether it uses the history provider or the internal history, so a history provider
+# set or removed while it is edited does not make the end of the line remove an internal history entry that it did
+# not add (which crashed when the history was empty), or keep the one that it did.
+#
+# The callbacks only run when the line is read from a terminal, so each scenario runs in a terminal that script(1)
+# creates: util-linux (or BusyBox) script on Linux, BSD script on macOS and the BSDs.  Without script(1), the test is
+# skipped.  The test types the input once the prompt has appeared in the terminal's output, when linenoise reads the
+# terminal in raw mode (see fork-in-callback.qtest).
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires Util
+%requires FsUtil
+
+%exec-class LinenoiseCallbackReplacedTest
+
+class LinenoiseCallbackReplacedTest inherits QUnit::Test {
+    constructor() : QUnit::Test("linenoise callback replaced in the callback", "1.0", \ARGV) {
+        addTestCase("the completion callback replaces itself", \testCompletion());
+        addTestCase("the hints callback removes itself", \testHints());
+        addTestCase("the syntax callback removes itself", \testSyntax());
+        addTestCase("a key binding removes itself", \testKey());
+        addTestCase("the history provider removes itself", \testHistory());
+        addTestCase("a history provider is set while a line is edited", \testHistorySet());
+        set_return_value(main());
+    }
+
+    testCompletion() {
+        list<string> events = runScenario("completion", "ab\t\n", "abc");
+        checkEvents("completion", events);
+    }
+
+    testHints() {
+        # the hints callback runs when the line is displayed
+        list<string> events = runScenario("hints", "a\n", "a");
+        checkEvents("hints", events);
+    }
+
+    testSyntax() {
+        # the syntax callback runs when the line is displayed
+        list<string> events = runScenario("syntax", "a\n", "a");
+        checkEvents("syntax", events);
+    }
+
+    testKey() {
+        # Ctrl+X runs the key binding, which sets the line
+        list<string> events = runScenario("key", "\x18\n", "key");
+        checkEvents("key", events);
+    }
+
+    testHistory() {
+        # the up arrow asks the history provider for the previous entry
+        list<string> events = runScenario("history", "\e[A\n", "from the provider");
+        checkEvents("history", events);
+    }
+
+    testHistorySet() {
+        # the line uses the internal history; Ctrl+X sets a history provider
+        list<string> events = runScenario("history-set", "a\x18\n", "a");
+        assertEq(("provider set", "history entries: 0"), events,
+            "the internal history entry of the line was removed when the line ended");
+    }
+
+    #! checks that the callback ran once, used what it captured after it was replaced, and was destroyed after it
+    #! returned
+    private checkEvents(string kind, list<string> events) {
+        assertEq(("start " + kind, "after replace " + kind, "destroyed " + kind), events,
+            "the callback was destroyed only after it returned");
+    }
+
+    #! runs the scenario of the given kind in a terminal and types the input once the prompt is displayed
+    /** checks the line read and returns the events recorded
+    */
+    private list<string> runScenario(string kind, string input, string expected_line) {
+        if (system("command -v script > /dev/null 2>&1")) {
+            testSkip("script(1) is not available to run the scenario in a terminal");
+        }
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string scenario = get_script_dir() + DirSep + "CallbackReplacedScenario.qr";
+        string dir = make_tmp_dir("linenoise-replace");
+        on_exit remove_tree(dir);
+        string result_path = join_paths(dir, "result.txt");
+        # the terminal's input and output go through named pipes; the test holds both ends of each, so no open waits
+        # for the other end
+        string in_path = join_paths(dir, "in");
+        string out_path = join_paths(dir, "out");
+        if (mkfifo(in_path) || mkfifo(out_path)) {
+            throw "MKFIFO-ERROR", strerror();
+        }
+        File input_pipe();
+        input_pipe.open2(in_path, O_RDWR);
+        on_exit input_pipe.close();
+        File output_pipe();
+        output_pipe.open2(out_path, O_RDWR);
+
+        # the scenario runs in the execution mode given to the test, if any
+        *string mode = get_exec_mode();
+        string inner = sprintf("TERM=xterm %s%s %s %s %s", shell_quote(qore_bin),
+            mode ? " --exec-mode=" + shell_quote(mode) : "", shell_quote(scenario), shell_quote(result_path),
+            shell_quote(kind));
+        # the util-linux and BusyBox script take the command with -c; BSD script takes it as its last arguments
+        string script_cmd = PlatformOS == "Linux"
+            ? sprintf("script -q -c %s /dev/null", shell_quote(inner))
+            : sprintf("script -q /dev/null sh -c %s", shell_quote(inner));
+        # BSD script needs its input from a pipe, not a named pipe, so cat relays it; the shell opens the named pipe
+        # before it starts anything, so the input written to it is never lost, and does not wait for cat, which ends
+        # when the test closes the input
+        string cmd = sprintf("exec 3< %s > %s 2>&1; (cat <&3 3<&- &) | %s 3<&-", shell_quote(in_path),
+            shell_quote(out_path), script_cmd);
+        # the output has no end of file, since the test holds its write end too: the end of the session is marked in
+        # the output with its exit status, after everything that script(1) wrote, even if system() throws
+        string end_mark = "end of the session " + get_random_string(32);
+        background sub () {
+            int rc = -1;
+            on_exit {
+                File end_pipe();
+                end_pipe.open2(out_path, O_WRONLY);
+                end_pipe.printf("\n%s %d\n", end_mark, rc);
+            }
+            rc = system(cmd);
+        }();
+
+        string output;
+        bool prompted;
+        *int rc;
+        while (True) {
+            *binary data = output_pipe.readShortBinary(4096);
+            if (!data) {
+                break;
+            }
+            output += data.toString("ISO-8859-1");
+            # the input is typed once the prompt is displayed: linenoise is then reading the terminal in raw mode
+            if (!prompted && output =~ /replace> /) {
+                prompted = True;
+                input_pipe.write(input);
+                input_pipe.close();
+            }
+            *list<string> status = regex_extract(output, "\n" + end_mark + " (-?[0-9]+)\n");
+            if (status) {
+                rc = status[0].toInt();
+                break;
+            }
+        }
+        on_error printf("script output (rc %y):\n%s\n", rc, output);
+        assertEq(0, rc, "the session ended");
+        assertTrue(prompted, "the scenario displayed the prompt in the terminal");
+        assertTrue(is_file(result_path), "the scenario wrote its result");
+        list<string> lines = ReadOnlyFile::readTextFile(result_path).split("\n");
+        assertEq("line=" + expected_line, shift lines, "the line read");
+        return lines;
+    }
+
+    #! returns the execution mode given on the command line, if any
+    private static *string get_exec_mode() {
+        for (int i = 0; i < QORE_ARGV.size(); ++i) {
+            *string mode = (QORE_ARGV[i] =~ x/^--exec-mode=(.+)$/)[0];
+            if (mode) {
+                return mode;
+            }
+            if (QORE_ARGV[i] == "--exec-mode" && i + 1 < QORE_ARGV.size()) {
+                return QORE_ARGV[i + 1];
+            }
+        }
+    }
+
+    #! returns the string quoted for the shell
+    private static string shell_quote(string str) {
+        return "'" + replace(str, "'", "'\\''") + "'";
+    }
+}
