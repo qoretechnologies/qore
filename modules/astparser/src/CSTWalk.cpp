@@ -27,7 +27,6 @@
 
 #include "CSTWalk.h"
 
-#include <algorithm>
 #include <cstring>
 
 #include "AstParser.h"
@@ -101,16 +100,21 @@ std::string CSTDocComments::get(const AstParseResult* result) const {
 }
 
 std::string cst_get_doc_comment(TSNode node, const AstParseResult* result, CSTCancelCheck& cancel) {
-    // the comments before a declaration are its preceding siblings
-    std::vector<TSNode> preceding;
-    for (TSNode sibling = ts_node_prev_sibling(node);
-            !ts_node_is_null(sibling) && cst_is_comment(ts_node_type(sibling));
-            sibling = ts_node_prev_sibling(sibling)) {
-        if (cancel()) {
-            return std::string();
-        }
-        preceding.push_back(sibling);
+    TSNode parent = ts_node_parent(node);
+    if (ts_node_is_null(parent)) {
+        return std::string();
     }
-    std::reverse(preceding.begin(), preceding.end());
-    return cst_join_doc_comments(preceding, node, result);
+    // A backwards sibling lookup rescans the parent's children. Walk them once with a cursor,
+    // retaining the same consecutive-comment rules used by the bulk symbol searches.
+    CSTDocComments comments;
+    std::string docComment;
+    cst_for_each_child(parent, false, cancel, [&](TSNode child) {
+        comments.add(child);
+        if (!ts_node_eq(child, node)) {
+            return true;
+        }
+        docComment = comments.get(result);
+        return false;
+    });
+    return docComment;
 }

@@ -870,6 +870,11 @@ const QoreValue ConstantEntry::getValue() const {
     return resolveRtConstRef(val);
 }
 
+QoreValue ConstantEntry::getAOTOwnershipValue() const {
+    std::lock_guard<std::mutex> value_lock(runtimeValueLock());
+    return (saved_val_set ? saved_val : val).refSelf();
+}
+
 ConstantList::ConstantList(const ConstantList& old, const QoreParseOptions& po, ClassNs p) : ptr(p), runtime_init_hwm(old.runtime_init_hwm) {
     //printd(5, "ConstantList::ConstantList(old: %p, p: %s %s) this: %p cls: %p ns: %p\n", &old, p.getType(),
     //  p.getName(), this, ptr.getClass(), ptr.getNs());

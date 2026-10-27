@@ -2722,8 +2722,9 @@ class QoreAOTBinaryDeserializer {
         QoreAOTDeferredValueBlob parse_value_blob;
     };
     std::vector<std::vector<PendingClassConstant>> pending_class_constants;
-    bool class_constant_shells_registered = false;
 
+    // Namespace constants have the same shell/value split as class constants.
+    // Types are resolved only after hashdecl members have been installed.
     struct PendingNamespaceConstant {
         QoreAOTStringRef name;
         QoreAOTStringRef type_path;
@@ -2733,17 +2734,20 @@ class QoreAOTBinaryDeserializer {
         uint8_t pending;
         const QoreTypeInfo* type_info = nullptr;
         QoreAOTDeferredValueBlob value_blob;
-        //! Serialized compile-time value of a pending constant (format v15); empty when the producing parse
-        //! could not record one.  Kept only when preload_parse_constant_values is set.
         QoreAOTDeferredValueBlob parse_value_blob;
     };
-
     std::vector<PendingNamespaceConstant> pending_namespace_constants;
-    bool namespace_constant_shells_registered = false;
 
-    // Hashdecl member defaults are retained as serialized payloads until all
-    // type and constant-name shells exist across the loading batch. The fields
-    // mirror PendingInstanceMember for the shared materialization helpers.
+    // Pending hashdecl member info for two-pass resolution.
+    //
+    // The deferred-resolution fields below mirror PendingInstanceMember so
+    // the shared `readDeferredMemberDefault` template can be instantiated
+    // against this struct. Hashdecl defaults are read before constant names
+    // and before all classes/hashdecls in the module are committed
+    // (see openAndDeserializeShells ordering), so member defaults that
+    // reference an enum value, a class constructor, or a complex-type
+    // default (`hash<X>()`, `list<X>()`, `hash<string, X>()`) need to
+    // wait until resolveHashdeclMembers to produce a final QoreValue.
     struct PendingHashdeclMember {
         QoreAOTStringRef name;
         QoreAOTStringRef type_path;
@@ -2922,8 +2926,7 @@ private:
     bool resolveInstanceMembers(std::string& error);
     bool importInheritedMembers(std::string& error);
     bool resolveStaticMembers(std::string& error);
-    bool registerClassConstantShells(std::string& error, bool resolve_types = true);
-    bool registerNamespaceConstantShells(std::string& error);
+    bool registerClassConstantShells(std::string& error);
     bool resolveClassConstantValues(std::string& error);
     bool resolveNamespaceConstants(std::string& error);
     bool resolveClassConstants(std::string& error);
@@ -2947,6 +2950,7 @@ private:
     //! blob did not carry one
     void addEnumMemberNamespace(qore_ns_private* parent, const qore_enum_decl_private& edp);
     bool deserializeTypedefs(std::string& error);
+    bool registerNamespaceConstantShells(std::string& error);
     bool deserializeConstants(std::string& error);
     bool deserializeGlobals(std::string& error);
     bool deserializeFunctions(std::string& error);
@@ -3043,19 +3047,19 @@ public:
         sibling session. */
     bool resolveAll(std::string& error);
 
-    //! Phase-split 2a-1 — resolve base classes and type-only metadata.
+    //! Resolve bases, types, and hashdecl defaults after constant-shell registration.
     bool resolveTypes(std::string& error);
 
-    //! Phase-split 2a-2a — install types on the previously registered class-constant shells.
-    /** Names are registered with declaration shells so hashdecl defaults can bind lazy
-        references. Types are resolved here after every session has resolved its types. */
-    bool registerClassConstantShellsPhase(std::string& error) {
-        return registerClassConstantShells(error);
+    //! Register constant names before resolving types and hashdecl defaults.
+    /** Run across all sessions before resolveTypes(): defaults can refer to
+        constants in sibling fragments. Constant types and values are resolved
+        later, after hashdecl members have been installed. */
+    bool registerConstantShellsPhase(std::string& error) {
+        return registerClassConstantShells(error) && registerNamespaceConstantShells(error);
     }
 
-    //! Phase-split 2a-2b — resolve namespace-constant types and values.
-    /** Names were registered with declaration shells. Must run after class-constant types
-        are installed so namespace constants preserve typed references to class constants. */
+    //! Resolve namespace constant types and values after resolveTypes().
+    /** All class and namespace constant names must already be registered. */
     bool resolveNamespaceConstantsPhase(std::string& error) {
         return resolveNamespaceConstants(error);
     }
@@ -3216,6 +3220,12 @@ public:
         for (auto& hd_pair : pending_hashdecl_members) {
             for (auto& phm : hd_pair.second) {
                 phm.default_val.discard(nullptr);
+                for (auto& arg : phm.pending_new_args) {
+                    arg.discard(nullptr);
+                }
+                for (auto& arg : phm.pending_complex_default_args) {
+                    arg.discard(nullptr);
+                }
             }
         }
     }
@@ -3513,7 +3523,7 @@ public:
             rebuildRootIndexesOnce();
         }
 
-        // 2a: types/bases first, then constants, methods, static members,
+        // 2a: constant names first, then types/bases, constant values, methods, static members,
         // and each session's OWN instance members.  Methods must be added
         // before static/default resolution can observe or initialize class
         // state; otherwise abstract declarations can arrive after an AOT
@@ -3522,13 +3532,13 @@ public:
         // Class::staticMethod(), and signature defaults that reference
         // globals declared in sibling script fragments.
         AOT_PHASE_TIME(1, {
+            if (!runSessionPhase("AOT constant shell registration",
+                    [&error](QoreAOTBinaryDeserializer& sess) {
+                        return sess.registerConstantShellsPhase(error);
+                    })) return false;
             if (!runSessionPhase("AOT type resolution",
                     [&error](QoreAOTBinaryDeserializer& sess) {
                         return sess.resolveTypes(error);
-                    })) return false;
-            if (!runSessionPhase("AOT class constant shell registration",
-                    [&error](QoreAOTBinaryDeserializer& sess) {
-                        return sess.registerClassConstantShellsPhase(error);
                     })) return false;
             if (!runSessionPhase("AOT namespace constant resolution",
                     [&error](QoreAOTBinaryDeserializer& sess) {
@@ -3694,15 +3704,15 @@ public:
             rebuildRootIndexesOnce();
         }
 
-        if (!runSessionPhase("AOT type resolution",
+        if (!runSessionPhase("AOT constant shell registration",
                 [&error](QoreAOTBinaryDeserializer& sess) {
-                    return sess.resolveTypes(error);
+                    return sess.registerConstantShellsPhase(error);
                 })) {
             return false;
         }
-        if (!runSessionPhase("AOT class constant shell registration",
+        if (!runSessionPhase("AOT type resolution",
                 [&error](QoreAOTBinaryDeserializer& sess) {
-                    return sess.registerClassConstantShellsPhase(error);
+                    return sess.resolveTypes(error);
                 })) {
             return false;
         }

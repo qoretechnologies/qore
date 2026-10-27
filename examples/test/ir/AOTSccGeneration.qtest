@@ -56,6 +56,8 @@ class AOTSccGenerationTest inherits QUnit::Test {
             \testConvexSubset());
         addTestCase("a declaration of another kind does not hide a class from its subclass",
             \testKindSpecificProviders());
+        addTestCase("an execution directive does not hide the actual class provider",
+            \testExecClassIsNotAProvider());
         addTestCase("typedef mentions preload their providers without an existing depfile",
             \testTypedefProviders());
         addTestCase("a regex literal does not hide the namespace of what follows it",
@@ -680,6 +682,23 @@ class AOTSccGenerationTest inherits QUnit::Test {
             "and preloads it: " + join(", ", preload));
         assertEq((), componentFor(decomposition, "dupuser.qo").predecessors,
             "two classes of the same name leave the mention unresolved");
+    }
+
+    testExecClassIsNotAProvider() {
+        TmpDir tmp("qore-aot-scc-exec-class-");
+        string context_path = writeContext(tmp.path, (
+            "entrypoint": "%modern\n%exec-class App\n",
+            "app": "%modern\npublic class App {\n}\n",
+            "child": "%modern\npublic class Child inherits App {\n}\n",
+        ));
+        hash<auto> decomposition = componentMap(context_path);
+        hash<auto> child = componentFor(decomposition, "child.qo");
+        assertEq((componentFor(decomposition, "app.qo").scc,), child.predecessors,
+            "an exec-class reference in another source does not make the class provider ambiguous");
+        string output_dir = cmakePlan(context_path, "EXEC_CLASS_TEST");
+        string symbols = ReadOnlyFile::readTextFile(output_dir + "/source-symbols.manifest");
+        assertEq(-1, symbols.find("class\tApp\t" + tmp.path + "/src/entrypoint.qc"),
+            "the directive's source is not a declaration provider: " + symbols);
     }
 
     testTypedefProviders() {

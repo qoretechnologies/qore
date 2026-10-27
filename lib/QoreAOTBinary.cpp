@@ -4637,6 +4637,7 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
                 }
                 QoreValue elem = readValue(ptr, end, error);
                 if (!error.empty()) {
+                    elem.discard(nullptr);
                     return QoreValue();
                 }
                 needs_eval |= wrap_const_ref_in_rcr && elem.needsEval();
@@ -4685,6 +4686,7 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
                 }
                 QoreValue val = readValue(ptr, end, error);
                 if (!error.empty()) {
+                    val.discard(nullptr);
                     return QoreValue();
                 }
                 needs_eval |= wrap_const_ref_in_rcr && val.needsEval();
@@ -10335,9 +10337,9 @@ static bool qoreAOTWriteDefaultArgValuePayloadImpl(QoreAOTBinaryWriter& writer, 
 }
 
 //! Records the value a pending constant's initializer produced, for parses that resolve against `.qo` shells
-/** A `.qo` carries declarations, not executable bodies, so a `qcc -c -L` parse cannot run a preloaded
-    provider's `__const_init` function; a whole-group parse evaluates the provider's retained initializer
-    during the consumer's parse instead.  Evaluating a constant narrows its declared type to its value's type
+/** A `qcc -c -L` parse can encounter a pending provider constant before its initializer can run.
+    A whole-group parse evaluates the provider's retained initializer during the consumer's parse instead.
+    Evaluating a constant narrows its declared type to its value's type
     (ConstantEntry::parseCommitRuntimeInit()), so without this the same source compiled the two ways published
     different declared types for every constant folded from a sibling, and switching modes invalidated every
     consumer.  Recording the value the producing parse computed closes that gap.
@@ -10362,9 +10364,13 @@ static void writePendingConstantParseValue(QoreAOTBinaryWriter& writer, const Co
     }
     const uint32_t mark = writer.position();
     ValueHolder parse_value(ce->getReferencedValue(), nullptr);
-    // an initializer whose own evaluation was deferred (it reads a `--stub` constant or an unresolved shell)
-    // has no value to record; `val` is still the entry's own reference node
-    if (parse_value->getType() == NT_RTCONSTREF) {
+    // An initializer whose evaluation was deferred (it reads a `--stub` constant or an unresolved shell)
+    // has no value to record. getReferencedValue() cannot report errors, and its fallback can return
+    // NOTHING for an uninitialized source constant. Do not cache that as a successfully computed value:
+    // the next preload must still defer reads of it. A constant genuinely initialized to NOTHING has
+    // hasValue() set, and a preloaded pending constant can supply its recorded parse value.
+    if (parse_value->getType() == NT_RTCONSTREF
+            || (!ce->hasValue() && !ce->hasAOTParseShellValue())) {
         writer.writeU8(0);
         return;
     }
@@ -11122,7 +11128,7 @@ static void buildProgramConstantReverseMapImpl(qore_ns_private* ns,
             aot_add_constant_root_reverse_mapping(crm, ce->val, fqn, ce->getInitSeq(), true);
             continue;
         }
-        QoreValue v = ce->getReferencedValue();
+        QoreValue v = ce->getAOTOwnershipValue();
         if (!v.hasNode()) {
             v.discard(nullptr);
             continue;
@@ -11147,7 +11153,7 @@ static void buildProgramConstantReverseMapImpl(qore_ns_private* ns,
                 aot_add_constant_root_reverse_mapping(crm, ce->val, fqn, ce->getInitSeq(), true);
                 continue;
             }
-            QoreValue v = ce->getReferencedValue();
+            QoreValue v = ce->getAOTOwnershipValue();
             if (!v.hasNode()) {
                 v.discard(nullptr);
                 continue;
@@ -11185,7 +11191,7 @@ static AOTConstantReverseMap buildClassConstantReverseMap(const QoreClass* qc) {
             aot_add_constant_root_reverse_mapping(crm, ce->val, fqn, ce->getInitSeq(), true);
             continue;
         }
-        QoreValue v = ce->getReferencedValue();
+        QoreValue v = ce->getAOTOwnershipValue();
         if (!v.hasNode()) {
             v.discard(nullptr);
             continue;
@@ -11211,7 +11217,7 @@ static AOTConstantReverseMap buildClassConstantReverseMap(const QoreClass* qc) {
                     aot_add_constant_root_reverse_mapping(crm, ce->val, fqn, ce->getInitSeq(), true);
                     continue;
                 }
-                QoreValue v = ce->getReferencedValue();
+                QoreValue v = ce->getAOTOwnershipValue();
                 if (!v.hasNode()) {
                     v.discard(nullptr);
                     continue;
@@ -15188,10 +15194,8 @@ bool QoreAOTBinaryDeserializer::deserializeShellsFromOpenReader(std::string& err
     if (!deserializeTypedefs(error)) {
         return false;
     }
-    // Hashdecl defaults can reference constants in this or a sibling blob.
-    // Register names without resolving their types or evaluating their values.
-    return registerClassConstantShells(error, false)
-        && registerNamespaceConstantShells(error);
+    // Constant names are registered across all sessions before type/default resolution.
+    return true;
 }
 
 // Phase 2: resolution — base classes, member types, constants,
@@ -15221,9 +15225,8 @@ bool QoreAOTBinaryDeserializer::resolveTypes(std::string& error) {
     return true;
 }
 
-// Phase-split 2a-2.  Register constants before member defaults are
-// deserialized, because expression-tree member defaults can refer to same-class
-// or same-module constants (for example Class::Defaults.Key).
+// Resolve constant types and values after hashdecl members are installed.
+// All constant names have already been registered before resolveTypes().
 bool QoreAOTBinaryDeserializer::resolveConstants(std::string& error) {
     return resolveClassConstants(error);
 }
@@ -15272,7 +15275,8 @@ bool QoreAOTBinaryDeserializer::rebuildRootIndexes(std::string& error, IndexPhas
 }
 
 bool QoreAOTBinaryDeserializer::resolveTypesAndMembers(std::string& error) {
-    if (!resolveTypes(error)
+    if (!registerConstantShellsPhase(error)
+            || !resolveTypes(error)
             || !resolveConstants(error)
             || !resolveStaticsAndConstants(error)) {
         return false;
@@ -16790,28 +16794,9 @@ bool QoreAOTBinaryDeserializer::resolveStaticMembers(std::string& error) {
     return true;
 }
 
-bool QoreAOTBinaryDeserializer::registerClassConstantShells(std::string& error, bool resolve_types) {
-    // Publish constant names before hashdecl defaults are read, then install
-    // their types after type resolution. Value blobs are not materialized
-    // here: in batch mode a class
-    // constant in this fragment can reference a class constant or namespace
-    // constant from a sibling fragment whose value has not been installed yet.
-    auto resolve_type = [this](const PendingClassConstant& pcc,
-            const QoreClass* qc) -> const QoreTypeInfo* {
-        if (pcc.type_path.empty()) {
-            return nullptr;
-        }
-        std::string type_error;
-        const QoreTypeInfo* ti = type_resolver->resolve(pcc.type_path.c_str(), type_error);
-        if (!type_error.empty()) {
-            printd(2, "AOT deser: cannot resolve type '%s' for constant '%s' "
-                "in class '%s': %s (falling back to auto)\n",
-                pcc.type_path.c_str(), pcc.name.c_str(), qc->getName(), type_error.c_str());
-            return autoTypeInfo;
-        }
-        return ti;
-    };
-
+bool QoreAOTBinaryDeserializer::registerClassConstantShells(std::string& error) {
+    // Register names before resolving types: a constant's type can instantiate
+    // a generic hashdecl whose defaults themselves refer to these constants.
     for (uint32_t i = 0; i < class_list.size() && i < pending_class_constants.size(); ++i) {
         if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT class constant registration")) {
             error = "AOT class constant registration cancelled";
@@ -16829,19 +16814,10 @@ bool QoreAOTBinaryDeserializer::registerClassConstantShells(std::string& error, 
                 return false;
             }
             auto& pcc = pending_class_constants[i][j];
-            const QoreTypeInfo* ti = resolve_types ? resolve_type(pcc, qc) : nullptr;
-            if (class_constant_shells_registered) {
-                if (resolve_types) {
-                    ConstantEntry* ce = priv->constlist.findEntry(pcc.name.c_str());
-                    assert(ce);
-                    ce->typeInfo = ti;
-                }
-                continue;
-            }
 
             // Use addUserConstant to avoid setting sys=true on user classes
             priv->addUserConstant(pcc.name.c_str(), QoreValue(),
-                static_cast<ClassAccess>(pcc.access), ti);
+                static_cast<ClassAccess>(pcc.access), autoTypeInfo);
 
             ConstantEntry* ce = priv->constlist.findEntry(pcc.name.c_str());
             if (ce) {
@@ -16868,7 +16844,6 @@ bool QoreAOTBinaryDeserializer::registerClassConstantShells(std::string& error, 
                 pcc.name.c_str(), qc->getName());
         }
     }
-    class_constant_shells_registered = true;
     return true;
 }
 
@@ -16990,10 +16965,6 @@ bool QoreAOTBinaryDeserializer::resolveClassConstantValues(std::string& error) {
                 return false;
             }
             auto& pcc = pending_class_constants[i][j];
-            if (pcc.pending_init) {
-                continue;
-            }
-
             ConstantEntry* ce = priv->constlist.findEntry(pcc.name.c_str());
             if (!ce) {
                 error = "AOT cannot resolve deferred value for class constant '";
@@ -17002,6 +16973,12 @@ bool QoreAOTBinaryDeserializer::resolveClassConstantValues(std::string& error) {
                 error += pcc.name.c_str();
                 error += "': constant entry was not registered";
                 return false;
+            }
+
+            const QoreTypeInfo* ti = resolve_type(pcc, qc);
+            if (pcc.pending_init) {
+                ce->typeInfo = ti ? ti : autoTypeInfo;
+                continue;
             }
 
             const uint8_t* vptr = pcc.value_blob.data();
@@ -17037,7 +17014,6 @@ bool QoreAOTBinaryDeserializer::resolveClassConstantValues(std::string& error) {
                 return false;
             }
 
-            const QoreTypeInfo* ti = resolve_type(pcc, qc);
             apply_constant_type(pcc, qc, ti, resolved);
             ce->val.discard(nullptr);
             ce->val = resolved;
@@ -17095,8 +17071,7 @@ bool QoreAOTBinaryDeserializer::resolveNamespaceConstants(std::string& error) {
 }
 
 bool QoreAOTBinaryDeserializer::resolveClassConstants(std::string& error) {
-    return registerClassConstantShells(error)
-        && resolveNamespaceConstants(error)
+    return resolveNamespaceConstants(error)
         && resolveClassConstantValues(error);
 }
 
@@ -17266,7 +17241,7 @@ bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
             // `acceptInputMember` so the stored exp already carries the
             // member's declared type info.  This matches the effective shape
             // of source-parse without requiring a wire-format extension.
-            if (mti && phm.default_val.hasNode()
+            if (mti && !phm.default_val.needsEval() && phm.default_val.hasNode()
                     && (phm.default_val.getType() == NT_HASH
                         || phm.default_val.getType() == NT_LIST)) {
                 ExceptionSink xs;
@@ -17421,6 +17396,10 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
     qoreAOTReserveAdditional(pending_hashdecl_members, count);
 
     for (uint32_t i = 0; i < count; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT hashdecl shell deserialization")) {
+            error = "AOT hashdecl shell deserialization cancelled";
+            return false;
+        }
         const char* name = reader.readStringRef(ptr);
         const char* nspath = reader.readStringRef(ptr);
         uint32_t ns_idx = QoreAOTBinaryReader::readU32(ptr);
@@ -17778,9 +17757,6 @@ bool QoreAOTBinaryDeserializer::deserializeTypedefs(std::string& error) {
 }
 
 bool QoreAOTBinaryDeserializer::registerNamespaceConstantShells(std::string& error) {
-    if (namespace_constant_shells_registered) {
-        return true;
-    }
     const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::CONSTANTS);
     if (!sec) {
         return true;
@@ -17800,8 +17776,7 @@ bool QoreAOTBinaryDeserializer::registerNamespaceConstantShells(std::string& err
     const bool has_const_parse_value =
         reader.getHeader().version >= QORE_AOT_CONST_PARSE_VALUE_VERSION;
 
-    auto& pending_constants = pending_namespace_constants;
-    pending_constants.reserve(count);
+    pending_namespace_constants.reserve(count);
 
     for (uint32_t i = 0; i < count; ++i) {
         if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT namespace constant registration")) {
@@ -17860,23 +17835,18 @@ bool QoreAOTBinaryDeserializer::registerNamespaceConstantShells(std::string& err
             }
         }
 
-        // Types can depend on hashdecl members that are not resolved yet.
-        // Publish only the name here; the value phase installs its real type.
-        const QoreTypeInfo* ti = nullptr;
-
         // Register a shell before deserializing any namespace constant value.
         // Folded container literals can contain VT_CONST_REF entries pointing
         // to sibling namespace constants from the same module, and the
         // ConstantList iteration order is not a dependency order.
         ConstantEntry* ce = new ConstantEntry(getBlobLocation(), name, QoreValue(),
-            ti, is_pub != 0, true, false, static_cast<ClassAccess>(access));
+            autoTypeInfo, is_pub != 0, true, false, static_cast<ClassAccess>(access));
         ns_list[ns_idx]->constant.addEntry(name, ce);
-        ce->aot_shell_pending = true;
 
+        ce->aot_shell_pending = true;
         if (pending) {
             // Pending init-func: parser-time references to this constant must
             // defer to runtime until the init-func populates saved_val.
-            ce->aot_shell_pending = true;
             // Record that the value comes from an init expression, exactly as
             // parseCommitRuntimeInit() does for a source parse.  aot_shell_pending
             // is cleared once the init-func has run, so without this a downstream
@@ -17888,59 +17858,44 @@ bool QoreAOTBinaryDeserializer::registerNamespaceConstantShells(std::string& err
                 /*aot_deferred=*/true);
         }
 
-        pending_constants.push_back({makeDeferredStringRef(name), makeDeferredStringRef(type_path), ns_idx,
-            access, is_pub, pending, ti, std::move(value_blob),
+        pending_namespace_constants.push_back({makeDeferredStringRef(name), makeDeferredStringRef(type_path), ns_idx,
+            access, is_pub, pending, nullptr, std::move(value_blob),
             preload_parse_constant_values ? std::move(parse_value_blob) : QoreAOTDeferredValueBlob()});
     }
 
-    namespace_constant_shells_registered = true;
     return true;
 }
 
 bool QoreAOTBinaryDeserializer::deserializeConstants(std::string& error) {
-    if (!registerNamespaceConstantShells(error)) {
-        return false;
-    }
-    auto& pending_constants = pending_namespace_constants;
-    for (size_t i = 0; i < pending_constants.size(); ++i) {
-        if (i && !(i % 10) && qore_check_cancel(nullptr, "AOT namespace constant type resolution")) {
-            error = "AOT namespace constant type resolution cancelled";
-            return false;
-        }
-        auto& pc = pending_constants[i];
-        pc.type_info = type_resolver->resolve(pc.type_path.c_str(), error);
-        if (!error.empty()) {
-            error = "cannot resolve type '" + std::string(pc.type_path.c_str())
-                + "' for constant '" + pc.name.c_str() + "': " + error;
-            return false;
-        }
-        ConstantEntry* ce = ns_list[pc.ns_idx]->constant.findEntry(pc.name.c_str());
-        assert(ce);
-        ce->typeInfo = pc.type_info;
-    }
-
     static constinit QoreEnvFlag use_pending_constant_lookup_env("QORE_DISABLE_AOT_PENDING_CONSTANT_LOOKUP");
     const bool use_pending_constant_lookup = !use_pending_constant_lookup_env.get();
     if (!use_pending_constant_lookup) {
         rebuildAOTRootIndexes(pgm);
     }
 
-    for (size_t i = 0; i < pending_constants.size(); ++i) {
+    for (size_t i = 0; i < pending_namespace_constants.size(); ++i) {
         if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT namespace constant value resolution")) {
             error = "AOT namespace constant value resolution cancelled";
             return false;
         }
-        auto& pc = pending_constants[i];
-        if (pc.pending) {
-            continue;
-        }
-
+        auto& pc = pending_namespace_constants[i];
         ConstantEntry* ce = ns_list[pc.ns_idx]->constant.findEntry(pc.name.c_str());
         if (!ce) {
             error = "AOT cannot resolve deferred value for namespace constant '";
             error += pc.name.c_str();
             error += "': constant entry was not registered";
             return false;
+        }
+
+        pc.type_info = type_resolver->resolve(pc.type_path.c_str(), error);
+        if (!error.empty()) {
+            error = "cannot resolve type '" + std::string(pc.type_path.c_str())
+                + "' for constant '" + pc.name.c_str() + "': " + error;
+            return false;
+        }
+        if (pc.pending) {
+            ce->typeInfo = pc.type_info ? pc.type_info : autoTypeInfo;
+            continue;
         }
 
         const uint8_t* vptr = pc.value_blob.data();
@@ -17996,18 +17951,18 @@ bool QoreAOTBinaryDeserializer::deserializeConstants(std::string& error) {
 
         ce->val.discard(nullptr);
         ce->val = val;
-        ce->aot_shell_pending = false;
         ce->typeInfo = final_ti;
+        ce->aot_shell_pending = false;
         pc.value_blob.clear();
     }
 
     ExceptionSink xsink;
-    for (size_t i = 0; i < pending_constants.size(); ++i) {
+    for (size_t i = 0; i < pending_namespace_constants.size(); ++i) {
         if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT namespace constant materialization")) {
             error = "AOT namespace constant materialization cancelled";
             return false;
         }
-        auto& pc = pending_constants[i];
+        auto& pc = pending_namespace_constants[i];
         ConstantEntry* ce = ns_list[pc.ns_idx]->constant.findEntry(pc.name.c_str());
         if (!ce || pc.pending || ce->aot_shell_pending) {
             // see the class-constant path: a pending shell still carries the value the producing parse
