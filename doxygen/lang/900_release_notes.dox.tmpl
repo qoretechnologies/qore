@@ -276,6 +276,8 @@
     reducing call overhead while preserving program counts, lifetime and caller stack identity.
     Native AOT closure calls inline automatic frame setup and cleanup, reducing sustained call overhead
     while preserving diagnostic stack publication and context restoration.
+    Runtime stack pops inline their publication handshake and keep rare reader waits out of the hot path,
+    reducing native call-frame overhead while retaining concurrent stack inspection.
     Native closure call dispatch reuses concrete parse/AOT metadata, avoiding two virtual lookups
     while retaining live Program, body, context and stack checks.
     Native closure call dispatch decodes its live closure node once, reducing repeated-call overhead

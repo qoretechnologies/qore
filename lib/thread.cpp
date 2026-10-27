@@ -2461,7 +2461,13 @@ static const QoreStackLocation* publish_pushed_stack_location(ThreadData* td, Qo
    barrier it is a plain store and a plain load, on memory no other thread writes.  The process-wide read lock this
    replaced was two contended lock operations, on one mutex shared by every thread, on every call.
 */
-static void publish_popped_stack_location(ThreadData* td, const QoreStackLocation* stack_loc) {
+// Only an active reader needs the lock; keep its wait outside ordinary pops.
+static __attribute__((noinline, cold)) void wait_for_stack_walk(ThreadData* td) {
+    AutoLocker al(td->stack_walk_lck);
+}
+
+static __attribute__((always_inline)) void publish_popped_stack_location(ThreadData* td,
+        const QoreStackLocation* stack_loc) {
 #ifdef DEBUG
     {
         // The handshake below only protects the locations a walker can reach if the stack changes strictly
@@ -2490,7 +2496,7 @@ static void publish_popped_stack_location(ThreadData* td, const QoreStackLocatio
         }
     }
     // the walker holds this lock until it has finished reading the stack
-    AutoLocker al(td->stack_walk_lck);
+    wait_for_stack_walk(td);
 }
 
 RuntimeConfig& RuntimeConfigNativeAccess::getCurrent() {

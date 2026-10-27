@@ -26763,3 +26763,183 @@ The outer parse-option guard avoided a no-op constructor but grew the helper fra
 All 960 jobs / 2880 windows replay independently. Each variant passes the focused Release tests (7 cases / 6668 assertions); both option variants also pass 199 module-option assertions. Actual library paths, native routes, compatible identities and reference results were checked. Option comparisons use the exact same executable per layout against frozen libraries; emitted LLVM is byte-identical. Register candidates require separately compiled ABI-aware artifacts and retain a compiler-disabled control. Cross-target ABI probes are code-generation evidence only; Windows targets are excluded. No Debug/full-suite/Linux runtime/sanitizer qualification or Java comparison is claimed for these rejected candidates. No production code, runtime ABI or tests from them remain.
 
 [Raw evidence](results-fast-call-bookkeeping-rejected-macos-arm64.json); the checkpoint audit covers this documentation-only publication too.
+
+## Runtime stack-pop cold wait split (2026-10-27)
+
+The runtime forces inlining of the existing stack-pop publication handshake and moves its rare reader-lock wait into a private cold, non-inlined helper. The publication function body is textually unchanged after replacing that helper call with its original AutoLocker statement. Both atomic ordering paths, the Debug LIFO invariant, context restoration and reader completion remain. No public ABI, object layout, compiler lowering or native-module change. The exact same optimized AOT modules and executable run against the before and candidate libraries.
+
+This revisits the rejected 2026-10-08 inline-pop experiment after subsequent runtime changes and fresh native-frame profiles. That earlier result remains rejected; its indirect-wide cost is a current control. The baseline is optimized 8a13977556, including develop 71944301c9; source parent ea84a8ae7b adds checkpoint documentation only. Both runtime libraries use Release -O3 -DNDEBUG with allocation tracking off, LLVM 22.1.8, and default/reverse/shuffle-487 module layouts. One warmup and three 150 ms windows use count 4096 and seed 7, with count 1/16 controls. Kernel/fork blocks, layouts and variant order are randomized. Screen phases use three forks and confirmations five. Values are whole-kernel ns/item, not isolated call latency.
+
+Retain under the authorized broader workload tradeoff. Plain closures improve 6.892% in the narrow screen, 8.024% in its independent confirmation, 6.630% in the broad screen and 5.278% in final broad confirmation. Both small-loop call targets improve in every layout in all four phases; final gains are 2.049%/2.077%. Populated-context plain closures improve 5.320% in screening and 3.635% in confirmation, again in every layout. Captured closures do not have a consistent general gain: final ordinary captured calls cost 1.170%, while populated captures improve 0.921% aggregate but not in every layout.
+
+Accepted repeated costs include buffer positive/negative indexing 2.494%/2.692% (0.402115/0.434686 ns/item), boxed-float method fallback 1.542%, list building 1.024% and the string-result short probe 1.849%. Both buffer controls cost time in every layout in confirmation. The negative-buffer reverse layout remains +3.503% with disjoint observed fork ranges; positive-buffer shuffle is +3.092% with disjoint ranges. The effects, floating-loop and two-read aggregate screening costs do not repeat in confirmation; all observations remain below. Mixed confirmation changes are CSV -0.554%, orders +0.966%, pipeline +0.859%, and text -0.037%. Do not dismiss repeated costs as noise, attribute them to placement without evidence, or infer an application-weighted overall gain.
+
+All 98 broad workloads are preserved. Targeted confirmation selects every >=2% aggregate screening cost and every >3% disjoint-layout flag, plus the four original targets, all four mixed workloads, list building and two populated closure targets (19 workloads). Short and native-disabled controls have no material adverse aggregate screening cost and are not repeated. Short counts include invocation/dispatch setup and cleanup; closure creation and populated Program setup are outside their timed windows. Short measurements do not establish a universal single-call improvement.
+
+|!Phase|!Jobs|!Measured windows
+|Narrow screen|198|594
+|Narrow confirmation|330|990
+|Broad screen|1764|5292
+|Targeted broad confirmation|570|1710
+|Total|2862|8586
+
+### Narrow phases
+
+|!Phase|!Workload|!Before ns/item|!Candidate ns/item|!Change
+|timing|float:direct_loop_float_return|5.780375|5.653488|-2.195%
+|timing|float:callback_loop_float_return|5.046729|4.926505|-2.382%
+|timing|micro:closure_call|14.548463|13.545782|-6.892%
+|timing|micro:closure_capture|20.246104|19.874294|-1.836%
+|timing|micro:indirect_call|59.076384|58.656572|-0.711%
+|timing|micro:indirect_wide|59.056100|58.455531|-1.017%
+|timing|micro:polymorphic_call|23.557352|23.270539|-1.218%
+|timing|micro:list_mutate|131.640453|131.507926|-0.101%
+|timing|micro:list_build|26.239415|26.300151|+0.231%
+|timing|mixed:callback_pipeline|123.125197|123.849368|+0.588%
+|timing|float:typed_local_int_unary|1.188715|1.187925|-0.066%
+|confirmation|float:direct_loop_float_return|5.785492|5.652273|-2.303%
+|confirmation|float:callback_loop_float_return|5.059921|4.929032|-2.587%
+|confirmation|micro:closure_call|14.743655|13.560593|-8.024%
+|confirmation|micro:closure_capture|20.302517|20.141482|-0.793%
+|confirmation|micro:indirect_call|58.925992|58.239079|-1.166%
+|confirmation|micro:indirect_wide|59.145038|57.896592|-2.111%
+|confirmation|micro:polymorphic_call|23.563112|23.313639|-1.059%
+|confirmation|micro:list_mutate|131.781927|130.274409|-1.144%
+|confirmation|micro:list_build|26.260464|26.440649|+0.686%
+|confirmation|mixed:callback_pipeline|122.317656|123.736531|+1.160%
+|confirmation|float:typed_local_int_unary|1.187722|1.184877|-0.239%
+
+### Broad screen and confirmation
+
+|!Workload|!Screen before ns/item|!Screen candidate ns/item|!Screen change|!Confirmed before ns/item|!Confirmed candidate ns/item|!Confirmed change
+|float:direct_local_float_return|0.815394|0.808394|-0.858%|N/A|N/A|N/A
+|float:callback_local_float_return|0.870665|0.882501|+1.359%|N/A|N/A|N/A
+|float:direct_local_float_result|0.733088|0.751435|+2.503%|0.740586|0.726463|-1.907%
+|float:callback_local_float_result|0.840791|0.814984|-3.069%|N/A|N/A|N/A
+|float:direct_loop_float_return|5.942926|5.856831|-1.449%|5.927329|5.805868|-2.049%
+|float:callback_loop_float_return|5.196964|5.060119|-2.633%|5.180822|5.073198|-2.077%
+|float:direct_float_add|0.834242|0.830362|-0.465%|N/A|N/A|N/A
+|float:static_float_add|0.825265|0.815619|-1.169%|N/A|N/A|N/A
+|float:typed_local_int_unary|1.230067|1.230135|+0.006%|N/A|N/A|N/A
+|float:typed_local_float_unary|0.890495|0.900959|+1.175%|N/A|N/A|N/A
+|float:result_float_add|0.858607|0.853456|-0.600%|N/A|N/A|N/A
+|float:typed_local_int_result|0.844850|0.837268|-0.897%|N/A|N/A|N/A
+|micro:arithmetic|1.626214|1.623468|-0.169%|N/A|N/A|N/A
+|micro:direct_call|1.625015|1.619744|-0.324%|N/A|N/A|N/A
+|micro:method_call|1.672860|1.664723|-0.486%|N/A|N/A|N/A
+|micro:indirect_call|61.129852|59.549684|-2.585%|N/A|N/A|N/A
+|micro:polymorphic_call|24.065343|23.700292|-1.517%|N/A|N/A|N/A
+|micro:polymorphic_expression_call|11.304520|10.812204|-4.355%|N/A|N/A|N/A
+|micro:monomorphic_call|3.813153|3.835361|+0.582%|N/A|N/A|N/A
+|micro:optional_method_call|11.146894|10.677225|-4.213%|N/A|N/A|N/A
+|micro:polymorphic_float_call|24.714905|24.082830|-2.557%|N/A|N/A|N/A
+|micro:polymorphic_float_expression_call|11.801374|11.059119|-6.290%|N/A|N/A|N/A
+|micro:monomorphic_float_call|4.240668|4.203780|-0.870%|N/A|N/A|N/A
+|micro:optional_float_method_call|11.427191|10.954242|-4.139%|N/A|N/A|N/A
+|micro:boxed_float_method_call|21.003782|20.130582|-4.157%|N/A|N/A|N/A
+|micro:dynamic_int_result_call|11.317717|10.683751|-5.602%|N/A|N/A|N/A
+|micro:dynamic_int_result_fallback|21.192478|20.999185|-0.912%|N/A|N/A|N/A
+|micro:boxed_int_method_call|17.003761|16.134535|-5.112%|N/A|N/A|N/A
+|micro:boxed_int_method_fallback|33.129641|32.971608|-0.477%|N/A|N/A|N/A
+|micro:boxed_float_method_fallback|34.332597|35.082856|+2.185%|35.117740|35.659239|+1.542%
+|micro:boxed_int_method_effect|90.582072|90.742570|+0.177%|N/A|N/A|N/A
+|micro:dynamic_float_result_call|12.558197|11.159641|-11.137%|N/A|N/A|N/A
+|micro:indirect_wide|61.500968|60.292984|-1.964%|N/A|N/A|N/A
+|micro:indirect_float|60.542969|59.911441|-1.043%|N/A|N/A|N/A
+|micro:indirect_int_result|60.736941|59.355211|-2.275%|N/A|N/A|N/A
+|micro:indirect_float_result|60.939082|60.176201|-1.252%|N/A|N/A|N/A
+|micro:indirect_tagged_float|60.367215|59.806400|-0.929%|N/A|N/A|N/A
+|micro:indirect_branch_float|60.216772|59.811901|-0.672%|N/A|N/A|N/A
+|micro:indirect_affine|60.157923|58.795456|-2.265%|N/A|N/A|N/A
+|micro:indirect_affine_wide|61.249206|59.757112|-2.436%|N/A|N/A|N/A
+|micro:indirect_branch_int|60.610437|60.563893|-0.077%|N/A|N/A|N/A
+|micro:dispatch_control|1.979466|1.983067|+0.182%|N/A|N/A|N/A
+|micro:list_read|3.051954|3.025906|-0.854%|N/A|N/A|N/A
+|micro:list_build|26.312301|26.517515|+0.780%|26.856355|27.131299|+1.024%
+|micro:list_mutate|132.641834|130.925239|-1.294%|N/A|N/A|N/A
+|micro:temporary_list|1.765750|1.758703|-0.399%|N/A|N/A|N/A
+|micro:temporary_hash|1.787817|1.789323|+0.084%|N/A|N/A|N/A
+|micro:closure_call|14.764855|13.785874|-6.630%|14.591571|13.821401|-5.278%
+|micro:closure_capture|20.369962|20.588461|+1.073%|20.238976|20.475810|+1.170%
+|mixed:csv_report|976.999383|969.253821|-0.793%|966.612040|961.259232|-0.554%
+|mixed:object_orders|1872.033691|1859.505208|-0.669%|1828.228663|1845.882161|+0.966%
+|mixed:callback_pipeline|126.263329|125.695689|-0.450%|125.830198|126.911403|+0.859%
+|mixed:text_index|1507.177734|1513.636068|+0.429%|1496.233724|1495.683594|-0.037%
+|probe:object_loop|421.428971|416.261164|-1.226%|N/A|N/A|N/A
+|probe:object_short|1643.328238|1655.138018|+0.719%|N/A|N/A|N/A
+|probe:float_loop|445.312357|457.620867|+2.764%|449.857552|441.458648|-1.867%
+|probe:float_short|1620.294101|1640.196869|+1.228%|N/A|N/A|N/A
+|probe:string_loop|375.351477|372.835447|-0.670%|N/A|N/A|N/A
+|probe:string_short|1528.303358|1550.442166|+1.449%|N/A|N/A|N/A
+|probe:effect_loop|464.916471|484.869706|+4.292%|475.100055|464.846124|-2.158%
+|probe:effect_short|1707.967122|1742.084277|+1.998%|N/A|N/A|N/A
+|probe:two_read_loop|492.467439|510.274189|+3.616%|512.208337|509.284125|-0.571%
+|probe:two_read_short|1665.917358|1698.785955|+1.973%|N/A|N/A|N/A
+|probe:default_loop|813.811361|815.572398|+0.216%|N/A|N/A|N/A
+|probe:default_short|2067.229094|2054.031937|-0.638%|N/A|N/A|N/A
+|probe:string_result_loop|544.437184|549.630995|+0.954%|N/A|N/A|N/A
+|probe:string_result_short|1712.750059|1769.208548|+3.296%|1783.947173|1816.937547|+1.849%
+|index:list_positive|7.931633|7.975420|+0.552%|N/A|N/A|N/A
+|index:list_negative|7.962009|7.986790|+0.311%|N/A|N/A|N/A
+|index:binary_positive|7.640175|7.683039|+0.561%|N/A|N/A|N/A
+|index:binary_negative|8.172501|8.219099|+0.570%|N/A|N/A|N/A
+|index:buffer_positive|16.021900|16.506962|+3.027%|16.124054|16.526168|+2.494%
+|index:buffer_negative|16.038112|16.535562|+3.102%|16.149447|16.584132|+2.692%
+|lifecycle:object_closure_live|78.491287|77.248348|-1.584%|N/A|N/A|N/A
+|lifecycle:object_closure_dead|77.308448|76.536238|-0.999%|N/A|N/A|N/A
+|lifecycle:closure_create_plain|322.688231|325.070076|+0.738%|N/A|N/A|N/A
+|lifecycle:closure_create_capture|621.321053|605.025828|-2.623%|N/A|N/A|N/A
+|lifecycle:closure_create_object|888.381988|884.064205|-0.486%|N/A|N/A|N/A
+|populated_micro:closure_call|29.387761|27.824254|-5.320%|29.131308|28.072442|-3.635%
+|populated_micro:closure_capture|34.838388|34.534856|-0.871%|34.911809|34.590292|-0.921%
+|populated_micro:indirect_call|271.601532|271.261518|-0.125%|N/A|N/A|N/A
+|populated_micro:indirect_float|275.994213|274.769342|-0.444%|N/A|N/A|N/A
+|populated_micro:indirect_wide|347.490759|346.238059|-0.360%|N/A|N/A|N/A
+|populated_micro:indirect_affine_wide|354.325650|354.902396|+0.163%|N/A|N/A|N/A
+|populated_lifecycle:object_closure_live|106.230196|103.597901|-2.478%|N/A|N/A|N/A
+|populated_lifecycle:object_closure_dead|105.689981|104.077350|-1.526%|N/A|N/A|N/A
+|generic_micro:closure_call|118.106403|117.862174|-0.207%|N/A|N/A|N/A
+|generic_micro:closure_capture|145.654204|142.035816|-2.484%|N/A|N/A|N/A
+|generic_lifecycle:object_closure_live|195.901985|195.789892|-0.057%|N/A|N/A|N/A
+|generic_lifecycle:object_closure_dead|205.573731|205.309029|-0.129%|N/A|N/A|N/A
+|short1_float:direct_loop_float_return|437.595308|433.680519|-0.895%|N/A|N/A|N/A
+|short1_float:callback_loop_float_return|708.246548|705.204756|-0.429%|N/A|N/A|N/A
+|short1_micro:closure_call|2515.896624|2507.912473|-0.317%|N/A|N/A|N/A
+|short1_micro:closure_capture|2482.323539|2482.433747|+0.004%|N/A|N/A|N/A
+|short16_float:direct_loop_float_return|32.841399|32.466535|-1.141%|N/A|N/A|N/A
+|short16_float:callback_loop_float_return|47.801605|47.927925|+0.264%|N/A|N/A|N/A
+|short16_micro:closure_call|171.052516|172.480865|+0.835%|N/A|N/A|N/A
+|short16_micro:closure_capture|178.197606|177.205366|-0.557%|N/A|N/A|N/A
+
+### Confirmation by layout
+
+|!Workload|!Default change|!Reverse change|!Shuffle-487 change
+|float:callback_loop_float_return|-2.009%|-2.222%|-2.285%
+|float:direct_local_float_result|-0.906%|+2.450%|-3.269%
+|float:direct_loop_float_return|-1.671%|-2.026%|-2.944%
+|index:buffer_negative|+1.841%|+3.503%|+2.835%
+|index:buffer_positive|+2.522%|+1.116%|+3.092%
+|micro:boxed_float_method_fallback|+1.542%|+1.746%|+1.501%
+|micro:closure_call|-6.699%|-5.200%|-5.019%
+|micro:closure_capture|+2.135%|-0.621%|+1.170%
+|micro:list_build|-0.512%|+1.024%|+1.804%
+|mixed:callback_pipeline|+1.316%|+0.859%|+0.139%
+|mixed:csv_report|-0.048%|-0.403%|-0.554%
+|mixed:object_orders|+1.488%|+0.901%|-0.280%
+|mixed:text_index|-1.017%|-0.625%|+1.455%
+|populated_micro:closure_call|-3.448%|-3.850%|-3.221%
+|populated_micro:closure_capture|-1.906%|+0.212%|-1.136%
+|probe:effect_loop|-2.310%|-1.480%|-1.850%
+|probe:float_loop|+0.986%|-2.238%|-1.716%
+|probe:string_result_short|+2.126%|+1.995%|-0.232%
+|probe:two_read_loop|-0.571%|-0.796%|+1.417%
+
+Release and Debug each pass 39 selected fixtures: 36 QUnit runs / 208 cases / 10350 assertions plus three standalone fixtures. Debug adds 70 disabled-fast-path assertions and 2917 native checks. There are no skipped lines, and all 391 Release module links and hashes are restored after Debug. Focused initial Release qualification passes 14 cases / 6912 assertions. Same-module preparation verifies 6768 reference outputs; populated/native-disabled controls add 7560, and count 1/16 checks add 144 results against independent integer recurrences. Two native probes verify empty/populated callback contexts. This is targeted compiler/call/shared-runtime coverage, not the entire project suite.
+
+ARM64 disassembly confirms the unchanged ordered stlr/ldarb handshake. qore_rt_pop_native_call_frame already had that handshake inlined; outlining its lock wait reduces its stack frame from 32 to 16 bytes. The invariant unary helper replaces two calls to the private publication function with the inline handshake and conditional cold wait, retaining its 160-byte frame. All 9041 exported symbols match. Static code shape is not a speed estimate.
+
+Every phase, process completion, raw window and dependency record is preserved and independently replayed, including all 2862 jobs / 8586 windows after serialization. Preparation v1 stopped before timing because a Python generator shadowed its process-result variable; v2 fixes the harness and preserves the failure. Publication v1 required an uppercase Release cache label even though the build uses lowercase release with the verified -O3 -DNDEBUG flags; the corrected publisher preserves that failure too. Neither correction changes production source or measured data. No owned build/test/profile or heavy archive work overlaps timing. The shared host has no affinity, frequency or thermal control, and no exclusivity is claimed.
+
+No fresh Java/develop ratio, measured IR/JIT gain, Linux/sanitizer result or global maximum is established. After audit/commit, merge the latest develop and perform the requested optimized system installation. The next investigation is compact invocation-owned closure-frame storage with additive cleanup/version contracts and per-call borrowed metadata; its layout probe is prepared but uncompiled.
+
+[Raw evidence](results-stack-pop-cold-wait-macos-arm64.json); [62-check audit](audit-stack-pop-cold-wait.md).
