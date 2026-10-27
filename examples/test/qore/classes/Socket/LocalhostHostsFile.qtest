@@ -153,6 +153,7 @@ class LocalhostHostsFileTest inherits QUnit::Test {
         # a server bound on all interfaces is one dual-stack socket
         Socket s();
         on_exit s.close();
+        # all-interfaces: the case checks that one dual-stack socket on all interfaces serves every address of localhost
         s.bindINET(NOTHING, 0, True);
         s.listen();
         int port = s.getSocketInfo(False).port;
