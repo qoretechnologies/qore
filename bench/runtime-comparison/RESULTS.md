@@ -26599,3 +26599,167 @@ admission/context/stack/lifetime guard, and require measured benefit before rete
 
 [Raw evidence](results-native-call-int-accumulation-macos-arm64.json);
 [62-check audit](audit-native-call-int-accumulation.md).
+
+## Optimized module checkpoint after native integer accumulation (2026-10-27)
+
+Installed performance branch 8a13977556 versus unmodified develop 71944301c9, with matching Release -O3 -DNDEBUG builds, allocation tracking off, LLVM 22.1.8 and qcc -O3 stripped modules on Apple M4 Pro/macOS ARM64. Fresh fetch/merge found develop already included. Since the previous checkpoint, the branch adds typed boxed-integer argument admission and native integer callback accumulation. The four later register-result/parse-option-constructor variants were measured and rejected; none is in this checkpoint. Exact unchanged public helper sources run in both variants; no develop code is patched. Each variant is freshly compiled and linked in default, reverse and shuffle-487 layouts with identical explicit RPATHs. Actual native modules and runtime images are verified; the IR host loads/invokes the AOT kernels.
+
+All 78 Qore workloads use three forks per layout, three warmups and three 150 ms samples, 4096 items and seed 7. The 45 Java counterparts use three JVM forks, five warmups and three 300 ms samples. Qore/Java jobs are interleaved in randomized kernel/fork blocks. Qore aggregation is the median of per-layout median fork means; Java uses median fork means and has no Qore layout variants. All numbers are whole-kernel ns/item, not isolated call latencies. Develop/branch is speedup; Qore/Java is branch time divided by Java time.
+
+All 78 workloads have lower aggregate elapsed time than develop; no adverse layout flag (>3% cost with disjoint observed fork ranges) fires. This cumulative result does not remove the incremental regressions disclosed for retained optimizations. Known integer callbacks take 1.261480 ns/item versus Java 1.035918 (1.218x); direct calls take 1.670999 versus 1.025716 (1.629x), and simple methods take 1.731942 versus 1.023697 (1.692x). Plain/captured closures remain 8.605x/11.468x Java; polymorphic calls 9.234x, list mutation 30.480x, and imported-module callbacks 35.977x with an additional QoreProgram transition. Mixed workloads reduce elapsed time by 13.673% for CSV, 14.412% for orders, 15.784% for text, and 62.734% for the callback pipeline. These are separate workloads, not an application-weighted overall score.
+
+|!Mixed CPU workload|!Develop ns/item|!Branch ns/item|!Develop/branch
+|mixed:csv_report|1154.398600|996.563452|1.158x
+|mixed:object_orders|2222.254136|1901.993815|1.168x
+|mixed:callback_pipeline|344.656792|128.441291|2.683x
+|mixed:text_index|1828.380960|1539.793294|1.187x
+
+Mixed scenarios combine parsing, allocation, transformation, aggregation and formatting, with input generation outside timing. They compare Qore builds only and have no application-frequency weighting or single overall score. Lifecycle object-call controls cross QoreProgram boundaries and retain counts, locks, context and lifetime work; ordinary Java callback rows do not represent equivalent Program transitions. Module function references retain their importing Program while their body belongs to the module Program; the native module callback path preserves that Program transition as documented in the earlier module-reference-context experiment and confirmed by a fresh untimed interposition probe of the actual default-layout indirect_call workload. Five native-handled calls have captured Program different from current/body owner, an empty prepared cache and restored live Program afterward. The probe uses exported getProgram() live state, not the RuntimeConfig compatibility snapshot. Indirect module callback rows must not be labeled strict same-Program call latencies.
+
+|!Every workload|!Develop ns/item|!Branch ns/item|!Develop/branch|!Java ns/item|!Qore/Java
+|float:direct_local_float_return|82.120197|0.834338|98.426x|0.637605|1.309x
+|float:callback_local_float_return|357.762440|0.891620|401.250x|0.549439|1.623x
+|float:direct_local_float_result|80.170465|0.761329|105.303x|0.505993|1.505x
+|float:callback_local_float_result|243.875155|0.838164|290.963x|0.506609|1.654x
+|float:direct_loop_float_return|393.880943|6.017772|65.453x|0.672586|8.947x
+|float:callback_loop_float_return|582.214133|5.297203|109.910x|1.670037|3.172x
+|float:direct_float_add|67.073250|0.837310|80.106x|N/A|N/A
+|float:static_float_add|67.331846|0.846531|79.539x|N/A|N/A
+|float:typed_local_int_unary|244.537940|1.261480|193.850x|1.035918|1.218x
+|float:typed_local_float_unary|248.846777|0.921309|270.101x|N/A|N/A
+|float:result_float_add|229.221286|0.865142|264.952x|N/A|N/A
+|float:typed_local_int_result|132.694296|0.837162|158.505x|0.000221|3785.916x
+|micro:arithmetic|22.707845|1.664212|13.645x|1.031113|1.614x
+|micro:direct_call|22.419912|1.670999|13.417x|1.025716|1.629x
+|micro:method_call|11.943184|1.731942|6.896x|1.023697|1.692x
+|micro:indirect_call|278.939167|61.802859|4.513x|1.717867|35.977x
+|micro:polymorphic_call|314.135017|24.456290|12.845x|2.648397|9.234x
+|micro:polymorphic_expression_call|133.790672|11.552782|11.581x|2.647047|4.364x
+|micro:monomorphic_call|17.802828|3.950310|4.507x|1.737028|2.274x
+|micro:optional_method_call|203.988154|11.432147|17.843x|1.732555|6.598x
+|micro:polymorphic_float_call|330.986330|25.115879|13.178x|2.643992|9.499x
+|micro:polymorphic_float_expression_call|143.629437|12.226664|11.747x|2.664620|4.589x
+|micro:monomorphic_float_call|17.635583|4.265733|4.134x|1.732687|2.462x
+|micro:optional_float_method_call|211.451965|11.804282|17.913x|1.735614|6.801x
+|micro:boxed_float_method_call|236.242330|21.580618|10.947x|2.673320|8.073x
+|micro:dynamic_int_result_call|194.913093|11.488947|16.965x|3.209738|3.579x
+|micro:dynamic_int_result_fallback|424.538087|21.764585|19.506x|2.958940|7.356x
+|micro:boxed_int_method_call|222.677562|17.337701|12.844x|2.674898|6.482x
+|micro:boxed_int_method_fallback|264.357083|33.811141|7.819x|2.698743|12.528x
+|micro:boxed_float_method_fallback|313.349222|35.484064|8.831x|2.636217|13.460x
+|micro:boxed_int_method_effect|373.279263|93.801970|3.979x|1.916399|48.947x
+|micro:dynamic_float_result_call|206.180842|12.940090|15.933x|3.613866|3.581x
+|micro:indirect_wide|330.923156|62.799422|5.270x|1.753602|35.812x
+|micro:indirect_float|284.390580|61.927889|4.592x|1.721290|35.978x
+|micro:indirect_int_result|251.809516|61.692063|4.082x|1.958205|31.504x
+|micro:indirect_float_result|257.383986|61.782011|4.166x|2.943785|20.987x
+|micro:indirect_tagged_float|336.734163|61.094940|5.512x|1.693372|36.079x
+|micro:indirect_branch_float|292.116119|60.975218|4.791x|1.717062|35.511x
+|micro:indirect_affine|281.409540|62.393577|4.510x|1.706925|36.553x
+|micro:indirect_affine_wide|329.653772|62.895222|5.241x|1.703443|36.922x
+|micro:indirect_branch_int|278.690888|62.570332|4.454x|1.723292|36.309x
+|micro:dispatch_control|12.456498|2.074869|6.004x|1.042102|1.991x
+|micro:list_read|13.582999|3.098572|4.384x|0.296377|10.455x
+|micro:list_build|124.447876|27.514618|4.523x|2.695467|10.208x
+|micro:list_mutate|252.297651|137.644886|1.833x|4.515855|30.480x
+|micro:temporary_list|159.977784|1.805307|88.615x|1.251491|1.443x
+|micro:temporary_hash|352.533961|1.865377|188.988x|15.027737|0.124x
+|micro:closure_call|151.312341|14.842917|10.194x|1.724938|8.605x
+|micro:closure_capture|174.009001|20.709725|8.402x|1.805820|11.468x
+|mixed:csv_report|1154.398600|996.563452|1.158x|N/A|N/A
+|mixed:object_orders|2222.254136|1901.993815|1.168x|N/A|N/A
+|mixed:callback_pipeline|344.656792|128.441291|2.683x|N/A|N/A
+|mixed:text_index|1828.380960|1539.793294|1.187x|N/A|N/A
+|probe:object_loop|686.647015|424.918308|1.616x|N/A|N/A
+|probe:object_short|1918.047132|1674.699022|1.145x|N/A|N/A
+|probe:float_loop|718.924483|462.310855|1.555x|N/A|N/A
+|probe:float_short|1934.265137|1719.822035|1.125x|N/A|N/A
+|probe:string_loop|563.570042|388.575777|1.450x|N/A|N/A
+|probe:string_short|1689.649177|1565.663656|1.079x|N/A|N/A
+|probe:effect_loop|824.947205|489.286410|1.686x|N/A|N/A
+|probe:effect_short|2103.526795|1749.688219|1.202x|N/A|N/A
+|probe:two_read_loop|790.106259|523.812553|1.508x|N/A|N/A
+|probe:two_read_short|2005.961219|1778.014168|1.128x|N/A|N/A
+|probe:default_loop|1009.753406|819.974497|1.231x|N/A|N/A
+|probe:default_short|2236.246745|2084.703234|1.073x|N/A|N/A
+|probe:string_result_loop|757.347470|557.227549|1.359x|N/A|N/A
+|probe:string_result_short|2014.065927|1828.503224|1.101x|N/A|N/A
+|index:list_positive|23.696002|8.147768|2.908x|N/A|N/A
+|index:list_negative|23.523917|8.132762|2.892x|N/A|N/A
+|index:binary_positive|21.917047|7.789612|2.814x|N/A|N/A
+|index:binary_negative|21.799082|8.370808|2.604x|N/A|N/A
+|index:buffer_positive|29.712708|16.376519|1.814x|N/A|N/A
+|index:buffer_negative|29.537502|16.306564|1.811x|N/A|N/A
+|lifecycle:object_closure_live|237.472050|80.380374|2.954x|N/A|N/A
+|lifecycle:object_closure_dead|240.797871|80.278997|3.000x|N/A|N/A
+|lifecycle:closure_create_plain|369.820253|334.320253|1.106x|N/A|N/A
+|lifecycle:closure_create_capture|746.756750|640.857207|1.165x|N/A|N/A
+|lifecycle:closure_create_object|1152.456804|914.441002|1.260x|N/A|N/A
+
+Adverse layout flags (>3% branch cost and disjoint observed fork ranges): none. All layout/fork/window data remain in the evidence. Cumulative gains do not erase incremental costs documented for individual retained changes.
+
+The Java constant-result callback is 0.000221125 ns/item (0.905730 ns per 4096-item invocation). Its separately inspected C2 code folds the constant reduction; that normalized value is not a physical callback latency. The Qore generated-code review is retained alongside it.
+
+The constant integer result already folds to count*17 in Qore too, but retains the observable location/cancellation/pending-exception loop. Java folds that loop into one chunk at 4096 items, yielding 0.000221125 ns/item, about 0.906 ns per whole invocation; this is not a physical callback comparison. Known unary callbacks measure an inlined recurrence. Normal direct/method rows also allow optimization, while RuntimeBench dynamic targets retain explicit DONT_INLINE controls.
+
+Java uses the archived Temurin version and JMH 1.37, with C2 verified separately for each benchmark or generated measurement loop. Known integer/floating callbacks allow ordinary inlining. Existing RuntimeBench indirect/closure targets retain DONT_INLINE controls: these measure dynamic call boundaries, not best-case inlined Java. Qore and Java use their native value/container representations. The Qore harness reads a clock and dispatches a kernel per 4096-item invocation; JMH calls its benchmark method and consumes results. Harness costs are retained, not subtracted.
+
+All 9024 Qore and 675 Java reference checks pass; 45 Java kernels pass C2 diagnostics. All 1539 jobs/4617 measured windows replay independently. No owned build/test/profile or heavy archive scan overlaps timing. Host process snapshots are retained; the shared host has no exclusive CPU, affinity, frequency or thermal control. No samples are discarded or historical epochs pooled. These observations do not establish startup, memory, IR/JIT gains, production-wide speedup, universal Java parity or a global performance ceiling.
+
+Next investigate short statically bounded scalar loops and native-body eligibility. Fresh LLVM still has context/frame and cancellation operations for the two-iteration float body. First check earlier experiments and establish a sound bounded-body proof; preserve cancellation responsiveness, pending exceptions, source locations, stack overflow, frame readers and all generic/foreign behavior. Take optimized before/after measurements and qualify Release/Debug before auditing and retaining any candidate. The measured gap is a lead, not proof that one change will remove it.
+
+[Evidence](results-post-native-accumulation-module-macos-arm64.json); [all 62 audit checks](audit-post-native-accumulation-checkpoint.md).
+
+## Fast-call register results and parse-option setup: rejected (2026-10-27)
+
+All four variants are reverted. Baseline is the optimized installed 8a13977556 runtime, including the retained native integer accumulation change. These are standalone same-QoreProgram accumulation kernels, distinct from the imported-module rows above. Three layouts, randomized sequential forks, 4096 items, one warmup and three 150 ms windows use the same source. Screens use three forks; constructor-split confirmation uses five. Values are whole-kernel ns/item.
+
+The first two variants added a target-checked two-register result/status ABI for prepared integer function references. The second removed native-result stack stores and an extra closure adapter call, but net gains remained small and varied by layout. The compiler-disabled control was also slower than before in several cases, so candidate/control gains alone did not justify a new ABI. This differs from the rejected typed-method register-result experiment of 2026-10-14; neither result establishes that register returns are inherently slow.
+
+The outer parse-option guard avoided a no-op constructor but grew the helper frame from 160 to 176 bytes and slowed plain closures. The constructor split preserved 160 bytes and removed the common constructor call, but confirmation function gains came mainly from the reverse layout. Default function kernels cost 0.70%/1.95%, and plain closures cost 1.78%/3.36% aggregate with every layout slower. The modest, layout-sensitive tradeoff did not justify retention. This is a workload judgment, not a blanket rule rejecting every regression.
+
+|!Experiment/phase|!Kernel|!Before ns/item|!Candidate ns/item|!Candidate change|!Compile-disabled ns/item
+|register_v1/screen|closure_plain_inline|13.527304|14.016942|+3.620%|13.565309
+|register_v1/screen|closure_plain_wide|13.567680|14.050499|+3.559%|13.872742
+|register_v1/screen|function_plain_inline|8.027941|7.691716|-4.188%|8.334625
+|register_v1/screen|function_plain_wide|7.949573|7.828288|-1.526%|8.241276
+|register_v1/screen|closure_effect_inline|149.001110|148.089835|-0.612%|147.862408
+|register_v1/screen|closure_effect_wide|169.254366|166.303327|-1.744%|169.034236
+|register_v1/screen|function_effect_inline|179.387884|174.998608|-2.447%|173.093225
+|register_v1/screen|function_effect_wide|195.660087|191.956553|-1.893%|194.358027
+|register_v2/screen|closure_plain_inline|13.769554|13.558503|-1.533%|13.878956
+|register_v2/screen|closure_plain_wide|13.806522|13.674266|-0.958%|13.944119
+|register_v2/screen|function_plain_inline|8.170160|8.014340|-1.907%|8.621792
+|register_v2/screen|function_plain_wide|8.185611|7.917930|-3.270%|8.567725
+|register_v2/screen|closure_effect_inline|152.520075|153.077674|+0.366%|153.060194
+|register_v2/screen|closure_effect_wide|170.500614|173.283834|+1.632%|175.448037
+|register_v2/screen|function_effect_inline|181.585050|178.466624|-1.717%|179.998374
+|register_v2/screen|function_effect_wide|199.992555|197.646378|-1.173%|199.318053
+|outer_guard/screen|closure_plain_inline|13.784718|14.130200|+2.506%|N/A
+|outer_guard/screen|closure_plain_wide|13.711273|14.239638|+3.854%|N/A
+|outer_guard/screen|function_plain_inline|8.120371|8.258543|+1.702%|N/A
+|outer_guard/screen|function_plain_wide|8.313018|8.126640|-2.242%|N/A
+|outer_guard/screen|closure_effect_inline|150.875481|153.740297|+1.899%|N/A
+|outer_guard/screen|closure_effect_wide|170.387918|173.754171|+1.976%|N/A
+|outer_guard/screen|function_effect_inline|180.391282|179.849278|-0.300%|N/A
+|outer_guard/screen|function_effect_wide|197.977960|199.859243|+0.950%|N/A
+|constructor_split/screen|closure_plain_inline|13.605488|13.942344|+2.476%|N/A
+|constructor_split/screen|closure_plain_wide|13.797534|13.888809|+0.662%|N/A
+|constructor_split/screen|function_plain_inline|8.235930|8.043115|-2.341%|N/A
+|constructor_split/screen|function_plain_wide|8.246935|8.024787|-2.694%|N/A
+|constructor_split/screen|closure_effect_inline|153.955598|153.834056|-0.079%|N/A
+|constructor_split/screen|closure_effect_wide|173.634018|171.470911|-1.246%|N/A
+|constructor_split/screen|function_effect_inline|183.697801|180.339081|-1.828%|N/A
+|constructor_split/screen|function_effect_wide|201.816402|201.722347|-0.047%|N/A
+|constructor_split/confirmation|closure_plain_inline|13.745435|13.989856|+1.778%|N/A
+|constructor_split/confirmation|closure_plain_wide|13.775362|14.238787|+3.364%|N/A
+|constructor_split/confirmation|function_plain_inline|8.350620|8.113458|-2.840%|N/A
+|constructor_split/confirmation|function_plain_wide|8.138019|7.837870|-3.688%|N/A
+|constructor_split/confirmation|closure_effect_inline|153.433842|152.867656|-0.369%|N/A
+|constructor_split/confirmation|closure_effect_wide|172.678220|173.066190|+0.225%|N/A
+|constructor_split/confirmation|function_effect_inline|182.860877|181.871437|-0.541%|N/A
+|constructor_split/confirmation|function_effect_wide|198.493915|198.555679|+0.031%|N/A
+
+All 960 jobs / 2880 windows replay independently. Each variant passes the focused Release tests (7 cases / 6668 assertions); both option variants also pass 199 module-option assertions. Actual library paths, native routes, compatible identities and reference results were checked. Option comparisons use the exact same executable per layout against frozen libraries; emitted LLVM is byte-identical. Register candidates require separately compiled ABI-aware artifacts and retain a compiler-disabled control. Cross-target ABI probes are code-generation evidence only; Windows targets are excluded. No Debug/full-suite/Linux runtime/sanitizer qualification or Java comparison is claimed for these rejected candidates. No production code, runtime ABI or tests from them remain.
+
+[Raw evidence](results-fast-call-bookkeeping-rejected-macos-arm64.json); the checkpoint audit covers this documentation-only publication too.
