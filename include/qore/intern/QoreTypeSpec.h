@@ -318,7 +318,14 @@ public:
     DLLLOCAL qore_type_result_e match(const QoreTypeSpec& t, bool& may_not_match, bool& may_need_filter,
             qore_type_result_e& max_result, bool known_initial_assignment) const;
 
-    DLLLOCAL qore_type_result_e runtimeAcceptsValue(const QoreValue& n, bool exact) const;
+    //! matches a value at runtime
+    /** @param n the value
+        @param exact true if a match of this type is an exact match
+        @param fold if true, a typed container value whose element type this complex container type does not
+        accept, but whose elements the fold loops in acceptInputComplexHash()/acceptInputComplexList() may convert
+        (nested containers), is a QTI_AMBIGUOUS match; otherwise only a value that has this type matches
+    */
+    DLLLOCAL qore_type_result_e runtimeAcceptsValue(const QoreValue& n, bool exact, bool fold = false) const;
 
     DLLLOCAL qore_type_result_e checkMatchType(const QoreTypeSpec& t, bool& may_not_match,
             qore_type_result_e& max_result) const;

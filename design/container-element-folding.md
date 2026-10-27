@@ -61,7 +61,7 @@ accept. Three places ask the question, and all three answer it with the same eli
 | Check | Where | How |
 |---|---|---|
 | parse-time type match | `match_container_element_type()`, `lib/QoreTypeInfo.cpp` | a foldable element pair is `QTI_AMBIGUOUS` with `may_need_filter` and `may_not_match` set, not `QTI_NOT_EQUAL` |
-| runtime variant selection | `QoreTypeSpec::runtimeAcceptsValue()`, cases `QTS_COMPLEXHASH`/`QTS_COMPLEXLIST` | a foldable value is `QTI_AMBIGUOUS` |
+| runtime variant selection | `QoreTypeInfo::runtimeAcceptsValueOrFold()` (`QoreTypeSpec::runtimeAcceptsValue()` with `fold`, cases `QTS_COMPLEXHASH`/`QTS_COMPLEXLIST`), through `QoreTypeInfo::runtimeAcceptsCallArg()` | a foldable value is `QTI_AMBIGUOUS` |
 | the conversion itself | `acceptInputComplexHash()`/`acceptInputComplexList()` | `qore_container_value_may_convert_to()` |
 
 `match_container_element_type()` wraps `match_type()`, the element matcher every complex container
@@ -90,6 +90,16 @@ list<hash<Leaf>> parts = v;                                  # ... folded
 
 and an argument the parser accepted was then refused by `runtimeFindVariant()` with
 `RUNTIME-OVERLOAD-ERROR` before binding could convert it.
+
+The fold verdict answers "would this value be accepted", not "does this value have this type".
+`QoreTypeInfo::runtimeAcceptsValue()` answers the second question and does not report a fold: a
+`list<list<string>>` is not an instance of `list<list<int>>`, which is what the parser concludes for
+`instanceof` too, and the JIT fast paths that skip `acceptInput()` for a value that already has a
+slot's type must not take a value that still has to be folded for one.  When one function answered
+both, `instanceof` returned `True` at runtime where the parser warned that it always returns
+`False`.  The fold loops, runtime variant selection, a soft list that wraps a single container, and
+`qore_type_is_assignable_from()` (`Type::isAssignableFrom()` in the reflection module, and plugin
+operator matching) ask `runtimeAcceptsValueOrFold()`.
 
 A fold is reported as `QTI_AMBIGUOUS`, which is weaker than any match that needs no conversion, so
 a variant that accepts an argument as it stands still outranks one that has to fold it and existing
@@ -122,9 +132,9 @@ themselves untyped containers, and stops at the first element that does not matc
 
 `QTI_AMBIGUOUS` ranks the conversion below a variant that takes the value unchanged (`list`,
 `list<auto>`, `softlist<auto>`, `hash<auto>`) and above `auto` and `any`, as for a scalar that needs
-a conversion.  `runtimeAcceptsValue()` itself is unchanged: `instanceof` and the JIT fast paths that
-skip `acceptInput()` for a value that already has the slot's type ask it whether a value has a type,
-and a `list<auto>` does not have the type `list<int>`.
+a conversion.  `runtimeAcceptsValue()` does not accept such a value: `instanceof` and the JIT fast
+paths that skip `acceptInput()` for a value that already has the slot's type ask it whether a value
+has a type, and a `list<auto>` does not have the type `list<int>`.
 
 Variants with equal scores are ranked by match quality before the number of parameters: the worst
 element match of an element-checked container, otherwise the result itself, so `list<int>` is
@@ -199,6 +209,8 @@ source for a different hashdecl).
 execution mode and in a program compiled with qcc: dynamic calls, call references, methods, static
 methods and constructors, nested containers, weak references, hashdecls, ranking and ties, softlist
 selection, and call sites that get untyped lists of different element types in turn.
+`examples/test/qore/operators/instanceof-containers/` covers `instanceof` for nested container types
+that are folded but not accepted, together with the assignments and calls that still fold them.
 
 `testContainerFoldingParseRuntimeAgreement()` covers the agreement above: resolved literals in
 variable declarations and assignments, function and method arguments, return values and member

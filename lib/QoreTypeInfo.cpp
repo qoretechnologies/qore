@@ -3128,7 +3128,7 @@ bool QoreTypeSpec::acceptInputComplexHash(ExceptionSink* xsink, const QoreTypeIn
         hash_assignment_priv ha(*qore_hash_private::get(*h), *qhi_priv::get(i)->i);
         QoreValue hn(ha.swap(QoreValue()));
 
-        if (QoreTypeInfo::runtimeAcceptsValue(u.ti, hn) == QTI_NOT_EQUAL
+        if (QoreTypeInfo::runtimeAcceptsValueOrFold(u.ti, hn) == QTI_NOT_EQUAL
                 && !QoreTypeInfo::retypeValue(hn, u.ti, xsink)) {
             ha.swap(hn);
             err = true;
@@ -3189,7 +3189,7 @@ bool QoreTypeSpec::acceptInputComplexList(ExceptionSink* xsink, const QoreTypeIn
     // now we have to fold the value types into our type
     for (size_t i = 0; i < l->size(); ++i) {
         QoreValue ln(lp->takeExists(i));
-        if (QoreTypeInfo::runtimeAcceptsValue(u.ti, ln) == QTI_NOT_EQUAL
+        if (QoreTypeInfo::runtimeAcceptsValueOrFold(u.ti, ln) == QTI_NOT_EQUAL
                 && !QoreTypeInfo::retypeValue(ln, u.ti, xsink)) {
             lp->swap(i, ln);
             err = true;
@@ -3434,7 +3434,7 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
                 }
             } else if (typespec == QTS_COMPLEXSOFTLIST) {
                 // see if value matches
-                if (QoreTypeInfo::runtimeAcceptsValue(u.ti, n) > 0) {
+                if (QoreTypeInfo::runtimeAcceptsValueOrFold(u.ti, n) > 0) {
                     ok = true;
                 }
             }
@@ -3660,7 +3660,7 @@ static qore_type_result_e qore_untyped_hash_accepts(const QoreTypeInfo* elem_ti,
     return rv;
 }
 
-qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool exact) const {
+qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool exact, bool fold) const {
     qore_type_t ot = n.getType();
     // issue #2928 we must ensure that each typespec only access its own data in the union
     switch (typespec) {
@@ -3788,10 +3788,12 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool ex
             if (ti && QoreTypeInfo::hasType(ti) && QoreTypeInfo::parseAccepts(u.ti, ti)) {
                 return exact ? QTI_IDENT : QTI_AMBIGUOUS;
             }
-            // acceptInputComplexHash() below folds a value whose element type the fold path can convert, so a
-            // value this returned no match for would still be accepted once it was bound; report the same
-            // verdict here, as an inexact match, so that variant selection and binding cannot disagree
-            if (ti && QoreTypeInfo::hasType(ti) && qore_container_value_may_convert_to(u.ti, ti)) {
+            // acceptInputComplexHash() folds a value whose element type the fold path can convert, so a value this
+            // returned no match for would still be accepted once it was bound; when asked for that verdict, report
+            // it as an inexact match, so that variant selection and binding cannot disagree; the value does not have
+            // this type, though, so it does not match otherwise (instanceof, and code that skips the conversion of a
+            // value that has a slot's type)
+            if (fold && ti && QoreTypeInfo::hasType(ti) && qore_container_value_may_convert_to(u.ti, ti)) {
                 return QTI_AMBIGUOUS;
             }
             // issue #2647: allow an empty hash with no specific type to be passed to any complex hash type
@@ -3828,7 +3830,7 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool ex
                 // as in the complex hash case above: acceptInputComplexList() folds a value whose element type
                 // the fold path can convert, so reporting no match here would reject a value that binding
                 // accepts
-                if (ti && QoreTypeInfo::hasType(ti) && qore_container_value_may_convert_to(u.ti, ti)) {
+                if (fold && ti && QoreTypeInfo::hasType(ti) && qore_container_value_may_convert_to(u.ti, ti)) {
                     return QTI_AMBIGUOUS;
                 }
                 // issue #2647: allow an empty list with no specific type to be passed to any complex list type
@@ -3846,7 +3848,9 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool ex
                 }
             }
             if (typespec == QTS_COMPLEXSOFTLIST) {
-                qore_type_result_e rv = QoreTypeInfo::runtimeAcceptsValue(u.ti, n);
+                qore_type_result_e rv = fold
+                    ? QoreTypeInfo::runtimeAcceptsValueOrFold(u.ti, n)
+                    : QoreTypeInfo::runtimeAcceptsValue(u.ti, n);
                 if (rv > 0) {
                     // do not return an exact match if we have to convert to a list
                     if (rv == QTI_IDENT) {
@@ -3957,6 +3961,17 @@ qore_type_result_e QoreTypeInfo::runtimeAcceptsValue(const QoreValue& n) const {
     return acceptsBrokenSoftNull(n) ? QTI_AMBIGUOUS : QTI_NOT_EQUAL;
 }
 
+qore_type_result_e QoreTypeInfo::runtimeAcceptsValueOrFold(const QoreValue& n) const {
+    for (auto& t : accept_vec) {
+        qore_type_result_e rv = t.spec.runtimeAcceptsValue(n, t.exact, true);
+        if (rv != QTI_NOT_EQUAL) {
+            return rv;
+        }
+    }
+    // SQL NULL is converted, as the values of the other types that the type converts are
+    return acceptsBrokenSoftNull(n) ? QTI_AMBIGUOUS : QTI_NOT_EQUAL;
+}
+
 // returns the list or hash that a call argument is or refers to if it is a non-empty container with an untyped
 // element type, as a container built at runtime without a declared element type is; otherwise sets neither
 static void qore_get_untyped_call_arg_container(const QoreValue& n, const QoreListNode*& l, const QoreHashNode*& h) {
@@ -4033,7 +4048,7 @@ qore_type_result_e QoreTypeInfo::runtimeAcceptsCallArg(const QoreTypeInfo* ti, c
     const QoreHashNode* h;
     qore_get_untyped_call_arg_container(n, l, h);
     if ((!l && !h) || !hasType(ti)) {
-        qore_type_result_e rv = runtimeAcceptsValue(ti, n);
+        qore_type_result_e rv = runtimeAcceptsValueOrFold(ti, n);
         quality = rv;
         return rv;
     }
@@ -4068,7 +4083,7 @@ qore_type_result_e QoreTypeInfo::runtimeAcceptsCallArg(const QoreTypeInfo* ti, c
         if (l && has_typed_container && t.map && t.spec.isRuntimeBaseType(NT_LIST)) {
             continue;
         }
-        qore_type_result_e rv = t.spec.runtimeAcceptsValue(n, t.exact);
+        qore_type_result_e rv = t.spec.runtimeAcceptsValue(n, t.exact, true);
         if (rv != QTI_NOT_EQUAL) {
             quality = rv;
             return rv;

@@ -1,0 +1,100 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# checks instanceof for containers whose nested element types differ from the type tested; run by
+# instanceof-containers.qtest
+
+/** A container is an instance of a container type only if its element type is accepted by the type's element type:
+    a list<list<string>> is not a list<list<int>>, as the parser also concludes.  An assignment or a call still
+    converts the elements of such a container where they can be converted, so that the checks that skip the
+    conversion of a value that already has a slot's type must not take the value for one of that type.
+
+    The operands come through untyped (auto) variables, so the checks are made at runtime.  Each check prints
+    "name=result".
+*/
+
+string sub takes(list<list<softint>> l) { return sprintf("takes:%s:%y", l.fullType(), l); }
+string sub takes(string s) { return "takes(string)"; }
+string sub takesi(list<list<int>> l) { return "takesi:" + l.fullType(); }
+string sub takesh(hash<string, list<softint>> h) { return sprintf("takesh:%s:%y", h.fullType(), h); }
+
+#! returns the result of the call, or the error it raised
+string sub tryc(code c) {
+    try {
+        return c();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+#! makes every check and returns the results
+hash<string, string> sub run_checks() {
+    hash<string, string> r = {};
+    list<list<string>> lls_typed = (("a",),);
+    auto lls = lls_typed;
+    list<list<string>> lnum_typed = (("1",),);
+    auto lnum = lnum_typed;
+    hash<string, list<string>> hls_typed = {"a": ("x",)};
+    auto hls = hls_typed;
+    hash<string, list<string>> hnum_typed = {"a": ("1",)};
+    auto hnum = hnum_typed;
+    hash<string, hash<string, string>> hhs_typed = {"a": {"b": "x"}};
+    auto hhs = hhs_typed;
+    list<hash<string, string>> lhs_typed = ({"b": "x"},);
+    auto lhs = lhs_typed;
+    list<auto> lauto = (); push lauto, 1;
+    auto la = lauto;
+    list<auto> eauto = ();
+    auto ea = eauto;
+
+    r."nested-list-other" = sprintf("%y", lls instanceof list<list<int>>);
+    r."nested-list-same" = sprintf("%y", lls instanceof list<list<string>>);
+    r."nested-list-auto" = sprintf("%y", lls instanceof list<list<auto>>);
+    r."nested-list-plain" = sprintf("%y", lls instanceof list<list>);
+    r."nested-hash-other" = sprintf("%y", hls instanceof hash<string, list<int>>);
+    r."nested-hash-same" = sprintf("%y", hls instanceof hash<string, list<string>>);
+    r."hash-of-hash-other" = sprintf("%y", hhs instanceof hash<string, hash<string, int>>);
+    r."hash-of-hash-same" = sprintf("%y", hhs instanceof hash<string, hash<string, string>>);
+    r."list-of-hash-other" = sprintf("%y", lhs instanceof list<hash<string, int>>);
+    r."or-nothing-other" = sprintf("%y", lls instanceof *list<list<int>>);
+    r."untyped-list" = sprintf("%y", la instanceof list<int>);
+    r."empty-untyped-list" = sprintf("%y", ea instanceof list<int>);
+
+    # the conversions that an assignment and a call make are unchanged
+    r."assign-fold" = tryc(string sub () { list<list<softint>> l = lnum; return sprintf("%s:%y", l.fullType(), l); });
+    r."assign-fold-bad" = tryc(string sub () { list<list<int>> l = lls; return l.fullType(); });
+    r."hash-store-fold" = tryc(string sub () {
+        hash<string, list<list<softint>>> h = {};
+        h.a = lnum;
+        return sprintf("%s:%y", h.a.fullType(), h.a);
+    });
+    r."hash-store-fold-bad" = tryc(string sub () {
+        hash<string, list<list<int>>> h = {};
+        h.a = lls;
+        return h.a.fullType();
+    });
+    r."list-push-fold" = tryc(string sub () {
+        list<list<list<softint>>> l = ();
+        push l, lnum;
+        return sprintf("%s:%y", l[0].fullType(), l[0]);
+    });
+    r."call-fold" = tryc(string sub () { return takes(lnum); });
+    r."call-fold-hash" = tryc(string sub () { return takesh(hnum); });
+    r."call-fold-bad" = tryc(string sub () { return takesi(lls); });
+    return r;
+}
+
+# called three times so that the checks also run on the IR tier and as native code with tiered execution
+hash<string, string> first = run_checks();
+bool stable = True;
+hash<string, string> results;
+for (int i = 0; i < 2; ++i) {
+    results = run_checks();
+    if (results != first) {
+        stable = False;
+    }
+}
+foreach hash<auto> i in (results.pairIterator()) {
+    printf("%s=%s\n", i.key, i.value);
+}
+printf("stable=%s\n", stable ? "yes" : "no");

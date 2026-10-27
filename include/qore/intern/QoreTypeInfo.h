@@ -229,6 +229,11 @@ public:
         return ti && hasType(ti) ? ti->runtimeAcceptsValue(n) : QTI_WILDCARD;
     }
 
+    // static version of method, checking for null pointer
+    DLLLOCAL static qore_type_result_e runtimeAcceptsValueOrFold(const QoreTypeInfo* ti, const QoreValue n) {
+        return ti && hasType(ti) ? ti->runtimeAcceptsValueOrFold(n) : QTI_WILDCARD;
+    }
+
     //! Matches a call argument against a parameter type for runtime variant selection
     /** Gives the same result as runtimeAcceptsValue(), except for a non-empty list or hash whose element type is
         untyped (a container built at runtime without a declared element type, such as by a language binding).
@@ -1056,7 +1061,20 @@ protected:
     */
     DLLLOCAL qore_type_result_e runtimeTypeMatch(const QoreTypeInfo* typeInfo) const;
 
+    //! Returns the match of a value that has this type, or that this type accepts as it stands
+    /** A container matches only if its element type is accepted: this is what \c instanceof and the code that skips
+        a conversion for a value that already has a slot's type ask.
+    */
     DLLLOCAL qore_type_result_e runtimeAcceptsValue(const QoreValue& n) const;
+
+    //! Returns the match of a value that this type accepts, possibly by folding the elements of a container
+    /** As runtimeAcceptsValue(), but a typed container whose element type is not accepted, and whose elements the
+        fold loops of QoreTypeSpec::acceptInputComplexHash()/acceptInputComplexList() may convert (nested containers),
+        is a QTI_AMBIGUOUS match: this is what the fold loops and runtime variant selection ask.
+
+        @see design/container-element-folding.md
+    */
+    DLLLOCAL qore_type_result_e runtimeAcceptsValueOrFold(const QoreValue& n) const;
 
     //! Returns true if the value is SQL NULL that this type accepts as its zero or empty value
     /** Only a non-optional soft scalar type (\c softint, \c softfloat, \c softnumber, \c softbool,

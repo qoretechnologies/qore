@@ -1,0 +1,113 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class InstanceofContainersTest
+
+#! Tests instanceof for containers whose nested element types differ from the type tested
+/** A list<list<string>> is not an instance of list<list<int>>, as the parser also concludes, while an assignment or
+    a call still converts the elements of a container where it can.  The checks are in
+    instanceof-containers-worker.qr, which is run in each execution mode and as a program compiled with qcc; every run
+    must give the results below.
+*/
+class InstanceofContainersTest inherits QUnit::Test {
+    public {
+        #! the result of every check the worker makes
+        const Expected = {
+            "nested-list-other": "False",
+            "nested-list-same": "True",
+            "nested-list-auto": "True",
+            "nested-list-plain": "True",
+            "nested-hash-other": "False",
+            "nested-hash-same": "True",
+            "hash-of-hash-other": "False",
+            "hash-of-hash-same": "True",
+            "list-of-hash-other": "False",
+            "or-nothing-other": "False",
+            "untyped-list": "False",
+            "empty-untyped-list": "True",
+            "assign-fold": "list<list<softint>>:[[1]]",
+            "assign-fold-bad": "RUNTIME-TYPE-ERROR",
+            "hash-store-fold": "list<list<softint>>:[[1]]",
+            "hash-store-fold-bad": "RUNTIME-TYPE-ERROR",
+            "list-push-fold": "list<list<softint>>:[[1]]",
+            "call-fold": "takes:list<list<softint>>:[[1]]",
+            "call-fold-hash": "takesh:hash<string, list<softint>>:{a: [1]}",
+            "call-fold-bad": "RUNTIME-TYPE-ERROR",
+            "stable": "yes",
+        };
+
+        #! the execution modes that the worker is run in
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("InstanceofContainersTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + DirSep + "qcc") ? libqore_dir + DirSep + "qcc"
+                : dirname(qore_bin) + DirSep + "qcc");
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("compiled program", \testCompiledProgram());
+
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModes) {
+            string out = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s",
+                libqore_dir, qore_bin, mode, getWorker()));
+            checkWorkerOutput(mode, out);
+        }
+    }
+
+    testCompiledProgram() {
+        TmpDir tmp("qore-instanceof-containers-");
+        string exe = tmp.path + DirSep + "instanceof-containers";
+        string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s --strip-source -o %s %s 2>&1", libqore_dir,
+            qcc_bin, exe, getWorker()));
+        assertTrue(is_file(exe), "compiled program: " + compile_out);
+        checkWorkerOutput("aot", backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe)));
+    }
+
+    private string getWorker() {
+        return get_script_dir() + DirSep + "instanceof-containers-worker.qr";
+    }
+
+    #! parses the "name=result" lines printed by the worker and checks them
+    private checkWorkerOutput(string label, string out) {
+        hash<string, string> results = {};
+        foreach string line in (out.split("\n")) {
+            *list<*string> parts = (line =~ x/^([-a-z]+)=(.*)$/);
+            if (!parts) {
+                if (line.val()) {
+                    fail(sprintf("%s: unexpected worker output: %y", label, out));
+                }
+                continue;
+            }
+            results{parts[0]} = parts[1];
+        }
+        assertEq(sort(keys Expected), sort(keys results), label + ": checks run");
+        foreach hash<auto> i in (Expected.pairIterator()) {
+            assertEq(i.value, results{i.key}, sprintf("%s: %s", label, i.key));
+        }
+    }
+}

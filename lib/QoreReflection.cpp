@@ -107,7 +107,8 @@ bool qore_type_is_assignable_from(const QoreTypeInfo* ti1, const QoreTypeInfo* t
 }
 
 int qore_type_is_assignable_from(const QoreTypeInfo* t, QoreValue value) {
-    return QoreTypeInfo::runtimeAcceptsValue(t, value);
+    // an assignment folds the elements of a container that it can convert
+    return QoreTypeInfo::runtimeAcceptsValueOrFold(t, value);
 }
 
 bool qore_type_can_convert_to_scalar(const QoreTypeInfo* ti) {
