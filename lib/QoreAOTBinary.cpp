@@ -10202,9 +10202,9 @@ static bool qoreAOTWriteDefaultArgValuePayloadImpl(QoreAOTBinaryWriter& writer, 
 }
 
 //! Records the value a pending constant's initializer produced, for parses that resolve against `.qo` shells
-/** A `.qo` carries declarations, not executable bodies, so a `qcc -c -L` parse cannot run a preloaded
-    provider's `__const_init` function; a whole-group parse evaluates the provider's retained initializer
-    during the consumer's parse instead.  Evaluating a constant narrows its declared type to its value's type
+/** A `qcc -c -L` parse can encounter a pending provider constant before its initializer can run.
+    A whole-group parse evaluates the provider's retained initializer during the consumer's parse instead.
+    Evaluating a constant narrows its declared type to its value's type
     (ConstantEntry::parseCommitRuntimeInit()), so without this the same source compiled the two ways published
     different declared types for every constant folded from a sibling, and switching modes invalidated every
     consumer.  Recording the value the producing parse computed closes that gap.
@@ -10229,9 +10229,13 @@ static void writePendingConstantParseValue(QoreAOTBinaryWriter& writer, const Co
     }
     const uint32_t mark = writer.position();
     ValueHolder parse_value(ce->getReferencedValue(), nullptr);
-    // an initializer whose own evaluation was deferred (it reads a `--stub` constant or an unresolved shell)
-    // has no value to record; `val` is still the entry's own reference node
-    if (parse_value->getType() == NT_RTCONSTREF) {
+    // An initializer whose evaluation was deferred (it reads a `--stub` constant or an unresolved shell)
+    // has no value to record. getReferencedValue() cannot report errors, and its fallback can return
+    // NOTHING for an uninitialized source constant. Do not cache that as a successfully computed value:
+    // the next preload must still defer reads of it. A constant genuinely initialized to NOTHING has
+    // hasValue() set, and a preloaded pending constant can supply its recorded parse value.
+    if (parse_value->getType() == NT_RTCONSTREF
+            || (!ce->hasValue() && !ce->hasAOTParseShellValue())) {
         writer.writeU8(0);
         return;
     }
@@ -10989,7 +10993,7 @@ static void buildProgramConstantReverseMapImpl(qore_ns_private* ns,
             aot_add_constant_root_reverse_mapping(crm, ce->val, fqn, ce->getInitSeq(), true);
             continue;
         }
-        QoreValue v = ce->getReferencedValue();
+        QoreValue v = ce->getAOTOwnershipValue();
         if (!v.hasNode()) {
             v.discard(nullptr);
             continue;
@@ -11014,7 +11018,7 @@ static void buildProgramConstantReverseMapImpl(qore_ns_private* ns,
                 aot_add_constant_root_reverse_mapping(crm, ce->val, fqn, ce->getInitSeq(), true);
                 continue;
             }
-            QoreValue v = ce->getReferencedValue();
+            QoreValue v = ce->getAOTOwnershipValue();
             if (!v.hasNode()) {
                 v.discard(nullptr);
                 continue;
@@ -11052,7 +11056,7 @@ static AOTConstantReverseMap buildClassConstantReverseMap(const QoreClass* qc) {
             aot_add_constant_root_reverse_mapping(crm, ce->val, fqn, ce->getInitSeq(), true);
             continue;
         }
-        QoreValue v = ce->getReferencedValue();
+        QoreValue v = ce->getAOTOwnershipValue();
         if (!v.hasNode()) {
             v.discard(nullptr);
             continue;
@@ -11078,7 +11082,7 @@ static AOTConstantReverseMap buildClassConstantReverseMap(const QoreClass* qc) {
                     aot_add_constant_root_reverse_mapping(crm, ce->val, fqn, ce->getInitSeq(), true);
                     continue;
                 }
-                QoreValue v = ce->getReferencedValue();
+                QoreValue v = ce->getAOTOwnershipValue();
                 if (!v.hasNode()) {
                     v.discard(nullptr);
                     continue;

@@ -325,7 +325,19 @@ public:
             return false;
         }
         const char* path = QoreTypeInfo::getPath(ti);
-        return path && type_path == path;
+        if (!path) {
+            return false;
+        }
+        if (type_path == path) {
+            return true;
+        }
+        // Deferred paths use the unrooted spelling serialized in AOT contracts, while a loaded
+        // class can render as object<::Ns::Class>.  Ignore only that root qualifier: the kind,
+        // nullable marker, and complete namespace-qualified name must still match.
+        size_t prefix_size = strlen(hashdecl ? "hash<" : "object<") + (or_nothing ? 1 : 0);
+        return !strncmp(path, type_path.c_str(), prefix_size)
+            && path[prefix_size] == ':' && path[prefix_size + 1] == ':'
+            && !strcmp(path + prefix_size + 2, type_path.c_str() + prefix_size);
     }
 
 protected:
@@ -390,16 +402,16 @@ static std::string aotDeferredTypeQorePath(const char* qore_path) {
     return qore_path;
 }
 
-//! Renders a deferred type the way a resolved one renders.
-/** A type this parse cannot see yet and the same type resolved live must render
-    identically, or every signature and declaration hash that names it differs between a
-    whole-group parse and a parse against preloaded shells -- and the scheduler then
+//! Renders a deferred type using the unrooted spelling of whole-group AOT contracts.
+/** A type this parse cannot see yet and the same type resolved in a whole-group parse must
+    have the same serialized spelling, or every signature and declaration hash that names it differs
+    between a whole-group parse and a parse against preloaded shells -- and the scheduler then
     rebuilds the whole closure of an edit for a difference that changes no declaration.
 
-    They did not: a deferred CLASS was rooted (`object<::X>`) while a resolved one is not
-    (`object<X>`), and a deferred hashdecl was already unrooted like its resolved form.
-    The unrooted spelling is what a whole-group parse emits, so it is the form already in
-    every existing artifact and the one both paths now agree on.
+    A deferred CLASS previously used the rooted spelling (`object<::X>`), unlike the
+    whole-group contract (`object<X>`); deferred hashdecls already used the unrooted form.
+    A loaded live type can still return a rooted path, which matchesResolvedType() handles
+    separately without changing the serialized spelling.
 */
 static std::string aotDeferredTypePath(const std::string& qore_path, bool hashdecl, bool or_nothing) {
     std::string rv;

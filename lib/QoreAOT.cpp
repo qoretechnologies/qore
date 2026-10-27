@@ -5241,7 +5241,7 @@ static void buildConstantReverseMapImpl(qore_ns_private* ns, AOTConstantReverseM
             // dependency after its own path is filtered out.
             QoreValue init_expr = ce->getInitExpr();
             if (!dynamic_cast<const RuntimeConstantRefNode*>(init_expr.getInternalNode())) {
-                QoreValue v = ce->getReferencedValue();
+                QoreValue v = ce->getAOTOwnershipValue();
                 if (v.hasNode()) {
                     qore_aot_add_constant_value_reverse_mappings(crm, v, fqn, ce->getInitSeq(), true);
                 }
@@ -5249,7 +5249,7 @@ static void buildConstantReverseMapImpl(qore_ns_private* ns, AOTConstantReverseM
             }
             continue;
         }
-        QoreValue v = ce->getReferencedValue();
+        QoreValue v = ce->getAOTOwnershipValue();
         if (v.hasNode()) {
             qore_aot_add_constant_value_reverse_mappings(crm, v, fqn, ce->getInitSeq());
         }
@@ -5283,7 +5283,7 @@ static void buildConstantReverseMapImpl(qore_ns_private* ns, AOTConstantReverseM
                 }
                 QoreValue init_expr = ce->getInitExpr();
                 if (!dynamic_cast<const RuntimeConstantRefNode*>(init_expr.getInternalNode())) {
-                    QoreValue v = ce->getReferencedValue();
+                    QoreValue v = ce->getAOTOwnershipValue();
                     if (v.hasNode()) {
                         qore_aot_add_constant_value_reverse_mappings(crm, v, fqn, ce->getInitSeq(), true);
                     }
@@ -5291,7 +5291,7 @@ static void buildConstantReverseMapImpl(qore_ns_private* ns, AOTConstantReverseM
                 }
                 continue;
             }
-            QoreValue v = ce->getReferencedValue();
+            QoreValue v = ce->getAOTOwnershipValue();
             if (!v.hasNode()) {
                 v.discard(nullptr);
                 continue;
@@ -5436,7 +5436,7 @@ static void buildPendingSafeConstantReverseMapImpl(qore_ns_private* ns,
         if (pending_fqns.find(fqn) != pending_fqns.end()) {
             addConstantRootReverseMapping(crm, ce->val, fqn, ce->getInitSeq(), true);
         }
-        QoreValue v = ce->getReferencedValue();
+        QoreValue v = ce->getAOTOwnershipValue();
         if (v.hasNode()) {
             // Init contexts are deserialized before init functions execute. A direct
             // pending-constant ref is safe after dependency ordering; nested paths
@@ -5465,7 +5465,7 @@ static void buildPendingSafeConstantReverseMapImpl(qore_ns_private* ns,
             if (pending_fqns.find(fqn) != pending_fqns.end()) {
                 addConstantRootReverseMapping(crm, ce->val, fqn, ce->getInitSeq(), true);
             }
-            QoreValue v = ce->getReferencedValue();
+            QoreValue v = ce->getAOTOwnershipValue();
             if (!v.hasNode()) {
                 v.discard(nullptr);
                 continue;
@@ -15653,6 +15653,9 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
 
                     BatchCalleeInfo info;
                     info.name = ir_func->name;
+                    // Method contracts use the symbol index's public identity, including for static
+                    // methods whose native name contains _static_. call_ref_path is only for functions.
+                    info.body_contract_qore_path = aotRelocMethodDisplayKey(qc, meth->getName(), variant);
                     info.approach_b_eligible = true;
                     info.implicit_self_method = implicit_self;
                     info.fast_name = fast_entry_name;
@@ -15671,6 +15674,7 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
                         && !aot_batch_callee_map.count(variant)) {
                     BatchCalleeInfo info;
                     info.name = ir_func->name;
+                    info.body_contract_qore_path = aotRelocMethodDisplayKey(qc, meth->getName(), variant);
                     info.num_params = sig->numParams();
                     info.param_kinds =
                         qore_ir_get_fast_entry_param_kinds(*ir_func, sig);

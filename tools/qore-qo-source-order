@@ -12,7 +12,7 @@
 # contract.  Bump it whenever source summaries or graph construction change;
 # command/output and orchestration-only edits must not make every large consumer
 # rescan all of its sources on the next otherwise-no-op build.
-const CACHE_VERSION = 40;
+const CACHE_VERSION = 41;
 #! The sidecar beside a batch stamp that dates the group's last shared parse.
 /** The batch stamp cannot date it: the build tool also uses the stamp for
     ordering, so recipes that publish nothing touch it.  qore-qo-batch-bootstrap
@@ -61,7 +61,7 @@ const BodyContractImportsSuffix = ".body-contract-imports";
     provider source), and a preload set is closed over it as well as over the depfiles.
 */
 const LoadRequiresSuffix = ".load-requires";
-const SOURCE_SYMBOL_CACHE_VERSION = 2;
+const SOURCE_SYMBOL_CACHE_VERSION = 3;
 const SOURCE_SUMMARY_KEYS = (
     "provides",
     "classes",
@@ -127,9 +127,11 @@ hashdecl SourceOrderComponents {
 
 class SourceSymbolManifestGenerator {
     private {
-        Regex class_re = new Regex("\\b(?:public\\s+|private\\s+|abstract\\s+|final\\s+)*class\\s+([A-Za-z_][A-Za-z0-9_]*)\\b", RE_Global);
+        # The class keyword in %exec-class names a reference, not a declaration.  A phantom root
+        # declaration would hide the actual namespace of an unqualified class type in a partial parse.
+        Regex class_re = new Regex("(?<!-)\\b(?:public\\s+|private\\s+|abstract\\s+|final\\s+)*class\\s+([A-Za-z_][A-Za-z0-9_]*)\\b", RE_Global);
         Regex class_inherits_re = new Regex(
-            "\\b(?:public\\s+|private\\s+|abstract\\s+|final\\s+)*class\\s+"
+            "(?<!-)\\b(?:public\\s+|private\\s+|abstract\\s+|final\\s+)*class\\s+"
             "[A-Za-z_][A-Za-z0-9_]*\\b[^\\{;]*\\binherits\\s+([^\\{;]+)", RE_Global);
         Regex enum_re = new Regex(
             "\\b(?:public\\s+|private\\s+)*enum\\s+([A-Za-z_][A-Za-z0-9_]*)\\b", RE_Global);

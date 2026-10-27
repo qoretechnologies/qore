@@ -43,6 +43,8 @@ class AOTSymbolIndexTest inherits QUnit::Test {
             \testSourceSymbolManifestRecordsExactCallableProviders());
         addTestCase("source symbol manifest records typedefs and refreshes old caches",
             \testSourceSymbolManifestTypedefs());
+        addTestCase("exec-class is a reference and preserves global type contracts in partial parses",
+            \testExecClassPreservesGlobalTypeContract());
         addTestCase("source symbol manifest preserves namespaces across scanner edge tokens",
             \testSourceSymbolManifestPreservesNamespacesAcrossListIndexToken());
         addTestCase("source-order cache incrementally refreshes changed providers and consumers",
@@ -51,6 +53,10 @@ class AOTSymbolIndexTest inherits QUnit::Test {
             \testSourceOrderRequiresStaticParameterDefaultProvider());
         addTestCase("standalone abstract returns match deferred class types",
             \testStandaloneDeferredAbstractReturnTypes());
+        addTestCase("manifest-deferred abstract returns match rooted loaded class types",
+            \testManifestDeferredAbstractReturnTypes());
+        addTestCase("a deferred constant is not cached as a known NOTHING value",
+            \testDeferredParseValueIsNotNothing());
         addTestCase("standalone deferred class overload types stay distinct",
             \testStandaloneDeferredClassOverloadTypes());
         addTestCase("standalone static complex defaults preserve nested object types",
@@ -1451,6 +1457,71 @@ class AOTSymbolIndexTest inherits QUnit::Test {
         assertTrue(is_file(child_qo), "derived source restores the static default: " + child_out);
     }
 
+    #! An execution directive must not introduce a class declaration into the source manifest.
+    /** With a namespaced entry class, a phantom root-level declaration wins the exact-name lookup
+        for an unqualified type in another source.  Its global then publishes a different declaration
+        contract after a partial parse, invalidating consumers of an unchanged declaration (#5542).
+    */
+    testExecClassPreservesGlobalTypeContract() {
+        TmpDir tmp = initDirs();
+        string app_src = tmp_dir + "/entry-app.qc";
+        string global_src = tmp_dir + "/entry-global.qc";
+        string context_file = tmp_dir + "/context";
+        string manifest = tmp_dir + "/symbols";
+        write(global_src, "%modern\nour EntryApp entry;\n");
+
+        foreach string exec_class in (("EntryApp", "EntryNs::EntryApp")) {
+            string variant = exec_class.find("::") >= 0 ? "qualified" : "unqualified";
+            string whole_dir = tmp_dir + "/whole-" + variant;
+            string partial_dir = tmp_dir + "/partial-" + variant;
+            mkdir(whole_dir);
+            mkdir(partial_dir);
+            write(context_file, "format=1\ninput=" + app_src + "\ninput=" + global_src
+                + "\noutput=" + partial_dir + "/app.qo\noutput=" + partial_dir + "/global.qo\n");
+            write(app_src, "%modern\n%exec-class " + exec_class + "\n"
+                "namespace EntryNs {\n"
+                "    public class EntryApp {\n"
+                "        constructor() { entry = self; printf(\"%d\\n\", entry.value()); }\n"
+                "        int value() { return 42; }\n"
+                "    }\n"
+                "}\n"
+                "int sub main() { EntryNs::EntryApp app(); return 0; }\n");
+            string scanned = run(sprintf("%s --source-symbol-manifest %s %s",
+                getSourceOrderCommand(), manifest, context_file));
+            assertTrue(is_file(manifest), "the source manifest is generated: " + scanned);
+            string symbols = ReadOnlyFile::readTextFile(manifest);
+            assertTrue(symbols.find("class\tEntryNs::EntryApp\t") >= 0,
+                "the actual entry class is declared in its namespace: " + symbols);
+            assertEq(-1, symbols.find("class\tEntryApp\t"),
+                "an unqualified execution directive declares no root class: " + symbols);
+            assertEq(-1, symbols.find("class\tEntryNs\t"),
+                "a qualified execution directive declares no class named for its namespace: " + symbols);
+
+            string compiled = run(sprintf("%s %s -c --batch-build-sidecars --output-dir=%s"
+                " --depfile-dir=%s %s %s", env, qcc_bin, whole_dir, whole_dir, app_src, global_src));
+            *string app_qo = batchObject(whole_dir, "entry-app");
+            *string global_qo = batchObject(whole_dir, "entry-global");
+            assertTrue(exists app_qo && exists global_qo, "the whole-group parse compiles: " + compiled);
+            string whole = run(sprintf("%s %s --dump-info --dump-symbols %s", env, qcc_bin, global_qo));
+            string expected = attr(findSymbolLine(whole, "global", "entry"), "decl");
+            string partial_app = partial_dir + DirSep + basename(app_qo);
+            string partial_global = partial_dir + DirSep + basename(global_qo);
+            run(sprintf("cp %y %y", app_qo, partial_app));
+            string partial = run(sprintf("%s %s -c -L %s --source-symbol-manifest=%s -o %s %s",
+                env, qcc_bin, partial_dir, manifest, partial_global, global_src));
+            assertTrue(is_file(partial_global), "the global compiles against the preloaded class: " + partial);
+            string actual = run(sprintf("%s %s --dump-info --dump-symbols %s", env, qcc_bin, partial_global));
+            assertEq(expected, attr(findSymbolLine(actual, "global", "entry"), "decl"),
+                "a global has the same declared type in both compile modes: " + actual);
+
+            string app = tmp_dir + "/entry-app-" + variant;
+            string linked = run(sprintf("%s %s -o %s %s %s", env, qcc_bin, app, partial_app, partial_global));
+            assertTrue(is_file(app), "the mixed whole-group and partial objects link: " + linked);
+            assertEq("42", trim(run(sprintf("%s %s", env, app))),
+                "the entry class assigns and reads the typed global at runtime");
+        }
+    }
+
     testStandaloneDeferredAbstractReturnTypes() {
         TmpDir tmp = initDirs();
         string qo_dir = tmp_dir + "/qo-abstract-return";
@@ -1513,6 +1584,141 @@ class AOTSymbolIndexTest inherits QUnit::Test {
         string out = run(sprintf("%s %s", env, app));
         assertEq("linked\n", out,
             "linked executable dispatches the concrete abstract-return override: " + out);
+    }
+
+    testDeferredParseValueIsNotNothing() {
+        TmpDir tmp = initDirs();
+        string whole_dir = tmp_dir + "/whole";
+        mkdir(whole_dir);
+        list<string> sources = map tmp_dir + "/" + $1 + ".qc", ("provider", "consumer", "trigger");
+        # The object cannot be recorded in a pending constant's compile-time value cache.
+        write(sources[0], "%modern\n"
+            "public class Token { int value() { return 42; } }\n"
+            "public class Provider { public { const Fields = {\"token\": new Token()}; } }\n"
+            "public class Parent {\n"
+            "    public { hash<auto> data; }\n"
+            "    constructor(hash<auto> fields) { data = fields; }\n"
+            "}\n"
+            "nothing sub knownNothing() { return NOTHING; }\n");
+        write(sources[1], "%modern\n"
+            "public class Consumer inherits Parent {\n"
+            "    public {\n"
+            "        const Fields = Provider::Fields + {\"extra\": 7};\n"
+            "        const Empty = knownNothing();\n"
+            "    }\n"
+            "    constructor() : Parent(Fields) { }\n"
+            "}\n");
+        write(sources[2], "%modern\n"
+            "public const Instance = new Consumer();\n"
+            "int sub main() {\n"
+            "    printf(\"%d/%d/%d\\n\", Instance.data.token.value(), Instance.data.extra, "
+                "exists Consumer::Empty);\n"
+            "    return 0;\n"
+            "}\n");
+        string context_file = tmp_dir + "/context";
+        string manifest = tmp_dir + "/symbols";
+        write(context_file, "format=1\n" + (map "input=" + $1 + "\n", sources).join("")
+            + (map "output=" + whole_dir + "/" + $1 + ".qo\n", ("provider", "consumer", "trigger")).join(""));
+        string scanned = run(sprintf("%s --source-symbol-manifest %y %y",
+            getSourceOrderCommand(), manifest, context_file));
+        assertTrue(is_file(manifest), "the source manifest is generated: " + scanned);
+        string source_args = (map sprintf("%y", $1), sources).join(" ");
+        string compiled = run(sprintf("%s %y -c --batch-build-sidecars --output-dir=%y"
+            " --depfile-dir=%y %s", env, qcc_bin, whole_dir, whole_dir, source_args));
+        list<string> objects;
+        foreach string name in (("provider", "consumer", "trigger")) {
+            *string object = batchObject(whole_dir, name);
+            assertTrue(exists object, "the whole parse compiles " + name + ": " + compiled);
+            push objects, object;
+        }
+        # The consumer now defers Fields because the preloaded provider has no cached object value.
+        # The trigger must also defer construction, instead of calling Parent with a fabricated NOTHING.
+        for (int i = 1; i < sources.size(); ++i) {
+            string stage = tmp_dir + "/partial-" + i;
+            string preload = stage + "/preload";
+            string output = stage + "/out";
+            mkdir(stage);
+            mkdir(preload);
+            mkdir(output);
+            for (int j = 0; j < objects.size(); ++j) {
+                if (i != j) {
+                    copy_file(objects[j], preload + DirSep + basename(objects[j]));
+                }
+            }
+            compiled = run(sprintf("%s %y -c -L %y --source-symbol-manifest=%y --batch-build-sidecars"
+                " --output-dir=%y --depfile-dir=%y %y", env, qcc_bin, preload, manifest,
+                output, output, sources[i]));
+            objects[i] = output + DirSep + basename(objects[i]);
+            assertTrue(is_file(objects[i]), "partial parse " + i + " preserves pending values: " + compiled);
+        }
+        string app = tmp_dir + "/app";
+        string object_args = (map sprintf("%y", $1), objects).join(" ");
+        string linked = run(sprintf("%s %y -o %y %s", env, qcc_bin, app, object_args));
+        assertTrue(is_file(app), "the partial objects link: " + linked);
+        assertEq("42/7/0", trim(run(sprintf("%s %y", env, app))),
+            "runtime initialization preserves the metadata and the genuine NOTHING value");
+    }
+
+    testManifestDeferredAbstractReturnTypes() {
+        foreach string ns in (("", "DeferredReturnNs")) {
+            foreach string nullable in (("", "*")) {
+                TmpDir tmp = initDirs();
+                string qo_dir = tmp_dir + "/qo";
+                mkdir(qo_dir);
+                string provider = tmp_dir + "/provider.qc";
+                string consumer = tmp_dir + "/consumer.qc";
+                string provider_qo = qo_dir + "/provider.qo";
+                string consumer_qo = tmp_dir + "/consumer.qo";
+                string manifest = tmp_dir + "/symbols";
+                string context_file = tmp_dir + "/context";
+                string ns_open = ns ? "namespace " + ns + " {\n" : "";
+                string ns_close = ns ? "}\n" : "";
+                string prefix = ns ? ns + "::" : "";
+                string result_type = nullable + prefix + "Result";
+                write(provider, "%modern\n" + ns_open
+                    + "class Parent {\n"
+                    + "    " + result_type + " make() { return makeImpl(); }\n"
+                    + "    private abstract " + result_type + " makeImpl();\n"
+                    + "}\nclass Result { string value() { return \"linked\"; } }\n" + ns_close
+                    + "namespace Foreign { class Result { } }\n");
+                string child = ns_open + "class Child inherits Parent {\n"
+                    + "    private " + result_type + " makeImpl() { return new " + prefix + "Result(); }\n"
+                    + "}\nChild sub makeChild() { return new Child(); }\n" + ns_close;
+                write(consumer, "%modern\n" + child
+                    + "int sub main() { printf(\"%s\\n\", " + prefix
+                    + "makeChild().make().value()); return 0; }\n");
+                write(context_file, "format=1\ninput=" + provider + "\ninput=" + consumer
+                    + "\noutput=" + provider_qo + "\noutput=" + consumer_qo + "\n");
+                string scanned = run(sprintf("%s --source-symbol-manifest %s %s",
+                    getSourceOrderCommand(), manifest, context_file));
+                assertTrue(is_file(manifest), "the source manifest is generated: " + scanned);
+                string compiled = run(sprintf("%s %s -c -o %s %s", env, qcc_bin, provider_qo, provider));
+                assertTrue(is_file(provider_qo), "the abstract provider compiles: " + compiled);
+                compiled = run(sprintf("%s %s -c -L %s --source-symbol-manifest=%s -o %s %s",
+                    env, qcc_bin, qo_dir, manifest, consumer_qo, consumer));
+                assertTrue(is_file(consumer_qo), "the overriding source instantiates its concrete class: " + compiled);
+                string app = tmp_dir + "/abstract-app";
+                string linked = run(sprintf("%s %s -o %s %s %s", env, qcc_bin, app, provider_qo, consumer_qo));
+                assertTrue(is_file(app), "the deferred-return objects link: " + linked);
+                assertEq("linked", trim(run(sprintf("%s %s", env, app))),
+                    "the concrete override executes with the correct return type");
+
+                # Root normalization must preserve both nullability and the complete class name.
+                string rejected_qo = tmp_dir + "/rejected.qo";
+                string bad_return = nullable ? "Foreign::Result" : "*" + prefix + "Result";
+                string bad_value = nullable ? "new Foreign::Result()" : "NOTHING";
+                write(consumer, "%modern\n" + ns_open
+                    + "class Rejected inherits Parent {\n"
+                    + "    private " + bad_return + " makeImpl() { return " + bad_value + "; }\n"
+                    + "}\nRejected sub makeRejected() { return new Rejected(); }\n" + ns_close);
+                run(sprintf("%s --source-symbol-manifest %s %s", getSourceOrderCommand(), manifest, context_file));
+                string rejected = run(sprintf("%s %s -c -L %s --source-symbol-manifest=%s -o %s %s",
+                    env, qcc_bin, qo_dir, manifest, rejected_qo, consumer));
+                assertTrue(rejected.find("ABSTRACT-CLASS-ERROR") >= 0,
+                    "a different class or a nullable result cannot implement the required return: " + rejected);
+                assertFalse(is_file(rejected_qo), "an incompatible override emits no object");
+            }
+        }
     }
 
     testSiblingNamespacedObjectTypeImport() {

@@ -32,10 +32,9 @@ processes can agree on them.
 
 ## The graph has two halves, and only one of them is stable
 
-| Half | Derived from | Changes when |
-|---|---|---|
-| Summary edges | Static analysis of source content | A source is edited |
-| Contract edges | The `.compile-contract.stamp` entries in each member's `.qo.d` | **The build itself compiles something** |
+|!Half|!Derived from|!Changes when
+|Summary edges|Static analysis of source content|A source is edited
+|Contract edges|The `.compile-contract.stamp` entries in each member's `.qo.d`|**The build itself compiles something**
 
 The second half is the whole problem. `qcc` records the compile contract of every
 provider a source was actually compiled against, and the scheduler promotes those
@@ -50,11 +49,10 @@ Read live, that graph is not the same from one helper invocation to the next.
 Conflating any two of these produces a diagnostic that blames the wrong agent,
 which is worse than no diagnostic at all.
 
-| Identity | Covers | Answers |
-|---|---|---|
-| Source token | The member sources' content digests | "Did something outside the build edit my sources while qcc was reading them?" |
-| Generation token | Member sources **plus** the published compile contract of every direct predecessor member | "Is this component's published artifact set still valid?" |
-| Graph generation | The depfile-derived contract edge set | "Is this still the dependency graph I planned against?" |
+|!Identity|!Covers|!Answers
+|Source token|The member sources' content digests|"Did something outside the build edit my sources while qcc was reading them?"
+|Generation token|Member sources **plus** the published compile contract of every direct predecessor member|"Is this component's published artifact set still valid?"
+|Graph generation|The depfile-derived contract edge set|"Is this still the dependency graph I planned against?"
 
 Consequences worth stating explicitly:
 
@@ -153,12 +151,11 @@ qore-qo-source-order --scc-publish --expect SOURCE_TOKEN \
     --expect-graph GRAPH_GENERATION CONTEXT COMPONENT_KEY
 ```
 
-| Exit | Meaning | Response |
-|---|---|---|
-| 0 | Published | — |
-| 75 | A member source moved away from `--expect` | An agent outside the build edited it. Rebuild the component once; a second occurrence is reported as external interference |
-| 76 | The graph moved away from `--expect-graph`, or the key no longer resolves | The build's own doing. Re-resolve identity from the current graph and rebuild once; never blame anything outside the build |
-| 1 | Anything else, including an incomplete artifact set | Real failure |
+|!Exit|!Meaning|!Response
+|0|Published|—
+|75|A member source moved away from `--expect`|An agent outside the build edited it. Rebuild the component once; a second occurrence is reported as external interference
+|76|The graph moved away from `--expect-graph`, or the key no longer resolves|The build's own doing. Re-resolve identity from the current graph and rebuild once; never blame anything outside the build
+|1|Anything else, including an incomplete artifact set|Real failure
 
 Source movement is checked before the graph, so a build whose sources really were
 edited is never told to look at its own scheduler instead.
@@ -267,13 +264,12 @@ below is a walk of standalone compiles, one component at a time, each preloading
 the whole group — while the group's own parse compiles every member in one parse
 and at the build tool's parallelism.
 
-What decides that crossover is not one build but the next one. The two modes
-publish different compile contracts for the same source, so the first incremental
-build after a group parse walks the whole closure of whatever was edited whatever
-the size of the edit — and **a build that escalates leaves the tree in the mode
-that makes the next edit walk it again**. A walk pays that transition once and
-every edit after it is one compile. Measured on Qorus, editing a source whose
-closure is 13 components:
+The crossover also depends on the next edit. Changing which sources are parsed
+together can change body contracts and invalidate consumers of assumptions baked
+into generated code. A whole-group fallback restores the original compilation
+mode, so the next partial edit may pay that transition again. In the historical
+876-source Qorus measurement below, editing a source whose closure contained 13
+components paid a transition on the first edit and only one compile on the next:
 
 |!Build|!Walk|!Escalate to the group's parse
 |first edit after a group parse|5m03, 23 `qcc` invocations|4m54, 876
@@ -285,6 +281,13 @@ an hour of serial compiles against a four-minute parse. The default of 5% puts
 that boundary at 41 components on that tree. Left at 50% the floor was 410, and
 thirteen widely required sources sat at closures of 408 and 409 — exactly the
 ones the walk cannot amortise. Setting the variable pins either value.
+
+Those timings do not establish the crossover for a different graph or for a
+multi-source component. Row-level body imports now narrow invalidation to the
+contracts a consumer actually used. Conversely, convexity can reduce an opt-in
+partial batch to one source per pass, defeating the batching assumption behind
+the 50% floor. Measure the complete transition and later edits on the target
+graph before changing either default.
 
 **What a partial parse preloads is the transitive predecessors of what it
 compiles, staged into a directory of its own — never the group's object
@@ -303,11 +306,13 @@ predecessors, which is what `--scc-preload-set` reports. Both answer from one
 closure (`componentPreloadOutputs()`), so what a source is preloaded with does not
 depend on which path compiled it.
 
-The partial parse is nevertheless **opt-in** (`QORE_QCC_SUBSET_PARSE=1`), for
-its cost rather than its correctness (measured below). The coordinator falls back to the group's own
-parse when a partial parse fails, so enabling it cannot break a build — but the
-fallback costs the failed parse on top of the group's, so a partial parse that
-fails routinely is worse than not trying.
+The partial parse remains **opt-in** (`QORE_QCC_SUBSET_PARSE=1`), based on the
+cost measured below. The coordinator falls back to the group's own parse when
+a partial compile fails. That fallback costs the failed parse on top of the
+group's, so a partial parse that fails routinely is worse than not trying.
+Successful compilation also needs link and execution checks: the missing method
+dependencies found during #5542 allowed compilation to finish but left stale
+consumer objects that could not link.
 
 ## Parsing part of a group is not the same as parsing all of it
 
@@ -794,6 +799,79 @@ contract was emitted twice**, so an object's contract depended on the parity of 
 length rather than on its declarations. 697 of 875 Qorus contracts carried duplicated rows.
 The symbol path now trims to the length the header records.
 
+**An execution directive references a class; it does not declare one**
+([#5542](https://github.com/qoretechnologies/qore/issues/5542)). The scanner's word-boundary
+match for `class` also matched `%exec-class QorusApp`, adding a phantom root-level
+`QorusApp` alongside the actual `OMQ::QorusApp`. The exact unqualified entry then won the
+manifest lookup during a partial parse: the global `Qorus` acquired type
+`object<QorusApp>` instead of `object<OMQ::QorusApp>`. Its declaration hash changed after a
+comment-only edit, invalidating consumers of an unchanged global. A qualified execution
+directive could similarly introduce a phantom class named for its first namespace segment.
+Class scans now exclude keywords embedded in hyphenated directives, and both the source-summary
+and symbol-manifest caches are invalidated. The regression checks both directive forms,
+compares the global's declaration contract across compile modes, and links and executes the
+mixed objects.
+
+**Deferred and loaded types must compare using the same root spelling.** The
+unrooted deferred type spelling above stabilized serialized contracts, but
+`QoreAOTDeferredTypeInfo::matchesResolvedType()` still compared it with the loaded
+type's path verbatim. A loaded `object<::Result>` consequently did not match the
+placeholder `object<Result>`. A partial parse with a source-symbol manifest could
+then reject a concrete override of a preloaded abstract method when the source
+instantiated its own class. This surfaced on the 75th partial compiler invocation in
+the first Qorus core transition measured for #5542: `CodeServerReverseProxy` was
+reported abstract, and the coordinator fell back to a whole-group parse. The
+comparison now ignores only the optional root qualifier after `object<` or `hash<`;
+the nullable marker and complete namespace-qualified name must still match.
+Regression cases instantiate, link, and execute root-level and namespaced classes
+with required and optional return types, and reject incompatible overrides.
+
+**A preloaded alias must not become the owner of a recompiled constant's value.**
+After the type fix, the first transition reached its 159th partial compiler invocation
+before failing on `ObjectOptionsRestClassV7::InterfaceSystemOptions`. Its preloaded base
+object contained a reference back into a derived class's constant. The AOT ownership
+map had materialized an old alias's references and ranked the newly reached base nodes
+under the alias's earlier preload initialization sequence. Ownership maps now walk each
+constant's stored graph without materializing its references. The regression compiles a
+group, recompiles the base with the old aliases preloaded, then recompiles and executes
+the consumers. See [AOT constant value references](aot-constant-value-references.md)
+for the ownership rule and the class/namespace coverage.
+
+**An uninitialized constant must not be cached as a known `NOTHING` value.** The
+next Qorus run cleared both earlier failures, then failed on its 169th partial
+compiler invocation, for `FsmExecutionLogger.qc`. A preloaded
+`AsyncQueueMetadata::constructor()` passed `NOTHING` to a base constructor requiring
+a metadata hash. Its preceding partial compile had deferred the metadata constant's
+initializer because a provider value could not be cached. `getReferencedValue()`
+cannot report exceptions, and its fallback for this uninitialized source constant
+returned `NOTHING`. The writer incorrectly recorded that as a successful parse-time
+value, so the next consumer read it instead of deferring its own initializer.
+
+`writePendingConstantParseValue()` now also checks that the entry has an initialized
+value or a supplied preload value. A deferred initializer gets no cache payload;
+a constant actually initialized to `NOTHING` remains cacheable. The regression
+compiles a provider containing an object, recompiles a consumer whose initializer
+must defer, then compiles another source that constructs that consumer. The final
+objects are linked and executed to verify the metadata and a genuine `NOTHING` value.
+
+**Batch-compiled method calls must record their body contracts.** With the four
+fixes above, the first partial transition compiled 307 source instances in 233
+compiler calls, reached a current no-op build, and then failed to link.
+`AbstractQorusCoreService.qc` still referenced two fast-entry symbols that the
+recompiled `AbstractServiceResource.qc` no longer provided. The caller's index
+recorded function body imports but omitted method body imports, so the scheduler
+had no body dependency telling it to rebuild that caller.
+
+Newly discovered method entries lacked `body_contract_qore_path`. Functions derive
+that identity from their callable-reference path, but methods do not use that
+field. Preloaded methods already obtained the identity from their symbol index,
+which is why standalone-only coverage missed the defect. Batch method discovery
+now sets the canonical public method identity for both fast-entry and effect-only
+entries. Static methods use that same public spelling, without the native symbol's
+`_static_` prefix. The regression checks instance and static imports, excludes an
+unused method, rejects a stale consumer after a body-only provider change, then
+recompiles, links, and executes the updated calls.
+
 **The cascade of declarations is gone; what remained was body-contract granularity**
 ([#5459](https://github.com/qoretechnologies/qore/issues/5459)). With declarations
 mode-independent, a comment-only edit to `Classes/QorusRestApiHandler.qc` from a group-parse
@@ -803,14 +881,46 @@ provider's *declaration* contract — took that to one compile; the body contrac
 `--link-qo` validates are watched separately, per row. See "Two channels decide staleness"
 and "The bound this narrowing must not cross".
 
-**It also loses bodies.** A whole-group parse lowers cross-member calls
-it can see in its own parse, so an object it emits is not byte-identical to one
-emitted against preloaded shells: it records more cross-object fast-entry
-providers. Switching a component between the two modes therefore changes its
-compile contract and rebuilds its consumers once — which is why the first
-incremental build after a group parse walks the whole closure of whatever was
-edited, however small the edit, and why the coordinator prefers to stay in one
-mode for a whole build.
+**Body contracts can still depend on which sources are parsed together.** The
+interprocedural effect analysis runs over the functions lowered in the current
+parse. A call into a preloaded object can therefore receive a more conservative
+summary than the same call in a whole-group parse. This changes parameter mutation
+information, runtime-local effects, fast-entry eligibility, and the body dependencies
+that a caller must record. Preloaded objects still contain executable bodies; their
+absence from this analysis is not an absence of executable code.
+
+The first 403-source Qorus core parse measured for
+[#5542](https://github.com/qoretechnologies/qore/issues/5542), with all five
+correctness fixes above, has identical declaration contracts to the whole-group
+parse. Body-contract rows differ in 195 sources, fast-entry provider rows in 52,
+and body imports in 258. Counting distinct callable paths with the `qore_fast_v1`
+ABI gives 1,008 for the whole parse and 1,048 for the partial parse: 21 disappear
+and 61 appear. Partial parsing does not simply remove a fixed set of optimizations.
+
+All 30,505 ordinary `qore_body` native entry paths in these sources remain present.
+Fast-entry eligibility also depends on whether parameters and body locals can stay
+entirely in IR and on the lowered calls; it is not a monotonic count of executable
+functions or a direct measure of application throughput. The runtime probes below
+exercise system-pool lookup and telemetry redaction through the resulting artifacts.
+
+These are not declaration changes and must not be hidden by weakening the linker's
+body-contract checks. Consumers that baked in the old assumptions must be rebuilt.
+That can change dependency edges and split a component, requiring the coordinator
+to replan. It does not necessarily invalidate every consumer in the transitive
+declaration closure. A short first partial compiler invocation alone therefore
+does not establish an incremental-build improvement; the complete transition,
+subsequent edits, linking, and runtime behavior must be measured.
+
+After the complete incremental builds settle, comparing all 1,197 sources against
+the matching whole-group build still finds **no declaration differences** and
+retains all 41,361 ordinary `qore_body` callable paths in every case. The first
+comment, second comment, and equivalent body edit have the same differences:
+225 sources change body-contract rows, 62 change fast-entry rows, and 296 change
+body imports. Their fast-entry paths total 1,321 versus 1,385 for the whole build
+(126 removed, 62 added). After the declaration edit, those counts are 377, 98,
+and 410 sources, with 1,251 fast-entry paths (199 removed, 65 added). The initial
+component's increase in fast entries therefore does not describe the completed
+transition, which also recompiles consumers.
 
 **Parse commit runs user code, including a preloaded object's**
 ([#5466](https://github.com/qoretechnologies/qore/issues/5466)). A preloaded `.qo` is not a
@@ -852,6 +962,174 @@ which only the compile that resolved the variable could do.
 
 `QORE_QCC_SUBSET_PARSE` stays opt-in for the reason measured above: on a group as dense as Qorus the
 convexity rule reduces most multi-source stale sets to one source per pass.
+
+### Measuring the Qorus core component (#5542)
+
+The October 2026 comparison uses Qore `71944301c964be5b94e88c7fbafe9409bb0a05c0`
+plus the five correctness fixes described above, and Qorus
+`b4fcbbbe2896bbe2a156d0e9008ec1a1fa597cd4`. Both arms use the same Release compiler
+(`-O3 -DNDEBUG`, GNU C++ 15.2.0, LLVM 21), the same frozen dependency sources and native modules,
+and the same SSD build path on `umbrella` (Intel Core Ultra 9 285H, 16 CPUs, 123 GiB
+RAM). Builds run sequentially with `-j12`; compiler tests finish before the timed matrix.
+An AOT object retains absolute source identities, so each arm restores its checkpoint
+to the original build path rather than compiling in differently named directories.
+
+The compiler fixes change its AOT identity. The frozen dependency
+copy therefore sets aside 2,171 generated AOT modules and loads their source counterparts;
+it retains the 67 native module files. Qorus's local AOT module prerequisites are rebuilt
+with the measured compiler before timing the core builds. Both arms use that same
+dependency mode. Earlier diagnostic runs used the older compiler and installed AOT
+dependencies, so their timings are not used as a before/after performance comparison.
+
+The corrected initial graph has 1,197 sources and 793 components. Its core
+component contains 403 sources, has 409 direct predecessor components, and has a
+required consumer closure of 192 components including itself. The other multi-source
+components contain two sources each. The exact core membership is recorded in
+[the benchmark inventory](benchmarks/qcc-5542-core-component.txt).
+
+The earlier 20-source core component was based on incomplete method dependencies.
+Adding those missing edges joins it with previously separate components. Its old
+membership and timings therefore cannot describe the corrected compiler's graph.
+
+The core edit sequence changes `Classes/ThreadLocalData.qc`: append a comment,
+append a second comment, replace `group_namespace >= RuntimePortableGroupIdBase`
+with the equivalent `group_namespace > RuntimePortableGroupIdBase - 1`, then
+increment `RuntimePortableGroupIdBase` from 100000000000 to 100000000001. Each arm
+starts from the same fresh whole-group compilation and retains its own outputs
+between edits. The declaration edit deliberately changes behavior at that boundary;
+the runtime probe checks both sides of the current constant. These edits are
+benchmark inputs, not Qorus changes to ship.
+
+The separate singleton control appends a comment to each of
+`Classes/QorusSoapApiManager.qc`, `Classes/QonsoleAssistService.qc`, and
+`Classes/QonsoleCoreDesignNlBridge.qc`. These are three singleton application classes
+with a dependency on the core in the corrected graph. The historical control files
+(`QorusQonsoleCore`, `QorusRestApiHandlerV9`, and `QonsoleDesignArtifactStore`) now all
+belong to the 403-source core component, so they no longer test singleton behavior.
+Each arm restores the same whole-group baseline before the control edits. The
+default control uses standalone compilation of the three singletons.
+
+Build wall time includes planning, preload staging, compilation, contract publication,
+and replanning through the CMake generation target, plus measurement-side contract
+capture. A wrapper separately records
+each compiler invocation's inputs, preloads, duration, and exit status, and preserves
+the emitted contracts. Link time is recorded separately, including aggregate glue
+compilation when needed. Every completed build is followed by a generation-target
+no-op check. A forced baseline uses the incremental-plan target because a fresh
+Make graph otherwise queues a redundant freshness recipe for every source before
+the bootstrap publishes its outputs; those recipes are not extra compiler parses.
+
+The fresh whole-group baseline takes 580.86 seconds, including one 566.87-second
+compiler invocation for all 1,197 sources and no preloads. Its following generation
+check takes 3.46 seconds without invoking the compiler. Local module prerequisites
+were built separately in 66.59 seconds before that measurement.
+
+Only `QORE_QCC_SUBSET_PARSE` differs between the incremental arms. The scheduler
+thresholds retain their defaults: two stale components, or one multi-source component,
+select a shared pass,
+and the whole-group escalation floor is the greater of eight components or 5%
+of the graph in default mode, versus 50% with partial parsing enabled, rounded up. The initial
+793-component graph therefore has floors of 40 and 397; graph changes recalculate
+them. A graph plan can execute several standalone compiler calls, while a partial
+pass can replan after publishing just one source, so the table counts both separately.
+
+The corrected three-singleton control produces:
+
+|!Mode|!Build wall (s)|!Compiler total (s)|!Compiler calls / source compilations|!Graph plans|!Next no-op (s)
+|Default standalone|67.03|21.66|3 / 3|2|0.33
+|Opt-in partial|80.92|17.56|3 / 3|4|0.33
+
+Both arms compile the same three sources, preloading 1,092 objects for
+`QorusSoapApiManager` and `QonsoleAssistService`, and 1,093 for
+`QonsoleCoreDesignNlBridge`. Neither has compiler failures or whole-group fallback;
+both link and pass five version-startup checks. Convexity still prevents a shared
+parse of the edited sources: the opt-in arm performs two one-source partial passes,
+then the ordinary singleton path. Its compiler time is slightly lower, but two extra
+graph plans leave its total wall time 20.7% higher. These are single trials and do
+not justify changing the global default.
+
+The first core transition from the whole-build baseline takes 1,466.42 seconds.
+Its initial 403-source compile takes 367.72 seconds with 690 preloads, but publishing
+those contracts causes further work: a one-source pass, another shared parse of
+410 sources, then individual consumer passes. In total, 28 compiler calls compile
+839 source instances across 439 distinct sources, using 868.33 seconds of compiler
+time and 29 graph plans. There is no compiler failure or whole-group fallback.
+The following no-op takes 0.32 seconds; linking takes 33.16 seconds. The resulting
+artifact passes five version-startup checks and both runtime probes.
+
+A 27.37-second comparison of saved contract metadata ran concurrently with the
+last consumer passes of this first transition. Its wall time is therefore a single
+observed run, not a controlled microbenchmark; no compiler tests ran concurrently.
+The initial component's compile time alone omits most of the transition cost.
+
+The complete incremental matrix is:
+
+|!Edit|!Mode|!Build wall (s)|!Compiler total (s)|!Compiler calls / source compilations|!Graph plans|!Next no-op (s)|!Link (s)
+|First comment|Whole|624.24|548.89|1 / 1197|2|0.32|11.52
+|First comment|Partial|1466.42|868.33|28 / 839|29|0.32|33.16
+|Second comment|Whole|629.34|553.17|1 / 1197|2|0.33|10.96
+|Second comment|Partial|462.36|367.39|1 / 398|2|0.32|10.29
+|Equivalent body|Whole|632.57|557.47|1 / 1197|2|0.33|10.24
+|Equivalent body|Partial|469.29|371.90|1 / 398|2|0.33|11.18
+|Declaration|Whole|626.46|554.22|1 / 1197|2|0.33|10.79
+|Declaration|Partial|3877.76|1022.07|155 / 567|156|0.32|31.93
+
+Every row passes compilation, the following no-op, linking, startup, and both
+runtime probes. None contains a failed compiler invocation. Each default build
+compiles all 1,197 sources with no preloads. The partial builds never fall back to
+the whole group. After the first transition, the core has 398 sources in a graph
+of 798 components. The second comment preloads 748 objects; the body edit preloads
+745. Each needs only one compiler invocation.
+
+The declaration edit compiles 567 distinct sources in 155 invocations, starting
+with the 398-source core and 749 preloads. Subsequent consumer passes preload
+1,142–1,144 objects. Most of its wall time is outside the compiler, in repeated
+planning, staging, publication, and measurement capture. The partial mode's default 50% escalation
+floor does not turn this consumer walk into a whole-group parse. Detailed
+per-invocation source/preload counts, contracts, and runtime summaries are retained
+in [the measurement data](benchmarks/qcc-5542-results.json).
+
+**Policy decision: keep partial parsing opt-in.** Subsequent comment and body edits
+are about 26% faster on this tree, but the first transition costs 2.35 times the
+whole-group build, and the declaration change costs 6.19 times as much. The
+singleton control also regresses. These single-trial results support an explicit
+choice for sustained edits within a component, not a global default change. This
+work fixes the correctness defects and records the tradeoff; it does not alter
+the coordinator's thresholds or weaken contract validation.
+
+#### Runtime checks and measurement limits
+
+The core cases link the actual generated objects into `qorus-core` and pass five
+version-startup checks with parse validation enabled. A separate temporary main
+wrapper runs two probes through those same objects. The pool probe initializes
+thread-local data, checks the portable namespace boundary against the constant in
+that build, then calls `qorus_get_system_pool_name()` one million times, requiring
+`omq` on every call. The telemetry probe calls
+`UserApi::_priv_ai_telemetry_safe_metadata_value()` 10,000 times on a nested hash,
+checking that passwords and API keys are redacted while ordinary fields survive.
+Neither wrapper nor the benchmark edits are part of the shipped Qorus sources.
+
+Each probe runs six times per artifact; the first two are warmup iterations.
+After all builds finish, the first-comment and declaration artifacts are compared
+in four alternating whole/partial pairs on CPU 0, a performance core. Both arms
+load the same local modules from the matching whole-arm checkpoint for that edit.
+This gives 16 timed samples per arm, probe, and edit, without a concurrent compiler.
+The loop timers exclude startup and probe parsing. These are targeted correctness
+and runtime checks, not a complete service workload or a throughput guarantee.
+
+|!Edit|!Probe|!Whole median (s)|!Partial median (s)|!Partial / whole
+|First comment|Pool lookup|1.79536|1.79535|1.0000
+|First comment|Telemetry redaction|0.39296|0.39352|1.0014
+|Declaration|Pool lookup|1.75831|1.74599|0.9930
+|Declaration|Telemetry redaction|0.38826|0.38203|0.9840
+
+All 192 raw samples, including warmups, produce the expected results. The timed
+sample ranges overlap in every comparison. These probes show no material runtime
+slowdown from the changed fast-entry providers, while their narrow coverage does
+not establish equivalence for other call patterns. The decision is to accept
+parse-dependent optimization contracts for the opt-in mode, with stale consumers
+rebuilt and linker validation preserved. Declaration drift, missing dependency
+records, unresolved native entries, and incorrect runtime results are not accepted.
 
 ## Two channels decide staleness, and both have to agree about granularity
 

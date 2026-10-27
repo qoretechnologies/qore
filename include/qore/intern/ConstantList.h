@@ -243,6 +243,18 @@ public:
 
     DLLLOCAL QoreValue getReferencedValue() const;
 
+    //! Returns the stored value graph for AOT ownership discovery, with an owned reference
+    /** References inside a preloaded constant belong to their targets. Resolving them here would let an
+        older preloaded alias claim a newly parsed constant's nodes under the alias's earlier initialization
+        sequence. It could also put temporary materialized containers in the reverse map.
+
+        This accessor does not evaluate references or initializers; ordinary constant reads must continue
+        to use getReferencedValue().
+
+        @return an owned reference to the stored value graph
+    */
+    DLLLOCAL QoreValue getAOTOwnershipValue() const;
+
     DLLLOCAL const QoreValue getValue() const;
 
     //! Returns true if the constant's value has been initialized
@@ -252,8 +264,8 @@ public:
     }
 
     //! Supplies the value a preloaded `.qo` shell recorded for this pending constant
-    /** A `.qo` carries declarations, not executable bodies, so a `qcc -c -L` parse resolving a constant
-        against a preloaded shell cannot run the provider's `__const_init` function.  A whole-group parse can
+    /** A `qcc -c -L` parse can encounter a pending provider constant before its `__const_init` function can
+        run. A whole-group parse can
         evaluate the provider's retained initializer during the consumer's parse, and evaluating a constant
         narrows its declared type to its value's type (see parseCommitRuntimeInit()), so the same source
         compiled the two ways published different declared types for every constant folded from a sibling --

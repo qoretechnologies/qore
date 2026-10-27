@@ -93,6 +93,8 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
             \testPreloadModuleDependencyUnderParse());
         addTestCase("a consumer records the body-contract rows it baked",
             \testBodyContractImportRows());
+        addTestCase("batch method calls record their body contracts",
+            \testMethodBodyContractImports());
 
         set_return_value(main());
     }
@@ -1515,6 +1517,65 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
         writeMap();
         out = compile("rowcons");
         assertFalse(is_file(imports_path), "the record is removed when nothing is baked: " + out);
+    }
+
+    testMethodBodyContractImports() {
+        TmpDir tmp = initDirs();
+        string provider = tmp_dir + "/methodprov.qc";
+        string consumer = tmp_dir + "/methodcons.qc";
+        write(provider, "%modern\nnamespace MethodDeps {\nclass Resource {\n"
+            "    int adjust(int x) { return x + 1; }\n"
+            "    static int scale(int x) { return x * 2; }\n"
+            "    int unused(int x) { return x - 1; }\n}\n}\n");
+        write(consumer, "%modern\nnamespace MethodDeps {\n"
+            "int sub useResource(Resource r, int x) { return r.adjust(x) + Resource::scale(x); }\n"
+            "}\nint sub main() { MethodDeps::Resource r(); "
+            "printf(\"%d\\n\", MethodDeps::useResource(r, 2)); return 0; }\n");
+        string out = run(sprintf("%s %s -c --batch-build-sidecars --output-dir=%y --depfile-dir=%y %y %y",
+            env, qcc_bin, lib_dir, lib_dir, provider, consumer));
+        string provider_qo = objectPath("methodprov");
+        string consumer_qo = objectPath("methodcons");
+        assertTrue(is_file(provider_qo) && is_file(consumer_qo), "the batch compiles: " + out);
+        hash<auto> index = parse_json(File::readTextFile(consumer_qo + ".idx.json"));
+        hash<string, bool> imports = {};
+        foreach hash<auto> row in (index.requires) {
+            if (row.abi_kind == "qore_body_contract_import_v1") {
+                imports{row.qore_path} = True;
+            }
+        }
+        assertTrue(exists imports{"MethodDeps::Resource::adjust(int)"},
+            "the guarded instance call records its method contract: " + sprintf("%y", imports));
+        assertTrue(exists imports{"MethodDeps::Resource::scale(int)"},
+            "the static summary records the public method identity, without _static_: " + sprintf("%y", imports));
+        assertFalse(exists imports{"MethodDeps::Resource::unused(int)"},
+            "an unrelated method creates no body dependency");
+        string app = tmp_dir + "/method-app";
+        out = run(sprintf("%s %s -o %y %y %y", env, qcc_bin, app, provider_qo, consumer_qo));
+        assertTrue(is_file(app), "the initial method objects link: " + out);
+        assertEq("7", trim(run(sprintf("%s %y", env, app))), "the initial method calls execute");
+
+        # Capturing the parameter removes the direct fast ABI without changing either declaration.
+        write(provider, "%modern\nnamespace MethodDeps {\nclass Resource {\n"
+            "    int adjust(int x) { auto f = int sub () { return x; }; return f() + 3; }\n"
+            "    static int scale(int x) { auto f = int sub () { return x; }; return f() * 4; }\n"
+            "    int unused(int x) { return x - 1; }\n}\n}\n");
+        string partial = tmp_dir + "/partial";
+        mkdir(partial);
+        string new_provider = partial + DirSep + basename(provider_qo);
+        out = run(sprintf("%s %s -c -o %y %y", env, qcc_bin, new_provider, provider));
+        assertTrue(is_file(new_provider), "the changed method provider compiles: " + out);
+        string rejected = tmp_dir + "/stale-method-app";
+        out = run(sprintf("%s %s -o %y %y %y", env, qcc_bin, rejected, new_provider, consumer_qo));
+        assertTrue(out.find("body_contract") >= 0, "link rejects the stale method contracts: " + out);
+        assertFalse(is_file(rejected), "a stale consumer produces no executable");
+
+        string new_consumer = partial + DirSep + basename(consumer_qo);
+        out = run(sprintf("%s %s -c -L %y -o %y %y", env, qcc_bin, partial, new_consumer, consumer));
+        assertTrue(is_file(new_consumer), "the consumer recompiles against the changed methods: " + out);
+        app = tmp_dir + "/rebuilt-method-app";
+        out = run(sprintf("%s %s -o %y %y %y", env, qcc_bin, app, new_provider, new_consumer));
+        assertTrue(is_file(app), "the updated method objects link: " + out);
+        assertEq("13", trim(run(sprintf("%s %y", env, app))), "both method calls use the new bodies");
     }
 
     testByteReproducibleObject() {

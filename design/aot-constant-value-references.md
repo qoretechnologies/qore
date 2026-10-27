@@ -86,9 +86,40 @@ takes the value — the very failure this rule exists to prevent. Completion ord
 cannot be fooled that way: the alias cannot finish until the definer has.
 
 Constants a compile inherits from its preload are stamped as they load, which
-need not match how they were declared, but they are harmless: the preload is the
-unit's transitive predecessor set, so a reference into it resolves for every
-consumer of the unit as well.
+need not match how they were originally initialized. Ownership discovery must
+walk their **stored** value graphs, without evaluating the references inside
+them. A reference already names another constant's value; its target's nodes
+must not become ownership candidates under the preloaded holder's sequence.
+
+### Preloaded aliases during recompilation
+
+The partial-build evaluation in [#5542](https://github.com/qoretechnologies/qore/issues/5542)
+exposed a sequence that a single whole-group compilation does not exercise:
+
+1. Compile a base constant and derived constants that merge and embed its value.
+2. Recompile the base while the older derived objects are in the preload closure.
+3. Recompile a derived source against the new base object.
+
+The old derived constant can contain a deferred reference into the base source
+being parsed. Reading its fully materialized value after the base initializes
+reaches the new base's nodes, but the derived constant still has its earlier
+preload initialization sequence. Building the reverse map from that materialized
+view therefore gives the derived constant ownership of the base's value. The base
+object then references its own consumer. On the third compile, the reference can
+be unresolved or cyclic; the Qorus case failed while serializing
+`ObjectOptionsRestClassV7::InterfaceSystemOptions["stack-size"]`.
+
+`ConstantEntry::getAOTOwnershipValue()` returns an owned reference to the stored
+graph under the entry's value lock. All AOT reverse-map builders use this accessor.
+They retain ordinary initialization-order ranking for nodes actually present in
+that graph and do not claim the targets of deferred references. This also avoids
+indexing temporary container copies created by deep materialization. Ordinary
+constant reads and serialization of constant values still materialize references
+through `getReferencedValue()`.
+
+`AOTAliasedConstantPathOwnership.qtest` covers the three-step sequence for both
+class and namespace constants, then links and executes the resulting objects to
+check the original and merged values.
 
 ### What the rule requires of the build
 
@@ -180,10 +211,9 @@ enum folds, the narrowed edge, same-named enums, and mode-independent declaratio
 
 Nothing breaks a cycle at load time, and both of its outcomes are build-stopping:
 
-| Cycle reached with | Failure |
-|---|---|
-| the other constant still a pending shell | the value deserializes to a deferred `RuntimeConstantPathRefNode` instead of a value. A later compilation unit that folds that constant into a new one hands the writer a node it has no case for: `AOT cannot serialize class constant '…' without data loss` |
-| the other constant already holding a value | `ConstantEntry::getReferencedValue()` and `RuntimeConstantPathRefNode::evalImpl()` call each other with no base case, and `qcc` dies of a stack overflow with no diagnostic at all |
+|!Cycle reached with|!Failure
+|the other constant still a pending shell|the value deserializes to a deferred `RuntimeConstantPathRefNode` instead of a value. A later compilation unit that folds that constant into a new one hands the writer a node it has no case for: `AOT cannot serialize class constant '…' without data loss`
+|the other constant already holding a value|`ConstantEntry::getReferencedValue()` and `RuntimeConstantPathRefNode::evalImpl()` call each other with no base case, and `qcc` dies of a stack overflow with no diagnostic at all
 
 ### Why ranking the candidate paths does not work
 
@@ -288,10 +318,9 @@ initializer.
 
 Two narrower conditions were tried first and both admit `Base`:
 
-| Condition | Why it fails |
-|---|---|
-| the node is in the reverse map | `Base` is in it — that is how the false reference is emitted at all |
-| ... and its path is top level, carrying no subscript chain | `Base` is top level too |
+|!Condition|!Why it fails
+|the node is in the reverse map|`Base` is in it — that is how the false reference is emitted at all
+|... and its path is top level, carrying no subscript chain|`Base` is top level too
 
 The remaining ways to tell the roles apart are the initializer call graph — is
 this function reachable from a `__const_init`? — and serializing the payload

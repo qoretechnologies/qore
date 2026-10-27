@@ -77,6 +77,8 @@ class AOTAliasedConstantPathOwnershipTest inherits QUnit::Test {
             "reference cycle", \testMergeAndEmbedCycle());
         addTestCase("an alias compiled beside its definer does not take ownership of its value",
             \testPeerAliasDoesNotOwnItsDefinersValue());
+        addTestCase("preloaded aliases cannot own a recompiled provider's value",
+            \testPreloadedAliasesDoNotOwnRecompiledValues());
 
         set_return_value(main());
     }
@@ -89,6 +91,78 @@ class AOTAliasedConstantPathOwnershipTest inherits QUnit::Test {
         File f();
         f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
         f.write(contents);
+    }
+
+    #! Recompiling a provider beside older preloaded aliases must not reverse constant ownership.
+    testPreloadedAliasesDoNotOwnRecompiledValues() {
+        foreach bool classes in ((True, False)) {
+            TmpDir tmp("qore-aot-const-ownership-recompile-");
+            string whole_dir = tmp.path + "/whole";
+            mkdir(whole_dir);
+            list<string> sources = map tmp.path + "/" + $1 + ".qc", ("owner", "alias", "last");
+            string owner_open = classes ? "public class Owner { public {\n" : "public namespace Owner {\n";
+            string alias_open = classes ? "public class Alias inherits Owner { public {\n"
+                : "public namespace Alias {\n";
+            string last_open = classes ? "public class Last inherits Alias { public {\n"
+                : "public namespace Last {\n";
+            string close = classes ? "} }\n" : "}\n";
+            string visibility = classes ? "" : "public ";
+            writeFile(sources[0], "%modern\n" + owner_open
+                + visibility + "const Options = {\"stack-size\": {\"type\": \"byte-size\"}};\n"
+                + visibility + "const Container = {\"system\": Options};\n" + close);
+            writeFile(sources[1], "%modern\n" + alias_open
+                + visibility + "const Options = Owner::Options + {\"heap\": {\"type\": \"byte-size\"}};\n"
+                + visibility + "const Container = {\"system\": Options};\n" + close);
+            writeFile(sources[2], "%modern\n" + last_open
+                + visibility + "const Container = {\"system\": Alias::Options};\n" + close
+                + "int sub main() { printf(\"%s/%s\\n\", Last::Container.system.\"stack-size\".type, "
+                + "Last::Container.system.heap.type); return 0; }\n");
+
+            string context_file = tmp.path + "/context";
+            string manifest = tmp.path + "/symbols";
+            writeFile(context_file, "format=1\n" + (map "input=" + $1 + "\n", sources).join("")
+                + (map "output=" + whole_dir + "/" + $1 + ".qo\n", ("owner", "alias", "last")).join(""));
+            string env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+            string scanned = run(sprintf("%s %y %y --source-symbol-manifest %y %y", env, qore_bin,
+                get_script_dir() + "/../../../tools/qore-qo-source-order", manifest, context_file));
+            assertTrue(is_file(manifest), "the source manifest is generated: " + scanned);
+            string source_args = (map sprintf("%y", $1), sources).join(" ");
+            string compiled = run(sprintf("%s %y -c --batch-build-sidecars --output-dir=%y"
+                " --depfile-dir=%y %s", env, qcc_bin, whole_dir, whole_dir, source_args));
+            list<string> objects;
+            foreach string name in (("owner", "alias", "last")) {
+                list<string> matches = glob(whole_dir + "/*_" + name + "_qc.qo");
+                assertEq(1, matches.size(), "the whole parse compiles " + name + ": " + compiled);
+                push objects, matches[0];
+            }
+
+            # Keep each batch object's basename: it also names its registration symbol.
+            for (int i = 0; i < sources.size(); ++i) {
+                string stage = tmp.path + "/partial-" + i;
+                string preload = stage + "/preload";
+                string output = stage + "/out";
+                mkdir(stage);
+                mkdir(preload);
+                mkdir(output);
+                for (int j = 0; j < objects.size(); ++j) {
+                    if (i != j) {
+                        copy_file(objects[j], preload + DirSep + basename(objects[j]));
+                    }
+                }
+                compiled = run(sprintf("%s %y -c -L %y --source-symbol-manifest=%y --batch-build-sidecars"
+                    " --output-dir=%y --depfile-dir=%y %y", env, qcc_bin, preload, manifest,
+                    output, output, sources[i]));
+                objects[i] = output + DirSep + basename(objects[i]);
+                assertTrue(is_file(objects[i]), "partial parse " + i + " preserves constant ownership: " + compiled);
+            }
+
+            string app = tmp.path + "/app";
+            string object_args = (map sprintf("%y", $1), objects).join(" ");
+            string linked = run(sprintf("%s %y -o %y %s", env, qcc_bin, app, object_args));
+            assertTrue(is_file(app), "the successive partial objects link: " + linked);
+            assertEq("byte-size/byte-size\n", run(sprintf("%s %y", env, app)),
+                "the linked constants retain both the original and added values");
+        }
     }
 
     #! An alias may not own a value its own definer's object then has to reference.
