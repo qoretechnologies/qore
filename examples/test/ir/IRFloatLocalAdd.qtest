@@ -73,7 +73,7 @@ class FloatLocalAddTest inherits QUnit::Test {
                             string body = definition.split("\n}")[0];
                             if (!body.split("\n")[0].contains("@" + name + "_")) { continue; }
                             ++found;
-                            assertEq(!selected, regex(body, "@qore_rt_lv_path_compound_aot(?:_throwing)?\\("),
+                            assertEq(!selected, regex(body, "@qore_rt_lv_path_compound(?:_consume)?_aot(?:_throwing)?\\("),
                                 "lvalue mutation path " + name + " " + prefix);
                             if (selected) {
                                 assertTrue(body.contains(" = fadd "), "native float arithmetic " + name);
@@ -100,7 +100,7 @@ class FloatLocalAddTest inherits QUnit::Test {
                             string body = definition.split("\n}")[0];
                             if (!body.split("\n")[0].contains("@" + name + "_")) { continue; }
                             ++found;
-                            assertEq(!selected, regex(body, "@qore_rt_lv_path_compound_aot(?:_throwing)?\\("),
+                            assertEq(!selected, regex(body, "@qore_rt_lv_path_compound(?:_consume)?_aot(?:_throwing)?\\("),
                                 "direct-call float mutation path " + name + " " + prefix);
                         }
                         assertEq(selected ? 2 : 1, found, "direct-call ordinary/fast entries " + name);

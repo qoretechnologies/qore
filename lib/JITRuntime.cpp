@@ -15379,16 +15379,21 @@ static uint64_t qore_rt_lv_path_compound_impl(QoreIRLValuePathInstruction* inst,
     // Navigation still handles references, locks, COW, vivification and type checks.
     const bool single_index = inst->path.size() == 2
         && inst->path[1].kind == LVPathStepKind::ListIndex;
+    // A lone local root has no dynamic operands to patch. Borrow its immutable
+    // descriptor through the existing navigation/operator scopes, preserving
+    // live variable resolution, locking and RHS ownership without a vector copy.
+    const bool single_local = inst->path.size() == 1
+        && inst->path[0].kind == LVPathStepKind::LocalVar;
     int64_t index = 0;
     if (single_index) {
         const LVPathStep& step = inst->path[1];
         index = step.operand_idx == UINT32_MAX ? step.index : fromBits(dyn_vals[0]).getAsBigInt();
-    } else {
+    } else if (!single_local) {
         if (patchLVPath(path_copy, inst, dyn_vals, xsink)) {
             return toBits(QoreValue());
         }
     }
-    const auto& path = single_index ? inst->path : path_copy;
+    const auto& path = single_index || single_local ? inst->path : path_copy;
 
     LValueHelper lvh(xsink);
     if (lvh.navigatePath(path.data(), path.size(), false, single_index ? &index : nullptr)) {

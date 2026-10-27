@@ -250,6 +250,9 @@
     type can also use this arithmetic path after normal return validation; runtime overload dispatch and optional
     returns retain their existing behavior.
 
+    JIT and AOT compound assignments to local variables avoid copying an unchanged lvalue descriptor.
+    Conversion, reference, locking and cleanup behavior are preserved.
+
     AOT compilation preserves native floating-point and boolean return snapshots across cleanup, avoiding
     redundant boxing and reference-count operations while retaining boxed-value ownership.
     AOT and JIT compilation can also summarize side-effect-free floating-point expressions returned through

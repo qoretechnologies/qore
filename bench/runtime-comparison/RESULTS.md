@@ -27109,3 +27109,137 @@ python3 bench/runtime-comparison/opaque_callbacks.py /tmp/opaque-aot-check.txt
 Use an optimized runtime for performance measurements. The four kernels are int_zero, int_unary, float_zero, float_unary. The elevated float_zero time includes generic floating compound assignment: sum += callback() still uses qore_rt_lv_path_compound_consume_aot. That is the next separate optimization lead; callable return compatibility, callback mutation, cleanup and exception ordering must be established before extending native lowering. These bounded experiments do not establish a global maximum or Java parity.
 
 [Lossless evidence](results-call-context-pointer-rejected-macos-arm64.json); [62-check audit](audit-call-context-pointer-rejected.md).
+
+## Borrow immutable local compound paths (2026-10-28)
+
+The optimized baseline is b9fc7a8427, including develop 42ae5a5181. In the shared JIT/AOT generic compound-assignment helper, a path consisting of one LocalVar has no dynamic operand to patch. Borrow the instruction-owned descriptor instead of allocating/copying its vector. All live variable resolution, reference traversal, locking, conversions, operator handling, exceptions, result ownership and RHS cleanup remain unchanged. No ABI, cached slot, calling convention or callable-return contract changes. Other paths retain their existing handling. The IR interpreter has a separate compound implementation and receives no direct benefit from this patch.
+
+The opaque floating callback target deliberately prevents compile-time target specialization. It still uses generic compound assignment after the native callback. Untimed probes verify 13,113 compound calls/layout, all with a single LocalVar, and all four same-Program callback signatures with 13,101 reused native frames after first-call setup. Timing has no interposition. These are whole-kernel ns/item, not isolated call latency.
+
+Release uses -O3 -DNDEBUG and allocation tracking off; benchmark images were compiled with qcc -O3 --strip-source. Each paired comparison uses the same physical executable/qmod per layout with matching normal runtime identities, changing only the runtime library. Default/reverse/shuffle-487 layouts, seed 7, one warmup and three 150 ms samples; three screen forks and five independent confirmation forks. The main count is 4096; short controls use 1 and 17. The host is shared without exclusivity, affinity or thermal control. No owned build/test/profile/heavy archive work overlaps timing. Frozen images and actual loaded dependencies are checked per job; the broad phase checks all tracked source hashes at phase boundaries.
+
+For each process, take the mean of its three measured windows, then the median across forks in each layout, and finally the median across the three layouts. Tables and decision percentages use these aggregate medians; individual layout results are retained in the evidence.
+
+Targeted results:
+
+|!Workload|!Screen before|!Screen candidate|!Screen change|!Confirm before|!Confirm candidate|!Confirm change
+|opaque:float_zero|75.197436|61.496379|-18.220%|75.247156|61.474397|-18.303%
+|opaque:int_zero|17.460664|17.360659|-0.573%|17.383424|17.450424|+0.385%
+|opaque:int_unary|18.570718|18.530387|-0.217%|18.466355|18.426587|-0.215%
+|opaque:float_unary|18.518318|18.719943|+1.089%|18.708532|18.446298|-1.402%
+|micro:closure_call|13.999937|14.151030|+1.079%|14.000368|13.989204|-0.080%
+|micro:closure_capture|20.077117|20.050911|-0.131%|20.062952|19.956363|-0.531%
+|micro:indirect_call|59.627992|59.531217|-0.162%|59.211646|59.231718|+0.034%
+|micro:indirect_wide|59.010266|59.465203|+0.771%|58.869190|59.194032|+0.552%
+|micro:list_build|26.695191|26.506442|-0.707%|26.595006|26.377113|-0.819%
+|mixed:callback_pipeline|122.309824|121.436973|-0.714%|121.968552|121.248826|-0.590%
+|index:buffer_positive|14.883465|14.922484|+0.262%|14.737910|14.907483|+1.151%
+|index:buffer_negative|14.764938|14.869232|+0.706%|14.771669|14.732294|-0.267%
+
+The broader screen covers 94 workloads: 78 existing call/container/mixed/lifetime workloads, four opaque signatures, eight short opaque controls and four populated-context controls. Confirmation repeats all mixed/opaque/short/populated controls and every screen workload at least 2% slower. All results follow; a missing confirmation means the prospective rule did not select that control.
+
+|!Workload|!Screen before|!Screen candidate|!Screen change|!Confirm before|!Confirm candidate|!Confirm change
+|float:direct_local_float_return|0.809221|0.787559|-2.677%|n/a|n/a|n/a
+|float:callback_local_float_return|0.855051|0.852283|-0.324%|n/a|n/a|n/a
+|float:direct_local_float_result|0.763553|0.737789|-3.374%|n/a|n/a|n/a
+|float:callback_local_float_result|0.802834|0.794775|-1.004%|n/a|n/a|n/a
+|float:direct_loop_float_return|5.691819|5.674429|-0.306%|n/a|n/a|n/a
+|float:callback_loop_float_return|4.950306|4.945819|-0.091%|n/a|n/a|n/a
+|float:direct_float_add|0.819635|0.815600|-0.492%|n/a|n/a|n/a
+|float:static_float_add|0.815061|0.806591|-1.039%|n/a|n/a|n/a
+|float:typed_local_int_unary|1.191241|1.195730|+0.377%|n/a|n/a|n/a
+|float:typed_local_float_unary|0.886364|0.894189|+0.883%|n/a|n/a|n/a
+|float:result_float_add|0.848285|0.849578|+0.152%|n/a|n/a|n/a
+|float:typed_local_int_result|0.826831|0.833049|+0.752%|n/a|n/a|n/a
+|micro:arithmetic|1.586296|1.583748|-0.161%|n/a|n/a|n/a
+|micro:direct_call|1.592244|1.591084|-0.073%|n/a|n/a|n/a
+|micro:method_call|1.664126|1.667929|+0.228%|n/a|n/a|n/a
+|micro:indirect_call|59.550817|59.531755|-0.032%|n/a|n/a|n/a
+|micro:polymorphic_call|23.243808|23.226602|-0.074%|n/a|n/a|n/a
+|micro:polymorphic_expression_call|10.740546|10.725239|-0.143%|n/a|n/a|n/a
+|micro:monomorphic_call|3.874644|3.936408|+1.594%|n/a|n/a|n/a
+|micro:optional_method_call|10.532314|10.460111|-0.686%|n/a|n/a|n/a
+|micro:polymorphic_float_call|23.585984|23.372984|-0.903%|n/a|n/a|n/a
+|micro:polymorphic_float_expression_call|10.885576|10.829320|-0.517%|n/a|n/a|n/a
+|micro:monomorphic_float_call|4.215817|4.156640|-1.404%|n/a|n/a|n/a
+|micro:optional_float_method_call|10.851814|10.814004|-0.348%|n/a|n/a|n/a
+|micro:boxed_float_method_call|19.861328|19.922104|+0.306%|n/a|n/a|n/a
+|micro:dynamic_int_result_call|10.486537|10.333952|-1.455%|n/a|n/a|n/a
+|micro:dynamic_int_result_fallback|20.337192|20.196095|-0.694%|n/a|n/a|n/a
+|micro:boxed_int_method_call|16.080054|16.207985|+0.796%|n/a|n/a|n/a
+|micro:boxed_int_method_fallback|33.123129|32.695532|-1.291%|n/a|n/a|n/a
+|micro:boxed_float_method_fallback|34.199724|34.186547|-0.039%|n/a|n/a|n/a
+|micro:boxed_int_method_effect|89.766447|89.398234|-0.410%|n/a|n/a|n/a
+|micro:dynamic_float_result_call|11.165575|11.134662|-0.277%|n/a|n/a|n/a
+|micro:indirect_wide|59.050583|58.738998|-0.528%|n/a|n/a|n/a
+|micro:indirect_float|58.543792|58.573366|+0.051%|n/a|n/a|n/a
+|micro:indirect_int_result|59.184585|58.991969|-0.325%|n/a|n/a|n/a
+|micro:indirect_float_result|58.194517|58.634382|+0.756%|n/a|n/a|n/a
+|micro:indirect_tagged_float|58.193129|58.648680|+0.783%|n/a|n/a|n/a
+|micro:indirect_branch_float|58.308936|58.389785|+0.139%|n/a|n/a|n/a
+|micro:indirect_affine|59.122696|59.264462|+0.240%|n/a|n/a|n/a
+|micro:indirect_affine_wide|59.009846|59.063093|+0.090%|n/a|n/a|n/a
+|micro:indirect_branch_int|59.623339|59.414321|-0.351%|n/a|n/a|n/a
+|micro:dispatch_control|1.989783|1.984581|-0.261%|n/a|n/a|n/a
+|micro:list_read|2.946487|2.946503|+0.001%|n/a|n/a|n/a
+|micro:list_build|26.633401|26.590063|-0.163%|n/a|n/a|n/a
+|micro:list_mutate|130.002393|130.139491|+0.105%|n/a|n/a|n/a
+|micro:temporary_list|1.741482|1.750731|+0.531%|n/a|n/a|n/a
+|micro:temporary_hash|1.751601|1.752959|+0.077%|n/a|n/a|n/a
+|micro:closure_call|13.895375|13.797110|-0.707%|n/a|n/a|n/a
+|micro:closure_capture|19.854582|19.575271|-1.407%|n/a|n/a|n/a
+|mixed:csv_report|935.527782|926.208496|-0.996%|919.295198|928.413981|+0.992%
+|mixed:object_orders|1744.182724|1745.113488|+0.053%|1741.093975|1747.158034|+0.348%
+|mixed:callback_pipeline|121.653545|122.401287|+0.615%|121.061661|121.435241|+0.309%
+|mixed:text_index|1446.364183|1450.286083|+0.271%|1457.673778|1447.656876|-0.687%
+|probe:object_loop|399.420519|398.254699|-0.292%|n/a|n/a|n/a
+|probe:object_short|1573.348630|1576.585558|+0.206%|n/a|n/a|n/a
+|probe:float_loop|429.425829|431.451992|+0.472%|n/a|n/a|n/a
+|probe:float_short|1592.978952|1613.298941|+1.276%|n/a|n/a|n/a
+|probe:string_loop|367.321745|367.082442|-0.065%|n/a|n/a|n/a
+|probe:string_short|1479.062625|1495.771484|+1.130%|n/a|n/a|n/a
+|probe:effect_loop|450.748741|452.199845|+0.322%|n/a|n/a|n/a
+|probe:effect_short|1638.052678|1640.472854|+0.148%|n/a|n/a|n/a
+|probe:two_read_loop|483.573613|485.765308|+0.453%|n/a|n/a|n/a
+|probe:two_read_short|1655.494097|1677.819454|+1.349%|n/a|n/a|n/a
+|probe:default_loop|758.078197|759.992535|+0.253%|n/a|n/a|n/a
+|probe:default_short|1974.617941|2028.464037|+2.727%|1955.549274|1959.254215|+0.189%
+|probe:string_result_loop|516.041596|520.023756|+0.772%|n/a|n/a|n/a
+|probe:string_result_short|1697.968454|1708.928888|+0.646%|n/a|n/a|n/a
+|index:list_positive|7.775683|7.758818|-0.217%|n/a|n/a|n/a
+|index:list_negative|7.872053|7.869676|-0.030%|n/a|n/a|n/a
+|index:binary_positive|7.545640|7.597168|+0.683%|n/a|n/a|n/a
+|index:binary_negative|8.121703|8.106962|-0.182%|n/a|n/a|n/a
+|index:buffer_positive|14.903507|14.862678|-0.274%|n/a|n/a|n/a
+|index:buffer_negative|14.743536|14.863723|+0.815%|n/a|n/a|n/a
+|lifecycle:object_closure_live|75.926603|76.352034|+0.560%|n/a|n/a|n/a
+|lifecycle:object_closure_dead|76.478330|75.561878|-1.198%|n/a|n/a|n/a
+|lifecycle:closure_create_plain|310.392576|308.330412|-0.664%|n/a|n/a|n/a
+|lifecycle:closure_create_capture|575.130189|582.632876|+1.305%|n/a|n/a|n/a
+|lifecycle:closure_create_object|838.455395|839.027930|+0.068%|n/a|n/a|n/a
+|opaque:int_zero|17.455644|17.506709|+0.293%|17.433406|17.365133|-0.392%
+|opaque:int_unary|18.446283|18.360155|-0.467%|18.313845|18.454125|+0.766%
+|opaque:float_zero|75.830066|61.571752|-18.803%|75.609585|61.781340|-18.289%
+|opaque:float_unary|18.449428|18.445915|-0.019%|18.552670|18.499244|-0.288%
+|short1_opaque:int_zero|425.518446|425.803943|+0.067%|422.869764|426.567680|+0.874%
+|short1_opaque:int_unary|442.403726|441.817751|-0.132%|440.289080|440.381539|+0.021%
+|short1_opaque:float_zero|714.295340|711.654453|-0.370%|717.567937|702.494915|-2.101%
+|short1_opaque:float_unary|444.332573|447.831615|+0.787%|444.101324|450.134239|+1.358%
+|short17_opaque:int_zero|42.283312|42.268625|-0.035%|42.654681|42.577903|-0.180%
+|short17_opaque:int_unary|44.622227|43.871720|-1.682%|43.782165|44.141437|+0.821%
+|short17_opaque:float_zero|116.599432|101.684601|-12.792%|115.720018|101.990469|-11.864%
+|short17_opaque:float_unary|43.888715|44.009406|+0.275%|44.286756|44.635625|+0.788%
+|populated_micro:closure_call|28.397299|28.741404|+1.212%|28.280912|27.843377|-1.547%
+|populated_micro:closure_capture|34.330166|34.770834|+1.284%|34.667059|34.883073|+0.623%
+|populated_micro:indirect_call|274.203557|272.784347|-0.518%|271.771886|269.672117|-0.773%
+|populated_micro:indirect_wide|342.747638|351.188158|+2.463%|345.803699|346.654756|+0.246%
+
+Retain the descriptor-borrowing change. The directly exercised opaque floating accumulation target improves 18.2–18.8% in aggregate across all four rounds, with improvement in every layout; the 17-item control improves 12.8% in the broad screen and 11.9% in confirmation. One-item results are small and do not establish a robust per-call speedup. The two >=2% screen regressions do not repeat at that magnitude: default-short confirms +0.19%, populated wide indirect +0.25%. Mixed confirmation changes are callback-pipeline +0.31%, CSV +0.99%, object-orders +0.35%, text-index −0.69%; several change sign from screening. Some small control costs remain (for example short unary-float +1.36% and populated captured closure +0.62%), and all per-layout results are retained. The 18% target gain is worthwhile under the user-authorized broader tradeoff; it is not an 18% overall runtime improvement, isolated call latency result, or Java parity claim.
+
+All 2,898 jobs / 8,694 windows are retained and independently replayed. There is no application-weighted overall score or fresh Java/develop comparison.
+
+Release and Debug each pass 81 QUnit cases/7,718 assertions plus two standalone fixtures. Debug adds 18 cases / 70 assertions of fallback/context controls and 2,917 native assertions. The full Release build and all 391 qmod links are verified. Preparation validates 7,488 reference results plus 3,330 populated-context results. The original float codegen test expected only the borrowed helper name; the untouched baseline fails identically because optionalAdd now uses the consuming helper. The corrected matcher accepts both forms while retaining the generic-path assertion; the corrected baseline passes 353 assertions. Two driver-only classification failures are also preserved: requiring a QUnit summary from a standalone script, then misclassifying a relative QUnit import. Successful children are retained; no test failure is hidden.
+
+Further native lowering is a distinct experiment. `code<float()>` is a compatibility annotation and can return integer, number, string or NOTHING values without coercion; it does not alone prove a native float result. Any further optimization must preserve conversion, callback mutation and cleanup order. This gain does not establish Java parity or a global performance maximum.
+
+[Lossless evidence](results-local-compound-path-macos-arm64.json); [62-check audit](audit-local-compound-path.md).
