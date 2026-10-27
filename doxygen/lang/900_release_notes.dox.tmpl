@@ -4705,30 +4705,24 @@ while (*binary chunk = input.read(65536)) {
       - new module providing a Language Server Protocol (LSP) implementation for %Qore
       - symbol and file-kind handling based on the tree-sitter-based @ref astparserintro "astparser" module,
         including typedefs and all Qore/Qorus source extensions
-      - files that are not open in the editor are kept as compact symbol indexes instead of syntax trees, and only
-        the files that can contain a result are parsed for a request, keeping memory use proportional to the
-        number of symbols rather than the size of the workspace (see @ref qls_indexing)
-      - workspace scanning skips version control, dependency, agent worktree and build directories as well as very
-        large files, follows each directory only once, and can be configured with initialization options
-      - indexes all workspace folders and follows workspace folder changes
-      - references and reference-count code lenses include closed workspace files; a per-file identifier filter
-        avoids reading files that cannot contain the identifier, and code lenses look up the declared name
-      - hierarchical document symbols with name selection ranges, and incremental document synchronization
-        (see @ref qls_sync)
-      - the server answers requests while the workspace is indexed in the background, reports indexing progress,
-        and supports request cancellation; @ref QLS::LspConnection "LspConnection" runs the server on any streams
+      - workspace indexing with memory use proportional to the number of symbols: files that are not open in the
+        editor are kept as compact symbol indexes and parsed only when a request needs them; scanning skips
+        version control, dependency, agent worktree and build directories and very large files, and can be
+        configured with initialization options (see @ref qls_indexing)
+      - all workspace folders are indexed in the background with progress reports, requests are answered during
+        indexing and can be cancelled, and @ref QLS::LspConnection "LspConnection" runs the server on any streams
         (see @ref qls_loop)
-      - completion inserts callables as snippets, shows parameter hints and further suggestions in VS Code, and
-        returns Markdown documentation
-      - standalone scripts are checked with the %Qore parser when they are opened and saved, so type errors,
-        unresolved symbols, errors in required modules and warnings are reported, with quick fixes for the fixes
-        of %Qore diagnostics (see @ref qls_diagnostics)
-      - links the module names and paths of \c %%requires, \c %%try-module and \c %%include directives to their
-        files, and supports go to declaration
-      - formats a range of a document and returns semantic token changes as deltas
-      - edits the occurrences of a local variable or parameter together, and shows the values of local variables
-        and parameters inline while debugging
-      - updates the directives that refer to renamed or moved files, and supports pull diagnostics
+      - navigation: hover, go to definition, declaration, type definition and implementation, references and
+        rename across the workspace, reference-count code lenses, call and type hierarchies, and links for the
+        module names and paths of \c %%requires, \c %%try-module and \c %%include directives
+      - editing: completion with snippets, parameter hints and Markdown documentation, signature help, inlay
+        hints, linked editing of local variables, document, range and on-type formatting, and updates of the
+        directives that refer to renamed or moved files
+      - diagnostics: standalone scripts are checked with the %Qore parser when they are opened and saved, with
+        quick fixes for the fixes of %Qore diagnostics, and other files get syntax errors; diagnostics are
+        published or pulled (see @ref qls_diagnostics)
+      - hierarchical document symbols, semantic tokens with deltas, folding and selection ranges, incremental
+        document synchronization (see @ref qls_sync), and inline values while debugging
 
     - @ref qoreagentstrategiesintro "QoreAgentStrategies" module
       - new module providing configurable agent execution strategies for LLM agents
