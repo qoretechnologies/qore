@@ -51,6 +51,7 @@ class JsonTest inherits QUnit::Test {
         addTestCase("nested float rounding test", \nestedFloatRoundingTest());
         addTestCase("scientific notation test", \scientificNotationTest());
         addTestCase("issue 3135", \issue3135());
+        addTestCase("truncated objects and arrays", \truncatedContainersTest());
         addTestCase("JsonTestCase", \jsonTestCase());
         addTestCase("JSON-RPC TestCase", \jsonRpcTestCase());
         addTestCase("JSON-RPC 1.1 TestCase", \jsonRpc11TestCase());
@@ -104,6 +105,18 @@ class JsonTest inherits QUnit::Test {
             ({"a": {"b": 1}}, "/a\x00/b"));
         # a value keeps its NUL character
         assertEq({"a": "x\x00y"}, parse_json('{"a": "x\u0000y"}'));
+    }
+
+    truncatedContainersTest() {
+        # the input ends where a key or value is expected; each must be an error and not an empty value
+        foreach string json in (("{", "{ ", "{\"a\": 1,", "{\"jsonrpc\": \"2.0\", \"id\": 1, ", "[", "[ ", "[1,",
+                "[1, ", "{\"a\": [1,", "[{\"a\": 1},")) {
+            assertThrows("JSON-PARSE-ERROR", "premature end of input", \parse_json(), json, sprintf("%y", json));
+        }
+        # complete containers are still parsed
+        assertEq({"a": (1, 2)}, parse_json("{\"a\": [1, 2]}"));
+        assertEq({}, parse_json("{ }"));
+        assertEq((), parse_json("[ ]"));
     }
 
     formattingTest() {

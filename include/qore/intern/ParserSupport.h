@@ -71,9 +71,10 @@ public:
       if (first_line == lineno)
          last_col += leng;
       else {
+         // columns are 0-based: the column after the token is the number of characters after its last newline
          unsigned int col = 1;
          for (; ((int)col <= leng) && (text[leng - col] != '\n'); ++col) {}
-         last_col = col;
+         last_col = col - 1;
          last_line = lineno;
       }
    }

@@ -496,6 +496,16 @@ sub test() {
         addTestCase("Resolve definition", \testResolveDefinition());
         addTestCase("Resolve definition cross-doc", \testResolveDefinitionCrossDoc());
         addTestCase("Scope symbols with parse errors", \testScopeSymbolsWithErrors());
+        addTestCase("Identifier filter contains all identifiers", \testIdentifierFilterComplete());
+        addTestCase("Identifier filter scoped identifiers", \testIdentifierFilterScoped());
+        addTestCase("Identifier filter false positives", \testIdentifierFilterFalsePositives());
+        addTestCase("Identifier filter empty and invalid", \testIdentifierFilterEmptyInvalid());
+        addTestCase("Closure parameters resolve", \testClosureParameters());
+        addTestCase("Variable symbols", \testVariableSymbols());
+        addTestCase("Closure scope symbols", \testClosureScopeSymbols());
+        addTestCase("Expression chains", \testExpressionChains());
+        addTestCase("Hover signatures with return types", \testHoverReturnTypes());
+        addTestCase("Hover doc comments", \testHoverDocComments());
 %endif
         set_return_value(main());
     }
@@ -4046,5 +4056,313 @@ sub broken(int x) {
         *list<auto> matching = searcher.findMatchingSymbols(tree, "test.q", "MyClass");
         assertTrue(exists matching, "findMatchingSymbols returns results despite errors");
         assertGt(0, matching.size(), "MyClass found by findMatchingSymbols");
+    }
+
+    testIdentifierFilterComplete() {
+        # every identifier in a real source file must be found: the filter has no false negatives
+        string file = get_script_dir() + "/../../../qlib/Util.qm";
+        AstParser parser();
+        *AstTree tree = parser.parseFile(file);
+        assertTrue(exists tree, "Util.qm is parsed");
+        binary filter = tree.getIdentifierFilter();
+
+        # names in comments and strings are not identifiers, so check the declared names of the module
+        AstTreeSearcher searcher();
+        int checked = 0;
+        foreach hash<auto> sym in (searcher.findSymbols(tree, "Util.qm", True, True) ?? ()) {
+            # constructors and destructors are declared with keywords, which are not identifiers
+            if (sym.name == "constructor" || sym.name == "destructor") {
+                continue;
+            }
+            assertTrue(AstTree::identifierFilterContains(filter, sym.name), sprintf("declared %y", sym.name));
+            ++checked;
+        }
+        assertGt(100, checked, "all declared names checked");
+
+        # every name that a reference search compares at some position must be in the filter
+        code<nothing(string)> check = sub (string text) {
+            *AstTree t = parser.parseString(text);
+            binary f = t.getIdentifierFilter();
+            int identifiers = 0;
+            list<string> lines = text.split("\n");
+            for (int line = 0; line < lines.size(); ++line) {
+                for (int col = 0; col < lines[line].length(); ++col) {
+                    if (col && lines[line][col - 1] =~ /^[A-Za-z0-9_]$/) {
+                        continue;
+                    }
+                    *list<string> word = (lines[line].substr(col) =~ x/^([A-Za-z_][A-Za-z0-9_]*)/);
+                    if (!word || !searcher.findReferences(t, "x", line, col, True)) {
+                        continue;
+                    }
+                    ++identifiers;
+                    assertTrue(AstTree::identifierFilterContains(f, word[0]), sprintf("%y at %d:%d", word[0], line,
+                        col));
+                }
+            }
+            assertGt(5, identifiers, "identifiers checked");
+        };
+        check("%modern\nint sub compute(int alpha, string beta) {\n    hash<auto> gamma = {\"k\": alpha};\n"
+            "    return gamma.k + beta.size() + delta(epsilon);\n}\n");
+        check("%modern\nclass Widget inherits Base::Gadget {\n    private { int count; }\n"
+            "    run() { count = Base::Gadget::defaultCount(); foreach int item in (items) { ++count; } }\n}\n");
+    }
+
+    testIdentifierFilterScoped() {
+        AstParser parser();
+        *AstTree tree = parser.parseString("%modern\nint x = Outer::Inner::compute(1);\n");
+        binary filter = tree.getIdentifierFilter();
+        foreach string name in (("Outer::Inner::compute", "Outer", "Inner", "compute", "x")) {
+            assertTrue(AstTree::identifierFilterContains(filter, name), name);
+        }
+        assertFalse(AstTree::identifierFilterContains(filter, "Outer::compute"),
+            "a scoped name that does not occur is not found");
+    }
+
+    testIdentifierFilterFalsePositives() {
+        AstParser parser();
+        string text = "%modern\n";
+        for (int i = 0; i < 200; ++i) {
+            text += sprintf("int sub function_%d(int argument_%d) { return argument_%d + %d; }\n", i, i, i, i);
+        }
+        binary filter = parser.parseString(text).getIdentifierFilter();
+        int positives = 0;
+        for (int i = 0; i < 10000; ++i) {
+            if (AstTree::identifierFilterContains(filter, sprintf("absent_name_%d", i))) {
+                ++positives;
+            }
+        }
+        # about 1% are expected
+        assertLt(300, positives, sprintf("%d false positives in 10000", positives));
+        # about 10 bits per distinct identifier plus a 4-byte header
+        assertLt(401 * 2 + 4, filter.size(), "filter size");
+    }
+
+    testIdentifierFilterEmptyInvalid() {
+        AstParser parser();
+        binary filter = parser.parseString("").getIdentifierFilter();
+        assertEq(4 + 8, filter.size(), "minimum filter size");
+        assertFalse(AstTree::identifierFilterContains(filter, "anything"), "an empty filter contains nothing");
+
+        AstTree empty();
+        assertFalse(AstTree::identifierFilterContains(empty.getIdentifierFilter(), "x"), "object without a tree");
+
+        foreach binary invalid in ((binary(), binary("abc"), filter + <00>, filter.substr(0, 10),
+                <00000000> + filter.substr(4))) {
+            assertThrows("ASTPARSER-FILTER-ERROR", \AstTree::identifierFilterContains(), (invalid, "x"),
+                sprintf("invalid filter of size %d", invalid.size()));
+        }
+
+        # names are compared as UTF-8
+        binary f = parser.parseString("%modern\nint value = 1;\n").getIdentifierFilter();
+        assertTrue(AstTree::identifierFilterContains(f, convert_encoding("value", "ISO-8859-1")),
+            "a name in another encoding is converted");
+    }
+
+    #! Code with closures in a variable, a function and nested hashes (issue 2538)
+    const ClosureCode = "%modern\n"
+        "code c = sub (int x) {\n"
+        "    return x;\n"
+        "};\n"
+        "sub f(int outer) {\n"
+        "    int local = 1;\n"
+        "    hash<auto> h = {\"a\": {\"b\": sub (int p) { int q = p; return q + local + outer; }}};\n"
+        "}\n";
+
+    #! Returns the start of the first definition at a position as "line:column", or NOTHING
+    private *string definitionAt(AstTree tree, int line, int col) {
+        AstTreeSearcher searcher();
+        *list<auto> defs = searcher.resolveDefinition(tree, "test.q", line, col);
+        return defs ? sprintf("%d:%d", defs[0].range.start.line, defs[0].range.start.character) : NOTHING;
+    }
+
+    testClosureParameters() {
+        AstParser parser();
+        AstTree tree = parser.parseString(ClosureCode);
+        assertEq("1:18", definitionAt(tree, 2, 11), "the parameter of a closure in a variable");
+        # line 6: "    hash<auto> h = {"a": {"b": sub (int p) { int q = p; return q + local + outer; }}};"
+        assertEq("6:40", definitionAt(tree, 6, 53), "the parameter of a closure in nested hashes");
+        assertEq("6:49", definitionAt(tree, 6, 63), "a local variable of the closure");
+        assertEq("5:8", definitionAt(tree, 6, 67), "a local variable of the enclosing function");
+        assertEq("4:10", definitionAt(tree, 6, 75), "a parameter of the enclosing function");
+    }
+
+    testVariableSymbols() {
+        AstParser parser();
+        AstTree tree = parser.parseString("%modern\nint i = 1;\nour int o = 2;\nour int a, b;\n"
+            "namespace Ns { our int n = 3; }\n"
+            "for (int loop = 0; loop < 1; ++loop) {}\n" + ClosureCode.substr(8));
+        AstTreeSearcher searcher();
+        list<auto> symbols = searcher.findSymbols(tree, "test.q", True, False);
+        list<string> variables = map $1.name, (select symbols, $1.kind == ASYK_Variable);
+        assertEq(("i", "o", "a", "b", "Ns::n", "c"), variables,
+            "global and top-level variables; not loop variables or the locals of functions and closures");
+        hash<auto> o = (select symbols, $1.name == "o")[0];
+        assertEq({"line": 2, "character": 0}, o.location.range.start, "a declaration with one declarator");
+        hash<auto> b = (select symbols, $1.name == "b")[0];
+        assertEq({"line": 3, "character": 11}, b.location.range.start, "each declarator of a declaration");
+    }
+
+    testClosureScopeSymbols() {
+        AstParser parser();
+        AstTree tree = parser.parseString(ClosureCode);
+        AstTreeSearcher searcher();
+        # in the closure in nested hashes, after "int q = p;"
+        list<string> names = map $1.name, (select searcher.findScopeSymbolsDetailed(tree, "test.q", 6, 58) ?? (),
+            $1.kind == ASYK_Variable);
+        foreach string name in (("p", "q", "local", "outer")) {
+            assertTrue(names.contains(name), sprintf("%s is in scope: %y", name, names));
+        }
+
+        # at the closure's "sub" keyword and at its parameter, the parameter is in scope, but not the closure's locals
+        foreach int col in (32, 40) {
+            names = map $1.name, (select searcher.findScopeSymbolsDetailed(tree, "test.q", 6, col) ?? (),
+                $1.kind == ASYK_Variable);
+            foreach string name in (("p", "local", "outer")) {
+                assertTrue(names.contains(name), sprintf("%s is in scope at column %d: %y", name, col, names));
+            }
+            assertFalse(names.contains("q"), sprintf("q is not in scope at column %d: %y", col, names));
+        }
+
+        # in the closure in a top-level variable, its parameter is in scope, but not the locals of f()
+        names = map $1.name, (select searcher.findScopeSymbolsDetailed(tree, "test.q", 2, 11) ?? (),
+            $1.kind == ASYK_Variable);
+        assertTrue(names.contains("x"), sprintf("x is in scope: %y", names));
+        assertFalse(names.contains("local"), sprintf("local is not in scope: %y", names));
+    }
+
+    const ChainCode = "%modern\n"
+        "class C {\n"
+        "    m() {\n"
+        "        self.n();\n"
+        "    }\n"
+        "}\n"
+        "sub f(File file, string s) {\n"
+        "    file.stat().size;\n"
+        "    now().format(\"x\");\n"
+        "    Qore::Thread::Mutex m();\n"
+        "    \"abc\".size();\n"
+        "    (new Mutex()).lock();\n"
+        "    cast<hash<StatInfo>>(s).size;\n"
+        "    (1, 2).size();\n"
+        "    auto v = {\"a\": 1}.keys();\n"
+        "    f(file, s)(1);\n"
+        "    $s.size();\n"
+        "    True.typeCode();\n"
+        "}\n";
+
+    #! Returns the expression chain at a position as text, such as "name:f<File> -> member:stat()"
+    private *string chainAt(AstTreeSearcher searcher, AstTree tree, int line, int col) {
+        *list<hash<AstExpressionLink>> chain = searcher.getExpressionChain(tree, line, col);
+        if (!chain) {
+            return NOTHING;
+        }
+        return (foldl $1 + " -> " + $2, (map sprintf("%s:%s%s%s", $1.kind, $1.name ?? "",
+            $1.typeName ? "<" + $1.typeName + ">" : "", $1.call ? "()" : ""), chain));
+    }
+
+    testExpressionChains() {
+        AstParser parser();
+        AstTree tree = parser.parseString(ChainCode);
+        AstTreeSearcher searcher();
+
+        # a variable has its declared type; members and calls follow their receivers
+        assertEq("name:file<File>", chainAt(searcher, tree, 7, 4));
+        assertEq("name:file<File> -> member:stat()", chainAt(searcher, tree, 7, 10));
+        # the closing parenthesis of a call belongs to the call
+        assertEq("name:file<File> -> member:stat()", chainAt(searcher, tree, 7, 14));
+        assertEq("name:file<File> -> member:stat() -> member:size", chainAt(searcher, tree, 7, 17));
+
+        # a called function and a method of its result
+        assertEq("name:now()", chainAt(searcher, tree, 8, 5));
+        assertEq("name:now() -> member:format()", chainAt(searcher, tree, 8, 12));
+
+        # the components of a scoped name name their namespaces
+        assertEq("name:Qore", chainAt(searcher, tree, 9, 5));
+        assertEq("name:Qore::Thread", chainAt(searcher, tree, 9, 12));
+        assertEq("name:Qore::Thread::Mutex", chainAt(searcher, tree, 9, 20));
+
+        # literals, new expressions and casts have their types
+        assertEq("type:<string> -> member:size()", chainAt(searcher, tree, 10, 11));
+        assertEq("type:<Mutex> -> member:lock()", chainAt(searcher, tree, 11, 19));
+        assertEq("type:<hash<StatInfo>> -> member:size", chainAt(searcher, tree, 12, 29));
+        assertEq("type:<list> -> member:size()", chainAt(searcher, tree, 13, 12));
+        assertEq("type:<hash> -> member:keys()", chainAt(searcher, tree, 14, 23));
+        assertEq("type:<bool> -> member:typeCode()", chainAt(searcher, tree, 17, 10));
+
+        # the result of calling the result of a call is unknown
+        assertEq("name:f() -> unknown:", chainAt(searcher, tree, 15, 16));
+
+        # variable names with "$" and self
+        assertEq("name:s<string> -> member:size()", chainAt(searcher, tree, 16, 8));
+        assertEq("name:self<C> -> member:n()", chainAt(searcher, tree, 3, 13));
+
+        # positions outside of expressions have no chain
+        assertNothing(searcher.getExpressionChain(tree, 7, 0));
+        assertNothing(searcher.getExpressionChain(tree, 6, 1));
+        assertNothing(searcher.getExpressionChain(tree, -1, 0));
+
+        # the ranges of the links: the name of a member, and a scoped name through the component at the position
+        list<hash<AstExpressionLink>> chain = searcher.getExpressionChain(tree, 7, 10);
+        assertEq({"start": {"line": 7, "character": 9}, "end": {"line": 7, "character": 13}}, chain[1].range);
+        chain = searcher.getExpressionChain(tree, 9, 12);
+        assertEq({"start": {"line": 9, "character": 4}, "end": {"line": 9, "character": 16}}, chain[0].range);
+        assertFalse(chain[0].call);
+    }
+
+    testHoverReturnTypes() {
+        AstParser parser();
+        AstTree tree = parser.parseString("%modern\n"
+            "class C {\n"
+            "    int size() { return 1; }\n"
+            "    private *string name(int i) { return NOTHING; }\n"
+            "    static hash<string, int> map() { return {}; }\n"
+            "    m() {}\n"
+            "    private:internal static synchronized abstract float n();\n"
+            "}\n"
+            "list<int> sub f() { return (); }\n"
+            "sub g() {}\n");
+        AstTreeSearcher searcher();
+        assertEq("int size()", searcher.hoverInfo(tree, ASYK_Method, 2, 9).description);
+        assertEq("private *string name(int i)", searcher.hoverInfo(tree, ASYK_Method, 3, 21).description);
+        assertEq("static hash<string, int> map()", searcher.hoverInfo(tree, ASYK_Method, 4, 30).description);
+        # methods and functions without return types
+        assertEq("m()", searcher.hoverInfo(tree, ASYK_Method, 5, 4).description);
+        # all modifiers
+        assertEq("private:internal static synchronized abstract float n()",
+            searcher.hoverInfo(tree, ASYK_Method, 6, 56).description);
+        assertEq("list<int> sub f()", searcher.hoverInfo(tree, ASYK_Function, 8, 15).description);
+        assertEq("sub g()", searcher.hoverInfo(tree, ASYK_Function, 9, 4).description);
+    }
+
+    testHoverDocComments() {
+        AstParser parser();
+        AstTree tree = parser.parseString("%modern\n"
+            "#! A counter\n"
+            "class C {\n"
+            "    #! Returns the size\n"
+            "    /** @return the number of elements\n"
+            "    */\n"
+            "    int size() { return 1; }\n"
+            "\n"
+            "    # not a doc comment\n"
+            "    m() {}\n"
+            "\n"
+            "    #! separated by a blank line\n"
+            "\n"
+            "    n() {}\n"
+            "}\n"
+            "# a comment that ends the doc comment\n"
+            "#! the function\n"
+            "sub f() {}\n");
+        AstTreeSearcher searcher();
+        hash<auto> info = searcher.hoverInfo(tree, ASYK_Class, 2, 6);
+        assertEq("#! A counter", info.docComment);
+        info = searcher.hoverInfo(tree, ASYK_Method, 6, 9);
+        assertEq("int size()", info.description);
+        assertEq("#! Returns the size\n/** @return the number of elements\n    */", info.docComment);
+        # comments that are not doc comments and doc comments before a blank line are not doc comments
+        assertFalse(searcher.hoverInfo(tree, ASYK_Method, 9, 4).hasKey("docComment"));
+        assertFalse(searcher.hoverInfo(tree, ASYK_Method, 13, 4).hasKey("docComment"));
+        assertEq("#! the function", searcher.hoverInfo(tree, ASYK_Function, 17, 5).docComment);
     }
 }

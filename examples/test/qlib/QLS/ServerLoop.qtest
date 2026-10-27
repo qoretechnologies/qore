@@ -1,0 +1,447 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  ServerLoop.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires json
+%requires Util
+%requires QLS
+
+%exec-class ServerLoopTest
+
+#! Tests the server loop: background indexing with progress reports, cancellation, error responses and the
+#! message connection
+class ServerLoopTest inherits QUnit::Test {
+    private {
+        int reqId = 0;
+        int tmpCount = 0;
+        list<string> tmpDirs = ();
+    }
+
+    constructor() : Test("QLS Server Loop", "1.0") {
+        addTestCase("background indexing with progress reports", \testBackgroundIndexingProgress());
+        addTestCase("background indexing without progress support", \testBackgroundIndexingNoProgress());
+        addTestCase("background indexing of added workspace folders", \testBackgroundIndexingAddedFolder());
+        addTestCase("requests are answered while indexing", \testRequestsWhileIndexing());
+        addTestCase("cancelled requests", \testCancelledRequests());
+        addTestCase("responses from the client are not answered", \testClientResponses());
+        addTestCase("invalid JSON", \testInvalidJson());
+        addTestCase("internal errors have the request ID", \testInternalErrorId());
+        addTestCase("LspConnection framing", \testConnectionFraming());
+        addTestCase("main loop over streams", \testMainLoop());
+        addTestCase("main loop ends at the end of the input", \testMainLoopEof());
+        addTestCase("logging from the server thread", \testLoggingThread());
+
+        on_exit {
+            map ServerLoopTest::removeTree($1), tmpDirs;
+        }
+        set_return_value(main());
+    }
+
+    #
+    # helpers
+    #
+
+    private string makeTmpDir() {
+        string dir = sprintf("%s/qls-loop-test-%d-%d", tmp_location(), getpid(), ++tmpCount);
+        mkdir(dir, 0700, True);
+        push tmpDirs, dir;
+        return dir;
+    }
+
+    private static writeFile(string path, string text) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(text);
+    }
+
+    private static removeTree(string path) {
+        *hash<StatInfo> info = hlstat(path);
+        if (!info) {
+            return;
+        }
+        if (info.type == "DIRECTORY") {
+            Dir d();
+            if (d.chdir(path)) {
+                map ServerLoopTest::removeTree(path + "/" + $1), d.list();
+            }
+            rmdir(path);
+        } else {
+            unlink(path);
+        }
+    }
+
+    #! Creates a workspace with the given number of files, each declaring a class
+    private string makeWorkspace(int files) {
+        string root = makeTmpDir();
+        for (int i = 0; i < files; ++i) {
+            ServerLoopTest::writeFile(sprintf("%s/f%d.qc", root, i), sprintf("class Loop%d {}\n", i));
+        }
+        return root;
+    }
+
+    private string makeRequest(string method, *hash<auto> params, auto id = ++reqId) {
+        return make_json({"jsonrpc": "2.0", "id": id, "method": method, "params": params});
+    }
+
+    private string makeNotification(string method, *hash<auto> params) {
+        return make_json({"jsonrpc": "2.0", "method": method, "params": params});
+    }
+
+    #! Sends a request and returns the parsed response
+    private hash<auto> request(QLS::QLSServer server, string method, *hash<auto> params, auto id = ++reqId) {
+        softlist<auto> responses = server.handleRequest(makeRequest(method, params, id));
+        assertEq(1, responses.size(), sprintf("one response to %s", method));
+        return parse_json(responses[0]);
+    }
+
+    private notify(QLS::QLSServer server, string method, *hash<auto> params) {
+        assertEq((), server.handleRequest(makeNotification(method, params)) ?? (), sprintf("no response to %s",
+            method));
+    }
+
+    #! Returns the parsed queued messages of the server
+    private list<hash<auto>> takeMessages(QLS::QLSServer server) {
+        return map parse_json($1), server.takeQueuedMessages();
+    }
+
+    #! Initializes a server with background indexing
+    private QLS::QLSServer startServer(string root, bool progress) {
+        QLS::QLSServer server();
+        server.setBackgroundIndexing(True);
+        hash<auto> response = request(server, "initialize", {
+            "processId": getpid(),
+            "rootUri": QLS::Document::getFileUri(root),
+            "capabilities": progress ? {"window": {"workDoneProgress": True}} : {},
+        });
+        assertTrue(exists response.result.capabilities, "initialize succeeds");
+        return server;
+    }
+
+    private list<string> symbolNames(QLS::QLSServer server, string query) {
+        return sort(map $1.name, request(server, "workspace/symbol", {"query": query}).result);
+    }
+
+    #
+    # tests
+    #
+
+    testBackgroundIndexingProgress() {
+        QLS::QLSServer server = startServer(makeWorkspace(4), True);
+        hash<QLS::IndexInfo> info = server.getIndexInfo();
+        assertEq(0, info.workspaceFiles, "initialize does not index files in the background mode");
+        assertEq(4, info.pendingFiles, "the workspace files are queued");
+        assertFalse(server.indexPendingFile(), "indexing starts after the initialized notification");
+
+        notify(server, "initialized");
+        list<hash<auto>> msgs = takeMessages(server);
+        assertEq(1, msgs.size());
+        hash<auto> create = msgs[0];
+        assertEq("window/workDoneProgress/create", create.method);
+        string token = create.params.token;
+
+        # progress is only reported after the client has created the token
+        assertTrue(server.indexPendingFile());
+        assertEq((), takeMessages(server), "no progress before the token is created");
+        assertEq((), server.handleRequest(make_json({"jsonrpc": "2.0", "id": create.id, "result": NOTHING})) ?? (),
+            "the client's response is not answered");
+
+        while (server.getIndexInfo().pendingFiles && server.getIndexInfo().workspaceFiles < 4) {
+            assertTrue(server.indexPendingFile());
+        }
+        msgs = takeMessages(server);
+        assertEq(("$/progress",), keys (map {$1.method: True}, msgs), "only progress notifications");
+        assertEq(token, msgs[0].params.token);
+        list<hash<auto>> values = map $1.params.value, msgs;
+        assertEq({"kind": "begin", "title": "Indexing Qore files", "cancellable": False, "percentage": 25},
+            values[0], "begin with the files already indexed");
+        assertEq(("report", "report"), map $1.kind, values[1..2]);
+        assertEq((50, 75), map $1.percentage, values[1..2]);
+        assertEq("3/4 files", values[2].message);
+        # the last file ends the progress
+        assertEq({"kind": "end", "message": "4 files indexed"}, values[3]);
+        assertEq(4, values.size());
+
+        assertEq(4, server.getIndexInfo().workspaceFiles);
+        assertEq(("Loop0", "Loop1", "Loop2", "Loop3"), symbolNames(server, "Loop"));
+    }
+
+    testBackgroundIndexingNoProgress() {
+        QLS::QLSServer server = startServer(makeWorkspace(3), False);
+        notify(server, "initialized");
+        assertEq((), takeMessages(server), "no progress token without client support");
+        for (int i = 0; i < 3; ++i) {
+            assertTrue(server.indexPendingFile());
+        }
+        assertEq((), takeMessages(server), "no progress notifications");
+        assertEq(3, server.getIndexInfo().workspaceFiles);
+
+        # a refused progress token does not stop indexing
+        QLS::QLSServer refused = startServer(makeWorkspace(2), True);
+        notify(refused, "initialized");
+        hash<auto> create = takeMessages(refused)[0];
+        refused.handleRequest(make_json({"jsonrpc": "2.0", "id": create.id, "error": {"code": -32603,
+            "message": "refused"}}));
+        assertTrue(refused.indexPendingFile());
+        assertTrue(refused.indexPendingFile());
+        assertEq((), takeMessages(refused));
+        assertEq(2, refused.getIndexInfo().workspaceFiles);
+    }
+
+    testBackgroundIndexingAddedFolder() {
+        QLS::QLSServer server = startServer(makeWorkspace(1), True);
+        notify(server, "initialized");
+        hash<auto> create = takeMessages(server)[0];
+        server.handleRequest(make_json({"jsonrpc": "2.0", "id": create.id, "result": NOTHING}));
+        assertTrue(server.indexPendingFile());
+        assertEq(("begin", "end"), map $1.params.value.kind, takeMessages(server));
+
+        # a folder added later is indexed in the background with a new progress token
+        string added = makeTmpDir();
+        ServerLoopTest::writeFile(added + "/added.qc", "class LoopAdded {}\n");
+        notify(server, "workspace/didChangeWorkspaceFolders", {"event": {
+            "added": ({"uri": QLS::Document::getFileUri(added), "name": "added"},),
+            "removed": (),
+        }});
+        assertEq((), symbolNames(server, "LoopAdded"), "not indexed before responding");
+        hash<auto> create2 = takeMessages(server)[0];
+        assertEq("window/workDoneProgress/create", create2.method);
+        assertTrue(create2.params.token != create.params.token, "a new token");
+        server.handleRequest(make_json({"jsonrpc": "2.0", "id": create2.id, "result": NOTHING}));
+        assertTrue(server.indexPendingFile());
+        assertEq(("LoopAdded",), symbolNames(server, "LoopAdded"));
+    }
+
+    testRequestsWhileIndexing() {
+        string root = makeWorkspace(3);
+        QLS::QLSServer server = startServer(root, False);
+        notify(server, "initialized");
+        assertTrue(server.indexPendingFile());
+
+        # requests are answered with the files indexed so far
+        assertEq(("Loop0",), symbolNames(server, "Loop"));
+
+        # an open document is used instead of the queued file
+        string path = root + "/f2.qc";
+        # didOpen is answered with a diagnostics notification
+        server.handleRequest(makeNotification("textDocument/didOpen", {"textDocument": {
+            "uri": QLS::Document::getFileUri(path), "languageId": "qore", "version": 1,
+            "text": "class LoopOpen {}\n"}}));
+        while (server.indexPendingFile() && server.getIndexInfo().workspaceFiles < 2) {
+        }
+        assertEq(("Loop0", "Loop1", "LoopOpen"), symbolNames(server, "Loop"), "the open file is not indexed");
+    }
+
+    testCancelledRequests() {
+        QLS::QLSServer server = startServer(makeWorkspace(1), False);
+        notify(server, "initialized");
+
+        # a request cancelled before it is processed is answered with RequestCancelled
+        server.registerRequest(100);
+        notify(server, "$/cancelRequest", {"id": 100});
+        hash<auto> response = request(server, "workspace/symbol", {"query": ""}, 100);
+        assertEq(100, response.id);
+        assertEq(-32800, response.error.code);
+
+        # the ID can be used again after the request is answered
+        response = request(server, "workspace/symbol", {"query": ""}, 100);
+        assertTrue(exists response.result, "a new request with the same ID is processed");
+
+        # string IDs are distinct from integer IDs
+        server.registerRequest("100");
+        assertTrue(server.cancelRequest("100"));
+        assertEq(-32800, request(server, "workspace/symbol", {"query": ""}, "100").error.code);
+        assertTrue(exists request(server, "workspace/symbol", {"query": ""}, 100).result);
+
+        # unknown and answered requests cannot be cancelled
+        assertFalse(server.cancelRequest(12345));
+        assertFalse(server.cancelRequest(100));
+    }
+
+    testClientResponses() {
+        QLS::QLSServer server = startServer(makeWorkspace(1), False);
+        notify(server, "initialized");
+        foreach hash<auto> msg in (({"jsonrpc": "2.0", "id": "unknown", "result": NOTHING},
+                {"jsonrpc": "2.0", "id": 5, "error": {"code": -1, "message": "x"}})) {
+            assertEq((), server.handleRequest(make_json(msg)) ?? (), "responses are not answered");
+        }
+        # a message without a method that is not a response is still invalid
+        hash<auto> invalid = parse_json(server.handleRequest(make_json({"jsonrpc": "2.0", "id": 6}))[0]);
+        assertEq(-32600, invalid.error.code);
+    }
+
+    testInvalidJson() {
+        QLS::QLSServer server = startServer(makeWorkspace(1), False);
+        softlist<auto> responses = server.handleRequest("{\"jsonrpc\": \"2.0\", \"id\": 1, ");
+        assertEq(1, responses.size());
+        hash<auto> response = parse_json(responses[0]);
+        assertEq(-32700, response.error.code, "ParseError");
+        assertNothing(response.id);
+        # the server still works
+        assertTrue(exists request(server, "workspace/symbol", {"query": ""}).result);
+    }
+
+    testInternalErrorId() {
+        QLS::QLSServer server = startServer(makeWorkspace(1), False);
+        notify(server, "initialized");
+        # a code lens with a URI of the wrong type makes the handler throw an exception
+        hash<auto> response = request(server, "codeLens/resolve", {"data": {"uri": 1, "position": {"line": 0,
+            "character": 0}}}, 77);
+        assertEq(77, response.id, "the error response has the request ID");
+        assertEq(-32603, response.error.code);
+    }
+
+    testConnectionFraming() {
+        # close() does not wait for the reader
+        StreamPipe pipe(False);
+        QLS::LspConnection writer(new StringInputStream(""), pipe.getOutputStream());
+        QLS::LspConnection reader(pipe.getInputStream(), new StringOutputStream());
+        Counter done(1);
+        background sub () {
+            on_exit {
+                done.dec();
+            }
+            writer.send("{\"text\": \"héllo\"}");
+            writer.send("{}");
+            pipe.getOutputStream().close();
+        }();
+        assertEq({"Content-Type": NOTHING, "msg": "{\"text\": \"héllo\"}"}, reader.receive(),
+            "the length is in bytes for non-ASCII text");
+        assertEq("{}", reader.receive().msg);
+        assertEq({"error": "EOF"}, reader.receive());
+        done.waitForZero();
+
+        # framing errors
+        QLS::LspConnection noLength(new StringInputStream("Content-Type: x\r\n\r\n{}"), new StringOutputStream());
+        assertEq({"error": "Content-Length header is missing"}, noLength.receive());
+        QLS::LspConnection short(new StringInputStream("Content-Length: 10\r\n\r\n{}"), new StringOutputStream());
+        assertEq({"error": "EOF"}, short.receive(), "the input ends in the message");
+    }
+
+    testMainLoop() {
+        string root = makeWorkspace(3);
+        StreamPipe input(False);
+        StreamPipe output(False);
+        QLS::QLSServer server();
+        Counter done(1);
+        int exitCode = -1;
+        background sub () {
+            on_exit {
+                done.dec();
+            }
+            exitCode = server.main(new QLS::LspConnection(input.getInputStream(), output.getOutputStream()));
+        }();
+        QLS::LspConnection client(output.getInputStream(), input.getOutputStream());
+
+        # returns the next message that is not a progress notification
+        code<hash<auto>()> next = hash<auto> sub () {
+            while (True) {
+                hash<auto> received = client.receive();
+                assertNothing(received.error, "the server sends a message");
+                hash<auto> msg = parse_json(received.msg);
+                if (msg.method != "$/progress") {
+                    return msg;
+                }
+            }
+        };
+
+        client.send(makeRequest("initialize", {"processId": getpid(), "rootUri": QLS::Document::getFileUri(root),
+            "capabilities": {"window": {"workDoneProgress": True}}}, 1));
+        hash<auto> init = next();
+        assertEq(1, init.id);
+        assertTrue(exists init.result.capabilities);
+
+        client.send(makeNotification("initialized"));
+        hash<auto> create = next();
+        assertEq("window/workDoneProgress/create", create.method, "the server asks for a progress token");
+        client.send(make_json({"jsonrpc": "2.0", "id": create.id, "result": NOTHING}));
+
+        client.send(makeRequest("workspace/symbol", {"query": "Loop"}, 2));
+        hash<auto> symbols = next();
+        assertEq(2, symbols.id, "requests are answered while indexing; no error for the client's response");
+        assertTrue(symbols.result.typeCode() == NT_LIST);
+
+        client.send(makeRequest("shutdown", NOTHING, 3));
+        assertEq(3, next().id);
+        client.send(makeNotification("exit"));
+        done.waitForZero();
+        assertEq(0, exitCode, "normal exit after shutdown");
+    }
+
+    testLoggingThread() {
+        string logFile = makeTmpDir() + "/qls.log";
+        StreamPipe input(False);
+        StreamPipe output(False);
+        QLS::QLSServer server();
+        Counter done(1);
+        int exitCode = -1;
+        # the server runs in another thread than the one that created it
+        background sub () {
+            on_exit {
+                done.dec();
+            }
+            exitCode = server.main(new QLS::LspConnection(input.getInputStream(), output.getOutputStream()));
+        }();
+        QLS::LspConnection client(output.getInputStream(), input.getOutputStream());
+        client.send(makeRequest("initialize", {"processId": getpid(), "capabilities": {}}, 1));
+        assertEq(1, parse_json(client.receive().msg).id);
+        client.send(makeNotification("workspace/didChangeConfiguration", {"settings": {"qore": {
+            "logging": True, "logFile": logFile, "appendToLog": False, "logVerbosity": 2}}}));
+        client.send(makeRequest("workspace/symbol", {"query": "x"}, 2));
+        assertEq(2, parse_json(client.receive().msg).id);
+
+        # turning logging off closes the log file
+        client.send(makeNotification("workspace/didChangeConfiguration", {"settings": {"qore": {
+            "logging": False, "logFile": logFile}}}));
+        client.send(makeRequest("workspace/symbol", {"query": "after-logging-off"}, 3));
+        assertEq(3, parse_json(client.receive().msg).id);
+        client.send(makeRequest("shutdown", NOTHING, 4));
+        assertEq(4, parse_json(client.receive().msg).id);
+        client.send(makeNotification("exit"));
+        done.waitForZero();
+        assertEq(0, exitCode);
+
+        string log = ReadOnlyFile::readTextFile(logFile);
+        assertRegex("workspace symbols requested; query: 'x'", log, "requests are logged from the server thread");
+        assertEq(-1, log.find("after-logging-off"), "nothing is logged after logging is turned off");
+    }
+
+    testMainLoopEof() {
+        StreamPipe input(False);
+        QLS::QLSServer server();
+        Counter done(1);
+        int exitCode = -1;
+        background sub () {
+            on_exit {
+                done.dec();
+            }
+            exitCode = server.main(new QLS::LspConnection(input.getInputStream(), new StringOutputStream()));
+        }();
+        input.getOutputStream().close();
+        done.waitForZero();
+        assertEq(0, exitCode, "the server ends when the client closes the input");
+    }
+}

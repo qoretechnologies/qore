@@ -191,16 +191,69 @@ public class Document {
         return parser.getDiagnostics();
     }
 
-    #! The document has changed.
-    didChange(hash<auto> changes) {
-        # Modify document text.
-        # Using whole document sync here.
-        text = changes.text;
+    #! Applies a change to the document and parses it again
+    /** @param change an LSP \c TextDocumentContentChangeEvent: a hash with a \c text key and, for an incremental
+        change, a \c range key with the range that the text replaces; without a range, the text replaces the whole
+        document
+    */
+    didChange(hash<auto> change) {
+        text = change.range
+            ? Document::applyEdit(text ?? "", change.range, change.text)
+            : change.text;
         delete cachedLines;
         delete cachedParseOptions;
 
         # Re-parse the document.
         parseText();
+    }
+
+    #! Returns the text with the given range replaced
+    /** @param text the text
+        @param range the LSP range to replace; positions use UTF-16 code units like LSP, and positions beyond the end
+        of a line or of the text are clamped
+        @param newText the text that replaces the range
+
+        @return the new text
+    */
+    static string applyEdit(string text, hash<auto> range, string newText) {
+        int start = Document::getOffset(text, range.start);
+        int end = Document::getOffset(text, range.end);
+        if (end < start) {
+            end = start;
+        }
+        return text.substr(0, start) + newText + text.substr(end);
+    }
+
+    #! Returns the character offset in the text of an LSP position
+    /** @param text the text
+        @param position an LSP position; the character is in UTF-16 code units
+
+        @return the character offset; a position beyond the end of the line is at the end of the line (before
+        \c "\r\n" or \c "\n"), and a line beyond the end of the text is at the end of the text
+    */
+    static int getOffset(string text, hash<auto> position) {
+        int lineStart = 0;
+        for (int line = 0; line < position.line; ++line) {
+            int nl = text.find("\n", lineStart);
+            if (nl == -1) {
+                return text.length();
+            }
+            lineStart = nl + 1;
+        }
+        int lineEnd = text.find("\n", lineStart);
+        if (lineEnd == -1) {
+            lineEnd = text.length();
+        } else if (lineEnd > lineStart && text[lineEnd - 1] == "\r") {
+            --lineEnd;
+        }
+        # count UTF-16 code units: characters outside the Basic Multilingual Plane take two
+        int units = 0;
+        int offset = lineStart;
+        while (offset < lineEnd && units < position.character) {
+            units += text[offset].getUnicode() > 0xffff ? 2 : 1;
+            ++offset;
+        }
+        return offset;
     }
 
     changeVersion(int n_version) {
@@ -242,28 +295,19 @@ public class Document {
     }
 
     #! Return hover info about symbol at the passed position.
-    *hash<auto> hoverInfo(int kind, hash<auto> Position) {
-        int line = Position.line;
-        int char = Position.character;
-        if (!parseOk) {
-            return {
-                "contents": parseError,
-                "range": {
-                    "start": {
-                        "line": line,
-                        "character": char,
-                    },
-                    "end": {
-                        "line": line,
-                        "character": char + 1,
-                    },
-                },
-            };
-        }
+    /** The syntax tree of a document with syntax errors still has its declarations, so they have hover info while
+        the document is edited.
 
-        AstTreeSearcher searcher();
+        @param kind the symbol kind of the declaration
+        @param Position LSP position in the declaration
+
+        @return the hover info from @ref astparser::AstTreeSearcher::hoverInfo(): the signature in \c description
+        and the doc comment in \c docComment, or NOTHING if there is no declaration of the kind at the position
+    */
+    *hash<auto> hoverInfo(int kind, hash<auto> Position) {
         if (tree) {
-            return searcher.hoverInfo(tree, kind, line, char);
+            AstTreeSearcher searcher();
+            return searcher.hoverInfo(tree, kind, Position.line, Position.character);
         }
         return NOTHING;
     }
@@ -352,6 +396,19 @@ public class Document {
         AstTreeSearcher searcher();
         if (tree) {
             return searcher.getSymbolType(tree, Position.line, Position.character);
+        }
+        return NOTHING;
+    }
+
+    #! Returns the receiver chain of the expression at a position
+    /** @param Position LSP position (line, character)
+        @return the links of the chain from the outermost receiver, or NOTHING if there is no expression at the
+        position; see @ref astparser::AstTreeSearcher::getExpressionChain()
+    */
+    *list<hash<AstExpressionLink>> getExpressionChain(hash<auto> Position) {
+        if (tree) {
+            AstTreeSearcher searcher();
+            return searcher.getExpressionChain(tree, Position.line, Position.character);
         }
         return NOTHING;
     }
@@ -493,6 +550,11 @@ public class Document {
             "try_statement": True,
             "catch_clause": True,
             "switch_statement": True,
+            # closures and literals in data structures, such as closures in nested hashes
+            "closure_expression": True,
+            "hash_literal": True,
+            "paren_hash_literal": True,
+            "list_literal": True,
         };
 
         list<auto> result = ();
@@ -559,6 +621,48 @@ public class Document {
         }
         if (lineNum >= 0 && lineNum < cachedLines.size()) {
             return cachedLines[lineNum];
+        }
+        return NOTHING;
+    }
+
+    #! Returns the position of a declaration's name
+    /** Declaration ranges start with modifiers and types (for example \c "int" in \c "int sub foo()"), while
+        features that look up the declared symbol need the position of its name.
+
+        @param name the declared name, without namespace or class prefixes
+        @param range the LSP range of the declaration
+
+        @return the position of the first occurrence of the name as a whole word in the range, or the start of the
+        range if it is not found or the document has no text
+    */
+    hash<auto> getNamePosition(string name, hash<auto> range) {
+        return findNamePosition(name, range) ?? {"line": range.start.line, "character": range.start.character};
+    }
+
+    #! Returns the position of a declaration's name, or @ref nothing if it is not found
+    /** @param name the declared name, without namespace or class prefixes
+        @param range the LSP range of the declaration
+
+        @return the position of the first occurrence of the name as a whole word in the range, or @ref nothing if
+        it is not found or the document has no text
+    */
+    *hash<auto> findNamePosition(string name, hash<auto> range) {
+        int col = range.start.character;
+        for (int line = range.start.line; line <= range.end.line; ++line, col = 0) {
+            *string lineText = getLine(line);
+            if (!exists lineText) {
+                break;
+            }
+            for (int i = lineText.find(name, col); i != -1; i = lineText.find(name, i + 1)) {
+                int end = i + name.length();
+                if (line == range.end.line && end > range.end.character) {
+                    break;
+                }
+                if ((!i || lineText[i - 1] !~ /^[A-Za-z0-9_$]$/)
+                        && (end >= lineText.length() || lineText[end] !~ /^[A-Za-z0-9_]$/)) {
+                    return {"line": line, "character": i};
+                }
+            }
         }
         return NOTHING;
     }

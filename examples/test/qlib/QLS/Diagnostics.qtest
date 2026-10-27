@@ -1,0 +1,324 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  Diagnostics.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires json
+%requires Util
+%requires QLS
+
+%exec-class DiagnosticsTest
+
+#! Tests checking standalone scripts with the Qore parser and quick fixes for Qore diagnostics
+class DiagnosticsTest inherits QUnit::Test {
+    private {
+        int reqId = 0;
+        int tmpCount = 0;
+        list<string> tmpDirs = ();
+
+        #! A script with a type error on line 2 and an unknown function on line 3
+        const BadScript = "%modern\nstring s = 1;\nnothing sub f() {\n    missing_function();\n}\n";
+    }
+
+    constructor() : Test("QLS Diagnostics", "1.0") {
+        addTestCase("Qore diagnostics for an opened script", \testOpenScript());
+        addTestCase("syntax errors after a change until the script is saved", \testChangeAndSave());
+        addTestCase("diagnostics are removed when the document is closed", \testClose());
+        addTestCase("only standalone scripts that match the file are checked", \testNotChecked());
+        addTestCase("syntax mode and a failing Qore executable", \testSyntaxModeAndFailure());
+        addTestCase("error in a required module", \testRequiredModuleError());
+        addTestCase("quick fix for a Qore diagnostic", \testQuickFix());
+        addTestCase("standalone script detection", \testIsStandaloneScript());
+        addTestCase("LSP diagnostic conversion", \testMakeQoreDiagnostic());
+        addTestCase("quick fixes from diagnostic data", \testGetQuickFixes());
+
+        on_exit {
+            map DiagnosticsTest::removeTree($1), tmpDirs;
+        }
+        set_return_value(main());
+    }
+
+    #
+    # helpers
+    #
+
+    private string makeTmpDir() {
+        string dir = sprintf("%s/qls-diag-test-%d-%d", tmp_location(), getpid(), ++tmpCount);
+        mkdir(dir, 0700, True);
+        push tmpDirs, dir;
+        return dir;
+    }
+
+    private static writeFile(string path, string text) {
+        string dir = dirname(path);
+        if (!is_dir(dir)) {
+            mkdir(dir, 0700, True);
+        }
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(text);
+    }
+
+    private static removeTree(string path) {
+        *hash<StatInfo> info = hlstat(path);
+        if (!info) {
+            return;
+        }
+        if (info.type == "DIRECTORY") {
+            Dir d();
+            if (d.chdir(path)) {
+                map DiagnosticsTest::removeTree(path + "/" + $1), d.list();
+            }
+            rmdir(path);
+        } else {
+            unlink(path);
+        }
+    }
+
+    #! Sends a message and returns the parsed messages returned by the server
+    private list<hash<auto>> send(QLS::QLSServer server, string method, *hash<auto> params, bool notification) {
+        hash<auto> msg = {"jsonrpc": "2.0", "method": method, "params": params};
+        if (!notification) {
+            msg.id = ++reqId;
+        }
+        return map parse_json($1), server.handleRequest(make_json(msg)) ?? ();
+    }
+
+    private QLS::QLSServer startServer(*hash<auto> initOptions) {
+        QLS::QLSServer server();
+        hash<auto> params = {"processId": getpid(), "capabilities": {}};
+        if (initOptions) {
+            params.initializationOptions = initOptions;
+        }
+        send(server, "initialize", params, False);
+        send(server, "initialized", NOTHING, True);
+        return server;
+    }
+
+    #! Opens a document and returns its published diagnostics
+    private list<hash<auto>> open(QLS::QLSServer server, string path, string text) {
+        return getDiagnostics(send(server, "textDocument/didOpen", {"textDocument": {
+            "uri": QLS::Document::getFileUri(path), "languageId": "qore", "version": 1, "text": text}}, True));
+    }
+
+    #! Returns the diagnostics of the only publishDiagnostics notification in the messages
+    private list<hash<auto>> getDiagnostics(list<hash<auto>> msgs) {
+        list<hash<auto>> published = select msgs, $1.method == "textDocument/publishDiagnostics";
+        assertEq(1, published.size(), "one diagnostics notification");
+        return published[0].params.diagnostics;
+    }
+
+    #! Writes a script and returns its path
+    private string writeScript(string text, string name = "script.q") {
+        string path = makeTmpDir() + "/" + name;
+        DiagnosticsTest::writeFile(path, text);
+        return path;
+    }
+
+    #
+    # tests
+    #
+
+    testOpenScript() {
+        QLS::QLSServer server = startServer();
+        string path = writeScript(BadScript);
+        list<hash<auto>> diags = open(server, path, BadScript);
+        assertEq(("qore",), keys (map {$1.source: True}, diags), "diagnostics from the Qore parser");
+
+        hash<auto> assign = (select diags, $1.code == "INCOMPATIBLE-ASSIGNMENT-TYPE")[0];
+        assertEq(1, assign.severity, "error");
+        assertEq(1, assign.range.start.line, "the line is 0-based");
+        assertRegex("expects type 'string'", assign.message);
+        assertRegex("\n", assign.message, "the hint follows the message");
+
+        hash<auto> call = (select diags, $1.message =~ /missing_function/)[0];
+        assertEq({"start": {"line": 3, "character": 4}, "end": {"line": 3, "character": 22}}, call.range,
+            "the columns of the call on a later line");
+    }
+
+    testChangeAndSave() {
+        QLS::QLSServer server = startServer();
+        string path = writeScript(BadScript);
+        string uri = QLS::Document::getFileUri(path);
+        assertGt(0, open(server, path, BadScript).size());
+
+        # after a change, the Qore diagnostics are for the saved text, so only syntax errors are published
+        string fixed = "%modern\nstring s = \"1\";\nnothing sub f() {\n}\n";
+        list<hash<auto>> diags = getDiagnostics(send(server, "textDocument/didChange", {
+            "textDocument": {"uri": uri, "version": 2}, "contentChanges": ({"text": fixed},)}, True));
+        assertEq((), diags, "no syntax errors in the changed text");
+
+        # after saving, the script is checked again
+        DiagnosticsTest::writeFile(path, fixed);
+        diags = getDiagnostics(send(server, "textDocument/didSave", {"textDocument": {"uri": uri}}, True));
+        assertEq((), diags, "the saved script has no diagnostics");
+
+        string broken = "%modern\nint x = missing_value;\n";
+        send(server, "textDocument/didChange", {"textDocument": {"uri": uri, "version": 3},
+            "contentChanges": ({"text": broken},)}, True);
+        DiagnosticsTest::writeFile(path, broken);
+        diags = getDiagnostics(send(server, "textDocument/didSave", {"textDocument": {"uri": uri}}, True));
+        assertEq(1, diags.size());
+        assertRegex("missing_value", diags[0].message);
+    }
+
+    testClose() {
+        QLS::QLSServer server = startServer();
+        string path = writeScript(BadScript);
+        string uri = QLS::Document::getFileUri(path);
+        assertGt(0, open(server, path, BadScript).size());
+        assertEq((), getDiagnostics(send(server, "textDocument/didClose", {"textDocument": {"uri": uri}}, True)),
+            "the diagnostics of the closed document are removed");
+    }
+
+    testNotChecked() {
+        QLS::QLSServer server = startServer();
+        # a class file is part of a module and is not checked on its own
+        string classFile = writeScript("class C {\n    string s = 1;\n}\n", "C.qc");
+        assertEq((), open(server, classFile, "class C {\n    string s = 1;\n}\n"), "no Qore check of class files");
+
+        # an unsaved editor text that differs from the file is not checked
+        string path = writeScript(BadScript);
+        string edited = "%modern\nint i = 1;\n";
+        assertEq((), open(server, path, edited), "the file is not checked when the editor text differs");
+
+        # the syntax errors of the syntax tree are still published
+        string syntaxError = writeScript("class {\n", "S.qc");
+        list<hash<auto>> diags = open(server, syntaxError, "class {\n");
+        assertGt(0, diags.size(), "syntax errors");
+        assertFalse((map $1.source, diags).contains("qore"));
+    }
+
+    testSyntaxModeAndFailure() {
+        string path = writeScript(BadScript);
+        QLS::QLSServer syntaxOnly = startServer({"diagnostics": "syntax"});
+        assertEq((), open(syntaxOnly, path, BadScript), "no Qore check in syntax mode");
+
+        # a Qore executable that cannot be run leaves the syntax errors
+        QLS::QLSServer failing = startServer({"qoreExecutable": "/nonexistent/qore"});
+        assertEq((), open(failing, path, BadScript), "the check fails without diagnostics");
+
+        # invalid options are ignored
+        QLS::QLSServer invalid = startServer({"diagnostics": "everything", "qoreExecutable": 1});
+        assertGt(0, open(invalid, path, BadScript).size(), "the defaults are used");
+    }
+
+    testRequiredModuleError() {
+        string dir = makeTmpDir();
+        DiagnosticsTest::writeFile(dir + "/mods/DiagQlsBroken.qm", "%modern\nmodule DiagQlsBroken {\n"
+            "    version = \"1.0\";\n    desc = \"test\";\n    author = \"test\";\n    url = \"https://qore.org\";\n}\n"
+            "public namespace DiagQlsBroken {\n    public int sub f() { return undefined_function(); }\n}\n");
+        string text = "%modern\n%requires ./mods/DiagQlsBroken.qm\nint x = 1;\n";
+        string path = dir + "/use.q";
+        DiagnosticsTest::writeFile(path, text);
+        QLS::QLSServer server = startServer();
+        list<hash<auto>> diags = open(server, path, text);
+        assertEq(1, diags.size(), "the error in the module is reported");
+        assertEq(1, diags[0].range.start.line, "at the %requires directive");
+        assertRegex("while loading user module", diags[0].message);
+    }
+
+    testQuickFix() {
+        string text = "%modern\nclass TrapCtor {}\nnothing sub t() {\n    TrapCtor();\n}\n";
+        string path = writeScript(text);
+        string uri = QLS::Document::getFileUri(path);
+        QLS::QLSServer server = startServer();
+        list<hash<auto>> diags = open(server, path, text);
+        hash<auto> diag = (select diags, $1.code == "MISSING-NEW-CONSTRUCTOR")[0];
+        assertTrue(exists diag.data.fixes, "the fixes are in the diagnostic data");
+
+        list<hash<auto>> response = send(server, "textDocument/codeAction", {
+            "textDocument": {"uri": uri},
+            "range": diag.range,
+            "context": {"diagnostics": (diag,)},
+        }, False);
+        list<auto> fixes = select response[0].result, $1.kind == "quickfix";
+        assertEq(1, fixes.size());
+        assertEq("insert 'new' before the class name", fixes[0].title);
+        assertTrue(fixes[0].isPreferred, "machine-applicable fixes are preferred");
+        assertEq(({"range": {"start": {"line": 3, "character": 4}, "end": {"line": 3, "character": 4}},
+            "newText": "new "},), fixes[0].edit.changes{uri}, "the edit inserts before the class name");
+    }
+
+    testIsStandaloneScript() {
+        string dir = makeTmpDir();
+        foreach string name in (("a.q", "a.qr", "a.qtest", "A.Q")) {
+            assertTrue(QLS::QLSServer::isStandaloneScript(dir + "/" + name), name);
+        }
+        foreach string name in (("a.qm", "a.qc", "a.ql", "a.qwf", "a.qsd", "a.txt")) {
+            assertFalse(QLS::QLSServer::isStandaloneScript(dir + "/" + name), name);
+        }
+        DiagnosticsTest::writeFile(dir + "/script", "#!/usr/bin/env qore\nint x = 1;\n");
+        DiagnosticsTest::writeFile(dir + "/data", "not qore\n");
+        assertTrue(QLS::QLSServer::isStandaloneScript(dir + "/script"), "a script with a qore #! line");
+        assertFalse(QLS::QLSServer::isStandaloneScript(dir + "/data"), "a file without one");
+    }
+
+    testMakeQoreDiagnostic() {
+        QLS::Document doc("file:///tmp/conv.q", "line one\nsecond line\n", "qore", 1);
+        hash<auto> d = QLS::QLSServer::makeQoreDiagnostic({"severity": "warning", "id": "X-ID", "code": "X",
+            "startLine": 2, "endLine": 2, "startColumn": -1, "endColumn": -1, "message": "msg", "hint": NOTHING},
+            doc);
+        assertEq({"start": {"line": 1, "character": 0}, "end": {"line": 1, "character": 11}}, d.range,
+            "unknown columns cover the line");
+        assertEq(2, d.severity);
+        assertEq("X-ID", d.code);
+        assertEq("msg", d.message);
+        assertFalse(exists d.data, "no data without fixes");
+
+        d = QLS::QLSServer::makeQoreDiagnostic({"severity": "error", "code": "Y", "startLine": 1, "endLine": 1,
+            "startColumn": 5, "endColumn": 2, "message": "m", "hint": "h", "fixes": ({"title": "t"},)}, doc);
+        assertEq({"start": {"line": 0, "character": 5}, "end": {"line": 0, "character": 5}}, d.range,
+            "an end before the start is empty");
+        assertEq("Y", d.code, "the code is used without an id");
+        assertEq("m\nh", d.message);
+        assertEq(({"title": "t"},), d.data.fixes);
+    }
+
+    testGetQuickFixes() {
+        string uri = "file:///tmp/fixes.q";
+        hash<auto> edit = {"file": "/tmp/fixes.q", "startLine": 2, "endLine": 2, "startColumn": 3, "endColumn": 5,
+            "replacement": "x"};
+        list<auto> diags = (
+            "invalid",
+            {"message": "no data"},
+            {"data": {"fixes": ({"title": "review", "applicability": "review-required", "edits": (edit,)},)}},
+            # unknown columns, another file and missing edits cannot be applied
+            {"data": {"fixes": (
+                {"title": "unknown", "edits": (edit + {"startColumn": -1},)},
+                {"title": "other file", "edits": (edit + {"file": "/tmp/other.q"},)},
+                {"title": "no edits", "edits": ()},
+                "invalid",
+            )}},
+        );
+        list<hash<auto>> actions = QLS::QLSServer::getQuickFixes(uri, diags);
+        assertEq(("review",), (map $1.title, actions), "only applicable fixes");
+        assertFalse(actions[0].isPreferred, "review-required fixes are not preferred");
+        assertEq(({"range": {"start": {"line": 1, "character": 3}, "end": {"line": 1, "character": 5}},
+            "newText": "x"},), actions[0].edit.changes{uri});
+        assertEq((), QLS::QLSServer::getQuickFixes(uri, NOTHING));
+    }
+}

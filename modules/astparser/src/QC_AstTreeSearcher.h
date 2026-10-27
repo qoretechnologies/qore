@@ -32,4 +32,7 @@ DLLEXPORT extern qore_classid_t CID_ASTTREESEARCHER;
 DLLEXPORT extern QoreClass *QC_ASTTREESEARCHER;
 DLLLOCAL QoreClass* initAstTreeSearcherClass(QoreNamespace& ns);
 
+DLLLOCAL TypedHashDecl* init_hashdecl_AstExpressionLink(QoreNamespace& ns);
+DLLLOCAL extern const TypedHashDecl* hashdeclAstExpressionLink;
+
 #endif // _QLS_QC_ASTTREESEARCHER_H

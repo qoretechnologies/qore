@@ -4811,11 +4811,28 @@ while (*binary chunk = input.read(65536)) {
       - new module providing a Language Server Protocol (LSP) implementation for %Qore
       - symbol and file-kind handling based on the tree-sitter-based @ref astparserintro "astparser" module,
         including typedefs and all Qore/Qorus source extensions
-      - files that are not open in the editor are kept as compact symbol indexes instead of syntax trees, and only
-        the files that can contain a result are parsed for a request, keeping memory use proportional to the
-        number of symbols rather than the size of the workspace (see @ref qls_indexing)
-      - workspace scanning skips version control, dependency, agent worktree and build directories as well as very
-        large files, follows each directory only once, and can be configured with initialization options
+      - workspace indexing with memory use proportional to the number of symbols: files that are not open in the
+        editor are kept as compact symbol indexes and parsed only when a request needs them; scanning skips
+        version control, dependency, agent worktree and build directories and very large files, and can be
+        configured with initialization options (see @ref qls_indexing)
+      - all workspace folders are indexed in the background with progress reports, requests are answered during
+        indexing and can be cancelled, and @ref QLS::LspConnection "LspConnection" runs the server on any streams
+        (see @ref qls_loop)
+      - navigation: hover with the documentation of doxygen-style doc comments, go to definition, declaration,
+        type definition and implementation, references and rename across the workspace, reference-count code
+        lenses, call and type hierarchies, and links for the module names and paths of \c %%requires,
+        \c %%try-module and \c %%include directives
+      - editing: completion with snippets, parameter hints and Markdown documentation, signature help, inlay
+        hints, linked editing of local variables, document, range and on-type formatting, and updates of the
+        directives that refer to renamed or moved files
+      - the builtin API in hover, completion and signature help: builtin functions, classes, constants, typed
+        hashes and namespaces, and the methods of basic types such as strings and lists, with members resolved
+        by the types of their receivers, as in \c now().format() (see @ref qls_builtins)
+      - diagnostics: standalone scripts are checked with the %Qore parser when they are opened and saved, with
+        quick fixes for the fixes of %Qore diagnostics, and other files get syntax errors; diagnostics are
+        published or pulled (see @ref qls_diagnostics)
+      - hierarchical document symbols, semantic tokens with deltas, folding and selection ranges, incremental
+        document synchronization (see @ref qls_sync), and inline values while debugging
 
     - @ref qoreagentstrategiesintro "QoreAgentStrategies" module
       - new module providing configurable agent execution strategies for LLM agents
@@ -5161,6 +5178,19 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a list or hash with no declared element type (<tt>list&lt;auto&gt;</tt>, <tt>hash&lt;auto&gt;</tt>), as
+      built at runtime by language bindings such as the \c python module, was rejected for a typed container
+      parameter (ex: <tt>list&lt;int&gt;</tt>, <tt>hash&lt;string, list&lt;string&gt;&gt;</tt>) in runtime
+      variant matching (functions, methods, static methods, constructors, call references and closures), even
+      when every element matched the element type; it is now accepted and converted to the parameter type as in
+      an assignment, and a container with an element that does not match is rejected as before
+      (<a href="https://github.com/qoretechnologies/qore/issues/5541">issue 5541</a>)
+    - runtime variant matching ranked a typed list or hash whose elements the parameter accepts only with a
+      conversion the same as one of the parameter's own element type, so that, for example, a
+      <tt>list&lt;int&gt;</tt> passed with @ref Qore::call_function() "call_function()" to a function with
+      <tt>list&lt;float&gt;</tt> and <tt>list&lt;int&gt;</tt> variants selected the variant declared first; a
+      container of the parameter's element type now ranks first, as when the variant is selected when the call is
+      parsed
     - a class created at runtime by a binary module and added with <tt>QoreNamespace::addSystemClass()</tt>, as
       the \c python module does when it exports a Python subclass of a %Qore class, did not initialize the members
       of its user-class parents or its own members with initial values when an object of the class was created

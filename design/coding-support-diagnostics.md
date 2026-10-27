@@ -103,6 +103,12 @@ chokepoint when collection is enabled, then converted to the hashdecl.  Fixes
 declare their applicability as `machine-applicable` or `review-required`; tools
 must never apply a review-required fix automatically.
 
+Errors raised while loading a module for `%requires` come from the module's own
+`Program` and are assimilated into the parse exception sink without passing the
+chokepoint; `qore_program_private::collectModuleLoadErrors()` records each of them
+as an error diagnostic at the directive's location, since the errors' own
+locations are in the module's source.
+
 ## Source columns
 
 Columns are tracked end-to-end. `QoreProgramLineLocation` carries

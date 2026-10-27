@@ -348,6 +348,8 @@ sub test() {
         addTestCase("CodeAction: add modern present", \testCodeActionAddModernPresent());
         addTestCase("CodeAction: empty document", \testCodeActionEmptyDocument());
         addTestCase("CodeAction: missing params", \testCodeActionMissingParams());
+        addTestCase("Completion: LSP item formats", \testCompletionItemFormats());
+        addTestCase("Completion: snippets and commands by client", \testCompletionByClient());
 
         set_return_value(main());
     }
@@ -1366,5 +1368,90 @@ sub foo() { return 1; }
             "should return error response for missing params");
         hash<auto> resp = parse_json(responses[0]);
         assertTrue(exists resp.error, "response should have error field");
+    }
+
+    testCompletionItemFormats() {
+        hash<QoreCodeCompletion::CompletionItem> func = <QoreCodeCompletion::CompletionItem>{
+            "label": "add_values", "kind": "function", "detail": "int add_values(int a)",
+            "documentation": "Adds **values**", "isCallable": True,
+        };
+        hash<auto> item = QLS::QLSServer::makeCompletionItem(func, True, True, True);
+        assertEq("add_values($0)", item.insertText, "the cursor is placed between the parentheses");
+        assertEq(2, item.insertTextFormat, "snippet");
+        assertEq({"kind": "markdown", "value": "Adds **values**"}, item.documentation);
+        assertEq("int add_values(int a)", item.detail);
+        assertEq("editor.action.triggerParameterHints", item.command.command);
+
+        item = QLS::QLSServer::makeCompletionItem(func, False, False, False);
+        assertEq("add_values(", item.insertText, "without snippet support");
+        assertFalse(exists item.insertTextFormat);
+        assertEq("Adds **values**", item.documentation, "plain text documentation");
+        assertFalse(exists item.command, "no VS Code commands for other clients");
+
+        # callables without arguments
+        hash<auto> noArgs = QLS::QLSServer::makeCompletionItem(
+            cast<hash<QoreCodeCompletion::CompletionItem>>(func + {"noArgsOnly": True}), True, True, True);
+        assertEq("add_values()", noArgs.insertText);
+        assertFalse(exists noArgs.insertTextFormat);
+        assertFalse(exists noArgs.command, "no parameter hints without parameters");
+
+        # snippet characters in names are escaped
+        hash<auto> odd = QLS::QLSServer::makeCompletionItem(
+            cast<hash<QoreCodeCompletion::CompletionItem>>(func + {"label": "a$b}c\\d"}), True, False, False);
+        assertEq("a\\$b\\}c\\\\d($0)", odd.insertText);
+
+        hash<auto> ns = QLS::QLSServer::makeCompletionItem(<QoreCodeCompletion::CompletionItem>{
+            "label": "Utils", "kind": "namespace"}, True, True, True);
+        assertEq("Utils::", ns.insertText);
+        assertEq("editor.action.triggerSuggest", ns.command.command);
+        assertFalse(exists ns.detail, "no null detail");
+        assertFalse(exists ns.documentation);
+
+        hash<auto> var = QLS::QLSServer::makeCompletionItem(<QoreCodeCompletion::CompletionItem>{
+            "label": "count", "kind": "variable"}, True, True, True);
+        assertEq("count", var.insertText);
+        assertFalse(exists var.command);
+    }
+
+    testCompletionByClient() {
+        string text = "%modern\nint sub add_values(int a) { return a; }\nnamespace Utils {}\n"
+            "sub test() {\n    add_v\n    Uti\n}\n";
+        code<list<hash<auto>>(*hash<auto>, *hash<auto>, int, int)> complete = list<hash<auto>> sub (
+                *hash<auto> clientInfo, *hash<auto> caps, int line, int col) {
+            QLS::QLSServer server();
+            hash<auto> params = {"processId": getpid(), "capabilities": caps ?? {}};
+            if (clientInfo) {
+                params.clientInfo = clientInfo;
+            }
+            server.handleRequest(make_json({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": params}));
+            string uri = "file:///tmp/completion-client.q";
+            server.handleRequest(make_json({"jsonrpc": "2.0", "method": "textDocument/didOpen", "params": {
+                "textDocument": {"uri": uri, "languageId": "qore", "version": 1, "text": text}}}));
+            hash<auto> response = parse_json(server.handleRequest(make_json({"jsonrpc": "2.0", "id": 2,
+                "method": "textDocument/completion", "params": {"textDocument": {"uri": uri},
+                "position": {"line": line, "character": col}}}))[0]);
+            return response.result.items;
+        };
+        hash<auto> vscodeCaps = {"textDocument": {"completion": {"completionItem": {"snippetSupport": True,
+            "documentationFormat": ("markdown", "plaintext")}}}};
+
+        hash<auto> func = (select complete({"name": "Visual Studio Code"}, vscodeCaps, 4, 9),
+            $1.label == "add_values")[0];
+        assertEq("add_values($0)", func.insertText);
+        assertEq(2, func.insertTextFormat);
+        assertEq("editor.action.triggerParameterHints", func.command.command);
+
+        hash<auto> ns = (select complete({"name": "Visual Studio Code"}, vscodeCaps, 5, 7), $1.label == "Utils")[0];
+        assertEq("Utils::", ns.insertText);
+        assertEq("editor.action.triggerSuggest", ns.command.command);
+
+        # other clients get plain text and no editor commands
+        hash<auto> plain = (select complete({"name": "Neovim"}, NOTHING, 4, 9), $1.label == "add_values")[0];
+        assertEq("add_values(", plain.insertText);
+        assertFalse(exists plain.insertTextFormat);
+        assertFalse(exists plain.command);
+        hash<auto> noInfo = (select complete(NOTHING, vscodeCaps, 4, 9), $1.label == "add_values")[0];
+        assertEq(2, noInfo.insertTextFormat, "snippets depend on the capability");
+        assertFalse(exists noInfo.command, "commands depend on the client");
     }
 }

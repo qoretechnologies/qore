@@ -1,0 +1,583 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  Features.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires json
+%requires Util
+%requires QoreCodeFormat
+%requires QLS
+
+%exec-class FeaturesTest
+
+#! Tests document links, go to declaration and the other LSP features of QLS
+class FeaturesTest inherits QUnit::Test {
+    private {
+        #! Two functions with parameters named p, a local, a foreach variable and a global function call
+        const LocalsText = "%modern\n"
+            "int sub f(int p) {\n"
+            "    int loc = p;\n"
+            "    foreach int i in (xrange(3)) {\n"
+            "        loc += i + p;\n"
+            "    }\n"
+            "    return loc;\n"
+            "}\n"
+            "int sub h(int p) { return p + f(p); }\n";
+
+        int reqId = 0;
+        int tmpCount = 0;
+        list<string> tmpDirs = ();
+    }
+
+    constructor() : Test("QLS Features", "1.0") {
+        addTestCase("document links for module and include directives", \testDocumentLinks());
+        addTestCase("document links that cannot be resolved", \testDocumentLinksUnresolved());
+        addTestCase("document links over the protocol", \testDocumentLinkRequest());
+        addTestCase("go to declaration", \testDeclaration());
+        addTestCase("line differences", \testDiffLines());
+        addTestCase("text edits from line differences", \testTextEdits());
+        addTestCase("range formatting", \testRangeFormatting());
+        addTestCase("semantic tokens delta", \testSemanticTokensDelta());
+        addTestCase("linked editing of local variables", \testLinkedEditing());
+        addTestCase("inline values while debugging", \testInlineValues());
+        addTestCase("path helpers", \testPathHelpers());
+        addTestCase("directive edits for renamed files", \testRenameEdits());
+        addTestCase("willRenameFiles request", \testWillRenameFiles());
+        addTestCase("pull diagnostics", \testPullDiagnostics());
+        addTestCase("closures in nested hashes", \testClosuresInNestedHashes());
+
+        on_exit {
+            map FeaturesTest::removeTree($1), tmpDirs;
+        }
+        set_return_value(main());
+    }
+
+    #
+    # helpers
+    #
+
+    private string makeTmpDir() {
+        string dir = sprintf("%s/qls-features-test-%d-%d", tmp_location(), getpid(), ++tmpCount);
+        mkdir(dir, 0700, True);
+        push tmpDirs, dir;
+        return dir;
+    }
+
+    private static writeFile(string path, string text = "") {
+        string dir = dirname(path);
+        if (!is_dir(dir)) {
+            mkdir(dir, 0700, True);
+        }
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(text);
+    }
+
+    private static removeTree(string path) {
+        *hash<StatInfo> info = hlstat(path);
+        if (!info) {
+            return;
+        }
+        if (info.type == "DIRECTORY") {
+            Dir d();
+            if (d.chdir(path)) {
+                map FeaturesTest::removeTree(path + "/" + $1), d.list();
+            }
+            rmdir(path);
+        } else {
+            unlink(path);
+        }
+    }
+
+    private list<hash<auto>> send(QLS::QLSServer server, string method, *hash<auto> params, bool notification) {
+        hash<auto> msg = {"jsonrpc": "2.0", "method": method, "params": params};
+        if (!notification) {
+            msg.id = ++reqId;
+        }
+        return map parse_json($1), server.handleRequest(make_json(msg)) ?? ();
+    }
+
+    private auto request(QLS::QLSServer server, string method, *hash<auto> params) {
+        return send(server, method, params, False)[0].result;
+    }
+
+    private QLS::QLSServer startServer(*hash<auto> capabilities) {
+        QLS::QLSServer server();
+        send(server, "initialize", {"processId": getpid(), "capabilities": capabilities ?? {},
+            "initializationOptions": {"diagnostics": "syntax"}}, False);
+        send(server, "initialized", NOTHING, True);
+        return server;
+    }
+
+    private string open(QLS::QLSServer server, string path, string text) {
+        string uri = QLS::Document::getFileUri(path);
+        send(server, "textDocument/didOpen", {"textDocument": {"uri": uri, "languageId": "qore", "version": 1,
+            "text": text}}, True);
+        return uri;
+    }
+
+    #! Returns the link targets of a document by line, as file paths
+    private static hash<string, string> targetsByLine(list<hash<auto>> links) {
+        return map {$1.range.start.line: QLS::Document::getFilePath($1.target)}, links;
+    }
+
+    #
+    # tests
+    #
+
+    testDocumentLinks() {
+        string dir = makeTmpDir();
+        FeaturesTest::writeFile(dir + "/lib/Local.qm");
+        FeaturesTest::writeFile(dir + "/lib/DirModule/DirModule.qm");
+        FeaturesTest::writeFile(dir + "/inc/common.ql");
+        FeaturesTest::writeFile(dir + "/mods/Relative.qm");
+        string env = dir + "/env";
+        FeaturesTest::writeFile(env + "/FromEnv.qm");
+        *string oldEnv = getenv("QORE_MODULE_DIR");
+        setenv("QORE_MODULE_DIR", env + ":" + (oldEnv ?? ""));
+        on_exit {
+            if (exists oldEnv) {
+                setenv("QORE_MODULE_DIR", oldEnv);
+            } else {
+                unsetenv("QORE_MODULE_DIR");
+            }
+        }
+
+        string text = "%modern\n"
+            "%prepend-module-path \"${SCRIPT_DIR}/lib\"\n"
+            "%requires Local\n"
+            "%requires(reexport) DirModule >= 1.0\n"
+            "%requires FromEnv\n"
+            "%requires ./mods/Relative.qm\n"
+            "%try-module ($ex) Local\n"
+            "%include inc/common.ql\n"
+            "%requires qore >= 3.0\n";
+        list<hash<auto>> links = QLS::DocumentLinks::getLinks(dir + "/script.q", text);
+        hash<string, string> targets = FeaturesTest::targetsByLine(links);
+        assertEq(dir + "/lib/Local.qm", targets."2", "a module in a prepended directory");
+        assertEq(dir + "/lib/DirModule/DirModule.qm", targets."3", "a module directory, with reexport and version");
+        assertEq(env + "/FromEnv.qm", targets."4", "a module in QORE_MODULE_DIR");
+        assertEq(dir + "/./mods/Relative.qm", targets."5", "a relative module path");
+        assertEq(dir + "/lib/Local.qm", targets."6", "a %try-module directive with an exception variable");
+        assertEq(dir + "/inc/common.ql", targets."7", "an included file");
+        assertFalse(exists targets."8", "the interpreter version requirement is not a module");
+
+        # the link covers the name only
+        hash<auto> local = (select links, $1.range.start.line == 2)[0];
+        assertEq({"start": {"line": 2, "character": 10}, "end": {"line": 2, "character": 15}}, local.range);
+        assertEq(dir + "/lib/Local.qm", local.tooltip);
+        hash<auto> dirModule = (select links, $1.range.start.line == 3)[0];
+        assertEq(20, dirModule.range.start.character, "after the reexport option");
+        assertEq(29, dirModule.range.end.character, "before the version");
+    }
+
+    testDocumentLinksUnresolved() {
+        string dir = makeTmpDir();
+        # a binary module has no source file to open
+        FeaturesTest::writeFile(dir + "/lib/Binary.qmod");
+        string text = "%prepend-module-path \"" + dir + "/lib\"\n"
+            "%requires Binary\n"
+            "%requires DoesNotExist\n"
+            "%include missing.ql\n"
+            "# %requires Local\n";
+        assertEq((), QLS::DocumentLinks::getLinks(dir + "/script.q", text), "nothing to link");
+
+        # environment variables are expanded in paths
+        setenv("QLS_LINK_TEST_DIR", dir);
+        on_exit {
+            unsetenv("QLS_LINK_TEST_DIR");
+        }
+        FeaturesTest::writeFile(dir + "/x.ql");
+        assertEq(dir + "/x.ql", QLS::DocumentLinks::expand("$QLS_LINK_TEST_DIR/x.ql", "/other"));
+        assertEq(dir + "/x.ql", QLS::DocumentLinks::expand("${QLS_LINK_TEST_DIR}/x.ql", "/other"));
+        assertEq("/base/x.ql", QLS::DocumentLinks::expand("${SCRIPT_DIR}/x.ql", "/base"));
+        hash<string, string> targets = FeaturesTest::targetsByLine(QLS::DocumentLinks::getLinks(dir + "/s.q",
+            "%include \"$QLS_LINK_TEST_DIR/x.ql\"\n"));
+        assertEq(dir + "/x.ql", targets."0");
+    }
+
+    testDocumentLinkRequest() {
+        string dir = makeTmpDir();
+        FeaturesTest::writeFile(dir + "/inc.ql");
+        QLS::QLSServer server = startServer();
+        string uri = open(server, dir + "/main.q", "%include inc.ql\n");
+        list<auto> links = request(server, "textDocument/documentLink", {"textDocument": {"uri": uri}});
+        assertEq((QLS::Document::getFileUri(dir + "/inc.ql"),), (map $1.target, links));
+        assertEq((), request(server, "textDocument/documentLink", {"textDocument": {"uri": "file:///not/open.q"}}),
+            "no links for documents that are not open");
+    }
+
+    testDeclaration() {
+        QLS::QLSServer server = startServer();
+        string text = "%modern\nint sub helper() { return 1; }\nint sub main() { return helper(); }\n";
+        string uri = open(server, makeTmpDir() + "/decl.q", text);
+        hash<auto> params = {"textDocument": {"uri": uri}, "position": {"line": 2, "character": 25}};
+        list<auto> decl = request(server, "textDocument/declaration", params);
+        assertEq(1, decl.size());
+        assertEq(1, decl[0].range.start.line, "the declaration is the definition");
+        assertEq(decl, request(server, "textDocument/definition", params));
+    }
+
+    #! Applies LSP text edits to a text
+    private static string applyEdits(string text, list<hash<auto>> edits) {
+        # edits are applied from the end so that earlier positions stay valid
+        list<hash<auto>> sorted = sort(edits, int sub (hash<auto> l, hash<auto> r) {
+            return r.range.start.line <=> l.range.start.line ?: r.range.start.character <=> l.range.start.character;
+        });
+        foreach hash<auto> edit in (sorted) {
+            text = QLS::Document::applyEdit(text, edit.range, edit.newText);
+        }
+        return text;
+    }
+
+    testDiffLines() {
+        assertEq((), QLS::TextDiff::diffLines(("a", "b"), ("a", "b")), "no differences");
+        assertEq((<QLS::LineHunk>{"oldStart": 1, "oldEnd": 1, "newStart": 1, "newEnd": 2},),
+            QLS::TextDiff::diffLines(("a", "c"), ("a", "b", "c")), "an insertion");
+        assertEq((<QLS::LineHunk>{"oldStart": 1, "oldEnd": 2, "newStart": 1, "newEnd": 1},),
+            QLS::TextDiff::diffLines(("a", "b", "c"), ("a", "c")), "a deletion");
+        assertEq((<QLS::LineHunk>{"oldStart": 1, "oldEnd": 2, "newStart": 1, "newEnd": 2},),
+            QLS::TextDiff::diffLines(("a", "b", "c"), ("a", "x", "c")), "a replacement");
+        list<hash<QLS::LineHunk>> hunks = QLS::TextDiff::diffLines(("1", "2", "3", "4", "5", "6"),
+            ("1", "x", "3", "4", "5", "6", "7"));
+        assertEq(((1, 2, 1, 2), (6, 6, 6, 7)), (map ($1.oldStart, $1.oldEnd, $1.newStart, $1.newEnd), hunks),
+            "separate hunks for separate changes");
+        assertEq((<QLS::LineHunk>{"oldStart": 0, "oldEnd": 0, "newStart": 0, "newEnd": 2},),
+            QLS::TextDiff::diffLines((), ("a", "b")), "an empty old text");
+
+        # beyond the maximum number of differences, the lines between the common prefix and suffix are one hunk
+        list<string> a = map sprintf("a%d", $1), xrange(1100);
+        list<string> b = map sprintf("b%d", $1), xrange(1100);
+        assertEq((<QLS::LineHunk>{"oldStart": 1, "oldEnd": 1101, "newStart": 1, "newEnd": 1101},),
+            QLS::TextDiff::diffLines(("same",) + a + ("end",), ("same",) + b + ("end",)));
+    }
+
+    testTextEdits() {
+        list<list<string>> pairs = (
+            ("a\nb\nc\n", "a\nx\nc\n"),
+            ("a\nb\nc", "a\nb\nc\nd"),
+            ("a\nb\nc", "a\nb"),
+            ("", "new\n"),
+            ("old\n", ""),
+            ("1\n2\n3\n4\n", "0\n1\n3\n4\n5\n"),
+        );
+        foreach list<string> pair in (pairs) {
+            list<hash<auto>> edits = QLS::TextDiff::getTextEdits(pair[0], pair[1]);
+            assertEq(pair[1], FeaturesTest::applyEdits(pair[0], edits), sprintf("%y", pair));
+        }
+        assertEq((), QLS::TextDiff::getTextEdits("same\n", "same\n"));
+        # only the edits accepted by the filter are returned
+        list<hash<auto>> edits = QLS::TextDiff::getTextEdits("1\n2\n3\n", "x\n2\ny\n",
+            bool sub (hash<QLS::LineHunk> h) { return h.oldStart == 2; });
+        assertEq(({"range": {"start": {"line": 2, "character": 0}, "end": {"line": 3, "character": 0}},
+            "newText": "y\n"},), edits);
+    }
+
+    testRangeFormatting() {
+        string text = "int sub a() {\nreturn 1;\n}\nint sub b() {\nreturn 2;\n}\n";
+        QoreCodeFormat::CodeFormatter fmt();
+        string formatted = fmt.format(text);
+        assertNeq(text, formatted, "the text is not formatted");
+
+        # formatting the second function only changes its lines
+        list<hash<auto>> edits = QLS::QLSServer::getRangeFormattingEdits(text, formatted,
+            {"start": {"line": 3, "character": 0}, "end": {"line": 5, "character": 1}});
+        assertGt(0, edits.size());
+        foreach hash<auto> edit in (edits) {
+            assertTrue(edit.range.start.line >= 3 && edit.range.end.line <= 6, sprintf("%y", edit.range));
+        }
+        string result = FeaturesTest::applyEdits(text, edits);
+        assertEq(text.split("\n")[0..2], result.split("\n")[0..2], "the first function is unchanged");
+        assertEq(formatted.split("\n")[3..5], result.split("\n")[3..5], "the second function is formatted");
+
+        # the whole document gives the formatted text; a range ending at the start of a line excludes it
+        assertEq(formatted, FeaturesTest::applyEdits(text, QLS::QLSServer::getRangeFormattingEdits(text, formatted,
+            {"start": {"line": 0, "character": 0}, "end": {"line": 7, "character": 0}})));
+        assertEq((), QLS::QLSServer::getRangeFormattingEdits(text, formatted,
+            {"start": {"line": 0, "character": 0}, "end": {"line": 1, "character": 0}}),
+            "the first line is already formatted");
+
+        QLS::QLSServer server = startServer();
+        string uri = open(server, makeTmpDir() + "/fmt.q", text);
+        list<auto> response = request(server, "textDocument/rangeFormatting", {"textDocument": {"uri": uri},
+            "range": {"start": {"line": 3, "character": 0}, "end": {"line": 5, "character": 1}},
+            "options": {"tabSize": 4, "insertSpaces": True}});
+        assertEq(edits, response, "the request returns the same edits");
+        hash<auto> error = send(server, "textDocument/rangeFormatting", {"textDocument": {"uri": uri}}, False)[0];
+        assertEq(-32602, error.error.code, "a range is required");
+    }
+
+    testSemanticTokensDelta() {
+        QLS::QLSServer server = startServer();
+        string text = "%modern\nint sub a() { return 1; }\n";
+        string uri = open(server, makeTmpDir() + "/tokens.q", text);
+        hash<auto> full = request(server, "textDocument/semanticTokens/full", {"textDocument": {"uri": uri}});
+        assertTrue(exists full.resultId, "a result ID for deltas");
+
+        # unchanged tokens give no edits
+        hash<auto> same = request(server, "textDocument/semanticTokens/full/delta", {"textDocument": {"uri": uri},
+            "previousResultId": full.resultId});
+        assertEq((), same.edits);
+        assertNeq(full.resultId, same.resultId, "a new result ID");
+
+        send(server, "textDocument/didChange", {"textDocument": {"uri": uri, "version": 2}, "contentChanges": (
+            {"text": "%modern\nint sub a() { return 1; }\nstring sub b() { return \"x\"; }\n"},)}, True);
+        hash<auto> delta = request(server, "textDocument/semanticTokens/full/delta", {"textDocument": {"uri": uri},
+            "previousResultId": same.resultId});
+        hash<auto> expected = request(server, "textDocument/semanticTokens/full", {"textDocument": {"uri": uri}});
+        list<int> data = full.data;
+        foreach hash<auto> edit in (delta.edits) {
+            splice data, edit.start, edit.deleteCount, edit.data;
+        }
+        assertEq(expected.data, data, "applying the delta gives the new tokens");
+
+        # an unknown previous result gives all tokens
+        hash<auto> stale = request(server, "textDocument/semanticTokens/full/delta", {"textDocument": {"uri": uri},
+            "previousResultId": "unknown"});
+        assertEq(expected.data, stale.data);
+        assertFalse(exists stale.edits);
+
+        assertEq(({"start": 1, "deleteCount": 1, "data": (9, 8)},),
+            QLS::QLSServer::getSemanticTokensEdits((1, 2, 3), (1, 9, 8, 3)));
+        assertEq(({"start": 3, "deleteCount": 0, "data": (4,)},),
+            QLS::QLSServer::getSemanticTokensEdits((1, 2, 3), (1, 2, 3, 4)));
+        assertEq(({"start": 0, "deleteCount": 3, "data": ()},), QLS::QLSServer::getSemanticTokensEdits((1, 2, 3), ()));
+    }
+
+    #! Returns the ranges as (line, start, end) lists
+    private static list<list<int>> spans(*list<auto> ranges) {
+        return map ($1.start.line, $1.start.character, $1.end.character), ranges;
+    }
+
+    testLinkedEditing() {
+        QLS::Document doc("file:///tmp/locals.q", LocalsText, "qore", 1);
+        code<*list<list<int>>(int, int)> linked = *list<list<int>> sub (int line, int character) {
+            *list<hash<auto>> ranges = QLS::QLSServer::getLocalOccurrences(doc, {"line": line,
+                "character": character});
+            return ranges ? FeaturesTest::spans(ranges) : NOTHING;
+        };
+        # the parameter of f from a use; the parameter of h with the same name is not included
+        assertEq(((1, 14, 15), (2, 14, 15), (4, 19, 20)), linked(2, 14));
+        # the local from its declaration
+        assertEq(((2, 8, 11), (4, 8, 11), (6, 11, 14)), linked(2, 9));
+        # the foreach variable from a use
+        assertEq(((3, 16, 17), (4, 15, 16)), linked(4, 15));
+        # the parameter of h
+        assertEq(((8, 14, 15), (8, 26, 27), (8, 32, 33)), linked(8, 26));
+        assertNothing(linked(8, 30), "a function name is not local");
+        assertNothing(linked(1, 10), "a type name is not local");
+        assertNothing(linked(3, 23), "a function from another file is not local");
+        assertNothing(linked(1, 8), "the name of the function");
+
+        QLS::QLSServer server = startServer();
+        string uri = open(server, makeTmpDir() + "/linked.q", LocalsText);
+        hash<auto> result = request(server, "textDocument/linkedEditingRange", {"textDocument": {"uri": uri},
+            "position": {"line": 2, "character": 14}});
+        assertEq(((1, 14, 15), (2, 14, 15), (4, 19, 20)), FeaturesTest::spans(result.ranges));
+        assertEq("[A-Za-z_][A-Za-z0-9_]*", result.wordPattern);
+        assertNothing(request(server, "textDocument/linkedEditingRange", {"textDocument": {"uri": uri},
+            "position": {"line": 8, "character": 30}}));
+    }
+
+    testInlineValues() {
+        QLS::Document doc("file:///tmp/locals.q", LocalsText, "qore", 1);
+        hash<auto> all = {"start": {"line": 0, "character": 0}, "end": {"line": 9, "character": 0}};
+        # stopped in the loop of f: the locals and parameters of f up to the stopped line
+        list<hash<auto>> values = QLS::QLSServer::getInlineValues(doc, all,
+            {"start": {"line": 4, "character": 8}, "end": {"line": 4, "character": 21}});
+        assertEq(((1, "p"), (2, "loc"), (2, "p"), (3, "i"), (4, "loc"), (4, "i"), (4, "p")),
+            (map ($1.range.start.line, $1.variableName), values),
+            "no types, functions or names after the stopped line");
+        assertTrue(values[0].caseSensitiveLookup);
+        assertEq({"start": {"line": 2, "character": 8}, "end": {"line": 2, "character": 11}}, values[1].range);
+
+        # only the visible lines
+        values = QLS::QLSServer::getInlineValues(doc, {"start": {"line": 4, "character": 0},
+            "end": {"line": 9, "character": 0}}, {"start": {"line": 6, "character": 4},
+            "end": {"line": 6, "character": 15}});
+        assertEq(((4, "loc"), (4, "i"), (4, "p"), (6, "loc")), (map ($1.range.start.line, $1.variableName), values));
+
+        # stopped in h: its parameter, not the one of f
+        values = QLS::QLSServer::getInlineValues(doc, all, {"start": {"line": 8, "character": 19},
+            "end": {"line": 8, "character": 37}});
+        assertEq(((8, "p"), (8, "p"), (8, "p")), (map ($1.range.start.line, $1.variableName), values));
+
+        # outside of a function
+        assertEq((), QLS::QLSServer::getInlineValues(doc, all, {"start": {"line": 0, "character": 0},
+            "end": {"line": 0, "character": 1}}));
+
+        QLS::QLSServer server = startServer();
+        string uri = open(server, makeTmpDir() + "/inline.q", LocalsText);
+        list<auto> response = request(server, "textDocument/inlineValue", {"textDocument": {"uri": uri},
+            "range": all, "context": {"frameId": 1, "stoppedLocation": {"start": {"line": 8, "character": 19},
+            "end": {"line": 8, "character": 37}}}});
+        assertEq(3, response.size());
+        assertEq((), request(server, "textDocument/inlineValue", {"textDocument": {"uri": uri}, "range": all}),
+            "no stopped location");
+    }
+
+    testPathHelpers() {
+        assertEq("/a/c", QLS::DocumentLinks::normalizePath("/a/./b/../c"));
+        assertEq("/a/b", QLS::DocumentLinks::normalizePath("/a//b/"));
+        assertEq("/", QLS::DocumentLinks::normalizePath("/.."));
+        assertEq("../x", QLS::DocumentLinks::normalizePath("../x"));
+        assertEq(".", QLS::DocumentLinks::normalizePath("a/.."));
+        assertEq("b/c.q", QLS::DocumentLinks::relativePath("/a", "/a/b/c.q"));
+        assertEq("../x/y.q", QLS::DocumentLinks::relativePath("/a/b", "/a/x/y.q"));
+        assertEq("../../z.q", QLS::DocumentLinks::relativePath("/a/b/c", "/a/z.q"));
+        assertEq(".", QLS::DocumentLinks::relativePath("/a/b", "/a/b"));
+    }
+
+    testRenameEdits() {
+        string text = "%include lib/common.ql\n"
+            "%include ./lib/common.ql\n"
+            "%include \"${SCRIPT_DIR}/lib/common.ql\"\n"
+            "%include /proj/lib/common.ql\n"
+            "%requires ./mods/Mod\n"
+            "%requires(reexport) ./mods/Mod.qm >= 1.0\n"
+            "%include $PROJ/lib/common.ql\n"
+            "%include other.ql\n"
+            "%requires Mod\n";
+        list<hash<auto>> edits = QLS::DocumentLinks::getRenameEdits("/proj/main.q", text, "/proj/lib/common.ql",
+            "/proj/shared/common.ql");
+        assertEq((
+            (0, 9, 22, "shared/common.ql"),
+            (1, 9, 24, "./shared/common.ql"),
+            (2, 10, 37, "${SCRIPT_DIR}/shared/common.ql"),
+            (3, 9, 28, "/proj/shared/common.ql"),
+        ), map ($1.range.start.line, $1.range.start.character, $1.range.end.character, $1.newText), edits,
+            "each path keeps its style; other variables, other files and module names are not changed");
+
+        # module paths with and without the extension
+        edits = QLS::DocumentLinks::getRenameEdits("/proj/main.q", text, "/proj/mods/Mod.qm", "/proj/lib/Mod.qm");
+        assertEq(((4, 10, 20, "./lib/Mod"), (5, 20, 33, "./lib/Mod.qm")),
+            map ($1.range.start.line, $1.range.start.character, $1.range.end.character, $1.newText), edits);
+        edits = QLS::DocumentLinks::getRenameEdits("/proj/main.q", text, "/proj/mods/Mod.qm", "/proj/lib/Other.qm");
+        assertEq(((4, "./lib/Other"), (5, "./lib/Other.qm")), (map ($1.range.start.line, $1.newText), edits),
+            "a module file renamed to another name");
+
+        # a moved file keeps referring to the same files
+        edits = QLS::DocumentLinks::getRenameEdits("/proj/main.q", "%include lib/common.ql\n%include /abs/x.ql\n",
+            "/proj/main.q", "/proj/bin/main.q");
+        assertEq(((0, "../lib/common.ql"),), map ($1.range.start.line, $1.newText), edits,
+            "relative paths are changed; absolute paths are not");
+
+        assertEq((), QLS::DocumentLinks::getRenameEdits("/proj/main.q", text, "/proj/unrelated.q", "/proj/x.q"));
+    }
+
+    testWillRenameFiles() {
+        string dir = makeTmpDir();
+        FeaturesTest::writeFile(dir + "/lib/common.ql", "int sub common() { return 1; }\n");
+        FeaturesTest::writeFile(dir + "/closed.q", "%include lib/common.ql\n");
+        FeaturesTest::writeFile(dir + "/unrelated.q", "int x = 1;\n");
+        QLS::QLSServer server();
+        hash<auto> init = send(server, "initialize", {"processId": getpid(), "capabilities": {},
+            "rootUri": QLS::Document::getFileUri(dir), "initializationOptions": {"diagnostics": "syntax"}},
+            False)[0].result;
+        assertEq("file", init.capabilities.workspace.fileOperations.willRename.filters[0].scheme);
+        send(server, "initialized", NOTHING, True);
+        # the open document has unsaved text
+        string openUri = open(server, dir + "/open.q", "%include ./lib/common.ql\n");
+
+        hash<auto> result = request(server, "workspace/willRenameFiles", {"files": ({
+            "oldUri": QLS::Document::getFileUri(dir + "/lib/common.ql"),
+            "newUri": QLS::Document::getFileUri(dir + "/lib/base.ql"),
+        },)});
+        hash<auto> changes = result.changes;
+        assertEq((QLS::Document::getFileUri(dir + "/closed.q"), openUri), sort(keys changes));
+        assertEq("lib/base.ql", changes{QLS::Document::getFileUri(dir + "/closed.q")}[0].newText);
+        assertEq("./lib/base.ql", changes{openUri}[0].newText);
+
+        assertNothing(request(server, "workspace/willRenameFiles", {"files": ({
+            "oldUri": QLS::Document::getFileUri(dir + "/unrelated.q"),
+            "newUri": QLS::Document::getFileUri(dir + "/renamed.q"),
+        },)}), "no edits");
+        assertEq(-32602, send(server, "workspace/willRenameFiles", {}, False)[0].error.code);
+    }
+
+    testPullDiagnostics() {
+        string dir = makeTmpDir();
+        string text = "%modern\nstring s = 1;\n";
+        FeaturesTest::writeFile(dir + "/pull.q", text);
+        string uri = QLS::Document::getFileUri(dir + "/pull.q");
+        hash<auto> pullCaps = {"textDocument": {"diagnostic": {"dynamicRegistration": False}},
+            "workspace": {"diagnostics": {"refreshSupport": True}}};
+
+        QLS::QLSServer server();
+        hash<auto> init = send(server, "initialize", {"processId": getpid(), "capabilities": pullCaps}, False)[0]
+            .result;
+        assertEq({"identifier": "qore", "interFileDependencies": False, "workspaceDiagnostics": False},
+            init.capabilities.diagnosticProvider);
+        send(server, "initialized", NOTHING, True);
+        assertEq((), send(server, "textDocument/didOpen", {"textDocument": {"uri": uri, "languageId": "qore",
+            "version": 1, "text": text}}, True), "no published diagnostics");
+        hash<auto> report = request(server, "textDocument/diagnostic", {"textDocument": {"uri": uri}});
+        assertEq("full", report.kind);
+        assertEq(("INCOMPATIBLE-ASSIGNMENT-TYPE",), (map $1.code, report.items), "the Qore check results");
+
+        # after a save, the client is asked to pull the diagnostics again
+        server.takeQueuedMessages();
+        assertEq((), send(server, "textDocument/didSave", {"textDocument": {"uri": uri}}, True));
+        assertEq(("workspace/diagnostic/refresh",), (map parse_json($1).method, server.takeQueuedMessages()));
+        assertEq((), send(server, "textDocument/didClose", {"textDocument": {"uri": uri}}, True));
+        assertEq((), request(server, "textDocument/diagnostic", {"textDocument": {"uri": uri}}).items,
+            "no diagnostics for a closed document");
+
+        # clients that cannot be asked to pull again get published diagnostics
+        QLS::QLSServer pushServer();
+        init = send(pushServer, "initialize", {"processId": getpid(), "capabilities": {"textDocument": {"diagnostic": {}}}},
+            False)[0].result;
+        assertFalse(exists init.capabilities.diagnosticProvider);
+        send(pushServer, "initialized", NOTHING, True);
+        list<hash<auto>> msgs = send(pushServer, "textDocument/didOpen", {"textDocument": {"uri": uri,
+            "languageId": "qore", "version": 1, "text": text}}, True);
+        assertEq(("textDocument/publishDiagnostics",), (map $1.method, msgs));
+    }
+
+    testClosuresInNestedHashes() {
+        string text = "%modern\n"
+            "sub f() {\n"
+            "    hash<auto> h = {\n"
+            "        \"a\": {\n"
+            "            \"b\": sub (int x) {\n"
+            "                return x + 1;\n"
+            "            },\n"
+            "        },\n"
+            "    };\n"
+            "}\n";
+        QLS::Document doc("file:///tmp/nested.q", text, "qore", 1);
+        # the function, both hashes and the closure fold
+        assertEq(((1, 9), (2, 8), (3, 7), (4, 6)), sort(map ($1.startLine, $1.endLine), doc.foldingRanges()));
+
+        # the parameter of the closure is linked and shown while debugging
+        assertEq(((4, 26, 27), (5, 23, 24)), FeaturesTest::spans(QLS::QLSServer::getLocalOccurrences(doc,
+            {"line": 5, "character": 23})));
+        list<hash<auto>> values = QLS::QLSServer::getInlineValues(doc, {"start": {"line": 0, "character": 0},
+            "end": {"line": 9, "character": 0}}, {"start": {"line": 5, "character": 16},
+            "end": {"line": 5, "character": 29}});
+        assertEq(("h", "x", "x"), (map $1.variableName, values));
+    }
+}

@@ -80,12 +80,12 @@ hashdecl SourceLocationInfo {
     //! the ending source line number
     int endline;
 
-    //! the starting source column number, or -1 if unknown
+    //! the 0-based starting source column (a character offset in the line), or -1 if unknown
     /** @since %Qore 3.0
     */
     int column;
 
-    //! the ending source column number, or -1 if unknown
+    //! the 0-based ending source column (exclusive), or -1 if unknown
     /** @since %Qore 3.0
     */
     int endcolumn;
@@ -113,10 +113,10 @@ hashdecl ParseDiagnosticSpanInfo {
     //! the ending source line number
     int endLine;
 
-    //! the starting source column number, or -1 if unknown
+    //! the 0-based starting source column (a character offset in the line), or -1 if unknown
     int startColumn;
 
-    //! the ending source column number, or -1 if unknown
+    //! the 0-based ending source column (exclusive), or -1 if unknown
     int endColumn;
 }
 
@@ -184,10 +184,10 @@ hashdecl ParseDiagnosticInfo {
     //! the ending source line number
     int endLine;
 
-    //! the starting source column number, or -1 if unknown
+    //! the 0-based starting source column (a character offset in the line), or -1 if unknown
     int startColumn;
 
-    //! the ending source column number, or -1 if unknown
+    //! the 0-based ending source column (exclusive), or -1 if unknown
     int endColumn;
 
     //! the human-readable diagnostic message

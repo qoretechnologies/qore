@@ -7,6 +7,9 @@
     This module is always delivered with %Qore and therefore mirrors the %Qore version.
 
     @section astparser_3_0 astparser Module Version 3.0
+    - added @ref astparser::AstTree::getIdentifierFilter() "AstTree::getIdentifierFilter()" and
+      @ref astparser::AstTree::identifierFilterContains() "AstTree::identifierFilterContains()" to test whether an
+      identifier can occur in a file without keeping its syntax tree or reading it again
     - a file name with a NUL character is refused instead of being cut at the NUL character:
       @ref astparser::AstParser::parseFile() "AstParser::parseFile()" returns @ref nothing and
       @ref astparser::AstTree::printTree() "AstTree::printTree()" raises \c FILE-OPEN-ERROR
@@ -14,6 +17,18 @@
       including nested and escaped braces, multiline contents and operation-specific modifiers
     - added @ref astparser::AstTreeSearcher::findScopeSymbols() "AstTreeSearcher::findScopeSymbols()"
       for scope-aware symbol completion
+    - @ref astparser::AstTreeSearcher::findSymbols() "AstTreeSearcher::findSymbols()" returns global variables and
+      variables of the top-level code, one symbol per declared variable
+    - @ref astparser::AstTreeSearcher::resolveDefinition() "AstTreeSearcher::resolveDefinition()" and
+      @ref astparser::AstTreeSearcher::findScopeSymbols() "AstTreeSearcher::findScopeSymbols()" support closures,
+      including closures in nested hashes and lists: closure parameters and locals are resolved, and the locals of
+      the enclosing code are in scope in a closure
+    - added @ref astparser::AstTreeSearcher::getExpressionChain() "AstTreeSearcher::getExpressionChain()" and the
+      @ref astparser::AstExpressionLink "AstExpressionLink" hashdecl, which give the receiver chain of an expression
+      such as \c "f.stat().size", so the types of members and call results can be resolved link by link
+    - the signatures of functions and methods from
+      @ref astparser::AstTreeSearcher::hoverInfo() "AstTreeSearcher::hoverInfo()" include their modifiers and
+      return types, and the hover info has the doc comment of the declaration in the \c docComment key
     - added \c ADK_Typedef constant for typedef declarations
     - added \c ASYK_TypeAlias constant for typedef symbol kind
     - added \c ASUK_TypedefDeclName and \c ASUK_TypedefTypeName constants for typedef usage kinds

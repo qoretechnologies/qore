@@ -51,6 +51,9 @@ public:
     //! Get all comments from the tree.
     QoreListNode* getComments(ExceptionSink* xsink);
 
+    //! Get a serialized IdentifierFilter of the identifiers in the tree.
+    BinaryNode* getIdentifierFilter(ExceptionSink* xsink);
+
     void set(AstParseResult* r);
     AstParseResult* get();
     AstParseResult* release();

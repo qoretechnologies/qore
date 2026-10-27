@@ -121,8 +121,16 @@ public const ServerCapabilities = {
     /**
      * Defines how text documents are synced. Is either a detailed structure defining each notification or
      * for backwards compatibility the TextDocumentSyncKind number.
+     *
+     * Changes are sent incrementally, so large documents are not sent again for every edit.
      */
-    "textDocumentSync": TextDocumentSyncKind.Full,
+    "textDocumentSync": {
+        "openClose": True,
+        "change": TextDocumentSyncKind.Incremental,
+        "save": {
+            "includeText": False,
+        },
+    },
 
     /**
      * The server provides hover support.
@@ -239,7 +247,9 @@ public const ServerCapabilities = {
             "tokenTypes": SemanticTokenTypes,
             "tokenModifiers": SemanticTokenModifiers,
         },
-        "full": True,
+        "full": {
+            "delta": True,
+        },
         "range": True,
     },
 
@@ -247,7 +257,59 @@ public const ServerCapabilities = {
      * The server provides code action support.
      */
     "codeActionProvider": {
-        "codeActionKinds": ("source.sortImports", "source"),
+        "codeActionKinds": ("quickfix", "source.sortImports", "source"),
+    },
+
+    /**
+     * The server provides linked editing of the occurrences of local variables and parameters.
+     */
+    "linkedEditingRangeProvider": True,
+
+    /**
+     * The server provides the local variables and parameters to show inline while debugging.
+     */
+    "inlineValueProvider": True,
+
+    /**
+     * The server provides formatting of a range of a document.
+     */
+    "documentRangeFormattingProvider": True,
+
+    /**
+     * The server provides go to declaration support; declarations are definitions in Qore.
+     */
+    "declarationProvider": True,
+
+    /**
+     * The server provides links for the files of module and include directives.
+     */
+    "documentLinkProvider": {
+        "resolveProvider": False,
+    },
+
+    /**
+     * Workspace-specific server capabilities: all workspace folders are indexed, and folders added to or removed
+     * from the workspace are indexed or removed.
+     */
+    "workspace": {
+        "workspaceFolders": {
+            "supported": True,
+            "changeNotifications": True,
+        },
+        # the directives that refer to renamed Qore files are updated
+        "fileOperations": {
+            "willRename": {
+                "filters": (
+                    {
+                        "scheme": "file",
+                        "pattern": {
+                            "glob": "**/*.{q,ql,qc,qm,qr,qtest,qclass,qconn,qwf,qsd,qfd,qjob,qconst,qsm,qstep,qmc}",
+                            "matches": "file",
+                        },
+                    },
+                ),
+            },
+        },
     },
 };
 
@@ -292,6 +354,9 @@ public class QLSServer {
 
         #! Workspace root path (ex. "/home/user/projects/lorem")
         string rootPath;
+
+        #! Paths of the workspace folders; all are indexed (rootPath is the first one)
+        list<string> workspaceRoots = ();
 
         #! Client capabilities
         hash<auto> clientCapabilities;
@@ -359,6 +424,9 @@ public class QLSServer {
         #! Single-char prefix index: lowercased first char → list of names
         hash<string, list<string>> metaPrefixIndex;
 
+        #! Resolves expressions to builtin symbols and types (NOTHING if metadata loading fails)
+        *BuiltinResolver builtinResolver;
+
         #! Process-local cache for immutable standard module URI lists and lazily built symbol indexes
         static hash<auto> stdModuleIndexCache = {};
 
@@ -370,10 +438,84 @@ public class QLSServer {
 
         #! Lock protecting builtin metadata cache initialization
         static Mutex builtinMetadataCacheMutex();
+
+        #! Whether files are indexed between requests instead of before responding to requests; set by main()
+        bool backgroundIndexing = False;
+
+        #! Workspace files waiting to be indexed in the background
+        list<string> pendingWorkspaceFiles = ();
+
+        #! Standard module files waiting to be indexed in the background
+        list<string> pendingStdFiles = ();
+
+        #! Standard module indexes built so far; published to the shared cache when all files are indexed
+        hash<string, FileIndex> stdIndexPartial = {};
+
+        #! The number of files queued for background indexing since background indexing last finished
+        int indexQueued = 0;
+
+        #! The number of queued files that have been indexed
+        int indexDone = 0;
+
+        #! The progress token of the current background indexing, if the client supports progress reports
+        *string progressToken;
+
+        #! The ID of the pending window/workDoneProgress/create request
+        *string progressRequestId;
+
+        #! Whether progress is being reported with progressToken
+        bool progressActive = False;
+
+        #! The last percentage reported
+        int progressPercent = -1;
+
+        #! The number of progress tokens created
+        int progressCount = 0;
+
+        #! The connection used by main()
+        *LspConnection connection;
+
+        #! Requests that have been read and not yet answered; keys are JSON-encoded request IDs
+        hash<string, bool> pendingRequests = {};
+
+        #! Pending requests that the client has cancelled; keys are JSON-encoded request IDs
+        hash<string, bool> cancelledRequests = {};
+
+        #! Protects pendingRequests and cancelledRequests, which the message reader thread updates
+        Mutex requestLock();
+
+        #! The JSON-encoded ID of the request being processed
+        *string currentRequestKey;
+
+        #! The client's name from the initialize request, if sent
+        *string clientName;
+
+        #! The diagnostics mode: \c "qore" checks standalone scripts with the Qore parser, \c "syntax" only reports
+        #! syntax errors of the syntax tree
+        string diagnosticsMode = "qore";
+
+        #! The Qore executable used to check scripts; the interpreter running the server if not set
+        *string qoreExecutable;
+
+        #! The diagnostics of the last Qore check of each open document: \c version and \c diagnostics keys
+        hash<string, hash<auto>> qoreDiagnostics = {};
+
+        #! Whether the client pulls diagnostics; if not, they are published
+        bool pullDiagnostics = False;
+
+        #! The number of diagnostic refresh requests sent, for request IDs
+        int diagnosticRefreshCount = 0;
+
+        #! The last semantic tokens returned for each open document: \c resultId and \c data keys
+        hash<string, hash<auto>> semanticTokensResults = {};
+
+        #! The number of semantic token results returned, for result IDs
+        int semanticTokensResultCount = 0;
     }
 
     private:internal {
-        FileOutputStream fos;
+        #! The log file; a File object can be written from any thread, unlike a stream
+        *File logFh;
     }
 
     constructor() {
@@ -406,17 +548,18 @@ public class QLSServer {
 
             # check if the log file can be opened and truncate it if appending is turned off
             try {
-                fos = new FileOutputStream(logFile, appendToLog);
+                File f();
+                f.open2(logFile, O_CREAT | O_WRONLY | (appendToLog ? O_APPEND : O_TRUNC));
+                logFh = f;
             } catch (hash<ExceptionInfo> ex) {
             }
         }
     }
 
     private:internal log(int verbosity, string fmt, ...) {
-        if (fos && verbosity <= logVerbosity) {
+        if (logFh && verbosity <= logVerbosity) {
             string str = sprintf("%s: ", format_date("YYYY-MM-DD HH:mm:SS", now()));
-            string msg = vsprintf(str + fmt + "\n", argv);
-            fos.write(binary(msg));
+            logFh.write(vsprintf(str + fmt + "\n", argv));
         }
     }
 
@@ -449,6 +592,9 @@ public class QLSServer {
             "workspace/didChangeConfiguration": \meth_ws_didChangeConfiguration(),
             "workspace/didChangeWatchedFiles": \meth_ws_didChangeWatchedFiles(),
             "workspace/symbol": \meth_ws_symbol(),
+            "workspace/didChangeWorkspaceFolders": \meth_ws_didChangeWorkspaceFolders(),
+            "workspace/willRenameFiles": \meth_ws_willRenameFiles(),
+            "textDocument/diagnostic": \meth_td_diagnostic(),
 
             # Document methods
             "textDocument/didOpen": \meth_td_didOpen(),
@@ -485,6 +631,13 @@ public class QLSServer {
             "textDocument/semanticTokens/full": \meth_td_semanticTokensFull(),
             "textDocument/semanticTokens/range": \meth_td_semanticTokensRange(),
             "textDocument/codeAction": \meth_td_codeAction(),
+            # Qore has no declarations that are separate from definitions
+            "textDocument/declaration": \meth_td_definition(),
+            "textDocument/documentLink": \meth_td_documentLink(),
+            "textDocument/rangeFormatting": \meth_td_rangeFormatting(),
+            "textDocument/linkedEditingRange": \meth_td_linkedEditingRange(),
+            "textDocument/inlineValue": \meth_td_inlineValue(),
+            "textDocument/semanticTokens/full/delta": \meth_td_semanticTokensDelta(),
         };
     }
 
@@ -493,13 +646,32 @@ public class QLSServer {
     # Main logic
     #=================
 
-    #! Runs the main JSON-RPC server loop, reading requests from stdin and writing responses to stdout.
-    /** @return the exit code (0 for normal shutdown, 1 for error)
+    #! Runs the main JSON-RPC server loop
+    /** Messages are read by a background thread, so that \c $/cancelRequest notifications can cancel requests
+        that are being processed.  Workspace and standard module files are indexed one at a time while no message
+        is waiting, so requests are answered while the workspace is being indexed; progress is reported to clients
+        that support it.
+
+        @param conn the connection to use; if not given, the process's standard input and output are used
+
+        @return the exit code (0 for normal shutdown, 1 for error)
     */
-    public int main() {
+    public int main(*LspConnection conn) {
+        connection = conn ?? new LspConnection();
+        backgroundIndexing = True;
+
+        Queue messages();
+        Counter readerRunning(1);
+        background readMessages(connection, messages, readerRunning);
+
         while (running) {
+            if (!messages.size() && indexPendingFile()) {
+                sendQueuedMessages();
+                continue;
+            }
+
             # read JSON-RPC request
-            hash<auto> received = Messenger::receive();
+            hash<auto> received = messages.get();
             list<auto> responses;
             if (received.error) {
                 # Normal shutdown when stdin closes (ex: client exit)
@@ -516,22 +688,291 @@ public class QLSServer {
             }
 
             # send back response if any
-            if (responses) {
-                map Messenger::send($1), responses, $1.typeCode() == NT_STRING;
-            }
+            map connection.send($1), responses, $1.typeCode() == NT_STRING;
+            sendQueuedMessages();
+        }
 
-            # send additional messages
-            if (initialized && clientInitialized) {
-                while (messagesToSend.size()) {
-                    list<auto> msg = extract messagesToSend, 0, 1;
-                    foreach auto m in (msg) {
-                        Messenger::send(m);
+        # the reader stops after reading the exit notification or the end of the input
+        readerRunning.waitForZero();
+        return exitCode;
+    }
+
+    #! Records a request that has been read and not yet answered, so that the client can cancel it
+    /** The message reader of main() calls this method; applications that read messages themselves and call
+        handleRequest() from another thread can call it to support cancellation.
+
+        @param id the request ID
+    */
+    registerRequest(auto id) {
+        AutoLock al(requestLock);
+        pendingRequests{make_json(id)} = True;
+    }
+
+    #! Cancels a request that has been read and not yet answered
+    /** A cancelled request that has not been started is answered with a \c RequestCancelled error; a request
+        that is being processed stops at the next file that it would search and is answered with the same error.
+
+        @param id the request ID
+
+        @return @ref True if the request was pending; @ref False if it is unknown or has already been answered
+    */
+    bool cancelRequest(auto id) {
+        AutoLock al(requestLock);
+        string key = make_json(id);
+        if (!pendingRequests{key}) {
+            return False;
+        }
+        cancelledRequests{key} = True;
+        return True;
+    }
+
+    #! Returns @ref True if the request with the given key has been cancelled
+    private:internal bool isCancelled(string key) {
+        AutoLock al(requestLock);
+        return cancelledRequests{key} ?? False;
+    }
+
+    #! Forgets a request that has been answered
+    private:internal finishRequest(string key) {
+        AutoLock al(requestLock);
+        remove pendingRequests{key};
+        remove cancelledRequests{key};
+    }
+
+    #! Ends the current request if the client has cancelled it
+    /** Called between files in operations that search many files.
+
+        @throw QLS-REQUEST-CANCELLED the client has cancelled the request
+    */
+    private:internal checkCancelled() {
+        if (currentRequestKey && isCancelled(currentRequestKey)) {
+            throw "QLS-REQUEST-CANCELLED", sprintf("request %s was cancelled", currentRequestKey);
+        }
+    }
+
+    #! Reads messages for main() until the input ends or the exit notification is read
+    private:internal readMessages(LspConnection conn, Queue messages, Counter running) {
+        on_exit {
+            running.dec();
+        }
+        try {
+            while (True) {
+                hash<auto> received = conn.receive();
+                bool exitMsg;
+                if (received.msg) {
+                    auto msg;
+                    try {
+                        msg = parse_json(received.msg);
+                    } catch (hash<ExceptionInfo> ex) {
+                        # invalid JSON is answered by the main loop
                     }
+                    if (msg.typeCode() == NT_HASH) {
+                        if (msg.method == "$/cancelRequest") {
+                            if (exists msg.params.id) {
+                                cancelRequest(msg.params.id);
+                            }
+                        } else if (msg.method && exists msg.id) {
+                            registerRequest(msg.id);
+                        }
+                        exitMsg = msg.method == "exit";
+                    }
+                }
+                messages.push(received);
+                if (received.error == "EOF" || exitMsg) {
+                    break;
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            log(0, "ERROR: reading messages failed: %s", get_exception_string(ex));
+            messages.push({"error": "EOF"});
+        }
+    }
+
+    #! Sends the messages queued by request handlers and background indexing
+    private:internal sendQueuedMessages() {
+        map connection.send($1), takeQueuedMessages();
+    }
+
+    #! Sets whether files are indexed between requests
+    /** main() enables background indexing.  Applications that call handleRequest() themselves can enable it
+        before the \c initialize request and call indexPendingFile() while no request is waiting, and send the
+        messages returned by takeQueuedMessages() to the client.
+
+        Background indexing starts after the client's \c initialized notification.  Without background
+        indexing, files are indexed before \c initialize and workspace folder changes are answered.
+
+        @param enable @ref True to index files between requests
+    */
+    setBackgroundIndexing(bool enable) {
+        backgroundIndexing = enable;
+    }
+
+    #! Indexes the next file waiting for background indexing
+    /** Workspace files are indexed first, with progress reports for clients that support them; standard module
+        files follow.
+
+        @return @ref True if a file was indexed; @ref False if no file is waiting or the client has not sent the
+        \c initialized notification yet
+    */
+    bool indexPendingFile() {
+        if (!clientInitialized || !indexPending()) {
+            return False;
+        }
+        indexNextFile();
+        return True;
+    }
+
+    #! Returns the notifications and requests for the client queued by the server, and removes them from the queue
+    /** Messages are only returned after the client's \c initialized notification.
+
+        @return JSON-RPC messages to send to the client in the order returned
+    */
+    list<string> takeQueuedMessages() {
+        if (!initialized || !clientInitialized || !messagesToSend) {
+            return ();
+        }
+        list<string> ret = messagesToSend;
+        messagesToSend = ();
+        return ret;
+    }
+
+    #! Handles a response from the client to a request sent by the server
+    private:internal handleClientResponse(hash<auto> response) {
+        if (progressRequestId && response.id == progressRequestId) {
+            delete progressRequestId;
+            if (response.error) {
+                log(0, "client refused the indexing progress token: %y", response.error);
+                return;
+            }
+            # the token can only be used after the client has created it
+            if (pendingWorkspaceFiles) {
+                progressActive = True;
+                progressPercent = -1;
+                queueProgress({"kind": "begin", "title": "Indexing Qore files", "cancellable": False,
+                    "percentage": getIndexPercentage()});
+            }
+            return;
+        }
+        log(1, "ignoring response from the client: %y", response);
+    }
+
+    #! Returns @ref True if files are waiting to be indexed in the background
+    private:internal bool indexPending() {
+        return pendingWorkspaceFiles || pendingStdFiles;
+    }
+
+    #! Returns the percentage of the workspace files queued for background indexing that have been indexed
+    private:internal int getIndexPercentage() {
+        return indexQueued ? (indexDone * 100 / indexQueued) : 100;
+    }
+
+    #! Queues a $/progress notification for the indexing progress token
+    private:internal queueProgress(hash<auto> value) {
+        push messagesToSend, make_json({
+            "jsonrpc": jsonRpcVer,
+            "method": "$/progress",
+            "params": {"token": progressToken, "value": value},
+        });
+    }
+
+    #! Asks the client to create a progress token for background indexing, if it supports progress reports
+    private:internal startIndexingProgress() {
+        if (!backgroundIndexing || !pendingWorkspaceFiles || progressActive || progressRequestId
+                || !clientCapabilities.window.workDoneProgress) {
+            return;
+        }
+        ++progressCount;
+        progressToken = sprintf("qls-indexing-%d", progressCount);
+        progressRequestId = sprintf("qls-progress-%d", progressCount);
+        push messagesToSend, make_json({
+            "jsonrpc": jsonRpcVer,
+            "id": progressRequestId,
+            "method": "window/workDoneProgress/create",
+            "params": {"token": progressToken},
+        });
+    }
+
+    #! Reports the progress of indexing the workspace files in the background
+    private:internal reportIndexingProgress() {
+        if (!pendingWorkspaceFiles) {
+            if (progressActive) {
+                queueProgress({"kind": "end", "message": sprintf("%d files indexed", indexDone)});
+                progressActive = False;
+            }
+            indexQueued = 0;
+            indexDone = 0;
+            return;
+        }
+        if (!progressActive) {
+            return;
+        }
+        int percentage = getIndexPercentage();
+        if (percentage != progressPercent) {
+            progressPercent = percentage;
+            queueProgress({"kind": "report", "message": sprintf("%d/%d files", indexDone, indexQueued),
+                "percentage": percentage});
+        }
+    }
+
+    #! Indexes the next file waiting for background indexing
+    private:internal indexNextFile() {
+        if (pendingWorkspaceFiles) {
+            string uri = shift pendingWorkspaceFiles;
+            # the file can have been opened, or its folder removed from the workspace, since it was queued
+            if (!documents{uri} && !workspaceIndex{uri} && getWorkspaceRoot(Document::getFilePath(uri))) {
+                *FileIndex index = indexFile(uri);
+                if (index) {
+                    workspaceIndex{uri} = index;
+                    delete indexedClassGraph;
+                }
+            }
+            ++indexDone;
+            reportIndexingProgress();
+            if (!pendingWorkspaceFiles) {
+                log(0, "background indexing of workspace files done; %d workspace files indexed",
+                    workspaceIndex.size());
+                queueStdModules();
+            }
+        } else {
+            string uri = shift pendingStdFiles;
+            if (!stdModuleIndexLoaded) {
+                *FileIndex index = indexFile(uri);
+                if (index) {
+                    stdIndexPartial{uri} = index;
+                }
+                if (!pendingStdFiles) {
+                    publishStdModuleIndex();
                 }
             }
         }
+    }
 
-        return exitCode;
+    #! Queues the standard module files for background indexing if they are not indexed yet
+    private:internal queueStdModules() {
+        if (stdModuleIndexLoaded) {
+            return;
+        }
+        {
+            AutoLock al(stdModuleIndexCacheMutex);
+            if (exists stdModuleIndexCache.index) {
+                setStdModuleIndex(stdModuleIndexCache.index);
+                return;
+            }
+        }
+        pendingStdFiles = select stdModuleUris, !stdIndexPartial{$1};
+    }
+
+    #! Publishes the standard module index built in stdIndexPartial to the process-wide cache
+    private:internal publishStdModuleIndex() {
+        {
+            AutoLock al(stdModuleIndexCacheMutex);
+            if (!exists stdModuleIndexCache.index) {
+                stdModuleIndexCache.index = stdIndexPartial;
+            }
+            setStdModuleIndex(stdModuleIndexCache.index);
+        }
+        stdIndexPartial = {};
+        log(0, "%d standard module files indexed", stdModuleIndex.size());
     }
 
     #! Handles a single JSON-RPC request message and returns the response(s).
@@ -540,12 +981,25 @@ public class QLSServer {
     */
     softlist<auto> handleRequest(string msg) {
         # parse the request
-        auto request = parse_json(msg);
+        auto request;
+        try {
+            request = parse_json(msg);
+        } catch (hash<ExceptionInfo> ex) {
+            log(0, "invalid JSON received: %s: %s", ex.err, ex.desc);
+            return ErrorResponse::parseError(jsonRpcVer, sprintf("%s: %s", ex.err, ex.desc));
+        }
 
         # validate request
         if (request.typeCode() != NT_HASH) {
             return ErrorResponse::invalidRequest({"received": msg, "jsonrpc": jsonRpcVer},
                 "Invalid JSON-RPC request");
+        }
+
+        # responses to requests sent by the server
+        if (!request.hasKey("method") && request.hasKey("id")
+                && (request.hasKey("result") || request.hasKey("error"))) {
+            handleClientResponse(request);
+            return NOTHING;
         }
 
         *string validation = validateRequest(request);
@@ -567,15 +1021,34 @@ public class QLSServer {
             }
         }
 
+        # requests that the client has cancelled before they were started are not processed
+        *string key = exists request.id ? make_json(request.id) : NOTHING;
+        if (key) {
+            if (isCancelled(key)) {
+                finishRequest(key);
+                return ErrorResponse::requestCancelled(request);
+            }
+            currentRequestKey = key;
+        }
+        on_exit {
+            if (key) {
+                finishRequest(key);
+                delete currentRequestKey;
+            }
+        }
+
         # call appropriate method
         try {
             softlist<auto> responses = methodMap{request.method}(request);
             return responses;
         } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "QLS-REQUEST-CANCELLED") {
+                log(1, "request %s cancelled in method '%s'", key, request.method);
+                return exists request.id ? ErrorResponse::requestCancelled(request) : NOTHING;
+            }
             log(0, "unhandled exception in method '%s': %s: %s", request.method, ex.err, ex.desc);
-            if (request.id) {
-                return ErrorResponse::internalError(jsonRpcVer,
-                    sprintf("%s: %s", ex.err, ex.desc));
+            if (exists request.id) {
+                return ErrorResponse::requestInternalError(request, sprintf("%s: %s", ex.err, ex.desc));
             }
             return NOTHING;
         }
@@ -587,16 +1060,42 @@ public class QLSServer {
     #=================
 
     private:internal parseFilesInWorkspace() {
-        if (!rootPath) {
-            log(0, "WARNING: root path not set - workspace files will not be parsed");
+        if (!workspaceRoots) {
+            log(0, "WARNING: no workspace folders - workspace files will not be parsed");
             return;
         }
+        map indexWorkspaceRoot($1), workspaceRoots;
+    }
 
+    #! Adds a workspace folder; it is indexed by the caller
+    /** @param uri the URI of the folder
+
+        @return the path of the folder, or @ref nothing if it is not a local folder or is already a workspace folder
+    */
+    private:internal *string addWorkspaceRoot(string uri) {
+        if (uri !~ /^file:\//) {
+            log(0, "WARNING: ignoring workspace folder that is not a local directory: %y", uri);
+            return NOTHING;
+        }
+        string path = regex_subst(Document::getFilePath(uri), "(.)/+$", "$1");
+        if (workspaceRoots.contains(path)) {
+            return NOTHING;
+        }
+        push workspaceRoots, path;
+        if (!rootPath) {
+            rootPath = path;
+            rootUri = Document::getFileUri(path);
+        }
+        return path;
+    }
+
+    #! Indexes the Qore files in a workspace folder
+    private:internal indexWorkspaceRoot(string root) {
         # find all Qore files in the workspace
         list<string> qoreFiles;
         list<string> skippedFiles;
         try {
-            qoreFiles = Files::find_qore_files(rootPath, scanOptions, \skippedFiles);
+            qoreFiles = Files::find_qore_files(root, scanOptions, \skippedFiles);
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "DIR-READ-FAILURE") {
                 log(0, "WARNING: root path scanning failed: %s", get_exception_string(ex));
@@ -619,34 +1118,87 @@ public class QLSServer {
                         "files or directories.");
                 return;
             }
+            rethrow;
         }
         if (skippedFiles) {
             log(0, "skipped %d workspace files larger than %d bytes: %Y", skippedFiles.size(),
                 scanOptions.maxFileSize, skippedFiles);
         }
 
-        # create a list of file URIs
-        int rootPathSize = rootPath.size();
-        qoreFiles = map rootUri + $1.substr(rootPathSize), qoreFiles;
-        log(1, "qore files in workspace: %Y", qoreFiles);
+        # create a list of file URIs encoded like the URIs of documents opened by the client
+        qoreFiles = map Document::getFileUri($1), qoreFiles;
+        log(1, "qore files in workspace folder %y: %Y", root, qoreFiles);
+
+        if (backgroundIndexing) {
+            pendingWorkspaceFiles += qoreFiles;
+            indexQueued += qoreFiles.size();
+            log(0, "queued %d files in workspace folder %y for background indexing", qoreFiles.size(), root);
+            return;
+        }
 
         # measure start time
         date start = now_us();
 
-        # index everything; syntax trees are released after indexing and parsed again when needed
+        # index everything; syntax trees are released after indexing and parsed again when needed; open documents
+        # and files in nested workspace folders that are already indexed are skipped
+        int count = 0;
         foreach string uri in (qoreFiles) {
+            if (documents{uri} || workspaceIndex{uri}) {
+                continue;
+            }
             *FileIndex index = indexFile(uri);
             if (index) {
                 workspaceIndex{uri} = index;
+                ++count;
             }
         }
+        delete indexedClassGraph;
 
         # measure end time
         date end = now_us();
-        int symbolCount = 0;
-        map symbolCount += $1.getSymbolCount(), workspaceIndex.iterator();
-        log(0, "indexing of %d workspace files with %d symbols took: %y", workspaceIndex.size(), symbolCount,
-            end - start);
+        log(0, "indexing of %d files in workspace folder %y took: %y; %d workspace files indexed", count, root,
+            end - start, workspaceIndex.size());
+    }
+
+    #! Removes a workspace folder and the index of its files that are not in another workspace folder
+    private:internal removeWorkspaceRoot(string uri) {
+        if (uri !~ /^file:\//) {
+            return;
+        }
+        string root = regex_subst(Document::getFilePath(uri), "(.)/+$", "$1");
+        if (!workspaceRoots.contains(root)) {
+            log(1, "removed workspace folder %y was not indexed", root);
+            return;
+        }
+        workspaceRoots = select workspaceRoots, $1 != root;
+        if (root == rootPath) {
+            rootPath = workspaceRoots[0] ?? "";
+            rootUri = rootPath ? Document::getFileUri(rootPath) : "";
+        }
+        int count = 0;
+        foreach string fileUri in (keys workspaceIndex) {
+            string path = Document::getFilePath(fileUri);
+            if (path.equalPartial(root + DirSep) && !getWorkspaceRoot(path)) {
+                remove workspaceIndex{fileUri};
+                treeCache.invalidate(fileUri);
+                ++count;
+            }
+        }
+        delete indexedClassGraph;
+        log(0, "removed workspace folder %y and the index of %d files", root, count);
+    }
+
+    #! Returns the workspace folder that contains the given path, or @ref nothing if it is not in the workspace
+    /** If workspace folders are nested, the innermost folder is returned.
+    */
+    private:internal *string getWorkspaceRoot(string path) {
+        *string ret;
+        foreach string root in (workspaceRoots) {
+            if (path.equalPartial(root + DirSep) && (!ret || root.size() > ret.size())) {
+                ret = root;
+            }
+        }
+        return ret;
     }
 
     #! Applies the initialization options sent by the client
@@ -656,6 +1208,10 @@ public class QLSServer {
         - @c maxIndexFileSize: files larger than this many bytes are not indexed; 0 means no limit
         - @c treeCacheSize: syntax trees of indexed files are cached up to this many bytes of source; 0 disables
           the cache
+        - @c diagnostics: \c "qore" (the default) to check standalone scripts with the Qore parser, or
+          \c "syntax" to only report syntax errors
+        - @c qoreExecutable: the Qore executable used to check scripts; the interpreter running the server by
+          default
 
         Options with invalid values are logged and ignored.
     */
@@ -681,6 +1237,20 @@ public class QLSServer {
             } else {
                 log(0, "WARNING: ignoring invalid initializationOptions.maxIndexFileSize: %y",
                     opts.maxIndexFileSize);
+            }
+        }
+        if (exists opts.diagnostics) {
+            if (opts.diagnostics == "qore" || opts.diagnostics == "syntax") {
+                diagnosticsMode = opts.diagnostics;
+            } else {
+                log(0, "WARNING: ignoring invalid initializationOptions.diagnostics: %y", opts.diagnostics);
+            }
+        }
+        if (exists opts.qoreExecutable) {
+            if (opts.qoreExecutable.typeCode() == NT_STRING && opts.qoreExecutable) {
+                qoreExecutable = opts.qoreExecutable;
+            } else {
+                log(0, "WARNING: ignoring invalid initializationOptions.qoreExecutable: %y", opts.qoreExecutable);
             }
         }
         if (exists opts.treeCacheSize) {
@@ -782,26 +1352,25 @@ public class QLSServer {
             }
         }
 
+        # complete the index; files indexed in the background or before a cancellation are kept
         date start = now_us();
-        log(0, "lazy indexing standard module files for %s", reason);
-        hash<string, FileIndex> index = {};
+        log(0, "indexing standard module files for %s", reason);
         foreach string uri in (stdModuleUris) {
+            if (stdIndexPartial{uri}) {
+                continue;
+            }
+            checkCancelled();
             *FileIndex fileIndex = indexFile(uri);
             if (fileIndex) {
-                index{uri} = fileIndex;
+                stdIndexPartial{uri} = fileIndex;
             }
         }
-
-        {
-            AutoLock al(stdModuleIndexCacheMutex);
-            if (!exists stdModuleIndexCache.index) {
-                stdModuleIndexCache.index = index;
-            }
-            setStdModuleIndex(stdModuleIndexCache.index);
-        }
+        # the files queued for background indexing are done
+        pendingStdFiles = ();
+        publishStdModuleIndex();
 
         date end = now_us();
-        log(0, "lazy indexing of %d standard module files took: %y", stdModuleIndex.size(), end - start);
+        log(0, "indexing of %d standard module files for %s took: %y", stdModuleIndex.size(), reason, end - start);
     }
 
     #! Find the metadata directory containing qpp .meta.json files
@@ -835,6 +1404,7 @@ public class QLSServer {
                 metaByQualifiedName = builtinMetadataCache.metaByQualifiedName;
                 metaClassByName = builtinMetadataCache.metaClassByName;
                 metaPrefixIndex = builtinMetadataCache.metaPrefixIndex;
+                builtinResolver = builtinMetadataCache.builtinResolver;
                 log(0, "metadata index reused: %d names, %d qualified, %d classes",
                     metaByName.size(), metaByQualifiedName.size(), metaClassByName.size());
                 return;
@@ -874,6 +1444,14 @@ public class QLSServer {
         log(0, "metadata index built: %d names, %d qualified, %d classes",
             metaByName.size(), metaByQualifiedName.size(), metaClassByName.size());
 
+        # step 5: the resolver for expressions, with the pseudo-classes of the basic types, which are only in the
+        # qpp metadata
+        list<hash<QoreApiMetadata::ClassInfo>> pseudoClasses = docIndex
+            ? QoreApiMetadata::SymbolMerger::extractPseudoClasses(docIndex)
+            : ();
+        builtinResolver = new BuiltinResolver(metaByName, metaClassByName, pseudoClasses, builtinMetadata);
+        log(0, "builtin resolver created: %d pseudo-classes", pseudoClasses.size());
+
         {
             AutoLock al(builtinMetadataCacheMutex);
             if (!builtinMetadataCache.builtinMetadata || builtinMetadataCache.dir != cacheKey) {
@@ -884,6 +1462,7 @@ public class QLSServer {
                     "metaByQualifiedName": metaByQualifiedName,
                     "metaClassByName": metaClassByName,
                     "metaPrefixIndex": metaPrefixIndex,
+                    "builtinResolver": builtinResolver,
                 };
             }
         }
@@ -983,17 +1562,23 @@ public class QLSServer {
         # parse/save initialization params
         parentProcessId = request.params.processId;
         clientCapabilities = request.params.capabilities;
-        if (request.params.rootUri) {
-            rootUri = request.params.rootUri;
-        }
-        if (request.params.rootPath) {
-            rootPath = request.params.rootPath;
-        }
-        if (!rootPath && rootUri) {
-            rootPath = parse_url(rootUri).path;
-        }
-        if (!rootUri && rootPath) {
-            rootUri = Document::getFileUri(rootPath);
+        pullDiagnostics = clientCapabilities.textDocument.diagnostic && clientCapabilities.workspace.diagnostics
+            .refreshSupport;
+        clientName = request.params.clientInfo.name;
+        # all workspace folders are indexed; the deprecated rootUri and rootPath parameters are only used when the
+        # client does not send workspace folders
+        if (request.params.workspaceFolders.typeCode() == NT_LIST && request.params.workspaceFolders) {
+            foreach auto folder in (request.params.workspaceFolders) {
+                if (folder.typeCode() == NT_HASH && folder.uri.typeCode() == NT_STRING) {
+                    addWorkspaceRoot(folder.uri);
+                } else {
+                    log(0, "WARNING: ignoring invalid workspace folder: %y", folder);
+                }
+            }
+        } else if (request.params.rootUri) {
+            addWorkspaceRoot(request.params.rootUri);
+        } else if (request.params.rootPath) {
+            addWorkspaceRoot(Document::getFileUri(request.params.rootPath));
         }
         applyInitializationOptions(request.params.initializationOptions);
 
@@ -1008,7 +1593,7 @@ public class QLSServer {
             # discover standard Qore modules; source parsing is deferred until needed
             parseStdModules();
         } catch (hash<ExceptionInfo> ex) {
-            return ErrorResponse::internalError(jsonRpcVer, sprintf("%s: %s: %Y", ex.err, ex.desc, ex));
+            return ErrorResponse::requestInternalError(request, sprintf("%s: %s: %Y", ex.err, ex.desc, ex));
         }
 
         try {
@@ -1020,7 +1605,12 @@ public class QLSServer {
 
         # create response
         hash<auto> result = {
-            "capabilities": ServerCapabilities,
+            # pull diagnostics are only offered to clients that can be asked to pull them again
+            "capabilities": ServerCapabilities + (pullDiagnostics ? {"diagnosticProvider": {
+                "identifier": "qore",
+                "interFileDependencies": False,
+                "workspaceDiagnostics": False,
+            }} : {}),
         };
 
         log(0, "initialization complete!");
@@ -1033,6 +1623,7 @@ public class QLSServer {
     private *string meth_initialized(hash<auto> request) {
         clientInitialized = True;
         log(0, "client initialized!");
+        startIndexingProgress();
         return NOTHING;
     }
 
@@ -1056,7 +1647,11 @@ public class QLSServer {
 
     #! "$/cancelRequest" notification method handler
     private *string meth_cancelRequest(hash<auto> request) {
-        # ignore for now
+        # main() cancels requests when the notification is read, so that requests being processed can be
+        # cancelled; this handles applications that read messages themselves
+        if (exists request.params.id) {
+            cancelRequest(request.params.id);
+        }
         return NOTHING;
     }
 
@@ -1092,9 +1687,11 @@ public class QLSServer {
         } else {
             logFile = getDefaultLogFilePath();
         }
+        # close the current log file; it is opened again if logging is enabled
+        delete logFh;
         prepareLogFile(logFile);
 
-        if (logging && !fos) {
+        if (logging && !logFh) {
             return Notification::showMessage(jsonRpcVer, MessageType.Warning,
                 "QLS log file could not be opened. Logging will be turned off.");
         }
@@ -1148,16 +1745,99 @@ public class QLSServer {
         return NOTHING;
     }
 
+    #! "workspace/willRenameFiles" method handler
+    /** Returns the edits to the directives of open documents and workspace files that refer to the renamed files
+        by path, and to the relative paths of moved files.
+    */
+    private *string meth_ws_willRenameFiles(hash<auto> request) {
+        if (request.params.files.typeCode() != NT_LIST) {
+            return ErrorResponse::invalidParams(request, "required attribute 'files' is missing");
+        }
+        hash<string, list<hash<auto>>> changes = {};
+        foreach auto file in (request.params.files) {
+            if (file.typeCode() != NT_HASH || file.oldUri !~ /^file:\// || file.newUri !~ /^file:\//) {
+                continue;
+            }
+            string oldPath = Document::getFilePath(file.oldUri);
+            string newPath = Document::getFilePath(file.newUri);
+            # the name without the extension, which module paths can omit
+            string name = regex_subst(basename(oldPath), "\\.[^.]*$", "");
+            foreach hash<auto> candidate in (getRenameCandidates(name, oldPath)) {
+                list<hash<auto>> edits = DocumentLinks::getRenameEdits(Document::getFilePath(candidate.uri),
+                    candidate.text, oldPath, newPath);
+                if (edits) {
+                    changes{candidate.uri} = (changes{candidate.uri} ?? ()) + edits;
+                }
+            }
+        }
+        return make_jsonrpc_response(jsonRpcVer, request.id, changes ? {"changes": changes} : NOTHING);
+    }
+
+    #! Returns the open documents and indexed workspace files that can refer to a renamed file
+    /** @param name the file name without its extension
+        @param oldPath the path of the renamed file, which is always a candidate
+
+        @return a list of hashes with \c uri and \c text keys; open documents have their editor text
+    */
+    private:internal list<hash<auto>> getRenameCandidates(string name, string oldPath) {
+        list<hash<auto>> ret = ();
+        foreach hash<auto> i in (documents.pairIterator()) {
+            *string text = i.value.getText();
+            if (text && i.key =~ /^file:\// && (text.find(name) != -1 || Document::getFilePath(i.key) == oldPath)) {
+                push ret, {"uri": i.key, "text": text};
+            }
+        }
+        foreach FileIndex index in (workspaceIndex.iterator()) {
+            string uri = index.getUri();
+            if (index.sourceContains(name) || Document::getFilePath(uri) == oldPath) {
+                try {
+                    push ret, {"uri": uri, "text": ReadOnlyFile::readTextFile(Document::getFilePath(uri))};
+                } catch (hash<ExceptionInfo> ex) {
+                    log(1, "cannot read %s for renaming: %s: %s", uri, ex.err, ex.desc);
+                }
+            }
+        }
+        return ret;
+    }
+
+    #! "workspace/didChangeWorkspaceFolders" notification method handler
+    /** Indexes added workspace folders and removes the index of the files in removed workspace folders.
+    */
+    private *string meth_ws_didChangeWorkspaceFolders(hash<auto> request) {
+        *hash<auto> event = request.params.event;
+        if (event.typeCode() != NT_HASH) {
+            log(0, "WARNING: 'workspace/didChangeWorkspaceFolders' notification without a valid event: %y",
+                request.params);
+            return NOTHING;
+        }
+        foreach auto folder in (event.removed) {
+            if (folder.typeCode() == NT_HASH && folder.uri.typeCode() == NT_STRING) {
+                removeWorkspaceRoot(folder.uri);
+            }
+        }
+        foreach auto folder in (event.added) {
+            if (folder.typeCode() == NT_HASH && folder.uri.typeCode() == NT_STRING) {
+                *string root = addWorkspaceRoot(folder.uri);
+                if (root) {
+                    indexWorkspaceRoot(root);
+                }
+                startIndexingProgress();
+            }
+        }
+        return NOTHING;
+    }
+
     #! Returns @ref True if the given file is in the workspace and is indexed according to the scan options
     private:internal bool isIndexedWorkspaceFile(string uri) {
-        if (!rootPath || uri !~ /^file:\//) {
+        if (uri !~ /^file:\//) {
             return False;
         }
         string path = Document::getFilePath(uri);
-        if (!path.equalPartial(rootPath + DirSep) || !Files::is_valid_qore_file(path)) {
+        *string root = getWorkspaceRoot(path);
+        if (!root || !Files::is_valid_qore_file(path)) {
             return False;
         }
-        return !Files::is_excluded_path(path, rootPath, scanOptions);
+        return !Files::is_excluded_path(path, root, scanOptions);
     }
 
     #! "workspace/symbol" method handler
@@ -1235,12 +1915,16 @@ public class QLSServer {
             if (doc != NOTHING) {
                 documents{textDoc.uri} = doc;
                 log(1, "opened text document: '%s'", textDoc.uri);
-
-                if (doc.getParseErrorCount() > 0) {
-                    *list<auto> diagnostics = doc.getDiagnostics();
-                    responses += Notification::diagnostics(jsonRpcVer, textDoc.uri, diagnostics);
-                    continue;
+                # the Qore parser checks the file, so the editor text must be the same as the file
+                if (QLSServer::sameAsFile(doc)) {
+                    checkWithQore(doc);
                 }
+                # clients that pull diagnostics get no notification
+                *string notification = publishDiagnostics(doc);
+                if (notification) {
+                    responses += notification;
+                }
+                continue;
             }
 
             responses += Notification::diagnostics(jsonRpcVer, textDoc.uri);
@@ -1280,11 +1964,9 @@ public class QLSServer {
         doc.changeVersion(textDoc.version);
         log(1, "text document changed: '%s'", textDoc.uri);
 
-        if (doc.getParseErrorCount() > 0) {
-            *list<auto> diagnostics = doc.getDiagnostics();
-            return Notification::diagnostics(jsonRpcVer, textDoc.uri, diagnostics);
-        }
-        return Notification::diagnostics(jsonRpcVer, textDoc.uri);
+        # the diagnostics of the last Qore check are for the saved text, so the syntax errors are published until
+        # the document is saved again
+        return publishDiagnostics(doc);
     }
 
     #! "textDocument/willSave" notification method handler
@@ -1300,9 +1982,196 @@ public class QLSServer {
 
     #! "textDocument/didSave" notification method handler
     private *string meth_td_didSave(hash<auto> request) {
-        # ignore for now
-        return NOTHING;
+        *string uri = request.params.textDocument.uri;
+        if (!uri || ignoredUris{uri} || !documents{uri}) {
+            return NOTHING;
+        }
+        Document doc = documents{uri};
+        checkWithQore(doc);
+        refreshDiagnostics();
+        return publishDiagnostics(doc);
     }
+
+    #! Returns the current diagnostics of an open document
+    /** The diagnostics of the last Qore check are returned if the document has not changed since, as they include
+        the syntax errors and are more accurate; otherwise the syntax errors of the syntax tree are returned.
+    */
+    private:internal list<auto> getCurrentDiagnostics(Document doc) {
+        *hash<auto> checked = qoreDiagnostics{doc.getUri()};
+        if (checked && checked.version == doc.getVersion()) {
+            return checked.diagnostics;
+        }
+        return doc.getParseErrorCount() ? doc.getDiagnostics() : ();
+    }
+
+    #! Returns the diagnostics notification for an open document, or @ref nothing if the client pulls diagnostics
+    private:internal *string publishDiagnostics(Document doc) {
+        if (pullDiagnostics) {
+            return NOTHING;
+        }
+        return Notification::diagnostics(jsonRpcVer, doc.getUri(), getCurrentDiagnostics(doc));
+    }
+
+    #! Asks a client that pulls diagnostics to pull them again, after a Qore check
+    private:internal refreshDiagnostics() {
+        if (pullDiagnostics) {
+            push messagesToSend, make_json({
+                "jsonrpc": jsonRpcVer,
+                "id": sprintf("qls-diagnostic-refresh-%d", ++diagnosticRefreshCount),
+                "method": "workspace/diagnostic/refresh",
+            });
+        }
+    }
+
+    #! "textDocument/diagnostic" method handler
+    /** Returns the current diagnostics of an open document for clients that pull diagnostics.
+    */
+    private *string meth_td_diagnostic(hash<auto> request) {
+        if (!request.hasKey("params")) {
+            return ErrorResponse::invalidRequest(request, "required attribute 'params' is missing");
+        }
+        *string validation = ParamValidator::textDocumentIdentifier(request, request.params);
+        if (validation) {
+            return validation;
+        }
+        string uri = request.params.textDocument.uri;
+        return make_jsonrpc_response(jsonRpcVer, request.id, {
+            "kind": "full",
+            "items": (!ignoredUris{uri} && documents{uri}) ? getCurrentDiagnostics(documents{uri}) : (),
+        });
+    }
+
+    #! Returns @ref True if the text of an open document is the same as the file
+    private:internal static bool sameAsFile(Document doc) {
+        try {
+            return ReadOnlyFile::readTextFile(Document::getFilePath(doc.getUri())) == doc.getText();
+        } catch (hash<ExceptionInfo> ex) {
+            # a file that cannot be read cannot be checked
+        }
+        return False;
+    }
+
+    #! Returns @ref True if the file is a standalone script that can be checked with the Qore parser
+    /** Module, class and Qorus files are parts of a larger program and would report errors for the parts that
+        they do not contain.
+    */
+    static bool isStandaloneScript(string path) {
+        *string ext = (path =~ x/\.([^.\/]+)$/)[0];
+        if (ext) {
+            return StandaloneScriptExtensions{ext.lwr()} ?? False;
+        }
+        # scripts without an extension are recognized by their "#!" line
+        return Files::is_valid_qore_file(path);
+    }
+
+    #! The extensions of standalone Qore scripts
+    const StandaloneScriptExtensions = {
+        "q": True,
+        "qr": True,
+        "qtest": True,
+    };
+
+    #! Checks a saved document with the Qore parser and stores its diagnostics
+    /** Standalone scripts are parsed with <tt>qore --diag-format=json</tt> in a separate process, so the modules
+        that the script requires are loaded there and not in the server.  Other documents, and documents whose
+        check fails, keep the syntax errors of the syntax tree.
+    */
+    private:internal checkWithQore(Document doc) {
+        string uri = doc.getUri();
+        remove qoreDiagnostics{uri};
+        if (diagnosticsMode != "qore" || uri !~ /^file:\//) {
+            return;
+        }
+        string path = Document::getFilePath(uri);
+        if (!QLSServer::isStandaloneScript(path)) {
+            return;
+        }
+        # the Windows command shell expands %name% even in quoted arguments, so such paths cannot be passed safely
+        if (PlatformOS == "Windows" && (path.find("%") != -1 || getQoreExecutable().find("%") != -1)) {
+            log(0, "WARNING: not checking %s: the path cannot be passed to the command shell", path);
+            return;
+        }
+        string cmd = sprintf("%s --diag-format=json -W %s %s", QLSServer::shellQuote(getQoreExecutable()),
+            QLSServer::shellQuote(path), PlatformOS == "Windows" ? "2>NUL" : "2>/dev/null");
+        int rc;
+        auto parsed;
+        try {
+            string out = backquote(cmd, \rc);
+            parsed = parse_json(trim(out));
+        } catch (hash<ExceptionInfo> ex) {
+            log(0, "WARNING: checking %s with %y failed (exit code %d): %s: %s", path, getQoreExecutable(), rc,
+                ex.err, ex.desc);
+            return;
+        }
+        if (parsed.typeCode() != NT_LIST) {
+            log(0, "WARNING: checking %s with %y gave no diagnostics list (exit code %d)", path, getQoreExecutable(),
+                rc);
+            return;
+        }
+        list<hash<auto>> diagnostics = ();
+        foreach auto d in (parsed) {
+            # diagnostics in included files are not shown in this document
+            if (d.typeCode() == NT_HASH && d.file == path) {
+                push diagnostics, QLSServer::makeQoreDiagnostic(d, doc);
+            }
+        }
+        qoreDiagnostics{uri} = {"version": doc.getVersion(), "diagnostics": diagnostics};
+        log(1, "Qore check of %s: %d diagnostics", path, diagnostics.size());
+    }
+
+    #! Returns the Qore executable used to check scripts
+    private:internal string getQoreExecutable() {
+        if (!qoreExecutable) {
+            # the interpreter running the server has the same version and module path
+            qoreExecutable = is_file("/proc/self/exe") ? realpath("/proc/self/exe") : "qore";
+        }
+        return qoreExecutable;
+    }
+
+    #! Returns the argument quoted for the command shell
+    static string shellQuote(string arg) {
+        if (PlatformOS == "Windows") {
+            return "\"" + replace(arg, "\"", "\\\"") + "\"";
+        }
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+
+    #! Returns an LSP diagnostic for a Qore parse diagnostic
+    /** @param d a diagnostic in the format of @ref Qore::ParseDiagnosticInfo "ParseDiagnosticInfo": lines are
+        1-based, columns are 0-based and the end column is exclusive; a column of -1 is unknown
+        @param doc the document, for the length of lines when the end column is unknown
+
+        @return an LSP diagnostic; the fixes of the Qore diagnostic are in its \c data
+    */
+    static hash<auto> makeQoreDiagnostic(hash<auto> d, Document doc) {
+        int startLine = max(d.startLine - 1, 0);
+        int endLine = d.endLine > 0 ? d.endLine - 1 : startLine;
+        int startChar = d.startColumn >= 0 ? d.startColumn : 0;
+        int endChar = d.endColumn >= 0 ? d.endColumn : (doc.getLine(endLine) ?? "").length();
+        if (endLine == startLine && endChar < startChar) {
+            endChar = startChar;
+        }
+        hash<auto> diag = {
+            "range": {
+                "start": {"line": startLine, "character": startChar},
+                "end": {"line": endLine, "character": endChar},
+            },
+            "severity": d.severity == "error" ? DiagnosticSeverity.Error : DiagnosticSeverity.Warning,
+            "source": "qore",
+            "code": d.id ?? d.code,
+            "message": d.hint ? sprintf("%s\n%s", d.message, d.hint) : d.message,
+        };
+        if (d.fixes) {
+            diag.data = {"fixes": d.fixes};
+        }
+        return diag;
+    }
+
+    #! LSP DiagnosticSeverity values
+    const DiagnosticSeverity = {
+        "Error": 1,
+        "Warning": 2,
+    };
 
     #! "textDocument/didClose" notification method handler
     private *string meth_td_didClose(hash<auto> request) {
@@ -1333,8 +2202,11 @@ public class QLSServer {
         # keep the symbols of the closed document and release its syntax tree
         workspaceIndex{uri} = (remove documents{uri}).getIndex();
         delete indexedClassGraph;
+        remove qoreDiagnostics{uri};
+        remove semanticTokensResults{uri};
         log(1, "closed text document: '%s'", uri);
-        return NOTHING;
+        # the diagnostics of a closed document are removed; clients that pull diagnostics remove them themselves
+        return pullDiagnostics ? NOTHING : Notification::diagnostics(jsonRpcVer, uri);
     }
 
     #! "textDocument/hover" method handler
@@ -1360,6 +2232,20 @@ public class QLSServer {
 
         # get the document
         Document doc = documents{request.params.textDocument.uri};
+
+        # members of builtin types, qualified builtin names and calls of builtin functions are resolved by the
+        # types of their receivers instead of by name
+        *hash<auto> builtinHover = getBuiltinHover(doc, request.params.position);
+        if (builtinHover) {
+            return make_jsonrpc_response(jsonRpcVer, request.id, builtinHover);
+        }
+
+        # members of the classes in the source are resolved by their definitions, as their symbols have qualified
+        # names
+        *hash<auto> memberHover = getMemberDefinitionHover(doc, request.params.position);
+        if (memberHover) {
+            return make_jsonrpc_response(jsonRpcVer, request.id, memberHover);
+        }
 
         # find requested symbol in the document
         *hash<auto> symbolInfo = doc.findSymbolInfo(request.params.position);
@@ -1402,7 +2288,7 @@ public class QLSServer {
             }
 
             if (description) {
-                result.contents += replace(description.description, "*", "\\*");
+                result.contents += QLSServer::formatSourceHover(description);
             }
         }
 
@@ -1434,12 +2320,128 @@ public class QLSServer {
                 }
 
                 if (description) {
-                    result.contents += replace(description.description, "*", "\\*");
+                    result.contents += QLSServer::formatSourceHover(description);
                 }
             }
         }
 
         return make_jsonrpc_response(jsonRpcVer, request.id, result);
+    }
+
+    #! Returns the hover of the builtin symbol of an expression at a position
+    /** Handles members accessed with "." on values of builtin types, such as the methods of strings and the members
+        of typed hashes, qualified builtin names and calls of builtin functions; other names are resolved by the
+        source symbols first.
+
+        @param doc the document
+        @param position the LSP position
+
+        @return the LSP hover, or NOTHING if the expression at the position is not resolved with builtin types; the
+        hover has no contents if the receiver is a builtin type without the member
+    */
+    private:internal *hash<auto> getBuiltinHover(Document doc, hash<auto> position) {
+        if (!builtinResolver) {
+            return NOTHING;
+        }
+        *list<hash<AstExpressionLink>> chain = doc.getExpressionChain(position);
+        if (!chain) {
+            return NOTHING;
+        }
+        hash<AstExpressionLink> last = chain.last();
+        if (last.kind == "name") {
+            # variables, and names that are neither qualified nor called, are resolved by the source symbols first
+            if (last.typeName || (!last.call && last.name.find("::") < 0)) {
+                return NOTHING;
+            }
+        } else if (last.kind != "member") {
+            return NOTHING;
+        }
+
+        BuiltinSourceNameCheck isSourceName = bool sub (string name) {
+            return isSourceSymbolName(name);
+        };
+        if (chain.size() > 1
+                && !builtinResolver.resolve(chain[0..chain.size() - 2], isSourceName).type) {
+            # the members of other types are resolved by the source symbols
+            return NOTHING;
+        }
+
+        list<string> contents = ();
+        foreach hash<auto> entry in (builtinResolver.resolve(chain, isSourceName).entries) {
+            *string md = formatMetadataEntry(entry);
+            if (md) {
+                contents += md;
+            }
+        }
+        if (!contents && chain.size() == 1) {
+            # a name that is not builtin
+            return NOTHING;
+        }
+        return {
+            "range": last.range,
+            "contents": contents,
+        };
+    }
+
+    #! Returns the hover of a member accessed with "." from its definitions in the source
+    /** @param doc the document
+        @param position the LSP position
+
+        @return the LSP hover, or NOTHING if the position is not on a member of a value or the member has no
+        definition in the source
+    */
+    private:internal *hash<auto> getMemberDefinitionHover(Document doc, hash<auto> position) {
+        *list<hash<AstExpressionLink>> chain = doc.getExpressionChain(position);
+        if (chain.size() < 2 || chain.last().kind != "member") {
+            return NOTHING;
+        }
+        *list<auto> definitions = doc.resolveDefinition(position);
+        if (!definitions && (documents.size() > 1 || workspaceIndex || (stdModuleIndexLoaded && stdModuleIndex))) {
+            definitions = resolveDefinitionCrossDoc(doc, position);
+        }
+        list<string> contents = ();
+        foreach hash<auto> location in (definitions) {
+            *Document definitionDoc = getAnyDocument(location.uri);
+            if (!definitionDoc) {
+                continue;
+            }
+            # a member is declared as a method or as a member
+            foreach int kind in (ASTSymbolKind.Method, ASTSymbolKind.Field) {
+                *hash<auto> description = definitionDoc.hoverInfo(kind, location.range.start);
+                if (description) {
+                    contents += QLSServer::formatSourceHover(description);
+                    break;
+                }
+            }
+        }
+        return contents ? {"range": chain.last().range, "contents": contents} : NOTHING;
+    }
+
+    #! Kinds of declarations whose names are not resolved as builtin symbols
+    const SourceNameKinds = {
+        ASTSymbolKind.Function: True,
+        ASTSymbolKind.Method: True,
+        ASTSymbolKind.Class: True,
+        ASTSymbolKind.Constant: True,
+        ASTSymbolKind.Namespace: True,
+        ASTSymbolKind.Interface: True,
+        ASTSymbolKind.Enum: True,
+        ASTSymbolKind.TypeAlias: True,
+    };
+
+    #! Returns @ref True if a name is declared in the open documents or the workspace
+    /** @param name an unqualified name
+
+        @return @ref True if a function, method, class, constant, namespace, hashdecl, enum or typedef has the name,
+        so it does not name a builtin symbol
+    */
+    private:internal bool isSourceSymbolName(string name) {
+        foreach hash<auto> symbol in (findWorkspaceSymbols(name, True)) {
+            if (SourceNameKinds{symbol.kind}) {
+                return True;
+            }
+        }
+        return False;
     }
 
     #! Build hover Markdown from builtin metadata
@@ -1495,6 +2497,78 @@ public class QLSServer {
         return 0;
     }
 
+    #! Returns the Markdown hover of a declaration in the source
+    /** @param info the hover info from Document::hoverInfo(): the signature in \c description and the doc comment
+        in \c docComment
+
+        @return the signature as code, followed by the documentation from the doc comment, in the format of the
+        hover of builtin symbols
+
+        @par Example:
+        @code{.py}
+# "```qore\nint size()\n```\n\nReturns the number of invoices"
+string md = QLSServer::formatSourceHover({"description": "int size()", "docComment": "#! Returns the number of invoices"});
+        @endcode
+    */
+    static string formatSourceHover(hash<auto> info) {
+        return QLSServer::formatMetadataEntry({"signature": info.description}
+            + QLSServer::parseDocComment(info.docComment)) ?? "";
+    }
+
+    #! Returns the documentation of a doc comment in the format of builtin metadata entries
+    /** @param docComment the \c #! and \c /** comments of a declaration, as written in the source
+
+        @return a hash with the keys of the documentation of builtin metadata entries that the comment has:
+        \c description, \c params (with \c name and \c description keys), \c return_description, \c throws,
+        \c since, \c see_also, \c notes, \c warnings, \c is_deprecated and \c deprecated_reason; the text is
+        Markdown
+
+        @par Example:
+        @code{.py}
+hash<auto> doc = QLSServer::parseDocComment("#! Posts an invoice\n#! @param inv the invoice");
+# "the invoice"
+string param_doc = doc.params[0].description;
+        @endcode
+    */
+    static hash<auto> parseDocComment(*string docComment) {
+        if (!docComment) {
+            return {};
+        }
+        hash<auto> doc = QoreApiMetadata::DocCommentParser::parse(docComment);
+        hash<auto> result = {};
+        if (doc.description) {
+            result.description = doc.description;
+        }
+        if (doc.params) {
+            result.params = (map ("name": $1.key, "description": $1.value), doc.params.pairIterator());
+        }
+        if (doc.return_description) {
+            result.return_description = doc.return_description;
+        }
+        if (doc.throws) {
+            result.throws = doc.throws;
+        }
+        if (doc.since) {
+            result.since = doc.since;
+        }
+        if (doc.see_also) {
+            result.see_also = doc.see_also;
+        }
+        if (doc.notes) {
+            result.notes = doc.notes;
+        }
+        if (doc.warnings) {
+            result.warnings = doc.warnings;
+        }
+        if (exists doc.deprecated) {
+            result.is_deprecated = True;
+            if (doc.deprecated.typeCode() == NT_STRING) {
+                result.deprecated_reason = doc.deprecated;
+            }
+        }
+        return result;
+    }
+
     #! Format a single metadata entry as Markdown for hover
     private static *string formatMetadataEntry(hash<auto> entry) {
         list<string> parts = ();
@@ -1529,7 +2603,8 @@ public class QLSServer {
         if (entry.params && entry.params.size()) {
             list<string> paramLines = ("", "**Parameters:**", "");
             foreach hash<auto> p in (entry.params) {
-                string line = sprintf("- `%s %s`", p.type_name ?? "auto", p.name);
+                # the parameters of doc comments have no types; their types are in the signature
+                string line = p.type_name ? sprintf("- `%s %s`", p.type_name, p.name) : sprintf("- `%s`", p.name);
                 if (p.default_value) {
                     line += sprintf(" = `%s`", p.default_value);
                 }
@@ -1559,7 +2634,18 @@ public class QLSServer {
             parts += throwLines.join("\n");
         }
 
+        # notes and warnings
+        foreach string note in (entry.notes) {
+            parts += sprintf("**Note:** %s", note);
+        }
+        foreach string warning in (entry.warnings) {
+            parts += sprintf("**Warning:** %s", warning);
+        }
+
         # annotations
+        if (entry.see_also) {
+            parts += sprintf("**See also:** %s", entry.see_also.join(", "));
+        }
         if (entry.since) {
             parts += sprintf("**Since:** %s", entry.since);
         }
@@ -1595,11 +2681,76 @@ public class QLSServer {
             return ErrorResponse::nonExistentDocument(request);
         }
 
-        # find references
+        # find references in the open documents and the workspace
         Document doc = documents{request.params.textDocument.uri};
-        *list<auto> references = doc.findReferences(request.params.position,
-            request.params.context.includeDeclaration);
+        bool includeDecl = request.params.context.includeDeclaration ?? False;
+        *list<auto> references = findReferencesCrossDoc(doc, request.params.position, includeDecl)
+            ?? doc.findReferences(request.params.position, includeDecl);
         return make_jsonrpc_response(jsonRpcVer, request.id, references ?? ());
+    }
+
+    #! Symbol kinds whose declarations contain local variables
+    const CallableSymbolKinds = {
+        ASTSymbolKind.Function: True,
+        ASTSymbolKind.Method: True,
+        ASTSymbolKind.Constructor: True,
+    };
+
+    #! Returns @ref True if the outer LSP range contains the inner range
+    private:internal static bool rangeContains(hash<auto> outer, hash<auto> inner) {
+        return (outer.start.line < inner.start.line
+                || (outer.start.line == inner.start.line && outer.start.character <= inner.start.character))
+            && (inner.end.line < outer.end.line
+                || (inner.end.line == outer.end.line && inner.end.character <= outer.end.character));
+    }
+
+    #! Returns the symbols of a document as a tree of LSP \c DocumentSymbol hashes
+    /** Symbols are nested by their ranges and named without namespace or class prefixes; \c selectionRange is the
+        declared name.  Local variables of functions and methods are not included.
+    */
+    private:internal list<hash<auto>> getDocumentSymbolTree(Document doc) {
+        *list<auto> symbols = doc.findSymbols(True, True);
+        if (!symbols) {
+            return ();
+        }
+        # symbols are in tree order, so the enclosing symbols of a symbol are the open ones that contain it
+        list<int> parents = ();
+        list<int> open = ();
+        for (int i = 0; i < symbols.size(); ++i) {
+            hash<auto> range = symbols[i].location.range;
+            while (open && !QLSServer::rangeContains(symbols[open.last()].location.range, range)) {
+                pop open;
+            }
+            push parents, open ? open.last() : -1;
+            push open, i;
+        }
+        hash<string, list<int>> children = {};
+        list<int> roots = ();
+        for (int i = 0; i < symbols.size(); ++i) {
+            int parent = parents[i];
+            if (parent == -1) {
+                push roots, i;
+            } else if (symbols[i].kind != ASTSymbolKind.Variable || !CallableSymbolKinds{symbols[parent].kind}) {
+                push children{parent}, i;
+            }
+        }
+        code<hash<auto>(int)> makeSymbol;
+        makeSymbol = hash<auto> sub (int i) {
+            hash<auto> sym = symbols[i];
+            hash<auto> range = sym.location.range;
+            *hash<auto> namePos = doc.findNamePosition(sym.name, range);
+            hash<auto> selectionRange = namePos
+                ? {"start": namePos, "end": namePos + {"character": namePos.character + sym.name.length()}}
+                : {"start": range.start, "end": range.start};
+            return {
+                "name": sym.name,
+                "kind": LspDocumentSymbolKindMap{string(sym.kind)} ?? 1,
+                "range": range,
+                "selectionRange": selectionRange,
+                "children": map makeSymbol($1), children{i} ?? (),
+            };
+        };
+        return map makeSymbol($1), roots;
     }
 
     #! "textDocument/documentSymbol" method handler
@@ -1652,6 +2803,12 @@ public class QLSServer {
                     ret = doc.getNodesInfo();
                     break;
                 default: {
+                    # the extension API asks for the flat list with an explicit retType
+                    if (!params.retType && clientCapabilities.textDocument.documentSymbol
+                            .hierarchicalDocumentSymbolSupport) {
+                        ret = getDocumentSymbolTree(doc);
+                        break;
+                    }
                     ret = doc.findSymbols();
                     if (ret) {
                         for (int i = 0; i < ret.size(); ++i) {
@@ -1722,38 +2879,94 @@ public class QLSServer {
 
         # Create provider + engine for this request
         CSTCompletionProvider provider(doc, request.params.position, metaByName, metaClassByName,
-            metaPrefixIndex);
+            metaPrefixIndex, builtinResolver, bool sub (string name) {
+                return isSourceSymbolName(name);
+            });
         QoreCodeCompletion::CompletionEngine engine(provider);
 
         # Get completions
         list<hash<QoreCodeCompletion::CompletionItem>> items = engine.complete(input);
 
         # Convert to LSP format
-        list<hash<auto>> lspItems = ();
-        foreach hash<QoreCodeCompletion::CompletionItem> item in (items) {
-            string insertText = item.label;
-            if (item.isCallable) {
-                insertText += "(";
-            } else if (item.kind == "namespace") {
-                insertText += "::";
-            }
-            lspItems += {
-                "label": item.label,
-                "kind": LspCompletionItemKind{item.kind} ?? 1,
-                "detail": item.detail,
-                "documentation": item.documentation,
-                "insertText": insertText,
-                "data": {
-                    "name": item.label,
-                    "symbolKind": item.kind,
-                },
-            };
-        }
+        hash<auto> itemCaps = clientCapabilities.textDocument.completion.completionItem ?? {};
+        bool snippets = itemCaps.snippetSupport ?? False;
+        bool markdown = (itemCaps.documentationFormat ?? ()).contains("markdown");
+        # the commands that show parameter hints and suggestions after inserting an item are VS Code commands
+        bool editorCommands = clientName =~ /visual studio code|vscodium|code - oss/i;
+        list<hash<auto>> lspItems = map QLSServer::makeCompletionItem($1, snippets, markdown, editorCommands), items;
 
         return make_jsonrpc_response(jsonRpcVer, request.id, {
             "isIncomplete": False,
             "items": lspItems,
         });
+    }
+
+    #! Returns an LSP \c CompletionItem for a completion
+    /** @param item the completion
+        @param snippets whether the client supports snippets; callables with arguments are then inserted with
+        parentheses and the cursor between them; callables without arguments are always inserted with parentheses
+        @param markdown whether the client supports Markdown documentation
+        @param editorCommands whether the client is VS Code or a compatible editor, whose commands show parameter
+        hints after a callable and suggestions after a namespace are inserted
+
+        @return the LSP completion item
+    */
+    static hash<auto> makeCompletionItem(hash<QoreCodeCompletion::CompletionItem> item, bool snippets, bool markdown,
+            bool editorCommands) {
+        hash<auto> lspItem = {
+            "label": item.label,
+            "kind": LspCompletionItemKind{item.kind} ?? 1,
+            "data": {
+                "name": item.label,
+                "symbolKind": item.kind,
+            },
+        };
+        if (exists item.detail) {
+            lspItem.detail = item.detail;
+        }
+        if (item.documentation) {
+            lspItem.documentation = markdown
+                ? {"kind": "markdown", "value": item.documentation}
+                : item.documentation;
+        }
+        if (item.isCallable && item.noArgsOnly) {
+            # nothing to enter between the parentheses
+            lspItem.insertText = item.label + "()";
+        } else if (item.isCallable) {
+            if (snippets) {
+                # the cursor is placed between the parentheses
+                lspItem.insertText = QLSServer::escapeSnippet(item.label) + "($0)";
+                lspItem.insertTextFormat = InsertTextFormat.Snippet;
+            } else {
+                lspItem.insertText = item.label + "(";
+            }
+            if (editorCommands) {
+                lspItem.command = {
+                    "title": "Show parameter hints",
+                    "command": "editor.action.triggerParameterHints",
+                };
+            }
+        } else if (item.kind == "namespace") {
+            lspItem.insertText = item.label + "::";
+            if (editorCommands) {
+                lspItem.command = {"title": "Show suggestions", "command": "editor.action.triggerSuggest"};
+            }
+        } else {
+            lspItem.insertText = item.label;
+        }
+        return lspItem;
+    }
+
+    #! LSP InsertTextFormat values
+    const InsertTextFormat = {
+        "PlainText": 1,
+        "Snippet": 2,
+    };
+
+    #! Returns the text with the characters that have a meaning in LSP snippets escaped
+    private:internal static string escapeSnippet(string text) {
+        # a literal backslash before the matched character
+        return regex_subst(text, "([\\\\$}])", "\\\\$1", RE_Global);
     }
 
     #! "completionItem/resolve" method handler
@@ -1975,6 +3188,281 @@ public class QLSServer {
         return make_jsonrpc_response(jsonRpcVer, request.id, edits);
     }
 
+    #! Returns the range of the identifier at a position of a document, or @ref nothing if there is none
+    static *hash<auto> getIdentifierRange(Document doc, hash<auto> position) {
+        *string line = doc.getLine(position.line);
+        if (!line) {
+            return NOTHING;
+        }
+        int col = position.character;
+        code<bool(int)> isWordChar = bool sub (int i) {
+            return i >= 0 && i < line.size() && line[i] =~ /^[A-Za-z0-9_]$/;
+        };
+        if (!isWordChar(col)) {
+            # the position may be just after the identifier
+            if (!isWordChar(col - 1)) {
+                return NOTHING;
+            }
+            --col;
+        }
+        int start = col;
+        while (isWordChar(start - 1)) {
+            --start;
+        }
+        int end = col + 1;
+        while (isWordChar(end)) {
+            ++end;
+        }
+        # identifiers do not start with a digit
+        if (line[start] =~ /^[0-9]$/) {
+            return NOTHING;
+        }
+        return {
+            "start": {"line": position.line, "character": start},
+            "end": {"line": position.line, "character": end},
+        };
+    }
+
+    #! Returns the text of a range on one line of a document, or @ref nothing if it is not on one line
+    static *string getRangeText(Document doc, hash<auto> range) {
+        if (range.start.line != range.end.line) {
+            return NOTHING;
+        }
+        *string line = doc.getLine(range.start.line);
+        return line ? line.substr(range.start.character, range.end.character - range.start.character) : NOTHING;
+    }
+
+    #! Returns the innermost function, method or constructor declaration that contains a position
+    /** @return the symbol with its \c name and \c location, or @ref nothing if the position is not in one
+    */
+    static *hash<auto> getEnclosingCallable(Document doc, hash<auto> position) {
+        *hash<auto> ret;
+        foreach hash<auto> sym in (doc.findSymbols(True, True) ?? ()) {
+            if (CallableSymbolKinds{sym.kind} && QLSServer::rangeContains(sym.location.range,
+                    {"start": position, "end": position})
+                    && (!ret || QLSServer::rangeContains(ret.location.range, sym.location.range))) {
+                ret = sym;
+            }
+        }
+        return ret;
+    }
+
+    #! Returns the definition of the local variable or parameter at a position
+    /** @return a hash with \c def (the range of the declared name) and \c callable (the function, method or
+        constructor that declares it), or @ref nothing if the identifier at the position is not a local variable
+        or parameter
+    */
+    static *hash<auto> getLocalDefinition(Document doc, hash<auto> position) {
+        *hash<auto> def;
+        *list<auto> defs = doc.resolveDefinition(position);
+        if (defs) {
+            if (defs[0].uri && defs[0].uri != doc.getUri()) {
+                return NOTHING;
+            }
+            def = defs[0].range;
+            # a variable is declared with the name that it is used with; this excludes keywords
+            *hash<auto> used = QLSServer::getIdentifierRange(doc, position);
+            if (!used || QLSServer::getRangeText(doc, used) != QLSServer::getRangeText(doc, def)) {
+                return NOTHING;
+            }
+        } else {
+            # a declaration has no definition elsewhere; the name must be a variable or parameter in scope, which
+            # excludes type names and functions defined in other files
+            def = QLSServer::getIdentifierRange(doc, position);
+            if (!def) {
+                return NOTHING;
+            }
+            string name = doc.getLine(position.line).substr(def.start.character,
+                def.end.character - def.start.character);
+            if (!(select doc.findScopeSymbolsDetailed(position) ?? (),
+                    $1.name == name && $1.kind == ASTSymbolKind.Variable)) {
+                return NOTHING;
+            }
+        }
+        *hash<auto> callable = QLSServer::getEnclosingCallable(doc, def.start);
+        if (!callable) {
+            return NOTHING;
+        }
+        # the name of the function itself is not local
+        *hash<auto> namePos = doc.findNamePosition(callable.name, callable.location.range);
+        if (namePos && namePos == def.start) {
+            return NOTHING;
+        }
+        return {"def": def, "callable": callable};
+    }
+
+    #! Returns the ranges of the occurrences of the local variable or parameter at a position
+    /** Only occurrences in the same function that refer to the same declaration are returned, so variables with
+        the same name in other functions or scopes are not included.
+
+        @return the ranges, or @ref nothing if the identifier at the position is not a local variable or parameter
+    */
+    static *list<hash<auto>> getLocalOccurrences(Document doc, hash<auto> position) {
+        *hash<auto> local = QLSServer::getLocalDefinition(doc, position);
+        if (!local) {
+            return NOTHING;
+        }
+        list<hash<auto>> ranges = ();
+        foreach hash<auto> ref in (doc.findReferences(local.def.start, True) ?? ()) {
+            if (!QLSServer::rangeContains(local.callable.location.range, ref.range)) {
+                continue;
+            }
+            if (ref.range == local.def) {
+                push ranges, ref.range;
+                continue;
+            }
+            *list<auto> defs = doc.resolveDefinition(ref.range.start);
+            if (defs && defs[0].range == local.def) {
+                push ranges, ref.range;
+            }
+        }
+        return ranges ?: NOTHING;
+    }
+
+    #! "textDocument/linkedEditingRange" method handler
+    /** Returns the occurrences of a local variable or parameter, so that they are edited together.
+    */
+    private *string meth_td_linkedEditingRange(hash<auto> request) {
+        if (!request.hasKey("params")) {
+            return ErrorResponse::invalidRequest(request, "required attribute 'params' is missing");
+        }
+        *string validation = ParamValidator::textDocumentPositionParams(request, request.params);
+        if (validation) {
+            return validation;
+        }
+        string uri = request.params.textDocument.uri;
+        if (ignoredUris{uri} || !exists documents{uri}) {
+            return make_jsonrpc_response(jsonRpcVer, request.id, NOTHING);
+        }
+        *list<hash<auto>> ranges = QLSServer::getLocalOccurrences(documents{uri}, request.params.position);
+        return make_jsonrpc_response(jsonRpcVer, request.id, ranges
+            ? {"ranges": ranges, "wordPattern": "[A-Za-z_][A-Za-z0-9_]*"}
+            : NOTHING);
+    }
+
+    #! "textDocument/inlineValue" method handler
+    /** Returns variable lookups for the local variables and parameters used in the visible lines of the function
+        where the debugger stopped, up to the stopped line.
+    */
+    private *string meth_td_inlineValue(hash<auto> request) {
+        if (!request.hasKey("params")) {
+            return ErrorResponse::invalidRequest(request, "required attribute 'params' is missing");
+        }
+        *string validation = ParamValidator::textDocumentIdentifier(request, request.params);
+        if (validation) {
+            return validation;
+        }
+        string uri = request.params.textDocument.uri;
+        *hash<auto> stopped = request.params.context.stoppedLocation;
+        if (ignoredUris{uri} || !exists documents{uri} || stopped.start.line.typeCode() != NT_INT
+                || request.params.range.start.line.typeCode() != NT_INT) {
+            return make_jsonrpc_response(jsonRpcVer, request.id, ());
+        }
+        return make_jsonrpc_response(jsonRpcVer, request.id,
+            QLSServer::getInlineValues(documents{uri}, request.params.range, stopped));
+    }
+
+    #! Returns LSP \c InlineValueVariableLookup hashes for the local variables and parameters before a stop
+    /** @param doc the document
+        @param range the visible range
+        @param stopped the range where the debugger stopped
+
+        @return the variable lookups for the occurrences of local variables and parameters of the function that
+        contains the stopped location, in the visible lines up to the stopped line
+    */
+    static list<hash<auto>> getInlineValues(Document doc, hash<auto> range, hash<auto> stopped) {
+        *hash<auto> callable = QLSServer::getEnclosingCallable(doc, stopped.start);
+        if (!callable) {
+            return ();
+        }
+        hash<auto> callableRange = callable.location.range;
+        int first = max(range.start.line, callableRange.start.line);
+        int last = min(range.end.line, stopped.start.line);
+        list<hash<auto>> values = ();
+        for (int line = first; line <= last; ++line) {
+            *string text = doc.getLine(line);
+            if (!text) {
+                continue;
+            }
+            for (int i = 0; i < text.length(); ++i) {
+                # the start of each identifier
+                if (text[i] !~ /^[A-Za-z_]$/ || (i && text[i - 1] =~ /^[A-Za-z0-9_$]$/)) {
+                    continue;
+                }
+                hash<auto> position = {"line": line, "character": i};
+                *hash<auto> local = QLSServer::getLocalDefinition(doc, position);
+                *hash<auto> identifier = QLSServer::getIdentifierRange(doc, position);
+                if (local && identifier && local.callable.location.range == callableRange) {
+                    push values, {
+                        "range": identifier,
+                        "variableName": text.substr(identifier.start.character,
+                            identifier.end.character - identifier.start.character),
+                        "caseSensitiveLookup": True,
+                    };
+                }
+                i = identifier ? identifier.end.character - 1 : i;
+            }
+        }
+        return values;
+    }
+
+    #! "textDocument/rangeFormatting" method handler
+    /** Formats the document and returns the changed lines that overlap the range, as the formatter needs the
+        whole document.
+    */
+    private *string meth_td_rangeFormatting(hash<auto> request) {
+        if (!request.hasKey("params")) {
+            return ErrorResponse::invalidRequest(request, "required attribute 'params' is missing");
+        }
+        *string validation = ParamValidator::textDocumentIdentifier(request, request.params);
+        if (validation) {
+            return validation;
+        }
+        if (request.params.range.start.line.typeCode() != NT_INT
+                || request.params.range.end.line.typeCode() != NT_INT) {
+            return ErrorResponse::invalidParams(request,
+                "required attribute 'range' with 'start' and 'end' is missing");
+        }
+        string uri = request.params.textDocument.uri;
+        if (ignoredUris{uri} || !exists documents{uri}) {
+            return make_jsonrpc_response(jsonRpcVer, request.id, ());
+        }
+        *string text = documents{uri}.getText();
+        if (!text) {
+            return make_jsonrpc_response(jsonRpcVer, request.id, ());
+        }
+        string formatted;
+        try {
+            QoreCodeFormat::CodeFormatter fmt();
+            formatted = fmt.format(text);
+        } catch (hash<ExceptionInfo> ex) {
+            log(1, "formatting failed: %s: %s", ex.err, ex.desc);
+            return make_jsonrpc_response(jsonRpcVer, request.id, ());
+        }
+        return make_jsonrpc_response(jsonRpcVer, request.id,
+            QLSServer::getRangeFormattingEdits(text, formatted, request.params.range));
+    }
+
+    #! Returns the edits of a formatted document that overlap a range
+    /** @param text the document text
+        @param formatted the formatted document text
+        @param range the LSP range to format; a range that ends at the start of a line does not include that line
+
+        @return the LSP text edits for the changed lines that overlap the range
+    */
+    static list<hash<auto>> getRangeFormattingEdits(string text, string formatted, hash<auto> range) {
+        int first = range.start.line;
+        int last = range.end.line;
+        if (last > first && !range.end.character) {
+            --last;
+        }
+        code<bool(hash<LineHunk>)> overlaps = bool sub (hash<LineHunk> h) {
+            # lines inserted between two lines belong to the range if the line after them is in it
+            return h.oldStart <= last && (h.oldEnd > first || (h.oldEnd == h.oldStart && h.oldStart >= first));
+        };
+        return TextDiff::getTextEdits(text, formatted, overlaps);
+    }
+
     #! "textDocument/documentHighlight" method handler
     /** Highlights all occurrences of the symbol under the cursor.
         @param request LSP request with params: textDocument, position
@@ -2111,7 +3599,9 @@ public class QLSServer {
         bool isScopeAccess = False;
 
         *list<auto> dotMatch = (beforeParen =~ x/\.(\w+)$/);
-        *list<auto> scopeMatch = dotMatch ? NOTHING : (beforeParen =~ x/(\w+)::(\w+)$/);
+        *list<auto> scopeMatch = dotMatch ? NOTHING : (beforeParen =~ x/((?:\w+::)*\w+)::(\w+)$/);
+        # the position of the end of the receiver of a method, for its type
+        int receiverCharacter = -1;
         *list<auto> plainMatch = !dotMatch && !scopeMatch ? (beforeParen =~ x/(\w+)$/) : NOTHING;
 
         if (dotMatch) {
@@ -2121,6 +3611,7 @@ public class QLSServer {
             int dotPos = beforeParen.rfind(".");
             string beforeDot = beforeParen.substr(0, dotPos);
             beforeDot =~ s/\s+$//;
+            receiverCharacter = beforeDot.length() - 1;
             *list<auto> targetMatch = (beforeDot =~ x/(\w+)$/);
             if (targetMatch) {
                 target = targetMatch[0];
@@ -2145,6 +3636,8 @@ public class QLSServer {
         # Look up the callable
         *list<hash<auto>> params;
         *string returnType;
+        # the doc comment of a callable in the source
+        *string sourceDocComment;
 
         if (isDotAccess && target) {
             # Look up the variable in scope symbols to find its declared type
@@ -2175,6 +3668,7 @@ public class QLSServer {
                             && (sym.params ? sym.params.size() : 0) >= minimumParamCount) {
                         params = sym.params ?? ();
                         returnType = sym.returnType;
+                        sourceDocComment = sym.docComment;
                         break;
                     }
                 }
@@ -2190,6 +3684,7 @@ public class QLSServer {
                             && (sym.params ? sym.params.size() : 0) >= minimumParamCount) {
                         params = sym.params ?? ();
                         returnType = sym.returnType;
+                        sourceDocComment = sym.docComment;
                         break;
                     }
                 }
@@ -2206,17 +3701,55 @@ public class QLSServer {
                             && (sym.params ? sym.params.size() : 0) >= minimumParamCount) {
                         params = sym.params ?? ();
                         returnType = sym.returnType;
+                        sourceDocComment = sym.docComment;
                         break;
                     }
                 }
             }
         }
 
-        # metadata fallback for builtins
+        # the documentation of a callable in the source is in its doc comment
         *string methodDoc;
+        if (sourceDocComment) {
+            hash<auto> doc = QLSServer::parseDocComment(sourceDocComment);
+            methodDoc = doc.description;
+            hash<string, string> paramDocs = map {$1.name: $1.description}, doc.params;
+            params = map $1 + {"description": paramDocs{$1.name}}, params;
+        }
+
+        # metadata fallback for builtins
         if (!exists params && builtinMetadata) {
             *hash<auto> metaInfo;
-            if (isDotAccess && target) {
+            BuiltinSourceNameCheck isSourceName = bool sub (string name) {
+                return isSourceSymbolName(name);
+            };
+            # whether the callable was resolved with the builtin type of its receiver or its namespace
+            bool resolved = False;
+            if (isDotAccess && receiverCharacter >= 0 && builtinResolver) {
+                # methods of builtin types, resolved from the receiver expression, such as "now().format("
+                *list<hash<AstExpressionLink>> chain = doc.getExpressionChain({
+                    "line": line,
+                    "character": receiverCharacter,
+                });
+                *hash<BuiltinType> type = chain ? builtinResolver.resolve(chain, isSourceName).type : NOTHING;
+                if (type) {
+                    metaInfo = QLSServer::selectOverload(builtinResolver.getMethods(type, funcName),
+                        minimumParamCount);
+                    resolved = True;
+                }
+            } else if (isScopeAccess && builtinResolver) {
+                # functions in builtin namespaces, such as "Qore::printf("
+                metaInfo = QLSServer::selectOverload(builtinResolver.resolve((<AstExpressionLink>{
+                    "kind": "name",
+                    "name": target + "::" + funcName,
+                    "call": True,
+                    "range": {},
+                },), isSourceName).entries ?? (), minimumParamCount);
+                resolved = exists metaInfo;
+            }
+            if (resolved) {
+                # the callable was resolved with the builtin types
+            } else if (isDotAccess && target) {
                 # resolve type from scope symbols
                 *string typeName;
                 *list<auto> scopeSymbols2 = doc.findScopeSymbolsDetailed({
@@ -2312,6 +3845,16 @@ public class QLSServer {
                 ? (commaCount < paramInfos.size() ? commaCount : paramInfos.size() - 1)
                 : 0,
         });
+    }
+
+    #! Returns the first overload with at least the given number of parameters
+    private:internal static *hash<auto> selectOverload(list<hash<auto>> overloads, int minimumParamCount) {
+        foreach hash<auto> entry in (overloads) {
+            if ((entry.params ? entry.params.size() : 0) >= minimumParamCount) {
+                return entry;
+            }
+        }
+        return NOTHING;
     }
 
     #! Find a method in builtin metadata by class name and method name
@@ -2595,10 +4138,8 @@ public class QLSServer {
                         "uri": uri,
                         "name": sym.name,
                         "kind": sym.kind,
-                        "position": {
-                            "line": sym.location.range.start.line,
-                            "character": sym.location.range.start.character,
-                        },
+                        # the references of the symbol are found from its name
+                        "position": doc.getNamePosition(sym.name, sym.location.range),
                     },
                 };
             }
@@ -2628,8 +4169,10 @@ public class QLSServer {
             return make_jsonrpc_response(jsonRpcVer, request.id, lens);
         }
 
+        # count the references like textDocument/references, so the title matches the references shown
         Document doc = documents{uri};
-        *list<auto> refs = doc.findReferences(lens.data.position, False);
+        *list<auto> refs = findReferencesCrossDoc(doc, lens.data.position, False)
+            ?? doc.findReferences(lens.data.position, False);
         int refCount = refs ? refs.size() : 0;
 
         lens.command = {
@@ -2773,6 +4316,7 @@ public class QLSServer {
         list<auto> result = ();
 
         code<nothing(FileIndex)> scanIndex = sub (FileIndex index) {
+            checkCancelled();
             foreach hash<IndexedClass> cls in (index.getClasses()) {
                 # Check if this class inherits from targetName
                 if (cls.parents.contains(targetName)) {
@@ -2936,6 +4480,7 @@ public class QLSServer {
         if (symbolInfo.kind == ASTSymbolKind.Class) {
             # Find all subtypes
             foreach FileIndex index in (getAllIndexes()) {
+                checkCancelled();
                 foreach hash<IndexedClass> cls in (index.getClasses()) {
                     if (cls.parents.contains(symbolInfo.name)) {
                         result += index.getSymbol(cls.symbol).location;
@@ -2962,6 +4507,7 @@ public class QLSServer {
                 string methodName = symbolInfo.name;
 
                 foreach FileIndex index in (getAllIndexes()) {
+                    checkCancelled();
                     *Document d;
                     foreach hash<IndexedClass> cls in (index.getClasses()) {
                         if (!cls.parents.contains(enclosingClass)) {
@@ -3492,10 +5038,72 @@ public class QLSServer {
         }
 
         Document doc = documents{uri};
-        *list<auto> tokens = doc.semanticTokens();
+        list<int> data = encodeSemanticTokens(doc.semanticTokens());
+        return make_jsonrpc_response(jsonRpcVer, request.id, storeSemanticTokens(uri, data));
+    }
 
-        list<int> data = encodeSemanticTokens(tokens);
-        return make_jsonrpc_response(jsonRpcVer, request.id, {"data": data});
+    #! Stores the semantic tokens returned for a document, for later delta requests
+    /** @return an LSP \c SemanticTokens hash with \c resultId and \c data keys
+    */
+    private:internal hash<auto> storeSemanticTokens(string uri, list<int> data) {
+        hash<auto> result = {"resultId": string(++semanticTokensResultCount), "data": data};
+        semanticTokensResults{uri} = result;
+        return result;
+    }
+
+    #! "textDocument/semanticTokens/full/delta" method handler
+    /** Returns the changes to the semantic tokens since the result with the given ID, or all tokens if that result
+        is not the last one returned for the document.
+    */
+    private *string meth_td_semanticTokensDelta(hash<auto> request) {
+        if (!request.hasKey("params")) {
+            return ErrorResponse::invalidRequest(request, "required attribute 'params' is missing");
+        }
+        *string validation = ParamValidator::textDocumentIdentifier(request, request.params);
+        if (validation) {
+            return validation;
+        }
+        string uri = request.params.textDocument.uri;
+        if (ignoredUris{uri} || !exists documents{uri}) {
+            return make_jsonrpc_response(jsonRpcVer, request.id, {"data": ()});
+        }
+        list<int> data = encodeSemanticTokens(documents{uri}.semanticTokens());
+        *hash<auto> previous = semanticTokensResults{uri};
+        if (!previous || previous.resultId != request.params.previousResultId) {
+            return make_jsonrpc_response(jsonRpcVer, request.id, storeSemanticTokens(uri, data));
+        }
+        list<hash<auto>> edits = QLSServer::getSemanticTokensEdits(previous.data, data);
+        hash<auto> result = storeSemanticTokens(uri, data);
+        return make_jsonrpc_response(jsonRpcVer, request.id, {"resultId": result.resultId, "edits": edits});
+    }
+
+    #! Returns the LSP \c SemanticTokensEdit list that changes the old token data to the new data
+    /** The data between the common prefix and the common suffix is replaced by one edit.
+
+        @param oldData the old token data
+        @param newData the new token data
+
+        @return an empty list if the data is the same, otherwise one edit
+    */
+    static list<hash<auto>> getSemanticTokensEdits(list<int> oldData, list<int> newData) {
+        int prefix = 0;
+        while (prefix < oldData.size() && prefix < newData.size() && oldData[prefix] == newData[prefix]) {
+            ++prefix;
+        }
+        if (prefix == oldData.size() && prefix == newData.size()) {
+            return ();
+        }
+        int suffix = 0;
+        while (suffix < oldData.size() - prefix && suffix < newData.size() - prefix
+                && oldData[oldData.size() - 1 - suffix] == newData[newData.size() - 1 - suffix]) {
+            ++suffix;
+        }
+        int end = newData.size() - suffix;
+        return ({
+            "start": prefix,
+            "deleteCount": oldData.size() - prefix - suffix,
+            "data": end > prefix ? newData[prefix..end - 1] : (),
+        },);
     }
 
     #! "textDocument/semanticTokens/range" method handler
@@ -3589,7 +5197,7 @@ public class QLSServer {
             return make_jsonrpc_response(jsonRpcVer, request.id, ());
         }
 
-        list<auto> actions = ();
+        list<auto> actions = QLSServer::getQuickFixes(uri, request.params.context.diagnostics);
 
         # --- Sort imports ---
         *list<auto> sortAction = buildSortImportsAction(uri, text);
@@ -3604,6 +5212,75 @@ public class QLSServer {
         }
 
         return make_jsonrpc_response(jsonRpcVer, request.id, actions);
+    }
+
+    #! "textDocument/documentLink" method handler
+    /** Returns links for the files of the module and include directives of an open document.
+    */
+    private *string meth_td_documentLink(hash<auto> request) {
+        if (!request.hasKey("params")) {
+            return ErrorResponse::invalidRequest(request, "required attribute 'params' is missing");
+        }
+        *string validation = ParamValidator::textDocumentIdentifier(request, request.params);
+        if (validation) {
+            return validation;
+        }
+        string uri = request.params.textDocument.uri;
+        if (ignoredUris{uri} || !exists documents{uri} || uri !~ /^file:\//) {
+            return make_jsonrpc_response(jsonRpcVer, request.id, ());
+        }
+        *string text = documents{uri}.getText();
+        return make_jsonrpc_response(jsonRpcVer, request.id,
+            text ? DocumentLinks::getLinks(Document::getFilePath(uri), text) : ());
+    }
+
+    #! Returns quick fix code actions for the fixes of Qore diagnostics
+    /** @param uri the document URI
+        @param diagnostics the diagnostics in the code action request; Qore diagnostics have their fixes in
+        \c data
+
+        @return the quick fix code actions; machine-applicable fixes are preferred
+    */
+    static list<hash<auto>> getQuickFixes(string uri, *list<auto> diagnostics) {
+        list<hash<auto>> actions = ();
+        string path = Document::getFilePath(uri);
+        foreach auto diag in (diagnostics) {
+            if (diag.typeCode() != NT_HASH || diag.data.fixes.typeCode() != NT_LIST) {
+                continue;
+            }
+            foreach auto fix in (diag.data.fixes) {
+                if (fix.typeCode() != NT_HASH || !fix.edits) {
+                    continue;
+                }
+                # only edits in this document with known positions can be applied
+                list<hash<auto>> edits = ();
+                foreach auto edit in (fix.edits) {
+                    if (edit.typeCode() != NT_HASH || (exists edit.file && edit.file != path)
+                            || edit.startColumn < 0 || edit.endColumn < 0 || edit.startLine < 1) {
+                        edits = ();
+                        break;
+                    }
+                    push edits, {
+                        "range": {
+                            "start": {"line": edit.startLine - 1, "character": edit.startColumn},
+                            "end": {"line": edit.endLine - 1, "character": edit.endColumn},
+                        },
+                        "newText": edit.replacement,
+                    };
+                }
+                if (!edits) {
+                    continue;
+                }
+                push actions, {
+                    "title": fix.title,
+                    "kind": "quickfix",
+                    "diagnostics": (diag,),
+                    "isPreferred": fix.applicability == "machine-applicable",
+                    "edit": {"changes": {uri: edits}},
+                };
+            }
+        }
+        return actions;
     }
 
     #! Build a "Sort imports" code action if %requires directives are unsorted
@@ -3835,7 +5512,9 @@ public class QLSServer {
         }
         foreach hash<string, FileIndex> indexes in (getSearchIndexes()) {
             foreach FileIndex index in (indexes.iterator()) {
-                if (index.getUri() != uri && index.sourceContains(name)) {
+                checkCancelled();
+                # the identifier filter excludes most files without reading them
+                if (index.getUri() != uri && index.mayContainIdentifier(name) && index.sourceContains(name)) {
                     addIndexedDocument(\ret, index);
                 }
             }
@@ -3945,6 +5624,7 @@ public class QLSServer {
         list<string> declaringFiles = ();
         foreach hash<string, FileIndex> indexes in (searchIndexes) {
             foreach FileIndex index in (indexes.iterator()) {
+                checkCancelled();
                 string indexUri = index.getUri();
                 if (indexUri == uri) {
                     continue;
@@ -3968,6 +5648,7 @@ public class QLSServer {
             hash<string, Document> docs = base;
             foreach hash<string, FileIndex> indexes in (searchIndexes) {
                 foreach FileIndex index in (indexes.iterator()) {
+                    checkCancelled();
                     if (searchFiles{index.getUri()}) {
                         addIndexedDocument(\docs, index);
                     }
@@ -4004,6 +5685,7 @@ printf("%d files indexed, %d syntax trees cached\n", info.workspaceFiles, info.c
             "cachedTrees": treeCache.size(),
             "cachedTreeSourceSize": treeCache.getTotalSize(),
             "treeCacheSize": treeCache.getMaxSize(),
+            "pendingFiles": pendingWorkspaceFiles.size() + pendingStdFiles.size(),
         };
     }
 
@@ -4184,21 +5866,34 @@ class CSTCompletionProvider inherits QoreCodeCompletion::AbstractCompletionProvi
         hash<string, hash<auto>> metaClassByName;
         #! Single-char prefix index for fast lookup
         hash<string, list<string>> metaPrefixIndex;
+        #! Resolves the builtin types of receivers (may be NOTHING)
+        *BuiltinResolver builtinResolver;
+        #! Returns True for names declared in the source code, which are not builtin symbols
+        *BuiltinSourceNameCheck isSourceName;
     }
 
     constructor(Document doc, hash<auto> position,
             *hash<string, list<hash<auto>>> metaByName,
             *hash<string, hash<auto>> metaClassByName,
-            *hash<string, list<string>> metaPrefixIndex) {
+            *hash<string, list<string>> metaPrefixIndex,
+            *BuiltinResolver builtinResolver,
+            *BuiltinSourceNameCheck isSourceName) {
         self.doc = doc;
         self.position = position;
         self.metaByName = metaByName ?? {};
         self.metaClassByName = metaClassByName ?? {};
         self.metaPrefixIndex = metaPrefixIndex ?? {};
+        self.builtinResolver = builtinResolver;
+        self.isSourceName = isSourceName;
     }
 
     int getParseOptions() {
         return doc.getParseDirectiveOptions();
+    }
+
+    #! Returns the Markdown description of the doc comment of a symbol in the source, or NOTHING
+    private static *string getDocumentation(*string docComment) {
+        return docComment ? QLSServer::parseDocComment(docComment).description : NOTHING;
     }
 
     list<hash<QoreCodeCompletion::CompletionItem>> getVisibleSymbols(string prefix) {
@@ -4218,6 +5913,7 @@ class CSTCompletionProvider inherits QoreCodeCompletion::AbstractCompletionProvi
                     result += <QoreCodeCompletion::CompletionItem>{
                         "label": name,
                         "kind": kind,
+                        "documentation": CSTCompletionProvider::getDocumentation(sym.docComment),
                         "isCallable": callable,
                     };
                 }
@@ -4360,44 +6056,42 @@ class CSTCompletionProvider inherits QoreCodeCompletion::AbstractCompletionProvi
                     result += <QoreCodeCompletion::CompletionItem>{
                         "label": name,
                         "kind": kind,
+                        "documentation": CSTCompletionProvider::getDocumentation(sym.docComment),
                         "isCallable": callable,
                     };
                 }
             }
         }
 
-        # metadata fallback for builtin class members
-        if (!result.size() && metaClassByName{typeName}) {
-            hash<auto> ci = metaClassByName{typeName};
-            foreach hash<auto> m in (ci.instance_methods) {
-                string name = m.name;
-                if (name == "constructor" || name == "destructor" || name == "copy") {
-                    continue;
-                }
-                if (!seen{name}
-                        && QoreCodeCompletion::CompletionEngine::matchesPrefix(name, prefix)) {
-                    seen{name} = True;
-                    result += <QoreCodeCompletion::CompletionItem>{
-                        "label": name,
-                        "kind": "method",
-                        "isCallable": True,
-                    };
+        # members of builtin types, including inherited members, the methods of the pseudo-classes of basic types
+        # and the members of typed hashes; the receiver is resolved from the expression before the "." so calls such
+        # as "now()." are also completed
+        if (!result.size() && builtinResolver) {
+            *hash<BuiltinType> type;
+            if (targetCharacter >= 0) {
+                *list<hash<AstExpressionLink>> chain = doc.getExpressionChain({
+                    "line": position.line,
+                    "character": targetCharacter,
+                });
+                if (chain) {
+                    type = builtinResolver.resolve(chain, isSourceName).type;
                 }
             }
-            # also add public members
-            foreach hash<auto> m in (ci.members) {
-                if (m.access != "public") {
-                    continue;
-                }
-                string name = m.name;
-                if (!seen{name}
-                        && QoreCodeCompletion::CompletionEngine::matchesPrefix(name, prefix)) {
-                    seen{name} = True;
-                    result += <QoreCodeCompletion::CompletionItem>{
-                        "label": name,
-                        "kind": "member",
-                        "isCallable": False,
-                    };
+            if (!type) {
+                type = builtinResolver.getType(typeName, isSourceName);
+            }
+            if (type) {
+                foreach hash<auto> entry in (builtinResolver.getInstanceMembers(type)) {
+                    if (QoreCodeCompletion::CompletionEngine::matchesPrefix(entry.name, prefix)) {
+                        bool method = entry.symbol_type != "member";
+                        result += <QoreCodeCompletion::CompletionItem>{
+                            "label": entry.name,
+                            "kind": method ? "method" : "member",
+                            "detail": entry.signature,
+                            "documentation": entry.description,
+                            "isCallable": method,
+                        };
+                    }
                 }
             }
         }
@@ -4425,13 +6119,36 @@ class CSTCompletionProvider inherits QoreCodeCompletion::AbstractCompletionProvi
                     result += <QoreCodeCompletion::CompletionItem>{
                         "label": name,
                         "kind": kind,
+                        "documentation": CSTCompletionProvider::getDocumentation(sym.docComment),
                         "isCallable": callable,
                     };
                 }
             }
         }
 
-        # metadata fallback for builtin class static members / namespace members
+        # members of builtin namespaces, such as "Qore::Thread::"
+        if (!result.size() && builtinResolver) {
+            *hash<BuiltinType> type = builtinResolver.resolve((<AstExpressionLink>{
+                "kind": "name",
+                "name": target,
+                "range": {},
+            },), isSourceName).type;
+            if (type.ns) {
+                foreach hash<auto> entry in (builtinResolver.getScopeMembers(type)) {
+                    if (QoreCodeCompletion::CompletionEngine::matchesPrefix(entry.name, prefix)) {
+                        result += <QoreCodeCompletion::CompletionItem>{
+                            "label": entry.name,
+                            "kind": entry.symbol_type,
+                            "detail": entry.signature,
+                            "documentation": entry.description,
+                            "isCallable": entry.symbol_type == "function",
+                        };
+                    }
+                }
+            }
+        }
+
+        # metadata fallback for builtin class static members
         if (!result.size() && metaClassByName{target}) {
             hash<auto> ci = metaClassByName{target};
             foreach hash<auto> m in (ci.static_methods) {

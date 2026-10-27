@@ -59,10 +59,16 @@ module QLS {
       notifications; call @ref QLS::QLSServer::main() "main()" to run the server loop
     - @ref QLS::Document "Document": document model wrapping the @c astparser CST; provides
       symbol search, diagnostics, completion, formatting, folding, and cross-document resolution
+    - @ref QLS::BuiltinResolver "BuiltinResolver": resolves expressions to builtin functions, classes, namespaces,
+      typed hashes and the methods of basic types (see @ref qls_builtins)
     - @ref QLS::FileIndex "FileIndex": compact symbol index of a source file that is not open in the editor
     - @ref QLS::DocumentCache "DocumentCache": size-limited cache of syntax trees parsed from indexed files
     - @ref QLS::Messenger "Messenger": JSON-RPC transport layer reading/writing LSP messages
       on stdin/stdout with @c Content-Length headers
+    - @ref QLS::LspConnection "LspConnection": LSP message connection on standard input and output or on any
+      pair of streams
+    - @ref QLS::DocumentLinks "DocumentLinks": finds the files of module and include directives
+    - @ref QLS::TextDiff "TextDiff": line differences and minimal text edits between two texts
     - @ref QLS::ErrorResponse "ErrorResponse": factory for LSP error responses
       (@c InvalidRequest, @c MethodNotFound, @c InternalError, etc.)
     - @ref QLS::Notification "Notification": factory for LSP notifications
@@ -76,30 +82,35 @@ module QLS {
 
     <b>Navigation</b>
     |!Feature|!LSP Method|!Description
-    |Hover|@c textDocument/hover|Shows type, documentation, and source info for the symbol under the cursor
+    |Hover|@c textDocument/hover|Shows type, documentation, and source info for the symbol under the cursor; declarations in the source show the documentation of their @c #! and @c /** doc comments, with parameters, return values, exceptions and code examples, also while the document has syntax errors, as do signature help and completion items; members accessed with @c . are resolved by the types of their receivers, including the methods of basic types and the members of typed hashes (see @ref qls_builtins)
     |Go to Definition|@c textDocument/definition|Jumps to the definition of a symbol
+    |Go to Declaration|@c textDocument/declaration|Jumps to the declaration of a symbol; declarations are definitions in %Qore
+    |Document Links|@c textDocument/documentLink|Links the module names and paths of @c %%requires, @c %%try-module and @c %%include directives to their source files, resolving module names like %Qore with the document's module path directives, @c QORE_MODULE_DIR and the library module path
     |Go to Type Definition|@c textDocument/typeDefinition|Jumps to the type definition of a symbol
     |Go to Implementation|@c textDocument/implementation|Jumps to the implementation of an abstract method or interface
     |Find References|@c textDocument/references|Finds all references to a symbol across open and workspace documents
 
     <b>Code Intelligence</b>
     |!Feature|!LSP Method|!Description
-    |Code Completion|@c textDocument/completion|Context-aware completions with trigger characters @c . (member access), @c : (namespace/static), and normal identifier completion; uses @ref qorecodecompletionintro "QoreCodeCompletion"
-    |Signature Help|@c textDocument/signatureHelp|Function/method parameter hints with trigger characters @c ( and @c ,
+    |Code Completion|@c textDocument/completion|Context-aware completions with trigger characters @c . (member access), @c : (namespace/static), and normal identifier completion; uses @ref qorecodecompletionintro "QoreCodeCompletion"; callables are inserted as snippets with the cursor between the parentheses, VS Code clients are asked to show parameter hints and further suggestions after callables and namespaces, and documentation is Markdown when the client supports it; the members of builtin classes include inherited members, and the receivers of @c . can be calls such as @c now() (see @ref qls_builtins)
+    |Signature Help|@c textDocument/signatureHelp|Function/method parameter hints with trigger characters @c ( and @c ,, including the functions of builtin namespaces and the methods of builtin types
     |Inlay Hints|@c textDocument/inlayHint|Shows parameter names at call sites as inline hints
-    |Semantic Tokens|@c textDocument/semanticTokens/full and @c .../range|Full semantic syntax highlighting with node-level classification
+    |Semantic Tokens|@c textDocument/semanticTokens/full, @c .../full/delta and @c .../range|Full semantic syntax highlighting with node-level classification
     |Document Highlight|@c textDocument/documentHighlight|Highlights all occurrences of the symbol under the cursor
+    |Linked Editing|@c textDocument/linkedEditingRange|Edits the occurrences of a local variable or parameter together; occurrences of variables with the same name in other functions are not included
+    |Inline Values|@c textDocument/inlineValue|Shows the values of the local variables and parameters of the function where the debugger stopped, in the visible lines up to the stopped line
 
     <b>Refactoring</b>
     |!Feature|!LSP Method|!Description
     |Rename|@c textDocument/rename (with @c textDocument/prepareRename)|Renames a symbol across all documents in the workspace
+    |File Rename|@c workspace/willRenameFiles|Updates the @c %%include and module path directives that refer to renamed or moved %Qore files, and the relative paths of moved files; relative, @c ${SCRIPT_DIR} and absolute paths keep their form (paths use @c / as the separator)
     |Code Actions|@c textDocument/codeAction|Quick fixes: sort imports, add @c %modern directive
 
     <b>Code Structure</b>
     |!Feature|!LSP Method|!Description
     |Document Symbols|@c textDocument/documentSymbol|Hierarchical outline of all symbols in a document
     |Workspace Symbols|@c workspace/symbol|Search for symbols across all workspace files
-    |Folding Ranges|@c textDocument/foldingRange|Code folding for declarations, blocks, and multi-line comments
+    |Folding Ranges|@c textDocument/foldingRange|Code folding for declarations, blocks, closures, multi-line hash and list literals, and multi-line comments
     |Selection Range|@c textDocument/selectionRange|Expanding selection based on syntactic structure
 
     <b>Hierarchy</b>
@@ -110,9 +121,10 @@ module QLS {
     <b>Formatting and Display</b>
     |!Feature|!LSP Method|!Description
     |Document Formatting|@c textDocument/formatting|Whole-document formatting via @ref qorecodeformatintro "QoreCodeFormat"
+    |Range Formatting|@c textDocument/rangeFormatting|Formats the selected lines: the whole document is formatted, as the formatter needs the complete syntax tree, and only the changed lines that overlap the selection are returned
     |On-Type Formatting|@c textDocument/onTypeFormatting|Auto-indent on Enter, auto-dedent on @c }
-    |Code Lens|@c textDocument/codeLens|Shows reference counts above declarations
-    |Diagnostics|@c textDocument/publishDiagnostics|Reports parse errors as diagnostics
+    |Code Lens|@c textDocument/codeLens|Shows reference counts across open and workspace documents above declarations; the lenses run the \c qls.showReferences client command with the document URI and the position of the declared name
+    |Diagnostics|@c textDocument/publishDiagnostics, @c textDocument/diagnostic|Reports Qore parse errors and warnings for standalone scripts and syntax errors for other files (see @ref qls_diagnostics)
 
     @section qlsusage Usage
 
@@ -155,8 +167,9 @@ server.main();
     - <b>Open documents</b> (@c documents): files currently open in the editor, updated on
       every @c textDocument/didChange notification; open documents keep their syntax trees
     - <b>Workspace index</b> (@c workspaceIndex): Qore and Qorus source files with extensions
-      listed in @ref QLS::Files::QORE_EXTENSIONS, discovered in the workspace root and indexed on
-      initialization
+      listed in @ref QLS::Files::QORE_EXTENSIONS, discovered in all workspace folders and indexed on
+      initialization; folders added to or removed from the workspace
+      (@c workspace/didChangeWorkspaceFolders) are indexed or removed
     - <b>Standard module index</b> (@c stdModuleIndex): %Qore standard library modules, indexed from
       the module path when a request first needs them
 
@@ -173,7 +186,10 @@ server.main();
 
     When a request needs the syntax tree of an indexed file, only the files that can contain the
     result are parsed:
-    - references, rename and incoming calls: the files whose source contains the identifier
+    - references, rename, code lenses and incoming calls: the files whose source contains the identifier;
+      each index has a filter of the identifiers in the file
+      (@ref astparser::AstTree::getIdentifierFilter() "AstTree::getIdentifierFilter()"), so most files are
+      excluded without being read
     - definitions: the files that declare classes on the inheritance path from a class used in
       the document to a class with a member of that name, and the files that declare the
       identifier, in batches and in the original search order
@@ -193,6 +209,8 @@ server.main();
     |@c excludeDirs|list of strings|shell-style glob patterns (@c * and @c ?) for subdirectory names that are not searched; replaces @ref QLS::Files::DefaultExcludeDirs
     |@c maxIndexFileSize|int|files larger than this many bytes are not indexed; @c 0 means no limit (default: @ref QLS::Files::DefaultMaxIndexFileSize)
     |@c treeCacheSize|int|syntax trees of indexed files are cached up to this many bytes of source; @c 0 disables the cache (default: @ref QLS::DefaultTreeCacheSize)
+    |@c diagnostics|string|@c "qore" (the default) to check standalone scripts with the %Qore parser, or @c "syntax" to only report syntax errors (see @ref qls_diagnostics)
+    |@c qoreExecutable|string|the %Qore executable used to check scripts; by default the interpreter running the server
 
     For example:
     @code{.json}
@@ -206,6 +224,78 @@ server.main();
     @endcode
 
     Options with invalid values are logged and ignored.
+
+    @subsection qls_loop Server Loop
+
+    @ref QLS::QLSServer::main() "QLSServer::main()" reads messages in a background thread, so that
+    @c $/cancelRequest notifications are seen while a request is processed.  The workspace is indexed after the
+    client's @c initialized notification, one file at a time while no message is waiting, so requests are answered
+    during indexing with the files indexed so far:
+    - clients that support work done progress (@c window.workDoneProgress) are asked to create a progress token
+      and get @c begin, @c report and @c end notifications for the workspace files
+    - standard module files are indexed after the workspace files, so the first lookup in a standard module does
+      not have to wait for them
+    - a cancelled request is answered with the @c RequestCancelled error, before it is started or at the next file
+      that it would search
+    - errors in request handlers are answered with the request ID, invalid JSON with a @c ParseError response, and
+      responses from the client to requests sent by the server are not answered
+
+    Applications that call @ref QLS::QLSServer::handleRequest() "handleRequest()" themselves can use the same
+    behavior: enable it with @ref QLS::QLSServer::setBackgroundIndexing() "setBackgroundIndexing()", call
+    @ref QLS::QLSServer::indexPendingFile() "indexPendingFile()" while no message is waiting, send the messages
+    returned by @ref QLS::QLSServer::takeQueuedMessages() "takeQueuedMessages()", and report request IDs with
+    @ref QLS::QLSServer::registerRequest() "registerRequest()" and
+    @ref QLS::QLSServer::cancelRequest() "cancelRequest()".  To run the server on other streams, pass an
+    @ref QLS::LspConnection "LspConnection" to @ref QLS::QLSServer::main() "main()".
+
+    @subsection qls_diagnostics Diagnostics
+
+    Standalone scripts (@c .q, @c .qr and @c .qtest files, and files without an extension that start with a
+    @c qore @c "#!" line) are checked with the %Qore parser when they are opened and when they are saved:
+    <tt>qore --diag-format=json -W</tt> parses the file in a separate process, so the modules that the script
+    requires are loaded there and not in the server.  The diagnostics include type errors, unresolved symbols,
+    errors in required modules (at their @c %%requires directive) and warnings, and are shown while the document has
+    not changed since it was checked; after a change, the syntax errors of the syntax tree are shown until the
+    document is saved again.  A script is only checked when the editor text is the same as the file.
+
+    Module, class and Qorus files are parts of a larger program, so only their syntax errors are reported.
+
+    The fixes of %Qore diagnostics are offered as @c quickfix code actions; machine-applicable fixes are
+    preferred.
+
+    Clients that support pull diagnostics and diagnostic refresh requests pull the same diagnostics with
+    @c textDocument/diagnostic and are asked to pull them again after a document is saved and checked; other
+    clients get them with @c textDocument/publishDiagnostics notifications.
+
+    @subsection qls_sync Document Synchronization and Symbols
+
+    Open documents are synchronized incrementally (@c TextDocumentSyncKind.Incremental): clients send only the
+    changed ranges, with positions in UTF-16 code units as defined by LSP.  Save notifications are requested.
+
+    @c textDocument/documentSymbol returns a tree of @c DocumentSymbol objects when the client supports
+    hierarchical document symbols: symbols are nested in their namespaces and classes, named without prefixes,
+    and their @c selectionRange is the declared name; local variables of functions and methods are not included.
+    Clients without this capability, and requests with the @c retType parameter used by the VS Code extension
+    API, get a flat list of @c SymbolInformation objects with qualified names.
+
+    @subsection qls_builtins Builtin Symbols
+
+    Hover, completion and signature help cover the builtin API of %Qore: its functions, classes, constants,
+    hashdecls, enums and namespaces, which are extracted with the @c reflection module and documented with the
+    qpp metadata installed with %Qore, and the pseudo-classes of the basic types, which are only in the qpp
+    metadata: the methods of @c \<string\> can be called on strings, for example, and the methods of @c \<value\> on
+    all values.
+
+    Members accessed with @c . are resolved by the types of their receivers, which
+    @ref astparser::AstTreeSearcher::getExpressionChain() returns as chains of variables, calls and members; in
+    @code{.py}
+string text = now().format("YYYY-MM-DD") + ": " + hstat(path).size;
+    @endcode
+    @c format is the method of dates, as @c now() returns a date, and @c size is the member of the
+    @c StatInfo hashdecl that @c hstat() returns.  The members of a builtin class include the members of its
+    parent classes and the methods of the @c \<object\> and @c \<value\> pseudo-classes, and typed hashes have the
+    methods of the @c \<hash\> pseudo-class.  Names declared in the open documents or the workspace, such as a
+    function named like a builtin function, are resolved as source symbols instead of builtin symbols.
 
     @section qlsrelnotes Release Notes
 

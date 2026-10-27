@@ -28,6 +28,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/astparser"
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires json
 %requires QoreApiMetadata
 
 %exec-class QoreApiMetadataTest
@@ -123,6 +124,9 @@ class QoreApiMetadataTest inherits QUnit::Test {
         addTestCase("doxygen: all text fields converted", \testDoxygenAllFieldsConverted());
         addTestCase("doc comment deferred past namespaces", \testDocCommentDeferredPastNamespaces());
         addTestCase("doc comment not deferred across content", \testDocCommentNotDeferredAcrossContent());
+        addTestCase("merger: pseudo-classes from qpp metadata", \testPseudoClasses());
+        addTestCase("doc comment: code examples in descriptions", \testCodeExamplesInDescriptions());
+        addTestCase("doxygen: @ref punctuation and code blocks", \testRefPunctuation());
         set_return_value(main());
     }
 
@@ -354,10 +358,9 @@ class QoreApiMetadataTest inherits QUnit::Test {
             "    @endcode\n"
             "*/";
         hash<auto> result = QoreApiMetadata::DocCommentParser::parse(comment);
-        assertEq("Description.", result.description);
-        assertEq(1, result.examples.size());
-        assertRegex("int x = 1;", result.examples[0]);
-        assertRegex("printf", result.examples[0]);
+        # the example stays in place in the description as a fenced code block
+        assertEq("Description.\n\n```qore\nint x = 1;\nprintf(\"%d\\n\", x);\n```", result.description);
+        assertEq(("int x = 1;\nprintf(\"%d\\n\", x);",), result.examples);
     }
 
     testContinuationLines() {
@@ -2247,5 +2250,136 @@ class QoreApiMetadataTest inherits QUnit::Test {
         assertRegex("`warning`", r.warnings[0]);
         assertRegex("`newFunc`", r.deprecated);
         assertRegex("`OtherClass`", r.see_also[0]);
+    }
+
+    testPseudoClasses() {
+        # qpp metadata as generated for lib/Pseudo_QC_String.qpp, with a regular class that is not a pseudo-class
+        hash<auto> meta = {
+            "schema_version": "1.1",
+            "source_file": "Pseudo_QC_String.qpp",
+            "classes": (
+                {
+                    "name": "<string>",
+                    "description": "//! Methods in this pseudo-class can be executed on strings\n/***/\n",
+                    "parents": ("<value>",),
+                    "is_final": False,
+                    "instance_methods": (
+                        {
+                            "name": "substr",
+                            "signature": "*string <string>::substr(softint start, softint len = -1) const",
+                            "return_type": "*string",
+                            "description": "//! Returns a substring\n/** @param start the offset\n"
+                                "    @param len the length\n\n    @return the substring\n */\n",
+                            "params": (
+                                {"name": "start", "type_name": "softint"},
+                                {"name": "len", "type_name": "softint", "default_value": "-1"},
+                            ),
+                            "named_callable": True,
+                            "named_parameters": ("start", "len"),
+                            "access": "public",
+                            "is_static": False,
+                            "is_const_method": True,
+                        },
+                    ),
+                    "static_methods": (),
+                },
+                {
+                    "name": "File",
+                    "namespace_path": "Qore",
+                    "instance_methods": (),
+                },
+            ),
+        };
+        string dir = sprintf("%s/qore-api-metadata-%d", ENV.TMPDIR ?? "/tmp", getpid());
+        mkdir(dir);
+        on_exit {
+            unlink(dir + "/Pseudo_QC_String.meta.json");
+            rmdir(dir);
+        }
+        string path = dir + "/Pseudo_QC_String.meta.json";
+        {
+            File f();
+            f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(make_json(meta));
+        }
+        hash<string, hash<auto>> doc_index = QoreApiMetadata::QppDocIndex::buildFromMetaFiles((path,));
+
+        list<hash<QoreApiMetadata::ClassInfo>> classes =
+            QoreApiMetadata::SymbolMerger::extractPseudoClasses(doc_index);
+        # regular classes are extracted by reflection, not as pseudo-classes
+        assertEq(("<string>",), (map $1.name, classes));
+        hash<QoreApiMetadata::ClassInfo> ci = classes[0];
+        assertEq("<string>", ci.full_name);
+        assertEq(("<value>",), ci.parents);
+        assertEq("Methods in this pseudo-class can be executed on strings", trim(ci.description));
+
+        hash<QoreApiMetadata::MethodInfo> mi = ci.instance_methods[0];
+        assertEq("substr", mi.name);
+        assertEq("<string>::substr", mi.full_name);
+        assertEq("*string", mi.return_type);
+        assertTrue(mi.is_const_method);
+        assertTrue(mi.named_callable);
+        assertEq(("start", "len"), mi.named_parameters);
+        assertEq(("start", "len"), (map $1.name, mi.params));
+        assertEq(("softint", "softint"), (map $1.type_name, mi.params));
+        assertNothing(mi.params[0].default_value);
+        assertEq("-1", mi.params[1].default_value);
+        # the documentation is parsed from the doc comment
+        assertEq("Returns a substring", trim(mi.description));
+        assertEq("the offset", trim(mi.params[0].description));
+        assertEq("the substring", trim(mi.return_description));
+
+        # an index without pseudo-classes has none
+        assertEq((), QoreApiMetadata::SymbolMerger::extractPseudoClasses({}));
+    }
+
+    testCodeExamplesInDescriptions() {
+        hash<auto> result = QoreApiMetadata::DocCommentParser::parse("#! Processes an invoice\n"
+            "/** Validates the @ref Invoice and posts it.\n"
+            "\n"
+            "    @param inv the invoice\n"
+            "    @param dry_run if @ref True, nothing is posted\n"
+            "\n"
+            "    @par Example:\n"
+            "    @code{.py}\n"
+            "int n = process(inv);\n"
+            "if (n) {\n"
+            "    printf(\"%d lines: $1\\n\", n);\n"
+            "}\n"
+            "    @endcode\n"
+            "    See @ref Qore::Thread::Mutex::lock().\n"
+            "*/");
+        # the #! line and the block comment are paragraphs; the example keeps its indentation and its text, and
+        # punctuation after a reference is not part of the reference
+        assertEq("Processes an invoice\n\n"
+            "Validates the `Invoice` and posts it.\n\n"
+            "**Example:**\n\n"
+            "```qore\n"
+            "int n = process(inv);\n"
+            "if (n) {\n"
+            "    printf(\"%d lines: $1\\n\", n);\n"
+            "}\n"
+            "```\n\n"
+            "See `Qore::Thread::Mutex::lock()`.", result.description);
+        assertEq("if `True`, nothing is posted", result.params.dry_run);
+
+        # examples in indented block comments without decorations lose the indentation of the comment
+        result = QoreApiMetadata::DocCommentParser::parse("    /** Example:\n"
+            "        @code{.py}\n"
+            "        if (x) {\n"
+            "            y();\n"
+            "        }\n"
+            "        @endcode\n"
+            "    */");
+        assertEq(("if (x) {\n    y();\n}",), result.examples);
+    }
+
+    testRefPunctuation() {
+        assertEq("`True`, `False`. `x`", QoreApiMetadata::DoxygenToMarkdown::convert("@ref True, @ref False. @ref x"));
+        assertEq("see `Foo::bar()`; `Baz`!", QoreApiMetadata::DoxygenToMarkdown::convert(
+            "see @ref Foo::bar(); @ref Baz!"));
+        # code blocks are restored as they are
+        assertEq("```qore\nprintf(\"$1\\n\");\n```", QoreApiMetadata::DoxygenToMarkdown::convert(
+            "```qore\nprintf(\"$1\\n\");\n```"));
     }
 }

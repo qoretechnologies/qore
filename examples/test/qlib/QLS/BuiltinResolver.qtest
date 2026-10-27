@@ -1,0 +1,502 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  BuiltinResolver.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires astparser
+%requires QLS
+
+%exec-class BuiltinResolverTest
+
+#! Tests the resolution of expressions with builtin metadata, independent of the installed metadata
+class BuiltinResolverTest inherits QUnit::Test {
+    private {
+        #! the root namespace of the metadata
+        hash<auto> root;
+
+        #! the pseudo-classes of the basic types
+        list<hash<auto>> pseudoClasses;
+
+        #! the resolver of the metadata
+        QLS::BuiltinResolver resolver;
+    }
+
+    constructor() : Test("BuiltinResolver", "1.0") {
+        root = BuiltinResolverTest::makeRootNamespace();
+        pseudoClasses = BuiltinResolverTest::makePseudoClasses();
+        hash<string, list<hash<auto>>> metaByName = {};
+        hash<string, hash<auto>> metaClassByName = {};
+        BuiltinResolverTest::index(root, \metaByName, \metaClassByName);
+        resolver = new QLS::BuiltinResolver(metaByName, metaClassByName, pseudoClasses, root);
+
+        addTestCase("types of type names", \testTypes());
+        addTestCase("methods of basic types", \testBasicTypeMethods());
+        addTestCase("functions and their return types", \testFunctions());
+        addTestCase("namespaces and qualified names", \testNamespaces());
+        addTestCase("class hierarchies", \testClassHierarchies());
+        addTestCase("typed hashes", \testTypedHashes());
+        addTestCase("unresolved chains", \testUnresolved());
+        addTestCase("names declared in the source", \testSourceNames());
+        addTestCase("instance members", \testInstanceMembers());
+        addTestCase("scope members", \testScopeMembers());
+        addTestCase("method overloads", \testMethods());
+
+        set_return_value(main());
+    }
+
+    testTypes() {
+        assertEq("<string>", resolver.getType("string").cls.name);
+        assertEq("<string>", resolver.getType("*softstring").cls.name);
+        assertEq("<list>", resolver.getType("list<int>").cls.name);
+        assertEq("<hash>", resolver.getType("hash<auto>").cls.name);
+        assertEq("<hash>", resolver.getType("hash<string, int>").cls.name);
+        assertEq("<hash>", resolver.getType("hash").cls.name);
+        assertEq("StatInfo", resolver.getType("*hash<StatInfo>").hashDecl.name);
+        assertEq("StatInfo", resolver.getType("hash<Qore::StatInfo>").hashDecl.name);
+        assertNothing(resolver.getType("hash<UnknownHash>"));
+        assertEq("Qore::File", resolver.getType("File").cls.full_name);
+        assertEq("Qore::Thread::Mutex", resolver.getType("Qore::Thread::Mutex").cls.full_name);
+        assertEq("Qore::Thread::Mutex", resolver.getType("Thread::Mutex").cls.full_name);
+        assertEq("Qore::Thread::Mutex", resolver.getType("::Qore::Thread::Mutex").cls.full_name);
+        # generic type arguments do not change the members of a class
+        assertEq("Qore::Thread::Mutex", resolver.getType("Mutex<int>").cls.full_name);
+        assertNothing(resolver.getType("auto"));
+        assertNothing(resolver.getType("UnknownClass"));
+        assertNothing(resolver.getType(NOTHING));
+        # basic types without a pseudo-class in the metadata
+        assertNothing(resolver.getType("int"));
+    }
+
+    testBasicTypeMethods() {
+        hash<auto> r = resolver.resolve((name("s", "string"), member("size", True)));
+        assertEq(("<string>::size",), (map $1.full_name, r.entries));
+        assertEq("method", r.entries[0].symbol_type);
+        assertEq("<string>", r.entries[0].class_name);
+
+        # the methods of <value> can be called on all values
+        r = resolver.resolve((name("s", "*softstring"), member("typeCode", True)));
+        assertEq(("<value>::typeCode",), (map $1.full_name, r.entries));
+
+        # literals
+        r = resolver.resolve((type("list"), member("first", True)));
+        assertEq(("<list>::first",), (map $1.full_name, r.entries));
+
+        # the type of the value of a method is its return type
+        r = resolver.resolve((name("s", "string"), member("substr", True)));
+        assertEq("<string>", r.type.cls.name);
+        r = resolver.resolve((name("s", "string"), member("substr", True), member("size", True)));
+        assertEq(("<string>::size",), (map $1.full_name, r.entries));
+    }
+
+    testFunctions() {
+        hash<auto> r = resolver.resolve((name("now", NOTHING, True),));
+        assertEq(("Qore::now",), (map $1.full_name, r.entries));
+        assertEq("function", r.entries[0].symbol_type);
+        assertEq("<date>", r.type.cls.name);
+
+        r = resolver.resolve((name("now", NOTHING, True), member("format", True)));
+        assertEq(("<date>::format",), (map $1.full_name, r.entries));
+        assertEq("<string>", r.type.cls.name);
+
+        # a function name that is not called is resolved to the function
+        r = resolver.resolve((name("now"),));
+        assertEq(("Qore::now",), (map $1.full_name, r.entries));
+        assertNothing(r.type);
+
+        # a method name is not a function name
+        assertNothing(resolver.resolve((name("open2", NOTHING, True),)));
+    }
+
+    testNamespaces() {
+        hash<auto> r = resolver.resolve((name("Qore::printf", NOTHING, True),));
+        assertEq(("Qore::printf",), (map $1.full_name, r.entries));
+        r = resolver.resolve((name("Thread::gettid", NOTHING, True),));
+        assertEq(("Qore::Thread::gettid",), (map $1.full_name, r.entries));
+        r = resolver.resolve((name("::Qore::Thread::gettid", NOTHING, True),));
+        assertEq(("Qore::Thread::gettid",), (map $1.full_name, r.entries));
+        # a function in another namespace
+        assertNothing(resolver.resolve((name("Thread::printf", NOTHING, True),)));
+
+        r = resolver.resolve((name("Qore::Thread"),));
+        assertEq(("namespace",), (map $1.symbol_type, r.entries));
+        assertEq("namespace Qore::Thread", r.entries[0].signature);
+        assertEq("Threading classes", r.entries[0].description);
+        assertEq("Qore::Thread", r.type.ns.full_name);
+        r = resolver.resolve((name("Thread"),));
+        assertEq("Qore::Thread", r.type.ns.full_name);
+        r = resolver.resolve((name("Qore"),));
+        assertEq("Qore", r.type.ns.full_name);
+
+        # a class, a constant and a hashdecl
+        r = resolver.resolve((name("Qore::Thread::Mutex"),));
+        assertEq(("class",), (map $1.symbol_type, r.entries));
+        assertEq("Qore::Thread::Mutex", r.type.cls.full_name);
+        r = resolver.resolve((name("O_CREAT"),));
+        assertEq(("constant",), (map $1.symbol_type, r.entries));
+        r = resolver.resolve((name("ENV"), member("keys", True)));
+        assertEq(("<hash>::keys",), (map $1.full_name, r.entries));
+        r = resolver.resolve((name("StatInfo"),));
+        assertEq(("hashdecl",), (map $1.symbol_type, r.entries));
+        assertEq("StatInfo", r.type.hashDecl.name);
+    }
+
+    testClassHierarchies() {
+        # a method of the class is found before the method of its parent class that it overrides
+        hash<auto> r = resolver.resolve((name("f", "File"), member("readLine", True)));
+        assertEq(("Qore::File::readLine",), (map $1.full_name, r.entries));
+        assertEq("File", r.entries[0].class_name);
+
+        # inherited methods and members
+        r = resolver.resolve((name("f", "File"), member("readTextFile", True)));
+        assertEq(("Qore::ReadOnlyFile::readTextFile",), (map $1.full_name, r.entries));
+        r = resolver.resolve((name("f", "File"), member("path")));
+        assertEq(("member",), (map $1.symbol_type, r.entries));
+        assertEq("string Qore::ReadOnlyFile::path", r.entries[0].signature);
+        assertEq("<string>", r.type.cls.name);
+
+        # objects have the methods of <object> and <value>
+        r = resolver.resolve((name("f", "File"), member("className", True)));
+        assertEq(("<object>::className",), (map $1.full_name, r.entries));
+        r = resolver.resolve((name("f", "File"), member("typeCode", True)));
+        assertEq(("<value>::typeCode",), (map $1.full_name, r.entries));
+
+        # a method that is not called, as in a call reference, has no value type
+        r = resolver.resolve((name("f", "File"), member("stat")));
+        assertEq(("Qore::File::stat",), (map $1.full_name, r.entries));
+        assertNothing(r.type);
+
+        r = resolver.resolve((type("Qore::Thread::Mutex"), member("lock", True)));
+        assertEq(("Qore::Thread::Mutex::lock",), (map $1.full_name, r.entries));
+    }
+
+    testTypedHashes() {
+        hash<auto> r = resolver.resolve((name("hstat", NOTHING, True), member("size")));
+        assertEq(("member",), (map $1.symbol_type, r.entries));
+        assertEq("int Qore::StatInfo::size", r.entries[0].signature);
+        assertEq("the size of the file in bytes", r.entries[0].description);
+
+        # typed hashes have the methods of <hash>
+        r = resolver.resolve((name("hstat", NOTHING, True), member("keys", True)));
+        assertEq(("<hash>::keys",), (map $1.full_name, r.entries));
+        r = resolver.resolve((name("si", "hash<StatInfo>"), member("mtime"), member("format", True)));
+        assertEq(("<date>::format",), (map $1.full_name, r.entries));
+    }
+
+    testUnresolved() {
+        # unknown members, receivers and types
+        assertNothing(resolver.resolve((name("f", "File"), member("nosuch", True))));
+        assertNothing(resolver.resolve((name("f", "File"), member("nosuch", True), member("size", True))));
+        assertNothing(resolver.resolve(({"kind": "unknown", "range": {}}, member("size", True))));
+        assertNothing(resolver.resolve((name("a", "auto"), member("size", True))));
+        assertNothing(resolver.resolve((name("nosuch", NOTHING, True),)));
+        # the result of calling a closure or call reference variable is unknown
+        assertNothing(resolver.resolve((name("c", "code", True),)));
+        # the members of namespaces are accessed with "::"
+        assertNothing(resolver.resolve((name("Qore::Thread"), member("gettid", True))));
+        # a member without a name, as for a string member
+        assertNothing(resolver.resolve((name("s", "string"), {"kind": "member", "range": {}})));
+        # a member link cannot start a chain
+        assertNothing(resolver.resolve((member("size", True),)));
+        assertNothing(resolver.resolve(()));
+    }
+
+    testSourceNames() {
+        QLS::BuiltinSourceNameCheck isSourceName = bool sub (string name) {
+            return name == "now" || name == "File" || name == "StatInfo";
+        };
+        # functions and types declared in the source are not builtin
+        assertNothing(resolver.resolve((name("now", NOTHING, True),), isSourceName));
+        assertNothing(resolver.resolve((name("Qore::now", NOTHING, True),), isSourceName));
+        assertNothing(resolver.resolve((name("f", "File"), member("readLine", True)), isSourceName));
+        assertNothing(resolver.getType("File", isSourceName));
+        assertNothing(resolver.getType("hash<StatInfo>", isSourceName));
+        # basic types and other names are builtin
+        assertEq("<string>", resolver.getType("string", isSourceName).cls.name);
+        hash<auto> r = resolver.resolve((name("hstat", NOTHING, True),), isSourceName);
+        assertEq(("Qore::hstat",), (map $1.full_name, r.entries));
+        # the types in builtin metadata are builtin types, also when the source declares types with the same names
+        r = resolver.resolve((name("hstat", NOTHING, True), member("size")), isSourceName);
+        assertEq("int Qore::StatInfo::size", r.entries[0].signature);
+        r = resolver.resolve((name("hstat", NOTHING, True), member("mtime"), member("format", True)),
+            isSourceName);
+        assertEq(("<date>::format",), (map $1.full_name, r.entries));
+        # but not the variables of types declared in the source
+        assertNothing(resolver.resolve((name("si", "hash<StatInfo>"), member("size")), isSourceName));
+    }
+
+    testInstanceMembers() {
+        hash<string, hash<auto>> members = map {$1.name: $1}, resolver.getInstanceMembers(resolver.getType("File"));
+        # the method of the class, not of its parent class
+        assertEq("File", members.readLine.class_name);
+        assertEq("ReadOnlyFile", members.readTextFile.class_name);
+        assertEq("method", members.open2.symbol_type);
+        assertEq("member", members.path.symbol_type);
+        assertEq("<object>", members.className.class_name);
+        assertEq("<value>", members.typeCode.class_name);
+        # special methods, private members and static methods are not accessed with "."
+        assertFalse(members.hasKey("constructor"));
+        assertFalse(members.hasKey("copy"));
+        assertFalse(members.hasKey("fd"));
+        assertFalse(members.hasKey("count"));
+
+        # a member of a typed hash is found before the method of <hash> with the same name
+        members = map {$1.name: $1}, resolver.getInstanceMembers(resolver.getType("hash<StatInfo>"));
+        assertEq("member", members.size.symbol_type);
+        assertEq("member", members.mtime.symbol_type);
+        assertEq("<hash>", members.keys.class_name);
+
+        list<string> names = sort(map $1.name, resolver.getInstanceMembers(resolver.getType("string")));
+        assertEq(("callp", "size", "substr", "typeCode"), names);
+    }
+
+    testScopeMembers() {
+        hash<string, hash<auto>> members = map {$1.name: $1},
+            resolver.getScopeMembers(resolver.resolve((name("Qore"),)).type);
+        assertEq("class", members.File.symbol_type);
+        assertEq("function", members.now.symbol_type);
+        assertEq("constant", members.O_CREAT.symbol_type);
+        assertEq("hashdecl", members.StatInfo.symbol_type);
+        assertEq("namespace", members.Thread.symbol_type);
+        assertEq("enum", members.Color.symbol_type);
+        # classes of child namespaces are members of the child namespaces
+        assertFalse(members.hasKey("Mutex"));
+
+        list<string> names = sort(map $1.name, resolver.getScopeMembers(resolver.getType("Qore::Thread::Mutex")));
+        assertEq(("MaxWaiters", "lock", "unlock"), names);
+
+        names = sort(map $1.name, resolver.getScopeMembers(resolver.resolve((name("Thread"),)).type));
+        assertEq(("Mutex", "gettid"), names);
+
+        # File::count is static
+        members = map {$1.name: $1}, resolver.getScopeMembers(resolver.getType("File"));
+        assertEq("static_method", members.count.symbol_type);
+        assertFalse(members.hasKey("constructor"));
+    }
+
+    testMethods() {
+        list<hash<auto>> overloads = resolver.getMethods(resolver.getType("string"), "substr");
+        assertEq((1, 2), (map $1.params.size(), overloads));
+        assertEq((), resolver.getMethods(resolver.getType("string"), "nosuch"));
+        assertEq((), resolver.getMethods(resolver.resolve((name("Thread"),)).type, "gettid"));
+        assertEq("Mutex", QLS::BuiltinResolver::getUnqualifiedName("Qore::Thread::Mutex"));
+        assertEq("Mutex", QLS::BuiltinResolver::getUnqualifiedName("Mutex"));
+    }
+
+    #! Returns a name link
+    private static hash<AstExpressionLink> name(string name, *string typeName, bool call = False) {
+        return <AstExpressionLink>{"kind": "name", "name": name, "typeName": typeName, "call": call, "range": {}};
+    }
+
+    #! Returns a member link
+    private static hash<AstExpressionLink> member(string name, bool call = False) {
+        return <AstExpressionLink>{"kind": "member", "name": name, "call": call, "range": {}};
+    }
+
+    #! Returns a type link
+    private static hash<AstExpressionLink> type(string typeName) {
+        return <AstExpressionLink>{"kind": "type", "typeName": typeName, "range": {}};
+    }
+
+    #! Returns the metadata of a method
+    private static hash<auto> method(string owner, string name, *string returnType, *list<hash<auto>> params,
+            bool isStatic = False) {
+        return {
+            "name": name,
+            "full_name": owner + "::" + name,
+            "signature": sprintf("%s %s::%s()", returnType ?? "nothing", owner, name),
+            "return_type": returnType,
+            "params": params ?? (),
+            "is_static": isStatic,
+        };
+    }
+
+    #! Returns the metadata of a function
+    private static hash<auto> function(string ns, string name, string returnType) {
+        return {
+            "name": name,
+            "full_name": ns + "::" + name,
+            "signature": sprintf("%s %s()", returnType, name),
+            "return_type": returnType,
+            "params": (),
+        };
+    }
+
+    #! Returns the metadata of the root namespace, as extracted by reflection
+    private static hash<auto> makeRootNamespace() {
+        hash<auto> readOnlyFile = {
+            "name": "ReadOnlyFile",
+            "full_name": "Qore::ReadOnlyFile",
+            "instance_methods": (
+                BuiltinResolverTest::method("Qore::ReadOnlyFile", "constructor"),
+                BuiltinResolverTest::method("Qore::ReadOnlyFile", "readLine", "*string"),
+                BuiltinResolverTest::method("Qore::ReadOnlyFile", "readTextFile", "string"),
+            ),
+            "members": (
+                {"name": "path", "type_name": "string", "access": "public", "is_static": False},
+                {"name": "fd", "type_name": "int", "access": "private", "is_static": False},
+            ),
+        };
+        hash<auto> file = {
+            "name": "File",
+            "full_name": "Qore::File",
+            "parents": ("ReadOnlyFile",),
+            "instance_methods": (
+                BuiltinResolverTest::method("Qore::File", "constructor"),
+                BuiltinResolverTest::method("Qore::File", "copy"),
+                BuiltinResolverTest::method("Qore::File", "readLine", "*string",
+                    ({"name": "incl_eol", "type_name": "bool"},)),
+                BuiltinResolverTest::method("Qore::File", "open2", "nothing",
+                    ({"name": "path", "type_name": "string"},)),
+                BuiltinResolverTest::method("Qore::File", "stat", "list<auto>"),
+            ),
+            "static_methods": (
+                BuiltinResolverTest::method("Qore::File", "count", "int", NOTHING, True),
+            ),
+        };
+        hash<auto> mutex = {
+            "name": "Mutex",
+            "full_name": "Qore::Thread::Mutex",
+            "instance_methods": (
+                BuiltinResolverTest::method("Qore::Thread::Mutex", "lock"),
+                BuiltinResolverTest::method("Qore::Thread::Mutex", "unlock"),
+            ),
+            "constants": (
+                {"name": "MaxWaiters", "full_name": "Qore::Thread::Mutex::MaxWaiters", "type_name": "int"},
+            ),
+        };
+        return {
+            "name": "Qore",
+            "full_name": "Qore",
+            "classes": (readOnlyFile, file),
+            "functions": (
+                BuiltinResolverTest::function("Qore", "now", "date"),
+                BuiltinResolverTest::function("Qore", "hstat", "*hash<StatInfo>"),
+                BuiltinResolverTest::function("Qore", "printf", "string"),
+            ),
+            "constants": (
+                {"name": "O_CREAT", "full_name": "Qore::O_CREAT", "type_name": "int"},
+                {"name": "ENV", "full_name": "Qore::ENV", "type_name": "hash<auto>"},
+            ),
+            "hashdecls": (
+                {
+                    "name": "StatInfo",
+                    "full_name": "Qore::StatInfo",
+                    "members": (
+                        {"name": "size", "type_name": "int", "access": "public", "is_static": False,
+                            "description": "the size of the file in bytes"},
+                        {"name": "mtime", "type_name": "date", "access": "public", "is_static": False},
+                    ),
+                },
+            ),
+            "enums": (
+                {"name": "Color", "full_name": "Qore::Color", "values": ()},
+            ),
+            "namespaces": (
+                {
+                    "name": "Thread",
+                    "full_name": "Qore::Thread",
+                    "description": "Threading classes",
+                    "classes": (mutex,),
+                    "functions": (BuiltinResolverTest::function("Qore::Thread", "gettid", "int"),),
+                },
+            ),
+        };
+    }
+
+    #! Returns the metadata of the pseudo-classes of the basic types, without <int>
+    private static list<hash<auto>> makePseudoClasses() {
+        return (
+            {
+                "name": "<value>",
+                "full_name": "<value>",
+                "instance_methods": (
+                    BuiltinResolverTest::method("<value>", "typeCode", "int"),
+                    BuiltinResolverTest::method("<value>", "callp", "bool"),
+                ),
+            },
+            {
+                "name": "<string>",
+                "full_name": "<string>",
+                "parents": ("<value>",),
+                "instance_methods": (
+                    BuiltinResolverTest::method("<string>", "size", "int"),
+                    BuiltinResolverTest::method("<string>", "substr", "*string",
+                        ({"name": "start", "type_name": "softint"},)),
+                    BuiltinResolverTest::method("<string>", "substr", "*string",
+                        ({"name": "start", "type_name": "softint"}, {"name": "len", "type_name": "softint"})),
+                ),
+            },
+            {
+                "name": "<date>",
+                "full_name": "<date>",
+                "parents": ("<value>",),
+                "instance_methods": (BuiltinResolverTest::method("<date>", "format", "string",
+                    ({"name": "format", "type_name": "string"},)),),
+            },
+            {
+                "name": "<list>",
+                "full_name": "<list>",
+                "parents": ("<value>",),
+                "instance_methods": (BuiltinResolverTest::method("<list>", "first", "auto"),),
+            },
+            {
+                "name": "<hash>",
+                "full_name": "<hash>",
+                "parents": ("<value>",),
+                "instance_methods": (
+                    BuiltinResolverTest::method("<hash>", "keys", "list<string>"),
+                    BuiltinResolverTest::method("<hash>", "size", "int"),
+                ),
+            },
+            {
+                "name": "<object>",
+                "full_name": "<object>",
+                "parents": ("<value>",),
+                "instance_methods": (BuiltinResolverTest::method("<object>", "className", "string"),),
+            },
+        );
+    }
+
+    #! Indexes the metadata by name, as QLSServer does
+    private static index(hash<auto> ns, reference<hash<string, list<hash<auto>>>> metaByName,
+            reference<hash<string, hash<auto>>> metaClassByName) {
+        code<nothing(hash<auto>, string)> add = sub (hash<auto> entry, string symbolType) {
+            metaByName{entry.name} += (entry + {"symbol_type": symbolType},);
+        };
+        foreach hash<auto> c in (ns.classes) {
+            add(c, "class");
+            metaClassByName{c.name} = c;
+            metaClassByName{c.full_name} = c;
+            map add($1 + {"class_name": c.name}, "method"), c.instance_methods;
+            map add($1 + {"class_name": c.name}, "static_method"), c.static_methods;
+        }
+        map add($1, "function"), ns.functions;
+        map add($1, "constant"), ns.constants;
+        map add($1, "hashdecl"), ns.hashdecls;
+        map add($1, "enum"), ns.enums;
+        map BuiltinResolverTest::index($1, \metaByName, \metaClassByName), ns.namespaces;
+    }
+}

@@ -1,0 +1,263 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class UntypedContainerArgsTest
+
+string sub list_int(list<int> x) {
+    return sprintf("%s %y", x.fullType(), x);
+}
+
+string sub hash_str(hash<string, string> x) {
+    return sprintf("%s %y", x.fullType(), x);
+}
+
+string sub list_float(list<float> x) {
+    return sprintf("%s %y", x.fullType(), x);
+}
+
+string sub nested_list(list<list<int>> x) {
+    return sprintf("%s %s %y", x.fullType(), x[0].fullType(), x);
+}
+
+string sub nested_hash(hash<string, list<string>> x) {
+    return sprintf("%s %s %y", x.fullType(), x.a.fullType(), x);
+}
+
+# overloads that the elements of an untyped container select between
+string sub by_elem(list<int> x) {
+    return "list<int>";
+}
+
+string sub by_elem(list<string> x) {
+    return "list<string>";
+}
+
+# an exact match of the elements ranks above a match that converts them
+string sub by_rank(list<float> x) {
+    return "list<float>";
+}
+
+string sub by_rank(list<int> x) {
+    return "list<int>";
+}
+
+string sub by_rank_rev(list<int> x) {
+    return "list<int>";
+}
+
+string sub by_rank_rev(list<float> x) {
+    return "list<float>";
+}
+
+class Base;
+class Derived inherits Base;
+
+string sub by_class(list<auto> x) {
+    return "list<auto>";
+}
+
+string sub by_class(list<Base> x) {
+    return "list<Base>";
+}
+
+string sub hash_by_class(hash<auto> x) {
+    return "hash<auto>";
+}
+
+string sub hash_by_class(hash<string, Base> x) {
+    return "hash<string, Base>";
+}
+
+string sub float_or_auto(list<auto> x) {
+    return "list<auto>";
+}
+
+string sub float_or_auto(list<float> x) {
+    return "list<float>";
+}
+
+string sub hash_rank(hash<string, float> x) {
+    return "hash<string, float>";
+}
+
+string sub hash_rank(hash<string, int> x) {
+    return "hash<string, int>";
+}
+
+# a parameter of the container's own type ranks above one that the elements match
+string sub by_auto(list<int> x) {
+    return "list<int>";
+}
+
+string sub by_auto(list<auto> x) {
+    return "list<auto>";
+}
+
+class Target {
+    public {
+        string ctor;
+    }
+
+    constructor(list<int> x) {
+        ctor = sprintf("%s %y", x.fullType(), x);
+    }
+
+    string m(list<string> x) {
+        return sprintf("%s %y", x.fullType(), x);
+    }
+
+    static string sm(hash<string, int> x) {
+        return sprintf("%s %y", x.fullType(), x);
+    }
+}
+
+#! Tests runtime variant matching of containers with no declared element type for typed container parameters
+/** Containers built at runtime without a declared element type, as by a language binding (ex: from a Python list),
+    are \c list<auto> and \c hash<auto>: a typed container parameter accepts them if every element matches the
+    element type, and converts them as an assignment does (issue #5541).
+*/
+class UntypedContainerArgsTest inherits QUnit::Test {
+    constructor() : QUnit::Test("UntypedContainerArgs", "1.0") {
+        addTestCase("functions", \functions());
+        addTestCase("methods and constructors", \methods());
+        addTestCase("call references and closures", \callRefs());
+        addTestCase("nested containers", \nested());
+        addTestCase("variant selection", \variantSelection());
+        addTestCase("typed container ranking", \typedRanking());
+        addTestCase("incompatible elements", \incompatible());
+        set_return_value(main());
+    }
+
+    functions() {
+        list<auto> l = UntypedContainerArgsTest::makeList((1, 2));
+        hash<auto> h = UntypedContainerArgsTest::makeHash({"Content-Type": "text/plain"});
+        assertEq("list<auto>", l.fullType());
+        assertEq("hash<auto>", h.fullType());
+
+        assertEq("list<int> [1, 2]", call_function("list_int", l));
+        assertEq("hash<string, string> {Content-Type: \"text/plain\"}", call_function("hash_str", h));
+        # the elements are converted to the element type
+        assertEq("list<float> [1.0, 2.0]", call_function("list_float", l));
+        # the argument is converted, not the caller's container
+        assertEq("list<auto>", l.fullType());
+    }
+
+    methods() {
+        list<auto> ls = UntypedContainerArgsTest::makeList(("a", "b"));
+        list<auto> li = UntypedContainerArgsTest::makeList((3,));
+        hash<auto> hi = UntypedContainerArgsTest::makeHash({"a": 1});
+
+        Target t = create_object("Target", li);
+        assertEq("list<int> [3]", t.ctor);
+        assertEq("list<string> [\"a\", \"b\"]", call_object_method(t, "m", ls));
+        assertEq("hash<string, int> {a: 1}", call_static_method("Target", "sm", hi));
+    }
+
+    callRefs() {
+        list<auto> l = UntypedContainerArgsTest::makeList((1, 2));
+        code ref = \list_int();
+        assertEq("list<int> [1, 2]", ref(l));
+        assertEq("list<int> [1, 2]", call_function_args(ref, (l,)));
+
+        code closure = string sub (list<int> x) { return x.fullType(); };
+        assertEq("list<int>", closure(l));
+
+        Target t(UntypedContainerArgsTest::makeList((1,)));
+        code mref = \t.m();
+        assertEq("list<string> [\"x\"]", mref(UntypedContainerArgsTest::makeList(("x",))));
+    }
+
+    nested() {
+        list<auto!> outer = ();
+        push outer, UntypedContainerArgsTest::makeList((1, 2));
+        push outer, UntypedContainerArgsTest::makeList((3,));
+        assertEq("list<list<int>> list<int> [[1, 2], [3]]", call_function("nested_list", outer));
+
+        hash<auto!> h = {};
+        h.a = UntypedContainerArgsTest::makeList(("x", "y"));
+        assertEq("hash<string, list<string>> list<string> {a: [\"x\", \"y\"]}", call_function("nested_hash", h));
+
+        # an incompatible element of a nested container
+        list<auto!> bad_outer = ();
+        push bad_outer, UntypedContainerArgsTest::makeList((1, "a"));
+        assertThrows("RUNTIME-OVERLOAD-ERROR", \call_function(), ("nested_list", bad_outer));
+        hash<auto!> bad_h = {};
+        bad_h.a = UntypedContainerArgsTest::makeList((1,));
+        bad_h.a[0] = {};
+        assertThrows("RUNTIME-OVERLOAD-ERROR", \call_function(), ("nested_hash", bad_h));
+    }
+
+    variantSelection() {
+        assertEq("list<int>", call_function("by_elem", UntypedContainerArgsTest::makeList((1, 2))));
+        assertEq("list<string>", call_function("by_elem", UntypedContainerArgsTest::makeList(("a",))));
+        assertEq("list<int>", call_function("by_rank", UntypedContainerArgsTest::makeList((1, 2))));
+        assertEq("list<float>", call_function("by_rank", UntypedContainerArgsTest::makeList((1.5,))));
+        assertEq("list<auto>", call_function("by_auto", UntypedContainerArgsTest::makeList((1, 2))));
+        assertEq("hash<string, int>", call_function("hash_rank", UntypedContainerArgsTest::makeHash({"a": 1})));
+        assertEq("hash<string, float>", call_function("hash_rank", UntypedContainerArgsTest::makeHash({"a": 1.5})));
+        # typed containers select the variants as before
+        assertEq("list<string>", call_function("by_elem", ("a",)));
+        list<float> lf = (1.5,);
+        assertEq("list<float>", call_function("by_rank", lf));
+    }
+
+    typedRanking() {
+        # a container of the parameter's element type ranks above one whose elements the parameter accepts with a
+        # conversion, whatever the order of the variants, as when the variant is selected when the call is parsed
+        list<int> li = (1, 2);
+        assertEq("list<int>", by_rank(li));
+        assertEq("list<int>", call_function("by_rank", li));
+        assertEq("list<int>", call_function("by_rank", (1, 2)));
+        assertEq("list<int>", call_function("by_rank_rev", li));
+        hash<string, int> hi = {"a": 1};
+        assertEq("hash<string, int>", call_function("hash_rank", hi));
+        hash<string, float> hf = {"a": 1.5};
+        assertEq("hash<string, float>", call_function("hash_rank", hf));
+
+        # elements of a subclass or that are converted rank above an auto container (issue #4419)
+        list<Derived> ld = (new Derived(),);
+        assertEq("list<Base>", call_function("by_class", ld));
+        hash<string, Derived> hd = {"a": new Derived()};
+        assertEq("hash<string, Base>", call_function("hash_by_class", hd));
+        assertEq("list<float>", call_function("float_or_auto", li));
+        # an auto container ranks below one of the element type
+        assertEq("list<int>", call_function("by_auto", li));
+    }
+
+    incompatible() {
+        assertThrows("RUNTIME-OVERLOAD-ERROR", \call_function(), ("list_int",
+            UntypedContainerArgsTest::makeList((1, "a"))));
+        assertThrows("RUNTIME-OVERLOAD-ERROR", \call_function(), ("hash_str",
+            UntypedContainerArgsTest::makeHash({"a": {}})));
+        assertThrows("RUNTIME-OVERLOAD-ERROR", \call_function(), ("by_elem",
+            UntypedContainerArgsTest::makeList((1, "a"))));
+        assertThrows("RUNTIME-OVERLOAD-ERROR", \create_object(), ("Target",
+            UntypedContainerArgsTest::makeList(("a",))));
+        code closure = string sub (list<int> x) { return x.fullType(); };
+        assertThrows("RUNTIME-OVERLOAD-ERROR", closure, UntypedContainerArgsTest::makeList(("a",)));
+    }
+
+    #! returns a list with no declared element type, as a language binding builds one at runtime
+    static list<auto> makeList(list<auto> vals) {
+        list<auto!> rv = ();
+        foreach auto v in (vals) {
+            push rv, v;
+        }
+        return rv;
+    }
+
+    #! returns a hash with no declared value type, as a language binding builds one at runtime
+    static hash<auto> makeHash(hash<auto> vals) {
+        hash<auto!> rv = {};
+        foreach hash<auto> i in (vals.pairIterator()) {
+            rv{i.key} = i.value;
+        }
+        return rv;
+    }
+}

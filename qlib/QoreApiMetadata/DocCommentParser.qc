@@ -31,7 +31,7 @@ public class DocCommentParser {
     #! Parse a doc comment string into structured fields
     /** @param comment the raw doc comment string (with delimiters)
         @return a hash with parsed fields:
-        - \c description: main description text
+        - \c description: main description text, with the code examples in place as fenced code blocks
         - \c brief: brief description (from \@brief tag)
         - \c params: hash<string, string> mapping param name to description
         - \c return_description: return value description
@@ -45,7 +45,9 @@ public class DocCommentParser {
     */
     static hash<auto> parse(string comment) {
         # strip delimiters and normalize lines
-        list<string> lines = DocCommentParser::stripDelimiters(comment);
+        # the lines with their indentation, for code examples
+        list<string> indented_lines;
+        list<string> lines = DocCommentParser::stripDelimiters(comment, \indented_lines);
 
         hash<auto> result = {
             "description": "",
@@ -72,10 +74,18 @@ public class DocCommentParser {
         string code_text = "";
 
         foreach string line in (lines) {
+            string indented_line = indented_lines[$#];
             # handle @code/@endcode blocks
             if (in_code) {
                 if (line =~ /@endcode/) {
+                    code_text = DocCommentParser::removeIndentation(code_text);
                     result.examples += code_text;
+                    # the example stays in place in the description as a fenced code block, which is not
+                    # converted by DoxygenToMarkdown
+                    if (result.description.length() && !result.description.endsWith("\n\n")) {
+                        result.description += "\n\n";
+                    }
+                    result.description += "```qore\n" + code_text + "\n```\n\n";
                     in_code = False;
                     code_text = "";
                     continue;
@@ -83,7 +93,7 @@ public class DocCommentParser {
                 if (code_text.length()) {
                     code_text += "\n";
                 }
-                code_text += line;
+                code_text += indented_line;
                 continue;
             }
 
@@ -304,8 +314,33 @@ public class DocCommentParser {
         return result;
     }
 
+    #! Removes the indentation that all lines of a code example have
+    private static string removeIndentation(string code) {
+        list<string> code_lines = code.split("\n");
+        *int indent;
+        foreach string code_line in (code_lines) {
+            if (!trim(code_line).length()) {
+                continue;
+            }
+            int width = code_line.length() - ltrim(code_line).length();
+            if (!exists indent || width < indent) {
+                indent = width;
+            }
+        }
+        if (!indent) {
+            return code;
+        }
+        return (map $1.substr(indent), code_lines).join("\n");
+    }
+
     #! Strip comment delimiters and normalize to clean lines
-    private static list<string> stripDelimiters(string comment) {
+    /** @param comment the doc comment
+        @param indented_lines receives the same lines with the indentation of their text, for code examples
+
+        @return the lines without leading and trailing whitespace
+    */
+    private static list<string> stripDelimiters(string comment, reference<list<string>> indented_lines) {
+        indented_lines = ();
         string text = comment;
 
         # strip block comment delimiters: /** ... */ or /* ... */
@@ -329,6 +364,7 @@ public class DocCommentParser {
                 # Insert paragraph break at transition from line comment to block comment
                 if (prev_was_line_comment && result.size()) {
                     result += "";
+                    indented_lines += "";
                 }
                 cleaned = regex_subst(cleaned, "^\\/\\*\\*\\s?", "");
                 in_block = True;
@@ -360,6 +396,11 @@ public class DocCommentParser {
                 prev_was_line_comment = True;
             }
             result += cleaned;
+            # the indentation of a line without a decoration before its text is the leading whitespace of the line
+            int pos = cleaned.length() ? line.find(cleaned) : -1;
+            indented_lines += (pos > 0 && !trim(line.substr(0, pos)).length())
+                ? line.substr(0, pos) + cleaned
+                : cleaned;
         }
 
         return result;

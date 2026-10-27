@@ -27,6 +27,7 @@
 
 #include "CSTWalk.h"
 
+#include <algorithm>
 #include <cstring>
 
 #include "AstParser.h"
@@ -64,7 +65,9 @@ bool CSTDocComments::add(TSNode child) {
     return false;
 }
 
-std::string CSTDocComments::get(const AstParseResult* result) const {
+//! Returns the doc comment of a node from the comments immediately before it, in order
+static std::string cst_join_doc_comments(const std::vector<TSNode>& preceding, TSNode last,
+        const AstParseResult* result) {
     if (preceding.empty()) {
         return std::string();
     }
@@ -91,4 +94,23 @@ std::string CSTDocComments::get(const AstParseResult* result) const {
         docComment += result->getNodeText(preceding[i]);
     }
     return docComment;
+}
+
+std::string CSTDocComments::get(const AstParseResult* result) const {
+    return cst_join_doc_comments(preceding, last, result);
+}
+
+std::string cst_get_doc_comment(TSNode node, const AstParseResult* result, CSTCancelCheck& cancel) {
+    // the comments before a declaration are its preceding siblings
+    std::vector<TSNode> preceding;
+    for (TSNode sibling = ts_node_prev_sibling(node);
+            !ts_node_is_null(sibling) && cst_is_comment(ts_node_type(sibling));
+            sibling = ts_node_prev_sibling(sibling)) {
+        if (cancel()) {
+            return std::string();
+        }
+        preceding.push_back(sibling);
+    }
+    std::reverse(preceding.begin(), preceding.end());
+    return cst_join_doc_comments(preceding, node, result);
 }
