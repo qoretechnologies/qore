@@ -1,0 +1,92 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+int sub intZeroA() { return 17; }
+int sub intZeroB() { return 19; }
+int sub intUnaryA(int value) { return (value * 33 + 17) & 65535; }
+int sub intUnaryB(int value) { return (value * 33 + 19) & 65535; }
+float sub floatZeroA() { return 0.25; }
+float sub floatZeroB() { return 0.5; }
+float sub floatUnaryA(float value) { return 65535.5 - value; }
+float sub floatUnaryB(float value) { return 65534.5 - value; }
+int sub intZero(int count, int seed) {
+    code<int()> fn = (seed & 1) ? \intZeroA() : \intZeroB();
+    int sum = 0;
+    for (int i = 0; i < count; ++i) { sum += fn(); }
+    return sum;
+}
+int sub intUnary(int count, int seed) {
+    code<int(int)> fn = (seed & 1) ? \intUnaryA() : \intUnaryB();
+    int value = seed;
+    int sum = 0;
+    for (int i = 0; i < count; ++i) { value = fn(value); sum += value; }
+    return sum;
+}
+int sub floatZero(int count, int seed) {
+    code<float()> fn = (seed & 1) ? \floatZeroA() : \floatZeroB();
+    float sum = 0.0;
+    for (int i = 0; i < count; ++i) { sum += fn(); }
+    return int(sum * 2.0);
+}
+int sub floatUnary(int count, int seed) {
+    code<float(float)> fn = (seed & 1) ? \floatUnaryA() : \floatUnaryB();
+    float value = float(seed);
+    float sum = 0.0;
+    for (int i = 0; i < count; ++i) { value = fn(value); sum += value; }
+    return int(sum * 2.0);
+}
+int sub dispatch(string name, int count, int seed) {
+    switch (name) {
+        case "int_zero": return intZero(count, seed);
+        case "int_unary": return intUnary(count, seed);
+        case "float_zero": return floatZero(count, seed);
+        case "float_unary": return floatUnary(count, seed);
+    }
+    throw "BENCH-ARGUMENT-ERROR", "unknown kernel";
+}
+int sub integerArg(list<string> arguments, int index, int minimum, int maximum) {
+    if (index >= arguments.size() || arguments[index] !~ /^\d+$/) {
+        throw "BENCH-ARGUMENT-ERROR", "missing or invalid integer argument";
+    }
+    int value = arguments[index].toInt();
+    if (value < minimum || value > maximum) {
+        throw "BENCH-ARGUMENT-ERROR", "integer argument outside supported range";
+    }
+    return value;
+}
+sub run(list<string> arguments) {
+    if (arguments.size() == 1 && arguments[0] == "check") {
+        foreach int count in ((0, 1, 17, 257, 4096)) {
+            foreach int seed in ((0, 7, 65535)) {
+                foreach string name in (("int_zero", "int_unary", "float_zero", "float_unary")) {
+                    printf("CHECK\t%s\t%d\t%d\t%d\n", name, count, seed, dispatch(name, count, seed));
+                }
+            }
+        }
+        return;
+    }
+    if (arguments.size() != 6) { throw "BENCH-ARGUMENT-ERROR", "expected check or KERNEL COUNT WARMUP SAMPLES MS SEED"; }
+    string name = arguments[0];
+    int count = integerArg(arguments, 1, 1, 1000000);
+    int warmup = integerArg(arguments, 2, 0, 1000);
+    int samples = integerArg(arguments, 3, 1, 1000);
+    int duration_us = integerArg(arguments, 4, 1, 60000) * 1000;
+    int seed = integerArg(arguments, 5, 0, 65535);
+    for (int sample = -warmup; sample < samples; ++sample) {
+        int checksum = 0;
+        int calls = 0;
+        int start = clock_get_monotonic_us();
+        int elapsed;
+        do {
+            seed = (seed + 1) & 65535;
+            checksum ^= dispatch(name, count, seed);
+            ++calls;
+            elapsed = clock_get_monotonic_us() - start;
+        } while (elapsed < duration_us);
+        printf("%s\t%s\t%d\t%d\t%d\t%d\n", sample < 0 ? "WARMUP" : "SAMPLE",
+            name, elapsed, calls, count, checksum);
+    }
+}
+
+
+run(ARGV);

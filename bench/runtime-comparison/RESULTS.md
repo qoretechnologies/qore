@@ -27065,3 +27065,47 @@ After reversion, all production/test hashes match the baseline, all 391 Release 
 Storage reuse has not earned retention in these bounded experiments. This does not establish a global performance ceiling or a fresh Java/develop ratio. Next inspect avoidable pointer reloads in the established call paths and target-specialization opportunities, with a new prospective plan and optimized before/after measurements.
 
 [Lossless raw evidence](results-reusable-closure-storage-rejected-macos-arm64.json); [62-check publication audit](audit-reusable-closure-storage-rejected.md). Large logs are compressed in the blob map, deduplicated by decoded SHA256.
+
+## Existing call-context pointer snapshots: rejected (2026-10-27)
+
+The optimized baseline is 0f3795889d, including origin/develop 42ae5a5181. Its system installation completed with sudo make install followed by copy-qore-modules: 391 native modules, 9 headers, 225 declaration-owner checks and the native-stack RuntimeConfig probe were verified. The rejected candidate was never installed.
+
+A const member-pointer overlay produced byte-identical executable code and was not timed. The runtime candidate instead snapshots the private constructor-bound ThreadData pointer in four existing enter/restore methods. It preserves layout, ABI, admission, capture synchronization, publication ordering and reader waits. Six linked reusable callback entries lose nine loads each, without extra calls or larger frames. Ordinary closure dispatch instruction sequences remain identical after normalizing function-relative branch addresses and disassembler PC-page comments.
+
+The first 216-job screen and 360-job confirmation were mis-targeted: the floating loop workloads already use earlier known-callback specialization, while ordinary closure bodies have unchanged instruction sequences. Those completed measurements are retained as regression controls, not direct validation of reusable-helper optimization. Initial confirmation measured plain/captured closures 14.104745→13.656339(-3.179%) and 19.843599→19.050557(-3.996%); imported indirect calls 59.213126→60.252125(+1.755%) and wide indirect 59.331476→60.051847(+1.214%). Code placement can contribute to these unchanged-body effects; no unique causal claim is made.
+
+A new standalone workload chooses between two callbacks at runtime, keeping target identity opaque to compile-time specialization. Four exact signatures cover integer/floating results with zero or one argument. Final LLVM verifies the helper calls. Untimed interposition verifies 13,113 calls/signature, 13,101 native reusable-frame hits after first-call setup, equality of current/captured/owner Programs, and Program restoration for both libraries in every layout. Interposition is absent during timing. The fixed Mach-O executable-header marker is excluded from function order files; every actual function follows its requested order.
+
+All performance runs use Release -O3 -DNDEBUG, allocation tracking off, LLVM 22.1.8 and qcc -O3 --strip-source on macOS ARM64. Each comparison uses identical executables/native modules per layout; only the runtime library changes, with normal matching runtime identities. Three layouts (default/reverse/shuffle-487), 4,096 items, seed 7, one warmup, three 150 ms samples, three screen forks and five independent confirmation forks. All 1,008 jobs / 3,024 windows are preserved. No owned build/test/profile overlaps timing. The host is shared without exclusivity, affinity, frequency or thermal control. Values are whole-kernel ns/item, not isolated call latency or a fresh Java/develop comparison.
+
+The corrected screen/confirmation results are:
+
+|!Workload|!Screen before|!Screen candidate|!Screen change|!Confirm before|!Confirm candidate|!Confirm change
+|opaque:int_zero|17.287521|17.347432|+0.347%|17.370804|17.286471|-0.485%
+|opaque:int_unary|18.341444|18.262219|-0.432%|18.413334|18.166512|-1.340%
+|opaque:float_zero|75.902114|73.900396|-2.637%|75.068018|74.772566|-0.394%
+|opaque:float_unary|18.309153|18.146531|-0.888%|18.499242|18.033844|-2.516%
+|micro:closure_call|13.974854|13.746295|-1.635%|14.090355|13.729350|-2.562%
+|micro:closure_capture|19.885098|19.083422|-4.032%|19.769177|19.213839|-2.809%
+|micro:indirect_call|59.199823|60.487979|+2.176%|58.989971|60.591430|+2.715%
+|micro:indirect_wide|58.385686|59.604096|+2.087%|58.548211|60.098759|+2.648%
+|mixed:callback_pipeline|121.164551|121.792198|+0.518%|121.830361|121.983213|+0.125%
+
+Reject the four-method runtime candidate. No directly exercised target achieves at least 1% aggregate improvement with improvement in every layout in both rounds. The only screen qualifier, float-zero, confirms only 0.394%; unary integer/floating targets become stronger only in confirmation. Imported indirect costs repeat across all rounds and layouts. Ordinary closure gains persist but accompany unchanged instructions, making them sensitive to code placement. This is an overall tradeoff judgment, not an automatic rejection of every regression. No broad/short/populated expansion or Debug runtime qualification follows rejection.
+
+Focused qualification passed 14 Release cases / 6,912 assertions, including stack readers and context/overflow restoration. Original preparation passed 6,768 native + 1,128 source reference results. Corrected preparation added 840 checks, independently recomputed with exact integer references. Failed probe compilation (missing internal configuration/C++20 flags), a standalone symbol-prefix mismatch, and an executable-header ordering assertion are preserved before their corrections. The initial target-selection gap is explicitly retained. All production edits are reverted; the full optimized baseline is byte-identical, 391 qmod aliases are restored, 1,188 restored reference results pass, and the verified system installation is unchanged.
+
+The standalone harness and independent reference validator are reusable:
+
+```sh
+qore --exec-mode=ir bench/runtime-comparison/opaque_callbacks.qr check > /tmp/opaque-check.txt
+python3 bench/runtime-comparison/opaque_callbacks.py /tmp/opaque-check.txt
+qcc -O3 --strip-source -o /tmp/opaque-callbacks bench/runtime-comparison/opaque_callbacks.qr
+/tmp/opaque-callbacks check > /tmp/opaque-aot-check.txt
+python3 bench/runtime-comparison/opaque_callbacks.py /tmp/opaque-aot-check.txt
+/tmp/opaque-callbacks float_unary 4096 1 3 150 7
+```
+
+Use an optimized runtime for performance measurements. The four kernels are int_zero, int_unary, float_zero, float_unary. The elevated float_zero time includes generic floating compound assignment: sum += callback() still uses qore_rt_lv_path_compound_consume_aot. That is the next separate optimization lead; callable return compatibility, callback mutation, cleanup and exception ordering must be established before extending native lowering. These bounded experiments do not establish a global maximum or Java parity.
+
+[Lossless evidence](results-call-context-pointer-rejected-macos-arm64.json); [62-check audit](audit-call-context-pointer-rejected.md).
