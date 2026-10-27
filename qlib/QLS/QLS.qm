@@ -114,7 +114,7 @@ module QLS {
     |Document Formatting|@c textDocument/formatting|Whole-document formatting via @ref qorecodeformatintro "QoreCodeFormat"
     |On-Type Formatting|@c textDocument/onTypeFormatting|Auto-indent on Enter, auto-dedent on @c }
     |Code Lens|@c textDocument/codeLens|Shows reference counts across open and workspace documents above declarations; the lenses run the \c qls.showReferences client command with the document URI and the position of the declared name
-    |Diagnostics|@c textDocument/publishDiagnostics|Reports parse errors as diagnostics
+    |Diagnostics|@c textDocument/publishDiagnostics|Reports Qore parse errors and warnings for standalone scripts and syntax errors for other files (see @ref qls_diagnostics)
 
     @section qlsusage Usage
 
@@ -199,6 +199,8 @@ server.main();
     |@c excludeDirs|list of strings|shell-style glob patterns (@c * and @c ?) for subdirectory names that are not searched; replaces @ref QLS::Files::DefaultExcludeDirs
     |@c maxIndexFileSize|int|files larger than this many bytes are not indexed; @c 0 means no limit (default: @ref QLS::Files::DefaultMaxIndexFileSize)
     |@c treeCacheSize|int|syntax trees of indexed files are cached up to this many bytes of source; @c 0 disables the cache (default: @ref QLS::DefaultTreeCacheSize)
+    |@c diagnostics|string|@c "qore" (the default) to check standalone scripts with the %Qore parser, or @c "syntax" to only report syntax errors (see @ref qls_diagnostics)
+    |@c qoreExecutable|string|the %Qore executable used to check scripts; by default the interpreter running the server
 
     For example:
     @code{.json}
@@ -235,6 +237,21 @@ server.main();
     @ref QLS::QLSServer::registerRequest() "registerRequest()" and
     @ref QLS::QLSServer::cancelRequest() "cancelRequest()".  To run the server on other streams, pass an
     @ref QLS::LspConnection "LspConnection" to @ref QLS::QLSServer::main() "main()".
+
+    @subsection qls_diagnostics Diagnostics
+
+    Standalone scripts (@c .q, @c .qr and @c .qtest files, and files without an extension that start with a
+    @c qore @c "#!" line) are checked with the %Qore parser when they are opened and when they are saved:
+    <tt>qore --diag-format=json -W</tt> parses the file in a separate process, so the modules that the script
+    requires are loaded there and not in the server.  The diagnostics include type errors, unresolved symbols,
+    errors in required modules (at their @c %%requires directive) and warnings, and are shown while the document has
+    not changed since it was checked; after a change, the syntax errors of the syntax tree are shown until the
+    document is saved again.  A script is only checked when the editor text is the same as the file.
+
+    Module, class and Qorus files are parts of a larger program, so only their syntax errors are reported.
+
+    The fixes of %Qore diagnostics are offered as @c quickfix code actions; machine-applicable fixes are
+    preferred.
 
     @subsection qls_sync Document Synchronization and Symbols
 

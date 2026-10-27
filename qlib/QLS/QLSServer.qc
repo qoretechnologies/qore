@@ -255,7 +255,7 @@ public const ServerCapabilities = {
      * The server provides code action support.
      */
     "codeActionProvider": {
-        "codeActionKinds": ("source.sortImports", "source"),
+        "codeActionKinds": ("quickfix", "source.sortImports", "source"),
     },
 
     /**
@@ -443,6 +443,16 @@ public class QLSServer {
 
         #! The client's name from the initialize request, if sent
         *string clientName;
+
+        #! The diagnostics mode: \c "qore" checks standalone scripts with the Qore parser, \c "syntax" only reports
+        #! syntax errors of the syntax tree
+        string diagnosticsMode = "qore";
+
+        #! The Qore executable used to check scripts; the interpreter running the server if not set
+        *string qoreExecutable;
+
+        #! The diagnostics of the last Qore check of each open document: \c version and \c diagnostics keys
+        hash<string, hash<auto>> qoreDiagnostics = {};
     }
 
     private:internal {
@@ -1131,6 +1141,10 @@ public class QLSServer {
         - @c maxIndexFileSize: files larger than this many bytes are not indexed; 0 means no limit
         - @c treeCacheSize: syntax trees of indexed files are cached up to this many bytes of source; 0 disables
           the cache
+        - @c diagnostics: \c "qore" (the default) to check standalone scripts with the Qore parser, or
+          \c "syntax" to only report syntax errors
+        - @c qoreExecutable: the Qore executable used to check scripts; the interpreter running the server by
+          default
 
         Options with invalid values are logged and ignored.
     */
@@ -1156,6 +1170,20 @@ public class QLSServer {
             } else {
                 log(0, "WARNING: ignoring invalid initializationOptions.maxIndexFileSize: %y",
                     opts.maxIndexFileSize);
+            }
+        }
+        if (exists opts.diagnostics) {
+            if (opts.diagnostics == "qore" || opts.diagnostics == "syntax") {
+                diagnosticsMode = opts.diagnostics;
+            } else {
+                log(0, "WARNING: ignoring invalid initializationOptions.diagnostics: %y", opts.diagnostics);
+            }
+        }
+        if (exists opts.qoreExecutable) {
+            if (opts.qoreExecutable.typeCode() == NT_STRING && opts.qoreExecutable) {
+                qoreExecutable = opts.qoreExecutable;
+            } else {
+                log(0, "WARNING: ignoring invalid initializationOptions.qoreExecutable: %y", opts.qoreExecutable);
             }
         }
         if (exists opts.treeCacheSize) {
@@ -1748,12 +1776,12 @@ public class QLSServer {
             if (doc != NOTHING) {
                 documents{textDoc.uri} = doc;
                 log(1, "opened text document: '%s'", textDoc.uri);
-
-                if (doc.getParseErrorCount() > 0) {
-                    *list<auto> diagnostics = doc.getDiagnostics();
-                    responses += Notification::diagnostics(jsonRpcVer, textDoc.uri, diagnostics);
-                    continue;
+                # the Qore parser checks the file, so the editor text must be the same as the file
+                if (QLSServer::sameAsFile(doc)) {
+                    checkWithQore(doc);
                 }
+                responses += publishDiagnostics(doc);
+                continue;
             }
 
             responses += Notification::diagnostics(jsonRpcVer, textDoc.uri);
@@ -1793,11 +1821,9 @@ public class QLSServer {
         doc.changeVersion(textDoc.version);
         log(1, "text document changed: '%s'", textDoc.uri);
 
-        if (doc.getParseErrorCount() > 0) {
-            *list<auto> diagnostics = doc.getDiagnostics();
-            return Notification::diagnostics(jsonRpcVer, textDoc.uri, diagnostics);
-        }
-        return Notification::diagnostics(jsonRpcVer, textDoc.uri);
+        # the diagnostics of the last Qore check are for the saved text, so the syntax errors are published until
+        # the document is saved again
+        return publishDiagnostics(doc);
     }
 
     #! "textDocument/willSave" notification method handler
@@ -1813,9 +1839,160 @@ public class QLSServer {
 
     #! "textDocument/didSave" notification method handler
     private *string meth_td_didSave(hash<auto> request) {
-        # ignore for now
-        return NOTHING;
+        *string uri = request.params.textDocument.uri;
+        if (!uri || ignoredUris{uri} || !documents{uri}) {
+            return NOTHING;
+        }
+        Document doc = documents{uri};
+        checkWithQore(doc);
+        return publishDiagnostics(doc);
     }
+
+    #! Returns the diagnostics notification for an open document
+    /** The diagnostics of the last Qore check are published if the document has not changed since, as they
+        include the syntax errors and are more accurate; otherwise the syntax errors of the syntax tree are
+        published.
+    */
+    private:internal string publishDiagnostics(Document doc) {
+        string uri = doc.getUri();
+        *hash<auto> checked = qoreDiagnostics{uri};
+        if (checked && checked.version == doc.getVersion()) {
+            return Notification::diagnostics(jsonRpcVer, uri, checked.diagnostics);
+        }
+        return Notification::diagnostics(jsonRpcVer, uri, doc.getParseErrorCount() ? doc.getDiagnostics() : ());
+    }
+
+    #! Returns @ref True if the text of an open document is the same as the file
+    private:internal static bool sameAsFile(Document doc) {
+        try {
+            return ReadOnlyFile::readTextFile(Document::getFilePath(doc.getUri())) == doc.getText();
+        } catch (hash<ExceptionInfo> ex) {
+            # a file that cannot be read cannot be checked
+        }
+        return False;
+    }
+
+    #! Returns @ref True if the file is a standalone script that can be checked with the Qore parser
+    /** Module, class and Qorus files are parts of a larger program and would report errors for the parts that
+        they do not contain.
+    */
+    static bool isStandaloneScript(string path) {
+        *string ext = (path =~ x/\.([^.\/]+)$/)[0];
+        if (ext) {
+            return StandaloneScriptExtensions{ext.lwr()} ?? False;
+        }
+        # scripts without an extension are recognized by their "#!" line
+        return Files::is_valid_qore_file(path);
+    }
+
+    #! The extensions of standalone Qore scripts
+    const StandaloneScriptExtensions = {
+        "q": True,
+        "qr": True,
+        "qtest": True,
+    };
+
+    #! Checks a saved document with the Qore parser and stores its diagnostics
+    /** Standalone scripts are parsed with <tt>qore --diag-format=json</tt> in a separate process, so the modules
+        that the script requires are loaded there and not in the server.  Other documents, and documents whose
+        check fails, keep the syntax errors of the syntax tree.
+    */
+    private:internal checkWithQore(Document doc) {
+        string uri = doc.getUri();
+        remove qoreDiagnostics{uri};
+        if (diagnosticsMode != "qore" || uri !~ /^file:\//) {
+            return;
+        }
+        string path = Document::getFilePath(uri);
+        if (!QLSServer::isStandaloneScript(path)) {
+            return;
+        }
+        # the Windows command shell expands %name% even in quoted arguments, so such paths cannot be passed safely
+        if (PlatformOS == "Windows" && (path.find("%") != -1 || getQoreExecutable().find("%") != -1)) {
+            log(0, "WARNING: not checking %s: the path cannot be passed to the command shell", path);
+            return;
+        }
+        string cmd = sprintf("%s --diag-format=json -W %s %s", QLSServer::shellQuote(getQoreExecutable()),
+            QLSServer::shellQuote(path), PlatformOS == "Windows" ? "2>NUL" : "2>/dev/null");
+        int rc;
+        auto parsed;
+        try {
+            string out = backquote(cmd, \rc);
+            parsed = parse_json(trim(out));
+        } catch (hash<ExceptionInfo> ex) {
+            log(0, "WARNING: checking %s with %y failed (exit code %d): %s: %s", path, getQoreExecutable(), rc,
+                ex.err, ex.desc);
+            return;
+        }
+        if (parsed.typeCode() != NT_LIST) {
+            log(0, "WARNING: checking %s with %y gave no diagnostics list (exit code %d)", path, getQoreExecutable(),
+                rc);
+            return;
+        }
+        list<hash<auto>> diagnostics = ();
+        foreach auto d in (parsed) {
+            # diagnostics in included files are not shown in this document
+            if (d.typeCode() == NT_HASH && d.file == path) {
+                push diagnostics, QLSServer::makeQoreDiagnostic(d, doc);
+            }
+        }
+        qoreDiagnostics{uri} = {"version": doc.getVersion(), "diagnostics": diagnostics};
+        log(1, "Qore check of %s: %d diagnostics", path, diagnostics.size());
+    }
+
+    #! Returns the Qore executable used to check scripts
+    private:internal string getQoreExecutable() {
+        if (!qoreExecutable) {
+            # the interpreter running the server has the same version and module path
+            qoreExecutable = is_file("/proc/self/exe") ? realpath("/proc/self/exe") : "qore";
+        }
+        return qoreExecutable;
+    }
+
+    #! Returns the argument quoted for the command shell
+    static string shellQuote(string arg) {
+        if (PlatformOS == "Windows") {
+            return "\"" + replace(arg, "\"", "\\\"") + "\"";
+        }
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+
+    #! Returns an LSP diagnostic for a Qore parse diagnostic
+    /** @param d a diagnostic in the format of @ref Qore::ParseDiagnosticInfo "ParseDiagnosticInfo": lines are
+        1-based, columns are 0-based and the end column is exclusive; a column of -1 is unknown
+        @param doc the document, for the length of lines when the end column is unknown
+
+        @return an LSP diagnostic; the fixes of the Qore diagnostic are in its \c data
+    */
+    static hash<auto> makeQoreDiagnostic(hash<auto> d, Document doc) {
+        int startLine = max(d.startLine - 1, 0);
+        int endLine = d.endLine > 0 ? d.endLine - 1 : startLine;
+        int startChar = d.startColumn >= 0 ? d.startColumn : 0;
+        int endChar = d.endColumn >= 0 ? d.endColumn : (doc.getLine(endLine) ?? "").length();
+        if (endLine == startLine && endChar < startChar) {
+            endChar = startChar;
+        }
+        hash<auto> diag = {
+            "range": {
+                "start": {"line": startLine, "character": startChar},
+                "end": {"line": endLine, "character": endChar},
+            },
+            "severity": d.severity == "error" ? DiagnosticSeverity.Error : DiagnosticSeverity.Warning,
+            "source": "qore",
+            "code": d.id ?? d.code,
+            "message": d.hint ? sprintf("%s\n%s", d.message, d.hint) : d.message,
+        };
+        if (d.fixes) {
+            diag.data = {"fixes": d.fixes};
+        }
+        return diag;
+    }
+
+    #! LSP DiagnosticSeverity values
+    const DiagnosticSeverity = {
+        "Error": 1,
+        "Warning": 2,
+    };
 
     #! "textDocument/didClose" notification method handler
     private *string meth_td_didClose(hash<auto> request) {
@@ -1846,8 +2023,10 @@ public class QLSServer {
         # keep the symbols of the closed document and release its syntax tree
         workspaceIndex{uri} = (remove documents{uri}).getIndex();
         delete indexedClassGraph;
+        remove qoreDiagnostics{uri};
         log(1, "closed text document: '%s'", uri);
-        return NOTHING;
+        # the diagnostics of a closed document are removed
+        return Notification::diagnostics(jsonRpcVer, uri);
     }
 
     #! "textDocument/hover" method handler
@@ -4230,7 +4409,7 @@ public class QLSServer {
             return make_jsonrpc_response(jsonRpcVer, request.id, ());
         }
 
-        list<auto> actions = ();
+        list<auto> actions = QLSServer::getQuickFixes(uri, request.params.context.diagnostics);
 
         # --- Sort imports ---
         *list<auto> sortAction = buildSortImportsAction(uri, text);
@@ -4245,6 +4424,55 @@ public class QLSServer {
         }
 
         return make_jsonrpc_response(jsonRpcVer, request.id, actions);
+    }
+
+    #! Returns quick fix code actions for the fixes of Qore diagnostics
+    /** @param uri the document URI
+        @param diagnostics the diagnostics in the code action request; Qore diagnostics have their fixes in
+        \c data
+
+        @return the quick fix code actions; machine-applicable fixes are preferred
+    */
+    static list<hash<auto>> getQuickFixes(string uri, *list<auto> diagnostics) {
+        list<hash<auto>> actions = ();
+        string path = Document::getFilePath(uri);
+        foreach auto diag in (diagnostics) {
+            if (diag.typeCode() != NT_HASH || diag.data.fixes.typeCode() != NT_LIST) {
+                continue;
+            }
+            foreach auto fix in (diag.data.fixes) {
+                if (fix.typeCode() != NT_HASH || !fix.edits) {
+                    continue;
+                }
+                # only edits in this document with known positions can be applied
+                list<hash<auto>> edits = ();
+                foreach auto edit in (fix.edits) {
+                    if (edit.typeCode() != NT_HASH || (exists edit.file && edit.file != path)
+                            || edit.startColumn < 0 || edit.endColumn < 0 || edit.startLine < 1) {
+                        edits = ();
+                        break;
+                    }
+                    push edits, {
+                        "range": {
+                            "start": {"line": edit.startLine - 1, "character": edit.startColumn},
+                            "end": {"line": edit.endLine - 1, "character": edit.endColumn},
+                        },
+                        "newText": edit.replacement,
+                    };
+                }
+                if (!edits) {
+                    continue;
+                }
+                push actions, {
+                    "title": fix.title,
+                    "kind": "quickfix",
+                    "diagnostics": (diag,),
+                    "isPreferred": fix.applicability == "machine-applicable",
+                    "edit": {"changes": {uri: edits}},
+                };
+            }
+        }
+        return actions;
     }
 
     #! Build a "Sort imports" code action if %requires directives are unsorted
