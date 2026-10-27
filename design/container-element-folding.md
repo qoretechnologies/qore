@@ -130,6 +130,11 @@ themselves untyped containers, and stops at the first element that does not matc
 | every element matches | `QTI_AMBIGUOUS`; binding converts the argument as an assignment does |
 | an element does not match | `QTI_NOT_EQUAL`, so another variant can be selected |
 
+`runtimeAcceptsValue()` is not where the elements are checked: a first fix of issue #5541
+(577cc3cec6) matched the elements there, which made a `list<auto>` of integers an instance of
+`list<int>` and gave the AOT method dispatch cache, keyed by argument types, a selection that depends
+on the elements; the call matching below replaced it.
+
 `QTI_AMBIGUOUS` ranks the conversion below a variant that takes the value unchanged (`list`,
 `list<auto>`, `softlist<auto>`, `hash<auto>`) and above `auto` and `any`, as for a scalar that needs
 a conversion.  `runtimeAcceptsValue()` does not accept such a value: `instanceof` and the JIT fast
@@ -137,7 +142,9 @@ paths that skip `acceptInput()` for a value that already has the slot's type ask
 has a type, and a `list<auto>` does not have the type `list<int>`.
 
 Variants with equal scores are ranked by match quality before the number of parameters: the worst
-element match of an element-checked container, otherwise the result itself, so `list<int>` is
+element match of an element-checked container, `QTI_AMBIGUOUS` for a typed container whose element
+type is not the parameter's element type (the type match scores a `list<int>` the same for
+`list<float>` as for `list<int>`), otherwise the result itself, so `list<int>` is
 called rather than `list<number>` for a list of integers in either order of declaration, while all
 other ties are decided as before.  The softlist conversion entry, which accepts any list, does not
 decide for an untyped list: a `softlist<string>` variant is not selected for a list of integers.

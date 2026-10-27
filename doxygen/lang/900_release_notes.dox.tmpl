@@ -14,18 +14,6 @@
     or QoreSandboxProvenanceHelper; existing public object and callback layouts are unchanged
     (<a href="https://github.com/qoretechnologies/qore/issues/5516">issue 5516</a>).
 
-    A list or hash built at runtime without a declared element type (\c list<auto>, \c hash<auto>, or a plain
-    \c list or \c hash), such as a container made by a language binding from a Python, Java or JavaScript value, is
-    now accepted for a typed container parameter (ex: \c list<int> or \c hash<string, list<string>>) of a function,
-    method, constructor or call reference selected at runtime when every element is accepted by the element type,
-    including in nested containers; the argument is converted as an assignment converts it.  A variant that takes the
-    value unchanged, such as one with a \c list or \c list<auto> parameter, is still preferred, and when several
-    typed container variants accept the value, the one whose element type matches the elements best is called.  A
-    container with an element that is not accepted selects another variant, or raises \c RUNTIME-OVERLOAD-ERROR as
-    before.  A \c softlist<T> variant is no longer selected for a list whose elements it cannot convert (see
-    @ref overloading_untyped_containers and
-    <a href="https://github.com/qoretechnologies/qore/issues/5541">issue 5541</a>).
-
     Runtime variant selection also checks the elements of a typed container argument where its type alone does not
     decide whether binding can convert it: a nested container accepted by its shape (ex: a \c list<list<string>>
     for a \c list<list<int>> parameter), a nested element type that may not match (ex: \c list<list<auto>>), or a
@@ -5131,9 +5119,14 @@ while (*binary chunk = input.read(65536)) {
       built at runtime by language bindings such as the \c python module, was rejected for a typed container
       parameter (ex: <tt>list&lt;int&gt;</tt>, <tt>hash&lt;string, list&lt;string&gt;&gt;</tt>) in runtime
       variant matching (functions, methods, static methods, constructors, call references and closures), even
-      when every element matched the element type; it is now accepted and converted to the parameter type as in
-      an assignment, and a container with an element that does not match is rejected as before
-      (<a href="https://github.com/qoretechnologies/qore/issues/5541">issue 5541</a>)
+      when every element matched the element type, including in nested containers; it is now accepted and
+      converted to the parameter type as in an assignment, and a container with an element that does not match
+      selects another variant, or raises \c RUNTIME-OVERLOAD-ERROR as before.  A variant that takes the value
+      unchanged, such as one with a \c list or \c list<auto> parameter, is still preferred, a typed container
+      variant is preferred to one with an \c auto or \c any parameter, and when several typed container variants
+      accept the value, the one whose element type matches the elements best is called; a \c softlist<T> variant is
+      no longer selected for a list whose elements it cannot convert (see @ref overloading_untyped_containers and
+      <a href="https://github.com/qoretechnologies/qore/issues/5541">issue 5541</a>)
     - runtime variant matching ranked a typed list or hash whose elements the parameter accepts only with a
       conversion the same as one of the parameter's own element type, so that, for example, a
       <tt>list&lt;int&gt;</tt> passed with @ref Qore::call_function() "call_function()" to a function with

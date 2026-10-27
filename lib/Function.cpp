@@ -109,35 +109,6 @@ static qore_type_result_e qore_runtime_accepts_call_arg(const QoreTypeInfo* ti, 
     return QoreTypeInfo::runtimeAcceptsCallArg(ti, arg, quality, content_dependent);
 }
 
-// returns true if the argument is a list or hash whose element type is identical to the element type of the
-// complex list or hash parameter type
-/* a container whose element type the parameter accepts only with a conversion or as a subclass (ex: list<int> for
-   list<float>) gets the same type match score as one of the parameter's own element type, so this is the secondary
-   score of runtime variant matching that ranks the latter first when the scores are equal
-*/
-static bool qore_runtime_container_elements_exact(const QoreTypeInfo* ti, const QoreValue& arg) {
-    const QoreTypeInfo* elem_ti;
-    const QoreTypeInfo* value_elem_ti;
-    switch (arg.getType()) {
-        case NT_LIST:
-            elem_ti = QoreTypeInfo::getComplexListValueType(ti);
-            value_elem_ti = arg.get<const QoreListNode>()->getValueTypeInfo();
-            break;
-        case NT_HASH: {
-            const QoreHashNode* h = arg.get<const QoreHashNode>();
-            if (h->getHashDecl()) {
-                return false;
-            }
-            elem_ti = QoreTypeInfo::getComplexHashValueType(ti);
-            value_elem_ti = h->getValueTypeInfo();
-            break;
-        }
-        default:
-            return false;
-    }
-    return elem_ti && QoreTypeInfo::hasType(value_elem_ti) && QoreTypeInfo::equal(elem_ti, value_elem_ti);
-}
-
 static bool qore_is_defaulted_null_soft_arg(const QoreTypeInfo* ti, const QoreValue& arg, bool has_default) {
     return has_default && arg.isNull() && qore_is_non_optional_soft_type(ti);
 }
@@ -3128,12 +3099,11 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
     QoreParseOptions ppo = runtime_get_parse_options();
 
     // the highest score wins; for equal scores, the highest match quality (which differs from the score only for
-    // untyped containers whose elements were checked against a typed container parameter), then the highest
-    // secondary score (see qore_runtime_container_elements_exact()), then the lowest score length
+    // containers: an untyped container whose elements were checked against a typed container parameter, or a typed
+    // container whose element type is not the parameter's element type), then the lowest score length
     int score_len = -1;
     int score = -1;
     int score_quality = -1;
-    int score2 = -1;
     // set if any match depended on the elements of an argument, so another call with arguments of the same types
     // could select another variant
     bool elements_checked = false;
@@ -3233,7 +3203,6 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
             }
 
             int pscore = 0;
-            int pscore2 = 0;
             int pquality = 0;
             bool ok = true;
             bool needs_type_param_substitution = sig->needsTypeParameterSubstitution();
@@ -3272,9 +3241,6 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
                 if (t && rc != QTI_IGNORE) {
                     pscore += rc;
                     pquality += quality;
-                    if (qore_runtime_container_elements_exact(t, n)) {
-                        ++pscore2;
-                    }
                 }
             }
             if (!ok) {
@@ -3302,13 +3268,9 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
                     || (pscore == score
                         && (pquality > score_quality
                             || (pquality == score_quality
-                                && (pscore2 > score2
-                                    || (pscore2 == score2
-                                        && (score_len == -1
-                                            || sig->numParams() < static_cast<unsigned>(score_len)))))))) {
+                                && (score_len == -1 || sig->numParams() < static_cast<unsigned>(score_len)))))) {
                 score = pscore;
                 score_quality = pquality;
-                score2 = pscore2;
                 variant = *i;
                 if (type_param_inst) {
                     *type_param_inst = std::move(candidate_inst);
