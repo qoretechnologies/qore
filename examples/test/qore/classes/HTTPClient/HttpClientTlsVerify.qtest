@@ -480,7 +480,7 @@ WKEuKQ7xuGuAiIESuSDBsSg=
         }
         # HTTP/3 disabled: the TCP listener is used
         RestClientIo rest({"url": sprintf("https://localhost:%d", good_port), "ssl_verify_cert": True,
-            "ssl_ca_file": ca_file, "http3_mode": "disabled", "data": "text"});
+            "ssl_ca_file": ca_file, "enable_http3": False, "data": "text"});
         on_exit rest.close();
         hash<RestResponseInfo> resp = rest.restGet("/");
         assertEq(200, resp.status_code);
