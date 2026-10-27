@@ -17,6 +17,12 @@
       including nested and escaped braces, multiline contents and operation-specific modifiers
     - added @ref astparser::AstTreeSearcher::findScopeSymbols() "AstTreeSearcher::findScopeSymbols()"
       for scope-aware symbol completion
+    - @ref astparser::AstTreeSearcher::findSymbols() "AstTreeSearcher::findSymbols()" returns global variables and
+      variables of the top-level code, one symbol per declared variable
+    - @ref astparser::AstTreeSearcher::resolveDefinition() "AstTreeSearcher::resolveDefinition()" and
+      @ref astparser::AstTreeSearcher::findScopeSymbols() "AstTreeSearcher::findScopeSymbols()" support closures,
+      including closures in nested hashes and lists: closure parameters and locals are resolved, and the locals of
+      the enclosing code are in scope in a closure
     - added \c ADK_Typedef constant for typedef declarations
     - added \c ASYK_TypeAlias constant for typedef symbol kind
     - added \c ASUK_TypedefDeclName and \c ASUK_TypedefTypeName constants for typedef usage kinds

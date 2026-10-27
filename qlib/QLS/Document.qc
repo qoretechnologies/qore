@@ -546,6 +546,11 @@ public class Document {
             "try_statement": True,
             "catch_clause": True,
             "switch_statement": True,
+            # closures and literals in data structures, such as closures in nested hashes
+            "closure_expression": True,
+            "hash_literal": True,
+            "paren_hash_literal": True,
+            "list_literal": True,
         };
 
         list<auto> result = ();

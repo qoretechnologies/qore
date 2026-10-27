@@ -67,6 +67,7 @@ class FeaturesTest inherits QUnit::Test {
         addTestCase("directive edits for renamed files", \testRenameEdits());
         addTestCase("willRenameFiles request", \testWillRenameFiles());
         addTestCase("pull diagnostics", \testPullDiagnostics());
+        addTestCase("closures in nested hashes", \testClosuresInNestedHashes());
 
         on_exit {
             map FeaturesTest::removeTree($1), tmpDirs;
@@ -554,5 +555,29 @@ class FeaturesTest inherits QUnit::Test {
         list<hash<auto>> msgs = send(pushServer, "textDocument/didOpen", {"textDocument": {"uri": uri,
             "languageId": "qore", "version": 1, "text": text}}, True);
         assertEq(("textDocument/publishDiagnostics",), (map $1.method, msgs));
+    }
+
+    testClosuresInNestedHashes() {
+        string text = "%modern\n"
+            "sub f() {\n"
+            "    hash<auto> h = {\n"
+            "        \"a\": {\n"
+            "            \"b\": sub (int x) {\n"
+            "                return x + 1;\n"
+            "            },\n"
+            "        },\n"
+            "    };\n"
+            "}\n";
+        QLS::Document doc("file:///tmp/nested.q", text, "qore", 1);
+        # the function, both hashes and the closure fold
+        assertEq(((1, 9), (2, 8), (3, 7), (4, 6)), sort(map ($1.startLine, $1.endLine), doc.foldingRanges()));
+
+        # the parameter of the closure is linked and shown while debugging
+        assertEq(((4, 26, 27), (5, 23, 24)), FeaturesTest::spans(QLS::QLSServer::getLocalOccurrences(doc,
+            {"line": 5, "character": 23})));
+        list<hash<auto>> values = QLS::QLSServer::getInlineValues(doc, {"start": {"line": 0, "character": 0},
+            "end": {"line": 9, "character": 0}}, {"start": {"line": 5, "character": 16},
+            "end": {"line": 5, "character": 29}});
+        assertEq(("h", "x", "x"), (map $1.variableName, values));
     }
 }

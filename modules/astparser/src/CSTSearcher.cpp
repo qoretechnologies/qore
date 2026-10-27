@@ -228,6 +228,36 @@ QoreHashNode* CSTSearcher::makeLocation(TSNode node, const std::string& uri,
 // Symbol collection
 // --------------------------------------------------------------------------
 
+//! Returns the name node of a variable_declarator or parameter, or the node itself if it has no name node
+static TSNode getNameNode(TSNode node) {
+    TSNode nameNode = ts_node_child_by_field_name(node, "name", 4);
+    return ts_node_is_null(nameNode) ? node : nameNode;
+}
+
+//! Returns true if the node type has parameters and a body with local variables: functions, methods and closures
+static bool isCallableScope(const char* type) {
+    return strcmp(type, "function_declaration") == 0
+        || strcmp(type, "method_declaration") == 0
+        || strcmp(type, "constructor_declaration") == 0
+        || strcmp(type, "destructor_declaration") == 0
+        || strcmp(type, "closure_expression") == 0;
+}
+
+//! Returns true if a variable declaration declares symbols: global variables and variables of the top-level code
+/** Local variables of functions and closures, and variables of statements such as loops, are not symbols.
+*/
+static bool isSymbolVariableDeclaration(TSNode node, const char* type, bool inCallable) {
+    if (inCallable || (strcmp(type, "local_variable_declaration") && strcmp(type, "global_variable_declaration"))) {
+        return false;
+    }
+    TSNode parent = ts_node_parent(node);
+    if (ts_node_is_null(parent)) {
+        return false;
+    }
+    const char* parentType = ts_node_type(parent);
+    return strcmp(parentType, "source_file") == 0 || strstr(parentType, "namespace");
+}
+
 std::vector<CSTSymbolInfo>* CSTSearcher::collectSymbols(
     const AstParseResult* result,
     CSTCancelCheck& cancel,
@@ -244,6 +274,8 @@ std::vector<CSTSymbolInfo>* CSTSearcher::collectSymbols(
     struct PathEntry {
         std::string childPrefix;
         CSTDocComments docComments;
+        //! whether the children of the node are in a function, method or closure
+        bool inCallable = false;
     };
     std::vector<PathEntry> path;
     bool ok = cst_walk(result->getRootNode(), cancel, [&](const TSTreeCursor*, TSNode node, uint32_t depth) {
@@ -253,10 +285,42 @@ std::vector<CSTSymbolInfo>* CSTSearcher::collectSymbols(
         }
         const std::string scopePrefix = depth ? path[depth - 1].childPrefix : std::string();
         std::string childPrefix = scopePrefix;
+        const bool inCallable = depth && path[depth - 1].inCallable;
 
         const char* type = ts_node_type(node);
         ASTSymbolKind kind = nodeTypeToSymbolKind(type);
-        if (kind != ASYK_None) {
+
+        // global variables and variables of the top-level code are named by their declarators; a declaration with
+        // one declarator has the range of the declaration, like other declarations
+        if (kind == ASYK_Variable && getNodeName(node, result).empty()
+                && isSymbolVariableDeclaration(node, type, inCallable)) {
+            std::vector<TSNode> declarators;
+            cst_for_each_child(node, true, cancel, [&](TSNode child) {
+                if (strcmp(ts_node_type(child), "variable_declarator") == 0) {
+                    declarators.push_back(child);
+                }
+                return true;
+            });
+            std::string docComment = depth ? path[depth - 1].docComments.get(result) : std::string();
+            for (const TSNode& declarator : declarators) {
+                std::string name = result->getNodeText(getNameNode(declarator));
+                if (name.empty()) {
+                    continue;
+                }
+                CSTSymbolInfo si;
+                si.kind = kind;
+                si.name = (fixSymbols && !scopePrefix.empty() && !bareNames) ? scopePrefix + "::" + name : name;
+                si.docComment = docComment;
+                TSNode rangeNode = declarators.size() == 1 ? node : declarator;
+                TSPoint start = ts_node_start_point(rangeNode);
+                TSPoint end = ts_node_end_point(rangeNode);
+                si.startLine = start.row;
+                si.startCol = start.column;
+                si.endLine = end.row;
+                si.endCol = end.column;
+                vec->push_back(std::move(si));
+            }
+        } else if (kind != ASYK_None) {
             std::string name = getNodeName(node, result);
             if (!name.empty()) {
                 CSTSymbolInfo si;
@@ -299,6 +363,7 @@ std::vector<CSTSymbolInfo>* CSTSearcher::collectSymbols(
         }
         path[depth].childPrefix = std::move(childPrefix);
         path[depth].docComments.reset();
+        path[depth].inCallable = inCallable || isCallableScope(type);
         return CSTWalkAction::Descend;
     });
     if (!ok) {
@@ -759,7 +824,19 @@ void CSTSearcher::collectScopeSymbolsFromAncestors(
         }
         const char* type = ts_node_type(ancestors[i]);
 
-        if (strcmp(type, "block") == 0 && !inFunction) {
+        if (strcmp(type, "block") == 0 && i + 1 < ancestors.size()
+                && strcmp(ts_node_type(ancestors[i + 1]), "closure_expression") == 0) {
+            // a closure has its own locals and parameters, and the locals of the enclosing code stay visible
+            collectLocalsBeforePosition(ancestors[i], result, line, col, scopeLevel, vec, cancel);
+            collectParameters(ancestors[i + 1], result, scopeLevel, vec, cancel);
+            scopeLevel++;
+        } else if (strcmp(type, "closure_expression") == 0
+                && (!i || strcmp(ts_node_type(ancestors[i - 1]), "block") != 0)) {
+            // a position in a closure outside of its body, such as in its parameter list, has its parameters in
+            // scope, like a function's
+            collectParameters(ancestors[i], result, scopeLevel, vec, cancel);
+            scopeLevel++;
+        } else if (strcmp(type, "block") == 0 && !inFunction) {
             // Check if parent is a function/method/constructor
             if (i + 1 < ancestors.size()) {
                 const char* parentType = ts_node_type(ancestors[i + 1]);
@@ -1493,14 +1570,6 @@ static bool isDeclNameUsage(ASTSymbolUsageKind usage) {
     }
 }
 
-//! Check if a node type is a function-like declaration.
-static bool isFunctionLike(const char* type) {
-    return strcmp(type, "function_declaration") == 0
-        || strcmp(type, "method_declaration") == 0
-        || strcmp(type, "constructor_declaration") == 0
-        || strcmp(type, "destructor_declaration") == 0;
-}
-
 //! Returns true if a node declares a class member that definitions resolve to
 static bool isClassMemberDeclaration(const char* type) {
     return strcmp(type, "method_declaration") == 0 ||
@@ -1582,12 +1651,6 @@ bool CSTSearcher::findMemberInClass(TSNode classNode, const AstParseResult* resu
             return false;
         }
     }
-}
-
-//! Returns the name node of a variable_declarator or parameter, or the node itself if it has no name node
-static TSNode getNameNode(TSNode node) {
-    TSNode nameNode = ts_node_child_by_field_name(node, "name", 4);
-    return ts_node_is_null(nameNode) ? node : nameNode;
 }
 
 //! Finds a variable declared by the variable_declarator children of a local_variable_declaration
@@ -1680,10 +1743,10 @@ bool CSTSearcher::findLocalDeclaration(
                 return found;
             }
 
-            // If this block's parent is function-like, also search parameters
+            // If this block is the body of a function, method or closure, also search its parameters
             if (i + 1 < ancestors.size()) {
                 const char* parentType = ts_node_type(ancestors[i + 1]);
-                if (isFunctionLike(parentType)) {
+                if (isCallableScope(parentType)) {
                     TSNode params = cst_find_named_child(ancestors[i + 1], "parameter_list", cancel);
                     if (!ts_node_is_null(params)) {
                         cst_for_each_child(params, true, cancel, [&](TSNode param) {

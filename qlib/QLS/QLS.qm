@@ -108,7 +108,7 @@ module QLS {
     |!Feature|!LSP Method|!Description
     |Document Symbols|@c textDocument/documentSymbol|Hierarchical outline of all symbols in a document
     |Workspace Symbols|@c workspace/symbol|Search for symbols across all workspace files
-    |Folding Ranges|@c textDocument/foldingRange|Code folding for declarations, blocks, and multi-line comments
+    |Folding Ranges|@c textDocument/foldingRange|Code folding for declarations, blocks, closures, multi-line hash and list literals, and multi-line comments
     |Selection Range|@c textDocument/selectionRange|Expanding selection based on syntactic structure
 
     <b>Hierarchy</b>

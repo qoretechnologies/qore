@@ -500,6 +500,9 @@ sub test() {
         addTestCase("Identifier filter scoped identifiers", \testIdentifierFilterScoped());
         addTestCase("Identifier filter false positives", \testIdentifierFilterFalsePositives());
         addTestCase("Identifier filter empty and invalid", \testIdentifierFilterEmptyInvalid());
+        addTestCase("Closure parameters resolve", \testClosureParameters());
+        addTestCase("Variable symbols", \testVariableSymbols());
+        addTestCase("Closure scope symbols", \testClosureScopeSymbols());
 %endif
         set_return_value(main());
     }
@@ -4150,5 +4153,77 @@ sub broken(int x) {
         binary f = parser.parseString("%modern\nint value = 1;\n").getIdentifierFilter();
         assertTrue(AstTree::identifierFilterContains(f, convert_encoding("value", "ISO-8859-1")),
             "a name in another encoding is converted");
+    }
+
+    #! Code with closures in a variable, a function and nested hashes (issue 2538)
+    const ClosureCode = "%modern\n"
+        "code c = sub (int x) {\n"
+        "    return x;\n"
+        "};\n"
+        "sub f(int outer) {\n"
+        "    int local = 1;\n"
+        "    hash<auto> h = {\"a\": {\"b\": sub (int p) { int q = p; return q + local + outer; }}};\n"
+        "}\n";
+
+    #! Returns the start of the first definition at a position as "line:column", or NOTHING
+    private *string definitionAt(AstTree tree, int line, int col) {
+        AstTreeSearcher searcher();
+        *list<auto> defs = searcher.resolveDefinition(tree, "test.q", line, col);
+        return defs ? sprintf("%d:%d", defs[0].range.start.line, defs[0].range.start.character) : NOTHING;
+    }
+
+    testClosureParameters() {
+        AstParser parser();
+        AstTree tree = parser.parseString(ClosureCode);
+        assertEq("1:18", definitionAt(tree, 2, 11), "the parameter of a closure in a variable");
+        # line 6: "    hash<auto> h = {"a": {"b": sub (int p) { int q = p; return q + local + outer; }}};"
+        assertEq("6:40", definitionAt(tree, 6, 53), "the parameter of a closure in nested hashes");
+        assertEq("6:49", definitionAt(tree, 6, 63), "a local variable of the closure");
+        assertEq("5:8", definitionAt(tree, 6, 67), "a local variable of the enclosing function");
+        assertEq("4:10", definitionAt(tree, 6, 75), "a parameter of the enclosing function");
+    }
+
+    testVariableSymbols() {
+        AstParser parser();
+        AstTree tree = parser.parseString("%modern\nint i = 1;\nour int o = 2;\nour int a, b;\n"
+            "namespace Ns { our int n = 3; }\n"
+            "for (int loop = 0; loop < 1; ++loop) {}\n" + ClosureCode.substr(8));
+        AstTreeSearcher searcher();
+        list<auto> symbols = searcher.findSymbols(tree, "test.q", True, False);
+        list<string> variables = map $1.name, (select symbols, $1.kind == ASYK_Variable);
+        assertEq(("i", "o", "a", "b", "Ns::n", "c"), variables,
+            "global and top-level variables; not loop variables or the locals of functions and closures");
+        hash<auto> o = (select symbols, $1.name == "o")[0];
+        assertEq({"line": 2, "character": 0}, o.location.range.start, "a declaration with one declarator");
+        hash<auto> b = (select symbols, $1.name == "b")[0];
+        assertEq({"line": 3, "character": 11}, b.location.range.start, "each declarator of a declaration");
+    }
+
+    testClosureScopeSymbols() {
+        AstParser parser();
+        AstTree tree = parser.parseString(ClosureCode);
+        AstTreeSearcher searcher();
+        # in the closure in nested hashes, after "int q = p;"
+        list<string> names = map $1.name, (select searcher.findScopeSymbolsDetailed(tree, "test.q", 6, 58) ?? (),
+            $1.kind == ASYK_Variable);
+        foreach string name in (("p", "q", "local", "outer")) {
+            assertTrue(names.contains(name), sprintf("%s is in scope: %y", name, names));
+        }
+
+        # at the closure's "sub" keyword and at its parameter, the parameter is in scope, but not the closure's locals
+        foreach int col in (32, 40) {
+            names = map $1.name, (select searcher.findScopeSymbolsDetailed(tree, "test.q", 6, col) ?? (),
+                $1.kind == ASYK_Variable);
+            foreach string name in (("p", "local", "outer")) {
+                assertTrue(names.contains(name), sprintf("%s is in scope at column %d: %y", name, col, names));
+            }
+            assertFalse(names.contains("q"), sprintf("q is not in scope at column %d: %y", col, names));
+        }
+
+        # in the closure in a top-level variable, its parameter is in scope, but not the locals of f()
+        names = map $1.name, (select searcher.findScopeSymbolsDetailed(tree, "test.q", 2, 11) ?? (),
+            $1.kind == ASYK_Variable);
+        assertTrue(names.contains("x"), sprintf("x is in scope: %y", names));
+        assertFalse(names.contains("local"), sprintf("local is not in scope: %y", names));
     }
 }
