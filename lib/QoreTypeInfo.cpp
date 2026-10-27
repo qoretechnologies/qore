@@ -3606,6 +3606,48 @@ bool QoreTypeSpec::operator!=(const QoreTypeSpec& other) const {
    return !(*this == other);
 }
 
+// returns true if a container with the given value type has no declared element type, as a container built at
+// runtime without one (ex: by a language binding) has
+static bool qore_is_untyped_container_vti(const QoreTypeInfo* ti) {
+    return !ti || is_auto_vti(ti) || ti == anyTypeInfo || !QoreTypeInfo::hasType(ti);
+}
+
+// issue #5541: matches the elements of a container with no declared element type against the element type of a
+// complex container type as arguments are matched, so that runtime variant matching accepts the container when
+// binding the argument would fold every element into the type, as an assignment does; an exact match of every
+// element ranks above a match that converts elements, and both rank below a container of the type
+static qore_type_result_e qore_untyped_container_element_match(qore_type_result_e rv, const QoreTypeInfo* elem_ti,
+        const QoreValue& v) {
+    qore_type_result_e erv = QoreTypeInfo::runtimeAcceptsValue(elem_ti, v);
+    if (erv == QTI_NOT_EQUAL) {
+        return QTI_NOT_EQUAL;
+    }
+    return erv == QTI_IDENT ? rv : QTI_WILDCARD;
+}
+
+static qore_type_result_e qore_untyped_list_accepts(const QoreTypeInfo* elem_ti, const QoreListNode& l) {
+    qore_type_result_e rv = QTI_AMBIGUOUS;
+    for (size_t i = 0, e = l.size(); i < e; ++i) {
+        rv = qore_untyped_container_element_match(rv, elem_ti, l.retrieveEntry(i));
+        if (rv == QTI_NOT_EQUAL) {
+            break;
+        }
+    }
+    return rv;
+}
+
+static qore_type_result_e qore_untyped_hash_accepts(const QoreTypeInfo* elem_ti, const QoreHashNode& h) {
+    qore_type_result_e rv = QTI_AMBIGUOUS;
+    ConstHashIterator hi(h);
+    while (hi.next()) {
+        rv = qore_untyped_container_element_match(rv, elem_ti, hi.get());
+        if (rv == QTI_NOT_EQUAL) {
+            break;
+        }
+    }
+    return rv;
+}
+
 qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool exact) const {
     qore_type_t ot = n.getType();
     // issue #2928 we must ensure that each typespec only access its own data in the union
@@ -3746,6 +3788,10 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool ex
             if (h->empty() && !h->getHashDecl() && (!ti || !QoreTypeInfo::hasType(ti))) {
                 return QTI_NEAR;
             }
+            // issue #5541: a hash with no declared value type matches if all of its values do
+            if (!h->getHashDecl() && qore_is_untyped_container_vti(ti)) {
+                return qore_untyped_hash_accepts(u.ti, *h);
+            }
             return QTI_NOT_EQUAL;
         }
 
@@ -3778,6 +3824,13 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool ex
                 // NOTE: if the list has a specific type (ti with hasType), it must be compatible - checked above
                 if (l->empty() && (!ti || !QoreTypeInfo::hasType(ti))) {
                     return QTI_NEAR;
+                }
+                // issue #5541: a list with no declared element type matches if all of its elements do
+                if (qore_is_untyped_container_vti(ti)) {
+                    qore_type_result_e rv = qore_untyped_list_accepts(u.ti, *l);
+                    if (rv != QTI_NOT_EQUAL) {
+                        return rv;
+                    }
                 }
             }
             if (typespec == QTS_COMPLEXSOFTLIST) {

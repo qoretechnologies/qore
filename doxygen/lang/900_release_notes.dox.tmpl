@@ -5072,6 +5072,19 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a list or hash with no declared element type (<tt>list&lt;auto&gt;</tt>, <tt>hash&lt;auto&gt;</tt>), as
+      built at runtime by language bindings such as the \c python module, was rejected for a typed container
+      parameter (ex: <tt>list&lt;int&gt;</tt>, <tt>hash&lt;string, list&lt;string&gt;&gt;</tt>) in runtime
+      variant matching (functions, methods, static methods, constructors, call references and closures), even
+      when every element matched the element type; it is now accepted and converted to the parameter type as in
+      an assignment, and a container with an element that does not match is rejected as before
+      (<a href="https://github.com/qoretechnologies/qore/issues/5541">issue 5541</a>)
+    - runtime variant matching ranked a typed list or hash whose elements the parameter accepts only with a
+      conversion the same as one of the parameter's own element type, so that, for example, a
+      <tt>list&lt;int&gt;</tt> passed with @ref Qore::call_function() "call_function()" to a function with
+      <tt>list&lt;float&gt;</tt> and <tt>list&lt;int&gt;</tt> variants selected the variant declared first; a
+      container of the parameter's element type now ranks first, as when the variant is selected when the call is
+      parsed
     - a class created at runtime by a binary module and added with <tt>QoreNamespace::addSystemClass()</tt>, as
       the \c python module does when it exports a Python subclass of a %Qore class, did not initialize the members
       of its user-class parents or its own members with initial values when an object of the class was created
