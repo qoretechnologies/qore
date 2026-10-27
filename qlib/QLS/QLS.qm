@@ -59,6 +59,8 @@ module QLS {
       notifications; call @ref QLS::QLSServer::main() "main()" to run the server loop
     - @ref QLS::Document "Document": document model wrapping the @c astparser CST; provides
       symbol search, diagnostics, completion, formatting, folding, and cross-document resolution
+    - @ref QLS::FileIndex "FileIndex": compact symbol index of a source file that is not open in the editor
+    - @ref QLS::DocumentCache "DocumentCache": size-limited cache of syntax trees parsed from indexed files
     - @ref QLS::Messenger "Messenger": JSON-RPC transport layer reading/writing LSP messages
       on stdin/stdout with @c Content-Length headers
     - @ref QLS::ErrorResponse "ErrorResponse": factory for LSP error responses
@@ -151,15 +153,59 @@ server.main();
 
     The @ref QLS::QLSServer "QLSServer" maintains three document stores:
     - <b>Open documents</b> (@c documents): files currently open in the editor, updated on
-      every @c textDocument/didChange notification
-    - <b>Workspace documents</b> (@c workspaceDocs): Qore and Qorus source files with extensions
-      listed in @ref QLS::Files::QORE_EXTENSIONS, discovered in the workspace root and parsed on
+      every @c textDocument/didChange notification; open documents keep their syntax trees
+    - <b>Workspace index</b> (@c workspaceIndex): Qore and Qorus source files with extensions
+      listed in @ref QLS::Files::QORE_EXTENSIONS, discovered in the workspace root and indexed on
       initialization
-    - <b>Standard module documents</b> (@c stdModuleDocs): %Qore standard library modules,
-      parsed from the module path on initialization
+    - <b>Standard module index</b> (@c stdModuleIndex): %Qore standard library modules, indexed from
+      the module path when a request first needs them
 
     Cross-document features (find references, rename, call hierarchy) search across all three
     stores to provide workspace-wide results.
+
+    @subsection qls_indexing Workspace Indexing
+
+    A syntax tree takes roughly 20 times the size of its source in memory, so files that are not
+    open in the editor are not kept as syntax trees.  Each file is parsed once, the symbols that it
+    declares are stored in a @ref QLS::FileIndex "FileIndex", and the syntax tree is released.
+    Symbol searches (workspace symbols, hover, definition and type lookups) use the indexes
+    directly.
+
+    When a request needs the syntax tree of an indexed file, only the files that can contain the
+    result are parsed:
+    - references, rename and incoming calls: the files whose source contains the identifier
+    - definitions: the files that declare classes on the inheritance path from a class used in
+      the document to a class with a member of that name, and the files that declare the
+      identifier, in batches and in the original search order
+    - hover, subtypes and implementations: the files with matching symbols or subclasses
+
+    Parsed trees are kept in a @ref QLS::DocumentCache "DocumentCache" limited by the total size of
+    their sources.  @ref QLS::QLSServer::getIndexInfo() "QLSServer::getIndexInfo()" returns the
+    current size of the indexes and the cache.
+
+    Workspace scanning skips subdirectories matching @ref QLS::Files::DefaultExcludeDirs (version
+    control metadata, dependency trees, agent worktrees and build output), files larger than
+    @ref QLS::Files::DefaultMaxIndexFileSize, and directories already reached through another path,
+    so symbolic links cannot cause loops or duplicate results.
+
+    These limits can be set with the @c initializationOptions of the @c initialize request:
+    |!Option|!Type|!Description
+    |@c excludeDirs|list of strings|shell-style glob patterns (@c * and @c ?) for subdirectory names that are not searched; replaces @ref QLS::Files::DefaultExcludeDirs
+    |@c maxIndexFileSize|int|files larger than this many bytes are not indexed; @c 0 means no limit (default: @ref QLS::Files::DefaultMaxIndexFileSize)
+    |@c treeCacheSize|int|syntax trees of indexed files are cached up to this many bytes of source; @c 0 disables the cache (default: @ref QLS::DefaultTreeCacheSize)
+
+    For example:
+    @code{.json}
+{
+    "initializationOptions": {
+        "excludeDirs": [".git", "node_modules", "build*", "generated"],
+        "maxIndexFileSize": 4194304,
+        "treeCacheSize": 16777216
+    }
+}
+    @endcode
+
+    Options with invalid values are logged and ignored.
 
     @section qlsrelnotes Release Notes
 
