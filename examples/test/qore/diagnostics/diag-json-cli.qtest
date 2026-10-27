@@ -15,6 +15,7 @@ public class DiagJsonCliTest inherits QUnit::Test {
         addTestCase("json empty for clean program", \testJsonClean());
         addTestCase("json language trap warning", \testJsonLanguageTrapWarning());
         addTestCase("json via environment variable", \testJsonEnv());
+        addTestCase("json error for a module that fails to load", \testJsonModuleLoadError());
         set_return_value(main());
     }
 
@@ -67,6 +68,46 @@ public class DiagJsonCliTest inherits QUnit::Test {
         # a real column span must be present (a positive integer)
         assertRegex("\"startColumn\":[0-9]+", out);
         assertFalse(out =~ /"startColumn":-1/, "the error should carry a real column");
+    }
+
+    #! Writes a module that fails to load and a script that requires it; returns the script path
+    private static string writeBrokenModuleScript(string dir) {
+        mkdir(dir + "/mods", 0700, True);
+        File m();
+        m.open2(dir + "/mods/DiagBroken.qm", O_CREAT | O_WRONLY | O_TRUNC);
+        m.write("%modern\nmodule DiagBroken {\n    version = \"1.0\";\n    desc = \"test\";\n"
+            "    author = \"test\";\n    url = \"https://qore.org\";\n}\n"
+            "public namespace DiagBroken {\n    public int sub f() { return undefined_function(); }\n}\n");
+        File s();
+        s.open2(dir + "/use.q", O_CREAT | O_WRONLY | O_TRUNC);
+        s.write("%modern\n%requires DiagBroken\nint x = 1;\n");
+        return dir + "/use.q";
+    }
+
+    #! Removes the files written by writeBrokenModuleScript()
+    private static removeBrokenModuleScript(string dir) {
+        unlink(dir + "/mods/DiagBroken.qm");
+        rmdir(dir + "/mods");
+        unlink(dir + "/use.q");
+        rmdir(dir);
+    }
+
+    testJsonModuleLoadError() {
+        string dir = sprintf("%s/diag-json-module-%d", ENV.TMPDIR ?? "/tmp", getpid());
+        string script = DiagJsonCliTest::writeBrokenModuleScript(dir);
+        on_exit {
+            DiagJsonCliTest::removeBrokenModuleScript(dir);
+        }
+        int rc;
+        string out = backquote(sprintf("QORE_MODULE_DIR=%s %s --diag-format=json %s 2>/dev/null",
+            DiagJsonCliTest::shellQuote(dir + "/mods"), qoreBin(), DiagJsonCliTest::shellQuote(script)), \rc);
+        assertEq(2, rc, "exit code 2 for an error");
+        assertRegex("\"severity\":\"error\"", out, "the error is reported, not an empty list");
+        assertRegex("function 'undefined_function\\(\\)' cannot be found \\(while loading user module "
+            "\\\\\"DiagBroken\\\\\"", out);
+        # the error is placed at the %requires directive in the script, where an editor shows it
+        assertRegex("\"file\":\"[^\"]*use.q\"", out);
+        assertRegex("\"startLine\":2,\"endLine\":2", out);
     }
 
     testJsonClean() {

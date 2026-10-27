@@ -1688,6 +1688,14 @@ public:
         return collect_diagnostics;
     }
 
+    //! records the exceptions raised while loading a module for a parse directive as error diagnostics
+    /** Module loading raises its errors in the module's own Program, so they reach the parse exception sink
+        without makeParseException() and would otherwise be missing from the structured diagnostics.  The
+        diagnostics are placed at the directive, as the errors are in the source of the module.  Implemented in
+        QoreProgram.cpp.
+    */
+    DLLLOCAL void collectModuleLoadErrors(const QoreProgramLocation& loc, ExceptionSink& xsink);
+
     //! returns the structured diagnostics collected during the last parse action as a
     //! list<hash<ParseDiagnosticInfo>> (implemented in QoreProgram.cpp); never returns nullptr
     DLLLOCAL QoreListNode* getParseDiagnosticList() const;

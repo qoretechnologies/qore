@@ -1609,6 +1609,10 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                                     //printd(5, "scanner requesting feature: '%s'\n", cn);
                                                     ExceptionSink xsink;
                                                     QMM.parseLoadModule(xsink, xsink, cn, pgm, reexport);
+                                                    if (xsink) {
+                                                       qore_program_private::get(*pgm)->collectModuleLoadErrors(
+                                                          *get_loc(yylloc), xsink);
+                                                    }
                                                     pgm->getParseExceptionSink()->assimilate(xsink);
                                                  }
                                               }

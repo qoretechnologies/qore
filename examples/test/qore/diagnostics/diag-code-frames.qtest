@@ -15,6 +15,7 @@ public class DiagCodeFramesTest inherits QUnit::Test {
         addTestCase("code frame for language trap warning", \testFrameLanguageTrap());
         addTestCase("no frame for clean program", \testFrameClean());
         addTestCase("frame via environment variable", \testFrameEnv());
+        addTestCase("frame for a module that fails to load", \testFrameModuleLoadError());
         set_return_value(main());
     }
 
@@ -33,6 +34,43 @@ public class DiagCodeFramesTest inherits QUnit::Test {
             ? sprintf("QORE_CODE_FRAMES=1 %s -e %s 2>&1", qoreBin(), shellQuote(src))
             : sprintf("%s --code-frames -e %s 2>&1", qoreBin(), shellQuote(src));
         return backquote(cmd);
+    }
+
+    #! Writes a module that fails to load and a script that requires it; returns the script path
+    private static string writeBrokenModuleScript(string dir) {
+        mkdir(dir + "/mods", 0700, True);
+        File m();
+        m.open2(dir + "/mods/DiagBroken.qm", O_CREAT | O_WRONLY | O_TRUNC);
+        m.write("%modern\nmodule DiagBroken {\n    version = \"1.0\";\n    desc = \"test\";\n"
+            "    author = \"test\";\n    url = \"https://qore.org\";\n}\n"
+            "public namespace DiagBroken {\n    public int sub f() { return undefined_function(); }\n}\n");
+        File s();
+        s.open2(dir + "/use.q", O_CREAT | O_WRONLY | O_TRUNC);
+        s.write("%modern\n%requires DiagBroken\nint x = 1;\n");
+        return dir + "/use.q";
+    }
+
+    #! Removes the files written by writeBrokenModuleScript()
+    private static removeBrokenModuleScript(string dir) {
+        unlink(dir + "/mods/DiagBroken.qm");
+        rmdir(dir + "/mods");
+        unlink(dir + "/use.q");
+        rmdir(dir);
+    }
+
+    testFrameModuleLoadError() {
+        string dir = sprintf("%s/diag-frames-module-%d", ENV.TMPDIR ?? "/tmp", getpid());
+        string script = DiagCodeFramesTest::writeBrokenModuleScript(dir);
+        on_exit {
+            DiagCodeFramesTest::removeBrokenModuleScript(dir);
+        }
+        int rc;
+        string out = backquote(sprintf("QORE_MODULE_DIR=%s %s --code-frames %s 2>&1",
+            DiagCodeFramesTest::shellQuote(dir + "/mods"), qoreBin(), DiagCodeFramesTest::shellQuote(script)), \rc);
+        assertEq(2, rc, "exit code 2 for an error, not 0");
+        assertRegex("use.q:2:[0-9]+: error\\[PARSE-EXCEPTION\\]", out);
+        assertRegex("while loading user module \"DiagBroken\"", out);
+        assertRegex("%requires DiagBroken", out, "the directive is shown");
     }
 
     testFrameError() {

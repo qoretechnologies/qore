@@ -608,6 +608,17 @@ static QoreListNode* make_diagnostic_fix_list(const std::vector<QoreDiagnosticFi
     return list.release();
 }
 
+void qore_program_private::collectModuleLoadErrors(const QoreProgramLocation& loc, ExceptionSink& xsink) {
+    if (!collect_diagnostics) {
+        return;
+    }
+    for (const QoreException* e = qore_es_private::get(xsink)->head; e; e = e->next) {
+        QoreStringValueHelper err(e->err);
+        QoreStringValueHelper desc(e->desc);
+        diagnostics.push_back(QoreDiagnostic(true, err->c_str(), -1, loc, desc->c_str()));
+    }
+}
+
 QoreListNode* qore_program_private::getParseDiagnosticList() const {
     ReferenceHolder<QoreListNode> l(new QoreListNode(hashdeclParseDiagnosticInfo->getTypeInfo()), nullptr);
     for (auto& d : diagnostics) {
