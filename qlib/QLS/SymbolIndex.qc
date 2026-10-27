@@ -121,6 +121,9 @@ public class FileIndex {
 
         #! The classes declared in the file
         list<hash<IndexedClass>> classes = ();
+
+        #! Filter of the identifiers in the file; see astparser::AstTree::getIdentifierFilter()
+        *binary identifierFilter;
     }
 
     #! Creates the index from a parsed document
@@ -130,6 +133,10 @@ public class FileIndex {
     constructor(Document doc, int sourceSize) {
         uri = doc.getUri();
         self.sourceSize = sourceSize;
+        *astparser::AstTree tree = doc.getTree();
+        if (tree) {
+            identifierFilter = tree.getIdentifierFilter();
+        }
 
         *list<auto> qualified = doc.findSymbols(True, False);
         *list<auto> bare = doc.findSymbols(True, True);
@@ -292,6 +299,19 @@ public class FileIndex {
             }
         }
         return ret;
+    }
+
+    #! Returns @ref True if the file can contain the identifier when it was indexed
+    /** Uses a filter of the identifiers in the file without reading it: there are no false negatives, and about 1%
+        of identifiers that do not occur in the file also give @ref True.
+
+        @param name the identifier, as compared by reference searches
+
+        @return @ref False if the file did not contain the identifier when it was indexed; @ref True if it can
+        contain it or if the file could not be parsed
+    */
+    bool mayContainIdentifier(string name) {
+        return identifierFilter ? astparser::AstTree::identifierFilterContains(identifierFilter, name) : True;
     }
 
     #! Returns @ref True if the source file currently contains the given text

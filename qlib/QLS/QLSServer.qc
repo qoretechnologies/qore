@@ -121,8 +121,16 @@ public const ServerCapabilities = {
     /**
      * Defines how text documents are synced. Is either a detailed structure defining each notification or
      * for backwards compatibility the TextDocumentSyncKind number.
+     *
+     * Changes are sent incrementally, so large documents are not sent again for every edit.
      */
-    "textDocumentSync": TextDocumentSyncKind.Full,
+    "textDocumentSync": {
+        "openClose": True,
+        "change": TextDocumentSyncKind.Incremental,
+        "save": {
+            "includeText": False,
+        },
+    },
 
     /**
      * The server provides hover support.
@@ -249,6 +257,17 @@ public const ServerCapabilities = {
     "codeActionProvider": {
         "codeActionKinds": ("source.sortImports", "source"),
     },
+
+    /**
+     * Workspace-specific server capabilities: all workspace folders are indexed, and folders added to or removed
+     * from the workspace are indexed or removed.
+     */
+    "workspace": {
+        "workspaceFolders": {
+            "supported": True,
+            "changeNotifications": True,
+        },
+    },
 };
 
 #! QLS - Language Server Protocol server implementation for Qore.
@@ -292,6 +311,9 @@ public class QLSServer {
 
         #! Workspace root path (ex. "/home/user/projects/lorem")
         string rootPath;
+
+        #! Paths of the workspace folders; all are indexed (rootPath is the first one)
+        list<string> workspaceRoots = ();
 
         #! Client capabilities
         hash<auto> clientCapabilities;
@@ -449,6 +471,7 @@ public class QLSServer {
             "workspace/didChangeConfiguration": \meth_ws_didChangeConfiguration(),
             "workspace/didChangeWatchedFiles": \meth_ws_didChangeWatchedFiles(),
             "workspace/symbol": \meth_ws_symbol(),
+            "workspace/didChangeWorkspaceFolders": \meth_ws_didChangeWorkspaceFolders(),
 
             # Document methods
             "textDocument/didOpen": \meth_td_didOpen(),
@@ -587,16 +610,42 @@ public class QLSServer {
     #=================
 
     private:internal parseFilesInWorkspace() {
-        if (!rootPath) {
-            log(0, "WARNING: root path not set - workspace files will not be parsed");
+        if (!workspaceRoots) {
+            log(0, "WARNING: no workspace folders - workspace files will not be parsed");
             return;
         }
+        map indexWorkspaceRoot($1), workspaceRoots;
+    }
 
+    #! Adds a workspace folder; it is indexed by the caller
+    /** @param uri the URI of the folder
+
+        @return the path of the folder, or @ref nothing if it is not a local folder or is already a workspace folder
+    */
+    private:internal *string addWorkspaceRoot(string uri) {
+        if (uri !~ /^file:\//) {
+            log(0, "WARNING: ignoring workspace folder that is not a local directory: %y", uri);
+            return NOTHING;
+        }
+        string path = regex_subst(Document::getFilePath(uri), "(.)/+$", "$1");
+        if (workspaceRoots.contains(path)) {
+            return NOTHING;
+        }
+        push workspaceRoots, path;
+        if (!rootPath) {
+            rootPath = path;
+            rootUri = Document::getFileUri(path);
+        }
+        return path;
+    }
+
+    #! Indexes the Qore files in a workspace folder
+    private:internal indexWorkspaceRoot(string root) {
         # find all Qore files in the workspace
         list<string> qoreFiles;
         list<string> skippedFiles;
         try {
-            qoreFiles = Files::find_qore_files(rootPath, scanOptions, \skippedFiles);
+            qoreFiles = Files::find_qore_files(root, scanOptions, \skippedFiles);
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "DIR-READ-FAILURE") {
                 log(0, "WARNING: root path scanning failed: %s", get_exception_string(ex));
@@ -619,34 +668,80 @@ public class QLSServer {
                         "files or directories.");
                 return;
             }
+            rethrow;
         }
         if (skippedFiles) {
             log(0, "skipped %d workspace files larger than %d bytes: %Y", skippedFiles.size(),
                 scanOptions.maxFileSize, skippedFiles);
         }
 
-        # create a list of file URIs
-        int rootPathSize = rootPath.size();
-        qoreFiles = map rootUri + $1.substr(rootPathSize), qoreFiles;
-        log(1, "qore files in workspace: %Y", qoreFiles);
+        # create a list of file URIs encoded like the URIs of documents opened by the client
+        qoreFiles = map Document::getFileUri($1), qoreFiles;
+        log(1, "qore files in workspace folder %y: %Y", root, qoreFiles);
 
         # measure start time
         date start = now_us();
 
-        # index everything; syntax trees are released after indexing and parsed again when needed
+        # index everything; syntax trees are released after indexing and parsed again when needed; open documents
+        # and files in nested workspace folders that are already indexed are skipped
+        int count = 0;
         foreach string uri in (qoreFiles) {
+            if (documents{uri} || workspaceIndex{uri}) {
+                continue;
+            }
             *FileIndex index = indexFile(uri);
             if (index) {
                 workspaceIndex{uri} = index;
+                ++count;
             }
         }
+        delete indexedClassGraph;
 
         # measure end time
         date end = now_us();
-        int symbolCount = 0;
-        map symbolCount += $1.getSymbolCount(), workspaceIndex.iterator();
-        log(0, "indexing of %d workspace files with %d symbols took: %y", workspaceIndex.size(), symbolCount,
-            end - start);
+        log(0, "indexing of %d files in workspace folder %y took: %y; %d workspace files indexed", count, root,
+            end - start, workspaceIndex.size());
+    }
+
+    #! Removes a workspace folder and the index of its files that are not in another workspace folder
+    private:internal removeWorkspaceRoot(string uri) {
+        if (uri !~ /^file:\//) {
+            return;
+        }
+        string root = regex_subst(Document::getFilePath(uri), "(.)/+$", "$1");
+        if (!workspaceRoots.contains(root)) {
+            log(1, "removed workspace folder %y was not indexed", root);
+            return;
+        }
+        workspaceRoots = select workspaceRoots, $1 != root;
+        if (root == rootPath) {
+            rootPath = workspaceRoots[0] ?? "";
+            rootUri = rootPath ? Document::getFileUri(rootPath) : "";
+        }
+        int count = 0;
+        foreach string fileUri in (keys workspaceIndex) {
+            string path = Document::getFilePath(fileUri);
+            if (path.equalPartial(root + DirSep) && !getWorkspaceRoot(path)) {
+                remove workspaceIndex{fileUri};
+                treeCache.invalidate(fileUri);
+                ++count;
+            }
+        }
+        delete indexedClassGraph;
+        log(0, "removed workspace folder %y and the index of %d files", root, count);
+    }
+
+    #! Returns the workspace folder that contains the given path, or @ref nothing if it is not in the workspace
+    /** If workspace folders are nested, the innermost folder is returned.
+    */
+    private:internal *string getWorkspaceRoot(string path) {
+        *string ret;
+        foreach string root in (workspaceRoots) {
+            if (path.equalPartial(root + DirSep) && (!ret || root.size() > ret.size())) {
+                ret = root;
+            }
+        }
+        return ret;
     }
 
     #! Applies the initialization options sent by the client
@@ -983,17 +1078,20 @@ public class QLSServer {
         # parse/save initialization params
         parentProcessId = request.params.processId;
         clientCapabilities = request.params.capabilities;
-        if (request.params.rootUri) {
-            rootUri = request.params.rootUri;
-        }
-        if (request.params.rootPath) {
-            rootPath = request.params.rootPath;
-        }
-        if (!rootPath && rootUri) {
-            rootPath = parse_url(rootUri).path;
-        }
-        if (!rootUri && rootPath) {
-            rootUri = Document::getFileUri(rootPath);
+        # all workspace folders are indexed; the deprecated rootUri and rootPath parameters are only used when the
+        # client does not send workspace folders
+        if (request.params.workspaceFolders.typeCode() == NT_LIST && request.params.workspaceFolders) {
+            foreach auto folder in (request.params.workspaceFolders) {
+                if (folder.typeCode() == NT_HASH && folder.uri.typeCode() == NT_STRING) {
+                    addWorkspaceRoot(folder.uri);
+                } else {
+                    log(0, "WARNING: ignoring invalid workspace folder: %y", folder);
+                }
+            }
+        } else if (request.params.rootUri) {
+            addWorkspaceRoot(request.params.rootUri);
+        } else if (request.params.rootPath) {
+            addWorkspaceRoot(Document::getFileUri(request.params.rootPath));
         }
         applyInitializationOptions(request.params.initializationOptions);
 
@@ -1148,16 +1246,43 @@ public class QLSServer {
         return NOTHING;
     }
 
+    #! "workspace/didChangeWorkspaceFolders" notification method handler
+    /** Indexes added workspace folders and removes the index of the files in removed workspace folders.
+    */
+    private *string meth_ws_didChangeWorkspaceFolders(hash<auto> request) {
+        *hash<auto> event = request.params.event;
+        if (event.typeCode() != NT_HASH) {
+            log(0, "WARNING: 'workspace/didChangeWorkspaceFolders' notification without a valid event: %y",
+                request.params);
+            return NOTHING;
+        }
+        foreach auto folder in (event.removed) {
+            if (folder.typeCode() == NT_HASH && folder.uri.typeCode() == NT_STRING) {
+                removeWorkspaceRoot(folder.uri);
+            }
+        }
+        foreach auto folder in (event.added) {
+            if (folder.typeCode() == NT_HASH && folder.uri.typeCode() == NT_STRING) {
+                *string root = addWorkspaceRoot(folder.uri);
+                if (root) {
+                    indexWorkspaceRoot(root);
+                }
+            }
+        }
+        return NOTHING;
+    }
+
     #! Returns @ref True if the given file is in the workspace and is indexed according to the scan options
     private:internal bool isIndexedWorkspaceFile(string uri) {
-        if (!rootPath || uri !~ /^file:\//) {
+        if (uri !~ /^file:\//) {
             return False;
         }
         string path = Document::getFilePath(uri);
-        if (!path.equalPartial(rootPath + DirSep) || !Files::is_valid_qore_file(path)) {
+        *string root = getWorkspaceRoot(path);
+        if (!root || !Files::is_valid_qore_file(path)) {
             return False;
         }
-        return !Files::is_excluded_path(path, rootPath, scanOptions);
+        return !Files::is_excluded_path(path, root, scanOptions);
     }
 
     #! "workspace/symbol" method handler
@@ -1595,11 +1720,76 @@ public class QLSServer {
             return ErrorResponse::nonExistentDocument(request);
         }
 
-        # find references
+        # find references in the open documents and the workspace
         Document doc = documents{request.params.textDocument.uri};
-        *list<auto> references = doc.findReferences(request.params.position,
-            request.params.context.includeDeclaration);
+        bool includeDecl = request.params.context.includeDeclaration ?? False;
+        *list<auto> references = findReferencesCrossDoc(doc, request.params.position, includeDecl)
+            ?? doc.findReferences(request.params.position, includeDecl);
         return make_jsonrpc_response(jsonRpcVer, request.id, references ?? ());
+    }
+
+    #! Symbol kinds whose declarations contain local variables
+    const CallableSymbolKinds = {
+        ASTSymbolKind.Function: True,
+        ASTSymbolKind.Method: True,
+        ASTSymbolKind.Constructor: True,
+    };
+
+    #! Returns @ref True if the outer LSP range contains the inner range
+    private:internal static bool rangeContains(hash<auto> outer, hash<auto> inner) {
+        return (outer.start.line < inner.start.line
+                || (outer.start.line == inner.start.line && outer.start.character <= inner.start.character))
+            && (inner.end.line < outer.end.line
+                || (inner.end.line == outer.end.line && inner.end.character <= outer.end.character));
+    }
+
+    #! Returns the symbols of a document as a tree of LSP \c DocumentSymbol hashes
+    /** Symbols are nested by their ranges and named without namespace or class prefixes; \c selectionRange is the
+        declared name.  Local variables of functions and methods are not included.
+    */
+    private:internal list<hash<auto>> getDocumentSymbolTree(Document doc) {
+        *list<auto> symbols = doc.findSymbols(True, True);
+        if (!symbols) {
+            return ();
+        }
+        # symbols are in tree order, so the enclosing symbols of a symbol are the open ones that contain it
+        list<int> parents = ();
+        list<int> open = ();
+        for (int i = 0; i < symbols.size(); ++i) {
+            hash<auto> range = symbols[i].location.range;
+            while (open && !QLSServer::rangeContains(symbols[open.last()].location.range, range)) {
+                pop open;
+            }
+            push parents, open ? open.last() : -1;
+            push open, i;
+        }
+        hash<string, list<int>> children = {};
+        list<int> roots = ();
+        for (int i = 0; i < symbols.size(); ++i) {
+            int parent = parents[i];
+            if (parent == -1) {
+                push roots, i;
+            } else if (symbols[i].kind != ASTSymbolKind.Variable || !CallableSymbolKinds{symbols[parent].kind}) {
+                push children{parent}, i;
+            }
+        }
+        code<hash<auto>(int)> makeSymbol;
+        makeSymbol = hash<auto> sub (int i) {
+            hash<auto> sym = symbols[i];
+            hash<auto> range = sym.location.range;
+            *hash<auto> namePos = doc.findNamePosition(sym.name, range);
+            hash<auto> selectionRange = namePos
+                ? {"start": namePos, "end": namePos + {"character": namePos.character + sym.name.length()}}
+                : {"start": range.start, "end": range.start};
+            return {
+                "name": sym.name,
+                "kind": LspDocumentSymbolKindMap{string(sym.kind)} ?? 1,
+                "range": range,
+                "selectionRange": selectionRange,
+                "children": map makeSymbol($1), children{i} ?? (),
+            };
+        };
+        return map makeSymbol($1), roots;
     }
 
     #! "textDocument/documentSymbol" method handler
@@ -1652,6 +1842,12 @@ public class QLSServer {
                     ret = doc.getNodesInfo();
                     break;
                 default: {
+                    # the extension API asks for the flat list with an explicit retType
+                    if (!params.retType && clientCapabilities.textDocument.documentSymbol
+                            .hierarchicalDocumentSymbolSupport) {
+                        ret = getDocumentSymbolTree(doc);
+                        break;
+                    }
                     ret = doc.findSymbols();
                     if (ret) {
                         for (int i = 0; i < ret.size(); ++i) {
@@ -2595,10 +2791,8 @@ public class QLSServer {
                         "uri": uri,
                         "name": sym.name,
                         "kind": sym.kind,
-                        "position": {
-                            "line": sym.location.range.start.line,
-                            "character": sym.location.range.start.character,
-                        },
+                        # the references of the symbol are found from its name
+                        "position": doc.getNamePosition(sym.name, sym.location.range),
                     },
                 };
             }
@@ -2628,8 +2822,10 @@ public class QLSServer {
             return make_jsonrpc_response(jsonRpcVer, request.id, lens);
         }
 
+        # count the references like textDocument/references, so the title matches the references shown
         Document doc = documents{uri};
-        *list<auto> refs = doc.findReferences(lens.data.position, False);
+        *list<auto> refs = findReferencesCrossDoc(doc, lens.data.position, False)
+            ?? doc.findReferences(lens.data.position, False);
         int refCount = refs ? refs.size() : 0;
 
         lens.command = {
@@ -3835,7 +4031,8 @@ public class QLSServer {
         }
         foreach hash<string, FileIndex> indexes in (getSearchIndexes()) {
             foreach FileIndex index in (indexes.iterator()) {
-                if (index.getUri() != uri && index.sourceContains(name)) {
+                # the identifier filter excludes most files without reading them
+                if (index.getUri() != uri && index.mayContainIdentifier(name) && index.sourceContains(name)) {
                     addIndexedDocument(\ret, index);
                 }
             }

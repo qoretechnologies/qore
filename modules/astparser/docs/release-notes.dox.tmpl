@@ -7,6 +7,9 @@
     This module is always delivered with %Qore and therefore mirrors the %Qore version.
 
     @section astparser_3_0 astparser Module Version 3.0
+    - added @ref astparser::AstTree::getIdentifierFilter() "AstTree::getIdentifierFilter()" and
+      @ref astparser::AstTree::identifierFilterContains() "AstTree::identifierFilterContains()" to test whether an
+      identifier can occur in a file without keeping its syntax tree or reading it again
     - a file name with a NUL character is refused instead of being cut at the NUL character:
       @ref astparser::AstParser::parseFile() "AstParser::parseFile()" returns @ref nothing and
       @ref astparser::AstTree::printTree() "AstTree::printTree()" raises \c FILE-OPEN-ERROR

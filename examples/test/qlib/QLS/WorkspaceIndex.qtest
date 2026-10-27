@@ -57,6 +57,8 @@ class WorkspaceIndexTest inherits QUnit::Test {
         addTestCase("FileIndex: classes, members and class graph", \testFileIndexClasses());
         addTestCase("FileIndex: source search", \testFileIndexSourceContains());
         addTestCase("FileIndex: missing file", \testFileIndexMissingFile());
+        addTestCase("FileIndex: identifier filter", \testFileIndexIdentifierFilter());
+        addTestCase("Document: declaration name position", \testDocumentNamePosition());
         addTestCase("DocumentCache: LRU eviction by source size", \testDocumentCacheEviction());
         addTestCase("DocumentCache: disabled and invalidated", \testDocumentCacheDisabled());
 
@@ -68,6 +70,13 @@ class WorkspaceIndexTest inherits QUnit::Test {
         addTestCase("server: inherited method through closed files", \testServerDefinitionInheritedClosedFiles());
         addTestCase("server: definition without tree cache", \testServerDefinitionNoCache());
         addTestCase("server: rename across closed files", \testServerRenameClosedFiles());
+        addTestCase("server: references across closed files", \testServerReferencesClosedFiles());
+        addTestCase("server: code lenses count references across files", \testServerCodeLens());
+        addTestCase("server: all workspace folders are indexed", \testServerWorkspaceFolders());
+        addTestCase("server: workspace folders are added and removed", \testServerWorkspaceFolderChanges());
+        addTestCase("server: file URIs are encoded like client URIs", \testServerEncodedUris());
+        addTestCase("server: hierarchical document symbols", \testServerDocumentSymbolTree());
+        addTestCase("server: incremental document sync", \testServerIncrementalSync());
         addTestCase("server: hover on symbol in closed file", \testServerHoverClosedFile());
         addTestCase("server: subtypes and implementations in closed files", \testServerHierarchyClosedFiles());
         addTestCase("server: incoming calls from closed file", \testServerIncomingCallsClosedFile());
@@ -156,13 +165,13 @@ class WorkspaceIndexTest inherits QUnit::Test {
     }
 
     #! Creates a server with the given workspace root
-    private QLS::QLSServer startServer(string root, auto initOptions) {
+    private QLS::QLSServer startServer(string root, auto initOptions, *hash<auto> params) {
         QLS::QLSServer server();
-        hash<auto> params = {
+        params = {
             "processId": getpid(),
             "capabilities": {},
             "rootUri": QLS::Document::getFileUri(root),
-        };
+        } + params;
         if (exists initOptions) {
             params.initializationOptions = initOptions;
         }
@@ -441,6 +450,52 @@ class WorkspaceIndexTest inherits QUnit::Test {
         assertFalse(index.sourceContains("other"), "a missing file contains nothing");
     }
 
+    testFileIndexIdentifierFilter() {
+        string text = "class Alpha inherits Ns::Beta {\n    int run() { return gamma(delta); }\n}\n";
+        QLS::Document doc("file:///tmp/filter.q", text, "qore", 1);
+        QLS::FileIndex index(doc, text.size());
+        foreach string name in (("Alpha", "Ns::Beta", "Ns", "Beta", "run", "gamma", "delta")) {
+            assertTrue(index.mayContainIdentifier(name), name);
+        }
+        int positives = 0;
+        for (int i = 0; i < 1000; ++i) {
+            if (index.mayContainIdentifier(sprintf("missing_%d", i))) {
+                ++positives;
+            }
+        }
+        assertLt(50, positives, sprintf("%d false positives in 1000", positives));
+
+        # a file that cannot be parsed has no filter and can contain anything
+        QLS::FileIndex missing = QLS::FileIndex::fromFile("file:///nonexistent/dir/missing.q");
+        assertTrue(missing.mayContainIdentifier("anything"));
+    }
+
+    testDocumentNamePosition() {
+        string text = "int sub add(int a) {\n    return a;\n}\n"
+            "class Foo inherits FooBase {}\n"
+            "public\n    class\n    Late {}\n"
+            "const $Foo2 = 1;\n";
+        QLS::Document doc("file:///tmp/names.q", text, "qore", 1);
+        code<hash<auto>(int, int, int, int)> range = hash<auto> sub (int sl, int sc, int el, int ec) {
+            return {"start": {"line": sl, "character": sc}, "end": {"line": el, "character": ec}};
+        };
+        assertEq({"line": 0, "character": 8}, doc.getNamePosition("add", range(0, 0, 2, 1)), "after the type");
+        assertEq({"line": 3, "character": 6}, doc.getNamePosition("Foo", range(3, 0, 3, 29)),
+            "whole words only: not FooBase");
+        assertEq({"line": 6, "character": 4}, doc.getNamePosition("Late", range(4, 0, 6, 11)),
+            "name on a later line");
+        assertEq({"line": 7, "character": 0}, doc.getNamePosition("Foo2", range(7, 0, 7, 16)),
+            "a $ prefix is part of another word");
+        assertEq({"line": 0, "character": 0}, doc.getNamePosition("missing", range(0, 0, 2, 1)),
+            "the start of the range if the name is not found");
+        assertEq({"line": 9, "character": 2}, doc.getNamePosition("x", range(9, 2, 9, 5)),
+            "the start of the range beyond the text");
+
+        QLS::Document noText("file:///nonexistent/dir/missing.q");
+        assertEq({"line": 1, "character": 3}, noText.getNamePosition("x", range(1, 3, 2, 0)),
+            "the start of the range without text");
+    }
+
     testFileIndexMissingFile() {
         QLS::FileIndex index = QLS::FileIndex::fromFile("file:///nonexistent/dir/missing.q");
         assertEq(0, index.getSymbolCount(), "missing file has no symbols");
@@ -641,6 +696,247 @@ class WorkspaceIndexTest inherits QUnit::Test {
         assertEq(1, changes{uri}.size(), "call in the open file");
         assertEq(2, changes.size(), "files without the name are not changed");
         assertEq(1, server.getIndexInfo().cachedTrees, "only the file containing the name was parsed");
+    }
+
+    testServerReferencesClosedFiles() {
+        string root = makeHierarchyWorkspace();
+        WorkspaceIndexTest::writeFile(root + "/lib/user.ql", "int sub user() {\n    return add_numbers(3, 4);\n}\n");
+        QLS::QLSServer server = startServer(root);
+        string text = "int sub main() {\n    return add_numbers(5, 6);\n}\n";
+        string uri = openDoc(server, root + "/main.q", text);
+        hash<auto> pos = WorkspaceIndexTest::positionOf(text, "add_numbers");
+        code<hash<string, int>(bool)> refs = hash<string, int> sub (bool includeDecl) {
+            list<auto> locations = request(server, "textDocument/references", {
+                "textDocument": {"uri": uri},
+                "position": pos,
+                "context": {"includeDeclaration": includeDecl},
+            }).result;
+            hash<string, int> count = {};
+            map count{basename(QLS::Document::getFilePath($1.uri))}++, locations;
+            return count;
+        };
+        assertEq({"main.q": 1, "util.ql": 1, "user.ql": 1}, refs(False), "calls in open and closed files");
+        assertEq({"main.q": 1, "util.ql": 2, "user.ql": 1}, refs(True), "the declaration is included on request");
+        assertEq(2, server.getIndexInfo().cachedTrees, "only the files containing the name were parsed");
+    }
+
+    testServerCodeLens() {
+        string root = makeHierarchyWorkspace();
+        WorkspaceIndexTest::writeFile(root + "/lib/user.ql",
+            "int sub user() {\n    return add_numbers(3, 4) + add_numbers(5, 6);\n}\n");
+        QLS::QLSServer server = startServer(root);
+        string path = root + "/lib/util.ql";
+        string uri = openDoc(server, path, ReadOnlyFile::readTextFile(path));
+        list<auto> lenses = request(server, "textDocument/codeLens", {"textDocument": {"uri": uri}}).result;
+        *hash<auto> lens = (select lenses, $1.data.name == "add_numbers")[0];
+        assertTrue(exists lens, "lens for the function");
+        assertEq({"line": 1, "character": 8}, lens.data.position, "the lens is at the declared name");
+
+        hash<auto> command = request(server, "codeLens/resolve", lens).result.command;
+        assertEq("3 references", command.title, "the call in the file and the two calls in a closed file");
+        assertEq("qls.showReferences", command.command);
+        assertEq((uri, {"line": 1, "character": 8}), command.arguments);
+
+        # the lens count is the same as the references shown when the lens is clicked
+        list<auto> shown = request(server, "textDocument/references", {
+            "textDocument": {"uri": uri},
+            "position": command.arguments[1],
+            "context": {"includeDeclaration": False},
+        }).result;
+        assertEq(3, shown.size());
+    }
+
+    #! Returns the workspace symbol names for the query
+    private list<string> symbolNames(QLS::QLSServer server, string query = "") {
+        return sort(map $1.name, request(server, "workspace/symbol", {"query": query}).result);
+    }
+
+    testServerWorkspaceFolders() {
+        string a = makeTmpDir();
+        string b = makeTmpDir();
+        WorkspaceIndexTest::writeFile(a + "/A.qc", "class FolderA {}\n");
+        WorkspaceIndexTest::writeFile(b + "/B.qc", "class FolderB {}\n");
+        QLS::QLSServer server = startServer(a, NOTHING, {
+            "workspaceFolders": (
+                {"uri": QLS::Document::getFileUri(a), "name": "a"},
+                {"uri": QLS::Document::getFileUri(b) + "/", "name": "b"},
+                {"uri": "untitled:x", "name": "not local"},
+                "invalid",
+            ),
+        });
+        assertEq(("FolderA", "FolderB"), symbolNames(server, "Folder"), "both folders are indexed");
+        assertEq(2, server.getIndexInfo().workspaceFiles);
+
+        # files created in the second folder are indexed
+        string created = b + "/C.qc";
+        WorkspaceIndexTest::writeFile(created, "class FolderC {}\n");
+        notify(server, "workspace/didChangeWatchedFiles", {
+            "changes": ({"uri": QLS::Document::getFileUri(created), "type": 1},),
+        });
+        assertEq(("FolderA", "FolderB", "FolderC"), symbolNames(server, "Folder"));
+
+        # rootUri is used when there are no workspace folders
+        QLS::QLSServer rootOnly = startServer(a, NOTHING, {"workspaceFolders": NOTHING});
+        assertEq(("FolderA",), symbolNames(rootOnly, "Folder"));
+    }
+
+    testServerWorkspaceFolderChanges() {
+        string a = makeTmpDir();
+        string b = makeTmpDir();
+        WorkspaceIndexTest::writeFile(a + "/A.qc", "class FolderA {}\n");
+        WorkspaceIndexTest::writeFile(a + "/nested/N.qc", "class FolderN {}\n");
+        WorkspaceIndexTest::writeFile(b + "/B.qc", "class FolderB {}\n");
+        QLS::QLSServer server = startServer(a);
+
+        QLS::QLSServer probe();
+        hash<auto> caps = request(probe, "initialize", {"processId": getpid(), "capabilities": {}}).result.capabilities;
+        assertEq({"supported": True, "changeNotifications": True}, caps.workspace.workspaceFolders,
+            "workspace folder support is advertised");
+
+        notify(server, "workspace/didChangeWorkspaceFolders", {"event": {
+            "added": ({"uri": QLS::Document::getFileUri(b), "name": "b"},
+                # a nested folder is already indexed
+                {"uri": QLS::Document::getFileUri(a + "/nested"), "name": "nested"}),
+            "removed": (),
+        }});
+        assertEq(("FolderA", "FolderB", "FolderN"), symbolNames(server, "Folder"), "added folder indexed once");
+        assertEq(3, server.getIndexInfo().workspaceFiles);
+
+        # files in a nested folder stay indexed while the outer folder is in the workspace
+        notify(server, "workspace/didChangeWorkspaceFolders", {"event": {
+            "added": (),
+            "removed": ({"uri": QLS::Document::getFileUri(a + "/nested"), "name": "nested"},),
+        }});
+        assertEq(("FolderA", "FolderB", "FolderN"), symbolNames(server, "Folder"));
+
+        notify(server, "workspace/didChangeWorkspaceFolders", {"event": {
+            "added": (),
+            "removed": ({"uri": QLS::Document::getFileUri(a), "name": "a"},
+                {"uri": QLS::Document::getFileUri(makeTmpDir()), "name": "unknown"}),
+        }});
+        assertEq(("FolderB",), symbolNames(server, "Folder"), "removed folder is not indexed");
+
+        # files in removed folders are no longer indexed when they change
+        string changed = a + "/A.qc";
+        notify(server, "workspace/didChangeWatchedFiles", {
+            "changes": ({"uri": QLS::Document::getFileUri(changed), "type": 2},),
+        });
+        assertEq(("FolderB",), symbolNames(server, "Folder"));
+
+        # invalid events are ignored
+        notify(server, "workspace/didChangeWorkspaceFolders", {"event": "invalid"});
+        notify(server, "workspace/didChangeWorkspaceFolders", {});
+        assertEq(("FolderB",), symbolNames(server, "Folder"));
+    }
+
+    testServerEncodedUris() {
+        string root = makeTmpDir() + "/my project";
+        string path = root + "/my file.qc";
+        WorkspaceIndexTest::writeFile(path, "class Spaced {}\n");
+        QLS::QLSServer server = startServer(root);
+        list<auto> symbols = request(server, "workspace/symbol", {"query": "Spaced"}).result;
+        string uri = QLS::Document::getFileUri(path);
+        assertRegex("%20", uri);
+        assertEq((uri,), (map $1.location.uri, symbols), "the indexed file has the client's URI");
+
+        # opening the file replaces its index instead of duplicating its symbols
+        openDoc(server, path, "class Spaced {}\n");
+        assertEq(1, request(server, "workspace/symbol", {"query": "Spaced"}).result.size());
+        assertEq(0, server.getIndexInfo().workspaceFiles);
+    }
+
+    testServerDocumentSymbolTree() {
+        string text = "namespace Ns {\n"
+            "    class Box inherits Base {\n"
+            "        private {\n"
+            "            int size;\n"
+            "        }\n"
+            "        int area(int scale) {\n"
+            "            int local = size * scale;\n"
+            "            return local;\n"
+            "        }\n"
+            "    }\n"
+            "}\n"
+            "int sub helper() {\n"
+            "    string temp = \"x\";\n"
+            "    return temp.size();\n"
+            "}\n"
+            "const LIMIT = 3;\n";
+        QLS::QLSServer server = startServer(makeTmpDir(), NOTHING, {
+            "capabilities": {"textDocument": {"documentSymbol": {"hierarchicalDocumentSymbolSupport": True}}},
+        });
+        string uri = openDoc(server, makeTmpDir() + "/tree.q", text);
+        list<auto> tree = request(server, "textDocument/documentSymbol", {"textDocument": {"uri": uri}}).result;
+
+        code<list<auto>(list<auto>)> names = list<auto> sub (list<auto> nodes) {
+            return map $1.name, nodes;
+        };
+        assertEq(("Ns", "helper", "LIMIT"), names(tree), "top-level symbols");
+        hash<auto> ns = tree[0];
+        assertEq(("Box",), names(ns.children), "classes nested in namespaces");
+        hash<auto> box = ns.children[0];
+        assertEq(("size", "area"), names(box.children), "members nested in classes; locals are not included");
+        assertEq((), box.children[1].children, "no local variables in methods");
+        assertEq((), tree[1].children, "no local variables in functions");
+
+        # ranges and name ranges
+        assertEq({"start": {"line": 1, "character": 10}, "end": {"line": 1, "character": 13}}, box.selectionRange,
+            "the selection range is the name");
+        assertEq(1, box.range.start.line);
+        assertEq(9, box.range.end.line);
+        assertEq({"start": {"line": 11, "character": 8}, "end": {"line": 11, "character": 14}},
+            tree[1].selectionRange);
+        assertEq(3, ns.kind, "LSP SymbolKind Namespace");
+        assertEq(5, box.kind, "LSP SymbolKind Class");
+        assertEq(6, box.children[1].kind, "LSP SymbolKind Method");
+        assertEq(12, tree[1].kind, "LSP SymbolKind Function");
+
+        # the extension API asks for the flat list with an explicit retType
+        list<auto> flat = request(server, "textDocument/documentSymbol", {
+            "textDocument": {"uri": uri},
+            "retType": "symbols",
+        }).result;
+        assertTrue(exists flat[0].location, "flat SymbolInformation list");
+        assertTrue((map $1.name, flat).contains("Ns::Box::area"), "qualified names in the flat list");
+
+        # clients without hierarchical support get the flat list
+        QLS::QLSServer flatServer = startServer(makeTmpDir());
+        string flatUri = openDoc(flatServer, makeTmpDir() + "/flat.q", text);
+        list<auto> flat2 = request(flatServer, "textDocument/documentSymbol", {"textDocument": {"uri": flatUri}})
+            .result;
+        assertTrue(exists flat2[0].location);
+        assertFalse(exists flat2[0].children);
+    }
+
+    testServerIncrementalSync() {
+        QLS::QLSServer server = startServer(makeTmpDir());
+        QLS::QLSServer probe();
+        hash<auto> caps = request(probe, "initialize", {"processId": getpid(), "capabilities": {}}).result.capabilities;
+        assertEq({"openClose": True, "change": 2, "save": {"includeText": False}}, caps.textDocumentSync,
+            "incremental sync and save notifications are requested");
+
+        string text = "int sub first() {\n    return 1;\n}\n";
+        string uri = openDoc(server, makeTmpDir() + "/sync.q", text);
+        notify(server, "textDocument/didChange", {
+            "textDocument": {"uri": uri, "version": 2},
+            "contentChanges": (
+                {"range": {"start": {"line": 0, "character": 8}, "end": {"line": 0, "character": 13}},
+                    "text": "second"},
+                {"range": {"start": {"line": 3, "character": 0}, "end": {"line": 3, "character": 0}},
+                    "text": "int sub third() { return second(); }\n"},
+            ),
+        });
+        assertEq(("second", "third"), symbolNames(server), "changes are applied in order");
+        list<auto> refs = request(server, "textDocument/references", {
+            "textDocument": {"uri": uri},
+            "position": {"line": 3, "character": 25},
+            "context": {"includeDeclaration": True},
+        }).result;
+        assertEq(2, refs.size(), "the reparsed tree has the new text");
+
+        # save notifications are accepted
+        notify(server, "textDocument/didSave", {"textDocument": {"uri": uri}});
+        assertEq(("second", "third"), symbolNames(server));
     }
 
     testServerHoverClosedFile() {

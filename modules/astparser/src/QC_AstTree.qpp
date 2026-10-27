@@ -31,6 +31,7 @@
 #include "qore/QoreSandboxManager.h"
 
 #include "AstTreeHolder.h"
+#include "IdentifierFilter.h"
 
 //! AstTree class
 /** AST tree structure.
@@ -106,4 +107,66 @@ list AstTree::getNodesInfo() {
  */
 *list<hash<auto>> AstTree::getComments() {
     return ath->getComments(xsink);
+}
+
+//! Returns a compact filter of the identifiers in the tree
+/** The filter answers whether an identifier can occur in the tree without keeping the tree or its source: it has
+    no false negatives and about 1% false positives, and takes about 10 bits per distinct identifier.  It contains
+    the full text of each identifier (as compared by
+    @ref astparser::AstTreeSearcher::findReferences() "AstTreeSearcher::findReferences()") and each
+    \c "::"-separated component of scoped identifiers.
+
+    Use it to skip files that cannot contain a reference before parsing them again, for example in a language
+    server that does not keep the syntax trees of files that are not open.
+
+    @return the filter, for @ref astparser::AstTree::identifierFilterContains() "AstTree::identifierFilterContains()";
+    a tree without identifiers, or an object without a tree, gives a filter that contains nothing
+
+    @par Example
+    @code{.py}
+AstParser parser();
+*AstTree tree = parser.parseFile("/src/project/lib/InvoiceProcessor.qc");
+binary filter = tree.getIdentifierFilter();
+# later: parse the file again only if it can reference the class
+if (AstTree::identifierFilterContains(filter, "TaxCalculator")) {
+    # ...
+}
+    @endcode
+
+    @throw THREAD-CANCELLED the current thread was cancelled
+    @throw PROGRAM-INTERRUPTED the current program was interrupted
+
+    @since astparser 3.0
+ */
+binary AstTree::getIdentifierFilter() [flags=RET_VALUE_ONLY] {
+    return ath->getIdentifierFilter(xsink);
+}
+
+//! Returns @ref True if the identifier can occur in the tree that the filter was created from
+/** @param filter a filter returned by @ref astparser::AstTree::getIdentifierFilter() "AstTree::getIdentifierFilter()"
+    @param name the identifier
+
+    @return @ref True if the identifier can occur in the tree (about 1% of identifiers that do not occur also give
+    @ref True); @ref False if it does not occur
+
+    @throw ASTPARSER-FILTER-ERROR the filter is not a filter returned by
+    @ref astparser::AstTree::getIdentifierFilter() "AstTree::getIdentifierFilter()"
+
+    @since astparser 3.0
+ */
+static bool AstTree::identifierFilterContains(binary filter, string name) [flags=RET_VALUE_ONLY] {
+    // identifiers in the tree are compared as UTF-8 source text
+    TempEncodingHelper utf8Name(name, QCS_UTF8, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    bool valid;
+    bool rv = IdentifierFilter::contains(filter->getPtr(), filter->size(),
+        std::string(utf8Name->c_str(), utf8Name->size()), valid);
+    if (!valid) {
+        xsink->raiseException("ASTPARSER-FILTER-ERROR", "the binary value of size %zu is not an identifier "
+            "filter returned by AstTree::getIdentifierFilter()", filter->size());
+        return QoreValue();
+    }
+    return rv;
 }

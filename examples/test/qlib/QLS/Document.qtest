@@ -44,6 +44,9 @@ class DocumentTest inherits QUnit::Test {
         addTestCase("hover", \testHover());
         addTestCase("CST features with parse errors", \testCstFeaturesWithParseErrors());
         addTestCase("didChange preserves tree on errors", \testDidChangePreservesTree());
+        addTestCase("LSP position offsets", \testGetOffset());
+        addTestCase("incremental edits", \testApplyEdit());
+        addTestCase("didChange with incremental changes", \testIncrementalDidChange());
 
         set_return_value(main());
     }
@@ -257,5 +260,65 @@ sub broken(int x) {
         doc.didChange({"text": fixedText});
         assertEq(0, doc.getParseErrorCount(), "fixed text has no errors");
         assertTrue(exists doc.getTree(), "tree exists after fix");
+    }
+
+    #! Returns an LSP range
+    private static hash<auto> range(int sl, int sc, int el, int ec) {
+        return {"start": {"line": sl, "character": sc}, "end": {"line": el, "character": ec}};
+    }
+
+    testGetOffset() {
+        string text = "ab\ncd\r\nef";
+        assertEq(0, QLS::Document::getOffset(text, {"line": 0, "character": 0}));
+        assertEq(2, QLS::Document::getOffset(text, {"line": 0, "character": 2}), "end of the first line");
+        assertEq(2, QLS::Document::getOffset(text, {"line": 0, "character": 99}), "clamped to the end of the line");
+        assertEq(4, QLS::Document::getOffset(text, {"line": 1, "character": 1}));
+        assertEq(5, QLS::Document::getOffset(text, {"line": 1, "character": 99}), "before \\r\\n");
+        assertEq(8, QLS::Document::getOffset(text, {"line": 2, "character": 1}), "after \\r\\n");
+        assertEq(text.length(), QLS::Document::getOffset(text, {"line": 9, "character": 0}),
+            "a line beyond the end of the text");
+        assertEq(0, QLS::Document::getOffset("", {"line": 0, "character": 3}), "empty text");
+
+        # characters outside the BMP take two UTF-16 code units
+        string emoji = "a\U0001F600b";
+        assertEq(3, emoji.length());
+        assertEq(1, QLS::Document::getOffset(emoji, {"line": 0, "character": 1}));
+        assertEq(2, QLS::Document::getOffset(emoji, {"line": 0, "character": 3}), "after the emoji");
+        assertEq(3, QLS::Document::getOffset(emoji, {"line": 0, "character": 4}));
+        assertEq(3, QLS::Document::getOffset("aéb", {"line": 0, "character": 3}), "BMP characters take one unit");
+    }
+
+    testApplyEdit() {
+        string text = "int x = 1;\nint y = 2;\n";
+        assertEq("int x = 10;\nint y = 2;\n", QLS::Document::applyEdit(text, DocumentTest::range(0, 9, 0, 9), "0"),
+            "insertion");
+        assertEq("int x = 1;\n", QLS::Document::applyEdit(text, DocumentTest::range(1, 0, 2, 0), ""),
+            "deletion of a line");
+        assertEq("int z = 2;\n", QLS::Document::applyEdit(text, DocumentTest::range(0, 4, 1, 5), "z"),
+            "replacement across lines");
+        assertEq("int x = 1;\nint y = 2;\n// end", QLS::Document::applyEdit(text, DocumentTest::range(2, 0, 2, 0),
+            "// end"), "append at the end");
+        assertEq("X\U0001F600b", QLS::Document::applyEdit("a\U0001F600b", DocumentTest::range(0, 0, 0, 1), "X"),
+            "a position before a surrogate pair");
+        assertEq("a\U0001F600Z", QLS::Document::applyEdit("a\U0001F600b", DocumentTest::range(0, 3, 0, 4), "Z"),
+            "a position after a surrogate pair");
+        assertEq("ab", QLS::Document::applyEdit("ab", DocumentTest::range(0, 2, 0, 1), ""),
+            "a reversed range is empty");
+    }
+
+    testIncrementalDidChange() {
+        QLS::Document doc("file:///test.q", "%modern\nint sub f() {\n    return 1;\n}\n", "qore", 1);
+        assertEq(1, doc.findMatchingSymbols("f", True).size());
+
+        # rename the function in two incremental steps, then apply a full update
+        doc.didChange({"range": DocumentTest::range(1, 8, 1, 9), "text": "g"});
+        assertEq("%modern\nint sub g() {\n    return 1;\n}\n", doc.getText());
+        assertEq(1, doc.findMatchingSymbols("g", True).size(), "the tree is updated");
+        assertEq(0, doc.findMatchingSymbols("f", True).size());
+        doc.didChange({"range": DocumentTest::range(2, 11, 2, 12), "text": "42"});
+        assertEq("    return 42;", doc.getLine(2), "cached lines are updated");
+        doc.didChange({"text": "class C {}\n"});
+        assertEq("class C {}\n", doc.getText(), "a change without a range replaces the text");
+        assertEq(1, doc.findMatchingSymbols("C", True).size());
     }
 }

@@ -34,6 +34,7 @@
 #include "AstParser.h"
 #include "AstTreePrinter.h"
 #include "CSTWalk.h"
+#include "IdentifierFilter.h"
 #include "ast/ASTComment.h"
 #include "queries/GetNodesInfoQuery.h"
 
@@ -131,6 +132,17 @@ QoreListNode* AstTreeHolder::getComments(ExceptionSink* xsink) {
     }
 
     return lst.release();
+}
+
+BinaryNode* AstTreeHolder::getIdentifierFilter(ExceptionSink* xsink) {
+    std::string filter;
+    CSTCancelCheck cancel(xsink, "building an astparser identifier filter");
+    if (!IdentifierFilter::build(result, cancel, filter) || *xsink) {
+        return nullptr;
+    }
+    SimpleRefHolder<BinaryNode> rv(new BinaryNode);
+    rv->append(filter.data(), filter.size());
+    return rv.release();
 }
 
 void AstTreeHolder::set(AstParseResult* r) {

@@ -543,7 +543,7 @@ CSTSymbolInfo CSTSearcher::findSymbolInfo(
 // Find references
 // --------------------------------------------------------------------------
 
-static bool isIdentifierLikeNode(const char* type) {
+bool CSTSearcher::isIdentifierLikeNode(const char* type) {
     return strcmp(type, "identifier") == 0
         || strcmp(type, "scoped_identifier") == 0
         || strcmp(type, "streaming_keyword_identifier") == 0;

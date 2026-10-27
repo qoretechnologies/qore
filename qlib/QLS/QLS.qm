@@ -111,7 +111,7 @@ module QLS {
     |!Feature|!LSP Method|!Description
     |Document Formatting|@c textDocument/formatting|Whole-document formatting via @ref qorecodeformatintro "QoreCodeFormat"
     |On-Type Formatting|@c textDocument/onTypeFormatting|Auto-indent on Enter, auto-dedent on @c }
-    |Code Lens|@c textDocument/codeLens|Shows reference counts above declarations
+    |Code Lens|@c textDocument/codeLens|Shows reference counts across open and workspace documents above declarations; the lenses run the \c qls.showReferences client command with the document URI and the position of the declared name
     |Diagnostics|@c textDocument/publishDiagnostics|Reports parse errors as diagnostics
 
     @section qlsusage Usage
@@ -155,8 +155,9 @@ server.main();
     - <b>Open documents</b> (@c documents): files currently open in the editor, updated on
       every @c textDocument/didChange notification; open documents keep their syntax trees
     - <b>Workspace index</b> (@c workspaceIndex): Qore and Qorus source files with extensions
-      listed in @ref QLS::Files::QORE_EXTENSIONS, discovered in the workspace root and indexed on
-      initialization
+      listed in @ref QLS::Files::QORE_EXTENSIONS, discovered in all workspace folders and indexed on
+      initialization; folders added to or removed from the workspace
+      (@c workspace/didChangeWorkspaceFolders) are indexed or removed
     - <b>Standard module index</b> (@c stdModuleIndex): %Qore standard library modules, indexed from
       the module path when a request first needs them
 
@@ -173,7 +174,10 @@ server.main();
 
     When a request needs the syntax tree of an indexed file, only the files that can contain the
     result are parsed:
-    - references, rename and incoming calls: the files whose source contains the identifier
+    - references, rename, code lenses and incoming calls: the files whose source contains the identifier;
+      each index has a filter of the identifiers in the file
+      (@ref astparser::AstTree::getIdentifierFilter() "AstTree::getIdentifierFilter()"), so most files are
+      excluded without being read
     - definitions: the files that declare classes on the inheritance path from a class used in
       the document to a class with a member of that name, and the files that declare the
       identifier, in batches and in the original search order
@@ -206,6 +210,17 @@ server.main();
     @endcode
 
     Options with invalid values are logged and ignored.
+
+    @subsection qls_sync Document Synchronization and Symbols
+
+    Open documents are synchronized incrementally (@c TextDocumentSyncKind.Incremental): clients send only the
+    changed ranges, with positions in UTF-16 code units as defined by LSP.  Save notifications are requested.
+
+    @c textDocument/documentSymbol returns a tree of @c DocumentSymbol objects when the client supports
+    hierarchical document symbols: symbols are nested in their namespaces and classes, named without prefixes,
+    and their @c selectionRange is the declared name; local variables of functions and methods are not included.
+    Clients without this capability, and requests with the @c retType parameter used by the VS Code extension
+    API, get a flat list of @c SymbolInformation objects with qualified names.
 
     @section qlsrelnotes Release Notes
 

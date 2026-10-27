@@ -169,6 +169,9 @@ public:
     //! Check if a node type is a declaration type.
     static bool isDeclarationNode(const char* type);
 
+    //! Returns true if the node type is compared by name in reference searches
+    static bool isIdentifierLikeNode(const char* type);
+
     //! Extract the "name" field from a declaration node.
     static std::string getNodeName(TSNode node, const AstParseResult* result);
 

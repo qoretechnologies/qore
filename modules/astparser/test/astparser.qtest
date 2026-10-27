@@ -496,6 +496,10 @@ sub test() {
         addTestCase("Resolve definition", \testResolveDefinition());
         addTestCase("Resolve definition cross-doc", \testResolveDefinitionCrossDoc());
         addTestCase("Scope symbols with parse errors", \testScopeSymbolsWithErrors());
+        addTestCase("Identifier filter contains all identifiers", \testIdentifierFilterComplete());
+        addTestCase("Identifier filter scoped identifiers", \testIdentifierFilterScoped());
+        addTestCase("Identifier filter false positives", \testIdentifierFilterFalsePositives());
+        addTestCase("Identifier filter empty and invalid", \testIdentifierFilterEmptyInvalid());
 %endif
         set_return_value(main());
     }
@@ -4046,5 +4050,105 @@ sub broken(int x) {
         *list<auto> matching = searcher.findMatchingSymbols(tree, "test.q", "MyClass");
         assertTrue(exists matching, "findMatchingSymbols returns results despite errors");
         assertGt(0, matching.size(), "MyClass found by findMatchingSymbols");
+    }
+
+    testIdentifierFilterComplete() {
+        # every identifier in a real source file must be found: the filter has no false negatives
+        string file = get_script_dir() + "/../../../qlib/Util.qm";
+        AstParser parser();
+        *AstTree tree = parser.parseFile(file);
+        assertTrue(exists tree, "Util.qm is parsed");
+        binary filter = tree.getIdentifierFilter();
+
+        # names in comments and strings are not identifiers, so check the declared names of the module
+        AstTreeSearcher searcher();
+        int checked = 0;
+        foreach hash<auto> sym in (searcher.findSymbols(tree, "Util.qm", True, True) ?? ()) {
+            # constructors and destructors are declared with keywords, which are not identifiers
+            if (sym.name == "constructor" || sym.name == "destructor") {
+                continue;
+            }
+            assertTrue(AstTree::identifierFilterContains(filter, sym.name), sprintf("declared %y", sym.name));
+            ++checked;
+        }
+        assertGt(100, checked, "all declared names checked");
+
+        # every name that a reference search compares at some position must be in the filter
+        code<nothing(string)> check = sub (string text) {
+            *AstTree t = parser.parseString(text);
+            binary f = t.getIdentifierFilter();
+            int identifiers = 0;
+            list<string> lines = text.split("\n");
+            for (int line = 0; line < lines.size(); ++line) {
+                for (int col = 0; col < lines[line].length(); ++col) {
+                    if (col && lines[line][col - 1] =~ /^[A-Za-z0-9_]$/) {
+                        continue;
+                    }
+                    *list<string> word = (lines[line].substr(col) =~ x/^([A-Za-z_][A-Za-z0-9_]*)/);
+                    if (!word || !searcher.findReferences(t, "x", line, col, True)) {
+                        continue;
+                    }
+                    ++identifiers;
+                    assertTrue(AstTree::identifierFilterContains(f, word[0]), sprintf("%y at %d:%d", word[0], line,
+                        col));
+                }
+            }
+            assertGt(5, identifiers, "identifiers checked");
+        };
+        check("%modern\nint sub compute(int alpha, string beta) {\n    hash<auto> gamma = {\"k\": alpha};\n"
+            "    return gamma.k + beta.size() + delta(epsilon);\n}\n");
+        check("%modern\nclass Widget inherits Base::Gadget {\n    private { int count; }\n"
+            "    run() { count = Base::Gadget::defaultCount(); foreach int item in (items) { ++count; } }\n}\n");
+    }
+
+    testIdentifierFilterScoped() {
+        AstParser parser();
+        *AstTree tree = parser.parseString("%modern\nint x = Outer::Inner::compute(1);\n");
+        binary filter = tree.getIdentifierFilter();
+        foreach string name in (("Outer::Inner::compute", "Outer", "Inner", "compute", "x")) {
+            assertTrue(AstTree::identifierFilterContains(filter, name), name);
+        }
+        assertFalse(AstTree::identifierFilterContains(filter, "Outer::compute"),
+            "a scoped name that does not occur is not found");
+    }
+
+    testIdentifierFilterFalsePositives() {
+        AstParser parser();
+        string text = "%modern\n";
+        for (int i = 0; i < 200; ++i) {
+            text += sprintf("int sub function_%d(int argument_%d) { return argument_%d + %d; }\n", i, i, i, i);
+        }
+        binary filter = parser.parseString(text).getIdentifierFilter();
+        int positives = 0;
+        for (int i = 0; i < 10000; ++i) {
+            if (AstTree::identifierFilterContains(filter, sprintf("absent_name_%d", i))) {
+                ++positives;
+            }
+        }
+        # about 1% are expected
+        assertLt(300, positives, sprintf("%d false positives in 10000", positives));
+        # about 10 bits per distinct identifier plus a 4-byte header
+        assertLt(401 * 2 + 4, filter.size(), "filter size");
+    }
+
+    testIdentifierFilterEmptyInvalid() {
+        AstParser parser();
+        binary filter = parser.parseString("").getIdentifierFilter();
+        assertEq(4 + 8, filter.size(), "minimum filter size");
+        assertFalse(AstTree::identifierFilterContains(filter, "anything"), "an empty filter contains nothing");
+
+        AstTree empty();
+        assertFalse(AstTree::identifierFilterContains(empty.getIdentifierFilter(), "x"), "object without a tree");
+
+        foreach binary invalid in ((binary(), binary("abc"), filter + <00>, filter.substr(0, 10),
+                <00000000> + filter.substr(4))) {
+            assertThrows("ASTPARSER-FILTER-ERROR", \AstTree::identifierFilterContains(), (invalid, "x"),
+                sprintf("invalid filter of size %d", invalid.size()));
+        }
+
+        # names are compared as UTF-8
+        binary f = parser.parseString("%modern\nint value = 1;\n").getIdentifierFilter();
+        assertTrue(AstTree::identifierFilterContains(f, convert_encoding("value", "ISO-8859-1")),
+            "a name in another encoding is converted");
     }
 }
