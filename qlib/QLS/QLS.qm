@@ -95,6 +95,8 @@ module QLS {
     |Inlay Hints|@c textDocument/inlayHint|Shows parameter names at call sites as inline hints
     |Semantic Tokens|@c textDocument/semanticTokens/full, @c .../full/delta and @c .../range|Full semantic syntax highlighting with node-level classification
     |Document Highlight|@c textDocument/documentHighlight|Highlights all occurrences of the symbol under the cursor
+    |Linked Editing|@c textDocument/linkedEditingRange|Edits the occurrences of a local variable or parameter together; occurrences of variables with the same name in other functions are not included
+    |Inline Values|@c textDocument/inlineValue|Shows the values of the local variables and parameters of the function where the debugger stopped, in the visible lines up to the stopped line
 
     <b>Refactoring</b>
     |!Feature|!LSP Method|!Description

@@ -36,6 +36,17 @@
 #! Tests document links, go to declaration and the other LSP features of QLS
 class FeaturesTest inherits QUnit::Test {
     private {
+        #! Two functions with parameters named p, a local, a foreach variable and a global function call
+        const LocalsText = "%modern\n"
+            "int sub f(int p) {\n"
+            "    int loc = p;\n"
+            "    foreach int i in (xrange(3)) {\n"
+            "        loc += i + p;\n"
+            "    }\n"
+            "    return loc;\n"
+            "}\n"
+            "int sub h(int p) { return p + f(p); }\n";
+
         int reqId = 0;
         int tmpCount = 0;
         list<string> tmpDirs = ();
@@ -50,6 +61,8 @@ class FeaturesTest inherits QUnit::Test {
         addTestCase("text edits from line differences", \testTextEdits());
         addTestCase("range formatting", \testRangeFormatting());
         addTestCase("semantic tokens delta", \testSemanticTokensDelta());
+        addTestCase("linked editing of local variables", \testLinkedEditing());
+        addTestCase("inline values while debugging", \testInlineValues());
 
         on_exit {
             map FeaturesTest::removeTree($1), tmpDirs;
@@ -347,5 +360,77 @@ class FeaturesTest inherits QUnit::Test {
         assertEq(({"start": 3, "deleteCount": 0, "data": (4,)},),
             QLS::QLSServer::getSemanticTokensEdits((1, 2, 3), (1, 2, 3, 4)));
         assertEq(({"start": 0, "deleteCount": 3, "data": ()},), QLS::QLSServer::getSemanticTokensEdits((1, 2, 3), ()));
+    }
+
+    #! Returns the ranges as (line, start, end) lists
+    private static list<list<int>> spans(*list<auto> ranges) {
+        return map ($1.start.line, $1.start.character, $1.end.character), ranges;
+    }
+
+    testLinkedEditing() {
+        QLS::Document doc("file:///tmp/locals.q", LocalsText, "qore", 1);
+        code<*list<list<int>>(int, int)> linked = *list<list<int>> sub (int line, int character) {
+            *list<hash<auto>> ranges = QLS::QLSServer::getLocalOccurrences(doc, {"line": line,
+                "character": character});
+            return ranges ? FeaturesTest::spans(ranges) : NOTHING;
+        };
+        # the parameter of f from a use; the parameter of h with the same name is not included
+        assertEq(((1, 14, 15), (2, 14, 15), (4, 19, 20)), linked(2, 14));
+        # the local from its declaration
+        assertEq(((2, 8, 11), (4, 8, 11), (6, 11, 14)), linked(2, 9));
+        # the foreach variable from a use
+        assertEq(((3, 16, 17), (4, 15, 16)), linked(4, 15));
+        # the parameter of h
+        assertEq(((8, 14, 15), (8, 26, 27), (8, 32, 33)), linked(8, 26));
+        assertNothing(linked(8, 30), "a function name is not local");
+        assertNothing(linked(1, 10), "a type name is not local");
+        assertNothing(linked(3, 23), "a function from another file is not local");
+        assertNothing(linked(1, 8), "the name of the function");
+
+        QLS::QLSServer server = startServer();
+        string uri = open(server, makeTmpDir() + "/linked.q", LocalsText);
+        hash<auto> result = request(server, "textDocument/linkedEditingRange", {"textDocument": {"uri": uri},
+            "position": {"line": 2, "character": 14}});
+        assertEq(((1, 14, 15), (2, 14, 15), (4, 19, 20)), FeaturesTest::spans(result.ranges));
+        assertEq("[A-Za-z_][A-Za-z0-9_]*", result.wordPattern);
+        assertNothing(request(server, "textDocument/linkedEditingRange", {"textDocument": {"uri": uri},
+            "position": {"line": 8, "character": 30}}));
+    }
+
+    testInlineValues() {
+        QLS::Document doc("file:///tmp/locals.q", LocalsText, "qore", 1);
+        hash<auto> all = {"start": {"line": 0, "character": 0}, "end": {"line": 9, "character": 0}};
+        # stopped in the loop of f: the locals and parameters of f up to the stopped line
+        list<hash<auto>> values = QLS::QLSServer::getInlineValues(doc, all,
+            {"start": {"line": 4, "character": 8}, "end": {"line": 4, "character": 21}});
+        assertEq(((1, "p"), (2, "loc"), (2, "p"), (3, "i"), (4, "loc"), (4, "i"), (4, "p")),
+            (map ($1.range.start.line, $1.variableName), values),
+            "no types, functions or names after the stopped line");
+        assertTrue(values[0].caseSensitiveLookup);
+        assertEq({"start": {"line": 2, "character": 8}, "end": {"line": 2, "character": 11}}, values[1].range);
+
+        # only the visible lines
+        values = QLS::QLSServer::getInlineValues(doc, {"start": {"line": 4, "character": 0},
+            "end": {"line": 9, "character": 0}}, {"start": {"line": 6, "character": 4},
+            "end": {"line": 6, "character": 15}});
+        assertEq(((4, "loc"), (4, "i"), (4, "p"), (6, "loc")), (map ($1.range.start.line, $1.variableName), values));
+
+        # stopped in h: its parameter, not the one of f
+        values = QLS::QLSServer::getInlineValues(doc, all, {"start": {"line": 8, "character": 19},
+            "end": {"line": 8, "character": 37}});
+        assertEq(((8, "p"), (8, "p"), (8, "p")), (map ($1.range.start.line, $1.variableName), values));
+
+        # outside of a function
+        assertEq((), QLS::QLSServer::getInlineValues(doc, all, {"start": {"line": 0, "character": 0},
+            "end": {"line": 0, "character": 1}}));
+
+        QLS::QLSServer server = startServer();
+        string uri = open(server, makeTmpDir() + "/inline.q", LocalsText);
+        list<auto> response = request(server, "textDocument/inlineValue", {"textDocument": {"uri": uri},
+            "range": all, "context": {"frameId": 1, "stoppedLocation": {"start": {"line": 8, "character": 19},
+            "end": {"line": 8, "character": 37}}}});
+        assertEq(3, response.size());
+        assertEq((), request(server, "textDocument/inlineValue", {"textDocument": {"uri": uri}, "range": all}),
+            "no stopped location");
     }
 }

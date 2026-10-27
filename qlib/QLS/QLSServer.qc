@@ -261,6 +261,16 @@ public const ServerCapabilities = {
     },
 
     /**
+     * The server provides linked editing of the occurrences of local variables and parameters.
+     */
+    "linkedEditingRangeProvider": True,
+
+    /**
+     * The server provides the local variables and parameters to show inline while debugging.
+     */
+    "inlineValueProvider": True,
+
+    /**
      * The server provides formatting of a range of a document.
      */
     "documentRangeFormattingProvider": True,
@@ -600,6 +610,8 @@ public class QLSServer {
             "textDocument/declaration": \meth_td_definition(),
             "textDocument/documentLink": \meth_td_documentLink(),
             "textDocument/rangeFormatting": \meth_td_rangeFormatting(),
+            "textDocument/linkedEditingRange": \meth_td_linkedEditingRange(),
+            "textDocument/inlineValue": \meth_td_inlineValue(),
             "textDocument/semanticTokens/full/delta": \meth_td_semanticTokensDelta(),
         };
     }
@@ -2821,6 +2833,224 @@ public class QLSServer {
         },);
 
         return make_jsonrpc_response(jsonRpcVer, request.id, edits);
+    }
+
+    #! Returns the range of the identifier at a position of a document, or @ref nothing if there is none
+    static *hash<auto> getIdentifierRange(Document doc, hash<auto> position) {
+        *string line = doc.getLine(position.line);
+        if (!line) {
+            return NOTHING;
+        }
+        int col = position.character;
+        code<bool(int)> isWordChar = bool sub (int i) {
+            return i >= 0 && i < line.size() && line[i] =~ /^[A-Za-z0-9_]$/;
+        };
+        if (!isWordChar(col)) {
+            # the position may be just after the identifier
+            if (!isWordChar(col - 1)) {
+                return NOTHING;
+            }
+            --col;
+        }
+        int start = col;
+        while (isWordChar(start - 1)) {
+            --start;
+        }
+        int end = col + 1;
+        while (isWordChar(end)) {
+            ++end;
+        }
+        # identifiers do not start with a digit
+        if (line[start] =~ /^[0-9]$/) {
+            return NOTHING;
+        }
+        return {
+            "start": {"line": position.line, "character": start},
+            "end": {"line": position.line, "character": end},
+        };
+    }
+
+    #! Returns the text of a range on one line of a document, or @ref nothing if it is not on one line
+    static *string getRangeText(Document doc, hash<auto> range) {
+        if (range.start.line != range.end.line) {
+            return NOTHING;
+        }
+        *string line = doc.getLine(range.start.line);
+        return line ? line.substr(range.start.character, range.end.character - range.start.character) : NOTHING;
+    }
+
+    #! Returns the innermost function, method or constructor declaration that contains a position
+    /** @return the symbol with its \c name and \c location, or @ref nothing if the position is not in one
+    */
+    static *hash<auto> getEnclosingCallable(Document doc, hash<auto> position) {
+        *hash<auto> ret;
+        foreach hash<auto> sym in (doc.findSymbols(True, True) ?? ()) {
+            if (CallableSymbolKinds{sym.kind} && QLSServer::rangeContains(sym.location.range,
+                    {"start": position, "end": position})
+                    && (!ret || QLSServer::rangeContains(ret.location.range, sym.location.range))) {
+                ret = sym;
+            }
+        }
+        return ret;
+    }
+
+    #! Returns the definition of the local variable or parameter at a position
+    /** @return a hash with \c def (the range of the declared name) and \c callable (the function, method or
+        constructor that declares it), or @ref nothing if the identifier at the position is not a local variable
+        or parameter
+    */
+    static *hash<auto> getLocalDefinition(Document doc, hash<auto> position) {
+        *hash<auto> def;
+        *list<auto> defs = doc.resolveDefinition(position);
+        if (defs) {
+            if (defs[0].uri && defs[0].uri != doc.getUri()) {
+                return NOTHING;
+            }
+            def = defs[0].range;
+            # a variable is declared with the name that it is used with; this excludes keywords
+            *hash<auto> used = QLSServer::getIdentifierRange(doc, position);
+            if (!used || QLSServer::getRangeText(doc, used) != QLSServer::getRangeText(doc, def)) {
+                return NOTHING;
+            }
+        } else {
+            # a declaration has no definition elsewhere; the name must be a variable or parameter in scope, which
+            # excludes type names and functions defined in other files
+            def = QLSServer::getIdentifierRange(doc, position);
+            if (!def) {
+                return NOTHING;
+            }
+            string name = doc.getLine(position.line).substr(def.start.character,
+                def.end.character - def.start.character);
+            if (!(select doc.findScopeSymbolsDetailed(position) ?? (),
+                    $1.name == name && $1.kind == ASTSymbolKind.Variable)) {
+                return NOTHING;
+            }
+        }
+        *hash<auto> callable = QLSServer::getEnclosingCallable(doc, def.start);
+        if (!callable) {
+            return NOTHING;
+        }
+        # the name of the function itself is not local
+        *hash<auto> namePos = doc.findNamePosition(callable.name, callable.location.range);
+        if (namePos && namePos == def.start) {
+            return NOTHING;
+        }
+        return {"def": def, "callable": callable};
+    }
+
+    #! Returns the ranges of the occurrences of the local variable or parameter at a position
+    /** Only occurrences in the same function that refer to the same declaration are returned, so variables with
+        the same name in other functions or scopes are not included.
+
+        @return the ranges, or @ref nothing if the identifier at the position is not a local variable or parameter
+    */
+    static *list<hash<auto>> getLocalOccurrences(Document doc, hash<auto> position) {
+        *hash<auto> local = QLSServer::getLocalDefinition(doc, position);
+        if (!local) {
+            return NOTHING;
+        }
+        list<hash<auto>> ranges = ();
+        foreach hash<auto> ref in (doc.findReferences(local.def.start, True) ?? ()) {
+            if (!QLSServer::rangeContains(local.callable.location.range, ref.range)) {
+                continue;
+            }
+            if (ref.range == local.def) {
+                push ranges, ref.range;
+                continue;
+            }
+            *list<auto> defs = doc.resolveDefinition(ref.range.start);
+            if (defs && defs[0].range == local.def) {
+                push ranges, ref.range;
+            }
+        }
+        return ranges ?: NOTHING;
+    }
+
+    #! "textDocument/linkedEditingRange" method handler
+    /** Returns the occurrences of a local variable or parameter, so that they are edited together.
+    */
+    private *string meth_td_linkedEditingRange(hash<auto> request) {
+        if (!request.hasKey("params")) {
+            return ErrorResponse::invalidRequest(request, "required attribute 'params' is missing");
+        }
+        *string validation = ParamValidator::textDocumentPositionParams(request, request.params);
+        if (validation) {
+            return validation;
+        }
+        string uri = request.params.textDocument.uri;
+        if (ignoredUris{uri} || !exists documents{uri}) {
+            return make_jsonrpc_response(jsonRpcVer, request.id, NOTHING);
+        }
+        *list<hash<auto>> ranges = QLSServer::getLocalOccurrences(documents{uri}, request.params.position);
+        return make_jsonrpc_response(jsonRpcVer, request.id, ranges
+            ? {"ranges": ranges, "wordPattern": "[A-Za-z_][A-Za-z0-9_]*"}
+            : NOTHING);
+    }
+
+    #! "textDocument/inlineValue" method handler
+    /** Returns variable lookups for the local variables and parameters used in the visible lines of the function
+        where the debugger stopped, up to the stopped line.
+    */
+    private *string meth_td_inlineValue(hash<auto> request) {
+        if (!request.hasKey("params")) {
+            return ErrorResponse::invalidRequest(request, "required attribute 'params' is missing");
+        }
+        *string validation = ParamValidator::textDocumentIdentifier(request, request.params);
+        if (validation) {
+            return validation;
+        }
+        string uri = request.params.textDocument.uri;
+        *hash<auto> stopped = request.params.context.stoppedLocation;
+        if (ignoredUris{uri} || !exists documents{uri} || stopped.start.line.typeCode() != NT_INT
+                || request.params.range.start.line.typeCode() != NT_INT) {
+            return make_jsonrpc_response(jsonRpcVer, request.id, ());
+        }
+        return make_jsonrpc_response(jsonRpcVer, request.id,
+            QLSServer::getInlineValues(documents{uri}, request.params.range, stopped));
+    }
+
+    #! Returns LSP \c InlineValueVariableLookup hashes for the local variables and parameters before a stop
+    /** @param doc the document
+        @param range the visible range
+        @param stopped the range where the debugger stopped
+
+        @return the variable lookups for the occurrences of local variables and parameters of the function that
+        contains the stopped location, in the visible lines up to the stopped line
+    */
+    static list<hash<auto>> getInlineValues(Document doc, hash<auto> range, hash<auto> stopped) {
+        *hash<auto> callable = QLSServer::getEnclosingCallable(doc, stopped.start);
+        if (!callable) {
+            return ();
+        }
+        hash<auto> callableRange = callable.location.range;
+        int first = max(range.start.line, callableRange.start.line);
+        int last = min(range.end.line, stopped.start.line);
+        list<hash<auto>> values = ();
+        for (int line = first; line <= last; ++line) {
+            *string text = doc.getLine(line);
+            if (!text) {
+                continue;
+            }
+            for (int i = 0; i < text.length(); ++i) {
+                # the start of each identifier
+                if (text[i] !~ /^[A-Za-z_]$/ || (i && text[i - 1] =~ /^[A-Za-z0-9_$]$/)) {
+                    continue;
+                }
+                hash<auto> position = {"line": line, "character": i};
+                *hash<auto> local = QLSServer::getLocalDefinition(doc, position);
+                *hash<auto> identifier = QLSServer::getIdentifierRange(doc, position);
+                if (local && identifier && local.callable.location.range == callableRange) {
+                    push values, {
+                        "range": identifier,
+                        "variableName": text.substr(identifier.start.character,
+                            identifier.end.character - identifier.start.character),
+                        "caseSensitiveLookup": True,
+                    };
+                }
+                i = identifier ? identifier.end.character - 1 : i;
+            }
+        }
+        return values;
     }
 
     #! "textDocument/rangeFormatting" method handler
