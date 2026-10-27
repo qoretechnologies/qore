@@ -26253,3 +26253,349 @@ and complete use counting. Conditional caller-local invalidation is a separate,
 later investigation because deferred destructor effects must be accounted for.
 
 [Audit](audit-typed-boxed-int-argument.md); [raw evidence](results-typed-boxed-int-argument-macos-arm64.json).
+
+
+## Native integer callback results in compound addition (2026-10-27)
+
+Retain under the authorized broader workload tradeoff. For an exact integer callback
+result consumed once as the right operand of AddAssignInt in the same IR block,
+AOT lowering keeps the native payload and avoids boxing it only to convert it back
+to an integer. The producer must precede the consumer, and the complete use count
+includes Return/Phi and other dedicated value uses. Ordinary AddInt/AddAny,
+multiple-use/escaping results, methods and cross-block arithmetic consumers are
+excluded. Existing explicit ToInt/ToFloat and native-local continuations remain
+independent. QORE_DISABLE_AOT_NATIVE_CALL_ARITHMETIC=1 restores the previous
+arithmetic routing. No runtime-helper or frame/object ABI changes are made; one
+private compiler method signature changes, and the normal AOT runtime identity
+requires matching rebuilt artifacts.
+
+Native misses retain the original conversion, ownership, exception checks and
+cleanup. The left operand is converted first. Program transitions, caller-local
+invalidation, capture/lifetime/context checks and stack publication remain in
+place. The initial ordinary-add idea was narrowed after unchanged baseline modes
+showed different fallback semantics for ordinary + and integer compound +=;
+no language semantic change is introduced.
+
+The optimized baseline is installed 5e6f25fac6; the candidate is that source plus
+the recorded compiler/test patch. Both use Release -O3 -DNDEBUG with allocation
+tracking off, LLVM 22.1.8, on Apple M4 Pro/macOS arm64. These are whole-kernel
+nanoseconds per item, not isolated physical call latency. Three linked layouts
+(default, reverse, shuffle-487), randomized sequential forks, one warmup and three
+150 ms windows per fork use count 4096 and seed 7. Screens use three forks; independent
+confirmation and the focused three-way followup use five. No owned build, test,
+profile or measured input mutation overlaps timing. Host scheduling, frequency and
+thermal conditions remain uncontrolled.
+
+Five-fork confirmation improves same-Program wide-result closures from 28.619360 to
+13.570241 ns/item (-52.584%) and function references from 21.462216 to 8.076496
+(-62.369%). Both exceed the prospective 5% target in every layout and repeat their
+screen gains. Small inline results show no consistent all-layout gain. Effects
+matter: effectful closure controls cost 1.985%/2.316% (inline/wide), and effectful
+functions cost 2.515%/2.759%. Live probes independently confirm current, captured and
+body-owner Program identity; pure functions take the native route immediately,
+pure closures after a cold first miss, and effectful controls always miss it.
+
+The broader confirmation repeats costs: CSV +1.449%, callback pipeline +1.233%,
+text +0.389%, polymorphic floating expressions +4.100%, object-closure creation +3.797%
+and plain closures +1.186%. Orders improve 0.653%; captured closures cost 1.288% after
+a faster screen. The standard short control batches have maximum aggregate costs
+2.529% at count 1 and 5.439% at count 16. Populated-context confirmation costs up to
+2.183%; native-disabled confirmation up to 2.026%. No primary single-call gain or
+weighted application speedup is established.
+
+The fresh three-way followup accepts no explanation merely from a source diff.
+Polymorphic floating expressions cost 3.275% enabled and 2.887% disabled; plain
+closures cost 2.670% and 2.629%. The callback pipeline costs 1.844% enabled and 1.135%
+disabled, with enabled 0.701% slower than the same-runtime control. CSV/text costs
+are 0.895%/0.783%; orders improve 1.122%. Larger costs mostly remain when the new
+routing is disabled, but their exact cause is unproven. A separate read-only
+assembly diagnostic observes helper address/alignment shifts with equal mnemonic
+sequences; that is not a causal performance proof. These measured costs are
+accepted and disclosed, not dismissed as noise or assumed to disappear after a
+rebuild. The repeated wide-result reduction justifies retaining this bounded
+compiler optimization while continuing to investigate general call overhead.
+
+All before/disabled optimized LLVM modules match after independently checked
+runtime-identity and compressed-metadata-size normalization. The broad candidate
+changes five function bodies per layout (the mixed callback pipeline, its inlined
+dispatch case, and three probe bodies), each removing exactly one integer boxing
+call while retaining fallback conversion and owned cleanup. All 54 broad/control
+LLVM modules verify; all other broad bodies match. The standalone diagnostic
+likewise changes only its two kernel bodies. Compiler-disabled binaries use the
+candidate runtime, with live loaded-library/module paths and link layouts checked;
+no AOT identity check is bypassed.
+
+Positive percentages below mean more time; negative percentages mean less time.
+The tables preserve every measured control, not just favorable results.
+
+### Same-Program integer accumulation — screen
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Disabled control ns/item|!Candidate vs before|!Candidate vs disabled
+|closure_plain_inline|13.737876|13.850896|13.871522|+0.823%|-0.149%
+|closure_plain_wide|28.345736|13.450673|28.244571|-52.548%|-52.378%
+|function_plain_inline|8.337629|7.794465|8.194357|-6.515%|-4.880%
+|function_plain_wide|21.720367|8.057658|21.242745|-62.903%|-62.069%
+|closure_effect_inline|145.852632|147.792508|146.814337|+1.330%|+0.666%
+|closure_effect_wide|161.800770|163.122468|164.519357|+0.817%|-0.849%
+|function_effect_inline|167.696455|174.403697|175.390137|+4.000%|-0.562%
+|function_effect_wide|186.201217|191.709276|191.321133|+2.958%|+0.203%
+
+### Same-Program integer accumulation — confirmation
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Disabled control ns/item|!Candidate vs before|!Candidate vs disabled
+|closure_plain_inline|13.716873|13.639820|13.788462|-0.562%|-1.078%
+|closure_plain_wide|28.619360|13.570241|28.135155|-52.584%|-51.768%
+|function_plain_inline|8.309513|8.163408|8.204740|-1.758%|-0.504%
+|function_plain_wide|21.462216|8.076496|21.264778|-62.369%|-62.019%
+|closure_effect_inline|145.552780|148.441352|147.781273|+1.985%|+0.447%
+|closure_effect_wide|162.836389|166.607654|163.885775|+2.316%|+1.661%
+|function_effect_inline|169.689357|173.957774|173.595129|+2.515%|+0.209%
+|function_effect_wide|186.737557|191.889820|189.530342|+2.759%|+1.245%
+
+### All 78 broader workloads — screen
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Candidate vs before
+|float:direct_local_float_return|0.815102|0.823220|+0.996%
+|float:callback_local_float_return|0.882957|0.879778|-0.360%
+|float:direct_local_float_result|0.750424|0.743849|-0.876%
+|float:callback_local_float_result|0.840668|0.827999|-1.507%
+|float:direct_loop_float_return|5.970598|6.052188|+1.367%
+|float:callback_loop_float_return|5.239882|5.217510|-0.427%
+|float:direct_float_add|0.835685|0.833042|-0.316%
+|float:static_float_add|0.831125|0.838798|+0.923%
+|float:typed_local_int_unary|1.232714|1.227534|-0.420%
+|float:typed_local_float_unary|0.920187|0.922409|+0.241%
+|float:result_float_add|0.860070|0.852869|-0.837%
+|float:typed_local_int_result|0.856010|0.843609|-1.449%
+|micro:arithmetic|1.642651|1.625044|-1.072%
+|micro:direct_call|1.637959|1.639881|+0.117%
+|micro:method_call|1.706500|1.722472|+0.936%
+|micro:indirect_call|60.755190|61.688997|+1.537%
+|micro:polymorphic_call|24.376169|24.585725|+0.860%
+|micro:polymorphic_expression_call|11.526303|11.554456|+0.244%
+|micro:monomorphic_call|3.976547|3.884681|-2.310%
+|micro:optional_method_call|11.357675|11.459825|+0.899%
+|micro:polymorphic_float_call|24.608225|24.677273|+0.281%
+|micro:polymorphic_float_expression_call|11.628641|12.085681|+3.930%
+|micro:monomorphic_float_call|4.225301|4.284185|+1.394%
+|micro:optional_float_method_call|11.506524|11.548621|+0.366%
+|micro:boxed_float_method_call|21.001026|21.209406|+0.992%
+|micro:dynamic_int_result_call|11.369901|11.282105|-0.772%
+|micro:dynamic_int_result_fallback|21.752791|21.695452|-0.264%
+|micro:boxed_int_method_call|17.543023|17.862000|+1.818%
+|micro:boxed_int_method_fallback|33.681714|33.714312|+0.097%
+|micro:boxed_float_method_fallback|35.654733|35.570268|-0.237%
+|micro:boxed_int_method_effect|90.556212|92.046518|+1.646%
+|micro:dynamic_float_result_call|12.319143|12.505896|+1.516%
+|micro:indirect_wide|61.292135|61.856729|+0.921%
+|micro:indirect_float|60.906430|61.052532|+0.240%
+|micro:indirect_int_result|60.510542|61.557284|+1.730%
+|micro:indirect_float_result|61.386832|61.299764|-0.142%
+|micro:indirect_tagged_float|61.189444|60.905732|-0.464%
+|micro:indirect_branch_float|60.306536|60.799796|+0.818%
+|micro:indirect_affine|62.318921|61.803863|-0.826%
+|micro:indirect_affine_wide|61.562674|62.263598|+1.139%
+|micro:indirect_branch_int|61.626753|61.874101|+0.401%
+|micro:dispatch_control|2.054344|2.059114|+0.232%
+|micro:list_read|3.033369|3.052177|+0.620%
+|micro:list_build|27.519132|27.329248|-0.690%
+|micro:list_mutate|135.943296|135.337890|-0.445%
+|micro:temporary_list|1.801863|1.797924|-0.219%
+|micro:temporary_hash|1.796428|1.788271|-0.454%
+|micro:closure_call|14.796048|14.946495|+1.017%
+|micro:closure_capture|20.817481|20.761428|-0.269%
+|mixed:csv_report|965.276680|992.566734|+2.827%
+|mixed:object_orders|1855.851237|1858.644322|+0.151%
+|mixed:callback_pipeline|126.497554|128.059334|+1.235%
+|mixed:text_index|1503.876953|1525.187174|+1.417%
+|probe:object_loop|420.319826|422.047635|+0.411%
+|probe:object_short|1655.240950|1668.096289|+0.777%
+|probe:float_loop|463.125793|468.245158|+1.105%
+|probe:float_short|1669.483934|1709.161932|+2.377%
+|probe:string_loop|376.617194|379.773404|+0.838%
+|probe:string_short|1546.522352|1551.060520|+0.293%
+|probe:effect_loop|472.540184|481.075056|+1.806%
+|probe:effect_short|1705.825343|1737.731846|+1.870%
+|probe:two_read_loop|518.178065|521.731332|+0.686%
+|probe:two_read_short|1745.646335|1761.568496|+0.912%
+|probe:default_loop|785.904255|781.659859|-0.540%
+|probe:default_short|2087.429470|2057.192202|-1.449%
+|probe:string_result_loop|549.649651|551.840158|+0.399%
+|probe:string_result_short|1814.007471|1815.637595|+0.090%
+|index:list_positive|7.969631|8.101018|+1.649%
+|index:list_negative|8.033213|8.139194|+1.319%
+|index:binary_positive|7.814083|7.751136|-0.806%
+|index:binary_negative|8.332453|8.363058|+0.367%
+|index:buffer_positive|16.194808|16.141562|-0.329%
+|index:buffer_negative|16.083835|16.139152|+0.344%
+|lifecycle:object_closure_live|77.039916|79.216352|+2.825%
+|lifecycle:object_closure_dead|78.314221|80.161255|+2.358%
+|lifecycle:closure_create_plain|339.693288|327.827510|-3.493%
+|lifecycle:closure_create_capture|615.189524|631.147470|+2.594%
+|lifecycle:closure_create_object|885.120210|908.933562|+2.690%
+
+### Broader 43-workload confirmation
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Candidate vs before
+|float:callback_local_float_result|0.825033|0.831960|+0.840%
+|float:callback_local_float_return|0.878914|0.870642|-0.941%
+|float:callback_loop_float_return|5.209320|5.213147|+0.073%
+|float:direct_loop_float_return|5.996476|6.003644|+0.120%
+|float:typed_local_float_unary|0.909083|0.920478|+1.253%
+|float:typed_local_int_result|0.847010|0.841239|-0.681%
+|float:typed_local_int_unary|1.225950|1.226596|+0.053%
+|index:list_negative|7.964155|7.987581|+0.294%
+|index:list_positive|8.008624|8.063563|+0.686%
+|lifecycle:closure_create_capture|612.440223|625.214086|+2.086%
+|lifecycle:closure_create_object|875.387299|908.626649|+3.797%
+|lifecycle:closure_create_plain|328.336641|327.850723|-0.148%
+|lifecycle:object_closure_dead|78.461945|80.071989|+2.052%
+|lifecycle:object_closure_live|77.616174|79.914915|+2.962%
+|micro:boxed_float_method_call|21.037598|21.406903|+1.755%
+|micro:boxed_float_method_fallback|35.396602|35.695344|+0.844%
+|micro:boxed_int_method_call|17.436435|17.639561|+1.165%
+|micro:boxed_int_method_fallback|33.790666|34.037968|+0.732%
+|micro:closure_call|14.691291|14.865572|+1.186%
+|micro:closure_capture|20.520474|20.784834|+1.288%
+|micro:direct_call|1.625539|1.636731|+0.689%
+|micro:indirect_affine_wide|60.922619|61.832215|+1.493%
+|micro:indirect_call|61.012946|61.890600|+1.438%
+|micro:indirect_float|61.312027|60.933141|-0.618%
+|micro:indirect_float_result|60.974796|61.433671|+0.753%
+|micro:indirect_wide|61.191917|62.005922|+1.330%
+|micro:list_build|27.395458|27.239436|-0.570%
+|micro:list_mutate|135.898574|136.402722|+0.371%
+|micro:list_read|3.038366|3.040697|+0.077%
+|micro:method_call|1.706469|1.711154|+0.275%
+|micro:monomorphic_call|3.940220|3.857541|-2.098%
+|micro:monomorphic_float_call|4.290209|4.284404|-0.135%
+|micro:polymorphic_call|24.178506|24.429608|+1.039%
+|micro:polymorphic_float_call|24.477052|24.730778|+1.037%
+|micro:polymorphic_float_expression_call|11.581066|12.055896|+4.100%
+|micro:temporary_hash|1.789867|1.795827|+0.333%
+|mixed:callback_pipeline|127.528768|129.101754|+1.233%
+|mixed:csv_report|964.884495|978.868986|+1.449%
+|mixed:object_orders|1870.467122|1858.260091|-0.653%
+|mixed:text_index|1515.817057|1521.715766|+0.389%
+|probe:default_loop|796.437308|789.800116|-0.833%
+|probe:effect_loop|480.682232|480.791156|+0.023%
+|probe:float_short|1686.226062|1689.401338|+0.188%
+
+### Standard short controls — count 1
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Candidate vs before
+|micro:closure_call|2533.872445|2561.889771|+1.106%
+|micro:closure_capture|2550.712551|2589.181612|+1.508%
+|micro:indirect_call|2591.057003|2590.210625|-0.033%
+|micro:direct_call|2468.046814|2479.898739|+0.480%
+|lifecycle:object_closure_live|346.391761|350.012050|+1.045%
+|lifecycle:object_closure_dead|354.031927|357.342520|+0.935%
+|lifecycle:closure_create_plain|650.659154|654.021440|+0.517%
+|lifecycle:closure_create_capture|938.504810|962.243681|+2.529%
+|lifecycle:closure_create_object|1498.883306|1503.737647|+0.324%
+
+### Standard short controls — count 16
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Candidate vs before
+|micro:closure_call|172.565712|173.535327|+0.562%
+|micro:closure_capture|179.097946|181.293817|+1.226%
+|micro:indirect_call|220.651674|223.286221|+1.194%
+|micro:direct_call|154.054537|154.773337|+0.467%
+|lifecycle:object_closure_live|96.065178|97.883040|+1.892%
+|lifecycle:object_closure_dead|97.013970|98.347853|+1.375%
+|lifecycle:closure_create_plain|350.878975|356.694520|+1.657%
+|lifecycle:closure_create_capture|648.988190|644.879419|-0.633%
+|lifecycle:closure_create_object|923.923864|974.174714|+5.439%
+
+### Populated Program — screen
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Candidate vs before
+|context_micro:closure_call|30.324511|30.422360|+0.323%
+|context_micro:closure_capture|35.754823|36.231037|+1.332%
+|context_micro:indirect_call|281.332518|280.124220|-0.429%
+|context_micro:indirect_float|280.522420|283.674836|+1.124%
+|context_micro:indirect_wide|357.945395|357.629671|-0.088%
+|context_micro:indirect_affine_wide|357.752167|358.035503|+0.079%
+|context_lifecycle:object_closure_live|106.945469|109.270140|+2.174%
+|context_lifecycle:object_closure_dead|105.026019|107.222610|+2.091%
+
+### Populated Program — confirmation
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Candidate vs before
+|context_lifecycle:object_closure_dead|107.452851|107.694462|+0.225%
+|context_lifecycle:object_closure_live|107.906664|109.864602|+1.814%
+|context_micro:closure_call|30.449554|30.497398|+0.157%
+|context_micro:closure_capture|36.168270|36.957865|+2.183%
+|context_micro:indirect_affine_wide|356.966245|356.735239|-0.065%
+|context_micro:indirect_call|278.340700|278.558958|+0.078%
+|context_micro:indirect_float|281.153678|286.176132|+1.786%
+|context_micro:indirect_wide|356.262838|358.866300|+0.731%
+
+### Native closure entry disabled — screen
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Candidate vs before
+|generic_micro:closure_call|121.176671|124.568433|+2.799%
+|generic_micro:closure_capture|143.150813|147.907386|+3.323%
+|generic_lifecycle:object_closure_live|203.821636|206.583860|+1.355%
+|generic_lifecycle:object_closure_dead|205.473231|207.001149|+0.744%
+
+### Native closure entry disabled — confirmation
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Candidate vs before
+|generic_lifecycle:object_closure_dead|209.247228|209.471652|+0.107%
+|generic_lifecycle:object_closure_live|203.302800|206.359756|+1.504%
+|generic_micro:closure_call|121.984215|124.455583|+2.026%
+|generic_micro:closure_capture|144.955642|146.828700|+1.292%
+
+### Focused three-way followup — five forks
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Disabled control ns/item|!Candidate vs before|!Candidate vs disabled
+|mixed:csv_report|971.414131|980.104681|976.765951|+0.895%|+0.342%
+|mixed:object_orders|1880.680339|1859.574382|1854.024251|-1.122%|+0.299%
+|mixed:callback_pipeline|127.210422|129.556702|128.654231|+1.844%|+0.701%
+|mixed:text_index|1514.620768|1526.485189|1516.839193|+0.783%|+0.636%
+|micro:polymorphic_float_expression_call|11.618192|11.998688|11.953629|+3.275%|+0.377%
+|micro:closure_call|14.595463|14.985145|14.979217|+2.670%|+0.040%
+|lifecycle:closure_create_object|887.818969|902.218038|913.821028|+1.622%|-1.270%
+|lifecycle:object_closure_live|77.548597|79.228616|79.774005|+2.166%|-0.684%
+|float:typed_local_float_unary|0.909050|0.917853|0.922887|+0.968%|-0.545%
+
+Release and Debug each pass 33 QUnit runs / 202 cases / 10080 assertions plus three
+standalone fixtures. Debug additionally passes three disabled/generic controls
+(18 cases / 70 assertions) and 2917 native checks. All 391 Release qmod aliases and
+hashes are restored after Debug. The new regression has 440 QUnit assertions;
+existing native conversion and dynamic closure tests have 1142 and 586. Internal
+standalone checks are not added to those QUnit totals. Edge coverage includes
+int48/int64 boundaries and wrap, zero/unary callbacks, two calls, effects exactly
+once, generic NOTHING/bool/float/string/list/hash/object conversion, owned cleanup,
+exception ordering, excluded consumers, four source modes, AOT O0/O3, EH, split,
+compiler-disabled and legacy RuntimeConfig paths.
+
+Reference runs include 9024 paired broad results, 3384 additional compiler-disabled
+results, 7830 focused three-way results, and 3780 each for populated and native-disabled
+controls. All 4575 paired jobs / 13725 measured windows and 72 initial baseline jobs /
+216 windows are independently reconstructed from raw child output and actual waited
+receipts. Published data includes executed drivers, source/runtime hashes, test/probe
+receipts and deduplicated dependency manifests whose original hashes are reconstructible.
+Large build/compiler logs, native binaries and full LLVM remain in the local archives
+with hashes and proof reports.
+
+Failed drafts and harness assumptions are preserved: generic fallback expectations
+were corrected against unchanged baseline semantics; the first build used a nonexistent
+intTypeInfo spelling; a v5-only probe missed the v9 route; a validation driver demanded
+a QUnit summary from a successful standalone fixture; inherited link configuration
+retained an old embedded rpath despite correct actual resolution; and an initial broad
+review wrongly expected all bodies to be unchanged. Corrected versions retain actual
+completion receipts and do not reuse failed timing. No measured phase is pooled with
+another or discarded. The published retention decision records the point before final
+documentation/audit; the linked audit is the final review of this change.
+
+There is no new Java/develop ratio, universal speedup, global ceiling, complete-project
+suite, sanitizer/Linux or external binary-module result. The earlier optimized cumulative
+checkpoint remains the Java/develop reference; do not combine its denominators with
+these newer timings. Next validate a versioned scalar result/status register return,
+starting with a native ABI/compiler-output probe. Preserve old helpers and every live
+admission/context/stack/lifetime guard, and require measured benefit before retention.
+
+[Raw evidence](results-native-call-int-accumulation-macos-arm64.json);
+[62-check audit](audit-native-call-int-accumulation.md).

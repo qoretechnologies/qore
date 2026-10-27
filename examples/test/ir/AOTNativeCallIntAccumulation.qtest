@@ -1,0 +1,75 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class NativeCallIntAccumulationTest
+
+class NativeCallIntAccumulationTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+    constructor() : Test("native callback integer accumulation", "1.0", \ARGV) {
+        addTestCase("native results and boxed fallback conversions", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private string body(string ir, string name) {
+        *list<*string> found = regex_extract(ir,
+            "(?s)define [^\n]*@" + name + "_[^\n]*\\(ptr %ctx, ptr %xsink\\)[^\n]*\n(.*?)\n\\}");
+        assertTrue(!!found, name + " normal LLVM entry");
+        return found[0] ?? "";
+    }
+    private check() {
+        string source = get_script_dir() + "/AOTNativeCallIntAccumulation.qr";
+        string expected = "native-call-add-int: ok\n";
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source)), mode);
+        }
+        TmpDir tmp("qore-native-call-int-accumulation-");
+        foreach string prefix in (("", "QORE_DISABLE_AOT_NATIVE_CALL_ARITHMETIC=1 ",
+                "QORE_DISABLE_AOT_NATIVE_CALL_CONVERSION=1 ", "QORE_AOT_EH=1 ",
+                "QORE_DISABLE_AOT_FUNCREF_NATIVE_CONTINUATION=1 ",
+                "QORE_DISABLE_AOT_TYPED_FUNCREF_CALL=1 ",
+                "QORE_DISABLE_AOT_FUNCREF_RUNTIME_CONFIG=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = tmp.path + "/fixture";
+                string ir = run((qcc, level, "--strip-source", "-o", executable, source),
+                    prefix + "QORE_DUMP_LLVM_IR=1 ");
+                bool callable = prefix != "QORE_DISABLE_AOT_FUNCREF_NATIVE_CONTINUATION=1 "
+                    && prefix != "QORE_DISABLE_AOT_TYPED_FUNCREF_CALL=1 ";
+                bool arithmetic = callable && prefix != "QORE_DISABLE_AOT_NATIVE_CALL_ARITHMETIC=1 ";
+                foreach string name in (("compound", "twoCompound", "accumulate", "addZero")) {
+                    assertEq(arithmetic, regex(body(ir, name), "native_call_converted_value"),
+                        name + prefix + level);
+                }
+                assertEq(callable && prefix != "QORE_DISABLE_AOT_NATIVE_CALL_CONVERSION=1 ",
+                    regex(body(ir, "explicitConversion"), "native_call_converted_value"),
+                    "explicit conversion control remains independent " + prefix + level);
+                foreach string name in (("addLeft", "addRight", "addTwo", "multipleConsumers", "escaping")) {
+                    assertFalse(regex(body(ir, name), "native_call_converted_value"),
+                        name + " excluded ordinary/escaping consumer " + prefix + level);
+                }
+                foreach string runtime in (("", "QORE_DISABLE_FUNCREF_FAST_CALL=1 ",
+                        "QORE_DISABLE_IR_CONTEXT_ELISION=1 ")) {
+                    assertEq(expected, run((executable,), runtime), prefix + level + runtime);
+                }
+            }
+        }
+    }
+}

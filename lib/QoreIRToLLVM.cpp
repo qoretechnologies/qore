@@ -11388,15 +11388,13 @@ bool QoreIRToLLVM::tryEmitAotNameMethodNativeContinuation(const QoreIRInstructio
     return true;
 }
 
-llvm::Value* QoreIRToLLVM::tryEmitNativeCallConversion(const QoreIRInstruction* inst,
+llvm::Value* QoreIRToLLVM::tryEmitNativeCallConversion(uint32_t id, bool floating,
         llvm::Value* boxed, llvm::Module& module, llvm::Function* llvm_func) {
-    auto continuation = native_funcref_results.find(inst->operands[0].id);
+    auto continuation = native_funcref_results.find(id);
     if (continuation == native_funcref_results.end()) {
         return nullptr;
     }
-    assert(native_call_conversion_results.count(inst->operands[0].id));
-    assert(inst->opcode == QoreIROpcode::ToInt || inst->opcode == QoreIROpcode::ToFloat);
-    bool floating = inst->opcode == QoreIROpcode::ToFloat;
+    assert(native_call_conversion_results.count(id));
     auto* fast = llvm::BasicBlock::Create(ctx, "native_call_convert", llvm_func);
     auto* fallback = llvm::BasicBlock::Create(ctx, "native_call_convert_fallback", llvm_func);
     auto* merge = llvm::BasicBlock::Create(ctx, "native_call_convert_merge", llvm_func);
@@ -11428,8 +11426,8 @@ llvm::Value* QoreIRToLLVM::tryEmitNativeCallConversion(const QoreIRInstruction* 
     // The fallback can return any type. Keep the existing language conversion
     // and owned boxed cleanup; it is not constrained by the native companion.
     llvm::Value* converted = floating
-        ? ensureFloatType(boxed, inst->operands[0].id, module)
-        : ensureIntTypeInline(boxed, inst->operands[0].id);
+        ? ensureFloatType(boxed, id, module)
+        : ensureIntTypeInline(boxed, id);
     builder->CreateBr(merge);
     fallback = builder->GetInsertBlock();
     builder->SetInsertPoint(merge);
@@ -14359,7 +14357,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             }
         }
     }
-    if (aot_mode && !q_env_is_set("QORE_DISABLE_AOT_NATIVE_CALL_CONVERSION")) {
+    bool native_call_conversions = aot_mode && !q_env_is_set("QORE_DISABLE_AOT_NATIVE_CALL_CONVERSION");
+    bool native_call_arithmetic = aot_mode && !q_env_is_set("QORE_DISABLE_AOT_NATIVE_CALL_ARITHMETIC");
+    if (native_call_conversions || native_call_arithmetic) {
         // Count every use, including Return/Phi's non-operand uses above. Also
         // require producer-before-consumer lowering order so its native SSA
         // side channel exists when a conversion in another block is emitted.
@@ -14368,6 +14368,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         bool callbacks = !q_env_is_set("QORE_DISABLE_AOT_FUNCREF_NATIVE_CONTINUATION");
         bool methods = !q_env_is_set("QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION");
         for (const auto& block : func.blocks) {
+            // Compound addition requires an earlier exact-int callback in this
+            // IR block, so the native SSA value necessarily dominates its use.
+            std::unordered_set<uint32_t> local_int_callbacks;
             if (conversion_count++ && !(conversion_count % 100)
                     && qore_check_cancel(nullptr, "LLVM native call conversion analysis")) {
                 error = "cancelled during LLVM native call conversion analysis";
@@ -14387,11 +14390,29 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                             || (methods && (inst->opcode == QoreIROpcode::DotEvalMethodDirect
                                 || inst->opcode == QoreIROpcode::InvokeDotEvalMethodDirect)))) {
                     available_calls.insert(inst->result.id);
-                } else if ((inst->opcode == QoreIROpcode::ToInt || inst->opcode == QoreIROpcode::ToFloat)
+                    if (native_call_arithmetic && callbacks
+                            && inst->opcode == QoreIROpcode::CallClosureDirect && !inst->operands.empty()) {
+                        const QoreIRValueFacts* facts = func.getValueFacts(inst->operands[0]);
+                        const QoreComplexCodeTypeInfo* callable = QoreTypeInfo::getComplexCodeType(
+                            facts ? facts->type_info : nullptr);
+                        if (callable && callable->getReturnType() == bigIntTypeInfo) {
+                            local_int_callbacks.insert(inst->result.id);
+                        }
+                    }
+                } else if (native_call_conversions
+                        && (inst->opcode == QoreIROpcode::ToInt || inst->opcode == QoreIROpcode::ToFloat)
                         && inst->operands.size() == 1) {
                     uint32_t id = inst->operands[0].id;
                     auto uses = operand_remaining_uses.find(id);
                     if (available_calls.count(id) && uses != operand_remaining_uses.end() && uses->second == 1) {
+                        native_call_conversion_results.insert(id);
+                    }
+                } else if (native_call_arithmetic && inst->opcode == QoreIROpcode::AddAssignInt
+                        && inst->operands.size() == 2) {
+                    uint32_t id = inst->operands[1].id;
+                    auto uses = operand_remaining_uses.find(id);
+                    if (local_int_callbacks.count(id) && uses != operand_remaining_uses.end()
+                            && uses->second == 1) {
                         native_call_conversion_results.insert(id);
                     }
                 }
@@ -17148,7 +17169,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         case QoreIROpcode::ToInt: {
             auto* val = getVal(inst->operands[0].id, error);
             if (!val) { return false; }
-            if (auto* converted = tryEmitNativeCallConversion(inst, val, module, llvm_func)) {
+            if (auto* converted = tryEmitNativeCallConversion(inst->operands[0].id, false, val, module, llvm_func)) {
                 values[inst->result.id] = converted;
                 return true;
             }
@@ -17174,7 +17195,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         case QoreIROpcode::ToFloat: {
             auto* val = getVal(inst->operands[0].id, error);
             if (!val) { return false; }
-            if (auto* converted = tryEmitNativeCallConversion(inst, val, module, llvm_func)) {
+            if (auto* converted = tryEmitNativeCallConversion(inst->operands[0].id, true, val, module, llvm_func)) {
                 values[inst->result.id] = converted;
                 return true;
             }
@@ -32576,9 +32597,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
-            values[inst->result.id] = builder->CreateAdd(
-                ensureIntTypeInline(lhs, inst->operands[0].id),
-                ensureIntTypeInline(rhs, inst->operands[1].id));
+            auto* left = ensureIntTypeInline(lhs, inst->operands[0].id);
+            auto* right = tryEmitNativeCallConversion(inst->operands[1].id, false, rhs, module, llvm_func);
+            if (!right) {
+                right = ensureIntTypeInline(rhs, inst->operands[1].id);
+            }
+            values[inst->result.id] = builder->CreateAdd(left, right);
             return true;
         }
         case QoreIROpcode::SubAssignInt: {

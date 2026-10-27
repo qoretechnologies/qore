@@ -525,9 +525,9 @@ private:
     std::unordered_set<uint32_t> reserve_typed_list_outputs;
     std::unordered_map<uint32_t, BatchCalleeReturnKind> native_call_result_kinds;
     // Single-use callback/method results assigned to an exact native scalar local
-    // or consumed by an explicit scalar conversion after the producer is lowered.
+    // or consumed by a scalar conversion (explicit, or a proven AddAssignInt RHS).
     // The boxed value remains the fallback's owned result (NOTHING on the native
-    // edge); only the proven StoreLocal/ToInt/ToFloat consumer reads this side channel.
+    // edge); only the proven StoreLocal/ToInt/ToFloat/AddAssignInt consumer reads this side channel.
     std::unordered_map<uint32_t, const QoreTypeInfo*> native_funcref_store_types;
     std::unordered_set<uint32_t> native_call_conversion_results;
     struct NativeFunctionRefResult {
@@ -1090,7 +1090,7 @@ private:
 
     // Consume the single-use native result on a hit, retaining ordinary boxed
     // conversion and ownership on a miss. Returns nullptr without a continuation.
-    llvm::Value* tryEmitNativeCallConversion(const QoreIRInstruction* inst,
+    llvm::Value* tryEmitNativeCallConversion(uint32_t id, bool floating,
             llvm::Value* boxed, llvm::Module& module, llvm::Function* llvm_func);
 
     // Emit an imported pure scalar leaf body. Returns nullptr when the summary

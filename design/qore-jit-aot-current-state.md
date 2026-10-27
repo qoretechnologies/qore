@@ -5533,3 +5533,37 @@ Prepared exact int(int) callbacks can accept an unknown-representation heap inte
 Five-fork, three-layout optimized confirmation improves same-Program wide closure arguments 61.237936 to 56.726822 ns/item (-7.37%), pure function references 84.204731 to 49.907299 (-40.73%), and imported-module function references 296.117671 to 106.170835 (-64.15%). The module path retains the captured Program transition; it is not a strict same-Program measurement. Accepted same-Program costs include pure inline functions +2.26%, wide effectful closures +2.54% and wide effectful functions +3.46%. Broad 38-workload confirmation has no disjoint-layout flags; its maximum aggregate cost is 1.92%, and mixed workloads cost 0.34–0.96%. Short counts do not establish the sustained 5% target. Disabled-native, populated-context, superseded iterations and all measured costs are preserved.
 
 Release and Debug each pass 33 QUnit runs / 216 cases / 8491 assertions plus three standalone fixtures, native 2917 and standard references 1110. All 391 Release aliases are restored. Independently replayed evidence covers 4848 current jobs / 14544 windows, 432 superseded jobs / 1296 windows and 108 rejected alignment jobs / 324 windows. See [results](../bench/runtime-comparison/results-typed-boxed-int-argument-macos-arm64.json), [tradeoff and all phase tables](../bench/runtime-comparison/RESULTS.md) and [62-check audit](../bench/runtime-comparison/audit-typed-boxed-int-argument.md). No new Java/develop ratio or global ceiling. Next test scalar result continuation into a sole AddInt consumer, preserving conversion order, full use-count/dominance proof and cleanup; evaluate caller-local invalidation separately with deferred destruction accounted for.
+
+
+## Native integer callback results in compound addition (2026-10-27)
+
+AOT lowering retains an exact-int typed callback result for a sole AddAssignInt RHS
+in the same IR block, after its producer. Complete value-use counting and dominance
+restrict the optimization; ordinary +, methods, escaping/multiple uses and cross-block
+arithmetic remain excluded. The native payload avoids a temporary heap integer;
+fallback conversion, owned cleanup, exceptions, caller-local invalidation and all
+live Program/context/lifetime/stack checks remain. Explicit ToInt/ToFloat continuations
+have independent controls. QORE_DISABLE_AOT_NATIVE_CALL_ARITHMETIC=1 restores the previous
+arithmetic lowering. No runtime-helper or object/frame ABI change; the private compiler
+method signature and AOT runtime identity change, so matching artifacts are rebuilt.
+
+Retain under the authorized broader workload tradeoff. Five-fork, three-layout optimized
+same-Program wide-result closure/function accumulation improves 52.584%/62.369%
+(28.619360 to 13.570241 / 21.462216 to 8.076496 ns/item), with improvement in every layout.
+Small inline results have no consistent all-layout gain. Effectful controls cost 1.985–2.759%.
+Broader confirmation costs include pipeline 1.233%, CSV1.449%,text 0.389%,polymorphic floating
+expressions 4.100% and object-closure creation 3.797%; orders improve 0.653%. The focused
+same-runtime disabled control retains most larger costs: polymorphic floating expressions
+cost 3.275% enabled/ 2.887% disabled, plain closures 2.670%/2.629%. Exact causes remain
+unproven; these costs are accepted, not dismissed as noise. Short/context/disabled controls
+and every phase are reported; no weighted application improvement is claimed.
+
+Release/Debug each pass 202 cases / 10080 assertions plus three standalone fixtures; Debug
+also passes 70 additional assertions and 2917 native checks. All 391 Release aliases are
+restored. Reviewed evidence contains 4575 paired jobs / 13725 windows plus 72 initial
+baseline jobs / 216 windows. See [all phase tables](../bench/runtime-comparison/RESULTS.md),
+[raw evidence](../bench/runtime-comparison/results-native-call-int-accumulation-macos-arm64.json)
+and [62-check audit](../bench/runtime-comparison/audit-native-call-int-accumulation.md).
+No new Java/develop comparison or performance-ceiling claim. After the upstream merge
+and optimized installation, probe an additive scalar result/status register ABI, preserving
+legacy entries and live admission/context/stack/lifetime semantics; measure before retaining.
