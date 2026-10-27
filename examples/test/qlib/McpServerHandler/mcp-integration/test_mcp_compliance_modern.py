@@ -21,12 +21,14 @@ import argparse
 import asyncio
 import sys
 import traceback
+import warnings
 from dataclasses import dataclass, field
 from typing import Any
 
 try:
     from mcp import Client
     from mcp.types import ElicitResult, CreateMessageResult, TextContent
+    from mcp.shared.exceptions import MCPDeprecationWarning
 except ImportError as e:
     print("ERROR: MCP SDK v2 not installed. Run: pip install -r requirements-modern.txt")
     print(f"Import error: {e}")
@@ -184,7 +186,10 @@ async def run(url: str) -> Results:
         print("\n[removed methods]")
         # ping was removed in 2026-07-28; the server must not answer it
         try:
-            await client.send_ping()
+            # the SDK warns that ping is removed, which is what this check expects
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", MCPDeprecationWarning)
+                await client.send_ping()
             r.fail("ping is not available to modern clients", "ping succeeded")
         except Exception:  # noqa: BLE001
             r.ok("ping is not available to modern clients")
