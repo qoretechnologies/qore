@@ -26,6 +26,13 @@
     @ref overloading_untyped_containers and
     <a href="https://github.com/qoretechnologies/qore/issues/5541">issue 5541</a>).
 
+    Runtime variant selection also checks the elements of a typed container argument where its type alone does not
+    decide whether binding can convert it: a nested container accepted by its shape (ex: a \c list<list<string>>
+    for a \c list<list<int>> parameter), a nested element type that may not match (ex: \c list<list<auto>>), or a
+    \c softlist<T> parameter, which converts any list.  A variant whose binding would fail with
+    \c RUNTIME-TYPE-ERROR is no longer selected: another variant is called, or \c RUNTIME-OVERLOAD-ERROR is raised
+    when none matches.  A call that binds selects the same variant as before.
+
     The @ref instanceof "instanceof" operator now returns \c False at runtime for a container whose nested element
     type the type tested does not accept, such as a \c list<list<string>> tested against \c list<list<int>>, as the
     parser already reported; it returned \c True, as an assignment can convert some such containers.  Assignments

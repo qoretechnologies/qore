@@ -41,7 +41,7 @@ class InstanceofContainersTest inherits QUnit::Test {
             "list-push-fold": "list<list<softint>>:[[1]]",
             "call-fold": "takes:list<list<softint>>:[[1]]",
             "call-fold-hash": "takesh:hash<string, list<softint>>:{a: [1]}",
-            "call-fold-bad": "RUNTIME-TYPE-ERROR",
+            "call-fold-bad": "RUNTIME-OVERLOAD-ERROR",
             "stable": "yes",
         };
 

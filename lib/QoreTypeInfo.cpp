@@ -3972,11 +3972,14 @@ qore_type_result_e QoreTypeInfo::runtimeAcceptsValueOrFold(const QoreValue& n) c
     return acceptsBrokenSoftNull(n) ? QTI_AMBIGUOUS : QTI_NOT_EQUAL;
 }
 
-// returns the list or hash that a call argument is or refers to if it is a non-empty container with an untyped
-// element type, as a container built at runtime without a declared element type is; otherwise sets neither
-static void qore_get_untyped_call_arg_container(const QoreValue& n, const QoreListNode*& l, const QoreHashNode*& h) {
+// returns the list or hash that a call argument is or refers to, if any, and whether its element type is untyped,
+// as the element type of a container built at runtime without a declared element type is; a hashdecl hash is a
+// declared structure, not generic data, and is left to the hashdecl rules
+static void qore_get_call_arg_container(const QoreValue& n, const QoreListNode*& l, const QoreHashNode*& h,
+        bool& untyped) {
     l = nullptr;
     h = nullptr;
+    untyped = false;
     switch (n.getType()) {
         case NT_LIST:
             l = n.get<const QoreListNode>();
@@ -3993,13 +3996,11 @@ static void qore_get_untyped_call_arg_container(const QoreValue& n, const QoreLi
         default:
             return;
     }
-    if (l && (l->empty() || QoreTypeInfo::hasType(l->getValueTypeInfo()))) {
-        l = nullptr;
-    }
-    // a hashdecl hash is a declared structure, not generic data, and is left to the hashdecl rules
-    if (h && (h->empty() || h->getHashDecl() || QoreTypeInfo::hasType(h->getValueTypeInfo()))) {
+    if (h && h->getHashDecl()) {
         h = nullptr;
+        return;
     }
+    untyped = !QoreTypeInfo::hasType(l ? l->getValueTypeInfo() : h->getValueTypeInfo());
 }
 
 // checks every element of an untyped container against the element type of a typed container parameter type, as
@@ -4011,10 +4012,12 @@ static bool qore_call_arg_elements_accepted(const QoreTypeInfo* elem_ti, const Q
     // as it builds the typed hash; as for a typed container whose elements may be converted, the match is decided by
     // the type here and the conversion reports a key that does not belong to the hashdecl
     bool elem_hashdecl = QoreTypeInfo::getTypedHash(elem_ti);
-    auto check = [elem_ti, elem_hashdecl, &quality, &content_dependent] (const QoreValue& v) -> bool {
+    // likewise, an object is materialized into a list<T> element type if it is an iterator, which binding finds out
+    bool elem_list = QoreTypeInfo::getComplexListValueType(elem_ti);
+    auto check = [elem_ti, elem_hashdecl, elem_list, &quality, &content_dependent] (const QoreValue& v) -> bool {
         int elem_quality;
         if (QoreTypeInfo::runtimeAcceptsCallArg(elem_ti, v, elem_quality, content_dependent) == QTI_NOT_EQUAL) {
-            if (!elem_hashdecl || v.getType() != NT_HASH) {
+            if (!(elem_hashdecl && v.getType() == NT_HASH) && !(elem_list && v.getType() == NT_OBJECT)) {
                 return false;
             }
             elem_quality = QTI_AMBIGUOUS;
@@ -4046,8 +4049,10 @@ qore_type_result_e QoreTypeInfo::runtimeAcceptsCallArg(const QoreTypeInfo* ti, c
         bool& content_dependent) {
     const QoreListNode* l;
     const QoreHashNode* h;
-    qore_get_untyped_call_arg_container(n, l, h);
-    if ((!l && !h) || !hasType(ti)) {
+    bool untyped;
+    qore_get_call_arg_container(n, l, h, untyped);
+    // empty untyped containers keep the rule of issue #2647, and empty typed containers have no elements to check
+    if ((!l && !h) || (l ? l->empty() : h->empty()) || !hasType(ti)) {
         qore_type_result_e rv = runtimeAcceptsValueOrFold(ti, n);
         quality = rv;
         return rv;
@@ -4059,35 +4064,77 @@ qore_type_result_e QoreTypeInfo::runtimeAcceptsCallArg(const QoreTypeInfo* ti, c
         return elem_ti && !is_auto_vti(elem_ti) ? elem_ti : nullptr;
     };
 
-    bool has_typed_container = false;
-    for (auto& t : ti->accept_vec) {
-        if (get_elem_ti(t)) {
-            has_typed_container = true;
-            break;
+    // the element type of the typed list in the type, if any; a softlist<T> type also converts any list with a mapped
+    // plain list type, whose conversion fails for the same elements
+    const QoreTypeInfo* list_elem_ti = nullptr;
+    if (l) {
+        for (auto& t : ti->accept_vec) {
+            if ((list_elem_ti = get_elem_ti(t))) {
+                break;
+            }
         }
     }
+    auto is_softlist_catch_all = [l, list_elem_ti] (const QoreAcceptSpec& t) -> bool {
+        return l && list_elem_ti && t.map && t.spec.isRuntimeBaseType(NT_LIST);
+    };
 
     // as in runtimeAcceptsValue(), the first type in the type that accepts the value gives the result
     for (auto& t : ti->accept_vec) {
-        if (const QoreTypeInfo* elem_ti = get_elem_ti(t)) {
-            content_dependent = true;
-            int elem_quality = QTI_IDENT;
-            if (qore_call_arg_elements_accepted(elem_ti, l, h, elem_quality, content_dependent)) {
-                quality = elem_quality;
-                return QTI_AMBIGUOUS;
+        const QoreTypeInfo* elem_ti = get_elem_ti(t);
+        if (untyped) {
+            // every element of an untyped container is checked against a typed container type
+            if (elem_ti) {
+                content_dependent = true;
+                int elem_quality = QTI_IDENT;
+                if (qore_call_arg_elements_accepted(elem_ti, l, h, elem_quality, content_dependent)) {
+                    quality = elem_quality;
+                    return QTI_AMBIGUOUS;
+                }
+                continue;
+            }
+            if (is_softlist_catch_all(t)) {
+                continue;
+            }
+            qore_type_result_e rv = t.spec.runtimeAcceptsValue(n, t.exact, true);
+            if (rv != QTI_NOT_EQUAL) {
+                quality = rv;
+                return rv;
             }
             continue;
         }
-        // a softlist<T> type also converts any list with a mapped plain list type; for a list it is the element
-        // check above that decides, as the conversion fails for the same elements
-        if (l && has_typed_container && t.map && t.spec.isRuntimeBaseType(NT_LIST)) {
+
+        // a typed container: the type decides, except where the verdict depends on the elements, which are then
+        // checked as binding will convert them; the result and its quality are those of the type, so a call that
+        // binding accepts selects the variant it selected without the check
+        qore_type_result_e rv = t.spec.runtimeAcceptsValue(n, t.exact, true);
+        if (rv == QTI_NOT_EQUAL) {
             continue;
         }
-        qore_type_result_e rv = t.spec.runtimeAcceptsValue(n, t.exact, true);
-        if (rv != QTI_NOT_EQUAL) {
-            quality = rv;
-            return rv;
+        const QoreTypeInfo* check_elem_ti = nullptr;
+        if (is_softlist_catch_all(t)) {
+            check_elem_ti = list_elem_ti;
+        } else if (elem_ti) {
+            // a value whose element type is the element type needs no check; another one does if the match comes
+            // from the fold rule, which accepts nested containers by their shape, or if its element type may not
+            // match (ex: list<list<auto>> for list<list<int>>, which the type accepts as an exact match)
+            const QoreTypeInfo* vti = l ? l->getValueTypeInfo() : h->getValueTypeInfo();
+            if (vti != elem_ti && !QoreTypeInfo::equal(vti, elem_ti)) {
+                bool may_not_match = false;
+                if ((rv == QTI_AMBIGUOUS && t.spec.runtimeAcceptsValue(n, t.exact) == QTI_NOT_EQUAL)
+                        || (QoreTypeInfo::parseAccepts(elem_ti, vti, may_not_match) && may_not_match)) {
+                    check_elem_ti = elem_ti;
+                }
+            }
         }
+        if (check_elem_ti) {
+            content_dependent = true;
+            int elem_quality = QTI_IDENT;
+            if (!qore_call_arg_elements_accepted(check_elem_ti, l, h, elem_quality, content_dependent)) {
+                continue;
+            }
+        }
+        quality = rv;
+        return rv;
     }
     quality = QTI_NOT_EQUAL;
     return QTI_NOT_EQUAL;

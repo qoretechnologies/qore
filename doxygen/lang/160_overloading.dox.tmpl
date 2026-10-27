@@ -104,6 +104,13 @@ total(strs);    # calls total(list<string>), which gets a list<string>
     the element type does not accept selects another variant, or raises \c RUNTIME-OVERLOAD-ERROR if no other
     variant matches.
 
+    The elements of a typed container are checked too where its type alone does not decide whether it can be
+    converted: a nested container that is accepted by its shape (ex: a \c list<list<string>> for a
+    \c list<list<softint>> parameter, which converts the strings), a nested element type that may not match (ex: a
+    \c list<list<auto>> for a \c list<list<int>> parameter), or a \c softlist<T> parameter, which converts any list.
+    A variant whose binding would fail for the elements given is not selected; otherwise such a container is ranked
+    by its type as before.  A typed container whose element type is the parameter's element type is not checked.
+
     An empty untyped container is accepted by every typed container parameter, and is not checked, so the first such
     variant declared is called.  A hash argument is not converted to a @ref hashdecl "hashdecl" type, as an
     assignment does not convert it, but a hash element of an untyped container is converted to a hashdecl element

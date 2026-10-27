@@ -142,6 +142,20 @@ called rather than `list<number>` for a list of integers in either order of decl
 other ties are decided as before.  The softlist conversion entry, which accepts any list, does not
 decide for an untyped list: a `softlist<string>` variant is not selected for a list of integers.
 
+A typed container is matched by its type, except where that verdict depends on its elements, which
+are then checked the same way before the type's result is returned:
+
+| Typed source | Why the type does not decide |
+|---|---|
+| a nested container accepted by the fold rule (`list<list<string>>` for `list<list<softint>>`) | the fold accepts it by its shape |
+| a nested element type that `parseAccepts()` accepts with `may_not_match` (`list<list<auto>>` for `list<list<int>>`, an exact match by type) | the elements may not match |
+| any list for a `softlist<T>` type, through its conversion entry | the conversion accepts any list |
+
+A container whose element type is the parameter's element type is not checked, so exact typed
+matches pay nothing.  The result and quality stay those of the type, so a call that binding accepts
+selects the variant it selected before; only a variant whose binding would fail is no longer
+selected.  The check sets `content_dependent` too.
+
 A hash element is accepted for a hashdecl element type without checking its keys, as
 `retypeValue()` converts it and reports a key the hashdecl does not declare; a hash argument is not
 converted to a hashdecl, as lvalue assignment does not convert it.  Empty untyped containers keep
@@ -209,6 +223,10 @@ source for a different hashdecl).
 execution mode and in a program compiled with qcc: dynamic calls, call references, methods, static
 methods and constructors, nested containers, weak references, hashdecls, ranking and ties, softlist
 selection, and call sites that get untyped lists of different element types in turn.
+`examples/test/qore/functions/typed-container-args/` covers typed sources: calls that bind keep their
+variant (exact matches, `list` and `auto` overloads, softlists, folded nested containers, hashdecl
+elements, ties), and calls whose binding would fail select another variant or raise
+`RUNTIME-OVERLOAD-ERROR`.
 `examples/test/qore/operators/instanceof-containers/` covers `instanceof` for nested container types
 that are folded but not accepted, together with the assignments and calls that still fold them.
 
