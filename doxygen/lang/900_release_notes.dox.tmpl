@@ -33,6 +33,11 @@
     \c RUNTIME-TYPE-ERROR is no longer selected: another variant is called, or \c RUNTIME-OVERLOAD-ERROR is raised
     when none matches.  A call that binds selects the same variant as before.
 
+    @ref Qore::HTTPClient::sendHttp2Connect() "HTTPClient::sendHttp2Connect()" and
+    @ref Qore::HTTPClient::sendHttp3Connect() "HTTPClient::sendHttp3Connect()" now send their headers as every other
+    request does: a value that is not a string is sent as a string, the elements of a list as repeated headers, and an
+    empty value is not sent; an int, float or bool header was silently dropped.
+
     The @ref instanceof "instanceof" operator now returns \c False at runtime for a container whose nested element
     type the type tested does not accept, such as a \c list<list<string>> tested against \c list<list<int>>, as the
     parser already reported; it returned \c True, as an assignment can convert some such containers.  Assignments

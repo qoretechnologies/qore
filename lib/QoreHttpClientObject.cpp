@@ -4255,6 +4255,22 @@ QoreStringNode* QoreHttpClientObject::getHttpVersion() const {
     return new QoreStringNode(http_priv->http11 ? "HTTP/1.1" : "HTTP/1.0");
 }
 
+// copies the request headers of an extended CONNECT request into the header hash that is sent, as the other request
+// paths do with qore_httpclient_priv::addAppendHeader(): a value that is not a string is sent as a string, the
+// elements of a list as repeated headers, and an empty value is not sent; these headers were copied only if they were
+// a string or a list, so that an int header was silently dropped
+static int qore_copy_connect_request_headers(const QoreHashNode& headers, QoreHashNode& out, ExceptionSink* xsink) {
+    strcase_set_t hdrs;
+    ConstHashIterator hi(&headers);
+    while (hi.next()) {
+        qore_httpclient_priv::addAppendHeader(hdrs, out, hi.getKey(), hi.get(), xsink);
+        if (*xsink) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
 QoreHashNode* QoreHttpClientObject::sendHttp2Connect(const char* path, const QoreHashNode* headers,
         const char* protocol, QoreHashNode* info, ExceptionSink* xsink) {
     SocketSyncPoll::assertNotOnIoThread("HTTPClient", "sendHttp2Connect", xsink);
@@ -4285,17 +4301,8 @@ QoreHashNode* QoreHttpClientObject::sendHttp2Connect(const char* path, const Qor
         return nullptr;
     }
 
-    if (headers) {
-        ConstHashIterator hi(headers);
-        while (hi.next()) {
-            QoreValue val = hi.get();
-            if (val.getType() == NT_STRING || val.getType() == NT_LIST) {
-                h2_headers->setKeyValue(hi.getKey(), val.refSelf(), xsink);
-                if (*xsink) {
-                    return nullptr;
-                }
-            }
-        }
+    if (headers && qore_copy_connect_request_headers(*headers, **h2_headers, xsink)) {
+        return nullptr;
     }
 
     std::shared_ptr<HttpClientConnectionManagerBase> mgr_holder = http_priv->getConnMgr(xsink);
@@ -4494,17 +4501,8 @@ QoreHashNode* QoreHttpClientObject::sendHttp3Connect(const char* path, const Qor
         return nullptr;
     }
 
-    if (headers) {
-        ConstHashIterator hi(headers);
-        while (hi.next()) {
-            QoreValue val = hi.get();
-            if (val.getType() == NT_STRING || val.getType() == NT_LIST) {
-                h3_headers->setKeyValue(hi.getKey(), val.refSelf(), xsink);
-                if (*xsink) {
-                    return nullptr;
-                }
-            }
-        }
+    if (headers && qore_copy_connect_request_headers(*headers, **h3_headers, xsink)) {
+        return nullptr;
     }
 
     bool forced_h3 = !http_priv->http3_active.load(std::memory_order_acquire);
