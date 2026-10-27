@@ -1,0 +1,191 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Tests the ID that JsonRpcClient calls without an explicit ID use after calls with an explicit ID: an integer or
+# float ID is continued from; a string ID and NULL do not change the next ID; the calls with an explicit ID and a
+# reference to an info hash send the method given. The calls are made from code parsed in
+# each execution mode, as the AST interpreter and the IR and JIT engines pass a literal NULL to a builtin method
+# differently: from a function and a method, with a literal NULL and NULL from a variable.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires json
+%requires QUnit
+%requires HttpServer
+%requires Logger
+%requires Mime
+%requires JsonRpcHandler
+
+%exec-class JsonRpcClientNextIdTest
+
+class NextIdJsonRpcHandler inherits JsonRpcHandler {
+    public {
+        const ApiMethods = (
+            {
+                "name": "^system\\.echo$",
+                "text": "system.echo",
+                "function": \NextIdJsonRpcHandler::echo(),
+                "help": "echos the argument",
+                "logopt": 0,
+            },
+        );
+    }
+
+    constructor() : JsonRpcHandler(new PermissiveAuthenticator(), ApiMethods) {
+    }
+
+    static auto echo(auto arg) {
+        return arg;
+    }
+}
+
+public class JsonRpcClientNextIdTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        NextIdJsonRpcHandler handler();
+        string url;
+    }
+
+    public {
+        #! the execution modes that the calls are made in
+        const Modes = {"ast": EM_AST, "ir": EM_IR, "jit": EM_JIT, "tiered": EM_TIERED};
+
+        #! the IDs of the calls without an explicit ID made by each function below
+        const ExpectedIds = (1, 11, 12, 13, 14, 15, 3.5, 31);
+
+        #! each function makes the same calls and returns the IDs of the calls without an explicit ID
+        const Code = "%modern
+list<auto> sub calls(JsonRpcClient client, code null_call, code null_args_call) {
+    list<auto> ids;
+    ids += client.call(\"system.echo\", 1).id;
+    if (client.callId(10, \"system.echo\", 2).id != 10) {
+        throw \"ID-ERROR\", \"the explicit ID 10 was not used\";
+    }
+    null_call(client);
+    ids += client.call(\"system.echo\", 3).id;
+    if (client.callId(\"abc\", \"system.echo\", 4).id != \"abc\") {
+        throw \"ID-ERROR\", \"the explicit ID 'abc' was not used\";
+    }
+    ids += client.call(\"system.echo\", 5).id;
+    null_args_call(client);
+    ids += client.callArgs(\"system.echo\", 6).id;
+    hash<auto> info;
+    hash<auto> h = client.callIdArgsWithInfo(\\info, 'x', \"system.echo\", 7);
+    if (h.id != 'x' || h.result != 7) {
+        throw \"ID-ERROR\", sprintf(\"the explicit ID 'x' or the method was not used: %y\", h);
+    }
+    ids += client.call(\"system.echo\", 8).id;
+    # a string with an integer value is a string ID, which does not change the next ID
+    if (client.callId(\"20\", \"system.echo\", 9).id != \"20\") {
+        throw \"ID-ERROR\", \"the explicit ID '20' was not used\";
+    }
+    ids += client.call(\"system.echo\", 10).id;
+    if (client.callId(2.5, \"system.echo\", 11).id != 2.5) {
+        throw \"ID-ERROR\", \"the explicit ID 2.5 was not used\";
+    }
+    ids += client.call(\"system.echo\", 12).id;
+    h = client.callIdWithInfo(\\info, 30, \"system.echo\", 13);
+    if (h.id != 30 || h.result != 13) {
+        throw \"ID-ERROR\", sprintf(\"the explicit ID 30 or the method was not used: %y\", h);
+    }
+    ids += client.call(\"system.echo\", 14).id;
+    return ids;
+}
+
+# a call with a NULL ID is a notification, which has no response
+sub null_id_literal(JsonRpcClient client) {
+    try {
+        client.callId(NULL, \"system.echo\", \"n\");
+    } catch (hash<ExceptionInfo> ex) {
+    }
+}
+sub null_id_variable(JsonRpcClient client) {
+    auto n = NULL;
+    try {
+        client.callId(n, \"system.echo\", \"n\");
+    } catch (hash<ExceptionInfo> ex) {
+    }
+}
+sub null_args_id_literal(JsonRpcClient client) {
+    hash<auto> info;
+    try {
+        client.callIdArgsWithInfo(\\info, NULL, \"system.echo\", \"n\");
+    } catch (hash<ExceptionInfo> ex) {
+    }
+}
+sub null_args_id_variable(JsonRpcClient client) {
+    hash<auto> info;
+    auto n = NULL;
+    try {
+        client.callIdArgsWithInfo(\\info, n, \"system.echo\", \"n\");
+    } catch (hash<ExceptionInfo> ex) {
+    }
+}
+
+list<auto> sub literal_null(string url) {
+    return calls(new JsonRpcClient({\"url\": url}), \\null_id_literal(), \\null_args_id_literal());
+}
+list<auto> sub variable_null(string url) {
+    return calls(new JsonRpcClient({\"url\": url}), \\null_id_variable(), \\null_args_id_variable());
+}
+
+class NullIdCaller {
+    nullId(JsonRpcClient client) {
+        try {
+            client.callId(NULL, \"system.echo\", \"n\");
+        } catch (hash<ExceptionInfo> ex) {
+        }
+    }
+    nullArgsId(JsonRpcClient client) {
+        hash<auto> info;
+        try {
+            client.callIdArgsWithInfo(\\info, NULL, \"system.echo\", \"n\");
+        } catch (hash<ExceptionInfo> ex) {
+        }
+    }
+    list<auto> run(string url) {
+        return calls(new JsonRpcClient({\"url\": url}), sub (JsonRpcClient c) { nullId(c); },
+            sub (JsonRpcClient c) { nullArgsId(c); });
+    }
+}
+list<auto> sub method_literal_null(string url) {
+    return (new NullIdCaller()).run(url);
+}
+";
+    }
+
+    constructor() : Test("JsonRpcClient next ID test", "1.0") {
+        addTestCase("the ID of calls without an explicit ID in each execution mode", \nextIdTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+        };
+        server = new HttpServer(http_opts);
+        server.setHandler("jsonrpc-handler", "", MimeTypeJson, handler);
+        server.setDefaultHandler("jsonrpc-handler", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        url = "http://localhost:" + port + "/JSON";
+    }
+
+    globalTearDown() {
+        server.stop();
+        delete server;
+    }
+
+    nextIdTest() {
+        foreach hash<auto> mode in (Modes.pairIterator()) {
+            Program pgm();
+            pgm.setExecMode(mode.value);
+            pgm.parse(Code, "next-id-" + mode.key);
+            foreach string func in ("literal_null", "variable_null", "method_literal_null") {
+                assertEq(ExpectedIds, pgm.callFunction(func, url), mode.key + " " + func);
+            }
+        }
+    }
+}

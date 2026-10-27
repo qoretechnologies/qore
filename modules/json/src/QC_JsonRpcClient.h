@@ -88,22 +88,29 @@ public:
         return jsonrpc_version;
     }
 
+    //! returns the ID of the next call: the last numeric ID plus one, or 1 if there is none
     DLLLOCAL QoreValue getNextId() {
-        if (!last_id) {
-            last_id = 1;
-        } else if (last_id.getType() == NT_INT) {
+        AutoLocker al(m);
+        if (last_id.getType() == NT_INT) {
             last_id = last_id.getAsBigInt() + 1;
         } else if (last_id.getType() == NT_FLOAT) {
             last_id = last_id.getAsFloat() + 1.0;
         } else {
-            printf("CAN'T HANDLE TYPE %s\n", last_id.getFullTypeName());
+            assert(last_id.isNothing());
+            last_id = 1;
         }
         return last_id;
     }
 
+    //! sets the ID that the next ID follows, if it is an integer or a float
+    /** Other IDs (ex: strings) do not change the next ID; NULL and NOTHING are not IDs, as for the request; only an
+        integer or a float is kept, which is held by value, so no reference to the caller's value is kept
+    */
     DLLLOCAL void setLastId(QoreValue id) {
-        if (id) {
-            last_id = id;
+        qore_type_t t = id.getType();
+        if (t == NT_INT || t == NT_FLOAT) {
+            AutoLocker al(m);
+            last_id = t == NT_INT ? QoreValue(id.getAsBigInt()) : QoreValue(id.getAsFloat());
         }
     }
 

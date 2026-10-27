@@ -253,6 +253,9 @@ hash<auto> JsonRpcClient::call(string[doc] method, ...) {
 
     @note other exceptions may be thrown related to communication errors (ex: SSL errors, etc)
 
+    @note a call without an explicit ID that follows uses this ID plus one if it is an integer or a float; other
+    IDs, including \c NULL, do not change the ID of the next call without an explicit ID
+
     @par Example:
     @code{.py}
 hash result = jrc.callId(1, "method.name", arg1, arg2);
@@ -333,6 +336,9 @@ hash<auto> JsonRpcClient::callArgsWithInfo(reference<auto> info, string[doc] met
     @throw HTTP-CLIENT-RECEIVE-ERROR error communicating with HTTP server
 
     @note other exceptions may be thrown related to communication errors (ex: SSL errors, etc)
+
+    @note a call without an explicit ID that follows uses this ID plus one if it is an integer or a float; other
+    IDs, including \c NULL, do not change the ID of the next call without an explicit ID
 
     @par Example:
     @code{.py}
@@ -416,6 +422,9 @@ hash<auto> JsonRpcClient::callWithInfo(reference<hash<auto>> info, string[doc] m
     @throw HTTP-CLIENT-RECEIVE-ERROR error communicating with HTTP server
 
     @note other exceptions may be thrown related to communication errors (ex: SSL errors, etc)
+
+    @note a call without an explicit ID that follows uses this ID plus one if it is an integer or a float; other
+    IDs, including \c NULL, do not change the ID of the next call without an explicit ID
 
     @par Example:
     @code{.py}
