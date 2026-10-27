@@ -150,6 +150,8 @@ class DataProviderPresentationTest inherits QUnit::Test {
             \rekeyConflictToolTest());
         addTestCase("qore-data-provider-i18n refuses re-key requests it does not support",
             \rekeyUsageToolTest());
+        addTestCase("qore-data-provider-i18n reports missing translations of standard and partial locales apart",
+            \rekeyStandardAndPartialLocalesToolTest());
         addTestCase("producer locale validation is metadata-only and comprehensive",
             \sourceLocaleInspectionTest());
         addTestCase("the checked-in Qore source catalog is synchronized",
@@ -1938,14 +1940,14 @@ class DataProviderPresentationTest inherits QUnit::Test {
         writeRekeyTree(tree, fx, old_messages, {"cs": cs, "de": fx.de});
         hash<string, string> before = readRekeyTree(tree);
         string report = "(?m)^REKEY: .*root\\.json: 32 -> 27 message\\(s\\); translations carried 28, matched by "
-            "type 2, variants 3, reused by text 3, missing 21; new texts 1$";
+            "type 2, variants 3, reused by text 3, missing 21 in standard locales, 0 in partial locales; new texts 1$";
 
         string out;
         assertEq(0, runI18nTool(root, sprintf("--rekey-source-tree --dry-run -o %s --owner %s", shellQuote(tree),
                 RekeyOwnerModule), \out), "a dry run without conflicts succeeds: " + out);
         assertRegex(report, out, "a dry run reports the counts of the domain");
         assertRegex("(?m)^surveyed 1 domain\\(s\\), 1 re-keyed; 32 -> 27 message\\(s\\); 0 conflict\\(s\\); "
-            "translations carried 28, matched by type 2, variants 3, reused by text 3, missing 21; new texts 1 "
+            "translations carried 28, matched by type 2, variants 3, reused by text 3, missing 21 in standard locales, 0 in partial locales; new texts 1 "
             "\\(dry run: nothing written\\)$", out, "a dry run reports the totals");
         assertEq(before, readRekeyTree(tree), "a dry run writes nothing");
 
@@ -2030,7 +2032,7 @@ class DataProviderPresentationTest inherits QUnit::Test {
         assertEq(0, runI18nTool(root, sprintf("--rekey-source-tree -o %s --owner %s", shellQuote(tree),
                 RekeyOwnerModule), \out), "re-keying succeeds: " + out);
         assertRegex("(?m)^REKEY: .*root\\.json: 27 -> 27 message\\(s\\); translations carried 24, matched by type 0, "
-            "variants 0, reused by text 3, missing 0; new texts 0$", out,
+            "variants 0, reused by text 3, missing 0 in standard locales, 0 in partial locales; new texts 0$", out,
             "every translation of the renamed type is reused: " + out);
         hash<auto> cs_messages = parse_json(ReadOnlyFile::readTextFile(join_paths(tree, fx.domain, "cs.json")))
             .locales.cs.messages;
@@ -2080,7 +2082,7 @@ class DataProviderPresentationTest inherits QUnit::Test {
         assertEq(0, runI18nTool(root, sprintf("--rekey-source-tree -o %s --owner %s", shellQuote(tree),
                 RekeyOwnerModule), \out), "re-keying succeeds: " + out);
         assertRegex("(?m)^REKEY: .*root\\.json: 27 -> 27 message\\(s\\); translations carried 24, matched by type 3, "
-            "variants 0, reused by text 0, missing 0; new texts 0$", out,
+            "variants 0, reused by text 0, missing 0 in standard locales, 0 in partial locales; new texts 0$", out,
             "every translation of the type is carried as that of the same type: " + out);
         hash<auto> cs_messages = parse_json(ReadOnlyFile::readTextFile(join_paths(tree, fx.domain, "cs.json")))
             .locales.cs.messages;
@@ -2230,7 +2232,7 @@ class DataProviderPresentationTest inherits QUnit::Test {
         writeRekeyTree(extracted, fx, fx.old_messages, {"cs": fx.cs, "de": fx.de});
         writeRekeyTree(mechanical, fx, fx.old_messages, {"cs": fx.cs, "de": fx.de});
         string report = "(?m)^REKEY: .*root\\.json: 33 -> 27 message\\(s\\); translations carried 29, matched by "
-            "type 2, variants 3, reused by text 3, missing 20; new texts 0$";
+            "type 2, variants 3, reused by text 3, missing 20 in standard locales, 0 in partial locales; new texts 0$";
 
         string out;
         assertEq(0, runI18nTool(root, sprintf("--rekey-source-tree -o %s --owner %s", shellQuote(extracted),
@@ -2245,6 +2247,68 @@ class DataProviderPresentationTest inherits QUnit::Test {
         assertEq(fx.root_catalog,
             parse_json(ReadOnlyFile::readTextFile(join_paths(mechanical, fx.domain, "root.json"))),
             "the committed root re-keyed is the extracted catalog");
+    }
+
+    #! The tool reports the translations missing in the standard locales apart from those in partial locales
+    /** A non-standard locale is partial by design, so its untranslated texts are not reported as missing in the
+        standard locales that \c --require-standard-locales requires: a lossless re-key of a tree whose standard
+        locales are complete reports nothing missing in them.
+    */
+    rekeyStandardAndPartialLocalesToolTest() {
+        string root = sourceRoot();
+        string work = make_tmp_dir("data-provider-i18n-rekey-partial-");
+        on_exit remove_tree(work);
+        hash<auto> fx = rekeyFixture(root, work);
+        assertTrue(inlist("cs", DataProviderPresentation::StandardTranslationLocales), "cs is a standard locale");
+        assertFalse(inlist("pt", DataProviderPresentation::StandardTranslationLocales),
+            "pt is not a standard locale");
+
+        # every text translated in the standard locale; one text translated in the partial locale
+        hash<auto> cs = map {$1.key: {"source": $1.value.source, "message": $1.value.source + " (cs)"}},
+            fx.old_messages.pairIterator();
+        string app_id = DataProviderPresentation::appMessageId(RekeyOwnerApp, "display_name");
+        hash<auto> pt = {app_id: {"source": fx.old_messages{app_id}.source, "message": "Fornecedor Rekey"}};
+        string tree = join_paths(work, "tree");
+        writeRekeyTree(tree, fx, fx.old_messages, {"cs": cs, "pt": pt});
+
+        string out;
+        assertEq(0, runI18nTool(root, sprintf("--rekey-source-tree -o %s --owner %s", shellQuote(tree),
+                RekeyOwnerModule), \out), "re-keying succeeds: " + out);
+        assertRegex("(?m)^REKEY: .*root\\.json: 33 -> 27 message\\(s\\); translations carried 28, matched by "
+            "type 0, variants 0, reused by text 0, missing 0 in standard locales, 26 in partial locales; "
+            "new texts 0$", out, "the domain reports the missing translations of each kind of locale apart");
+        assertRegex("(?m)^re-keyed 1 domain\\(s\\), 1 re-keyed; 33 -> 27 message\\(s\\); 0 conflict\\(s\\); "
+            "translations carried 28, matched by type 0, variants 0, reused by text 0, missing 0 in standard "
+            "locales, 26 in partial locales \\(pt: partial by design\\); new texts 0$", out,
+            "the totals report the missing translations of each kind of locale apart and name the partial locales");
+
+        # re-keying the re-keyed tree loses nothing: nothing is missing in the standard locale
+        hash<string, string> rekeyed = readRekeyTree(tree);
+        assertEq(0, runI18nTool(root, sprintf("--rekey-source-tree -o %s --owner %s", shellQuote(tree),
+                RekeyOwnerModule), \out), "re-keying the re-keyed tree succeeds: " + out);
+        assertRegex("(?m)^re-keyed 1 domain\\(s\\), 0 re-keyed; 27 -> 27 message\\(s\\); 0 conflict\\(s\\); "
+            "translations carried 28, matched by type 0, variants 0, reused by text 0, missing 0 in standard "
+            "locales, 26 in partial locales \\(pt: partial by design\\); new texts 0$", out,
+            "a lossless re-key reports nothing missing in the standard locales");
+        assertEq(rekeyed, readRekeyTree(tree), "re-keying the re-keyed tree writes nothing");
+
+        # a translation missing in the standard locale is reported as missing there
+        string untranslated = join_paths(work, "untranslated");
+        writeRekeyTree(untranslated, fx, fx.old_messages, {"cs": cs - app_id, "pt": pt});
+        assertEq(0, runI18nTool(root, sprintf("--rekey-source-tree --dry-run -o %s --owner %s",
+                shellQuote(untranslated), RekeyOwnerModule), \out), "the dry run succeeds: " + out);
+        assertRegex("(?m)^surveyed 1 domain\\(s\\), 1 re-keyed; 33 -> 27 message\\(s\\); 0 conflict\\(s\\); "
+            "translations carried 27, matched by type 0, variants 0, reused by text 0, missing 1 in standard "
+            "locales, 26 in partial locales \\(pt: partial by design\\); new texts 0 \\(dry run: nothing written\\)$",
+            out, "a translation missing in a standard locale is reported as missing in the standard locales");
+
+        # without partial locales, no partial locale is named
+        string standard_only = join_paths(work, "standard-only");
+        writeRekeyTree(standard_only, fx, fx.old_messages, {"cs": cs});
+        assertEq(0, runI18nTool(root, sprintf("--rekey-source-tree --dry-run -o %s --owner %s",
+                shellQuote(standard_only), RekeyOwnerModule), \out), "the dry run succeeds: " + out);
+        assertRegex("(?m)^surveyed .*missing 0 in standard locales, 0 in partial locales; new texts 0 "
+            "\\(dry run: nothing written\\)$", out, "a tree without partial locales names none");
     }
 
     #! A conflict makes re-keying write nothing in any domain

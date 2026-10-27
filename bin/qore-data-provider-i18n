@@ -686,8 +686,11 @@ class QoreDataProviderI18nCmd {
         locale gives the same text for the same field and member in the same action, if there is exactly one, which
         carries the texts of a type that has a new name, such as a property type that now has the name of the schema
         it refers to; and otherwise the translation that the locale gives the same text for the same field and
-        member under another id, if there is exactly one.  The others are reported as missing.  A root text that
-        the old root does not have is reported as a new text.
+        member under another id, if there is exactly one.  The others are reported as missing, separately for the
+        standard locales (DataProviderPresentation::StandardTranslationLocales, the locales that
+        \c --require-standard-locales requires) and for the other locales, whose catalogs are partial by design, so
+        that a lossless re-key of a tree whose standard locales are complete reports nothing missing in them.  A root
+        text that the old root does not have is reported as a new text.
 
         Conflicting texts for one new id (or a conflict reported by the extraction) are reported for each domain;
         then nothing is written, and the program exits with status 2.
@@ -793,8 +796,10 @@ class QoreDataProviderI18nCmd {
         hash<string, bool> write_dirs;
         hash<string, int> totals = {
             "domains": 0, "changed": 0, "before": 0, "after": 0, "conflicts": 0, "carried": 0, "variants": 0,
-            "matched": 0, "reused": 0, "missing": 0, "new_texts": 0,
+            "matched": 0, "reused": 0, "missing_standard": 0, "missing_partial": 0, "new_texts": 0,
         };
+        # the non-standard locales found, whose catalogs are partial by design
+        hash<string, bool> partial_locales = {};
         foreach hash<auto> root in (sort_stable(roots, int sub (hash<auto> l, hash<auto> r) {
                 return l.path <=> r.path; })) {
             ++totals.domains;
@@ -865,12 +870,17 @@ class QoreDataProviderI18nCmd {
             int matched = 0;
             int variants = 0;
             int reused = 0;
-            int missing = 0;
+            int missing_standard = 0;
+            int missing_partial = 0;
             foreach string file in (sort(glob(dir + DirSep + "*.json"))) {
                 string locale = basename(file);
                 locale = locale.substr(0, locale.length() - 5);
                 if (locale == DataProviderPresentation::RootLocale) {
                     continue;
+                }
+                bool standard = isStandardLocale(locale);
+                if (!standard) {
+                    partial_locales{locale} = True;
                 }
                 hash<auto> locale_catalog = parse_json(ReadOnlyFile::readTextFile(file));
                 hash<auto> translations = locale_catalog.locales{locale}.messages ?? {};
@@ -962,7 +972,11 @@ class QoreDataProviderI18nCmd {
                         ++reused;
                         continue;
                     }
-                    ++missing;
+                    if (standard) {
+                        ++missing_standard;
+                    } else {
+                        ++missing_partial;
+                    }
                 }
                 hash<auto> messages = map {$1.id: $1.value}, sort_stable(placed,
                     int sub (hash<auto> l, hash<auto> r) { return l.pos <=> r.pos; });
@@ -970,7 +984,7 @@ class QoreDataProviderI18nCmd {
                 locale_catalogs{locale} = locale_catalog;
             }
             hash<string, int> stats = {"carried": carried, "matched": matched, "variants": variants,
-                "reused": reused, "missing": missing};
+                "reused": reused, "missing_standard": missing_standard, "missing_partial": missing_partial};
             int new_texts = (select new_messages.iterator(), !old_sources{$1.source}).size();
             map totals{$1.key} += $1.value, stats.pairIterator();
             totals.new_texts += new_texts;
@@ -980,9 +994,10 @@ class QoreDataProviderI18nCmd {
             }
             if (changed || verbose) {
                 printf("%s %s: %d -> %d message(s); translations carried %d, matched by type %d, variants %d, "
-                    "reused by text %d, missing %d; new texts %d\n", color.key(changed ? "REKEY:" : "SAME:"),
-                    root.path, old_messages.size(), new_messages.size(), stats.carried, stats.matched,
-                    stats.variants, stats.reused, stats.missing, new_texts);
+                    "reused by text %d, missing %d in standard locales, %d in partial locales; new texts %d\n",
+                    color.key(changed ? "REKEY:" : "SAME:"), root.path, old_messages.size(), new_messages.size(),
+                    stats.carried, stats.matched, stats.variants, stats.reused, stats.missing_standard,
+                    stats.missing_partial, new_texts);
             }
             if (!changed && !stats.matched && !stats.reused && new_catalog == old_catalog) {
                 continue;
@@ -1000,15 +1015,25 @@ class QoreDataProviderI18nCmd {
             QoreCatalogGeneratorRecord::writeRecords(keys write_dirs);
         }
         printf("%s %d domain(s), %d re-keyed; %d -> %d message(s); %d conflict(s); translations carried %d, "
-            "matched by type %d, variants %d, reused by text %d, missing %d; new texts %d%s\n",
+            "matched by type %d, variants %d, reused by text %d, missing %d in standard locales, %d in partial "
+            "locales%s; new texts %d%s\n",
             dry_run || totals.conflicts ? "surveyed" : "re-keyed", totals.domains, totals.changed, totals.before,
             totals.after, totals.conflicts, totals.carried, totals.matched, totals.variants, totals.reused,
-            totals.missing, totals.new_texts, dry_run
+            totals.missing_standard, totals.missing_partial,
+            partial_locales ? sprintf(" (%s: partial by design)", sort(keys partial_locales).join(", ")) : "",
+            totals.new_texts, dry_run
                 ? " (dry run: nothing written)"
                 : (totals.conflicts ? " (conflicts: nothing written)" : ""));
         if (totals.conflicts) {
             exit(2);
         }
+    }
+
+    #! Returns True if the locale is one of the standard locales that \c --require-standard-locales requires
+    /** The other locales are partial by design: a re-key reports their missing translations separately.
+    */
+    static bool isStandardLocale(string locale) {
+        return inlist(locale, DataProviderPresentation::StandardTranslationLocales);
     }
 
     #! Returns the translation given most often, the first one in the file for a tie

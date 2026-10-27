@@ -1597,6 +1597,10 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       "DataProviderPresentation::typePresentationIdentity()"), so building a type with another class keeps the message
       IDs of its texts; catalogs with the previous IDs are moved to the new ones, carrying their translations, with
       \c qore-data-provider-i18n \c --rekey-source-tree
+    - \c qore-data-provider-i18n \c --rekey-source-tree reports the translations missing in the standard locales
+      (the locales that \c --require-standard-locales requires) apart from those missing in other locales, which
+      are partial by design and are named in the summary; it reported them as one count, so a re-key that lost no
+      translation never reported none missing
     - fields and options describe the value that the remote system assumes when they are not given, as
       @ref DataProvider::DataFieldInfo::remote_default_value "remote_default_value", which is shown and never applied,
       pre-filled or sent (see @ref dataprovider_remote_default_values)
