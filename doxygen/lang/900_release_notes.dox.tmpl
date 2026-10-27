@@ -38,6 +38,10 @@
     request does: a value that is not a string is sent as a string, the elements of a list as repeated headers, and an
     empty value is not sent; an int, float or bool header was silently dropped.
 
+    An untyped hash, such as the empty hash literal \c {}, can now be assigned to a \c hash<auto!> class member, as to
+    a \c hash<auto!> local or global variable; the parser refused it, taking the type, which is named
+    \c hash<string, auto>, for a hash with a typed value type.
+
     The @ref instanceof "instanceof" operator now returns \c False at runtime for a container whose nested element
     type the type tested does not accept, such as a \c list<list<string>> tested against \c list<list<int>>, as the
     parser already reported; it returned \c True, as an assignment can convert some such containers.  Assignments
