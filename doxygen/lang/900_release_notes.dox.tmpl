@@ -5115,6 +5115,9 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a module compiled with \c qcc or \c --compile-module whose hashdecl member default references a constant of the
+      same module (ex: <tt>list&lt;string&gt; excludeDirs = DefaultExcludeDirs;</tt> in the \c QLS module) failed to
+      load (<tt>cannot resolve const_ref</tt>), so it was loaded from its source if available
     - a list or hash with no declared element type (<tt>list&lt;auto&gt;</tt>, <tt>hash&lt;auto&gt;</tt>), as
       built at runtime by language bindings such as the \c python module, was rejected for a typed container
       parameter (ex: <tt>list&lt;int&gt;</tt>, <tt>hash&lt;string, list&lt;string&gt;&gt;</tt>) in runtime

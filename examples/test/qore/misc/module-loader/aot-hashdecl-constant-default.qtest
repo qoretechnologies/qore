@@ -1,0 +1,116 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires FsUtil
+%requires QUnit
+
+%exec-class AotHashdeclConstantDefaultTest
+
+#! Tests a compiled module whose hashdecl member defaults reference constants of the same module
+/** Hashdecl members are added when the types of a compiled module are resolved, before its constants are registered,
+    and a member default that references a constant of the same module failed to load ("cannot resolve const_ref"),
+    so the module was loaded from its source instead, or not at all without it.  The QLS module's FileScanOptions
+    (excludeDirs = DefaultExcludeDirs) was one.
+
+    The test compiles the module with qcc, removes its source, and runs a child in each execution mode that loads the
+    compiled module and prints the defaults of its hashdecls.
+*/
+class AotHashdeclConstantDefaultTest inherits QUnit::Test {
+    public {
+        #! the module: hashdecl member defaults referencing namespace and class constants of the module
+        const ModuleSource = "%modern
+module HdConstDefault {
+    version = \"1.0\";
+    desc = \"hashdecl constant default test module\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+
+public namespace HdConstDefault {
+public const DefaultDirs = (\".git\", \"build\");
+public const DefaultLimits = {\"files\": 10, \"depth\": 3};
+public const DefaultSize = 8 * 1024;
+
+public class Defaults {
+    public {
+        const Mode = \"strict\";
+    }
+}
+
+public hashdecl Opts {
+    list<string> dirs = DefaultDirs;
+    hash<string, int> limits = DefaultLimits;
+    int size = DefaultSize;
+    string mode = Defaults::Mode;
+}
+
+public hash<Opts> sub get_opts() {
+    return <Opts>{};
+}
+}
+";
+
+        #! the child: loads the compiled module and prints the defaults and the module's file
+        const ChildSource = "%modern
+%requires HdConstDefault
+hash<Opts> o();
+printf(\"%y\\n\", o);
+printf(\"%y\\n\", get_opts());
+printf(\"%s\\n\", o.limits.fullType());
+printf(\"%s\\n\", basename(get_module_hash().HdConstDefault.filename));
+";
+
+        #! the execution modes the child runs in
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("AotHashdeclConstantDefaultTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        addTestCase("hashdecl member defaults referencing module constants", \defaultsTest());
+        set_return_value(main());
+    }
+
+    defaultsTest() {
+        TmpDir tmp("qore-aot-hashdecl-constant-default-");
+        string src = tmp.path + DirSep + "HdConstDefault.qm";
+        string qmod = tmp.path + DirSep + "HdConstDefault.qmod";
+        File f();
+        f.open2(src, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(ModuleSource);
+        f.close();
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s --module "
+            "--strip-source -o %s %s 2>&1", libqore_dir, libqore_dir, tmp.path, qcc_bin, qmod, src));
+        assertTrue(is_file(qmod), "qcc compiled the module: " + out);
+        # the child must load the compiled module: there is no source to fall back to
+        unlink(src);
+
+        string child = tmp.path + DirSep + "child.q";
+        f.open2(child, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(ChildSource);
+        f.close();
+
+        string expected = "{dirs: [\".git\", \"build\"], limits: {files: 10, depth: 3}, size: 8192, mode: \"strict\"}\n"
+            "{dirs: [\".git\", \"build\"], limits: {files: 10, depth: 3}, size: 8192, mode: \"strict\"}\n"
+            "hash<string, int>\n"
+            "HdConstDefault.qmod\n";
+        foreach string mode in (ExecModes) {
+            out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --exec-mode=%s %s 2>&1",
+                libqore_dir, tmp.path, qore_bin, mode, child));
+            assertEq(expected, out, mode);
+        }
+    }
+}
