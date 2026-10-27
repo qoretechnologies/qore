@@ -870,7 +870,8 @@ QoreValue QoreComplexHashCastOperatorNode::evalImpl(bool& needs_deref, Exception
     // 1. complexTypeInfo is properly set
     // 2. hashdecl bindings are cleared (important for hashes created by map operators)
     // This is necessary even if types match, because hashdecl values might still have bindings
-    return qore_hash_private::newComplexHashFromHash(typeInfo, rv.takeReferencedNode<QoreHashNode>(), xsink);
+    // the values are converted to the value type as by an assignment
+    return qore_hash_private::newComplexHashFromHash(typeInfo, rv.takeReferencedNode<QoreHashNode>(), xsink, true);
 }
 
 QoreValue QoreComplexHashCastOperatorNode::castValue(QoreValue inner, ExceptionSink* xsink) const {
@@ -887,7 +888,9 @@ QoreValue QoreComplexHashCastOperatorNode::castValue(QoreValue inner, ExceptionS
 
     // Always call newComplexHashFromHash to ensure inner value hashdecls are cleared
     // (this is what evalImpl() does; the previous shortcut skipped necessary work)
-    QoreValue result = qore_hash_private::newComplexHashFromHash(typeInfo, inner.get<QoreHashNode>()->hashRefSelf(), xsink);
+    // the values are converted to the value type as by an assignment
+    QoreValue result = qore_hash_private::newComplexHashFromHash(typeInfo, inner.get<QoreHashNode>()->hashRefSelf(),
+        xsink, true);
     return result;
 }
 

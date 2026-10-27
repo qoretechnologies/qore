@@ -112,21 +112,29 @@ class CastingTest inherits QUnit::Test {
         }
 
         {
-            # Hash cast doesn't validate individual value types at runtime
-            # (unlike list cast which validates element types)
+            # a hash cast checks and converts its values at runtime as an assignment does, as a list cast does its
+            # elements; it labeled a hash<string, string> holding an integer
             Program p(PO_NEW_STYLE);
             p.parse("hash<string, string> sub t() { auto x = 1; "
                 "return cast<hash<string, string>>({'a': '1', 'b': x}); }", "");
-            hash<auto> result = p.callFunction("t");
-            assertEq("hash<string, string>", result.fullType());
+            assertThrows("RUNTIME-TYPE-ERROR", "expects .* got", \p.callFunction(), "t");
         }
 
         {
             Program p(PO_NEW_STYLE);
             p.parse("*hash<string, string> sub t() { auto x = 1; "
                 "return cast<*hash<string, string>>({'a': '1', 'b': x}); }", "");
-            auto result = p.callFunction("t");
-            assertEq("*hash<string, string>", result.fullType());
+            assertThrows("RUNTIME-TYPE-ERROR", "expects .* got", \p.callFunction(), "t");
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("hash<string, softint> sub t() { auto x = '2'; "
+                "return cast<hash<string, softint>>({'a': 1, 'b': x}); }", "");
+            hash<auto> result = p.callFunction("t");
+            assertEq("hash<string, softint>", result.fullType());
+            assertEq({"a": 1, "b": 2}, result);
+            assertEq("integer", result.b.type());
         }
 
         {

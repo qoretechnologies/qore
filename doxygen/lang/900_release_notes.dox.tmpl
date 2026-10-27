@@ -31,6 +31,12 @@
     parser already reported; it returned \c True, as an assignment can convert some such containers.  Assignments
     and calls convert them as before.
 
+    A @ref cast "cast" to a complex hash type (ex: \c cast<hash<string, softint>>(...)) now converts the hash's
+    values to the value type as an assignment does, and raises \c RUNTIME-TYPE-ERROR for a value that an assignment
+    refuses; it labeled the hash with the value type without checking or converting its values.  A cast to a
+    container type with a nested soft or numeric element type (ex: \c cast<list<list<softint>>>(...)) now converts
+    the nested elements too, as an assignment does, where it left them unconverted.
+
     The C++ API adds TypedHashDecl::getProgram() and QoreEnumDecl::getProgram(), matching
     QoreClass::getProgram(). Modules can associate cached declarations with their owning %Program and
     invalidate handles in qore_register_program_cleanup_callback() before namespace data is freed.

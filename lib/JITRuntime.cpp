@@ -2965,7 +2965,9 @@ static uint64_t qore_rt_cast_by_type_path_in_program(uint64_t inner_bits,
             return toBits(QoreValue());
         }
         QoreHashNode* init_hash = inner.get<QoreHashNode>()->hashRefSelf();
-        QoreValue result = qore_hash_private::newComplexHashFromHash(ti, init_hash, xsink);
+        // the values are converted to the value type as by an assignment, as in
+        // QoreComplexHashCastOperatorNode::castValue()
+        QoreValue result = qore_hash_private::newComplexHashFromHash(ti, init_hash, xsink, true);
         return toBits(result);
     }
 

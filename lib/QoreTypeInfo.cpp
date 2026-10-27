@@ -6186,7 +6186,8 @@ const QoreTypeInfo* QoreTypeInfo::getComplexBufferValueType(const QoreTypeInfo* 
 //
 // The element type's own acceptance machinery is used here so that legal conversions (soft types,
 // int -> float, ...) still take place; an element that cannot be accepted fails the retype, and the
-// caller reports the type error.
+// caller reports the type error.  An element that is accepted only through such a conversion is converted
+// too: cast<list<list<softint>>>() of a list<list<string>> gave a list<list<softint>> holding strings.
 static bool qore_retype_element_accepted(QoreValue& v, const QoreTypeInfo* elem_ti, const char* key,
         ExceptionSink* xsink) {
     // auto and auto! element types accept any value without narrowing it
@@ -6213,7 +6214,11 @@ static bool qore_retype_element_accepted(QoreValue& v, const QoreTypeInfo* elem_
         default:
             break;
     }
-    if (QoreTypeInfo::runtimeAcceptsValue(elem_ti, v) != QTI_NOT_EQUAL) {
+    // an element that is accepted only through a conversion (a soft type given a string, a float given an int, ...)
+    // is converted as an assignment converts it; only an element that already has the type is left as it is, or
+    // the container would be stamped with an element type that its element does not have
+    qore_type_result_e rv = QoreTypeInfo::runtimeAcceptsValue(elem_ti, v);
+    if (rv == QTI_IDENT || (rv != QTI_NOT_EQUAL && QoreTypeInfo::superSetOf(elem_ti, v.getTypeInfo()))) {
         return true;
     }
     if (key) {

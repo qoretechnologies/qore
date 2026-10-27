@@ -1,0 +1,94 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# checks that the elements of nested containers are converted by a cast as by an assignment; run by
+# cast-nested-soft.qtest
+
+/** A cast to a container type whose nested element type accepts an element only through a conversion (a soft type
+    given a string, a float given an integer) converts the element, as an assignment does, rather than stamping the
+    container with an element type that its element does not have; a cast to a complex hash type converts its values
+    likewise, and fails for a value that an assignment refuses.  Each check prints "name=result", where the
+    result is the type of the container and of its innermost element, and the value.
+*/
+
+const CastConst = cast<list<list<softint>>>((("1", "2"),));
+
+#! describes a value with the type of its innermost element
+string sub desc(auto v) {
+    auto e = v;
+    while (e.typeCode() == NT_LIST || e.typeCode() == NT_HASH) {
+        e = e.typeCode() == NT_LIST ? e[0] : e.firstValue();
+    }
+    return sprintf("%s:%s:%y", v.fullType(), e.type(), v);
+}
+
+#! returns the result of the closure, or the error it raised
+string sub tryc(code c) {
+    try {
+        return c();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+#! makes every check and returns the results
+hash<string, string> sub run_checks() {
+    hash<string, string> r = {};
+    list<list<string>> lls_typed = (("1", "2"),);
+    auto lls = lls_typed;
+    list<list<int>> lli_typed = ((1, 2),);
+    auto lli = lli_typed;
+    hash<string, list<string>> hls_typed = {"a": ("1",)};
+    auto hls = hls_typed;
+    list<hash<string, string>> lhs_typed = ({"a": "1"},);
+    auto lhs = lhs_typed;
+    list<list<list<string>>> l3_typed = ((("1",),),);
+    auto l3 = l3_typed;
+    list<list<string>> bad_typed = (("x1",),);
+    auto bad = bad_typed;
+
+    r."cast-list-softint" = tryc(string sub () { return desc(cast<list<list<softint>>>(lls)); });
+    r."assign-list-softint" = tryc(string sub () { list<list<softint>> l = lls; return desc(l); });
+    r."cast-list-float" = tryc(string sub () { return desc(cast<list<list<float>>>(lli)); });
+    r."assign-list-float" = tryc(string sub () { list<list<float>> l = lli; return desc(l); });
+    r."cast-hash-softint" = tryc(string sub () { return desc(cast<hash<string, list<softint>>>(hls)); });
+    r."assign-hash-softint" = tryc(string sub () { hash<string, list<softint>> h = hls; return desc(h); });
+    r."cast-list-of-hash" = tryc(string sub () { return desc(cast<list<hash<string, softint>>>(lhs)); });
+    r."assign-list-of-hash" = tryc(string sub () { list<hash<string, softint>> l = lhs; return desc(l); });
+    r."cast-three-levels" = tryc(string sub () { return desc(cast<list<list<list<softint>>>>(l3)); });
+    r."cast-softstring" = tryc(string sub () { return desc(cast<list<list<softstring>>>(lli)); });
+    r."cast-already-typed" = tryc(string sub () { return desc(cast<list<list<int>>>(lli)); });
+    r."cast-source-unchanged" = tryc(string sub () { auto c = cast<list<list<softint>>>(lls); return desc(lls) + "|" + c.fullType(); });
+    r."cast-bad" = tryc(string sub () { return desc(cast<list<list<int>>>(bad)); });
+    r."constant" = desc(CastConst);
+
+    # a cast to a complex hash type converts its values, as an assignment does, and fails where an assignment fails
+    hash<string, string> hs_typed = {"a": "1"};
+    auto hs = hs_typed;
+    hash<auto> hx_typed = {"a": "x", "b": 1};
+    auto hx = hx_typed;
+    hash<string, int> hi_typed = {"a": 1};
+    auto hi = hi_typed;
+    r."cast-hash-top-softint" = tryc(string sub () { return desc(cast<hash<string, softint>>(hs)); });
+    r."assign-hash-top-softint" = tryc(string sub () { hash<string, softint> h = hs; return desc(h); });
+    r."cast-hash-top-bad" = tryc(string sub () { return desc(cast<hash<string, int>>(hx)); });
+    r."assign-hash-top-bad" = tryc(string sub () { hash<string, int> h = hx; return desc(h); });
+    r."cast-hash-top-typed" = tryc(string sub () { return desc(cast<hash<string, int>>(hi)); });
+    r."cast-hash-top-float" = tryc(string sub () { return desc(cast<hash<string, float>>(hi)); });
+    return r;
+}
+
+# called three times so that the checks also run on the IR tier and as native code with tiered execution
+hash<string, string> first = run_checks();
+bool stable = True;
+hash<string, string> results;
+for (int i = 0; i < 2; ++i) {
+    results = run_checks();
+    if (results != first) {
+        stable = False;
+    }
+}
+foreach hash<auto> i in (results.pairIterator()) {
+    printf("%s=%s\n", i.key, i.value);
+}
+printf("stable=%s\n", stable ? "yes" : "no");
