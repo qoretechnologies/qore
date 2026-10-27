@@ -32,7 +32,7 @@ set(LINENOISE_QPP_SRC
 
 add_definitions(-DUSE_UTF8)
 
-qore_wrap_qpp_value(LINENOISE_QPP_SOURCES DOXLIST _dox_src ${LINENOISE_QPP_SRC})
+qore_wrap_qpp_value(LINENOISE_QPP_SOURCES DOXLIST _dox_src METALIST LINENOISE_QPP_META_SRC ${LINENOISE_QPP_SRC})
 add_custom_target(LINENOISE_QPP_GENERATED_FILES DEPENDS qpp ${LINENOISE_QPP_SOURCES})
 
 set(linenoise_module_name "linenoise")
@@ -59,6 +59,7 @@ endif()
 set(MODULE_DOX_INPUT ${CMAKE_BINARY_DIR}/modules/linenoise/mainpage.dox
     ${CMAKE_BINARY_DIR}/modules/linenoise/release-notes.dox ${_dox_src})
 qore_binary_module_qore(${linenoise_module_name} "${VERSION}" "/${VERSION}")
+qore_install_qpp_metadata(${linenoise_module_name} ${LINENOISE_QPP_META_SRC})
 
 set(QORE_DOX_LINENOISE_TMPL_SRC
     docs/mainpage.dox.tmpl

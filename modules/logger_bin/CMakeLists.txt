@@ -87,7 +87,7 @@ foreach (it ${LOGGER_H_SRC})
     set(LOGGER_H_SOURCES, ${LOGGER_H_SOURCES} ${_outfile})
 endforeach(it)
 
-qore_wrap_qpp_value(LOGGER_QPP_SOURCES DOXLIST _dox_src ${LOGGER_QPP_SRC})
+qore_wrap_qpp_value(LOGGER_QPP_SOURCES DOXLIST _dox_src METALIST LOGGER_QPP_META_SRC ${LOGGER_QPP_SRC})
 add_custom_target(LOGGER_QPP_GENERATED_FILES DEPENDS qpp ${LOGGER_QPP_SOURCES} ${LOGGER_H_SOURCES})
 
 # prepare logger module target
@@ -133,6 +133,7 @@ add_dependencies(${logger_module_name} libqore LOGGER_QPP_GENERATED_FILES)
 set(MODULE_DOX_INPUT ${CMAKE_BINARY_DIR}/modules/logger_bin/mainpage.dox
     ${CMAKE_BINARY_DIR}/modules/logger_bin/release-notes.dox ${_dox_src})
 qore_binary_module_qore(${logger_module_name} "${VERSION}" "/${VERSION}")
+qore_install_qpp_metadata(${logger_module_name} ${LOGGER_QPP_META_SRC})
 
 if (DOXYGEN_FOUND)
     qore_wrap_dox(QORE_DOX_LOGGER_SRC ${QORE_DOX_LOGGER_TMPL_SRC})

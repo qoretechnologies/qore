@@ -74,7 +74,7 @@ set(QORE_DOX_I18N_TMPL_SRC
     docs/release-notes.dox.tmpl
 )
 
-qore_wrap_qpp_value(I18N_QPP_SOURCES DOXLIST _dox_src ${I18N_QPP_SRC})
+qore_wrap_qpp_value(I18N_QPP_SOURCES DOXLIST _dox_src METALIST I18N_QPP_META_SRC ${I18N_QPP_SRC})
 add_custom_target(I18N_QPP_GENERATED_FILES DEPENDS qpp ${I18N_QPP_SOURCES})
 
 set(i18n_module_name "i18n")
@@ -96,6 +96,7 @@ else()
 endif()
 
 qore_binary_module_qore(${i18n_module_name} "${VERSION}" "/${VERSION}")
+qore_install_qpp_metadata(${i18n_module_name} ${I18N_QPP_META_SRC})
 
 if (DOXYGEN_FOUND)
     add_custom_target(QORE_I18N_MOD_DOX_FILES DEPENDS ${QORE_DOX_I18N_SRC})

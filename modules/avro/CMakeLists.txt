@@ -76,7 +76,7 @@ set(QORE_DOX_AVRO_TMPL_SRC
 )
 
 # Process QPP files
-qore_wrap_qpp_value(AVRO_QPP_SOURCES DOXLIST _dox_src ${AVRO_QPP_SRC})
+qore_wrap_qpp_value(AVRO_QPP_SOURCES DOXLIST _dox_src METALIST AVRO_QPP_META_SRC ${AVRO_QPP_SRC})
 add_custom_target(AVRO_QPP_GENERATED_FILES DEPENDS qpp ${AVRO_QPP_SOURCES})
 
 # Create the module library
@@ -93,6 +93,7 @@ set(MODULE_DOX_INPUT ${CMAKE_BINARY_DIR}/modules/avro/mainpage.dox
     ${CMAKE_BINARY_DIR}/modules/avro/release-notes.dox
     ${_dox_src})
 qore_binary_module_qore(${avro_module_name} "${VERSION}" "/${VERSION}")
+qore_install_qpp_metadata(${avro_module_name} ${AVRO_QPP_META_SRC})
 
 if (DOXYGEN_FOUND)
     qore_wrap_dox(QORE_DOX_AVRO_SRC ${QORE_DOX_AVRO_TMPL_SRC})

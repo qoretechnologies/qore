@@ -113,7 +113,7 @@ set(QORE_DOX_OCR_TMPL_SRC
 )
 
 # Process QPP files
-qore_wrap_qpp_value(OCR_QPP_SOURCES DOXLIST _dox_src ${OCR_QPP_SRC})
+qore_wrap_qpp_value(OCR_QPP_SOURCES DOXLIST _dox_src METALIST OCR_QPP_META_SRC ${OCR_QPP_SRC})
 add_custom_target(OCR_QPP_GENERATED_FILES DEPENDS qpp ${OCR_QPP_SOURCES})
 
 # Create the module library
@@ -136,6 +136,7 @@ add_dependencies(${ocr_module_name} libqore OCR_QPP_GENERATED_FILES)
 set(MODULE_DOX_INPUT ${CMAKE_BINARY_DIR}/modules/ocr/mainpage.dox
     ${CMAKE_BINARY_DIR}/modules/ocr/release-notes.dox ${_dox_src})
 qore_binary_module_qore(${ocr_module_name} "${VERSION}" "/${VERSION}")
+qore_install_qpp_metadata(${ocr_module_name} ${OCR_QPP_META_SRC})
 
 if (DOXYGEN_FOUND)
     qore_wrap_dox(QORE_DOX_OCR_SRC ${QORE_DOX_OCR_TMPL_SRC})

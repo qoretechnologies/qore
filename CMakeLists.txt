@@ -3340,6 +3340,10 @@ add_subdirectory(examples/test/module-cpp-api)
 # test module owning a Program with static storage duration; built but never installed
 add_subdirectory(examples/test/module-static-program)
 
+# the API metadata directory (.meta.json files for the language server); defined before the binary modules, whose
+# qore_install_qpp_metadata() call installs nothing without it
+set(QORE_METADATA_DIR ${CMAKE_INSTALL_DATADIR}/qore/metadata)
+
 # astparser module
 add_subdirectory(modules/astparser)
 # avro module
@@ -3526,8 +3530,8 @@ set(QORE_QM_METADATA_DEPENDS qore ${QORE_AOT_BINARY_MODULE_TARGETS})
 # exist before any metadata scan runs (QORE_QM_METADATA_DEPENDS above).  This replaces a probe
 # that ran an *installed* qore against an *installed* json and compared its module API against
 # this source tree, silently disabling metadata for the whole build on any mismatch -- a
-# bootstrap cycle that made a from-scratch build unable to produce metadata at all.
-set(QORE_METADATA_DIR ${CMAKE_INSTALL_DATADIR}/qore/metadata)
+# bootstrap cycle that made a from-scratch build unable to produce metadata at all.  QORE_METADATA_DIR is set
+# above, before the binary modules.
 
 # An installed qore is still used below to probe *external* binary modules whose availability
 # changes qlib AOT output; that probe degrades gracefully when qore is not installed yet.
