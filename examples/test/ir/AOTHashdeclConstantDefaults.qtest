@@ -1,0 +1,122 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTHashdeclConstantDefaultsTest
+
+class AOTHashdeclConstantDefaultsTest inherits QUnit::Test {
+    private {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+    }
+
+    constructor() : QUnit::Test("AOTHashdeclConstantDefaultsTest", "1.0", \ARGV) {
+        addTestCase("compiled hashdecl defaults bind same-module constants", \testDefaults());
+        set_return_value(main());
+    }
+
+    private static writeFile(string path, string text) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(text);
+    }
+
+    testDefaults() {
+        TmpDir tmp("qore-aot-hashdecl-const-");
+        string source_dir = tmp.path + "/source";
+        string module_dir = tmp.path + "/compiled";
+        mkdir(source_dir);
+        mkdir(module_dir);
+        string source = source_dir + "/HashdeclDefaults.qm";
+        writeFile(source, "%modern
+module HashdeclDefaults {
+    version = \"1.0\";
+    desc = \"Hashdecl constant default regression\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+public namespace HashdeclDefaults {
+    public const Names = (\"alpha\", \"beta\");
+    public class Defaults {
+        public {
+            const Limits = (7, 11);
+        }
+    }
+    public hashdecl Options {
+        list<string> names = Names;
+        list<int> limits = Defaults::Limits;
+        hash<auto> nested = {\"names\": Names, \"limits\": Defaults::Limits};
+        list<auto> sequence = (Names, {\"limits\": Defaults::Limits});
+    }
+    public hashdecl Generic<T> {
+        T value;
+        list<string> names = Names;
+    }
+    public const Typed = makeTyped();
+    hash<Generic<int>> sub makeTyped() {
+        hash<Generic<int>> rv({\"value\": 42});
+        return rv;
+    }
+    public hash<Options> sub makeOptions() {
+        hash<Options> rv();
+        return rv;
+    }
+}
+");
+        string probe = tmp.path + "/probe.q";
+        writeFile(probe, "%modern
+%requires HashdeclDefaults
+hash<HashdeclDefaults::Options> opts = HashdeclDefaults::makeOptions();
+if (opts.names != (\"alpha\", \"beta\") || opts.limits != (7, 11)
+        || opts.nested.names != opts.names || opts.nested.limits != opts.limits
+        || opts.sequence[0] != opts.names || opts.sequence[1].limits != opts.limits
+        || HashdeclDefaults::Typed.names != opts.names || HashdeclDefaults::Typed.value != 42) {
+    throw \"DEFAULT-ERROR\", sprintf(\"%y %y\", opts, HashdeclDefaults::Typed);
+}
+opts.names += \"changed\";
+if (HashdeclDefaults::makeOptions().names != (\"alpha\", \"beta\")) {
+    throw \"DEFAULT-ALIAS-ERROR\", \"modifying an instance changed its constant default\";
+}
+printf(\"ok\\n\");
+");
+        string src_out = backquote(sprintf("QORE_MODULE_DIR=%y:$QORE_MODULE_DIR %y -b %y 2>&1",
+            source_dir, qore_bin, probe));
+        assertEq("ok\n", src_out, "source semantics: " + src_out);
+        string qmod = module_dir + "/HashdeclDefaults.qmod";
+        string compile_out = backquote(sprintf("%y -b --compile-module --strip-source --output %y %y 2>&1",
+            qore_bin, qmod, source));
+        assertTrue(is_file(qmod), "module compiled: " + compile_out);
+        # The source directory is absent from the module path: load failures cannot fall back to source.
+        foreach string mode in ("ast", "ir", "jit", "tiered") {
+            string out = backquote(sprintf("QORE_MODULE_DIR=%y:$QORE_MODULE_DIR %y -b --enable-debug --exec-mode=%s %y 2>&1",
+                module_dir, qore_bin, mode, probe));
+            assertEq("ok\n", out, mode + " loads compiled constant defaults: " + out);
+        }
+
+        # Split the same declarations across objects: defaults must find constant
+        # shells in a sibling deserializer session, independent of value order.
+        string declarations = ReadOnlyFile::readTextFile(source);
+        declarations = declarations.substr(declarations.find("public namespace HashdeclDefaults"));
+        int split = declarations.find("    public hashdecl Options");
+        string constants_path = tmp.path + "/constants.qc";
+        string options_path = tmp.path + "/options.qc";
+        writeFile(constants_path, "%modern\n" + declarations.substr(0, split) + "}\n");
+        writeFile(options_path, "%modern\npublic namespace HashdeclDefaults {\n" + declarations.substr(split));
+        string main_path = tmp.path + "/main.q";
+        string body = ReadOnlyFile::readTextFile(probe);
+        body = body.substr(body.find("hash<HashdeclDefaults::Options> opts"));
+        writeFile(main_path, "%modern\nint sub main() {\n" + body + "return 0;\n}\n");
+        string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ((ENV.QORE_LIBDIR ?? dirname(qore_bin)) + "/qcc");
+        string exe = tmp.path + "/defaults";
+        string batch_out = backquote(sprintf("%y -O3 -o %y %y %y %y 2>&1",
+            qcc_bin, exe, options_path, constants_path, main_path));
+        assertTrue(is_file(exe), "split declarations compile: " + batch_out);
+        string run_out = backquote(sprintf("%y 2>&1", exe));
+        assertEq("ok\n", run_out, "defaults bind constants across object files: " + run_out);
+    }
+}

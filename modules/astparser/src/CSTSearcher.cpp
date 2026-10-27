@@ -1293,7 +1293,7 @@ static bool isScopedName(const char* type) {
 }
 
 //! Returns the type of a literal or a literal data structure, or nullptr
-static const char* getLiteralTypeName(TSNode node) {
+static const char* getLiteralTypeName(TSNode node, CSTCancelCheck& cancel) {
     const char* type = ts_node_type(node);
     if (strcmp(type, "string") == 0 || strcmp(type, "string_concatenation") == 0) {
         return "string";
@@ -1307,7 +1307,15 @@ static const char* getLiteralTypeName(TSNode node) {
     if (strcmp(type, "literal") || !ts_node_named_child_count(node)) {
         return nullptr;
     }
-    const char* valueType = ts_node_type(ts_node_named_child(node, 0));
+    TSNode value = {};
+    cst_for_each_child(node, true, cancel, [&](TSNode child) {
+        value = child;
+        return false;
+    });
+    if (ts_node_is_null(value)) {
+        return nullptr;
+    }
+    const char* valueType = ts_node_type(value);
     if (strcmp(valueType, "integer") == 0) {
         return "int";
     }
@@ -1445,9 +1453,12 @@ bool CSTSearcher::appendExpressionChain(TSNode expr, const AstParseResult* resul
         return true;
     }
 
-    if (const char* literalType = getLiteralTypeName(expr)) {
+    if (const char* literalType = getLiteralTypeName(expr, cancel)) {
         link.kind = CELK_Type;
         link.typeName = literalType;
+    }
+    if (cancel.failed()) {
+        return false;
     }
     chain.push_back(std::move(link));
     return true;
@@ -1476,8 +1487,14 @@ std::vector<CSTExpressionLink> CSTSearcher::getExpressionChain(const AstParseRes
     } else if (strcmp(type, "identifier") == 0 && i + 1 < ancestors.size()
             && isScopedName(ts_node_type(ancestors[i + 1]))) {
         TSNode scoped = ancestors[i + 1];
-        uint32_t count = ts_node_named_child_count(scoped);
-        if (count && !ts_node_eq(ts_node_named_child(scoped, count - 1), expr)) {
+        TSNode last = {};
+        if (!cst_for_each_child(scoped, true, cancel, [&](TSNode child) {
+                last = child;
+                return true;
+            })) {
+            return chain;
+        }
+        if (!ts_node_is_null(last) && !ts_node_eq(last, expr)) {
             // a component before the last one of a scoped name names a namespace or class: "Qore::Thread" in
             // "Qore::Thread::Mutex"
             CSTExpressionLink link;

@@ -510,13 +510,20 @@ public:
 
     DLLLOCAL QoreHashNode* evalImpl(ExceptionSink* xsink) const {
         QoreHashNodeHolder h(getCopy(), xsink);
-
+        size_t count = 0;
         for (qhlist_t::const_iterator i = member_list.begin(), e = member_list.end(); i != e; ++i) {
-            h->priv->setKeyValue((*i)->key, (*i)->val.refSelf(), xsink);
-            if (*xsink)
+            if (++count % 100 == 0 && qore_check_cancel(xsink, "hash expression evaluation")) {
                 return nullptr;
+            }
+            ValueEvalOptimizedRefHolder value((*i)->val, xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            h->priv->setKeyValue((*i)->key, value.takeReferencedValue(), xsink);
+            if (*xsink) {
+                return nullptr;
+            }
         }
-
         return h.release();
     }
 

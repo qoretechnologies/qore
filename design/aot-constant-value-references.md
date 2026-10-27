@@ -411,3 +411,31 @@ innermost value it could not write (`current_value_path`,
 of plain strings and a hash holding a deferred reference are otherwise
 indistinguishable in the message, which is most of the diagnostic work when this
 does go wrong.
+
+## Hashdecl defaults and constant registration
+
+A hashdecl default can refer to a constant from the same module or another object
+in a batch. Reading that default while creating the hashdecl shell is too early:
+the `ConstantEntry` does not exist yet. QLS exposed this with
+`FileScanOptions.excludeDirs = DefaultExcludeDirs`; its compiled module failed to
+load and the module loader fell back to source.
+
+The loader now retains each hashdecl default as a serialized payload. After all
+declaration shells exist, it registers every class and namespace constant name
+across the batch, then resolves types and hashdecl defaults, and finally resolves
+constant types and values. Constant types must wait for hashdecl members: resolving
+a parameterized hashdecl too early can cache an instance with missing defaults.
+Both the normal load and source-parse preload paths use these barriers.
+
+Defaults retain lazy references to the registered entries. Literal lists and
+hashes containing those references are marked as expressions and evaluate their
+children when the default is used. They must not expose runtime constant-reference
+nodes as ordinary container values. Once a hashdecl takes ownership of a default,
+the pending record is cleared so a later failure or cancellation cannot free the
+expression twice.
+
+`AOTHashdeclConstantDefaults.qtest` compares source behavior with source-stripped
+module loading in AST, IR, JIT, and tiered modes, and with a linked executable whose
+constants and hashdecls are in separate objects. It covers class and namespace
+constants, nested container defaults, a parameterized hashdecl, and mutation of an
+instance without changing its constant default.

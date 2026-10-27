@@ -23,6 +23,7 @@
 */
 
 %modern
+%allow-weak-references
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
@@ -56,6 +57,7 @@ class WorkspaceIndexTest inherits QUnit::Test {
         addTestCase("FileIndex: symbols match the parsed document", \testFileIndexSymbols());
         addTestCase("FileIndex: classes, members and class graph", \testFileIndexClasses());
         addTestCase("FileIndex: source search", \testFileIndexSourceContains());
+        addTestCase("FileIndex: releases documents and syntax trees", \testFileIndexReleasesTrees());
         addTestCase("FileIndex: missing file", \testFileIndexMissingFile());
         addTestCase("FileIndex: identifier filter", \testFileIndexIdentifierFilter());
         addTestCase("Document: declaration name position", \testDocumentNamePosition());
@@ -82,7 +84,7 @@ class WorkspaceIndexTest inherits QUnit::Test {
         addTestCase("server: incoming calls from closed file", \testServerIncomingCallsClosedFile());
         addTestCase("server: open and close replace the index", \testServerOpenClose());
         addTestCase("server: watched file changes", \testServerWatchedFiles());
-        addTestCase("server: memory does not grow with workspace trees", \testServerMemory());
+        addTestCase("server: large workspace keeps no syntax trees", \testServerLargeWorkspace());
 
         on_exit {
             map WorkspaceIndexTest::removeTree($1), tmpDirs;
@@ -1104,12 +1106,32 @@ class WorkspaceIndexTest inherits QUnit::Test {
         assertEq(5, server.getIndexInfo().workspaceFiles);
     }
 
-    testServerMemory() {
-        if (!is_file("/proc/self/status")) {
-            testSkip("no /proc/self/status");
+    # Check ownership directly: process RSS also counts the JIT compiler and
+    # allocator arenas, whose growth depends on execution mode and test order.
+    testFileIndexReleasesTrees() {
+        hash<auto!> weak = {};
+        *QLS::FileIndex index;
+        {
+            QLS::Document doc("file:///tmp/released.q", "class Released { int method() { return 7; } }\n",
+                "qore", 1);
+            object tree = doc.getTree();
+            weak.document := doc;
+            weak.tree := tree;
+            index = doc.getIndex();
+            assertEq(doc.getUri(), weak.document.getUri(), "document is alive in its scope");
+            assertEq(tree.getIdentifierFilter(), weak.tree.getIdentifierFilter(), "tree is alive in its scope");
         }
+        # Do not explicitly delete either object: normal last-reference release
+        # must destroy them even while their index is still alive.
+        assertThrows("OBJECT-ALREADY-DELETED", sub () { weak.document.getUri(); });
+        assertThrows("OBJECT-ALREADY-DELETED", sub () { weak.tree.getIdentifierFilter(); });
+        assertEq(2, index.getSymbolCount());
+        assertTrue(index.declares("Released"));
+        assertTrue(index.mayContainIdentifier("method"));
+    }
+
+    testServerLargeWorkspace() {
         string root = makeTmpDir();
-        int sourceSize = 0;
         for (int i = 0; i < 200; ++i) {
             string text;
             for (int j = 0; j < 40; ++j) {
@@ -1117,25 +1139,13 @@ class WorkspaceIndexTest inherits QUnit::Test {
                     "\"b\": b};\n        return h.a + b.size() + %d;\n    }\n}\n", i, j, j, j);
             }
             WorkspaceIndexTest::writeFile(sprintf("%s/f%d.q", root, i), text);
-            sourceSize += text.size();
         }
-        # warm up allocations that do not depend on the workspace
-        startServer(makeTmpDir());
-
-        int before = WorkspaceIndexTest::getRss();
         QLS::QLSServer server = startServer(root);
-        int growth = WorkspaceIndexTest::getRss() - before;
         hash<QLS::IndexInfo> info = server.getIndexInfo();
         assertEq(200, info.workspaceFiles);
         assertEq(8000 * 2, info.workspaceSymbols, "a class and a method per declaration");
+        assertEq(0, info.openDocuments);
         assertEq(0, info.cachedTrees);
-        # syntax trees would take about 20 times the size of the source
-        assertLt(sourceSize * 6, growth, sprintf("RSS growth %d bytes for %d bytes of source", growth,
-            sourceSize));
-    }
-
-    #! Returns the resident set size of the process in bytes
-    private static int getRss() {
-        return (ReadOnlyFile::readTextFile("/proc/self/status") =~ x/VmRSS:\s+(\d+)/)[0].toInt() * 1024;
+        assertEq(0, info.cachedTreeSourceSize);
     }
 }

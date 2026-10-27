@@ -4515,17 +4515,27 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
             }
             uint32_t count = readU32(ptr);
             ReferenceHolder<QoreListNode> list(new QoreListNode(autoTypeInfo), nullptr);
+            bool needs_eval = false;
             for (uint32_t i = 0; i < count; ++i) {
-                QoreValue elem = readValue(ptr, end, error);
-                if (!error.empty()) {
+                if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT container value decoding")) {
+                    error = "AOT container value decoding cancelled";
                     return QoreValue();
                 }
+                QoreValue elem = readValue(ptr, end, error);
+                if (!error.empty()) {
+                    elem.discard(nullptr);
+                    return QoreValue();
+                }
+                needs_eval |= wrap_const_ref_in_rcr && elem.needsEval();
                 qore_list_private::get(**list)->pushIntern(elem);
             }
             QoreValue rv(list.release());
             if (!qoreAOTApplyContainerValueType(rv, kind, type_path, getProgram(), error)) {
                 rv.discard(nullptr);
                 return QoreValue();
+            }
+            if (needs_eval) {
+                qore_list_private::setNeedsEval(*rv.get<QoreListNode>());
             }
             return rv;
         }
@@ -4542,7 +4552,12 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
             }
             uint32_t count = readU32(ptr);
             ReferenceHolder<QoreHashNode> hash(new QoreHashNode(autoTypeInfo), nullptr);
+            bool needs_eval = false;
             for (uint32_t i = 0; i < count; ++i) {
+                if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT container value decoding")) {
+                    error = "AOT container value decoding cancelled";
+                    return QoreValue();
+                }
                 if (ptr + 4 > end) {
                     error = "unexpected end of data reading hash key";
                     return QoreValue();
@@ -4555,14 +4570,19 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
                 }
                 QoreValue val = readValue(ptr, end, error);
                 if (!error.empty()) {
+                    val.discard(nullptr);
                     return QoreValue();
                 }
+                needs_eval |= wrap_const_ref_in_rcr && val.needsEval();
                 qore_hash_private::get(**hash)->setKeyValueIntern(key, val);
             }
             QoreValue rv(hash.release());
             if (!qoreAOTApplyContainerValueType(rv, kind, type_path, getProgram(), error)) {
                 rv.discard(nullptr);
                 return QoreValue();
+            }
+            if (needs_eval) {
+                qore_hash_private::setNeedsEval(*rv.get<QoreHashNode>());
             }
             return rv;
         }
@@ -15089,9 +15109,8 @@ bool QoreAOTBinaryDeserializer::resolveTypes(std::string& error) {
     return true;
 }
 
-// Phase-split 2a-2.  Register constants before member defaults are
-// deserialized, because expression-tree member defaults can refer to same-class
-// or same-module constants (for example Class::Defaults.Key).
+// Resolve constant types and values after hashdecl members are installed.
+// All constant names have already been registered before resolveTypes().
 bool QoreAOTBinaryDeserializer::resolveConstants(std::string& error) {
     return resolveClassConstants(error);
 }
@@ -15140,7 +15159,8 @@ bool QoreAOTBinaryDeserializer::rebuildRootIndexes(std::string& error, IndexPhas
 }
 
 bool QoreAOTBinaryDeserializer::resolveTypesAndMembers(std::string& error) {
-    if (!resolveTypes(error)
+    if (!registerConstantShellsPhase(error)
+            || !resolveTypes(error)
             || !resolveConstants(error)
             || !resolveStaticsAndConstants(error)) {
         return false;
@@ -16657,26 +16677,8 @@ bool QoreAOTBinaryDeserializer::resolveStaticMembers(std::string& error) {
 }
 
 bool QoreAOTBinaryDeserializer::registerClassConstantShells(std::string& error) {
-    // Register class-constant shells now that types are resolved.  Value
-    // blobs are intentionally not materialized here: in batch mode a class
-    // constant in this fragment can reference a class constant or namespace
-    // constant from a sibling fragment whose value has not been installed yet.
-    auto resolve_type = [this](const PendingClassConstant& pcc,
-            const QoreClass* qc) -> const QoreTypeInfo* {
-        if (pcc.type_path.empty()) {
-            return nullptr;
-        }
-        std::string type_error;
-        const QoreTypeInfo* ti = type_resolver->resolve(pcc.type_path.c_str(), type_error);
-        if (!type_error.empty()) {
-            printd(2, "AOT deser: cannot resolve type '%s' for constant '%s' "
-                "in class '%s': %s (falling back to auto)\n",
-                pcc.type_path.c_str(), pcc.name.c_str(), qc->getName(), type_error.c_str());
-            return autoTypeInfo;
-        }
-        return ti;
-    };
-
+    // Register names before resolving types: a constant's type can instantiate
+    // a generic hashdecl whose defaults themselves refer to these constants.
     for (uint32_t i = 0; i < class_list.size() && i < pending_class_constants.size(); ++i) {
         if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT class constant registration")) {
             error = "AOT class constant registration cancelled";
@@ -16694,11 +16696,10 @@ bool QoreAOTBinaryDeserializer::registerClassConstantShells(std::string& error) 
                 return false;
             }
             auto& pcc = pending_class_constants[i][j];
-            const QoreTypeInfo* ti = resolve_type(pcc, qc);
 
             // Use addUserConstant to avoid setting sys=true on user classes
             priv->addUserConstant(pcc.name.c_str(), QoreValue(),
-                static_cast<ClassAccess>(pcc.access), ti);
+                static_cast<ClassAccess>(pcc.access), autoTypeInfo);
 
             ConstantEntry* ce = priv->constlist.findEntry(pcc.name.c_str());
             if (ce) {
@@ -16846,10 +16847,6 @@ bool QoreAOTBinaryDeserializer::resolveClassConstantValues(std::string& error) {
                 return false;
             }
             auto& pcc = pending_class_constants[i][j];
-            if (pcc.pending_init) {
-                continue;
-            }
-
             ConstantEntry* ce = priv->constlist.findEntry(pcc.name.c_str());
             if (!ce) {
                 error = "AOT cannot resolve deferred value for class constant '";
@@ -16858,6 +16855,12 @@ bool QoreAOTBinaryDeserializer::resolveClassConstantValues(std::string& error) {
                 error += pcc.name.c_str();
                 error += "': constant entry was not registered";
                 return false;
+            }
+
+            const QoreTypeInfo* ti = resolve_type(pcc, qc);
+            if (pcc.pending_init) {
+                ce->typeInfo = ti ? ti : autoTypeInfo;
+                continue;
             }
 
             const uint8_t* vptr = pcc.value_blob.data();
@@ -16893,7 +16896,6 @@ bool QoreAOTBinaryDeserializer::resolveClassConstantValues(std::string& error) {
                 return false;
             }
 
-            const QoreTypeInfo* ti = resolve_type(pcc, qc);
             apply_constant_type(pcc, qc, ti, resolved);
             ce->val.discard(nullptr);
             ce->val = resolved;
@@ -16951,18 +16953,40 @@ bool QoreAOTBinaryDeserializer::resolveNamespaceConstants(std::string& error) {
 }
 
 bool QoreAOTBinaryDeserializer::resolveClassConstants(std::string& error) {
-    return registerClassConstantShells(error)
-        && resolveNamespaceConstants(error)
+    return resolveNamespaceConstants(error)
         && resolveClassConstantValues(error);
 }
 
 bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
+    // Preserve constant references as lazy expressions while their values are
+    // still pending. All constant names now exist, including sibling fragments.
+    struct RcrWrapGuard {
+        QoreAOTBinaryReader& r;
+        bool prev;
+        RcrWrapGuard(QoreAOTBinaryReader& r_) : r(r_), prev(r_.wrap_const_ref_in_rcr) {
+            r.wrap_const_ref_in_rcr = true;
+        }
+        ~RcrWrapGuard() { r.wrap_const_ref_in_rcr = prev; }
+    } rcr_guard(reader);
+    size_t iterations = 0;
     // Second pass: add hashdecl members now that all types exist
     for (auto& entry : pending_hashdecl_members) {
+        if (++iterations % 100 == 0 && qore_check_cancel(nullptr, "AOT hashdecl member resolution")) {
+            error = "AOT hashdecl member resolution cancelled";
+            return false;
+        }
         TypedHashDecl* hd = entry.first;
         typed_hash_decl_private* hdp = typed_hash_decl_private::get(*hd);
 
         for (auto& phm : entry.second) {
+            if (++iterations % 100 == 0 && qore_check_cancel(nullptr, "AOT hashdecl member resolution")) {
+                error = "AOT hashdecl member resolution cancelled";
+                return false;
+            }
+            if (!materializeDeferredMemberDefault(reader, phm, phm.default_val,
+                    error, "hashdecl", hd->getName(), phm.name.c_str())) {
+                return false;
+            }
             // Resolve deferred enum member default.  At hashdecl-read time
             // enums haven't been deserialized yet; now that deserializeEnums
             // has run, look up the enum member and materialise the value.
@@ -17091,7 +17115,7 @@ bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
             // `acceptInputMember` so the stored exp already carries the
             // member's declared type info.  This matches the effective shape
             // of source-parse without requiring a wire-format extension.
-            if (mti && phm.default_val.hasNode()
+            if (mti && !phm.default_val.needsEval() && phm.default_val.hasNode()
                     && (phm.default_val.getType() == NT_HASH
                         || phm.default_val.getType() == NT_LIST)) {
                 ExceptionSink xs;
@@ -17125,6 +17149,8 @@ bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
                 }
             }
             hdp->addMember(phm.name.c_str(), mti, phm.default_val);
+            // The hashdecl now owns the expression, including on later failure/cancellation.
+            phm.default_val.clear();
             // Mark the member as already parse-initialized; the default-value expression tree
             // was rebuilt by the AOT expression readers in its post-parse-init form.  Without
             // this, source code that references a member of an AOT hashdecl by name reaches
@@ -17145,6 +17171,10 @@ bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
     }
 
     for (auto& entry : pending_hashdecl_members) {
+        if (++iterations % 100 == 0 && qore_check_cancel(nullptr, "AOT hashdecl member resolution")) {
+            error = "AOT hashdecl member resolution cancelled";
+            return false;
+        }
         TypedHashDecl* hd = entry.first;
         if (typed_hash_decl_private::get(*hd)->resolveParseParent()) {
             error = "failed to resolve parent hashdecl for '";
@@ -17240,6 +17270,10 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
     qoreAOTReserveAdditional(pending_hashdecl_members, count);
 
     for (uint32_t i = 0; i < count; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT hashdecl shell deserialization")) {
+            error = "AOT hashdecl shell deserialization cancelled";
+            return false;
+        }
         const char* name = reader.readStringRef(ptr);
         const char* nspath = reader.readStringRef(ptr);
         uint32_t ns_idx = QoreAOTBinaryReader::readU32(ptr);
@@ -17291,59 +17325,23 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
             }
         }
 
-        // Read members first to collect info.  The default-value path uses
-        // readDeferredMemberDefault so that VT_ENUM references — which the
-        // generic readValue would try to resolve immediately — are deferred
-        // to resolveHashdeclMembers.  Hashdecls are deserialized BEFORE
-        // enums in openAndDeserializeShells; without the deferral a member
-        // like `string http_version = HttpVersionMode::Auto;` in
-        // `hashdecl HttpListenerInfo` fails with "enum not found" at load
-        // time.
-        // Local MemberInfo mirrors PendingHashdeclMember's deferred-resolution
-        // fields so readDeferredMemberDefault instantiates against it.
-        struct MemberInfo {
-            QoreAOTStringRef name;
-            QoreAOTStringRef type_path;
-            QoreValue default_val;
-            std::string pending_enum_path;
-            std::string pending_enum_member;
-            std::string pending_new_class_path;
-            std::vector<QoreValue> pending_new_args;
-            int8_t pending_complex_default_kind = -1;
-            int8_t pending_complex_buffer_init_kind = 0;
-            std::string pending_complex_default_path;
-            std::vector<QoreValue> pending_complex_default_args;
-            std::vector<uint8_t> pending_expr_tree_blob;
-            std::string pending_const_ref_path;
-            std::vector<uint8_t> pending_expr_native_blob;
-        };
-        std::vector<MemberInfo> members;
-
+        // Keep complete payloads deferred, including nested constant references.
+        // Constant names are registered batch-wide before resolving defaults.
+        std::vector<PendingHashdeclMember> members;
         uint32_t num_members = QoreAOTBinaryReader::readU32(ptr);
         members.reserve(num_members);
-        // Enable RCR wrapping for VT_CONST_REF defaults so member initializers
-        // like `hash<string, hash<MapperRuntimeKeyInfo>> mapper_keys =
-        // Mapper::MapperKeyInfo;` preserve lazy-eval semantics and match
-        // source-parse behaviour during parse-time folding of downstream
-        // `<DataProviderInfo>{...}` constants.  See the VT_CONST_REF reader
-        // branch in readValue for the mechanism.
-        struct RcrWrapGuard {
-            QoreAOTBinaryReader& r;
-            bool prev;
-            RcrWrapGuard(QoreAOTBinaryReader& r_, bool newv) : r(r_), prev(r_.wrap_const_ref_in_rcr) {
-                r_.wrap_const_ref_in_rcr = newv;
-            }
-            ~RcrWrapGuard() { r.wrap_const_ref_in_rcr = prev; }
-        } rcr_guard(reader, true);
 
         for (uint32_t j = 0; j < num_members; ++j) {
-            MemberInfo mi;
+            if (j && !(j % 100) && qore_check_cancel(nullptr, "AOT hashdecl member deserialization")) {
+                error = "AOT hashdecl member deserialization cancelled";
+                return false;
+            }
+            PendingHashdeclMember mi;
             mi.name = makeDeferredStringRef(reader.readStringRef(ptr));
             mi.type_path = makeDeferredStringRef(reader.readStringRef(ptr));
             uint8_t has_default = QoreAOTBinaryReader::readU8(ptr);
             if (has_default) {
-                if (!readDeferredMemberDefault(reader, ptr, end, error,
-                        mi.default_val, mi)) {
+                if (!readDeferredValueBlob(ptr, end, error, mi.value_blob)) {
                     error = "hashdecl '" + std::string(name ? name : "(null)")
                         + "' member '" + mi.name.c_str() + "' default: " + error;
                     return false;
@@ -17411,30 +17409,7 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
             rpriv->thdmap.update(hd->getName(), ns_list[ns_idx], hd);
         }
 
-        // Store members for later resolution (after all hashdecls/enums/typedefs exist).
-        // Carry the deferred-resolution fields (pending_enum_*, pending_new_*,
-        // pending_complex_default_*) through to resolveHashdeclMembers.
-        std::vector<PendingHashdeclMember> pending_members;
-        pending_members.reserve(members.size());
-        for (auto& mi : members) {
-            PendingHashdeclMember phm;
-            phm.name = std::move(mi.name);
-            phm.type_path = std::move(mi.type_path);
-            phm.default_val = mi.default_val;
-            phm.pending_enum_path = std::move(mi.pending_enum_path);
-            phm.pending_enum_member = std::move(mi.pending_enum_member);
-            phm.pending_new_class_path = std::move(mi.pending_new_class_path);
-            phm.pending_new_args = std::move(mi.pending_new_args);
-            phm.pending_complex_default_kind = mi.pending_complex_default_kind;
-            phm.pending_complex_buffer_init_kind = mi.pending_complex_buffer_init_kind;
-            phm.pending_complex_default_path = std::move(mi.pending_complex_default_path);
-            phm.pending_complex_default_args = std::move(mi.pending_complex_default_args);
-            phm.pending_expr_tree_blob = std::move(mi.pending_expr_tree_blob);
-            phm.pending_const_ref_path = std::move(mi.pending_const_ref_path);
-            phm.pending_expr_native_blob = std::move(mi.pending_expr_native_blob);
-            pending_members.push_back(std::move(phm));
-        }
-        pending_hashdecl_members.push_back({hd, std::move(pending_members)});
+        pending_hashdecl_members.push_back({hd, std::move(members)});
 
         // Store for parent resolution pass
         hashdecl_list.push_back({hd, parent_path ? parent_path : ""});
@@ -17659,7 +17634,7 @@ bool QoreAOTBinaryDeserializer::deserializeTypedefs(std::string& error) {
     return true;
 }
 
-bool QoreAOTBinaryDeserializer::deserializeConstants(std::string& error) {
+bool QoreAOTBinaryDeserializer::registerNamespaceConstantShells(std::string& error) {
     const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::CONSTANTS);
     if (!sec) {
         return true;
@@ -17679,22 +17654,7 @@ bool QoreAOTBinaryDeserializer::deserializeConstants(std::string& error) {
     const bool has_const_parse_value =
         reader.getHeader().version >= QORE_AOT_CONST_PARSE_VALUE_VERSION;
 
-    struct PendingNamespaceConstant {
-        QoreAOTStringRef name;
-        QoreAOTStringRef type_path;
-        uint32_t ns_idx;
-        uint8_t access;
-        uint8_t is_pub;
-        uint8_t pending;
-        const QoreTypeInfo* type_info = nullptr;
-        QoreAOTDeferredValueBlob value_blob;
-        //! Serialized compile-time value of a pending constant (format v15); empty when the producing parse
-        //! could not record one.  Kept only when preload_parse_constant_values is set.
-        QoreAOTDeferredValueBlob parse_value_blob;
-    };
-
-    std::vector<PendingNamespaceConstant> pending_constants;
-    pending_constants.reserve(count);
+    pending_namespace_constants.reserve(count);
 
     for (uint32_t i = 0; i < count; ++i) {
         if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT namespace constant registration")) {
@@ -17753,27 +17713,18 @@ bool QoreAOTBinaryDeserializer::deserializeConstants(std::string& error) {
             }
         }
 
-        const QoreTypeInfo* ti = type_resolver->resolve(type_path, error);
-        if (!error.empty()) {
-            printd(0, "AOT: failed to resolve type '%s' for const '%s': %s\n",
-                type_path ? type_path : "(null)", name ? name : "(null)", error.c_str());
-            error = "cannot resolve type '" + std::string(type_path ? type_path : "(null)") +
-                "' for constant '" + std::string(name) + "': " + error;
-            return false;
-        }
-
         // Register a shell before deserializing any namespace constant value.
         // Folded container literals can contain VT_CONST_REF entries pointing
         // to sibling namespace constants from the same module, and the
         // ConstantList iteration order is not a dependency order.
         ConstantEntry* ce = new ConstantEntry(getBlobLocation(), name, QoreValue(),
-            ti, is_pub != 0, true, false, static_cast<ClassAccess>(access));
+            autoTypeInfo, is_pub != 0, true, false, static_cast<ClassAccess>(access));
         ns_list[ns_idx]->constant.addEntry(name, ce);
 
+        ce->aot_shell_pending = true;
         if (pending) {
             // Pending init-func: parser-time references to this constant must
             // defer to runtime until the init-func populates saved_val.
-            ce->aot_shell_pending = true;
             // Record that the value comes from an init expression, exactly as
             // parseCommitRuntimeInit() does for a source parse.  aot_shell_pending
             // is cleared once the init-func has run, so without this a downstream
@@ -17785,33 +17736,44 @@ bool QoreAOTBinaryDeserializer::deserializeConstants(std::string& error) {
                 /*aot_deferred=*/true);
         }
 
-        pending_constants.push_back({makeDeferredStringRef(name), makeDeferredStringRef(type_path), ns_idx,
-            access, is_pub, pending, ti, std::move(value_blob),
+        pending_namespace_constants.push_back({makeDeferredStringRef(name), makeDeferredStringRef(type_path), ns_idx,
+            access, is_pub, pending, nullptr, std::move(value_blob),
             preload_parse_constant_values ? std::move(parse_value_blob) : QoreAOTDeferredValueBlob()});
     }
 
+    return true;
+}
+
+bool QoreAOTBinaryDeserializer::deserializeConstants(std::string& error) {
     static constinit QoreEnvFlag use_pending_constant_lookup_env("QORE_DISABLE_AOT_PENDING_CONSTANT_LOOKUP");
     const bool use_pending_constant_lookup = !use_pending_constant_lookup_env.get();
     if (!use_pending_constant_lookup) {
         rebuildAOTRootIndexes(pgm);
     }
 
-    for (size_t i = 0; i < pending_constants.size(); ++i) {
+    for (size_t i = 0; i < pending_namespace_constants.size(); ++i) {
         if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT namespace constant value resolution")) {
             error = "AOT namespace constant value resolution cancelled";
             return false;
         }
-        auto& pc = pending_constants[i];
-        if (pc.pending) {
-            continue;
-        }
-
+        auto& pc = pending_namespace_constants[i];
         ConstantEntry* ce = ns_list[pc.ns_idx]->constant.findEntry(pc.name.c_str());
         if (!ce) {
             error = "AOT cannot resolve deferred value for namespace constant '";
             error += pc.name.c_str();
             error += "': constant entry was not registered";
             return false;
+        }
+
+        pc.type_info = type_resolver->resolve(pc.type_path.c_str(), error);
+        if (!error.empty()) {
+            error = "cannot resolve type '" + std::string(pc.type_path.c_str())
+                + "' for constant '" + pc.name.c_str() + "': " + error;
+            return false;
+        }
+        if (pc.pending) {
+            ce->typeInfo = pc.type_info ? pc.type_info : autoTypeInfo;
+            continue;
         }
 
         const uint8_t* vptr = pc.value_blob.data();
@@ -17868,16 +17830,17 @@ bool QoreAOTBinaryDeserializer::deserializeConstants(std::string& error) {
         ce->val.discard(nullptr);
         ce->val = val;
         ce->typeInfo = final_ti;
+        ce->aot_shell_pending = false;
         pc.value_blob.clear();
     }
 
     ExceptionSink xsink;
-    for (size_t i = 0; i < pending_constants.size(); ++i) {
+    for (size_t i = 0; i < pending_namespace_constants.size(); ++i) {
         if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT namespace constant materialization")) {
             error = "AOT namespace constant materialization cancelled";
             return false;
         }
-        auto& pc = pending_constants[i];
+        auto& pc = pending_namespace_constants[i];
         ConstantEntry* ce = ns_list[pc.ns_idx]->constant.findEntry(pc.name.c_str());
         if (!ce || pc.pending || ce->aot_shell_pending) {
             // see the class-constant path: a pending shell still carries the value the producing parse
@@ -17893,6 +17856,7 @@ bool QoreAOTBinaryDeserializer::deserializeConstants(std::string& error) {
         }
     }
 
+    pending_namespace_constants.clear();
     return true;
 }
 
