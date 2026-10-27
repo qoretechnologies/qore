@@ -86,7 +86,7 @@ module QLS {
 
     <b>Code Intelligence</b>
     |!Feature|!LSP Method|!Description
-    |Code Completion|@c textDocument/completion|Context-aware completions with trigger characters @c . (member access), @c : (namespace/static), and normal identifier completion; uses @ref qorecodecompletionintro "QoreCodeCompletion"
+    |Code Completion|@c textDocument/completion|Context-aware completions with trigger characters @c . (member access), @c : (namespace/static), and normal identifier completion; uses @ref qorecodecompletionintro "QoreCodeCompletion"; callables are inserted as snippets with the cursor between the parentheses, VS Code clients are asked to show parameter hints and further suggestions after callables and namespaces, and documentation is Markdown when the client supports it
     |Signature Help|@c textDocument/signatureHelp|Function/method parameter hints with trigger characters @c ( and @c ,
     |Inlay Hints|@c textDocument/inlayHint|Shows parameter names at call sites as inline hints
     |Semantic Tokens|@c textDocument/semanticTokens/full and @c .../range|Full semantic syntax highlighting with node-level classification

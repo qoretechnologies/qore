@@ -440,6 +440,9 @@ public class QLSServer {
 
         #! The JSON-encoded ID of the request being processed
         *string currentRequestKey;
+
+        #! The client's name from the initialize request, if sent
+        *string clientName;
     }
 
     private:internal {
@@ -1454,6 +1457,7 @@ public class QLSServer {
         # parse/save initialization params
         parentProcessId = request.params.processId;
         clientCapabilities = request.params.capabilities;
+        clientName = request.params.clientInfo.name;
         # all workspace folders are indexed; the deprecated rootUri and rootPath parameters are only used when the
         # client does not send workspace folders
         if (request.params.workspaceFolders.typeCode() == NT_LIST && request.params.workspaceFolders) {
@@ -2309,31 +2313,85 @@ public class QLSServer {
         list<hash<QoreCodeCompletion::CompletionItem>> items = engine.complete(input);
 
         # Convert to LSP format
-        list<hash<auto>> lspItems = ();
-        foreach hash<QoreCodeCompletion::CompletionItem> item in (items) {
-            string insertText = item.label;
-            if (item.isCallable) {
-                insertText += "(";
-            } else if (item.kind == "namespace") {
-                insertText += "::";
-            }
-            lspItems += {
-                "label": item.label,
-                "kind": LspCompletionItemKind{item.kind} ?? 1,
-                "detail": item.detail,
-                "documentation": item.documentation,
-                "insertText": insertText,
-                "data": {
-                    "name": item.label,
-                    "symbolKind": item.kind,
-                },
-            };
-        }
+        hash<auto> itemCaps = clientCapabilities.textDocument.completion.completionItem ?? {};
+        bool snippets = itemCaps.snippetSupport ?? False;
+        bool markdown = (itemCaps.documentationFormat ?? ()).contains("markdown");
+        # the commands that show parameter hints and suggestions after inserting an item are VS Code commands
+        bool editorCommands = clientName =~ /visual studio code|vscodium|code - oss/i;
+        list<hash<auto>> lspItems = map QLSServer::makeCompletionItem($1, snippets, markdown, editorCommands), items;
 
         return make_jsonrpc_response(jsonRpcVer, request.id, {
             "isIncomplete": False,
             "items": lspItems,
         });
+    }
+
+    #! Returns an LSP \c CompletionItem for a completion
+    /** @param item the completion
+        @param snippets whether the client supports snippets; callables with arguments are then inserted with
+        parentheses and the cursor between them; callables without arguments are always inserted with parentheses
+        @param markdown whether the client supports Markdown documentation
+        @param editorCommands whether the client is VS Code or a compatible editor, whose commands show parameter
+        hints after a callable and suggestions after a namespace are inserted
+
+        @return the LSP completion item
+    */
+    static hash<auto> makeCompletionItem(hash<QoreCodeCompletion::CompletionItem> item, bool snippets, bool markdown,
+            bool editorCommands) {
+        hash<auto> lspItem = {
+            "label": item.label,
+            "kind": LspCompletionItemKind{item.kind} ?? 1,
+            "data": {
+                "name": item.label,
+                "symbolKind": item.kind,
+            },
+        };
+        if (exists item.detail) {
+            lspItem.detail = item.detail;
+        }
+        if (item.documentation) {
+            lspItem.documentation = markdown
+                ? {"kind": "markdown", "value": item.documentation}
+                : item.documentation;
+        }
+        if (item.isCallable && item.noArgsOnly) {
+            # nothing to enter between the parentheses
+            lspItem.insertText = item.label + "()";
+        } else if (item.isCallable) {
+            if (snippets) {
+                # the cursor is placed between the parentheses
+                lspItem.insertText = QLSServer::escapeSnippet(item.label) + "($0)";
+                lspItem.insertTextFormat = InsertTextFormat.Snippet;
+            } else {
+                lspItem.insertText = item.label + "(";
+            }
+            if (editorCommands) {
+                lspItem.command = {
+                    "title": "Show parameter hints",
+                    "command": "editor.action.triggerParameterHints",
+                };
+            }
+        } else if (item.kind == "namespace") {
+            lspItem.insertText = item.label + "::";
+            if (editorCommands) {
+                lspItem.command = {"title": "Show suggestions", "command": "editor.action.triggerSuggest"};
+            }
+        } else {
+            lspItem.insertText = item.label;
+        }
+        return lspItem;
+    }
+
+    #! LSP InsertTextFormat values
+    const InsertTextFormat = {
+        "PlainText": 1,
+        "Snippet": 2,
+    };
+
+    #! Returns the text with the characters that have a meaning in LSP snippets escaped
+    private:internal static string escapeSnippet(string text) {
+        # a literal backslash before the matched character
+        return regex_subst(text, "([\\\\$}])", "\\\\$1", RE_Global);
     }
 
     #! "completionItem/resolve" method handler

@@ -4718,6 +4718,8 @@ while (*binary chunk = input.read(65536)) {
       - the server answers requests while the workspace is indexed in the background, reports indexing progress,
         and supports request cancellation; @ref QLS::LspConnection "LspConnection" runs the server on any streams
         (see @ref qls_loop)
+      - completion inserts callables as snippets, shows parameter hints and further suggestions in VS Code, and
+        returns Markdown documentation
 
     - @ref qoreagentstrategiesintro "QoreAgentStrategies" module
       - new module providing configurable agent execution strategies for LLM agents
