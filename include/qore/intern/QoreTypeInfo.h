@@ -229,6 +229,25 @@ public:
         return ti && hasType(ti) ? ti->runtimeAcceptsValue(n) : QTI_WILDCARD;
     }
 
+    //! Matches a call argument against a parameter type for runtime variant selection
+    /** Gives the same result as runtimeAcceptsValue(), except for a non-empty list or hash whose element type is
+        untyped (a container built at runtime without a declared element type, such as by a language binding).
+        Such a value is accepted by a typed list, softlist or hash parameter type with QTI_AMBIGUOUS when every
+        element is accepted by the element type, as binding the argument then converts it, element by element, as
+        an assignment does; an element that is not accepted gives QTI_NOT_EQUAL.
+
+        @param ti the parameter type
+        @param n the argument value
+        @param quality set to the match quality that ranks variants whose primary scores are equal: the worst
+        element match for an element-checked container, otherwise the result itself
+        @param content_dependent set to true if the result depends on the elements of the value, so that another
+        value of the same type can give a different result; never set to false
+
+        @see design/container-element-folding.md
+    */
+    DLLLOCAL static qore_type_result_e runtimeAcceptsCallArg(const QoreTypeInfo* ti, const QoreValue& n,
+            int& quality, bool& content_dependent);
+
     // static version of method, checking for null pointer
     DLLLOCAL static qore_type_result_e parseAccepts(const QoreTypeInfo* first, const QoreTypeInfo* second) {
         if (first == second) {

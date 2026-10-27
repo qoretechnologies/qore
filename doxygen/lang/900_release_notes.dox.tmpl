@@ -14,6 +14,18 @@
     or QoreSandboxProvenanceHelper; existing public object and callback layouts are unchanged
     (<a href="https://github.com/qoretechnologies/qore/issues/5516">issue 5516</a>).
 
+    A list or hash built at runtime without a declared element type (\c list<auto>, \c hash<auto>, or a plain
+    \c list or \c hash), such as a container made by a language binding from a Python, Java or JavaScript value, is
+    now accepted for a typed container parameter (ex: \c list<int> or \c hash<string, list<string>>) of a function,
+    method, constructor or call reference selected at runtime when every element is accepted by the element type,
+    including in nested containers; the argument is converted as an assignment converts it.  A variant that takes the
+    value unchanged, such as one with a \c list or \c list<auto> parameter, is still preferred, and when several
+    typed container variants accept the value, the one whose element type matches the elements best is called.  A
+    container with an element that is not accepted selects another variant, or raises \c RUNTIME-OVERLOAD-ERROR as
+    before.  A \c softlist<T> variant is no longer selected for a list whose elements it cannot convert (see
+    @ref overloading_untyped_containers and
+    <a href="https://github.com/qoretechnologies/qore/issues/5541">issue 5541</a>).
+
     The C++ API adds TypedHashDecl::getProgram() and QoreEnumDecl::getProgram(), matching
     QoreClass::getProgram(). Modules can associate cached declarations with their owning %Program and
     invalidate handles in qore_register_program_cleanup_callback() before namespace data is freed.

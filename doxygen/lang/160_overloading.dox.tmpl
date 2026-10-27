@@ -71,6 +71,44 @@ open("/tmp/data.txt", path: "/tmp/other.txt"); # parse-time error
 
     @see @ref require-types "%require-types"
 
+    @section overloading_untyped_containers Untyped Containers And Typed Container Parameters
+    A list or hash built at runtime without a declared element type, such as a \c list<auto> or \c hash<auto>
+    value, or a container made by a language binding, is accepted at runtime for a typed container parameter when
+    every element is accepted by the parameter's element type; elements that are themselves untyped containers are
+    checked the same way against a nested container type.  The argument is then converted to the parameter type as an
+    assignment converts it; the caller's value is not changed.
+
+    @code{.py}
+string sub total(list<int> l) {
+    return sprintf("%s: %d", l.fullType(), foldl $1 + $2, l);
+}
+
+string sub total(list<string> l) {
+    return sprintf("%s: %s", l.fullType(), l.join(""));
+}
+
+auto ints = ();
+push ints, 1;
+push ints, 2;
+auto strs = ();
+push strs, "a";
+total(ints);    # calls total(list<int>), which gets a list<int>
+total(strs);    # calls total(list<string>), which gets a list<string>
+    @endcode
+
+    Such a match is weaker than one that needs no conversion: a variant whose parameter takes the value unchanged,
+    such as \c list, \c list<auto> or \c softlist<auto>, is preferred, while a typed container variant is preferred
+    to one with an \c auto or \c any parameter.  When several typed container variants accept the value with the
+    same score, the one whose element type matches the elements best is called (ex: \c list<int> rather than
+    \c list<number> for a list of integers), whatever their order of declaration.  A container with an element that
+    the element type does not accept selects another variant, or raises \c RUNTIME-OVERLOAD-ERROR if no other
+    variant matches.
+
+    An empty untyped container is accepted by every typed container parameter, and is not checked, so the first such
+    variant declared is called.  A hash argument is not converted to a @ref hashdecl "hashdecl" type, as an
+    assignment does not convert it, but a hash element of an untyped container is converted to a hashdecl element
+    type as in an assignment, which reports a key that the hashdecl does not declare.
+
     @section overloaded_methods Overloaded Class Methods
 
     Class methods may also be overloaded, but note that \c destructor(), \c copy(), @ref methodGate_methods "methodGate()", @ref memberGate_methods "memberGate()", and @ref memberNotification_methods "memberNotification()" methods may not be overloaded, but all other methods may be overloaded.

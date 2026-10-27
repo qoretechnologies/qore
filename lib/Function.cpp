@@ -91,17 +91,22 @@ static bool qore_is_non_optional_soft_type(const QoreTypeInfo* ti) {
         || QoreTypeInfo::getUniqueReturnComplexSoftList(ti);
 }
 
-static qore_type_result_e qore_runtime_accepts_call_arg(const QoreTypeInfo* ti, QoreValue arg) {
+// quality: set to the match quality that ranks variants with equal scores (see
+// QoreTypeInfo::runtimeAcceptsCallArg()); content_dependent: set to true if the result depends on the elements of
+// the argument
+static qore_type_result_e qore_runtime_accepts_call_arg(const QoreTypeInfo* ti, QoreValue arg, int& quality,
+        bool& content_dependent) {
     if (ti && QoreTypeInfo::hasType(ti) && arg.getType() == NT_RTCONSTREF) {
         ConstantEntry* ce = arg.get<const RuntimeConstantRefNode>()->getConstantEntry();
         if (ce && QoreTypeInfo::hasType(ce->typeInfo)) {
             qore_type_result_e rc = QoreTypeInfo::parseAccepts(ti, ce->typeInfo);
             if (rc != QTI_NOT_EQUAL) {
+                quality = rc;
                 return rc;
             }
         }
     }
-    return QoreTypeInfo::runtimeAcceptsValue(ti, arg);
+    return QoreTypeInfo::runtimeAcceptsCallArg(ti, arg, quality, content_dependent);
 }
 
 // returns true if the argument is a list or hash whose element type is identical to the element type of the
@@ -1322,7 +1327,7 @@ int CodeEvaluationHelper::findVariant(const QoreFunction* func, const AbstractQo
     }
 
     variant = func->runtimeFindVariant(xsink, getArgs(), false, class_ctx, receiver_type_info,
-        &type_param_instantiation, explicit_type_param_instantiation);
+        &type_param_instantiation, explicit_type_param_instantiation, &variant_content_dependent);
     if (!variant) {
         assert(*xsink);
         return -1;
@@ -3111,18 +3116,27 @@ QoreListNode* QoreFunction::runtimeGetCallVariants() const {
 // finds a variant at runtime
 const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSink* xsink, const QoreListNode* args,
         bool only_user, const qore_class_private* class_ctx, const QoreTypeInfo* receiver_type_info,
-        QoreTypeParamInstantiation* type_param_inst, const QoreTypeParamInstantiation* explicit_type_param_inst) const {
+        QoreTypeParamInstantiation* type_param_inst, const QoreTypeParamInstantiation* explicit_type_param_inst,
+        bool* content_dependent) const {
     if (type_param_inst) {
         type_param_inst->clear();
+    }
+    if (content_dependent) {
+        *content_dependent = false;
     }
     unsigned nargs = args ? args->size() : 0;
     QoreParseOptions ppo = runtime_get_parse_options();
 
-    // the highest score wins, then the highest secondary score (see qore_runtime_container_elements_exact()), then
-    // the lowest score length
+    // the highest score wins; for equal scores, the highest match quality (which differs from the score only for
+    // untyped containers whose elements were checked against a typed container parameter), then the highest
+    // secondary score (see qore_runtime_container_elements_exact()), then the lowest score length
     int score_len = -1;
     int score = -1;
+    int score_quality = -1;
     int score2 = -1;
+    // set if any match depended on the elements of an argument, so another call with arguments of the same types
+    // could select another variant
+    bool elements_checked = false;
     const AbstractQoreFunctionVariant* variant = nullptr;
     //const AbstractQoreFunctionVariant* saved_variant = nullptr;
 
@@ -3220,6 +3234,7 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
 
             int pscore = 0;
             int pscore2 = 0;
+            int pquality = 0;
             bool ok = true;
             bool needs_type_param_substitution = sig->needsTypeParameterSubstitution();
             for (unsigned pi = 0; pi < sig->numParams(); ++pi) {
@@ -3233,11 +3248,12 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
                 }
 
                 int rc;
+                int quality = 0;
                 if ((n.isNothing() || qore_is_defaulted_null_soft_arg(t, n, sig->hasDefaultArg(pi)))
                         && sig->hasDefaultArg(pi)) {
                     rc = QTI_IGNORE;
                 } else {
-                    rc = qore_runtime_accepts_call_arg(t, n);
+                    rc = qore_runtime_accepts_call_arg(t, n, quality, elements_checked);
                     if (className() && !strcmp(getName(), "constructor") && nargs == 0) {
                         printd(5, "  param[%d] type='%s' hasDefault=%d acceptsNothing=%d rc=%d\n",
                             pi, QoreTypeInfo::getName(t), sig->hasDefaultArg(pi), (int)rc, (int)(rc == QTI_NOT_EQUAL));
@@ -3255,6 +3271,7 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
                 // only increment for actual type matches (t may be NULL)
                 if (t && rc != QTI_IGNORE) {
                     pscore += rc;
+                    pquality += quality;
                     if (qore_runtime_container_elements_exact(t, n)) {
                         ++pscore2;
                     }
@@ -3283,10 +3300,14 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
 
             if (pscore > score
                     || (pscore == score
-                        && (pscore2 > score2
-                            || (pscore2 == score2
-                                && (score_len == -1 || sig->numParams() < static_cast<unsigned>(score_len)))))) {
+                        && (pquality > score_quality
+                            || (pquality == score_quality
+                                && (pscore2 > score2
+                                    || (pscore2 == score2
+                                        && (score_len == -1
+                                            || sig->numParams() < static_cast<unsigned>(score_len)))))))) {
                 score = pscore;
+                score_quality = pquality;
                 score2 = pscore2;
                 variant = *i;
                 if (type_param_inst) {
@@ -3307,6 +3328,10 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
         variant = saved_variant;
     }
     */
+
+    if (content_dependent) {
+        *content_dependent = elements_checked;
+    }
 
     if (!variant && !only_user) {
         QoreStringNode* desc = new QoreStringNode("no variant matching '");

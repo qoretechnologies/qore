@@ -1,0 +1,255 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# checks runtime variant selection for untyped containers passed to typed container parameters (issue #5541); run
+# by untyped-container-args.qtest
+
+%allow-weak-references
+
+/** A list or hash built at runtime without a declared element type (list<auto>, hash<auto> or a plain list or hash,
+    as a language binding builds them) is accepted for a typed container parameter when every element is accepted by
+    the element type; the argument is then converted as an assignment converts it.
+
+    The containers are built by mk() and mkh() from values that the parser cannot see, and are passed through
+    untyped (auto) variables, so the calls are dispatched at runtime.  Each check prints "name=result", where the
+    result names the variant called and the type of the argument it got, or the error raised.
+*/
+
+hashdecl D {
+    int a;
+}
+
+string sub tl(list<int> x) { return "tl:" + x.fullType(); }
+string sub tsh(hash<string, string> x) { return "tsh:" + x.fullType(); }
+string sub tnl(list<list<int>> x) { return "tnl:" + x.fullType() + "/" + x[0].fullType(); }
+string sub tnh(hash<string, list<string>> x) { return "tnh:" + x.fullType() + "/" + x.a.fullType(); }
+string sub tdeep(hash<string, list<hash<string, int>>> x) {
+    return "tdeep:" + x.fullType() + "/" + x.a.fullType() + "/" + x.a[0].fullType();
+}
+string sub tsoft(list<softint> x) { return sprintf("tsoft:%s:%y", x.fullType(), x); }
+string sub tnull(*list<int> x) { return "tnull:" + x.fullType(); }
+string sub tnullh(*hash<string, int> x) { return "tnullh:" + x.fullType(); }
+
+string sub ov(list<int> x) { return "ov(list<int>):" + x.fullType(); }
+string sub ov(list<string> x) { return "ov(list<string>):" + x.fullType(); }
+
+# a variant that takes the value unchanged wins over an element-checked conversion, which wins over auto
+string sub fall(list<int> x) { return "fall(list<int>):" + x.fullType(); }
+string sub fall(auto x) { return "fall(auto):" + x.fullType(); }
+string sub anyv(list<int> x) { return "anyv(list<int>):" + x.fullType(); }
+string sub anyv(any x) { return "anyv(any):" + x.fullType(); }
+string sub gen(list<int> x) { return "gen(list<int>):" + x.fullType(); }
+string sub gen(list x) { return "gen(list):" + x.fullType(); }
+string sub gena(list<int> x) { return "gena(list<int>):" + x.fullType(); }
+string sub gena(list<auto> x) { return "gena(list<auto>):" + x.fullType(); }
+string sub gens(list<int> x) { return "gens(list<int>):" + x.fullType(); }
+string sub gens(softlist<auto> x) { return "gens(softlist<auto>):" + x.fullType(); }
+string sub genh(hash<string, int> x) { return "genh(hash<string, int>):" + x.fullType(); }
+string sub genh(hash<auto> x) { return "genh(hash<auto>):" + x.fullType(); }
+
+# equal scores: the variant whose element type matches the elements best wins, in either declaration order
+string sub qa(list<number> x) { return "qa(list<number>):" + x.fullType(); }
+string sub qa(list<int> x) { return "qa(list<int>):" + x.fullType(); }
+string sub qb(list<int> x) { return "qb(list<int>):" + x.fullType(); }
+string sub qb(list<number> x) { return "qb(list<number>):" + x.fullType(); }
+string sub qh(hash<string, number> x) { return "qh(hash<string, number>):" + x.fullType(); }
+string sub qh(hash<string, int> x) { return "qh(hash<string, int>):" + x.fullType(); }
+string sub qs(hash<string, softint> x) { return "qs(hash<string, softint>):" + x.fullType(); }
+string sub qs(hash<string, int> x) { return "qs(hash<string, int>):" + x.fullType(); }
+string sub qn(list<list<number>> x) { return "qn(list<list<number>>):" + x.fullType(); }
+string sub qn(list<list<int>> x) { return "qn(list<list<int>>):" + x.fullType(); }
+
+# a softlist<T> converts any list, so it must not win for a list whose elements it cannot convert
+string sub sl(list<int> x) { return "sl(list<int>):" + x.fullType(); }
+string sub sl(softlist<string> x) { return "sl(softlist<string>):" + x.fullType(); }
+
+# hashdecls are declared structures, not generic data: an untyped hash argument is not converted to one, as an
+# assignment does not convert it; an element of an untyped container is, as in an assignment
+string sub hd(hash<D> x) { return "hd:" + x.fullType(); }
+string sub hdf(hash<D> x) { return "hdf(hash<D>):" + x.fullType(); }
+string sub hdf(auto x) { return "hdf(auto):" + x.fullType(); }
+string sub hdl(list<hash<D>> x) { return "hdl(list<hash<D>>):" + x.fullType(); }
+string sub hdl(auto x) { return "hdl(auto):" + x.fullType(); }
+string sub hv(hash<string, int> x) { return "hv(hash<string, int>):" + x.fullType(); }
+string sub hv(auto x) { return "hv(auto):" + x.fullType(); }
+
+class C {
+    public {
+        string made;
+    }
+    constructor() {
+        made = "none";
+    }
+    constructor(list<string> l) {
+        made = "C(list<string>):" + l.fullType();
+    }
+    constructor(list<int> l) {
+        made = "C(list<int>):" + l.fullType();
+    }
+    string m(list<string> l) { return "m(list<string>):" + l.fullType(); }
+    string m(list<int> l) { return "m(list<int>):" + l.fullType(); }
+    static string s(list<int> l) { return "s(list<int>):" + l.fullType(); }
+    static string s(list<string> l) { return "s(list<string>):" + l.fullType(); }
+}
+
+#! returns a list<auto> with the given elements, built at runtime
+list<auto> sub mk(softlist<auto> v) {
+    list<auto> rv = ();
+    foreach auto e in (v) {
+        push rv, e;
+    }
+    return rv;
+}
+
+#! returns a hash<auto> with the given values, built at runtime
+hash<auto> sub mkh(hash<auto> v) {
+    hash<auto> rv = {};
+    foreach hash<auto> i in (v.pairIterator()) {
+        rv{i.key} = i.value;
+    }
+    return rv;
+}
+
+#! returns the result of the call, or the error it raised
+string sub tryc(code c) {
+    try {
+        return c();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+#! makes every check and returns the results
+hash<string, string> sub run_checks() {
+    hash<string, string> r = {};
+    auto li = mk((1, 2));
+    auto ls = mk(("a", "b"));
+    auto lf = mk((1.5, 2.5));
+    auto lm = mk((1, "b"));
+    auto e = mk();
+    auto h = mkh({"a": "x", "b": "y"});
+    auto hi = mkh({"a": 1});
+    auto hstr = mkh({"a": "1"});
+    auto ll = mk(); push ll, mk((1, 2));
+    auto llbad = mk(); push llbad, mk(("x",));
+    auto hl = mkh({}); hl.a = mk(("s",));
+    auto deep = mkh({}); deep.a = mk(); push deep.a, mkh({"k": 1});
+    auto deepbad = mkh({}); deepbad.a = mk(); push deepbad.a, mkh({"k": "x"});
+    list<auto> sli = mk((1, 2));
+    hash<auto> shm = mkh({"a": "x"});
+    list pl = mk((1, 2));
+    auto apl = pl;
+
+    # functions, call references and dynamic calls
+    r."call-function-list" = tryc(string sub () { return call_function("tl", li); });
+    r."call-function-hash" = tryc(string sub () { return call_function("tsh", h); });
+    r."direct-auto-arg" = tryc(string sub () { return tl(li); });
+    r."plain-list" = tryc(string sub () { return tl(apl); });
+    r."call-ref" = tryc(string sub () { code c = \tl(); return c(li); });
+    r."call-function-args" = tryc(string sub () { return call_function_args("tsh", (h,)); });
+    r."or-nothing-list" = tryc(string sub () { return tnull(li); });
+    r."or-nothing-hash" = tryc(string sub () { return tnullh(hi); });
+    r."soft-element-conversion" = tryc(string sub () { return tsoft(mk(("1", "2"))); });
+    r."caller-value-unchanged" = tryc(string sub () { tl(li); return li.fullType(); });
+    r."bad-element-single" = tryc(string sub () { return tl(lm); });
+    r."bad-hash-value" = tryc(string sub () { return tsh(hi); });
+
+    # parse-time selection gives the same result: a single variant is bound at parse time and converts the argument
+    r."static-single" = tryc(string sub () { return tl(sli); });
+    r."static-single-hash" = tryc(string sub () { return tsh(shm); });
+    r."static-overload-ints" = tryc(string sub () { return ov(sli); });
+
+    # nested containers
+    r."nested-list" = tryc(string sub () { return tnl(ll); });
+    r."nested-hash" = tryc(string sub () { return tnh(hl); });
+    r."nested-deep" = tryc(string sub () { return tdeep(deep); });
+    r."nested-bad" = tryc(string sub () { return tnl(llbad); });
+    r."nested-deep-bad" = tryc(string sub () { return tdeep(deepbad); });
+
+    # overloads
+    r."overload-ints" = tryc(string sub () { return ov(li); });
+    r."overload-strings" = tryc(string sub () { return ov(ls); });
+    r."overload-mixed" = tryc(string sub () { return ov(lm); });
+    r."overload-empty" = tryc(string sub () { return ov(e); });
+    r."fallthrough-match" = tryc(string sub () { return fall(li); });
+    r."fallthrough-auto" = tryc(string sub () { return fall(ls); });
+    r."fallthrough-any" = tryc(string sub () { return anyv(ls); });
+    r."any-loses" = tryc(string sub () { return anyv(li); });
+    r."generic-list-wins" = tryc(string sub () { return gen(li); });
+    r."list-auto-wins" = tryc(string sub () { return gena(li); });
+    r."softlist-auto-wins" = tryc(string sub () { return gens(li); });
+    r."hash-auto-wins" = tryc(string sub () { return genh(hi); });
+
+    # ties
+    r."quality-int-first" = tryc(string sub () { return qa(li); });
+    r."quality-int-second" = tryc(string sub () { return qb(li); });
+    r."quality-float" = tryc(string sub () { return qa(lf); });
+    r."quality-hash" = tryc(string sub () { return qh(hi); });
+    r."quality-hash-convert" = tryc(string sub () { return qs(hstr); });
+    r."quality-nested" = tryc(string sub () { return qn(ll); });
+
+    # softlist
+    r."softlist-ints" = tryc(string sub () { return sl(li); });
+    r."softlist-strings" = tryc(string sub () { return sl(ls); });
+    r."softlist-mixed" = tryc(string sub () { return sl(lm); });
+    r."softlist-scalar" = tryc(string sub () { return sl("a"); });
+
+    # weak references
+    {
+        list<auto> base = mk((1, 2));
+        auto wl := base;
+        r."weak-list" = tryc(string sub () { return tl(wl); });
+        hash<auto> hbase = mkh({"a": "x"});
+        auto wh := hbase;
+        r."weak-hash" = tryc(string sub () { return tsh(wh); });
+        list<auto> sbase = mk(("a",));
+        auto wls := sbase;
+        r."weak-overload" = tryc(string sub () { return ov(wls); });
+    }
+
+    # hashdecls
+    r."hashdecl-param" = tryc(string sub () { return hd(hi); });
+    r."hashdecl-fallthrough" = tryc(string sub () { return hdf(hi); });
+    # an element is converted to a hashdecl as in an assignment, which reports a key the hashdecl does not have
+    r."hashdecl-element" = tryc(string sub () { auto l = mk(); push l, hi; return hdl(l); });
+    r."hashdecl-element-bad" = tryc(string sub () { auto l = mk(); push l, mkh({"b": 1}); return hdl(l); });
+    r."hashdecl-value" = tryc(string sub () { auto v = <D>{"a": 1}; return hv(v); });
+
+    # methods, static methods and constructors; the same call sites get list<auto> values of ints and of strings in
+    # turn, so a variant selected from the elements of one value is not reused for the other
+    C c();
+    list<string> calls = ();
+    foreach auto v in ((li, ls, li, ls)) {
+        push calls, tryc(string sub () { return c.m(v); });
+    }
+    r."method-alternating" = calls.join(",");
+    calls = ();
+    foreach auto v in ((ls, li, ls, li)) {
+        push calls, tryc(string sub () { return C::s(v); });
+    }
+    r."static-alternating" = calls.join(",");
+    calls = ();
+    foreach auto v in ((li, ls, li)) {
+        push calls, tryc(string sub () { C c2(v); return c2.made; });
+    }
+    r."constructor-alternating" = calls.join(",");
+    r."call-object-method" = tryc(string sub () { return call_object_method(c, "m", ls); });
+    r."method-ref" = tryc(string sub () { code mr = \c.m(); return mr(li); });
+    r."method-bad" = tryc(string sub () { return c.m(lm); });
+    return r;
+}
+
+# called three times so that the checks also run on the IR tier and as native code with tiered execution
+hash<string, string> first = run_checks();
+bool stable = True;
+hash<string, string> results;
+for (int i = 0; i < 2; ++i) {
+    results = run_checks();
+    if (results != first) {
+        stable = False;
+    }
+}
+foreach hash<auto> i in (results.pairIterator()) {
+    printf("%s=%s\n", i.key, i.value);
+}
+printf("stable=%s\n", stable ? "yes" : "no");

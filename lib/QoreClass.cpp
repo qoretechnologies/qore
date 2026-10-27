@@ -6705,8 +6705,9 @@ QoreValue NormalMethodFunction::evalMethodTmpArgs(ExceptionSink* xsink, RuntimeC
     if (*xsink)
         return QoreValue();
 
+    // the variant is reported only if it can be reused for another call with arguments of the same types
     if (resolved_variant) {
-        *resolved_variant = variant;
+        *resolved_variant = ceh.isVariantContentDependent() ? nullptr : variant;
     }
     const MethodVariant* mv = METHV_const(variant);
     if (mv->isAbstract()) {
@@ -6772,8 +6773,9 @@ QoreValue StaticMethodFunction::evalMethodTmpArgs(ExceptionSink* xsink, RuntimeC
     if (*xsink)
         return QoreValue();
 
+    // the variant is reported only if it can be reused for another call with arguments of the same types
     if (resolved_variant) {
-        *resolved_variant = variant;
+        *resolved_variant = ceh.isVariantContentDependent() ? nullptr : variant;
     }
     return METHV_const(variant)->evalMethod(nullptr, ceh, xsink);
 }

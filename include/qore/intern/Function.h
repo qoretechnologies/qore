@@ -550,6 +550,14 @@ public:
         return pgm;
     }
 
+    //! returns true if the variant was selected at runtime by checking the elements of an argument
+    /** A variant selected so must not be reused for another call with arguments of the same types, as other elements
+        can select another variant
+    */
+    DLLLOCAL bool isVariantContentDependent() const {
+        return variant_content_dependent;
+    }
+
     DLLLOCAL q_rt_flags_t getRuntimeFlags() const {
         return rc.getRuntimeFlags();
     }
@@ -626,6 +634,9 @@ protected:
     const QoreTypeParamInstantiation* old_type_param_instantiation = nullptr;
     q_rt_flags_t old_rtflags = 0;
     bool variant_needs_type_param_substitution = false;
+    //! true if the variant was selected at runtime by checking the elements of an argument, so that another call
+    //! with arguments of the same types could select another variant
+    bool variant_content_dependent = false;
     bool restore_stack = false;
     bool restore_runtime_ctx = false;
     bool restore_receiver_type_info = false;
@@ -1794,7 +1805,8 @@ public:
             bool only_user, const qore_class_private* class_ctx,
             const QoreTypeInfo* receiver_type_info = nullptr,
             QoreTypeParamInstantiation* type_param_inst = nullptr,
-            const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr) const;
+            const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr,
+            bool* content_dependent = nullptr) const;
 
     // finds the best match with the given arg types
     DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindVariant(ExceptionSink* xsink, const type_vec_t& args,

@@ -101,6 +101,47 @@ scalar element type (`list<int>` from `list<string>`), a hashdecl source for a d
 and a plain hash assigned directly to a hashdecl lvalue (`hash<Leaf> l = some_plain_hash;`), which
 is an lvalue assignment rather than the conversion of a container's elements.
 
+## Untyped container arguments
+
+A list or hash built at runtime without a declared element type -- `list<auto>`, `hash<auto>`, a
+plain `list` or `hash`, and every container a language binding builds from a Python, Java or
+JavaScript value -- has no element type for the eligibility rule above to examine, so
+`runtimeAcceptsValue()` matches it against a typed container type only when it is empty (issue
+#2647).  The fold accepts such a value whenever its elements fit, so runtime variant selection would
+refuse an argument that binding converts (issue #5541).
+
+`QoreTypeInfo::runtimeAcceptsCallArg()` matches call arguments for `runtimeFindVariant()` instead.
+For a non-empty untyped container (not a hashdecl hash) and a typed list, softlist or hash
+parameter type, it checks every element against the element type, recursing into elements that are
+themselves untyped containers, and stops at the first element that does not match:
+
+| Elements | Result |
+|---|---|
+| every element matches | `QTI_AMBIGUOUS`; binding converts the argument as an assignment does |
+| an element does not match | `QTI_NOT_EQUAL`, so another variant can be selected |
+
+`QTI_AMBIGUOUS` ranks the conversion below a variant that takes the value unchanged (`list`,
+`list<auto>`, `softlist<auto>`, `hash<auto>`) and above `auto` and `any`, as for a scalar that needs
+a conversion.  `runtimeAcceptsValue()` itself is unchanged: `instanceof` and the JIT fast paths that
+skip `acceptInput()` for a value that already has the slot's type ask it whether a value has a type,
+and a `list<auto>` does not have the type `list<int>`.
+
+Variants with equal scores are ranked by match quality before the number of parameters: the worst
+element match of an element-checked container, otherwise the result itself, so `list<int>` is
+called rather than `list<number>` for a list of integers in either order of declaration, while all
+other ties are decided as before.  The softlist conversion entry, which accepts any list, does not
+decide for an untyped list: a `softlist<string>` variant is not selected for a list of integers.
+
+A hash element is accepted for a hashdecl element type without checking its keys, as
+`retypeValue()` converts it and reports a key the hashdecl does not declare; a hash argument is not
+converted to a hashdecl, as lvalue assignment does not convert it.  Empty untyped containers keep
+the #2647 rule and are not checked.
+
+The result now depends on a value's elements, not only on its type, so `runtimeFindVariant()`
+reports through its `content_dependent` argument whether any element check ran, and the AOT
+polymorphic method dispatch cache in `lib/JITRuntime.cpp`, which is keyed by argument types, does
+not cache such a selection: `evalMethodTmpArgs()` returns no `resolved_variant` for it.
+
 ## The parse-time check
 
 `typed_hash_decl_private::parseCheckHashDeclAssignment()` in `lib/TypedHashDecl.cpp` performs the
@@ -153,6 +194,11 @@ element types, shared and unshared sources, JSON-derived input, fully resolved i
 parse-time path, and the two parse-time negative cases (a scalar element type, and a hashdecl
 source for a different hashdecl).
 `testGenericContainerHashDeclFolding()` covers the `hash<auto>`/`list<auto>` cases.
+
+`examples/test/qore/functions/untyped-container-args/` covers untyped container arguments in every
+execution mode and in a program compiled with qcc: dynamic calls, call references, methods, static
+methods and constructors, nested containers, weak references, hashdecls, ranking and ties, softlist
+selection, and call sites that get untyped lists of different element types in turn.
 
 `testContainerFoldingParseRuntimeAgreement()` covers the agreement above: resolved literals in
 variable declarations and assignments, function and method arguments, return values and member
