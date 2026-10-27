@@ -88,7 +88,7 @@ class FakeGeminiLlmHandler inherits AbstractHttpRequestHandler {
         }
         string out = resp.body.typeCode() == NT_STRING
             ? resp.body : make_json(resp.body);
-        return makeResponse(code, out, {"Content-Type": MimeTypeJson});
+        return makeResponse(code, out, {"Content-Type": MimeTypeJson} + (resp.headers ?? {}));
     }
 }
 
@@ -204,6 +204,14 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             \providerPerCallRetryBudgetTest());
         addTestCase("LlmBackend OpenAI facade honors per-call request timeout",
             \providerPerCallRequestTimeoutTest());
+        addTestCase("a call's HTTP 429 retries are its own budget, and every attempt is recorded",
+            \providerRateLimitRetriesTest());
+        addTestCase("a Retry-After longer than the request timeout is not waited for",
+            \providerRetryAfterCapTest());
+        addTestCase("a retry whose wait would end after the call's deadline is not made",
+            \providerRetryDeadlineTest());
+        addTestCase("a repair request gets only the time left of its call, not a timeout of its own",
+            \providerRepairDeadlineTest());
         addTestCase("LlmBackend Gemini schema sanitizer flattens "
             "composition", \geminiSchemaCompositionSanitizerTest());
         addTestCase("LlmBackend Gemini schema sanitizer strips dialect "
@@ -1233,6 +1241,234 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             gemini_handler.requests[0].body.generationConfig.thinkingConfig.thinkingBudget);
         assertEq("lookup",
             gemini_handler.requests[0].body.tools[0].functionDeclarations[0].name);
+    }
+
+    # a Gemini 429 as Vertex AI and the Gemini API answer a rate limit
+    private hash<auto> geminiRateLimited(*hash<auto> headers) {
+        return {
+            "code": 429,
+            "headers": headers,
+            "body": {
+                "error": {
+                    "code": 429,
+                    "status": "RESOURCE_EXHAUSTED",
+                    "message": "rate limit test",
+                },
+            },
+        };
+    }
+
+    private hash<auto> geminiTextResponse(string text) {
+        return {
+            "code": 200,
+            "body": {
+                "candidates": ({
+                    "finishReason": "STOP",
+                    "content": {"parts": ({"text": text},)},
+                },),
+                "usageMetadata": {"totalTokenCount": 3},
+            },
+        };
+    }
+
+    providerRateLimitRetriesTest() {
+        checkGeminiModule();
+        hash<auto> request = {"messages": ({"role": "user", "content": "test rate limits"},)};
+        LlmBackendConfig config = <LlmBackendConfig>{
+            "mode": "gemini",
+            "url": "http://localhost:" + port,
+            "model": "gemini-2.5-flash",
+            "api_key": "gemini-test-key",
+            "max_retries": 3,
+            "retry_delay_ms": 1,
+        };
+
+        # a caller that asks again itself gets the 429 at once, with its record
+        installGeminiHandler({
+            "/v1beta/models/gemini-2.5-flash:generateContent":
+                {"sequence": (geminiRateLimited(), geminiTextResponse("late"))},
+        });
+        LlmBackend llm(config);
+        *hash<ExceptionInfo> failure;
+        try {
+            llm.chatCompletions(request + {"rate_limit_retries": 0});
+        } catch (hash<ExceptionInfo> ex) {
+            failure = ex;
+        }
+        assertEq("LLM-ERROR", failure.err);
+        assertEq(1, gemini_handler.requests.size(), "a 429 is not asked again");
+        hash<auto> retry = failure.arg.arg.retry;
+        on_error printf("%N\n", failure.arg);
+        assertEq(1, retry.attempts);
+        assertEq((), retry.waits_ms);
+        assertEq("retries_spent", retry.stopped);
+        assertEq(({"status": 429, "provider_code": "RESOURCE_EXHAUSTED"},), retry.failures);
+
+        # a server error is still retried under the transient-error budget
+        installGeminiHandler({
+            "/v1beta/models/gemini-2.5-flash:generateContent":
+                {"sequence": ({"code": 503, "body": {"error": {"status": "UNAVAILABLE", "message": "x"}}},
+                    geminiTextResponse("recovered"))},
+        });
+        llm = new LlmBackend(config);
+        hash<auto> rv = llm.chatCompletions(request + {"rate_limit_retries": 0});
+        assertEq(2, gemini_handler.requests.size());
+        assertEq("recovered", rv.choices[0].message.content);
+        # a response that took more than one request reports them
+        assertEq(2, rv.provider_diagnostics.retry.attempts);
+        assertEq((1,), rv.provider_diagnostics.retry.waits_ms);
+        assertEq(503, rv.provider_diagnostics.retry.failures[0].status);
+
+        # without the option a 429 is retried as before, with its evidence recorded
+        installGeminiHandler({
+            "/v1beta/models/gemini-2.5-flash:generateContent":
+                {"sequence": (geminiRateLimited() + {"body": {"error": {"code": 429,
+                    "status": "RESOURCE_EXHAUSTED", "message": "quota",
+                    "details": ({"@type": "type.googleapis.com/google.rpc.QuotaFailure"},)}}},
+                    geminiTextResponse("ok"))},
+        });
+        llm = new LlmBackend(config);
+        rv = llm.chatCompletions(request);
+        assertEq(2, gemini_handler.requests.size());
+        assertEq(({"status": 429, "provider_code": "RESOURCE_EXHAUSTED", "quota_detail": True},),
+            rv.provider_diagnostics.retry.failures);
+        # one request, nothing to report
+        installGeminiHandler({
+            "/v1beta/models/gemini-2.5-flash:generateContent": geminiTextResponse("first"),
+        });
+        llm = new LlmBackend(config);
+        rv = llm.chatCompletions(request);
+        assertFalse(exists rv.provider_diagnostics.retry);
+    }
+
+    providerRetryAfterCapTest() {
+        checkGeminiModule();
+        hash<auto> request = {"messages": ({"role": "user", "content": "test retry-after"},)};
+        LlmBackendConfig config = <LlmBackendConfig>{
+            "mode": "gemini",
+            "url": "http://localhost:" + port,
+            "model": "gemini-2.5-flash",
+            "api_key": "gemini-test-key",
+            "max_retries": 3,
+            "retry_delay_ms": 1,
+            "timeout_ms": 30000,
+        };
+        # an hour asked for: longer than the request timeout, so not waited for (a caller can fail over at once)
+        installGeminiHandler({
+            "/v1beta/models/gemini-2.5-flash:generateContent":
+                {"sequence": (geminiRateLimited({"Retry-After": "3600"}), geminiTextResponse("late"))},
+        });
+        LlmBackend llm(config);
+        date start = now_us();
+        *hash<ExceptionInfo> failure;
+        try {
+            llm.chatCompletions(request);
+        } catch (hash<ExceptionInfo> ex) {
+            failure = ex;
+        }
+        assertTrue((now_us() - start) < 30s, "no wait for the hour");
+        assertEq(1, gemini_handler.requests.size());
+        assertEq("retry_after_too_long", failure.arg.arg.retry.stopped);
+        assertEq(3600000, failure.arg.arg.retry.failures[0].retry_after_ms);
+
+        # one second asked for: waited, then asked again
+        installGeminiHandler({
+            "/v1beta/models/gemini-2.5-flash:generateContent":
+                {"sequence": (geminiRateLimited({"Retry-After": "1"}), geminiTextResponse("after the wait"))},
+        });
+        llm = new LlmBackend(config);
+        hash<auto> rv = llm.chatCompletions(request);
+        assertEq("after the wait", rv.choices[0].message.content);
+        assertEq((1000,), rv.provider_diagnostics.retry.waits_ms);
+    }
+
+    providerRetryDeadlineTest() {
+        checkGeminiModule();
+        installGeminiHandler({
+            "/v1beta/models/gemini-2.5-flash:generateContent":
+                {"sequence": ({"code": 503, "body": {"error": {"status": "UNAVAILABLE", "message": "x"}}},
+                    geminiTextResponse("late"))},
+        });
+        # a backoff of an hour would end long after the call's 5 s deadline: it is not waited for
+        LlmBackend llm(<LlmBackendConfig>{
+            "mode": "gemini",
+            "url": "http://localhost:" + port,
+            "model": "gemini-2.5-flash",
+            "api_key": "gemini-test-key",
+            "max_retries": 3,
+            "retry_delay_ms": 3600000,
+            "timeout_ms": 5000,
+        });
+        date start = now_us();
+        *hash<ExceptionInfo> failure;
+        try {
+            llm.chatCompletions({"messages": ({"role": "user", "content": "test deadline"},)});
+        } catch (hash<ExceptionInfo> ex) {
+            failure = ex;
+        }
+        assertTrue((now_us() - start) < 5s, "the call ended before its deadline instead of waiting");
+        assertEq(1, gemini_handler.requests.size());
+        assertEq("deadline", failure.arg.arg.retry.stopped);
+    }
+
+    providerRepairDeadlineTest() {
+        checkGeminiModule();
+        Queue gate();
+        Queue handler_done();
+        # the first answer arrives after 2 s and needs a repair; the repair is never answered, so only a timeout
+        # ends it: the call's deadline (4 s after it started), not a 4 s timeout of the repair's own
+        installGeminiHandler({
+            "/v1beta/models/gemini-2.5-flash:generateContent": {
+                "sequence": (
+                    {
+                        "code": 200,
+                        "delay_ms": 2000,
+                        "body": {
+                            "candidates": ({
+                                "finishReason": "MALFORMED_FUNCTION_CALL",
+                                "content": {"parts": ()},
+                            },),
+                            "usageMetadata": {"totalTokenCount": 100},
+                        },
+                    },
+                    geminiTextResponse("never") + {"gate": gate, "done": handler_done},
+                ),
+            },
+        });
+        LlmBackend llm(<LlmBackendConfig>{
+            "mode": "gemini",
+            "url": "http://localhost:" + port,
+            "model": "gemini-2.5-flash",
+            "api_key": "gemini-test-key",
+            "max_retries": 0,
+            "timeout_ms": 4000,
+        });
+        date start = now_us();
+        try {
+            llm.chatCompletions({
+                "messages": ({"role": "user", "content": "Decompose the requirement."},),
+                "tools": ({
+                    "type": "function",
+                    "function": {
+                        "name": "decompose",
+                        "description": "Return a structured decomposition",
+                        "parameters": {"type": "object", "properties": {"text": {"type": "string"}},
+                            "required": ("text",)},
+                    },
+                },),
+                "tool_choice": {"type": "function", "function": {"name": "decompose"}},
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            # the repair's timeout may end the call or leave the malformed answer: either way it ends in time
+        }
+        date elapsed = now_us() - start;
+        # release the held repair reply and wait until the handler has finished
+        gate.push(True);
+        handler_done.get(60s);
+        assertEq(2, gemini_handler.requests.size(), "the repair was sent");
+        # a fresh 4 s timeout for the repair would end the call after about 6 s
+        assertTrue(elapsed < 5s, sprintf("the call ended at its deadline: %y", elapsed));
+        assertTrue(elapsed >= 3900ms, sprintf("and not before: %y", elapsed));
     }
 
     providerPerCallRetryBudgetTest() {
