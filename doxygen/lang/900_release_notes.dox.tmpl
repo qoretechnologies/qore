@@ -4724,7 +4724,10 @@ while (*binary chunk = input.read(65536)) {
         by the types of their receivers, as in \c now().format() (see @ref qls_builtins)
       - diagnostics: standalone scripts are checked with the %Qore parser when they are opened and saved, with
         quick fixes for the fixes of %Qore diagnostics, and other files get syntax errors; diagnostics are
-        published or pulled (see @ref qls_diagnostics)
+        published or pulled, including the syntax errors of workspace files that are not open
+        (see @ref qls_diagnostics)
+      - workspace symbol search, with the ranges of the symbols resolved when they are selected for clients that
+        support it
       - hierarchical document symbols, semantic tokens with deltas, folding and selection ranges, incremental
         document synchronization (see @ref qls_sync), and inline values while debugging
 

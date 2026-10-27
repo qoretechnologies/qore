@@ -127,6 +127,9 @@ public class FileIndex {
 
         #! Filter of the identifiers in the file; see astparser::AstTree::getIdentifierFilter()
         *binary identifierFilter;
+
+        #! The LSP diagnostics of the syntax errors of the file, if any
+        *list<hash<auto>> diagnostics;
     }
 
     #! Creates the index from a parsed document
@@ -139,6 +142,10 @@ public class FileIndex {
         *astparser::AstTree tree = doc.getTree();
         if (tree) {
             identifierFilter = tree.getIdentifierFilter();
+        }
+        # syntax errors are rare, so their diagnostics are kept for the diagnostics of files that are not open
+        if (doc.getParseErrorCount()) {
+            diagnostics = doc.getDiagnostics();
         }
 
         *list<auto> qualified = doc.findSymbols(True, False);
@@ -191,6 +198,13 @@ public class FileIndex {
     #! Returns the number of symbols in the index
     int getSymbolCount() {
         return names.size();
+    }
+
+    #! Returns the LSP diagnostics of the syntax errors of the file
+    /** @return the diagnostics of the syntax errors found when the file was indexed, or an empty list
+    */
+    list<hash<auto>> getDiagnostics() {
+        return diagnostics ?? ();
     }
 
     #! Returns the classes declared in the file

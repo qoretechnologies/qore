@@ -153,9 +153,10 @@ public const ServerCapabilities = {
     "documentSymbolProvider": True,
 
     /**
-     * The server provides workspace symbol support.
+     * The server provides workspace symbol support; the ranges of the locations of workspace symbols are resolved
+     * with workspaceSymbol/resolve for clients that support it.
      */
-    "workspaceSymbolProvider": True,
+    "workspaceSymbolProvider": {"resolveProvider": True},
 
     /**
      * The server provides completion support.
@@ -503,6 +504,9 @@ public class QLSServer {
         #! Whether the client pulls diagnostics; if not, they are published
         bool pullDiagnostics = False;
 
+        #! Whether the client resolves the ranges of workspace symbols with workspaceSymbol/resolve
+        bool resolveWorkspaceSymbolRanges = False;
+
         #! The number of diagnostic refresh requests sent, for request IDs
         int diagnosticRefreshCount = 0;
 
@@ -592,6 +596,8 @@ public class QLSServer {
             "workspace/didChangeConfiguration": \meth_ws_didChangeConfiguration(),
             "workspace/didChangeWatchedFiles": \meth_ws_didChangeWatchedFiles(),
             "workspace/symbol": \meth_ws_symbol(),
+            "workspaceSymbol/resolve": \meth_wsSymbol_resolve(),
+            "workspace/diagnostic": \meth_ws_diagnostic(),
             "workspace/didChangeWorkspaceFolders": \meth_ws_didChangeWorkspaceFolders(),
             "workspace/willRenameFiles": \meth_ws_willRenameFiles(),
             "textDocument/diagnostic": \meth_td_diagnostic(),
@@ -932,6 +938,8 @@ public class QLSServer {
                 log(0, "background indexing of workspace files done; %d workspace files indexed",
                     workspaceIndex.size());
                 queueStdModules();
+                # the workspace diagnostics include the syntax errors of the indexed files
+                refreshWorkspaceDiagnostics();
             }
         } else {
             string uri = shift pendingStdFiles;
@@ -1564,6 +1572,8 @@ public class QLSServer {
         clientCapabilities = request.params.capabilities;
         pullDiagnostics = clientCapabilities.textDocument.diagnostic && clientCapabilities.workspace.diagnostics
             .refreshSupport;
+        resolveWorkspaceSymbolRanges = (clientCapabilities.workspace.symbol.resolveSupport.properties ?? ())
+            .contains("location.range");
         clientName = request.params.clientInfo.name;
         # all workspace folders are indexed; the deprecated rootUri and rootPath parameters are only used when the
         # client does not send workspace folders
@@ -1609,7 +1619,7 @@ public class QLSServer {
             "capabilities": ServerCapabilities + (pullDiagnostics ? {"diagnosticProvider": {
                 "identifier": "qore",
                 "interFileDependencies": False,
-                "workspaceDiagnostics": False,
+                "workspaceDiagnostics": True,
             }} : {}),
         };
 
@@ -1742,6 +1752,10 @@ public class QLSServer {
                     break;
             }
         }
+        # the workspace diagnostics include the syntax errors of the changed files
+        if (changes) {
+            refreshWorkspaceDiagnostics();
+        }
         return NOTHING;
     }
 
@@ -1859,7 +1873,127 @@ public class QLSServer {
         list<auto> symbols = findWorkspaceSymbols(query, False);
         log(1, "found %d workspace symbols for query: '%s'", symbols.size(), query);
 
+        if (resolveWorkspaceSymbolRanges) {
+            # the ranges are resolved when a symbol is selected; the data identifies the symbol in its file: its
+            # qualified name, kind and the number of symbols before it in the file with the same name and kind
+            hash<string, int> counts = {};
+            symbols = map QLSServer::makeUnresolvedWorkspaceSymbol($1, \counts), symbols;
+        }
+
         return make_jsonrpc_response(jsonRpcVer, request.id, symbols);
+    }
+
+    #! Returns a workspace symbol whose location has no range, for workspaceSymbol/resolve
+    /** @param symbol the symbol with its location
+        @param counts the number of symbols with the same file, name and kind already returned, which is updated
+    */
+    private:internal static hash<auto> makeUnresolvedWorkspaceSymbol(hash<auto> symbol,
+            reference<hash<string, int>> counts) {
+        string key = sprintf("%s:%s:%d", symbol.location.uri, symbol.name, symbol.kind);
+        int index = counts{key} ?? 0;
+        counts{key} = index + 1;
+        return {
+            "name": symbol.name,
+            "kind": symbol.kind,
+            "location": {"uri": symbol.location.uri},
+            "data": {"index": index},
+        };
+    }
+
+    #! "workspaceSymbol/resolve" method handler
+    /** Adds the range to the location of a workspace symbol returned without it by workspace/symbol; the symbol is
+        returned without a range if its file no longer has it.
+    */
+    private *string meth_wsSymbol_resolve(hash<auto> request) {
+        if (!request.hasKey("params") || request.params.typeCode() != NT_HASH) {
+            return ErrorResponse::invalidRequest(request, "required attribute 'params' is missing");
+        }
+        *string validation = ParamValidator::workspaceSymbolResolveParams(request, request.params);
+        if (validation) {
+            return validation;
+        }
+        hash<auto> symbol = request.params;
+        string uri = symbol.location.uri;
+        *FileIndex index = documents{uri} ? documents{uri}.getIndex() : workspaceIndex{uri};
+        if (index) {
+            list<auto> matches = select index.findMatchingSymbols(symbol.name, True), $1.kind == symbol.kind;
+            int i = symbol.data.index.typeCode() == NT_INT ? symbol.data.index : 0;
+            *hash<auto> match = matches[i] ?? matches[0];
+            if (match) {
+                symbol.location = match.location;
+            }
+        }
+        return make_jsonrpc_response(jsonRpcVer, request.id, symbol);
+    }
+
+    #! "workspace/diagnostic" method handler
+    /** Returns the diagnostics of the open documents and of the indexed workspace files: the current diagnostics of
+        open documents, including those of Qore checks, and the syntax errors found when the other files were
+        indexed; the Qore parser checks scripts when they are saved, not when they are indexed.
+
+        Files without diagnostics are only reported if the client has a result for them, so their diagnostics
+        are removed; files whose diagnostics have not changed are reported as unchanged.
+    */
+    private *string meth_ws_diagnostic(hash<auto> request) {
+        if (!request.hasKey("params") || request.params.typeCode() != NT_HASH) {
+            return ErrorResponse::invalidRequest(request, "required attribute 'params' is missing");
+        }
+        *string validation = ParamValidator::workspaceDiagnosticParams(request, request.params);
+        if (validation) {
+            return validation;
+        }
+        hash<string, string> previous = map {$1.uri: $1.value}, request.params.previousResultIds ?? ();
+
+        list<hash<auto>> reports = ();
+        foreach hash<auto> i in (documents.pairIterator()) {
+            if (!ignoredUris{i.key}) {
+                *hash<auto> report = QLSServer::makeWorkspaceDiagnosticReport(i.key, i.value.getVersion(),
+                    getCurrentDiagnostics(i.value), remove previous{i.key});
+                if (report) {
+                    reports += report;
+                }
+            }
+        }
+        foreach hash<auto> i in (workspaceIndex.pairIterator()) {
+            if (!documents{i.key} && !ignoredUris{i.key}) {
+                *hash<auto> report = QLSServer::makeWorkspaceDiagnosticReport(i.key, NOTHING,
+                    i.value.getDiagnostics(), remove previous{i.key});
+                if (report) {
+                    reports += report;
+                }
+            }
+        }
+        # files that are no longer in the workspace have no diagnostics
+        foreach hash<auto> i in (previous.pairIterator()) {
+            reports += QLSServer::makeWorkspaceDiagnosticReport(i.key, NOTHING, (), i.value);
+        }
+        return make_jsonrpc_response(jsonRpcVer, request.id, {"items": reports});
+    }
+
+    #! Returns the workspace diagnostic report of a file
+    /** @param uri the URI of the file
+        @param version the version of an open document, or @ref nothing for a file that is not open
+        @param diagnostics the current diagnostics of the file
+        @param previousResultId the result ID of the diagnostics of the file that the client has, if any
+
+        @return the report: \c "unchanged" if the diagnostics have the previous result ID, otherwise \c "full"; or
+        @ref nothing for a file without diagnostics that the client has no result for
+    */
+    private:internal static *hash<auto> makeWorkspaceDiagnosticReport(string uri, *int version,
+            list<auto> diagnostics, *string previousResultId) {
+        if (!diagnostics && !previousResultId) {
+            return NOTHING;
+        }
+        string resultId = SHA1(make_json(diagnostics));
+        hash<auto> report = {
+            "uri": uri,
+            "version": version,
+            "resultId": resultId,
+        };
+        if (resultId == previousResultId) {
+            return report + {"kind": "unchanged"};
+        }
+        return report + {"kind": "full", "items": diagnostics};
     }
 
 
@@ -2020,6 +2154,16 @@ public class QLSServer {
                 "id": sprintf("qls-diagnostic-refresh-%d", ++diagnosticRefreshCount),
                 "method": "workspace/diagnostic/refresh",
             });
+        }
+    }
+
+    #! Asks a client that pulls diagnostics to pull them again after the workspace index changes
+    /** Workspace diagnostics are pulled when the client is initialized; indexing during initialization does not
+        need a refresh.
+    */
+    private:internal refreshWorkspaceDiagnostics() {
+        if (clientInitialized) {
+            refreshDiagnostics();
         }
     }
 

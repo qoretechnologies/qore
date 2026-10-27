@@ -204,6 +204,35 @@ public class ParamValidator {
         return NOTHING;
     }
 
+    #! Validates a WorkspaceSymbol to resolve (location with uri, and the data of workspace/symbol).
+    public static *string workspaceSymbolResolveParams(hash<auto> request, hash<auto> params) {
+        string err;
+        if (!ParamValidator::required(request, params, "name", NT_STRING, \err)
+                || !ParamValidator::required(request, params, "location", NT_HASH, \err)
+                || !ParamValidator::required(request, params.location, "uri", NT_STRING, \err)) {
+            return err;
+        }
+        return NOTHING;
+    }
+
+    #! Validates WorkspaceDiagnosticParams (optional previousResultIds array of uri and value hashes).
+    public static *string workspaceDiagnosticParams(hash<auto> request, hash<auto> params) {
+        if (!exists params.previousResultIds) {
+            return NOTHING;
+        }
+        if (params.previousResultIds.typeCode() != NT_LIST) {
+            return ErrorResponse::invalidRequest(request, "attribute 'previousResultIds' is not an array");
+        }
+        foreach auto previous in (params.previousResultIds) {
+            if (previous.typeCode() != NT_HASH || previous.uri.typeCode() != NT_STRING
+                    || previous.value.typeCode() != NT_STRING) {
+                return ErrorResponse::invalidRequest(request,
+                    "attribute 'previousResultIds' has an element without 'uri' and 'value' strings");
+            }
+        }
+        return NOTHING;
+    }
+
     #! Validates SelectionRangeParams (textDocument + positions array).
     public static *string selectionRangeParams(hash<auto> request, hash<auto> params) {
         *string err = ParamValidator::textDocumentIdentifier(request, params);

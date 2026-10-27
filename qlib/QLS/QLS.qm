@@ -109,7 +109,7 @@ module QLS {
     <b>Code Structure</b>
     |!Feature|!LSP Method|!Description
     |Document Symbols|@c textDocument/documentSymbol|Hierarchical outline of all symbols in a document
-    |Workspace Symbols|@c workspace/symbol|Search for symbols across all workspace files
+    |Workspace Symbols|@c workspace/symbol, @c workspaceSymbol/resolve|Search for symbols across all workspace files; clients that support resolving the ranges of workspace symbols get locations without ranges, which are resolved when a symbol is selected
     |Folding Ranges|@c textDocument/foldingRange|Code folding for declarations, blocks, closures, multi-line hash and list literals, and multi-line comments
     |Selection Range|@c textDocument/selectionRange|Expanding selection based on syntactic structure
 
@@ -124,7 +124,7 @@ module QLS {
     |Range Formatting|@c textDocument/rangeFormatting|Formats the selected lines: the whole document is formatted, as the formatter needs the complete syntax tree, and only the changed lines that overlap the selection are returned
     |On-Type Formatting|@c textDocument/onTypeFormatting|Auto-indent on Enter, auto-dedent on @c }
     |Code Lens|@c textDocument/codeLens|Shows reference counts across open and workspace documents above declarations; the lenses run the \c qls.showReferences client command with the document URI and the position of the declared name
-    |Diagnostics|@c textDocument/publishDiagnostics, @c textDocument/diagnostic|Reports Qore parse errors and warnings for standalone scripts and syntax errors for other files (see @ref qls_diagnostics)
+    |Diagnostics|@c textDocument/publishDiagnostics, @c textDocument/diagnostic, @c workspace/diagnostic|Reports Qore parse errors and warnings for standalone scripts and syntax errors for other files (see @ref qls_diagnostics)
 
     @section qlsusage Usage
 
@@ -266,6 +266,13 @@ server.main();
     Clients that support pull diagnostics and diagnostic refresh requests pull the same diagnostics with
     @c textDocument/diagnostic and are asked to pull them again after a document is saved and checked; other
     clients get them with @c textDocument/publishDiagnostics notifications.
+
+    These clients also pull the diagnostics of the workspace with @c workspace/diagnostic: those of the open
+    documents, and the syntax errors of the other workspace files, which are found when the files are indexed, so
+    files with syntax errors are reported without opening them.  Files that are not open are not checked with the
+    %Qore parser, as that would run a process for every script of the workspace.  Files whose diagnostics have not
+    changed since the client's last result are reported as unchanged, and clients are asked to pull the
+    diagnostics again when background indexing is done and when workspace files change.
 
     @subsection qls_sync Document Synchronization and Symbols
 
