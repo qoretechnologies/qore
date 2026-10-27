@@ -67,6 +67,8 @@ class FeaturesTest inherits QUnit::Test {
         addTestCase("directive edits for renamed files", \testRenameEdits());
         addTestCase("willRenameFiles request", \testWillRenameFiles());
         addTestCase("pull diagnostics", \testPullDiagnostics());
+        addTestCase("workspace diagnostics", \testWorkspaceDiagnostics());
+        addTestCase("workspace symbol resolution", \testWorkspaceSymbolResolve());
         addTestCase("closures in nested hashes", \testClosuresInNestedHashes());
 
         on_exit {
@@ -529,7 +531,7 @@ class FeaturesTest inherits QUnit::Test {
         QLS::QLSServer server();
         hash<auto> init = send(server, "initialize", {"processId": getpid(), "capabilities": pullCaps}, False)[0]
             .result;
-        assertEq({"identifier": "qore", "interFileDependencies": False, "workspaceDiagnostics": False},
+        assertEq({"identifier": "qore", "interFileDependencies": False, "workspaceDiagnostics": True},
             init.capabilities.diagnosticProvider);
         send(server, "initialized", NOTHING, True);
         assertEq((), send(server, "textDocument/didOpen", {"textDocument": {"uri": uri, "languageId": "qore",
@@ -579,5 +581,117 @@ class FeaturesTest inherits QUnit::Test {
             "end": {"line": 9, "character": 0}}, {"start": {"line": 5, "character": 16},
             "end": {"line": 5, "character": 29}});
         assertEq(("h", "x", "x"), (map $1.variableName, values));
+    }
+
+    testWorkspaceDiagnostics() {
+        string dir = makeTmpDir();
+        FeaturesTest::writeFile(dir + "/ok.q", "%modern\nsub f() {}\n");
+        FeaturesTest::writeFile(dir + "/bad.q", "%modern\nsub f( {\n");
+        string badUri = QLS::Document::getFileUri(dir + "/bad.q");
+        hash<auto> pullCaps = {"textDocument": {"diagnostic": {"dynamicRegistration": False}},
+            "workspace": {"diagnostics": {"refreshSupport": True}}};
+
+        QLS::QLSServer server();
+        send(server, "initialize", {"processId": getpid(), "capabilities": pullCaps,
+            "workspaceFolders": ({"uri": QLS::Document::getFileUri(dir), "name": "test"},),
+            "initializationOptions": {"diagnostics": "syntax"}}, False);
+        send(server, "initialized", NOTHING, True);
+        server.takeQueuedMessages();
+
+        # the syntax errors of files that are not open; files without diagnostics are not reported
+        list<hash<auto>> reports = request(server, "workspace/diagnostic", {"previousResultIds": ()}).items;
+        assertEq((badUri,), (map $1.uri, reports));
+        hash<auto> report = reports[0];
+        assertEq("full", report.kind);
+        assertTrue(report.hasKey("version"));
+        assertNothing(report.version, "a file that is not open has no version");
+        assertTrue(report.items.size() > 0);
+        assertEq(1, report.items[0].severity);
+        string resultId = report.resultId;
+
+        # unchanged diagnostics are reported as unchanged
+        reports = request(server, "workspace/diagnostic", {"previousResultIds": ({"uri": badUri, "value": resultId},)})
+            .items;
+        assertEq(({"uri": badUri, "version": NOTHING, "resultId": resultId, "kind": "unchanged"},), reports);
+
+        # a fixed file is reported without diagnostics, after the client is asked to pull them again
+        FeaturesTest::writeFile(dir + "/bad.q", "%modern\nsub f() {}\n");
+        send(server, "workspace/didChangeWatchedFiles", {"changes": ({"uri": badUri, "type": 2},)}, True);
+        assertEq(("workspace/diagnostic/refresh",), (map parse_json($1).method, server.takeQueuedMessages()));
+        reports = request(server, "workspace/diagnostic", {"previousResultIds": ({"uri": badUri, "value": resultId},)})
+            .items;
+        assertEq(1, reports.size());
+        assertEq("full", reports[0].kind);
+        assertEq((), reports[0].items);
+        assertNeq(resultId, reports[0].resultId);
+
+        # files that are no longer in the workspace are reported without diagnostics
+        string goneUri = QLS::Document::getFileUri(dir + "/gone.q");
+        reports = request(server, "workspace/diagnostic", {"previousResultIds": ({"uri": goneUri, "value": "x"},)})
+            .items;
+        assertEq(({"uri": goneUri, "version": NOTHING, "resultId": SHA1(make_json(())), "kind": "full",
+            "items": ()},), reports);
+
+        # open documents are reported with their versions and current diagnostics
+        string openUri = QLS::Document::getFileUri(dir + "/open.q");
+        send(server, "textDocument/didOpen", {"textDocument": {"uri": openUri, "languageId": "qore", "version": 3,
+            "text": "%modern\nclass {\n"}}, True);
+        reports = request(server, "workspace/diagnostic", {}).items;
+        assertEq((openUri,), (map $1.uri, reports));
+        assertEq(3, reports[0].version);
+        assertTrue(reports[0].items.size() > 0);
+
+        # invalid parameters
+        hash<auto> response = send(server, "workspace/diagnostic", {"previousResultIds": "x"}, False)[0];
+        assertEq(-32600, response.error.code);
+        response = send(server, "workspace/diagnostic", {"previousResultIds": ({"uri": badUri},)}, False)[0];
+        assertEq(-32600, response.error.code);
+    }
+
+    testWorkspaceSymbolResolve() {
+        string dir = makeTmpDir();
+        string text = "%modern\n"
+            "sub compute() {}\n"
+            "sub compute(int i) {}\n"
+            "class Computer {\n"
+            "}\n";
+        FeaturesTest::writeFile(dir + "/syms.q", text);
+        string uri = QLS::Document::getFileUri(dir + "/syms.q");
+        hash<auto> folders = {"workspaceFolders": ({"uri": QLS::Document::getFileUri(dir), "name": "test"},)};
+        hash<auto> resolveCaps = {"workspace": {"symbol": {"resolveSupport": {"properties": ("location.range",)}}}};
+
+        QLS::QLSServer server();
+        hash<auto> init = send(server, "initialize", {"processId": getpid(), "capabilities": resolveCaps} + folders,
+            False)[0].result;
+        assertEq({"resolveProvider": True}, init.capabilities.workspaceSymbolProvider);
+        send(server, "initialized", NOTHING, True);
+
+        # the locations have no ranges; overloads are told apart by their data
+        list<hash<auto>> symbols = request(server, "workspace/symbol", {"query": "comput"});
+        list<hash<auto>> functions = select symbols, $1.name == "compute";
+        assertEq(({"uri": uri}, {"uri": uri}), (map $1.location, functions));
+        assertEq(({"index": 0}, {"index": 1}), (map $1.data, functions));
+
+        # the ranges are resolved
+        assertEq((1, 2), (map request(server, "workspaceSymbol/resolve", $1).location.range.start.line, functions));
+        hash<auto> cls = (select symbols, $1.name == "Computer")[0];
+        hash<auto> resolved = request(server, "workspaceSymbol/resolve", cls);
+        assertEq({"uri": uri, "range": {"start": {"line": 3, "character": 0}, "end": {"line": 4, "character": 1}}},
+            resolved.location);
+        assertEq("Computer", resolved.name);
+
+        # a symbol that is no longer in its file is returned without a range
+        hash<auto> gone = functions[0] + {"name": "removed"};
+        assertEq(gone, request(server, "workspaceSymbol/resolve", gone));
+        hash<auto> response = send(server, "workspaceSymbol/resolve", {"name": "x"}, False)[0];
+        assertEq(-32600, response.error.code);
+
+        # clients that do not resolve ranges get the full locations
+        QLS::QLSServer fullServer();
+        send(fullServer, "initialize", {"processId": getpid(), "capabilities": {}} + folders, False);
+        send(fullServer, "initialized", NOTHING, True);
+        functions = select request(fullServer, "workspace/symbol", {"query": "comput"}), $1.name == "compute";
+        assertEq((1, 2), (map $1.location.range.start.line, functions));
+        assertFalse(functions[0].hasKey("data"));
     }
 }
