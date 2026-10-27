@@ -1,0 +1,175 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# checks the header values that the McpClient, JsonRpcClientIo and YamlRpcClientIo clients send; run by
+# header-values.qtest
+
+%requires json
+%requires yaml
+%requires HttpServer
+%requires HttpServerUtil
+%requires Logger
+%requires Mime
+%requires DataProvider
+%requires JsonRpcHandler
+%requires McpServerHandler
+%requires McpClient
+%requires JsonRpcClientIo
+%requires YamlRpcClientIo
+
+/** The \c headers option of a connection, or of a client, converts a value that is not a string to a string, and the
+    elements of a list to strings, which are sent as repeated headers, as HTTPClient does; a hash or NULL value raises
+    RUNTIME-TYPE-ERROR when the client is created.  Each client is
+    given an int, a list, a bool and a string header through a connection and through its options hash, and the
+    headers that a local server receives are printed as "name=result" lines; the server parses repeated headers into a
+    list.  The last lines name the files that the client modules were loaded from.
+*/
+
+#! the headers given to every client
+const Headers = {"X-Int": 5, "X-List": ("a", 2), "X-Bool": True, "X-Str": "s"};
+
+#! the header names, as the server receives them
+const HeaderNames = ("x-int", "x-list", "x-bool", "x-str");
+
+#! describes the test headers received
+string sub describe(*hash<auto> hdr) {
+    if (!hdr) {
+        return "no request";
+    }
+    list<string> l = ();
+    foreach string name in (HeaderNames) {
+        auto v = hdr{name};
+        push l, sprintf("%s=%s", name, v.typeCode() == NT_LIST ? ("list(" + v.join(",") + ")") : sprintf("%y", v));
+    }
+    return l.join(" ");
+}
+
+#! records the headers of the first request of each client and answers JSON-RPC and YAML-RPC requests
+class RpcPeer inherits AbstractHttpRequestHandler {
+    public {
+        hash<string, hash<auto>> seen;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        string client = hdr."x-client";
+        if (!seen{client}) {
+            seen{client} = hdr;
+        }
+        if (hdr."content-type" =~ /yaml/) {
+            return makeResponse(200, make_yaml({"result": "ok"}), {"Content-Type": "application/x-yaml"});
+        }
+        return makeResponse(200, make_json({"jsonrpc": "2.0", "id": 1, "result": "ok"}),
+            {"Content-Type": "application/json"});
+    }
+}
+
+#! an MCP server that records the headers of the first request of each client
+class McpPeer inherits McpServerHandler {
+    public {
+        hash<string, hash<auto>> seen;
+    }
+
+    constructor(LoggerInterface logger) : McpServerHandler(logger, new PermissiveAuthenticator()) {
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data b) {
+        string client = hdr."x-client";
+        if (!seen{client}) {
+            seen{client} = hdr;
+        }
+        return McpServerHandler::handleRequest(cx, hdr, b);
+    }
+}
+
+#! returns the result of the call, or the error it raised
+string sub tryc(code c) {
+    try {
+        c();
+        return "ok";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+Logger logger("header-values", LoggerLevel::getLevelError());
+RpcPeer rpc();
+HttpServer rpc_http(<HttpServerOptionInfo>{"logger": logger});
+on_exit rpc_http.stop();
+rpc_http.setDefaultHandler("rpc", rpc);
+string rpc_url = sprintf("http://127.0.0.1:%d",
+    rpc_http.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port);
+
+McpPeer mcp(logger);
+HttpServer mcp_http(<HttpServerOptionInfo>{"logger": logger});
+on_exit mcp_http.stop();
+mcp_http.setHandler("mcp", "", MimeTypeJson, mcp);
+mcp_http.setDefaultHandler("mcp", mcp);
+string mcp_url = sprintf("http://127.0.0.1:%d",
+    mcp_http.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port);
+
+hash<string, string> results;
+
+# JSON-RPC: through a connection, and through the options hash of the client
+results."jsonrpc-connection-call" = tryc(sub () {
+    JsonRpcIoConnection conn("jsonrpc", "test", replace(rpc_url, "http:", "jsonrpcio:"), {"monitor": False},
+        {"headers": Headers + {"X-Client": "jsonrpc-connection"}});
+    JsonRpcClientIo c = conn.get();
+    on_exit c.close();
+    c.call("echo");
+});
+results."jsonrpc-options-call" = tryc(sub () {
+    JsonRpcClientIo c({"url": rpc_url, "http_protocol": "h1", "headers": Headers + {"X-Client": "jsonrpc-options"}});
+    on_exit c.close();
+    c.call("echo");
+});
+
+# YAML-RPC
+results."yamlrpc-connection-call" = tryc(sub () {
+    YamlRpcIoConnection conn("yamlrpc", "test", replace(rpc_url, "http:", "yamlrpcio:"), {"monitor": False},
+        {"headers": Headers + {"X-Client": "yamlrpc-connection"}});
+    YamlRpcClientIo c = conn.get();
+    on_exit c.close();
+    c.call("echo");
+});
+results."yamlrpc-options-call" = tryc(sub () {
+    YamlRpcClientIo c({"url": rpc_url, "http_protocol": "h1", "headers": Headers + {"X-Client": "yamlrpc-options"}});
+    on_exit c.close();
+    c.call("echo");
+});
+
+# MCP
+results."mcp-connection-call" = tryc(sub () {
+    McpConnection conn("mcp", "test", mcp_url, {"monitor": False},
+        {"headers": Headers + {"X-Client": "mcp-connection"}});
+    # the connection initializes the client
+    McpClient::McpClient c = conn.get();
+    on_exit c.close();
+});
+results."mcp-options-call" = tryc(sub () {
+    McpClient::McpClient c(mcp_url, {"headers": Headers + {"X-Client": "mcp-options"}});
+    on_exit c.close();
+    c.initialize(<McpClientInfo>{"name": "HeaderValues", "version": "1.0"});
+});
+
+# header values that cannot be sent raise an error when the client is created
+foreach hash<auto> bad in ({"name": "hash", "value": {"a": 1}}, {"name": "null", "value": NULL}) {
+    hash<auto> hdrs = {"X-Bad": bad.value};
+    results{"jsonrpc-bad-" + bad.name} = tryc(sub () { JsonRpcClientIo c(rpc_url, {"headers": hdrs}); });
+    results{"yamlrpc-bad-" + bad.name} = tryc(sub () { YamlRpcClientIo c(rpc_url, {"headers": hdrs}); });
+    results{"mcp-bad-" + bad.name} = tryc(sub () { McpClient::McpClient c(mcp_url, {"headers": hdrs}); });
+}
+
+foreach string client in (("jsonrpc-connection", "jsonrpc-options", "yamlrpc-connection", "yamlrpc-options")) {
+    results{client + "-headers"} = describe(rpc.seen{client});
+}
+foreach string client in (("mcp-connection", "mcp-options")) {
+    results{client + "-headers"} = describe(mcp.seen{client});
+}
+
+foreach hash<auto> i in (results.pairIterator()) {
+    printf("%s=%s\n", i.key, i.value);
+}
+hash<auto> mods = get_module_hash();
+foreach string m in (("McpClient", "JsonRpcClientIo", "YamlRpcClientIo")) {
+    printf("module-%s=%s\n", m, basename(mods{m}.filename));
+}

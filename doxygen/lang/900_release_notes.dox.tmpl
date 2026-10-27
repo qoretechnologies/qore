@@ -42,7 +42,15 @@
     values to the value type as an assignment does, and raises \c RUNTIME-TYPE-ERROR for a value that an assignment
     refuses; it labeled the hash with the value type without checking or converting its values.  A cast to a
     container type with a nested soft or numeric element type (ex: \c cast<list<list<softint>>>(...)) now converts
-    the nested elements too, as an assignment does, where it left them unconverted.
+    the nested elements too, as an assignment does, where it left them unconverted.  This is a behavior change: code
+    that cast a hash whose values do not have the value type now gets an exception where it got a mislabeled hash.
+    The \c headers option of connections and clients still accepts header values of any type that can be sent: the
+    @ref McpClient::McpClient "McpClient", @ref JsonRpcClientIo::JsonRpcClientIo "JsonRpcClientIo" and
+    @ref YamlRpcClientIo::YamlRpcClientIo "YamlRpcClientIo" clients now convert a value that is not a string to a
+    string, and the elements of a list to strings, which are sent as repeated headers, as \c HTTPClient does, where
+    any header value that was not a string raised \c RUNTIME-TYPE-ERROR.  A header value that cannot be sent (a hash,
+    \c NULL, or no value), which was dropped or sent empty, now raises \c RUNTIME-TYPE-ERROR when the client is
+    created.
 
     The C++ API adds TypedHashDecl::getProgram() and QoreEnumDecl::getProgram(), matching
     QoreClass::getProgram(). Modules can associate cached declarations with their owning %Program and

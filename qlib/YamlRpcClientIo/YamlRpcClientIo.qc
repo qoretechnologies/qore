@@ -85,8 +85,9 @@ public class YamlRpcClientIo {
         #! Logger
         *LoggerInterface logger;
 
-        #! Default headers for all requests
-        hash<string, string> default_headers;
+        #! Default headers for all requests; a value is converted to a string, and a list to
+        #! a list of strings, which are sent as repeated headers
+        hash<string, union<softstring, list<softstring>>> default_headers;
     }
 
     #! Creates the YamlRpcClientIo with the given URL and options
@@ -98,7 +99,9 @@ public class YamlRpcClientIo {
         - \c default_path: fallback path when the URL has no path, with or without a leading slash (default: \c "YAML")
         - \c http_protocol: HTTP protocol to use (\c "auto", \c "h1", \c "h2", \c "h3"; default: \c "auto")
         - \c logger: a \c LoggerInterface object for logging
-        - \c headers: extra default headers as a hash
+        - \c headers: extra default headers as a hash; a value that is not a string is converted to a string, and
+          the elements of a list are sent as repeated headers; a hash, \c NULL or missing value raises
+          \c RUNTIME-TYPE-ERROR
         - \c flags: YAML serialization flags (default: \c YAML::None)
 
         @see yamlrpcclientio_urls
@@ -126,7 +129,7 @@ YamlRpcClientIo client("http://localhost:8080/YAML", {"timeout": 30000});
             "User-Agent": DefaultUserAgent,
         };
         if (opts.headers.typeCode() == NT_HASH) {
-            default_headers += cast<hash<string, string>>(opts.headers);
+            default_headers += opts.headers;
         }
 
         mgr = createConnectionManager();
@@ -167,7 +170,7 @@ YamlRpcClientIo client({"url": "http://localhost:8080/YAML", "timeout": 30000});
             "User-Agent": DefaultUserAgent,
         };
         if (opts.headers.typeCode() == NT_HASH) {
-            default_headers += cast<hash<string, string>>(opts.headers);
+            default_headers += opts.headers;
         }
 
         mgr = createConnectionManager();
