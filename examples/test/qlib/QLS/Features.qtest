@@ -28,6 +28,7 @@
 %requires QUnit
 %requires json
 %requires Util
+%requires QoreCodeFormat
 %requires QLS
 
 %exec-class FeaturesTest
@@ -45,6 +46,10 @@ class FeaturesTest inherits QUnit::Test {
         addTestCase("document links that cannot be resolved", \testDocumentLinksUnresolved());
         addTestCase("document links over the protocol", \testDocumentLinkRequest());
         addTestCase("go to declaration", \testDeclaration());
+        addTestCase("line differences", \testDiffLines());
+        addTestCase("text edits from line differences", \testTextEdits());
+        addTestCase("range formatting", \testRangeFormatting());
+        addTestCase("semantic tokens delta", \testSemanticTokensDelta());
 
         on_exit {
             map FeaturesTest::removeTree($1), tmpDirs;
@@ -216,5 +221,131 @@ class FeaturesTest inherits QUnit::Test {
         assertEq(1, decl.size());
         assertEq(1, decl[0].range.start.line, "the declaration is the definition");
         assertEq(decl, request(server, "textDocument/definition", params));
+    }
+
+    #! Applies LSP text edits to a text
+    private static string applyEdits(string text, list<hash<auto>> edits) {
+        # edits are applied from the end so that earlier positions stay valid
+        list<hash<auto>> sorted = sort(edits, int sub (hash<auto> l, hash<auto> r) {
+            return r.range.start.line <=> l.range.start.line ?: r.range.start.character <=> l.range.start.character;
+        });
+        foreach hash<auto> edit in (sorted) {
+            text = QLS::Document::applyEdit(text, edit.range, edit.newText);
+        }
+        return text;
+    }
+
+    testDiffLines() {
+        assertEq((), QLS::TextDiff::diffLines(("a", "b"), ("a", "b")), "no differences");
+        assertEq((<QLS::LineHunk>{"oldStart": 1, "oldEnd": 1, "newStart": 1, "newEnd": 2},),
+            QLS::TextDiff::diffLines(("a", "c"), ("a", "b", "c")), "an insertion");
+        assertEq((<QLS::LineHunk>{"oldStart": 1, "oldEnd": 2, "newStart": 1, "newEnd": 1},),
+            QLS::TextDiff::diffLines(("a", "b", "c"), ("a", "c")), "a deletion");
+        assertEq((<QLS::LineHunk>{"oldStart": 1, "oldEnd": 2, "newStart": 1, "newEnd": 2},),
+            QLS::TextDiff::diffLines(("a", "b", "c"), ("a", "x", "c")), "a replacement");
+        list<hash<QLS::LineHunk>> hunks = QLS::TextDiff::diffLines(("1", "2", "3", "4", "5", "6"),
+            ("1", "x", "3", "4", "5", "6", "7"));
+        assertEq(((1, 2, 1, 2), (6, 6, 6, 7)), (map ($1.oldStart, $1.oldEnd, $1.newStart, $1.newEnd), hunks),
+            "separate hunks for separate changes");
+        assertEq((<QLS::LineHunk>{"oldStart": 0, "oldEnd": 0, "newStart": 0, "newEnd": 2},),
+            QLS::TextDiff::diffLines((), ("a", "b")), "an empty old text");
+
+        # beyond the maximum number of differences, the lines between the common prefix and suffix are one hunk
+        list<string> a = map sprintf("a%d", $1), xrange(1100);
+        list<string> b = map sprintf("b%d", $1), xrange(1100);
+        assertEq((<QLS::LineHunk>{"oldStart": 1, "oldEnd": 1101, "newStart": 1, "newEnd": 1101},),
+            QLS::TextDiff::diffLines(("same",) + a + ("end",), ("same",) + b + ("end",)));
+    }
+
+    testTextEdits() {
+        list<list<string>> pairs = (
+            ("a\nb\nc\n", "a\nx\nc\n"),
+            ("a\nb\nc", "a\nb\nc\nd"),
+            ("a\nb\nc", "a\nb"),
+            ("", "new\n"),
+            ("old\n", ""),
+            ("1\n2\n3\n4\n", "0\n1\n3\n4\n5\n"),
+        );
+        foreach list<string> pair in (pairs) {
+            list<hash<auto>> edits = QLS::TextDiff::getTextEdits(pair[0], pair[1]);
+            assertEq(pair[1], FeaturesTest::applyEdits(pair[0], edits), sprintf("%y", pair));
+        }
+        assertEq((), QLS::TextDiff::getTextEdits("same\n", "same\n"));
+        # only the edits accepted by the filter are returned
+        list<hash<auto>> edits = QLS::TextDiff::getTextEdits("1\n2\n3\n", "x\n2\ny\n",
+            bool sub (hash<QLS::LineHunk> h) { return h.oldStart == 2; });
+        assertEq(({"range": {"start": {"line": 2, "character": 0}, "end": {"line": 3, "character": 0}},
+            "newText": "y\n"},), edits);
+    }
+
+    testRangeFormatting() {
+        string text = "int sub a() {\nreturn 1;\n}\nint sub b() {\nreturn 2;\n}\n";
+        QoreCodeFormat::CodeFormatter fmt();
+        string formatted = fmt.format(text);
+        assertNeq(text, formatted, "the text is not formatted");
+
+        # formatting the second function only changes its lines
+        list<hash<auto>> edits = QLS::QLSServer::getRangeFormattingEdits(text, formatted,
+            {"start": {"line": 3, "character": 0}, "end": {"line": 5, "character": 1}});
+        assertGt(0, edits.size());
+        foreach hash<auto> edit in (edits) {
+            assertTrue(edit.range.start.line >= 3 && edit.range.end.line <= 6, sprintf("%y", edit.range));
+        }
+        string result = FeaturesTest::applyEdits(text, edits);
+        assertEq(text.split("\n")[0..2], result.split("\n")[0..2], "the first function is unchanged");
+        assertEq(formatted.split("\n")[3..5], result.split("\n")[3..5], "the second function is formatted");
+
+        # the whole document gives the formatted text; a range ending at the start of a line excludes it
+        assertEq(formatted, FeaturesTest::applyEdits(text, QLS::QLSServer::getRangeFormattingEdits(text, formatted,
+            {"start": {"line": 0, "character": 0}, "end": {"line": 7, "character": 0}})));
+        assertEq((), QLS::QLSServer::getRangeFormattingEdits(text, formatted,
+            {"start": {"line": 0, "character": 0}, "end": {"line": 1, "character": 0}}),
+            "the first line is already formatted");
+
+        QLS::QLSServer server = startServer();
+        string uri = open(server, makeTmpDir() + "/fmt.q", text);
+        list<auto> response = request(server, "textDocument/rangeFormatting", {"textDocument": {"uri": uri},
+            "range": {"start": {"line": 3, "character": 0}, "end": {"line": 5, "character": 1}},
+            "options": {"tabSize": 4, "insertSpaces": True}});
+        assertEq(edits, response, "the request returns the same edits");
+        hash<auto> error = send(server, "textDocument/rangeFormatting", {"textDocument": {"uri": uri}}, False)[0];
+        assertEq(-32602, error.error.code, "a range is required");
+    }
+
+    testSemanticTokensDelta() {
+        QLS::QLSServer server = startServer();
+        string text = "%modern\nint sub a() { return 1; }\n";
+        string uri = open(server, makeTmpDir() + "/tokens.q", text);
+        hash<auto> full = request(server, "textDocument/semanticTokens/full", {"textDocument": {"uri": uri}});
+        assertTrue(exists full.resultId, "a result ID for deltas");
+
+        # unchanged tokens give no edits
+        hash<auto> same = request(server, "textDocument/semanticTokens/full/delta", {"textDocument": {"uri": uri},
+            "previousResultId": full.resultId});
+        assertEq((), same.edits);
+        assertNeq(full.resultId, same.resultId, "a new result ID");
+
+        send(server, "textDocument/didChange", {"textDocument": {"uri": uri, "version": 2}, "contentChanges": (
+            {"text": "%modern\nint sub a() { return 1; }\nstring sub b() { return \"x\"; }\n"},)}, True);
+        hash<auto> delta = request(server, "textDocument/semanticTokens/full/delta", {"textDocument": {"uri": uri},
+            "previousResultId": same.resultId});
+        hash<auto> expected = request(server, "textDocument/semanticTokens/full", {"textDocument": {"uri": uri}});
+        list<int> data = full.data;
+        foreach hash<auto> edit in (delta.edits) {
+            splice data, edit.start, edit.deleteCount, edit.data;
+        }
+        assertEq(expected.data, data, "applying the delta gives the new tokens");
+
+        # an unknown previous result gives all tokens
+        hash<auto> stale = request(server, "textDocument/semanticTokens/full/delta", {"textDocument": {"uri": uri},
+            "previousResultId": "unknown"});
+        assertEq(expected.data, stale.data);
+        assertFalse(exists stale.edits);
+
+        assertEq(({"start": 1, "deleteCount": 1, "data": (9, 8)},),
+            QLS::QLSServer::getSemanticTokensEdits((1, 2, 3), (1, 9, 8, 3)));
+        assertEq(({"start": 3, "deleteCount": 0, "data": (4,)},),
+            QLS::QLSServer::getSemanticTokensEdits((1, 2, 3), (1, 2, 3, 4)));
+        assertEq(({"start": 0, "deleteCount": 3, "data": ()},), QLS::QLSServer::getSemanticTokensEdits((1, 2, 3), ()));
     }
 }

@@ -247,7 +247,9 @@ public const ServerCapabilities = {
             "tokenTypes": SemanticTokenTypes,
             "tokenModifiers": SemanticTokenModifiers,
         },
-        "full": True,
+        "full": {
+            "delta": True,
+        },
         "range": True,
     },
 
@@ -257,6 +259,11 @@ public const ServerCapabilities = {
     "codeActionProvider": {
         "codeActionKinds": ("quickfix", "source.sortImports", "source"),
     },
+
+    /**
+     * The server provides formatting of a range of a document.
+     */
+    "documentRangeFormattingProvider": True,
 
     /**
      * The server provides go to declaration support; declarations are definitions in Qore.
@@ -465,6 +472,12 @@ public class QLSServer {
 
         #! The diagnostics of the last Qore check of each open document: \c version and \c diagnostics keys
         hash<string, hash<auto>> qoreDiagnostics = {};
+
+        #! The last semantic tokens returned for each open document: \c resultId and \c data keys
+        hash<string, hash<auto>> semanticTokensResults = {};
+
+        #! The number of semantic token results returned, for result IDs
+        int semanticTokensResultCount = 0;
     }
 
     private:internal {
@@ -586,6 +599,8 @@ public class QLSServer {
             # Qore has no declarations that are separate from definitions
             "textDocument/declaration": \meth_td_definition(),
             "textDocument/documentLink": \meth_td_documentLink(),
+            "textDocument/rangeFormatting": \meth_td_rangeFormatting(),
+            "textDocument/semanticTokens/full/delta": \meth_td_semanticTokensDelta(),
         };
     }
 
@@ -2039,6 +2054,7 @@ public class QLSServer {
         workspaceIndex{uri} = (remove documents{uri}).getIndex();
         delete indexedClassGraph;
         remove qoreDiagnostics{uri};
+        remove semanticTokensResults{uri};
         log(1, "closed text document: '%s'", uri);
         # the diagnostics of a closed document are removed
         return Notification::diagnostics(jsonRpcVer, uri);
@@ -2805,6 +2821,63 @@ public class QLSServer {
         },);
 
         return make_jsonrpc_response(jsonRpcVer, request.id, edits);
+    }
+
+    #! "textDocument/rangeFormatting" method handler
+    /** Formats the document and returns the changed lines that overlap the range, as the formatter needs the
+        whole document.
+    */
+    private *string meth_td_rangeFormatting(hash<auto> request) {
+        if (!request.hasKey("params")) {
+            return ErrorResponse::invalidRequest(request, "required attribute 'params' is missing");
+        }
+        *string validation = ParamValidator::textDocumentIdentifier(request, request.params);
+        if (validation) {
+            return validation;
+        }
+        if (request.params.range.start.line.typeCode() != NT_INT
+                || request.params.range.end.line.typeCode() != NT_INT) {
+            return ErrorResponse::invalidParams(request,
+                "required attribute 'range' with 'start' and 'end' is missing");
+        }
+        string uri = request.params.textDocument.uri;
+        if (ignoredUris{uri} || !exists documents{uri}) {
+            return make_jsonrpc_response(jsonRpcVer, request.id, ());
+        }
+        *string text = documents{uri}.getText();
+        if (!text) {
+            return make_jsonrpc_response(jsonRpcVer, request.id, ());
+        }
+        string formatted;
+        try {
+            QoreCodeFormat::CodeFormatter fmt();
+            formatted = fmt.format(text);
+        } catch (hash<ExceptionInfo> ex) {
+            log(1, "formatting failed: %s: %s", ex.err, ex.desc);
+            return make_jsonrpc_response(jsonRpcVer, request.id, ());
+        }
+        return make_jsonrpc_response(jsonRpcVer, request.id,
+            QLSServer::getRangeFormattingEdits(text, formatted, request.params.range));
+    }
+
+    #! Returns the edits of a formatted document that overlap a range
+    /** @param text the document text
+        @param formatted the formatted document text
+        @param range the LSP range to format; a range that ends at the start of a line does not include that line
+
+        @return the LSP text edits for the changed lines that overlap the range
+    */
+    static list<hash<auto>> getRangeFormattingEdits(string text, string formatted, hash<auto> range) {
+        int first = range.start.line;
+        int last = range.end.line;
+        if (last > first && !range.end.character) {
+            --last;
+        }
+        code<bool(hash<LineHunk>)> overlaps = bool sub (hash<LineHunk> h) {
+            # lines inserted between two lines belong to the range if the line after them is in it
+            return h.oldStart <= last && (h.oldEnd > first || (h.oldEnd == h.oldStart && h.oldStart >= first));
+        };
+        return TextDiff::getTextEdits(text, formatted, overlaps);
     }
 
     #! "textDocument/documentHighlight" method handler
@@ -4327,10 +4400,72 @@ public class QLSServer {
         }
 
         Document doc = documents{uri};
-        *list<auto> tokens = doc.semanticTokens();
+        list<int> data = encodeSemanticTokens(doc.semanticTokens());
+        return make_jsonrpc_response(jsonRpcVer, request.id, storeSemanticTokens(uri, data));
+    }
 
-        list<int> data = encodeSemanticTokens(tokens);
-        return make_jsonrpc_response(jsonRpcVer, request.id, {"data": data});
+    #! Stores the semantic tokens returned for a document, for later delta requests
+    /** @return an LSP \c SemanticTokens hash with \c resultId and \c data keys
+    */
+    private:internal hash<auto> storeSemanticTokens(string uri, list<int> data) {
+        hash<auto> result = {"resultId": string(++semanticTokensResultCount), "data": data};
+        semanticTokensResults{uri} = result;
+        return result;
+    }
+
+    #! "textDocument/semanticTokens/full/delta" method handler
+    /** Returns the changes to the semantic tokens since the result with the given ID, or all tokens if that result
+        is not the last one returned for the document.
+    */
+    private *string meth_td_semanticTokensDelta(hash<auto> request) {
+        if (!request.hasKey("params")) {
+            return ErrorResponse::invalidRequest(request, "required attribute 'params' is missing");
+        }
+        *string validation = ParamValidator::textDocumentIdentifier(request, request.params);
+        if (validation) {
+            return validation;
+        }
+        string uri = request.params.textDocument.uri;
+        if (ignoredUris{uri} || !exists documents{uri}) {
+            return make_jsonrpc_response(jsonRpcVer, request.id, {"data": ()});
+        }
+        list<int> data = encodeSemanticTokens(documents{uri}.semanticTokens());
+        *hash<auto> previous = semanticTokensResults{uri};
+        if (!previous || previous.resultId != request.params.previousResultId) {
+            return make_jsonrpc_response(jsonRpcVer, request.id, storeSemanticTokens(uri, data));
+        }
+        list<hash<auto>> edits = QLSServer::getSemanticTokensEdits(previous.data, data);
+        hash<auto> result = storeSemanticTokens(uri, data);
+        return make_jsonrpc_response(jsonRpcVer, request.id, {"resultId": result.resultId, "edits": edits});
+    }
+
+    #! Returns the LSP \c SemanticTokensEdit list that changes the old token data to the new data
+    /** The data between the common prefix and the common suffix is replaced by one edit.
+
+        @param oldData the old token data
+        @param newData the new token data
+
+        @return an empty list if the data is the same, otherwise one edit
+    */
+    static list<hash<auto>> getSemanticTokensEdits(list<int> oldData, list<int> newData) {
+        int prefix = 0;
+        while (prefix < oldData.size() && prefix < newData.size() && oldData[prefix] == newData[prefix]) {
+            ++prefix;
+        }
+        if (prefix == oldData.size() && prefix == newData.size()) {
+            return ();
+        }
+        int suffix = 0;
+        while (suffix < oldData.size() - prefix && suffix < newData.size() - prefix
+                && oldData[oldData.size() - 1 - suffix] == newData[newData.size() - 1 - suffix]) {
+            ++suffix;
+        }
+        int end = newData.size() - suffix;
+        return ({
+            "start": prefix,
+            "deleteCount": oldData.size() - prefix - suffix,
+            "data": end > prefix ? newData[prefix..end - 1] : (),
+        },);
     }
 
     #! "textDocument/semanticTokens/range" method handler

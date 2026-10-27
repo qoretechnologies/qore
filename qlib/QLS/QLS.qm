@@ -66,6 +66,7 @@ module QLS {
     - @ref QLS::LspConnection "LspConnection": LSP message connection on standard input and output or on any
       pair of streams
     - @ref QLS::DocumentLinks "DocumentLinks": finds the files of module and include directives
+    - @ref QLS::TextDiff "TextDiff": line differences and minimal text edits between two texts
     - @ref QLS::ErrorResponse "ErrorResponse": factory for LSP error responses
       (@c InvalidRequest, @c MethodNotFound, @c InternalError, etc.)
     - @ref QLS::Notification "Notification": factory for LSP notifications
@@ -92,7 +93,7 @@ module QLS {
     |Code Completion|@c textDocument/completion|Context-aware completions with trigger characters @c . (member access), @c : (namespace/static), and normal identifier completion; uses @ref qorecodecompletionintro "QoreCodeCompletion"; callables are inserted as snippets with the cursor between the parentheses, VS Code clients are asked to show parameter hints and further suggestions after callables and namespaces, and documentation is Markdown when the client supports it
     |Signature Help|@c textDocument/signatureHelp|Function/method parameter hints with trigger characters @c ( and @c ,
     |Inlay Hints|@c textDocument/inlayHint|Shows parameter names at call sites as inline hints
-    |Semantic Tokens|@c textDocument/semanticTokens/full and @c .../range|Full semantic syntax highlighting with node-level classification
+    |Semantic Tokens|@c textDocument/semanticTokens/full, @c .../full/delta and @c .../range|Full semantic syntax highlighting with node-level classification
     |Document Highlight|@c textDocument/documentHighlight|Highlights all occurrences of the symbol under the cursor
 
     <b>Refactoring</b>
@@ -115,6 +116,7 @@ module QLS {
     <b>Formatting and Display</b>
     |!Feature|!LSP Method|!Description
     |Document Formatting|@c textDocument/formatting|Whole-document formatting via @ref qorecodeformatintro "QoreCodeFormat"
+    |Range Formatting|@c textDocument/rangeFormatting|Formats the selected lines: the whole document is formatted, as the formatter needs the complete syntax tree, and only the changed lines that overlap the selection are returned
     |On-Type Formatting|@c textDocument/onTypeFormatting|Auto-indent on Enter, auto-dedent on @c }
     |Code Lens|@c textDocument/codeLens|Shows reference counts across open and workspace documents above declarations; the lenses run the \c qls.showReferences client command with the document URI and the position of the declared name
     |Diagnostics|@c textDocument/publishDiagnostics|Reports Qore parse errors and warnings for standalone scripts and syntax errors for other files (see @ref qls_diagnostics)
