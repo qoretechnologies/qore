@@ -2,6 +2,8 @@
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern
+%allow-weak-references
+%allow-opaque-references
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 
@@ -19,6 +21,7 @@ class YamlStreamWriterTest inherits QUnit::Test {
         addTestCase("multiple documents", \testMultipleDocuments());
         addTestCase("anchors and aliases", \testAnchorsAndAliases());
         addTestCase("auto write", \testAutoWrite());
+        addTestCase("auto write indirect references", \testAutoWriteIndirectReferences());
         addTestCase("named argument calls", \testNamedArgumentCalls());
         addTestCase("flush", \testFlush());
         addTestCase("document count", \testDocumentCount());
@@ -232,6 +235,61 @@ class YamlStreamWriterTest inherits QUnit::Test {
         string yaml = sos.getData();
         auto parsed = parse_yaml(yaml);
         assertEq(data, parsed);
+    }
+
+    #! write() writes a container member holding a weak or opaque reference as its target
+    /** Iterating a container yields the reference itself and not its target, so the writer must resolve it;
+        otherwise a hash or list target is written as an empty string scalar.
+    */
+    testAutoWriteIndirectReferences() {
+        hash<auto> inner = {"a": 1, "b": "two"};
+        list<auto> ilist = (1, "two", 3);
+
+        # the hash and the list are walked by separate iterators, so cover both containers as the holder and both as
+        # the target
+        hash<auto> weak = {};
+        weak{"h"} := inner;
+        weak{"l"} := ilist;
+        assertEq({"h": inner, "l": ilist}, parse_yaml(writeOne(weak)),
+            "weak references in a hash are written as their targets");
+
+        list<auto> weak_list = ();
+        weak_list[0] := inner;
+        weak_list[1] := ilist;
+        assertEq((inner, ilist), parse_yaml(writeOne(weak_list)),
+            "weak references in a list are written as their targets");
+
+        hash<auto> opaque = {};
+        opaque{"h"} @= inner;
+        opaque{"l"} @= ilist;
+        assertEq({"h": inner, "l": ilist}, parse_yaml(writeOne(opaque)),
+            "opaque references in a hash are written as their targets");
+
+        list<auto> opaque_list = ();
+        opaque_list[0] @= inner;
+        opaque_list[1] @= ilist;
+        assertEq((inner, ilist), parse_yaml(writeOne(opaque_list)),
+            "opaque references in a list are written as their targets");
+
+        # a reference to a scalar is written as the scalar
+        int i = 42;
+        hash<auto> scalar_ref = {};
+        scalar_ref{"i"} @= i;
+        assertEq({"i": 42}, parse_yaml(writeOne(scalar_ref)), "an opaque reference to a scalar is written as it");
+
+        # write() gives the same document as make_yaml() for the same data
+        assertEq(parse_yaml(make_yaml(weak)), parse_yaml(writeOne(weak)));
+    }
+
+    #! writes one document with YamlStreamWriter::write() and returns the YAML text
+    private string writeOne(auto data) {
+        StringOutputStream sos();
+        YamlStreamWriter writer(sos);
+        writer.startDocument();
+        writer.write(data);
+        writer.endDocument();
+        writer.close();
+        return sos.getData();
     }
 
     testNamedArgumentCalls() {
