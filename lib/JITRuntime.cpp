@@ -7476,6 +7476,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_1(uint64_t ref_bits, uint64_t
     return toBits(result);
 }
 
+template <bool TryNativeClosure = true>
 static uint64_t qore_rt_call_closure_fast_impl(uint64_t ref_bits, uint64_t* args,
         uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink) {
     if (check_stack(xsink)) {
@@ -7503,9 +7504,11 @@ static uint64_t qore_rt_call_closure_fast_impl(uint64_t ref_bits, uint64_t* args
         assert(uf);
         const AbstractQoreFunctionVariant* variant = uf->first();
         const UserVariantBase* uvb = variant->getUserVariantBase();
-        uint64_t native_result;
-        if (tryExecNativeIntClosure(cb, uvb, args, nargs, arg_cleanups, xsink, native_result)) {
-            return native_result;
+        if constexpr (TryNativeClosure) {
+            uint64_t native_result;
+            if (tryExecNativeIntClosure(cb, uvb, args, nargs, arg_cleanups, xsink, native_result)) {
+                return native_result;
+            }
         }
         if (uvb && !uvb->hasLazyAOTClosureIR()
                 && (uvb->hasCachedFunction() || uvb->getCachedIR())
@@ -7562,6 +7565,20 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_fast(uint64_t ref_bits, uint6
 extern "C" DLLEXPORT uint64_t qore_rt_call_closure_fast_consume_args(uint64_t ref_bits,
         uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink) {
     return qore_rt_call_closure_fast_impl(ref_bits, args, arg_cleanups, nargs, xsink);
+}
+
+// A typed native admission miss is not a proof that binding can be skipped.
+// Keep ordinary dispatch and the full Program transition, including the native
+// retry after that transition; omit only the initial optional native attempt.
+// The compiler keeps the original helper for argument-compatibility misses.
+extern "C" DLLEXPORT uint64_t qore_rt_call_closure_typed_fallback_v1(
+        uint64_t ref_bits, uint64_t* args, int nargs, ExceptionSink* xsink) {
+    return qore_rt_call_closure_fast_impl<false>(ref_bits, args, nullptr, nargs, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_call_closure_typed_fallback_consume_args_v1(
+        uint64_t ref_bits, uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink) {
+    return qore_rt_call_closure_fast_impl<false>(ref_bits, args, arg_cleanups, nargs, xsink);
 }
 
 static qore_list_private* qore_rt_prepare_map_result(QoreListNode& result, size_t size) {
@@ -17843,6 +17860,26 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_call_closure_fas
         ExceptionSink* xsink) {
     uint64_t result = qore_rt_call_closure_fast_consume_args(ref_bits, args,
         arg_cleanups, nargs, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_call_closure_typed_fallback_v1_throwing(
+        uint64_t ref_bits, uint64_t* args, int nargs, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_call_closure_typed_fallback_v1(ref_bits, args, nargs, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t
+qore_rt_call_closure_typed_fallback_consume_args_v1_throwing(
+        uint64_t ref_bits, uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_call_closure_typed_fallback_consume_args_v1(ref_bits, args, arg_cleanups,
+        nargs, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }

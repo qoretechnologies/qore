@@ -1957,6 +1957,26 @@ uint64_t qore_rt_call_closure_fast(uint64_t ref_bits, uint64_t* args, int nargs,
 uint64_t qore_rt_call_closure_fast_consume_args(uint64_t ref_bits, uint64_t* args,
         uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);
 
+//! Typed AOT fallback with ordinary binding and no initial optional native closure attempt.
+/** Used after a typed scalar admission miss; ordinary argument binding is still required.
+    Full Program entry and its native retry remain. Arguments/results use the existing boxed ABI.
+    Argument-compatibility misses use the original helper to preserve its wide-integer native path.
+*/
+uint64_t qore_rt_call_closure_typed_fallback_v1(uint64_t ref_bits, uint64_t* args, int nargs,
+        ExceptionSink* xsink);
+
+//! Typed AOT fallback consuming caller-owned argument cleanup refs.
+uint64_t qore_rt_call_closure_typed_fallback_consume_args_v1(uint64_t ref_bits, uint64_t* args,
+        uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);
+
+//! Typed AOT fallback that throws QoreJITException when the exception sink is set.
+uint64_t qore_rt_call_closure_typed_fallback_v1_throwing(uint64_t ref_bits, uint64_t* args, int nargs,
+        ExceptionSink* xsink);
+
+//! Consuming typed AOT fallback that throws QoreJITException when the exception sink is set.
+uint64_t qore_rt_call_closure_typed_fallback_consume_args_v1_throwing(uint64_t ref_bits, uint64_t* args,
+        uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);
+
 // --- AOT context-based helpers (Phase 7b) ---
 // These variants take QoreAOTContext* and a slot index instead of raw pointers.
 // At runtime, they resolve ctx->array[idx] and delegate to the existing helpers.

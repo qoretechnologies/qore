@@ -1242,15 +1242,54 @@ llvm::Value* QoreIRToLLVM::emitTypedFunctionRefCall(const QoreIRInstruction* ins
     auto ft = llvm::FunctionType::get(i64_type, has_cleanups
         ? std::vector<llvm::Type*>{i64_type, ptr_type, ptr_type, i32_type, ptr_type}
         : std::vector<llvm::Type*>{i64_type, ptr_type, i32_type, ptr_type}, false);
-    std::string fallback_name = has_cleanups ? "qore_rt_call_closure_fast_consume_args" : "qore_rt_call_closure_fast";
+    // The exact scalar attempt already includes optional native closure
+    // admission. An argument-compatibility miss has not tried that entry:
+    // retain the original helper there, including native calls with boxed
+    // wide integers. Both paths retain full binding and cleanup.
+    // Only the prepared helpers (v3 and later) include native closure admission.
+    bool typed_closure_fallback = prepared_target && ret_kind == 1 && arg_kind == 1
+        && !q_env_is_set("QORE_DISABLE_AOT_TYPED_CLOSURE_FALLBACK");
+    const char* original_fallback = has_cleanups
+        ? "qore_rt_call_closure_fast_consume_args" : "qore_rt_call_closure_fast";
+    const char* attempted_fallback = has_cleanups
+        ? "qore_rt_call_closure_typed_fallback_consume_args_v1" : "qore_rt_call_closure_typed_fallback_v1";
     std::vector<llvm::Value*> fallback_args{ref_boxed, boxed_args};
     if (has_cleanups) {
         fallback_args.push_back(cleanups);
     }
     fallback_args.push_back(llvm::ConstantInt::get(i32_type, fallback_nargs));
     fallback_args.push_back(xsink_arg);
-    llvm::Value* slow_result = emitMaybeInvoke(module.getOrInsertFunction(fallback_name, ft),
-        module.getOrInsertFunction(fallback_name + "_throwing", ft), fallback_args, module, llvm_func, inst);
+    auto emit_fallback = [&](const char* name) {
+        return emitMaybeInvoke(module.getOrInsertFunction(name, ft),
+            module.getOrInsertFunction(std::string(name) + "_throwing", ft),
+            fallback_args, module, llvm_func, inst);
+    };
+    llvm::Value* slow_result;
+    auto* constant_compatible = llvm::dyn_cast<llvm::ConstantInt>(compatible);
+    if (!typed_closure_fallback || constant_compatible) {
+        slow_result = emit_fallback(typed_closure_fallback && constant_compatible->isOne()
+            ? attempted_fallback : original_fallback);
+    } else {
+        // The original compatibility value dominates both incoming edges.
+        // A true value reaches fallback only after the scalar attempt missed.
+        auto* native_miss = llvm::BasicBlock::Create(ctx, "typed_funcref_native_miss", llvm_func);
+        auto* argument_miss = llvm::BasicBlock::Create(ctx, "typed_funcref_argument_miss", llvm_func);
+        auto* fallback_merge = llvm::BasicBlock::Create(ctx, "typed_funcref_fallback_result", llvm_func);
+        builder->CreateCondBr(compatible, native_miss, argument_miss);
+        builder->SetInsertPoint(native_miss);
+        llvm::Value* attempted_result = emit_fallback(attempted_fallback);
+        builder->CreateBr(fallback_merge);
+        native_miss = builder->GetInsertBlock();
+        builder->SetInsertPoint(argument_miss);
+        llvm::Value* argument_result = emit_fallback(original_fallback);
+        builder->CreateBr(fallback_merge);
+        argument_miss = builder->GetInsertBlock();
+        builder->SetInsertPoint(fallback_merge);
+        auto* merged_result = builder->CreatePHI(i64_type, 2, "typed_funcref_fallback_value");
+        merged_result->addIncoming(attempted_result, native_miss);
+        merged_result->addIncoming(argument_result, argument_miss);
+        slow_result = merged_result;
+    }
     // Only the fallback edge is guaranteed sink-clean after an invoke. The
     // merged result also includes a non-throwing helper that reports errors
     // through xsink (for example stack exhaustion), so retain its sink check

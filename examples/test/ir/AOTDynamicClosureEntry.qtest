@@ -35,6 +35,9 @@ class DynamicClosureEntryTest inherits QUnit::Test {
         }
         TmpDir dir("qore-dynamic-closure-");
         foreach string prefix in (("", "QORE_AOT_EH=1 ",
+                "QORE_DISABLE_AOT_TYPED_CLOSURE_FALLBACK=1 ",
+                "QORE_DISABLE_AOT_FUNCREF_RUNTIME_CONFIG=1 ",
+                "QORE_DISABLE_AOT_FUNCREF_PREPARED_TARGET=1 ",
                 "QORE_DISABLE_AOT_DYNAMIC_CLOSURE_ENTRY=1 ",
                 "QORE_DISABLE_AOT_KNOWN_CLOSURE_ROUTE=1 ",
                 "QORE_DISABLE_AOT_DYNAMIC_CLOSURE_CONTEXT_V2=1 ",
@@ -62,9 +65,25 @@ class DynamicClosureEntryTest inherits QUnit::Test {
                 assertFalse(regex(ir,
                     "call void @qore_rt_bind_closure_int_unary_v1[^\\n]*dynamicClosureReference"),
                     "reference-backed capture not admitted");
-                string helper_version = prefix.startsWith("QORE_DISABLE_AOT_KNOWN_CLOSURE_ROUTE=") ? "v4" : "v5";
+                string helper_version = prefix.startsWith("QORE_DISABLE_AOT_FUNCREF_RUNTIME_CONFIG=") ? "v1"
+                    : prefix.startsWith("QORE_DISABLE_AOT_FUNCREF_PREPARED_TARGET=") ? "v2"
+                    : prefix.startsWith("QORE_DISABLE_AOT_KNOWN_CLOSURE_ROUTE=") ? "v4" : "v5";
                 assertTrue(ir.contains("call i32 @qore_rt_try_funcref_int_int_" + helper_version + "("),
                     "alternating loop exercises the prepared callback miss route");
+                bool typed_fallback = !prefix.startsWith("QORE_DISABLE_AOT_TYPED_CLOSURE_FALLBACK=")
+                    && helper_version != "v1" && helper_version != "v2";
+                foreach string helper in (("qore_rt_call_closure_typed_fallback_v1",
+                        "qore_rt_call_closure_typed_fallback_consume_args_v1")) {
+                    assertEq(typed_fallback, regex(ir, "(call|invoke) i64 @" + helper),
+                        "typed argument fallback and cleanup: " + helper + " " + prefix + level);
+                }
+                foreach string function_name in (("dynamicClosureAutoArg", "dynamicClosureConsumedArg")) {
+                    *list<*string> body = regex_extract(ir,
+                        "(?s)define [^\\n]*@" + function_name + "[^\\n]*\\{(.*?)\\n\\}");
+                    assertTrue(!!body, "boxed argument caller found: " + function_name);
+                    assertTrue(regex(body[0] ?? "", "(call|invoke) i64 @qore_rt_call_closure_fast"),
+                        "argument-compatibility miss retains original native admission: " + function_name);
+                }
                 assertEq(expected, run((executable,)), prefix + level);
                 assertEq(expected, run((executable,), "QORE_DISABLE_AOT_DYNAMIC_CLOSURE_CONTEXT_V2=1 "),
                     "v1 context " + prefix + level);

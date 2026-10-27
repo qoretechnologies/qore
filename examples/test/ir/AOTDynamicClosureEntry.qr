@@ -6,6 +6,21 @@
 int sub dynamicClosureCall(code<int(int)> callback, int value) {
     return callback(value);
 }
+# An unknown representation must keep argument binding on the typed fallback,
+# including wide integers that do not fit the inline integer tag.
+auto sub dynamicClosureAutoArg(code<int(int)> callback, auto value) {
+    return callback(value);
+}
+thread_local int fallbackDestroyed = 0;
+class DynamicClosureOwnedArgument {
+    destructor() { ++fallbackDestroyed; }
+}
+auto sub dynamicClosureProducedArgument(bool owned) {
+    return owned ? new DynamicClosureOwnedArgument() : 1125899906842624;
+}
+auto sub dynamicClosureConsumedArg(code<int(int)> callback, bool owned) {
+    return callback(dynamicClosureProducedArgument(owned));
+}
 int sub dynamicClosureFunction(int value) {
     return ((value * 3 + 47) ^ 5);
 }
@@ -88,6 +103,28 @@ for (int i = 0; i < 16; ++i) {
     checkValue(i + 1, dynamicClosureCall(effect, i), "effect fallback");
 }
 checkValue(16, effects, "effects exactly once");
+
+foreach int input in ((7, 140737488355327, 140737488355328, -140737488355329)) {
+    checkValue((input * 3 + 17) ^ 5, dynamicClosureAutoArg(first, input),
+        "boxed argument compatibility fallback");
+}
+checkValue((1125899906842624 * 3 + 17) ^ 5, dynamicClosureConsumedArg(first, False),
+    "consumed wide argument");
+foreach auto invalid in ((NOTHING, "not an integer", (1, 2))) {
+    try {
+        dynamicClosureAutoArg(first, invalid);
+        throw "DYNAMIC-CLOSURE-TEST", "invalid boxed argument accepted";
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err == "DYNAMIC-CLOSURE-TEST") { rethrow; }
+    }
+}
+try {
+    dynamicClosureConsumedArg(first, True);
+    throw "DYNAMIC-CLOSURE-TEST", "owned object argument accepted";
+} catch (hash<ExceptionInfo> ex) {
+    if (ex.err == "DYNAMIC-CLOSURE-TEST") { rethrow; }
+}
+checkValue(1, fallbackDestroyed, "owned argument destroyed exactly once after rejection");
 
 # Simultaneous first calls share the variant, not its invocation captures.
 const int Threads = 16;

@@ -25618,3 +25618,260 @@ All 9024 Qore and 675 Java reference checks pass; 45 Java kernels pass C2 diagno
 Next evaluate an additive AOT typed-callback fallback that omits duplicate optional native closure admission. Preserve argument-compatibility misses, full binding and Program entry, post-transition native retry, cleanup, stack/context and lifetime behavior. Compare separately compiled before/candidate modules, qualify Release/Debug, measure broader controls and audit before retaining code.
 
 [Evidence](results-post-foreign-admission-module-macos-arm64.json); [all 62 audit checks](audit-post-foreign-admission-checkpoint.md).
+
+## Typed closure fallback after prepared native admission (2026-10-27)
+
+The AOT compiler routes an exact int(int) callback to a specialized fallback only after its prepared native attempt actually misses. Four additive versioned internal helpers share ordinary closure dispatch and omit its redundant initial native attempt. Argument-compatibility misses and legacy typed helpers v1/v2 retain the original helper, including wide-integer native admission. Full binding, cleanup, exceptions, Program transitions, counts/locks/TLPD, context, capture synchronization, stack publication and post-transition native retry remain. No object/frame layout change. QORE_DISABLE_AOT_TYPED_CLOSURE_FALLBACK=1 selects original compiler routing. This is an AOT optimization; shared-runtime regression tests do not establish an IR/JIT speed benefit.
+
+Installed 86c0d7759a is the baseline; source parent 352b6655e8 differs only in checkpoint documentation. Both include develop 8dc8bdf6fb. Release -O3 -DNDEBUG, allocation tracking off, LLVM 22.1.8, Apple M4 Pro/macOS ARM64. Before/candidate modules are compiled separately with their own runtime identity from identical frozen sources. All 18 optimized LLVM modules match after the exact helper-name substitution and verified Git/runtime-identity metadata changes; they are not byte-identical. Three layouts (default/reverse/shuffle487), 4096 items, seed 7, one warmup, three 150 ms windows,three screening forks and five confirmation forks. Aggregate is the median of per-layout median fork means; figures are whole-kernel ns/item, not isolated call latency.
+
+Retain under the authorized broader workload tradeoff. Five-fork confirmation improves live-object closure calls 87.828278 to 80.378538 ns/item (-8.482%) and deleted-object calls 87.853687 to 79.437466 (-9.580%), with improvement in every layout. Plain closures cost 14.802122 to 15.330583 (+3.570%, +0.528461 ns/item), and captured closures 20.426190 to 20.826995 (+1.962%, +0.400805 ns/item); the plain cost repeats the earlier screens and is accepted, not dismissed because confirmation fork ranges overlap. No other confirmation aggregate costs 2% or more. Populated-context object calls improve 7.209%/7.715%; other populated confirmation costs are at most 0.824%. Native-disabled confirmation is within 1.204% either direction. Short count 16 improves both object cases about 8%; count 1 improves only 0.725%/0.801% aggregate and fails the one-percent/every-layout target predicate. Therefore no single-call improvement is established. Short controls cost at most 1.085%. Mixed-workload confirmation ranges from a 1.328% improvement to a 1.180% cost; no weighted application gain is claimed. Both repeated-call primary targets pass the prospective screen, broad and confirmation gates. Remaining costs warrant follow-up, not a global maximum or Java-parity claim.
+
+### Main screen
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change
+|lifecycle:object_closure_live|85.426519|77.885947|-8.827%
+|lifecycle:object_closure_dead|86.426132|78.362757|-9.330%
+|micro:closure_call|14.606543|14.982620|+2.575%
+|micro:closure_capture|20.270943|20.487426|+1.068%
+|micro:direct_call|1.621528|1.613282|-0.509%
+|micro:indirect_call|60.708309|60.275908|-0.712%
+
+### Main broad
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change
+|float:direct_local_float_return|0.817367|0.820923|+0.435%
+|float:callback_local_float_return|0.880021|0.877982|-0.232%
+|float:direct_local_float_result|0.740190|0.746639|+0.871%
+|float:callback_local_float_result|0.829706|0.846345|+2.005%
+|float:direct_loop_float_return|6.013127|5.979597|-0.558%
+|float:callback_loop_float_return|5.198648|5.184011|-0.282%
+|float:direct_float_add|0.835529|0.837093|+0.187%
+|float:static_float_add|0.838859|0.831070|-0.929%
+|float:typed_local_int_unary|1.237113|1.235724|-0.112%
+|float:typed_local_float_unary|0.923544|0.906273|-1.870%
+|float:result_float_add|0.867345|0.872970|+0.648%
+|float:typed_local_int_result|0.856446|0.858856|+0.281%
+|micro:arithmetic|1.631181|1.623413|-0.476%
+|micro:direct_call|1.636496|1.640859|+0.267%
+|micro:method_call|1.733344|1.742100|+0.505%
+|micro:indirect_call|61.876263|61.565581|-0.502%
+|micro:polymorphic_call|24.315162|24.111231|-0.839%
+|micro:polymorphic_expression_call|11.623028|11.597386|-0.221%
+|micro:monomorphic_call|3.963368|3.842017|-3.062%
+|micro:optional_method_call|11.329242|11.382003|+0.466%
+|micro:polymorphic_float_call|24.736868|24.553252|-0.742%
+|micro:polymorphic_float_expression_call|12.192281|11.831517|-2.959%
+|micro:monomorphic_float_call|4.298554|4.299289|+0.017%
+|micro:optional_float_method_call|11.557444|11.452016|-0.912%
+|micro:boxed_float_method_call|21.146007|20.776875|-1.746%
+|micro:dynamic_int_result_call|11.555135|11.414644|-1.216%
+|micro:dynamic_int_result_fallback|21.375821|22.002656|+2.932%
+|micro:boxed_int_method_call|17.512184|17.284772|-1.299%
+|micro:boxed_int_method_fallback|33.853019|33.903164|+0.148%
+|micro:boxed_float_method_fallback|35.767758|35.603441|-0.459%
+|micro:boxed_int_method_effect|92.521587|92.793397|+0.294%
+|micro:dynamic_float_result_call|12.464718|12.235414|-1.840%
+|micro:indirect_wide|61.522505|61.262894|-0.422%
+|micro:indirect_float|61.579501|60.939084|-1.040%
+|micro:indirect_int_result|60.895262|60.850531|-0.073%
+|micro:indirect_float_result|61.561942|60.157317|-2.282%
+|micro:indirect_tagged_float|61.557240|60.189143|-2.222%
+|micro:indirect_branch_float|61.218806|60.706798|-0.836%
+|micro:indirect_affine|61.343185|61.509811|+0.272%
+|micro:indirect_affine_wide|61.239106|60.820411|-0.684%
+|micro:indirect_branch_int|61.234466|61.582062|+0.568%
+|micro:dispatch_control|2.035179|2.032547|-0.129%
+|micro:list_read|3.064227|3.071161|+0.226%
+|micro:list_build|29.279770|29.745855|+1.592%
+|micro:list_mutate|140.208552|139.131056|-0.768%
+|micro:temporary_list|1.806756|1.809871|+0.172%
+|micro:temporary_hash|1.800799|1.806767|+0.331%
+|micro:closure_call|14.520537|15.066775|+3.762%
+|micro:closure_capture|20.647314|20.991015|+1.665%
+|mixed:csv_report|982.496599|975.567895|-0.705%
+|mixed:object_orders|1860.180664|1868.599447|+0.453%
+|mixed:callback_pipeline|126.105727|127.056498|+0.754%
+|mixed:text_index|1511.706000|1508.735216|-0.197%
+|probe:object_loop|413.180661|418.148947|+1.202%
+|probe:object_short|1646.908967|1635.130067|-0.715%
+|probe:float_loop|447.507613|449.182030|+0.374%
+|probe:float_short|1698.667584|1695.667614|-0.177%
+|probe:string_loop|375.649381|374.344509|-0.347%
+|probe:string_short|1531.943631|1521.872559|-0.657%
+|probe:effect_loop|474.200714|474.474351|+0.058%
+|probe:effect_short|1708.484996|1695.597331|-0.754%
+|probe:two_read_loop|510.529884|505.364170|-1.012%
+|probe:two_read_short|1743.988962|1716.937441|-1.551%
+|probe:default_loop|800.188138|802.859984|+0.334%
+|probe:default_short|2018.148738|2040.497600|+1.107%
+|probe:string_result_loop|540.946056|545.089978|+0.766%
+|probe:string_result_short|1792.085193|1821.498326|+1.641%
+|index:list_positive|9.111196|9.148695|+0.412%
+|index:list_negative|9.018843|8.948901|-0.776%
+|index:binary_positive|8.744149|8.705749|-0.439%
+|index:binary_negative|9.362169|9.291330|-0.757%
+|index:buffer_positive|16.382820|16.397874|+0.092%
+|index:buffer_negative|16.267235|16.420401|+0.942%
+|lifecycle:object_closure_live|86.713498|78.990013|-8.907%
+|lifecycle:object_closure_dead|85.468478|78.166513|-8.543%
+|lifecycle:closure_create_plain|337.257709|334.490255|-0.821%
+|lifecycle:closure_create_capture|631.435743|618.352892|-2.072%
+|lifecycle:closure_create_object|896.706587|897.855079|+0.128%
+
+### Main confirmation
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change
+|float:callback_local_float_result|0.836500|0.833680|-0.337%
+|float:callback_local_float_return|0.889328|0.890809|+0.167%
+|float:callback_loop_float_return|5.290442|5.315289|+0.470%
+|float:direct_loop_float_return|6.023113|6.053180|+0.499%
+|float:typed_local_int_result|0.870316|0.840160|-3.465%
+|float:typed_local_int_unary|1.246499|1.243384|-0.250%
+|index:list_negative|9.082241|9.156562|+0.818%
+|index:list_positive|9.106519|9.054899|-0.567%
+|lifecycle:closure_create_capture|643.211812|622.950437|-3.150%
+|lifecycle:closure_create_object|915.560839|912.790835|-0.303%
+|lifecycle:closure_create_plain|343.639673|336.470119|-2.086%
+|lifecycle:object_closure_dead|87.853687|79.437466|-9.580%
+|lifecycle:object_closure_live|87.828278|80.378538|-8.482%
+|micro:boxed_float_method_call|21.281362|21.184060|-0.457%
+|micro:boxed_float_method_fallback|35.934319|36.149071|+0.598%
+|micro:boxed_int_method_call|17.548261|17.272000|-1.574%
+|micro:boxed_int_method_fallback|33.753130|33.928384|+0.519%
+|micro:closure_call|14.802122|15.330583|+3.570%
+|micro:closure_capture|20.426190|20.826995|+1.962%
+|micro:direct_call|1.659279|1.657339|-0.117%
+|micro:dynamic_int_result_fallback|21.747559|22.067397|+1.471%
+|micro:indirect_affine_wide|61.697739|61.315004|-0.620%
+|micro:indirect_call|61.608292|61.850706|+0.393%
+|micro:indirect_float|62.360595|61.000688|-2.181%
+|micro:indirect_float_result|62.787221|61.389471|-2.226%
+|micro:indirect_wide|62.077332|62.050810|-0.043%
+|micro:list_build|29.708036|29.749208|+0.139%
+|micro:list_mutate|140.665994|139.898448|-0.546%
+|micro:list_read|3.078184|3.065050|-0.427%
+|micro:method_call|1.734406|1.725773|-0.498%
+|micro:monomorphic_call|4.050185|4.006631|-1.075%
+|micro:monomorphic_float_call|4.342321|4.359182|+0.388%
+|micro:polymorphic_call|24.286974|24.549972|+1.083%
+|micro:polymorphic_float_call|24.732402|24.739411|+0.028%
+|micro:temporary_hash|1.823120|1.817018|-0.335%
+|mixed:callback_pipeline|127.339590|127.210454|-0.101%
+|mixed:csv_report|995.348131|987.940449|-0.744%
+|mixed:object_orders|1899.500154|1874.267578|-1.328%
+|mixed:text_index|1531.115451|1549.186334|+1.180%
+
+### Main short1
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change
+|micro:closure_call|2555.924971|2561.386673|+0.214%
+|micro:closure_capture|2581.762959|2592.095169|+0.400%
+|micro:indirect_call|2606.716027|2624.192306|+0.670%
+|micro:direct_call|2474.953263|2495.855134|+0.845%
+|lifecycle:object_closure_live|359.770619|356.890297|-0.801%
+|lifecycle:object_closure_dead|365.146031|362.498060|-0.725%
+|lifecycle:closure_create_plain|676.421824|659.458290|-2.508%
+|lifecycle:closure_create_capture|968.556590|963.608443|-0.511%
+|lifecycle:closure_create_object|1554.861012|1540.509790|-0.923%
+
+### Main short16
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change
+|micro:closure_call|176.638296|176.650625|+0.007%
+|micro:closure_capture|182.423378|183.143628|+0.395%
+|micro:indirect_call|225.797709|225.112718|-0.303%
+|micro:direct_call|156.096992|157.702345|+1.028%
+|lifecycle:object_closure_live|107.277008|98.713016|-7.983%
+|lifecycle:object_closure_dead|107.078163|98.516081|-7.996%
+|lifecycle:closure_create_plain|368.108921|357.561583|-2.865%
+|lifecycle:closure_create_capture|664.915696|653.621788|-1.699%
+|lifecycle:closure_create_object|960.540761|970.955270|+1.084%
+
+### Populated context screen
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change
+|context_micro:closure_call|29.927244|30.271802|+1.151%
+|context_micro:closure_capture|35.958569|35.681273|-0.771%
+|context_micro:indirect_call|282.116117|281.937108|-0.063%
+|context_micro:indirect_float|283.958155|288.485484|+1.594%
+|context_micro:indirect_wide|358.223556|360.914698|+0.751%
+|context_micro:indirect_affine_wide|364.613952|364.875666|+0.072%
+|context_lifecycle:object_closure_live|117.789514|108.854151|-7.586%
+|context_lifecycle:object_closure_dead|116.941172|107.875331|-7.752%
+
+### Populated context confirmation
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change
+|context_lifecycle:object_closure_dead|115.457218|107.133522|-7.209%
+|context_lifecycle:object_closure_live|115.572504|106.656528|-7.715%
+|context_micro:closure_call|29.679405|29.684391|+0.017%
+|context_micro:closure_capture|35.512063|35.804561|+0.824%
+|context_micro:indirect_affine_wide|360.965453|358.863867|-0.582%
+|context_micro:indirect_call|284.292756|284.895302|+0.212%
+|context_micro:indirect_float|283.435334|285.161297|+0.609%
+|context_micro:indirect_wide|358.416532|360.844310|+0.677%
+
+### Native disabled screen
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change
+|generic_micro:closure_call|121.963282|120.687816|-1.046%
+|generic_micro:closure_capture|144.256777|143.109479|-0.795%
+|generic_lifecycle:object_closure_live|199.693219|202.005536|+1.158%
+|generic_lifecycle:object_closure_dead|205.615272|204.885181|-0.355%
+
+### Native disabled confirmation
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change
+|generic_lifecycle:object_closure_dead|209.048011|209.526370|+0.229%
+|generic_lifecycle:object_closure_live|207.222668|206.370459|-0.411%
+|generic_micro:closure_call|125.195518|123.688947|-1.203%
+|generic_micro:closure_capture|147.365836|147.322178|-0.030%
+
+### Standalone boxed diagnostic timing
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change
+|boxed_inline|38.998196|37.476688|-3.901%
+|boxed_wide|61.006799|59.185174|-2.986%
+
+### Superseded main screen
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change
+|lifecycle:object_closure_live|86.673130|77.345630|-10.762%
+|lifecycle:object_closure_dead|87.210936|78.199196|-10.333%
+|micro:closure_call|14.681192|14.951770|+1.843%
+|micro:closure_capture|20.618611|20.908779|+1.407%
+|micro:direct_call|1.645356|1.638785|-0.399%
+|micro:indirect_call|61.364405|61.323416|-0.067%
+
+### Superseded native disabled screen
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change
+|generic_micro:closure_call|124.197804|121.475557|-2.192%
+|generic_micro:closure_capture|144.918648|143.899922|-0.703%
+|generic_lifecycle:object_closure_live|203.248935|199.734647|-1.729%
+|generic_lifecycle:object_closure_dead|209.946023|203.572402|-3.036%
+
+### typed-closure-fallback-boxed-v2-j05x0rap
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change
+|boxed_inline|152.868812|141.263832|-7.591%
+|boxed_wide|177.435889|162.659426|-8.328%
+
+### typed-closure-fallback-boxed-standalone-v2-z_75lm09
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change
+|boxed_inline|39.741705|39.195236|-1.375%
+|boxed_wide|62.514234|163.654658|+161.788%
+
+The first candidate also skipped native admission on argument-compatibility misses. A module diagnostic looked positive, but live getProgram() probes showed its captured Program differed from the current/body-owner Program. A standalone diagnostic verified all three identities equal and exposed a wide-integer regression 62.51 to 163.65 ns/item (2.62x). The split candidate restores that path: 61.01 to 59.19 ns/item, compiler-disabled control 59.40. This diagnostic establishes restoration; it is not a wide-integer optimization claim. The current optimized standalone LLVM sends int48 misses directly to the original helper and actual typed-attempt misses to the new helper. Checked diagnostic block coalescing and PHI-edge reordering make the latter equivalent to the compiler-disabled graph after helper substitution. These diagnostic copies are never timed.
+
+An intermediate split build was cancelled after source review found v1/v2 typed helpers do not attempt native closures; the final candidate requires prepared_target and adds both compiler controls. Other preserved harness failures: a bool diagnostic argument rejected parsing; an executable symbol-order assertion included the non-code Mach-O header; an LLVM comparison initially missed changed metadata length; graph-review v1 used an invalid opt pass adaptor, v2 did not coalesce equivalent blocks, and v3 differed only in unordered PHI incoming order. Corrected receipts are archived separately; these are not production correctness failures.
+
+Release and Debug each pass 33 QUnit runs / 216 cases / 8403 assertions plus three standalone fixtures. The focused Release subset is reused only after exact source/runtime verification; remaining Release and all Debug cases run fresh. Native 2917, standard 1110, paired 9024, generic 3780, populated 3780 and standalone boxed 432 references pass. All 391 Release qmod aliases/hashes are restored. The changed dynamic closure fixture passes 498 assertions across execution modes, AOT O0/O3, EH, native-disabled and legacy controls.
+
+Linked legacy dispatch has 268 instructions versus 271 before; specialized dispatch 238 omits the native-admission call and retains binding, generic entry and cleanup. Native scalar instruction counts are unchanged, but function placement changes. This does not establish a cause for the plain-closure cost. Populated controls use child Program context setup outside timing. Native-disabled controls disable dynamic closure entries on both variants. Short counts include invocation setup and cleanup. Every aggregate and layout flag remains in the evidence; no samples are discarded or phases pooled.
+
+All 3636 candidate jobs/10908 measured windows and 288 superseded jobs/864 windows are independently replayed from child output and actual completion receipts. The shared host has no exclusive CPU, affinity, frequency or thermal control. No new Java/develop ratio, weighted application gain, full-suite/sanitizer/Linux or external binary-module result, or global performance ceiling is inferred. Next investigate checked boxed-wide argument admission and the remaining plain-closure cost, preserving lifetime, argument compatibility and full Program semantics.
+
+[Audit](audit-typed-closure-fallback.md); [raw evidence](results-typed-closure-fallback-macos-arm64.json).
