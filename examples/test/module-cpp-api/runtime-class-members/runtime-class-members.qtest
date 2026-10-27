@@ -1,0 +1,154 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+# the "cppapiuser" test module is built into the build tree by examples/test/module-cpp-api/CMakeLists.txt and is not
+# installed, so QORE_MODULE_DIR must include the build tree (run_tests.sh does this)
+%requires cppapiuser
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class RuntimeClassMembersTest
+
+#! a user class with members of every access level, all with initializers
+class Tracked {
+    public {
+        int x = 1;
+        auto y = "y";
+        # the value of x when the constructor ran
+        auto ctor_x;
+    }
+
+    private {
+        int p = 2;
+    }
+
+    private:internal {
+        int i = 3;
+    }
+
+    constructor() {
+        ctor_x = x;
+    }
+
+    int getP() {
+        return p;
+    }
+
+    int getI() {
+        return i;
+    }
+
+    setI(int v) {
+        i = v;
+    }
+}
+
+#! the base of a two-level hierarchy
+class Base {
+    public {
+        int a = 10;
+    }
+}
+
+#! a member initializer that reads a member of the parent class (issue #3368: parent members are initialized first)
+class Mid inherits Base {
+    public {
+        int b = a + 1;
+    }
+}
+
+#! a member initializer that raises an exception
+class Raises {
+    public {
+        int r = Raises::fail();
+    }
+
+    static int fail() {
+        throw "MEMBER-INIT-ERROR", "member initializer failed";
+    }
+}
+
+#! Tests the members of user-class parents of a class created at runtime and added with addSystemClass()
+/** A class that a binary module creates at runtime and registers with QoreNamespace::addSystemClass() - as
+    module-python does when it exports a Python subclass of a %Qore class - had no member initialization list, so the
+    member initializers of its user-class parents and its own members with initial values never ran (issue #5544).
+*/
+class RuntimeClassMembersTest inherits QUnit::Test {
+    constructor() : QUnit::Test("RuntimeClassMembers", "1.0") {
+        addTestCase("parent members", \parentMembers());
+        addTestCase("member access", \memberAccess());
+        addTestCase("hierarchy", \hierarchy());
+        addTestCase("local member", \localMember());
+        addTestCase("initializer exception", \initializerException());
+        addTestCase("negative", \negative());
+        set_return_value(main());
+    }
+
+    parentMembers() {
+        assertTrue(cpp_api_add_runtime_subclass("RtTracked", "Tracked"));
+        object o = create_object("RtTracked");
+        assertEq("RtTracked", o.className());
+        assertTrue(o instanceof Tracked);
+        assertEq(1, o.x);
+        assertEq("y", o.y);
+        # the members were initialized before the parent's constructor ran
+        assertEq(1, o.ctor_x);
+        assertEq(2, o.getP());
+        assertEq(3, o.getI());
+
+        # every object gets its own members
+        object o2 = create_object("RtTracked");
+        o.x = 100;
+        assertEq(100, o.x);
+        assertEq(1, o2.x);
+    }
+
+    memberAccess() {
+        assertTrue(cpp_api_add_runtime_subclass("RtAccess", "Tracked"));
+        object o = create_object("RtAccess");
+
+        # the inherited members are members of the class: they are object keys, and typed
+        hash<auto> h = o{"x", "y"};
+        assertEq(1, h.x);
+        assertEq("y", h.y);
+        # the same keys as for an object of a parsed subclass; the private:internal member is stored separately
+        assertEq(("ctor_x", "local", "p", "x", "y"), sort(o.keys()));
+        assertThrows("RUNTIME-TYPE-ERROR", sub () { o.x = "not an int"; });
+        assertEq(1, o.x);
+
+        # private members are not accessible outside the class
+        assertThrows("PRIVATE-MEMBER", sub () { auto v = o.p; delete v; });
+
+        # the private:internal member is stored for the parent class and written through its methods
+        o.setI(30);
+        assertEq(30, o.getI());
+    }
+
+    hierarchy() {
+        assertTrue(cpp_api_add_runtime_subclass("RtMid", "Mid"));
+        object o = create_object("RtMid");
+        assertTrue(o instanceof Base);
+        assertEq(10, o.a);
+        assertEq(11, o.b);
+    }
+
+    localMember() {
+        assertTrue(cpp_api_add_runtime_subclass("RtLocal", "Base"));
+        object o = create_object("RtLocal");
+        assertEq("runtime", o.local);
+        assertEq(10, o.a);
+        assertThrows("RUNTIME-TYPE-ERROR", sub () { o.local = {}; });
+    }
+
+    initializerException() {
+        assertTrue(cpp_api_add_runtime_subclass("RtRaises", "Raises"));
+        assertThrows("MEMBER-INIT-ERROR", "member initializer failed", \create_object(), "RtRaises");
+    }
+
+    negative() {
+        assertThrows("CLASS-NOT-FOUND", \cpp_api_add_runtime_subclass(), ("RtMissing", "NoSuchClass"));
+    }
+}

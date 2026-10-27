@@ -1371,6 +1371,15 @@ void qore_class_private::mergeAbstract() {
 void qore_class_private::finalizeBuiltin(const char* nspath) {
     initializeBuiltin();
     initializeMembers();
+    // issue #5554: make the member initialization list, as parseCommit() does for a parsed class and the copy
+    // constructor for a copied builtin class; a class created at runtime by a module and registered here is not
+    // copied, so without it the members of user-class parents (and members with initial values) would never be
+    // initialized; issue #3368: parent class members first, then local members
+    assert(member_init_list.empty());
+    if (scl) {
+        scl->sml.processMemberInitializationList(members, member_init_list);
+    }
+    addLocalMembersForInit();
     // A builtin class is shared by every Program and can be used by other threads as soon as it is registered, which a
     // binary module loaded at runtime does while other threads run: the parse state that a parse would otherwise
     // resolve the first time it reaches the class is resolved now, before the class is published, so that no later
