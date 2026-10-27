@@ -5055,6 +5055,11 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a class created at runtime by a binary module and added with <tt>QoreNamespace::addSystemClass()</tt>, as
+      the \c python module does when it exports a Python subclass of a %Qore class, did not initialize the members
+      of its user-class parents or its own members with initial values when an object of the class was created
+      (<a href="https://github.com/qoretechnologies/qore/issues/5544">issue 5544</a>,
+      <a href="https://github.com/qoretechnologies/qore/issues/5554">issue 5554</a>)
     - serializing an object with a weak reference whose target has been destroyed raised an
       \c OBJECT-ALREADY-DELETED exception; the reference is now serialized as no value, as a weak reference to an
       object that no longer exists has none (see @ref Qore::Serializable "Serializable")

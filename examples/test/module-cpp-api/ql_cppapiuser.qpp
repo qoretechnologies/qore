@@ -387,6 +387,41 @@ bool cpp_api_add_module_namespace(string module, string name) {
     return true;
 }
 
+//! creates a class at runtime that inherits a class of the current Program, as module-python does for a Python class
+/** Builds a new QoreClass with the given parent class and a public local member \c local of type \c string with the
+    initial value \c "runtime", and adds it to the root namespace of the current Program with
+    QoreNamespace::addSystemClass(), holding the Program's parse lock, as module-python does when it exports a Python
+    subclass of a %Qore class (issue #5544).
+
+    @param name the name of the new class in the root namespace
+    @param parent the path of the parent class in the current Program
+
+    @return @ref True "True" if the class was added, @ref False "False" if the current Program could not be owned for
+    parsing because it is being deleted
+
+    @throw CLASS-NOT-FOUND the parent class does not exist
+*/
+bool cpp_api_add_runtime_subclass(string name, string parent) {
+    QoreProgram* pgm = getProgram();
+    CurrentProgramRuntimeExternalParseContextHelper pch;
+    if (!pch) {
+        return false;
+    }
+    const QoreClass* pcls = pgm->findClass(parent->c_str(), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (!pcls) {
+        xsink->raiseException("CLASS-NOT-FOUND", "class '%s' does not exist", parent->c_str());
+        return QoreValue();
+    }
+    QoreClassHolder cls(new QoreClass(name->c_str(), ("::" + std::string(name->c_str())).c_str()));
+    static_cast<QoreClass*>(cls)->addBaseClass(const_cast<QoreClass*>(pcls), false);
+    static_cast<QoreClass*>(cls)->addMember("local", Public, stringTypeInfo, new QoreStringNode("runtime"));
+    pgm->getRootNS()->addSystemClass(cls.release());
+    return true;
+}
+
 //! records each child process that this process creates with fork() in a file
 /** A pthread_atfork() child handler appends one byte to the file in every child created with fork(); a child created
     with posix_spawn() runs no handler, so it is not recorded.  The handler is registered once; the file is opened by
