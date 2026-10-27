@@ -187,7 +187,8 @@ qcc -o myapp build/aot/*.qo
     <tt>"warning"</tt>), \c code (the legacy exception or warning code), \c id
     (a stable id for the exact semantic condition), \c warningCode (the
     @ref warnings "warning bit" for warnings, \c null for errors), \c file,
-    \c source, \c startLine, \c endLine, \c startColumn, \c endColumn (a column of
+    \c source, \c startLine, \c endLine (lines are 1-based), \c startColumn, \c endColumn
+    (columns are 0-based character offsets in the line and \c endColumn is exclusive; a column of
     \c -1 means the column is unknown), \c message, \c hint, \c suggestions,
     \c facts, \c relatedLocations, and \c fixes.  A fix declares an
     <tt>applicability</tt> of <tt>machine-applicable</tt> or
@@ -229,8 +230,8 @@ qore --diag-format=json bad.q
     "source": null,
     "startLine": 8,
     "endLine": 8,
-    "startColumn": 12,
-    "endColumn": 24,
+    "startColumn": 11,
+    "endColumn": 23,
     "message": "reference to undefined class 'widget'; did you mean 'Widget'? (check capitalization)",
     "hint": null,
     "suggestions": [],
@@ -247,8 +248,8 @@ qore --diag-format=json bad.q
     "source": null,
     "startLine": 9,
     "endLine": 9,
-    "startColumn": -1,
-    "endColumn": -1,
+    "startColumn": 13,
+    "endColumn": 32,
     "message": "function 'calculateTotl()' cannot be found; did you mean 'calculateTotal'?",
     "hint": null,
     "suggestions": [],
@@ -323,15 +324,16 @@ qore --code-frames bad.q
     @endcode
 
     @verbatim
-bad.q:8:12: error[PARSE-EXCEPTION]: reference to undefined class 'widget'; did you mean 'Widget'? (check capitalization)
+bad.q:8:11: error[PARSE-EXCEPTION]: reference to undefined class 'widget'; did you mean 'Widget'? (check capitalization)
   Widget w = new widget();
-              ^~~~~~~~~~~~
-bad.q:9: error[PARSE-EXCEPTION]: function 'calculateTotl()' cannot be found; did you mean 'calculateTotal'?
+             ^~~~~~~~~~~~
+bad.q:9:13: error[PARSE-EXCEPTION]: function 'calculateTotl()' cannot be found; did you mean 'calculateTotal'?
   int result = calculateTotl(2, 3);
+               ^~~~~~~~~~~~~~~~~~~
     @endverbatim
 
     When a diagnostic's columns are unknown (column \c -1) the header omits the
-    column and no caret span is drawn, as in the second frame above.
+    column and no caret span is drawn.
 
     @note Structured diagnostics are also available to embedded code via the
     @ref Qore::Program::setParseDiagnosticsCollected() "Program::setParseDiagnosticsCollected()"

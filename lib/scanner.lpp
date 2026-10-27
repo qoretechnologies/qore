@@ -1610,8 +1610,12 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                                     ExceptionSink xsink;
                                                     QMM.parseLoadModule(xsink, xsink, cn, pgm, reexport);
                                                     if (xsink) {
+                                                       // the token includes the whitespace before the module name
+                                                       int start = yylloc->first_col + (int)(cn - yytext);
                                                        qore_program_private::get(*pgm)->collectModuleLoadErrors(
-                                                          *get_loc(yylloc), xsink);
+                                                          *qore_program_private::get(*pgm)->getLocation(
+                                                             yylloc->first_line, yylloc->last_line, start,
+                                                             start + (int)strlen(cn)), xsink);
                                                     }
                                                     pgm->getParseExceptionSink()->assimilate(xsink);
                                                  }

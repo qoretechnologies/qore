@@ -15,6 +15,8 @@ public class StructuredDiagnosticsTest inherits QUnit::Test {
         addTestCase("toggle flag", \testToggleFlag());
         addTestCase("structured error with column + suggestion", \testStructuredError());
         addTestCase("structured warning with warning code", \testStructuredWarning());
+        addTestCase("columns are 0-based on every line", \testColumnsOnEveryLine());
+        addTestCase("fix edit position on a later line", \testFixEditOnLaterLine());
         addTestCase("narrowed hash mismatch metadata", \testNarrowedHashMismatch());
         addTestCase("narrowed list append metadata", \testNarrowedListAppend());
         addTestCase("explicit list mismatch does not claim narrowing", \testExplicitListMismatch());
@@ -233,6 +235,43 @@ public class StructuredDiagnosticsTest inherits QUnit::Test {
         }
         assertTrue(False, sprintf("no error diagnostic for: %s", source));
         return diags[0];
+    }
+
+    testColumnsOnEveryLine() {
+        Program p(PO_MODERN);
+        p.setParseDiagnosticsCollected(True);
+        try {
+            # statements are in a function, as test programs do not allow top-level statements
+            p.parse("nothing sub t() { a_missing();\nb_missing();\n    c_missing(); }\n", "<columns>");
+        } catch (hash<ExceptionInfo> ex) {
+            # the parse errors are checked below
+        }
+        list<hash<ParseDiagnosticInfo>> diags = select p.getParseDiagnostics(), $1.severity == "error";
+        assertEq(3, diags.size(), sprintf("%y", map sprintf("%d:%d-%d %s", $1.startLine, $1.startColumn,
+            $1.endColumn, $1.message), diags));
+        # columns are 0-based character offsets and end columns are exclusive, on the first line and after it
+        assertEq((1, 18, 29), (diags[0].startLine, diags[0].startColumn, diags[0].endColumn), "first line");
+        assertEq((2, 0, 11), (diags[1].startLine, diags[1].startColumn, diags[1].endColumn),
+            "a token at the start of a later line is at column 0");
+        assertEq((3, 4, 15), (diags[2].startLine, diags[2].startColumn, diags[2].endColumn),
+            "a token after other text on a later line");
+    }
+
+    testFixEditOnLaterLine() {
+        string src = "class TrapCtor {}\nnothing sub trapTest() {\n    TrapCtor();\n}\n";
+        hash<ParseDiagnosticInfo> d = parseFirstError(src);
+        assertEq("MISSING-NEW-CONSTRUCTOR", d.id);
+        hash<ParseDiagnosticEditInfo> edit = d.fixes[0].edits[0];
+        assertEq((3, 4, 3, 4), (edit.startLine, edit.startColumn, edit.endLine, edit.endColumn),
+            "the edit inserts before the class name");
+        # applying the machine-applicable fix gives valid code
+        list<string> lines = src.split("\n");
+        string line = lines[edit.startLine - 1];
+        lines[edit.startLine - 1] = line.substr(0, edit.startColumn) + edit.replacement + line.substr(edit.startColumn);
+        Program fixed(PO_MODERN);
+        fixed.setParseDiagnosticsCollected(True);
+        fixed.parse(lines.join("\n"), "<fixed>");
+        assertEq((), fixed.getParseDiagnostics(), "the fixed code has no diagnostics");
     }
 
     testMissingNewConstructor() {
