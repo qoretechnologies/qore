@@ -223,7 +223,7 @@ modules, use the two-pass build:
     make && sudo make install
 
     # Pass 2: build and install all external binary modules
-    # (module-json, module-yaml, module-xml, module-uuid, etc.)
+    # (module-xml, module-uuid, etc.; json and yaml are part of Qore)
     # against the qore installed above.
 
     # Pass 3: re-cmake qore with AOT re-enabled; the cmake-time probe
