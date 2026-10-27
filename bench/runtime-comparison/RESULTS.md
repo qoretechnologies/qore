@@ -24911,3 +24911,113 @@ All 1314 jobs/3942 measured windows are independently replayed, with actual proc
 The installed c583a53ac6 runtime remains the validated baseline. This result does not update the separately measured Java/develop ratios or establish maximum performance. Next inspect a nonvirtual owning-Program lookup for closures, beginning with complete lifetime/Program-writer, private-layout and compile-only allocation/code-shape checks. Preserve the live Program equality check and existing ownership; no new Program-pointer candidate is implemented or measured here.
 
 [Audit](audit-closure-context-admission.md); [evidence](results-closure-context-admission-macos-arm64.json).
+
+## Captured closure Program lookup: rejected (2026-10-27)
+
+The candidate moves ordinary closure Program storage into the private base and snapshots an object closure owner after retaining the object. Only the scalar native helper changes to the nonvirtual getter; all three Program identity comparisons and live body/entry, implicit context, Program data, debugger, physical stack, exception, ownership and capture checks remain. A Debug invariant and assertions in the existing deferred-context fixture compare the snapshot with the independently known owner across plain, captured, live/deleted-object and foreign-Program cases. All three source files are restored exactly to f0a325b086 before publication; runtime source then matches installed c583a53ac6. The candidate was never installed.
+
+The frozen optimized baseline is the validated c583a53ac6 installation, including develop 55a10023c2 and retained frame inlining ae315f495b. The parent f0a325b086 adds only rejected-experiment evidence. Both runtimes use Release -O3 -DNDEBUG, allocation tracking off and LLVM 22.1.8. The same 18 freshly compiled qcc -O3 native modules cover 78 workloads: the existing 73 plus five object-closure/lifecycle controls. Three forks, default/reverse/shuffle-487 layouts, 4096 items, one warmup and three 150 ms windows are fixed in advance. Both targets must improve at least 1% aggregate and improve in every layout to continue. Values are whole-kernel ns/item, not isolated call latency.
+
+Reject under the prospective two-target gate. Plain closure calls improve 2.133% aggregate (14.536458 to 14.226415 ns/item), improving in every layout. Captured calls improve only 0.261% (20.185195 to 20.132528), below the required 1%, and their default layout is 4.715% slower. The plain target passes; the captured target fails. As planned, no independent confirmation, short-call or populated-context timing follows this failed screen. Preserve all 78 workloads, 1404 jobs and 4212 measured windows, including adverse controls. The private layout cost and inconsistent captured-call benefit do not justify retaining this candidate.
+
+|!Screen workload|!Before ns/item|!Candidate ns/item|!Change
+|float:direct_local_float_return|0.796419|0.807798|+1.429%
+|float:callback_local_float_return|0.862007|0.867038|+0.584%
+|float:direct_local_float_result|0.727203|0.743639|+2.260%
+|float:callback_local_float_result|0.810337|0.841266|+3.817%
+|float:direct_loop_float_return|5.828759|5.838841|+0.173%
+|float:callback_loop_float_return|5.095806|5.080483|-0.301%
+|float:direct_float_add|0.815058|0.824158|+1.116%
+|float:static_float_add|0.807371|0.814733|+0.912%
+|float:typed_local_int_unary|1.192319|1.197328|+0.420%
+|float:typed_local_float_unary|0.893779|0.886970|-0.762%
+|float:result_float_add|0.833552|0.833670|+0.014%
+|float:typed_local_int_result|0.858331|0.832678|-2.989%
+|micro:arithmetic|1.577384|1.581030|+0.231%
+|micro:direct_call|1.582825|1.587869|+0.319%
+|micro:method_call|1.665311|1.670527|+0.313%
+|micro:indirect_call|58.921884|58.363475|-0.948%
+|micro:polymorphic_call|23.525675|23.719820|+0.825%
+|micro:polymorphic_expression_call|11.312873|11.274287|-0.341%
+|micro:monomorphic_call|3.884194|3.843485|-1.048%
+|micro:optional_method_call|11.125409|11.040381|-0.764%
+|micro:polymorphic_float_call|23.864089|24.316207|+1.895%
+|micro:polymorphic_float_expression_call|11.575836|11.721663|+1.260%
+|micro:monomorphic_float_call|4.155221|4.155398|+0.004%
+|micro:optional_float_method_call|11.197717|11.337969|+1.252%
+|micro:boxed_float_method_call|20.817345|20.806341|-0.053%
+|micro:dynamic_int_result_call|11.304119|11.266134|-0.336%
+|micro:dynamic_int_result_fallback|21.044373|21.474719|+2.045%
+|micro:boxed_int_method_call|17.041701|17.022818|-0.111%
+|micro:boxed_int_method_fallback|33.462641|32.968323|-1.477%
+|micro:boxed_float_method_fallback|34.680377|35.139625|+1.324%
+|micro:boxed_int_method_effect|90.254998|89.632377|-0.690%
+|micro:dynamic_float_result_call|12.397053|12.348924|-0.388%
+|micro:indirect_wide|58.260940|58.547662|+0.492%
+|micro:indirect_float|57.175727|58.165749|+1.732%
+|micro:indirect_int_result|58.365755|58.371255|+0.009%
+|micro:indirect_float_result|57.711899|58.322566|+1.058%
+|micro:indirect_tagged_float|58.007697|58.138237|+0.225%
+|micro:indirect_branch_float|57.532275|58.061222|+0.919%
+|micro:indirect_affine|58.736663|58.274828|-0.786%
+|micro:indirect_affine_wide|58.414925|58.296889|-0.202%
+|micro:indirect_branch_int|58.218985|58.882699|+1.140%
+|micro:dispatch_control|1.982446|1.979887|-0.129%
+|micro:list_read|2.962224|2.960160|-0.070%
+|micro:list_build|28.457999|26.555446|-6.685%
+|micro:list_mutate|134.596213|130.896324|-2.749%
+|micro:temporary_list|1.751754|1.743228|-0.487%
+|micro:temporary_hash|1.751748|1.749001|-0.157%
+|micro:closure_call|14.536458|14.226415|-2.133%
+|micro:closure_capture|20.185195|20.132528|-0.261%
+|mixed:csv_report|936.183675|940.827303|+0.496%
+|mixed:object_orders|1746.178653|1734.858878|-0.648%
+|mixed:callback_pipeline|121.676800|121.698575|+0.018%
+|mixed:text_index|1458.128756|1466.344777|+0.563%
+|probe:object_loop|395.582168|398.528449|+0.745%
+|probe:object_short|1611.296281|1579.386246|-1.980%
+|probe:float_loop|425.271075|432.502298|+1.700%
+|probe:float_short|1648.346309|1613.723534|-2.100%
+|probe:string_loop|365.606653|365.678038|+0.020%
+|probe:string_short|1483.005308|1464.326923|-1.259%
+|probe:effect_loop|449.601344|453.311206|+0.825%
+|probe:effect_short|1668.867631|1639.804121|-1.742%
+|probe:two_read_loop|487.630430|494.110723|+1.329%
+|probe:two_read_short|1685.413707|1682.058623|-0.199%
+|probe:default_loop|769.022624|756.535329|-1.624%
+|probe:default_short|1948.032312|1953.579016|+0.285%
+|probe:string_result_loop|516.454339|521.235519|+0.926%
+|probe:string_result_short|1718.886867|1715.180368|-0.216%
+|index:list_positive|8.861217|7.895903|-10.894%
+|index:list_negative|8.794409|7.887483|-10.313%
+|index:binary_positive|8.587790|7.642679|-11.005%
+|index:binary_negative|9.016519|8.095589|-10.214%
+|index:buffer_positive|15.806588|14.941526|-5.473%
+|index:buffer_negative|15.839009|14.845163|-6.275%
+|lifecycle:object_closure_live|196.342975|197.717897|+0.700%
+|lifecycle:object_closure_dead|198.781580|201.099297|+1.166%
+|lifecycle:closure_create_plain|322.007370|315.152078|-2.129%
+|lifecycle:closure_create_capture|689.698488|691.870134|+0.315%
+|lifecycle:closure_create_object|865.945975|839.772645|-3.023%
+
+|!Closure target|!Layout|!Before ns/item|!Candidate ns/item|!Change
+|micro:closure_call|default|14.869957|14.226415|-4.328%
+|micro:closure_call|reverse|14.536458|14.033173|-3.462%
+|micro:closure_call|shuffle-487|14.335795|14.313689|-0.154%
+|micro:closure_capture|default|20.045299|20.990458|+4.715%
+|micro:closure_capture|reverse|20.185195|19.858754|-1.617%
+|micro:closure_capture|shuffle-487|20.307860|20.132528|-0.863%
+
+Screen costs include callback-local-float-result +3.817% aggregate, indirect float +1.732%, live/deleted-object closure calls +0.700%/+1.166%, captured-closure construction +0.315%, CSV +0.496% and text indexing +0.563%. Plain/object construction change -2.129%/-3.023%; list build/mutation -6.685%/-2.749%. The flagged layout costs with disjoint fork ranges are captured closure default +4.715%, float-loop shuffle +5.139%, and two-read-loop default +3.154%. These are screening observations, without independent confirmation or causal attribution to any one instruction change. No samples are discarded.
+
+Release and Debug each pass 30 QUnit fixtures/198 cases/8117 assertions plus three standalone fixtures, without skips. Native checks remain 2917; standard 1110, fresh baseline 4512, paired 9024 and new-compiler 1128 reference checks pass. All 391 Release qmod aliases/hashes are restored after Debug. The changed C++ fixture asserts owner identity before and during a foreign Program context; its existing lifetime, helper-version and native-entry-version cases exercise those assertions.
+
+Compile-only Release/Debug layout checks show base size 96 to 104, plain closure 104 unchanged and object closure 104 to 112 bytes. The host allocator reports a 112-byte bucket for both sizes; cross-platform allocation/memory costs remain unknown. The borrowed owner adds no reference: ordinary closures retain the Program, object closures retain object storage whose Program is fixed. Generic virtual getters remain unchanged. Read-only searches found no private closure header/class use in 40 external module workspaces; this is not external binary qualification or a public private-layout ABI promise. Runtime-generated closure construction avoids embedding the private layout in native modules.
+
+Linked ARM64 code replaces vtable slot 0xb8 dispatch with a field load at closure offset 0x60. Helper instructions change 300 to 294, with unchanged 352-byte stack, 139-instruction miss helper, 12-instruction binders and 9035 exports. Both implicit-context flag checks remain; the prior rejected admission change is absent. Normal/exceptional frame restoration and reader completion remain. Eight separate profiles verify native scalar closure execution and the expected module/runtime images for plain, captured and live/deleted-object cases. Static size and sampling are not speed estimates. New-compiler LLVM is equal apart from verified informational revision/compressed metadata size; all timed variants use identical modules.
+
+All 1404 jobs/4212 measured windows are independently replayed with actual process completion and dependency checks. No owned build/test/profile or heavy archival scan overlaps timing. Shared-host startup activity includes Terminal at 21.1% and WindowManager at 10.5% CPU; the snapshot does not locate activity in individual windows. No host exclusivity, affinity, frequency or thermal control is claimed. Gated confirmation, short-call and populated-context drivers were prepared but not executed.
+
+The installed c583a53ac6 runtime remains unchanged by this rejected experiment. Upstream test-only commit bb6c159ad6 was fetched during qualification and is queued for merge, optimized rebuild and installation after this evidence commit. No fresh Java/develop ratio or global performance ceiling is established. After integration, investigate compile-time captured-value immutability and escape/write analysis before proposing a larger native closure simplification; do not assume a mutable capture can be read without its existing synchronization.
+
+[Audit](audit-closure-program-lookup.md); [evidence](results-closure-program-lookup-macos-arm64.json).
