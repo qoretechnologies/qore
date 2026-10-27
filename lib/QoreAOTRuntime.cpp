@@ -14328,9 +14328,8 @@ AotLazyConstantInitForkHandler aot_lazy_constant_init_fork_handler;
 }
 
 void qore_aot_runtime_init_once() {
-    // the lock is created when the library is initialized: it is recursive, which needs the mutex attributes that
-    // init_qore_threads() initializes (a recursive lock created during static initialization is not recursive), and
-    // a child process created with fork() must not inherit its creation in progress (see QoreForkHandlers.h)
+    // the lock is created when the library is initialized, so that a child process created with fork() does not
+    // inherit its creation in progress (see QoreForkHandlers.h)
     (void)aotLazyConstantInitLock();
 }
 
