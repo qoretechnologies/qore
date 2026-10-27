@@ -202,6 +202,11 @@ public class FileIndex {
 
     #! Returns the LSP diagnostics of the syntax errors of the file
     /** @return the diagnostics of the syntax errors found when the file was indexed, or an empty list
+
+        @note This returns cached syntax diagnostics; it does not read the file or run the Qore parser again.
+
+        @par Example
+        Include these diagnostics in a workspace diagnostic response for a file that is not open in the editor.
     */
     list<hash<auto>> getDiagnostics() {
         return diagnostics ?? ();

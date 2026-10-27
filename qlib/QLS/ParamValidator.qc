@@ -205,6 +205,17 @@ public class ParamValidator {
     }
 
     #! Validates a WorkspaceSymbol to resolve (location with uri, and the data of workspace/symbol).
+    /** @param request the JSON-RPC request, used to identify an error response
+        @param params the workspace symbol supplied by the client
+
+        @return @ref nothing if the name and location URI are valid, or an encoded JSON-RPC error response
+
+        @note Validation errors are returned to the caller; optional resolution data is handled by the server.
+
+        @par Example
+        Before resolving a symbol selected in an editor's workspace search, validate its name and location URI
+        and return any error response directly to the client.
+    */
     public static *string workspaceSymbolResolveParams(hash<auto> request, hash<auto> params) {
         string err;
         if (!ParamValidator::required(request, params, "name", NT_STRING, \err)
@@ -216,6 +227,18 @@ public class ParamValidator {
     }
 
     #! Validates WorkspaceDiagnosticParams (optional previousResultIds array of uri and value hashes).
+    /** @param request the JSON-RPC request, used to identify an error response
+        @param params the workspace diagnostic parameters supplied by the client
+
+        @return @ref nothing if previousResultIds is absent or contains URI/result-ID pairs, or an encoded
+        JSON-RPC error response
+
+        @note An empty list is valid. Validation errors are returned to the caller.
+
+        @par Example
+        Validate an editor's previous diagnostic result IDs before deciding which workspace files need updated
+        diagnostics in the response.
+    */
     public static *string workspaceDiagnosticParams(hash<auto> request, hash<auto> params) {
         if (!exists params.previousResultIds) {
             return NOTHING;
