@@ -11180,19 +11180,25 @@ template <bool CallerProgramFrame = false>
 static bool tryExecNativeIntClosureScalar(RuntimeConfig& rc, const QoreClosureBase* closure,
         const UserVariantBase* uvb, int64_t argument, int64_t& result, ExceptionSink* xsink,
         QoreProgram* caller_pgm = nullptr) {
-    QoreSandboxProvenanceHelper provenance(closure);
     QoreAOTContext* ctx = uvb ? uvb->getCachedAOTContext() : nullptr;
     if (!ctx || !uvb->hasCachedAOT()
             || ctx->native_body_fn != uvb->getCachedAOTFunction()
-            || ctx->uses_self || ctx->uses_argv) {
+            || ctx->uses_self || ctx->uses_argv) [[unlikely]] {
         return false;
     }
     auto entry = ctx->native_int_unary_closure_entry.load(std::memory_order_acquire);
-    if (!entry) {
+    if (!entry) [[unlikely]] {
         return false;
     }
     QoreProgram* pgm = RuntimeConfigNativeAccess::getProgram(rc);
-    if (pgm != uvb->pgm || pgm != ctx->pgm || pgm != closure->getProgram()
+    // These metadata reads and the live Program comparison cannot execute Qore.
+    // A foreign miss needs no invocation context; the ordinary call establishes
+    // its full Program context before retrying native admission.
+    if (pgm != uvb->pgm) [[unlikely]] {
+        return false;
+    }
+    QoreSandboxProvenanceHelper provenance(closure);
+    if (pgm != ctx->pgm || pgm != closure->getProgram()
             || !RuntimeConfigNativeAccess::hasProgramData(rc)
             || qore_program_private::get(*pgm)->hasDebuggerAttached()) {
         return false;

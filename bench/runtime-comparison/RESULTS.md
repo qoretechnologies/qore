@@ -25262,3 +25262,249 @@ All 180 jobs/540 measured windows are independently replayed against raw output 
 The next lead is an earlier foreign-Program rejection in native admission, subject to explicit RuntimeConfig validity and no-effects-on-miss proofs. It must retain the ordinary Program transition and all same-Program live guards, and measure noneligible/generic controls; no such candidate is included in this result.
 
 [Audit](audit-closure-entry-context.md); [evidence](results-closure-entry-context-macos-arm64.json).
+
+## Native closure admission before temporary context setup (2026-10-27)
+
+Native scalar closure admission rejects ineligible metadata or a foreign Program before looking up and temporarily applying the captured context. These checks cannot execute Qore. The first RuntimeConfig read stays after the same metadata/body/entry preconditions. All actual calls retain context setup, full Program transitions, counts, locks, TLPD, lifetime, live guards, capture synchronization, stack publication and caller diagnostic identity. No public ABI, private layout, compiler body, test source or runtime flag changes.
+
+Baseline and source parent are installed 468d586e5b, including develop 8dc8bdf6fb. Both runtimes use Release -O3 -DNDEBUG, allocation tracking off and LLVM 22.1.8 on Apple M4 Pro/macOS ARM64. The same 18 freshly compiled qcc -O3 modules cover six suites and 78 workloads across default, reverse and shuffle-487 layouts. All 18 new candidate LLVM dumps are byte-identical. Measurements use 4096 items, one warmup, three 150 ms windows, three screening forks and five confirmation forks. Each aggregate is the median of per-layout median fork means. Both object-call targets must improve at least 1% aggregate and improve in every layout. Values are whole-kernel ns/item, not isolated call latency.
+
+The first unhinted variant passed the object targets but cost plain/captured same-Program closures 8.179%/6.378%, with adverse disjoint fork ranges in every layout. Linked code had outlined provenance construction and ordinary destruction. That variant stopped after the narrow and disabled-native screens (180 jobs/540 windows); full qualification and broader phases were not run. A rejected statement-attribute syntax probe never changed production. A one-hint compile-only probe still outlined the ordinary path. The retained three-hint variant restores ordinary-path inlining; its remaining outlined destructor is exceptional cleanup only. This evidence motivates fresh measurements, not an instruction-count speed claim.
+
+Retain the refined three-hint candidate under the authorized broader workload tradeoff. Five-fork confirmation improves live/deleted-object calls 1.994%/2.883%, same-Program plain/captured closures 1.406%/2.134%, and populated object calls 20.616%/20.929%. Both primary targets pass the prospective 1% aggregate and every-layout gate, including short controls. Costs remain: main confirmation includes callback-local-float-return +1.428%, text indexing +1.246%, monomorphic calls +1.171%, indirect float +1.150% and indirect float result +1.110%; all repeated smaller costs are recorded. CSV +1.045%, orders +1.089%, captured/plain construction +1.586%/+0.776% do not repeat the broad direction. Populated plain/captured closure controls cost 1.160%/1.276%; short captured controls cost 0.575%/0.844%; generic plain/live-object controls repeat smaller costs of 0.369%/0.215%, and generic captured calls cost 0.383% after a faster screen. No confirmation aggregate costs>=3% and no confirmation disjoint-range flags remain. These are whole-workload observations on a shared host, not component-cost attribution or an application-weighted overall speedup.
+
+### screen
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change
+|lifecycle:object_closure_live|85.924348|84.078778|-2.148%
+|lifecycle:object_closure_dead|85.767827|83.630992|-2.491%
+|micro:closure_call|14.678467|14.347361|-2.256%
+|micro:closure_capture|20.086147|20.122627|+0.182%
+|micro:direct_call|1.552761|1.549850|-0.187%
+|micro:indirect_call|59.220074|58.867650|-0.595%
+
+### broad
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change
+|float:direct_local_float_return|0.789689|0.794675|+0.631%
+|float:callback_local_float_return|0.857510|0.865478|+0.929%
+|float:direct_local_float_result|0.738868|0.718644|-2.737%
+|float:callback_local_float_result|0.805773|0.804234|-0.191%
+|float:direct_loop_float_return|5.787619|5.770181|-0.301%
+|float:callback_loop_float_return|5.071954|5.046134|-0.509%
+|float:direct_float_add|0.820636|0.803389|-2.102%
+|float:static_float_add|0.833963|0.813877|-2.409%
+|float:typed_local_int_unary|1.183630|1.184667|+0.088%
+|float:typed_local_float_unary|0.905971|0.891522|-1.595%
+|float:result_float_add|0.827699|0.828620|+0.111%
+|float:typed_local_int_result|0.827416|0.841686|+1.725%
+|micro:arithmetic|1.569365|1.575735|+0.406%
+|micro:direct_call|1.571798|1.576027|+0.269%
+|micro:method_call|1.654058|1.653902|-0.009%
+|micro:indirect_call|58.758233|58.980667|+0.379%
+|micro:polymorphic_call|23.847486|23.769410|-0.327%
+|micro:polymorphic_expression_call|11.481715|11.325894|-1.357%
+|micro:monomorphic_call|3.783895|3.903577|+3.163%
+|micro:optional_method_call|11.015859|11.071772|+0.508%
+|micro:polymorphic_float_call|24.408717|24.168032|-0.986%
+|micro:polymorphic_float_expression_call|11.593362|11.717716|+1.073%
+|micro:monomorphic_float_call|4.135797|4.201874|+1.598%
+|micro:optional_float_method_call|11.317163|11.289795|-0.242%
+|micro:boxed_float_method_call|20.512429|20.356982|-0.758%
+|micro:dynamic_int_result_call|11.221639|11.329418|+0.960%
+|micro:dynamic_int_result_fallback|21.292762|20.909990|-1.798%
+|micro:boxed_int_method_call|16.947395|17.082243|+0.796%
+|micro:boxed_int_method_fallback|32.689763|32.883558|+0.593%
+|micro:boxed_float_method_fallback|35.037917|34.833649|-0.583%
+|micro:boxed_int_method_effect|90.156244|90.087481|-0.076%
+|micro:dynamic_float_result_call|12.475341|12.170773|-2.441%
+|micro:indirect_wide|58.539768|59.060610|+0.890%
+|micro:indirect_float|58.633390|58.921099|+0.491%
+|micro:indirect_int_result|58.838771|58.547867|-0.494%
+|micro:indirect_float_result|59.002176|59.504534|+0.851%
+|micro:indirect_tagged_float|59.152943|59.119958|-0.056%
+|micro:indirect_branch_float|58.598811|59.083606|+0.827%
+|micro:indirect_affine|59.068715|59.102696|+0.058%
+|micro:indirect_affine_wide|58.830460|58.985315|+0.263%
+|micro:indirect_branch_int|59.085888|58.647362|-0.742%
+|micro:dispatch_control|1.975384|1.975303|-0.004%
+|micro:list_read|2.933079|2.941314|+0.281%
+|micro:list_build|28.230368|28.200983|-0.104%
+|micro:list_mutate|132.592448|133.019025|+0.322%
+|micro:temporary_list|1.732623|1.733349|+0.042%
+|micro:temporary_hash|1.742466|1.733226|-0.530%
+|micro:closure_call|14.632250|14.388941|-1.663%
+|micro:closure_capture|20.160728|20.044128|-0.578%
+|mixed:csv_report|927.555718|925.744629|-0.195%
+|mixed:object_orders|1750.910507|1731.234464|-1.124%
+|mixed:callback_pipeline|121.856516|120.769203|-0.892%
+|mixed:text_index|1448.154547|1450.076372|+0.133%
+|probe:object_loop|397.378406|398.101003|+0.182%
+|probe:object_short|1563.025581|1581.256959|+1.166%
+|probe:float_loop|425.916992|431.903013|+1.405%
+|probe:float_short|1591.126815|1596.304778|+0.325%
+|probe:string_loop|364.412930|361.609165|-0.769%
+|probe:string_short|1458.858298|1454.874674|-0.273%
+|probe:effect_loop|446.789327|450.569155|+0.846%
+|probe:effect_short|1638.388813|1652.110224|+0.837%
+|probe:two_read_loop|488.892701|482.181935|-1.373%
+|probe:two_read_short|1685.550574|1664.799103|-1.231%
+|probe:default_loop|762.138730|776.451778|+1.878%
+|probe:default_short|1959.772478|1968.304550|+0.435%
+|probe:string_result_loop|519.077164|521.877637|+0.540%
+|probe:string_result_short|1691.524621|1693.633752|+0.125%
+|index:list_positive|8.669484|8.747978|+0.905%
+|index:list_negative|8.761072|8.797712|+0.418%
+|index:binary_positive|8.533865|8.473841|-0.703%
+|index:binary_negative|8.970406|8.908743|-0.687%
+|index:buffer_positive|15.623453|15.581784|-0.267%
+|index:buffer_negative|15.759353|15.654579|-0.665%
+|lifecycle:object_closure_live|86.542907|83.936445|-3.012%
+|lifecycle:object_closure_dead|87.293121|84.439989|-3.268%
+|lifecycle:closure_create_plain|326.010881|323.997781|-0.617%
+|lifecycle:closure_create_capture|605.027875|603.925627|-0.182%
+|lifecycle:closure_create_object|844.508746|839.949538|-0.540%
+
+### confirmation
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change
+|float:callback_local_float_result|0.821077|0.811938|-1.113%
+|float:callback_local_float_return|0.849480|0.861606|+1.428%
+|float:callback_loop_float_return|5.060925|5.054361|-0.130%
+|float:direct_loop_float_return|5.778367|5.778412|+0.001%
+|float:result_float_add|0.826517|0.835947|+1.141%
+|float:typed_local_int_result|0.842034|0.843630|+0.190%
+|float:typed_local_int_unary|1.186742|1.187799|+0.089%
+|index:list_negative|8.792937|8.749680|-0.492%
+|index:list_positive|8.758335|8.745620|-0.145%
+|lifecycle:closure_create_capture|600.240061|609.758621|+1.586%
+|lifecycle:closure_create_object|841.865308|841.650761|-0.025%
+|lifecycle:closure_create_plain|321.010544|323.500132|+0.776%
+|lifecycle:object_closure_dead|86.130620|83.647827|-2.883%
+|lifecycle:object_closure_live|85.676110|83.967563|-1.994%
+|micro:boxed_float_method_call|20.732493|20.400801|-1.600%
+|micro:boxed_float_method_fallback|34.376927|35.079469|+2.044%
+|micro:boxed_int_method_call|16.922739|17.015914|+0.551%
+|micro:boxed_int_method_fallback|32.752493|32.485980|-0.814%
+|micro:closure_call|14.504777|14.300841|-1.406%
+|micro:closure_capture|20.334859|19.900964|-2.134%
+|micro:direct_call|1.574955|1.579173|+0.268%
+|micro:indirect_affine_wide|59.174871|59.296493|+0.206%
+|micro:indirect_call|58.988452|58.988932|+0.001%
+|micro:indirect_float|58.563133|59.236663|+1.150%
+|micro:indirect_float_result|58.678341|59.329629|+1.110%
+|micro:indirect_wide|59.094075|58.767959|-0.552%
+|micro:list_build|28.363129|28.262522|-0.355%
+|micro:list_mutate|133.436767|133.052093|-0.288%
+|micro:list_read|2.934555|2.935789|+0.042%
+|micro:method_call|1.658659|1.652273|-0.385%
+|micro:monomorphic_call|3.817990|3.862696|+1.171%
+|micro:monomorphic_float_call|4.178637|4.188393|+0.233%
+|micro:polymorphic_call|23.777343|23.653610|-0.520%
+|micro:polymorphic_float_call|24.271308|23.990570|-1.157%
+|micro:temporary_hash|1.737521|1.736562|-0.055%
+|mixed:callback_pipeline|121.873742|121.543538|-0.271%
+|mixed:csv_report|928.768369|938.475519|+1.045%
+|mixed:object_orders|1722.678445|1741.430241|+1.089%
+|mixed:text_index|1444.589468|1462.590520|+1.246%
+|probe:effect_loop|451.192418|445.112481|-1.348%
+
+### short1
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change
+|micro:closure_call|2459.332378|2441.512386|-0.725%
+|micro:closure_capture|2462.509730|2476.681394|+0.575%
+|micro:indirect_call|2478.556389|2469.125232|-0.381%
+|micro:direct_call|2388.407892|2382.565798|-0.245%
+|lifecycle:object_closure_live|342.821449|336.924919|-1.720%
+|lifecycle:object_closure_dead|345.595361|341.468077|-1.194%
+|lifecycle:closure_create_plain|630.515876|627.041370|-0.551%
+|lifecycle:closure_create_capture|907.807406|892.584644|-1.677%
+|lifecycle:closure_create_object|1426.262670|1432.424315|+0.432%
+
+### short16
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change
+|micro:closure_call|165.995098|164.938183|-0.637%
+|micro:closure_capture|171.888852|173.339219|+0.844%
+|micro:indirect_call|212.864466|213.035463|+0.080%
+|micro:direct_call|149.354903|148.647446|-0.474%
+|lifecycle:object_closure_live|102.022894|100.387149|-1.603%
+|lifecycle:object_closure_dead|102.887219|99.676602|-3.121%
+|lifecycle:closure_create_plain|344.845249|346.542157|+0.492%
+|lifecycle:closure_create_capture|626.690591|616.157980|-1.681%
+|lifecycle:closure_create_object|888.603275|885.411895|-0.359%
+
+### Populated and generic controls
+
+Populated controls run the same modules from a child Program carrying a SandboxManager, with setup outside timing; native probes verify empty and populated captured contexts. Generic controls set QORE_DISABLE_AOT_DYNAMIC_CLOSURE_ENTRY=1 for both runtimes, verified by preparation metadata, driver code and profiles. Individual child process receipts do not store environment values. Short counts 1 and 16 include setup, dispatch and cleanup, with different wrappers across suites.
+
+### Populated screen
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change
+|context_micro:closure_call|27.954180|28.560924|+2.170%
+|context_micro:closure_capture|33.929824|34.163677|+0.689%
+|context_micro:indirect_call|273.462773|270.295203|-1.158%
+|context_micro:indirect_float|267.458605|268.163057|+0.263%
+|context_micro:indirect_wide|343.487206|342.137668|-0.393%
+|context_micro:indirect_affine_wide|343.603931|344.200436|+0.174%
+|context_lifecycle:object_closure_live|137.716628|110.189513|-19.988%
+|context_lifecycle:object_closure_dead|139.420571|109.677819|-21.333%
+
+### Populated confirmation
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change
+|context_lifecycle:object_closure_dead|138.891485|109.822531|-20.929%
+|context_lifecycle:object_closure_live|139.390990|110.654759|-20.616%
+|context_micro:closure_call|27.892620|28.216179|+1.160%
+|context_micro:closure_capture|33.848557|34.280495|+1.276%
+|context_micro:indirect_affine_wide|343.443753|341.723220|-0.501%
+|context_micro:indirect_call|270.236745|268.865414|-0.507%
+|context_micro:indirect_float|271.436609|270.933092|-0.186%
+|context_micro:indirect_wide|346.942409|343.429347|-1.013%
+
+### Generic screen
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change
+|generic_micro:closure_call|118.400136|120.351630|+1.648%
+|generic_micro:closure_capture|139.720113|139.005900|-0.511%
+|generic_lifecycle:object_closure_live|192.496208|195.394749|+1.506%
+|generic_lifecycle:object_closure_dead|196.550140|195.528003|-0.520%
+
+### Generic confirmation
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change
+|generic_lifecycle:object_closure_dead|198.889525|198.836644|-0.027%
+|generic_lifecycle:object_closure_live|195.356892|195.777355|+0.215%
+|generic_micro:closure_call|119.260801|119.700551|+0.369%
+|generic_micro:closure_capture|139.329315|139.862690|+0.383%
+
+### Initial superseded main screen
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change
+|lifecycle:object_closure_live|85.558445|83.647196|-2.234%
+|lifecycle:object_closure_dead|86.193372|84.435734|-2.039%
+|micro:closure_call|14.450350|15.632305|+8.179%
+|micro:closure_capture|20.090533|21.371955|+6.378%
+|micro:direct_call|1.560642|1.559694|-0.061%
+|micro:indirect_call|59.300455|58.651764|-1.094%
+
+### Initial superseded generic screen
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change
+|generic_micro:closure_call|117.984117|119.252365|+1.075%
+|generic_micro:closure_capture|138.478460|141.859212|+2.441%
+|generic_lifecycle:object_closure_live|192.695149|197.024984|+2.247%
+|generic_lifecycle:object_closure_dead|197.837174|197.402566|-0.220%
+
+All adverse aggregates and disjoint-range layout flags remain in the evidence; no samples are discarded or epochs pooled. The broad screen has 78 workloads; confirmation has all 38 mandatory controls plus two flagged workloads. Confirmation proceeds regardless of the broad target estimate, as clarified before broad timing. There are no confirmation disjoint-range flags or aggregate costs of 3% or more.
+
+Release and Debug each pass 33 QUnit fixture runs/216 cases/8187 assertions, plus three standalone fixtures; native checks remain 2917. Standard 1110, baseline 4512, paired 9024, new-compiler 1128, generic 3780 and populated 3780 reference checks pass. Focused Release checks (9 runs/45 cases/249 assertions) are reused only with exact source/runtime hashes; remaining Release and all Debug fixtures run fresh. All 391 Release qmod aliases/hashes are restored. No new test source is needed for this guard/RAII ordering change; existing C++ assertions cover v1/v2 and helpers v3/v4/v5/v9, foreign threads, context restoration, Program counts, caller identity, pending exceptions, overflow, fallback, mutable captures and live/deleted objects.
+
+Linked native helper instruction counts change 300 to 302 and 306 to 307, with unchanged 352/368-byte frames. Generic entry (2426), miss dispatcher (139), both binders (12 each) and all 9035 exported names retain their counts. Ordinary provenance setup/cleanup remains inline. Eight separate profiles observe actual native companions on positive object cases and generic execution under the disabled-native control; admission-helper entry alone is not a hit.
+
+All 3612 jobs/10836 measured windows for the retained variant, plus 180/540 for the initial variant, independently replay against raw child outputs and actual completion receipts. No owned build/test/profile or heavy archive scan overlaps timing. The shared host has no exclusive CPU, affinity, frequency or thermal control. No new Java/develop ratio, IR/JIT speed estimate, weighted application gain, full-suite/sanitizer/Linux result or global performance ceiling is inferred.
+
+Next refresh the optimized branch/develop/Java checkpoint and investigate duplicated native admission in the typed closure fallback. Any continuation must preserve argument compatibility misses, full Program transitions, post-transition retry and cleanup; the current change introduces no new calling convention.
+
+[Audit](audit-closure-foreign-admission.md); [evidence](results-closure-foreign-admission-macos-arm64.json).

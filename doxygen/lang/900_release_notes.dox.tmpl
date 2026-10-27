@@ -260,6 +260,8 @@
     literal keys and all uses are proven at compile time, retaining ordinary lookup for unsupported cases.
     JIT/AOT indexed reads reuse an existing live RuntimeConfig for negative-offset policy checks,
     retaining the compatibility entry and all indexed-read semantics.
+    Native scalar closure admission rejects foreign-program calls before temporary context setup,
+    reducing redundant work while preserving the complete program transition and invocation context.
     Eligible native scalar closures use their compiled entry after cross-program context setup,
     reducing call overhead while preserving program counts, lifetime and caller stack identity.
     Native AOT closure calls inline automatic frame setup and cleanup, reducing sustained call overhead
