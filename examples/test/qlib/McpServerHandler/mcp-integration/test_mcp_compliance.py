@@ -62,6 +62,8 @@ class McpComplianceTest:
         self.transport = transport
         self.results: List[TestResult] = []
         self.session: Optional[ClientSession] = None
+        # messages from the server that the transport could not parse as JSON-RPC messages
+        self.invalid_messages: List[Exception] = []
 
     @asynccontextmanager
     async def _get_transport(self):
@@ -90,7 +92,7 @@ class McpComplianceTest:
 
         try:
             async with self._get_transport() as (read, write):
-                async with ClientSession(read, write) as session:
+                async with ClientSession(read, write, message_handler=self._on_message) as session:
                     self.session = session
 
                     # Run test suites
@@ -102,11 +104,28 @@ class McpComplianceTest:
                     await self._test_resource_templates()
                     # Note: Tasks API requires session header, tested separately
 
+                    # a ping round trip after the tests ensures that every earlier server message has been received
+                    await session.send_ping()
+                    self._test_server_messages()
+
         except Exception as e:
             self._add_result("connection", False, f"Failed to connect: {e}")
             traceback.print_exc()
 
         return self._print_summary()
+
+    async def _on_message(self, message: Any) -> None:
+        """Records a server message that the transport could not parse; other messages need no handling here."""
+        if isinstance(message, Exception):
+            self.invalid_messages.append(message)
+
+    def _test_server_messages(self):
+        """Every message that the server sends must be a valid JSON-RPC message."""
+        if self.invalid_messages:
+            self._add_result("server messages", False, f"{len(self.invalid_messages)} invalid JSON-RPC message(s) "
+                f"from the server; first: {type(self.invalid_messages[0]).__name__}: {self.invalid_messages[0]}")
+        else:
+            self._add_result("server messages", True, "every server message is a valid JSON-RPC message")
 
     def _get_sdk_version(self) -> str:
         try:
