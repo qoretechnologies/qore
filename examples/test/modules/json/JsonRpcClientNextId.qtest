@@ -169,7 +169,7 @@ list<auto> sub method_literal_null(string url) {
         server = new HttpServer(http_opts);
         server.setHandler("jsonrpc-handler", "", MimeTypeJson, handler);
         server.setDefaultHandler("jsonrpc-handler", handler);
-        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         url = "http://localhost:" + port + "/JSON";
     }
 
