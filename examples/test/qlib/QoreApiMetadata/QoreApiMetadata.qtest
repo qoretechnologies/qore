@@ -125,6 +125,8 @@ class QoreApiMetadataTest inherits QUnit::Test {
         addTestCase("doc comment deferred past namespaces", \testDocCommentDeferredPastNamespaces());
         addTestCase("doc comment not deferred across content", \testDocCommentNotDeferredAcrossContent());
         addTestCase("merger: pseudo-classes from qpp metadata", \testPseudoClasses());
+        addTestCase("doc comment: code examples in descriptions", \testCodeExamplesInDescriptions());
+        addTestCase("doxygen: @ref punctuation and code blocks", \testRefPunctuation());
         set_return_value(main());
     }
 
@@ -356,10 +358,9 @@ class QoreApiMetadataTest inherits QUnit::Test {
             "    @endcode\n"
             "*/";
         hash<auto> result = QoreApiMetadata::DocCommentParser::parse(comment);
-        assertEq("Description.", result.description);
-        assertEq(1, result.examples.size());
-        assertRegex("int x = 1;", result.examples[0]);
-        assertRegex("printf", result.examples[0]);
+        # the example stays in place in the description as a fenced code block
+        assertEq("Description.\n\n```qore\nint x = 1;\nprintf(\"%d\\n\", x);\n```", result.description);
+        assertEq(("int x = 1;\nprintf(\"%d\\n\", x);",), result.examples);
     }
 
     testContinuationLines() {
@@ -2330,5 +2331,55 @@ class QoreApiMetadataTest inherits QUnit::Test {
 
         # an index without pseudo-classes has none
         assertEq((), QoreApiMetadata::SymbolMerger::extractPseudoClasses({}));
+    }
+
+    testCodeExamplesInDescriptions() {
+        hash<auto> result = QoreApiMetadata::DocCommentParser::parse("#! Processes an invoice\n"
+            "/** Validates the @ref Invoice and posts it.\n"
+            "\n"
+            "    @param inv the invoice\n"
+            "    @param dry_run if @ref True, nothing is posted\n"
+            "\n"
+            "    @par Example:\n"
+            "    @code{.py}\n"
+            "int n = process(inv);\n"
+            "if (n) {\n"
+            "    printf(\"%d lines: $1\\n\", n);\n"
+            "}\n"
+            "    @endcode\n"
+            "    See @ref Qore::Thread::Mutex::lock().\n"
+            "*/");
+        # the #! line and the block comment are paragraphs; the example keeps its indentation and its text, and
+        # punctuation after a reference is not part of the reference
+        assertEq("Processes an invoice\n\n"
+            "Validates the `Invoice` and posts it.\n\n"
+            "**Example:**\n\n"
+            "```qore\n"
+            "int n = process(inv);\n"
+            "if (n) {\n"
+            "    printf(\"%d lines: $1\\n\", n);\n"
+            "}\n"
+            "```\n\n"
+            "See `Qore::Thread::Mutex::lock()`.", result.description);
+        assertEq("if `True`, nothing is posted", result.params.dry_run);
+
+        # examples in indented block comments without decorations lose the indentation of the comment
+        result = QoreApiMetadata::DocCommentParser::parse("    /** Example:\n"
+            "        @code{.py}\n"
+            "        if (x) {\n"
+            "            y();\n"
+            "        }\n"
+            "        @endcode\n"
+            "    */");
+        assertEq(("if (x) {\n    y();\n}",), result.examples);
+    }
+
+    testRefPunctuation() {
+        assertEq("`True`, `False`. `x`", QoreApiMetadata::DoxygenToMarkdown::convert("@ref True, @ref False. @ref x"));
+        assertEq("see `Foo::bar()`; `Baz`!", QoreApiMetadata::DoxygenToMarkdown::convert(
+            "see @ref Foo::bar(); @ref Baz!"));
+        # code blocks are restored as they are
+        assertEq("```qore\nprintf(\"$1\\n\");\n```", QoreApiMetadata::DoxygenToMarkdown::convert(
+            "```qore\nprintf(\"$1\\n\");\n```"));
     }
 }

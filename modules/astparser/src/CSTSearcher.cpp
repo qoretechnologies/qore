@@ -2624,7 +2624,8 @@ std::string CSTSearcher::buildHoverInfo(
     const AstParseResult* result,
     ASTSymbolKind kind,
     uint32_t line, uint32_t col,
-    CSTCancelCheck& cancel) {
+    CSTCancelCheck& cancel,
+    std::string* docComment) {
 
     if (!result) {
         return std::string();
@@ -2648,33 +2649,46 @@ std::string CSTSearcher::buildHoverInfo(
         const char* type = ts_node_type(node);
         ASTSymbolKind nodeKind = nodeTypeToSymbolKind(type);
 
+        std::string signature;
         // Constructor/destructor/method all match ASYK_Function (after mapping)
         if (kind == ASYK_Function &&
             (nodeKind == ASYK_Function || nodeKind == ASYK_Method ||
              nodeKind == ASYK_Constructor)) {
-            return buildFunctionSignature(node, result, cancel);
-        }
-
-        if (nodeKind == kind) {
+            signature = buildFunctionSignature(node, result, cancel);
+        } else if (nodeKind == kind) {
             switch (kind) {
                 case ASYK_Class:
-                    return buildClassSignature(node, result, cancel);
-                case ASYK_Constant:
-                    return buildConstantSignature(node, result);
-                case ASYK_Interface:
-                    return buildHashdeclSignature(node, result);
-                case ASYK_Field:
-                    return buildHashMemberSignature(node, result);
-                case ASYK_Variable:
-                    return buildVariableSignature(node, result, cancel);
-                case ASYK_TypeAlias:
-                    return buildTypedefSignature(node, result);
-                case ASYK_Module:
-                    return "module " + getNodeName(node, result);
-                default:
+                    signature = buildClassSignature(node, result, cancel);
                     break;
+                case ASYK_Constant:
+                    signature = buildConstantSignature(node, result);
+                    break;
+                case ASYK_Interface:
+                    signature = buildHashdeclSignature(node, result);
+                    break;
+                case ASYK_Field:
+                    signature = buildHashMemberSignature(node, result);
+                    break;
+                case ASYK_Variable:
+                    signature = buildVariableSignature(node, result, cancel);
+                    break;
+                case ASYK_TypeAlias:
+                    signature = buildTypedefSignature(node, result);
+                    break;
+                case ASYK_Module:
+                    signature = "module " + getNodeName(node, result);
+                    break;
+                default:
+                    // other kinds have no hover; the search continues with the ancestors
+                    continue;
             }
+        } else {
+            continue;
         }
+        if (docComment && !signature.empty()) {
+            *docComment = cst_get_doc_comment(node, result, cancel);
+        }
+        return signature;
     }
 
     return std::string();

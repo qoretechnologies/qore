@@ -57,8 +57,8 @@ public class DoxygenToMarkdown {
         # 5. Convert @ref target "display text" → display text (plain)
         result = regex_subst(result, "@ref\\s+\\S+\\s+\"([^\"]+)\"", "$1", RE_Global);
 
-        # 6. Convert @ref target → `target`
-        result = regex_subst(result, "@ref\\s+(\\S+)", "`$1`", RE_Global);
+        # 6. Convert @ref target → `target`; punctuation after the target ends the sentence
+        result = regex_subst(result, "@ref\\s+(\\S+?)([.,;:!?]*(?:\\s|$))", "`$1`$2", RE_Global);
 
         # 7. Convert %ClassName → ClassName (strip % before uppercase letter)
         result = regex_subst(result, "%([A-Z])", "$1", RE_Global);
@@ -165,9 +165,9 @@ public class DoxygenToMarkdown {
 
     #! Restore protected code blocks from placeholders
     static string restoreCodeBlocks(string result, list<string> protected_blocks) {
+        # the blocks are inserted as they are, without interpreting their text as a replacement pattern
         for (int i = protected_blocks.size() - 1; i >= 0; --i) {
-            result = regex_subst(result, "\x01PROTECTED_" + string(i) + "\x01",
-                protected_blocks[i], RE_Global);
+            result = replace(result, "\x01PROTECTED_" + string(i) + "\x01", protected_blocks[i]);
         }
         return result;
     }

@@ -85,7 +85,18 @@ AstTreeSearcher::constructor() {
     @param line on what line lies the symbol we want to get info about (0-indexed)
     @param col on what column lies the symbol we want to get info about (0-indexed)
 
-    @return hash with hover info containing "description" key, or NOTHING if not found
+    @return hash with hover info, or NOTHING if not found:
+    - \c description: the signature of the declaration, such as \c "int sub size()"
+    - \c docComment: the doc comment of the declaration, if any: the consecutive \c #! and \c /** comments
+      immediately before it, as written in the source (since %Qore 3.0)
+
+    @par Example:
+    @code{.py}
+*hash<auto> info = searcher.hoverInfo(tree, ASYK_Function, line, col);
+if (info.docComment) {
+    printf("%s\n%s\n", info.description, info.docComment);
+}
+    @endcode
 
     @throw THREAD-CANCELLED the current thread was cancelled
     @throw PROGRAM-INTERRUPTED the current program was interrupted
@@ -97,9 +108,10 @@ AstTreeSearcher::constructor() {
     }
     CSTCancelCheck cancel(xsink, "searching an astparser syntax tree");
 
+    std::string docComment;
     std::string desc = CSTSearcher::buildHoverInfo(
         result, static_cast<ASTSymbolKind>(kind),
-        static_cast<uint32_t>(line), static_cast<uint32_t>(col), cancel);
+        static_cast<uint32_t>(line), static_cast<uint32_t>(col), cancel, &docComment);
     if (*xsink) {
         return QoreValue();
     }
@@ -115,6 +127,12 @@ AstTreeSearcher::constructor() {
     rv->setKeyValue("description", new QoreStringNode(desc), xsink);
     if (*xsink) {
         return QoreValue();
+    }
+    if (!docComment.empty()) {
+        rv->setKeyValue("docComment", new QoreStringNode(docComment), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
     }
     return rv.release();
 }

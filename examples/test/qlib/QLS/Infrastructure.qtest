@@ -71,6 +71,7 @@ class InfrastructureTest inherits QUnit::Test {
         addTestCase("completion — builtin receiver expressions", \testCompletionBuiltinReceivers());
         addTestCase("completion — builtin namespace members", \testCompletionBuiltinNamespace());
         addTestCase("signature help — builtin receiver expressions", \testSignatureHelpBuiltinReceivers());
+        addTestCase("hover, signature help and completion — source doc comments", \testSourceDocComments());
         addTestCase("signature help — user function still works", \testSignatureHelpUserFunction());
         addTestCase("no metadata dir — graceful", \testNoMetadataGraceful());
         addTestCase("document symbols — typedef uses LSP TypeParameter kind",
@@ -575,11 +576,11 @@ class InfrastructureTest inherits QUnit::Test {
 
         # the method of the class in the source, not of a builtin class or pseudo-class
         hash<auto> hover = sendHover(uri, 9, 7);
-        assertEq(("int size()",), hover.contents);
+        assertEq(("```qore\nint size()\n```\n\nreturns the count",), hover.contents);
         assertEq({"start": {"line": 9, "character": 6}, "end": {"line": 9, "character": 10}}, hover.range);
         # a function in the source is not resolved as the builtin function with the same name
         hover = sendHover(uri, 10, 5);
-        assertEq(("int sub gettid()",), hover.contents);
+        assertEq(("```qore\nint sub gettid()\n```\n\nthe thread ID in the test",), hover.contents);
     }
 
     testCompletionBasicTypeMethods() {
@@ -1110,5 +1111,62 @@ class InfrastructureTest inherits QUnit::Test {
         assertEq("window/showMessage", parsed.method);
         assertEq(QLS::MessageType.Warning, parsed.params.type);
         assertEq("test warning", parsed.params.message);
+    }
+
+    testSourceDocComments() {
+        string text = "%modern\n"
+            "#! Counts invoices\n"
+            "class InvoiceCounter {\n"
+            "    #! Processes an invoice\n"
+            "    /** Validates the invoice and posts it.\n"
+            "\n"
+            "        @param inv the invoice\n"
+            "        @param dry_run if @ref True, nothing is posted\n"
+            "\n"
+            "        @return the number of lines posted\n"
+            "\n"
+            "        @throw INVOICE-ERROR the invoice is invalid\n"
+            "\n"
+            "        @par Example:\n"
+            "        @code{.py}\n"
+            "int n = counter.processInvoice(inv);\n"
+            "        @endcode\n"
+            "    */\n"
+            "    int processInvoice(hash<auto> inv, bool dry_run = False) { return 1; }\n"
+            "}\n"
+            "sub test() {\n"
+            "    InvoiceCounter c();\n"
+            "    c.processInvoice({}, True);\n"
+            "    c.\n"
+            "}\n";
+        string uri = setupDoc(text);
+
+        # the signature as code and the documentation of the doc comment
+        assertEq(("```qore\nint processInvoice(hash<auto> inv, bool dry_run = False)\n```\n\n"
+            "Processes an invoice\n\n"
+            "Validates the invoice and posts it.\n\n"
+            "**Example:**\n\n"
+            "```qore\nint n = counter.processInvoice(inv);\n```\n\n\n"
+            "**Parameters:**\n\n"
+            "- `inv` — the invoice\n"
+            "- `dry_run` — if `True`, nothing is posted\n\n"
+            "**Returns:** the number of lines posted\n\n"
+            "**Throws:**\n"
+            "- `INVOICE-ERROR` — the invoice is invalid",), sendHover(uri, 22, 7).contents);
+        assertEq(("```qore\nclass InvoiceCounter\n```\n\nCounts invoices",), sendHover(uri, 21, 6).contents);
+
+        # signature help has the description and the parameter descriptions
+        hash<auto> sig = sendSignatureHelp(uri, 22, 21).signatures[0];
+        assertRegex("^Processes an invoice", sig.documentation.value);
+        assertEq(("the invoice", "if `True`, nothing is posted"), (map $1.documentation.value, sig.parameters));
+
+        # completion items have the descriptions
+        hash<auto> item = (select sendCompletion(uri, 23, 6).items, $1.label == "processInvoice")[0];
+        assertRegex("^Processes an invoice", item.documentation);
+
+        # the document has a syntax error, the incomplete "c." line, which does not prevent the hover of its
+        # declarations
+        hash<auto> classHover = sendHover(uri, 2, 8);
+        assertEq(("```qore\nclass InvoiceCounter\n```\n\nCounts invoices",), classHover.contents);
     }
 }

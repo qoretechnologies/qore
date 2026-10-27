@@ -329,11 +329,14 @@ public:
         uint32_t endLine = UINT32_MAX);
 
     //! Build hover info description for a declaration at position.
+    /** @param docComment if not null, receives the doc comment of the declaration
+    */
     static std::string buildHoverInfo(
         const AstParseResult* result,
         ASTSymbolKind kind,
         uint32_t line, uint32_t col,
-        CSTCancelCheck& cancel);
+        CSTCancelCheck& cancel,
+        std::string* docComment = nullptr);
 
     //! Resolve the definition location for the symbol at position (0-indexed).
     /** Handles local variables, parameters, member access, scoped access,

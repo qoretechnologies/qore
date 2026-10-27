@@ -82,7 +82,7 @@ module QLS {
 
     <b>Navigation</b>
     |!Feature|!LSP Method|!Description
-    |Hover|@c textDocument/hover|Shows type, documentation, and source info for the symbol under the cursor; members accessed with @c . are resolved by the types of their receivers, including the methods of basic types and the members of typed hashes (see @ref qls_builtins)
+    |Hover|@c textDocument/hover|Shows type, documentation, and source info for the symbol under the cursor; declarations in the source show the documentation of their @c #! and @c /** doc comments, with parameters, return values, exceptions and code examples, also while the document has syntax errors, as do signature help and completion items; members accessed with @c . are resolved by the types of their receivers, including the methods of basic types and the members of typed hashes (see @ref qls_builtins)
     |Go to Definition|@c textDocument/definition|Jumps to the definition of a symbol
     |Go to Declaration|@c textDocument/declaration|Jumps to the declaration of a symbol; declarations are definitions in %Qore
     |Document Links|@c textDocument/documentLink|Links the module names and paths of @c %%requires, @c %%try-module and @c %%include directives to their source files, resolving module names like %Qore with the document's module path directives, @c QORE_MODULE_DIR and the library module path

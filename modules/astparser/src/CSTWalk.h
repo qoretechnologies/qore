@@ -192,6 +192,11 @@ bool cst_for_each_child(TSNode node, bool named, CSTCancelCheck& cancel, F&& f) 
 //! Returns the first named child of a node with the given type, or a null node
 DLLLOCAL TSNode cst_find_named_child(TSNode node, const char* type, CSTCancelCheck& cancel);
 
+//! Returns the doc comment of a declaration: the consecutive \c #! and \c /** comments immediately before it
+/** @return the text of the comments, or an empty string if there is no doc comment or the search was cancelled
+*/
+DLLLOCAL std::string cst_get_doc_comment(TSNode node, const AstParseResult* result, CSTCancelCheck& cancel);
+
 //! Returns true if a node is a comment
 DLLLOCAL bool cst_is_comment(const char* type);
 

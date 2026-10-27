@@ -4712,9 +4712,10 @@ while (*binary chunk = input.read(65536)) {
       - all workspace folders are indexed in the background with progress reports, requests are answered during
         indexing and can be cancelled, and @ref QLS::LspConnection "LspConnection" runs the server on any streams
         (see @ref qls_loop)
-      - navigation: hover, go to definition, declaration, type definition and implementation, references and
-        rename across the workspace, reference-count code lenses, call and type hierarchies, and links for the
-        module names and paths of \c %%requires, \c %%try-module and \c %%include directives
+      - navigation: hover with the documentation of doxygen-style doc comments, go to definition, declaration,
+        type definition and implementation, references and rename across the workspace, reference-count code
+        lenses, call and type hierarchies, and links for the module names and paths of \c %%requires,
+        \c %%try-module and \c %%include directives
       - editing: completion with snippets, parameter hints and Markdown documentation, signature help, inlay
         hints, linked editing of local variables, document, range and on-type formatting, and updates of the
         directives that refer to renamed or moved files

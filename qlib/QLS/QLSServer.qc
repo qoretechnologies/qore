@@ -2288,7 +2288,7 @@ public class QLSServer {
             }
 
             if (description) {
-                result.contents += replace(description.description, "*", "\\*");
+                result.contents += QLSServer::formatSourceHover(description);
             }
         }
 
@@ -2320,7 +2320,7 @@ public class QLSServer {
                 }
 
                 if (description) {
-                    result.contents += replace(description.description, "*", "\\*");
+                    result.contents += QLSServer::formatSourceHover(description);
                 }
             }
         }
@@ -2409,7 +2409,7 @@ public class QLSServer {
             foreach int kind in (ASTSymbolKind.Method, ASTSymbolKind.Field) {
                 *hash<auto> description = definitionDoc.hoverInfo(kind, location.range.start);
                 if (description) {
-                    contents += replace(description.description, "*", "\\*");
+                    contents += QLSServer::formatSourceHover(description);
                     break;
                 }
             }
@@ -2497,6 +2497,78 @@ public class QLSServer {
         return 0;
     }
 
+    #! Returns the Markdown hover of a declaration in the source
+    /** @param info the hover info from Document::hoverInfo(): the signature in \c description and the doc comment
+        in \c docComment
+
+        @return the signature as code, followed by the documentation from the doc comment, in the format of the
+        hover of builtin symbols
+
+        @par Example:
+        @code{.py}
+# "```qore\nint size()\n```\n\nReturns the number of invoices"
+string md = QLSServer::formatSourceHover({"description": "int size()", "docComment": "#! Returns the number of invoices"});
+        @endcode
+    */
+    static string formatSourceHover(hash<auto> info) {
+        return QLSServer::formatMetadataEntry({"signature": info.description}
+            + QLSServer::parseDocComment(info.docComment)) ?? "";
+    }
+
+    #! Returns the documentation of a doc comment in the format of builtin metadata entries
+    /** @param docComment the \c #! and \c /** comments of a declaration, as written in the source
+
+        @return a hash with the keys of the documentation of builtin metadata entries that the comment has:
+        \c description, \c params (with \c name and \c description keys), \c return_description, \c throws,
+        \c since, \c see_also, \c notes, \c warnings, \c is_deprecated and \c deprecated_reason; the text is
+        Markdown
+
+        @par Example:
+        @code{.py}
+hash<auto> doc = QLSServer::parseDocComment("#! Posts an invoice\n#! @param inv the invoice");
+# "the invoice"
+string param_doc = doc.params[0].description;
+        @endcode
+    */
+    static hash<auto> parseDocComment(*string docComment) {
+        if (!docComment) {
+            return {};
+        }
+        hash<auto> doc = QoreApiMetadata::DocCommentParser::parse(docComment);
+        hash<auto> result = {};
+        if (doc.description) {
+            result.description = doc.description;
+        }
+        if (doc.params) {
+            result.params = (map ("name": $1.key, "description": $1.value), doc.params.pairIterator());
+        }
+        if (doc.return_description) {
+            result.return_description = doc.return_description;
+        }
+        if (doc.throws) {
+            result.throws = doc.throws;
+        }
+        if (doc.since) {
+            result.since = doc.since;
+        }
+        if (doc.see_also) {
+            result.see_also = doc.see_also;
+        }
+        if (doc.notes) {
+            result.notes = doc.notes;
+        }
+        if (doc.warnings) {
+            result.warnings = doc.warnings;
+        }
+        if (exists doc.deprecated) {
+            result.is_deprecated = True;
+            if (doc.deprecated.typeCode() == NT_STRING) {
+                result.deprecated_reason = doc.deprecated;
+            }
+        }
+        return result;
+    }
+
     #! Format a single metadata entry as Markdown for hover
     private static *string formatMetadataEntry(hash<auto> entry) {
         list<string> parts = ();
@@ -2531,7 +2603,8 @@ public class QLSServer {
         if (entry.params && entry.params.size()) {
             list<string> paramLines = ("", "**Parameters:**", "");
             foreach hash<auto> p in (entry.params) {
-                string line = sprintf("- `%s %s`", p.type_name ?? "auto", p.name);
+                # the parameters of doc comments have no types; their types are in the signature
+                string line = p.type_name ? sprintf("- `%s %s`", p.type_name, p.name) : sprintf("- `%s`", p.name);
                 if (p.default_value) {
                     line += sprintf(" = `%s`", p.default_value);
                 }
@@ -2561,7 +2634,18 @@ public class QLSServer {
             parts += throwLines.join("\n");
         }
 
+        # notes and warnings
+        foreach string note in (entry.notes) {
+            parts += sprintf("**Note:** %s", note);
+        }
+        foreach string warning in (entry.warnings) {
+            parts += sprintf("**Warning:** %s", warning);
+        }
+
         # annotations
+        if (entry.see_also) {
+            parts += sprintf("**See also:** %s", entry.see_also.join(", "));
+        }
         if (entry.since) {
             parts += sprintf("**Since:** %s", entry.since);
         }
@@ -3552,6 +3636,8 @@ public class QLSServer {
         # Look up the callable
         *list<hash<auto>> params;
         *string returnType;
+        # the doc comment of a callable in the source
+        *string sourceDocComment;
 
         if (isDotAccess && target) {
             # Look up the variable in scope symbols to find its declared type
@@ -3582,6 +3668,7 @@ public class QLSServer {
                             && (sym.params ? sym.params.size() : 0) >= minimumParamCount) {
                         params = sym.params ?? ();
                         returnType = sym.returnType;
+                        sourceDocComment = sym.docComment;
                         break;
                     }
                 }
@@ -3597,6 +3684,7 @@ public class QLSServer {
                             && (sym.params ? sym.params.size() : 0) >= minimumParamCount) {
                         params = sym.params ?? ();
                         returnType = sym.returnType;
+                        sourceDocComment = sym.docComment;
                         break;
                     }
                 }
@@ -3613,14 +3701,23 @@ public class QLSServer {
                             && (sym.params ? sym.params.size() : 0) >= minimumParamCount) {
                         params = sym.params ?? ();
                         returnType = sym.returnType;
+                        sourceDocComment = sym.docComment;
                         break;
                     }
                 }
             }
         }
 
-        # metadata fallback for builtins
+        # the documentation of a callable in the source is in its doc comment
         *string methodDoc;
+        if (sourceDocComment) {
+            hash<auto> doc = QLSServer::parseDocComment(sourceDocComment);
+            methodDoc = doc.description;
+            hash<string, string> paramDocs = map {$1.name: $1.description}, doc.params;
+            params = map $1 + {"description": paramDocs{$1.name}}, params;
+        }
+
+        # metadata fallback for builtins
         if (!exists params && builtinMetadata) {
             *hash<auto> metaInfo;
             BuiltinSourceNameCheck isSourceName = bool sub (string name) {
@@ -5794,6 +5891,11 @@ class CSTCompletionProvider inherits QoreCodeCompletion::AbstractCompletionProvi
         return doc.getParseDirectiveOptions();
     }
 
+    #! Returns the Markdown description of the doc comment of a symbol in the source, or NOTHING
+    private static *string getDocumentation(*string docComment) {
+        return docComment ? QLSServer::parseDocComment(docComment).description : NOTHING;
+    }
+
     list<hash<QoreCodeCompletion::CompletionItem>> getVisibleSymbols(string prefix) {
         *list<auto> symbols = doc.findScopeSymbolsDetailed(position);
 
@@ -5811,6 +5913,7 @@ class CSTCompletionProvider inherits QoreCodeCompletion::AbstractCompletionProvi
                     result += <QoreCodeCompletion::CompletionItem>{
                         "label": name,
                         "kind": kind,
+                        "documentation": CSTCompletionProvider::getDocumentation(sym.docComment),
                         "isCallable": callable,
                     };
                 }
@@ -5953,6 +6056,7 @@ class CSTCompletionProvider inherits QoreCodeCompletion::AbstractCompletionProvi
                     result += <QoreCodeCompletion::CompletionItem>{
                         "label": name,
                         "kind": kind,
+                        "documentation": CSTCompletionProvider::getDocumentation(sym.docComment),
                         "isCallable": callable,
                     };
                 }
@@ -6015,6 +6119,7 @@ class CSTCompletionProvider inherits QoreCodeCompletion::AbstractCompletionProvi
                     result += <QoreCodeCompletion::CompletionItem>{
                         "label": name,
                         "kind": kind,
+                        "documentation": CSTCompletionProvider::getDocumentation(sym.docComment),
                         "isCallable": callable,
                     };
                 }

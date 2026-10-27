@@ -505,6 +505,7 @@ sub test() {
         addTestCase("Closure scope symbols", \testClosureScopeSymbols());
         addTestCase("Expression chains", \testExpressionChains());
         addTestCase("Hover signatures with return types", \testHoverReturnTypes());
+        addTestCase("Hover doc comments", \testHoverDocComments());
 %endif
         set_return_value(main());
     }
@@ -4331,5 +4332,37 @@ sub broken(int x) {
             searcher.hoverInfo(tree, ASYK_Method, 6, 56).description);
         assertEq("list<int> sub f()", searcher.hoverInfo(tree, ASYK_Function, 8, 15).description);
         assertEq("sub g()", searcher.hoverInfo(tree, ASYK_Function, 9, 4).description);
+    }
+
+    testHoverDocComments() {
+        AstParser parser();
+        AstTree tree = parser.parseString("%modern\n"
+            "#! A counter\n"
+            "class C {\n"
+            "    #! Returns the size\n"
+            "    /** @return the number of elements\n"
+            "    */\n"
+            "    int size() { return 1; }\n"
+            "\n"
+            "    # not a doc comment\n"
+            "    m() {}\n"
+            "\n"
+            "    #! separated by a blank line\n"
+            "\n"
+            "    n() {}\n"
+            "}\n"
+            "# a comment that ends the doc comment\n"
+            "#! the function\n"
+            "sub f() {}\n");
+        AstTreeSearcher searcher();
+        hash<auto> info = searcher.hoverInfo(tree, ASYK_Class, 2, 6);
+        assertEq("#! A counter", info.docComment);
+        info = searcher.hoverInfo(tree, ASYK_Method, 6, 9);
+        assertEq("int size()", info.description);
+        assertEq("#! Returns the size\n/** @return the number of elements\n    */", info.docComment);
+        # comments that are not doc comments and doc comments before a blank line are not doc comments
+        assertFalse(searcher.hoverInfo(tree, ASYK_Method, 9, 4).hasKey("docComment"));
+        assertFalse(searcher.hoverInfo(tree, ASYK_Method, 13, 4).hasKey("docComment"));
+        assertEq("#! the function", searcher.hoverInfo(tree, ASYK_Function, 17, 5).docComment);
     }
 }

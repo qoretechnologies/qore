@@ -295,28 +295,19 @@ public class Document {
     }
 
     #! Return hover info about symbol at the passed position.
-    *hash<auto> hoverInfo(int kind, hash<auto> Position) {
-        int line = Position.line;
-        int char = Position.character;
-        if (!parseOk) {
-            return {
-                "contents": parseError,
-                "range": {
-                    "start": {
-                        "line": line,
-                        "character": char,
-                    },
-                    "end": {
-                        "line": line,
-                        "character": char + 1,
-                    },
-                },
-            };
-        }
+    /** The syntax tree of a document with syntax errors still has its declarations, so they have hover info while
+        the document is edited.
 
-        AstTreeSearcher searcher();
+        @param kind the symbol kind of the declaration
+        @param Position LSP position in the declaration
+
+        @return the hover info from @ref astparser::AstTreeSearcher::hoverInfo(): the signature in \c description
+        and the doc comment in \c docComment, or NOTHING if there is no declaration of the kind at the position
+    */
+    *hash<auto> hoverInfo(int kind, hash<auto> Position) {
         if (tree) {
-            return searcher.hoverInfo(tree, kind, line, char);
+            AstTreeSearcher searcher();
+            return searcher.hoverInfo(tree, kind, Position.line, Position.character);
         }
         return NOTHING;
     }
