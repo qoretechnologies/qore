@@ -101,6 +101,7 @@ module QLS {
     <b>Refactoring</b>
     |!Feature|!LSP Method|!Description
     |Rename|@c textDocument/rename (with @c textDocument/prepareRename)|Renames a symbol across all documents in the workspace
+    |File Rename|@c workspace/willRenameFiles|Updates the @c %%include and module path directives that refer to renamed or moved %Qore files, and the relative paths of moved files; relative, @c ${SCRIPT_DIR} and absolute paths keep their form (paths use @c / as the separator)
     |Code Actions|@c textDocument/codeAction|Quick fixes: sort imports, add @c %modern directive
 
     <b>Code Structure</b>
@@ -121,7 +122,7 @@ module QLS {
     |Range Formatting|@c textDocument/rangeFormatting|Formats the selected lines: the whole document is formatted, as the formatter needs the complete syntax tree, and only the changed lines that overlap the selection are returned
     |On-Type Formatting|@c textDocument/onTypeFormatting|Auto-indent on Enter, auto-dedent on @c }
     |Code Lens|@c textDocument/codeLens|Shows reference counts across open and workspace documents above declarations; the lenses run the \c qls.showReferences client command with the document URI and the position of the declared name
-    |Diagnostics|@c textDocument/publishDiagnostics|Reports Qore parse errors and warnings for standalone scripts and syntax errors for other files (see @ref qls_diagnostics)
+    |Diagnostics|@c textDocument/publishDiagnostics, @c textDocument/diagnostic|Reports Qore parse errors and warnings for standalone scripts and syntax errors for other files (see @ref qls_diagnostics)
 
     @section qlsusage Usage
 
@@ -259,6 +260,10 @@ server.main();
 
     The fixes of %Qore diagnostics are offered as @c quickfix code actions; machine-applicable fixes are
     preferred.
+
+    Clients that support pull diagnostics and diagnostic refresh requests pull the same diagnostics with
+    @c textDocument/diagnostic and are asked to pull them again after a document is saved and checked; other
+    clients get them with @c textDocument/publishDiagnostics notifications.
 
     @subsection qls_sync Document Synchronization and Symbols
 

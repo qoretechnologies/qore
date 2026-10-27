@@ -63,6 +63,10 @@ class FeaturesTest inherits QUnit::Test {
         addTestCase("semantic tokens delta", \testSemanticTokensDelta());
         addTestCase("linked editing of local variables", \testLinkedEditing());
         addTestCase("inline values while debugging", \testInlineValues());
+        addTestCase("path helpers", \testPathHelpers());
+        addTestCase("directive edits for renamed files", \testRenameEdits());
+        addTestCase("willRenameFiles request", \testWillRenameFiles());
+        addTestCase("pull diagnostics", \testPullDiagnostics());
 
         on_exit {
             map FeaturesTest::removeTree($1), tmpDirs;
@@ -432,5 +436,123 @@ class FeaturesTest inherits QUnit::Test {
         assertEq(3, response.size());
         assertEq((), request(server, "textDocument/inlineValue", {"textDocument": {"uri": uri}, "range": all}),
             "no stopped location");
+    }
+
+    testPathHelpers() {
+        assertEq("/a/c", QLS::DocumentLinks::normalizePath("/a/./b/../c"));
+        assertEq("/a/b", QLS::DocumentLinks::normalizePath("/a//b/"));
+        assertEq("/", QLS::DocumentLinks::normalizePath("/.."));
+        assertEq("../x", QLS::DocumentLinks::normalizePath("../x"));
+        assertEq(".", QLS::DocumentLinks::normalizePath("a/.."));
+        assertEq("b/c.q", QLS::DocumentLinks::relativePath("/a", "/a/b/c.q"));
+        assertEq("../x/y.q", QLS::DocumentLinks::relativePath("/a/b", "/a/x/y.q"));
+        assertEq("../../z.q", QLS::DocumentLinks::relativePath("/a/b/c", "/a/z.q"));
+        assertEq(".", QLS::DocumentLinks::relativePath("/a/b", "/a/b"));
+    }
+
+    testRenameEdits() {
+        string text = "%include lib/common.ql\n"
+            "%include ./lib/common.ql\n"
+            "%include \"${SCRIPT_DIR}/lib/common.ql\"\n"
+            "%include /proj/lib/common.ql\n"
+            "%requires ./mods/Mod\n"
+            "%requires(reexport) ./mods/Mod.qm >= 1.0\n"
+            "%include $PROJ/lib/common.ql\n"
+            "%include other.ql\n"
+            "%requires Mod\n";
+        list<hash<auto>> edits = QLS::DocumentLinks::getRenameEdits("/proj/main.q", text, "/proj/lib/common.ql",
+            "/proj/shared/common.ql");
+        assertEq((
+            (0, 9, 22, "shared/common.ql"),
+            (1, 9, 24, "./shared/common.ql"),
+            (2, 10, 37, "${SCRIPT_DIR}/shared/common.ql"),
+            (3, 9, 28, "/proj/shared/common.ql"),
+        ), map ($1.range.start.line, $1.range.start.character, $1.range.end.character, $1.newText), edits,
+            "each path keeps its style; other variables, other files and module names are not changed");
+
+        # module paths with and without the extension
+        edits = QLS::DocumentLinks::getRenameEdits("/proj/main.q", text, "/proj/mods/Mod.qm", "/proj/lib/Mod.qm");
+        assertEq(((4, 10, 20, "./lib/Mod"), (5, 20, 33, "./lib/Mod.qm")),
+            map ($1.range.start.line, $1.range.start.character, $1.range.end.character, $1.newText), edits);
+        edits = QLS::DocumentLinks::getRenameEdits("/proj/main.q", text, "/proj/mods/Mod.qm", "/proj/lib/Other.qm");
+        assertEq(((4, "./lib/Other"), (5, "./lib/Other.qm")), (map ($1.range.start.line, $1.newText), edits),
+            "a module file renamed to another name");
+
+        # a moved file keeps referring to the same files
+        edits = QLS::DocumentLinks::getRenameEdits("/proj/main.q", "%include lib/common.ql\n%include /abs/x.ql\n",
+            "/proj/main.q", "/proj/bin/main.q");
+        assertEq(((0, "../lib/common.ql"),), map ($1.range.start.line, $1.newText), edits,
+            "relative paths are changed; absolute paths are not");
+
+        assertEq((), QLS::DocumentLinks::getRenameEdits("/proj/main.q", text, "/proj/unrelated.q", "/proj/x.q"));
+    }
+
+    testWillRenameFiles() {
+        string dir = makeTmpDir();
+        FeaturesTest::writeFile(dir + "/lib/common.ql", "int sub common() { return 1; }\n");
+        FeaturesTest::writeFile(dir + "/closed.q", "%include lib/common.ql\n");
+        FeaturesTest::writeFile(dir + "/unrelated.q", "int x = 1;\n");
+        QLS::QLSServer server();
+        hash<auto> init = send(server, "initialize", {"processId": getpid(), "capabilities": {},
+            "rootUri": QLS::Document::getFileUri(dir), "initializationOptions": {"diagnostics": "syntax"}},
+            False)[0].result;
+        assertEq("file", init.capabilities.workspace.fileOperations.willRename.filters[0].scheme);
+        send(server, "initialized", NOTHING, True);
+        # the open document has unsaved text
+        string openUri = open(server, dir + "/open.q", "%include ./lib/common.ql\n");
+
+        hash<auto> result = request(server, "workspace/willRenameFiles", {"files": ({
+            "oldUri": QLS::Document::getFileUri(dir + "/lib/common.ql"),
+            "newUri": QLS::Document::getFileUri(dir + "/lib/base.ql"),
+        },)});
+        hash<auto> changes = result.changes;
+        assertEq((QLS::Document::getFileUri(dir + "/closed.q"), openUri), sort(keys changes));
+        assertEq("lib/base.ql", changes{QLS::Document::getFileUri(dir + "/closed.q")}[0].newText);
+        assertEq("./lib/base.ql", changes{openUri}[0].newText);
+
+        assertNothing(request(server, "workspace/willRenameFiles", {"files": ({
+            "oldUri": QLS::Document::getFileUri(dir + "/unrelated.q"),
+            "newUri": QLS::Document::getFileUri(dir + "/renamed.q"),
+        },)}), "no edits");
+        assertEq(-32602, send(server, "workspace/willRenameFiles", {}, False)[0].error.code);
+    }
+
+    testPullDiagnostics() {
+        string dir = makeTmpDir();
+        string text = "%modern\nstring s = 1;\n";
+        FeaturesTest::writeFile(dir + "/pull.q", text);
+        string uri = QLS::Document::getFileUri(dir + "/pull.q");
+        hash<auto> pullCaps = {"textDocument": {"diagnostic": {"dynamicRegistration": False}},
+            "workspace": {"diagnostics": {"refreshSupport": True}}};
+
+        QLS::QLSServer server();
+        hash<auto> init = send(server, "initialize", {"processId": getpid(), "capabilities": pullCaps}, False)[0]
+            .result;
+        assertEq({"identifier": "qore", "interFileDependencies": False, "workspaceDiagnostics": False},
+            init.capabilities.diagnosticProvider);
+        send(server, "initialized", NOTHING, True);
+        assertEq((), send(server, "textDocument/didOpen", {"textDocument": {"uri": uri, "languageId": "qore",
+            "version": 1, "text": text}}, True), "no published diagnostics");
+        hash<auto> report = request(server, "textDocument/diagnostic", {"textDocument": {"uri": uri}});
+        assertEq("full", report.kind);
+        assertEq(("INCOMPATIBLE-ASSIGNMENT-TYPE",), (map $1.code, report.items), "the Qore check results");
+
+        # after a save, the client is asked to pull the diagnostics again
+        server.takeQueuedMessages();
+        assertEq((), send(server, "textDocument/didSave", {"textDocument": {"uri": uri}}, True));
+        assertEq(("workspace/diagnostic/refresh",), (map parse_json($1).method, server.takeQueuedMessages()));
+        assertEq((), send(server, "textDocument/didClose", {"textDocument": {"uri": uri}}, True));
+        assertEq((), request(server, "textDocument/diagnostic", {"textDocument": {"uri": uri}}).items,
+            "no diagnostics for a closed document");
+
+        # clients that cannot be asked to pull again get published diagnostics
+        QLS::QLSServer pushServer();
+        init = send(pushServer, "initialize", {"processId": getpid(), "capabilities": {"textDocument": {"diagnostic": {}}}},
+            False)[0].result;
+        assertFalse(exists init.capabilities.diagnosticProvider);
+        send(pushServer, "initialized", NOTHING, True);
+        list<hash<auto>> msgs = send(pushServer, "textDocument/didOpen", {"textDocument": {"uri": uri,
+            "languageId": "qore", "version": 1, "text": text}}, True);
+        assertEq(("textDocument/publishDiagnostics",), (map $1.method, msgs));
     }
 }

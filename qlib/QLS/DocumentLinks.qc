@@ -95,6 +95,145 @@ public class DocumentLinks {
         return links;
     }
 
+    #! Returns the directives of a document that refer to files by path
+    /** @param path the document's file path
+        @param text the document's text
+
+        @return a list of hashes with \c line, \c start and \c length (the position of the argument), \c arg (the
+        argument without quotes), \c module (@ref True for a module path, which can omit the \c .qm extension) and
+        \c path (the absolute path that the argument refers to, which need not exist)
+    */
+    static list<hash<auto>> getPathDirectives(string path, string text) {
+        string dir = dirname(path);
+        list<string> lines = text.split("\n");
+        list<hash<auto>> ret = ();
+        for (int i = 0; i < lines.size(); ++i) {
+            *list<auto> m;
+            bool module;
+            if ((m = (lines[i] =~ x/^(%requires(?:\(reexport\))?\s+)([^\s<>=!]+)/))
+                    || (m = (lines[i] =~ x/^(%try-module(?:\s*\(\s*\$?\w+\s*\))?\s+)([^\s<>=!]+)/))) {
+                # module names are not paths
+                if (m[1] !~ /[\/\\]/ && m[1] !~ /\.qm$/) {
+                    continue;
+                }
+                module = True;
+            } else if (!(m = (lines[i] =~ x/^(%include\s+)(.+?)\s*$/))) {
+                continue;
+            }
+            string arg = DocumentLinks::unquote(m[1]);
+            # the argument starts after a quote, if it is quoted
+            int start = m[0].length() + (arg != m[1] ? 1 : 0);
+            push ret, {
+                "line": i,
+                "start": start,
+                "length": arg.length(),
+                "arg": arg,
+                "module": module,
+                "path": DocumentLinks::normalizePath(DocumentLinks::absolute(DocumentLinks::expand(arg, dir), dir)),
+            };
+        }
+        return ret;
+    }
+
+    #! Returns the edits to a document's directives when a file is renamed or moved
+    /** The paths of directives that refer to the renamed file are changed to the new path.  If the document is
+        the renamed file and it moves to another directory, its relative paths are changed so that they still
+        refer to the same files.  Relative paths stay relative, paths starting with \c ${SCRIPT_DIR} keep it, and
+        absolute paths stay absolute; paths with other variables are not changed.
+
+        @param docPath the document's file path before the rename
+        @param text the document's text
+        @param oldPath the path of the renamed file
+        @param newPath the new path of the file
+
+        @return the LSP text edits for the document
+    */
+    static list<hash<auto>> getRenameEdits(string docPath, string text, string oldPath, string newPath) {
+        oldPath = DocumentLinks::normalizePath(oldPath);
+        newPath = DocumentLinks::normalizePath(newPath);
+        docPath = DocumentLinks::normalizePath(docPath);
+        string oldDir = dirname(docPath);
+        string newDir = docPath == oldPath ? dirname(newPath) : oldDir;
+        list<hash<auto>> edits = ();
+        foreach hash<auto> d in (DocumentLinks::getPathDirectives(docPath, text)) {
+            string target = d.path;
+            *string newTarget;
+            if (target == oldPath) {
+                newTarget = newPath;
+            } else if (d.module && target + ".qm" == oldPath) {
+                # a module path without the extension keeps it out
+                if (newPath !~ /\.qm$/) {
+                    continue;
+                }
+                newTarget = newPath.substr(0, -3);
+            } else {
+                newTarget = target;
+            }
+            if (newTarget == target && newDir == oldDir) {
+                continue;
+            }
+            string arg;
+            if (absolute_path(d.arg)) {
+                if (newTarget == target) {
+                    continue;
+                }
+                arg = newTarget;
+            } else if (d.arg.equalPartial("${SCRIPT_DIR}")) {
+                arg = "${SCRIPT_DIR}/" + DocumentLinks::relativePath(newDir, newTarget);
+            } else if (d.arg =~ /\$/) {
+                # paths with other variables cannot be changed reliably
+                continue;
+            } else {
+                arg = DocumentLinks::relativePath(newDir, newTarget);
+                if (d.arg.equalPartial("./") && !arg.equalPartial("..")) {
+                    arg = "./" + arg;
+                }
+            }
+            if (arg == d.arg) {
+                continue;
+            }
+            push edits, {
+                "range": {
+                    "start": {"line": d.line, "character": d.start},
+                    "end": {"line": d.line, "character": d.start + d.length},
+                },
+                "newText": arg,
+            };
+        }
+        return edits;
+    }
+
+    #! Returns the path with "." and ".." components resolved and duplicate separators removed
+    static string normalizePath(string path) {
+        bool absolute = path.equalPartial("/");
+        list<string> parts = ();
+        foreach string part in (path.split("/")) {
+            if (part == "" || part == ".") {
+                continue;
+            }
+            if (part == ".." && parts && parts.last() != "..") {
+                pop parts;
+            } else if (part != ".." || !absolute) {
+                push parts, part;
+            }
+        }
+        string ret = parts.join("/");
+        return absolute ? "/" + ret : (ret ?: ".");
+    }
+
+    #! Returns the relative path from a directory to a path
+    static string relativePath(string fromDir, string to) {
+        list<string> from = select DocumentLinks::normalizePath(fromDir).split("/"), $1;
+        list<string> target = select DocumentLinks::normalizePath(to).split("/"), $1;
+        int common = 0;
+        while (common < from.size() && common < target.size() && from[common] == target[common]) {
+            ++common;
+        }
+        list<string> parts = map "..", xrange(from.size() - common);
+        parts += target[common..];
+        return parts.join("/") ?: ".";
+    }
+
     #! Returns the link for a module name or path, or @ref nothing if it has no source file
     private static *hash<auto> moduleLink(string name, int start, string dir, list<string> moduleDirs) {
         # the interpreter's version requirement is not a module

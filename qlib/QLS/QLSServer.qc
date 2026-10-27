@@ -296,6 +296,20 @@ public const ServerCapabilities = {
             "supported": True,
             "changeNotifications": True,
         },
+        # the directives that refer to renamed Qore files are updated
+        "fileOperations": {
+            "willRename": {
+                "filters": (
+                    {
+                        "scheme": "file",
+                        "pattern": {
+                            "glob": "**/*.{q,ql,qc,qm,qr,qtest,qclass,qconn,qwf,qsd,qfd,qjob,qconst,qsm,qstep,qmc}",
+                            "matches": "file",
+                        },
+                    },
+                ),
+            },
+        },
     },
 };
 
@@ -483,6 +497,12 @@ public class QLSServer {
         #! The diagnostics of the last Qore check of each open document: \c version and \c diagnostics keys
         hash<string, hash<auto>> qoreDiagnostics = {};
 
+        #! Whether the client pulls diagnostics; if not, they are published
+        bool pullDiagnostics = False;
+
+        #! The number of diagnostic refresh requests sent, for request IDs
+        int diagnosticRefreshCount = 0;
+
         #! The last semantic tokens returned for each open document: \c resultId and \c data keys
         hash<string, hash<auto>> semanticTokensResults = {};
 
@@ -570,6 +590,8 @@ public class QLSServer {
             "workspace/didChangeWatchedFiles": \meth_ws_didChangeWatchedFiles(),
             "workspace/symbol": \meth_ws_symbol(),
             "workspace/didChangeWorkspaceFolders": \meth_ws_didChangeWorkspaceFolders(),
+            "workspace/willRenameFiles": \meth_ws_willRenameFiles(),
+            "textDocument/diagnostic": \meth_td_diagnostic(),
 
             # Document methods
             "textDocument/didOpen": \meth_td_didOpen(),
@@ -1527,6 +1549,8 @@ public class QLSServer {
         # parse/save initialization params
         parentProcessId = request.params.processId;
         clientCapabilities = request.params.capabilities;
+        pullDiagnostics = clientCapabilities.textDocument.diagnostic && clientCapabilities.workspace.diagnostics
+            .refreshSupport;
         clientName = request.params.clientInfo.name;
         # all workspace folders are indexed; the deprecated rootUri and rootPath parameters are only used when the
         # client does not send workspace folders
@@ -1568,7 +1592,12 @@ public class QLSServer {
 
         # create response
         hash<auto> result = {
-            "capabilities": ServerCapabilities,
+            # pull diagnostics are only offered to clients that can be asked to pull them again
+            "capabilities": ServerCapabilities + (pullDiagnostics ? {"diagnosticProvider": {
+                "identifier": "qore",
+                "interFileDependencies": False,
+                "workspaceDiagnostics": False,
+            }} : {}),
         };
 
         log(0, "initialization complete!");
@@ -1703,6 +1732,61 @@ public class QLSServer {
         return NOTHING;
     }
 
+    #! "workspace/willRenameFiles" method handler
+    /** Returns the edits to the directives of open documents and workspace files that refer to the renamed files
+        by path, and to the relative paths of moved files.
+    */
+    private *string meth_ws_willRenameFiles(hash<auto> request) {
+        if (request.params.files.typeCode() != NT_LIST) {
+            return ErrorResponse::invalidParams(request, "required attribute 'files' is missing");
+        }
+        hash<string, list<hash<auto>>> changes = {};
+        foreach auto file in (request.params.files) {
+            if (file.typeCode() != NT_HASH || file.oldUri !~ /^file:\// || file.newUri !~ /^file:\//) {
+                continue;
+            }
+            string oldPath = Document::getFilePath(file.oldUri);
+            string newPath = Document::getFilePath(file.newUri);
+            # the name without the extension, which module paths can omit
+            string name = regex_subst(basename(oldPath), "\\.[^.]*$", "");
+            foreach hash<auto> candidate in (getRenameCandidates(name, oldPath)) {
+                list<hash<auto>> edits = DocumentLinks::getRenameEdits(Document::getFilePath(candidate.uri),
+                    candidate.text, oldPath, newPath);
+                if (edits) {
+                    changes{candidate.uri} = (changes{candidate.uri} ?? ()) + edits;
+                }
+            }
+        }
+        return make_jsonrpc_response(jsonRpcVer, request.id, changes ? {"changes": changes} : NOTHING);
+    }
+
+    #! Returns the open documents and indexed workspace files that can refer to a renamed file
+    /** @param name the file name without its extension
+        @param oldPath the path of the renamed file, which is always a candidate
+
+        @return a list of hashes with \c uri and \c text keys; open documents have their editor text
+    */
+    private:internal list<hash<auto>> getRenameCandidates(string name, string oldPath) {
+        list<hash<auto>> ret = ();
+        foreach hash<auto> i in (documents.pairIterator()) {
+            *string text = i.value.getText();
+            if (text && i.key =~ /^file:\// && (text.find(name) != -1 || Document::getFilePath(i.key) == oldPath)) {
+                push ret, {"uri": i.key, "text": text};
+            }
+        }
+        foreach FileIndex index in (workspaceIndex.iterator()) {
+            string uri = index.getUri();
+            if (index.sourceContains(name) || Document::getFilePath(uri) == oldPath) {
+                try {
+                    push ret, {"uri": uri, "text": ReadOnlyFile::readTextFile(Document::getFilePath(uri))};
+                } catch (hash<ExceptionInfo> ex) {
+                    log(1, "cannot read %s for renaming: %s: %s", uri, ex.err, ex.desc);
+                }
+            }
+        }
+        return ret;
+    }
+
     #! "workspace/didChangeWorkspaceFolders" notification method handler
     /** Indexes added workspace folders and removes the index of the files in removed workspace folders.
     */
@@ -1822,7 +1906,11 @@ public class QLSServer {
                 if (QLSServer::sameAsFile(doc)) {
                     checkWithQore(doc);
                 }
-                responses += publishDiagnostics(doc);
+                # clients that pull diagnostics get no notification
+                *string notification = publishDiagnostics(doc);
+                if (notification) {
+                    responses += notification;
+                }
                 continue;
             }
 
@@ -1887,21 +1975,57 @@ public class QLSServer {
         }
         Document doc = documents{uri};
         checkWithQore(doc);
+        refreshDiagnostics();
         return publishDiagnostics(doc);
     }
 
-    #! Returns the diagnostics notification for an open document
-    /** The diagnostics of the last Qore check are published if the document has not changed since, as they
-        include the syntax errors and are more accurate; otherwise the syntax errors of the syntax tree are
-        published.
+    #! Returns the current diagnostics of an open document
+    /** The diagnostics of the last Qore check are returned if the document has not changed since, as they include
+        the syntax errors and are more accurate; otherwise the syntax errors of the syntax tree are returned.
     */
-    private:internal string publishDiagnostics(Document doc) {
-        string uri = doc.getUri();
-        *hash<auto> checked = qoreDiagnostics{uri};
+    private:internal list<auto> getCurrentDiagnostics(Document doc) {
+        *hash<auto> checked = qoreDiagnostics{doc.getUri()};
         if (checked && checked.version == doc.getVersion()) {
-            return Notification::diagnostics(jsonRpcVer, uri, checked.diagnostics);
+            return checked.diagnostics;
         }
-        return Notification::diagnostics(jsonRpcVer, uri, doc.getParseErrorCount() ? doc.getDiagnostics() : ());
+        return doc.getParseErrorCount() ? doc.getDiagnostics() : ();
+    }
+
+    #! Returns the diagnostics notification for an open document, or @ref nothing if the client pulls diagnostics
+    private:internal *string publishDiagnostics(Document doc) {
+        if (pullDiagnostics) {
+            return NOTHING;
+        }
+        return Notification::diagnostics(jsonRpcVer, doc.getUri(), getCurrentDiagnostics(doc));
+    }
+
+    #! Asks a client that pulls diagnostics to pull them again, after a Qore check
+    private:internal refreshDiagnostics() {
+        if (pullDiagnostics) {
+            push messagesToSend, make_json({
+                "jsonrpc": jsonRpcVer,
+                "id": sprintf("qls-diagnostic-refresh-%d", ++diagnosticRefreshCount),
+                "method": "workspace/diagnostic/refresh",
+            });
+        }
+    }
+
+    #! "textDocument/diagnostic" method handler
+    /** Returns the current diagnostics of an open document for clients that pull diagnostics.
+    */
+    private *string meth_td_diagnostic(hash<auto> request) {
+        if (!request.hasKey("params")) {
+            return ErrorResponse::invalidRequest(request, "required attribute 'params' is missing");
+        }
+        *string validation = ParamValidator::textDocumentIdentifier(request, request.params);
+        if (validation) {
+            return validation;
+        }
+        string uri = request.params.textDocument.uri;
+        return make_jsonrpc_response(jsonRpcVer, request.id, {
+            "kind": "full",
+            "items": (!ignoredUris{uri} && documents{uri}) ? getCurrentDiagnostics(documents{uri}) : (),
+        });
     }
 
     #! Returns @ref True if the text of an open document is the same as the file
@@ -2068,8 +2192,8 @@ public class QLSServer {
         remove qoreDiagnostics{uri};
         remove semanticTokensResults{uri};
         log(1, "closed text document: '%s'", uri);
-        # the diagnostics of a closed document are removed
-        return Notification::diagnostics(jsonRpcVer, uri);
+        # the diagnostics of a closed document are removed; clients that pull diagnostics remove them themselves
+        return pullDiagnostics ? NOTHING : Notification::diagnostics(jsonRpcVer, uri);
     }
 
     #! "textDocument/hover" method handler
