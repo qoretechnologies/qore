@@ -1,0 +1,77 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# checks how HTTPClient recognizes a WebSocket upgrade request from its headers; run by
+# websocket-upgrade-tokens.qtest
+
+/** A request is a WebSocket upgrade if its Connection header has the "upgrade" token and its Upgrade header the
+    "websocket" protocol.  Both are comma-separated token lists that are compared case-insensitively (RFC 9110), and
+    either can be given as a list of values, which are sent as repeated headers.  For an upgrade request, HTTPClient
+    takes over the connection after the 101 response, so the data that the server sends next can be read from it.
+    Each check prints "name=result": the status code and whether the server's data is available on the client.
+*/
+
+#! runs one upgrade request with the given headers against a server that switches protocols and then sends data
+string sub check(hash<auto> headers) {
+    Queue q();
+    Queue sent();
+    Queue done();
+    background sub () {
+        try {
+            Socket server();
+            server.bind("127.0.0.1:0");
+            server.listen();
+            q.push(server.getSocketInfo().port);
+            Socket peer = server.accept(15s);
+            peer.readHTTPHeader(15s);
+            peer.send("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n");
+            peer.send("abc");
+            sent.push(True);
+            done.get(15s);
+            peer.close();
+            server.close();
+        } catch (hash<ExceptionInfo> ex) {
+            q.push(ex);
+        }
+    }();
+    auto port = q.get();
+    if (port.typeCode() == NT_HASH) {
+        return port.err;
+    }
+    on_exit done.push(True);
+    HTTPClient hc({"url": "http://127.0.0.1:" + port, "timeout": 5s});
+    hash<auto> resp;
+    try {
+        resp = hc.send(NOTHING, "GET", "/", headers);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+    sent.get(15s);
+    # a request that is not taken for an upgrade leaves the client without the switched connection
+    bool switched;
+    try {
+        switched = hc.isDataAvailable(2s);
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err != "SOCKET-NOT-OPEN") {
+            return ex.err;
+        }
+    }
+    return sprintf("%d:%s", resp.status_code, switched ? "switched" : "not-switched");
+}
+
+hash<string, string> results = {
+    "plain": check({"Upgrade": "websocket", "Connection": "Upgrade"}),
+    "connection-list": check({"Upgrade": "websocket", "Connection": ("keep-alive", "Upgrade")}),
+    "connection-tokens": check({"Upgrade": "websocket", "Connection": "keep-alive, Upgrade"}),
+    "connection-tokens-spaces": check({"Upgrade": "websocket", "Connection": "keep-alive ,\tupgrade "}),
+    "case-insensitive": check({"upgrade": "WebSocket", "connection": "UPGRADE"}),
+    "upgrade-list": check({"Upgrade": ("h2c", "websocket"), "Connection": "Upgrade"}),
+    "upgrade-tokens": check({"Upgrade": "h2c, websocket", "Connection": "Upgrade"}),
+    "upgrade-version": check({"Upgrade": "websocket/13", "Connection": "Upgrade"}),
+    "not-upgrade-token": check({"Upgrade": "websocket", "Connection": "no-upgrade"}),
+    "not-websocket-token": check({"Upgrade": "websockets", "Connection": "Upgrade"}),
+    "no-connection": check({"Upgrade": "websocket"}),
+};
+foreach hash<auto> i in (results.pairIterator()) {
+    printf("%s=%s\n", i.key, i.value);
+}

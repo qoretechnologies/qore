@@ -42,6 +42,11 @@
     a \c hash<auto!> local or global variable; the parser refused it, taking the type, which is named
     \c hash<string, auto>, for a hash with a typed value type.
 
+    \c HTTPClient now recognizes a WebSocket upgrade request from its \c Connection and \c Upgrade headers as RFC 9110
+    defines them: as comma-separated token lists compared case-insensitively, given as a string or as a list of values;
+    a list value or a token list in \c Upgrade was not recognized, and a \c Connection value merely containing
+    \c "upgrade", such as \c "no-upgrade", was.
+
     The @ref instanceof "instanceof" operator now returns \c False at runtime for a container whose nested element
     type the type tested does not accept, such as a \c list<list<string>> tested against \c list<list<int>>, as the
     parser already reported; it returned \c True, as an assignment can convert some such containers.  Assignments
