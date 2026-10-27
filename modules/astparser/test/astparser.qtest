@@ -503,6 +503,8 @@ sub test() {
         addTestCase("Closure parameters resolve", \testClosureParameters());
         addTestCase("Variable symbols", \testVariableSymbols());
         addTestCase("Closure scope symbols", \testClosureScopeSymbols());
+        addTestCase("Expression chains", \testExpressionChains());
+        addTestCase("Hover signatures with return types", \testHoverReturnTypes());
 %endif
         set_return_value(main());
     }
@@ -4225,5 +4227,109 @@ sub broken(int x) {
             $1.kind == ASYK_Variable);
         assertTrue(names.contains("x"), sprintf("x is in scope: %y", names));
         assertFalse(names.contains("local"), sprintf("local is not in scope: %y", names));
+    }
+
+    const ChainCode = "%modern\n"
+        "class C {\n"
+        "    m() {\n"
+        "        self.n();\n"
+        "    }\n"
+        "}\n"
+        "sub f(File file, string s) {\n"
+        "    file.stat().size;\n"
+        "    now().format(\"x\");\n"
+        "    Qore::Thread::Mutex m();\n"
+        "    \"abc\".size();\n"
+        "    (new Mutex()).lock();\n"
+        "    cast<hash<StatInfo>>(s).size;\n"
+        "    (1, 2).size();\n"
+        "    auto v = {\"a\": 1}.keys();\n"
+        "    f(file, s)(1);\n"
+        "    $s.size();\n"
+        "    True.typeCode();\n"
+        "}\n";
+
+    #! Returns the expression chain at a position as text, such as "name:f<File> -> member:stat()"
+    private *string chainAt(AstTreeSearcher searcher, AstTree tree, int line, int col) {
+        *list<hash<AstExpressionLink>> chain = searcher.getExpressionChain(tree, line, col);
+        if (!chain) {
+            return NOTHING;
+        }
+        return (foldl $1 + " -> " + $2, (map sprintf("%s:%s%s%s", $1.kind, $1.name ?? "",
+            $1.typeName ? "<" + $1.typeName + ">" : "", $1.call ? "()" : ""), chain));
+    }
+
+    testExpressionChains() {
+        AstParser parser();
+        AstTree tree = parser.parseString(ChainCode);
+        AstTreeSearcher searcher();
+
+        # a variable has its declared type; members and calls follow their receivers
+        assertEq("name:file<File>", chainAt(searcher, tree, 7, 4));
+        assertEq("name:file<File> -> member:stat()", chainAt(searcher, tree, 7, 10));
+        # the closing parenthesis of a call belongs to the call
+        assertEq("name:file<File> -> member:stat()", chainAt(searcher, tree, 7, 14));
+        assertEq("name:file<File> -> member:stat() -> member:size", chainAt(searcher, tree, 7, 17));
+
+        # a called function and a method of its result
+        assertEq("name:now()", chainAt(searcher, tree, 8, 5));
+        assertEq("name:now() -> member:format()", chainAt(searcher, tree, 8, 12));
+
+        # the components of a scoped name name their namespaces
+        assertEq("name:Qore", chainAt(searcher, tree, 9, 5));
+        assertEq("name:Qore::Thread", chainAt(searcher, tree, 9, 12));
+        assertEq("name:Qore::Thread::Mutex", chainAt(searcher, tree, 9, 20));
+
+        # literals, new expressions and casts have their types
+        assertEq("type:<string> -> member:size()", chainAt(searcher, tree, 10, 11));
+        assertEq("type:<Mutex> -> member:lock()", chainAt(searcher, tree, 11, 19));
+        assertEq("type:<hash<StatInfo>> -> member:size", chainAt(searcher, tree, 12, 29));
+        assertEq("type:<list> -> member:size()", chainAt(searcher, tree, 13, 12));
+        assertEq("type:<hash> -> member:keys()", chainAt(searcher, tree, 14, 23));
+        assertEq("type:<bool> -> member:typeCode()", chainAt(searcher, tree, 17, 10));
+
+        # the result of calling the result of a call is unknown
+        assertEq("name:f() -> unknown:", chainAt(searcher, tree, 15, 16));
+
+        # variable names with "$" and self
+        assertEq("name:s<string> -> member:size()", chainAt(searcher, tree, 16, 8));
+        assertEq("name:self<C> -> member:n()", chainAt(searcher, tree, 3, 13));
+
+        # positions outside of expressions have no chain
+        assertNothing(searcher.getExpressionChain(tree, 7, 0));
+        assertNothing(searcher.getExpressionChain(tree, 6, 1));
+        assertNothing(searcher.getExpressionChain(tree, -1, 0));
+
+        # the ranges of the links: the name of a member, and a scoped name through the component at the position
+        list<hash<AstExpressionLink>> chain = searcher.getExpressionChain(tree, 7, 10);
+        assertEq({"start": {"line": 7, "character": 9}, "end": {"line": 7, "character": 13}}, chain[1].range);
+        chain = searcher.getExpressionChain(tree, 9, 12);
+        assertEq({"start": {"line": 9, "character": 4}, "end": {"line": 9, "character": 16}}, chain[0].range);
+        assertFalse(chain[0].call);
+    }
+
+    testHoverReturnTypes() {
+        AstParser parser();
+        AstTree tree = parser.parseString("%modern\n"
+            "class C {\n"
+            "    int size() { return 1; }\n"
+            "    private *string name(int i) { return NOTHING; }\n"
+            "    static hash<string, int> map() { return {}; }\n"
+            "    m() {}\n"
+            "    private:internal static synchronized abstract float n();\n"
+            "}\n"
+            "list<int> sub f() { return (); }\n"
+            "sub g() {}\n");
+        AstTreeSearcher searcher();
+        assertEq("int size()", searcher.hoverInfo(tree, ASYK_Method, 2, 9).description);
+        assertEq("private *string name(int i)", searcher.hoverInfo(tree, ASYK_Method, 3, 21).description);
+        assertEq("static hash<string, int> map()", searcher.hoverInfo(tree, ASYK_Method, 4, 30).description);
+        # methods and functions without return types
+        assertEq("m()", searcher.hoverInfo(tree, ASYK_Method, 5, 4).description);
+        # all modifiers
+        assertEq("private:internal static synchronized abstract float n()",
+            searcher.hoverInfo(tree, ASYK_Method, 6, 56).description);
+        assertEq("list<int> sub f()", searcher.hoverInfo(tree, ASYK_Function, 8, 15).description);
+        assertEq("sub g()", searcher.hoverInfo(tree, ASYK_Function, 9, 4).description);
     }
 }

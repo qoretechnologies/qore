@@ -63,6 +63,14 @@ class InfrastructureTest inherits QUnit::Test {
             \testSignatureHelpBuiltinZeroArgumentMethod());
         addTestCase("signature help — rejects incompatible builtin overload",
             \testSignatureHelpBuiltinInvalidOverload());
+        addTestCase("hover — methods of basic types", \testHoverBasicTypeMethods());
+        addTestCase("hover — builtin members by receiver type", \testHoverBuiltinMembers());
+        addTestCase("hover — builtin functions and namespaces", \testHoverBuiltinNames());
+        addTestCase("hover — source symbols before builtin symbols", \testHoverSourceBeforeBuiltin());
+        addTestCase("completion — methods of basic types", \testCompletionBasicTypeMethods());
+        addTestCase("completion — builtin receiver expressions", \testCompletionBuiltinReceivers());
+        addTestCase("completion — builtin namespace members", \testCompletionBuiltinNamespace());
+        addTestCase("signature help — builtin receiver expressions", \testSignatureHelpBuiltinReceivers());
         addTestCase("signature help — user function still works", \testSignatureHelpUserFunction());
         addTestCase("no metadata dir — graceful", \testNoMetadataGraceful());
         addTestCase("document symbols — typedef uses LSP TypeParameter kind",
@@ -450,6 +458,228 @@ class InfrastructureTest inherits QUnit::Test {
         hash<auto> result = sendSignatureHelp(uri, 3, 15);
         assertEq(0, result.signatures.size(),
             "no signature should be returned when no overload accepts both arguments");
+    }
+
+    #! Returns True if the qpp metadata of the pseudo-classes is installed; the methods of basic types need it
+    /** The metadata directory is found as QLSServer finds it
+    */
+    private bool pseudoClassMetadataAvailable() {
+        string dir = ENV.QORE_METADATA_DIR
+            ?? dirname(regex_subst(get_qore_library_info().UserModuleDir, "/+$", "")) + "/qore/metadata";
+        return is_file(dir + "/core/Pseudo_QC_String.meta.json") || is_file(dir + "/Pseudo_QC_String.meta.json");
+    }
+
+    #! Returns the hover contents at a position as one string
+    private string hoverText(string uri, int line, int character) {
+        return (foldl $1 + "\n---\n" + $2, sendHover(uri, line, character).contents ?? ()) ?? "";
+    }
+
+    #! Returns the labels of the completion items at a position
+    private hash<string, bool> completionLabels(string uri, int line, int character) {
+        return map {$1.label: True}, sendCompletion(uri, line, character).items ?? ();
+    }
+
+    testHoverBasicTypeMethods() {
+        if (!pseudoClassMetadataAvailable()) {
+            testSkip("the qpp metadata of the pseudo-classes is not installed");
+        }
+        string text = "%modern\n"
+            "sub test(string s, list<int> l, hash<auto> h) {\n"
+            "    s.size();\n"
+            "    l.first();\n"
+            "    h.keys();\n"
+            "    now().format(\"YYYY\");\n"
+            "    \"abc\".upr();\n"
+            "}\n";
+        string uri = setupDoc(text);
+
+        # the method of the pseudo-class of the type of the receiver, not methods of classes with the same name
+        string hover = hoverText(uri, 2, 7);
+        assertRegex("<string>::size\\(\\)", hover);
+        assertNRegex("EventLoop", hover);
+        assertRegex("<list>::first\\(\\)", hoverText(uri, 3, 7));
+        assertRegex("<hash>::keys\\(\\)", hoverText(uri, 4, 7));
+        # the receiver is the result of a call
+        assertRegex("<date>::format\\(string format\\)", hoverText(uri, 5, 12));
+        # the receiver is a literal
+        assertRegex("<string>::upr\\(\\)", hoverText(uri, 6, 11));
+        # the hover range is the name of the method
+        assertEq({"start": {"line": 2, "character": 6}, "end": {"line": 2, "character": 10}},
+            sendHover(uri, 2, 7).range);
+    }
+
+    testHoverBuiltinMembers() {
+        string text = "%modern\n"
+            "sub test() {\n"
+            "    Qore::Thread::Mutex x();\n"
+            "    x.lock();\n"
+            "    File f();\n"
+            "    f.readLine();\n"
+            "    hash<StatInfo> si = hstat(\"/\");\n"
+            "    si.size;\n"
+            "    hstat(\"/\").mtime;\n"
+            "    f.nosuchMethod();\n"
+            "}\n";
+        string uri = setupDoc(text);
+
+        # the method of the class of the variable, not of another class with a method with the same name
+        string hover = hoverText(uri, 3, 7);
+        assertRegex("Mutex::lock", hover);
+        assertNRegex("File::lock", hover);
+        # an inherited method
+        assertRegex("ReadOnlyFile::readLine", hoverText(uri, 5, 8));
+        # the members of typed hashes
+        hover = hoverText(uri, 7, 8);
+        assertRegex("int Qore::StatInfo::size", hover);
+        assertNRegex("EventLoop", hover);
+        assertRegex("date Qore::StatInfo::mtime", hoverText(uri, 8, 16));
+        # a builtin receiver without the member has no hover instead of the hover of other classes
+        assertEq((), sendHover(uri, 9, 8).contents);
+    }
+
+    testHoverBuiltinNames() {
+        string text = "%modern\n"
+            "sub test() {\n"
+            "    hstat(\"/\");\n"
+            "    Qore::printf(\"x\");\n"
+            "    Qore::Thread::Mutex m();\n"
+            "}\n";
+        string uri = setupDoc(text);
+
+        # a called name is a function, not a method with the same name
+        string hover = hoverText(uri, 2, 6);
+        assertRegex("hstat\\(string path\\)", hover);
+        assertNRegex("Dir::hstat", hover);
+        hover = hoverText(uri, 3, 11);
+        assertRegex("printf\\(string fmt", hover);
+        assertNRegex("File::printf", hover);
+        # the components of qualified names
+        assertRegex("namespace Qore::Thread", hoverText(uri, 4, 12));
+        assertRegex("class Qore::Thread::Mutex", hoverText(uri, 4, 20));
+    }
+
+    testHoverSourceBeforeBuiltin() {
+        string text = "%modern\n"
+            "class Counter {\n"
+            "    #! returns the count\n"
+            "    int size() { return 1; }\n"
+            "}\n"
+            "#! the thread ID in the test\n"
+            "int sub gettid() { return 1; }\n"
+            "sub test() {\n"
+            "    Counter c();\n"
+            "    c.size();\n"
+            "    gettid();\n"
+            "}\n";
+        string uri = setupDoc(text);
+
+        # the method of the class in the source, not of a builtin class or pseudo-class
+        hash<auto> hover = sendHover(uri, 9, 7);
+        assertEq(("int size()",), hover.contents);
+        assertEq({"start": {"line": 9, "character": 6}, "end": {"line": 9, "character": 10}}, hover.range);
+        # a function in the source is not resolved as the builtin function with the same name
+        hover = sendHover(uri, 10, 5);
+        assertEq(("int sub gettid()",), hover.contents);
+    }
+
+    testCompletionBasicTypeMethods() {
+        if (!pseudoClassMetadataAvailable()) {
+            testSkip("the qpp metadata of the pseudo-classes is not installed");
+        }
+        string text = "%modern\n"
+            "sub test(string s, hash<auto> h, int i) {\n"
+            "    s.su\n"
+            "}\n";
+        string uri = setupDoc(text);
+        hash<auto> result = sendCompletion(uri, 2, 8);
+        hash<string, bool> labels = map {$1.label: True}, result.items;
+        assertTrue(labels.substr, sprintf("substr is a method of strings: %y", keys labels));
+        # methods of other types do not match
+        assertFalse(labels.lock ?? False);
+        hash<auto> substr = (select result.items, $1.label == "substr")[0];
+        assertEq(2, substr.kind, "a method");
+        assertRegex("<string>::substr", substr.detail);
+        # the client of the test does not support Markdown documentation
+        assertEq(Type::String, substr.documentation.type());
+        assertTrue(substr.documentation.size() > 0);
+
+        # all values have the methods of <value>
+        uri = setupDoc("%modern\nsub test(int i) {\n    i.\n}\n");
+        assertTrue(completionLabels(uri, 2, 6).typeCode ?? False);
+    }
+
+    testCompletionBuiltinReceivers() {
+        string text = "%modern\n"
+            "sub test() {\n"
+            "    File f();\n"
+            "    f.\n"
+            "}\n";
+        # inherited methods of builtin classes
+        hash<string, bool> labels = completionLabels(setupDoc(text), 3, 6);
+        assertTrue(labels.open2 ?? False);
+        assertTrue(labels.readLine ?? False, "readLine is inherited from ReadOnlyFile");
+        assertFalse(labels.constructor ?? False);
+
+        # the members of a typed hash returned by a function
+        labels = completionLabels(setupDoc("%modern\nsub test() {\n    hstat(\"/\").\n}\n"), 2, 15);
+        assertTrue(labels.size ?? False);
+        assertTrue(labels.mtime ?? False);
+
+        if (pseudoClassMetadataAvailable()) {
+            # the methods of the value of a call
+            labels = completionLabels(setupDoc("%modern\nsub test() {\n    now().\n}\n"), 2, 10);
+            assertTrue(labels.format ?? False, sprintf("format is a method of dates: %y", keys labels));
+        }
+    }
+
+    testCompletionBuiltinNamespace() {
+        string text = "%modern\n"
+            "sub test() {\n"
+            "    Qore::Thread::\n"
+            "}\n";
+        hash<auto> result = sendCompletion(setupDoc(text), 2, 18);
+        hash<string, hash<auto>> items = map {$1.label: $1}, result.items;
+        assertEq(7, items.Mutex.kind, "a class");
+        assertEq("Mutex", items.Mutex.insertText, "a class name is not called");
+        assertEq(7, items.Queue.kind, "a class");
+        assertFalse(exists items.printf, "printf is not in Qore::Thread");
+        assertFalse(exists items.File, "File is not in Qore::Thread");
+
+        # the functions and namespaces of the root namespace
+        result = sendCompletion(setupDoc("%modern\nsub test() {\n    Qore::pri\n}\n"), 2, 13);
+        items = map {$1.label: $1}, result.items;
+        assertEq(3, items.printf.kind, "a function");
+        assertEq("printf(", items.printf.insertText, "a function is called");
+        assertFalse(exists items.Mutex);
+        result = sendCompletion(setupDoc("%modern\nsub test() {\n    Qore::Thr\n}\n"), 2, 13);
+        items = map {$1.label: $1}, result.items;
+        assertEq(9, items.Thread.kind, "a namespace");
+        assertEq("Thread::", items.Thread.insertText);
+    }
+
+    testSignatureHelpBuiltinReceivers() {
+        string text = "%modern\n"
+            "sub test() {\n"
+            "    Qore::printf(\"x\");\n"
+            "    File f();\n"
+            "    f.readLine(True);\n"
+            "}\n";
+        string uri = setupDoc(text);
+        # a function in a namespace
+        hash<auto> result = sendSignatureHelp(uri, 2, 17);
+        assertEq(1, result.signatures.size());
+        assertRegex("^printf\\(string fmt", result.signatures[0].label);
+        # an inherited method
+        result = sendSignatureHelp(uri, 4, 15);
+        assertEq(1, result.signatures.size());
+        assertRegex("^readLine\\(", result.signatures[0].label);
+
+        if (pseudoClassMetadataAvailable()) {
+            uri = setupDoc("%modern\nsub test() {\n    now().format(\"YYYY\");\n}\n");
+            result = sendSignatureHelp(uri, 2, 17);
+            assertEq(1, result.signatures.size());
+            assertRegex("^format\\(string format\\) returns string", result.signatures[0].label);
+        }
     }
 
     testSignatureHelpUserFunction() {

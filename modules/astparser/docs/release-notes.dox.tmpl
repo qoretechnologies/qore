@@ -23,6 +23,12 @@
       @ref astparser::AstTreeSearcher::findScopeSymbols() "AstTreeSearcher::findScopeSymbols()" support closures,
       including closures in nested hashes and lists: closure parameters and locals are resolved, and the locals of
       the enclosing code are in scope in a closure
+    - added @ref astparser::AstTreeSearcher::getExpressionChain() "AstTreeSearcher::getExpressionChain()" and the
+      @ref astparser::AstExpressionLink "AstExpressionLink" hashdecl, which give the receiver chain of an expression
+      such as \c "f.stat().size", so the types of members and call results can be resolved link by link
+    - the signatures of functions and methods from
+      @ref astparser::AstTreeSearcher::hoverInfo() "AstTreeSearcher::hoverInfo()" include their modifiers and
+      return types
     - added \c ADK_Typedef constant for typedef declarations
     - added \c ASYK_TypeAlias constant for typedef symbol kind
     - added \c ASUK_TypedefDeclName and \c ASUK_TypedefTypeName constants for typedef usage kinds

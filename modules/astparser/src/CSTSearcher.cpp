@@ -176,9 +176,10 @@ std::string CSTSearcher::getFieldText(TSNode node, const char* fieldName,
 // --------------------------------------------------------------------------
 
 QoreHashNode* CSTSearcher::makeRange(TSNode node, ExceptionSink* xsink) {
-    TSPoint start = ts_node_start_point(node);
-    TSPoint end = ts_node_end_point(node);
+    return makeRange(ts_node_start_point(node), ts_node_end_point(node), xsink);
+}
 
+QoreHashNode* CSTSearcher::makeRange(TSPoint start, TSPoint end, ExceptionSink* xsink) {
     ReferenceHolder<QoreHashNode> startHash(new QoreHashNode, xsink);
     ReferenceHolder<QoreHashNode> endHash(new QoreHashNode, xsink);
     ReferenceHolder<QoreHashNode> range(new QoreHashNode, xsink);
@@ -1168,23 +1169,9 @@ std::string CSTSearcher::getSymbolType(
     // `value`; the enclosing declaration's type must not mask `obj`'s type.
     CSTSymbolInfo symbolInfo = findSymbolInfo(result, line, col, cancel);
     if (!symbolInfo.name.empty()) {
-        std::unique_ptr<std::vector<CSTScopeSymbolInfo>> symbols(
-            findScopeSymbols(result, line, col, cancel));
-        if (symbols) {
-            for (const auto& symbol : *symbols) {
-                if (cancel()) {
-                    return std::string();
-                }
-                if (symbol.symbol.name == symbolInfo.name) {
-                    // Enrich only the matching symbol instead of every symbol
-                    // in scope; large scopes otherwise make a single type
-                    // lookup unnecessarily expensive.
-                    CSTSymbolDetail detail = enrichSymbol(symbol, result, cancel);
-                    if (!detail.typeName.empty()) {
-                        return detail.typeName;
-                    }
-                }
-            }
+        std::string typeName = getVariableType(result, line, col, symbolInfo.name, cancel);
+        if (!typeName.empty()) {
+            return typeName;
         }
     }
     if (cancel.failed()) {
@@ -1262,6 +1249,268 @@ std::string CSTSearcher::getSymbolType(
     }
 
     return std::string();
+}
+
+std::string CSTSearcher::getVariableType(const AstParseResult* result, uint32_t line, uint32_t col,
+        const std::string& name, CSTCancelCheck& cancel) {
+    std::unique_ptr<std::vector<CSTScopeSymbolInfo>> symbols(findScopeSymbols(result, line, col, cancel));
+    if (!symbols) {
+        return std::string();
+    }
+    for (const auto& symbol : *symbols) {
+        if (cancel()) {
+            return std::string();
+        }
+        if (symbol.symbol.name == name) {
+            // Enrich only the matching symbol instead of every symbol
+            // in scope; large scopes otherwise make a single type
+            // lookup unnecessarily expensive.
+            CSTSymbolDetail detail = enrichSymbol(symbol, result, cancel);
+            if (!detail.typeName.empty()) {
+                return detail.typeName;
+            }
+        }
+    }
+    return std::string();
+}
+
+// --------------------------------------------------------------------------
+// Expression chains
+// --------------------------------------------------------------------------
+
+//! The maximum nesting of the receivers of an expression; deeper receivers are unknown
+static constexpr unsigned MaxExpressionChainDepth = 64;
+
+//! Returns true if a node is the given field of its parent
+static bool isFieldOf(TSNode parent, const char* field, TSNode node) {
+    TSNode child = ts_node_child_by_field_name(parent, field, strlen(field));
+    return !ts_node_is_null(child) && ts_node_eq(child, node);
+}
+
+//! Returns true if the node type is a scoped name
+static bool isScopedName(const char* type) {
+    return strcmp(type, "scoped_identifier") == 0 || strcmp(type, "generic_scoped_identifier") == 0;
+}
+
+//! Returns the type of a literal or a literal data structure, or nullptr
+static const char* getLiteralTypeName(TSNode node) {
+    const char* type = ts_node_type(node);
+    if (strcmp(type, "string") == 0 || strcmp(type, "string_concatenation") == 0) {
+        return "string";
+    }
+    if (strcmp(type, "list_literal") == 0) {
+        return "list";
+    }
+    if (strcmp(type, "hash_literal") == 0 || strcmp(type, "paren_hash_literal") == 0) {
+        return "hash";
+    }
+    if (strcmp(type, "literal") || !ts_node_named_child_count(node)) {
+        return nullptr;
+    }
+    const char* valueType = ts_node_type(ts_node_named_child(node, 0));
+    if (strcmp(valueType, "integer") == 0) {
+        return "int";
+    }
+    if (strcmp(valueType, "float") == 0 || strcmp(valueType, "special_float") == 0) {
+        return "float";
+    }
+    if (strcmp(valueType, "number") == 0) {
+        return "number";
+    }
+    if (strcmp(valueType, "boolean") == 0) {
+        return "bool";
+    }
+    if (strcmp(valueType, "date") == 0 || strcmp(valueType, "relative_date") == 0
+            || strcmp(valueType, "time") == 0) {
+        return "date";
+    }
+    if (strcmp(valueType, "binary") == 0) {
+        return "binary";
+    }
+    return nullptr;
+}
+
+bool CSTSearcher::appendExpressionChain(TSNode expr, const AstParseResult* result,
+        std::vector<CSTExpressionLink>& chain, unsigned depth, CSTCancelCheck& cancel) {
+    if (cancel()) {
+        return false;
+    }
+    CSTExpressionLink link;
+    link.setRange(expr);
+    const char* type = ts_node_type(expr);
+    if (depth > MaxExpressionChainDepth) {
+        chain.push_back(std::move(link));
+        return true;
+    }
+
+    if (strcmp(type, "parenthesized_expression") == 0 || strcmp(type, "primary_expression") == 0) {
+        // the value of a parenthesized expression or of an expression wrapper is the value of its expression
+        TSNode inner = {};
+        if (!cst_for_each_child(expr, true, cancel, [&](TSNode child) {
+                    if (cst_is_comment(ts_node_type(child))) {
+                        return true;
+                    }
+                    inner = child;
+                    return false;
+                }) && cancel.failed()) {
+            return false;
+        }
+        if (ts_node_is_null(inner)) {
+            chain.push_back(std::move(link));
+            return true;
+        }
+        return appendExpressionChain(inner, result, chain, depth + 1, cancel);
+    }
+
+    if (strcmp(type, "call_expression") == 0) {
+        TSNode callee = ts_node_child_by_field_name(expr, "function", 8);
+        if (ts_node_is_null(callee)) {
+            chain.push_back(std::move(link));
+            return true;
+        }
+        if (!appendExpressionChain(callee, result, chain, depth + 1, cancel)) {
+            return false;
+        }
+        CSTExpressionLink& last = chain.back();
+        if (last.call || (last.kind != CELK_Name && last.kind != CELK_Member)) {
+            // the result of calling the result of a call or of another expression is unknown
+            chain.push_back(std::move(link));
+        } else {
+            last.call = true;
+        }
+        return true;
+    }
+
+    if (strcmp(type, "member_expression") == 0) {
+        TSNode object = ts_node_child_by_field_name(expr, "object", 6);
+        TSNode member = ts_node_child_by_field_name(expr, "member", 6);
+        if (ts_node_is_null(object) || ts_node_is_null(member)) {
+            chain.push_back(std::move(link));
+            return true;
+        }
+        if (!appendExpressionChain(object, result, chain, depth + 1, cancel)) {
+            return false;
+        }
+        const char* memberType = ts_node_type(member);
+        link.setRange(member);
+        if (strcmp(memberType, "identifier") == 0 || strcmp(memberType, "streaming_keyword_identifier") == 0) {
+            link.kind = CELK_Member;
+            link.name = result->getNodeText(member);
+        }
+        chain.push_back(std::move(link));
+        return true;
+    }
+
+    if (strcmp(type, "identifier") == 0 || strcmp(type, "variable_name") == 0 || strcmp(type, "self") == 0) {
+        link.kind = CELK_Name;
+        link.name = result->getNodeText(expr);
+        if (!link.name.empty() && link.name[0] == '$') {
+            link.name.erase(0, 1);
+        }
+        TSPoint start = ts_node_start_point(expr);
+        if (link.name == "self") {
+            // the type of self is the class of the method
+            for (TSNode parent = ts_node_parent(expr); !ts_node_is_null(parent); parent = ts_node_parent(parent)) {
+                if (cancel()) {
+                    return false;
+                }
+                if (strcmp(ts_node_type(parent), "class_declaration") == 0) {
+                    link.typeName = getNodeName(parent, result);
+                    break;
+                }
+            }
+        } else {
+            link.typeName = getVariableType(result, start.row, start.column, link.name, cancel);
+            if (cancel.failed()) {
+                return false;
+            }
+        }
+        chain.push_back(std::move(link));
+        return true;
+    }
+
+    if (isScopedName(type)) {
+        link.kind = CELK_Name;
+        link.name = result->getNodeText(expr);
+        chain.push_back(std::move(link));
+        return true;
+    }
+
+    if (strcmp(type, "new_expression") == 0 || strcmp(type, "cast_expression") == 0) {
+        link.typeName = getFieldText(expr, "type", result);
+        if (!link.typeName.empty()) {
+            link.kind = CELK_Type;
+        }
+        chain.push_back(std::move(link));
+        return true;
+    }
+
+    if (const char* literalType = getLiteralTypeName(expr)) {
+        link.kind = CELK_Type;
+        link.typeName = literalType;
+    }
+    chain.push_back(std::move(link));
+    return true;
+}
+
+std::vector<CSTExpressionLink> CSTSearcher::getExpressionChain(const AstParseResult* result,
+        uint32_t line, uint32_t col, CSTCancelCheck& cancel) {
+    std::vector<CSTExpressionLink> chain;
+    if (!result) {
+        return chain;
+    }
+    std::vector<TSNode> ancestors = findNodeAndParents(result, line, col, cancel);
+    if (ancestors.empty()) {
+        return chain;
+    }
+
+    size_t i = 0;
+    TSNode expr = ancestors[0];
+    const char* type = ts_node_type(expr);
+    if (strcmp(type, "argument_list") == 0) {
+        // the parentheses of an argument list belong to the call
+        if (i + 1 >= ancestors.size() || strcmp(ts_node_type(ancestors[i + 1]), "call_expression")) {
+            return chain;
+        }
+        expr = ancestors[++i];
+    } else if (strcmp(type, "identifier") == 0 && i + 1 < ancestors.size()
+            && isScopedName(ts_node_type(ancestors[i + 1]))) {
+        TSNode scoped = ancestors[i + 1];
+        uint32_t count = ts_node_named_child_count(scoped);
+        if (count && !ts_node_eq(ts_node_named_child(scoped, count - 1), expr)) {
+            // a component before the last one of a scoped name names a namespace or class: "Qore::Thread" in
+            // "Qore::Thread::Mutex"
+            CSTExpressionLink link;
+            link.kind = CELK_Name;
+            uint32_t start = ts_node_start_byte(scoped);
+            link.name = result->getSource().substr(start, ts_node_end_byte(expr) - start);
+            link.start = ts_node_start_point(scoped);
+            link.end = ts_node_end_point(expr);
+            chain.push_back(std::move(link));
+            return chain;
+        }
+        expr = ancestors[++i];
+    }
+
+    // the member of a member expression and the callee of a call are part of their expressions
+    while (i + 1 < ancestors.size()) {
+        TSNode parent = ancestors[i + 1];
+        const char* parentType = ts_node_type(parent);
+        if ((strcmp(parentType, "member_expression") == 0 && isFieldOf(parent, "member", expr))
+                || (strcmp(parentType, "call_expression") == 0 && isFieldOf(parent, "function", expr))) {
+            expr = parent;
+            ++i;
+            continue;
+        }
+        break;
+    }
+
+    if (!appendExpressionChain(expr, result, chain, 0, cancel)
+            || (chain.size() == 1 && chain[0].kind == CELK_Unknown)) {
+        // a position that is not in an expression has no chain
+        chain.clear();
+    }
+    return chain;
 }
 
 bool CSTSearcher::findDeclarationByName(TSNode root, const AstParseResult* result,
@@ -2234,6 +2483,14 @@ std::string CSTSearcher::buildFunctionSignature(TSNode node, const AstParseResul
             strcmp(childType, "parameter_list") == 0) {
             return false;
         }
+        // the grammar groups the modifiers in a "modifiers" node
+        if (strcmp(childType, "modifiers") == 0) {
+            cst_for_each_child(child, true, cancel, [&](TSNode modifier) {
+                ss << result->getNodeText(modifier) << " ";
+                return true;
+            });
+            return true;
+        }
         if (strcmp(childType, "access_modifier") == 0 ||
             strcmp(childType, "static") == 0 ||
             strcmp(childType, "abstract") == 0 ||
@@ -2241,8 +2498,9 @@ std::string CSTSearcher::buildFunctionSignature(TSNode node, const AstParseResul
             strcmp(childType, "deprecated") == 0) {
             ss << result->getNodeText(child) << " ";
         }
-        // Return type
-        if (strcmp(childType, "simple_type") == 0 ||
+        // Return type; the grammar wraps it in a "type" node
+        if (strcmp(childType, "type") == 0 ||
+            strcmp(childType, "simple_type") == 0 ||
             strcmp(childType, "complex_type") == 0 ||
             strcmp(childType, "nothing_type") == 0) {
             ss << result->getNodeText(child) << " ";

@@ -424,6 +424,9 @@ public class QLSServer {
         #! Single-char prefix index: lowercased first char → list of names
         hash<string, list<string>> metaPrefixIndex;
 
+        #! Resolves expressions to builtin symbols and types (NOTHING if metadata loading fails)
+        *BuiltinResolver builtinResolver;
+
         #! Process-local cache for immutable standard module URI lists and lazily built symbol indexes
         static hash<auto> stdModuleIndexCache = {};
 
@@ -1401,6 +1404,7 @@ public class QLSServer {
                 metaByQualifiedName = builtinMetadataCache.metaByQualifiedName;
                 metaClassByName = builtinMetadataCache.metaClassByName;
                 metaPrefixIndex = builtinMetadataCache.metaPrefixIndex;
+                builtinResolver = builtinMetadataCache.builtinResolver;
                 log(0, "metadata index reused: %d names, %d qualified, %d classes",
                     metaByName.size(), metaByQualifiedName.size(), metaClassByName.size());
                 return;
@@ -1440,6 +1444,14 @@ public class QLSServer {
         log(0, "metadata index built: %d names, %d qualified, %d classes",
             metaByName.size(), metaByQualifiedName.size(), metaClassByName.size());
 
+        # step 5: the resolver for expressions, with the pseudo-classes of the basic types, which are only in the
+        # qpp metadata
+        list<hash<QoreApiMetadata::ClassInfo>> pseudoClasses = docIndex
+            ? QoreApiMetadata::SymbolMerger::extractPseudoClasses(docIndex)
+            : ();
+        builtinResolver = new BuiltinResolver(metaByName, metaClassByName, pseudoClasses, builtinMetadata);
+        log(0, "builtin resolver created: %d pseudo-classes", pseudoClasses.size());
+
         {
             AutoLock al(builtinMetadataCacheMutex);
             if (!builtinMetadataCache.builtinMetadata || builtinMetadataCache.dir != cacheKey) {
@@ -1450,6 +1462,7 @@ public class QLSServer {
                     "metaByQualifiedName": metaByQualifiedName,
                     "metaClassByName": metaClassByName,
                     "metaPrefixIndex": metaPrefixIndex,
+                    "builtinResolver": builtinResolver,
                 };
             }
         }
@@ -2220,6 +2233,20 @@ public class QLSServer {
         # get the document
         Document doc = documents{request.params.textDocument.uri};
 
+        # members of builtin types, qualified builtin names and calls of builtin functions are resolved by the
+        # types of their receivers instead of by name
+        *hash<auto> builtinHover = getBuiltinHover(doc, request.params.position);
+        if (builtinHover) {
+            return make_jsonrpc_response(jsonRpcVer, request.id, builtinHover);
+        }
+
+        # members of the classes in the source are resolved by their definitions, as their symbols have qualified
+        # names
+        *hash<auto> memberHover = getMemberDefinitionHover(doc, request.params.position);
+        if (memberHover) {
+            return make_jsonrpc_response(jsonRpcVer, request.id, memberHover);
+        }
+
         # find requested symbol in the document
         *hash<auto> symbolInfo = doc.findSymbolInfo(request.params.position);
         if (!symbolInfo) {
@@ -2299,6 +2326,122 @@ public class QLSServer {
         }
 
         return make_jsonrpc_response(jsonRpcVer, request.id, result);
+    }
+
+    #! Returns the hover of the builtin symbol of an expression at a position
+    /** Handles members accessed with "." on values of builtin types, such as the methods of strings and the members
+        of typed hashes, qualified builtin names and calls of builtin functions; other names are resolved by the
+        source symbols first.
+
+        @param doc the document
+        @param position the LSP position
+
+        @return the LSP hover, or NOTHING if the expression at the position is not resolved with builtin types; the
+        hover has no contents if the receiver is a builtin type without the member
+    */
+    private:internal *hash<auto> getBuiltinHover(Document doc, hash<auto> position) {
+        if (!builtinResolver) {
+            return NOTHING;
+        }
+        *list<hash<AstExpressionLink>> chain = doc.getExpressionChain(position);
+        if (!chain) {
+            return NOTHING;
+        }
+        hash<AstExpressionLink> last = chain.last();
+        if (last.kind == "name") {
+            # variables, and names that are neither qualified nor called, are resolved by the source symbols first
+            if (last.typeName || (!last.call && last.name.find("::") < 0)) {
+                return NOTHING;
+            }
+        } else if (last.kind != "member") {
+            return NOTHING;
+        }
+
+        BuiltinSourceNameCheck isSourceName = bool sub (string name) {
+            return isSourceSymbolName(name);
+        };
+        if (chain.size() > 1
+                && !builtinResolver.resolve(chain[0..chain.size() - 2], isSourceName).type) {
+            # the members of other types are resolved by the source symbols
+            return NOTHING;
+        }
+
+        list<string> contents = ();
+        foreach hash<auto> entry in (builtinResolver.resolve(chain, isSourceName).entries) {
+            *string md = formatMetadataEntry(entry);
+            if (md) {
+                contents += md;
+            }
+        }
+        if (!contents && chain.size() == 1) {
+            # a name that is not builtin
+            return NOTHING;
+        }
+        return {
+            "range": last.range,
+            "contents": contents,
+        };
+    }
+
+    #! Returns the hover of a member accessed with "." from its definitions in the source
+    /** @param doc the document
+        @param position the LSP position
+
+        @return the LSP hover, or NOTHING if the position is not on a member of a value or the member has no
+        definition in the source
+    */
+    private:internal *hash<auto> getMemberDefinitionHover(Document doc, hash<auto> position) {
+        *list<hash<AstExpressionLink>> chain = doc.getExpressionChain(position);
+        if (chain.size() < 2 || chain.last().kind != "member") {
+            return NOTHING;
+        }
+        *list<auto> definitions = doc.resolveDefinition(position);
+        if (!definitions && (documents.size() > 1 || workspaceIndex || (stdModuleIndexLoaded && stdModuleIndex))) {
+            definitions = resolveDefinitionCrossDoc(doc, position);
+        }
+        list<string> contents = ();
+        foreach hash<auto> location in (definitions) {
+            *Document definitionDoc = getAnyDocument(location.uri);
+            if (!definitionDoc) {
+                continue;
+            }
+            # a member is declared as a method or as a member
+            foreach int kind in (ASTSymbolKind.Method, ASTSymbolKind.Field) {
+                *hash<auto> description = definitionDoc.hoverInfo(kind, location.range.start);
+                if (description) {
+                    contents += replace(description.description, "*", "\\*");
+                    break;
+                }
+            }
+        }
+        return contents ? {"range": chain.last().range, "contents": contents} : NOTHING;
+    }
+
+    #! Kinds of declarations whose names are not resolved as builtin symbols
+    const SourceNameKinds = {
+        ASTSymbolKind.Function: True,
+        ASTSymbolKind.Method: True,
+        ASTSymbolKind.Class: True,
+        ASTSymbolKind.Constant: True,
+        ASTSymbolKind.Namespace: True,
+        ASTSymbolKind.Interface: True,
+        ASTSymbolKind.Enum: True,
+        ASTSymbolKind.TypeAlias: True,
+    };
+
+    #! Returns @ref True if a name is declared in the open documents or the workspace
+    /** @param name an unqualified name
+
+        @return @ref True if a function, method, class, constant, namespace, hashdecl, enum or typedef has the name,
+        so it does not name a builtin symbol
+    */
+    private:internal bool isSourceSymbolName(string name) {
+        foreach hash<auto> symbol in (findWorkspaceSymbols(name, True)) {
+            if (SourceNameKinds{symbol.kind}) {
+                return True;
+            }
+        }
+        return False;
     }
 
     #! Build hover Markdown from builtin metadata
@@ -2652,7 +2795,9 @@ public class QLSServer {
 
         # Create provider + engine for this request
         CSTCompletionProvider provider(doc, request.params.position, metaByName, metaClassByName,
-            metaPrefixIndex);
+            metaPrefixIndex, builtinResolver, bool sub (string name) {
+                return isSourceSymbolName(name);
+            });
         QoreCodeCompletion::CompletionEngine engine(provider);
 
         # Get completions
@@ -3370,7 +3515,9 @@ public class QLSServer {
         bool isScopeAccess = False;
 
         *list<auto> dotMatch = (beforeParen =~ x/\.(\w+)$/);
-        *list<auto> scopeMatch = dotMatch ? NOTHING : (beforeParen =~ x/(\w+)::(\w+)$/);
+        *list<auto> scopeMatch = dotMatch ? NOTHING : (beforeParen =~ x/((?:\w+::)*\w+)::(\w+)$/);
+        # the position of the end of the receiver of a method, for its type
+        int receiverCharacter = -1;
         *list<auto> plainMatch = !dotMatch && !scopeMatch ? (beforeParen =~ x/(\w+)$/) : NOTHING;
 
         if (dotMatch) {
@@ -3380,6 +3527,7 @@ public class QLSServer {
             int dotPos = beforeParen.rfind(".");
             string beforeDot = beforeParen.substr(0, dotPos);
             beforeDot =~ s/\s+$//;
+            receiverCharacter = beforeDot.length() - 1;
             *list<auto> targetMatch = (beforeDot =~ x/(\w+)$/);
             if (targetMatch) {
                 target = targetMatch[0];
@@ -3475,7 +3623,36 @@ public class QLSServer {
         *string methodDoc;
         if (!exists params && builtinMetadata) {
             *hash<auto> metaInfo;
-            if (isDotAccess && target) {
+            BuiltinSourceNameCheck isSourceName = bool sub (string name) {
+                return isSourceSymbolName(name);
+            };
+            # whether the callable was resolved with the builtin type of its receiver or its namespace
+            bool resolved = False;
+            if (isDotAccess && receiverCharacter >= 0 && builtinResolver) {
+                # methods of builtin types, resolved from the receiver expression, such as "now().format("
+                *list<hash<AstExpressionLink>> chain = doc.getExpressionChain({
+                    "line": line,
+                    "character": receiverCharacter,
+                });
+                *hash<BuiltinType> type = chain ? builtinResolver.resolve(chain, isSourceName).type : NOTHING;
+                if (type) {
+                    metaInfo = QLSServer::selectOverload(builtinResolver.getMethods(type, funcName),
+                        minimumParamCount);
+                    resolved = True;
+                }
+            } else if (isScopeAccess && builtinResolver) {
+                # functions in builtin namespaces, such as "Qore::printf("
+                metaInfo = QLSServer::selectOverload(builtinResolver.resolve((<AstExpressionLink>{
+                    "kind": "name",
+                    "name": target + "::" + funcName,
+                    "call": True,
+                    "range": {},
+                },), isSourceName).entries ?? (), minimumParamCount);
+                resolved = exists metaInfo;
+            }
+            if (resolved) {
+                # the callable was resolved with the builtin types
+            } else if (isDotAccess && target) {
                 # resolve type from scope symbols
                 *string typeName;
                 *list<auto> scopeSymbols2 = doc.findScopeSymbolsDetailed({
@@ -3571,6 +3748,16 @@ public class QLSServer {
                 ? (commaCount < paramInfos.size() ? commaCount : paramInfos.size() - 1)
                 : 0,
         });
+    }
+
+    #! Returns the first overload with at least the given number of parameters
+    private:internal static *hash<auto> selectOverload(list<hash<auto>> overloads, int minimumParamCount) {
+        foreach hash<auto> entry in (overloads) {
+            if ((entry.params ? entry.params.size() : 0) >= minimumParamCount) {
+                return entry;
+            }
+        }
+        return NOTHING;
     }
 
     #! Find a method in builtin metadata by class name and method name
@@ -5582,17 +5769,25 @@ class CSTCompletionProvider inherits QoreCodeCompletion::AbstractCompletionProvi
         hash<string, hash<auto>> metaClassByName;
         #! Single-char prefix index for fast lookup
         hash<string, list<string>> metaPrefixIndex;
+        #! Resolves the builtin types of receivers (may be NOTHING)
+        *BuiltinResolver builtinResolver;
+        #! Returns True for names declared in the source code, which are not builtin symbols
+        *BuiltinSourceNameCheck isSourceName;
     }
 
     constructor(Document doc, hash<auto> position,
             *hash<string, list<hash<auto>>> metaByName,
             *hash<string, hash<auto>> metaClassByName,
-            *hash<string, list<string>> metaPrefixIndex) {
+            *hash<string, list<string>> metaPrefixIndex,
+            *BuiltinResolver builtinResolver,
+            *BuiltinSourceNameCheck isSourceName) {
         self.doc = doc;
         self.position = position;
         self.metaByName = metaByName ?? {};
         self.metaClassByName = metaClassByName ?? {};
         self.metaPrefixIndex = metaPrefixIndex ?? {};
+        self.builtinResolver = builtinResolver;
+        self.isSourceName = isSourceName;
     }
 
     int getParseOptions() {
@@ -5764,38 +5959,35 @@ class CSTCompletionProvider inherits QoreCodeCompletion::AbstractCompletionProvi
             }
         }
 
-        # metadata fallback for builtin class members
-        if (!result.size() && metaClassByName{typeName}) {
-            hash<auto> ci = metaClassByName{typeName};
-            foreach hash<auto> m in (ci.instance_methods) {
-                string name = m.name;
-                if (name == "constructor" || name == "destructor" || name == "copy") {
-                    continue;
-                }
-                if (!seen{name}
-                        && QoreCodeCompletion::CompletionEngine::matchesPrefix(name, prefix)) {
-                    seen{name} = True;
-                    result += <QoreCodeCompletion::CompletionItem>{
-                        "label": name,
-                        "kind": "method",
-                        "isCallable": True,
-                    };
+        # members of builtin types, including inherited members, the methods of the pseudo-classes of basic types
+        # and the members of typed hashes; the receiver is resolved from the expression before the "." so calls such
+        # as "now()." are also completed
+        if (!result.size() && builtinResolver) {
+            *hash<BuiltinType> type;
+            if (targetCharacter >= 0) {
+                *list<hash<AstExpressionLink>> chain = doc.getExpressionChain({
+                    "line": position.line,
+                    "character": targetCharacter,
+                });
+                if (chain) {
+                    type = builtinResolver.resolve(chain, isSourceName).type;
                 }
             }
-            # also add public members
-            foreach hash<auto> m in (ci.members) {
-                if (m.access != "public") {
-                    continue;
-                }
-                string name = m.name;
-                if (!seen{name}
-                        && QoreCodeCompletion::CompletionEngine::matchesPrefix(name, prefix)) {
-                    seen{name} = True;
-                    result += <QoreCodeCompletion::CompletionItem>{
-                        "label": name,
-                        "kind": "member",
-                        "isCallable": False,
-                    };
+            if (!type) {
+                type = builtinResolver.getType(typeName, isSourceName);
+            }
+            if (type) {
+                foreach hash<auto> entry in (builtinResolver.getInstanceMembers(type)) {
+                    if (QoreCodeCompletion::CompletionEngine::matchesPrefix(entry.name, prefix)) {
+                        bool method = entry.symbol_type != "member";
+                        result += <QoreCodeCompletion::CompletionItem>{
+                            "label": entry.name,
+                            "kind": method ? "method" : "member",
+                            "detail": entry.signature,
+                            "documentation": entry.description,
+                            "isCallable": method,
+                        };
+                    }
                 }
             }
         }
@@ -5829,7 +6021,29 @@ class CSTCompletionProvider inherits QoreCodeCompletion::AbstractCompletionProvi
             }
         }
 
-        # metadata fallback for builtin class static members / namespace members
+        # members of builtin namespaces, such as "Qore::Thread::"
+        if (!result.size() && builtinResolver) {
+            *hash<BuiltinType> type = builtinResolver.resolve((<AstExpressionLink>{
+                "kind": "name",
+                "name": target,
+                "range": {},
+            },), isSourceName).type;
+            if (type.ns) {
+                foreach hash<auto> entry in (builtinResolver.getScopeMembers(type)) {
+                    if (QoreCodeCompletion::CompletionEngine::matchesPrefix(entry.name, prefix)) {
+                        result += <QoreCodeCompletion::CompletionItem>{
+                            "label": entry.name,
+                            "kind": entry.symbol_type,
+                            "detail": entry.signature,
+                            "documentation": entry.description,
+                            "isCallable": entry.symbol_type == "function",
+                        };
+                    }
+                }
+            }
+        }
+
+        # metadata fallback for builtin class static members
         if (!result.size() && metaClassByName{target}) {
             hash<auto> ci = metaClassByName{target};
             foreach hash<auto> m in (ci.static_methods) {

@@ -34,6 +34,35 @@
 #include "CSTSearcher.h"
 #include "QC_AstTree.h"
 
+//! A link in the receiver chain of an expression, as returned by @ref astparser::AstTreeSearcher::getExpressionChain()
+/** The chain of \c "f.stat().size" has the variable \c f, the called method \c stat and the member \c size.
+
+    @since %Qore 3.0
+*/
+hashdecl AstExpressionLink {
+    //! the kind of the link
+    /** - \c "name": a name, such as a variable, function, class, constant or namespace; scoped names are qualified
+        - \c "member": a member or method accessed with \c "."
+        - \c "type": a value of a known type: a literal, a \c new expression or a cast
+        - \c "unknown": an expression whose type cannot be determined from the syntax
+    */
+    string kind;
+
+    //! the name of a \c "name" or \c "member" link
+    *string name;
+
+    //! the declared type of a variable for a \c "name" link, or the type of a \c "type" link
+    *string typeName;
+
+    //! whether the link is called, as in \c "stat()"
+    bool call = False;
+
+    //! the range of the name, or of the expression for \c "type" and \c "unknown" links
+    /** A hash with \c start and \c end keys, each with \c line and \c character keys (0-indexed)
+    */
+    hash<auto> range;
+}
+
 //! AstTreeSearcher class — provides symbol search on tree-sitter CST.
 /** Provides methods for finding symbols, references, scope symbols, hover info,
     and symbol info in a parsed Qore AST tree.
@@ -777,6 +806,83 @@ AstTreeSearcher::constructor() {
     }
 
     return new QoreStringNode(typeName);
+}
+
+//! Returns the receiver chain of the expression at a position
+/** The chain starts at the outermost receiver and ends at the name at the position, including the call of a
+    callee; at the closing parenthesis of a call, it ends with the call.  The types of builtin and user-defined
+    symbols can then be resolved link by link, for example for completion after \c "now()."
+
+    @param tree AST tree structure
+    @param line the line of the position (0-indexed)
+    @param col the column of the position (0-indexed)
+
+    @return the links of the chain from the outermost receiver, or @ref nothing if there is no expression at the
+    position
+
+    @par Example:
+    @code{.py}
+# the chain of "f.stat().size" at "size": "f" (a "name" link with the type of the variable), "stat" (a called
+# "member" link) and "size" (a "member" link)
+*list<hash<AstExpressionLink>> chain = searcher.getExpressionChain(tree, line, col);
+    @endcode
+
+    @throw THREAD-CANCELLED the current thread was cancelled
+    @throw PROGRAM-INTERRUPTED the current program was interrupted
+
+    @since %Qore 3.0
+ */
+*list<hash<AstExpressionLink>> AstTreeSearcher::getExpressionChain(astparser::AstTree[AstTreeHolder] tree, int line,
+        int col) [flags=RET_VALUE_ONLY] {
+    AstParseResult* result = tree->get();
+    if (!result || line < 0 || col < 0) {
+        return QoreValue();
+    }
+    CSTCancelCheck cancel(xsink, "searching an astparser syntax tree");
+
+    std::vector<CSTExpressionLink> chain = CSTSearcher::getExpressionChain(
+        result, static_cast<uint32_t>(line), static_cast<uint32_t>(col), cancel);
+    if (*xsink || chain.empty()) {
+        return QoreValue();
+    }
+
+    // the names of the CSTExpressionLinkKind values
+    static const char* kindNames[] = {"name", "member", "type", "unknown"};
+    static_assert(sizeof(kindNames) / sizeof(kindNames[0]) == CELK_Unknown + 1, "a kind name for each link kind");
+    ReferenceHolder<QoreListNode> lst(new QoreListNode(hashdeclAstExpressionLink->getTypeInfo()), xsink);
+    for (const CSTExpressionLink& link : chain) {
+        if (cancel()) {
+            return QoreValue();
+        }
+        ReferenceHolder<QoreHashNode> h(new QoreHashNode(hashdeclAstExpressionLink, xsink), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        h->setKeyValue("kind", new QoreStringNode(kindNames[link.kind]), xsink);
+        if (!link.name.empty()) {
+            h->setKeyValue("name", new QoreStringNode(link.name), xsink);
+        }
+        if (!link.typeName.empty()) {
+            h->setKeyValue("typeName", new QoreStringNode(link.typeName), xsink);
+        }
+        h->setKeyValue("call", link.call, xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        QoreHashNode* range = CSTSearcher::makeRange(link.start, link.end, xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        h->setKeyValue("range", range, xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        lst->push(h.release(), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+    }
+    return lst.release();
 }
 
 //! Find members of a named type.

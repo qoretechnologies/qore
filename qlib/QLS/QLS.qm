@@ -59,6 +59,8 @@ module QLS {
       notifications; call @ref QLS::QLSServer::main() "main()" to run the server loop
     - @ref QLS::Document "Document": document model wrapping the @c astparser CST; provides
       symbol search, diagnostics, completion, formatting, folding, and cross-document resolution
+    - @ref QLS::BuiltinResolver "BuiltinResolver": resolves expressions to builtin functions, classes, namespaces,
+      typed hashes and the methods of basic types (see @ref qls_builtins)
     - @ref QLS::FileIndex "FileIndex": compact symbol index of a source file that is not open in the editor
     - @ref QLS::DocumentCache "DocumentCache": size-limited cache of syntax trees parsed from indexed files
     - @ref QLS::Messenger "Messenger": JSON-RPC transport layer reading/writing LSP messages
@@ -80,7 +82,7 @@ module QLS {
 
     <b>Navigation</b>
     |!Feature|!LSP Method|!Description
-    |Hover|@c textDocument/hover|Shows type, documentation, and source info for the symbol under the cursor
+    |Hover|@c textDocument/hover|Shows type, documentation, and source info for the symbol under the cursor; members accessed with @c . are resolved by the types of their receivers, including the methods of basic types and the members of typed hashes (see @ref qls_builtins)
     |Go to Definition|@c textDocument/definition|Jumps to the definition of a symbol
     |Go to Declaration|@c textDocument/declaration|Jumps to the declaration of a symbol; declarations are definitions in %Qore
     |Document Links|@c textDocument/documentLink|Links the module names and paths of @c %%requires, @c %%try-module and @c %%include directives to their source files, resolving module names like %Qore with the document's module path directives, @c QORE_MODULE_DIR and the library module path
@@ -90,8 +92,8 @@ module QLS {
 
     <b>Code Intelligence</b>
     |!Feature|!LSP Method|!Description
-    |Code Completion|@c textDocument/completion|Context-aware completions with trigger characters @c . (member access), @c : (namespace/static), and normal identifier completion; uses @ref qorecodecompletionintro "QoreCodeCompletion"; callables are inserted as snippets with the cursor between the parentheses, VS Code clients are asked to show parameter hints and further suggestions after callables and namespaces, and documentation is Markdown when the client supports it
-    |Signature Help|@c textDocument/signatureHelp|Function/method parameter hints with trigger characters @c ( and @c ,
+    |Code Completion|@c textDocument/completion|Context-aware completions with trigger characters @c . (member access), @c : (namespace/static), and normal identifier completion; uses @ref qorecodecompletionintro "QoreCodeCompletion"; callables are inserted as snippets with the cursor between the parentheses, VS Code clients are asked to show parameter hints and further suggestions after callables and namespaces, and documentation is Markdown when the client supports it; the members of builtin classes include inherited members, and the receivers of @c . can be calls such as @c now() (see @ref qls_builtins)
+    |Signature Help|@c textDocument/signatureHelp|Function/method parameter hints with trigger characters @c ( and @c ,, including the functions of builtin namespaces and the methods of builtin types
     |Inlay Hints|@c textDocument/inlayHint|Shows parameter names at call sites as inline hints
     |Semantic Tokens|@c textDocument/semanticTokens/full, @c .../full/delta and @c .../range|Full semantic syntax highlighting with node-level classification
     |Document Highlight|@c textDocument/documentHighlight|Highlights all occurrences of the symbol under the cursor
@@ -275,6 +277,25 @@ server.main();
     and their @c selectionRange is the declared name; local variables of functions and methods are not included.
     Clients without this capability, and requests with the @c retType parameter used by the VS Code extension
     API, get a flat list of @c SymbolInformation objects with qualified names.
+
+    @subsection qls_builtins Builtin Symbols
+
+    Hover, completion and signature help cover the builtin API of %Qore: its functions, classes, constants,
+    hashdecls, enums and namespaces, which are extracted with the @c reflection module and documented with the
+    qpp metadata installed with %Qore, and the pseudo-classes of the basic types, which are only in the qpp
+    metadata: the methods of @c \<string\> can be called on strings, for example, and the methods of @c \<value\> on
+    all values.
+
+    Members accessed with @c . are resolved by the types of their receivers, which
+    @ref astparser::AstTreeSearcher::getExpressionChain() returns as chains of variables, calls and members; in
+    @code{.py}
+string text = now().format("YYYY-MM-DD") + ": " + hstat(path).size;
+    @endcode
+    @c format is the method of dates, as @c now() returns a date, and @c size is the member of the
+    @c StatInfo hashdecl that @c hstat() returns.  The members of a builtin class include the members of its
+    parent classes and the methods of the @c \<object\> and @c \<value\> pseudo-classes, and typed hashes have the
+    methods of the @c \<hash\> pseudo-class.  Names declared in the open documents or the workspace, such as a
+    function named like a builtin function, are resolved as source symbols instead of builtin symbols.
 
     @section qlsrelnotes Release Notes
 

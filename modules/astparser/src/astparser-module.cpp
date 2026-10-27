@@ -57,7 +57,11 @@ extern "C" DLLEXPORT void astparser_qore_module_desc(QoreModuleInfo& mod_info) {
 
 QoreNamespace AstParserNS("Qore::astparser");
 
+const TypedHashDecl* hashdeclAstExpressionLink;
+
 static void astparser_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
+    // hashdecls are initialized first, as the methods of the classes use them
+    hashdeclAstExpressionLink = init_hashdecl_AstExpressionLink(AstParserNS);
     AstParserNS.addSystemClass(initAstTreeClass(AstParserNS));
     AstParserNS.addSystemClass(initAstParserClass(AstParserNS));
     AstParserNS.addSystemClass(initAstTreeSearcherClass(AstParserNS));

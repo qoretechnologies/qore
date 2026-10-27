@@ -70,6 +70,87 @@ public class SymbolMerger {
             ast_methods, doc_index);
     }
 
+    #! Returns the pseudo-classes of the basic types from a qpp doc index
+    /** Pseudo-classes, such as \c \<string\> for strings, are not in the namespaces that reflection extracts; their
+        methods can be called on all values of their types, and the methods of \c \<value\> on all values.
+
+        @param doc_index the qpp .meta.json index from QppDocIndex
+
+        @return the pseudo-classes with their documentation, named like \c "<string>"
+
+        @par Example:
+        @code{.py}
+hash<string, hash<auto>> doc_index = QppDocIndex::buildFromDirectory(metadata_dir);
+# the methods that can be called on strings, such as "size"
+list<string> string_methods = map $1.name, (select SymbolMerger::extractPseudoClasses(doc_index),
+    $1.name == "<string>")[0].instance_methods;
+        @endcode
+
+        @since %Qore 3.0
+    */
+    static list<hash<ClassInfo>> extractPseudoClasses(hash<string, hash<auto>> doc_index) {
+        list<hash<ClassInfo>> result = ();
+        foreach hash<auto> i in (doc_index.pairIterator()) {
+            hash<auto> qpp = i.value;
+            if (!i.key.equalPartial("<") || i.key.find("::") >= 0 || qpp.symbol_type != "class") {
+                continue;
+            }
+            hash<ClassInfo> ci({
+                "name": i.key,
+                "full_name": i.key,
+                "is_final": qpp.is_final ? True : False,
+            });
+            if (qpp.parents) {
+                ci.parents = cast<list<string>>(map string($1), qpp.parents);
+            }
+            if (exists qpp.description) {
+                *hash<auto> parsed = DocCommentParser::parse(string(qpp.description));
+                if (exists parsed && parsed.description.length()) {
+                    ci.description = string(parsed.description);
+                }
+            }
+            foreach hash<auto> m in (qpp.instance_methods) {
+                ci.instance_methods += SymbolMerger::makeQppMethod(ci.name, m);
+            }
+            foreach hash<auto> m in (qpp.static_methods) {
+                ci.static_methods += SymbolMerger::makeQppMethod(ci.name, m);
+            }
+            result += ci;
+        }
+        return result;
+    }
+
+    #! Returns the metadata of a method from its qpp metadata, with its documentation
+    private static hash<MethodInfo> makeQppMethod(string class_name, hash<auto> qpp) {
+        hash<MethodInfo> mi({
+            "name": qpp.name,
+            "full_name": class_name + "::" + qpp.name,
+            "signature": qpp.signature ?? "",
+            "return_type": qpp.return_type,
+            "return_type_info": qpp.return_type_info,
+            "named_callable": qpp.named_callable ? True : False,
+            "access": qpp.access ?? "public",
+            "is_static": qpp.is_static ? True : False,
+            "is_abstract": qpp.is_abstract ? True : False,
+        });
+        if (qpp.named_parameters) {
+            mi.named_parameters = cast<list<string>>(map string($1), qpp.named_parameters);
+        }
+        foreach hash<auto> p in (qpp.params) {
+            hash<ParameterInfo> pi({
+                "name": p.name,
+                "type_name": p.type_name ?? "auto",
+                "type_info": p.type_info,
+            });
+            if (exists p.default_value) {
+                pi.default_value = string(p.default_value);
+            }
+            mi.params += pi;
+        }
+        SymbolMerger::applyQppMethodDocs(\mi, qpp);
+        return mi;
+    }
+
     #! Flatten a NamespaceInfo tree into qualified-name-keyed hashes
     private static flattenNamespace(hash<NamespaceInfo> ns,
             reference<hash<string, hash<auto>>> classes,

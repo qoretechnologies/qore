@@ -409,6 +409,19 @@ public class Document {
         return NOTHING;
     }
 
+    #! Returns the receiver chain of the expression at a position
+    /** @param Position LSP position (line, character)
+        @return the links of the chain from the outermost receiver, or NOTHING if there is no expression at the
+        position; see @ref astparser::AstTreeSearcher::getExpressionChain()
+    */
+    *list<hash<AstExpressionLink>> getExpressionChain(hash<auto> Position) {
+        if (tree) {
+            AstTreeSearcher searcher();
+            return searcher.getExpressionChain(tree, Position.line, Position.character);
+        }
+        return NOTHING;
+    }
+
     #! Returns the symbol index of the document
     /** The index is created when first requested and discarded when the document changes.
     */

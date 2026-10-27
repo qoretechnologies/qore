@@ -4718,6 +4718,9 @@ while (*binary chunk = input.read(65536)) {
       - editing: completion with snippets, parameter hints and Markdown documentation, signature help, inlay
         hints, linked editing of local variables, document, range and on-type formatting, and updates of the
         directives that refer to renamed or moved files
+      - the builtin API in hover, completion and signature help: builtin functions, classes, constants, typed
+        hashes and namespaces, and the methods of basic types such as strings and lists, with members resolved
+        by the types of their receivers, as in \c now().format() (see @ref qls_builtins)
       - diagnostics: standalone scripts are checked with the %Qore parser when they are opened and saved, with
         quick fixes for the fixes of %Qore diagnostics, and other files get syntax errors; diagnostics are
         published or pulled (see @ref qls_diagnostics)

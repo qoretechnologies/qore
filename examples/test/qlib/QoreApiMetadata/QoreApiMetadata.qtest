@@ -28,6 +28,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/astparser"
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires json
 %requires QoreApiMetadata
 
 %exec-class QoreApiMetadataTest
@@ -123,6 +124,7 @@ class QoreApiMetadataTest inherits QUnit::Test {
         addTestCase("doxygen: all text fields converted", \testDoxygenAllFieldsConverted());
         addTestCase("doc comment deferred past namespaces", \testDocCommentDeferredPastNamespaces());
         addTestCase("doc comment not deferred across content", \testDocCommentNotDeferredAcrossContent());
+        addTestCase("merger: pseudo-classes from qpp metadata", \testPseudoClasses());
         set_return_value(main());
     }
 
@@ -2247,5 +2249,86 @@ class QoreApiMetadataTest inherits QUnit::Test {
         assertRegex("`warning`", r.warnings[0]);
         assertRegex("`newFunc`", r.deprecated);
         assertRegex("`OtherClass`", r.see_also[0]);
+    }
+
+    testPseudoClasses() {
+        # qpp metadata as generated for lib/Pseudo_QC_String.qpp, with a regular class that is not a pseudo-class
+        hash<auto> meta = {
+            "schema_version": "1.1",
+            "source_file": "Pseudo_QC_String.qpp",
+            "classes": (
+                {
+                    "name": "<string>",
+                    "description": "//! Methods in this pseudo-class can be executed on strings\n/***/\n",
+                    "parents": ("<value>",),
+                    "is_final": False,
+                    "instance_methods": (
+                        {
+                            "name": "substr",
+                            "signature": "*string <string>::substr(softint start, softint len = -1) const",
+                            "return_type": "*string",
+                            "description": "//! Returns a substring\n/** @param start the offset\n"
+                                "    @param len the length\n\n    @return the substring\n */\n",
+                            "params": (
+                                {"name": "start", "type_name": "softint"},
+                                {"name": "len", "type_name": "softint", "default_value": "-1"},
+                            ),
+                            "named_callable": True,
+                            "named_parameters": ("start", "len"),
+                            "access": "public",
+                            "is_static": False,
+                            "is_const_method": True,
+                        },
+                    ),
+                    "static_methods": (),
+                },
+                {
+                    "name": "File",
+                    "namespace_path": "Qore",
+                    "instance_methods": (),
+                },
+            ),
+        };
+        string dir = sprintf("%s/qore-api-metadata-%d", ENV.TMPDIR ?? "/tmp", getpid());
+        mkdir(dir);
+        on_exit {
+            unlink(dir + "/Pseudo_QC_String.meta.json");
+            rmdir(dir);
+        }
+        string path = dir + "/Pseudo_QC_String.meta.json";
+        {
+            File f();
+            f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(make_json(meta));
+        }
+        hash<string, hash<auto>> doc_index = QoreApiMetadata::QppDocIndex::buildFromMetaFiles((path,));
+
+        list<hash<QoreApiMetadata::ClassInfo>> classes =
+            QoreApiMetadata::SymbolMerger::extractPseudoClasses(doc_index);
+        # regular classes are extracted by reflection, not as pseudo-classes
+        assertEq(("<string>",), (map $1.name, classes));
+        hash<QoreApiMetadata::ClassInfo> ci = classes[0];
+        assertEq("<string>", ci.full_name);
+        assertEq(("<value>",), ci.parents);
+        assertEq("Methods in this pseudo-class can be executed on strings", trim(ci.description));
+
+        hash<QoreApiMetadata::MethodInfo> mi = ci.instance_methods[0];
+        assertEq("substr", mi.name);
+        assertEq("<string>::substr", mi.full_name);
+        assertEq("*string", mi.return_type);
+        assertTrue(mi.is_const_method);
+        assertTrue(mi.named_callable);
+        assertEq(("start", "len"), mi.named_parameters);
+        assertEq(("start", "len"), (map $1.name, mi.params));
+        assertEq(("softint", "softint"), (map $1.type_name, mi.params));
+        assertNothing(mi.params[0].default_value);
+        assertEq("-1", mi.params[1].default_value);
+        # the documentation is parsed from the doc comment
+        assertEq("Returns a substring", trim(mi.description));
+        assertEq("the offset", trim(mi.params[0].description));
+        assertEq("the substring", trim(mi.return_description));
+
+        # an index without pseudo-classes has none
+        assertEq((), QoreApiMetadata::SymbolMerger::extractPseudoClasses({}));
     }
 }

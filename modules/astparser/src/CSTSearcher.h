@@ -98,6 +98,35 @@ struct CSTSymbolDetail {
     std::vector<CSTParamInfo> params;  //!< for callables
 };
 
+//! The kind of a link in the receiver chain of an expression
+enum CSTExpressionLinkKind {
+    CELK_Name,     //!< a name: a variable, function, class, constant or namespace
+    CELK_Member,   //!< a member or method accessed with "."
+    CELK_Type,     //!< a value of a known type: a literal, a new expression or a cast
+    CELK_Unknown,  //!< an expression whose type cannot be determined from the syntax
+};
+
+//! A link in the receiver chain of an expression, such as "stat" in "f.stat().size"
+struct CSTExpressionLink {
+    CSTExpressionLinkKind kind = CELK_Unknown;
+    //! the name of a name or member link; scoped names are qualified
+    std::string name;
+    //! the declared type of a variable for name links, or the type of a type link
+    std::string typeName;
+    //! whether the link is called
+    bool call = false;
+    //! the start of the name, or of the expression for type and unknown links
+    TSPoint start = {};
+    //! the end of the name, or of the expression for type and unknown links
+    TSPoint end = {};
+
+    //! Sets the range of the link to the range of a node
+    void setRange(TSNode node) {
+        start = ts_node_start_point(node);
+        end = ts_node_end_point(node);
+    }
+};
+
 //! Semantic token classification for syntax highlighting.
 struct SemanticToken {
     uint32_t line;
@@ -178,6 +207,9 @@ public:
     //! Build a QoreHashNode range from a TSNode (0-indexed).
     static QoreHashNode* makeRange(TSNode node, ExceptionSink* xsink);
 
+    //! Make an LSP-style range hash from start and end points.
+    static QoreHashNode* makeRange(TSPoint start, TSPoint end, ExceptionSink* xsink);
+
     //! Build a QoreHashNode location from a TSNode + URI.
     static QoreHashNode* makeLocation(TSNode node, const std::string& uri,
                                       ExceptionSink* xsink);
@@ -232,6 +264,19 @@ public:
 
     //! Resolve the type of a symbol at position (0-indexed).
     static std::string getSymbolType(
+        const AstParseResult* result,
+        uint32_t line, uint32_t col,
+        CSTCancelCheck& cancel);
+
+    //! Returns the receiver chain of the expression at a position (0-indexed)
+    /** The chain starts at the outermost receiver and ends at the name at the position, including the call of a
+        callee: "f.stat().size" at "stat" gives the variable "f" and the called member "stat".  At the closing
+        parenthesis of a call, the chain ends with the call.
+
+        @return the chain, or an empty vector if there is no expression at the position or the search was
+        cancelled
+    */
+    static std::vector<CSTExpressionLink> getExpressionChain(
         const AstParseResult* result,
         uint32_t line, uint32_t col,
         CSTCancelCheck& cancel);
@@ -321,6 +366,16 @@ public:
         CSTCancelCheck& cancel);
 
 private:
+    //! Returns the declared type of a variable visible at a position, or an empty string
+    static std::string getVariableType(const AstParseResult* result, uint32_t line, uint32_t col,
+        const std::string& name, CSTCancelCheck& cancel);
+
+    //! Appends the receiver chain of an expression
+    /** @return false if the search was cancelled
+    */
+    static bool appendExpressionChain(TSNode expr, const AstParseResult* result,
+        std::vector<CSTExpressionLink>& chain, unsigned depth, CSTCancelCheck& cancel);
+
     //! Collect all identifier nodes matching `name` in the tree.
     /** @param root the node to search
         @param result the parse result owning the node
