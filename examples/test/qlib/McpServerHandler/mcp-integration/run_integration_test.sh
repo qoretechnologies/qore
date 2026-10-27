@@ -60,6 +60,16 @@ PROTOCOL_MATRIX=(
     "2026-07-28:2.0.0:modern"
 )
 
+# Prints the requirements that an SDK release needs in addition to itself: pip installs the newest
+# release of each dependency, and an older SDK release can fail with a dependency released after
+# it.  mcp 1.6.0, 1.9.4 and 1.20.0 import eval_type_backport from pydantic's private
+# _internal._typing_extra module, which pydantic 2.14 removed, so "import mcp" fails with it.
+sdk_requirements() {
+    case "$1" in
+        1.6.0|1.9.4|1.20.0) echo "pydantic<2.14" ;;
+    esac
+}
+
 if [ -z "$PYTHON" ]; then
     for py in python3.14 python3.13 python3.12 python3.11 python3.10; do
         if command -v "$py" &>/dev/null; then
@@ -139,7 +149,9 @@ setup_venv() {
         "$venv/bin/pip" install --quiet --upgrade pip
     fi
     echo -e "${YELLOW}Installing mcp==$sdk for protocol $proto...${NC}"
-    "$venv/bin/pip" install --quiet "mcp==$sdk"
+    # the extra requirements are separate words; none contains a space
+    # shellcheck disable=SC2046
+    "$venv/bin/pip" install --quiet "mcp==$sdk" $(sdk_requirements "$sdk")
 }
 
 check_venv() {
