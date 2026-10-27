@@ -61,9 +61,14 @@ class ConnectStreamingTest inherits QUnit::Test {
         */
         const ConcurrentRetries = 2;
 
+        #! maximum request body size of the listener on \c mLimitPort
+        const LimitedBodySize = 4096;
+
         *Logger mLogger;
         *HttpServer mServer;
         int mPort;
+        #! port of a listener with a maximum request body size of @ref LimitedBodySize
+        int mLimitPort;
         bool mH3Available = False;
         Connect::YamlConnectCodec mCodec();
 
@@ -135,6 +140,10 @@ l50Xb2GWQesIt9k5jF5IOw==
         addTestCase("H2 server-streaming error", \testH2ServerStreamError());
         addTestCase("H2 empty server stream", \testH2EmptyServerStream());
         addTestCase("H2 large server stream", \testH2LargeServerStream());
+        addTestCase("H2 unary response size limit", \testH2UnaryResponseLimit());
+        addTestCase("H2 unary request over server body limit", \testH2UnaryRequestTooLarge());
+        addTestCase("H2 ConnectClient streaming API", \testH2ClientApiStreaming());
+        addTestCase("H2 client stream over server body limit", \testH2ClientStreamRequestTooLarge());
 
         # HTTP/3 streaming tests
         addTestCase("H3 unary", \testH3Unary());
@@ -144,6 +153,8 @@ l50Xb2GWQesIt9k5jF5IOw==
         addTestCase("H3 server-streaming error", \testH3ServerStreamError());
         addTestCase("H3 empty server stream", \testH3EmptyServerStream());
         addTestCase("H3 large server stream", \testH3LargeServerStream());
+        addTestCase("H3 unary response size limit", \testH3UnaryResponseLimit());
+        addTestCase("H3 ConnectClient streaming API", \testH3ClientApiStreaming());
 
         # Compression streaming tests
         addTestCase("H2 compressed server-streaming gzip", \testH2CompressedServerStreamGzip());
@@ -269,6 +280,14 @@ l50Xb2GWQesIt9k5jF5IOw==
             mPort = info.port;
         }
 
+        mLimitPort = mServer.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "max_request_body_size": LimitedBodySize,
+        }).port;
+
         mServer.waitForAsyncIo();
     }
 
@@ -352,6 +371,211 @@ l50Xb2GWQesIt9k5jF5IOw==
         auto response = client.call("Test", "Echo", {"message": "hello", "count": 42});
         assertEq("hello", response.message, "H2 unary echo: message");
         assertEq(42, response.count, "H2 unary echo: count");
+    }
+
+    testH2UnaryResponseLimit() {
+        unaryResponseLimit("h2");
+    }
+
+    #! a request body over the server's maximum request body size is answered with 413 (not a stream reset)
+    testH2UnaryRequestTooLarge() {
+        Connect::ConnectClient client(sprintf("https://127.0.0.1:%d", mLimitPort), NOTHING,
+            <Connect::ConnectClientOptions>{"protocol": "h2", "accept_all_certs": True});
+        on_exit client.shutdown();
+
+        # a request under the limit succeeds
+        auto response = client.call("Test", "Echo", {"data": "small"});
+        assertEq("small", response.data);
+
+        # a 1 MiB request over a 4 KiB limit: the client gets the server's HTTP 413 as a Connect error
+        string big = strmul("X", 1024 * 1024);
+        hash<ExceptionInfo> ex = callError(client, {"data": big});
+        assertEq("CONNECT-ERROR", ex.err);
+        assertEq("HTTP 413", ex.desc);
+        assertEq(Connect::CONNECT_ERROR_UNKNOWN, ex.arg.code);
+
+        # each oversized request on the same connection is answered, and the connection stays usable
+        for (int i = 0; i < 3; ++i) {
+            ex = callError(client, {"data": big});
+            assertEq("CONNECT-ERROR", ex.err);
+            assertEq("HTTP 413", ex.desc);
+        }
+        response = client.call("Test", "Echo", {"data": "after"});
+        assertEq("after", response.data);
+    }
+
+    testH2ClientApiStreaming() {
+        clientApiStreaming("h2");
+    }
+
+    #! a client stream whose request body exceeds the server's maximum request body size gets the server's 413
+    testH2ClientStreamRequestTooLarge() {
+        Connect::ConnectClient client(sprintf("https://127.0.0.1:%d", mLimitPort), NOTHING,
+            <Connect::ConnectClientOptions>{"protocol": "h2", "accept_all_certs": True});
+        on_exit client.shutdown();
+
+        Connect::ConnectClientStream stream = client.clientStream("Test", "Aggregate");
+        string big = strmul("X", 64 * 1024);
+        try {
+            for (int i = 0; i < 16; ++i) {
+                stream.write({"name": big});
+            }
+            stream.writesDone();
+        } catch (hash<ExceptionInfo> ex) {
+            # the server may answer and stop the request (RST_STREAM(NO_ERROR)) before all of it is written
+        }
+        hash<ExceptionInfo> ex = readError(stream);
+        assertEq("CONNECT-ERROR", ex.err);
+        assertEq("HTTP 413", ex.desc);
+        assertEq(Connect::CONNECT_ERROR_UNKNOWN, ex.arg.code);
+
+        # the connection remains usable
+        auto response = client.call("Test", "Echo", {"data": "after"});
+        assertEq("after", response.data);
+    }
+
+    #! reads from a stream that must fail and returns the exception
+    private hash<ExceptionInfo> readError(Connect::ConnectClientStream stream) {
+        try {
+            while (stream.read()) {
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+        throw "TEST-ERROR", "the stream did not fail";
+    }
+
+    #! checks the streaming API of ConnectClient
+    private clientApiStreaming(string protocol) {
+        Connect::ConnectClient client(url(), NOTHING,
+            <Connect::ConnectClientOptions>{"protocol": protocol, "accept_all_certs": True});
+        on_exit client.shutdown();
+
+        # server streaming
+        Connect::ConnectClientStream stream = client.serverStream("Test", "Numbers", {"count": 5});
+        list<auto> msgs();
+        while (*auto msg = stream.read()) {
+            msgs += msg;
+        }
+        assertEq((0, 1, 2, 3, 4), (map $1.index, msgs));
+        assertEq("msg-4", msgs[4].value);
+        assertTrue(stream.readsDone());
+        hash<Connect::ConnectCallResult> result = stream.finish();
+        assertNothing(result.error);
+
+        # an empty server stream
+        stream = client.serverStream("Test", "Empty", {});
+        assertNothing(stream.read());
+        assertNothing(stream.finish().error);
+
+        # a server stream whose handler fails after one message
+        stream = client.serverStream("Test", "StreamError", {});
+        assertEq("before-error", stream.read().value);
+        assertNothing(stream.read());
+        result = stream.finish();
+        assertEq(Connect::CONNECT_ERROR_INTERNAL, result.error.code);
+        assertRegex("deliberate test error", result.error.message);
+
+        # client streaming
+        stream = client.clientStream("Test", "Aggregate");
+        foreach string name in ("a", "b", "c") {
+            stream.write({"name": name});
+        }
+        stream.writesDone();
+        result = stream.finish();
+        assertNothing(result.error);
+        assertEq({"count": 3, "names": ("a", "b", "c")}, result.body);
+
+        # bidirectional streaming (ConnectHandler receives the complete request before it calls the handler)
+        stream = client.bidiStream("Test", "BidiEcho");
+        foreach string text in ("x", "y", "z") {
+            stream.write({"text": text});
+        }
+        stream.writesDone();
+        msgs = ();
+        while (*auto msg = stream.read()) {
+            msgs += msg;
+        }
+        assertEq(("echo:x", "echo:y", "echo:z"), (map $1.reply, msgs));
+        assertNothing(stream.finish().error);
+
+        # an unknown method is rejected before the stream starts
+        stream = client.serverStream("Test", "NoSuchMethod", {});
+        hash<ExceptionInfo> ex = readError(stream);
+        assertEq("CONNECT-ERROR", ex.err);
+        assertEq(Connect::CONNECT_ERROR_UNIMPLEMENTED, ex.arg.code);
+        assertEq(Connect::CONNECT_ERROR_UNIMPLEMENTED, stream.finish().error.code);
+    }
+
+    #! makes a unary Test.Echo call that must fail and returns its exception
+    private hash<ExceptionInfo> callError(Connect::ConnectClient client, hash<auto> request) {
+        try {
+            client.call("Test", "Echo", request);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+        throw "TEST-ERROR", "the call did not fail";
+    }
+
+    #! checks the unary response size limit given by \c max_message_size
+    private unaryResponseLimit(string protocol) {
+        hash<auto> request = {"data": strmul("X", 8192)};
+        # the server echoes the request with the same codec, so the response body has the same size
+        int size = mCodec.serialize(request).size();
+
+        # a response of exactly the maximum size is accepted
+        {
+            Connect::ConnectClient client(url(), NOTHING, <Connect::ConnectClientOptions>{
+                "protocol": protocol, "accept_all_certs": True, "max_message_size": size,
+            });
+            on_exit client.shutdown();
+            auto response = client.call("Test", "Echo", request);
+            assertEq(request.data, response.data);
+        }
+
+        # a response one byte over the maximum fails with a message size error
+        {
+            Connect::ConnectClient client(url(), NOTHING, <Connect::ConnectClientOptions>{
+                "protocol": protocol, "accept_all_certs": True, "max_message_size": size - 1,
+            });
+            on_exit client.shutdown();
+            hash<ExceptionInfo> ex = callError(client, request);
+            assertEq("CONNECT-MESSAGE-SIZE-ERROR", ex.err);
+            # the limit is applied while the response is received (the HTTP client error), not after buffering it
+            assertRegex(sprintf("^unary response exceeds maximum %d bytes: ", size - 1), ex.desc);
+
+            # the client remains usable for responses under the limit
+            auto response = client.call("Test", "Echo", {"data": "small"});
+            assertEq("small", response.data);
+        }
+
+        # the limit applies to each message of a streamed response, not to the size of the response body: five
+        # messages of about 10 KB each are received under a limit of 16 KiB
+        {
+            Connect::ConnectClient client(url(), NOTHING, <Connect::ConnectClientOptions>{
+                "protocol": protocol, "accept_all_certs": True, "max_message_size": 16 * 1024,
+            });
+            on_exit client.shutdown();
+            Connect::ConnectClientStream stream = client.serverStream("Test", "LargeNumbers", {"count": 5});
+            list<auto> msgs();
+            while (*auto msg = stream.read()) {
+                msgs += msg;
+            }
+            assertEq(5, msgs.size());
+            assertEq((0, 1, 2, 3, 4), (map $1.index, msgs));
+            assertEq(10000, msgs[4].data.size());
+        }
+
+        # 0 means no limit
+        {
+            Connect::ConnectClient client(url(), NOTHING, <Connect::ConnectClientOptions>{
+                "protocol": protocol, "accept_all_certs": True, "max_message_size": 0,
+            });
+            on_exit client.shutdown();
+            hash<auto> big_request = {"data": strmul("Y", 512 * 1024)};
+            auto response = client.call("Test", "Echo", big_request);
+            assertEq(big_request.data, response.data);
+        }
     }
 
     testH2ServerStream() {
@@ -478,6 +702,20 @@ l50Xb2GWQesIt9k5jF5IOw==
         auto response = mCodec.deserialize(binary(resp.body));
         assertEq("hello", response.message, "H3 unary echo: message");
         assertEq(42, response.count, "H3 unary echo: count");
+    }
+
+    testH3ClientApiStreaming() {
+        if (!mH3Available) {
+            testSkip("HTTP/3 not available");
+        }
+        clientApiStreaming("h3");
+    }
+
+    testH3UnaryResponseLimit() {
+        if (!mH3Available) {
+            testSkip("HTTP/3 not available");
+        }
+        unaryResponseLimit("h3");
     }
 
     testH3ServerStream() {

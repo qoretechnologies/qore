@@ -100,6 +100,12 @@ public class ConnectClient {
         if (opts.protocol) {
             mgr_opts.protocol = opts.protocol;
         }
+        # a response body returned whole (a unary response) is a single message: limit it while it is received
+        # and as decoded instead of checking its size only after the whole body is in memory; streamed responses
+        # are not affected by this limit, their messages are checked individually
+        if (m_max_message_size > 0) {
+            mgr_opts.max_response_body_size = m_max_message_size;
+        }
 
         m_mgr = new HttpClientIo::HttpClientConnectionManager(mgr_opts);
     }
@@ -113,6 +119,7 @@ public class ConnectClient {
         @return the deserialized response
 
         @throw CONNECT-ERROR if the server returns an error
+        @throw CONNECT-MESSAGE-SIZE-ERROR the response exceeds the maximum message size (\c max_message_size)
     */
     auto call(string service, string method, auto request, *hash<ConnectCallOptions> opts) {
         # Serialize request
@@ -131,6 +138,10 @@ public class ConnectClient {
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "THREAD-CANCELLED" || ex.err == "PROGRAM-INTERRUPTED") {
                 rethrow;
+            }
+            if (ex.err == "HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE") {
+                throw "CONNECT-MESSAGE-SIZE-ERROR",
+                    sprintf("unary response exceeds maximum %d bytes: %s", m_max_message_size, ex.desc);
             }
             throw "CONNECT-ERROR",
                 sprintf("Connect call to %s failed: %s: %s", path, ex.err, ex.desc);
@@ -213,10 +224,8 @@ public class ConnectClient {
         string path = "/" + service + "/" + method;
         HttpClientIo::HttpClientStreamHandle stream = m_mgr.acquireStream(m_url);
         ensureStreamReady(stream);
-        stream.startStreaming("POST", path, headers);
-
-        # Send request with END_STREAM (client has one message)
-        stream.sendData(framed, True);
+        # the client has one message: send it as the one-shot request body, which ends the request (END_STREAM)
+        stream.startStreaming("POST", path, headers, False, framed);
 
         # Writes are done; recv_encoding is the same encoding we advertised
         return new ConnectClientStream(stream, m_codec, True, m_max_message_size,
@@ -236,11 +245,12 @@ public class ConnectClient {
         hash<string, string> headers = ConnectHelper::buildStreamRequestHeaders(
             m_codec.name(), opts);
 
-        # Start streaming (no request body yet)
+        # Start streaming with the request body stream open (no request body yet); messages are sent with
+        # ConnectClientStream::write(), and ConnectClientStream::writesDone() ends the request
         string path = "/" + service + "/" + method;
         HttpClientIo::HttpClientStreamHandle stream = m_mgr.acquireStream(m_url);
         ensureStreamReady(stream);
-        stream.startStreaming("POST", path, headers);
+        stream.startStreaming("POST", path, headers, True);
 
         return new ConnectClientStream(stream, m_codec, False, m_max_message_size,
             opts.encoding, opts.encoding);
