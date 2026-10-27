@@ -26991,3 +26991,77 @@ The preceding requested merge/install completed with the exact sudo make install
 Next investigate invocation-owned reusable closure-frame storage within the now-proven 192-byte object / 208-byte slot budget. Use additive helper/cleanup contracts, refresh and clear borrowed metadata per call, and prove every compiler slot/cleanup use. No new reusable implementation, fresh Java/develop ratio or global performance ceiling is established by this experiment.
 
 [Raw evidence](results-compact-automatic-closure-rejected-macos-arm64.json); [audit](audit-compact-automatic-closure-rejected.md). Large exact logs are losslessly compressed in the evidence blob map; each blob key is its decoded SHA256.
+
+## Reusable closure storage: three rejected revisions (2026-10-27)
+
+All three revisions are rejected and all nine runtime/compiler/test edits are reverted. No experimental helper was installed. The baseline is the optimized 7bc52fd305 merge of develop 577cc3cec6, including the retained stack-pop optimization. The worktree was based on b2ffa1d, which adds documentation only.
+
+The experiment adds an invocation-owned 192-byte closure frame inside a new 208-byte slot, with a discriminator in existing padding. New v10 call and v2 cleanup helpers preserve old v4/v9/v1 contracts. Each call refreshes borrowed closure/variant metadata, publishes its frame, restores context, waits for readers and clears borrowed metadata. The compiler proves the invariant reference, slot allocation/alignment/initialization, identical cache/context operands and every producer/cleanup use before selecting both new helpers together. Program/body/debugger/stack/provenance/capture checks remain live. No closure is retained across calls.
+
+Revision 1 checks the slot kind on repeated calls and clears inactive diagnostic loc/next fields. Revision 2 removes the repeated kind checks under the invariant live-reference contract, retaining Debug assertions and exact-type destruction, and lets enter() overwrite inactive loc/next as the existing ordinary reusable frame does. Revision 3 passes the already admitted variant explicitly and snapshots ThreadData locally during publication, removing dependent reloads seen in assembly. All variants fit the 192-byte object and 208-byte slot budget; the three compile-probed callers remain 496 bytes. The linked new miss/entry helper uses 144 bytes, while the old miss and automatic native helper use 96 and 352 bytes respectively. Smaller storage and fewer loads do not establish faster execution.
+
+All measurements use Release -O3 -DNDEBUG, allocation tracking off, LLVM 22.1.8 and qcc -O3 native modules on macOS ARM64. Each revision uses three forks, default/reverse/shuffle-487 layouts, 4,096 items, seed 7, one warmup and three 150 ms samples. All 648 jobs / 1,944 sample windows are retained. The same optimized host executable is used. Revision 1 compiles fresh candidate modules for the additive ABI; revisions 2/3 reuse those exact modules after verifying unchanged normal runtime identity. Before modules use the frozen merged baseline. Module images and library paths are checked; there is no identity override or source fallback.
+
+The prospective gate requires at least one closure target to improve at least 1% in aggregate and improve in every layout before confirmation. Neither target passes in any revision. The third revision's captured aggregate gain is 1.055%, but its default layout is 1.475% slower; plain closures improve only 0.240% with a 1.328% shuffle cost. Indirect calls are 1.862% slower in that revision and slower in all layouts. Other controls have mixed signs. The added ABI/compiler complexity has no consistent target benefit, so no confirmation, broad/short/populated timing or Debug runtime qualification follows. This is a failed target-benefit gate under the authorized broader-workload tradeoff, not a blanket ban on regressions.
+
+Numbers below are whole-kernel ns/item, not isolated call latency. Percentages are candidate versus before. No owned build/test/profile/archive work overlaps timing. The host is shared, with no exclusivity, affinity, frequency or thermal control; compare paired results within each revision, not absolute values between revisions.
+
+### Revision 1
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Aggregate change|!Default|!Reverse|!Shuffle
+|micro:closure_call|13.933682|14.069925|+0.978%|+4.117%|-0.254%|+0.450%
+|micro:closure_capture|19.284723|19.856022|+2.962%|+2.403%|+2.962%|+4.454%
+|micro:indirect_call|60.698732|61.887546|+1.959%|+2.587%|+1.783%|+1.370%
+|micro:indirect_wide|60.971639|61.691132|+1.180%|+1.715%|-0.022%|+1.261%
+|micro:polymorphic_call|23.455442|23.941650|+2.073%|-1.219%|+3.043%|+1.374%
+|micro:list_build|27.623998|27.372187|-0.912%|-2.057%|-1.060%|-0.149%
+|float:direct_loop_float_return|5.838141|5.801557|-0.627%|-1.364%|-0.538%|-1.169%
+|float:callback_loop_float_return|5.122336|5.110255|-0.236%|-0.446%|-0.461%|-0.035%
+|float:typed_local_int_unary|1.236205|1.238749|+0.206%|+0.191%|-0.094%|+0.646%
+|mixed:callback_pipeline|126.109952|126.248044|+0.110%|-1.003%|+1.229%|+0.110%
+|index:buffer_positive|15.053210|15.088514|+0.235%|-1.171%|+0.866%|+0.032%
+|index:buffer_negative|15.179546|15.113266|-0.437%|-0.719%|+0.812%|+0.014%
+
+### Revision 2
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Aggregate change|!Default|!Reverse|!Shuffle
+|micro:closure_call|13.814333|13.827983|+0.099%|+0.099%|-1.154%|+1.517%
+|micro:closure_capture|19.292814|19.711612|+2.171%|+0.401%|+2.171%|+2.243%
+|micro:indirect_call|59.603645|59.704181|+0.169%|+0.169%|+0.262%|-0.200%
+|micro:indirect_wide|59.646211|59.236597|-0.687%|+0.357%|-1.807%|-0.687%
+|micro:polymorphic_call|23.433487|23.391934|-0.177%|-0.523%|+1.082%|-0.365%
+|micro:list_build|26.778517|26.233898|-2.034%|-2.796%|-1.657%|-2.277%
+|float:direct_loop_float_return|5.677304|5.706161|+0.508%|+0.600%|-0.037%|+0.508%
+|float:callback_loop_float_return|4.993519|4.991683|-0.037%|-0.029%|-0.489%|+0.010%
+|float:typed_local_int_unary|1.184101|1.183512|-0.050%|+0.045%|-0.291%|+0.007%
+|mixed:callback_pipeline|123.559936|121.833647|-1.397%|+0.691%|-2.709%|-1.397%
+|index:buffer_positive|14.617745|14.757338|+0.955%|+0.003%|+1.005%|+0.821%
+|index:buffer_negative|14.988850|14.842513|-0.976%|+0.035%|-1.107%|-1.386%
+
+### Revision 3
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Aggregate change|!Default|!Reverse|!Shuffle
+|micro:closure_call|13.582718|13.550096|-0.240%|-3.344%|-0.240%|+1.328%
+|micro:closure_capture|19.464153|19.258736|-1.055%|+1.475%|-0.047%|-2.217%
+|micro:indirect_call|58.681499|59.774308|+1.862%|+1.940%|+2.489%|+1.026%
+|micro:indirect_wide|58.682993|59.108730|+0.725%|+1.733%|+0.209%|-0.056%
+|micro:polymorphic_call|23.110637|23.571802|+1.995%|-0.339%|-0.257%|+2.568%
+|micro:list_build|26.462456|26.304912|-0.595%|-0.691%|-0.219%|-0.595%
+|float:direct_loop_float_return|5.663563|5.661024|-0.045%|-0.333%|-0.138%|-0.020%
+|float:callback_loop_float_return|4.960940|4.938290|-0.457%|-0.273%|-0.318%|-0.550%
+|float:typed_local_int_unary|1.185206|1.183593|-0.136%|+0.296%|-0.406%|-0.729%
+|mixed:callback_pipeline|121.752199|122.045016|+0.241%|+0.563%|+0.066%|-0.154%
+|index:buffer_positive|14.864609|14.594204|-1.819%|-2.233%|-0.060%|-2.397%
+|index:buffer_negative|14.698792|14.686966|-0.080%|+0.332%|-0.080%|-0.225%
+
+Each revision passes the same focused Release suite: 16 cases / 7,014 assertions, including the native LLVM proof fixture's 55 cases. Preparation checks 6,768 paired native results plus 1,128 source results per revision. Separate direct C++ probes cover exact slot kinds, a null owner with uninitialized kind, repeated cleanup/reconstruction, pending exceptions, foreign Programs, stack-limit sweeps and context restoration on main and foreign threads, with reusable and automatic controls.
+
+The first direct probe setup used one input where qcc aggregation requires two. Later probes found that an unactivated closure misses through both old and new helpers; its normal first execution activates the native path before the storage tests. These failures and corrected probes are preserved. The initial qualification plan inherited automatic-frame wording; corrected measurement plans were saved before timing. The first machine-code comparison rejected differing archived source-directory names; the corrected check normalizes only that exact prefix and verifies the remaining caller-body differences are the new call/cleanup names.
+
+A generated-code check found that the pre-existing concurrent-reader fixture did not select v10. Its passing runs therefore do not qualify the new reusable frame. A targeted scalar batch variant explicitly selects v10/v2 and passes concurrent capture mutation and stack readers in revision 3, including the automatic-context control. This coverage distinction and the failed selection check are retained. Only layout checks were run with assertions enabled; no Debug runtime result is claimed.
+
+After reversion, all production/test hashes match the baseline, all 391 Release module aliases are restored, and 1,128 native reference checks pass. The rebuilt qore/qcc executables are byte-identical to the frozen baseline; the library differs only in the documentation commit BUILD string and derived Mach-O UUID/code-signature bytes. Its code and every other section match exactly, and a whole-file comparison confirms those are the only differences. The verified system installation remains unchanged.
+
+Storage reuse has not earned retention in these bounded experiments. This does not establish a global performance ceiling or a fresh Java/develop ratio. Next inspect avoidable pointer reloads in the established call paths and target-specialization opportunities, with a new prospective plan and optimized before/after measurements.
+
+[Lossless raw evidence](results-reusable-closure-storage-rejected-macos-arm64.json); [62-check publication audit](audit-reusable-closure-storage-rejected.md). Large logs are compressed in the blob map, deduplicated by decoded SHA256.
