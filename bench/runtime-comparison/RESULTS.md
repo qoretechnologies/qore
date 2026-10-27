@@ -25222,3 +25222,43 @@ All 3450 jobs/10350 measured windows are independently replayed. Timing is seria
 Next investigate duplicate pre-transition admission and signature-binding work using an explicit typed continuation, preserving old helper contracts and the complete Program transition. Same-Program borrowing/capture caching requires invocation-lifetime and mutation proofs before implementation.
 
 [Audit](audit-cross-program-closure-entry.md); [evidence](results-cross-program-closure-entry-macos-arm64.json).
+
+## Closure entry RuntimeConfig reuse rejected (2026-10-27)
+
+Reject: neither target reaches the prospective 1% benefit or improves in every layout. Live-object closure calls change 85.152719 to 85.842914 ns/item (+0.810538%); deleted-object calls 85.393778 to 85.519726 (+0.147491%). Disabled-native plain and captured controls cost 4.029132% and 3.134086% aggregate, with disjoint adverse fork ranges in all three layouts. These are screening observations, not independently confirmed cost estimates. No broad, confirmation, short, populated or full Release/Debug qualification follows the failed primary gate.
+
+The parent and installed runtime are c467ccd013, including the retained cross-Program native retry and develop 8dc8bdf6fb. Both runtime sets use Release `-O3 -DNDEBUG`, allocation tracking off, LLVM 22.1.8 on Apple M4 Pro/macOS ARM64. The same 18 `qcc -O3` modules run on both frozen runtimes; newly compiled candidate LLVM is byte-identical across all three layouts. Three randomized forks/layouts, 4096 items, one warmup and three 150 ms measured windows per job. The table aggregates the median fork mean per layout, then the median across layouts.
+
+The candidate acquires one live `RuntimeConfig` after conditional TLPD installation, reads the caller Program through it, uses the existing explicit-context Program-entry constructor and reuses it for the native retry. Program counts, locks, lifetime, TLPD and diagnostic caller identity remain. There is no ABI, layout, generated-body or test-source change. Generic-only calls also acquire the view, which motivated the mandatory disabled-native controls.
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change
+|lifecycle:object_closure_live|85.152719|85.842914|+0.811%
+|lifecycle:object_closure_dead|85.393778|85.519726|+0.147%
+|micro:closure_call|14.403079|14.435690|+0.226%
+|micro:closure_capture|19.994096|20.282745|+1.444%
+|micro:direct_call|1.548743|1.539167|-0.618%
+|micro:indirect_call|58.867763|58.247789|-1.053%
+|generic_micro:closure_call|116.684972|121.386363|+4.029%
+|generic_micro:closure_capture|139.284211|143.649498|+3.134%
+|generic_lifecycle:object_closure_live|194.106824|196.539389|+1.253%
+|generic_lifecycle:object_closure_dead|195.857823|200.603888|+2.423%
+
+Generic controls set `QORE_DISABLE_AOT_DYNAMIC_CLOSURE_ENTRY=1` on both runtimes without recompiling the native modules. Six generic plain/captured layout flags have >3% cost and nonoverlapping fork ranges; their full values and all sample windows are in the evidence. No screened result is discarded. The adverse controls strengthen rejection but do not establish causal cost attribution or a repeated independent regression.
+
+|!Target|!Layout|!Before ns/item|!Candidate ns/item|!Change
+|lifecycle:object_closure_live|default|85.152719|85.227101|+0.087%
+|lifecycle:object_closure_live|reverse|85.173773|85.980692|+0.947%
+|lifecycle:object_closure_live|shuffle-487|84.852789|85.842914|+1.167%
+|lifecycle:object_closure_dead|default|85.155418|85.519726|+0.428%
+|lifecycle:object_closure_dead|reverse|85.844751|87.840590|+2.325%
+|lifecycle:object_closure_dead|shuffle-487|85.393778|84.630939|-0.893%
+
+Focused Release checks pass 9 QUnit fixture runs/45 cases/249 assertions and 1110 standard IR/AOT references, including disabled cross-Program/native controls, context/count restoration, lifetime, capture mutation, stack handling and cancellation. Fresh baseline, paired, new-compiler and generic reference totals are 4512, 9024, 1128 and 3780. Full Release/Debug qualification is deliberately not run after the failed screen. All 391 Release qmod aliases remain correct.
+
+Linked code retains both Program transitions and cleanup paths; generic entry changes 2426 to 2384 instructions, while native helper specializations, miss helper, binders and 9035 exported symbols retain their counts. This static reduction does not predict the observed timings. Eight separate diagnostic profiles verify actual native companions in both positive object-call variants and generic execution in both disabled-native controls, along with exact runtime/module images. Helper admission alone is not treated as a hit.
+
+All 180 jobs/540 measured windows are independently replayed against raw output and actual process completion, with frozen dependency checks. Profiling finishes before timing; no owned build/test/profile or heavy archive scan overlaps timing. Shared host without affinity, frequency or thermal control. No Java/develop comparison, IR/JIT speed estimate, application-weighted gain or global ceiling is inferred. The previously installed c467ccd013 runtime remains unchanged.
+
+The next lead is an earlier foreign-Program rejection in native admission, subject to explicit RuntimeConfig validity and no-effects-on-miss proofs. It must retain the ordinary Program transition and all same-Program live guards, and measure noneligible/generic controls; no such candidate is included in this result.
+
+[Audit](audit-closure-entry-context.md); [evidence](results-closure-entry-context-macos-arm64.json).
