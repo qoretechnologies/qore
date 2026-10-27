@@ -2722,17 +2722,28 @@ class QoreAOTBinaryDeserializer {
         QoreAOTDeferredValueBlob parse_value_blob;
     };
     std::vector<std::vector<PendingClassConstant>> pending_class_constants;
+    bool class_constant_shells_registered = false;
 
-    // Pending hashdecl member info for two-pass resolution.
-    //
-    // The deferred-resolution fields below mirror PendingInstanceMember so
-    // the shared `readDeferredMemberDefault` template can be instantiated
-    // against this struct.  Hashdecls are deserialized BEFORE enums
-    // AND before all classes/hashdecls in the module are committed
-    // (see openAndDeserializeShells ordering), so member defaults that
-    // reference an enum value, a class constructor, or a complex-type
-    // default (`hash<X>()`, `list<X>()`, `hash<string, X>()`) need to
-    // wait until resolveHashdeclMembers to produce a final QoreValue.
+    struct PendingNamespaceConstant {
+        QoreAOTStringRef name;
+        QoreAOTStringRef type_path;
+        uint32_t ns_idx;
+        uint8_t access;
+        uint8_t is_pub;
+        uint8_t pending;
+        const QoreTypeInfo* type_info = nullptr;
+        QoreAOTDeferredValueBlob value_blob;
+        //! Serialized compile-time value of a pending constant (format v15); empty when the producing parse
+        //! could not record one.  Kept only when preload_parse_constant_values is set.
+        QoreAOTDeferredValueBlob parse_value_blob;
+    };
+
+    std::vector<PendingNamespaceConstant> pending_namespace_constants;
+    bool namespace_constant_shells_registered = false;
+
+    // Hashdecl member defaults are retained as serialized payloads until all
+    // type and constant-name shells exist across the loading batch. The fields
+    // mirror PendingInstanceMember for the shared materialization helpers.
     struct PendingHashdeclMember {
         QoreAOTStringRef name;
         QoreAOTStringRef type_path;
@@ -2765,6 +2776,8 @@ class QoreAOTBinaryDeserializer {
         std::string pending_const_ref_path;
         // Deferred VT_EXPR_NATIVE member default.
         std::vector<uint8_t> pending_expr_native_blob;
+        //! Preserve the complete default until constant shells and all types exist.
+        QoreAOTDeferredValueBlob value_blob;
     };
     // Map from hashdecl pointer to pending members
     std::vector<std::pair<TypedHashDecl*, std::vector<PendingHashdeclMember>>> pending_hashdecl_members;
@@ -2909,7 +2922,8 @@ private:
     bool resolveInstanceMembers(std::string& error);
     bool importInheritedMembers(std::string& error);
     bool resolveStaticMembers(std::string& error);
-    bool registerClassConstantShells(std::string& error);
+    bool registerClassConstantShells(std::string& error, bool resolve_types = true);
+    bool registerNamespaceConstantShells(std::string& error);
     bool resolveClassConstantValues(std::string& error);
     bool resolveNamespaceConstants(std::string& error);
     bool resolveClassConstants(std::string& error);
@@ -3032,17 +3046,16 @@ public:
     //! Phase-split 2a-1 — resolve base classes and type-only metadata.
     bool resolveTypes(std::string& error);
 
-    //! Phase-split 2a-2a — register class-constant shells only.
-    /** In batch mode this must run across all sessions before class-constant
-        value blobs are materialized, because class constants can reference
-        constants declared in sibling fragments. */
+    //! Phase-split 2a-2a — install types on the previously registered class-constant shells.
+    /** Names are registered with declaration shells so hashdecl defaults can bind lazy
+        references. Types are resolved here after every session has resolved its types. */
     bool registerClassConstantShellsPhase(std::string& error) {
         return registerClassConstantShells(error);
     }
 
-    //! Phase-split 2a-2b — register namespace constants.
-    /** Must run after class-constant shells are registered so namespace
-        constants can preserve references to class constants as runtime refs. */
+    //! Phase-split 2a-2b — resolve namespace-constant types and values.
+    /** Names were registered with declaration shells. Must run after class-constant types
+        are installed so namespace constants preserve typed references to class constants. */
     bool resolveNamespaceConstantsPhase(std::string& error) {
         return resolveNamespaceConstants(error);
     }

@@ -51,15 +51,32 @@ registration path.
 
 Batch registration uses the multi-deserializer:
 
-1. Open all metadata blobs and create namespace/class/hashdecl/typedef shells.
+1. Open all metadata blobs and create namespace/class/hashdecl/typedef shells,
+   including names for class and namespace constants without resolving their types or values.
 2. Resolve types and base classes across all sessions.
-3. Register constants across all sessions.
+3. Resolve constant types and values across all sessions, retaining their original entries.
 4. Resolve own members, then inherited members.
 5. Deserialize functions, methods, globals, static members, and init functions.
 6. Commit class structures and run final fixups.
 
 The cross-session barriers are required because one `.qo` can reference classes,
 constants, or members declared in another `.qo`.
+
+Hashdecl member defaults retain their complete serialized payload until all declaration
+and constant-name shells exist. During member resolution, constant references bind to
+those stable entries as lazy expressions; later constant resolution fills the entries.
+The default is installed before parameterized hashdecl instantiation can copy it.
+Deferring installation until after constant values would leave already-instantiated
+hashdecls with missing defaults and would make typed constant construction observe
+incomplete declarations.
+
+Lists and hashes containing lazy default references are marked as expressions and
+evaluate their children when the default is used. Evaluated containers retain their
+type metadata and ordinary value containers keep their existing fast return. After
+a hashdecl takes ownership of a default, the pending record is cleared so an error in
+a later member does not release that default again. The regression
+`examples/test/ir/AOTHashdeclConstantDefaults.qtest` covers qmod-only loading, nested
+defaults, independent instances, AOT consumers and repeated failed loads.
 
 ### Class-Static LValue Roots Resolve By Name, With A Load-Time Fallback
 

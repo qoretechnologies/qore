@@ -260,6 +260,9 @@
     literal keys and all uses are proven at compile time, retaining ordinary lookup for unsupported cases.
     JIT/AOT indexed reads reuse an existing live RuntimeConfig for negative-offset policy checks,
     retaining the compatibility entry and all indexed-read semantics.
+    AOT modules load hashdecl defaults that reference constants in the same module, including references
+    nested inside lists and hashes. This fixes QLS binary-module loading and preserves independent default
+    values for each instance. Failed loading also releases already-transferred defaults exactly once.
     Typed AOT callbacks can pass exact heap-backed integer arguments through eligible native entries,
     retaining ordinary binding for unsupported or unavailable entries and all live invocation checks.
     Prepared typed AOT closure calls avoid duplicate native admission after a missed attempt,
