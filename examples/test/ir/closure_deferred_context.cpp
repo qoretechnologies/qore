@@ -28,6 +28,19 @@
 
 extern "C" void init_CLOSURE_DEFERRED_CONTEXT_qo(QoreProgram*);
 
+class CrossProgramStackProbe final : public QoreExternalRuntimeStackLocationHelper {
+public:
+    const QoreProgramLocation& getLocation() const override {
+        static const QoreProgramLocation loc("cross-program-closure-probe", 1, 1);
+        return loc;
+    }
+    const std::string& getCallName() const override {
+        static const std::string name("cross-program-closure-probe");
+        return name;
+    }
+    qore_call_t getCallType() const override { return CT_USER; }
+};
+
 // Each worker owns a separate Program; this test-only adapter wraps the real
 // compiler-proven entry and changes its live limit only after frame publication.
 struct ClosureProbe {
@@ -41,6 +54,9 @@ struct ClosureProbe {
     bool replace_impl = false;
     bool reject = false;
     bool live_object = false;
+    QoreProgram* expected_program = nullptr;
+    QoreProgram* expected_caller = nullptr;
+    unsigned expected_thread_count = 0;
     unsigned calls = 0;
     static thread_local ClosureProbe* current;
     ClosureProbe(QoreAOTContext* ctx, bool v2, RuntimeConfig& rc) : ctx(ctx),
@@ -74,6 +90,16 @@ struct ClosureProbe {
             assert(rc->getObject() == probe.caller_object && rc->getClass() == probe.caller_class);
         } else {
             assert(rc->getObject() == closure->getObject() && rc->getClass() == closure->getClassCtx());
+        }
+        if (probe.expected_program) {
+            assert(::getProgram() == probe.expected_program);
+            assert(probe.expected_program->getThreadCount() == probe.expected_thread_count);
+            // Inspect the published native frame through a nested public stack
+            // helper. Its Program must describe the caller, as the generic frame does.
+            CrossProgramStackProbe stack_probe;
+            const QoreStackLocation* frame = stack_probe.getNext();
+            assert(frame && frame->getCallName() == "<anonymous closure>");
+            assert(frame->getProgram() == probe.expected_caller);
         }
         if (probe.replace_impl) {
             // The helper must restore the current implementation, not an Impl
@@ -345,6 +371,62 @@ static void check(unsigned helper_version) {
         assert(invocation.call(&result, &xsink, qore_rt_get_fast_runtime_config()) == 0);
         assert(!xsink && result == 123 && invocation.cache.owner == empty_bits);
         assert(!invocation.frame.frame); // borrowed closures never construct reusable function-ref frames
+
+        // The scalar helper still misses across Programs. An ordinary closure
+        // call may use its native body only after the complete Program transition.
+        bool native_cross = !std::getenv("QORE_DISABLE_AOT_CROSS_PROGRAM_CLOSURE_ENTRY");
+        unsigned owner_threads = program->getThreadCount();
+        unsigned caller_threads = other->getThreadCount();
+        for (bool v2 : {false, true}) {
+            if (v2 && (std::getenv("QORE_DISABLE_AOT_DYNAMIC_CLOSURE_CONTEXT_V2")
+                    || std::getenv("QORE_DISABLE_AOT_DYNAMIC_CLOSURE_DEFERRED_CONTEXT"))) {
+                continue;
+            }
+            RuntimeConfig before = *qore_rt_get_fast_runtime_config();
+            ClosureProbe probe(invocation.ctx, v2, *qore_rt_get_fast_runtime_config());
+            probe.live_object = invocation.live_object;
+            probe.expected_program = *program;
+            probe.expected_caller = *other;
+            probe.expected_thread_count = owner_threads + 1;
+            QoreValue arg(int64_t(7));
+            uint64_t arg_bits;
+            std::memcpy(&arg_bits, &arg, sizeof(arg_bits));
+            for (bool reject : {false, true}) {
+                probe.reject = reject;
+                probe.calls = 0;
+                uint64_t bits = qore_rt_call_closure_fast(invocation.bits, &arg_bits, 1, &xsink);
+                QoreValue value;
+                std::memcpy(&value, &bits, sizeof(value));
+                ValueHolder holder(value, &xsink);
+                assert(!xsink && holder->getAsBigInt() == 24);
+                assert(probe.calls == (native_cross ? 1u : 0u));
+                assert(::getProgram() == *other);
+                assert(program->getThreadCount() == owner_threads && other->getThreadCount() == caller_threads);
+                sameContext(before);
+            }
+            if (native_cross) {
+                // The deliberate generic fallback above executes the normal
+                // body's binders, which may republish v2. Keep this v1 test on
+                // its instrumented entry for the following overflow check.
+                if (!v2) {
+                    invocation.ctx->native_int_unary_closure_entry_v2.store(nullptr, std::memory_order_release);
+                }
+                probe.reject = false;
+                probe.overflow = true;
+                probe.calls = 0;
+                uint64_t bits = qore_rt_call_closure_fast(invocation.bits, &arg_bits, 1, &xsink);
+                QoreValue value;
+                std::memcpy(&value, &bits, sizeof(value));
+                ValueHolder holder(value, &xsink);
+                assert(xsink && probe.calls == 1);
+                assert(xsink.getExceptionErr().get<const QoreStringNode>()->equal("STACK-LIMIT-EXCEEDED"));
+                ReferenceHolder<QoreHashNode> info(xsink.getExceptionInfo(), &xsink);
+                assert(!xsink);
+                assert(::getProgram() == *other);
+                assert(program->getThreadCount() == owner_threads && other->getThreadCount() == caller_threads);
+                sameContext(before);
+            }
+        }
     }
 }
 

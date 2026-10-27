@@ -1451,3 +1451,5 @@ disables v2 selection and restores eager markers. Controls are presence flags,
 sampled once at runtime. Compare separately compiled optimized artifacts against
 older runtimes; new artifacts need the v2 binder. See RESULTS for the measured
 closure gains and the effectful-method regression, not a universal speedup.
+
+`QORE_DISABLE_AOT_CROSS_PROGRAM_CLOSURE_ENTRY=1` disables the native scalar closure retry after the generic path enters the owning Program. It is a runtime presence flag sampled once; empty and `0` values also disable it. Same-Program admission and the complete generic Program transition remain. No recompile is needed for this diagnostic control. Compare frozen optimized runtimes for before/after performance; see RESULTS for cross-Program call measurements and all control costs.

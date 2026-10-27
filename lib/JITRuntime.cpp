@@ -11064,10 +11064,11 @@ extern "C" DLLEXPORT int qore_rt_try_load_closure_int_v1(const QoreClosureBase* 
 // final member unpublishes and waits before any earlier member is destroyed.
 class QoreNativeClosureStackLocation : public QoreStackLocation {
 public:
-    QoreNativeClosureStackLocation(RuntimeConfig& rc, const UserVariantBase* uvb, ExceptionSink* xsink)
-        : name(closureName()), statements(uvb->getStatementBlock()), pgm(uvb->pgm),
+    QoreNativeClosureStackLocation(RuntimeConfig& rc, const UserVariantBase* uvb, ExceptionSink* xsink,
+            QoreProgram* caller_pgm = nullptr)
+        : name(closureName()), statements(uvb->getStatementBlock()), pgm(caller_pgm ? caller_pgm : uvb->pgm),
           helper(rc, this, loc, uvb->getUserSignature()->getParseLocation(),
-              uvb->getParseOptions(pgm->getParseOptions()), pgm, xsink) {
+              uvb->getParseOptions(uvb->pgm->getParseOptions()), uvb->pgm, xsink) {
     }
     const QoreProgramLocation& getLocation() const override { return loc ? *loc : loc_builtin; }
     const std::string& getCallName() const override { return name; }
@@ -11089,8 +11090,9 @@ private:
 
 class QoreDeferredNativeClosureStackLocation : public QoreStackLocation {
 public:
-    QoreDeferredNativeClosureStackLocation(RuntimeConfig& rc, const UserVariantBase* uvb)
-        : name(closureName()), statements(uvb->getStatementBlock()), pgm(uvb->pgm),
+    QoreDeferredNativeClosureStackLocation(RuntimeConfig& rc, const UserVariantBase* uvb,
+            QoreProgram* caller_pgm = nullptr)
+        : name(closureName()), statements(uvb->getStatementBlock()), pgm(caller_pgm ? caller_pgm : uvb->pgm),
           helper(rc, this, loc, uvb) {
     }
     const QoreProgramLocation& getLocation() const override { return loc ? *loc : loc_builtin; }
@@ -11116,8 +11118,8 @@ public:
     // Keep per-call publication and restoration beside native admission.
     __attribute__((always_inline)) QoreDeferredNativeClosureStackLocationV2(RuntimeConfig& rc,
             const UserVariantBase* uvb,
-            const QoreClosureBase* closure)
-        : name(closureName()), statements(uvb->getStatementBlock()), pgm(uvb->pgm),
+            const QoreClosureBase* closure, QoreProgram* caller_pgm = nullptr)
+        : name(closureName()), statements(uvb->getStatementBlock()), pgm(caller_pgm ? caller_pgm : uvb->pgm),
           context(rc, closure, uvb), helper(rc, this, loc, context) {
     }
     __attribute__((always_inline)) ~QoreDeferredNativeClosureStackLocationV2() override = default;
@@ -11142,19 +11144,21 @@ private:
 };
 
 // Keep the legacy full frame out of the deferred helper's successful stack path.
+template <bool CallerProgramFrame>
 static __attribute__((noinline, cold)) int64_t execNativeClosureEagerContext(RuntimeConfig& rc,
         const UserVariantBase* uvb, QoreAOTContext::NativeIntUnaryClosureEntry entry,
         int64_t argument, const QoreClosureBase* closure, int* accepted,
-        QoreAOTContext* ctx, ExceptionSink* xsink) {
-    QoreNativeClosureStackLocation frame(rc, uvb, xsink);
+        QoreAOTContext* ctx, ExceptionSink* xsink, QoreProgram* caller_pgm) {
+    QoreNativeClosureStackLocation frame(rc, uvb, xsink, CallerProgramFrame ? caller_pgm : nullptr);
     return *xsink ? 0 : entry(argument, closure, &rc, accepted, ctx, xsink);
 }
 
 // Retain v1's eager object/class/self contract, including for older compiled modules.
+template <bool CallerProgramFrame>
 static __attribute__((noinline)) int64_t execNativeClosureV1Context(RuntimeConfig& rc,
         const UserVariantBase* uvb, QoreAOTContext::NativeIntUnaryClosureEntry entry,
         int64_t argument, const QoreClosureBase* closure, int* accepted,
-        QoreAOTContext* ctx, ExceptionSink* xsink, bool deferred) {
+        QoreAOTContext* ctx, ExceptionSink* xsink, bool deferred, QoreProgram* caller_pgm) {
     QoreObject* self = closure->getObject();
     std::optional<QoreClosureSelfContextHelper> self_context;
     if (self) {
@@ -11162,14 +11166,20 @@ static __attribute__((noinline)) int64_t execNativeClosureV1Context(RuntimeConfi
     }
     RuntimeConfigNativeObjectHelper context(rc, self, closure->getClassCtx());
     if (deferred) {
-        QoreDeferredNativeClosureStackLocation frame(rc, uvb);
+        QoreDeferredNativeClosureStackLocation frame(rc, uvb, CallerProgramFrame ? caller_pgm : nullptr);
         return entry(argument, closure, &rc, accepted, ctx, xsink);
     }
-    return execNativeClosureEagerContext(rc, uvb, entry, argument, closure, accepted, ctx, xsink);
+    return execNativeClosureEagerContext<CallerProgramFrame>(rc, uvb, entry, argument, closure, accepted,
+        ctx, xsink, caller_pgm);
 }
 
+// A cross-Program retry uses the caller's Program in the diagnostic frame, just
+// like execJITWithDeopt(), while execution stays in the already-entered owner.
+// Specialize this choice so same-Program calls retain their existing frame work.
+template <bool CallerProgramFrame = false>
 static bool tryExecNativeIntClosureScalar(RuntimeConfig& rc, const QoreClosureBase* closure,
-        const UserVariantBase* uvb, int64_t argument, int64_t& result, ExceptionSink* xsink) {
+        const UserVariantBase* uvb, int64_t argument, int64_t& result, ExceptionSink* xsink,
+        QoreProgram* caller_pgm = nullptr) {
     QoreSandboxProvenanceHelper provenance(closure);
     QoreAOTContext* ctx = uvb ? uvb->getCachedAOTContext() : nullptr;
     if (!ctx || !uvb->hasCachedAOT()
@@ -11215,10 +11225,12 @@ static bool tryExecNativeIntClosureScalar(RuntimeConfig& rc, const QoreClosureBa
         ? ctx->native_int_unary_closure_entry_v2.load(std::memory_order_acquire) : nullptr;
     try {
         if (entry_v2) {
-            QoreDeferredNativeClosureStackLocationV2 frame(rc, uvb, closure);
+            QoreDeferredNativeClosureStackLocationV2 frame(rc, uvb, closure,
+                CallerProgramFrame ? caller_pgm : nullptr);
             value = entry_v2(argument, closure, &rc, &accepted, ctx, xsink);
         } else {
-            value = execNativeClosureV1Context(rc, uvb, entry, argument, closure, &accepted, ctx, xsink, deferred);
+            value = execNativeClosureV1Context<CallerProgramFrame>(rc, uvb, entry, argument, closure,
+                &accepted, ctx, xsink, deferred, caller_pgm);
         }
     } catch (const QoreJITException&) {
         // Native stack exceptions already belong to the sink.
@@ -12410,6 +12422,24 @@ static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBa
     ProgramThreadCountContextHelper ptcch(xsink, uvb->pgm, true);
     if (*xsink) {
         return toBits(QoreValue());
+    }
+
+    // The initial native attempt intentionally rejects a foreign Program. Now
+    // that the ordinary Program transition has completed, a scalar companion
+    // can avoid generic capture/parameter/argv setup. Keep the transition and
+    // all of its counts, locks, TLPD and lifetime work, even on a native hit.
+    if (cb && caller_pgm != uvb->pgm && nargs == 1 && fromBits(args[0]).getType() == NT_INT
+            && isDynamicClosureEntryEnabled()) {
+        static constinit QoreEnvFlag disabled("QORE_DISABLE_AOT_CROSS_PROGRAM_CLOSURE_ENTRY");
+        int64_t result;
+        if (!disabled.get()
+                && tryExecNativeIntClosureScalar<true>(RuntimeConfigNativeAccess::getCurrent(), cb, uvb,
+                    fromBits(args[0]).getAsBigInt(), result, xsink, caller_pgm)) {
+            if (clearConsumedArgCleanups(arg_cleanups, nargs, xsink) < 0 || *xsink) {
+                return toBits(QoreValue());
+            }
+            return toBits(QoreValue(result));
+        }
     }
 
     // Push captured vars onto the cvstack selected by the closure's program context.
