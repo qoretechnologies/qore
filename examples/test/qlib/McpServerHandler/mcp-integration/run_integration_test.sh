@@ -37,7 +37,8 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MODULE_DIR="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+# the root of the Qore source tree, whose qlib directory has the modules under test
+MODULE_DIR="$(cd "$SCRIPT_DIR/../../../../.." && pwd)"
 VENVDIR="${VENVDIR:-$SCRIPT_DIR/.venvs}"
 PROTOCOL="all"
 DIRECTION="both"
