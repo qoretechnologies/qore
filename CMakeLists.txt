@@ -2768,6 +2768,11 @@ if (UNIX)
     target_include_directories(qore-stdio-startup-test PRIVATE
         ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
     target_link_libraries(qore-stdio-startup-test PRIVATE libqore)
+    add_executable(qore-fork-before-init-test
+        examples/test/qore/misc/fork-before-init/fork-before-init.cpp)
+    target_include_directories(qore-fork-before-init-test PRIVATE
+        ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+    target_link_libraries(qore-fork-before-init-test PRIVATE libqore)
 endif()
 #add_executable(qr ${QR_CPP_SRC})
 #target_link_libraries(qr libqore)

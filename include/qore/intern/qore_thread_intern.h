@@ -1730,7 +1730,17 @@ private:
     bool doit;
 };
 
+//! the attributes of a recursive lock (PTHREAD_MUTEX_RECURSIVE); use qore_recursive_mutex_attr() where the library
+//! may not be initialized yet
 DLLLOCAL extern pthread_mutexattr_t ma_recursive;
+
+//! returns ma_recursive, initialized on first use
+/** Valid while static objects are initialized, before qore_init() and after qore_cleanup(), where ma_recursive has
+    not been initialized by init_qore_threads(): a recursive lock created then, and the child handler of a recursive
+    lock in a process created with fork() then, would otherwise initialize the lock with uninitialized attributes
+    (refused with EINVAL on macOS; a lock that is not recursive with glibc)
+*/
+DLLLOCAL const pthread_mutexattr_t* qore_recursive_mutex_attr();
 
 //! the count that the current thread adds to thread_counter (its own run, or the ThreadPool task it runs)
 /** A child process created with fork() by the thread keeps only this count; see QoreForkHandlers.h

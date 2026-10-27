@@ -1,0 +1,41 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires QUnit
+
+%exec-class ForkBeforeInitTest
+
+#! A recursive lock is recursive however early it is created, and in a child process created with fork() at any time
+/** Runs qore-fork-before-init-test (fork-before-init.cpp), built beside the interpreter: an embedding program whose
+    recursive locks are created during static initialization, before qore_init() and after qore_cleanup(), and whose
+    fork handler initializes a recursive lock again in children created before qore_init(), while the library is
+    initialized and after qore_cleanup().  The attributes of a recursive lock were initialized only by qore_init() and
+    destroyed by qore_cleanup(): before or after, such a lock was not recursive (glibc), or its initialization failed
+    (EINVAL on macOS, an assertion in debug builds).
+*/
+class ForkBeforeInitTest inherits QUnit::Test {
+    constructor() : QUnit::Test("ForkBeforeInit", "1.0", \ARGV) {
+        addTestCase("recursive locks before qore_init(), in forked children and after qore_cleanup()", \nativeTest());
+        set_return_value(main());
+    }
+
+    nativeTest() {
+        string qore_bin = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0];
+        string native_bin = ENV.QORE_FORK_BEFORE_INIT_TEST ?? dirname(qore_bin) + "/qore-fork-before-init-test";
+        if (PlatformOS == "Windows" || !is_file(native_bin)) {
+            testSkip("the POSIX native test executable is not available");
+        }
+        int rc;
+        string output = backquote("exec " + shellQuote(native_bin) + " </dev/null 2>&1", \rc);
+        assertEq(0, rc, output);
+        assertEq("Passed 6 recursive lock cases\n", output);
+    }
+
+    #! Quotes a string as one word for the shell
+    private static string shellQuote(string str) {
+        return "'" + replace(str, "'", "'\\''") + "'";
+    }
+}

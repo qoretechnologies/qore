@@ -40,7 +40,7 @@
 #include <pthread.h>
 #include <unistd.h>
 
-DLLLOCAL extern pthread_mutexattr_t ma_recursive;
+DLLLOCAL const pthread_mutexattr_t* qore_recursive_mutex_attr();
 
 namespace {
 //! incremented in each child process created with fork(); see qore_fork_get_generation()
@@ -177,6 +177,9 @@ extern "C" void qore_fork_child() {
 }
 
 QoreForkRegistry::QoreForkRegistry() {
+    // the child handlers of recursive locks that do not ask for the attributes themselves (as the lazy constant lock
+    // of the AOT runtime) use ma_recursive: it is initialized before the first handler can run
+    (void)qore_recursive_mutex_attr();
 #ifdef HAVE_FORK
     // the registry is created by the first handler, while the library's static objects are initialized; the
     // allocator has registered its fork handlers by then, so its prepare handler runs after ours (prepare handlers
@@ -299,7 +302,7 @@ void qore_fork_child_thread_lock(void* lock) {
 }
 
 void qore_fork_reinit_recursive_thread_lock(QoreRecursiveThreadLock& lock) {
-    lock.reinitAfterFork(&ma_recursive);
+    lock.reinitAfterFork(qore_recursive_mutex_attr());
 }
 
 void QoreForkThreadLock::prepare() noexcept {
@@ -324,7 +327,7 @@ void QoreForkThreadLock::child() noexcept {
         c->reinitAfterFork();
     }
     // held by this thread since prepare(), or by a thread that no longer exists, or not held at all
-    l.reinitAfterFork(recursive ? &ma_recursive : nullptr);
+    l.reinitAfterFork(recursive ? qore_recursive_mutex_attr() : nullptr);
 }
 
 void QoreForkRWLock::prepare() noexcept {

@@ -144,8 +144,23 @@ const TypedHashDecl* hashdeclChannelTryResult = nullptr;
 
 DLLLOCAL bool threads_initialized = false;
 
-// recursive mutex attribute
+// recursive mutex attribute; see qore_recursive_mutex_attr()
 DLLLOCAL pthread_mutexattr_t ma_recursive;
+
+//! initializes ma_recursive once; see qore_recursive_mutex_attr()
+static pthread_once_t ma_recursive_once = PTHREAD_ONCE_INIT;
+
+static void qore_init_recursive_mutex_attr() {
+    pthread_mutexattr_init(&ma_recursive);
+    pthread_mutexattr_settype(&ma_recursive, PTHREAD_MUTEX_RECURSIVE);
+}
+
+const pthread_mutexattr_t* qore_recursive_mutex_attr() {
+    // both objects are constant-initialized, so this is valid while static objects are initialized, before
+    // qore_init() and after qore_cleanup()
+    pthread_once(&ma_recursive_once, qore_init_recursive_mutex_attr);
+    return &ma_recursive;
+}
 
 QoreThreadLock stack_lck;
 // 8MB default thread stack size
@@ -5196,9 +5211,8 @@ void init_qore_threads() {
     // the main thread exits naturally with the process and must not be detached
     thread_list.setJoined(initial_thread);
 
-    // initialize recursive mutex attribute
-    pthread_mutexattr_init(&ma_recursive);
-    pthread_mutexattr_settype(&ma_recursive, PTHREAD_MUTEX_RECURSIVE);
+    // the recursive mutex attribute: initialized by the first recursive lock or the fork handler registry, if not here
+    (void)qore_recursive_mutex_attr();
 
     // set the default thread name for the initial thread, unless that would rename the process
     if (!q_thread_name_is_process_name()) {
@@ -5209,7 +5223,7 @@ void init_qore_threads() {
     threads_initialized = true;
 }
 
-QoreRecursiveThreadLock::QoreRecursiveThreadLock() : QoreThreadLock(&ma_recursive) {
+QoreRecursiveThreadLock::QoreRecursiveThreadLock() : QoreThreadLock(qore_recursive_mutex_attr()) {
 }
 
 QoreNamespace* get_thread_ns(QoreNamespace &qorens) {
@@ -5328,7 +5342,8 @@ void delete_qore_threads() {
     // mark threading as inactive
     threads_initialized = false;
 
-    pthread_mutexattr_destroy(&ma_recursive);
+    // ma_recursive is not destroyed: a recursive lock can still be created, and a child process created with fork()
+    // initializes recursive locks again with it, after qore_cleanup() as before qore_init()
 
     assert(initial_thread > 0);
     thread_list.deleteDataRelease(initial_thread);
