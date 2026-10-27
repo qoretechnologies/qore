@@ -392,10 +392,59 @@ public class QLSServer {
 
         #! Lock protecting builtin metadata cache initialization
         static Mutex builtinMetadataCacheMutex();
+
+        #! Whether files are indexed between requests instead of before responding to requests; set by main()
+        bool backgroundIndexing = False;
+
+        #! Workspace files waiting to be indexed in the background
+        list<string> pendingWorkspaceFiles = ();
+
+        #! Standard module files waiting to be indexed in the background
+        list<string> pendingStdFiles = ();
+
+        #! Standard module indexes built so far; published to the shared cache when all files are indexed
+        hash<string, FileIndex> stdIndexPartial = {};
+
+        #! The number of files queued for background indexing since background indexing last finished
+        int indexQueued = 0;
+
+        #! The number of queued files that have been indexed
+        int indexDone = 0;
+
+        #! The progress token of the current background indexing, if the client supports progress reports
+        *string progressToken;
+
+        #! The ID of the pending window/workDoneProgress/create request
+        *string progressRequestId;
+
+        #! Whether progress is being reported with progressToken
+        bool progressActive = False;
+
+        #! The last percentage reported
+        int progressPercent = -1;
+
+        #! The number of progress tokens created
+        int progressCount = 0;
+
+        #! The connection used by main()
+        *LspConnection connection;
+
+        #! Requests that have been read and not yet answered; keys are JSON-encoded request IDs
+        hash<string, bool> pendingRequests = {};
+
+        #! Pending requests that the client has cancelled; keys are JSON-encoded request IDs
+        hash<string, bool> cancelledRequests = {};
+
+        #! Protects pendingRequests and cancelledRequests, which the message reader thread updates
+        Mutex requestLock();
+
+        #! The JSON-encoded ID of the request being processed
+        *string currentRequestKey;
     }
 
     private:internal {
-        FileOutputStream fos;
+        #! The log file; a File object can be written from any thread, unlike a stream
+        *File logFh;
     }
 
     constructor() {
@@ -428,17 +477,18 @@ public class QLSServer {
 
             # check if the log file can be opened and truncate it if appending is turned off
             try {
-                fos = new FileOutputStream(logFile, appendToLog);
+                File f();
+                f.open2(logFile, O_CREAT | O_WRONLY | (appendToLog ? O_APPEND : O_TRUNC));
+                logFh = f;
             } catch (hash<ExceptionInfo> ex) {
             }
         }
     }
 
     private:internal log(int verbosity, string fmt, ...) {
-        if (fos && verbosity <= logVerbosity) {
+        if (logFh && verbosity <= logVerbosity) {
             string str = sprintf("%s: ", format_date("YYYY-MM-DD HH:mm:SS", now()));
-            string msg = vsprintf(str + fmt + "\n", argv);
-            fos.write(binary(msg));
+            logFh.write(vsprintf(str + fmt + "\n", argv));
         }
     }
 
@@ -516,13 +566,32 @@ public class QLSServer {
     # Main logic
     #=================
 
-    #! Runs the main JSON-RPC server loop, reading requests from stdin and writing responses to stdout.
-    /** @return the exit code (0 for normal shutdown, 1 for error)
+    #! Runs the main JSON-RPC server loop
+    /** Messages are read by a background thread, so that \c $/cancelRequest notifications can cancel requests
+        that are being processed.  Workspace and standard module files are indexed one at a time while no message
+        is waiting, so requests are answered while the workspace is being indexed; progress is reported to clients
+        that support it.
+
+        @param conn the connection to use; if not given, the process's standard input and output are used
+
+        @return the exit code (0 for normal shutdown, 1 for error)
     */
-    public int main() {
+    public int main(*LspConnection conn) {
+        connection = conn ?? new LspConnection();
+        backgroundIndexing = True;
+
+        Queue messages();
+        Counter readerRunning(1);
+        background readMessages(connection, messages, readerRunning);
+
         while (running) {
+            if (!messages.size() && indexPendingFile()) {
+                sendQueuedMessages();
+                continue;
+            }
+
             # read JSON-RPC request
-            hash<auto> received = Messenger::receive();
+            hash<auto> received = messages.get();
             list<auto> responses;
             if (received.error) {
                 # Normal shutdown when stdin closes (ex: client exit)
@@ -539,22 +608,291 @@ public class QLSServer {
             }
 
             # send back response if any
-            if (responses) {
-                map Messenger::send($1), responses, $1.typeCode() == NT_STRING;
-            }
+            map connection.send($1), responses, $1.typeCode() == NT_STRING;
+            sendQueuedMessages();
+        }
 
-            # send additional messages
-            if (initialized && clientInitialized) {
-                while (messagesToSend.size()) {
-                    list<auto> msg = extract messagesToSend, 0, 1;
-                    foreach auto m in (msg) {
-                        Messenger::send(m);
+        # the reader stops after reading the exit notification or the end of the input
+        readerRunning.waitForZero();
+        return exitCode;
+    }
+
+    #! Records a request that has been read and not yet answered, so that the client can cancel it
+    /** The message reader of main() calls this method; applications that read messages themselves and call
+        handleRequest() from another thread can call it to support cancellation.
+
+        @param id the request ID
+    */
+    registerRequest(auto id) {
+        AutoLock al(requestLock);
+        pendingRequests{make_json(id)} = True;
+    }
+
+    #! Cancels a request that has been read and not yet answered
+    /** A cancelled request that has not been started is answered with a \c RequestCancelled error; a request
+        that is being processed stops at the next file that it would search and is answered with the same error.
+
+        @param id the request ID
+
+        @return @ref True if the request was pending; @ref False if it is unknown or has already been answered
+    */
+    bool cancelRequest(auto id) {
+        AutoLock al(requestLock);
+        string key = make_json(id);
+        if (!pendingRequests{key}) {
+            return False;
+        }
+        cancelledRequests{key} = True;
+        return True;
+    }
+
+    #! Returns @ref True if the request with the given key has been cancelled
+    private:internal bool isCancelled(string key) {
+        AutoLock al(requestLock);
+        return cancelledRequests{key} ?? False;
+    }
+
+    #! Forgets a request that has been answered
+    private:internal finishRequest(string key) {
+        AutoLock al(requestLock);
+        remove pendingRequests{key};
+        remove cancelledRequests{key};
+    }
+
+    #! Ends the current request if the client has cancelled it
+    /** Called between files in operations that search many files.
+
+        @throw QLS-REQUEST-CANCELLED the client has cancelled the request
+    */
+    private:internal checkCancelled() {
+        if (currentRequestKey && isCancelled(currentRequestKey)) {
+            throw "QLS-REQUEST-CANCELLED", sprintf("request %s was cancelled", currentRequestKey);
+        }
+    }
+
+    #! Reads messages for main() until the input ends or the exit notification is read
+    private:internal readMessages(LspConnection conn, Queue messages, Counter running) {
+        on_exit {
+            running.dec();
+        }
+        try {
+            while (True) {
+                hash<auto> received = conn.receive();
+                bool exitMsg;
+                if (received.msg) {
+                    auto msg;
+                    try {
+                        msg = parse_json(received.msg);
+                    } catch (hash<ExceptionInfo> ex) {
+                        # invalid JSON is answered by the main loop
                     }
+                    if (msg.typeCode() == NT_HASH) {
+                        if (msg.method == "$/cancelRequest") {
+                            if (exists msg.params.id) {
+                                cancelRequest(msg.params.id);
+                            }
+                        } else if (msg.method && exists msg.id) {
+                            registerRequest(msg.id);
+                        }
+                        exitMsg = msg.method == "exit";
+                    }
+                }
+                messages.push(received);
+                if (received.error == "EOF" || exitMsg) {
+                    break;
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            log(0, "ERROR: reading messages failed: %s", get_exception_string(ex));
+            messages.push({"error": "EOF"});
+        }
+    }
+
+    #! Sends the messages queued by request handlers and background indexing
+    private:internal sendQueuedMessages() {
+        map connection.send($1), takeQueuedMessages();
+    }
+
+    #! Sets whether files are indexed between requests
+    /** main() enables background indexing.  Applications that call handleRequest() themselves can enable it
+        before the \c initialize request and call indexPendingFile() while no request is waiting, and send the
+        messages returned by takeQueuedMessages() to the client.
+
+        Background indexing starts after the client's \c initialized notification.  Without background
+        indexing, files are indexed before \c initialize and workspace folder changes are answered.
+
+        @param enable @ref True to index files between requests
+    */
+    setBackgroundIndexing(bool enable) {
+        backgroundIndexing = enable;
+    }
+
+    #! Indexes the next file waiting for background indexing
+    /** Workspace files are indexed first, with progress reports for clients that support them; standard module
+        files follow.
+
+        @return @ref True if a file was indexed; @ref False if no file is waiting or the client has not sent the
+        \c initialized notification yet
+    */
+    bool indexPendingFile() {
+        if (!clientInitialized || !indexPending()) {
+            return False;
+        }
+        indexNextFile();
+        return True;
+    }
+
+    #! Returns the notifications and requests for the client queued by the server, and removes them from the queue
+    /** Messages are only returned after the client's \c initialized notification.
+
+        @return JSON-RPC messages to send to the client in the order returned
+    */
+    list<string> takeQueuedMessages() {
+        if (!initialized || !clientInitialized || !messagesToSend) {
+            return ();
+        }
+        list<string> ret = messagesToSend;
+        messagesToSend = ();
+        return ret;
+    }
+
+    #! Handles a response from the client to a request sent by the server
+    private:internal handleClientResponse(hash<auto> response) {
+        if (progressRequestId && response.id == progressRequestId) {
+            delete progressRequestId;
+            if (response.error) {
+                log(0, "client refused the indexing progress token: %y", response.error);
+                return;
+            }
+            # the token can only be used after the client has created it
+            if (pendingWorkspaceFiles) {
+                progressActive = True;
+                progressPercent = -1;
+                queueProgress({"kind": "begin", "title": "Indexing Qore files", "cancellable": False,
+                    "percentage": getIndexPercentage()});
+            }
+            return;
+        }
+        log(1, "ignoring response from the client: %y", response);
+    }
+
+    #! Returns @ref True if files are waiting to be indexed in the background
+    private:internal bool indexPending() {
+        return pendingWorkspaceFiles || pendingStdFiles;
+    }
+
+    #! Returns the percentage of the workspace files queued for background indexing that have been indexed
+    private:internal int getIndexPercentage() {
+        return indexQueued ? (indexDone * 100 / indexQueued) : 100;
+    }
+
+    #! Queues a $/progress notification for the indexing progress token
+    private:internal queueProgress(hash<auto> value) {
+        push messagesToSend, make_json({
+            "jsonrpc": jsonRpcVer,
+            "method": "$/progress",
+            "params": {"token": progressToken, "value": value},
+        });
+    }
+
+    #! Asks the client to create a progress token for background indexing, if it supports progress reports
+    private:internal startIndexingProgress() {
+        if (!backgroundIndexing || !pendingWorkspaceFiles || progressActive || progressRequestId
+                || !clientCapabilities.window.workDoneProgress) {
+            return;
+        }
+        ++progressCount;
+        progressToken = sprintf("qls-indexing-%d", progressCount);
+        progressRequestId = sprintf("qls-progress-%d", progressCount);
+        push messagesToSend, make_json({
+            "jsonrpc": jsonRpcVer,
+            "id": progressRequestId,
+            "method": "window/workDoneProgress/create",
+            "params": {"token": progressToken},
+        });
+    }
+
+    #! Reports the progress of indexing the workspace files in the background
+    private:internal reportIndexingProgress() {
+        if (!pendingWorkspaceFiles) {
+            if (progressActive) {
+                queueProgress({"kind": "end", "message": sprintf("%d files indexed", indexDone)});
+                progressActive = False;
+            }
+            indexQueued = 0;
+            indexDone = 0;
+            return;
+        }
+        if (!progressActive) {
+            return;
+        }
+        int percentage = getIndexPercentage();
+        if (percentage != progressPercent) {
+            progressPercent = percentage;
+            queueProgress({"kind": "report", "message": sprintf("%d/%d files", indexDone, indexQueued),
+                "percentage": percentage});
+        }
+    }
+
+    #! Indexes the next file waiting for background indexing
+    private:internal indexNextFile() {
+        if (pendingWorkspaceFiles) {
+            string uri = shift pendingWorkspaceFiles;
+            # the file can have been opened, or its folder removed from the workspace, since it was queued
+            if (!documents{uri} && !workspaceIndex{uri} && getWorkspaceRoot(Document::getFilePath(uri))) {
+                *FileIndex index = indexFile(uri);
+                if (index) {
+                    workspaceIndex{uri} = index;
+                    delete indexedClassGraph;
+                }
+            }
+            ++indexDone;
+            reportIndexingProgress();
+            if (!pendingWorkspaceFiles) {
+                log(0, "background indexing of workspace files done; %d workspace files indexed",
+                    workspaceIndex.size());
+                queueStdModules();
+            }
+        } else {
+            string uri = shift pendingStdFiles;
+            if (!stdModuleIndexLoaded) {
+                *FileIndex index = indexFile(uri);
+                if (index) {
+                    stdIndexPartial{uri} = index;
+                }
+                if (!pendingStdFiles) {
+                    publishStdModuleIndex();
                 }
             }
         }
+    }
 
-        return exitCode;
+    #! Queues the standard module files for background indexing if they are not indexed yet
+    private:internal queueStdModules() {
+        if (stdModuleIndexLoaded) {
+            return;
+        }
+        {
+            AutoLock al(stdModuleIndexCacheMutex);
+            if (exists stdModuleIndexCache.index) {
+                setStdModuleIndex(stdModuleIndexCache.index);
+                return;
+            }
+        }
+        pendingStdFiles = select stdModuleUris, !stdIndexPartial{$1};
+    }
+
+    #! Publishes the standard module index built in stdIndexPartial to the process-wide cache
+    private:internal publishStdModuleIndex() {
+        {
+            AutoLock al(stdModuleIndexCacheMutex);
+            if (!exists stdModuleIndexCache.index) {
+                stdModuleIndexCache.index = stdIndexPartial;
+            }
+            setStdModuleIndex(stdModuleIndexCache.index);
+        }
+        stdIndexPartial = {};
+        log(0, "%d standard module files indexed", stdModuleIndex.size());
     }
 
     #! Handles a single JSON-RPC request message and returns the response(s).
@@ -563,12 +901,25 @@ public class QLSServer {
     */
     softlist<auto> handleRequest(string msg) {
         # parse the request
-        auto request = parse_json(msg);
+        auto request;
+        try {
+            request = parse_json(msg);
+        } catch (hash<ExceptionInfo> ex) {
+            log(0, "invalid JSON received: %s: %s", ex.err, ex.desc);
+            return ErrorResponse::parseError(jsonRpcVer, sprintf("%s: %s", ex.err, ex.desc));
+        }
 
         # validate request
         if (request.typeCode() != NT_HASH) {
             return ErrorResponse::invalidRequest({"received": msg, "jsonrpc": jsonRpcVer},
                 "Invalid JSON-RPC request");
+        }
+
+        # responses to requests sent by the server
+        if (!request.hasKey("method") && request.hasKey("id")
+                && (request.hasKey("result") || request.hasKey("error"))) {
+            handleClientResponse(request);
+            return NOTHING;
         }
 
         *string validation = validateRequest(request);
@@ -590,15 +941,34 @@ public class QLSServer {
             }
         }
 
+        # requests that the client has cancelled before they were started are not processed
+        *string key = exists request.id ? make_json(request.id) : NOTHING;
+        if (key) {
+            if (isCancelled(key)) {
+                finishRequest(key);
+                return ErrorResponse::requestCancelled(request);
+            }
+            currentRequestKey = key;
+        }
+        on_exit {
+            if (key) {
+                finishRequest(key);
+                delete currentRequestKey;
+            }
+        }
+
         # call appropriate method
         try {
             softlist<auto> responses = methodMap{request.method}(request);
             return responses;
         } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "QLS-REQUEST-CANCELLED") {
+                log(1, "request %s cancelled in method '%s'", key, request.method);
+                return exists request.id ? ErrorResponse::requestCancelled(request) : NOTHING;
+            }
             log(0, "unhandled exception in method '%s': %s: %s", request.method, ex.err, ex.desc);
-            if (request.id) {
-                return ErrorResponse::internalError(jsonRpcVer,
-                    sprintf("%s: %s", ex.err, ex.desc));
+            if (exists request.id) {
+                return ErrorResponse::requestInternalError(request, sprintf("%s: %s", ex.err, ex.desc));
             }
             return NOTHING;
         }
@@ -678,6 +1048,13 @@ public class QLSServer {
         # create a list of file URIs encoded like the URIs of documents opened by the client
         qoreFiles = map Document::getFileUri($1), qoreFiles;
         log(1, "qore files in workspace folder %y: %Y", root, qoreFiles);
+
+        if (backgroundIndexing) {
+            pendingWorkspaceFiles += qoreFiles;
+            indexQueued += qoreFiles.size();
+            log(0, "queued %d files in workspace folder %y for background indexing", qoreFiles.size(), root);
+            return;
+        }
 
         # measure start time
         date start = now_us();
@@ -877,26 +1254,25 @@ public class QLSServer {
             }
         }
 
+        # complete the index; files indexed in the background or before a cancellation are kept
         date start = now_us();
-        log(0, "lazy indexing standard module files for %s", reason);
-        hash<string, FileIndex> index = {};
+        log(0, "indexing standard module files for %s", reason);
         foreach string uri in (stdModuleUris) {
+            if (stdIndexPartial{uri}) {
+                continue;
+            }
+            checkCancelled();
             *FileIndex fileIndex = indexFile(uri);
             if (fileIndex) {
-                index{uri} = fileIndex;
+                stdIndexPartial{uri} = fileIndex;
             }
         }
-
-        {
-            AutoLock al(stdModuleIndexCacheMutex);
-            if (!exists stdModuleIndexCache.index) {
-                stdModuleIndexCache.index = index;
-            }
-            setStdModuleIndex(stdModuleIndexCache.index);
-        }
+        # the files queued for background indexing are done
+        pendingStdFiles = ();
+        publishStdModuleIndex();
 
         date end = now_us();
-        log(0, "lazy indexing of %d standard module files took: %y", stdModuleIndex.size(), end - start);
+        log(0, "indexing of %d standard module files for %s took: %y", stdModuleIndex.size(), reason, end - start);
     }
 
     #! Find the metadata directory containing qpp .meta.json files
@@ -1106,7 +1482,7 @@ public class QLSServer {
             # discover standard Qore modules; source parsing is deferred until needed
             parseStdModules();
         } catch (hash<ExceptionInfo> ex) {
-            return ErrorResponse::internalError(jsonRpcVer, sprintf("%s: %s: %Y", ex.err, ex.desc, ex));
+            return ErrorResponse::requestInternalError(request, sprintf("%s: %s: %Y", ex.err, ex.desc, ex));
         }
 
         try {
@@ -1131,6 +1507,7 @@ public class QLSServer {
     private *string meth_initialized(hash<auto> request) {
         clientInitialized = True;
         log(0, "client initialized!");
+        startIndexingProgress();
         return NOTHING;
     }
 
@@ -1154,7 +1531,11 @@ public class QLSServer {
 
     #! "$/cancelRequest" notification method handler
     private *string meth_cancelRequest(hash<auto> request) {
-        # ignore for now
+        # main() cancels requests when the notification is read, so that requests being processed can be
+        # cancelled; this handles applications that read messages themselves
+        if (exists request.params.id) {
+            cancelRequest(request.params.id);
+        }
         return NOTHING;
     }
 
@@ -1190,9 +1571,11 @@ public class QLSServer {
         } else {
             logFile = getDefaultLogFilePath();
         }
+        # close the current log file; it is opened again if logging is enabled
+        delete logFh;
         prepareLogFile(logFile);
 
-        if (logging && !fos) {
+        if (logging && !logFh) {
             return Notification::showMessage(jsonRpcVer, MessageType.Warning,
                 "QLS log file could not be opened. Logging will be turned off.");
         }
@@ -1267,6 +1650,7 @@ public class QLSServer {
                 if (root) {
                     indexWorkspaceRoot(root);
                 }
+                startIndexingProgress();
             }
         }
         return NOTHING;
@@ -2969,6 +3353,7 @@ public class QLSServer {
         list<auto> result = ();
 
         code<nothing(FileIndex)> scanIndex = sub (FileIndex index) {
+            checkCancelled();
             foreach hash<IndexedClass> cls in (index.getClasses()) {
                 # Check if this class inherits from targetName
                 if (cls.parents.contains(targetName)) {
@@ -3132,6 +3517,7 @@ public class QLSServer {
         if (symbolInfo.kind == ASTSymbolKind.Class) {
             # Find all subtypes
             foreach FileIndex index in (getAllIndexes()) {
+                checkCancelled();
                 foreach hash<IndexedClass> cls in (index.getClasses()) {
                     if (cls.parents.contains(symbolInfo.name)) {
                         result += index.getSymbol(cls.symbol).location;
@@ -3158,6 +3544,7 @@ public class QLSServer {
                 string methodName = symbolInfo.name;
 
                 foreach FileIndex index in (getAllIndexes()) {
+                    checkCancelled();
                     *Document d;
                     foreach hash<IndexedClass> cls in (index.getClasses()) {
                         if (!cls.parents.contains(enclosingClass)) {
@@ -4031,6 +4418,7 @@ public class QLSServer {
         }
         foreach hash<string, FileIndex> indexes in (getSearchIndexes()) {
             foreach FileIndex index in (indexes.iterator()) {
+                checkCancelled();
                 # the identifier filter excludes most files without reading them
                 if (index.getUri() != uri && index.mayContainIdentifier(name) && index.sourceContains(name)) {
                     addIndexedDocument(\ret, index);
@@ -4142,6 +4530,7 @@ public class QLSServer {
         list<string> declaringFiles = ();
         foreach hash<string, FileIndex> indexes in (searchIndexes) {
             foreach FileIndex index in (indexes.iterator()) {
+                checkCancelled();
                 string indexUri = index.getUri();
                 if (indexUri == uri) {
                     continue;
@@ -4165,6 +4554,7 @@ public class QLSServer {
             hash<string, Document> docs = base;
             foreach hash<string, FileIndex> indexes in (searchIndexes) {
                 foreach FileIndex index in (indexes.iterator()) {
+                    checkCancelled();
                     if (searchFiles{index.getUri()}) {
                         addIndexedDocument(\docs, index);
                     }
@@ -4201,6 +4591,7 @@ printf("%d files indexed, %d syntax trees cached\n", info.workspaceFiles, info.c
             "cachedTrees": treeCache.size(),
             "cachedTreeSourceSize": treeCache.getTotalSize(),
             "treeCacheSize": treeCache.getMaxSize(),
+            "pendingFiles": pendingWorkspaceFiles.size() + pendingStdFiles.size(),
         };
     }
 

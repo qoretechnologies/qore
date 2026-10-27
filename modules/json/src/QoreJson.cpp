@@ -297,6 +297,11 @@ static QoreHashNode* get_json_object(const char*& buf, int& line_number, const Q
 
         skip_whitespace(buf, line_number);
     }
+    // the input ended before the object was closed, after '{' or ','
+    if (!*xsink) {
+        xsink->raiseException("JSON-PARSE-ERROR", "premature end of input at line %d while parsing JSON object "
+            "(expecting '\"' or '}')", line_number);
+    }
     return 0;
 }
 
@@ -363,6 +368,11 @@ static AbstractQoreNode* get_json_array(const char*& buf, int& line_number, cons
         ++buf;
 
         skip_whitespace(buf, line_number);
+    }
+    // the input ended before the array was closed, after '[' or ','
+    if (!*xsink) {
+        xsink->raiseException("JSON-PARSE-ERROR", "premature end of input at line %d while parsing JSON array "
+            "(expecting JSON value or ']')", line_number);
     }
     return 0;
 }

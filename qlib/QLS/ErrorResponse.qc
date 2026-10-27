@@ -34,6 +34,7 @@ public const ErrorCodes = {
     "serverErrorEnd": -32000,
     "ServerNotInitialized": -32002,
     "UnknownErrorCode": -32001,
+    "RequestCancelled": -32800,
 };
 
 #! Error response factory.
@@ -66,6 +67,35 @@ public class ErrorResponse {
         hash<auto> err = {
             "code": ErrorCodes.InternalError,
             "message": message ?? "internal error",
+        };
+        return make_jsonrpc_error(jsonrpc, NOTHING, err);
+    }
+
+    #! Returns an internal error response for a request
+    /** Unlike internalError(), the response has the request ID, so the client can match it to the request.
+    */
+    public static string requestInternalError(hash<auto> request, *string message) {
+        hash<auto> err = {
+            "code": ErrorCodes.InternalError,
+            "message": message ?? "internal error",
+        };
+        return make_jsonrpc_error(request.jsonrpc, request.id, err);
+    }
+
+    #! Returns the response for a request that the client cancelled
+    public static string requestCancelled(hash<auto> request) {
+        hash<auto> err = {
+            "code": ErrorCodes.RequestCancelled,
+            "message": "request cancelled",
+        };
+        return make_jsonrpc_error(request.jsonrpc, request.id, err);
+    }
+
+    #! Returns the response for a message that is not valid JSON
+    public static string parseError(string jsonrpc, *string message) {
+        hash<auto> err = {
+            "code": ErrorCodes.ParseError,
+            "message": message ?? "parse error",
         };
         return make_jsonrpc_error(jsonrpc, NOTHING, err);
     }

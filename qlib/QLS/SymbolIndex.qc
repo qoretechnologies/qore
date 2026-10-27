@@ -70,6 +70,9 @@ public hashdecl IndexInfo {
 
     #! The maximum total source size of the syntax trees in the cache
     int treeCacheSize = 0;
+
+    #! The number of workspace and standard module files waiting to be indexed in the background
+    int pendingFiles = 0;
 }
 
 #! Class inheritance relations, keyed by declared class name

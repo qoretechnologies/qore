@@ -180,6 +180,8 @@ public bool sub is_excluded_path(string path, string root, hash<FileScanOptions>
 /** Subdirectories matching @ref QLS::Files::FileScanOptions::excludeDirs "FileScanOptions.excludeDirs" are not
     searched, files larger than @ref QLS::Files::FileScanOptions::maxFileSize "FileScanOptions.maxFileSize" are
     skipped, and each real directory is searched once, so symbolic links cannot cause loops or duplicate results.
+    The files of each directory are returned sorted by name, before the files of its subdirectories, so the
+    result is the same on every file system.
 
     @param path the root directory to search
     @param opts the scan options
@@ -220,7 +222,8 @@ list<string> sub find_qore_files_intern(string path, hash<FileScanOptions> opts,
 
     list<string> ret = ();
 
-    foreach string entry in (d.listFileNames()) {
+    # sorted, so that files are found and indexed in the same order on every file system
+    foreach string entry in (sort(d.listFileNames())) {
         string fpath = sprintf("%s%s%s", path, DirSep, entry);
         if (!is_valid_qore_file(fpath)) {
             continue;
@@ -232,7 +235,7 @@ list<string> sub find_qore_files_intern(string path, hash<FileScanOptions> opts,
         push ret, fpath;
     }
 
-    foreach string entry in (d.listDirNames()) {
+    foreach string entry in (sort(d.listDirNames())) {
         if (excludeRegex && regex(entry, excludeRegex)) {
             continue;
         }

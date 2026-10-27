@@ -63,6 +63,8 @@ module QLS {
     - @ref QLS::DocumentCache "DocumentCache": size-limited cache of syntax trees parsed from indexed files
     - @ref QLS::Messenger "Messenger": JSON-RPC transport layer reading/writing LSP messages
       on stdin/stdout with @c Content-Length headers
+    - @ref QLS::LspConnection "LspConnection": LSP message connection on standard input and output or on any
+      pair of streams
     - @ref QLS::ErrorResponse "ErrorResponse": factory for LSP error responses
       (@c InvalidRequest, @c MethodNotFound, @c InternalError, etc.)
     - @ref QLS::Notification "Notification": factory for LSP notifications
@@ -210,6 +212,29 @@ server.main();
     @endcode
 
     Options with invalid values are logged and ignored.
+
+    @subsection qls_loop Server Loop
+
+    @ref QLS::QLSServer::main() "QLSServer::main()" reads messages in a background thread, so that
+    @c $/cancelRequest notifications are seen while a request is processed.  The workspace is indexed after the
+    client's @c initialized notification, one file at a time while no message is waiting, so requests are answered
+    during indexing with the files indexed so far:
+    - clients that support work done progress (@c window.workDoneProgress) are asked to create a progress token
+      and get @c begin, @c report and @c end notifications for the workspace files
+    - standard module files are indexed after the workspace files, so the first lookup in a standard module does
+      not have to wait for them
+    - a cancelled request is answered with the @c RequestCancelled error, before it is started or at the next file
+      that it would search
+    - errors in request handlers are answered with the request ID, invalid JSON with a @c ParseError response, and
+      responses from the client to requests sent by the server are not answered
+
+    Applications that call @ref QLS::QLSServer::handleRequest() "handleRequest()" themselves can use the same
+    behavior: enable it with @ref QLS::QLSServer::setBackgroundIndexing() "setBackgroundIndexing()", call
+    @ref QLS::QLSServer::indexPendingFile() "indexPendingFile()" while no message is waiting, send the messages
+    returned by @ref QLS::QLSServer::takeQueuedMessages() "takeQueuedMessages()", and report request IDs with
+    @ref QLS::QLSServer::registerRequest() "registerRequest()" and
+    @ref QLS::QLSServer::cancelRequest() "cancelRequest()".  To run the server on other streams, pass an
+    @ref QLS::LspConnection "LspConnection" to @ref QLS::QLSServer::main() "main()".
 
     @subsection qls_sync Document Synchronization and Symbols
 

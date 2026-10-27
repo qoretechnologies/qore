@@ -6,6 +6,8 @@
 
     @section json_v3_0_0 json Module Version 3.0.0
 
+    - input that ends inside a JSON object or array after \c "{", \c "[" or \c "," raises \c JSON-PARSE-ERROR;
+      it was parsed as @ref nothing, so a truncated document could not be told from an empty one
     - a key with a NUL character in a JSON document, which a hash key cannot hold, raises \c JSON-PARSE-ERROR, which
       gives the key and the byte offset of the NUL character: the key was cut at the NUL character and could replace
       the value of another key
