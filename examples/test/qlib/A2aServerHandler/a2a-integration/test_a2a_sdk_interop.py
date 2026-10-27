@@ -20,7 +20,8 @@ CAVEATS:
   correct per v1.0 spec (SendMessageResponse oneof). Our server always
   returns Task, which is also valid.
 
-This requires: pip install 'a2a-sdk[sqlite,http-server]'
+This requires: pip install 'a2a-sdk[sqlite,http-server]' uvicorn
+(the a2a-sdk http-server extra does not include the uvicorn server that this test runs the SDK server in)
 
 Usage:
     python test_a2a_sdk_interop.py <qore_server_url> --sdk-port <port>
@@ -51,8 +52,8 @@ try:
     from a2a.server.routes.agent_card_routes import create_agent_card_routes
     from starlette.applications import Starlette
 except ImportError as e:
-    print(f"ERROR: a2a-sdk not installed ({e})")
-    print("Install with: pip install 'a2a-sdk[sqlite,http-server]'")
+    print(f"ERROR: a required package is not installed ({e})")
+    print("Install with: pip install 'a2a-sdk[sqlite,http-server]' uvicorn")
     sys.exit(1)
 
 

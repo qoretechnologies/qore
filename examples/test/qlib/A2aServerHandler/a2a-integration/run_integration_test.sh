@@ -82,7 +82,8 @@ while [ $# -gt 0 ]; do
     case "$1" in
         --install-deps)
             echo -e "${YELLOW}Installing Python dependencies...${NC}"
-            $PIP install --quiet httpx
+            # the SDK interop test runs the a2a-sdk server in uvicorn, which the http-server extra does not include
+            $PIP install --quiet httpx 'a2a-sdk[sqlite,http-server]' uvicorn
             ;;
         --test)
             shift
