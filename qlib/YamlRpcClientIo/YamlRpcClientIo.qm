@@ -75,6 +75,7 @@ module YamlRpcClientIo {
     - API-compatible with the \c YamlRpcClient class
     - Debug info variants for all call methods
     - ConnectionProvider integration with \c yamlrpcio:// and \c yamlrpcios:// URL schemes
+    - the \c max_response_body_size option limits the size of response bodies as received and as decoded
 
     @subsection yamlrpcclientio_urls Endpoint URLs
 

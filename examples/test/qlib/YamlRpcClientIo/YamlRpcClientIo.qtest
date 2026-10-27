@@ -82,6 +82,7 @@ public class YamlRpcClientIoTest inherits QUnit::Test {
         addTestCase("makeRequest test", \testMakeRequest());
         addTestCase("error handling test", \testErrorHandling());
         addTestCase("connection provider test", \testConnectionProvider());
+        addTestCase("max response body size test", \testMaxResponseBodySize());
         addTestCase("connection hash constructor test", \testConnectionHashConstructor());
         addTestCase("connection scheme info test", \testConnectionSchemeInfo());
         addTestCase("connection serialization test", \testConnectionSerialization());
@@ -238,6 +239,36 @@ public class YamlRpcClientIoTest inherits QUnit::Test {
         # Test that the connected client works
         auto h = conn_client.call("system.echo", "connection-test");
         assertEq("connection-test", h.result, "connected client should work");
+    }
+
+    testMaxResponseBodySize() {
+        string big = strmul("X", 64 * 1024);
+        string url = "http://localhost:" + port + "/YAML";
+
+        # both constructors accept the option; a response over the limit fails, a smaller one succeeds
+        list<YamlRpcClientIo::YamlRpcClientIo> clients = (
+            new YamlRpcClientIo::YamlRpcClientIo(url, {"max_response_body_size": 1024}),
+            new YamlRpcClientIo::YamlRpcClientIo({"url": url, "max_response_body_size": 1024}),
+        );
+        foreach YamlRpcClientIo::YamlRpcClientIo c in (clients) {
+            on_exit c.close();
+            assertThrows("HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE", \c.call(), ("system.echo", big));
+            assertEq("small", c.call("system.echo", "small").result);
+        }
+
+        # 0 means no limit
+        YamlRpcClientIo::YamlRpcClientIo unlimited(url, {"max_response_body_size": 0});
+        on_exit unlimited.close();
+        assertEq(big, unlimited.call("system.echo", big).result);
+
+        # the connection option advertised by YamlRpcIoConnection reaches the client
+        assertEq("int", YamlRpcIoConnection::ConnectionScheme.options.max_response_body_size.type);
+        YamlRpcIoConnection conn("limit-test", "limit test", "yamlrpcio://localhost:" + port + "/YAML",
+            {"monitor": False}, {"max_response_body_size": 1024});
+        YamlRpcClientIo::YamlRpcClientIo conn_client = conn.get(False);
+        on_exit conn_client.close();
+        assertThrows("HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE", \conn_client.call(), ("system.echo", big));
+        assertEq("small", conn_client.call("system.echo", "small").result);
     }
 
     testConnectionHashConstructor() {

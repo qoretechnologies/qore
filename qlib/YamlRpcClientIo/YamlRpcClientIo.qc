@@ -79,6 +79,9 @@ public class YamlRpcClientIo {
         #! Protocol for the connection manager ("h1", "h2", "h3", or "auto")
         *string http_protocol;
 
+        #! Maximum size in bytes of a response body; 0 = no limit
+        int max_response_body_size = 0;
+
         #! YAML serialization flags
         int yaml_flags = YAML::None;
 
@@ -103,6 +106,9 @@ public class YamlRpcClientIo {
           the elements of a list are sent as repeated headers; a hash, \c NULL or missing value raises
           \c RUNTIME-TYPE-ERROR
         - \c flags: YAML serialization flags (default: \c YAML::None)
+        - \c max_response_body_size: the maximum size in bytes of a response body, as received and after its
+          content encoding is decoded (default: \c 0 = no limit); a larger response fails the call with
+          \c HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE
 
         @see yamlrpcclientio_urls
         @throw HTTP-ENDPOINT-URL-ERROR the endpoint URL or fallback path is invalid
@@ -120,6 +126,7 @@ YamlRpcClientIo client("http://localhost:8080/YAML", {"timeout": 30000});
         connect_timeout = opts.connect_timeout ?? DefaultConnectTimeout;
         io_timeout = opts.timeout ?? DefaultTimeout;
         http_protocol = opts.http_protocol;
+        max_response_body_size = opts.max_response_body_size ?? 0;
         logger = opts.logger;
         yaml_flags |= opts.flags ?? YAML::None;
 
@@ -161,6 +168,7 @@ YamlRpcClientIo client({"url": "http://localhost:8080/YAML", "timeout": 30000});
         connect_timeout = opts.connect_timeout ?? DefaultConnectTimeout;
         io_timeout = opts.timeout ?? DefaultTimeout;
         http_protocol = opts.http_protocol;
+        max_response_body_size = opts.max_response_body_size ?? 0;
         logger = opts.logger;
         yaml_flags |= opts.flags ?? YAML::None;
 
@@ -191,6 +199,7 @@ YamlRpcClientIo client({"url": "http://localhost:8080/YAML", "timeout": 30000});
         @throw YAML-SERIALIZATION-ERROR cannot serialize value passed
         @throw YAML-PARSE-ERROR syntax error parsing YAML response
         @throw YAMLRPCCLIENTIO-HTTP-ERROR HTTP error from server
+        @throw HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE the response body exceeds the \c max_response_body_size option
         @throw YAMLRPCCLIENTIO-RESPONSE-ERROR empty or invalid response
 
         @par Example:
@@ -213,6 +222,7 @@ auto result = client.call("method.name", arg1, arg2);
         @throw YAML-SERIALIZATION-ERROR cannot serialize value passed
         @throw YAML-PARSE-ERROR syntax error parsing YAML response
         @throw YAMLRPCCLIENTIO-HTTP-ERROR HTTP error from server
+        @throw HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE the response body exceeds the \c max_response_body_size option
         @throw YAMLRPCCLIENTIO-RESPONSE-ERROR empty or invalid response
 
         @par Example:
@@ -241,6 +251,7 @@ auto result = client.callArgs("method.name", arg_list);
         @throw YAML-SERIALIZATION-ERROR cannot serialize value passed
         @throw YAML-PARSE-ERROR syntax error parsing YAML response
         @throw YAMLRPCCLIENTIO-HTTP-ERROR HTTP error from server
+        @throw HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE the response body exceeds the \c max_response_body_size option
         @throw YAMLRPCCLIENTIO-RESPONSE-ERROR empty or invalid response
 
         @par Example:
@@ -270,6 +281,7 @@ auto result = client.callWithInfo(\info, "method.name", arg1, arg2);
         @throw YAML-SERIALIZATION-ERROR cannot serialize value passed
         @throw YAML-PARSE-ERROR syntax error parsing YAML response
         @throw YAMLRPCCLIENTIO-HTTP-ERROR HTTP error from server
+        @throw HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE the response body exceeds the \c max_response_body_size option
         @throw YAMLRPCCLIENTIO-RESPONSE-ERROR empty or invalid response
 
         @par Example:
@@ -317,6 +329,7 @@ auto result = client.callArgsWithInfo(\info, "method.name", arg_list);
         @return the parsed YAML-RPC response
 
         @throw YAMLRPCCLIENTIO-HTTP-ERROR HTTP error from server
+        @throw HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE the response body exceeds the \c max_response_body_size option
         @throw YAMLRPCCLIENTIO-RESPONSE-ERROR empty response body
     */
     private auto doRequest(string body) {
@@ -341,6 +354,7 @@ auto result = client.callArgsWithInfo(\info, "method.name", arg_list);
         @return the parsed YAML-RPC response
 
         @throw YAMLRPCCLIENTIO-HTTP-ERROR HTTP error from server
+        @throw HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE the response body exceeds the \c max_response_body_size option
         @throw YAMLRPCCLIENTIO-RESPONSE-ERROR empty response body
     */
     private auto doRequestWithInfo(string body, reference<hash<auto>> info) {
@@ -372,6 +386,7 @@ auto result = client.callArgsWithInfo(\info, "method.name", arg_list);
                 "connect_timeout": connect_timeout,
                 "request_timeout": io_timeout,
                 "protocol": http_protocol ?? "auto",
+                "max_response_body_size": max_response_body_size,
             });
     }
 
