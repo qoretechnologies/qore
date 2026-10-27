@@ -234,11 +234,12 @@ class A2AComplianceTest:
         def test_tasks_get_not_found():
             result, status = self._jsonrpc("tasks/get", {"id": "nonexistent-task-xyz"})
             assert "error" in result, "Expected error for non-existent task"
-            assert result["error"]["code"] == -32002, \
-                f"Expected error code -32002, got: {result['error']['code']}"
+            # TaskNotFoundError is -32001 in the A2A specification; -32002 is TaskNotCancelableError
+            assert result["error"]["code"] == -32001, \
+                f"Expected error code -32001, got: {result['error']['code']}"
 
         self._test("tasks", "tasks/get existing", test_tasks_get)
-        self._test("tasks", "tasks/get not found returns -32002", test_tasks_get_not_found)
+        self._test("tasks", "tasks/get not found returns -32001", test_tasks_get_not_found)
 
     # ================================================================
     # Error Handling Tests

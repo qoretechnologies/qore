@@ -279,12 +279,12 @@ class InteropTest:
             assert "TASK_STATE_" in result2["result"]["status"]["state"]
 
         def test_v10_get_task_not_found():
-            """GetTask for non-existent ID should return error -32002."""
+            """GetTask for a non-existent ID returns TaskNotFoundError, which is -32001 in the A2A specification."""
             result, status = self._jsonrpc(qore_url, "GetTask",
                 {"id": "nonexistent-task-xyz"}, v10_headers)
             assert "error" in result, "Expected error for non-existent task"
-            assert result["error"]["code"] == -32002, \
-                f"Expected -32002, got: {result['error']['code']}"
+            assert result["error"]["code"] == -32001, \
+                f"Expected -32001, got: {result['error']['code']}"
 
         # --- v1.0 ListTasks ---
         def test_v10_list_tasks():
@@ -415,7 +415,7 @@ class InteropTest:
         self._test("sdk→qore", "contextId in message", test_v10_contextid_in_message)
         self._test("sdk→qore", "multiple messages unique IDs", test_v10_multiple_messages)
         self._test("sdk→qore", "v1.0 GetTask", test_v10_get_task)
-        self._test("sdk→qore", "GetTask not found (-32002)", test_v10_get_task_not_found)
+        self._test("sdk→qore", "GetTask not found (-32001)", test_v10_get_task_not_found)
         self._test("sdk→qore", "v1.0 ListTasks", test_v10_list_tasks)
         self._test("sdk→qore", "CancelTask on completed", test_v10_cancel_completed_task)
         self._test("sdk→qore", "unknown method (-32601)", test_unknown_method)

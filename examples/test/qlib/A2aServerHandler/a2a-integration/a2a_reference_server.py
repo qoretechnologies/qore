@@ -272,7 +272,7 @@ def handle_tasks_get(params):
     """Handle tasks/get JSON-RPC method."""
     task_id = params.get("id")
     if not task_id or task_id not in tasks:
-        return None, {"code": -32002, "message": f"Task not found: {task_id}"}
+        return None, {"code": -32001, "message": f"Task not found: {task_id}"}
     return tasks[task_id], None
 
 
@@ -280,12 +280,12 @@ def handle_tasks_cancel(params):
     """Handle tasks/cancel JSON-RPC method."""
     task_id = params.get("id")
     if not task_id or task_id not in tasks:
-        return None, {"code": -32002, "message": f"Task not found: {task_id}"}
+        return None, {"code": -32001, "message": f"Task not found: {task_id}"}
 
     task = tasks[task_id]
     state = task["status"]["state"]
     if state in ("completed", "failed", "canceled", "rejected"):
-        return None, {"code": -32003, "message": f"Cannot cancel task in state: {state}"}
+        return None, {"code": -32002, "message": f"Cannot cancel task in state: {state}"}
 
     task["status"]["state"] = "canceled"
     task["status"]["timestamp"] = datetime.now(timezone.utc).isoformat()
