@@ -26943,3 +26943,51 @@ Every phase, process completion, raw window and dependency record is preserved a
 No fresh Java/develop ratio, measured IR/JIT gain, Linux/sanitizer result or global maximum is established. After audit/commit, merge the latest develop and perform the requested optimized system installation. The next investigation is compact invocation-owned closure-frame storage with additive cleanup/version contracts and per-call borrowed metadata; its layout probe is prepared but uncompiled.
 
 [Raw evidence](results-stack-pop-cold-wait-macos-arm64.json); [62-check audit](audit-stack-pop-cold-wait.md).
+
+## Compact automatic closure frame: rejected (2026-10-27)
+
+The same-Program closure-v2 candidate removes three duplicate metadata pointers. Diagnostic readers derive the Program and statement from the immutable variant already borrowed in the frame context, and use the existing static closure name. Cross-Program caller overrides, admission, capture locks, context restoration, cancellation and reader waits are unchanged. Both runtime source changes are reverted; the candidate was never installed.
+
+The logical frame shrinks from 216 to 192 bytes in Release and Debug layout probes; the linked ARM64 helper stack shrinks from 352 to 336 bytes. All 9,041 exports and ordered reader handshakes remain. These code-shape results do not establish a performance benefit.
+
+Baseline is the optimized, installed 7bc52fd305 merge of develop 577cc3cec6, including retained stack-pop optimization 026a75a038. Both runtimes use -O3 -DNDEBUG, allocation tracking off and LLVM 22.1.8 on macOS ARM64. The prior pre-merge qmods fail the normal runtime-identity check before timing. Eighteen fresh qcc-O3 modules are then compiled once with the frozen merged baseline; the same executable and physical module per layout run against both libraries, with matching runtime identity and actual loaded-image checks. No override or source fallback is used.
+
+Three screen forks and five confirmation forks cover default/reverse/shuffle-487 layouts, 4,096 items, seed 7, one warmup and three 150 ms windows. Runs are randomized sequentially; no owned build/test/profile work overlaps timing. There is no host exclusivity, CPU affinity, frequency or thermal control. Values are whole-kernel ns/item, not isolated call latency.
+
+The screen passes its gate only for captured closures. Confirmation gives plain closures 14.125245 to 14.007556 ns/item (-0.833%) and captured closures 19.912852 to 19.859748 ns/item (-0.267%), with the latter 2.472% slower in the reverse layout. Neither meets the prospective confirmation requirement of at least 1% aggregate gain and improvement in every layout. Reject the added automatic frame class: the repeated target benefit is too small/inconsistent. This is not a blanket rejection of every regression, nor a performance rejection of reusable storage.
+
+|!Workload|!Screen before|!Screen candidate|!Change|!Confirm before|!Confirm candidate|!Change
+|micro:closure_call|14.112139|13.899971|-1.503%|14.125245|14.007556|-0.833%
+|micro:closure_capture|19.802158|19.551188|-1.267%|19.912852|19.859748|-0.267%
+|micro:indirect_call|61.224620|61.493390|+0.439%|61.823788|61.846148|+0.036%
+|micro:indirect_wide|61.616760|62.356859|+1.201%|61.823015|61.955840|+0.215%
+|micro:polymorphic_call|23.860538|24.179311|+1.336%|24.418462|23.978350|-1.802%
+|micro:list_build|27.944182|27.984662|+0.145%|28.042373|27.912631|-0.463%
+|float:direct_loop_float_return|5.949262|5.899667|-0.834%|5.911148|5.957950|+0.792%
+|float:callback_loop_float_return|5.161381|5.143108|-0.354%|5.203422|5.175856|-0.530%
+|float:typed_local_int_unary|1.237751|1.240978|+0.261%|1.250082|1.248368|-0.137%
+|mixed:callback_pipeline|129.989275|127.547087|-1.879%|129.536849|128.544646|-0.766%
+|index:buffer_positive|15.441106|15.483203|+0.273%|15.431450|15.392545|-0.252%
+|index:buffer_negative|15.273359|15.246930|-0.173%|15.371911|15.385842|+0.091%
+
+|!Workload|!Screen default|!Screen reverse|!Screen shuffle|!Confirm default|!Confirm reverse|!Confirm shuffle
+|micro:closure_call|-0.921%|-2.711%|+0.492%|-1.086%|-0.833%|-1.029%
+|micro:closure_capture|-0.137%|-1.043%|-3.902%|-1.190%|+2.472%|-1.402%
+|micro:indirect_call|+0.715%|+0.439%|-0.631%|+0.265%|+0.664%|-0.745%
+|micro:indirect_wide|+1.201%|+0.787%|+0.896%|-0.407%|+0.719%|+0.615%
+|micro:polymorphic_call|+1.336%|+0.051%|+1.471%|-0.391%|+1.107%|-2.660%
+|micro:list_build|-0.522%|-0.248%|+0.389%|+0.025%|-0.480%|-0.458%
+|float:direct_loop_float_return|-0.991%|+0.351%|+0.168%|+0.387%|+0.324%|+1.174%
+|float:callback_loop_float_return|-0.252%|-0.224%|-1.157%|+0.038%|-0.906%|-0.184%
+|float:typed_local_int_unary|+0.036%|+0.395%|+0.116%|+0.789%|-0.137%|-1.356%
+|mixed:callback_pipeline|-1.829%|-1.833%|-1.879%|-0.336%|+0.420%|-0.958%
+|index:buffer_positive|+0.273%|-0.357%|+1.704%|-0.252%|-0.074%|-0.563%
+|index:buffer_negative|-0.285%|-1.139%|+0.997%|-0.746%|-0.389%|+0.955%
+
+All 576 jobs / 1,728 windows independently replay. Focused Release qualification passes 14 cases / 6,912 assertions, including concurrent capture/readers, debugger, legacy/eager/native-disabled, overflow and context restoration controls. Reference checks cover 6,768 paired AOT results plus 1,128 source results. After reversion, the full optimized build is byte-identical to the baseline, all 391 Release aliases are restored, and 1,128 native reference results pass. Debug runtime, broad workloads and short/populated timing are not pursued after the failed confirmation gate.
+
+The preceding requested merge/install completed with the exact sudo make install && copy-qore-modules command. Installed revision 7bc52fd305, 391 qmods in both system trees, nine public headers, 225 native declaration-owner checks and the native-stack probe are verified. The 34 test runs report 696 cases / 10,946 assertions, including one Linux-only workspace RSS skip on macOS. QLS initially used the old PATH executable in child processes; the corrected validation environment passes. An existing Markdown table in the diagnostics design note is corrected here. The unchanged installed runtime remains ready for binary-module rebuilds; no external module-python rebuild is claimed.
+
+Next investigate invocation-owned reusable closure-frame storage within the now-proven 192-byte object / 208-byte slot budget. Use additive helper/cleanup contracts, refresh and clear borrowed metadata per call, and prove every compiler slot/cleanup use. No new reusable implementation, fresh Java/develop ratio or global performance ceiling is established by this experiment.
+
+[Raw evidence](results-compact-automatic-closure-rejected-macos-arm64.json); [audit](audit-compact-automatic-closure-rejected.md). Large exact logs are losslessly compressed in the evidence blob map; each blob key is its decoded SHA256.
