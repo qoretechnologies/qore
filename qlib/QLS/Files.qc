@@ -80,33 +80,173 @@ public bool sub is_valid_qore_file(string path) {
     return False;
 }
 
-#! Find files in given root path
-/**
-    @return list of file paths
+#! Directory name patterns that are not searched for source files by default
+/** Patterns are shell-style globs (@c * and @c ?) matched against the name of each subdirectory; version control
+    metadata, dependency trees, agent worktrees and build output hold copies of sources or generated files that
+    would otherwise be indexed again.
 */
-public list<string> sub find_qore_files(string path) {
+public const DefaultExcludeDirs = (
+    ".git",
+    ".hg",
+    ".svn",
+    ".claude",
+    ".vscode-test",
+    "node_modules",
+    "build",
+    "build-*",
+);
+
+#! Source files larger than this are not indexed by default (8 MiB)
+public const DefaultMaxIndexFileSize = 8 * 1024 * 1024;
+
+#! Options for finding source files
+public hashdecl FileScanOptions {
+    #! Shell-style glob patterns for subdirectory names that are not searched
+    list<string> excludeDirs = DefaultExcludeDirs;
+
+    #! Files larger than this many bytes are skipped; 0 means no limit
+    int maxFileSize = DefaultMaxIndexFileSize;
+}
+
+#! Returns a regular expression matching any of the given shell-style glob patterns
+/** @param patterns glob patterns using @c * and @c ?
+
+    @return an anchored regular expression, or @ref nothing if there are no patterns
+*/
+public *string sub glob_list_to_regex(list<string> patterns) {
+    list<string> alternatives = ();
+    foreach string pattern in (patterns) {
+        string re;
+        for (int i = 0; i < pattern.size(); ++i) {
+            string c = pattern[i];
+            switch (c) {
+                case "*":
+                    re += ".*";
+                    break;
+                case "?":
+                    re += ".";
+                    break;
+                default:
+                    if (c =~ /[\\^$.|+(){}\[\]]/) {
+                        re += "\\";
+                    }
+                    re += c;
+                    break;
+            }
+        }
+        push alternatives, re;
+    }
+    return alternatives ? "^(" + alternatives.join("|") + ")$" : NOTHING;
+}
+
+#! Returns @ref True if the given path is not indexed according to the options
+/** A path is excluded if any directory component below @p root matches an exclude pattern, or if the file is
+    larger than the maximum file size.
+
+    @param path the absolute file path
+    @param root the root directory that was scanned
+    @param opts the scan options
+
+    @return @ref True if the file would not have been found by find_qore_files() with the same options
+*/
+public bool sub is_excluded_path(string path, string root, hash<FileScanOptions> opts = <FileScanOptions>{}) {
+    if (opts.maxFileSize > 0) {
+        *hash<StatInfo> info = hstat(path);
+        if (info && info.size > opts.maxFileSize) {
+            return True;
+        }
+    }
+    *string excludeRegex = glob_list_to_regex(opts.excludeDirs);
+    if (!excludeRegex) {
+        return False;
+    }
+    string rel = path;
+    string prefix = root + DirSep;
+    if (path.equalPartial(prefix)) {
+        rel = path.substr(prefix.size());
+    }
+    list<string> components = rel.split(DirSep);
+    # the last component is the file name
+    pop components;
+    foreach string component in (components) {
+        if (regex(component, excludeRegex)) {
+            return True;
+        }
+    }
+    return False;
+}
+
+#! Find files in given root path
+/** Subdirectories matching @ref QLS::Files::FileScanOptions::excludeDirs "FileScanOptions.excludeDirs" are not
+    searched, files larger than @ref QLS::Files::FileScanOptions::maxFileSize "FileScanOptions.maxFileSize" are
+    skipped, and each real directory is searched once, so symbolic links cannot cause loops or duplicate results.
+
+    @param path the root directory to search
+    @param opts the scan options
+    @param skippedFiles if given, receives the paths of Qore files skipped because of their size
+
+    @return list of file paths
+
+    @throw WORKSPACE-PATH-ERROR the root directory cannot be opened
+
+    @par Example
+    @code{.py}
+# index a project but skip generated code and files over 4 MiB
+list<string> skipped;
+list<string> files = Files::find_qore_files("/src/project", <FileScanOptions>{
+    "excludeDirs": Files::DefaultExcludeDirs + ("generated",),
+    "maxFileSize": 4 * 1024 * 1024,
+}, \skipped);
+    @endcode
+*/
+public list<string> sub find_qore_files(string path, hash<FileScanOptions> opts = <FileScanOptions>{},
+        *reference<list<string>> skippedFiles) {
+    hash<string, bool> visited = {};
+    list<string> skipped = ();
+    list<string> ret = find_qore_files_intern(path, opts, glob_list_to_regex(opts.excludeDirs), \visited,
+        \skipped);
+    skippedFiles = skipped;
+    return ret;
+}
+
+#! Searches one directory recursively for find_qore_files()
+list<string> sub find_qore_files_intern(string path, hash<FileScanOptions> opts, *string excludeRegex,
+        reference<hash<string, bool>> visited, reference<list<string>> skipped) {
     Dir d();
     if (!d.chdir(path)) {
         throw "WORKSPACE-PATH-ERROR", sprintf("%s: cannot open directory: %s", path, strerror());
     }
+    visited{realpath(path)} = True;
 
     list<string> ret = ();
 
     foreach string entry in (d.listFileNames()) {
         string fpath = sprintf("%s%s%s", path, DirSep, entry);
-        if (is_valid_qore_file(fpath)) {
-            push ret, fpath;
+        if (!is_valid_qore_file(fpath)) {
+            continue;
         }
+        if (opts.maxFileSize > 0 && hstat(fpath).size > opts.maxFileSize) {
+            push skipped, fpath;
+            continue;
+        }
+        push ret, fpath;
     }
 
     foreach string entry in (d.listDirNames()) {
+        if (excludeRegex && regex(entry, excludeRegex)) {
+            continue;
+        }
         string targ = path + DirSep + entry;
-        if (hstat(targ).type == "DIRECTORY") {
-            try {
-                ret += find_qore_files(targ);
-            } catch (hash<ExceptionInfo> ex) {
-                # ignore errors and continue
+        if (hstat(targ).type != "DIRECTORY") {
+            continue;
+        }
+        try {
+            if (visited{realpath(targ)}) {
+                continue;
             }
+            ret += find_qore_files_intern(targ, opts, excludeRegex, \visited, \skipped);
+        } catch (hash<ExceptionInfo> ex) {
+            # ignore errors and continue
         }
     }
 
@@ -115,9 +255,11 @@ public list<string> sub find_qore_files(string path) {
 
 #! Find standard Qore module files.
 /**
+    @param opts the scan options
+
     @return list of file paths
 */
-public list<string> sub find_std_modules() {
+public list<string> sub find_std_modules(hash<FileScanOptions> opts = <FileScanOptions>{}) {
     # find module path
     Program p(PO_NO_CHILD_PO_RESTRICTIONS | PO_NEW_STYLE);
     p.disableParseOptions(PO_NO_TOP_LEVEL_STATEMENTS);
@@ -158,7 +300,7 @@ public list<string> sub find_std_modules() {
         if (!is_dir(path)) {
             continue;
         }
-        list<string> moduleFiles = find_qore_files(path);
+        list<string> moduleFiles = find_qore_files(path, opts);
         if (moduleFiles.size()) {
             return moduleFiles;
         }

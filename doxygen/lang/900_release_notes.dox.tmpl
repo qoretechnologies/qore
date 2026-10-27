@@ -4705,6 +4705,11 @@ while (*binary chunk = input.read(65536)) {
       - new module providing a Language Server Protocol (LSP) implementation for %Qore
       - symbol and file-kind handling based on the tree-sitter-based @ref astparserintro "astparser" module,
         including typedefs and all Qore/Qorus source extensions
+      - files that are not open in the editor are kept as compact symbol indexes instead of syntax trees, and only
+        the files that can contain a result are parsed for a request, keeping memory use proportional to the
+        number of symbols rather than the size of the workspace (see @ref qls_indexing)
+      - workspace scanning skips version control, dependency, agent worktree and build directories as well as very
+        large files, follows each directory only once, and can be configured with initialization options
 
     - @ref qoreagentstrategiesintro "QoreAgentStrategies" module
       - new module providing configurable agent execution strategies for LLM agents

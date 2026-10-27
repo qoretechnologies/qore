@@ -320,17 +320,26 @@ public class QLSServer {
         #! Open text documents. Hash keys are document URIs.
         hash<auto> documents;
 
-        #! Qore Documents in the current workspace
-        hash<auto> workspaceDocs;
+        #! Symbol indexes of the Qore files in the current workspace that are not open; hash keys are URIs
+        hash<string, FileIndex> workspaceIndex = {};
 
-        #! Standard Qore modules
-        hash<auto> stdModuleDocs;
+        #! Symbol indexes of the standard Qore modules; hash keys are URIs
+        hash<string, FileIndex> stdModuleIndex = {};
 
-        #! Standard Qore module URIs; documents are parsed lazily from this list
+        #! Standard Qore module URIs; files are indexed lazily from this list
         list<string> stdModuleUris = ();
 
-        #! Whether standard module sources have been parsed into stdModuleDocs
-        bool stdModuleDocsLoaded = False;
+        #! Whether standard module sources have been indexed into stdModuleIndex
+        bool stdModuleIndexLoaded = False;
+
+        #! Options for finding workspace and standard module files; set from the initialization options
+        hash<Files::FileScanOptions> scanOptions = <Files::FileScanOptions>{};
+
+        #! Syntax trees of indexed files parsed for requests
+        DocumentCache treeCache();
+
+        #! Class graph of the indexed files; built when needed and discarded when an index changes
+        *hash<ClassGraph> indexedClassGraph;
 
         #! URIs of ignored documents
         hash<auto> ignoredUris;
@@ -350,11 +359,11 @@ public class QLSServer {
         #! Single-char prefix index: lowercased first char → list of names
         hash<string, list<string>> metaPrefixIndex;
 
-        #! Process-local cache for immutable standard module URI lists and lazily parsed documents
-        static hash<auto> stdModuleDocsCache = {};
+        #! Process-local cache for immutable standard module URI lists and lazily built symbol indexes
+        static hash<auto> stdModuleIndexCache = {};
 
-        #! Lock protecting standard module document cache initialization
-        static Mutex stdModuleDocsCacheMutex();
+        #! Lock protecting standard module index cache initialization
+        static Mutex stdModuleIndexCacheMutex();
 
         #! Process-local cache for immutable builtin metadata and lookup indexes
         static hash<auto> builtinMetadataCache = {};
@@ -585,8 +594,9 @@ public class QLSServer {
 
         # find all Qore files in the workspace
         list<string> qoreFiles;
+        list<string> skippedFiles;
         try {
-            qoreFiles = Files::find_qore_files(rootPath);
+            qoreFiles = Files::find_qore_files(rootPath, scanOptions, \skippedFiles);
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "DIR-READ-FAILURE") {
                 log(0, "WARNING: root path scanning failed: %s", get_exception_string(ex));
@@ -610,6 +620,10 @@ public class QLSServer {
                 return;
             }
         }
+        if (skippedFiles) {
+            log(0, "skipped %d workspace files larger than %d bytes: %Y", skippedFiles.size(),
+                scanOptions.maxFileSize, skippedFiles);
+        }
 
         # create a list of file URIs
         int rootPathSize = rootPath.size();
@@ -619,29 +633,84 @@ public class QLSServer {
         # measure start time
         date start = now_us();
 
-        # parse everything
-        map workspaceDocs{$1} = new Document($1), qoreFiles;
+        # index everything; syntax trees are released after indexing and parsed again when needed
+        foreach string uri in (qoreFiles) {
+            *FileIndex index = indexFile(uri);
+            if (index) {
+                workspaceIndex{uri} = index;
+            }
+        }
 
         # measure end time
         date end = now_us();
-        log(0, "parsing of %d workspace files took: %y", qoreFiles.size(), end - start);
+        int symbolCount = 0;
+        map symbolCount += $1.getSymbolCount(), workspaceIndex.iterator();
+        log(0, "indexing of %d workspace files with %d symbols took: %y", workspaceIndex.size(), symbolCount,
+            end - start);
+    }
+
+    #! Applies the initialization options sent by the client
+    /** Supported options:
+        - @c excludeDirs: list of shell-style glob patterns for directory names that are not searched for source
+          files; replaces @ref QLS::Files::DefaultExcludeDirs
+        - @c maxIndexFileSize: files larger than this many bytes are not indexed; 0 means no limit
+        - @c treeCacheSize: syntax trees of indexed files are cached up to this many bytes of source; 0 disables
+          the cache
+
+        Options with invalid values are logged and ignored.
+    */
+    private:internal applyInitializationOptions(auto opts) {
+        if (!exists opts) {
+            return;
+        }
+        if (opts.typeCode() != NT_HASH) {
+            log(0, "WARNING: ignoring initializationOptions with invalid type: %s", opts.type());
+            return;
+        }
+        if (exists opts.excludeDirs) {
+            if (opts.excludeDirs.typeCode() == NT_LIST
+                    && !(select opts.excludeDirs, $1.typeCode() != NT_STRING || !$1)) {
+                scanOptions.excludeDirs = cast<list<string>>(opts.excludeDirs);
+            } else {
+                log(0, "WARNING: ignoring invalid initializationOptions.excludeDirs: %y", opts.excludeDirs);
+            }
+        }
+        if (exists opts.maxIndexFileSize) {
+            if (opts.maxIndexFileSize.typeCode() == NT_INT && opts.maxIndexFileSize >= 0) {
+                scanOptions.maxFileSize = opts.maxIndexFileSize;
+            } else {
+                log(0, "WARNING: ignoring invalid initializationOptions.maxIndexFileSize: %y",
+                    opts.maxIndexFileSize);
+            }
+        }
+        if (exists opts.treeCacheSize) {
+            if (opts.treeCacheSize.typeCode() == NT_INT && opts.treeCacheSize >= 0) {
+                treeCache.setMaxSize(opts.treeCacheSize);
+            } else {
+                log(0, "WARNING: ignoring invalid initializationOptions.treeCacheSize: %y", opts.treeCacheSize);
+            }
+        }
+        log(0, "file scan options: %y; tree cache size: %d", scanOptions, treeCache.getMaxSize());
+    }
+
+    #! Returns the symbol index of a file, or @ref nothing if the file cannot be parsed
+    private:internal *FileIndex indexFile(string uri) {
+        try {
+            return FileIndex::fromFile(uri);
+        } catch (hash<ExceptionInfo> ex) {
+            log(0, "WARNING: cannot index %s: %s", uri, get_exception_string(ex));
+        }
+        return NOTHING;
     }
 
     private:internal parseStdModules() {
         {
-            AutoLock al(stdModuleDocsCacheMutex);
-            if (exists stdModuleDocsCache.files) {
-                stdModuleUris = stdModuleDocsCache.files;
-                if (exists stdModuleDocsCache.docs) {
-                    stdModuleDocs = stdModuleDocsCache.docs;
-                    stdModuleDocsLoaded = True;
+            AutoLock al(stdModuleIndexCacheMutex);
+            if (exists stdModuleIndexCache.files) {
+                stdModuleUris = stdModuleIndexCache.files;
+                if (exists stdModuleIndexCache.index) {
+                    setStdModuleIndex(stdModuleIndexCache.index);
                 }
-                return;
-            }
-            if (exists stdModuleDocsCache.docs) {
-                stdModuleDocs = stdModuleDocsCache.docs;
-                stdModuleDocsLoaded = True;
-                stdModuleUris = keys stdModuleDocs;
                 return;
             }
         }
@@ -649,7 +718,7 @@ public class QLSServer {
         # find standard Qore modules
         list<string> moduleFiles;
         try {
-            moduleFiles = Files::find_std_modules();
+            moduleFiles = Files::find_std_modules(scanOptions);
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "DIR-READ-FAILURE") {
                 log(0, "WARNING: std module scanning failed - %s: %s", ex.err, ex.desc);
@@ -663,67 +732,76 @@ public class QLSServer {
             rethrow;
         }
 
-        # create a list of file URIs; parsing is deferred until a request needs source docs
+        # create a list of file URIs; indexing is deferred until a request needs standard module symbols
         stdModuleUris = map Document::getFileUri($1), moduleFiles;
         log(0, "standard module discovery found %d files", stdModuleUris.size());
 
         {
-            AutoLock al(stdModuleDocsCacheMutex);
-            if (!exists stdModuleDocsCache.files) {
-                stdModuleDocsCache.files = stdModuleUris;
+            AutoLock al(stdModuleIndexCacheMutex);
+            if (!exists stdModuleIndexCache.files) {
+                stdModuleIndexCache.files = stdModuleUris;
             } else {
-                stdModuleUris = stdModuleDocsCache.files;
+                stdModuleUris = stdModuleIndexCache.files;
             }
-            if (exists stdModuleDocsCache.docs) {
-                stdModuleDocs = stdModuleDocsCache.docs;
-                stdModuleDocsLoaded = True;
+            if (exists stdModuleIndexCache.index) {
+                setStdModuleIndex(stdModuleIndexCache.index);
             }
         }
     }
 
-    private:internal ensureStdModuleDocs(string reason = "unspecified") {
-        if (stdModuleDocsLoaded) {
+    #! Sets the loaded standard module index
+    private:internal setStdModuleIndex(hash<string, FileIndex> index) {
+        stdModuleIndex = index;
+        stdModuleIndexLoaded = True;
+        delete indexedClassGraph;
+    }
+
+    private:internal ensureStdModuleIndex(string reason = "unspecified") {
+        if (stdModuleIndexLoaded) {
             return;
         }
 
         {
-            AutoLock al(stdModuleDocsCacheMutex);
-            if (exists stdModuleDocsCache.docs) {
-                stdModuleDocs = stdModuleDocsCache.docs;
-                stdModuleDocsLoaded = True;
-                if (!stdModuleUris.size() && exists stdModuleDocsCache.files) {
-                    stdModuleUris = stdModuleDocsCache.files;
+            AutoLock al(stdModuleIndexCacheMutex);
+            if (exists stdModuleIndexCache.index) {
+                setStdModuleIndex(stdModuleIndexCache.index);
+                if (!stdModuleUris.size() && exists stdModuleIndexCache.files) {
+                    stdModuleUris = stdModuleIndexCache.files;
                 }
                 return;
             }
-            if (!stdModuleUris.size() && exists stdModuleDocsCache.files) {
-                stdModuleUris = stdModuleDocsCache.files;
+            if (!stdModuleUris.size() && exists stdModuleIndexCache.files) {
+                stdModuleUris = stdModuleIndexCache.files;
             }
         }
 
         if (!stdModuleUris.size()) {
             parseStdModules();
-            if (stdModuleDocsLoaded) {
+            if (stdModuleIndexLoaded) {
                 return;
             }
         }
 
         date start = now_us();
-        log(0, "lazy parsing standard module files for %s", reason);
-        hash<auto> parsedDocs;
-        map parsedDocs{$1} = new Document($1), stdModuleUris;
+        log(0, "lazy indexing standard module files for %s", reason);
+        hash<string, FileIndex> index = {};
+        foreach string uri in (stdModuleUris) {
+            *FileIndex fileIndex = indexFile(uri);
+            if (fileIndex) {
+                index{uri} = fileIndex;
+            }
+        }
 
         {
-            AutoLock al(stdModuleDocsCacheMutex);
-            if (!exists stdModuleDocsCache.docs) {
-                stdModuleDocsCache.docs = parsedDocs;
+            AutoLock al(stdModuleIndexCacheMutex);
+            if (!exists stdModuleIndexCache.index) {
+                stdModuleIndexCache.index = index;
             }
-            stdModuleDocs = stdModuleDocsCache.docs;
-            stdModuleDocsLoaded = True;
+            setStdModuleIndex(stdModuleIndexCache.index);
         }
 
         date end = now_us();
-        log(0, "lazy parsing of %d standard module files took: %y", stdModuleDocs.size(), end - start);
+        log(0, "lazy indexing of %d standard module files took: %y", stdModuleIndex.size(), end - start);
     }
 
     #! Find the metadata directory containing qpp .meta.json files
@@ -917,9 +995,10 @@ public class QLSServer {
         if (!rootUri && rootPath) {
             rootUri = Document::getFileUri(rootPath);
         }
+        applyInitializationOptions(request.params.initializationOptions);
 
         try {
-            # parse all Qore files in the current workspace
+            # index all Qore files in the current workspace
             parseFilesInWorkspace();
         } catch (hash<ExceptionInfo> ex) {
             return ErrorResponse::invalidParams(request, sprintf("%s: %s: %Y", ex.err, ex.desc, ex));
@@ -1036,19 +1115,49 @@ public class QLSServer {
         # handle changes
         list<auto> changes = request.params.changes;
         foreach hash<auto> change in (changes) {
+            string uri = change.uri;
+            treeCache.invalidate(uri);
             switch (change.type) {
                 case FileChangeType.Created:
                 case FileChangeType.Changed:
-                    workspaceDocs{change.uri} = new Document(change.uri);
+                    # open documents are kept up to date by the editor
+                    if (documents{uri}) {
+                        break;
+                    }
+                    if (!isIndexedWorkspaceFile(uri)) {
+                        remove workspaceIndex{uri};
+                        delete indexedClassGraph;
+                        break;
+                    }
+                    *FileIndex index = indexFile(uri);
+                    if (index) {
+                        workspaceIndex{uri} = index;
+                    } else {
+                        remove workspaceIndex{uri};
+                    }
+                    delete indexedClassGraph;
                     break;
                 case FileChangeType.Deleted:
-                    remove workspaceDocs{change.uri};
+                    remove workspaceIndex{uri};
+                    delete indexedClassGraph;
                     break;
                 default:
                     break;
             }
         }
         return NOTHING;
+    }
+
+    #! Returns @ref True if the given file is in the workspace and is indexed according to the scan options
+    private:internal bool isIndexedWorkspaceFile(string uri) {
+        if (!rootPath || uri !~ /^file:\//) {
+            return False;
+        }
+        string path = Document::getFilePath(uri);
+        if (!path.equalPartial(rootPath + DirSep) || !Files::is_valid_qore_file(path)) {
+            return False;
+        }
+        return !Files::is_excluded_path(path, rootPath, scanOptions);
     }
 
     #! "workspace/symbol" method handler
@@ -1067,9 +1176,7 @@ public class QLSServer {
         log(1, "workspace symbols requested; query: '%s'", query);
 
         # find matching symbols
-        list<auto> symbols = ();
-        map symbols += $1.findMatchingSymbols(query), documents.iterator();
-        map symbols += $1.findMatchingSymbols(query), workspaceDocs.iterator();
+        list<auto> symbols = findWorkspaceSymbols(query, False);
         log(1, "found %d workspace symbols for query: '%s'", symbols.size(), query);
 
         return make_jsonrpc_response(jsonRpcVer, request.id, symbols);
@@ -1113,18 +1220,17 @@ public class QLSServer {
 
             reference textDoc = \params.textDocument;
             *Document doc;
-            if (workspaceDocs{textDoc.uri}) {
-                doc = remove workspaceDocs{textDoc.uri};
-                # Update with editor text which may differ from the file on disk
-                doc.didChange({"text": textDoc.text});
-            } else {
-                # ignore non-local files
-                if (textDoc.uri =~ /^file:\//) {
-                    doc = new Document(textDoc.uri, textDoc.text, textDoc.languageId, textDoc.version);
-                } else {
-                    ignoredUris{textDoc.uri} = True;
-                    log(1, "added URI to ignored: '%s'", textDoc.uri);
+            # ignore non-local files
+            if (textDoc.uri =~ /^file:\//) {
+                # the open document replaces the index of the file; the editor text may differ from the file on disk
+                if (remove workspaceIndex{textDoc.uri}) {
+                    delete indexedClassGraph;
                 }
+                treeCache.invalidate(textDoc.uri);
+                doc = new Document(textDoc.uri, textDoc.text, textDoc.languageId, textDoc.version);
+            } else {
+                ignoredUris{textDoc.uri} = True;
+                log(1, "added URI to ignored: '%s'", textDoc.uri);
             }
             if (doc != NOTHING) {
                 documents{textDoc.uri} = doc;
@@ -1224,7 +1330,9 @@ public class QLSServer {
         }
 
         string uri = request.params.textDocument.uri;
-        workspaceDocs{uri} = remove documents{uri};
+        # keep the symbols of the closed document and release its syntax tree
+        workspaceIndex{uri} = (remove documents{uri}).getIndex();
+        delete indexedClassGraph;
         log(1, "closed text document: '%s'", uri);
         return NOTHING;
     }
@@ -1273,9 +1381,7 @@ public class QLSServer {
         bool queryCanBeSourceSymbol = query =~ /^[A-Za-z_][A-Za-z0-9_]*$/;
 
         # find matching symbols in already parsed documents first; standard modules are loaded lazily below
-        list<auto> symbols = ();
-        map symbols += $1.findMatchingSymbols(query, True), documents.iterator();
-        map symbols += $1.findMatchingSymbols(query, True), workspaceDocs.iterator();
+        list<auto> symbols = findWorkspaceSymbols(query, True);
 
         for (int i = symbols.size() - 1; i >= 0; i--) {
             if (SymbolUsageFastMap{string(symbolInfo.usage)}) {
@@ -1290,14 +1396,9 @@ public class QLSServer {
         hash<auto> result = {"range": symbolInfo.range, "contents": ()};
         foreach hash<auto> symbol in (symbols) {
             *hash<auto> description;
-            if (documents{symbol.location.uri}) {
-                description = documents{symbol.location.uri}.hoverInfo(symbol.kind, symbol.location.range.start);
-            } else if (workspaceDocs{symbol.location.uri}) {
-                description = workspaceDocs{symbol.location.uri}.hoverInfo(symbol.kind,
-                    symbol.location.range.start);
-            } else if (stdModuleDocs{symbol.location.uri}) {
-                description = stdModuleDocs{symbol.location.uri}.hoverInfo(symbol.kind,
-                    symbol.location.range.start);
+            *Document symbolDoc = getAnyDocument(symbol.location.uri);
+            if (symbolDoc) {
+                description = symbolDoc.hoverInfo(symbol.kind, symbol.location.range.start);
             }
 
             if (description) {
@@ -1315,10 +1416,7 @@ public class QLSServer {
 
         # full standard-module source parsing is expensive, so only use it after metadata/open docs miss
         if (!result.contents.size() && !parsedSymbolMatched && queryCanBeSourceSymbol) {
-            ensureStdModuleDocs("hover: " + query);
-
-            list<auto> stdSymbols = ();
-            map stdSymbols += $1.findMatchingSymbols(query, True), stdModuleDocs.iterator();
+            list<auto> stdSymbols = findStdModuleSymbols(query, "hover: " + query);
 
             for (int i = stdSymbols.size() - 1; i >= 0; i--) {
                 if (SymbolUsageFastMap{string(symbolInfo.usage)}) {
@@ -1329,8 +1427,11 @@ public class QLSServer {
             }
 
             foreach hash<auto> symbol in (stdSymbols) {
-                *hash<auto> description = stdModuleDocs{symbol.location.uri}.hoverInfo(symbol.kind,
-                    symbol.location.range.start);
+                *hash<auto> description;
+                *Document symbolDoc = getIndexedDocument(symbol.location.uri);
+                if (symbolDoc) {
+                    description = symbolDoc.hoverInfo(symbol.kind, symbol.location.range.start);
+                }
 
                 if (description) {
                     result.contents += replace(description.description, "*", "\\*");
@@ -2403,9 +2504,7 @@ public class QLSServer {
         }
 
         # Search for type declaration across already parsed documents first.
-        list<auto> symbols = ();
-        map symbols += $1.findMatchingSymbols(typeName, True), documents.iterator();
-        map symbols += $1.findMatchingSymbols(typeName, True), workspaceDocs.iterator();
+        list<auto> symbols = findWorkspaceSymbols(typeName, True);
 
         # Filter to declaration types only (class, hashdecl, typedef, enum)
         list<auto> result = ();
@@ -2422,9 +2521,7 @@ public class QLSServer {
             return make_jsonrpc_response(jsonRpcVer, request.id, result);
         }
 
-        ensureStdModuleDocs("typeDefinition: " + typeName);
-        symbols = ();
-        map symbols += $1.findMatchingSymbols(typeName, True), stdModuleDocs.iterator();
+        symbols = findStdModuleSymbols(typeName, "typeDefinition: " + typeName);
         foreach hash<auto> sym in (symbols) {
             if (sym.kind == ASTSymbolKind.Class
                     || sym.kind == ASTSymbolKind.Interface
@@ -2616,9 +2713,7 @@ public class QLSServer {
         list<auto> result = ();
         foreach string parentName in (superNames) {
             # Search parsed/open docs first; defer standard module parsing until needed.
-            list<auto> symbols = ();
-            map symbols += $1.findMatchingSymbols(parentName, True), documents.iterator();
-            map symbols += $1.findMatchingSymbols(parentName, True), workspaceDocs.iterator();
+            list<auto> symbols = findWorkspaceSymbols(parentName, True);
 
             bool found = False;
             foreach hash<auto> sym in (symbols) {
@@ -2638,9 +2733,7 @@ public class QLSServer {
                 continue;
             }
 
-            ensureStdModuleDocs("typeHierarchy/supertypes: " + parentName);
-            symbols = ();
-            map symbols += $1.findMatchingSymbols(parentName, True), stdModuleDocs.iterator();
+            symbols = findStdModuleSymbols(parentName, "typeHierarchy/supertypes: " + parentName);
             foreach hash<auto> sym in (symbols) {
                 if (sym.kind == ASTSymbolKind.Class) {
                     result += {
@@ -2679,34 +2772,26 @@ public class QLSServer {
         # Scan all documents for classes whose superclass list contains the target
         list<auto> result = ();
 
-        code scanDoc = sub (Document doc, string docUri) {
-            *list<auto> symbols = doc.findSymbols(True, True);
-            if (!symbols) {
-                return;
-            }
-            foreach hash<auto> sym in (symbols) {
-                if (sym.kind != ASTSymbolKind.Class) {
-                    continue;
-                }
+        code<nothing(FileIndex)> scanIndex = sub (FileIndex index) {
+            foreach hash<IndexedClass> cls in (index.getClasses()) {
                 # Check if this class inherits from targetName
-                *list<string> parents = doc.getSuperclassNames(sym.location.range.start);
-                if (parents && parents.contains(targetName)) {
+                if (cls.parents.contains(targetName)) {
+                    hash<auto> range = index.getSymbol(cls.symbol).location.range;
                     result += {
-                        "name": sym.name,
+                        "name": cls.name,
                         "kind": LspSymbolKind.Class,
-                        "uri": docUri,
-                        "range": sym.location.range,
-                        "selectionRange": sym.location.range,
+                        "uri": index.getUri(),
+                        "range": range,
+                        "selectionRange": range,
                     };
                 }
             }
         };
 
-        map scanDoc(documents{$1}, $1), keys documents;
-        map scanDoc(workspaceDocs{$1}, $1), keys workspaceDocs;
+        map scanIndex($1), getAllIndexes(False);
         if (result.empty()) {
-            ensureStdModuleDocs("typeHierarchy/subtypes: " + targetName);
-            map scanDoc(stdModuleDocs{$1}, $1), keys stdModuleDocs;
+            ensureStdModuleIndex("typeHierarchy/subtypes: " + targetName);
+            map scanIndex($1), stdModuleIndex.iterator();
         }
 
         return make_jsonrpc_response(jsonRpcVer, request.id, result);
@@ -2787,9 +2872,7 @@ public class QLSServer {
         Document doc = documents{uri};
 
         # Get all references (include declaration) via cross-doc search
-        *hash<auto> otherTrees = buildOtherTrees(uri);
-
-        *list<auto> refs = doc.findReferencesCrossDoc(request.params.position, True, otherTrees);
+        *list<auto> refs = findReferencesCrossDoc(doc, request.params.position, True);
         if (!refs) {
             # Fall back to single-doc references
             refs = doc.findReferences(request.params.position, True);
@@ -2852,26 +2935,12 @@ public class QLSServer {
 
         if (symbolInfo.kind == ASTSymbolKind.Class) {
             # Find all subtypes
-            code scanDoc = sub (Document d, string docUri) {
-                *list<auto> symbols = d.findSymbols(True, True);
-                if (!symbols) {
-                    return;
-                }
-                foreach hash<auto> sym in (symbols) {
-                    if (sym.kind != ASTSymbolKind.Class) {
-                        continue;
-                    }
-                    *list<string> parents = d.getSuperclassNames(sym.location.range.start);
-                    if (parents && parents.contains(symbolInfo.name)) {
-                        result += sym.location;
+            foreach FileIndex index in (getAllIndexes()) {
+                foreach hash<IndexedClass> cls in (index.getClasses()) {
+                    if (cls.parents.contains(symbolInfo.name)) {
+                        result += index.getSymbol(cls.symbol).location;
                     }
                 }
-            };
-
-            map scanDoc(documents{$1}, $1), keys documents;
-            map scanDoc(workspaceDocs{$1}, $1), keys workspaceDocs;
-            if (stdModuleDocsLoaded) {
-                map scanDoc(stdModuleDocs{$1}, $1), keys stdModuleDocs;
             }
         } else if (symbolInfo.kind == ASTSymbolKind.Method
                 || symbolInfo.kind == ASTSymbolKind.Function) {
@@ -2892,21 +2961,21 @@ public class QLSServer {
                 # Find subclasses and check if they have a method with the same name
                 string methodName = symbolInfo.name;
 
-                code scanDoc = sub (Document d, string docUri) {
-                    *list<auto> symbols = d.findSymbols(True, True);
-                    if (!symbols) {
-                        return;
-                    }
-                    foreach hash<auto> sym in (symbols) {
-                        if (sym.kind != ASTSymbolKind.Class) {
+                foreach FileIndex index in (getAllIndexes()) {
+                    *Document d;
+                    foreach hash<IndexedClass> cls in (index.getClasses()) {
+                        if (!cls.parents.contains(enclosingClass)) {
                             continue;
                         }
-                        *list<string> parents = d.getSuperclassNames(sym.location.range.start);
-                        if (!parents || !parents.contains(enclosingClass)) {
-                            continue;
+                        # only subclasses need the syntax tree
+                        if (!d) {
+                            d = getAnyDocument(index.getUri());
+                            if (!d) {
+                                break;
+                            }
                         }
                         # Check if this class has the method
-                        *list<auto> members = d.findTypeMembers(sym.name, False);
+                        *list<auto> members = d.findTypeMembers(cls.name, False);
                         if (members) {
                             foreach hash<auto> member in (members) {
                                 if (member.name == methodName
@@ -2918,12 +2987,6 @@ public class QLSServer {
                             }
                         }
                     }
-                };
-
-                map scanDoc(documents{$1}, $1), keys documents;
-                map scanDoc(workspaceDocs{$1}, $1), keys workspaceDocs;
-                if (stdModuleDocsLoaded) {
-                    map scanDoc(stdModuleDocs{$1}, $1), keys stdModuleDocs;
                 }
             }
 
@@ -3198,8 +3261,8 @@ public class QLSServer {
         Document doc = documents{uri};
 
         # Find all references to this function across docs
-        *hash<auto> otherTrees = buildOtherTrees(uri);
-        *list<auto> refs = doc.findReferencesCrossDoc(item.range.start, False, otherTrees);
+        hash<string, Document> searchedDocs = {};
+        *list<auto> refs = findReferencesCrossDoc(doc, item.range.start, False, \searchedDocs);
         if (!refs) {
             refs = doc.findReferences(item.range.start, False);
         }
@@ -3212,14 +3275,7 @@ public class QLSServer {
         hash<string, hash<auto>> callers;
         foreach hash<auto> ref in (refs) {
             string refUri = ref.uri;
-            *Document refDoc;
-            if (documents{refUri}) {
-                refDoc = documents{refUri};
-            } else if (workspaceDocs{refUri}) {
-                refDoc = workspaceDocs{refUri};
-            } else if (stdModuleDocs{refUri}) {
-                refDoc = stdModuleDocs{refUri};
-            }
+            *Document refDoc = documents{refUri} ?? searchedDocs{refUri} ?? getIndexedDocument(refUri);
             if (!refDoc) {
                 continue;
             }
@@ -3314,8 +3370,7 @@ public class QLSServer {
             # Try to resolve the definition
             *list<auto> defs = doc.resolveDefinition(target.position);
             if (!defs) {
-                *hash<auto> otherTrees = buildOtherTrees(uri);
-                defs = doc.resolveDefinitionCrossDoc(target.position, otherTrees);
+                defs = resolveDefinitionCrossDoc(doc, target.position);
             }
 
             if (defs && defs.size() > 0) {
@@ -3324,9 +3379,7 @@ public class QLSServer {
                 if (!outgoing{key}) {
                     # Resolve the target's symbol kind
                     int targetKind = LspSymbolKind.Function;
-                    *Document targetDoc = documents{def.uri}
-                        ?? workspaceDocs{def.uri}
-                        ?? stdModuleDocs{def.uri};
+                    *Document targetDoc = getAnyDocument(def.uri);
                     if (targetDoc) {
                         *hash<auto> targetInfo = targetDoc.findSymbolInfo(def.range.start);
                         if (targetInfo) {
@@ -3671,37 +3724,342 @@ public class QLSServer {
         return NOTHING;
     }
 
-    #! Build a hash of URI → AstTree for parsed documents except the given one
-    private *hash<auto> buildOtherTrees(string excludeUri) {
-        hash<auto> otherTrees;
-        foreach string docUri in (keys documents) {
-            if (docUri == excludeUri) {
-                continue;
+    #! Returns the parsed document for an indexed file, or @ref nothing if the file is not indexed or cannot be parsed
+    private:internal *Document getIndexedDocument(string uri) {
+        *FileIndex index = workspaceIndex{uri} ?? stdModuleIndex{uri};
+        if (!index) {
+            return NOTHING;
+        }
+        try {
+            return treeCache.get(uri, index.getSourceSize());
+        } catch (hash<ExceptionInfo> ex) {
+            log(0, "WARNING: cannot parse %s: %s", uri, get_exception_string(ex));
+        }
+        return NOTHING;
+    }
+
+    #! Returns the open document or the parsed document of an indexed file for the given URI
+    private:internal *Document getAnyDocument(string uri) {
+        return documents{uri} ?? getIndexedDocument(uri);
+    }
+
+    #! Returns the symbol indexes searched for cross-document results, in search order
+    /** Standard module indexes are only included if they have already been loaded.
+    */
+    private:internal list<hash<string, FileIndex>> getSearchIndexes() {
+        list<hash<string, FileIndex>> ret = (workspaceIndex,);
+        if (stdModuleIndexLoaded) {
+            push ret, stdModuleIndex;
+        }
+        return ret;
+    }
+
+    #! Returns the identifier at the given position of an open document, or @ref nothing if there is none
+    private:internal static *string getIdentifierAt(Document doc, hash<auto> position) {
+        *string line = doc.getLine(position.line);
+        if (!line) {
+            return NOTHING;
+        }
+        int col = position.character;
+        code<bool(int)> isWordChar = bool sub (int i) {
+            return i >= 0 && i < line.size() && line[i] =~ /^[A-Za-z0-9_]$/;
+        };
+        if (!isWordChar(col)) {
+            # the position may be just after the identifier
+            if (!isWordChar(col - 1)) {
+                return NOTHING;
             }
-            *astparser::AstTree t = documents{docUri}.getTree();
-            if (t) {
-                otherTrees{docUri} = t;
+            --col;
+        }
+        int start = col;
+        while (isWordChar(start - 1)) {
+            --start;
+        }
+        int end = col;
+        while (isWordChar(end + 1)) {
+            ++end;
+        }
+        return line.substr(start, end - start + 1);
+    }
+
+    #! Returns the other open documents, keyed by URI
+    private:internal hash<string, Document> getOtherOpenDocuments(string excludeUri) {
+        hash<string, Document> ret = {};
+        foreach hash<auto> i in (documents.pairIterator()) {
+            if (i.key != excludeUri) {
+                ret{i.key} = i.value;
             }
         }
-        foreach string docUri in (keys workspaceDocs) {
-            if (docUri == excludeUri) {
-                continue;
-            }
-            *astparser::AstTree t = workspaceDocs{docUri}.getTree();
-            if (t) {
-                otherTrees{docUri} = t;
-            }
-        }
-        foreach string docUri in (keys stdModuleDocs) {
-            if (docUri == excludeUri) {
-                continue;
-            }
-            *astparser::AstTree t = stdModuleDocs{docUri}.getTree();
-            if (t) {
-                otherTrees{docUri} = t;
+        return ret;
+    }
+
+    #! Returns a hash of URI → AstTree for the given documents
+    private:internal static hash<auto> getTrees(hash<string, Document> docs) {
+        hash<auto> trees = {};
+        foreach hash<auto> i in (docs.pairIterator()) {
+            *astparser::AstTree tree = i.value.getTree();
+            if (tree) {
+                trees{i.key} = tree;
             }
         }
-        return otherTrees;
+        return trees;
+    }
+
+    #! Adds the parsed document of an indexed file to a set of documents
+    private:internal addIndexedDocument(reference<hash<string, Document>> docs, FileIndex index) {
+        string uri = index.getUri();
+        if (exists docs{uri}) {
+            return;
+        }
+        *Document doc = getIndexedDocument(uri);
+        if (doc) {
+            docs{uri} = doc;
+        }
+    }
+
+    #! Returns the documents that can contain references to the identifier at the given position
+    /** Returns the other open documents and the indexed files whose source contains the identifier; files that
+        cannot contain a reference are not parsed.
+
+        @param doc the open document
+        @param position the LSP position of the identifier
+
+        @return a hash of URI → Document, in search order
+    */
+    private:internal hash<string, Document> getReferenceCandidates(Document doc, hash<auto> position) {
+        string uri = doc.getUri();
+        hash<string, Document> ret = getOtherOpenDocuments(uri);
+        *string name = QLSServer::getIdentifierAt(doc, position);
+        if (!name) {
+            return ret;
+        }
+        foreach hash<string, FileIndex> indexes in (getSearchIndexes()) {
+            foreach FileIndex index in (indexes.iterator()) {
+                if (index.getUri() != uri && index.sourceContains(name)) {
+                    addIndexedDocument(\ret, index);
+                }
+            }
+        }
+        return ret;
+    }
+
+    #! Finds references across documents
+    /** @param doc the open document
+        @param position the LSP position of the identifier
+        @param includeDecl whether to include the declaration
+        @param searchedDocs receives the documents searched, keyed by URI
+
+        @return list of {uri, range} locations, or @ref nothing
+    */
+    private:internal *list<auto> findReferencesCrossDoc(Document doc, hash<auto> position, bool includeDecl,
+            *reference<hash<string, Document>> searchedDocs) {
+        hash<string, Document> docs = getReferenceCandidates(doc, position);
+        searchedDocs = docs;
+        return doc.findReferencesCrossDoc(position, includeDecl, QLSServer::getTrees(docs));
+    }
+
+    #! Number of files that only declare the identifier searched per round of cross-document definition resolution
+    const DefinitionBatchSize = 32;
+
+    #! Resolves a definition across documents
+    /** The definition resolution in @c astparser looks up declarations by name: the identifier itself, and the
+        classes on the inheritance path from a class used in the document to the class that declares a member with
+        the identifier's name.  Only the files that declare these classes are parsed for the first search, together
+        with the open documents.  The files that declare the identifier are then added in batches; files are always
+        searched in the order of the indexes, so the first declaration found is the same as if all files were
+        searched, without parsing every file that declares the name.
+
+        @param doc the open document
+        @param position the LSP position of the identifier
+
+        @return list of {uri, range} locations, or @ref nothing
+    */
+    private:internal *list<auto> resolveDefinitionCrossDoc(Document doc, hash<auto> position) {
+        string uri = doc.getUri();
+        hash<string, Document> base = getOtherOpenDocuments(uri);
+
+        # the names that the search can look up
+        hash<string, bool> lookupNames = {};
+        *string name = QLSServer::getIdentifierAt(doc, position);
+        if (name) {
+            lookupNames{name} = True;
+        }
+        *hash<auto> symbolInfo = doc.findSymbolInfo(position);
+        if (symbolInfo.name) {
+            lookupNames{symbolInfo.name} = True;
+            lookupNames{FileIndex::getLastComponent(symbolInfo.name)} = True;
+        }
+        if (!lookupNames) {
+            return doc.resolveDefinitionCrossDoc(position, QLSServer::getTrees(base));
+        }
+
+        list<hash<string, FileIndex>> searchIndexes = getSearchIndexes();
+
+        # the class graph of all open and indexed files
+        list<FileIndex> openIndexes = getOpenDocumentIndexes();
+        hash<ClassGraph> graph = getIndexedClassGraph();
+        map $1.addToClassGraph(\graph), openIndexes;
+        hash<string, hash<string, bool>> parents = graph.parents;
+        hash<string, hash<string, bool>> children = graph.children;
+
+        # the classes that declare a member with one of the names
+        hash<string, bool> memberClasses = {};
+        code<nothing(FileIndex)> addMemberClasses = sub (FileIndex index) {
+            foreach string lookupName in (keys lookupNames) {
+                map memberClasses{$1} = True, index.getClassesWithMember(lookupName);
+            }
+        };
+        map addMemberClasses($1), openIndexes;
+        foreach hash<string, FileIndex> indexes in (searchIndexes) {
+            map addMemberClasses($1), indexes.iterator();
+        }
+
+        # the classes named in the document and their ancestors
+        hash<string, bool> ancestors = {};
+        list<string> todo = ();
+        todo = (select keys doc.getIdentifiers(), exists parents{$1}) ?? ();
+        while (todo) {
+            string cls = shift todo;
+            if (!ancestors{cls}) {
+                ancestors{cls} = True;
+                todo += keys parents{cls} ?? ();
+            }
+        }
+
+        # the classes that declare a member with the name, and their descendants
+        hash<string, bool> descendants = {};
+        todo = keys memberClasses ?? ();
+        while (todo) {
+            string cls = shift todo;
+            if (!descendants{cls}) {
+                descendants{cls} = True;
+                todo += keys children{cls} ?? ();
+            }
+        }
+
+        # the classes that can be on the inheritance path
+        hash<string, bool> pathClasses = (map {$1: True}, keys ancestors, descendants{$1}) ?? {};
+
+        # the files needed for every search, and the files that only declare a name in search order
+        hash<string, bool> pathFiles = {};
+        list<string> declaringFiles = ();
+        foreach hash<string, FileIndex> indexes in (searchIndexes) {
+            foreach FileIndex index in (indexes.iterator()) {
+                string indexUri = index.getUri();
+                if (indexUri == uri) {
+                    continue;
+                }
+                if (pathClasses && (select index.getClasses(), pathClasses{$1.name})) {
+                    pathFiles{indexUri} = True;
+                } else if (select keys lookupNames, index.declares($1)) {
+                    push declaringFiles, indexUri;
+                }
+            }
+        }
+
+        int next = 0;
+        while (True) {
+            # search the files in the same order as all files would be searched, so that the first declaration
+            # found is the same
+            hash<string, bool> searchFiles = pathFiles;
+            for (int end = next + DefinitionBatchSize; next < end && next < declaringFiles.size(); ++next) {
+                searchFiles{declaringFiles[next]} = True;
+            }
+            hash<string, Document> docs = base;
+            foreach hash<string, FileIndex> indexes in (searchIndexes) {
+                foreach FileIndex index in (indexes.iterator()) {
+                    if (searchFiles{index.getUri()}) {
+                        addIndexedDocument(\docs, index);
+                    }
+                }
+            }
+            *list<auto> defs = doc.resolveDefinitionCrossDoc(position, QLSServer::getTrees(docs));
+            if (defs || next >= declaringFiles.size()) {
+                return defs;
+            }
+        }
+    }
+
+    #! Returns information about the symbol indexes and the syntax tree cache
+    /** Open documents keep their syntax trees; other workspace and standard module files are only kept as symbol
+        indexes, and their syntax trees are parsed for requests and kept in a cache of limited size.
+
+        @return the current number of indexed files and symbols and the state of the syntax tree cache
+
+        @par Example
+        @code{.py}
+hash<IndexInfo> info = server.getIndexInfo();
+printf("%d files indexed, %d syntax trees cached\n", info.workspaceFiles, info.cachedTrees);
+        @endcode
+    */
+    hash<IndexInfo> getIndexInfo() {
+        int workspaceSymbols = 0;
+        map workspaceSymbols += $1.getSymbolCount(), workspaceIndex.iterator();
+        return <IndexInfo>{
+            "workspaceFiles": workspaceIndex.size(),
+            "workspaceSymbols": workspaceSymbols,
+            "stdModulesLoaded": stdModuleIndexLoaded,
+            "stdModuleFiles": stdModuleIndex.size(),
+            "openDocuments": documents.size(),
+            "cachedTrees": treeCache.size(),
+            "cachedTreeSourceSize": treeCache.getTotalSize(),
+            "treeCacheSize": treeCache.getMaxSize(),
+        };
+    }
+
+    #! Returns the class graph of the indexed files that are searched for cross-document results
+    private:internal hash<ClassGraph> getIndexedClassGraph() {
+        if (!indexedClassGraph) {
+            hash<ClassGraph> graph();
+            foreach hash<string, FileIndex> indexes in (getSearchIndexes()) {
+                map $1.addToClassGraph(\graph), indexes.iterator();
+            }
+            indexedClassGraph = graph;
+        }
+        return indexedClassGraph;
+    }
+
+    #! Returns a symbol index for every open document
+    private:internal list<FileIndex> getOpenDocumentIndexes() {
+        return map $1.getIndex(), documents.iterator();
+    }
+
+    #! Returns the symbol indexes of all open and indexed files, in search order
+    /** @param includeStdModules whether to include the standard module indexes if they are loaded
+    */
+    private:internal list<FileIndex> getAllIndexes(bool includeStdModules = True) {
+        list<FileIndex> ret = getOpenDocumentIndexes();
+        ret += workspaceIndex.values();
+        if (includeStdModules && stdModuleIndexLoaded) {
+            ret += stdModuleIndex.values();
+        }
+        return ret;
+    }
+
+    #! Finds matching symbols in the open documents and the workspace index
+    /** @param query search query
+        @param exactMatch whether to only find exact matches
+
+        @return list of symbols
+    */
+    private:internal list<auto> findWorkspaceSymbols(string query, bool exactMatch) {
+        list<auto> symbols = ();
+        map symbols += $1.getIndex().findMatchingSymbols(query, exactMatch), documents.iterator();
+        map symbols += $1.findMatchingSymbols(query, exactMatch), workspaceIndex.iterator();
+        return symbols;
+    }
+
+    #! Finds matching symbols in the standard module index, loading it if necessary
+    /** @param query search query
+        @param reason the reason for loading the index, for logging
+
+        @return list of symbols
+    */
+    private:internal list<auto> findStdModuleSymbols(string query, string reason) {
+        ensureStdModuleIndex(reason);
+        list<auto> symbols = ();
+        map symbols += $1.findMatchingSymbols(query, True), stdModuleIndex.iterator();
+        return symbols;
     }
 
     #! "textDocument/definition" method handler
@@ -3735,9 +4093,8 @@ public class QLSServer {
         }
 
         # try cross-document definition resolution (inheritance, cross-file declarations)
-        *hash<auto> otherTrees = buildOtherTrees(request.params.textDocument.uri);
-        if (otherTrees) {
-            resolved = doc.resolveDefinitionCrossDoc(request.params.position, otherTrees);
+        if (documents.size() > 1 || workspaceIndex || (stdModuleIndexLoaded && stdModuleIndex)) {
+            resolved = resolveDefinitionCrossDoc(doc, request.params.position);
             if (resolved) {
                 return make_jsonrpc_response(jsonRpcVer, request.id, resolved);
             }
@@ -3763,9 +4120,7 @@ public class QLSServer {
         bool queryCanBeSourceSymbol = query =~ /^[A-Za-z_][A-Za-z0-9_]*$/;
 
         # find matching symbols in already parsed documents first
-        list<auto> symbols = ();
-        map symbols += $1.findMatchingSymbols(query, True), documents.iterator();
-        map symbols += $1.findMatchingSymbols(query, True), workspaceDocs.iterator();
+        list<auto> symbols = findWorkspaceSymbols(query, True);
 
         for (int i = symbols.size() - 1; i >= 0; i--) {
             if (SymbolUsageFastMap{string(symbolInfo.usage)}) {
@@ -3785,9 +4140,7 @@ public class QLSServer {
             return make_jsonrpc_response(jsonRpcVer, request.id, ());
         }
 
-        ensureStdModuleDocs("definition: " + query);
-        symbols = ();
-        map symbols += $1.findMatchingSymbols(query, True), stdModuleDocs.iterator();
+        symbols = findStdModuleSymbols(query, "definition: " + query);
 
         for (int i = symbols.size() - 1; i >= 0; i--) {
             if (SymbolUsageFastMap{string(symbolInfo.usage)}) {

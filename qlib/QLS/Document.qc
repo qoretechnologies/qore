@@ -61,6 +61,12 @@ public class Document {
 
         #! Cached parse directive options (invalidated on content change).
         *int cachedParseOptions;
+
+        #! Cached symbol index (invalidated on content change).
+        *FileIndex cachedIndex;
+
+        #! Cached set of identifiers in the text (invalidated on content change).
+        *hash<string, bool> cachedIdentifiers;
     }
 
     constructor(string n_uri, string n_text, string n_languageId, int n_version) {
@@ -107,7 +113,19 @@ public class Document {
         return Document::getFileUriPrefix() + Qore::encode_url(raw_path);
     }
 
+    #! Returns the file path for a file URI created with getFileUri()
+    /** @param uri a file URI
+
+        @return the decoded file path
+    */
+    static string getFilePath(string uri) {
+        # trim "file://" see Document::getFileUriPrefix()
+        return Qore::decode_url(uri.substr(Document::getFileUriPrefix().size()));
+    }
+
     private:internal parseInit() {
+        delete cachedIndex;
+        delete cachedIdentifiers;
         delete parseError;
         delete tree;
         parseOk = True;
@@ -143,9 +161,7 @@ public class Document {
     #! Parse document from a file.
     private:internal parseFile() {
         parseInit();
-        string filePath = uri.substr(Document::getFileUriPrefix().size()); # trim "file://" see Document::getFileUriPrefix()
-        filePath = Qore::decode_url(filePath);
-        tree = parser.parseFile(filePath);
+        tree = parser.parseFile(Document::getFilePath(uri));
         if (!tree || parser.getErrorCount()) {
             handleParseErrors();
         }
@@ -338,6 +354,27 @@ public class Document {
             return searcher.getSymbolType(tree, Position.line, Position.character);
         }
         return NOTHING;
+    }
+
+    #! Returns the symbol index of the document
+    /** The index is created when first requested and discarded when the document changes.
+    */
+    FileIndex getIndex() {
+        if (!cachedIndex) {
+            cachedIndex = new FileIndex(self, text ? text.size() : 0);
+        }
+        return cachedIndex;
+    }
+
+    #! Returns the set of identifiers in the document text
+    /** The set is created when first requested and discarded when the document changes; documents parsed from a
+        file without text return an empty set.
+    */
+    hash<string, bool> getIdentifiers() {
+        if (!exists cachedIdentifiers) {
+            cachedIdentifiers = text ? ((map {$1: True}, (text =~ x/([A-Za-z_][A-Za-z0-9_]*)/g)) ?? {}) : {};
+        }
+        return cachedIdentifiers;
     }
 
     #! Get the underlying AST tree (for cross-document resolution)
