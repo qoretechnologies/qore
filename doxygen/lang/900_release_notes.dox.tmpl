@@ -4723,6 +4723,8 @@ while (*binary chunk = input.read(65536)) {
       - standalone scripts are checked with the %Qore parser when they are opened and saved, so type errors,
         unresolved symbols, errors in required modules and warnings are reported, with quick fixes for the fixes
         of %Qore diagnostics (see @ref qls_diagnostics)
+      - links the module names and paths of \c %%requires, \c %%try-module and \c %%include directives to their
+        files, and supports go to declaration
 
     - @ref qoreagentstrategiesintro "QoreAgentStrategies" module
       - new module providing configurable agent execution strategies for LLM agents

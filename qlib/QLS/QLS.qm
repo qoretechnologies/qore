@@ -65,6 +65,7 @@ module QLS {
       on stdin/stdout with @c Content-Length headers
     - @ref QLS::LspConnection "LspConnection": LSP message connection on standard input and output or on any
       pair of streams
+    - @ref QLS::DocumentLinks "DocumentLinks": finds the files of module and include directives
     - @ref QLS::ErrorResponse "ErrorResponse": factory for LSP error responses
       (@c InvalidRequest, @c MethodNotFound, @c InternalError, etc.)
     - @ref QLS::Notification "Notification": factory for LSP notifications
@@ -80,6 +81,8 @@ module QLS {
     |!Feature|!LSP Method|!Description
     |Hover|@c textDocument/hover|Shows type, documentation, and source info for the symbol under the cursor
     |Go to Definition|@c textDocument/definition|Jumps to the definition of a symbol
+    |Go to Declaration|@c textDocument/declaration|Jumps to the declaration of a symbol; declarations are definitions in %Qore
+    |Document Links|@c textDocument/documentLink|Links the module names and paths of @c %%requires, @c %%try-module and @c %%include directives to their source files, resolving module names like %Qore with the document's module path directives, @c QORE_MODULE_DIR and the library module path
     |Go to Type Definition|@c textDocument/typeDefinition|Jumps to the type definition of a symbol
     |Go to Implementation|@c textDocument/implementation|Jumps to the implementation of an abstract method or interface
     |Find References|@c textDocument/references|Finds all references to a symbol across open and workspace documents

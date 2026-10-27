@@ -1,0 +1,220 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  Features.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires json
+%requires Util
+%requires QLS
+
+%exec-class FeaturesTest
+
+#! Tests document links, go to declaration and the other LSP features of QLS
+class FeaturesTest inherits QUnit::Test {
+    private {
+        int reqId = 0;
+        int tmpCount = 0;
+        list<string> tmpDirs = ();
+    }
+
+    constructor() : Test("QLS Features", "1.0") {
+        addTestCase("document links for module and include directives", \testDocumentLinks());
+        addTestCase("document links that cannot be resolved", \testDocumentLinksUnresolved());
+        addTestCase("document links over the protocol", \testDocumentLinkRequest());
+        addTestCase("go to declaration", \testDeclaration());
+
+        on_exit {
+            map FeaturesTest::removeTree($1), tmpDirs;
+        }
+        set_return_value(main());
+    }
+
+    #
+    # helpers
+    #
+
+    private string makeTmpDir() {
+        string dir = sprintf("%s/qls-features-test-%d-%d", tmp_location(), getpid(), ++tmpCount);
+        mkdir(dir, 0700, True);
+        push tmpDirs, dir;
+        return dir;
+    }
+
+    private static writeFile(string path, string text = "") {
+        string dir = dirname(path);
+        if (!is_dir(dir)) {
+            mkdir(dir, 0700, True);
+        }
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(text);
+    }
+
+    private static removeTree(string path) {
+        *hash<StatInfo> info = hlstat(path);
+        if (!info) {
+            return;
+        }
+        if (info.type == "DIRECTORY") {
+            Dir d();
+            if (d.chdir(path)) {
+                map FeaturesTest::removeTree(path + "/" + $1), d.list();
+            }
+            rmdir(path);
+        } else {
+            unlink(path);
+        }
+    }
+
+    private list<hash<auto>> send(QLS::QLSServer server, string method, *hash<auto> params, bool notification) {
+        hash<auto> msg = {"jsonrpc": "2.0", "method": method, "params": params};
+        if (!notification) {
+            msg.id = ++reqId;
+        }
+        return map parse_json($1), server.handleRequest(make_json(msg)) ?? ();
+    }
+
+    private auto request(QLS::QLSServer server, string method, *hash<auto> params) {
+        return send(server, method, params, False)[0].result;
+    }
+
+    private QLS::QLSServer startServer(*hash<auto> capabilities) {
+        QLS::QLSServer server();
+        send(server, "initialize", {"processId": getpid(), "capabilities": capabilities ?? {},
+            "initializationOptions": {"diagnostics": "syntax"}}, False);
+        send(server, "initialized", NOTHING, True);
+        return server;
+    }
+
+    private string open(QLS::QLSServer server, string path, string text) {
+        string uri = QLS::Document::getFileUri(path);
+        send(server, "textDocument/didOpen", {"textDocument": {"uri": uri, "languageId": "qore", "version": 1,
+            "text": text}}, True);
+        return uri;
+    }
+
+    #! Returns the link targets of a document by line, as file paths
+    private static hash<string, string> targetsByLine(list<hash<auto>> links) {
+        return map {$1.range.start.line: QLS::Document::getFilePath($1.target)}, links;
+    }
+
+    #
+    # tests
+    #
+
+    testDocumentLinks() {
+        string dir = makeTmpDir();
+        FeaturesTest::writeFile(dir + "/lib/Local.qm");
+        FeaturesTest::writeFile(dir + "/lib/DirModule/DirModule.qm");
+        FeaturesTest::writeFile(dir + "/inc/common.ql");
+        FeaturesTest::writeFile(dir + "/mods/Relative.qm");
+        string env = dir + "/env";
+        FeaturesTest::writeFile(env + "/FromEnv.qm");
+        *string oldEnv = getenv("QORE_MODULE_DIR");
+        setenv("QORE_MODULE_DIR", env + ":" + (oldEnv ?? ""));
+        on_exit {
+            if (exists oldEnv) {
+                setenv("QORE_MODULE_DIR", oldEnv);
+            } else {
+                unsetenv("QORE_MODULE_DIR");
+            }
+        }
+
+        string text = "%modern\n"
+            "%prepend-module-path \"${SCRIPT_DIR}/lib\"\n"
+            "%requires Local\n"
+            "%requires(reexport) DirModule >= 1.0\n"
+            "%requires FromEnv\n"
+            "%requires ./mods/Relative.qm\n"
+            "%try-module ($ex) Local\n"
+            "%include inc/common.ql\n"
+            "%requires qore >= 3.0\n";
+        list<hash<auto>> links = QLS::DocumentLinks::getLinks(dir + "/script.q", text);
+        hash<string, string> targets = FeaturesTest::targetsByLine(links);
+        assertEq(dir + "/lib/Local.qm", targets."2", "a module in a prepended directory");
+        assertEq(dir + "/lib/DirModule/DirModule.qm", targets."3", "a module directory, with reexport and version");
+        assertEq(env + "/FromEnv.qm", targets."4", "a module in QORE_MODULE_DIR");
+        assertEq(dir + "/./mods/Relative.qm", targets."5", "a relative module path");
+        assertEq(dir + "/lib/Local.qm", targets."6", "a %try-module directive with an exception variable");
+        assertEq(dir + "/inc/common.ql", targets."7", "an included file");
+        assertFalse(exists targets."8", "the interpreter version requirement is not a module");
+
+        # the link covers the name only
+        hash<auto> local = (select links, $1.range.start.line == 2)[0];
+        assertEq({"start": {"line": 2, "character": 10}, "end": {"line": 2, "character": 15}}, local.range);
+        assertEq(dir + "/lib/Local.qm", local.tooltip);
+        hash<auto> dirModule = (select links, $1.range.start.line == 3)[0];
+        assertEq(20, dirModule.range.start.character, "after the reexport option");
+        assertEq(29, dirModule.range.end.character, "before the version");
+    }
+
+    testDocumentLinksUnresolved() {
+        string dir = makeTmpDir();
+        # a binary module has no source file to open
+        FeaturesTest::writeFile(dir + "/lib/Binary.qmod");
+        string text = "%prepend-module-path \"" + dir + "/lib\"\n"
+            "%requires Binary\n"
+            "%requires DoesNotExist\n"
+            "%include missing.ql\n"
+            "# %requires Local\n";
+        assertEq((), QLS::DocumentLinks::getLinks(dir + "/script.q", text), "nothing to link");
+
+        # environment variables are expanded in paths
+        setenv("QLS_LINK_TEST_DIR", dir);
+        on_exit {
+            unsetenv("QLS_LINK_TEST_DIR");
+        }
+        FeaturesTest::writeFile(dir + "/x.ql");
+        assertEq(dir + "/x.ql", QLS::DocumentLinks::expand("$QLS_LINK_TEST_DIR/x.ql", "/other"));
+        assertEq(dir + "/x.ql", QLS::DocumentLinks::expand("${QLS_LINK_TEST_DIR}/x.ql", "/other"));
+        assertEq("/base/x.ql", QLS::DocumentLinks::expand("${SCRIPT_DIR}/x.ql", "/base"));
+        hash<string, string> targets = FeaturesTest::targetsByLine(QLS::DocumentLinks::getLinks(dir + "/s.q",
+            "%include \"$QLS_LINK_TEST_DIR/x.ql\"\n"));
+        assertEq(dir + "/x.ql", targets."0");
+    }
+
+    testDocumentLinkRequest() {
+        string dir = makeTmpDir();
+        FeaturesTest::writeFile(dir + "/inc.ql");
+        QLS::QLSServer server = startServer();
+        string uri = open(server, dir + "/main.q", "%include inc.ql\n");
+        list<auto> links = request(server, "textDocument/documentLink", {"textDocument": {"uri": uri}});
+        assertEq((QLS::Document::getFileUri(dir + "/inc.ql"),), (map $1.target, links));
+        assertEq((), request(server, "textDocument/documentLink", {"textDocument": {"uri": "file:///not/open.q"}}),
+            "no links for documents that are not open");
+    }
+
+    testDeclaration() {
+        QLS::QLSServer server = startServer();
+        string text = "%modern\nint sub helper() { return 1; }\nint sub main() { return helper(); }\n";
+        string uri = open(server, makeTmpDir() + "/decl.q", text);
+        hash<auto> params = {"textDocument": {"uri": uri}, "position": {"line": 2, "character": 25}};
+        list<auto> decl = request(server, "textDocument/declaration", params);
+        assertEq(1, decl.size());
+        assertEq(1, decl[0].range.start.line, "the declaration is the definition");
+        assertEq(decl, request(server, "textDocument/definition", params));
+    }
+}

@@ -259,6 +259,18 @@ public const ServerCapabilities = {
     },
 
     /**
+     * The server provides go to declaration support; declarations are definitions in Qore.
+     */
+    "declarationProvider": True,
+
+    /**
+     * The server provides links for the files of module and include directives.
+     */
+    "documentLinkProvider": {
+        "resolveProvider": False,
+    },
+
+    /**
      * Workspace-specific server capabilities: all workspace folders are indexed, and folders added to or removed
      * from the workspace are indexed or removed.
      */
@@ -571,6 +583,9 @@ public class QLSServer {
             "textDocument/semanticTokens/full": \meth_td_semanticTokensFull(),
             "textDocument/semanticTokens/range": \meth_td_semanticTokensRange(),
             "textDocument/codeAction": \meth_td_codeAction(),
+            # Qore has no declarations that are separate from definitions
+            "textDocument/declaration": \meth_td_definition(),
+            "textDocument/documentLink": \meth_td_documentLink(),
         };
     }
 
@@ -4424,6 +4439,26 @@ public class QLSServer {
         }
 
         return make_jsonrpc_response(jsonRpcVer, request.id, actions);
+    }
+
+    #! "textDocument/documentLink" method handler
+    /** Returns links for the files of the module and include directives of an open document.
+    */
+    private *string meth_td_documentLink(hash<auto> request) {
+        if (!request.hasKey("params")) {
+            return ErrorResponse::invalidRequest(request, "required attribute 'params' is missing");
+        }
+        *string validation = ParamValidator::textDocumentIdentifier(request, request.params);
+        if (validation) {
+            return validation;
+        }
+        string uri = request.params.textDocument.uri;
+        if (ignoredUris{uri} || !exists documents{uri} || uri !~ /^file:\//) {
+            return make_jsonrpc_response(jsonRpcVer, request.id, ());
+        }
+        *string text = documents{uri}.getText();
+        return make_jsonrpc_response(jsonRpcVer, request.id,
+            text ? DocumentLinks::getLinks(Document::getFilePath(uri), text) : ());
     }
 
     #! Returns quick fix code actions for the fixes of Qore diagnostics
