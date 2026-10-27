@@ -344,7 +344,7 @@ hash<auto> result = jrc.callIdArgsWithInfo(\info, 4, "method.name", arg_list, 2)
 */
 hash<auto> JsonRpcClient::callIdArgsWithInfo(reference<hash<auto>> info, auto id, string[doc] method, auto[doc] args) {
     // create the outgoing message in JSON-RPC call format
-    QoreStringNode *msg = make_jsonrpc_request_args(client->getVersionStr(), args, id, 1, xsink);
+    QoreStringNode *msg = make_jsonrpc_request_args(client->getVersionStr(), args, id, 2, xsink);
     if (!msg) {
         return QoreValue();
     }
@@ -427,7 +427,7 @@ hash<auto> result = jrc.callIdWithInfo(\info, 3, "method.name", arg1, arg2);
 */
 hash<auto> JsonRpcClient::callIdWithInfo(reference<hash<auto>> info, auto id, string[doc] method, ...) {
     // create the outgoing message in JSON-RPC call format
-    QoreStringNode *msg = make_jsonrpc_request(client->getVersionStr(), args, id, 1, xsink);
+    QoreStringNode *msg = make_jsonrpc_request(client->getVersionStr(), args, id, 2, xsink);
     if (!msg) {
         return QoreValue();
     }

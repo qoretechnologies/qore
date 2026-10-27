@@ -8,6 +8,9 @@
 
     - input that ends inside a JSON object or array after \c "{", \c "[" or \c "," raises \c JSON-PARSE-ERROR;
       it was parsed as @ref nothing, so a truncated document could not be told from an empty one
+    - fixed @ref Qore::Json::JsonRpcClient::callIdWithInfo() "JsonRpcClient::callIdWithInfo()" and
+      @ref Qore::Json::JsonRpcClient::callIdArgsWithInfo() "JsonRpcClient::callIdArgsWithInfo()" taking the call's ID
+      as the method name and the method name as the first method argument
     - a key with a NUL character in a JSON document, which a hash key cannot hold, raises \c JSON-PARSE-ERROR, which
       gives the key and the byte offset of the NUL character: the key was cut at the NUL character and could replace
       the value of another key
