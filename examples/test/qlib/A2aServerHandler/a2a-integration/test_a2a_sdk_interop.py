@@ -42,7 +42,6 @@ try:
     from a2a.server.agent_execution import AgentExecutor
     from a2a.server.agent_execution.context import RequestContext
     from a2a.server.tasks.inmemory_task_store import InMemoryTaskStore
-    from a2a.server.events.in_memory_queue_manager import InMemoryQueueManager
     from a2a.types import (
         AgentCard, AgentInterface, AgentCapabilities, AgentSkill,
         Part, Message,
@@ -107,7 +106,6 @@ def start_sdk_server(port):
         agent_executor=EchoExecutor(),
         task_store=InMemoryTaskStore(),
         agent_card=agent_card,
-        queue_manager=InMemoryQueueManager(),
     )
 
     # Build Starlette app from routes (v1.0.0a1+ API)
