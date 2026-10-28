@@ -27831,3 +27831,66 @@ Generated Qore code still calls a native wrapper from the batching loop. The wra
 All 252 timing jobs / 756 windows replay independently. The exact Python integer/rational reference checks 0/1/17/257/4096 batches and seeds 0/7/65535: 720 source AST/IR results, 1080 results across six LLVM-verified AOT images, and 180 Java results. Separate diagnostics confirm C2 for all 12 Java kernels. No production runtime change is included in this benchmark checkpoint. No cumulative develop or application-wide performance claim is added.
 
 [Evidence](results-short-callback-batches-macos-arm64.json); [all 62 audit checks](audit-short-callback-batches.md).
+
+## Finite callback adapter binding omission (2026-10-28)
+
+After the existing exact finite-target and scalar no-reentry proof, AOT records optional native/typed adapter bindings for callback creations whose only use is the admitted PHI. It erases those void binding calls only after every call site in that group actually emitted a native scalar summary. Creation, target resolution, boxed PHI/store, local ownership, cleanup and cancellation remain. Any declined call keeps the generated adapters. The compiler-only presence flag `QORE_DISABLE_AOT_FINITE_CALLREF_BIND_ELISION` restores them. No runtime ABI, RuntimeConfig, TLS, IR or JIT change.
+
+The frozen baseline is clean optimized installed 7733b0ae61, including develop 5343369107 and earlier finite-target/reload optimizations. Both runtimes use matching Release -O3 -DNDEBUG builds with allocation tracking off; AOT uses qcc -O3 --strip-source. Three linked layouts (default, reverse, shuffle-487), randomized variant order, three screen forks and five independent confirmation forks are retained. Short runs use two warmups and three 150ms samples, with 4096 short invocations per timer/dispatch; broader runs use one warmup and three 150ms samples. Fresh Temurin 25/JMH 1.37 uses five forks, five warmups and three 300ms samples; separate diagnostics observe C2 compilation and normal inlining for all 12 kernels. Values below are medians of layout medians of process means. This is a shared Apple M4 Pro/macOS ARM64 workstation without exclusive CPU, affinity or thermal control.
+
+Short invocation confirmation, ns/invocation (includes callback initialization, wrapper work and 1 or 17 callback operations):
+
+|!Kernel|!Before|!Candidate|!Binding disabled|!Fresh Java|!Candidate change
+|int_zero_1|240.745084|212.972870|242.106796|1.026858|-11.536%
+|int_zero_17|251.006046|224.115947|250.866766|1.021575|-10.713%
+|int_unary_1|244.580543|218.260826|245.216588|1.018379|-10.761%
+|int_unary_17|256.229306|227.857223|253.917690|7.289976|-11.073%
+|float_zero_1|241.688943|213.939498|242.494190|0.888399|-11.481%
+|float_zero_17|255.865007|229.390721|257.940629|3.179168|-10.347%
+|float_unary_1|243.957825|215.525681|242.760394|1.044310|-11.655%
+|float_unary_17|255.380419|227.898150|255.900068|2.975962|-10.761%
+|int_zero_inline|1.153548|1.151907|1.150979|0.984670|-0.142%
+|int_unary_inline|1.688194|1.676523|1.676806|1.003381|-0.691%
+|float_zero_inline|1.164372|1.164929|1.161629|0.995214|+0.048%
+|float_unary_inline|1.433379|1.428813|1.431699|0.995049|-0.319%
+
+All eight short targets improve 10.3–11.7% in independent confirmation, and improve in every layout. The saving is about 26–28ns per invocation. The one-callback Qore cases still cost 213–218ns versus 0.89–1.04ns for Java; the arithmetic-only Qore controls cost 1.15–1.68ns. These controls are not subtracted to infer isolated call latency. Java can inline and eliminate callback setup; this optimization does not establish general parity or a performance ceiling.
+
+Broader screen and independently selected confirmation, whole-kernel ns/item. Every absolute aggregate screen shift of at least 2%, all mixed workloads and boxed_int_method_effect were selected for five fresh forks. A dash means no confirmation was selected, not a zero change.
+
+|!Workload|!Screen before|!Screen candidate|!Screen change|!Confirm before|!Confirm candidate|!Confirm change
+|float:direct_local_float_return:4096|0.837832|0.837278|-0.066%|—|—|—
+|float:callback_local_float_return:4096|0.886431|0.891977|+0.626%|—|—|—
+|float:direct_local_float_result:4096|0.819554|0.796186|-2.851%|0.736859|0.731577|-0.717%
+|float:callback_local_float_result:4096|0.831451|0.841075|+1.157%|—|—|—
+|micro:direct_call:4096|1.653833|1.653090|-0.045%|—|—|—
+|micro:method_call:4096|1.798731|1.814812|+0.894%|—|—|—
+|micro:indirect_call:4096|64.101320|62.913818|-1.853%|—|—|—
+|micro:polymorphic_call:4096|23.624985|24.398840|+3.276%|23.772062|24.792277|+4.292%
+|micro:polymorphic_expression_call:4096|15.081007|15.402529|+2.132%|11.080460|11.081266|+0.007%
+|micro:boxed_int_method_effect:4096|94.726651|92.116047|-2.756%|94.143569|93.306972|-0.889%
+|micro:dynamic_float_result_call:4096|11.537966|11.670183|+1.146%|—|—|—
+|micro:indirect_affine:4096|62.851791|62.218557|-1.008%|—|—|—
+|micro:list_mutate:4096|204.618379|219.140429|+7.097%|134.025024|133.235912|-0.589%
+|micro:closure_call:4096|14.483494|14.451355|-0.222%|—|—|—
+|micro:closure_capture:4096|20.212198|19.769294|-2.191%|19.624773|19.546604|-0.398%
+|mixed:csv_report:4096|979.755602|994.297597|+1.484%|966.980008|961.228591|-0.595%
+|mixed:object_orders:4096|2066.200420|2050.911887|-0.740%|1877.897135|1854.207357|-1.262%
+|mixed:callback_pipeline:4096|137.676452|135.724184|-1.418%|127.473292|127.597118|+0.097%
+|mixed:text_index:4096|1608.271060|1541.451145|-4.155%|1512.418620|1516.628147|+0.278%
+|opaque:int_zero:4096|0.781883|0.802231|+2.603%|0.756993|0.802597|+6.024%
+|opaque:int_unary:4096|1.144852|1.133661|-0.977%|—|—|—
+|opaque:float_zero:4096|1.088917|1.088991|+0.007%|—|—|—
+|opaque:float_unary:4096|1.164257|1.177474|+1.135%|—|—|—
+
+Retain under the user-authorized broader workload tradeoff, with two repeated costs explicitly recorded. Polymorphic calls cost 4.292% more (+1.020215ns/item) in confirmation; the long integer-constant callback loop costs 6.024% more (+0.045604ns/item). List mutation's screen cost of 7.097% does not repeat: confirmation is 0.589% faster. Mixed confirmation ranges from 1.262% faster to 0.278% slower. No application-weighted overall gain is claimed. The earlier finite-target commit e79cbcb8ad's boxed-method cost of 2.715% remains historical; this experiment does not resolve its cause.
+
+A separate five-fork/three-layout attribution run uses matching-runtime compilation with binder removal disabled. Polymorphic calls take 23.479157ns before, 24.481632ns with the candidate and 24.407634ns with deletion disabled. Its cost is not specific to deleting binders; all 825 broader control function bodies match after debug attachments are removed, with 12 initializer differences limited to metadata length. The matching-runtime disabled micro module also has exactly matching function bodies. This does not isolate runtime/image/host layout effects. The long integer-constant loop takes 0.758764ns before, 0.801972ns with the candidate and 0.763108ns with deletion disabled. Its candidate assembly reloads one more cancellation-state pointer from the stack in the loop; the disabled image keeps it in a register. This is a plausible contributor, not an isolated causal measurement. No padding/alignment workaround was introduced.
+
+An attempted image/runtime crossover was rejected by the standard AOT runtime-identity check and produced no timed results. That guard was not bypassed; matching-runtime controls replaced the probe. Initial implementation/test expectations were corrected before timing: PHI values appear in both operand and incoming-edge use accounting; generic add.any expressions remain fallback; disabling expression import can itself suppress adapters. Final fixture checks use the actual fallback configuration.
+
+All 1758 timing jobs/5274 windows replay independently, including 90 attribution jobs and 60 fresh Java jobs. Release and Debug each pass 38 cases/5196 assertions plus one standalone fast-entry test; Debug also passes 2917 native assertions and 18 cases/70 fallback assertions. The 470-assertion fixture covers AST/IR/JIT/tiered and AOT O0/O3, EH/split, summary-disabling and generic/context controls, two call sites, and escape/reassignment fallbacks. Pilot references 360; short-suite references 720 source+1620 native with 9 LLVM verifications; broader references 795 source+5130 native; attribution 1845 native with 6 LLVM verifications; Java 180 references and 12 separate C2 diagnostics. All 391 Release qmod aliases were restored. Targeted macOS qualification is not whole-project/Linux/sanitizer coverage.
+
+These are incremental measurements against the frozen 7733 baseline, not a new comparison against current develop. Further work should investigate a selector-only representation for nonescaping callbacks and the remaining runtime-local/frame ownership work, keeping the polymorphic and long-loop controls.
+
+[Timing and validation evidence](results-finite-callback-binding-macos-arm64.json); [all 62 audit checks](audit-finite-callback-binding.md).

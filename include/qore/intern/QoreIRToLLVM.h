@@ -888,9 +888,14 @@ private:
     struct FiniteCallRefTargets {
         const AbstractQoreFunctionVariant* variants[2] = {nullptr, nullptr};
         llvm::PHINode* selector = nullptr;
+        size_t call_count = 0;
+        size_t inlined_calls = 0;
+        std::vector<llvm::CallInst*> binding_calls;
     };
     std::unordered_map<uint32_t, FiniteCallRefTargets> finite_call_ref_targets;
     std::unordered_map<uint32_t, uint32_t> finite_call_ref_loads;
+    // Only creations whose sole SSA use is an admitted finite-target PHI.
+    std::unordered_map<uint32_t, uint32_t> finite_call_ref_creations;
     std::unordered_map<uint32_t, const AbstractQoreFunctionVariant*> function_call_ref_definitions;
     std::unordered_map<uint32_t, const AbstractQoreFunctionVariant*> known_callback_arguments;
     const void* known_callback_parameter = nullptr;

@@ -822,6 +822,15 @@ void QoreIRToLLVM::emitFunctionRefNativeEntry(llvm::Value* ref,
     if (!aot_mode || q_env_is_set("QORE_DISABLE_AOT_FUNCREF_NATIVE_ENTRY")) {
         return;
     }
+    // Keep every binding until body lowering proves that all uses of this
+    // private callback group select native summaries. A declined summary
+    // must retain the original adapters and their fast fallback behavior.
+    auto remember_binding = [&](llvm::CallInst* binding) {
+        auto creation = finite_call_ref_creations.find(inst->result.id);
+        if (creation != finite_call_ref_creations.end()) {
+            finite_call_ref_targets.at(creation->second).binding_calls.push_back(binding);
+        }
+    };
     auto definition = function_call_ref_definitions.find(inst->result.id);
     if (definition == function_call_ref_definitions.end()) {
         return;
@@ -903,7 +912,7 @@ void QoreIRToLLVM::emitFunctionRefNativeEntry(llvm::Value* ref,
         llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
     auto bind = module.getOrInsertFunction("qore_rt_bind_function_call_ref_native",
         llvm::FunctionType::get(void_type, {i64_type, ptr_type, ptr_type}, false));
-    builder->CreateCall(bind, {ref, normal.getCallee(), adapter});
+    remember_binding(builder->CreateCall(bind, {ref, normal.getCallee(), adapter}));
 
     if (info->num_params > 1 || q_env_is_set("QORE_DISABLE_AOT_TYPED_FUNCREF_CALL")) {
         return;
@@ -950,8 +959,8 @@ void QoreIRToLLVM::emitFunctionRefNativeEntry(llvm::Value* ref,
     }
     auto typed_bind = module.getOrInsertFunction("qore_rt_bind_function_call_ref_typed_v1",
         llvm::FunctionType::get(void_type, {i64_type, ptr_type, ptr_type, i32_type}, false));
-    builder->CreateCall(typed_bind, {ref, normal.getCallee(), typed,
-        llvm::ConstantInt::get(i32_type, ret_kind | (arg_kind << 2))});
+    remember_binding(builder->CreateCall(typed_bind, {ref, normal.getCallee(), typed,
+        llvm::ConstantInt::get(i32_type, ret_kind | (arg_kind << 2))}));
 
     if (q_env_is_set("QORE_DISABLE_AOT_FUNCREF_CALLEE_RUNTIME_CONFIG")) {
         return;
@@ -1076,8 +1085,8 @@ void QoreIRToLLVM::emitFunctionRefNativeEntry(llvm::Value* ref,
             auto explicit_bind = module.getOrInsertFunction(inline_stack
                 ? "qore_rt_bind_function_call_ref_typed_v3" : "qore_rt_bind_function_call_ref_typed_v2",
                 llvm::FunctionType::get(void_type, {i64_type, ptr_type, ptr_type, i32_type}, false));
-            builder->CreateCall(explicit_bind, {ref, normal.getCallee(), explicit_entry,
-                llvm::ConstantInt::get(i32_type, ret_kind | (arg_kind << 2))});
+            remember_binding(builder->CreateCall(explicit_bind, {ref, normal.getCallee(), explicit_entry,
+                llvm::ConstantInt::get(i32_type, ret_kind | (arg_kind << 2))}));
         }
     }
 }
@@ -3982,6 +3991,7 @@ void QoreIRToLLVM::collectLocals(const QoreIRFunction& func) {
     known_function_call_refs.clear();
     finite_call_ref_targets.clear();
     finite_call_ref_loads.clear();
+    finite_call_ref_creations.clear();
     function_call_ref_definitions.clear();
     known_callback_arguments.clear();
     stored_closure_capture_allocas.clear();
@@ -14078,6 +14088,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     known_function_call_refs.clear();
     finite_call_ref_targets.clear();
     finite_call_ref_loads.clear();
+    finite_call_ref_creations.clear();
     stored_closure_capture_allocas.clear();
     entry_promoted_closure_captures.clear();
     guarded_stored_closure_creates.clear();
@@ -14858,7 +14869,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             if (!eligible) {
                 continue;
             }
-            finite_call_ref_targets.emplace(source, targets);
+            targets.call_count = loads->second.size();
+            finite_call_ref_targets.emplace(source, std::move(targets));
             for (const auto* load : loads->second) {
                 if (++scanned % 100 == 0 && qore_check_cancel(nullptr, "LLVM finite callback load mapping")) {
                     error = "cancelled during LLVM finite callback load mapping";
@@ -15044,6 +15056,20 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     if (choice != finite_call_ref_targets.end()) {
                         llvm::IRBuilder<> phi_builder(block_map.at(block.get()));
                         choice->second.selector = phi_builder.CreatePHI(i1_type, 2, "finite_callref_target");
+                        const auto* phi = static_cast<const QoreIRPhiInstruction*>(inst.get());
+                        // The shared use counter includes both PHI operands
+                        // and incoming values. Require the matching operand
+                        // plus incoming edge to be this creation's only uses.
+                        if (phi->operands.size() == 2) {
+                            for (unsigned i = 0; i < 2; ++i) {
+                                uint32_t id = phi->incoming[i].value.id;
+                                auto uses = operand_remaining_uses.find(id);
+                                if (phi->operands[i].id == id
+                                        && uses != operand_remaining_uses.end() && uses->second == 2) {
+                                    finite_call_ref_creations.emplace(id, inst->result.id);
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -16243,6 +16269,27 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         }
     }
     pending_phis.clear();
+
+    if (aot_mode && !q_env_is_set("QORE_DISABLE_AOT_FINITE_CALLREF_BIND_ELISION")) {
+        size_t scanned = 0;
+        for (auto& entry : finite_call_ref_targets) {
+            if (++scanned % 100 == 0 && qore_check_cancel(nullptr, "LLVM finite callback binding cleanup")) {
+                error = "cancelled during LLVM finite callback binding cleanup";
+                return false;
+            }
+            auto& targets = entry.second;
+            if (!targets.call_count || targets.inlined_calls != targets.call_count) {
+                continue;
+            }
+            // At most four void binder calls for each of the two creations.
+            // Creation, target resolution, local ownership and cleanup stay.
+            for (auto* binding : targets.binding_calls) {
+                assert(binding->getFunction() == llvm_func && binding->use_empty());
+                binding->eraseFromParent();
+            }
+            targets.binding_calls.clear();
+        }
+    }
 
     // Finalize the error return block (if used): fire on_block_exit handlers and
     // clean up before returning NOTHING for boxed entries or a neutral native
@@ -29037,7 +29084,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // operands[0] = closure/callref value, operands[1..n] = args
             auto finite_load = finite_call_ref_loads.find(inst->operands[0].id);
             if (aot_mode && finite_load != finite_call_ref_loads.end()) {
-                const auto& targets = finite_call_ref_targets.at(finite_load->second);
+                auto& targets = finite_call_ref_targets.at(finite_load->second);
                 const BatchCalleeInfo* infos[2] = {
                     getBatchCallee(targets.variants[0]), getBatchCallee(targets.variants[1])};
                 const auto* call = static_cast<const QoreIRExprInstruction*>(inst);
@@ -29086,6 +29133,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             results[0], results[1], "finite_callref_result");
                         native_call_result_kinds.emplace(inst->result.id, infos[0]->return_kind);
                         known_not_nothing_values.insert(inst->result.id);
+                        ++targets.inlined_calls;
                         if (skip_next_exception_check
                                 || q_env_is_set("QORE_DISABLE_AOT_KNOWN_CALLREF_EXCEPTION_ELISION")) {
                             emitExceptionCheck(module, llvm_func, inst);

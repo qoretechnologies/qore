@@ -43,6 +43,7 @@ class FiniteCallbackTargetsTest inherits QUnit::Test {
         TmpDir tmp("qore-finite-callback-targets-");
         foreach string prefix in (("", "QORE_DISABLE_AOT_FINITE_CALLREF_TARGETS=1 ",
                 "QORE_DISABLE_AOT_FINITE_CALLREF_RELOAD_ELISION=1 ",
+                "QORE_DISABLE_AOT_FINITE_CALLREF_BIND_ELISION=1 ",
                 "QORE_AOT_EH=1 ", "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ",
                 "QORE_DISABLE_AOT_INT_EXPRESSION_IMPORT=1 ",
                 "QORE_DISABLE_AOT_FLOAT_EXPRESSION_IMPORT=1 ",
@@ -54,14 +55,42 @@ class FiniteCallbackTargetsTest inherits QUnit::Test {
                     prefix + "QORE_DUMP_LLVM_IR=1 ");
                 if (prefix == "" || prefix == "QORE_DISABLE_AOT_FINITE_CALLREF_TARGETS=1 ") {
                     foreach string name in (("zeroLoop", "wideChoice", "unaryChoice", "floatChoice",
-                            "zeroChoice", "collisionChoice", "nestedLoop")) {
+                            "zeroChoice", "collisionChoice", "nestedLoop", "multipleCalls")) {
                         assertEq(prefix == "", regex(body(ir, name), "finite_callref_result"), name + level);
                     }
                     foreach string name in (("reassigned", "unknown", "captured", "aliased",
                             "effectChoice", "throwingChoice", "defaultChoice", "maybeAssigned", "optionalInt",
                             "optionalFloat", "arbitrary", "variableSignature", "sparse", "evaluatedArg",
-                            "interveningCall")) {
+                            "interveningCall", "multipleExpression")) {
                         assertFalse(regex(body(ir, name), "finite_callref_result"), name + level);
+                    }
+                }
+                if (prefix == "" || prefix == "QORE_DISABLE_AOT_FINITE_CALLREF_BIND_ELISION=1 ") {
+                    foreach string name in (("zeroLoop", "wideChoice", "unaryChoice", "floatChoice",
+                            "zeroChoice", "collisionChoice", "nestedLoop", "multipleCalls")) {
+                        assertEq(prefix != "", regex(body(ir, name), "@qore_rt_bind_function_call_ref_native"),
+                            name + level + " native adapter binding");
+                    }
+                    foreach string name in (("reassigned", "captured", "aliased", "interveningCall")) {
+                        assertTrue(regex(body(ir, name), "@qore_rt_bind_function_call_ref_native"),
+                            name + level + " retains binding");
+                    }
+                }
+                if (prefix == "QORE_DISABLE_AOT_INT_EXPRESSION_IMPORT=1 ") {
+                    string fallback_ir = run((qcc, level, "--strip-source", "-o", tmp.path + "/fallback", source),
+                        prefix + "QORE_DISABLE_AOT_FINITE_CALLREF_BIND_ELISION=1 QORE_DUMP_LLVM_IR=1 ");
+                    foreach string name in (("unaryChoice", "multipleCalls")) {
+                        string lowered = body(ir, name);
+                        string fallback = body(fallback_ir, name);
+                        assertFalse(regex(lowered, "finite_callref_result"), name + level + " fallback");
+                        assertTrue(regex(lowered, "@qore_rt_call_closure"), name + level + " fallback call");
+                        # Disabling expression import can also suppress adapter
+                        # generation. Preserve exactly the fallback's bindings.
+                        foreach string binder in (("native", "typed_v1", "typed_v2", "typed_v3")) {
+                            string symbol = "@qore_rt_bind_function_call_ref_" + binder;
+                            assertEq(regex(fallback, symbol), regex(lowered, symbol),
+                                name + level + " fallback " + binder);
+                        }
                     }
                 }
                 foreach string runtime in (("", "QORE_DISABLE_FUNCREF_FAST_CALL=1 ",

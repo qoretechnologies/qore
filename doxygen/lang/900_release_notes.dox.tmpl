@@ -255,6 +255,9 @@
     reenter arbitrary code. Callback creation, ownership, return checks and loop cancellation are preserved.
     The same proof also removes redundant local-cache refresh checks for these callbacks, while retaining
     the original cached value and cleanup. Other callback and local-variable loads keep their normal checks.
+    Optional native callback adapter binding is also omitted when every call through a private finite-target
+    value has actually been inlined. Any remaining fallback call retains its generated adapters; callback
+    creation, target resolution, ownership and cleanup are preserved.
 
     AOT can pass eligible typed float callback results directly to native compound addition, avoiding
     intermediate boxing while preserving compatible fallback conversion and owned-result cleanup.

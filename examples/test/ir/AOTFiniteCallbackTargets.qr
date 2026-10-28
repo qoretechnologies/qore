@@ -38,6 +38,16 @@ int sub unaryChoice(bool first, int value) {
     code<int(int)> fn = first ? \intA() : \intB();
     return fn(value);
 }
+int sub multipleCalls(bool first, int value) {
+    code<int(int)> fn = first ? \intA() : \intB();
+    int a = fn(value);
+    int b = fn(value + 1);
+    return a + b;
+}
+int sub multipleExpression(bool first, int value) {
+    code<int(int)> fn = first ? \intA() : \intB();
+    return fn(value) + fn(value + 1);
+}
 float sub floatChoice(bool first, float value) {
     code<float(float)> fn = first ? \floatA() : \floatB();
     return fn(value);
@@ -112,6 +122,8 @@ foreach bool first in ((False, True)) {
     foreach int value in ((0, 1, -1, 65535, 0x7fffffffffffffff, -0x7fffffffffffffff)) {
         expect((value * 33 + (first ? 17 : 19)) & 65535, unaryChoice(first, value));
     }
+    expect(first ? intA(5) + intA(6) : intB(5) + intB(6), multipleCalls(first, 5));
+    expect(first ? intA(5) + intA(6) : intB(5) + intB(6), multipleExpression(first, 5));
     foreach float value in ((0.0, -0.0, 1.5, -3.0e307, -6.0e307, @inf@, -@inf@, @nan@, -@nan@)) {
         expectFloat(first ? -value : value + 0.5, floatChoice(first, value));
     }

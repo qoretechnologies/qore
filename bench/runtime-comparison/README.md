@@ -1486,3 +1486,11 @@ Java uses the same JMH annotation-processing setup as the other benchmark classe
 Normal Java inlining remains enabled. Report whole-batch ns/invocation; do not
 subtract controls as isolated call latency or pool these numbers with the older
 per-invocation timer harness. See RESULTS for frozen-runtime provenance and limits.
+
+`QORE_DISABLE_AOT_FINITE_CALLREF_BIND_ELISION=1` retains optional callback native/typed
+adapter binding at compilation. By default, only creations whose sole use feeds
+a private admitted finite-target PHI qualify; deletion occurs after every call
+site in that group has actually inlined. Reference creation, local ownership,
+cleanup and cancellation remain. Recompile for the diagnostic control. The
+RESULTS section records independently confirmed short-call gains and the repeated
+polymorphic/long-loop costs; these are not a general Java parity claim.
