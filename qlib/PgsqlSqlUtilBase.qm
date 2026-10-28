@@ -381,8 +381,9 @@ $function$
     - fixed an insert-only upsert, and an upsert of a table whose columns are all key columns, sending \c BEGIN in
       an open transaction and inserting a row that already exists: PostgreSQL wrote a warning and a duplicate key
       error to its log for every such row, every time, as in each schema alignment for its reference data.  With
-      PostgreSQL 9.5 or later an existing row is now skipped with \c "on conflict do nothing", and \c BEGIN is
-      never sent
+      PostgreSQL 9.5 or later a row with the same upsert key is now skipped with
+      <tt>on conflict (</tt><em>key columns</em><tt>) do nothing</tt>, and \c BEGIN is never sent; a conflict on
+      another unique key now raises an exception instead of being skipped
 
     @subsection pgsqlsqlutilbasev18 PgsqlSqlUtilBase v1.8
     - updated to support \c jdbc and \c odbc drivers as well as the native \c pgsql driver
@@ -4311,6 +4312,26 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         };
     }
 
+    #! Returns a closure inserting a row unless a row with the same upsert key exists
+    /** With PostgreSQL 9.5 or later, the insert has <tt>on conflict (</tt><em>key columns</em><tt>) do
+        nothing</tt>: a row with the same upsert key is skipped by the server without an error, so the statement
+        is neither aborted nor written to the server log, and no savepoint is needed.  Any other conflict, on
+        another unique key or an exclusion constraint, raises an exception.  Older servers insert in a savepoint
+        (see tryInsertImpl()).
+    */
+    private code<int(hash<auto>)> getUpsertInsertOnly(Columns cols, hash<auto> example_row, *hash<auto> opt) {
+        if (!hasAtomicUpsert()) {
+            return AbstractTable::getUpsertInsertOnly(cols, example_row, opt);
+        }
+        string sql = getUpsertInsertSql(example_row) + " on conflict ("
+            + (foldl $1 + "," + $2, getColumnSqlNames(cols.keys())) + ") do nothing";
+        return int sub (hash<auto> row) {
+            list<auto> args = row.values();
+            on_error rethrow $1.err, sprintf("%s (SQL: %s args: %y)", $1.desc, sql, args);
+            return ds.vexec(sql, args) > 0 ? UR_Inserted : UR_Unchanged;
+        };
+    }
+
     private PgsqlFunction addTriggerFunctionUnlocked(string tfname, string src, string trigger) {
         if (!triggerFunctions) {
             triggerFunctions = new Functions();
@@ -5320,25 +5341,17 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         }
     }
 
-    #! Inserts a row unless a row with the same key exists
-    /** With PostgreSQL 9.5 or later, the insert has \c "on conflict do nothing": an existing row is skipped by the
-        server, which raises no error, so the statement is neither aborted nor written to the server log, and no
-        savepoint is needed.  Older servers have no \c "on conflict", so the insert runs in a savepoint and a
-        duplicate key error rolls back to it.
+    #! Inserts a row in a savepoint; a duplicate key error rolls back to the savepoint
+    /** Used only with servers older than PostgreSQL 9.5, which have no \c "on conflict"; newer servers use
+        getUpsertInsertOnly().  The savepoint statement starts the datasource's transaction if it has none;
+        \c BEGIN is never sent, as PostgreSQL refuses it with a warning in an open transaction.
 
-        The statement starts the datasource's transaction if it has none; it never sends \c BEGIN itself, which
-        PostgreSQL refuses with a warning in an open transaction.
-
-        @param sql the insert statement without a conflict clause
+        @param sql the insert statement
         @param row the row to insert; its values are bound in order
 
-        @return @ref True "True" if the row was inserted, @ref False "False" if a row with the same key exists
+        @return @ref True "True" if the row was inserted, @ref False "False" if it raised a duplicate key error
     */
     private bool tryInsertImpl(string sql, hash<auto> row) {
-        if (hasAtomicUpsert()) {
-            return ds.vexec(sql + " on conflict do nothing", row.values()) > 0;
-        }
-
         ds.exec("savepoint " + PgsqlDatabase::PGSQL_TempSavepoint);
 
         try {

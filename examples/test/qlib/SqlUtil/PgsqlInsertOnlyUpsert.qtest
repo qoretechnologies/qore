@@ -102,13 +102,22 @@ class RecordingDatasource inherits AbstractDatasource {
     }
 }
 
-#! Exposes PgsqlTable::tryInsertImpl() to the test
+#! Exposes PgsqlTable::tryInsertImpl() and PgsqlTable::getUpsertInsertOnly() to the test
 class InsertProbeTable inherits PgsqlSqlUtilBase::PgsqlTable {
     constructor(AbstractDatasource ds) : PgsqlTable(ds, "public.insert_probe") {
     }
 
     bool tryInsert(string sql, hash<auto> row) {
         return tryInsertImpl(sql, row);
+    }
+
+    #! returns the insert-only upsert closure for an upsert key of the given columns
+    code<int(hash<auto>)> insertOnly(list<string> key_cols, hash<auto> example_row) {
+        SqlUtil::Columns cols();
+        foreach string col in (key_cols) {
+            cols.add(col, new PgsqlSqlUtilBase::PgsqlColumn(col, "numeric", "number", 10, False));
+        }
+        return getUpsertInsertOnly(cols, example_row);
     }
 }
 
@@ -165,13 +174,15 @@ class PgsqlInsertOnlyUpsertTest inherits QUnit::Test {
     }
 
     constructor() : Test("PgsqlInsertOnlyUpsert", "1.0", \ARGV) {
-        addTestCase("atomic upsert servers skip an existing row with on conflict", \atomicStatementTest());
-        addTestCase("atomic upsert servers report an inserted row", \atomicInsertTest());
-        addTestCase("atomic upsert servers raise other insert errors", \atomicErrorTest());
+        addTestCase("atomic upsert servers skip a row with the same upsert key", \atomicKeyTargetTest());
+        addTestCase("atomic upsert servers start the transaction without BEGIN", \atomicInsertTest());
+        addTestCase("atomic upsert servers raise other insert errors with the statement", \atomicErrorTest());
+        addTestCase("older servers use the savepoint insert for an insert-only upsert", \olderServerInsertOnlyTest());
         addTestCase("older servers isolate the insert in a savepoint without BEGIN", \savepointTest());
         addTestCase("older servers raise other insert errors after the savepoint", \savepointErrorTest());
         addTestCase("live: an existing row is skipped in an open transaction", \liveInsertOnlyTest());
         addTestCase("live: a key-only table upsert skips an existing row", \liveKeyOnlyTest());
+        addTestCase("live: a conflict on another unique key raises", \liveOtherUniqueKeyTest());
         set_return_value(main());
     }
 
@@ -180,34 +191,57 @@ class PgsqlInsertOnlyUpsertTest inherits QUnit::Test {
         PgsqlRunSchema::teardown();
     }
 
-    private atomicStatementTest() {
+    private atomicKeyTargetTest() {
         RecordingDatasource ds(170000);
-        ds.insert_results = (0,);
+        ds.insert_results = (0, 1);
         InsertProbeTable t(ds);
         ds.beginTransaction();
-        assertFalse(t.tryInsert("insert into insert_probe (id) values ($1)", {"id": 1}),
-            "an existing row is not inserted");
-        assertEq(("<begin transaction>", "insert into insert_probe (id) values ($1) on conflict do nothing"),
-            ds.statements, "one insert with a conflict clause; no BEGIN and no savepoint");
+        code<int(hash<auto>)> insert_only = t.insertOnly(("k1", "k2"), {"k1": 1, "k2": 2, "value": 3});
+        assertEq(AbstractTable::UR_Unchanged, insert_only({"k1": 1, "k2": 2, "value": 3}),
+            "a row with the same upsert key is not inserted");
+        assertEq(AbstractTable::UR_Inserted, insert_only({"k1": 1, "k2": 3, "value": 3}),
+            "a new row is inserted");
+        string sql = "insert into public.insert_probe (k1,k2,value) values (%v,%v,%v) on conflict (k1,k2) do nothing";
+        assertEq(("<begin transaction>", sql, sql), ds.statements,
+            "each insert names the upsert key as its conflict target; no BEGIN and no savepoint");
     }
 
     private atomicInsertTest() {
         RecordingDatasource ds(90500);
         ds.insert_results = (1,);
         InsertProbeTable t(ds);
-        assertTrue(t.tryInsert("insert into insert_probe (id) values ($1)", {"id": 1}), "a new row is inserted");
-        assertEq(("insert into insert_probe (id) values ($1) on conflict do nothing",), ds.statements,
+        assertEq(AbstractTable::UR_Inserted, t.insertOnly(("id",), {"id": 1})({"id": 1}), "a new row is inserted");
+        assertEq(("insert into public.insert_probe (id) values (%v) on conflict (id) do nothing",), ds.statements,
             "the insert starts the datasource's transaction itself; no BEGIN is sent");
     }
 
     private atomicErrorTest() {
         RecordingDatasource ds(170000);
-        ds.insert_results = (<ExceptionInfo>{"err": "DBI:PGSQL:ERROR", "desc": "value too long"},);
+        ds.insert_results = (<ExceptionInfo>{"err": "DBI:PGSQL:ERROR", "desc": "duplicate key value violates "
+            "unique constraint \"insert_probe_code_uk\""},);
         InsertProbeTable t(ds);
-        assertThrows("DBI:PGSQL:ERROR", "value too long", \t.tryInsert(), ("insert into insert_probe (id) values ($1)",
-            {"id": 1}));
-        assertEq(("insert into insert_probe (id) values ($1) on conflict do nothing",), ds.statements,
-            "nothing is sent after the failed insert");
+        code<int(hash<auto>)> insert_only = t.insertOnly(("id",), {"id": 1, "code": 2});
+        try {
+            insert_only({"id": 1, "code": 2});
+            fail("a conflict outside the conflict target raises");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("DBI:PGSQL:ERROR", ex.err, "the driver's error code is kept");
+            assertTrue(ex.desc.equalPartial("duplicate key value violates unique constraint \"insert_probe_code_uk\""
+                " (SQL: insert into public.insert_probe (id,code) values (%v,%v) on conflict (id) do nothing args: "),
+                sprintf("the description keeps the driver message and appends the statement: %y", ex.desc));
+        }
+        assertEq(1, ds.statements.size(), "nothing is sent after the failed insert");
+    }
+
+    private olderServerInsertOnlyTest() {
+        RecordingDatasource ds(90400);
+        ds.insert_results = (DuplicateKeyError,);
+        InsertProbeTable t(ds);
+        assertEq(AbstractTable::UR_Unchanged, t.insertOnly(("id",), {"id": 1})({"id": 1}),
+            "a duplicate row is not inserted");
+        string sp = PgsqlDatabase::PGSQL_TempSavepoint;
+        assertEq(("savepoint " + sp, "insert into public.insert_probe (id) values (%v)", "rollback to savepoint " + sp),
+            ds.statements, "servers without on conflict use the savepoint insert; no BEGIN is sent");
     }
 
     private savepointTest() {
@@ -284,11 +318,27 @@ class PgsqlInsertOnlyUpsertTest inherits QUnit::Test {
         assertEq(2, rt.rowCount(), "both rows are committed");
     }
 
+    private liveOtherUniqueKeyTest() {
+        Datasource ds = connection();
+        AbstractTable t = createTable(ds, ("id", "code"), True);
+        on_exit dropTable(ds, t);
+
+        on_exit ds.rollback();
+        t.insert({"id": 1, "code": 10});
+        assertEq(AbstractTable::UR_Unchanged, t.upsert({"id": 1, "code": 99}, AbstractTable::UpsertInsertOnly),
+            "a row with the same primary key is unchanged");
+        assertThrows("DBI:PGSQL:ERROR", \t.upsert(), ({"id": 2, "code": 10}, AbstractTable::UpsertInsertOnly),
+            "a duplicate on another unique key raises");
+        ds.rollback();
+        assertEq(0, t.rowCount(), "nothing was committed");
+    }
+
     private checkStatements(list<string> statements) {
         foreach string sql in (statements) {
             assertFalse(sql =~ /^\s*begin\b/i, sprintf("BEGIN is never sent: %y", sql));
             assertFalse(sql =~ /savepoint/i, sprintf("no savepoint is needed: %y", sql));
-            assertRegex("on conflict do nothing$", sql, "each insert skips an existing row on the server");
+            assertRegex(" on conflict \(id\) do nothing$", sql,
+                "each insert skips a row with the same key on the server");
         }
         assertGt(0, statements.size(), "the inserts are recorded");
     }
@@ -309,13 +359,16 @@ class PgsqlInsertOnlyUpsertTest inherits QUnit::Test {
         return ds;
     }
 
-    private AbstractTable createTable(Datasource ds, list<string> cols) {
+    private AbstractTable createTable(Datasource ds, list<string> cols, bool unique_code = False) {
         string name = sprintf("insert_only_%d_%d", getpid(), ++serial);
         hash<auto> column = {"qore_type": "number", "size": 10, "notnull": True};
         hash<auto> desc = {
             "columns": (map {$1: column}, cols),
             "primary_key": {"name": name + "_pk", "columns": ("id",)},
         };
+        if (unique_code) {
+            desc.indexes = {name + "_code_uk": {"columns": ("code",), "unique": True}};
+        }
         AbstractTable t = (new Table(ds, desc, name)).getTable();
         t.createCommit();
         return t;
