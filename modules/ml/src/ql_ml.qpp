@@ -500,7 +500,7 @@ hashdecl Qore::ML::OnnxSessionConfig {
     *int inter_op_threads;
     //! how aggressively to optimize the model graph before inference: 0=disabled, 1=basic, 2=extended, 99=all; default 99
     *int graph_optimization_level;
-    //! diagnostic log verbosity: 0=verbose, 1=info, 2=warning, 3=error, 4=fatal; default 2 (warning)
+    //! diagnostic log verbosity of the session: 0=verbose, 1=info, 2=warning, 3=error, 4=fatal; default 2 (warning)
     *int log_severity;
     //! whether to enable ONNX Runtime profiling for this session
     *bool enable_profiling;
