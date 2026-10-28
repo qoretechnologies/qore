@@ -16967,6 +16967,11 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
     return true;
 }
 
+//! returns true if the classes are the same class, which a copy of a class in another Program is
+static bool qore_rt_same_class(const QoreClass* a, const QoreClass* b) {
+    return a == b || (a && b && a->getID() == b->getID());
+}
+
 static uint64_t dispatch_method_on_object(QoreObject* o, const QoreMethod* method,
         const QoreClass* qc, const AbstractQoreFunctionVariant* variant,
         QoreListNode* arg_list, ExceptionSink* xsink,
@@ -16976,7 +16981,7 @@ static uint64_t dispatch_method_on_object(QoreObject* o, const QoreMethod* metho
     if (!strcmp(method->getName(), "copy")) {
         return toBits(o->getClass()->execCopy(o, xsink));
     }
-    if (o->getClass() == qc || o->getClass() == method->getClass()) {
+    if (qore_rt_same_class(o->getClass(), qc) || qore_rt_same_class(o->getClass(), method->getClass())) {
         if (!o->isValid()) {
             xsink->raiseException("OBJECT-ALREADY-DELETED", "cannot call %s::%s() on an object that has "
                 "already been deleted", qc->getName(), method->getName());
@@ -17649,9 +17654,12 @@ static uint64_t qore_rt_dispatch_aot_object_method_by_name(
 
 static bool qore_rt_aot_object_method_needs_runtime_dispatch(
         const QoreAOTCallTarget& target, const QoreObject* object) {
+    // a class is compared by its ID: the copy of a class in another Program (a builtin class, or a class imported
+    // from a module) is the same class; only a subclass needs the variant resolved for it by name, which checks it
+    // against the runtime options, where the parser checked the bound one against the code's (#5556)
     return !target.method || target.is_pseudo
-        || (object->getClass() != target.qc
-            && object->getClass() != target.method->getClass());
+        || (!qore_rt_same_class(object->getClass(), target.qc)
+            && !qore_rt_same_class(object->getClass(), target.method->getClass()));
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_method_direct_aot(QoreAOTContext* ctx, int32_t slot,
