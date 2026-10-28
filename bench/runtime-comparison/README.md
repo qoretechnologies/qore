@@ -1454,6 +1454,20 @@ closure gains and the effectful-method regression, not a universal speedup.
 
 `QORE_DISABLE_AOT_CROSS_PROGRAM_CLOSURE_ENTRY=1` disables the native scalar closure retry after the generic path enters the owning Program. It is a runtime presence flag sampled once; empty and `0` values also disable it. Same-Program admission and the complete generic Program transition remain. No recompile is needed for this diagnostic control. Compare frozen optimized runtimes for before/after performance; see RESULTS for cross-Program call measurements and all control costs.
 
+`QORE_DISABLE_AOT_CROSS_PROGRAM_METHOD_ENTRY=1` disables the pure scalar method
+retry after an AOT dispatch site completes its ordinary Program transition. This
+runtime presence flag is sampled once; empty and `0` values also disable it, and
+no recompilation is needed. The matched dispatch entry must prove exact canonical
+arguments and a ready homogeneous `int(int)` or `float(float)` companion. After
+the transition, invocation rechecks the live receiver, body, entry, signature,
+Program and debugger state using stable method metadata. The frame retains the
+original caller's Program. Unsupported, parameterized, member and effectful
+methods keep ordinary binding, as does a native miss. The same-Program compact
+dispatch proof and the full transition's counts, locks and lifetime are unchanged.
+See RESULTS for optimized before/after timings, the disabling control and costs
+in other workloads. This changes AOT method dispatch; it does not add companions
+to bodies executed only by IR/JIT.
+
 `QORE_DISABLE_AOT_IMPORTED_CLOSURE_ENTRY=1` disables native integer closure
 admission when the closure executes in a different Program from its compiled
 body's owner. This runtime presence flag is sampled once; no recompile is needed.

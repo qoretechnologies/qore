@@ -28340,3 +28340,136 @@ are not established.
 
 [Evidence](results-deferred-closure-options-macos-arm64.json);
 [all 62 audit checks](audit-deferred-closure-options.md).
+
+## Native scalar methods after a Program transition (2026-10-28)
+
+This incremental comparison uses committed `e0220f4f91` as the baseline, including
+the imported-closure improvements and develop `6becf04083`. Both frozen runtimes
+are Release `-O3 -DNDEBUG`, with allocation tracking disabled. Each uses freshly
+compiled matching `qcc -O3 --strip-source` modules. The IR host invokes native
+AOT module bodies; loaded-library checks verify those bodies and their runtimes.
+There is no new pure-develop or Java measurement here.
+
+After the execution-context merge, imported functions run in their caller's
+Program, but objects retain the class source Program. Many method calls therefore
+need a genuine Program transition. The dispatcher previously tried a native
+scalar companion only before that transition, where the live Program check
+rejected it. A focused unchanged-baseline probe finds a ready companion and a
+warmed complete dispatch cache, but zero native invocations in eight calls.
+
+The retry uses the ordinary dispatch entry's proof of exact canonical scalar
+arguments, excluding enum bases, references and conversions. It snapshots that
+proof and positive companion availability before Program entry, which can run
+initialization callbacks. After the complete transition it borrows stable method
+metadata, reacquires the live body/context/entry, and uses existing uncached native
+admission before parameter, self and argv setup. It does not retain a replaceable
+PIC entry across initialization for the retry. The diagnostic frame uses the
+original caller Program while execution uses the method Program.
+
+The same-Program compact PIC witness is unchanged. Program counts, locks, TLPD,
+initialization, lifetime, receiver validity, provenance/access handling, debugger,
+body identity, exact signature and stack checks remain. Member/effect/forwarding
+bodies and parameterized receivers keep ordinary binding. Native misses consume
+no arguments. This changes AOT call dispatch, including AOT bodies invoked by an
+IR/JIT host; it does not add companions to IR/JIT-only bodies or change the ABI.
+
+### Prototype and positive preflight
+
+The first timed prototype improves its two integer targets by 41.41%/50.54%, but
+adds a 2.74% cost to an effectful-method control (341.64 to 351.01 ns/item). Such
+bodies cannot use this pure companion, so the final implementation skips the
+post-transition attempt unless a matching pure companion is already ready.
+Live checks still repeat after the transition; a negative preflight only skips
+this invocation. The prototype's full 234-job screen is preserved, not pooled
+with the final campaign or omitted as noise.
+
+### Final optimized results
+
+All units are whole-kernel ns/item in 4096-item batches, including loop and
+dispatch work, not isolated call latency. Each result is the median across three
+layouts of the per-layout median fork mean. Screens use three forks; the fresh
+confirmation uses five forks, each with two warmups and three 150 ms samples.
+Confirmation repeats both integer targets, the earlier effectful cost, indirect
+and closure controls, all mixed workloads and every screen shift of at least 2%.
+Six predeclared floating-point workloads first enter this five-fork campaign;
+they are labeled separately because they do not have a preceding timing screen.
+
+|!Kernel|!Baseline|!Candidate|!Change|!Phase
+|micro:direct_call|1.553506|1.554051|+0.035%|screen
+|micro:method_call|1.666228|1.661468|-0.286%|screen
+|micro:polymorphic_call|159.350744|94.450714|-40.728%|confirmation
+|micro:polymorphic_expression_call|129.174195|65.805693|-49.057%|confirmation
+|micro:boxed_int_method_effect|348.426562|344.202958|-1.212%|confirmation
+|micro:indirect_call|10.420144|10.218153|-1.938%|confirmation
+|micro:closure_call|18.064842|18.135916|+0.393%|confirmation
+|micro:closure_capture|23.763921|23.651037|-0.475%|confirmation
+|micro:list_mutate|192.697111|192.314335|-0.199%|screen
+|mixed:csv_report|945.610894|950.111846|+0.476%|confirmation
+|mixed:object_orders|3318.786621|3346.550836|+0.837%|confirmation
+|mixed:callback_pipeline|90.700400|90.598044|-0.113%|confirmation
+|mixed:text_index|1388.544936|1383.336950|-0.375%|confirmation
+|micro:polymorphic_float_call|165.454596|94.241376|-43.041%|five-fork float
+|micro:polymorphic_float_expression_call|135.376335|66.291812|-51.031%|five-fork float
+|micro:boxed_float_method_call|224.071378|126.401521|-43.589%|five-fork float
+|micro:monomorphic_float_call|4.184696|4.226728|+1.004%|five-fork float
+|micro:optional_float_method_call|181.177352|90.835259|-49.864%|five-fork float
+|micro:boxed_float_method_fallback|261.409092|259.923851|-0.568%|five-fork float
+
+Integer polymorphic calls improve 40.73%/49.06% in fresh confirmation. Floating
+polymorphic calls improve 43.04%/51.03%, boxed float calls 43.59%, and the
+optional-receiver float workload 49.86%, with improvements in every target/layout
+combination. The optional receiver is non-null here and its actual method still
+has a hard float signature; this does not admit optional-return companions.
+
+The effectful-method cost is removed: final screen/confirmation improve
+0.96%/1.21%, although the default confirmation layout is 0.05% slower. Plain
+closures cost 0.39%, and the newly measured monomorphic float control costs 1.00%.
+Mixed confirmation ranges from 0.38% faster to 0.84% slower: CSV and object orders
+cost 0.48%/0.84%; callback pipeline and text indexing improve 0.11%/0.38%. The
+screen's 3.46% CSV gain does not repeat. Retain these costs and layout/fork ranges;
+there is no clear overall application improvement or zero-regression claim.
+
+### Same-binary attribution
+
+`QORE_DISABLE_AOT_CROSS_PROGRAM_METHOD_ENTRY=1` changes only the runtime presence
+control; candidate modules and libraries are identical. Three layouts and five
+fresh forks recover the generic cost for integer and floating targets. The failed
+retry adds some overhead, so the disabled column is not a bit-identical baseline.
+
+|!Kernel|!Baseline ns/item|!Candidate|!Candidate with retry disabled
+|polymorphic_call|161.258195|95.907333|162.620436
+|polymorphic_float_call|170.496494|95.893543|173.147672
+
+### Validation and evidence
+
+The final campaign contains 804 jobs / 2412 windows: 234 screen, 480 five-fork
+comparison and 90 attribution. Including the superseded prototype, all 1038 jobs /
+3114 windows independently replay from actual child receipts and raw samples.
+The two preparations each pass 3690 native and 1230 source reference checks;
+disabled controls add 1665 checks. All 24 LLVM modules verify, and all 12 matched
+before/after LLVM pairs are byte-identical. Exact sources, drivers, runtime and
+tool identities, loaded libraries, layout orders and observed fork ranges are
+preserved in the content-addressed evidence. No samples are discarded and no
+owned build/test/profile overlaps timing. The shared macOS ARM64 host has
+background activity and no CPU affinity, exclusivity or thermal control.
+
+Release passes 25 cases / 5450 assertions. Debug passes 14 cases / 3036 assertions
+plus 2917 native assertions. The new 384-assertion fixture also passes unchanged
+baseline, and covers int/float methods, wide integers, infinities/NaN, O0/O3
+source-stripped AOT, source modes, EH, legacy v1 and disabled controls, stack
+overflow, missing companion, body mismatch and caller/context restoration.
+Existing suites cover resolved/assigned dispatch, unsupported and deleted
+overrides, debugger attachment, native stack readers, member/effect/getter paths
+and module context. All 391 Release qmod aliases are restored. All 62 audit checks
+pass or are inapplicable. This is targeted macOS qualification, not a full-project,
+sanitizer or other-platform claim.
+
+This recovers part of the method regression introduced by correct Program
+execution semantics. Genuine transitions still cost substantially more than
+same-Program calls. Next investigate member/effect companions after transitions
+and imported-body local-slot guards affecting list mutation, then refresh the
+optimized develop/Java comparisons. Java parity and a performance ceiling remain
+unestablished.
+
+[Evidence](results-cross-program-method-retry-macos-arm64.json);
+[all 62 audit checks](audit-cross-program-method-retry.md).
