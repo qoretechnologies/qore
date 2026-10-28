@@ -27431,3 +27431,110 @@ A prior fixture expected fadd in foreachAdd even though the copied loop variable
 Next candidates are preserving the native float callback result through accumulation and inline conversion. This result establishes neither Java parity nor a performance ceiling.
 
 [Timing and validation evidence](results-native-scalar-temp-keep-macos-arm64.json); [62-check audit](audit-native-scalar-temp-keep.md).
+
+## Native float callback continuation into accumulation (2026-10-28)
+
+The optimized baseline is 7eaf11e3e7, including develop a5af92e73c and native scalar retention across temporary cleanup. AOT can now carry an eligible typed float callback's native result directly into AddAssignFloat. Selection requires an earlier CallClosureDirect in the same IR block, a matching code<float()> signature and one result consumer. The signature alone does not prove the actual returned type: the existing runtime handled flag selects the native double, while arbitrary boxed fallback results retain getAsFloat conversion and ownership. The integer continuation match is unchanged.
+
+No runtime helper, ABI or TLS change is added. Program, binding, frame, context, physical-stack and exception guards remain in the existing runtime path, as do fallback invalidation and cleanup. Both ordinary and fast target bodies lose their one float-boxing site and use a native double phi; qore_rt_to_float remains only in the conversion fallback block. IR and JIT selection are unchanged. Set QORE_DISABLE_AOT_NATIVE_FLOAT_CALL_ARITHMETIC while compiling to disable this candidate independently; the existing arithmetic and function-reference continuation switches remain effective.
+
+Both runtimes use -O3 -DNDEBUG with allocation tracking off. Separate qcc -O3 --strip-source images use identical sources and matching frozen runtimes. Default/reverse/shuffle-487 layouts, randomized paired process order, one warmup and three 150 ms windows, three screen forks and five independent confirmation forks. Results average windows per process, take median forks per layout, then median layouts. Whole-kernel ns/item includes loop and outer-entry work and is not isolated callback latency. No owned build, test or heavy archive overlaps timing. The shared host has no exclusivity, CPU affinity or thermal control. Dependency identities are checked for every job and hashes at phase boundaries.
+
+All six opaque images pass 720 reference/probe checks. Untimed probes record 13,113 callbacks and 13,101 reused native frames per signature, same-Program execution and restored context. Timing uses no interposition.
+
+|!Workload:count|!Screen before|!Screen candidate|!Screen change|!Confirm before|!Confirm candidate|!Confirm change
+|int_zero:1|n/a|n/a|n/a|426.593339|432.354334|+1.350%
+|int_unary:1|n/a|n/a|n/a|443.815222|446.727874|+0.656%
+|float_zero:1|n/a|n/a|n/a|443.619016|444.224080|+0.136%
+|float_unary:1|n/a|n/a|n/a|448.087845|450.175116|+0.466%
+|int_zero:17|n/a|n/a|n/a|43.068863|42.896992|-0.399%
+|int_unary:17|n/a|n/a|n/a|44.014568|44.121023|+0.242%
+|float_zero:17|n/a|n/a|n/a|44.673092|43.268571|-3.144%
+|float_unary:17|n/a|n/a|n/a|44.873489|44.924125|+0.113%
+|int_zero:4096|17.450673|17.529571|+0.452%|17.603832|17.512766|-0.517%
+|int_unary:4096|18.433056|18.396434|-0.199%|18.418211|18.432558|+0.078%
+|float_zero:4096|19.190197|17.919210|-6.623%|19.185287|17.823263|-7.099%
+|float_unary:4096|18.545627|18.441987|-0.559%|18.905966|18.908275|+0.012%
+
+The broader screen covers all 53 existing float, micro and mixed kernels plus the opaque target and four short cases. The single-item integer control was added before broader preparation after a 1.35% focused slowdown. Confirmation selects every absolute aggregate shift of at least 2%, all mixed workloads and all five opaque cases. Unselected controls have no confirmation row.
+
+|!Workload:count|!Screen before|!Screen candidate|!Screen change|!Confirm before|!Confirm candidate|!Confirm change
+|float:direct_local_float_return:4096|0.803892|0.800119|-0.469%|n/a|n/a|n/a
+|float:callback_local_float_return:4096|0.868652|0.876175|+0.866%|n/a|n/a|n/a
+|float:direct_local_float_result:4096|0.745249|0.747105|+0.249%|n/a|n/a|n/a
+|float:callback_local_float_result:4096|0.796317|0.819085|+2.859%|0.801526|0.820858|+2.412%
+|float:direct_loop_float_return:4096|5.721016|5.704050|-0.297%|n/a|n/a|n/a
+|float:callback_loop_float_return:4096|4.978976|4.988801|+0.197%|n/a|n/a|n/a
+|float:direct_float_add:4096|0.821610|0.836047|+1.757%|n/a|n/a|n/a
+|float:static_float_add:4096|0.822585|0.827741|+0.627%|n/a|n/a|n/a
+|float:typed_local_int_unary:4096|1.197163|1.197050|-0.009%|n/a|n/a|n/a
+|float:typed_local_int_result:4096|0.830064|0.830612|+0.066%|n/a|n/a|n/a
+|float:typed_local_float_unary:4096|0.898175|0.912711|+1.618%|n/a|n/a|n/a
+|float:result_float_add:4096|0.848411|0.836098|-1.451%|n/a|n/a|n/a
+|micro:arithmetic:4096|1.597281|1.598026|+0.047%|n/a|n/a|n/a
+|micro:direct_call:4096|1.603049|1.598374|-0.292%|n/a|n/a|n/a
+|micro:method_call:4096|1.673903|1.673856|-0.003%|n/a|n/a|n/a
+|micro:indirect_call:4096|59.236453|60.718239|+2.501%|59.126508|60.933535|+3.056%
+|micro:polymorphic_call:4096|22.986941|23.308350|+1.398%|n/a|n/a|n/a
+|micro:polymorphic_expression_call:4096|10.880309|10.706019|-1.602%|n/a|n/a|n/a
+|micro:monomorphic_call:4096|3.904260|3.924737|+0.524%|n/a|n/a|n/a
+|micro:optional_method_call:4096|10.482847|10.475475|-0.070%|n/a|n/a|n/a
+|micro:polymorphic_float_call:4096|23.564683|23.467217|-0.414%|n/a|n/a|n/a
+|micro:polymorphic_float_expression_call:4096|10.993320|10.948463|-0.408%|n/a|n/a|n/a
+|micro:monomorphic_float_call:4096|4.247891|4.242352|-0.130%|n/a|n/a|n/a
+|micro:optional_float_method_call:4096|10.818109|10.924724|+0.986%|n/a|n/a|n/a
+|micro:boxed_float_method_call:4096|19.884860|19.961064|+0.383%|n/a|n/a|n/a
+|micro:dynamic_int_result_call:4096|10.380951|10.472054|+0.878%|n/a|n/a|n/a
+|micro:dynamic_int_result_fallback:4096|20.388115|20.441377|+0.261%|n/a|n/a|n/a
+|micro:boxed_int_method_call:4096|16.022100|16.239294|+1.356%|n/a|n/a|n/a
+|micro:boxed_int_method_fallback:4096|32.482823|32.506236|+0.072%|n/a|n/a|n/a
+|micro:boxed_float_method_fallback:4096|34.734614|34.645168|-0.258%|n/a|n/a|n/a
+|micro:boxed_int_method_effect:4096|90.135364|89.575791|-0.621%|n/a|n/a|n/a
+|micro:dynamic_float_result_call:4096|11.243728|11.136299|-0.955%|n/a|n/a|n/a
+|micro:indirect_wide:4096|59.394256|60.766357|+2.310%|58.999569|60.556973|+2.640%
+|micro:indirect_float:4096|58.575963|59.941088|+2.331%|58.378449|59.545696|+1.999%
+|micro:indirect_int_result:4096|59.960499|61.275962|+2.194%|59.461350|60.296060|+1.404%
+|micro:indirect_float_result:4096|58.829133|60.307708|+2.513%|58.785245|59.703290|+1.562%
+|micro:indirect_tagged_float:4096|58.929282|59.885847|+1.623%|n/a|n/a|n/a
+|micro:indirect_branch_float:4096|58.378122|59.835938|+2.497%|58.249840|59.259750|+1.734%
+|micro:indirect_affine:4096|59.590571|61.015107|+2.391%|59.234767|60.679021|+2.438%
+|micro:indirect_affine_wide:4096|59.284046|60.986906|+2.872%|59.303787|60.693576|+2.344%
+|micro:indirect_branch_int:4096|59.363631|60.381637|+1.715%|n/a|n/a|n/a
+|micro:dispatch_control:4096|1.987173|1.993285|+0.308%|n/a|n/a|n/a
+|micro:list_read:4096|2.982395|2.969916|-0.418%|n/a|n/a|n/a
+|micro:list_build:4096|26.790341|26.608321|-0.679%|n/a|n/a|n/a
+|micro:list_mutate:4096|131.142498|131.803225|+0.504%|n/a|n/a|n/a
+|micro:temporary_list:4096|1.752777|1.752614|-0.009%|n/a|n/a|n/a
+|micro:temporary_hash:4096|1.769165|1.756343|-0.725%|n/a|n/a|n/a
+|micro:closure_call:4096|14.338226|13.823004|-3.593%|13.979161|13.700172|-1.996%
+|micro:closure_capture:4096|19.698422|19.129745|-2.887%|19.702040|19.216817|-2.463%
+|mixed:csv_report:4096|952.150524|948.068994|-0.429%|938.574326|937.168376|-0.150%
+|mixed:object_orders:4096|1752.763052|1757.731472|+0.283%|1748.518422|1751.650856|+0.179%
+|mixed:callback_pipeline:4096|120.904744|122.456636|+1.284%|120.721633|122.070916|+1.118%
+|mixed:text_index:4096|1463.462790|1464.022185|+0.038%|1454.189203|1470.762595|+1.140%
+|opaque:float_zero:4096|18.933936|17.660057|-6.728%|19.039481|17.676440|-7.159%
+|opaque:float_unary:17|44.867091|44.782959|-0.188%|44.810207|45.119519|+0.690%
+|opaque:float_zero:1|449.104964|450.328406|+0.272%|446.075600|446.040388|-0.008%
+|opaque:float_unary:1|446.951355|457.433070|+2.345%|455.244153|448.703479|-1.437%
+|opaque:int_zero:1|432.998332|425.422735|-1.750%|428.517925|430.693246|+0.508%
+
+Retain under the explicitly authorized broader-workload tradeoff. Independent broader confirmation reduces opaque zero-argument float accumulation from 19.039481 to 17.676440 ns/item (7.159% faster), with 7.159–7.933% gains across layouts; focused count17 improves 3.144%. The same-runtime compiler-switch diagnostic confirms 18.989528 to 17.655364 ns/item (7.026% faster), with 6.844–7.471% gains across layouts. Build-to-build indirect-call controls repeatedly cost 1.404–3.056% (approximately 0.835–1.807 ns/item); local float-result callback costs 2.412% (0.0193 ns/item). Plain/captured closure controls improve 1.996%/2.463%. Mixed workloads range from 0.150% faster to 1.140% slower. All 36 inspected affected LLVM bodies are identical after removing only debug metadata; same-runtime selected control aggregates range from 0.702% faster to 0.593% slower, although individual layouts vary more. This supports retaining the direct compiler improvement, but does not establish the cause of the separate-runtime regressions or erase their practical cost. No workload weights are available, so no universal overall improvement or Java parity is claimed.
+
+An additional same-runtime diagnostic compiles with the new float-arithmetic switch enabled and disabled, keeping the optimized runtime binary identical. This isolates the direct generated-code effect and does not replace the before/after costs above. All 36 inspected indirect-call/local-float control bodies in the original comparison are identical after removing only debug metadata. The diagnostic uses five paired forks across all three layouts (210 processes, 630 windows), with independently checked references and replayed samples.
+
+|!Diagnostic workload:count|!Disabled ns/item|!Enabled ns/item|!Change
+|micro:indirect_call:4096|60.333147|60.114626|-0.362%
+|micro:indirect_wide:4096|60.411266|60.040002|-0.615%
+|micro:indirect_float_result:4096|59.141748|58.968680|-0.293%
+|micro:closure_call:4096|13.466906|13.546698|+0.593%
+|micro:closure_capture:4096|19.164335|19.255672|+0.477%
+|float:callback_local_float_result:4096|0.825249|0.819454|-0.702%
+|opaque:float_zero:4096|18.989528|17.655364|-7.026%
+
+All 2076 before/after runs/6228 measured windows, plus 210 same-runtime diagnostic runs/630 windows, are retained and independently replayed. No application-weighted overall score or fresh Java/develop ratio is inferred.
+
+Release and Debug each pass 87 QUnit cases / 8,281 assertions plus two standalone fixtures. Debug adds 18 cases / 70 fallback/context assertions and 2917 native assertions. Statement-lifetime tests pass 7 cases / 545 assertions, with an additional standalone scalar-lifetime script. Program-transition coverage is included in each full suite. All 391 Release qmod aliases are restored and verified. The new fixture passes 242 assertions across source modes, compile-time switches and runtime fallback controls, stripped AOT O0/O3/EH/split. Its worker covers native constant-return callbacks with tag-colliding doubles, infinities, NaNs and signed zero, plus compatible wide integer, boolean and NOTHING fallback results, used expressions and loop counts 0/1/3/17. Existing callback fixtures cover owned/borrowed results, destructor and call exceptions, aliases and Program transitions. Initial qualification passes 32 source and 32 AOT executions. Broader preparation validates 4,770 native and 795 source reference results. This is targeted macOS Release/Debug coverage, not a full project, Linux or sanitizer run.
+
+A fresh optimized develop/Java checkpoint is the next step for assessing cumulative gains and remaining call costs. This experiment establishes neither Java parity nor a performance ceiling.
+
+[Timing and validation evidence](results-native-float-call-arithmetic-macos-arm64.json); [62-check audit](audit-native-float-call-arithmetic.md).

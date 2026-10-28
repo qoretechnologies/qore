@@ -14363,6 +14363,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     }
     bool native_call_conversions = aot_mode && !q_env_is_set("QORE_DISABLE_AOT_NATIVE_CALL_CONVERSION");
     bool native_call_arithmetic = aot_mode && !q_env_is_set("QORE_DISABLE_AOT_NATIVE_CALL_ARITHMETIC");
+    bool native_float_call_arithmetic = native_call_arithmetic
+        && !q_env_is_set("QORE_DISABLE_AOT_NATIVE_FLOAT_CALL_ARITHMETIC");
     if (native_call_conversions || native_call_arithmetic) {
         // Count every use, including Return/Phi's non-operand uses above. Also
         // require producer-before-consumer lowering order so its native SSA
@@ -14372,9 +14374,11 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         bool callbacks = !q_env_is_set("QORE_DISABLE_AOT_FUNCREF_NATIVE_CONTINUATION");
         bool methods = !q_env_is_set("QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION");
         for (const auto& block : func.blocks) {
-            // Compound addition requires an earlier exact-int callback in this
-            // IR block, so the native SSA value necessarily dominates its use.
+            // Compound addition requires an earlier callback with a matching numeric signature in this
+            // IR block, so its handled native SSA result necessarily dominates the consumer. The signature
+            // alone does not prove the actual return type; the boxed fallback still performs conversion.
             std::unordered_set<uint32_t> local_int_callbacks;
+            std::unordered_set<uint32_t> local_float_callbacks;
             if (conversion_count++ && !(conversion_count % 100)
                     && qore_check_cancel(nullptr, "LLVM native call conversion analysis")) {
                 error = "cancelled during LLVM native call conversion analysis";
@@ -14401,6 +14405,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                             facts ? facts->type_info : nullptr);
                         if (callable && callable->getReturnType() == bigIntTypeInfo) {
                             local_int_callbacks.insert(inst->result.id);
+                        } else if (native_float_call_arithmetic && callable
+                                && callable->getReturnType() == floatTypeInfo) {
+                            local_float_callbacks.insert(inst->result.id);
                         }
                     }
                 } else if (native_call_conversions
@@ -14411,12 +14418,14 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     if (available_calls.count(id) && uses != operand_remaining_uses.end() && uses->second == 1) {
                         native_call_conversion_results.insert(id);
                     }
-                } else if (native_call_arithmetic && inst->opcode == QoreIROpcode::AddAssignInt
-                        && inst->operands.size() == 2) {
+                } else if (native_call_arithmetic && inst->operands.size() == 2
+                        && (inst->opcode == QoreIROpcode::AddAssignInt
+                            || (native_float_call_arithmetic && inst->opcode == QoreIROpcode::AddAssignFloat))) {
                     uint32_t id = inst->operands[1].id;
                     auto uses = operand_remaining_uses.find(id);
-                    if (local_int_callbacks.count(id) && uses != operand_remaining_uses.end()
-                            && uses->second == 1) {
+                    bool matching_callback = inst->opcode == QoreIROpcode::AddAssignInt
+                        ? local_int_callbacks.count(id) : local_float_callbacks.count(id);
+                    if (matching_callback && uses != operand_remaining_uses.end() && uses->second == 1) {
                         native_call_conversion_results.insert(id);
                     }
                 }
@@ -32685,7 +32694,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
             llvm::Value* l_float = ensureFloatType(lhs, inst->operands[0].id, module);
-            llvm::Value* r_float = ensureFloatType(rhs, inst->operands[1].id, module);
+            llvm::Value* r_float = tryEmitNativeCallConversion(inst->operands[1].id, true, rhs, module, llvm_func);
+            if (!r_float) {
+                r_float = ensureFloatType(rhs, inst->operands[1].id, module);
+            }
             values[inst->result.id] = builder->CreateFAdd(l_float, r_float);
             return true;
         }
