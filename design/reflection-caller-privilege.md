@@ -111,6 +111,23 @@ destruction still check the object's Program separately.
 This does not grant access to globals, static members, constants, functions, private module classes or builtin
 constructors, nor to an unrelated application Program merely because it contains the same imported class.
 
+#### Modules act for their application
+
+A user module's Program inherits the parse options of the Program that loads it first
+(`QoreModuleManager::loadSeparatedModule()`, and for an AOT module `qore_aot_module_init`), including explicitly-allowed
+options such as `PO_ALLOW_INJECTION`, so whether one module had full access to another depended on load order: Qorus
+loads `DataProvider` before its core Program enables injection and a provider module afterwards, so
+`AbstractDataProviderFactory::create()` was refused (#5556 follow-up). `qore_reflection_has_module_caller()` now also
+grants access to a target user module when the first application Program on the module call chain restricts no domain
+the target allows and allows every explicitly-allowed domain it allows: the modules act with that application's
+privileges, which it could use itself. A non-module caller is compared with the target as before, so a Program without
+injection cannot call into a module that has it. The application is the nearest one on the chain: a restricted
+Program's closure called back by module code for a privileged Program is judged as the restricted Program. Module code
+that runs for no application finds none and is judged strictly: a thread that module code started has no application
+frame, and a module's init and del closures run behind a barrier (`QoreModuleLifecycleBarrierHelper`, for source
+modules in `QoreModuleDefContext::init()` and `QoreUserModule::runDelCallback()`, for AOT modules around the compiled
+`MODULE_INIT` function) that the walk does not cross.
+
 #### Defaults and module compatibility
 
 This implements option (a) in issue #5483: retain the trusted-module exception **only for member-default evaluation**.

@@ -405,11 +405,27 @@ DLLLOCAL QoreSandboxManager* qore_find_thread_sandbox_manager_ref();
 //! Returns whether target is an enclosing caller reached only through user-module contexts.
 /** Starts at the captured caller, ignoring context switches made by the reflection API itself.
     The first non-module Program is included but is never crossed. Cancellation is reported in xsink.
-    For a class call, that application may instead have imported the exact public user-module class; this
-    permission is limited to the class and still compares the application's restricting domains.
+    That application may grant access to a target user module that it is at least as privileged as, so the modules
+    act for it; for a class call, it may instead have imported the exact public user-module class; this
+    permission is limited to the class and still compares the application's restricting domains.  The walk never
+    crosses a module lifecycle barrier (see QoreModuleLifecycleBarrierHelper).
 */
 DLLLOCAL bool qore_reflection_has_module_caller(const QoreProgram* caller, const QoreProgram* target,
     ExceptionSink* xsink, const QoreClass* cls = nullptr);
+
+//! Marks module code that runs for no application: a module's init or del closure
+/** The Program that loads or unloads a module does not call its init or del closure on its own behalf, so
+    qore_reflection_has_module_caller() does not look beyond this point for an application Program; a call reflected
+    from such code is judged by the strict comparison of its own Program with the target.
+*/
+class QoreModuleLifecycleBarrierHelper {
+public:
+    DLLLOCAL QoreModuleLifecycleBarrierHelper();
+    DLLLOCAL ~QoreModuleLifecycleBarrierHelper();
+
+private:
+    bool pushed = false;
+};
 
 //! Resolves the manager for a POLICY check (filesystem/network); honors the policy barrier
 /** Identical to @ref qore_find_thread_sandbox_manager_ref() except that an active policy

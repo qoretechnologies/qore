@@ -482,6 +482,12 @@ public:
     // governs the module code that callback calls, while the caller beyond the barrier is not inherited
     std::vector<const ProgramThreadCountContextHelper*> sandbox_policy_barrier_ctx;
 
+    // the program context helpers current when each active module lifecycle barrier was set, innermost last (see
+    // QoreModuleLifecycleBarrierHelper); module_lifecycle_unrecorded counts the barriers that could not be recorded,
+    // while which no application frame is used
+    std::vector<const ProgramThreadCountContextHelper*> module_lifecycle_barrier_ctx;
+    unsigned module_lifecycle_unrecorded = 0;
+
     // cancellation-deferral depth; while non-zero, qore_check_cancel() reports "not cancelled"
     // without touching the pending request, so that a bounded cleanup critical section (acquire a
     // lock, release ownership, signal waiters, unlock) can run to completion on a thread that has
@@ -3528,16 +3534,50 @@ QoreSandboxManager* qore_find_thread_sandbox_manager_ref() {
     return find_thread_sandbox_manager_ref_intern();
 }
 
+QoreModuleLifecycleBarrierHelper::QoreModuleLifecycleBarrierHelper() {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return;
+    }
+    try {
+        td->module_lifecycle_barrier_ctx.push_back(td->current_pgm_ctx);
+        pushed = true;
+    } catch (std::bad_alloc&) {
+        // fail closed: no application frame is used while it is active
+        ++td->module_lifecycle_unrecorded;
+    }
+}
+
+QoreModuleLifecycleBarrierHelper::~QoreModuleLifecycleBarrierHelper() {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return;
+    }
+    if (pushed) {
+        assert(!td->module_lifecycle_barrier_ctx.empty());
+        td->module_lifecycle_barrier_ctx.pop_back();
+    } else {
+        assert(td->module_lifecycle_unrecorded);
+        --td->module_lifecycle_unrecorded;
+    }
+}
+
 bool qore_reflection_has_module_caller(const QoreProgram* caller, const QoreProgram* target,
         ExceptionSink* xsink, const QoreClass* cls) {
     ThreadData* td = thread_data.get();
-    if (!td) {
+    if (!td || td->module_lifecycle_unrecorded) {
         return false;
     }
+    // the walk does not look beyond the innermost module lifecycle barrier
+    const ProgramThreadCountContextHelper* barrier_ctx = td->module_lifecycle_barrier_ctx.empty()
+        ? nullptr : td->module_lifecycle_barrier_ctx.back();
     bool found_caller = td->current_pgm == caller;
     unsigned iterations = 0;
     for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx; ch; ch = ch->getOldContext()) {
         if (++iterations % 100 == 0 && qore_check_cancel(xsink, "checking reflection module callers")) {
+            return false;
+        }
+        if (barrier_ctx && ch == barrier_ctx) {
             return false;
         }
         const QoreProgram* pgm = ch->getOldProgram();
@@ -3552,15 +3592,27 @@ bool qore_reflection_has_module_caller(const QoreProgram* caller, const QoreProg
             return true;
         }
         if (!pgm->getParseOptions().hasAny(QoreParseOptions(PO_IN_MODULE))) {
+            QoreParseOptions restricting = QoreParseOptions(QDOM_ALL)
+                & ~QoreParseOptions::POSITIVE_OPTIONS & ~QoreParseOptions(QDOM_IN_MODULE);
+            QoreParseOptions positive = QoreParseOptions(QDOM_ALL) & QoreParseOptions::POSITIVE_OPTIONS;
+            QoreParseOptions app_po = pgm->getParseOptions();
+            QoreParseOptions target_po = target->getParseOptions();
+            // The module chain runs for this application Program: if it restricts no domain that the target user
+            // module allows and allows every explicitly-allowed domain that the target allows, the modules act with
+            // its privileges.  A module Program inherits the options of the Program that loaded it first, so a
+            // library module loaded before its application enabled injection (DataProvider in Qorus) lacks
+            // explicitly-allowed domains that a module loaded afterwards has; its application has them
+            if (target_po.hasAny(QoreParseOptions(PO_IN_MODULE)) && !((app_po & restricting) & ~target_po)
+                    && !((target_po & positive) & ~app_po)) {
+                return true;
+            }
             // Importing a public module class authorizes calls to that class, not arbitrary execution in the
             // module's Program. Builtins and classes merely handed over from unrelated Programs do not qualify.
             if (!cls || cls->isSystem() || !cls->isModulePublic() || cls->getSourceProgram() != target
-                    || !target->getParseOptions().hasAny(QoreParseOptions(PO_IN_MODULE))) {
+                    || !target_po.hasAny(QoreParseOptions(PO_IN_MODULE))) {
                 return false;
             }
-            QoreParseOptions restricting = QoreParseOptions(QDOM_ALL)
-                & ~QoreParseOptions::POSITIVE_OPTIONS & ~QoreParseOptions(QDOM_IN_MODULE);
-            if ((pgm->getParseOptions() & restricting) & ~target->getParseOptions()) {
+            if ((app_po & restricting) & ~target_po) {
                 return false;
             }
             const QoreClass* imported = pgm->findClass(cls->getPath(), xsink);

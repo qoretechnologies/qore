@@ -88,6 +88,9 @@
     directly or transitively (including independent Programs), or from code at least as privileged as it. The latter
     must restrict no functional domain the target allows, allow every explicitly-allowed domain the target allows,
     and have no governing sandbox manager other than the target's own. Otherwise \c REFLECTION-ACCESS-ERROR is raised.
+    A module reflecting into another user module also has full access when the application %Program its module call
+    chain runs for has it: a module %Program inherits the options of the %Program that loaded it first, so a library
+    module may lack an explicitly-allowed domain that a module loaded later has, while its application has it.
     Structural navigation uses the same creator, restricting-domain and sandbox rules, but does not compare
     explicitly-allowed domains. Existing metadata-only accessors on a supplied handle retain their behavior.
 

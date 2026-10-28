@@ -1042,6 +1042,8 @@ int QoreModuleDefContext::init(QoreProgram& pgm, ExceptionSink& xsink) {
         if (xsink) {
             return -1;
         }
+        // the loading Program does not run the init closure on its own behalf
+        QoreModuleLifecycleBarrierHelper lifecycle_barrier;
 
         ValueHolder cn(init_c.eval(&xsink), &xsink);
         assert(!xsink);
@@ -1245,6 +1247,8 @@ void QoreUserModule::runDelCallback(ExceptionSink& xsink) {
 
     ProgramThreadCountContextHelper tch(&xsink, pgm, true);
     if (!xsink) {
+        // the unloading Program does not run the del closure on its own behalf
+        QoreModuleLifecycleBarrierHelper lifecycle_barrier;
         ValueHolder cn(d->eval(&xsink), &xsink);
         assert(!xsink);
         if (!xsink) {

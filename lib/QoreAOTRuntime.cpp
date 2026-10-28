@@ -15066,10 +15066,14 @@ static int executeInitFunctions(
                 // C++<->AOT boundary; xsink is already populated at the raise site.
                 // raw_result stays 0 (NOTHING bits) which is what the check-based
                 // path would have written too.
-                try {
-                    raw_result = info->fn_ptr(info->ctx, &xsink);
-                } catch (const QoreJITException&) {
-                    raw_result = 0;
+                {
+                    // the loading Program does not run the init closure on its own behalf
+                    QoreModuleLifecycleBarrierHelper lifecycle_barrier;
+                    try {
+                        raw_result = info->fn_ptr(info->ctx, &xsink);
+                    } catch (const QoreJITException&) {
+                        raw_result = 0;
+                    }
                 }
                 for (int k = instantiated - 1; k >= 0; --k) {
                     LocalVar* lv = info->ctx->all_body_locals[k];
