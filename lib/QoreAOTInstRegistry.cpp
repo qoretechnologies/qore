@@ -198,7 +198,7 @@ static const QoreMethod* instRegistryFindMethodByName(const QoreClass* qc, const
 static const AbstractQoreFunctionVariant* instRegistryFindMethodVariantByRef(
         QoreProgram* pgm, const QoreMethod*& method, const InstRegistryMethodRef& method_ref,
         bool pseudo) {
-    if (!method || !method_ref.sig_text || !*method_ref.sig_text) {
+    if (!method || !method_ref.sig_text) {
         return nullptr;
     }
 

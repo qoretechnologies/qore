@@ -12046,11 +12046,18 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
             bool generic_class_target = qc && method
                 && (qc->hasTypeParameters()
                     || method->getClass()->hasTypeParameters());
+            // A builtin variant that the parser selected is kept even if the method is overloaded: it is only used
+            // through CodeEvaluationHelper, which checks the arguments against it and selects another variant if
+            // they do not match, as an AST call does (dispatch_method_on_object()).  Resolving it by name instead
+            // would check its functional domain against the runtime parse options, which for module code include
+            // the restrictions of the calling Program, while the parser checked it against the module's own parse
+            // options (#5556).  An overloaded user method is still dispatched by name, since its variant can be
+            // bound to the arguments directly (try_dispatch_method_fast()).
             if (!m->isPseudo() && (!method || !qc || !variant || !method_func
                     || (generic_class_target
                         && q_env_is_set(
                             "QORE_DISABLE_IR_GENERIC_OBJECT_METHOD_TARGET"))
-                    || method_func->numVariants() != 1
+                    || (method_func->numVariants() != 1 && variant->isUser())
                     || overloadedDirectCallNeedsRuntimeDispatch(method_func, variant,
                         m->getParseArgs(), m->getArgs()))) {
                 method = nullptr;

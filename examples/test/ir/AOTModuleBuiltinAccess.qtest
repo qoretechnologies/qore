@@ -27,6 +27,13 @@
     \c HttpClientIo - and a module loaded on behalf of restricted code failed to load and fell back to its source
     (\c FileLocationHandler, whose base class constructor arguments construct a \c WaitGroup).
 
+    The fix made calls of module code run with the restrictions of the calling Program also on the fast call paths of
+    IR, JIT and AOT code, as they do in AST.  A call of an overloaded builtin method that IR lowering left to be
+    resolved by name was then checked against the caller's restrictions, although the parser had bound it to a variant
+    checked against the module's parse options; IR lowering now keeps the parse-selected builtin variant, and the AOT
+    loader binds a recorded no-argument variant, whose signature text is empty.  A call that the parser could not bind
+    either (an argument that may be \c NOTHING or has no type) is resolved at runtime in every mode, as in AST.
+
     Each case runs the same scripts with the source module and with the module AOT-compiled with
     <tt>--compile-module</tt>, in every execution mode, and expects the output of the source module with the AST
     interpreter, which is the reference.  The calling Program's SandboxManager still governs the module code's I/O, and user
@@ -79,6 +86,33 @@ p_closure_create_object_through_module: CREATE-OBJECT-ERROR: current Program san
 p_method_on_module_object: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::RWLock::readLock()'
 p_module_call_ref: \"RWLock|WaitGroup\"
 p_module_call_function: \"RWLock|WaitGroup\"
+p_overloaded_method_on_module_object: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::RWLock::readLock(timeout timeout_ms)'
+p_call_ref_to_module_object_method: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::RWLock::readLock()'
+p_closure_method_through_module: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::RWLock::readLock(timeout timeout_ms)'
+p_call_function_overloaded_builtin: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin function 'save_thread_data(string key, auto value)'
+p_call_ref_overloaded_builtin: PARSE-EXCEPTION: parse options do not allow access to function 'save_thread_data'
+";
+
+        #! expected output of the calls of overloaded builtins and of constructors with arguments in module code
+        /** the parser binds each call to a variant and checks it against the module's parse options; a call whose
+            variant it cannot select (\c maybe_nothing, \c untyped) and a call through a call reference to a
+            builtin method (\c in_module_call_ref) are resolved when they are evaluated, against the runtime parse
+            options, which include the calling Program's restrictions
+        */
+        const ExpectedCallOutput = "local: local
+local_default_arg: local
+member: member
+static: static
+objects: member|static
+member_direct: member
+static_direct: static
+closure: closure
+in_module_call_ref: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::RWLock::readLock()'
+thread_data: 1|2|gone
+named_args: 3
+constructors: 1|0|5|0
+maybe_nothing: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::Mutex::lock()'
+untyped: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::RWLock::readLock(timeout timeout_ms)'
 ";
 
         #! expected output of the issue's reproduction: the module code runs and the sandbox refuses the connection
@@ -98,11 +132,14 @@ p_module_call_function: \"RWLock|WaitGroup\"
 
         writeFile(src_dir + "/AOTBuiltinAccessMod.qm", accessModuleCode());
         writeFile(src_dir + "/AOTBuiltinAccessUser.qm", accessUserModuleCode());
+        writeFile(src_dir + "/AOTBuiltinCallMod.qm", callModuleCode());
 
         addTestCase("AOT module code may use the builtins its module may use when called from a PO_LOCKDOWN Program",
             \testModuleCodeAccess());
         addTestCase("user code in a PO_LOCKDOWN Program is still refused restricted builtins",
             \testUserCodeRefused());
+        addTestCase("AOT module code calls overloaded builtins and constructors with arguments as source code does",
+            \testModuleBuiltinCalls());
         addTestCase("issue #5556: Util::get_file_from_url() with AOT Util and HttpClientIo modules",
             \testIssueRepro());
         addTestCase("FileLocationHandler.qmod loaded on behalf of restricted code loads without source fallback",
@@ -233,6 +270,185 @@ public auto sub callIt(code c) {
 ";
     }
 
+    #! a module whose code calls overloaded builtin methods and functions and constructors with arguments
+    private string callModuleCode() {
+        return "%modern
+
+module AOTBuiltinCallMod {
+    version = \"1.0\";
+    desc = \"AOT overloaded builtin call regression module\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace AOTBuiltinCallMod {
+public class Locks {
+    public {
+        RWLock rw();
+    }
+
+    # RWLock::readLock() and RWLock::writeLock() have a variant with and one without a timeout
+    string member() {
+        rw.readLock();
+        rw.readUnlock();
+        rw.writeLock(1s);
+        rw.writeUnlock();
+        return \"member\";
+    }
+
+    static string staticBody() {
+        Mutex m();
+        m.lock();
+        m.unlock();
+        m.lock(1s);
+        m.unlock();
+        return \"static\";
+    }
+}
+
+public string sub local() {
+    RWLock l();
+    l.readLock();
+    l.readUnlock();
+    l.readLock(500ms);
+    l.readUnlock();
+    return \"local\";
+}
+
+# called with the restrictions of the calling Program in effect
+public string sub localDefaultArg(hash<auto> opts = {}) {
+    return local();
+}
+
+public string sub objects() {
+    Locks lk();
+    return lk.member() + \"|\" + Locks::staticBody();
+}
+
+public string sub closure() {
+    code c = string sub () {
+        RWLock l();
+        l.readLock(1s);
+        l.readUnlock();
+        l.readLock();
+        l.readUnlock();
+        return \"closure\";
+    };
+    return c();
+}
+
+public string sub inModuleCallRef() {
+    RWLock l();
+    code c = \\l.readLock();
+    c();
+    l.readUnlock();
+    return \"call ref\";
+}
+
+# save_thread_data(), get_thread_data(), delete_thread_data() and remove_thread_data() are overloaded functions
+public string sub threadData() {
+    save_thread_data(\"k\", 1);
+    save_thread_data({\"j\": 2});
+    string r = sprintf(\"%d|%d\", get_thread_data(\"k\"), get_thread_data(\"j\"));
+    delete_thread_data(\"k\");
+    remove_thread_data((\"j\",));
+    return r + \"|\" + (get_thread_data(\"k\") ?? \"gone\");
+}
+
+public string sub namedArgs() {
+    save_thread_data(key: \"n\", value: 3);
+    auto v = get_thread_data(key: \"n\");
+    delete_thread_data(\"n\");
+    return sprintf(\"%d\", v);
+}
+
+public string sub constructors() {
+    Queue q(10);
+    q.push(1);
+    Counter c(1);
+    c.dec();
+    Sequence s(5);
+    Mutex m();
+    AutoLock al(m);
+    Condition cond();
+    return sprintf(\"%d|%d|%d|%d\", q.size(), c.getCount(), s.getCurrent(), cond.wait_count(m));
+}
+
+# the argument may be NOTHING, so the parser cannot select the variant of Mutex::lock()
+public string sub maybeNothing(*timeout t) {
+    Mutex m();
+    m.lock(t);
+    m.unlock();
+    return \"nothing\";
+}
+
+# the argument has no type, so the parser cannot select the variant of RWLock::readLock()
+public string sub untyped(auto t) {
+    RWLock l();
+    l.readLock(t);
+    l.readUnlock();
+    return \"untyped\";
+}
+
+public RWLock sub getLock() {
+    return new RWLock();
+}
+
+public auto sub callIt(code c) {
+    return c();
+}
+}
+";
+    }
+
+    #! user code in a PO_LOCKDOWN Program that calls the overloaded builtin calls module's APIs
+    private string callScript() {
+        return "%modern
+%requires AOTBuiltinCallMod
+
+Program p(PO_NEW_STYLE);
+p.loadModule(\"AOTBuiltinCallMod\");
+p.setParseOptions(PO_LOCKDOWN);
+p.parse(\"
+string sub local() { return AOTBuiltinCallMod::local(); }
+string sub local_default_arg() { return AOTBuiltinCallMod::localDefaultArg(); }
+string sub member() { AOTBuiltinCallMod::Locks lk(); return lk.member(); }
+string sub static() { return AOTBuiltinCallMod::Locks::staticBody(); }
+string sub objects() { return AOTBuiltinCallMod::objects(); }
+string sub member_direct() { return (new AOTBuiltinCallMod::Locks()).member(); }
+string sub static_direct() { code c = \\\\AOTBuiltinCallMod::Locks::staticBody(); return c(); }
+string sub closure() { return AOTBuiltinCallMod::closure(); }
+string sub in_module_call_ref() { return AOTBuiltinCallMod::inModuleCallRef(); }
+string sub thread_data() { return AOTBuiltinCallMod::threadData(); }
+string sub named_args() { return AOTBuiltinCallMod::namedArgs(); }
+string sub constructors() { return AOTBuiltinCallMod::constructors(); }
+string sub maybe_nothing() { return AOTBuiltinCallMod::maybeNothing(); }
+string sub untyped() { return AOTBuiltinCallMod::untyped(1s); }
+\", \"probe\");
+
+# each function runs three times so that tiered execution runs it on more than one tier
+foreach string f in (\"local\", \"local_default_arg\", \"member\", \"static\", \"objects\", \"member_direct\",
+        \"static_direct\", \"closure\", \"in_module_call_ref\", \"thread_data\", \"named_args\", \"constructors\",
+        \"maybe_nothing\", \"untyped\") {
+    *string first;
+    for (int i = 0; i < 3; ++i) {
+        string result;
+        try {
+            result = p.callFunction(f);
+        } catch (hash<ExceptionInfo> ex) {
+            result = sprintf(\"%s: %s\", ex.err, ex.desc);
+        }
+        if (!exists first) {
+            first = result;
+        } else if (result != first) {
+            printf(\"%s: call %d differs: %s\\n\", f, i + 1, result);
+        }
+    }
+    printf(\"%s: %s\\n\", f, first);
+}
+";
+    }
+
     #! a module that creates objects of the other module's class through create_object(), like Util does
     private string accessUserModuleCode() {
         return "%modern
@@ -327,6 +543,7 @@ foreach string f in (\"body\", \"member\", \"wrapped\", \"wrapped_direct\", \"ho
     private string refusedScript() {
         return "%modern
 %requires AOTBuiltinAccessMod
+%requires AOTBuiltinCallMod
 
 hash<string, string> probes = {
     \"p_direct\": \"auto sub p_direct() { return new RWLock(); }\",
@@ -345,11 +562,23 @@ hash<string, string> probes = {
     \"p_module_call_ref\": \"auto sub p_module_call_ref() { code c = \\\\AOTBuiltinAccessMod::body(); return c(); }\",
     \"p_module_call_function\": \"auto sub p_module_call_function() { "
         "return call_function('AOTBuiltinAccessMod::body'); }\",
+    \"p_overloaded_method_on_module_object\": \"auto sub p_overloaded_method_on_module_object() { "
+        "auto l = AOTBuiltinCallMod::getLock(); l.readLock(1s); l.readUnlock(); return 'used'; }\",
+    \"p_call_ref_to_module_object_method\": \"auto sub p_call_ref_to_module_object_method() { "
+        "auto l = AOTBuiltinCallMod::getLock(); code c = \\\\l.readLock(); c(); return 'used'; }\",
+    \"p_closure_method_through_module\": \"auto sub p_closure_method_through_module() { "
+        "auto l = AOTBuiltinCallMod::getLock(); "
+        "return AOTBuiltinCallMod::callIt(auto sub () { l.readLock(1s); l.readUnlock(); return 'used'; }); }\",
+    \"p_call_function_overloaded_builtin\": \"auto sub p_call_function_overloaded_builtin() { "
+        "return call_function('save_thread_data', 'k', 1); }\",
+    \"p_call_ref_overloaded_builtin\": \"auto sub p_call_ref_overloaded_builtin() { "
+        "code c = \\\\save_thread_data(); return c('k', 1); }\",
 };
 
 foreach hash<auto> i in (probes.pairIterator()) {
     Program p(PO_NEW_STYLE);
     p.loadModule(\"AOTBuiltinAccessMod\");
+    p.loadModule(\"AOTBuiltinCallMod\");
     p.setParseOptions(PO_LOCKDOWN);
     try {
         p.parse(i.value, i.key);
@@ -453,6 +682,7 @@ printf(\"%s\\n\", get_module_hash().FileLocationHandler.filename ?? \"not loaded
         compileModule(src_dir + "/AOTBuiltinAccessMod.qm", qmod_dir + "/AOTBuiltinAccessMod.qmod", src_dir);
         compileModule(src_dir + "/AOTBuiltinAccessUser.qm", qmod_dir + "/AOTBuiltinAccessUser.qmod",
             qmod_dir + ":" + src_dir);
+        compileModule(src_dir + "/AOTBuiltinCallMod.qm", qmod_dir + "/AOTBuiltinCallMod.qmod", src_dir);
     }
 
     testModuleCodeAccess() {
@@ -465,6 +695,11 @@ printf(\"%s\\n\", get_module_hash().FileLocationHandler.filename ?? \"not loaded
     testUserCodeRefused() {
         compileAccessModules();
         checkAllModes("refused.q", refusedScript(), ExpectedRefusedOutput);
+    }
+
+    testModuleBuiltinCalls() {
+        compileAccessModules();
+        checkAllModes("calls.q", callScript(), ExpectedCallOutput);
     }
 
     testIssueRepro() {

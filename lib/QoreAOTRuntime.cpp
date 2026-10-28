@@ -957,7 +957,7 @@ static bool aotVariantSignatureMatches(const AbstractQoreFunctionVariant* v,
 
 static const AbstractQoreFunctionVariant* findAOTVariantBySignatureText(MethodFunctionBase* mfb,
         const char* sig_text) {
-    if (!mfb || !sig_text || !*sig_text) {
+    if (!mfb || !sig_text) {
         return nullptr;
     }
 
@@ -1517,7 +1517,7 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
             }
             const AbstractQoreFunctionVariant* resolved_variant = nullptr;
             QoreTypeParamInstantiation type_param_instantiation;
-            if (method_ref.sig_text && *method_ref.sig_text) {
+            if (method_ref.sig_text) {
                 resolved_variant = findAOTStaticMethodVariantByRef(pgm, m, method_ref, false);
             } else if (method_ref.arg_type_sig && *method_ref.arg_type_sig) {
                 MethodFunctionBase* mfb = qore_method_private::get(*const_cast<QoreMethod*>(m))->getFunction();
@@ -2395,7 +2395,7 @@ static const QoreMethod* findAOTMethodByName(const QoreClass* qc, const char* me
 static const AbstractQoreFunctionVariant* findAOTMethodVariantByRef(
         QoreProgram* pgm, const QoreMethod*& method, const AOTEncodedMethodRef& method_ref,
         bool pseudo) {
-    if (!method || !method_ref.sig_text || !*method_ref.sig_text) {
+    if (!method || !method_ref.sig_text) {
         return nullptr;
     }
 
@@ -2432,7 +2432,7 @@ static const QoreMethod* findAOTStaticCallMethodByName(const QoreClass* qc, cons
 static const AbstractQoreFunctionVariant* findAOTStaticMethodVariantByRef(
         QoreProgram* pgm, const QoreMethod*& method, const QoreAOTStaticMethodRef& method_ref,
         bool pseudo) {
-    if (!method || !method_ref.sig_text || !*method_ref.sig_text) {
+    if (!method || !method_ref.sig_text) {
         return nullptr;
     }
 
