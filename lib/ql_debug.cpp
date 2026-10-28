@@ -9030,8 +9030,359 @@ static void ut_manager_new_connection_closed_before_reservation(UnitTestCounters
     }
     xsink.clear();
     UT_ASSERT_EQ(c, 0, mgr->getPoolSize(), "the closed connection is not in the pool");
+    UT_ASSERT_EQ(c, 0, mgr->getAttachedConnectionCount(),
+        "the closed connection that the manager released does not notify it");
     mgr->closeAll(&xsink);
     xsink.clear();
+}
+
+// --- a connection that the manager releases does not notify it any more ---
+//
+// The I/O thread marks a connection closed and wakes the threads waiting for it before it sends the close
+// notification to the connection's manager.  A manager that released such a connection with its back-pointer still
+// set could be destroyed in between; the notification then called the destroyed manager (asyncio_unit_tests.qtest
+// crashed in HttpClientConnectionBase::onClosedHook() after ut_manager_new_connection_closed_before_reservation()).
+
+//! Holds the close notification of one connection between the time it is marked closed and its close hook
+/** Installed as qore_dbg_conn_close_notify_hook by UtCloseNotifyGateHolder.  The connection is chosen by its
+    address or, for a connection that is not known yet, by its target port.
+*/
+struct UtCloseNotifyGate {
+    std::mutex m;
+    std::condition_variable cond;
+    //! the connection whose notification is held, or nullptr to choose it by its target port
+    AbstractHttpPollConnectionPriv* conn = nullptr;
+    //! the target port of the connection whose notification is held, if conn is nullptr
+    int port = 0;
+    //! the connection whose notification is being held
+    AbstractHttpPollConnectionPriv* held = nullptr;
+    //! set when the connection has been marked closed and its notification is held
+    bool reached = false;
+    //! set by the test to let the notification go on
+    bool released = false;
+    //! set when the close hook of the held connection has returned
+    bool done = false;
+};
+
+static UtCloseNotifyGate ut_close_notify_gate;
+
+static void ut_close_notify_hook(AbstractHttpPollConnectionPriv* conn, bool after) {
+    UtCloseNotifyGate& g = ut_close_notify_gate;
+    std::unique_lock<std::mutex> lk(g.m);
+    if (after) {
+        if (conn == g.held) {
+            g.done = true;
+            g.cond.notify_all();
+        }
+        return;
+    }
+    if (g.reached) {
+        return;
+    }
+    bool match;
+    if (g.conn) {
+        match = conn == g.conn;
+    } else {
+        HttpClientConnectionBase* hc = dynamic_cast<HttpClientConnectionBase*>(conn);
+        match = hc && g.port && hc->getTargetPort() == g.port;
+    }
+    if (!match) {
+        return;
+    }
+    g.held = conn;
+    g.reached = true;
+    g.cond.notify_all();
+    g.cond.wait(lk, [&g] { return g.released; });
+}
+
+//! Arms the close notification gate for a test, and lets a held notification go on and disarms it on every exit
+class UtCloseNotifyGateHolder {
+public:
+    DLLLOCAL UtCloseNotifyGateHolder(AbstractHttpPollConnectionPriv* conn, int port) {
+        UtCloseNotifyGate& g = ut_close_notify_gate;
+        {
+            std::lock_guard<std::mutex> lk(g.m);
+            g.conn = conn;
+            g.port = port;
+            g.held = nullptr;
+            g.reached = false;
+            g.released = false;
+            g.done = false;
+        }
+        qore_dbg_conn_close_notify_hook.store(ut_close_notify_hook);
+    }
+
+    DLLLOCAL ~UtCloseNotifyGateHolder() {
+        release();
+        qore_dbg_conn_close_notify_hook.store(nullptr);
+    }
+
+    //! Waits until the notification of the connection is held; returns true if it is
+    /** The wait is bounded only so that a connection that is never closed fails the test instead of hanging it.
+    */
+    DLLLOCAL bool waitReached() {
+        UtCloseNotifyGate& g = ut_close_notify_gate;
+        std::unique_lock<std::mutex> lk(g.m);
+        return g.cond.wait_for(lk, std::chrono::seconds(30), [&g] { return g.reached; });
+    }
+
+    //! Lets the held notification go on
+    DLLLOCAL void release() {
+        UtCloseNotifyGate& g = ut_close_notify_gate;
+        std::lock_guard<std::mutex> lk(g.m);
+        g.released = true;
+        g.cond.notify_all();
+    }
+
+    //! Waits until the close hook of the held connection has returned; returns true if it has
+    /** The wait is bounded only so that a hook that never returns fails the test instead of hanging it.
+    */
+    DLLLOCAL bool waitDone() {
+        UtCloseNotifyGate& g = ut_close_notify_gate;
+        std::unique_lock<std::mutex> lk(g.m);
+        return g.cond.wait_for(lk, std::chrono::seconds(30), [&g] { return g.done; });
+    }
+};
+
+//! Counts the close notifications that it receives, and pools connections like UtCloseQueueManager
+class UtNotifyCountingManager : public HttpClientConnectionManagerBase {
+public:
+    DLLLOCAL UtNotifyCountingManager(const Options& opts, ExceptionSink* xsink)
+        : HttpClientConnectionManagerBase(opts, xsink) {
+    }
+
+    DLLLOCAL void onConnectionClosed(HttpClientConnectionBase* conn) override {
+        ++notifications;
+        HttpClientConnectionManagerBase::onConnectionClosed(conn);
+    }
+
+    DLLLOCAL int getNotifications() const {
+        return notifications.load();
+    }
+
+    DLLLOCAL void addPooledForOrigin(HttpClientConnectionBase* conn, const char* host, int port, bool ssl) {
+        const std::string key = poolKey(host, port, ssl);
+        conn->setPoolKey(key);
+        conn->setManager(this);
+        conn->ref();
+        std::unique_lock<std::shared_mutex> wl(pool_lock_);
+        pool_[key].push_back(conn);
+    }
+
+private:
+    std::atomic<int> notifications{0};
+};
+
+//! A ready connection with no socket that reports whether its manager back-pointer is set
+class UtDetachProbeConnection : public HttpClientConnectionBase {
+public:
+    DLLLOCAL UtDetachProbeConnection(int port) : HttpClientConnectionBase("127.0.0.1", port, false) {
+        onConnectionReady();
+    }
+
+    DLLLOCAL HttpClientProtocol getProtocol() const override {
+        return HttpClientProtocol::H1;
+    }
+
+    DLLLOCAL bool hasManager() const {
+        AutoLocker al(onclose_lock);
+        return manager_ != nullptr;
+    }
+};
+
+//! Sets qore_http_manager_new_connection_hook for a test, and clears it on every exit
+class UtNewConnectionHookHolder {
+public:
+    DLLLOCAL UtNewConnectionHookHolder(void (*hook)(HttpClientConnectionBase*)) {
+        ut_new_connection_hook_calls = 0;
+        qore_http_manager_new_connection_hook = hook;
+    }
+
+    DLLLOCAL ~UtNewConnectionHookHolder() {
+        qore_http_manager_new_connection_hook = nullptr;
+    }
+};
+
+// A new connection whose connect fails before the manager reserves its first stream is released by the manager with
+// its back-pointer cleared: here the I/O thread is held after it has marked the connection closed, which lets the
+// acquiring thread go on, and before it sends the close notification, which comes after the manager has released
+// the connection and been shut down.
+static void ut_manager_closed_new_connection_detached(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    int port = ut_reserve_closed_port();
+    if (port <= 0) {
+        UT_ASSERT(c, false, "reserve a port with no listener");
+        return;
+    }
+    HttpClientConnectionManagerBase::Options opts;
+    opts.protocol = HttpClientProtocol::H1;
+    opts.connect_timeout_ms = 5000;
+    ReferenceHolder<UtNotifyCountingManager> mgr(new UtNotifyCountingManager(opts, &xsink), &xsink);
+    UT_ASSERT(c, !xsink, "closed-new-connection fixture manager constructs");
+    if (xsink) {
+        xsink.clear();
+        return;
+    }
+    {
+        UtCloseNotifyGateHolder gate(nullptr, port);
+        HttpClientConnectionBase* conn;
+        {
+            UtNewConnectionHookHolder new_hook(ut_wait_for_connect_failure);
+            conn = mgr->acquireConnectionAsync("http", "127.0.0.1", port, &xsink);
+        }
+        UT_ASSERT(c, !conn, "no connection is returned for a connection whose connect failed");
+        UT_ASSERT(c, xsink.isException(), "the failed connect raises an error");
+        xsink.clear();
+        UT_ASSERT(c, gate.waitReached(), "the close notification of the new connection is held");
+        UT_ASSERT_EQ(c, 0, mgr->getAttachedConnectionCount(),
+            "the manager released the closed connection with its back-pointer cleared");
+        mgr->closeAll(&xsink);
+        xsink.clear();
+        int before = mgr->getNotifications();
+        gate.release();
+        UT_ASSERT(c, gate.waitDone(), "the close hook of the released connection returns");
+        UT_ASSERT_EQ(c, before, mgr->getNotifications(),
+            "the close notification of a connection the manager released does not reach it");
+    }
+}
+
+// A closed pooled connection that a checkout evicts is released with its back-pointer cleared: it is marked closed
+// before its close notification is sent, which is held here until the manager has evicted it and been shut down.
+static void ut_manager_evicted_closed_connection_detached(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    int port = ut_reserve_closed_port();
+    if (port <= 0) {
+        UT_ASSERT(c, false, "reserve a port with no listener");
+        return;
+    }
+    HttpClientConnectionManagerBase::Options opts;
+    opts.protocol = HttpClientProtocol::H1;
+    opts.connect_timeout_ms = 5000;
+    ReferenceHolder<UtNotifyCountingManager> mgr(new UtNotifyCountingManager(opts, &xsink), &xsink);
+    ReferenceHolder<UtDetachProbeConnection> conn(new UtDetachProbeConnection(port), &xsink);
+    UT_ASSERT(c, !xsink, "evicted-connection fixtures construct");
+    if (xsink) {
+        xsink.clear();
+        return;
+    }
+    mgr->addPooledForOrigin(*conn, "127.0.0.1", port, false);
+    UT_ASSERT(c, conn->hasManager(), "the pooled connection notifies its manager");
+    {
+        UtCloseNotifyGateHolder gate(*conn, 0);
+        std::thread closer([&conn] {
+            conn->setClosed();
+        });
+        bool reached = gate.waitReached();
+        UT_ASSERT(c, reached, "the close notification of the pooled connection is held");
+        if (reached) {
+            // the checkout evicts the closed connection; the new connection it makes is refused
+            UtNewConnectionHookHolder new_hook(ut_wait_for_connect_failure);
+            HttpClientConnectionBase* acquired = mgr->acquireConnectionAsync("http", "127.0.0.1", port, &xsink);
+            UT_ASSERT(c, !acquired, "the checkout gets no connection");
+            xsink.clear();
+            UT_ASSERT_EQ(c, 0, mgr->getPoolSize(), "the closed connection is evicted");
+            UT_ASSERT(c, !conn->hasManager(), "the evicted connection's back-pointer is cleared");
+        }
+        mgr->closeAll(&xsink);
+        xsink.clear();
+        int before = mgr->getNotifications();
+        gate.release();
+        closer.join();
+        UT_ASSERT_EQ(c, before, mgr->getNotifications(),
+            "the close notification of the evicted connection does not reach the manager");
+    }
+    UT_ASSERT_EQ(c, 0, mgr->getAttachedConnectionCount(), "no connection notifies the manager after closeAll()");
+}
+
+// A closed connection that the manager removes from its pool on its close notification is released with its
+// back-pointer cleared too, so that every connection the manager releases stops notifying it.
+static void ut_manager_notified_closed_connection_detached(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    int port = ut_reserve_closed_port();
+    if (port <= 0) {
+        UT_ASSERT(c, false, "reserve a port with no listener");
+        return;
+    }
+    HttpClientConnectionManagerBase::Options opts;
+    opts.protocol = HttpClientProtocol::H1;
+    opts.connect_timeout_ms = 5000;
+    ReferenceHolder<UtNotifyCountingManager> mgr(new UtNotifyCountingManager(opts, &xsink), &xsink);
+    ReferenceHolder<UtDetachProbeConnection> conn(new UtDetachProbeConnection(port), &xsink);
+    UT_ASSERT(c, !xsink, "notified-connection fixtures construct");
+    if (xsink) {
+        xsink.clear();
+        return;
+    }
+    mgr->addPooledForOrigin(*conn, "127.0.0.1", port, false);
+    conn->setClosed();
+    UT_ASSERT_EQ(c, 1, mgr->getNotifications(), "the closed connection notifies its manager");
+    {
+        UtNewConnectionHookHolder new_hook(ut_wait_for_connect_failure);
+        HttpClientConnectionBase* acquired = mgr->acquireConnectionAsync("http", "127.0.0.1", port, &xsink);
+        UT_ASSERT(c, !acquired, "the checkout gets no connection");
+        xsink.clear();
+    }
+    UT_ASSERT_EQ(c, 0, mgr->getPoolSize(), "the notified connection leaves the pool");
+    UT_ASSERT(c, !conn->hasManager(), "the notified connection's back-pointer is cleared");
+    UT_ASSERT_EQ(c, 0, mgr->getAttachedConnectionCount(), "no connection notifies the manager");
+    mgr->closeAll(&xsink);
+    xsink.clear();
+}
+
+//! the manager that ut_shut_down_manager_on_new_connection() shuts down
+static HttpClientConnectionManagerBase* ut_shutdown_manager = nullptr;
+//! the new connection seen by ut_shut_down_manager_on_new_connection(), with a reference
+static HttpClientConnectionBase* ut_shutdown_new_connection = nullptr;
+
+//! keeps the new connection and shuts its manager down before the manager pools it
+static void ut_shut_down_manager_on_new_connection(HttpClientConnectionBase* conn) {
+    ++ut_new_connection_hook_calls;
+    conn->ref();
+    ut_shutdown_new_connection = conn;
+    ExceptionSink xs;
+    ut_shutdown_manager->closeAll(&xs);
+    xs.clear();
+}
+
+// A new connection that the manager does not pool because it was shut down while the connection was being made is
+// released with its back-pointer cleared.
+static void ut_manager_shutdown_new_connection_detached(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    int port = ut_reserve_closed_port();
+    if (port <= 0) {
+        UT_ASSERT(c, false, "reserve a port with no listener");
+        return;
+    }
+    HttpClientConnectionManagerBase::Options opts;
+    opts.protocol = HttpClientProtocol::H1;
+    opts.connect_timeout_ms = 5000;
+    ReferenceHolder<UtNotifyCountingManager> mgr(new UtNotifyCountingManager(opts, &xsink), &xsink);
+    UT_ASSERT(c, !xsink, "shutdown fixture manager constructs");
+    if (xsink) {
+        xsink.clear();
+        return;
+    }
+    ut_shutdown_manager = *mgr;
+    ut_shutdown_new_connection = nullptr;
+    HttpClientConnectionBase* acquired;
+    {
+        UtNewConnectionHookHolder new_hook(ut_shut_down_manager_on_new_connection);
+        acquired = mgr->acquireConnectionAsync("http", "127.0.0.1", port, &xsink);
+    }
+    ut_shutdown_manager = nullptr;
+    ReferenceHolder<HttpClientConnectionBase> kept(ut_shutdown_new_connection, &xsink);
+    ut_shutdown_new_connection = nullptr;
+    UT_ASSERT(c, !acquired, "the checkout gets no connection from a manager that was shut down");
+    UT_ASSERT(c, xsink.isException(), "the checkout raises an error");
+    if (xsink.isException()) {
+        QoreStringValueHelper err(xsink.getExceptionErr());
+        UT_ASSERT(c, !strcmp(err->c_str(), "HTTPCLIENT-SHUTDOWN"),
+            (std::string("the error is the shutdown error: ") + err->c_str()).c_str());
+    }
+    xsink.clear();
+    UT_ASSERT(c, kept, "the new connection was made");
+    UT_ASSERT_EQ(c, 0, mgr->getAttachedConnectionCount(),
+        "the connection that the shut-down manager did not pool does not notify it");
 }
 
 // When the async I/O controller drives an HTTP client operation that follows a redirect, a callback worker acquires the
@@ -12445,6 +12796,10 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_manager_streaming_does_not_repeat_unsafe_requests(c);
     ut_manager_streaming_abandon_releases_connection(c);
     ut_manager_new_connection_closed_before_reservation(c);
+    ut_manager_closed_new_connection_detached(c);
+    ut_manager_evicted_closed_connection_detached(c);
+    ut_manager_notified_closed_connection_detached(c);
+    ut_manager_shutdown_new_connection_detached(c);
     ut_async_redirect_task_error_counted_on_driving_thread(c);
     ut_manager_abandon_h1_evicts_connection(c);
     ut_manager_abandon_multiplexed_keeps_connection(c);
@@ -13602,6 +13957,7 @@ static QoreValue f_dbg_get_closure_var_collections(const QoreListNode* params, R
 
 #ifdef DEBUG
 std::atomic<qore_dbg_http1_defer_close_hook_t> qore_dbg_http1_defer_close_hook{nullptr};
+std::atomic<qore_dbg_conn_close_notify_hook_t> qore_dbg_conn_close_notify_hook{nullptr};
 #endif
 
 namespace {

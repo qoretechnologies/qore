@@ -94,8 +94,18 @@ void AbstractHttpPollConnectionPriv::setClosed() {
     // See AbstractHttpPollConnection.h docs and
     // design/http-client-manager-cpp-port.md for the lock ordering rules.
     if (fire_hook) {
+#ifdef DEBUG
+        // tests hold the close notification after the connection is marked closed and its waiters are woken
+        qore_dbg_conn_close_notify_hook_t notify_hook = qore_dbg_conn_close_notify_hook.load();
+        if (notify_hook) {
+            notify_hook(this, false);
+        }
+#endif
         onClosedHook();
 #ifdef DEBUG
+        if (notify_hook) {
+            notify_hook(this, true);
+        }
         // tests release a reference here to make the one released below the last one, as when the connection
         // manager evicts the connection in the meantime
         qore_dbg_conn_close_release_hook_t release_hook = qore_dbg_conn_close_release_hook.load();

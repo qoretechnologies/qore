@@ -540,6 +540,26 @@ with manager destruction:
 4. After every back-pointer handshake has completed and the drained pool
    references have been released, shutdown clears the remaining non-owning
    notifications.  The manager may then safely free its state.
+5. Shutdown reaches only pooled connections, so every other path that
+   releases a manager reference to a connection without keeping it in the
+   pool clears the back-pointer first (`detachAndDeref()`): a new connection
+   found closed before its first reservation, a closed connection evicted at
+   checkout or removed on its close notification, a new connection made while
+   the manager was shut down, and a concrete connection of an ALPN handover
+   that is handed to the caller without entering the pool or fails.  The
+   connection being closed does not make this optional: `setClosed()` stores
+   the closed state and wakes the waiters before it calls `onClosedHook`
+   outside its lock, so a thread can find the connection closed, the manager
+   can release it and be destroyed, and the I/O thread, which still holds a
+   reference, then sends the notification.  This crashed
+   `asyncio_unit_tests.qtest` in CI (pipeline 62104) after
+   `ut_manager_new_connection_closed_before_reservation()`.
+6. `HttpClientConnectionManagerBase::getAttachedConnectionCount()` counts
+   the live connections whose back-pointer is set to the manager;
+   `setManager()` and the connection destructor maintain it under
+   `onclose_lock`.  The manager destructor asserts that it is 0 after
+   `closeAll()`, so a debug build reports a path that releases a connection
+   without clearing its back-pointer even when no notification comes late.
 
 This is the "back-pointer-nulling-under-lock" pattern.  Connection
 back-pointers are raw (no ref counting) — refs would be circular and

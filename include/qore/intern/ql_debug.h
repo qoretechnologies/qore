@@ -122,6 +122,12 @@ DLLLOCAL extern std::atomic<qore_dbg_http1_defer_close_hook_t> qore_dbg_http1_de
 typedef bool (*qore_dbg_conn_close_release_hook_t)(AbstractHttpPollConnectionPriv* conn);
 DLLLOCAL extern std::atomic<qore_dbg_conn_close_release_hook_t> qore_dbg_conn_close_release_hook;
 
+//! called by AbstractHttpPollConnectionPriv::setClosed() on the first close of a connection, holding a reference to
+//! it and no lock: once after the connection has been marked closed and its waiters woken, before the close hook
+//! (\a after false), and once after the close hook (\a after true); set by unit tests
+typedef void (*qore_dbg_conn_close_notify_hook_t)(AbstractHttpPollConnectionPriv* conn, bool after);
+DLLLOCAL extern std::atomic<qore_dbg_conn_close_notify_hook_t> qore_dbg_conn_close_notify_hook;
+
 //! called by AbstractHttpPollConnectionPriv::setClosed() after it released its reference when
 //! qore_dbg_conn_close_release_hook released one before
 DLLLOCAL void qore_dbg_conn_close_released();

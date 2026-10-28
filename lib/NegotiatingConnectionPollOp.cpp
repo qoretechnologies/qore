@@ -627,6 +627,9 @@ HttpClientConnectionBase* NegotiatingHttpClientConnection::takeOver(
 
     if (*xsink) {
         if (concrete) {
+            // the constructor can have submitted the connection to the I/O thread before it failed, so it can
+            // outlive this reference; its close notification must not reach the manager, which does not keep it
+            concrete->setManager(nullptr);
             concrete->deref(xsink);
         }
         return nullptr;
