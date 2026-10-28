@@ -1916,6 +1916,7 @@ static const char* aot_section_type_name(uint16_t type) {
         case QoreAOTSectionType::DEBUG_IR: return "DEBUG_IR";
         case QoreAOTSectionType::SOURCE_STAT_FINGERPRINT: return "SOURCE_STAT_FINGERPRINT";
         case QoreAOTSectionType::UNRUN_TOP_LEVEL_CODE: return "UNRUN_TOP_LEVEL_CODE";
+        case QoreAOTSectionType::FUNCTIONAL_DOMAIN: return "FUNCTIONAL_DOMAIN";
     }
     return "UNKNOWN";
 }

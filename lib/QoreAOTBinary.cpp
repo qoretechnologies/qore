@@ -1321,6 +1321,82 @@ static bool readAOTObjectDefaultVariant(const QoreAOTBinaryReader& reader,
 static QoreValue qoreAOTMakeObjectDefaultNode(QoreProgram* pgm, const QoreClass* qc,
     const std::string& class_path, std::vector<QoreValue>& args, const char* signature = nullptr);
 
+// Binding builtin variants while an image is loaded (issue #5556)
+//
+// When code is parsed from source, the parser binds calls to their variants and checks each builtin variant's
+// functional domain against the parse options of the code being parsed.  A call without a bound variant is resolved
+// when it is evaluated instead, against the runtime parse options then in effect, which include the restrictions of
+// the Program the call runs in (see RuntimeParseOptionsOverrideHelper) and, for a function call, are those of the
+// Program the call runs in (see CodeEvaluationHelper::init()).  So a call that an AOT image leaves unbound behaves
+// differently from the same source: a builtin that the module may use is refused when the module's code runs on
+// behalf of a restricted Program, as for a class member initializer or default argument that constructs a thread
+// class.
+//
+// The helpers below bind such calls while the image is loaded, which is what corresponds to parse time.  The
+// loaders call them with the runtime parse options set to those of the code being loaded (see
+// LoadTimeParseOptionsHelper), so the functional-domain check that runtimeFindVariant() makes is the check the parser
+// makes.  Only builtin variants are bound, since only they have a functional domain.  A call that cannot be bound,
+// including one whose variant the loaded code's options do not allow, is left to be resolved when it is evaluated,
+// as before, so nothing is allowed that the parser would refuse.
+
+//! binds the builtin constructor variant that a deserialized object construction resolves to
+static void qore_aot_bind_constructor_variant(ScopedObjectCallNode* socn, const QoreClass* qc) {
+    assert(socn);
+    if (!qc || socn->getVariant()) {
+        return;
+    }
+    const QoreListNode* args = socn->getArgs();
+    if (args && args->needs_eval()) {
+        return;
+    }
+    const QoreMethod* constructor = qc->getConstructor();
+    if (!constructor) {
+        return;
+    }
+    ExceptionSink xsink;
+    const AbstractQoreFunctionVariant* variant = qore_method_private::get(*constructor)->getFunction()
+        ->runtimeFindVariant(&xsink, args, false, nullptr);
+    if (xsink) {
+        xsink.clear();
+        return;
+    }
+    if (variant && !variant->isUser()) {
+        socn->setVariant(variant);
+    }
+}
+
+//! binds the builtin variant that a deserialized no-argument function call default resolves to
+static void qore_aot_bind_default_function_call_variant(FunctionCallNode* fcn, const FunctionEntry* fe) {
+    assert(fcn);
+    assert(fe);
+    ExceptionSink xsink;
+    const AbstractQoreFunctionVariant* variant = fe->getFunction()->runtimeFindVariant(&xsink, nullptr, false,
+        nullptr);
+    if (xsink) {
+        xsink.clear();
+        return;
+    }
+    if (variant && !variant->isUser()) {
+        fcn->setVariant(variant);
+    }
+}
+
+//! binds the builtin variant that a deserialized no-argument static method call default resolves to
+static void qore_aot_bind_default_static_method_call_variant(StaticMethodCallNode* smcn, const QoreMethod* m) {
+    assert(smcn);
+    assert(m);
+    ExceptionSink xsink;
+    const AbstractQoreFunctionVariant* variant = qore_method_private::get(*m)->getFunction()
+        ->runtimeFindVariant(&xsink, nullptr, false, nullptr);
+    if (xsink) {
+        xsink.clear();
+        return;
+    }
+    if (variant && !variant->isUser()) {
+        smcn->setVariant(variant);
+    }
+}
+
 // Read an instance-member / static-member default value.
 //
 // If the value is a VT_NEW_OBJECT whose target class is not yet registered in
@@ -3363,6 +3439,9 @@ static ScopedObjectCallNode* qoreAOTMakeObjectDefaultExpr(QoreProgram* pgm, cons
     socn->setVariant(bound);
     if (parse_args) {
         socn->resolveParseArgs();
+    }
+    if (!signature) {
+        qore_aot_bind_constructor_variant(*socn, qc);
     }
     return socn.release();
 }
@@ -15155,6 +15234,18 @@ bool QoreAOTBinaryDeserializer::deserializeShellsFromOpenReader(std::string& err
         return false;
     }
 
+    // The functional domains the blob's code uses are those of the Program it is loaded into: a module loaded at
+    // runtime is checked against them, and an aggregate written from fragment blobs records their union
+    {
+        QoreParseOptions used_dom;
+        if (!readFunctionalDomain(reader, used_dom, error)) {
+            return false;
+        }
+        if (used_dom) {
+            qore_program_private::addAOTUsedDomain(*pgm, used_dom);
+        }
+    }
+
     // Create type resolver for this program
     type_resolver = new QoreAOTTypeResolver(pgm);
 
@@ -15601,8 +15692,9 @@ bool QoreAOTBinaryDeserializer::finalizePreIndex(std::string& error) {
             arg_vec_t& defaults = const_cast<arg_vec_t&>(sig->getDefaultArgList());
             if (pd.param_index < defaults.size()) {
                 defaults[pd.param_index].discard(nullptr);
-                defaults[pd.param_index] = QoreValue(new StaticMethodCallNode(
-                    &loc_builtin, m, (QoreParseListNode*)nullptr));
+                StaticMethodCallNode* smcn = new StaticMethodCallNode(&loc_builtin, m, (QoreParseListNode*)nullptr);
+                defaults[pd.param_index] = QoreValue(smcn);
+                qore_aot_bind_default_static_method_call_variant(smcn, m);
             }
         }
         pending_smd.clear();
@@ -15664,8 +15756,9 @@ bool QoreAOTBinaryDeserializer::resolveFunctionCallDefaults(std::string& error) 
         arg_vec_t& defaults = const_cast<arg_vec_t&>(sig->getDefaultArgList());
         if (pd.param_index < defaults.size()) {
             defaults[pd.param_index].discard(nullptr);
-            defaults[pd.param_index] = QoreValue(new FunctionCallNode(
-                &loc_builtin, fe, static_cast<QoreParseListNode*>(nullptr)));
+            FunctionCallNode* fcn = new FunctionCallNode(&loc_builtin, fe, static_cast<QoreParseListNode*>(nullptr));
+            defaults[pd.param_index] = QoreValue(fcn);
+            qore_aot_bind_default_function_call_variant(fcn, fe);
         }
     }
     pending_fd.clear();
@@ -18376,6 +18469,7 @@ static bool readAndSetupVariantSignature(
                 FunctionCallNode* fcn = new FunctionCallNode(
                     &loc_builtin, fe, static_cast<QoreParseListNode*>(nullptr));
                 param_defaults[j] = QoreValue(fcn);
+                qore_aot_bind_default_function_call_variant(fcn, fe);
             } else if (fname && *fname && g_aot_pending_function_defaults) {
                 // The referenced function belongs to this module but has not been
                 // registered yet; the FUNCTIONS section is not ordered by dependency.
@@ -18461,8 +18555,9 @@ static bool readAndSetupVariantSignature(
                 }
             }
             if (m) {
-                param_defaults[j] = QoreValue(new StaticMethodCallNode(
-                    &loc_builtin, m, (QoreParseListNode*)nullptr));
+                StaticMethodCallNode* smcn = new StaticMethodCallNode(&loc_builtin, m, (QoreParseListNode*)nullptr);
+                param_defaults[j] = QoreValue(smcn);
+                qore_aot_bind_default_static_method_call_variant(smcn, m);
             } else {
                 // Method not yet committed (likely a default referencing a
                 // static method of the same or a still-pending class).
@@ -18678,7 +18773,9 @@ static void attachAOTEntryStatementBlock(QoreProgram* pgm, UserVariantBase* uvb,
         }
 
         entry = new StatementBlock(pp, loc);
-        entry->pwo.parse_options = variant_parse_options;
+        // the code runs with the restrictions its module inherited from the Program loading it, as the same code
+        // parsed from source does (#5556)
+        entry->pwo.parse_options = variant_parse_options | pp->aot_inherited_po;
         // Function-entry metadata is resolved through findFunctionStatementId().
         // Do not add it to the file/line index, or findStatementId() can
         // resolve the first executable statement line to the function entry.
@@ -20607,6 +20704,33 @@ bool readProgramMetadata(const QoreAOTBinaryReader& reader, std::string& exec_cl
         }
     }
 
+    return true;
+}
+
+void serializeFunctionalDomain(QoreAOTBinaryWriter& writer, const QoreParseOptions& dom) {
+    if (!dom) {
+        return;
+    }
+    uint32_t sec_idx = writer.beginSection(QoreAOTSectionType::FUNCTIONAL_DOMAIN);
+    writer.writeU64(static_cast<uint64_t>(dom.getLo()));
+    writer.writeU64(static_cast<uint64_t>(dom.getHi()));
+    writer.endSection(sec_idx);
+}
+
+bool readFunctionalDomain(const QoreAOTBinaryReader& reader, QoreParseOptions& dom, std::string& error) {
+    dom = QoreParseOptions();
+    const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::FUNCTIONAL_DOMAIN);
+    if (!sec) {
+        return true;
+    }
+    const uint8_t* ptr = reader.getSectionData(*sec);
+    if (!ptr || sec->size < 16) {
+        error = "invalid FUNCTIONAL_DOMAIN section";
+        return false;
+    }
+    uint64_t lo = QoreAOTBinaryReader::readU64(ptr);
+    uint64_t hi = QoreAOTBinaryReader::readU64(ptr);
+    dom = QoreParseOptions(static_cast<int64_t>(lo), static_cast<int64_t>(hi));
     return true;
 }
 

@@ -375,9 +375,15 @@ static void checkOther(QoreProgram* pgm, bool enabled) {
 
 static void check(bool enabled) {
     ExceptionSink xsink;
-    QoreProgramHelper pgm(PO_MODERN | PO_ALLOW_DEBUGGER | PO_ALLOW_INJECTION, xsink);
+    QoreProgramHelper pgm(PO_MODERN | PO_ALLOW_DEBUGGER, xsink);
     pgm->setExecMode(QEM_IR, true);
     pgm->parse("%modern\n%requires ModuleRefBinding\n", "module reference binding", &xsink);
+    // Both source and AOT modules inherit the loading Program's options. Enable
+    // this capability after loading so the probe still distinguishes the
+    // callback's executing Program from the Program that defined its body.
+    if (!xsink) {
+        pgm->setParseOptions(PO_ALLOW_INJECTION, &xsink);
+    }
     if (xsink) {
         xsink.handleExceptions();
         CHECK(false);

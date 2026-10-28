@@ -2457,6 +2457,11 @@ static QoreParseOptions get_inherited_module_parse_options(const QoreParseOption
     return parent_po & ~(QoreParseOptions::FREE_OPTIONS | exclude);
 }
 
+QoreParseOptions qore_get_inherited_module_parse_options(const QoreParseOptions& parent_po,
+        const QoreParseOptions& exclude) {
+    return get_inherited_module_parse_options(parent_po, exclude);
+}
+
 QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink, ExceptionSink& wsink,
         const char* path, const char* feature, QoreProgram* pgm, bool reexport, QoreProgram* mpgm,
         QoreProgram* path_pgm, unsigned load_opt, int warning_mask) {
@@ -3984,6 +3989,8 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
         QorePluginModuleHandle plugin_handle(name, path, dlh ? dlh->ptr : nullptr);
         QorePluginModuleInitScope plugin_scope(plugin_handle);
         ctx.plugin_module_handle = plugin_scope.getHandle();
+        // an AOT module inherits the restrictions of the Program loading it, as a source module does (#5556)
+        QoreAOTModuleInitLoaderHelper aot_loader(path_pgm);
         mod_info.init(ctx, xsink);
         if (xsink) {
             return nullptr;

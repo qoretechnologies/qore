@@ -1,0 +1,215 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class AOTModuleInheritedRestrictionsTest
+
+#! An AOT module inherits the restrictions of the Program loading it, as a source module does
+/** A source module is parsed with the restrictions of the Program that loads it: a Program that may not use thread
+    classes cannot load a module whose code constructs an \c RWLock, and module code that resolves a builtin when it
+    runs, such as through \c call_function(), is refused what the loading Program's restrictions forbid.  An AOT
+    module's Program used only the parse options it was compiled with, so a restricted Program could load and use
+    such a module.
+
+    Each case loads the module in a fresh process with the source module and with the module AOT-compiled with
+    <tt>--compile-module</tt>, in every execution mode, and expects the output of the source module with the AST
+    interpreter, which is the reference.
+*/
+class AOTModuleInheritedRestrictionsTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+
+        TmpDir tmp("qore-aot-module-inherited-restrictions-");
+        string src_dir;
+        string qmod_dir;
+
+        #! a Program that may not use thread classes loads a module whose code constructs one
+        const ExpectedThreadClassesOutput = "load: refused
+body: NO-FUNCTION
+";
+
+        #! a Program that may not use external information loads a module that resolves gethostname() when it runs
+        const ExpectedExternalInfoOutput = "static_method: INVALID-FUNCTION-ACCESS
+method: INVALID-FUNCTION-ACCESS
+function: INVALID-FUNCTION-ACCESS
+";
+
+        #! an unrestricted Program loads the module
+        const ExpectedUnrestrictedOutput = "load: loaded
+body: \"RWLock\"
+host: \"host\"
+";
+    }
+
+    constructor() : QUnit::Test("AOTModuleInheritedRestrictionsTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        src_dir = tmp.path + "/src";
+        qmod_dir = tmp.path + "/qmod";
+        mkdir(src_dir);
+        mkdir(qmod_dir);
+        writeFile(src_dir + "/InheritedRestrictionsMod.qm", moduleCode());
+
+        addTestCase("PO_NO_THREAD_CLASSES refuses the AOT module as it refuses the source module",
+            \testThreadClasses());
+        addTestCase("AOT module code runs with the restrictions inherited from the loading Program",
+            \testExternalInfo());
+        addTestCase("an unrestricted Program loads the AOT module", \testUnrestricted());
+
+        set_return_value(main());
+    }
+
+    private string moduleCode() {
+        return "%modern
+
+module InheritedRestrictionsMod {
+    version = \"1.0\";
+    desc = \"inherited restrictions regression module\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace InheritedRestrictionsMod {
+public string sub body() {
+    RWLock l();
+    return l.className();
+}
+
+public string sub host() {
+    return call_function(\"gethostname\").empty() ? \"empty\" : \"host\";
+}
+
+public class Probe {
+    static string host() {
+        return call_function(\"gethostname\").empty() ? \"empty\" : \"host\";
+    }
+
+    string methodHost() {
+        return call_function(\"gethostname\").empty() ? \"empty\" : \"host\";
+    }
+}
+}
+";
+    }
+
+    #! user code in a Program with the given restrictions loads the module and calls it
+    private string loaderScript(string restrictions) {
+        return sprintf("%%modern
+
+Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS%s);
+p.parse(\"
+string sub load() { load_module('InheritedRestrictionsMod'); return 'loaded'; }
+auto sub body() { return call_function('InheritedRestrictionsMod::body'); }
+auto sub host() { return call_function('InheritedRestrictionsMod::host'); }
+\", \"probe\");
+foreach string f in (\"load\", \"body\", \"host\") {
+    string r;
+    try {
+        r = f == \"load\" ? p.callFunction(f) : sprintf(\"%%y\", p.callFunction(f));
+    } catch (hash<ExceptionInfo> ex) {
+        # the source and the AOT module are refused with different exceptions; only the refusal is compared
+        r = f == \"load\" ? \"refused\" : ex.err;
+    }
+    printf(\"%%s: %%s\\n\", f, r);
+    if (f == \"load\" && r == \"refused\") {
+        printf(\"body: %%s\\n\", (try_call(p, \"body\")));
+        break;
+    }
+}
+
+string sub try_call(Program p, string f) {
+    try {
+        return sprintf(\"%%y\", p.callFunction(f));
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+", restrictions);
+    }
+
+    #! a Program that may not use external information loads the module and calls code that resolves a builtin
+    /** module methods run in the module's Program, where only the restrictions the module inherited apply
+    */
+    private string externalInfoScript() {
+        return "%modern
+
+Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_NO_EXTERNAL_INFO);
+p.loadModule(\"InheritedRestrictionsMod\");
+p.parse(\"
+auto sub static_method() { return InheritedRestrictionsMod::Probe::host(); }
+auto sub method() { InheritedRestrictionsMod::Probe probe(); return probe.methodHost(); }
+auto sub function() { return InheritedRestrictionsMod::host(); }
+\", \"probe\");
+foreach string f in (\"static_method\", \"method\", \"function\") {
+    string r;
+    try {
+        r = sprintf(\"%y\", p.callFunction(f));
+    } catch (hash<ExceptionInfo> ex) {
+        r = ex.err;
+    }
+    printf(\"%s: %s\\n\", f, r);
+}
+";
+    }
+
+    private string writeFile(string path, string contents) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(contents);
+        f.close();
+        return path;
+    }
+
+    private compileModule() {
+        string qmod_path = qmod_dir + "/InheritedRestrictionsMod.qmod";
+        if (is_file(qmod_path)) {
+            return;
+        }
+        string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s "
+            "%s -b --compile-module --output %s %s 2>&1", libqore_dir, libqore_dir, libqore_dir, qore_bin,
+            qmod_path, src_dir + "/InheritedRestrictionsMod.qm"));
+        assertTrue(is_file(qmod_path), "compiled InheritedRestrictionsMod.qmod: " + compile_out);
+    }
+
+    private hash<ExecModeHarness::ModeRunResult> runScript(string module_dir, string script_path, string mode) {
+        return ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s "
+            "QORE_MODULE_DIR=%s %s -b --enable-debug --exec-mode=%s %s", libqore_dir, libqore_dir, libqore_dir,
+            module_dir, qore_bin, mode, script_path));
+    }
+
+    #! runs the script with the source and the AOT module in every mode against the source module's AST output
+    private checkAllModes(string script_name, string script, string expected) {
+        compileModule();
+        string script_path = writeFile(tmp.path + "/" + script_name, script);
+        hash<ExecModeHarness::ModeRunResult> reference = runScript(src_dir, script_path, "ast");
+        assertEq(expected, reference.out, script_name + ": source module, ast");
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = runScript(src_dir, script_path, mode);
+            assertEq(reference.out, r.out, sprintf("%s: source module, %s", script_name, mode));
+            r = runScript(qmod_dir, script_path, mode);
+            assertEq(reference.out, r.out, sprintf("%s: AOT module, %s", script_name, mode));
+        }
+    }
+
+    testThreadClasses() {
+        checkAllModes("thread-classes.q", loaderScript(" | PO_NO_THREAD_CLASSES"), ExpectedThreadClassesOutput);
+    }
+
+    testExternalInfo() {
+        checkAllModes("external-info.q", externalInfoScript(), ExpectedExternalInfoOutput);
+    }
+
+    testUnrestricted() {
+        checkAllModes("unrestricted.q", loaderScript(""), ExpectedUnrestrictedOutput);
+    }
+}
