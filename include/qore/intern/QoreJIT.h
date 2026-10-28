@@ -503,6 +503,9 @@ struct BatchCalleeInfo {
     std::string fast_name;               //!< Fast entry function name (if eligible)
     std::string fast_contract_hash;      //!< Native fast-call ABI/effect contract hash
     bool preloaded_fast_entry = false;   //!< fast_name came from an immutable sibling artifact
+    //! The body contract fields (hash and dependency rows) came from a sibling artifact's symbol index; they
+    //! describe that artifact as it was built and are never recomputed from this compilation's state
+    bool preloaded_body_contract = false;
     std::string specialization_key;      //!< Concrete generic receiver/type-argument tuple
     const QoreTypeInfo* specialization_receiver_type_info = nullptr; //!< Parse-owned concrete receiver
     const QoreTypeParamInstantiation* specialization_type_param_instantiation = nullptr; //!< Parse-owned concrete args

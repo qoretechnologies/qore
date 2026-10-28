@@ -10028,7 +10028,11 @@ int main(int argc, char** argv) {
                 || !plan.call_relocation_hash_mismatches.empty());
         if (import_errors || call_relocation_errors) {
             if (import_errors) {
-                print_qo_link_issues("unresolved import", plan.unresolved_imports);
+                // an aggregate of part of a group may leave imports to the rest of it unresolved; listing them
+                // as errors would hide the issue that actually failed the link among them
+                if (!allow_unresolved_qo_imports) {
+                    print_qo_link_issues("unresolved import", plan.unresolved_imports);
+                }
                 print_qo_link_issues("ambiguous import", plan.ambiguous_imports);
                 print_qo_link_issues("hash mismatch", plan.hash_mismatches);
             }

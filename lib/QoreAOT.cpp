@@ -12780,6 +12780,123 @@ static bool resolveAOTBatchBodyDependencyProvenance(
     return true;
 }
 
+//! Publishes the body contracts of a completed fast-entry discovery
+/** resolveAOTBatchBodyDependencyProvenance() hashes a contract the first time it sees the entry, and every
+    caller that bakes the contract records that hash in its body_contract_dependencies, which later passes
+    only extend.  Discovery keeps deciding after that: the speculative method fast entries of overridable
+    classes that are not context independent, and generic specializations that need their runtime context,
+    lose approach_b_eligible, and context independence itself is resolved after the hash.  A demoted entry
+    can be left with no body contract at all; the symbol index then publishes no contract for it while its
+    callers still carry rows for the hash it had before, and every consumer that imports those rows fails to
+    link with "body_contract=<hash> actual=" against an unchanged provider.  An entry that keeps a contract
+    published the hash of a state it no longer has.
+
+    Once every decision is made, this recomputes each local contract from the entry's final state, clears it
+    for an entry left without one, and rewrites the rows that recorded a superseded local hash: to the new
+    hash, or away when the entry no longer has a contract.  Rows recorded by preloaded sibling artifacts, and
+    rows naming a hash this compilation never computed, are left alone, so the linker can still detect a
+    stale sibling.
+
+    @return false if the operation was cancelled
+*/
+static bool finalizeAOTBatchBodyContracts(
+        std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& batch_callees) {
+    // dependency key with the superseded hash -> the final hash; an empty final hash drops the row; a key
+    // whose entries disagree on the final hash is ambiguous and keeps its rows
+    struct Replacement {
+        std::string hash;
+        bool ambiguous = false;
+    };
+    std::unordered_map<std::string, Replacement> replacements;
+    size_t check_count = 0;
+    for (auto& [variant, info] : batch_callees) {
+        (void)variant;
+        if (++check_count % 100 == 0
+                && qore_check_cancel(nullptr, "AOT body contract finalization")) {
+            return false;
+        }
+        if (info.preloaded_body_contract) {
+            continue;
+        }
+        std::string new_hash;
+        if (info.hasBodyContract()) {
+            new_hash = qoreAOTBodyContractHash(info);
+            if (new_hash.empty()) {
+                return false;
+            }
+        }
+        if (new_hash == info.body_contract_hash) {
+            continue;
+        }
+        if (!info.body_contract_hash.empty() && !info.body_contract_qore_path.empty()
+                && !info.body_contract_source_file.empty()) {
+            std::string key = qoreAOTBodyDependencyKey(QoreAOTBodyContractDependency{
+                info.body_contract_qore_path, info.body_contract_source_file, info.body_contract_hash});
+            auto [it, inserted] = replacements.emplace(std::move(key), Replacement{new_hash});
+            if (!inserted && it->second.hash != new_hash) {
+                it->second.ambiguous = true;
+            }
+        }
+        info.body_contract_hash = std::move(new_hash);
+    }
+    if (replacements.empty()) {
+        return true;
+    }
+
+    auto replacement_for = [&replacements](const QoreAOTBodyContractDependency& dependency)
+            -> const Replacement* {
+        auto found = replacements.find(qoreAOTBodyDependencyKey(dependency));
+        return found == replacements.end() || found->second.ambiguous ? nullptr : &found->second;
+    };
+    for (auto& [variant, info] : batch_callees) {
+        (void)variant;
+        if (info.preloaded_body_contract || info.body_contract_dependencies.empty()) {
+            continue;
+        }
+        bool changed = false;
+        for (const QoreAOTBodyContractDependency& dependency : info.body_contract_dependencies) {
+            if (++check_count % 100 == 0
+                    && qore_check_cancel(nullptr, "AOT body contract dependency finalization")) {
+                return false;
+            }
+            if (replacement_for(dependency)) {
+                changed = true;
+                break;
+            }
+        }
+        if (!changed) {
+            continue;
+        }
+        std::vector<QoreAOTBodyContractDependency> dependencies;
+        dependencies.reserve(info.body_contract_dependencies.size());
+        for (const QoreAOTBodyContractDependency& dependency : info.body_contract_dependencies) {
+            if (++check_count % 100 == 0
+                    && qore_check_cancel(nullptr, "AOT body contract dependency finalization")) {
+                return false;
+            }
+            const Replacement* replacement = replacement_for(dependency);
+            if (!replacement) {
+                dependencies.push_back(dependency);
+            } else if (!replacement->hash.empty()) {
+                dependencies.push_back(QoreAOTBodyContractDependency{dependency.qore_path,
+                    dependency.provider_source_file, replacement->hash});
+            }
+        }
+        std::sort(dependencies.begin(), dependencies.end(),
+            [](const QoreAOTBodyContractDependency& lhs, const QoreAOTBodyContractDependency& rhs) {
+                return std::tie(lhs.qore_path, lhs.provider_source_file, lhs.body_contract_hash)
+                    < std::tie(rhs.qore_path, rhs.provider_source_file, rhs.body_contract_hash);
+            });
+        dependencies.erase(std::unique(dependencies.begin(), dependencies.end(),
+            [](const QoreAOTBodyContractDependency& lhs, const QoreAOTBodyContractDependency& rhs) {
+                return lhs.qore_path == rhs.qore_path && lhs.provider_source_file == rhs.provider_source_file
+                    && lhs.body_contract_hash == rhs.body_contract_hash;
+            }), dependencies.end());
+        info.body_contract_dependencies.swap(dependencies);
+    }
+    return true;
+}
+
 const QoreProgramLocation* qore_ir_get_body_location(const QoreIRFunction& func) {
     const QoreProgramLocation* first = nullptr;
     size_t check_count = 0;
@@ -15856,6 +15973,11 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
                 aot_batch_callee_map)) {
         return false;
     }
+    // every fast-entry decision of this discovery is made: publish the contracts of the final state
+    if (owns_generic_specializations
+            && !finalizeAOTBatchBodyContracts(aot_batch_callee_map)) {
+        return false;
+    }
     return true;
 }
 
@@ -16085,6 +16207,7 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
     info.body_contract_dependencies = rec.body_contract_dependencies;
     info.fast_name = callable ? rec.native_symbol : std::string();
     info.preloaded_fast_entry = callable;
+    info.preloaded_body_contract = true;
     info.num_params = rec.fast_entry_num_params;
     info.param_rejects_nothing = rec.fast_param_rejects_nothing;
     info.param_noescape = rec.fast_param_noescape;

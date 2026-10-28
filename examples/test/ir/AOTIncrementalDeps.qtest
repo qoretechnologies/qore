@@ -95,6 +95,8 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
             \testBodyContractImportRows());
         addTestCase("batch method calls record their body contracts",
             \testMethodBodyContractImports());
+        addTestCase("a demoted speculative method publishes the contract its callers baked",
+            \testDemotedMethodBodyContract());
 
         set_return_value(main());
     }
@@ -1576,6 +1578,102 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
         out = run(sprintf("%s %s -o %y %y %y", env, qcc_bin, app, new_provider, new_consumer));
         assertTrue(is_file(app), "the updated method objects link: " + out);
         assertEq("13", trim(run(sprintf("%s %y", env, app))), "both method calls use the new bodies");
+    }
+
+    #! The contract rows a batch's consumers import are the contracts its providers publish
+    /** A static method of an overridable class is a speculative fast entry: it keeps its fast ABI only if its
+        body is context independent.  This one reads a global of unknown type, so discovery demotes it after its
+        contract was first hashed, leaving it no body contract.  Its caller's dependency rows still named the
+        hash it had before, so the consumer of the caller imported a contract the provider never published, and
+        every link of the batch failed with "body_contract=<hash> actual=".  Qorus's QJOB aggregate failed so.
+    */
+    testDemotedMethodBodyContract() {
+        TmpDir tmp = initDirs();
+        string provider = tmp_dir + "/demoteprov.qc";
+        string holder = tmp_dir + "/demotehold.qc";
+        string consumer = tmp_dir + "/demotecons.qc";
+        write(provider, "%modern\nnamespace DemoteDeps {\nour auto Config;\n"
+            "class Resource {\n"
+            "    static bool enabled() {\n"
+            "        try {\n"
+            "            return (Config.options.get(\"enabled\") ?? True).toBool();\n"
+            "        } catch (hash<ExceptionInfo> ex) {\n"
+            "            return False;\n"
+            "        }\n"
+            "    }\n"
+            "    int user() { return Resource::enabled() ? 1 : 0; }\n"
+            "}\n}\n");
+        write(holder, "%modern\nclass DemoteOptions { auto get(string key) { return NOTHING; } }\n"
+            "class DemoteHolder { public { DemoteOptions options(); } }\n");
+        write(consumer, "%modern\nint sub useResource(DemoteDeps::Resource r) { return r.user() + 1; }\n"
+            "int sub main() { DemoteDeps::Config = new DemoteHolder(); DemoteDeps::Resource r(); "
+            "printf(\"%d\\n\", useResource(r)); return 0; }\n");
+        string out = run(sprintf("%s %s -c --batch-build-sidecars --output-dir=%y --depfile-dir=%y %y %y %y",
+            env, qcc_bin, lib_dir, lib_dir, provider, holder, consumer));
+        string provider_qo = objectPath("demoteprov");
+        string holder_qo = objectPath("demotehold");
+        string consumer_qo = objectPath("demotecons");
+        assertTrue(is_file(provider_qo) && is_file(holder_qo) && is_file(consumer_qo), "the batch compiles: " + out);
+
+        # every published body contract of the batch, by path and provider source
+        hash<string, string> published = {};
+        foreach string object in ((provider_qo, holder_qo, consumer_qo)) {
+            hash<auto> index = parse_json(File::readTextFile(object + ".idx.json"));
+            foreach hash<auto> row in (index.defines) {
+                if (row.body_contract_hash) {
+                    published{row.qore_path + "\n" + row.source_file} = row.body_contract_hash;
+                }
+            }
+        }
+        int checked = 0;
+        foreach string object in ((provider_qo, holder_qo, consumer_qo)) {
+            hash<auto> index = parse_json(File::readTextFile(object + ".idx.json"));
+            foreach hash<auto> row in (index.requires) {
+                if (row.abi_kind != "qore_body_contract_import_v1") {
+                    continue;
+                }
+                ++checked;
+                assertEq(row.body_contract_hash, published{row.qore_path + "\n" + row.provider_source_file},
+                    sprintf("%s imports the contract %s publishes for %s", basename(object),
+                        basename(row.provider_source_file), row.qore_path));
+            }
+        }
+        assertGt(0, checked, "the consumers import body contracts");
+
+        # the aggregate of part of the batch, as a build group links it, and the complete executable
+        string aggregate = tmp_dir + "/partial-aggregate.qo";
+        out = run(sprintf("%s %s --link-qo --allow-unresolved-imports --aggregate-symbol=DEMOTE_PARTIAL_AGG -o %y %y %y",
+            env, qcc_bin, aggregate, provider_qo, consumer_qo));
+        assertTrue(is_file(aggregate), "the partial aggregate links: " + out);
+        string app = tmp_dir + "/demote-app";
+        out = run(sprintf("%s %s -o %y %y %y %y", env, qcc_bin, app, provider_qo, holder_qo, consumer_qo));
+        assertTrue(is_file(app), "the batch objects link: " + out);
+        assertEq("2", trim(run(sprintf("%s %y", env, app))), "the demoted method runs through its normal entry");
+
+        # A stale consumer still fails the partial aggregate; the imports left to the rest of the group are
+        # allowed, so the hash mismatch is the only issue reported.
+        write(provider, "%modern\nnamespace DemoteDeps {\nour auto Config;\n"
+            "class Resource {\n"
+            "    static bool enabled() {\n"
+            "        try {\n"
+            "            return (Config.options.get(\"enabled\") ?? False).toBool();\n"
+            "        } catch (hash<ExceptionInfo> ex) {\n"
+            "            return False;\n"
+            "        }\n"
+            "    }\n"
+            "    int user() { return 2; }\n"
+            "}\n}\n");
+        string partial = tmp_dir + "/partial";
+        mkdir(partial);
+        string new_provider = partial + DirSep + basename(provider_qo);
+        out = run(sprintf("%s %s -c -o %y %y", env, qcc_bin, new_provider, provider));
+        assertTrue(is_file(new_provider), "the changed provider compiles: " + out);
+        string stale = tmp_dir + "/stale-aggregate.qo";
+        out = run(sprintf("%s %s --link-qo --allow-unresolved-imports --aggregate-symbol=DEMOTE_STALE_AGG -o %y %y %y",
+            env, qcc_bin, stale, new_provider, consumer_qo));
+        assertFalse(is_file(stale), "a stale consumer produces no aggregate: " + out);
+        assertTrue(out.find("qo-link hash mismatch") >= 0, "the stale contract is reported: " + out);
+        assertEq(-1, out.find("unresolved import"), "allowed unresolved imports are not reported as errors: " + out);
     }
 
     testByteReproducibleObject() {
