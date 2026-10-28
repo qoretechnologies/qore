@@ -1,0 +1,91 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%exec-class FloatCallbackAddTest
+
+class FloatCallbackAddTest inherits QUnit::Test {
+    private {
+        string libdir = realpath(ENV.QORE_LIBDIR ?? get_script_dir() + "/../../../build");
+        string qore = ENV.QORE_BIN ?? libdir + "/qore";
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+        string behavior = get_script_dir() + "/IRFloatCallbackAdd.qr";
+    }
+    constructor() : Test("IR private float callback accumulation", "1.0", \ARGV) {
+        addTestCase("conversion, aliases and owned-result cleanup across execution tiers", \source());
+        addTestCase("AOT native addition, cleanup and excluded lvalues", \compiled());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        hash<ExecModeHarness::ModeRunResult> result = ExecModeHarness::run_command(prefix
+            + "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " " + (map quote($1), args).join(" "));
+        if (result.mode) { ExecModeHarness::check_native(result); }
+        assertEq(0, result.rc, result.out);
+        return result.out;
+    }
+    private string expected() {
+        string result = run((qore, "--exec-mode=ast", behavior));
+        assertEq(40, trim(result).split("\n").size());
+        assertTrue(result.contains("KNOWN 2.5 1.5 8.5 66.5 4.0 1.5\n"));
+        assertTrue(result.contains("OWNED False False 1.5 101.5 none [\"call\", \"destroy\", \"observe\"]\n"));
+        assertTrue(result.contains("OWNED True False 1.5 -1.0 EXPECTED-DESTRUCTOR [\"call\", \"destroy\"]\n"));
+        assertTrue(result.contains("BORROWED 1.5 []\nBORROWED-CLEANUP [\"destroy\"]\n"));
+        assertTrue(result.contains("NESTED True 1.5 [\"call\", \"destroy\", \"EXPECTED-DESTRUCTOR\", \"exit\"]\n"));
+        return result;
+    }
+    private source() {
+        string reference = expected();
+        string generic = run((qore, "--exec-mode=ast", behavior, "generic"));
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(reference, run((qore, "--exec-mode=" + mode, behavior)), mode);
+            # The old generic path delays owned-result destruction. Keep its numeric and alias cases as controls;
+            # the new scoped path must match the AST's destruction boundary, including a throwing destructor.
+            foreach string prefix in (("QORE_DISABLE_IR_FLOAT_CALLBACK_ADD=1 ",
+                    "QORE_DISABLE_IR_FLOAT_LOCAL_ADD=1 ")) {
+                assertEq(generic, run((qore, "--exec-mode=" + mode, behavior, "generic"), prefix), prefix + mode);
+            }
+        }
+    }
+    private compiled() {
+        TmpDir dir("qore-float-callback-add-");
+        string reference = expected();
+        string generic = run((qore, "--exec-mode=ast", behavior, "generic"));
+        foreach string prefix in (("", "QORE_DISABLE_IR_FLOAT_CALLBACK_ADD=1 ",
+                "QORE_DISABLE_IR_FLOAT_LOCAL_ADD=1 ", "QORE_AOT_EH=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            bool enabled = !prefix.startsWith("QORE_DISABLE_");
+            foreach string level in (("-O0", "-O3")) {
+                string exe = dir.path + "/behavior";
+                string generated = run((qcc, level, "--strip-source", "-o", exe, behavior),
+                    prefix + "QORE_DUMP_IR_AFTER_OPT=1 ");
+                assertEq(enabled ? reference : generic, run(enabled ? (exe,) : (exe, "generic")), prefix + level);
+                if (level != "-O3") { continue; }
+                foreach string name in (("add", "expression", "ownedCase", "nested", "unassigned", "removed",
+                        "optional", "referenced", "weakAdd", "opaqueAdd", "withArgument", "computedCallee",
+                        "foreachAdd", "mutation")) {
+                    bool selected = enabled && (name == "add" || name == "expression"
+                        || name == "ownedCase" || name == "nested" || name == "foreachAdd");
+                    int found = 0;
+                    foreach string definition in (generated.split("\ndefine ")) {
+                        string body = definition.split("\n}")[0];
+                        string declaration = body.split("\n")[0];
+                        if (!declaration.contains("@" + name + "_") || declaration.contains("_obe_")) { continue; }
+                        ++found;
+                        assertEq(!selected, regex(body, "@qore_rt_lv_path_compound(?:_consume)?_aot(?:_throwing)?\\("),
+                            "lvalue path " + name + " " + prefix);
+                        if (selected) { assertTrue(body.contains(" = fadd "), "native addition " + name); }
+                    }
+                    assertTrue(found > 0, "compiled body " + name);
+                }
+            }
+        }
+    }
+}

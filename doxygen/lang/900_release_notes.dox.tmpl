@@ -250,6 +250,12 @@
     type can also use this arithmetic path after normal return validation; runtime overload dispatch and optional
     returns retain their existing behavior.
 
+    JIT and AOT convert native boolean True to float 1.0, including statically resolved callbacks.
+
+    IR, JIT and AOT use native addition for eligible private float accumulators fed by zero-argument
+    typed callbacks. Compatible non-float results retain their conversions, and owned results are
+    released after the store before the enclosing expression continues, including destructor exceptions.
+
     JIT and AOT compound assignments to local variables avoid copying an unchanged lvalue descriptor.
     Conversion, reference, locking and cleanup behavior are preserved.
 

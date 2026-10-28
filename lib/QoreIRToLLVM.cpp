@@ -3844,7 +3844,11 @@ llvm::Value* QoreIRToLLVM::ensureFloatType(llvm::Value* val, uint32_t value_id, 
             return builder->CreateSIToFP(val, double_type);
         }
     }
-    // For other integer types (e.g. i1 from boolean), convert to float
+    // A native boolean is unsigned: signed i1 conversion would turn True into -1.0.
+    if (val->getType() == i1_type) {
+        return builder->CreateUIToFP(val, double_type);
+    }
+    // Other native integer types use signed conversion.
     if (val->getType()->isIntegerTy()) {
         return builder->CreateSIToFP(val, double_type);
     }

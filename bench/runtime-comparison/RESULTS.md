@@ -27243,3 +27243,96 @@ Release and Debug each pass 81 QUnit cases/7,718 assertions plus two standalone 
 Further native lowering is a distinct experiment. `code<float()>` is a compatibility annotation and can return integer, number, string or NOTHING values without coercion; it does not alone prove a native float result. Any further optimization must preserve conversion, callback mutation and cleanup order. This gain does not establish Java parity or a global performance maximum.
 
 [Lossless evidence](results-local-compound-path-macos-arm64.json); [62-check audit](audit-local-compound-path.md).
+
+## Scoped native float callback accumulation (2026-10-28)
+
+The optimized baseline is ba9288ce68, including develop a5af92e73c and the earlier local-path copy removal. A required, definitely assigned private float local can now use native addition for a zero-argument `code<float()>` call through a private strong local. The actual callback result is converted with the existing getAsFloat semantics; the callable signature does not guarantee an actual float. Shared/reference, optional, weak/opaque-assigned, possibly unassigned, argument-bearing and computed-callee cases retain generic mutation. Scalar foreach locals may qualify; weak-capable foreach elements do not.
+
+A nested temporary scope covers callback evaluation, addition and store. It releases the owned RHS before evaluating the enclosing expression and preserves a destructor exception for the current handler. The untouched baseline delays this destruction in IR/JIT/tiered/AOT and can let its exception escape the intended catch; the admitted path now matches AST behavior. This is not a general fix for every generic lvalue cleanup case. Native boolean-to-float lowering also uses unsigned i1 conversion: a statically resolved True callback contributes 1.0, not -1.0. No runtime helper, calling convention or ABI is added. IR interpretation, JIT and AOT share the lowering; these performance measurements are AOT.
+
+Both builds use -O3 -DNDEBUG with allocation tracking off. Separate AOT images use qcc -O3 --strip-source, identical sources and their matching frozen runtime. Default/reverse/shuffle-487 layouts, randomized paired process order, one warmup and three 150 ms windows, three screen forks and five independent confirmation forks. Each process averages its windows; results are the median of forks per layout, then the median of layouts. Main loops have 4096 items, short cases 1 or 17. The shared host has no exclusivity, affinity or thermal control. No owned build, test or heavy archive work overlaps timing. Published metadata retains a reproducibility allowlist of environment variables; unrelated shell variables are omitted, with original and published metadata hashes recorded. Dependency identities are checked per job and hashes at phase boundaries.
+
+Untimed probes in all six opaque images record 13,113 callbacks/signature and 13,101 reused native frames, with same-Program execution and restored context. Timing uses no interposition. The target retains actual calls, replaces its generic compound helper with native fadd, and admits an existing outer function fast entry. Whole-kernel ns/item includes that outer entry and loop work, especially at count 1; it is not isolated callback latency.
+
+|!Workload:count|!Screen before|!Screen candidate|!Screen change|!Confirm before|!Confirm candidate|!Confirm change
+|int_zero:1|n/a|n/a|n/a|426.594085|429.155979|+0.601%
+|int_unary:1|n/a|n/a|n/a|439.175349|443.131703|+0.901%
+|float_zero:1|n/a|n/a|n/a|707.696501|455.352704|-35.657%
+|float_unary:1|n/a|n/a|n/a|442.407809|446.832387|+1.000%
+|int_zero:17|n/a|n/a|n/a|42.460822|42.548662|+0.207%
+|int_unary:17|n/a|n/a|n/a|44.530173|44.883823|+0.794%
+|float_zero:17|n/a|n/a|n/a|102.203290|47.742932|-53.286%
+|float_unary:17|n/a|n/a|n/a|44.252464|44.950254|+1.577%
+|int_zero:4096|17.686417|17.538369|-0.837%|17.500625|17.541296|+0.232%
+|int_unary:4096|18.659892|18.650794|-0.049%|18.477518|18.415753|-0.334%
+|float_zero:4096|61.950557|21.703231|-64.967%|61.659594|21.628051|-64.923%
+|float_unary:4096|18.809651|18.606762|-1.079%|18.645495|18.483863|-0.867%
+
+The broader screen covers all 53 existing float, micro and mixed kernels plus the opaque target and short float-unary control. Confirmation selects every absolute aggregate shift of at least 2%, all mixed workloads and both opaque cases. Unselected controls have no confirmation row.
+
+|!Workload:count|!Screen before|!Screen candidate|!Screen change|!Confirm before|!Confirm candidate|!Confirm change
+|float:direct_local_float_return:4096|0.789687|0.813966|+3.074%|0.814445|0.800756|-1.681%
+|float:callback_local_float_return:4096|0.862441|0.867041|+0.533%|n/a|n/a|n/a
+|float:direct_local_float_result:4096|0.765422|0.747715|-2.313%|0.742411|0.737016|-0.727%
+|float:callback_local_float_result:4096|0.823104|0.812329|-1.309%|n/a|n/a|n/a
+|float:direct_loop_float_return:4096|5.670189|5.651273|-0.334%|n/a|n/a|n/a
+|float:callback_loop_float_return:4096|4.943017|4.929124|-0.281%|n/a|n/a|n/a
+|float:direct_float_add:4096|0.825180|0.808503|-2.021%|0.827582|0.817603|-1.206%
+|float:static_float_add:4096|0.822532|0.820800|-0.211%|n/a|n/a|n/a
+|float:typed_local_int_unary:4096|1.185870|1.185841|-0.002%|n/a|n/a|n/a
+|float:typed_local_int_result:4096|0.815364|0.832639|+2.119%|0.836636|0.847194|+1.262%
+|float:typed_local_float_unary:4096|0.897933|0.893888|-0.450%|n/a|n/a|n/a
+|float:result_float_add:4096|0.877375|0.826133|-5.840%|0.836226|0.826473|-1.166%
+|micro:arithmetic:4096|1.582854|1.577411|-0.344%|n/a|n/a|n/a
+|micro:direct_call:4096|1.579457|1.581813|+0.149%|n/a|n/a|n/a
+|micro:method_call:4096|1.663934|1.661217|-0.163%|n/a|n/a|n/a
+|micro:indirect_call:4096|59.158745|59.468833|+0.524%|n/a|n/a|n/a
+|micro:polymorphic_call:4096|23.276399|23.039676|-1.017%|n/a|n/a|n/a
+|micro:polymorphic_expression_call:4096|10.676510|10.833298|+1.469%|n/a|n/a|n/a
+|micro:monomorphic_call:4096|3.874813|3.905881|+0.802%|n/a|n/a|n/a
+|micro:optional_method_call:4096|10.386198|10.421348|+0.338%|n/a|n/a|n/a
+|micro:polymorphic_float_call:4096|23.238180|23.824161|+2.522%|23.469061|23.550739|+0.348%
+|micro:polymorphic_float_expression_call:4096|10.925899|10.875311|-0.463%|n/a|n/a|n/a
+|micro:monomorphic_float_call:4096|4.161718|4.133332|-0.682%|n/a|n/a|n/a
+|micro:optional_float_method_call:4096|10.753309|10.795018|+0.388%|n/a|n/a|n/a
+|micro:boxed_float_method_call:4096|19.871972|19.869950|-0.010%|n/a|n/a|n/a
+|micro:dynamic_int_result_call:4096|10.448018|10.416349|-0.303%|n/a|n/a|n/a
+|micro:dynamic_int_result_fallback:4096|20.210189|20.359566|+0.739%|n/a|n/a|n/a
+|micro:boxed_int_method_call:4096|16.187279|16.134835|-0.324%|n/a|n/a|n/a
+|micro:boxed_int_method_fallback:4096|32.409245|32.801328|+1.210%|n/a|n/a|n/a
+|micro:boxed_float_method_fallback:4096|34.205169|34.259106|+0.158%|n/a|n/a|n/a
+|micro:boxed_int_method_effect:4096|88.377597|90.237376|+2.104%|89.866997|89.617953|-0.277%
+|micro:dynamic_float_result_call:4096|11.277036|11.198571|-0.696%|n/a|n/a|n/a
+|micro:indirect_wide:4096|58.836939|59.367648|+0.902%|n/a|n/a|n/a
+|micro:indirect_float:4096|58.605042|58.391176|-0.365%|n/a|n/a|n/a
+|micro:indirect_int_result:4096|57.931368|59.180067|+2.155%|59.052109|59.110831|+0.099%
+|micro:indirect_float_result:4096|58.776295|59.262718|+0.828%|n/a|n/a|n/a
+|micro:indirect_tagged_float:4096|58.427447|58.446740|+0.033%|n/a|n/a|n/a
+|micro:indirect_branch_float:4096|58.630110|57.650274|-1.671%|n/a|n/a|n/a
+|micro:indirect_affine:4096|58.944048|58.957985|+0.024%|n/a|n/a|n/a
+|micro:indirect_affine_wide:4096|58.897575|59.623980|+1.233%|n/a|n/a|n/a
+|micro:indirect_branch_int:4096|59.044129|59.260162|+0.366%|n/a|n/a|n/a
+|micro:dispatch_control:4096|1.981224|1.974776|-0.325%|n/a|n/a|n/a
+|micro:list_read:4096|2.943803|2.941608|-0.075%|n/a|n/a|n/a
+|micro:list_build:4096|26.602357|26.504688|-0.367%|n/a|n/a|n/a
+|micro:list_mutate:4096|131.308368|129.759249|-1.180%|n/a|n/a|n/a
+|micro:temporary_list:4096|1.736714|1.740293|+0.206%|n/a|n/a|n/a
+|micro:temporary_hash:4096|1.745844|1.748062|+0.127%|n/a|n/a|n/a
+|micro:closure_call:4096|14.077021|14.111468|+0.245%|n/a|n/a|n/a
+|micro:closure_capture:4096|19.758255|19.791565|+0.169%|n/a|n/a|n/a
+|mixed:csv_report:4096|934.748850|929.021017|-0.613%|929.408773|927.498372|-0.206%
+|mixed:object_orders:4096|1726.039165|1727.599305|+0.090%|1732.185133|1735.075891|+0.167%
+|mixed:callback_pipeline:4096|121.798285|120.870416|-0.762%|122.453536|120.527274|-1.573%
+|mixed:text_index:4096|1444.436098|1450.848232|+0.444%|1451.435422|1446.526943|-0.338%
+|opaque:float_zero:4096|61.245209|22.186087|-63.775%|61.939660|21.938666|-64.581%
+|opaque:float_unary:17|44.448265|44.319607|-0.289%|44.833333|44.735033|-0.219%
+
+Retain under the authorized broader workload tradeoff. Corrected focused confirmation improves the opaque float target 61.659594 to 21.628051 ns/item (-64.923%); independent broad confirmation gives 61.939660 to 21.938666 ns/item (-64.581%), improving every layout (-64.796%, -64.581%, -64.302%). Short target cases also improve: count 17 102.203290 to 47.742932 ns/item (-53.286%) and count 1 707.696501 to 455.352704 ns (-35.657%). No screen-flagged control repeats a >=2% aggregate regression in independent confirmation. The typed-local-int-result control is +1.262% (0.836636 to 0.847194 ns/item), with layout shifts +1.844%, -0.207%, +5.252%; this adverse layout is retained rather than dismissed. The focused short float-unary control is +1.577%, but independent broad confirmation is -0.219% with improvement in all layouts. Mixed confirmation ranges from -1.573% for callback_pipeline to +0.167% for object_orders; csv_report is -0.206% and text_index -0.338%. These results support a large benefit for the targeted pattern with small, layout-sensitive control changes; they do not establish an application-wide gain, statistical equivalence of controls, Java parity or a performance ceiling. All timing uses optimized builds, matching frozen runtime/artifact identities, randomized before/after order and three layouts on a shared host.
+
+All 1842 corrected-candidate runs/5526 measured windows are retained and independently replayed. There is no application-weighted overall score or fresh Java/develop ratio.
+
+Release and Debug each pass 83 QUnit cases / 7,949 assertions plus two standalone fixtures. Debug adds 18 cases / 70 assertions of fallback/context controls and 2917 native assertions. An additional standalone scalar-lifetime script passes; two statement-chain lifetime fixtures pass 7 cases/545 assertions. A separate Program-transition fixture passes in Release and Debug, covering foreign numeric/converted/throwing/owned results, AST/IR/JIT/tiered child Programs and restored caller context. All 391 Release qmod aliases are restored and verified. The new regression fixture covers conversion, owned/borrowed results, throwing callbacks/destructors, nested handlers, reference/weak/captured/foreach cases and generated native/generic paths. Its first matcher incorrectly included an outlined on-exit helper and classified every foreach local as weak-capable; correction and reference-foreach coverage pass 231 assertions. An earlier driver rejected valid BG-JIT promotion traces; corrected review reuses successful source children. Final review also corrected classification of a successful module-build receipt as a unit test; test results were reused unchanged. Baseline cleanup failures remain archived explicitly. A final static-call conversion probe rejected the first candidate: its AOT True callback produced 0.5 instead of 2.5 when added to 1.5. The corrected candidate adds native unsigned boolean conversion and permanent known-call references; its qualification and all reported timing were repeated. Superseded timing and qualification are archived separately and are not used for the tables above. The probe also recorded a parse-time rejection of anonymous `code<bool()>` assignment to `code<float()>` before isolating accepted function references.
+
+Further candidates are preserving native scalar values across DiscardTempsKeep and using inline float conversion. They require separate before/after measurements and validation; this result establishes neither Java parity nor a performance ceiling.
+
+[Timing and validation evidence](results-scoped-float-callback-macos-arm64.json); [62-check audit](audit-scoped-float-callback.md).

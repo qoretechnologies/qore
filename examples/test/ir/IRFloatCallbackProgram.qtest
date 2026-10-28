@@ -1,0 +1,54 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%exec-class FloatCallbackProgramTest
+
+class FloatCallbackProgramTest inherits QUnit::Test {
+    private {
+        string libdir = realpath(ENV.QORE_LIBDIR ?? get_script_dir() + "/../../../build");
+        string qore = ENV.QORE_BIN ?? libdir + "/qore";
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+        string worker = get_script_dir() + "/IRFloatCallbackProgram.qr";
+        const string Expected = "float-callback-program: ok\n";
+    }
+    constructor() : Test("float callback Program transitions", "1.0", \ARGV) {
+        addTestCase("foreign callbacks, conversion and destructor exceptions restore caller context", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(prefix
+            + "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " " + (map quote($1), args).join(" "));
+        assertEq(0, r.rc, r.out);
+        # Even AST/IR callers create JIT child Programs. Check compilation of this caller specifically.
+        if (r.mode == "jit" || r.mode == "tiered") {
+            assertTrue((select r.trace, $1.contains("accumulate")
+                && ($1.contains("compiled") || $1.contains("promoted"))).size() > 0, "native caller: " + r.trace.join("\n"));
+        }
+        return r.out;
+    }
+    private check() {
+        foreach string prefix in (("", "QORE_DISABLE_FUNCREF_FAST_CALL=1 ")) {
+            foreach string mode in (("ast", "ir", "jit", "tiered")) {
+                assertEq(Expected, run((qore, "--exec-mode=" + mode, worker), prefix), prefix + mode);
+            }
+        }
+        TmpDir dir("qore-float-callback-program-");
+        foreach string prefix in (("", "QORE_AOT_EH=1 ", "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string exe = dir.path + "/worker";
+                run((qcc, level, "--strip-source", "-o", exe, worker), prefix);
+                assertEq(Expected, run((exe,)), prefix + level);
+                assertEq(Expected, run((exe,), "QORE_DISABLE_FUNCREF_FAST_CALL=1 "), "generic " + prefix + level);
+            }
+        }
+    }
+}

@@ -7949,6 +7949,49 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
         }
     }
 
+    // A private assigned float uses getAsFloat() for every RHS, including a callable's compatible non-float
+    // result.  A zero-argument call through a private strong local has no intermediate operand to retain here.
+    // Close its result's temp scope after the store, before evaluating the enclosing expression: releasing an
+    // owned RHS can run a destructor and raise.  The callable signature alone is not an exact-float proof.
+    auto* callback = dynamic_cast<const CallReferenceCallNode*>(right_expr.getInternalNode());
+    const VarRefNode* callback_var = callback ? qoreIrGetDirectLocalVarRef(callback->getExp()) : nullptr;
+    auto* callback_type = callback_var
+        ? dynamic_cast<const QoreComplexCodeTypeInfo*>(callback_var->getTypeInfo()) : nullptr;
+    QoreParseAnalysis callback_lhs_analysis;
+    if (float_local && !changesThroughLValue(float_local) && parse_context
+            && parse_context->isLocalDefinitelyAssigned(float_local->ref.id)
+            && getAnalysis(op->getLeft(), callback_lhs_analysis)
+            && callback_lhs_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+            && builder.getExceptionTempScopeId() && callback_type
+            && callback_type->getReturnType() == floatTypeInfo && callback_type->getParamTypes().empty()
+            && !callback_type->hasVarArgs() && !callback_type->isOrNothing()
+            && !changesThroughLValue(callback_var)
+            && (!callback->getParseArgs() || !callback->getParseArgs()->size())
+            && (!callback->getArgs() || !callback->getArgs()->size())
+            && !q_env_is_set("QORE_DISABLE_IR_FLOAT_CALLBACK_ADD")) {
+        builder.createPushTempMark(nullptr);
+        QoreIRValue right = lowerExpression(right_expr, error);
+        if (!right.isValid() || blockHasTerminator(builder.getBlock())) {
+            builder.abandonTempScope();
+            return right;
+        }
+        QoreIRValue left = loadVarRef(float_local, error, "callback plus-equals", op->getLeft());
+        if (!left.isValid()) {
+            builder.abandonTempScope();
+            return QoreIRValue();
+        }
+        QoreIRValue result = lowerBinaryOpOrInvoke(QoreIROpcode::AddAssignFloat, expr, left, right, op->loc, error);
+        if (!result.isValid() || !storeVarRef(float_local, result, error, "callback plus-equals", &right_expr)) {
+            builder.abandonTempScope();
+            return QoreIRValue();
+        }
+        QoreIRInstruction* keep = builder.createDiscardTempsKeep(result, op->loc);
+        if (QoreIRBasicBlock* handler = getCurrentExceptionTarget()) {
+            keep->exception_target = handler;
+        }
+        return keep->result;
+    }
+
     QoreIRValue right = lowerMutationOperand(op->getLeft(), right_expr, op->loc, error);
     if (!right.isValid()) {
         return QoreIRValue();

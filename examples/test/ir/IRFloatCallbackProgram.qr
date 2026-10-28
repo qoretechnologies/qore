@@ -1,0 +1,49 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+sub parentOnly() {}
+sub parentContext() {
+    if (!exists_function("parentOnly") || exists_function("foreignOnly")) {
+        throw "CALLBACK-PROGRAM-CONTEXT", "caller context not restored";
+    }
+}
+float sub accumulate(code<float()> fn, string expected_error, float expected_value) {
+    float sum = 1.5;
+    string error = "none";
+    try { sum += fn(); }
+    catch (hash<ExceptionInfo> ex) { error = ex.err; }
+    parentContext();
+    if (error != expected_error || sum != expected_value) {
+        throw "CALLBACK-PROGRAM-RESULT", sprintf("%s %y", error, sum);
+    }
+    return sum;
+}
+foreach ExecMode mode in ((EM_AST, EM_IR, EM_JIT, EM_TIERED)) {
+    Program foreign(PO_NO_INHERIT_USER_CLASSES | PO_NO_INHERIT_USER_FUNC_VARIANTS | PO_NO_CHILD_PO_RESTRICTIONS);
+    foreign.setExecMode(mode);
+    foreign.parse("%modern\n"
+        "sub foreignOnly() {}\n"
+        "sub calleeContext() { if (!exists_function(\"foreignOnly\") || exists_function(\"parentOnly\")) { "
+        "throw \"CALLBACK-PROGRAM-CONTEXT\", \"callee context missing\"; } }\n"
+        "thread_local int destroyed = 0;\n"
+        "class Owned { destructor() { calleeContext(); ++destroyed; throw \"EXPECTED-DESTRUCTOR\", \"foreign result\"; } }\n"
+        "float sub value() { calleeContext(); return 2.5; }\n"
+        "auto sub converted() { calleeContext(); return \"2.5\"; }\n"
+        "auto sub failed() { calleeContext(); throw \"EXPECTED-CALL\", \"foreign callback\"; }\n"
+        "auto sub owned() { calleeContext(); return new Owned(); }\n"
+        "code<float()> sub callback(int kind) { switch (kind) { case 0: return \\value(); "
+        "case 1: return \\converted(); case 2: return \\failed(); default: return \\owned(); } }\n"
+        "int sub count() { return destroyed; }\n", "float-callback-foreign");
+    foreach int kind in ((0, 1, 2, 3)) {
+        code<float()> fn = foreign.callFunction("callback", kind);
+        for (int repeat = 0; repeat < 3; ++repeat) {
+            accumulate(fn, kind == 2 ? "EXPECTED-CALL" : kind == 3 ? "EXPECTED-DESTRUCTOR" : "none",
+                kind < 2 ? 4.0 : 1.5);
+        }
+        parentContext();
+    }
+    if (foreign.callFunction("count") != 3) { throw "CALLBACK-PROGRAM-CLEANUP", "foreign destructor count"; }
+    parentContext();
+}
+printf("float-callback-program: ok\n");
