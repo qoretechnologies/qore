@@ -5651,3 +5651,10 @@ An admitted `finite_call_ref_loads` entry now skips `ensureLocalCacheFresh`. The
 Original reference creation and binding, boxed PHI, runtime store, ordinary cached load and ownership/cleanup remain. Disabling scalar-summary import can retain ordinary dispatch through the same pure targets, so its fallback remains valid without refresh. Other locals retain their existing refresh path. Source locations, cancellation points, RuntimeConfig, TLS and runtime ABI are unchanged. `QORE_DISABLE_AOT_FINITE_CALLREF_RELOAD_ELISION=1` is a compilation presence flag that restores the old refresh lowering while retaining finite target selection.
 
 Optimized confirmation against merged `3080c23bc1` reduces the four 4096-iteration target kernels by 6.6–37.0%. Fresh natural-inlining Java comparisons and broader controls are in `bench/runtime-comparison/RESULTS.md`. Next measure batches of short invocations against inline controls, then use the resulting setup/entry evidence to choose the next optimization. No general Java parity or maximum-performance claim.
+
+
+## Short callback invocation checkpoint (2026-10-28)
+
+Batched short wrappers expose setup work that the 4096-iteration callback loops amortize: the one-callback Qore cases take about 242–245 ns/invocation, against 0.90–1.05 ns for Java with normal inlining. Algebraically equivalent Qore inline controls take 1.15–1.68 ns. This is whole-batch cost, not a subtraction-based estimate of call latency. The exact reference, generated code, three-layout/three-fork measurements and C2 diagnostics are in the batched short callback report.
+
+The next candidate will omit native-entry adapter binding only for exact callback values whose sole use feeds an admitted finite-target initializer. Those calls already select complete native scalar summaries. Preserve reference creation, local ownership and exception behavior; diagnostic summary-disabled paths must retain a correct generic fallback. Measure binding separately before changing local-slot ownership or reference creation, and qualify all admitted/fallback modes. General Java parity remains unestablished.

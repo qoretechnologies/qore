@@ -27803,3 +27803,31 @@ No owned build/test/profile/heavy archive work overlaps timing. The desktop host
 Next measure batches of short scalar invocations and matching inline controls to amortize the timer/string-dispatch overhead, then prioritize reference creation/binding and entry costs using those results. Source-location publication and cancellation cadence remain separate investigations. General Java parity and a performance maximum have not been established.
 
 [Timing and validation evidence](results-finite-callback-reload-macos-arm64.json); [all 62 audit checks](audit-finite-callback-reload.md).
+
+## Batched short callback invocations (2026-10-28)
+
+The long-loop callback result does not establish short-invocation efficiency. This diagnostic batches 4096 calls to the same scalar wrappers, each selecting and using a callback for 1 or 17 inner iterations. Seeds change on each invocation and an observed dependent checksum keeps every result relevant. Qore dispatches by string and reads its clock once per batch; Java JMH observes the same batch result. Four algebraically equivalent inline arithmetic controls are reported separately, never subtracted as isolated call latency. The callback wrappers are copied from opaque_callbacks so importing a shared helper module does not introduce a Program boundary.
+
+Frozen optimized before code is merged 3080c23bc1; candidate production code is now committed as ae5776aead. These binaries predate the documentation/commit and retain their build-time parent version; exact runtime and source hashes are archived. Both use Release -O3 -DNDEBUG, allocation tracking off and qcc -O3 --strip-source. Three Qore link layouts and three forks use two warmups and three 150 ms measurement windows. Fresh Temurin 25/JMH 1.37 uses normal C2 inlining, three forks, five warmups and three 300 ms windows. Process order is randomized across variants/layouts; no owned compilation/testing/profiling/archive work overlaps timing. The desktop host is shared without affinity/exclusivity/thermal control.
+
+|!Kernel|!Before ns/invocation|!Candidate|!Java|!Candidate change
+|int_zero_1|264.413833|241.728900|1.030718|-8.579%
+|int_zero_17|282.892401|251.871929|1.038369|-10.965%
+|int_unary_1|268.094592|244.698084|1.033237|-8.727%
+|int_unary_17|286.795895|255.651954|7.350274|-10.859%
+|float_zero_1|270.040004|244.077225|0.903209|-9.614%
+|float_zero_17|285.615144|258.084489|3.249832|-9.639%
+|float_unary_1|269.803291|244.770889|1.053226|-9.278%
+|float_unary_17|284.940815|256.769007|3.007969|-9.887%
+|int_zero_inline|1.150723|1.148419|1.025646|-0.200%
+|int_unary_inline|1.677274|1.677037|1.026611|-0.014%
+|float_zero_inline|1.161117|1.156231|1.022614|-0.421%
+|float_unary_inline|1.424896|1.428989|1.027172|+0.287%
+
+The one-callback Qore wrappers still cost about 242–245 ns per invocation versus 0.90–1.05 ns for Java, while Qore inline controls cost 1.15–1.68 ns. The preceding reload omission reduces the eight short-wrapper workloads by 8.6–11.0% in this harness. These are whole-batch costs per invocation, including checksum/loop work. This three-fork exploratory checkpoint ranks remaining overhead; it is not independent confirmation of a new production optimization, and controls are not subtracted to infer call latency.
+
+Generated Qore code still calls a native wrapper from the batching loop. The wrapper retains reference creation and native-entry adapter binding, body-local instantiation/store/cleanup, plus entry/frame/context work. Static call counts alone do not establish how much time each component consumes. Ordinary Java optimization can inline and eliminate this setup. The next controlled experiment will test omission of unused native-entry binding for exact finite callback values, retaining original reference creation/ownership and a correct fallback. Local-slot ownership and reference creation require separate proofs and measurements. There is no evidence of a global performance maximum.
+
+All 252 timing jobs / 756 windows replay independently. The exact Python integer/rational reference checks 0/1/17/257/4096 batches and seeds 0/7/65535: 720 source AST/IR results, 1080 results across six LLVM-verified AOT images, and 180 Java results. Separate diagnostics confirm C2 for all 12 Java kernels. No production runtime change is included in this benchmark checkpoint. No cumulative develop or application-wide performance claim is added.
+
+[Evidence](results-short-callback-batches-macos-arm64.json); [all 62 audit checks](audit-short-callback-batches.md).

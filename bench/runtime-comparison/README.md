@@ -1473,3 +1473,16 @@ default uses the same no-reentry, assignment, lifetime and dominance proof to
 omit a refresh whose value cannot change. Original binding, cached loads,
 ownership and cancellation remain. Recompile for this diagnostic control;
 see RESULTS for optimized before/after, disabled-control and Java measurements.
+
+
+`short_callbacks.qr`, `short_callbacks.py` and `ShortCallbackBench.java` measure
+batches of short invocations with the same callback bodies as `opaque_callbacks`.
+Compile with the intended optimized `qcc -O3 --strip-source` and run, for example,
+`./short_callbacks int_unary_1 4096 2 3 150 7`. The final suffix is the inner
+callback count (1 or 17); `_inline` kernels are algebraic controls. Each timed
+item is one short invocation, with 4096 items per timer/string dispatch. Use
+`./short_callbacks check` and validate its output with `short_callbacks.py`.
+Java uses the same JMH annotation-processing setup as the other benchmark classes.
+Normal Java inlining remains enabled. Report whole-batch ns/invocation; do not
+subtract controls as isolated call latency or pool these numbers with the older
+per-invocation timer harness. See RESULTS for frozen-runtime provenance and limits.
