@@ -853,6 +853,14 @@ private:
 };
 
 class VRMutex;
+//! returns the runtime parse options that code from another Program is restricted with in the Program it runs in
+/** A user variant that runs in a Program other than the one that defined it (a module function called from a
+    restricted Program, for example) runs with these options of the executing Program forced into its runtime parse
+    options (see RuntimeParseOptionsOverrideHelper and UserVariantBase::eval()); every path that calls a user variant
+    must apply them in the same way, so that the call behaves as it does with the AST interpreter
+*/
+DLLLOCAL QoreParseOptions get_user_variant_runtime_po_override_mask();
+
 class UserVariantExecHelper;
 class QoreJIT;
 

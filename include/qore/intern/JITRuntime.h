@@ -886,20 +886,28 @@ class ParseReferenceNode;
 uint64_t qore_rt_create_call_ref(uint64_t expr_bits, ExceptionSink* xsink);
 
 //! Create a class-qualified method call reference from serialized AOT metadata.
-uint64_t qore_rt_create_static_method_call_ref_aot(const char* class_path, const char* method_name,
+/** The class is resolved in the Program the code was loaded into (\a ctx), as the parser resolves it for the same
+    source; \a ctx is null for JIT code
+*/
+uint64_t qore_rt_create_static_method_call_ref_aot(QoreAOTContext* ctx, const char* class_path, const char* method_name,
     ExceptionSink* xsink);
-uint64_t qore_rt_create_static_method_call_ref_aot_throwing(const char* class_path, const char* method_name,
+uint64_t qore_rt_create_static_method_call_ref_aot_throwing(QoreAOTContext* ctx, const char* class_path, const char* method_name,
     ExceptionSink* xsink);
 
 //! Create a resolved local method call reference from serialized AOT metadata.
-uint64_t qore_rt_create_local_method_call_ref_aot(const char* class_path, const char* method_name,
+uint64_t qore_rt_create_local_method_call_ref_aot(QoreAOTContext* ctx, const char* class_path, const char* method_name,
     ExceptionSink* xsink);
-uint64_t qore_rt_create_local_method_call_ref_aot_throwing(const char* class_path, const char* method_name,
+uint64_t qore_rt_create_local_method_call_ref_aot_throwing(QoreAOTContext* ctx, const char* class_path, const char* method_name,
     ExceptionSink* xsink);
 
 //! Create a function call reference from serialized AOT metadata.
-uint64_t qore_rt_create_function_call_ref_aot(const char* function_name, ExceptionSink* xsink);
-uint64_t qore_rt_create_function_call_ref_aot_throwing(const char* function_name, ExceptionSink* xsink);
+/** The function is resolved in the Program the code was loaded into (\a ctx), as the parser resolves it for the same
+    source
+*/
+uint64_t qore_rt_create_function_call_ref_aot(QoreAOTContext* ctx, const char* function_name,
+    ExceptionSink* xsink);
+uint64_t qore_rt_create_function_call_ref_aot_throwing(QoreAOTContext* ctx, const char* function_name,
+    ExceptionSink* xsink);
 
 //! Create a method reference; returns NaN-boxed QoreValue
 uint64_t qore_rt_create_method_ref(uint64_t expr_bits, ExceptionSink* xsink);

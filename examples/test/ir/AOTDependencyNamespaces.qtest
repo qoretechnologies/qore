@@ -216,13 +216,17 @@ load_module(\"json\");
 ");
         string output = run(dir, modulePath(dir), (script,), 3);
         assertTrue(output.find("Namespace 'Json' already exists in '::Qore'") != -1, output);
+        # a module function runs in the Program that calls it, which declares no Qore::Json; a method of a module
+        # class runs in the module's Program, where the module's own Qore::Json collides with the json module's
         compileModule(dir, "AOTNsCollision", "public namespace Qore {
     public namespace Json { public const Owned = 7; }
 }
 public namespace AOTNsCollision {
-    public sub collide() { load_module(\"json\"); }
+    public class Loader {
+        static collide() { load_module(\"json\"); }
+    }
 }", modulePath(dir));
-        writeText(script, "%modern\n%requires AOTNsCollision\nAOTNsCollision::collide();\n");
+        writeText(script, "%modern\n%requires AOTNsCollision\nAOTNsCollision::Loader::collide();\n");
         output = run(dir, modulePath(dir), (script,), 3);
         assertTrue(output.find("Namespace 'Json' already exists in '::Qore'") != -1, output);
     }

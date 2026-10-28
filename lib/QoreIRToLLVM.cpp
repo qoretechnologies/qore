@@ -10456,10 +10456,12 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         xsink_arg->setName("xsink");
     } else if (is_fast_entry) {
         // Fast entry: params are i64 args, xsink is the last arg
+        aot_ctx_arg = nullptr;
         unsigned num_args = llvm_func->arg_size();
         xsink_arg = llvm_func->getArg(num_args - 1);
         xsink_arg->setName("xsink");
     } else {
+        aot_ctx_arg = nullptr;
         xsink_arg = llvm_func->getArg(0);
         xsink_arg->setName("xsink");
     }
@@ -17580,17 +17582,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             auto helper = module.getOrInsertFunction(
                                     "qore_rt_new_object_by_path_nb_consume_args",
                                     llvm::FunctionType::get(i64_type,
-                                        {ptr_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type},
+                                        {ptr_type, ptr_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type},
                                         false));
                             result = builder->CreateCall(helper,
-                                    {class_path, variant_sig, object_type_as_ptr, args_array, arg_cleanups,
+                                    {aot_ctx_arg ? aot_ctx_arg : llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type)), class_path, variant_sig, object_type_as_ptr, args_array, arg_cleanups,
                                      nargs_val, xsink_arg});
                         } else {
                             auto helper = module.getOrInsertFunction("qore_rt_new_object_by_path_nb",
                                     llvm::FunctionType::get(i64_type,
-                                        {ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
+                                        {ptr_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
                             result = builder->CreateCall(helper,
-                                    {class_path, variant_sig, object_type_as_ptr, args_array, nargs_val, xsink_arg});
+                                    {aot_ctx_arg ? aot_ctx_arg : llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type)), class_path, variant_sig, object_type_as_ptr, args_array, nargs_val, xsink_arg});
                         }
                     } else {
                         assert(qc);
@@ -17767,13 +17769,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 method->getName(),
                                 "local_method_call_ref_method_name");
                         auto cr_ft = llvm::FunctionType::get(i64_type,
-                                {ptr_type, ptr_type, ptr_type}, false);
+                                {ptr_type, ptr_type, ptr_type, ptr_type}, false);
                         auto helper = module.getOrInsertFunction(
                                 "qore_rt_create_local_method_call_ref_aot", cr_ft);
                         auto helper_throwing = module.getOrInsertFunction(
                                 "qore_rt_create_local_method_call_ref_aot_throwing", cr_ft);
                         result = emitMaybeInvoke(helper, helper_throwing,
-                                {class_path, method_name, xsink_arg}, module, llvm_func, inst);
+                                {aot_ctx_arg, class_path, method_name, xsink_arg}, module, llvm_func, inst);
                     } else {
                         auto* scr = dynamic_cast<const LocalStaticMethodCallReferenceNode*>(node);
                         method = scr ? scr->getMethod() : nullptr;
@@ -17788,13 +17790,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                     method->getName(),
                                     "static_call_ref_method_name");
                             auto cr_ft = llvm::FunctionType::get(i64_type,
-                                    {ptr_type, ptr_type, ptr_type}, false);
+                                    {ptr_type, ptr_type, ptr_type, ptr_type}, false);
                             auto helper = module.getOrInsertFunction(
                                     "qore_rt_create_static_method_call_ref_aot", cr_ft);
                             auto helper_throwing = module.getOrInsertFunction(
                                     "qore_rt_create_static_method_call_ref_aot_throwing", cr_ft);
                             result = emitMaybeInvoke(helper, helper_throwing,
-                                    {class_path, method_name, xsink_arg}, module, llvm_func, inst);
+                                    {aot_ctx_arg, class_path, method_name, xsink_arg}, module, llvm_func, inst);
                         } else if (auto* dcr = dynamic_cast<const DeferredStaticMethodCallReferenceNode*>(node)) {
                             llvm::Value* class_path =
                                 qore_ir_create_global_string_ptr(builder,
@@ -17805,26 +17807,26 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                     dcr->getMethodName(),
                                     "deferred_static_call_ref_method_name");
                             auto cr_ft = llvm::FunctionType::get(i64_type,
-                                    {ptr_type, ptr_type, ptr_type}, false);
+                                    {ptr_type, ptr_type, ptr_type, ptr_type}, false);
                             auto helper = module.getOrInsertFunction(
                                     "qore_rt_create_static_method_call_ref_aot", cr_ft);
                             auto helper_throwing = module.getOrInsertFunction(
                                     "qore_rt_create_static_method_call_ref_aot_throwing", cr_ft);
                             result = emitMaybeInvoke(helper, helper_throwing,
-                                    {class_path, method_name, xsink_arg}, module, llvm_func, inst);
+                                    {aot_ctx_arg, class_path, method_name, xsink_arg}, module, llvm_func, inst);
                         } else if (auto* dfcr = dynamic_cast<const DeferredFunctionCallReferenceNode*>(node)) {
                             llvm::Value* function_name =
                                 qore_ir_create_global_string_ptr(builder,
                                     dfcr->getFunctionName(),
                                     "deferred_function_call_ref_name");
                             auto cr_ft = llvm::FunctionType::get(i64_type,
-                                    {ptr_type, ptr_type}, false);
+                                    {ptr_type, ptr_type, ptr_type}, false);
                             auto helper = module.getOrInsertFunction(
                                     "qore_rt_create_function_call_ref_aot", cr_ft);
                             auto helper_throwing = module.getOrInsertFunction(
                                     "qore_rt_create_function_call_ref_aot_throwing", cr_ft);
                             result = emitMaybeInvoke(helper, helper_throwing,
-                                    {function_name, xsink_arg}, module, llvm_func, inst);
+                                    {aot_ctx_arg, function_name, xsink_arg}, module, llvm_func, inst);
                         } else if (auto* fcr = dynamic_cast<const LocalFunctionCallReferenceNode*>(node)) {
                             QoreFunction* func = fcr->getFunction();
                             if (!func) {
@@ -17836,13 +17838,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 qore_ir_create_global_string_ptr(builder,
                                     func->getName(), "function_call_ref_name");
                             auto cr_ft = llvm::FunctionType::get(i64_type,
-                                    {ptr_type, ptr_type}, false);
+                                    {ptr_type, ptr_type, ptr_type}, false);
                             auto helper = module.getOrInsertFunction(
                                     "qore_rt_create_function_call_ref_aot", cr_ft);
                             auto helper_throwing = module.getOrInsertFunction(
                                     "qore_rt_create_function_call_ref_aot_throwing", cr_ft);
                             result = emitMaybeInvoke(helper, helper_throwing,
-                                    {function_name, xsink_arg}, module, llvm_func, inst);
+                                    {aot_ctx_arg, function_name, xsink_arg}, module, llvm_func, inst);
                         } else {
                             error = "unsupported AOT call reference lowering: only resolved method, static method, "
                                 "and function call references are native";
@@ -26750,17 +26752,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         auto helper = module.getOrInsertFunction(
                                 "qore_rt_new_object_by_path_nb_consume_args",
                                 llvm::FunctionType::get(i64_type,
-                                    {ptr_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type},
+                                    {ptr_type, ptr_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type},
                                     false));
                         result = builder->CreateCall(helper,
-                                {class_path, variant_sig, object_type_as_ptr, args_array, arg_cleanups,
+                                {aot_ctx_arg ? aot_ctx_arg : llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type)), class_path, variant_sig, object_type_as_ptr, args_array, arg_cleanups,
                                  nargs_val, xsink_arg});
                     } else {
                         auto helper = module.getOrInsertFunction("qore_rt_new_object_by_path_nb",
                                 llvm::FunctionType::get(i64_type,
-                                    {ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
+                                    {ptr_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
                         result = builder->CreateCall(helper,
-                                {class_path, variant_sig, object_type_as_ptr, args_array, nargs_val, xsink_arg});
+                                {aot_ctx_arg ? aot_ctx_arg : llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type)), class_path, variant_sig, object_type_as_ptr, args_array, nargs_val, xsink_arg});
                     }
                 } else {
                     llvm::Value* qc_ptr = llvm::ConstantInt::get(i64_type,
@@ -27103,13 +27105,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             method->getName(),
                             "local_method_call_ref_method_name");
                     auto cr_ft = llvm::FunctionType::get(i64_type,
-                            {ptr_type, ptr_type, ptr_type}, false);
+                            {ptr_type, ptr_type, ptr_type, ptr_type}, false);
                     auto helper = module.getOrInsertFunction(
                             "qore_rt_create_local_method_call_ref_aot", cr_ft);
                     auto helper_throwing = module.getOrInsertFunction(
                             "qore_rt_create_local_method_call_ref_aot_throwing", cr_ft);
                     result = emitMaybeInvoke(helper, helper_throwing,
-                            {class_path, method_name, xsink_arg}, module, llvm_func, inst);
+                            {aot_ctx_arg, class_path, method_name, xsink_arg}, module, llvm_func, inst);
                 } else {
                     auto* scr = dynamic_cast<const LocalStaticMethodCallReferenceNode*>(node);
                     method = scr ? scr->getMethod() : nullptr;
@@ -27124,13 +27126,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 method->getName(),
                                 "static_call_ref_method_name");
                         auto cr_ft = llvm::FunctionType::get(i64_type,
-                                {ptr_type, ptr_type, ptr_type}, false);
+                                {ptr_type, ptr_type, ptr_type, ptr_type}, false);
                         auto helper = module.getOrInsertFunction(
                                 "qore_rt_create_static_method_call_ref_aot", cr_ft);
                         auto helper_throwing = module.getOrInsertFunction(
                                 "qore_rt_create_static_method_call_ref_aot_throwing", cr_ft);
                         result = emitMaybeInvoke(helper, helper_throwing,
-                                {class_path, method_name, xsink_arg}, module, llvm_func, inst);
+                                {aot_ctx_arg, class_path, method_name, xsink_arg}, module, llvm_func, inst);
                     } else if (auto* dcr = dynamic_cast<const DeferredStaticMethodCallReferenceNode*>(node)) {
                         llvm::Value* class_path =
                             qore_ir_create_global_string_ptr(builder,
@@ -27141,26 +27143,26 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 dcr->getMethodName(),
                                 "deferred_static_call_ref_method_name");
                         auto cr_ft = llvm::FunctionType::get(i64_type,
-                                {ptr_type, ptr_type, ptr_type}, false);
+                                {ptr_type, ptr_type, ptr_type, ptr_type}, false);
                         auto helper = module.getOrInsertFunction(
                                 "qore_rt_create_static_method_call_ref_aot", cr_ft);
                         auto helper_throwing = module.getOrInsertFunction(
                                 "qore_rt_create_static_method_call_ref_aot_throwing", cr_ft);
                         result = emitMaybeInvoke(helper, helper_throwing,
-                                {class_path, method_name, xsink_arg}, module, llvm_func, inst);
+                                {aot_ctx_arg, class_path, method_name, xsink_arg}, module, llvm_func, inst);
                     } else if (auto* dfcr = dynamic_cast<const DeferredFunctionCallReferenceNode*>(node)) {
                         llvm::Value* function_name =
                             qore_ir_create_global_string_ptr(builder,
                                 dfcr->getFunctionName(),
                                 "deferred_function_call_ref_name");
                         auto cr_ft = llvm::FunctionType::get(i64_type,
-                                {ptr_type, ptr_type}, false);
+                                {ptr_type, ptr_type, ptr_type}, false);
                         auto helper = module.getOrInsertFunction(
                                 "qore_rt_create_function_call_ref_aot", cr_ft);
                         auto helper_throwing = module.getOrInsertFunction(
                                 "qore_rt_create_function_call_ref_aot_throwing", cr_ft);
                         result = emitMaybeInvoke(helper, helper_throwing,
-                                {function_name, xsink_arg}, module, llvm_func, inst);
+                                {aot_ctx_arg, function_name, xsink_arg}, module, llvm_func, inst);
                     } else if (auto* fcr = dynamic_cast<const LocalFunctionCallReferenceNode*>(node)) {
                         QoreFunction* func = fcr->getFunction();
                         if (!func) {
@@ -27172,13 +27174,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             qore_ir_create_global_string_ptr(builder,
                                 func->getName(), "function_call_ref_name");
                         auto cr_ft = llvm::FunctionType::get(i64_type,
-                                {ptr_type, ptr_type}, false);
+                                {ptr_type, ptr_type, ptr_type}, false);
                         auto helper = module.getOrInsertFunction(
                                 "qore_rt_create_function_call_ref_aot", cr_ft);
                         auto helper_throwing = module.getOrInsertFunction(
                                 "qore_rt_create_function_call_ref_aot_throwing", cr_ft);
                         result = emitMaybeInvoke(helper, helper_throwing,
-                                {function_name, xsink_arg}, module, llvm_func, inst);
+                                {aot_ctx_arg, function_name, xsink_arg}, module, llvm_func, inst);
                     } else {
                         error = "unsupported AOT call reference lowering: only resolved method, static method, "
                             "and function call references are native";

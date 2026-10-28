@@ -1,0 +1,175 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class ModuleExecutionContextTest
+
+#! Module code called from a restricted Program runs in the caller's Program in every execution mode
+/** With the AST interpreter, a module function called from a Program runs in that Program and with its restrictions
+    (UserVariantBase::eval()): objects that the function creates belong to the calling Program, so a call reference
+    to one of their methods is checked against the calling Program, and a builtin that checks the current Program,
+    such as \c create_object(), sees the calling Program.  The fast call paths of the IR interpreter, JIT and AOT code
+    ran the function in the Program that defined it, without those restrictions, whenever the call did not go
+    through UserVariantBase::eval() - for example when the function has no default arguments, or after tiered
+    promotion: lockdown user code could call \c RWLock::readLock() through a call reference to an \c RWLock that a
+    module function created, and module code could create objects of thread classes with \c create_object().
+
+    Each case runs the same script with the source module and with the module AOT-compiled with
+    <tt>--compile-module</tt>, in every execution mode, and expects the output of the source module with the AST
+    interpreter, which is the reference.
+*/
+class ModuleExecutionContextTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+
+        TmpDir tmp("qore-module-execution-context-");
+        string src_dir;
+        string qmod_dir;
+
+        #! the output of the source module with the AST interpreter
+        const ExpectedContextOutput = "callref: INVALID-FUNCTION-ACCESS
+callref_default_arg: INVALID-FUNCTION-ACCESS
+direct: INVALID-FUNCTION-ACCESS
+create_obj: CREATE-OBJECT-ERROR
+create_obj: CREATE-OBJECT-ERROR
+create_obj: CREATE-OBJECT-ERROR
+create_obj_default_arg: CREATE-OBJECT-ERROR
+create_obj_default_arg: CREATE-OBJECT-ERROR
+create_obj_default_arg: CREATE-OBJECT-ERROR
+closure_create_obj: CREATE-OBJECT-ERROR
+closure_create_obj: CREATE-OBJECT-ERROR
+closure_create_obj: CREATE-OBJECT-ERROR
+";
+    }
+
+    constructor() : QUnit::Test("ModuleExecutionContextTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        src_dir = tmp.path + "/src";
+        qmod_dir = tmp.path + "/qmod";
+        mkdir(src_dir);
+        mkdir(qmod_dir);
+        writeFile(src_dir + "/ExecContextMod.qm", moduleCode());
+
+        addTestCase("module code called from a PO_LOCKDOWN Program runs in that Program in every mode",
+            \testExecutionContext());
+
+        set_return_value(main());
+    }
+
+    private string moduleCode() {
+        return "%modern
+
+module ExecContextMod {
+    version = \"1.0\";
+    desc = \"module execution context regression module\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace ExecContextMod {
+public auto sub getLock() {
+    return new RWLock();
+}
+
+public auto sub getLockDefaultArg(hash<auto> opts = {}) {
+    return new RWLock();
+}
+
+public string sub createObject() {
+    return create_object(\"RWLock\").className();
+}
+
+public string sub createObjectDefaultArg(hash<auto> opts = {}) {
+    return create_object(\"RWLock\").className();
+}
+
+public code sub closureCreateObject() {
+    return string sub () { return create_object(\"RWLock\").className(); };
+}
+
+}
+";
+    }
+
+    private string contextScript() {
+        return "%modern
+%requires ExecContextMod
+
+Program p(PO_NEW_STYLE);
+p.loadModule(\"ExecContextMod\");
+p.setParseOptions(PO_LOCKDOWN);
+p.parse(\"
+auto sub callref() { auto l = ExecContextMod::getLock(); code c = \\\\l.readLock(); return c(); }
+auto sub callref_default_arg() { auto l = ExecContextMod::getLockDefaultArg(); code c = \\\\l.readLock(); return c(); }
+auto sub direct() { auto l = ExecContextMod::getLock(); l.readLock(); return 'used'; }
+auto sub create_obj() { return ExecContextMod::createObject(); }
+auto sub create_obj_default_arg() { return ExecContextMod::createObjectDefaultArg(); }
+auto sub closure_create_obj() { code c = ExecContextMod::closureCreateObject(); return c(); }
+\", \"probe\");
+
+# repeated calls run the module code on every tier with tiered execution
+foreach string f in (\"callref\", \"callref_default_arg\", \"direct\", \"create_obj\",
+        \"create_obj\", \"create_obj\", \"create_obj_default_arg\", \"create_obj_default_arg\",
+        \"create_obj_default_arg\", \"closure_create_obj\", \"closure_create_obj\",
+        \"closure_create_obj\") {
+    string r;
+    try {
+        r = sprintf(\"%y\", p.callFunction(f));
+    } catch (hash<ExceptionInfo> ex) {
+        r = ex.err;
+    }
+    printf(\"%s: %s\\n\", f, r);
+}
+";
+    }
+
+    private string writeFile(string path, string contents) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(contents);
+        f.close();
+        return path;
+    }
+
+    private compileModule(string qm_path, string qmod_path) {
+        string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s "
+            "%s -b --compile-module --output %s %s 2>&1", libqore_dir, libqore_dir, libqore_dir, qore_bin,
+            qmod_path, qm_path));
+        assertTrue(is_file(qmod_path), sprintf("compiled %s: %s", basename(qmod_path), compile_out));
+    }
+
+    private hash<ExecModeHarness::ModeRunResult> runScript(string module_dir, string script_path, string mode) {
+        return ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s "
+            "QORE_MODULE_DIR=%s %s -b --enable-debug --exec-mode=%s %s", libqore_dir, libqore_dir, libqore_dir,
+            module_dir, qore_bin, mode, script_path));
+    }
+
+    #! runs the script with the source and the AOT module in every mode against the source module's AST output
+    private checkAllModes(string script_name, string script, string expected) {
+        string script_path = writeFile(tmp.path + "/" + script_name, script);
+        hash<ExecModeHarness::ModeRunResult> reference = runScript(src_dir, script_path, "ast");
+        assertEq(expected, reference.out, script_name + ": source module, ast");
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = runScript(src_dir, script_path, mode);
+            assertEq(reference.out, r.out, sprintf("%s: source module, %s", script_name, mode));
+            r = runScript(qmod_dir, script_path, mode);
+            assertEq(reference.out, r.out, sprintf("%s: AOT module, %s", script_name, mode));
+        }
+    }
+
+    testExecutionContext() {
+        compileModule(src_dir + "/ExecContextMod.qm", qmod_dir + "/ExecContextMod.qmod");
+        checkAllModes("context.q", contextScript(), ExpectedContextOutput);
+    }
+}

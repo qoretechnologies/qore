@@ -3141,15 +3141,18 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_call_ref(uint64_t expr_bits, Except
     return toBits(result);
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_create_static_method_call_ref_aot(const char* class_path,
-        const char* method_name, ExceptionSink* xsink) {
+extern "C" DLLEXPORT uint64_t qore_rt_create_static_method_call_ref_aot(QoreAOTContext* ctx,
+        const char* class_path, const char* method_name, ExceptionSink* xsink) {
     if (!class_path || !*class_path || !method_name || !*method_name) {
         xsink->raiseException("CALL-REFERENCE-ERROR", "cannot resolve method call reference '%s::%s()'",
             class_path ? class_path : "<null>", method_name ? method_name : "<null>");
         return toBits(QoreValue());
     }
 
-    QoreProgram* pgm = getProgram();
+    // the code resolves the name in the Program it was loaded into, as the parser does for the same source; the
+    // reference runs in the current Program (#5556)
+    QoreProgram* current_pgm = getProgram();
+    QoreProgram* pgm = ctx && ctx->pgm ? ctx->pgm : current_pgm;
     if (!pgm) {
         xsink->raiseException("CALL-REFERENCE-ERROR",
             "cannot resolve method call reference '%s::%s()': no program context",
@@ -3184,7 +3187,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_static_method_call_ref_aot(const ch
     }
 
     RuntimeConfig& rc = rc_get_current_ref();
-    QoreProgram* call_pgm = rc.getProgram() ? rc.getProgram() : pgm;
+    QoreProgram* call_pgm = rc.getProgram() ? rc.getProgram() : (current_pgm ? current_pgm : pgm);
     const qore_class_private* cls = rc.getClass() ? rc.getClass() : runtime_get_class();
     if (method->isStatic()) {
         return toBits(QoreValue(new StaticMethodCallReferenceNode(&loc_builtin, method, call_pgm, cls)));
@@ -3200,15 +3203,18 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_static_method_call_ref_aot(const ch
     return toBits(QoreValue(new RunTimeResolvedMethodReferenceNode(&loc_builtin, obj, method, cls)));
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_create_local_method_call_ref_aot(const char* class_path,
-        const char* method_name, ExceptionSink* xsink) {
+extern "C" DLLEXPORT uint64_t qore_rt_create_local_method_call_ref_aot(QoreAOTContext* ctx,
+        const char* class_path, const char* method_name, ExceptionSink* xsink) {
     if (!class_path || !*class_path || !method_name || !*method_name) {
         xsink->raiseException("CALL-REFERENCE-ERROR", "cannot resolve method call reference '%s::%s()'",
             class_path ? class_path : "<null>", method_name ? method_name : "<null>");
         return toBits(QoreValue());
     }
 
-    QoreProgram* pgm = getProgram();
+    // the code resolves the name in the Program it was loaded into, as the parser does for the same source; the
+    // reference runs in the current Program (#5556)
+    QoreProgram* current_pgm = getProgram();
+    QoreProgram* pgm = ctx && ctx->pgm ? ctx->pgm : current_pgm;
     if (!pgm) {
         xsink->raiseException("CALL-REFERENCE-ERROR",
             "cannot resolve method call reference '%s::%s()': no program context",
@@ -3251,15 +3257,18 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_local_method_call_ref_aot(const cha
     return toBits(QoreValue(new RunTimeResolvedMethodReferenceNode(&loc_builtin, obj, method, cls)));
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_create_function_call_ref_aot(const char* function_name,
-        ExceptionSink* xsink) {
+extern "C" DLLEXPORT uint64_t qore_rt_create_function_call_ref_aot(QoreAOTContext* ctx,
+        const char* function_name, ExceptionSink* xsink) {
     if (!function_name || !*function_name) {
         xsink->raiseException("CALL-REFERENCE-ERROR", "cannot resolve function call reference '%s()'",
             function_name ? function_name : "<null>");
         return toBits(QoreValue());
     }
 
-    QoreProgram* pgm = getProgram();
+    // the code resolves the name in the Program it was loaded into, as the parser does for the same source; the
+    // reference runs in the current Program (#5556)
+    QoreProgram* current_pgm = getProgram();
+    QoreProgram* pgm = ctx && ctx->pgm ? ctx->pgm : current_pgm;
     if (!pgm) {
         xsink->raiseException("CALL-REFERENCE-ERROR",
             "cannot resolve function call reference '%s()': no program context", function_name);
@@ -3276,7 +3285,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_function_call_ref_aot(const char* f
     }
 
     RuntimeConfig& rc = rc_get_current_ref();
-    QoreProgram* call_pgm = rc.getProgram() ? rc.getProgram() : pgm;
+    QoreProgram* call_pgm = rc.getProgram() ? rc.getProgram() : (current_pgm ? current_pgm : pgm);
     return toBits(QoreValue(new FunctionCallReferenceNode(&loc_builtin, func, call_pgm)));
 }
 
@@ -10359,6 +10368,36 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
     }
 }
 
+//! returns the Program a user function runs in when it is called from the current context
+/** This is the Program an AST call runs the function in (see FunctionCallNode::evalImpl() and
+    UserVariantExecHelper): the call's explicit Program, if any, otherwise the Program the caller runs in.  A function
+    defined in another Program, such as a module function called from a script, runs in the caller's Program and
+    with its restrictions (see QoreRtUserCallOverrideHelper), not in the Program that defined it.
+*/
+static QoreProgram* qore_rt_function_execution_program(QoreProgram* explicit_pgm, QoreProgram* caller_pgm,
+        const UserVariantBase* uvb) {
+    if (explicit_pgm) {
+        return explicit_pgm;
+    }
+    return caller_pgm ? caller_pgm : uvb->pgm;
+}
+
+//! sets the runtime parse options override of a fast call of a user variant as UserVariantBase::eval() does
+/** A user variant that runs in a Program other than the one that defined it is restricted with the executing
+    Program's restrictions; otherwise any override of the caller is cleared for the call.
+*/
+class QoreRtUserCallOverrideHelper {
+public:
+    DLLLOCAL QoreRtUserCallOverrideHelper(QoreProgram* exec_pgm, const UserVariantBase* uvb)
+            : helper(exec_pgm && exec_pgm != uvb->pgm ? get_user_variant_runtime_po_override_mask()
+                    : QoreParseOptions(),
+                exec_pgm ? exec_pgm->getParseOptions() : QoreParseOptions()) {
+    }
+
+private:
+    RuntimeParseOptionsOverrideHelper helper;
+};
+
 static QoreProgram* qore_rt_method_execution_program(const QoreMethod* method, const UserVariantBase* uvb) {
     QoreProgram* pgm = nullptr;
     if (method) {
@@ -10569,7 +10608,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
     // Capture caller's program before ptcch switch, for QoreJITStackLocation.
     // See qore_rt_call_static_method_direct for the rationale.
     QoreProgram* caller_pgm = getProgram();
-    QoreProgram* exec_pgm = pgm ? pgm : uvb->pgm;
+    QoreProgram* exec_pgm = qore_rt_function_execution_program(pgm, caller_pgm, uvb);
 
     // Set up program thread context (only if program differs from caller's program)
     std::optional<ProgramThreadCountContextHelper> ptcch;
@@ -10634,6 +10673,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
     QoreValue val{};
     {
         ArgvContextHelper argv_helper(argv.release(), xsink);
+        QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb);
         if (use_direct_params) {
             // Direct params path: pass args straight to IR slot cache, no TLS
             IRDirectParams dp{args, nargs};
@@ -10728,13 +10768,20 @@ static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBa
     // otherwise thread_instantiate_closure_var() null-derefs td->tlpd at lib/thread.cpp:1218.
     // The conditional install (tlpd==null only) preserves DataProvider's child-program
     // module-init flow, which depends on lvstack continuity across closure invocations.
-    ClosureTlpdEnsureHelper tlpd_helper(xsink, uvb->pgm);
+    // A closure runs in the Program it was created in, as an AST call of the closure does (see
+    // QoreClosureNode::execValue() and QoreObjectClosureNode::execValue()), and with that Program's restrictions
+    // if it is not the Program that defined the closure's code (see QoreRtUserCallOverrideHelper)
+    QoreProgram* exec_pgm = cb ? cb->getProgram() : nullptr;
+    if (!exec_pgm) {
+        exec_pgm = uvb->pgm;
+    }
+    ClosureTlpdEnsureHelper tlpd_helper(xsink, exec_pgm);
 
     // Capture caller's program before ptcch switches to uvb->pgm.
     QoreProgram* caller_pgm = getProgram();
 
     // Program context
-    ProgramThreadCountContextHelper ptcch(xsink, uvb->pgm, true);
+    ProgramThreadCountContextHelper ptcch(xsink, exec_pgm, true);
     if (*xsink) {
         return toBits(QoreValue());
     }
@@ -10838,39 +10885,40 @@ static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBa
     QoreValue val{};
     {
         ArgvContextHelper argv_helper(argv.release(), xsink);
+        QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb);
         if (use_direct_params) {
             // Direct params path: pass args straight to IR slot cache, no TLS
             IRDirectParams dp(args, nargs, arg_cleanups);
-            execJITWithDeopt(uvb, call_name, [ir, uvb, &dp](ExceptionSink* xs, bool& inv) -> uint64_t {
+            execJITWithDeopt(uvb, call_name, [ir, uvb, exec_pgm, &dp](ExceptionSink* xs, bool& inv) -> uint64_t {
                 QoreValue ir_return_value;
                 bool ok = QoreIRInterpreter::execute(*ir, ir_return_value, xs, nullptr,
                     nullptr, nullptr, ir->cached_pre_instantiated, nullptr,
-                    uvb->getStatementBlock(), uvb->pgm, false, &dp);
+                    uvb->getStatementBlock(), exec_pgm, false, &dp);
                 if (!ok && !*xs) {
                     inv = true;
                     return 0;
                 }
                 return toBits(ir_return_value);
-            }, val, xsink, caller_pgm);
+            }, val, xsink, caller_pgm, nullptr, exec_pgm);
         } else if (uvb->hasCachedFunction()) {
             // JIT/AOT fast path
             execJITWithDeopt(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
                 return uvb->execCachedFunction(xs, inv);
-            }, val, xsink, caller_pgm);
+            }, val, xsink, caller_pgm, nullptr, exec_pgm);
         } else {
             // IR fast path (standard TLS)
             const QoreIRFunction* callee_ir = uvb->getCachedIR();
-            execJITWithDeopt(uvb, call_name, [callee_ir, uvb](ExceptionSink* xs, bool& inv) -> uint64_t {
+            execJITWithDeopt(uvb, call_name, [callee_ir, uvb, exec_pgm](ExceptionSink* xs, bool& inv) -> uint64_t {
                 QoreValue ir_return_value;
                 bool ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xs, nullptr,
                     nullptr, nullptr, callee_ir->cached_pre_instantiated, nullptr,
-                    uvb->getStatementBlock(), uvb->pgm);
+                    uvb->getStatementBlock(), exec_pgm);
                 if (!ok && !*xs) {
                     inv = true;  // Request deopt to AST
                     return 0;
                 }
                 return toBits(ir_return_value);
-            }, val, xsink, caller_pgm);
+            }, val, xsink, caller_pgm, nullptr, exec_pgm);
         }
     }
 
@@ -11008,7 +11056,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast_with_target(uint64_t (*target_fn
 
     // Capture caller's program before ptcch switch.
     QoreProgram* caller_pgm = getProgram();
-    QoreProgram* exec_pgm = uvb->pgm;
+    QoreProgram* exec_pgm = qore_rt_function_execution_program(nullptr, caller_pgm, uvb);
 
     // Set up program thread context
     ProgramThreadCountContextHelper ptcch(xsink, exec_pgm, true);
@@ -11057,6 +11105,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast_with_target(uint64_t (*target_fn
     QoreValue val{};
     {
         ArgvContextHelper argv_helper(argv.release(), xsink);
+        QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb);
         execJITWithDeopt(uvb, call_name, [target_fn](ExceptionSink* xs, bool& /*inv*/) {
             return target_fn(xs);
         }, val, xsink, caller_pgm, nullptr, exec_pgm);
@@ -11135,8 +11184,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_self_recursive(const AbstractQoreFunc
     // and callee programs are the same, but keep the pattern consistent).
     QoreProgram* caller_pgm = getProgram();
 
-    // Set up program thread context (program is already correct from parent call)
-    ProgramThreadCountContextHelper ptcch(xsink, uvb->pgm, true);
+    // Set up program thread context: a recursive call runs where its caller runs, as an AST call does
+    QoreProgram* exec_pgm = qore_rt_function_execution_program(nullptr, caller_pgm, uvb);
+    ProgramThreadCountContextHelper ptcch(xsink, exec_pgm, true);
     if (*xsink) {
         return toBits(QoreValue());
     }
@@ -11185,9 +11235,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_self_recursive(const AbstractQoreFunc
     QoreValue val{};
     {
         ArgvContextHelper argv_helper(argv.release(), xsink);
+        QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb);
         execJITWithDeopt(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
             return uvb->execCachedFunction(xs, inv);
-        }, val, xsink, caller_pgm);
+        }, val, xsink, caller_pgm, nullptr, exec_pgm);
     }
 
     // Uninstantiate argv + params in reverse order (LIFO)
@@ -11478,6 +11529,7 @@ static uint64_t qore_rt_call_method_fast_impl(const QoreMethod* method,
     QoreValue val{};
     {
         ArgvContextHelper argv_helper(argv.release(), xsink);
+        QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb);
         if (use_direct_params) {
             // Direct params path: pass args straight to IR slot cache, no TLS
             IRDirectParams dp{args, nargs};
@@ -15084,7 +15136,7 @@ static uint64_t qore_rt_call_direct_aot_impl(QoreAOTContext* ctx, int32_t slot,
 
         // Capture caller's program before ptcch switch.
         QoreProgram* caller_pgm = getProgram();
-        QoreProgram* exec_pgm = target.pgm ? target.pgm : uvb->pgm;
+        QoreProgram* exec_pgm = qore_rt_function_execution_program(target.pgm, caller_pgm, uvb);
 
         // Set up program thread context (only if program differs from caller's program)
         std::optional<ProgramThreadCountContextHelper> ptcch;
@@ -15143,6 +15195,7 @@ static uint64_t qore_rt_call_direct_aot_impl(QoreAOTContext* ctx, int32_t slot,
         QoreValue val{};
         {
             ArgvContextHelper argv_helper(argv.release(), xsink);
+            QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb);
             if (uvb->hasCachedFunction()) {
                 execJITWithDeopt(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
                     return uvb->execCachedFunction(xs, inv);
@@ -16575,12 +16628,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_object_nb(const QoreClass* qc,
         nargs > 0 ? *arg_list : nullptr, xsink, object_type_info));
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_new_object_by_path_nb(const char* class_path,
+extern "C" DLLEXPORT uint64_t qore_rt_new_object_by_path_nb(QoreAOTContext* ctx, const char* class_path,
         const char* variant_sig, const QoreTypeInfo* object_type_info, uint64_t* args, int nargs,
         ExceptionSink* xsink) {
+    // the class is resolved in the Program the code was loaded into (ctx; null for JIT code), as the parser resolves it
+    // for the same source, and checked against the Program the code runs in (#5556)
     QoreProgram* pgm = getProgram();
     const QoreClass* qc = class_path && *class_path
-        ? qore_aot_resolve_class_ref(pgm, class_path, false) : nullptr;
+        ? qore_aot_resolve_class_ref(ctx && ctx->pgm ? ctx->pgm : pgm, class_path, false) : nullptr;
     if (!qc) {
         xsink->raiseException("AOT-ERROR",
             "cannot resolve class '%s' for AOT new object call",
@@ -16619,12 +16674,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_object_nb_consume_args(
         nargs > 0 ? *arg_list : nullptr, xsink, object_type_info));
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_new_object_by_path_nb_consume_args(const char* class_path,
+extern "C" DLLEXPORT uint64_t qore_rt_new_object_by_path_nb_consume_args(QoreAOTContext* ctx, const char* class_path,
         const char* variant_sig, const QoreTypeInfo* object_type_info, uint64_t* args,
         uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink) {
+    // the class is resolved in the Program the code was loaded into (ctx; null for JIT code), as the parser resolves it
+    // for the same source, and checked against the Program the code runs in (#5556)
     QoreProgram* pgm = getProgram();
     const QoreClass* qc = class_path && *class_path
-        ? qore_aot_resolve_class_ref(pgm, class_path, false) : nullptr;
+        ? qore_aot_resolve_class_ref(ctx && ctx->pgm ? ctx->pgm : pgm, class_path, false) : nullptr;
     if (!qc) {
         xsink->raiseException("AOT-ERROR",
             "cannot resolve class '%s' for AOT new object call",
@@ -16825,6 +16882,7 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
     QoreValue val{};
     {
         ArgvContextHelper argv_helper(argv.release(), xsink);
+        QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb);
         if (use_direct_params) {
             // Direct params path: pass args straight to IR slot cache, no TLS
             IRDirectParams dp{args, nargs, arg_cleanups};
@@ -18258,6 +18316,7 @@ static uint64_t qore_rt_call_static_method_direct_impl(const QoreMethod* method,
     QoreValue val{};
     {
         ArgvContextHelper argv_helper(argv.release(), xsink);
+        QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb);
         // Set class context for private method access (matches AST's
         // ObjectSubstitutionHelper in StaticMethodFunction::evalMethod)
         ClassOnlySubstitutionHelper cosh(qore_class_private::get(*method->getClass()));
@@ -19716,8 +19775,8 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_create_method_re
 }
 
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_create_static_method_call_ref_aot_throwing(
-        const char* class_path, const char* method_name, ExceptionSink* xsink) {
-    uint64_t result = qore_rt_create_static_method_call_ref_aot(class_path, method_name, xsink);
+        QoreAOTContext* ctx, const char* class_path, const char* method_name, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_create_static_method_call_ref_aot(ctx, class_path, method_name, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }
@@ -19725,8 +19784,8 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_create_static_me
 }
 
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_create_local_method_call_ref_aot_throwing(
-        const char* class_path, const char* method_name, ExceptionSink* xsink) {
-    uint64_t result = qore_rt_create_local_method_call_ref_aot(class_path, method_name, xsink);
+        QoreAOTContext* ctx, const char* class_path, const char* method_name, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_create_local_method_call_ref_aot(ctx, class_path, method_name, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }
@@ -19734,8 +19793,8 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_create_local_met
 }
 
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_create_function_call_ref_aot_throwing(
-        const char* function_name, ExceptionSink* xsink) {
-    uint64_t result = qore_rt_create_function_call_ref_aot(function_name, xsink);
+        QoreAOTContext* ctx, const char* function_name, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_create_function_call_ref_aot(ctx, function_name, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }

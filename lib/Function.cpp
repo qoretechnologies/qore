@@ -4845,7 +4845,7 @@ QoreProgram* UserVariantExecHelper::getExecutionProgram(const UserVariantBase* u
     return pgm ? pgm : uvb->pgm;
 }
 
-static QoreParseOptions get_user_variant_runtime_po_override_mask() {
+QoreParseOptions get_user_variant_runtime_po_override_mask() {
     return QoreParseOptions(PO_LOCKDOWN | PO_NO_EMBEDDED_LOGIC | PO_NO_LOCALE_CONTROL | PO_NO_DEBUGGING
         | PO_ALLOW_INJECTION | PO_ALLOW_DEBUGGER);
 }
