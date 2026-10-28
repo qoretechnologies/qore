@@ -8397,6 +8397,10 @@ std::unique_ptr<QoreIRFunction> qore_aot_materialize_lazy_closure_ir(
     const uint8_t* end = ptr + lazy_ir.ir_size;
     LocalVar** parent_locals = lazy_ir.parent_locals.empty()
         ? nullptr : const_cast<LocalVar**>(lazy_ir.parent_locals.data());
+    // The IR is built on the closure's first call, which can come from any code the closure was passed to; the
+    // variants resolved while building it are checked against the closure's own parse options, as the parser checks
+    // them for the same source, never against those of the caller (#5556)
+    LoadTimeParseOptionsHelper closure_poh(uvb->getParseOptions(lazy_ir.pgm->getParseOptions()));
     auto ir = deserializeIRFunction(reader, ptr, end, lazy_ir.pgm,
         read_expr, &lazy_ir.enclosing_locals, error,
         parent_locals, static_cast<int>(lazy_ir.parent_locals.size()),
@@ -8504,6 +8508,10 @@ QoreAOTContext* qore_aot_materialize_lazy_function_context(
         return nullptr;
     }
     qore_root_ns_private::RuntimeNamespaceReadLocker rnl(qore_root_ns_private::get(*lazy_ir.pgm->getRootNS()));
+    // The context is built on the function's first call, in the caller's context; the variants resolved while
+    // building it are checked against the function's own parse options, as the parser checks them for the same
+    // source, never against those of the caller (#5556)
+    LoadTimeParseOptionsHelper function_poh(uvb->getParseOptions(lazy_ir.pgm->getParseOptions()));
     std::string build_error;
     QoreAOTContext* ctx = buildContextFromSlotMap(reader, ptr, entry_end,
         uvb, lazy_ir.pgm, aot_func, serialized_name, entry_end, &lazy_ir.type_resolver,
@@ -11215,6 +11223,9 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
         bool deser_ok = false;
         {
             ProgramRuntimeParseContextHelper pch(&xsink, *qpgm);
+            // the variants resolved while loading are checked against the loaded code's own parse options, as the
+            // parser checks them for the same source, not against those of the code that triggered the load (#5556)
+            LoadTimeParseOptionsHelper load_poh((*qpgm)->getParseOptions());
             if (xsink.isException()) {
                 xsink.handleExceptions();
                 rc = 2;
@@ -12511,6 +12522,10 @@ static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_
         if (xsink) {
             return finish(false);
         }
+        // building the contexts of the module's initialization code resolves its variants, which are checked against
+        // the module's own parse options, as the parser checks them for the same source, not against those of the
+        // importing code (#5556)
+        LoadTimeParseOptionsHelper init_poh(init_ctx_pgm->getParseOptions());
         // Serialize only builders for this module's shared shadow Program.  Context
         // deserialization can resolve APIs in another Program and wait for its parse
         // lock; taking that context above gives every same-module importer one lock order
@@ -12922,6 +12937,9 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
         bool deser_ok = false;
         {
             ProgramRuntimeParseContextHelper pch(&xsink, *qpgm);
+            // the variants resolved while loading are checked against the loaded code's own parse options, as the
+            // parser checks them for the same source, not against those of the code that triggered the load (#5556)
+            LoadTimeParseOptionsHelper load_poh((*qpgm)->getParseOptions());
             if (xsink.isException()) {
                 xsink.handleExceptions();
                 rc = 2;
@@ -13871,6 +13889,9 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
             // Set parse context so UserVariantBase constructor can call
             // parse_get_parse_options() which reads thread-local current_pgm
             ProgramRuntimeParseContextHelper pch(&xsink, local_pgm);
+            // the variants resolved while loading are checked against the loaded code's own parse options, as the
+            // parser checks them for the same source, not against those of the code that triggered the load (#5556)
+            LoadTimeParseOptionsHelper load_poh(local_pgm->getParseOptions());
             if (xsink.isException()) {
                 xsink.clear();
                 parse_ctx_failed = true;
@@ -15645,6 +15666,9 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
             // Set parse context so UserVariantBase constructor can call
             // parse_get_parse_options() which reads thread-local current_pgm
             ProgramRuntimeParseContextHelper pch(&xsink, local_pgm);
+            // the variants resolved while loading are checked against the loaded code's own parse options, as the
+            // parser checks them for the same source, not against those of the code that triggered the load (#5556)
+            LoadTimeParseOptionsHelper load_poh(local_pgm->getParseOptions());
             if (xsink.isException()) {
                 xsink.clear();
                 parse_ctx_failed = true;
@@ -15694,6 +15718,10 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
             // otherwise a requiring program without options such as
             // %allow-debugger can reject valid module-local code.
             ProgramRuntimeParseContextHelper pch(&xsink, local_pgm);
+            // this also suspends the restrictions that the code triggering the load may run under, so that the
+            // module's variants are checked against its own parse options only, as the parser checks them for the
+            // same source (#5556)
+            LoadTimeParseOptionsHelper load_poh(local_pgm->getParseOptions());
             if (xsink.isException()) {
                 xsink.clear();
                 registration_parse_ctx_failed = true;
@@ -15982,6 +16010,10 @@ static int qore_aot_script_register_native_impl(QoreProgram* tpgm,
 
     ExceptionSink xsink;
     ProgramRuntimeParseContextHelper pch(&xsink, tpgm);
+    // the variants resolved while loading are checked against the loaded code's own parse options, as the parser
+    // checks them for the same source, not against those of the code that triggered the load (#5556); this ends
+    // before the script's initialization code runs
+    std::optional<LoadTimeParseOptionsHelper> load_poh(std::in_place, tpgm->getParseOptions());
     if (xsink.isException()) {
         xsink.handleExceptions();
         return 2;
@@ -16037,6 +16069,7 @@ static int qore_aot_script_register_native_impl(QoreProgram* tpgm,
         fprintf(stderr, "qore_aot_script_register_native: %s\n", msg.c_str());
         return 4;
     }
+    load_poh.reset();
 
     if (!init_func_contexts.empty()) {
         std::vector<AOTInitFuncDescriptor> init_descriptors;
@@ -16182,6 +16215,10 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
         // deserialization) can read parse_get_parse_options().
         // Same invariant qore_aot_module_init_v3 observes.
         ProgramRuntimeParseContextHelper pch(&xsink, tpgm);
+        // the variants resolved while loading are checked against the loaded code's own parse options, as the
+        // parser checks them for the same source, not against those of the code that triggered the load (#5556);
+        // this ends before the script's initialization code runs
+        std::optional<LoadTimeParseOptionsHelper> load_poh(std::in_place, tpgm->getParseOptions());
         if (xsink.isException()) {
             xsink.handleExceptions();
             return 2;
@@ -16235,6 +16272,7 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
                 return 4;
             }
         }
+        load_poh.reset();
 
         // Phase 4 slice 10f: execute init functions (NS_CONSTANT /
         // CLASS_CONSTANT / STATIC_VAR / MODULE_INIT) against tpgm.
@@ -16466,6 +16504,10 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
 
     {
         ProgramRuntimeParseContextHelper pch(&xsink, tpgm);
+        // the variants resolved while loading are checked against the loaded code's own parse options, as the
+        // parser checks them for the same source, not against those of the code that triggered the load (#5556);
+        // this ends before the scripts' initialization code runs
+        std::optional<LoadTimeParseOptionsHelper> load_poh(std::in_place, tpgm->getParseOptions());
         if (xsink.isException()) {
             xsink.handleExceptions();
             return 2;
@@ -16608,6 +16650,7 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
                 }
             }
         }
+        load_poh.reset();
         if (!batch_init_contexts.empty() && !batch_init_descriptors.empty()) {
             ExceptionSink tch_xsink;
             ProgramThreadCountContextHelper tch(&tch_xsink, tpgm, false);

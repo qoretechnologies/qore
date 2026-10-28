@@ -1285,6 +1285,82 @@ using PendingFunctionDefault = QoreAOTBinaryDeserializer::PendingFunctionDefault
 static thread_local std::vector<PendingFunctionDefault>*
     g_aot_pending_function_defaults = nullptr;
 
+// Binding builtin variants while an image is loaded (issue #5556)
+//
+// When code is parsed from source, the parser binds calls to their variants and checks each builtin variant's
+// functional domain against the parse options of the code being parsed.  A call without a bound variant is resolved
+// when it is evaluated instead, against the runtime parse options then in effect, which include the restrictions of
+// the Program the call runs in (see RuntimeParseOptionsOverrideHelper) and, for a function call, are those of the
+// Program the call runs in (see CodeEvaluationHelper::init()).  So a call that an AOT image leaves unbound behaves
+// differently from the same source: a builtin that the module may use is refused when the module's code runs on
+// behalf of a restricted Program, as for a class member initializer or default argument that constructs a thread
+// class.
+//
+// The helpers below bind such calls while the image is loaded, which is what corresponds to parse time.  The
+// loaders call them with the runtime parse options set to those of the code being loaded (see
+// LoadTimeParseOptionsHelper), so the functional-domain check that runtimeFindVariant() makes is the check the parser
+// makes.  Only builtin variants are bound, since only they have a functional domain.  A call that cannot be bound,
+// including one whose variant the loaded code's options do not allow, is left to be resolved when it is evaluated,
+// as before, so nothing is allowed that the parser would refuse.
+
+//! binds the builtin constructor variant that a deserialized object construction resolves to
+static void qore_aot_bind_constructor_variant(ScopedObjectCallNode* socn, const QoreClass* qc) {
+    assert(socn);
+    if (!qc || socn->getVariant()) {
+        return;
+    }
+    const QoreListNode* args = socn->getArgs();
+    if (args && args->needs_eval()) {
+        return;
+    }
+    const QoreMethod* constructor = qc->getConstructor();
+    if (!constructor) {
+        return;
+    }
+    ExceptionSink xsink;
+    const AbstractQoreFunctionVariant* variant = qore_method_private::get(*constructor)->getFunction()
+        ->runtimeFindVariant(&xsink, args, false, nullptr);
+    if (xsink) {
+        xsink.clear();
+        return;
+    }
+    if (variant && !variant->isUser()) {
+        socn->setVariant(variant);
+    }
+}
+
+//! binds the builtin variant that a deserialized no-argument function call default resolves to
+static void qore_aot_bind_default_function_call_variant(FunctionCallNode* fcn, const FunctionEntry* fe) {
+    assert(fcn);
+    assert(fe);
+    ExceptionSink xsink;
+    const AbstractQoreFunctionVariant* variant = fe->getFunction()->runtimeFindVariant(&xsink, nullptr, false,
+        nullptr);
+    if (xsink) {
+        xsink.clear();
+        return;
+    }
+    if (variant && !variant->isUser()) {
+        fcn->setVariant(variant);
+    }
+}
+
+//! binds the builtin variant that a deserialized no-argument static method call default resolves to
+static void qore_aot_bind_default_static_method_call_variant(StaticMethodCallNode* smcn, const QoreMethod* m) {
+    assert(smcn);
+    assert(m);
+    ExceptionSink xsink;
+    const AbstractQoreFunctionVariant* variant = qore_method_private::get(*m)->getFunction()
+        ->runtimeFindVariant(&xsink, nullptr, false, nullptr);
+    if (xsink) {
+        xsink.clear();
+        return;
+    }
+    if (variant && !variant->isUser()) {
+        smcn->setVariant(variant);
+    }
+}
+
 // Read an instance-member / static-member default value.
 //
 // If the value is a VT_NEW_OBJECT whose target class is not yet registered in
@@ -1517,6 +1593,7 @@ static bool readDeferredMemberDefault(
         if (parse_args) {
             socn->resolveParseArgs();
         }
+        qore_aot_bind_constructor_variant(socn, qc);
         default_val = QoreValue(socn);
     } else {
         // Defer: store class path + args; second pass resolves.
@@ -3266,6 +3343,7 @@ static QoreValue qoreAOTMakeObjectDefaultNode(QoreProgram* pgm, const QoreClass*
     if (parse_args) {
         socn->resolveParseArgs();
     }
+    qore_aot_bind_constructor_variant(socn, qc);
     return QoreValue(socn);
 }
 
@@ -4680,6 +4758,7 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
             if (parse_args) {
                 socn->resolveParseArgs();
             }
+            qore_aot_bind_constructor_variant(socn, qc);
             return QoreValue(socn);
         }
 
@@ -15485,8 +15564,9 @@ bool QoreAOTBinaryDeserializer::finalizePreIndex(std::string& error) {
             arg_vec_t& defaults = const_cast<arg_vec_t&>(sig->getDefaultArgList());
             if (pd.param_index < defaults.size()) {
                 defaults[pd.param_index].discard(nullptr);
-                defaults[pd.param_index] = QoreValue(new StaticMethodCallNode(
-                    &loc_builtin, m, (QoreParseListNode*)nullptr));
+                StaticMethodCallNode* smcn = new StaticMethodCallNode(&loc_builtin, m, (QoreParseListNode*)nullptr);
+                defaults[pd.param_index] = QoreValue(smcn);
+                qore_aot_bind_default_static_method_call_variant(smcn, m);
             }
         }
         pending_smd.clear();
@@ -15548,8 +15628,9 @@ bool QoreAOTBinaryDeserializer::resolveFunctionCallDefaults(std::string& error) 
         arg_vec_t& defaults = const_cast<arg_vec_t&>(sig->getDefaultArgList());
         if (pd.param_index < defaults.size()) {
             defaults[pd.param_index].discard(nullptr);
-            defaults[pd.param_index] = QoreValue(new FunctionCallNode(
-                &loc_builtin, fe, static_cast<QoreParseListNode*>(nullptr)));
+            FunctionCallNode* fcn = new FunctionCallNode(&loc_builtin, fe, static_cast<QoreParseListNode*>(nullptr));
+            defaults[pd.param_index] = QoreValue(fcn);
+            qore_aot_bind_default_function_call_variant(fcn, fe);
         }
     }
     pending_fd.clear();
@@ -18254,6 +18335,7 @@ static bool readAndSetupVariantSignature(
                 FunctionCallNode* fcn = new FunctionCallNode(
                     &loc_builtin, fe, static_cast<QoreParseListNode*>(nullptr));
                 param_defaults[j] = QoreValue(fcn);
+                qore_aot_bind_default_function_call_variant(fcn, fe);
             } else if (fname && *fname && g_aot_pending_function_defaults) {
                 // The referenced function belongs to this module but has not been
                 // registered yet; the FUNCTIONS section is not ordered by dependency.
@@ -18339,8 +18421,9 @@ static bool readAndSetupVariantSignature(
                 }
             }
             if (m) {
-                param_defaults[j] = QoreValue(new StaticMethodCallNode(
-                    &loc_builtin, m, (QoreParseListNode*)nullptr));
+                StaticMethodCallNode* smcn = new StaticMethodCallNode(&loc_builtin, m, (QoreParseListNode*)nullptr);
+                param_defaults[j] = QoreValue(smcn);
+                qore_aot_bind_default_static_method_call_variant(smcn, m);
             } else {
                 // Method not yet committed (likely a default referencing a
                 // static method of the same or a still-pending class).

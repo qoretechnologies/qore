@@ -552,6 +552,39 @@ DLLLOCAL QoreParseOptions runtime_get_parse_options_stack(ExceptionSink* xsink, 
 DLLLOCAL bool parse_check_parse_option(const QoreParseOptions& o);
 DLLLOCAL bool runtime_check_parse_option(const QoreParseOptions& o);
 
+//! Sets the runtime parse options to those of AOT-compiled code while the code is loaded
+/** When code is parsed from source, the parser binds calls to their variants and checks each builtin variant's
+    functional domain against the parse options of the code being parsed.  Code loaded from an AOT image is not
+    parsed: the loader resolves those variants instead, through QoreFunction::runtimeFindVariant(), which checks them
+    against the thread's runtime parse options.  The loader runs wherever the load was triggered - a %requires,
+    load_module(), Program::loadModule(), or the first call of a function whose context is built lazily - so without
+    this helper the image's code would be checked against the options of the code that happened to trigger the load,
+    including the restrictions that RuntimeParseOptionsOverrideHelper imposes on code running in a restricted
+    Program.
+
+    This helper sets the runtime parse options to the given options of the code being loaded and suspends any such
+    override for its lifetime, which makes load-time resolution what parse-time resolution is for the same source.
+    It must only be used around the loading of AOT-compiled code (deserialization, slot-map context construction and
+    module initialization), never around the evaluation of code on behalf of a caller: a variant resolved when code is
+    evaluated is checked against the options in effect for that evaluation, including the restrictions of the
+    Program it runs in.
+*/
+class LoadTimeParseOptionsHelper {
+public:
+    //! sets the runtime parse options to \a po and suspends any runtime parse options override
+    DLLLOCAL LoadTimeParseOptionsHelper(const QoreParseOptions& po);
+    //! restores the runtime parse options and override
+    DLLLOCAL ~LoadTimeParseOptionsHelper();
+
+    DLLLOCAL LoadTimeParseOptionsHelper(const LoadTimeParseOptionsHelper&) = delete;
+    DLLLOCAL LoadTimeParseOptionsHelper& operator=(const LoadTimeParseOptionsHelper&) = delete;
+
+private:
+    QoreParseOptions old_po;
+    QoreParseOptions old_mask;
+    QoreParseOptions old_value;
+};
+
 class RuntimeParseOptionsOverrideHelper {
 public:
     DLLLOCAL RuntimeParseOptionsOverrideHelper(const QoreParseOptions& mask, const QoreParseOptions& value);

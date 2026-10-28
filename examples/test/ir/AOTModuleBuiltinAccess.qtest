@@ -1,0 +1,498 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class AOTModuleBuiltinAccessTest
+
+#! Regression test for issue #5556: AOT module code resolves builtin variants under its own parse options
+/** When code is parsed from source, the parser binds its calls to their variants and checks each builtin variant's
+    functional domain against the parse options of the code being parsed: the module's.  A call that is not bound to a
+    variant is resolved when it is evaluated, against the runtime parse options then in effect, which include the
+    restrictions of the Program the call runs in.
+
+    The AOT loader left some calls unbound that the parser binds (constructor calls in class member, static variable
+    and hashdecl member initializers and in default argument values, and no-argument builtin function call defaults),
+    and resolved others with the runtime parse options of whatever code triggered the load.  Module code called from a
+    \c PO_LOCKDOWN Program was therefore refused builtins that the module may use - \c RWLock in a member initializer
+    of an object that module code created with \c create_object(), as \c Util::get_file_from_url() does through
+    \c HttpClientIo - and a module loaded on behalf of restricted code failed to load and fell back to its source
+    (\c FileLocationHandler, whose base class constructor arguments construct a \c WaitGroup).
+
+    Each case runs the same scripts with the module AOT-compiled with <tt>--compile-module</tt> in every execution
+    mode, and expects the output of the source module with the AST interpreter, which is the reference.  The calling Program's SandboxManager still governs the module code's I/O, and user
+    code in the restricted Program is still refused the builtins its own parse options forbid.
+*/
+class AOTModuleBuiltinAccessTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qlib_dir;
+
+        #! holds the source and AOT modules and the scripts for all cases
+        TmpDir tmp("qore-aot-module-builtin-access-");
+
+        #! the directory with the source modules
+        string src_dir;
+        #! the directory with the AOT modules
+        string qmod_dir;
+        #! the file that the sandboxed module code tries to read
+        string sandboxed_file;
+
+        #! expected output of the positive cases, as given by the source module with the AST interpreter
+        const ExpectedAccessOutput = "body: RWLock|WaitGroup
+member: member
+wrapped: WaitGroup
+wrapped_direct: WaitGroup
+holder: member
+create: member
+create_other: member
+create_other_default_arg: member
+closure: RWLock
+lazy_expr: RWLock|WaitGroup|RWLock|WaitGroup
+defarg: RWLock
+hostdef: host
+exprdef: expr
+hashdef: RWLock
+hash_direct: RWLock
+static_init: RWLock
+";
+
+        #! expected output of the user code that must still be refused
+        const ExpectedRefusedOutput = "p_direct: ILLEGAL-CLASS-INSTANTIATION: parse options do not allow access to the 'RWLock' class
+p_closure_direct: ILLEGAL-CLASS-INSTANTIATION: parse options do not allow access to the 'RWLock' class
+p_create_object: CREATE-OBJECT-ERROR: current Program sandboxing restrictions do not allow access to the 'RWLock' class
+p_call_function_create_object: CREATE-OBJECT-ERROR: current Program sandboxing restrictions do not allow access to the 'RWLock' class
+p_call_function_builtin: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin function 'gethostname()'
+p_call_ref_builtin: PARSE-EXCEPTION: parse options do not allow access to function 'gethostname'
+p_closure_through_module: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin function 'gethostname()'
+p_closure_create_object_through_module: CREATE-OBJECT-ERROR: current Program sandboxing restrictions do not allow access to the 'RWLock' class
+p_method_on_module_object: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::RWLock::readLock()'
+p_module_call_ref: \"RWLock|WaitGroup\"
+p_module_call_function: \"RWLock|WaitGroup\"
+";
+
+        #! expected output of the issue's reproduction: the module code runs and the sandbox refuses the connection
+        const ExpectedReproOutput = "NETWORK-ACCESS-DENIED: Connection to 127.0.0.1 denied by security policy "
+            "(private/blocked network)\n";
+    }
+
+    constructor() : QUnit::Test("AOTModuleBuiltinAccessTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qlib_dir = realpath(get_script_dir() + "/../../../qlib");
+        src_dir = tmp.path + "/src";
+        qmod_dir = tmp.path + "/qmod";
+        mkdir(src_dir);
+        mkdir(qmod_dir);
+        sandboxed_file = writeFile(tmp.path + "/sandboxed.txt", "sandboxed\n");
+
+        writeFile(src_dir + "/AOTBuiltinAccessMod.qm", accessModuleCode());
+        writeFile(src_dir + "/AOTBuiltinAccessUser.qm", accessUserModuleCode());
+
+        addTestCase("AOT module code may use the builtins its module may use when called from a PO_LOCKDOWN Program",
+            \testModuleCodeAccess());
+        addTestCase("user code in a PO_LOCKDOWN Program is still refused restricted builtins",
+            \testUserCodeRefused());
+        addTestCase("issue #5556: Util::get_file_from_url() with AOT Util and HttpClientIo modules",
+            \testIssueRepro());
+        addTestCase("FileLocationHandler.qmod loaded on behalf of restricted code loads without source fallback",
+            \testFileLocationHandlerLoad());
+
+        set_return_value(main());
+    }
+
+    #! the module whose code uses thread classes and a builtin with a functional domain
+    private string accessModuleCode() {
+        return "%modern
+
+module AOTBuiltinAccessMod {
+    version = \"1.0\";
+    desc = \"AOT builtin access regression module\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace AOTBuiltinAccessMod {
+public class Holder {
+    public {
+        # member initializers constructing thread classes and calling a builtin with a functional domain
+        RWLock lock();
+        WaitGroup wg();
+        string host = gethostname();
+    }
+
+    string check() {
+        lock.readLock();
+        lock.readUnlock();
+        return wg.getCount() == 0 && !host.empty() ? \"member\" : \"error\";
+    }
+}
+
+class WrapBase {
+    public {
+        object o;
+    }
+
+    constructor(object o) {
+        self.o = o;
+    }
+}
+
+public class Wrapped inherits WrapBase {
+    # base class constructor argument constructing a thread class
+    constructor() : WrapBase(new WaitGroup()) {
+    }
+
+    string check() {
+        return o.className();
+    }
+}
+
+public hashdecl LockInfo {
+    # hashdecl member default constructing a thread class
+    object lock = new RWLock();
+}
+
+public class StaticHolder {
+    public {
+        # static variable initializer constructing a thread class
+        static RWLock slock();
+    }
+
+    static string check() {
+        return slock.className();
+    }
+}
+
+public string sub body() {
+    RWLock l();
+    WaitGroup w();
+    return sprintf(\"%s|%s\", l.className(), w.className());
+}
+
+public string sub member() {
+    Holder h();
+    return h.check();
+}
+
+public string sub wrapped() {
+    Wrapped w();
+    return w.check();
+}
+
+# default argument value constructing a thread class
+public string sub defarg(RWLock l = new RWLock()) {
+    return l.className();
+}
+
+# no-argument builtin function call default with a functional domain
+public string sub hostdef(string h = gethostname()) {
+    return h.empty() ? \"empty\" : \"host\";
+}
+
+# expression default calling a builtin with a functional domain
+public string sub exprdef(string h = gethostname() + \"-x\") {
+    return h.empty() ? \"empty\" : \"expr\";
+}
+
+public string sub hashdef() {
+    hash<LockInfo> h();
+    return h.lock.className();
+}
+
+public string sub createHolder() {
+    return cast<Holder>(create_object(\"AOTBuiltinAccessMod::Holder\")).check();
+}
+
+public code sub mkclosure() {
+    return string sub () { RWLock l(); return l.className(); };
+}
+
+public string sub readFile(string path) {
+    return ReadOnlyFile::readTextFile(path);
+}
+
+public auto sub getLock() {
+    return new RWLock();
+}
+
+public auto sub callIt(code c) {
+    return c();
+}
+}
+";
+    }
+
+    #! a module that creates objects of the other module's class through create_object(), like Util does
+    private string accessUserModuleCode() {
+        return "%modern
+%requires AOTBuiltinAccessMod
+
+module AOTBuiltinAccessUser {
+    version = \"1.0\";
+    desc = \"AOT builtin access regression module (caller)\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace AOTBuiltinAccessUser {
+public string sub createOther() {
+    return cast<AOTBuiltinAccessMod::Holder>(create_object(\"AOTBuiltinAccessMod::Holder\")).check();
+}
+
+# a function with a default argument is called with the restrictions of the calling Program in effect, as
+# Util::get_file_from_url() is
+public string sub createOtherDefaultArg(hash<auto> opts = {}) {
+    return cast<AOTBuiltinAccessMod::Holder>(create_object(\"AOTBuiltinAccessMod::Holder\")).check();
+}
+
+public string sub lazyExpr(hash<auto> opts = {}) {
+    string a = (new RWLock()).className();
+    list<auto> l = map (new WaitGroup()).className(), (1, 2);
+    auto o = opts.x ? new Mutex() : new RWLock();
+    code c = WaitGroup sub () { return new WaitGroup(); };
+    return sprintf(\"%s|%s|%s|%s\", a, l[0], o.className(), c().className());
+}
+}
+";
+    }
+
+    #! user code in a PO_LOCKDOWN Program that calls the modules' APIs
+    private string accessScript() {
+        return sprintf("%%modern
+%%requires AOTBuiltinAccessMod
+%%requires AOTBuiltinAccessUser
+
+Program p(PO_NEW_STYLE);
+p.loadModule(\"AOTBuiltinAccessMod\");
+p.loadModule(\"AOTBuiltinAccessUser\");
+p.setParseOptions(PO_LOCKDOWN);
+SandboxManager m();
+m.setFilesystemDefaultPolicy(False);
+p.setSandboxManager(m);
+p.parse(\"
+string sub body() { return AOTBuiltinAccessMod::body(); }
+string sub member() { return AOTBuiltinAccessMod::member(); }
+string sub wrapped() { return AOTBuiltinAccessMod::wrapped(); }
+string sub wrapped_direct() { AOTBuiltinAccessMod::Wrapped w(); return w.check(); }
+string sub holder() { AOTBuiltinAccessMod::Holder h(); return h.check(); }
+string sub create() { return AOTBuiltinAccessMod::createHolder(); }
+string sub create_other() { return AOTBuiltinAccessUser::createOther(); }
+string sub create_other_default_arg() { return AOTBuiltinAccessUser::createOtherDefaultArg(); }
+string sub closure() { code c = AOTBuiltinAccessMod::mkclosure(); return c(); }
+string sub lazy_expr() { return AOTBuiltinAccessUser::lazyExpr(); }
+string sub defarg() { return AOTBuiltinAccessMod::defarg(); }
+string sub hostdef() { return AOTBuiltinAccessMod::hostdef(); }
+string sub exprdef() { return AOTBuiltinAccessMod::exprdef(); }
+string sub hashdef() { return AOTBuiltinAccessMod::hashdef(); }
+string sub hash_direct() { hash<AOTBuiltinAccessMod::LockInfo> h(); return h.lock.className(); }
+string sub static_init() { return AOTBuiltinAccessMod::StaticHolder::check(); }
+string sub file() { return AOTBuiltinAccessMod::readFile('%s'); }
+\", \"probe\");
+
+# each function runs twice so that tiered execution runs it on more than one tier
+foreach string f in (\"body\", \"member\", \"wrapped\", \"wrapped_direct\", \"holder\", \"create\", \"create_other\",
+        \"create_other_default_arg\", \"closure\", \"lazy_expr\", \"defarg\", \"hostdef\", \"exprdef\", \"hashdef\",
+        \"hash_direct\", \"static_init\", \"file\") {
+    *string first;
+    for (int i = 0; i < 2; ++i) {
+        string result;
+        try {
+            result = p.callFunction(f);
+        } catch (hash<ExceptionInfo> ex) {
+            result = sprintf(\"%%s: %%s\", ex.err, ex.desc);
+        }
+        if (!exists first) {
+            first = result;
+        } else if (result != first) {
+            printf(\"%%s: second call differs: %%s\\n\", f, result);
+        }
+    }
+    printf(\"%%s: %%s\\n\", f, first);
+}
+", sandboxed_file);
+    }
+
+    #! user code in a PO_LOCKDOWN Program that must still be refused; each probe runs in its own Program
+    private string refusedScript() {
+        return "%modern
+%requires AOTBuiltinAccessMod
+
+hash<string, string> probes = {
+    \"p_direct\": \"auto sub p_direct() { return new RWLock(); }\",
+    \"p_closure_direct\": \"auto sub p_closure_direct() { code c = sub () { RWLock l(); }; return c(); }\",
+    \"p_create_object\": \"auto sub p_create_object() { return create_object('RWLock'); }\",
+    \"p_call_function_create_object\": \"auto sub p_call_function_create_object() { "
+        "return call_function('create_object', 'RWLock'); }\",
+    \"p_call_function_builtin\": \"auto sub p_call_function_builtin() { return call_function('gethostname'); }\",
+    \"p_call_ref_builtin\": \"auto sub p_call_ref_builtin() { code c = \\\\gethostname(); return c(); }\",
+    \"p_closure_through_module\": \"auto sub p_closure_through_module() { "
+        "return AOTBuiltinAccessMod::callIt(auto sub () { return call_function('gethostname'); }); }\",
+    \"p_closure_create_object_through_module\": \"auto sub p_closure_create_object_through_module() { "
+        "return AOTBuiltinAccessMod::callIt(auto sub () { return create_object('RWLock'); }); }\",
+    \"p_method_on_module_object\": \"auto sub p_method_on_module_object() { auto l = AOTBuiltinAccessMod::getLock(); "
+        "l.readLock(); l.readUnlock(); return 'used'; }\",
+    \"p_module_call_ref\": \"auto sub p_module_call_ref() { code c = \\\\AOTBuiltinAccessMod::body(); return c(); }\",
+    \"p_module_call_function\": \"auto sub p_module_call_function() { "
+        "return call_function('AOTBuiltinAccessMod::body'); }\",
+};
+
+foreach hash<auto> i in (probes.pairIterator()) {
+    Program p(PO_NEW_STYLE);
+    p.loadModule(\"AOTBuiltinAccessMod\");
+    p.setParseOptions(PO_LOCKDOWN);
+    try {
+        p.parse(i.value, i.key);
+        printf(\"%s: %y\\n\", i.key, p.callFunction(i.key));
+    } catch (hash<ExceptionInfo> ex) {
+        printf(\"%s: %s: %s\\n\", i.key, ex.err, ex.desc);
+    }
+}
+";
+    }
+
+    #! the reproduction from issue #5556
+    private string reproScript() {
+        return "%modern
+%requires Util
+%requires HttpClientIo
+
+Program p(PO_NEW_STYLE);
+p.loadModule(\"Util\");
+p.loadModule(\"HttpClientIo\");
+p.setParseOptions(PO_LOCKDOWN);
+SandboxManager m();
+m.blockPrivateNetworks();
+p.setSandboxManager(m);
+p.parse(\"auto sub t() { return Util::get_file_from_url('http://127.0.0.1:1/'); }\", \"probe\");
+try {
+    p.callFunction(\"t\");
+    printf(\"no exception\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s: %s\\n\", ex.err, ex.desc);
+}
+";
+    }
+
+    #! loads FileLocationHandler into an unrestricted Program from code running in a restricted one
+    private string fileLocationHandlerScript() {
+        return "%modern
+
+Program target(PO_NEW_STYLE);
+Program p(PO_NEW_STYLE | PO_NO_THREAD_CLASSES | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+p.parse(\"string sub t(Program target) { target.loadModule('FileLocationHandler'); return 'loaded'; }\", \"probe\");
+try {
+    printf(\"%s\\n\", p.callFunction(\"t\", target));
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s: %s\\n\", ex.err, ex.desc);
+}
+printf(\"%s\\n\", get_module_hash().FileLocationHandler.filename ?? \"not loaded\");
+";
+    }
+
+    private string writeFile(string path, string contents) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(contents);
+        f.close();
+        return path;
+    }
+
+    #! AOT-compiles \a qm_path to \a qmod_path with the given module path and asserts that it succeeded
+    private compileModule(string qm_path, string qmod_path, string module_dir) {
+        string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s "
+            "QORE_MODULE_DIR=%s %s -b --compile-module --output %s %s 2>&1", libqore_dir, libqore_dir, libqore_dir,
+            module_dir, qore_bin, qmod_path, qm_path));
+        assertTrue(is_file(qmod_path), sprintf("compiled %s: %s", basename(qmod_path), compile_out));
+    }
+
+    #! returns the module path for running scripts against the modules in \a dir
+    private string modulePath(string dir) {
+        *string env_dir = ENV.QORE_MODULE_DIR;
+        return env_dir ? dir + ":" + qlib_dir + ":" + env_dir : dir + ":" + qlib_dir;
+    }
+
+    #! runs \a script_path in \a mode with the modules found in \a module_path first
+    private hash<ExecModeHarness::ModeRunResult> runScript(string module_path, string script_path, string mode) {
+        return ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s "
+            "QORE_MODULE_DIR=%s %s -b --enable-debug --exec-mode=%s %s", libqore_dir, libqore_dir, libqore_dir,
+            module_path, qore_bin, mode, script_path));
+    }
+
+    #! runs \a script_path with the AOT modules in every execution mode and checks the output
+    /** the source modules with the AST interpreter are the reference
+    */
+    private checkAllModes(string script_name, string script, string expected) {
+        string script_path = writeFile(tmp.path + "/" + script_name, script);
+        hash<ExecModeHarness::ModeRunResult> reference = runScript(modulePath(src_dir), script_path, "ast");
+        assertEq(expected, reference.out, script_name + ": source module, ast");
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = runScript(modulePath(qmod_dir), script_path, mode);
+            assertEq(reference.out, r.out, sprintf("%s: AOT module, %s", script_name, mode));
+            assertEq((), r.loader_warnings, sprintf("%s: AOT module, %s: loader warnings", script_name, mode));
+        }
+    }
+
+    #! AOT-compiles the regression modules once
+    private compileAccessModules() {
+        if (is_file(qmod_dir + "/AOTBuiltinAccessUser.qmod")) {
+            return;
+        }
+        compileModule(src_dir + "/AOTBuiltinAccessMod.qm", qmod_dir + "/AOTBuiltinAccessMod.qmod", src_dir);
+        compileModule(src_dir + "/AOTBuiltinAccessUser.qm", qmod_dir + "/AOTBuiltinAccessUser.qmod",
+            qmod_dir + ":" + src_dir);
+    }
+
+    testModuleCodeAccess() {
+        compileAccessModules();
+        string expected = ExpectedAccessOutput + sprintf("file: FILESYSTEM-ACCESS-DENIED: Access to '%s' denied: "
+            "read access not permitted by security policy\n", sandboxed_file);
+        checkAllModes("access.q", accessScript(), expected);
+    }
+
+    testUserCodeRefused() {
+        compileAccessModules();
+        checkAllModes("refused.q", refusedScript(), ExpectedRefusedOutput);
+    }
+
+    testIssueRepro() {
+        string dir = tmp.path + "/util-qmod";
+        mkdir(dir);
+        string compile_path = qlib_dir + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "");
+        compileModule(qlib_dir + "/Util.qm", dir + "/Util.qmod", compile_path);
+        compileModule(qlib_dir + "/HttpClientIo/HttpClientIo.qm", dir + "/HttpClientIo.qmod", compile_path);
+
+        string script_path = writeFile(tmp.path + "/repro.q", reproScript());
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = runScript(modulePath(dir), script_path, mode);
+            assertEq(ExpectedReproOutput, r.out, "AOT Util and HttpClientIo: " + mode);
+            assertEq((), r.loader_warnings, "AOT Util and HttpClientIo: loader warnings: " + mode);
+        }
+    }
+
+    testFileLocationHandlerLoad() {
+        string dir = tmp.path + "/flh-qmod";
+        mkdir(dir);
+        string compile_path = qlib_dir + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "");
+        compileModule(qlib_dir + "/FileLocationHandler/FileLocationHandler.qm", dir + "/FileLocationHandler.qmod",
+            compile_path);
+
+        string script_path = writeFile(tmp.path + "/flh.q", fileLocationHandlerScript());
+        string expected = sprintf("loaded\n%s\n", dir + "/FileLocationHandler.qmod");
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = runScript(modulePath(dir), script_path, mode);
+            # a source fallback is reported as a loader warning and loads the source module instead
+            assertEq((), r.loader_warnings, "FileLocationHandler.qmod: loader warnings: " + mode);
+            assertEq(expected, r.out, "FileLocationHandler.qmod: " + mode);
+        }
+    }
+}

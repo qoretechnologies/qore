@@ -4009,6 +4009,23 @@ RuntimeParseOptionsOverrideHelper::~RuntimeParseOptionsOverrideHelper() {
     td->runtime_po = old_po;
 }
 
+LoadTimeParseOptionsHelper::LoadTimeParseOptionsHelper(const QoreParseOptions& po) {
+    ThreadData* td = thread_data.get();
+    old_po = td->runtime_po;
+    old_mask = td->runtime_po_override_mask;
+    old_value = td->runtime_po_override_value;
+    td->runtime_po_override_mask = QoreParseOptions();
+    td->runtime_po_override_value = QoreParseOptions();
+    td->runtime_po = po;
+}
+
+LoadTimeParseOptionsHelper::~LoadTimeParseOptionsHelper() {
+    ThreadData* td = thread_data.get();
+    td->runtime_po_override_mask = old_mask;
+    td->runtime_po_override_value = old_value;
+    td->runtime_po = old_po;
+}
+
 QoreParseOptions runtime_get_parse_options_stack(ExceptionSink* xsink, size_t n) {
     assert(n);
     ThreadData* td = thread_data.get();
