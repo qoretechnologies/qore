@@ -41,8 +41,15 @@ class MkdirTest inherits QUnit::Test {
         int ret = mkdir(dir);
         assertEq(-1, ret);
 
-        assertEq(-1, mkdir("/err/invalid", 0700, True));
-        assertThrows("DIR-CREATE-FAILURE", \mkdir_ex(), ("/err/invalid", 0700, True));
+        # a path under a regular file cannot be created by any user, including root (ENOTDIR)
+        string file = tmp_location() + DirSep + unique_name + "-mkneg-file";
+        File f();
+        f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.close();
+        on_exit unlink(file);
+        string invalid = file + DirSep + "sub" + DirSep + "dir";
+        assertEq(-1, mkdir(invalid, 0700, True));
+        assertThrows("DIR-CREATE-FAILURE", \mkdir_ex(), (invalid, 0700, True));
     }
 
     mkdirParentTest() {
