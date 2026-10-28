@@ -298,6 +298,9 @@
     Optional native callback adapter binding is also omitted when every call through a private finite-target
     value has actually been inlined. Any remaining fallback call retains its generated adapters; callback
     creation, target resolution, ownership and cleanup are preserved.
+    When both callback signatures exactly match the local's required typed-code declaration, AOT also omits
+    redundant assignment coercion and its temporary reference. Creation and normal runtime publication
+    remain; plain, optional, differently typed and externally visible callback locals keep their existing checks.
 
     AOT can pass eligible typed float callback results directly to native compound addition, avoiding
     intermediate boxing while preserving compatible fallback conversion and owned-result cleanup.

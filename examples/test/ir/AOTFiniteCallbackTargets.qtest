@@ -44,6 +44,7 @@ class FiniteCallbackTargetsTest inherits QUnit::Test {
         foreach string prefix in (("", "QORE_DISABLE_AOT_FINITE_CALLREF_TARGETS=1 ",
                 "QORE_DISABLE_AOT_FINITE_CALLREF_RELOAD_ELISION=1 ",
                 "QORE_DISABLE_AOT_FINITE_CALLREF_BIND_ELISION=1 ",
+                "QORE_DISABLE_AOT_FINITE_CALLREF_COERCE_ELISION=1 ",
                 "QORE_AOT_EH=1 ", "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ",
                 "QORE_DISABLE_AOT_INT_EXPRESSION_IMPORT=1 ",
                 "QORE_DISABLE_AOT_FLOAT_EXPRESSION_IMPORT=1 ",
@@ -55,7 +56,8 @@ class FiniteCallbackTargetsTest inherits QUnit::Test {
                     prefix + "QORE_DUMP_LLVM_IR=1 ");
                 if (prefix == "" || prefix == "QORE_DISABLE_AOT_FINITE_CALLREF_TARGETS=1 ") {
                     foreach string name in (("zeroLoop", "wideChoice", "unaryChoice", "floatChoice",
-                            "zeroChoice", "collisionChoice", "nestedLoop", "multipleCalls")) {
+                            "zeroChoice", "collisionChoice", "nestedLoop", "multipleCalls",
+                            "multipleGroups", "conditionalChoice")) {
                         assertEq(prefix == "", regex(body(ir, name), "finite_callref_result"), name + level);
                     }
                     foreach string name in (("reassigned", "unknown", "captured", "aliased",
@@ -67,7 +69,8 @@ class FiniteCallbackTargetsTest inherits QUnit::Test {
                 }
                 if (prefix == "" || prefix == "QORE_DISABLE_AOT_FINITE_CALLREF_BIND_ELISION=1 ") {
                     foreach string name in (("zeroLoop", "wideChoice", "unaryChoice", "floatChoice",
-                            "zeroChoice", "collisionChoice", "nestedLoop", "multipleCalls")) {
+                            "zeroChoice", "collisionChoice", "nestedLoop", "multipleCalls",
+                            "multipleGroups", "conditionalChoice")) {
                         assertEq(prefix != "", regex(body(ir, name), "@qore_rt_bind_function_call_ref_native"),
                             name + level + " native adapter binding");
                     }
@@ -75,6 +78,22 @@ class FiniteCallbackTargetsTest inherits QUnit::Test {
                         assertTrue(regex(body(ir, name), "@qore_rt_bind_function_call_ref_native"),
                             name + level + " retains binding");
                     }
+                }
+                if (prefix == "" || prefix == "QORE_DISABLE_AOT_FINITE_CALLREF_COERCE_ELISION=1 ") {
+                    foreach string name in (("zeroLoop", "wideChoice", "unaryChoice", "floatChoice",
+                            "zeroChoice", "collisionChoice", "nestedLoop", "multipleCalls",
+                            "multipleGroups", "conditionalChoice")) {
+                        assertEq(prefix != "", regex(body(ir, name), "@qore_rt_coerce_value_aot"),
+                            name + level + " exact callback assignment coercion");
+                    }
+                    foreach string name in (("plainCodeChoice", "optionalCodeChoice", "nonExactCodeChoice",
+                            "reassigned", "captured", "interveningCall")) {
+                        assertTrue(regex(body(ir, name), "@qore_rt_coerce_value_aot"),
+                            name + level + " retains assignment coercion");
+                    }
+                    # A referenced local uses the checked closure-store path.
+                    assertTrue(regex(body(ir, "aliased"), "@qore_rt_store_closure_eval_weak_aot"),
+                        level + " retains referenced local assignment");
                 }
                 if (prefix == "QORE_DISABLE_AOT_INT_EXPRESSION_IMPORT=1 ") {
                     string fallback_ir = run((qcc, level, "--strip-source", "-o", tmp.path + "/fallback", source),

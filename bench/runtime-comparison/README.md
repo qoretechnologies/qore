@@ -1494,3 +1494,13 @@ site in that group has actually inlined. Reference creation, local ownership,
 cleanup and cancellation remain. Recompile for the diagnostic control. The
 RESULTS section records independently confirmed short-call gains and the repeated
 polymorphic/long-loop costs; these are not a general Java parity claim.
+
+`QORE_DISABLE_AOT_FINITE_CALLREF_COERCE_ELISION=1` restores assignment coercion
+for exact finite callback locals at compilation. The default requires both
+known target signatures to match the local's nonoptional, nonvariadic typed-code
+declaration exactly. It omits the redundant coercion helper and that helper's
+temporary owner, retaining creation, normal runtime publication, cache ownership,
+cleanup and cancellation. Plain, optional, differently typed, aliased and escaping
+cases retain their existing paths. Recompile for the diagnostic control. See
+RESULTS for independently confirmed short-invocation gains, broader costs and
+fresh Java measurements; these are incremental branch results, not pure develop.

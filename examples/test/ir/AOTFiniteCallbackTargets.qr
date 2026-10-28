@@ -68,6 +68,32 @@ int sub nestedLoop(int count) {
     }
     return sum;
 }
+int sub plainCodeChoice(bool first, int value) {
+    code fn = first ? \intA() : \intB();
+    return fn(value);
+}
+int sub optionalCodeChoice(bool first, int value) {
+    *code<int(int)> fn = first ? \intA() : \intB();
+    return fn(value);
+}
+int sub nonExactCodeChoice(bool first, int value) {
+    code<softint(int)> fn = first ? \intA() : \intB();
+    return fn(value);
+}
+int sub multipleGroups(bool first, int value) {
+    code<int(int)> fn = first ? \intA() : \intB();
+    code<int()> zero = first ? \one() : \two();
+    int a = fn(value);
+    int z = zero();
+    return a + z;
+}
+int sub conditionalChoice(bool active, bool first, int value) {
+    if (active) {
+        code<int(int)> fn = first ? \intA() : \intB();
+        return fn(value);
+    }
+    return -1;
+}
 int sub reassigned(bool first) {
     code<int()> fn = first ? \one() : \two();
     int value = fn();
@@ -124,6 +150,12 @@ foreach bool first in ((False, True)) {
     }
     expect(first ? intA(5) + intA(6) : intB(5) + intB(6), multipleCalls(first, 5));
     expect(first ? intA(5) + intA(6) : intB(5) + intB(6), multipleExpression(first, 5));
+    expect(first ? intA(5) : intB(5), plainCodeChoice(first, 5));
+    expect(first ? intA(5) : intB(5), optionalCodeChoice(first, 5));
+    expect(first ? intA(5) : intB(5), nonExactCodeChoice(first, 5));
+    expect(first ? intA(5) + 17 : intB(5) + 19, multipleGroups(first, 5));
+    expect(first ? intA(5) : intB(5), conditionalChoice(True, first, 5));
+    expect(-1, conditionalChoice(False, first, 5));
     foreach float value in ((0.0, -0.0, 1.5, -3.0e307, -6.0e307, @inf@, -@inf@, @nan@, -@nan@)) {
         expectFloat(first ? -value : value + 0.5, floatChoice(first, value));
     }

@@ -27894,3 +27894,65 @@ All 1758 timing jobs/5274 windows replay independently, including 90 attribution
 These are incremental measurements against the frozen 7733 baseline, not a new comparison against current develop. Further work should investigate a selector-only representation for nonescaping callbacks and the remaining runtime-local/frame ownership work, keeping the polymorphic and long-loop controls.
 
 [Timing and validation evidence](results-finite-callback-binding-macos-arm64.json); [all 62 audit checks](audit-finite-callback-binding.md).
+
+
+## Exact finite callback assignment coercion omission (2026-10-28)
+
+The optimized baseline is clean merged and installed `86e08dfea8`, including develop `62a415e603` and adapter-binding omission `0e007f8ce4`. The candidate omits assignment coercion and its extra temporary reference only when both admitted finite callback targets exactly match the local's required typed-code signature. Creation, Program/provenance association, runtime publication/cache owners, cleanup, cancellation and ordinary call fallback remain. `QORE_DISABLE_AOT_FINITE_CALLREF_COERCE_ELISION=1` restores the original lowering. The 24 baseline/disabled target bodies match exactly after debug annotations are removed.
+
+Both Qore runtimes use Release `-O3 -DNDEBUG`, allocation tracking OFF, and matching `qcc -O3 --strip-source` artifacts. Three linked layouts use a three-fork screen and five fresh confirmation forks; each process has two warmups and three 150ms samples. Each batch has 4096 short invocations containing callback creation/context plus 1 or 17 callback operations. Inline controls are algebraic equivalents, not subtracted estimates of call latency. Fresh Temurin 25/JMH 1.37 uses normal inlining, five forks, five warmups and three 300ms samples; all 12 kernels have separate C2 diagnostics. Shared macOS ARM64 host; no exclusive access, affinity or thermal control.
+
+|!Short workload|!Baseline ns/invocation|!Candidate|!Compile-disabled|!Change|!Fresh Java
+|int_zero_1|217.347512|174.434266|214.485456|-19.744%|1.053411
+|int_zero_17|228.424904|186.828240|225.454560|-18.210%|1.045755
+|int_unary_1|218.865468|177.861497|220.272698|-18.735%|1.045129
+|int_unary_17|232.471377|188.132937|229.698623|-19.073%|7.374702
+|float_zero_1|216.222051|174.945359|216.852759|-19.090%|0.910120
+|float_zero_17|232.220198|189.924534|234.044858|-18.214%|3.301841
+|float_unary_1|222.603785|177.630417|221.208371|-20.203%|1.068225
+|float_unary_17|232.082637|188.415578|232.956287|-18.815%|3.061346
+|int_zero_inline|1.165805|1.166065|1.167709|+0.022%|1.037215
+|int_unary_inline|1.704768|1.707968|1.692329|+0.188%|1.036991
+|float_zero_inline|1.186758|1.176379|1.179194|-0.875%|1.025540
+|float_unary_inline|1.439194|1.453504|1.452220|+0.994%|1.029529
+
+All eight targets improve 18.2–20.2% in confirmation, saving 41–45ns per short invocation. Every target/layout combination improves, by 16.953–20.834%. The initial screen independently showed 18.2–19.4% reductions. Inline confirmation controls range from -0.875% to +0.994%. Single-callback Qore invocations remain 174–178ns versus Java 0.91–1.07ns; Qore inline controls are 1.17–1.71ns. Callback setup remains a substantial gap; no general Java parity claim follows.
+
+The broader screen covers nineteen controls and four long callback kernels, with three forks per layout. Independent confirmation uses five forks for every absolute aggregate shift of at least 2%, all four mixed workloads and the boxed-method control. Entries without confirmation below are screen-only observations. Units are whole-kernel ns/item.
+
+|!Workload|!Screen baseline|!Screen candidate|!Change|!Confirmation baseline|!Confirmation candidate|!Change
+|float:direct_local_float_return:4096|0.838323|0.831357|-0.831%|—|—|—
+|float:callback_local_float_return:4096|0.910680|0.894825|-1.741%|—|—|—
+|float:direct_local_float_result:4096|0.756240|0.772042|+2.089%|0.761223|0.772900|+1.534%
+|float:callback_local_float_result:4096|0.851634|0.854172|+0.298%|—|—|—
+|micro:direct_call:4096|1.681813|1.665305|-0.982%|—|—|—
+|micro:method_call:4096|1.754596|1.800808|+2.634%|1.774453|1.773954|-0.028%
+|micro:indirect_call:4096|63.621721|63.227019|-0.620%|—|—|—
+|micro:polymorphic_call:4096|24.499689|24.430134|-0.284%|—|—|—
+|micro:polymorphic_expression_call:4096|11.224332|11.162653|-0.550%|—|—|—
+|micro:boxed_int_method_effect:4096|94.302443|95.297028|+1.055%|95.172188|96.447562|+1.340%
+|micro:dynamic_float_result_call:4096|11.749907|11.794942|+0.383%|—|—|—
+|micro:indirect_affine:4096|63.190441|63.197650|+0.011%|—|—|—
+|micro:list_mutate:4096|140.100793|138.700633|-0.999%|—|—|—
+|micro:closure_call:4096|14.375642|14.366105|-0.066%|—|—|—
+|micro:closure_capture:4096|20.557551|20.042090|-2.507%|20.060221|20.110882|+0.253%
+|mixed:csv_report:4096|996.083389|988.472140|-0.764%|999.531514|1005.962200|+0.643%
+|mixed:object_orders:4096|1905.769857|1925.787246|+1.050%|1907.242839|1926.660156|+1.018%
+|mixed:callback_pipeline:4096|128.883396|129.149397|+0.206%|129.899197|130.996718|+0.845%
+|mixed:text_index:4096|1560.333252|1550.930990|-0.603%|1554.053413|1549.313015|-0.305%
+|opaque:int_zero:4096|0.833020|0.824411|-1.034%|—|—|—
+|opaque:int_unary:4096|1.159217|1.154625|-0.396%|—|—|—
+|opaque:float_zero:4096|1.100969|1.094863|-0.555%|—|—|—
+|opaque:float_unary:4096|0.849367|0.827273|-2.601%|0.855070|0.834155|-2.446%
+
+Retain under the authorized broader-workload tradeoff. The method-call screen cost of +2.634% does not repeat: confirmation is -0.028%. Direct float result remains +1.534% (+0.011677ns/item), boxed method +1.340% (+1.275374ns/item), object orders +1.018%, and callback pipeline +0.845%. Mixed confirmation ranges from -0.305% to +1.018%; no application-weighted overall improvement is claimed. Layout directions vary and every adverse fork range overlaps, so these aggregate costs do not isolate a causal regression. The long float-unary loop improves 2.446%, with separated fork ranges in one layout. All 825 unrelated control function bodies match after debug removal; twelve initializer differences are metadata length only. This does not establish runtime/image layout equality.
+
+The prior binder optimization's polymorphic +4.292% and long integer-constant +6.024% costs remain recorded in its own campaign. This increment's screen shows no new slowdown in those two controls; it does not resolve their earlier causes. Do not combine medians across campaigns or present this as a current pure-develop comparison.
+
+Release and Debug each pass 38 QUnit cases/5378 assertions plus one standalone fast-entry fixture. Debug also passes 2917 native assertions and 18 cases/70 fallback-control assertions. The expanded 652-assertion fixture covers AST/IR/JIT/tiered and AOT O0/O3, EH/split, disabled-summary/generic/context controls, multiple target groups, conditional initialization and plain/optional/nonexact/alias/capture fallbacks. A first test expectation incorrectly required a direct coercion helper for the aliased local; both candidate and disabled builds use the checked closure-store helper. Only that assertion was corrected; production code did not change.
+
+Pilot images pass 360 references; short preparation passes 720 source and 1620 native references with nine LLVM verifications; broader preparation passes 795 source and 5130 native references; Java passes 180 references and twelve separate C2 diagnostics. All 391 Release qmod aliases are restored. All 1608 timing jobs/4824 windows replay independently. This is targeted macOS qualification, not full-project/Linux/sanitizer coverage.
+
+Next refresh the cumulative optimized develop comparison, then investigate early IR scalar replacement of the nonescaping callback and remaining return/frame setup. No global performance maximum is established.
+
+[Timing and validation evidence](results-finite-callback-coerce-macos-arm64.json); [all 62 audit checks](audit-finite-callback-coerce.md).

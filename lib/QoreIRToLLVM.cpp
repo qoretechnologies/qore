@@ -18695,6 +18695,33 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // separate body-local proof below; cache ownership still applies.
             bool exact_container_value = exact_fresh_container || exact_int_list_push;
 
+            // These private finite-target references are created by this body,
+            // so their concrete signatures are available before assignment.
+            // An exact typed-code declaration accepts either strong reference
+            // unchanged. Keep creation, runtime publication and cache ownership;
+            // only the redundant coercion and its temporary owner disappear.
+            bool exact_finite_call_ref = false;
+            auto finite_ref = finite_call_ref_targets.find(inst->operands[0].id);
+            if (aot_mode && finite_ref != finite_call_ref_targets.end()
+                    && !q_env_is_set("QORE_DISABLE_AOT_FINITE_CALLREF_COERCE_ELISION")) {
+                const auto* code_type = QoreTypeInfo::getComplexCodeType(local_ti);
+                if (code_type && !code_type->hasVarArgs() && !code_type->isOrNothing()) {
+                    exact_finite_call_ref = true;
+                    // The finite-target admission limits each signature to at
+                    // most one required scalar parameter and no type parameters.
+                    for (const auto* variant : finite_ref->second.variants) {
+                        const auto* signature = variant->getUserVariantBase()->getUserSignature();
+                        if (code_type->getReturnType() != signature->getReturnTypeInfo()
+                                || code_type->getParamTypes().size() != signature->numParams()
+                                || (signature->numParams() && code_type->getParamTypes()[0]
+                                    != signature->getParamTypeInfo(0))) {
+                            exact_finite_call_ref = false;
+                            break;
+                        }
+                    }
+                }
+            }
+
             // Case 1: Complex hash/list and hashdecl types need type coercion
             // via acceptAssignment() to set complexTypeInfo for runtime variant
             // matching (e.g., list<hash<auto>> matches typed signatures) and to
@@ -18754,6 +18781,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 && !needs_type_strip
                 && !QoreTypeInfo::getTypedHash(local_ti)
                 && !exact_assigned_string
+                && !exact_finite_call_ref
                 && !runtime_checked_class_store;
             bool needs_plain_any = local_ti == anyTypeInfo || local_ti == autoNoNarrowTypeInfo;
             // the variable of a foreach loop is assigned the element as it is; an IR-only variable keeps it in
@@ -19032,7 +19060,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // Type-stripped: qore_rt_coerce_value already produced the
                 // plain hash/list value.
                 bool use_no_coerce = needs_value_coerce || needs_type_strip
-                    || exact_container_value || linst->mode != AssignmentMode::Normal;
+                    || exact_container_value || exact_finite_call_ref
+                    || linst->mode != AssignmentMode::Normal;
                 const char* aot_helper_name = element_store ? "qore_rt_assign_local_aot"
                     : (linst->mode != AssignmentMode::Normal ? "qore_rt_assign_local_no_coerce_aot"
                         : (use_no_coerce ? "qore_rt_assign_local_no_coerce_eval_weak_aot"
