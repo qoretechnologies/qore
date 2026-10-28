@@ -34904,7 +34904,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
         case QoreIROpcode::DiscardTempsKeep: {
             // Close the temp scope of an expression whose value is used after other code has run, such as an
-            // lvalue mutation's operand (see the interpreter): the kept value is referenced before the scope's
+            // lvalue mutation's operand (see the interpreter): a boxed kept value is referenced before the scope's
             // cleanups run, since it can be one of them or be borrowed from one, and its reference is registered
             // after them, in the enclosing scope
             if (inst->operands.empty()) {
@@ -34915,6 +34915,23 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* val = getVal(kept_id, error);
             if (!val) {
                 return false;
+            }
+            // Raw scalar bits survive the scope drain without a reference. Do not box them just to retain and
+            // discard that box again. Multiple consumers can otherwise box the same wide scalar repeatedly.
+            // A converted typed-list read still carries its original boxed source (which can be NOTHING); keep
+            // that representation on the ordinary ownership path below.
+            bool native_scalar = val->getType() == double_type || val->getType() == i64_type
+                || val->getType() == i1_type;
+            auto uses = operand_remaining_uses.find(inst->result.id);
+            if (native_scalar && !nanboxed_values.count(kept_id) && !native_boxed_sources.count(kept_id)
+                    && (uses == operand_remaining_uses.end() || uses->second <= 1)
+                    && !q_env_is_set("QORE_DISABLE_NATIVE_SCALAR_TEMP_KEEP")) {
+                emitDiscardTemps(module, inst->temp_scope_id, false);
+                values[inst->result.id] = val;
+                nanboxed_values.erase(inst->result.id);
+                // Other temps can own objects whose destructors raise, even though the kept scalar cannot.
+                emitExceptionCheck(module, llvm_func, inst);
+                return true;
             }
             llvm::Value* boxed = boxValue(val, kept_id);
             // When this function owns the kept value's reference in a cleanup slot of the scope (defined in this

@@ -81,7 +81,15 @@ class FloatCallbackAddTest inherits QUnit::Test {
                         ++found;
                         assertEq(!selected, regex(body, "@qore_rt_lv_path_compound(?:_consume)?_aot(?:_throwing)?\\("),
                             "lvalue path " + name + " " + prefix);
-                        if (selected) { assertTrue(body.contains(" = fadd "), "native addition " + name); }
+                        if (selected) {
+                            # A scalar foreach local is not written back to the input list. Once temporary
+                            # retention no longer boxes its unused result, LLVM can remove the addition.
+                            if (name == "foreachAdd" && !body.contains(" = fadd ")) {
+                                assertFalse(regex(body, "@qore_rt_box_float\\("), "unused scalar " + name);
+                            } else {
+                                assertTrue(body.contains(" = fadd "), "native addition " + name);
+                            }
+                        }
                     }
                     assertTrue(found > 0, "compiled body " + name);
                 }

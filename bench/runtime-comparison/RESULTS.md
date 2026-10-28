@@ -27336,3 +27336,98 @@ Release and Debug each pass 83 QUnit cases / 7,949 assertions plus two standalon
 Further candidates are preserving native scalar values across DiscardTempsKeep and using inline float conversion. They require separate before/after measurements and validation; this result establishes neither Java parity nor a performance ceiling.
 
 [Timing and validation evidence](results-scoped-float-callback-macos-arm64.json); [62-check audit](audit-scoped-float-callback.md).
+
+## Native scalar retention across temporary cleanup (2026-10-28)
+
+The optimized baseline is 273f782ebe, including develop a5af92e73c and the scoped native float callback accumulation change. JIT and AOT can retain raw double, int64 and boolean SSA values across DiscardTempsKeep instead of boxing, referencing and scheduling another cleanup. Admission requires zero or one result consumer and excludes both NaN-boxed values and converted typed-list reads carrying their original boxed source. Multiple consumers retain their shared boxes; sparse typed-list NOTHING retains its original representation. Other temporary values are still drained and destructor exceptions still reach the current handler. Set QORE_DISABLE_NATIVE_SCALAR_TEMP_KEEP while compiling to use the existing retention path. No interpreter, runtime-helper, calling-convention or ABI change is made. These performance measurements are AOT.
+
+Both runtimes use -O3 -DNDEBUG with allocation tracking off. Separate qcc -O3 --strip-source images use identical sources and matching frozen runtimes. Three default/reverse/shuffle-487 layouts, randomized paired process order, one warmup and three 150 ms windows per process, three screen forks and five independent confirmation forks. Results average windows per process, take median forks per layout, then median layouts. The host is shared, without CPU affinity, exclusivity or thermal control; no owned build, test or heavy archive overlaps timing. Whole-kernel ns/item includes loop and outer-entry work and is not isolated callback latency. Dependency identities are checked for every job and hashes at phase boundaries.
+
+All six opaque images pass 720 reference/probe checks. Untimed probes record 13,113 callbacks and 13,101 reused native frames per signature, same-Program execution and restored context. Timing uses no interposition. Generated code removes one refself call in the target's ordinary and fast bodies. Thirteen scalar probe bodies confirm single-use int/float/bool retention loses one reference helper without extra boxing sites; multiple-use and sparse-list controls retain the original helper counts.
+
+|!Workload:count|!Screen before|!Screen candidate|!Screen change|!Confirm before|!Confirm candidate|!Confirm change
+|int_zero:1|n/a|n/a|n/a|426.500666|427.205843|+0.165%
+|int_unary:1|n/a|n/a|n/a|438.825953|440.435731|+0.367%
+|float_zero:1|n/a|n/a|n/a|446.097513|453.380973|+1.633%
+|float_unary:1|n/a|n/a|n/a|444.083166|453.278134|+2.071%
+|int_zero:17|n/a|n/a|n/a|42.123898|42.258995|+0.321%
+|int_unary:17|n/a|n/a|n/a|44.083657|44.341438|+0.585%
+|float_zero:17|n/a|n/a|n/a|47.899379|45.107132|-5.829%
+|float_unary:17|n/a|n/a|n/a|44.284771|44.995503|+1.605%
+|int_zero:4096|17.445964|17.352677|-0.535%|17.495843|17.464426|-0.180%
+|int_unary:4096|18.384881|18.377031|-0.043%|18.412167|18.237847|-0.947%
+|float_zero:4096|21.791797|19.142180|-12.159%|21.662746|19.168274|-11.515%
+|float_unary:4096|18.523255|18.325020|-1.070%|18.544015|18.450878|-0.502%
+
+The broader screen covers all 53 existing float, micro and mixed kernels plus the opaque target and three short cases. Single-item float-zero and float-unary cases were added before broader preparation because focused confirmation was slower. Confirmation selects every absolute aggregate shift of at least 2%, all mixed workloads and all four opaque cases. Unselected controls have no confirmation row.
+
+|!Workload:count|!Screen before|!Screen candidate|!Screen change|!Confirm before|!Confirm candidate|!Confirm change
+|float:direct_local_float_return:4096|0.796559|0.810395|+1.737%|n/a|n/a|n/a
+|float:callback_local_float_return:4096|0.861536|0.858043|-0.405%|n/a|n/a|n/a
+|float:direct_local_float_result:4096|0.735546|0.730146|-0.734%|n/a|n/a|n/a
+|float:callback_local_float_result:4096|0.818875|0.820024|+0.140%|n/a|n/a|n/a
+|float:direct_loop_float_return:4096|5.696174|5.688325|-0.138%|n/a|n/a|n/a
+|float:callback_loop_float_return:4096|4.959270|4.953822|-0.110%|n/a|n/a|n/a
+|float:direct_float_add:4096|0.803581|0.850605|+5.852%|0.828422|0.818370|-1.213%
+|float:static_float_add:4096|0.827082|0.803381|-2.866%|0.817355|0.815667|-0.207%
+|float:typed_local_int_unary:4096|1.186089|1.188514|+0.204%|n/a|n/a|n/a
+|float:typed_local_int_result:4096|0.823352|0.847217|+2.899%|0.821718|0.854187|+3.951%
+|float:typed_local_float_unary:4096|0.904084|0.889010|-1.667%|n/a|n/a|n/a
+|float:result_float_add:4096|0.832086|0.857792|+3.089%|0.823320|0.844735|+2.601%
+|micro:arithmetic:4096|1.581062|1.582921|+0.118%|n/a|n/a|n/a
+|micro:direct_call:4096|1.586634|1.586282|-0.022%|n/a|n/a|n/a
+|micro:method_call:4096|1.668391|1.667953|-0.026%|n/a|n/a|n/a
+|micro:indirect_call:4096|59.686871|58.768708|-1.538%|n/a|n/a|n/a
+|micro:polymorphic_call:4096|23.403223|23.380193|-0.098%|n/a|n/a|n/a
+|micro:polymorphic_expression_call:4096|10.866074|10.721474|-1.331%|n/a|n/a|n/a
+|micro:monomorphic_call:4096|3.904737|3.864371|-1.034%|n/a|n/a|n/a
+|micro:optional_method_call:4096|10.438926|10.440461|+0.015%|n/a|n/a|n/a
+|micro:polymorphic_float_call:4096|23.383426|23.785886|+1.721%|n/a|n/a|n/a
+|micro:polymorphic_float_expression_call:4096|10.964047|11.063530|+0.907%|n/a|n/a|n/a
+|micro:monomorphic_float_call:4096|4.188135|4.141658|-1.110%|n/a|n/a|n/a
+|micro:optional_float_method_call:4096|10.859238|10.805708|-0.493%|n/a|n/a|n/a
+|micro:boxed_float_method_call:4096|19.802471|20.074763|+1.375%|n/a|n/a|n/a
+|micro:dynamic_int_result_call:4096|10.409878|10.437481|+0.265%|n/a|n/a|n/a
+|micro:dynamic_int_result_fallback:4096|20.274327|20.232982|-0.204%|n/a|n/a|n/a
+|micro:boxed_int_method_call:4096|16.191514|15.904952|-1.770%|n/a|n/a|n/a
+|micro:boxed_int_method_fallback:4096|33.186681|32.477681|-2.136%|32.701834|32.675949|-0.079%
+|micro:boxed_float_method_fallback:4096|34.498618|34.259626|-0.693%|n/a|n/a|n/a
+|micro:boxed_int_method_effect:4096|89.511535|89.551994|+0.045%|n/a|n/a|n/a
+|micro:dynamic_float_result_call:4096|11.192476|11.332634|+1.252%|n/a|n/a|n/a
+|micro:indirect_wide:4096|59.205243|59.020609|-0.312%|n/a|n/a|n/a
+|micro:indirect_float:4096|58.495683|57.853064|-1.099%|n/a|n/a|n/a
+|micro:indirect_int_result:4096|58.954850|58.901440|-0.091%|n/a|n/a|n/a
+|micro:indirect_float_result:4096|59.306228|57.929925|-2.321%|59.129142|58.891028|-0.403%
+|micro:indirect_tagged_float:4096|58.012512|58.285797|+0.471%|n/a|n/a|n/a
+|micro:indirect_branch_float:4096|57.996049|58.185041|+0.326%|n/a|n/a|n/a
+|micro:indirect_affine:4096|59.701647|59.235801|-0.780%|n/a|n/a|n/a
+|micro:indirect_affine_wide:4096|59.131084|59.140581|+0.016%|n/a|n/a|n/a
+|micro:indirect_branch_int:4096|59.577678|59.925624|+0.584%|n/a|n/a|n/a
+|micro:dispatch_control:4096|1.979593|1.980142|+0.028%|n/a|n/a|n/a
+|micro:list_read:4096|2.951755|2.957953|+0.210%|n/a|n/a|n/a
+|micro:list_build:4096|26.565229|26.419408|-0.549%|n/a|n/a|n/a
+|micro:list_mutate:4096|131.455457|129.973397|-1.127%|n/a|n/a|n/a
+|micro:temporary_list:4096|1.745205|1.750987|+0.331%|n/a|n/a|n/a
+|micro:temporary_hash:4096|1.746330|1.743528|-0.160%|n/a|n/a|n/a
+|micro:closure_call:4096|14.111774|13.877363|-1.661%|n/a|n/a|n/a
+|micro:closure_capture:4096|20.038249|19.963161|-0.375%|n/a|n/a|n/a
+|mixed:csv_report:4096|928.623454|927.405202|-0.131%|934.328519|930.299886|-0.431%
+|mixed:object_orders:4096|1735.404583|1748.142171|+0.734%|1735.157976|1750.666543|+0.894%
+|mixed:callback_pipeline:4096|121.356212|120.989945|-0.302%|121.408178|121.404011|-0.003%
+|mixed:text_index:4096|1457.231571|1464.348958|+0.488%|1453.269606|1460.457983|+0.495%
+|opaque:float_zero:4096|21.688758|19.088260|-11.990%|21.855553|19.029425|-12.931%
+|opaque:float_unary:17|45.433598|45.299186|-0.296%|44.845643|44.912425|+0.149%
+|opaque:float_zero:1|442.600365|451.225636|+1.949%|448.739321|444.601625|-0.922%
+|opaque:float_unary:1|446.952321|450.297424|+0.748%|445.568363|448.078075|+0.563%
+
+Retain under the explicitly authorized broader workload tradeoff. Independent broader confirmation reduces the long opaque float callback loop from 21.855553 to 19.029425 ns/item (-12.931%, 2.826128 ns/item saved); all three layouts improve by 12.031-13.069%. Focused confirmation independently improves this loop by 11.515% and count 17 by 5.829%. Two controls repeatedly regress: typed_local_int_result rises from 0.821718 to 0.854187 ns/item (+3.951%, +0.032468 ns/item; layouts +5.122/+4.230/+1.421%), and result_float_add rises from 0.823320 to 0.844735 (+2.601%, +0.021415 ns/item; layouts +0.288/+2.601/+1.129%). These regressions are retained explicitly. Their six relevant ordinary/fast LLVM bodies are identical after removing metadata references, but that does not prove identical machine layout or explain away measured costs. The direct_float_add screen regression (+5.852%) does not repeat: confirmation is -1.213% aggregate. Other selected micro controls remain within 0.5% aggregate. Mixed confirmation is CSV -0.431%, orders +0.894%, pipeline -0.003%, text +0.495%; this is not evidence of an application-wide speedup. Short opaque confirmation is float-zero count 1 -0.922%, float-unary count 1 +0.563%, float-unary count 17 +0.149%; the focused single-item slowdowns do not repeat at the same magnitude. No fresh Java/develop ratio or global performance ceiling is claimed.
+
+All 1878 runs/5634 measured windows are retained and independently replayed. There is no application-weighted overall score or fresh Java/develop ratio.
+
+Release and Debug each pass 86 QUnit cases / 8,039 assertions plus two standalone fixtures. Debug adds 18 cases / 70 fallback/context assertions and 2917 native assertions. Statement-lifetime tests pass 7 cases / 545 assertions, with an additional standalone scalar-lifetime script. Program-transition coverage is included in each full suite. All 391 Release qmod aliases are restored and verified. The new 40-assertion fixture covers full-width integers, colliding doubles, signed zero, infinities, NaNs, booleans and sparse typed lists across source AST/IR/JIT/tiered, feature-disabled controls, and stripped AOT O0/O3/EH/split modes. Broader preparation validates 4,770 native and 795 source reference results. This is targeted macOS Release/Debug coverage, not a full project, Linux or sanitizer run.
+
+A prior fixture expected fadd in foreachAdd even though the copied loop variable is unused. Scalar retention enables LLVM to eliminate that addition; the corrected assertion permits this only without float boxing. Behavior and generic-path assertions remain. The failed receipt and 22 reused successful Release fixtures are retained. The first draft probe was rejected at parse time because list<auto> initialized with NOTHING narrowed its element type; the corrected probe uses list<auto!>. The first unmeasured compiler candidate passed semantics but generated extra boxing sites for reused wide values. Admission was narrowed to zero/one result consumers before any performance timing. Both attempts remain archived. An addendum corrects inherited descriptive fields in the copied experiment plan and preparation summary: the actual baseline, sources and runtime hashes were always recorded as 273f782ebe. Raw measurements and used drivers are unchanged.
+
+Next candidates are preserving the native float callback result through accumulation and inline conversion. This result establishes neither Java parity nor a performance ceiling.
+
+[Timing and validation evidence](results-native-scalar-temp-keep-macos-arm64.json); [62-check audit](audit-native-scalar-temp-keep.md).

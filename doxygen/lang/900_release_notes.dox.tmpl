@@ -250,6 +250,9 @@
     type can also use this arithmetic path after normal return validation; runtime overload dispatch and optional
     returns retain their existing behavior.
 
+    JIT and AOT avoid boxing single-use native scalar values solely to retain them across temporary
+    cleanup, while preserving sparse typed-list values and destructor exceptions.
+
     JIT and AOT convert native boolean True to float 1.0, including statically resolved callbacks.
 
     IR, JIT and AOT use native addition for eligible private float accumulators fed by zero-argument
