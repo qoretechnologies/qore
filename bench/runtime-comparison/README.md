@@ -1458,13 +1458,24 @@ closure gains and the effectful-method regression, not a universal speedup.
 admission when the closure executes in a different Program from its compiled
 body's owner. This runtime presence flag is sampled once; no recompile is needed.
 Admission requires the v2 explicit-context entry and the existing complete scalar
-body proof. The supplied RuntimeConfig provides live thread context for a scoped
-execution-Program option override. Both Programs' debugger guards, normal-body
+body proof. The supplied RuntimeConfig provides live thread context; the
+execution-Program option override is installed only on cold materialization.
+Both Programs' debugger guards, normal-body
 identity, capture checks, stack protection and diagnostic frames remain. A call
 from another execution Program still performs the ordinary Program transition.
 Disabling deferred context or v2 also disables this imported path. These runtime
 helpers benefit calls to eligible AOT bodies, including callers in IR/JIT mode;
 they do not add native companions to bodies executed only by IR/JIT.
+
+`QORE_DISABLE_AOT_IMPORTED_CLOSURE_DEFERRED_OPTIONS=1` restores eager option
+setup while retaining native imported-closure admission. This runtime presence
+flag is sampled once, requires no recompilation, and treats empty and `0` values
+as enabled controls. The existing complete v2 lowered-body proof permits only
+the dominating stack guard, location-slot access and non-evaluating scalar
+capture reads. Successful execution cannot observe runtime options; a failed
+stack guard installs them before constructing its exception. Cold restoration
+restores the caller's override before applying its saved runtime options. See
+RESULTS for the incremental gains and the measured costs in control workloads.
 
 `OpaqueCallbackBench.java` supplies ordinary optimized Java counterparts for all four
 `opaque_callbacks.qr` kernels, with no `DONT_INLINE` controls. The choice of two

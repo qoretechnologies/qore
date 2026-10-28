@@ -34,6 +34,8 @@
 
 #include <qore/RuntimeConfig.h>
 
+#include <optional>
+
 /**
  * @brief Runtime configuration passed through the evaluation call chain.
  *
@@ -280,7 +282,17 @@ private:
     const qore_class_private* old_rc_class;
     const QoreObject* old_self;
     bool restore_self;
+    struct SavedOptions {
+        SavedOptions(const QoreParseOptions& mask, const QoreParseOptions& value) noexcept : mask(mask), value(value) {
+        }
+        QoreParseOptions mask;
+        QoreParseOptions value;
+    };
+    // Disengaged on the successful path; do not initialize two option snapshots
+    // there. Only cold imported-body materialization saves an override.
+    std::optional<SavedOptions> old_options;
     DLLLOCAL void materialize(ThreadData* td);
+    DLLLOCAL void restoreOptions(ThreadData* td);
     DLLLOCAL void restore(ThreadData* td);
 };
 

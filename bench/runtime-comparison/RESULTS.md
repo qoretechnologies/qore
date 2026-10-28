@@ -28201,3 +28201,142 @@ Release validation passes 29 cases / 1453 assertions plus one standalone fixture
 Next evaluate whether the proven scalar body permits deferring imported option setup to cold context materialization, then recover native method admission after genuine Program transitions and investigate imported-body local-slot guards/list mutation. Refresh optimized develop/Java comparisons after these context regressions are addressed. These measurements do not establish current Java parity, startup/memory improvements, production-wide speedup or a performance ceiling.
 
 [Evidence](results-imported-native-closure-macos-arm64.json); [all 62 audit checks](audit-imported-native-closure.md).
+
+## Deferred imported closure runtime options (2026-10-28)
+
+This incremental experiment compares committed `fb2327d9cf` with deferred imported
+closure option setup. Both runtimes use Release `-O3 -DNDEBUG`, allocation tracking
+disabled, and freshly compiled matching `qcc -O3 --strip-source` artifacts. The
+previous closure recovery is already in the baseline. There is no new pure-develop
+or Java measurement here, and earlier campaign epochs are not pooled with this one.
+
+The existing v2 lowered-body proof admits only the dominating stack guard, fixed
+location-slot access and locked non-evaluating scalar capture reads. Successful
+execution cannot inspect runtime options or reenter Qore. Install the execution
+Program's option override on cold context materialization, before exception work,
+and restore the caller's override before applying its saved runtime options. No
+body eligibility, native ABI, debugger/body/capture/stack guard or actual Program
+transition is relaxed. IR/JIT callers benefit when invoking an eligible AOT body.
+
+The optional saved state adds 40 bytes to all closure-v2 context records on this
+platform, including same-Program calls. Supplementary standalone controls below
+measure that tradeoff; the eager attribution helper has its own frame.
+
+### Imported calls and broad controls
+
+Each result is the median across three layouts of per-layout median fork means.
+Each fork uses two warmups and three 150 ms samples, with 4096 items or short-helper
+invocations per dispatch. The screen has three forks; confirmation uses five fresh
+forks for every aggregate shift of at least 2%, all mixed workloads and imported
+closure/indirect controls. Whole-kernel units are ns/item, except short helpers,
+which use ns/invocation. No harness subtraction is made.
+
+|!Kernel|!Baseline|!Candidate|!Change|!Phase
+|short:int_zero_1|36.030800|35.725534|-0.847%|screen
+|short:int_zero_17|45.760089|45.682378|-0.170%|screen
+|short:int_unary_1|173.932346|175.106770|+0.675%|screen
+|short:int_unary_17|183.134893|186.400153|+1.783%|screen
+|short:float_zero_1|39.902557|39.883653|-0.047%|screen
+|short:float_zero_17|49.437846|49.384435|-0.108%|screen
+|short:float_unary_1|175.275385|176.715093|+0.821%|screen
+|short:float_unary_17|182.999155|185.793579|+1.527%|screen
+|short:int_zero_inline|1.105979|1.103887|-0.189%|screen
+|short:int_unary_inline|1.625949|1.628608|+0.164%|screen
+|short:float_zero_inline|1.114739|1.119741|+0.449%|screen
+|short:float_unary_inline|1.378794|1.380821|+0.147%|screen
+|micro:direct_call|1.594841|1.591086|-0.235%|screen
+|micro:method_call|1.683769|1.675958|-0.464%|screen
+|micro:polymorphic_call|156.310669|157.109456|+0.511%|screen
+|micro:polymorphic_expression_call|127.490893|129.329647|+1.442%|screen
+|micro:boxed_int_method_effect|349.724857|350.461672|+0.211%|screen
+|micro:indirect_call|10.082598|10.009022|-0.730%|confirmation
+|micro:closure_call|19.029386|18.160762|-4.565%|confirmation
+|micro:closure_capture|24.368601|23.315367|-4.322%|confirmation
+|micro:list_mutate|195.919163|196.190000|+0.138%|screen
+|float:direct_local_float_return|0.789601|0.800351|+1.361%|confirmation
+|float:callback_local_float_return|0.866779|0.867654|+0.101%|screen
+|float:direct_local_float_result|0.723658|0.737709|+1.942%|screen
+|float:callback_local_float_result|0.806960|0.812196|+0.649%|screen
+|mixed:csv_report|960.794233|951.059195|-1.013%|confirmation
+|mixed:object_orders|3204.250760|3176.968045|-0.851%|confirmation
+|mixed:callback_pipeline|91.957210|90.474270|-1.613%|confirmation
+|mixed:text_index|1349.795387|1348.046897|-0.130%|confirmation
+
+Confirmed plain/captured imported closures improve 4.56%/4.32%, and the mixed
+callback pipeline improves 1.61%, with improvements in every layout. The direct
+float-return control is 1.36% slower (+0.01075 ns/item), also in every layout.
+Other mixed results range from 1.01% faster to 0.13% faster in the aggregate,
+with mixed layout signs for object orders and text indexing. Short unary-17
+controls cost 1.78%/1.53% in the screen and did not meet the predeclared 2%
+confirmation threshold. These costs are retained in the broader workload
+tradeoff; no application-weighted overall score or zero-regression claim is made.
+
+### Same-binary eager-option attribution
+
+Only `QORE_DISABLE_AOT_IMPORTED_CLOSURE_DEFERRED_OPTIONS=1` changes in the eager
+column. Native imported admission stays enabled. Three layouts and five fresh
+forks use the same candidate libraries/images. The extra outlined helper means
+this control is not a bit-identical reconstruction of the baseline.
+
+|!Kernel|!Baseline ns/item|!Candidate|!Candidate with eager options
+|closure_call|19.005218|18.200040|19.946606
+|closure_capture|24.609975|23.452029|25.374039
+
+### Supplemental same-Program calls
+
+The imported module campaign does not cover same-owner RuntimeClosures. Fresh
+standalone `kernels.qr` executables keep functions, factories and closure bodies
+in one Program. All six controls use three layouts and five forks. A separate
+five-fork confirmation repeats the indirect-call regression and both closures.
+Both epochs are shown, without pooling or discarding the first run.
+
+|!Kernel|!Baseline ns/item|!Candidate|!Change|!Epoch
+|direct_call|1.545985|1.533588|-0.802%|measurement
+|indirect_call|8.564340|8.841274|+3.234%|measurement
+|closure_call|14.221323|14.056961|-1.156%|measurement
+|closure_capture|19.924928|19.811723|-0.568%|measurement
+|polymorphic_call|23.434564|23.384270|-0.215%|measurement
+|boxed_int_method_effect|92.448249|90.410264|-2.204%|measurement
+|indirect_call|8.476599|8.440204|-0.429%|confirmation
+|closure_call|14.038410|14.090295|+0.370%|confirmation
+|closure_capture|19.563820|19.824224|+1.331%|confirmation
+
+The initial indirect-call cost of 3.23% reverses to a 0.43% gain. Plain/captured
+closures first improve 1.16%/0.57%, then cost 0.37%/1.33% in the repeat; neither
+closure repeat has an adverse sign in all layouts. Small context-record costs
+remain possible. Retention rests on repeated imported-call and callback-pipeline
+gains, with these control uncertainties and the repeated float cost disclosed.
+
+### Validation and limits
+
+All 1122 jobs / 3366 timing windows independently replay: 522 broad screen,
+240 confirmation, 90 eager attribution, 180 same-Program controls and 90
+same-Program confirmation. Preparation passes 9180 native and 3060 source
+reference checks; eager controls add 1665 checks. All 30 LLVM modules verify,
+and all 15 matched before/after LLVM pairs are byte-identical. Exact sources,
+drivers, build flags, runtime identities, loaded libraries, order seeds, raw
+samples, actual child receipts and observed fork ranges are preserved in the
+content-addressed evidence. No owned build/test/profile overlaps timing. The
+shared macOS ARM64 host has background activity and no CPU affinity, exclusivity
+or thermal control. No samples are discarded.
+
+The expanded 382-assertion regression passes unchanged baseline first, then
+Release and Debug candidates. It covers O0/O3 stripped AOT, source modes, EH,
+five disabled/eager controls, wide values, pending/overflow exceptions, body
+identity, both debugger Programs, native rejection fallback, actual Program
+transitions, live option restoration and RuntimeConfig implementation replacement.
+Release passes 29 cases / 1513 assertions plus one standalone fixture. Debug
+passes 10 cases / 1414 assertions plus one standalone and 2917 native assertions.
+All 391 Release qmod aliases are restored. All 62 audit checks pass or are
+inapplicable. These are targeted macOS checks, not full-project or sanitizer
+qualification.
+
+Next investigate native method admission after genuine Program transitions and
+imported-body local-slot guards affecting list mutation. Duplicate imported
+closure admission remains another smaller candidate. Refresh optimized
+develop/Java comparisons after addressing those context costs. Current Java
+parity, startup/memory gains, production-wide speedup and a performance ceiling
+are not established.
+
+[Evidence](results-deferred-closure-options-macos-arm64.json);
+[all 62 audit checks](audit-deferred-closure-options.md).

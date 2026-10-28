@@ -75,11 +75,14 @@ printf(\"%d %d\\n\", plain(7), capture(-7));
             foreach string level in (("-O0", "-O3")) {
                 run((qcc, level, "--strip-source", "-m", "-o",
                     dir.path + "/modules/ImportedClosureEntry.qmod", source), dir.path + "/source", compile_prefix);
-                foreach string prefix in (("", "QORE_DISABLE_AOT_IMPORTED_CLOSURE_ENTRY=1 ",
+                foreach string prefix in (("", "QORE_DISABLE_AOT_IMPORTED_CLOSURE_DEFERRED_OPTIONS=1 ",
+                        "QORE_DISABLE_AOT_IMPORTED_CLOSURE_ENTRY=1 ",
                         "QORE_DISABLE_AOT_DYNAMIC_CLOSURE_ENTRY=1 ",
                         "QORE_DISABLE_AOT_DYNAMIC_CLOSURE_DEFERRED_CONTEXT=1 ",
                         "QORE_DISABLE_AOT_DYNAMIC_CLOSURE_CONTEXT_V2=1 ")) {
-                    assertTrue(regex(run((probe, prefix ? "0" : "1"), dir.path + "/modules", prefix),
+                    string enabled = !prefix || prefix.startsWith("QORE_DISABLE_AOT_IMPORTED_CLOSURE_DEFERRED_OPTIONS")
+                        ? "1" : "0";
+                    assertTrue(regex(run((probe, enabled), dir.path + "/modules", prefix),
                         "imported-closure-entry: [0-9]+ checks passed"));
                     foreach string mode in (("ast", "ir", "jit", "tiered")) {
                         assertEq("24 10\n", run((qore, "--exec-mode=" + mode, host), dir.path + "/modules", prefix));

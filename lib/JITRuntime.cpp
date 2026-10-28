@@ -11270,7 +11270,7 @@ static bool tryExecNativeIntClosureScalar(RuntimeConfig& rc, const QoreClosureBa
     QoreProgram* pgm = RuntimeConfigNativeAccess::getProgram(rc);
     // Code ownership is distinct from the closure's executing Program. A v2
     // entry can use module-owned metadata with the executing Program's live
-    // RuntimeConfig; the imported path establishes its runtime option override.
+    // RuntimeConfig; cold materialization establishes its runtime option override.
     // A different executing Program still needs the ordinary full transition.
     if constexpr (!ImportedBody) {
         if (pgm != uvb->pgm) [[unlikely]] {
@@ -12172,7 +12172,18 @@ private:
     RuntimeParseOptionsOverrideHelper helper;
 };
 
-// Keep the imported call's saved option state off the same-owner native frame.
+// The eager diagnostic control has its own frame, so its saved option state
+// does not enlarge successful deferred invocations.
+static __attribute__((noinline)) bool execImportedNativeIntClosureEagerOptions(RuntimeConfig& rc,
+        const QoreClosureBase* closure, const UserVariantBase* uvb, int64_t argument,
+        int64_t& result, ExceptionSink* xsink, QoreProgram* caller_pgm, bool caller_program_frame) {
+    QoreRtUserCallOverrideHelper po_override(rc, closure->getProgram(), uvb);
+    return caller_program_frame
+        ? tryExecNativeIntClosureScalar<true, true>(rc, closure, uvb, argument, result, xsink, caller_pgm)
+        : tryExecNativeIntClosureScalar<false, true>(rc, closure, uvb, argument, result, xsink);
+}
+
+// Keep imported-body admission off the same-owner native frame.
 static __attribute__((noinline)) bool tryExecImportedNativeIntClosureScalar(RuntimeConfig& rc,
         const QoreClosureBase* closure, const UserVariantBase* uvb, int64_t argument,
         int64_t& result, ExceptionSink* xsink, QoreProgram* caller_pgm, bool caller_program_frame) {
@@ -12190,9 +12201,15 @@ static __attribute__((noinline)) bool tryExecImportedNativeIntClosureScalar(Runt
             || qore_program_private::get(*uvb->pgm)->hasDebuggerAttached()) {
         return false;
     }
-    // Match execClosureDirect(): code from another Program runs with the
-    // closure Program's restrictions, including on native stack exceptions.
-    QoreRtUserCallOverrideHelper po_override(rc, pgm, uvb);
+    static constinit QoreEnvFlag eager_options("QORE_DISABLE_AOT_IMPORTED_CLOSURE_DEFERRED_OPTIONS");
+    if (eager_options.get()) {
+        return execImportedNativeIntClosureEagerOptions(rc, closure, uvb, argument, result, xsink,
+            caller_pgm, caller_program_frame);
+    }
+    // The complete v2 lowered-body proof allows only the stack guard, location
+    // slots and non-evaluating scalar capture reads. None can observe runtime
+    // options before the guard materializes the closure context. Install the
+    // execution Program's override there, before constructing its exception.
     return caller_program_frame
         ? tryExecNativeIntClosureScalar<true, true>(rc, closure, uvb, argument, result, xsink, caller_pgm)
         : tryExecNativeIntClosureScalar<false, true>(rc, closure, uvb, argument, result, xsink);

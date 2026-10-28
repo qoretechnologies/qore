@@ -2908,6 +2908,10 @@ __attribute__((always_inline)) void RuntimeConfigNativeLeafCallHelper::restoreDe
 
 __attribute__((noinline, cold)) void RuntimeConfigNativeLeafCallHelper::restoreMaterialized() {
     assert(state == ContextState::Materialized);
+    if (target_kind == TargetKind::ClosureV2) {
+        // Restore the caller's override before applying it to the saved options.
+        closure_context->restoreOptions(td);
+    }
     if (swapped) {
         td->runtime_po = apply_runtime_po_override(td, old_po);
     }
@@ -2948,6 +2952,12 @@ __attribute__((noinline, cold)) void RuntimeConfigNativeMethodContext::restore(T
 }
 
 __attribute__((noinline, cold)) void RuntimeConfigNativeClosureContext::materialize(ThreadData* td) {
+    QoreProgram* pgm = closure->getProgram();
+    if (pgm != uvb->pgm) {
+        old_options.emplace(td->runtime_po_override_mask, td->runtime_po_override_value);
+        td->runtime_po_override_mask = get_user_variant_runtime_po_override_mask();
+        td->runtime_po_override_value = pgm->getParseOptions();
+    }
     old_object = td->current_obj;
     old_class = td->current_class;
     old_rc_object = rc.getObject();
@@ -2962,6 +2972,14 @@ __attribute__((noinline, cold)) void RuntimeConfigNativeClosureContext::material
     td->current_class = cls;
     rc.setObject(object);
     rc.setClass(cls);
+}
+
+__attribute__((noinline, cold)) void RuntimeConfigNativeClosureContext::restoreOptions(ThreadData* td) {
+    if (old_options) {
+        td->runtime_po_override_mask = old_options->mask;
+        td->runtime_po_override_value = old_options->value;
+        old_options.reset();
+    }
 }
 
 __attribute__((noinline, cold)) void RuntimeConfigNativeClosureContext::restore(ThreadData* td) {

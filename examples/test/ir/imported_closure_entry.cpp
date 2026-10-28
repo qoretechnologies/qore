@@ -37,7 +37,17 @@ static bool callerAllowsInjection(ExceptionSink* xsink) {
     return bool(QoreParseOptions(result->getAsBigInt()) & PO_ALLOW_INJECTION);
 }
 
-static void sameContext(const RuntimeConfig& before) {
+// A test-only builtin call refreshes the compatibility stack snapshot; the
+// admitted scalar body cannot make this call itself. Preserve that test effect.
+static bool liveAllowsInjection(ExceptionSink* xsink) {
+    RuntimeConfig* rc = qore_rt_get_fast_runtime_config();
+    const QoreStackLocation* saved_snapshot = rc->getStackLocation();
+    bool allowed = callerAllowsInjection(xsink);
+    rc->setStackLocation(saved_snapshot);
+    return allowed;
+}
+
+static void sameContext(const RuntimeConfig& before, bool allows_injection) {
     RuntimeConfig after = *qore_rt_get_fast_runtime_config();
     CHECK(before.getProgram() == after.getProgram());
     CHECK(before.getLocation() == after.getLocation());
@@ -46,6 +56,8 @@ static void sameContext(const RuntimeConfig& before) {
     CHECK(before.getObject() == after.getObject() && before.getClass() == after.getClass());
     CHECK(before.getClosureEnv() == after.getClosureEnv());
     CHECK(before.getStackLocation() == after.getStackLocation());
+    ExceptionSink xsink;
+    CHECK(liveAllowsInjection(&xsink) == allows_injection);
 }
 
 class StackProbe final : public QoreExternalRuntimeStackLocationHelper {
@@ -121,11 +133,7 @@ struct EntryProbe {
             // has materialized the frame; no private TLS symbol is exported.
             // Preserve the original stack exception while executing the builtin.
             ExceptionSink options_sink;
-            const QoreStackLocation* saved_snapshot = rc->getStackLocation();
-            CHECK(callerAllowsInjection(&options_sink));
-            // The synthetic builtin call refreshes the compatibility snapshot;
-            // a compiler-proven scalar body cannot make that call itself.
-            rc->setStackLocation(saved_snapshot);
+            CHECK(liveAllowsInjection(&options_sink));
             // A cold call may replace the RuntimeConfig implementation; restoration
             // must update the current implementation, not a retained old pointer.
             RuntimeConfig replacement(*rc);
@@ -151,14 +159,22 @@ static void checkClosure(QoreProgram* pgm, const char* factory, bool enabled) {
     CHECK(!(uvb->pgm->getParseOptions() & PO_ALLOW_INJECTION));
     RuntimeConfig* rc = qore_rt_get_fast_runtime_config();
     const uint64_t bits = value->rawBits();
-    auto ordinary = [&](int64_t argument) {
+    const bool original_options = liveAllowsInjection(&xsink);
+    auto ordinary = [&](int64_t argument, bool overflow = false) {
         ValueHolder arg(QoreValue(argument), &xsink);
         uint64_t args[] = {arg->rawBits()};
         uint64_t raw = qore_rt_call_closure_fast(bits, args, 1, &xsink);
         QoreValue result;
         std::memcpy(&result, &raw, sizeof(result));
         ValueHolder answer(result, &xsink);
-        CHECK(!xsink && answer->getAsBigInt() == argument + 17);
+        CHECK(bool(xsink) == overflow);
+        if (overflow) {
+            CHECK(answer->isNothing());
+            CHECK(xsink.getExceptionErr().get<const QoreStringNode>()->equal("STACK-LIMIT-EXCEEDED"));
+            xsink.clear();
+        } else {
+            CHECK(answer->getAsBigInt() == argument + 17);
+        }
     };
     ordinary(7);
     QoreAOTContext* ctx = uvb->getCachedAOTContext();
@@ -178,7 +194,7 @@ static void checkClosure(QoreProgram* pgm, const char* factory, bool enabled) {
             CHECK(invoke(argument, result) == enabled);
             CHECK(!xsink && result == (enabled ? argument + 17 : -1));
             ordinary(argument);
-            sameContext(before);
+            sameContext(before, original_options);
             CHECK(!cache.owner && !frame.frame);
         }
         if (!enabled) { continue; }
@@ -203,7 +219,7 @@ static void checkClosure(QoreProgram* pgm, const char* factory, bool enabled) {
         CHECK(invoke(7, result) == 1 && result == 0 && xsink);
         CHECK(xsink.getExceptionErr().get<const QoreStringNode>()->equal("IMPORTED-CLOSURE-PENDING"));
         xsink.clear();
-        sameContext(before);
+        sameContext(before, original_options);
         EntryProbe probe(ctx, pgm);
         for (bool requested : {false, true, false}) {
             probe.overflow = requested && qore_rt_get_stack_limit_v1(rc);
@@ -213,25 +229,33 @@ static void checkClosure(QoreProgram* pgm, const char* factory, bool enabled) {
                 CHECK(xsink.getExceptionErr().get<const QoreStringNode>()->equal("STACK-LIMIT-EXCEEDED"));
                 xsink.clear();
             }
-            sameContext(before);
+            sameContext(before, original_options);
         }
         probe.reject = true;
         CHECK(invoke(7, result) == 0 && !xsink);
         ordinary(7); // rejected native capture admission falls back without changing the answer
-        sameContext(before);
+        sameContext(before, original_options);
         probe.reject = false;
         QoreProgramHelper foreign(PO_MODERN, xsink);
         {
             QoreExternalProgramContextHelper active(&xsink, *foreign);
+            const bool foreign_options = liveAllowsInjection(&xsink);
             RuntimeConfig foreign_before = *qore_rt_get_fast_runtime_config();
             CHECK(invoke(7, result) == 0 && !xsink);
             probe.caller = *foreign;
             unsigned calls = probe.calls;
             ordinary(7);
             CHECK(probe.calls == calls + 1);
-            sameContext(foreign_before);
+            sameContext(foreign_before, foreign_options);
+            if (qore_rt_get_stack_limit_v1(rc)) {
+                probe.overflow = true;
+                ordinary(7, true);
+                probe.overflow = false;
+                CHECK(probe.calls == calls + 2);
+                sameContext(foreign_before, foreign_options);
+            }
         }
-        sameContext(before);
+        sameContext(before, original_options);
     }
 }
 
