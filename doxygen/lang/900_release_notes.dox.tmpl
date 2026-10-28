@@ -6139,6 +6139,10 @@ while (*binary chunk = input.read(65536)) {
       additionally avoid generic scalar/enum storage dispatch while retaining the runtime slot's
       and caller cache's references, real-reference bookkeeping, and destructor ordering;
       positively identified strong inputs also bypass empty weak-normalization holder setup/cleanup
+    - Enabled prepared reload, auto and class body-local storage in imported AOT functions whose
+      executing Program differs from the code owner, avoiding repeated local lookup while retaining
+      compiler-proven invocation ownership, live type/access and mutation checks, cleanup and full
+      Program transitions; existing native artifacts benefit without recompilation
     - Specialized cleanup of prepared AOT class-local slots that still own a strong object, avoiding
       temporary tagged-value cleanup dispatch while preserving real-reference bookkeeping, virtual
       release, destructor exceptions, and reentrant cleanup; weak, opaque, borrowed, and empty slots

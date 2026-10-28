@@ -28668,3 +28668,165 @@ cumulative checkpoint.
 
 [Evidence](results-cross-program-member-retry-macos-arm64.json);
 [all 62 audit checks](audit-cross-program-member-retry.md).
+
+
+## Prepared body-local storage in imported AOT functions (2026-10-29)
+
+The optimized baseline is committed and installed `12107bdb79`, including develop
+`14b3edc792`. Both runtimes use Release `-O3 -DNDEBUG`, allocation tracking off,
+AppleClang 21 and LLVM 22.1.8 on the same macOS ARM64 M4 Pro host. Eighteen fresh
+matching `qcc -O3 --strip-source` artifacts cover three suites and three layouts.
+All nine before/after LLVM pairs are byte-for-byte identical, including serialized
+build metadata. The helper-only change preserves compiler/runtime identity and
+ABI. Actual loaded libraries and frozen artifacts are verified independently;
+no identity bypass is used. These are incremental branch results, with no fresh
+Java or pure-develop timing in this campaign.
+
+### Admission and lifetime
+
+Imported functions execute in their caller Program, while their AOT context
+retains the code-owner Program. The previous equality check unnecessarily
+rejected prepared reload, auto and class body-local slots. Each helper now
+requires an active executing Program without requiring code-owner equality.
+The compiler already excludes parameters, captures, self, top-level and IR-only
+storage, and emits preparation after current-invocation local instantiation.
+Ordinary entry pre-instantiates AOT body locals; private fast entry instantiates
+its runtime-visible locals before preparation. Exact LocalVar identity then
+selects the active slot through RuntimeConfig. Lookup itself crosses frame
+boundaries: compiler-proven instantiation dominance is essential to this proof.
+
+Handles borrow invocation/thread-local storage, never values or ownership flags.
+Nested stack allocation preserves parent addresses; block clears preserve the
+slot while live evaluation and assignment guards continue to run. Declaration,
+class/access, reference/weak/opaque, finalized/boundary, bounds, copy-on-write,
+cleanup and exception checks remain. Program transitions and policy handling are
+unchanged. The runtime improvement applies to AOT bodies, including those invoked
+through AST/IR/JIT hosts; it introduces no optimization for IR/JIT-only bodies.
+
+### Optimized measurements
+
+Units are whole-kernel ns/item for 4096-item batches, including loop and dispatch
+work. Results are median layouts of each layout's median fork mean. The initial
+screen uses three forks; fresh confirmation uses five forks for all 29 workloads.
+Each has two warmups and three 150 ms samples, with default, reverse and seeded
+shuffle layouts. No epoch pooling, harness subtraction or sample discard occurs.
+
+|!Kernel|!Baseline|!Candidate|!Confirmation change|!Screen change
+|micro:direct_call|1.582650|1.527541|-3.482%|-4.023%
+|micro:method_call|1.658623|1.610375|-2.909%|-2.879%
+|micro:polymorphic_call|91.919165|76.339949|-16.949%|-16.769%
+|micro:polymorphic_float_call|92.772567|77.791566|-16.148%|-16.967%
+|micro:boxed_int_method_call|111.580356|99.297944|-11.008%|-11.047%
+|micro:boxed_float_method_call|122.243914|102.933013|-15.797%|-15.449%
+|micro:boxed_int_method_fallback|123.166326|111.594992|-9.395%|-9.948%
+|micro:boxed_float_method_fallback|132.519651|112.838068|-14.852%|-14.419%
+|micro:boxed_int_method_effect|185.703881|166.439714|-10.374%|-9.650%
+|micro:indirect_call|9.816261|9.861812|+0.464%|-0.552%
+|micro:closure_call|18.142217|17.851397|-1.603%|-0.433%
+|micro:closure_capture|23.749479|23.630763|-0.500%|-1.157%
+|micro:list_read|2.953338|2.898232|-1.866%|-1.559%
+|micro:list_build|26.623885|26.561851|-0.233%|+0.120%
+|micro:list_mutate|197.183945|132.050597|-33.032%|-33.593%
+|micro:temporary_list|1.738738|1.690725|-2.761%|-1.936%
+|micro:temporary_hash|1.739354|1.695892|-2.499%|-3.042%
+|mixed:csv_report|949.788411|926.759847|-2.425%|-1.111%
+|mixed:object_orders|3121.168349|3107.611762|-0.434%|-1.478%
+|mixed:callback_pipeline|90.406097|88.890723|-1.676%|-2.608%
+|mixed:text_index|1349.184282|1322.919573|-1.947%|-4.297%
+|local:direct_call|1.530435|1.530870|+0.028%|-0.724%
+|local:method_call|1.605429|1.606535|+0.069%|-0.267%
+|local:polymorphic_call|23.400329|23.482768|+0.352%|+0.517%
+|local:list_mutate|133.425079|131.484204|-1.455%|-0.617%
+|local:temporary_list|1.686590|1.689377|+0.165%|+0.301%
+|local:boxed_int_method_fallback|32.561717|32.988389|+1.310%|-0.187%
+|local:boxed_float_method_fallback|34.069330|33.841781|-0.668%|-0.084%
+|local:boxed_int_method_effect|90.622536|90.403111|-0.242%|-0.948%
+
+Imported list mutation improves 33.03%, integer/float virtual dispatch
+16.95%/16.15%, pure boxed calls 11.01%/15.80%, member reads 9.39%/14.85%,
+and integer effects 10.37%. Each of these target/layout pairs improves in both
+screen and confirmation. CSV improves 2.42%; callback/text controls improve
+1.68%/1.95%. Object orders changes only -0.43% and its small gain does not
+repeat in the attribution epoch, so no object-orders improvement is attributed.
+Small direct/method and temporary-container improvements describe whole kernels,
+including body-local setup/reloads, not isolated call latency.
+
+Retained costs include same-Program integer member reads +1.31% in confirmation
+(screen -0.19%), local virtual dispatch +0.35% (screen +0.52%), local temporary
+lists +0.17% (screen +0.30%), and imported indirect calls +0.46% (screen -0.55%).
+All confirmation fork ranges overlap for adverse layout results. Two initial
+screen layouts have separated adverse ranges: local integer member reads +1.68%
+and effects +1.62%, both reverse layout; neither separation repeats in confirmation.
+These costs remain recorded. Retain the change under the authorized broader
+workload tradeoff; there is no weighted application-wide or zero-regression claim.
+
+### Same-binary attribution
+
+Five fresh forks and three layouts exercise each runtime presence control:
+`QORE_DISABLE_AOT_PREPARED_LOCAL_RELOAD`, `QORE_DISABLE_AOT_AUTO_LOCAL_SLOT`,
+and `QORE_DISABLE_AOT_CLASS_LOCAL_SLOT`, separately and together. Candidate
+library and artifacts remain identical. The 15 workloads include every repeated
+aggregate shift of at least 2%, imported list mutation, object orders and the
+local list control. Disabling prepared reload restores imported list mutation
+from about 133 to 196 ns/item; disabling class slots restores integer virtual
+calls from about 76 to 93. Auto-slot disabling explains much of the boxed-call
+gain; combined disabling restores the float baseline more fully. Local list
+mutation already used prepared reloads before this change, so disabling that
+existing path is not evidence of a new same-Program gain.
+
+|!Kernel|!Baseline|!Candidate|!No reload|!No auto|!No class|!All disabled
+|micro:direct_call|1.582289|1.526118|1.577517|1.526500|1.529706|1.582420
+|micro:method_call|1.659593|1.618987|1.666839|1.609933|1.610319|1.660594
+|micro:polymorphic_call|92.530050|76.435575|76.579164|77.181334|93.430968|92.834034
+|micro:polymorphic_float_call|92.946101|76.715294|77.532174|77.184546|92.235492|92.335636
+|micro:boxed_int_method_call|110.924699|99.751552|100.138349|110.697026|98.598471|111.104892
+|micro:boxed_float_method_call|122.243196|102.517621|102.747467|109.994614|102.435366|120.826556
+|micro:boxed_int_method_fallback|123.778278|112.936737|110.616285|121.888076|112.018655|123.289646
+|micro:boxed_float_method_fallback|133.132810|113.158462|112.328292|120.095241|113.269075|133.745986
+|micro:boxed_int_method_effect|184.461575|168.059257|168.168343|178.764526|168.770996|184.172243
+|micro:list_mutate|195.698195|132.798963|195.533309|131.312468|131.676459|196.217344
+|micro:temporary_list|1.735711|1.690607|1.738670|1.688406|1.691309|1.738945
+|micro:temporary_hash|1.741281|1.692635|1.741277|1.693760|1.691612|1.742413
+|mixed:csv_report|955.082298|927.902892|950.138972|936.752919|923.597403|977.057206
+|mixed:object_orders|3140.496148|3142.652724|3159.925673|3110.582140|3111.131456|3157.009549
+|local:list_mutate|131.530546|132.317523|196.181697|131.266263|132.056786|196.617580
+
+### Qualification and evidence
+
+All 2742 timing jobs / 8226 measured windows replay from raw output and actual
+waited child receipts: 522 screen, 870 confirmation and 1350 attribution jobs.
+Preparation passes 7020 native and 2340 source reference checks, with 18 LLVM
+verifications; disabled controls add 14040 reference checks. The native regression
+observes 50 rejected preparations on the unchanged baseline and 50 admitted
+preparations on the candidate, with distinct recursive slots and restored parent
+values. Per-family controls produce the expected admission counts.
+
+The new fixture passes 2 cases / 1735 assertions on both baseline and candidate.
+Release and Debug each pass 26 cases / 9790 assertions across 16 fixtures; Debug
+adds 2917 native assertions. Coverage includes AST/IR/JIT/tiered, stripped AOT
+O0/O3, EH, all three disabled families, reflection, destructor reentry, recursion,
+Program-changing object calls, class/weak/opaque/reference checks, cleanup and
+indexed copy-on-write mutation. All 391 Release qmod aliases are restored.
+
+Four failed diagnostic/fixture processes are preserved: an invalid fixed-literal
+storage assertion, illegal module-top-level initializers, an omitted host debugger
+directive, and an uninitialized empty test list. Corrected fixtures pass the
+unchanged baseline. Earlier wrapper preflight assumptions about forwarded LLVM
+storage, the baseline hash and runtime identity are preserved too. None supplied
+accepted timing samples or required a production workaround. A fifth failed
+process is the first Debug native run: five assertions still expected the
+superseded code-owner equality rule. Their two assertion sites now verify that
+the supplied active invocation selects storage independently of code-owner
+metadata. The actual imported-owner/recursive regression passes independently.
+Only Debug test expectations changed after timing; Release production code and
+the frozen timed runtimes are unchanged. The full Debug suite was rerun.
+
+No owned build, test or profiling overlaps timing. The shared host has background
+activity and no affinity, exclusivity or thermal control. This is targeted macOS
+qualification, not a full-project, sanitizer or other-platform claim. Startup,
+memory use, current Java parity and a global performance ceiling are unmeasured.
+Next refresh the optimized develop/Java checkpoint, then profile the remaining
+virtual-call, transition and list-mutation costs to select the next change.
+
+[Evidence](results-imported-body-local-slots-macos-arm64.json);
+[all 62 audit checks](audit-imported-body-local-slots.md).

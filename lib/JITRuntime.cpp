@@ -13861,11 +13861,14 @@ extern "C" DLLEXPORT void* qore_rt_get_reload_local_slot_aot_v1(QoreAOTContext* 
     static constinit QoreEnvFlag enabled_env("QORE_DISABLE_AOT_PREPARED_LOCAL_RELOAD");
     const bool enabled = !enabled_env.get();
     if (!enabled || !ctx || idx < 0 || idx >= ctx->num_locals || !rc
-            || RuntimeConfigNativeAccess::getProgram(*rc) != ctx->pgm
+            || !RuntimeConfigNativeAccess::getProgram(*rc)
             || !ctx->locals[idx] || !strcmp(ctx->locals[idx]->getName(), "self")) {
         return nullptr;
     }
     // Compiler-proven body ownership excludes parameters and private IR slots.
+    // Imported functions execute in their caller Program; ctx->pgm owns code
+    // metadata, not these invocation slots. Resolve exact local identity on the
+    // active execution stack after the compiler-proven instantiation point.
     // Reads need no assignment-type admission; actual evaluation remains live.
     return RuntimeConfigNativeAccess::getAOTBodyLocalSlot(*rc, ctx->locals[idx]);
 }
@@ -13913,11 +13916,12 @@ extern "C" DLLEXPORT void* qore_rt_get_auto_local_slot_aot_v1(QoreAOTContext* ct
     static constinit QoreEnvFlag enabled_env("QORE_DISABLE_AOT_AUTO_LOCAL_SLOT");
     const bool enabled = !enabled_env.get();
     if (!enabled || !ctx || idx < 0 || idx >= ctx->num_locals || !rc
-            || RuntimeConfigNativeAccess::getProgram(*rc) != ctx->pgm
+            || !RuntimeConfigNativeAccess::getProgram(*rc)
             || !ctx->locals[idx] || ctx->locals[idx]->getTypeInfo() != autoTypeInfo) {
         return nullptr;
     }
     // The compiler proves ordinary body-slot ownership, after instantiation.
+    // Its active stack can belong to an importing caller, not ctx->pgm.
     // Per-store declaration checks remain live even when a slot was prepared.
     return RuntimeConfigNativeAccess::getAOTBodyLocalSlot(*rc, ctx->locals[idx]);
 }
@@ -14105,9 +14109,11 @@ extern "C" DLLEXPORT void* qore_rt_get_class_local_slot_aot_v1(QoreAOTContext* c
     static constinit QoreEnvFlag enabled_env("QORE_DISABLE_AOT_CLASS_LOCAL_SLOT");
     const bool enabled = !enabled_env.get();
     if (!enabled || !ctx || idx < 0 || idx >= ctx->num_locals || !rc
-            || RuntimeConfigNativeAccess::getProgram(*rc) != ctx->pgm) {
+            || !RuntimeConfigNativeAccess::getProgram(*rc)) {
         return nullptr;
     }
+    // The compiler proves current-invocation body ownership; the active stack
+    // is authoritative even when an imported function has another code owner.
     return RuntimeConfigNativeAccess::getAOTBodyLocalSlot(*rc, ctx->locals[idx]);
 }
 

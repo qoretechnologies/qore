@@ -2040,6 +2040,8 @@ void qore_rt_reload_local_if_stale_aot(QoreAOTContext* ctx, int32_t idx, uint64_
     @param rc borrowed live same-thread invocation context
     @return borrowed slot, or nullptr to retain ordinary reload lookup
     @note The slot is valid only during this invocation, including nested calls and block clears.
+    The executing Program may be an importing caller rather than the AOT code owner;
+    compiler-proven instantiation and exact local identity select its active slot.
     No value, ownership or live-state flags are cached. The first-use presence control
     QORE_DISABLE_AOT_PREPARED_LOCAL_RELOAD returns nullptr independently of store-slot controls.
 */

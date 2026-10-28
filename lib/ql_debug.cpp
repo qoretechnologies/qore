@@ -936,8 +936,9 @@ static void ut_aot_scalar_local_store_mode(UnitTestCounters& c, bool direct_stor
             }
         }
         context.pgm = nullptr;
-        UT_ASSERT(c, !getter(&context, 0, &rc),
-            "a different Program cannot prepare this slot");
+        UT_ASSERT(c, getter(&context, 0, &rc)
+            == (q_env_is_set("QORE_DISABLE_AOT_AUTO_LOCAL_SLOT") ? nullptr : slot),
+            "code-owner metadata does not select active invocation storage");
 
         // Growing and shrinking separately allocated stack blocks must not move
         // this invocation's slot, even for recursive bindings of the same LocalVar.
@@ -1875,7 +1876,8 @@ static void ut_aot_prepared_local_reload(UnitTestCounters& c) {
     UT_ASSERT(c, !qore_rt_get_reload_local_slot_aot_v1(&context, 1, &rc), "past-end reload index is rejected");
     UT_ASSERT(c, !qore_rt_get_reload_local_slot_aot_v1(&context, 0, nullptr), "null runtime context is rejected");
     context.pgm = nullptr;
-    UT_ASSERT(c, !qore_rt_get_reload_local_slot_aot_v1(&context, 0, &rc), "foreign Program is rejected");
+    UT_ASSERT(c, qore_rt_get_reload_local_slot_aot_v1(&context, 0, &rc) == expected_slot(slot),
+        "code-owner metadata does not select active invocation storage");
     context.pgm = RuntimeConfigNativeAccess::getProgram(rc);
     {
         LocalScope typed("native_typed_reload", bigIntTypeInfo, xsink);

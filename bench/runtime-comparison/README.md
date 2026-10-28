@@ -1558,3 +1558,16 @@ fresh Java measurements; these are incremental branch results, not pure develop.
 The [latest optimized cumulative checkpoint](RESULTS.md#optimized-module-checkpoint-after-finite-callback-coercion-omission-2026-10-28) compares branch 8276756a7a with pure develop 62a415e603 across 78 Qore workloads and 45 fresh Java counterparts. It includes mixed workloads and documents whole-kernel units, inlining controls and Program transitions. The dedicated short finite-callback experiment has a separate preceding-branch baseline.
 
 The native constant-callback rewrite removes private two-target zero-argument constant callback objects before LLVM lowering and restores the original IR for metadata/debugging. `QORE_DISABLE_AOT_CONSTANT_CALLBACK_SCALAR_REPLACEMENT=1` restores the previous compiler path. The [optimized comparison](results-finite-constant-callback-macos-arm64.json) records 73–78% less time for short targets, about 9.6% less for long constant-callback loops, fresh Java results, broader tradeoffs and 1578 verified timing jobs. See [RESULTS.md](RESULTS.md) and the [62-check audit](audit-finite-constant-callback.md).
+
+
+Prepared reload, auto and class body-local handles also work inside imported
+AOT functions whose executing Program differs from their code owner. The
+compiler-proven instantiation point and exact local identity select active
+invocation storage through RuntimeConfig; handles cache storage, not values or
+type/access acceptance. Program transitions and live mutation/ownership checks
+remain. Existing runtime presence controls
+`QORE_DISABLE_AOT_PREPARED_LOCAL_RELOAD`, `QORE_DISABLE_AOT_AUTO_LOCAL_SLOT` and
+`QORE_DISABLE_AOT_CLASS_LOCAL_SLOT` independently disable acquisition. No
+recompilation is required for this helper-only change. See the
+[optimized incremental results](RESULTS.md#prepared-body-local-storage-in-imported-aot-functions-2026-10-29)
+for imported calls, list mutation, mixed workloads, retained costs and attribution.
