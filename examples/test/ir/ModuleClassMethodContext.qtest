@@ -1,0 +1,431 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class ModuleClassMethodContextTest
+
+#! Methods of module classes called from a restricted Program run with its restrictions in every execution mode
+/** A method of a class defined in a module ran with the module's options only, so lockdown user code could call
+    \c RWLock::readLock() through a call reference to an \c RWLock that a static or ordinary method of a module class
+    returned, and such a method could create thread classes with \c create_object(), with every execution mode
+    including the AST interpreter.  Module code now runs with the restrictions of its caller as well as its own, also
+    when another module method or function, a closure or a call reference enters it, while it keeps the module's
+    Program and so resolves the module's own names (\c create_object() and \c call_function() of names the caller
+    cannot see).
+
+    A module function, by contrast, runs in the Program that calls it, so the names it resolves at run time
+    (\c call_function(), \c create_object()) are those of the calling Program, where only the module's exported names
+    exist, while its direct references (a call, a call reference, \c new) are resolved when the module is parsed; a
+    method resolves the module's private names at run time.
+
+    Each case runs the same script with the source module and with the module AOT-compiled with
+    <tt>--compile-module</tt>, in every execution mode, and expects the output of the source module with the AST
+    interpreter.
+*/
+class ModuleClassMethodContextTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+
+        TmpDir tmp("qore-module-class-method-context-");
+        string src_dir;
+        string qmod_dir;
+
+        #! the output of the runtime name lookup script with the source module and the AST interpreter
+        const ExpectedNamesOutput = "function_call_private: NO-FUNCTION
+function_call_private: NO-FUNCTION
+function_call_public: \"public function\"
+function_call_public: \"public function\"
+function_create_private: CREATE-OBJECT-ERROR
+function_create_private: CREATE-OBJECT-ERROR
+function_create_public: \"Holder\"
+function_create_public: \"Holder\"
+function_direct_private: \"private function\"
+function_direct_private: \"private function\"
+function_callref_private: \"private function\"
+function_callref_private: \"private function\"
+function_new_private: \"PrivateThing\"
+function_new_private: \"PrivateThing\"
+method_call_private: \"private function\"
+method_call_private: \"private function\"
+method_create_private: \"PrivateThing\"
+method_create_private: \"PrivateThing\"
+main function_call_private: NO-FUNCTION
+main function_call_private: NO-FUNCTION
+";
+
+        #! the output of the source module with the AST interpreter
+        const ExpectedContextOutput = "static_callref: INVALID-FUNCTION-ACCESS
+method_callref: INVALID-FUNCTION-ACCESS
+static_create_obj: CREATE-OBJECT-ERROR
+static_create_obj: CREATE-OBJECT-ERROR
+static_create_obj: CREATE-OBJECT-ERROR
+method_create_obj: CREATE-OBJECT-ERROR
+method_create_obj: CREATE-OBJECT-ERROR
+method_create_obj: CREATE-OBJECT-ERROR
+function_via_method_callref: INVALID-FUNCTION-ACCESS
+member: \"member\"
+member: \"member\"
+holder: \"member\"
+holder: \"member\"
+private_create_obj: \"PrivateThing\"
+private_create_obj: \"PrivateThing\"
+private_call_function: \"private function\"
+private_call_function: \"private function\"
+nested_create_obj: CREATE-OBJECT-ERROR
+nested_create_obj: CREATE-OBJECT-ERROR
+function_via_method_create_obj: CREATE-OBJECT-ERROR
+function_via_method_create_obj: CREATE-OBJECT-ERROR
+closure_create_obj: CREATE-OBJECT-ERROR
+closure_create_obj: CREATE-OBJECT-ERROR
+unrestricted run_restricted: INVALID-FUNCTION-ACCESS
+unrestricted run_restricted: INVALID-FUNCTION-ACCESS
+unrestricted method_create_obj: \"RWLock\"
+unrestricted nested_create_obj: \"RWLock\"
+unrestricted closure_create_obj: \"RWLock\"
+unrestricted method_callref: \"locked\"
+unrestricted method_create_obj: \"RWLock\"
+unrestricted nested_create_obj: \"RWLock\"
+unrestricted closure_create_obj: \"RWLock\"
+unrestricted method_callref: \"locked\"
+";
+    }
+
+    constructor() : QUnit::Test("ModuleClassMethodContextTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        src_dir = tmp.path + "/src";
+        qmod_dir = tmp.path + "/qmod";
+        mkdir(src_dir);
+        mkdir(qmod_dir);
+        writeFile(src_dir + "/ClassContextMod.qm", moduleCode());
+
+        addTestCase("module class methods called from a PO_LOCKDOWN Program run with its restrictions in every mode",
+            \testExecutionContext());
+        addTestCase("module functions resolve names at run time in the calling Program and methods in the module's "
+            "Program in every mode", \testRuntimeNames());
+
+        set_return_value(main());
+    }
+
+    private string moduleCode() {
+        return "%modern
+
+module ClassContextMod {
+    version = \"1.0\";
+    desc = \"module class method context regression module\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace ClassContextMod {
+public class Factory {
+    auto make() {
+        return new RWLock();
+    }
+
+    static auto staticMake() {
+        return new RWLock();
+    }
+
+    string createObject() {
+        return create_object(\"RWLock\").className();
+    }
+
+    static string staticCreateObject() {
+        return create_object(\"RWLock\").className();
+    }
+
+    # resolves a class of its own module that the caller cannot see
+    string createPrivate() {
+        return create_object(\"ClassContextMod::PrivateThing\").className();
+    }
+
+    # resolves a function of its own module that the caller cannot see
+    static string callPrivate() {
+        return call_function(\"ClassContextMod::privateFunction\");
+    }
+
+    # a method of the module calling another one keeps the restrictions of the first one's caller
+    string nested() {
+        return createObject();
+    }
+
+    code makeClosure() {
+        return string sub () { return create_object(\"RWLock\").className(); };
+    }
+}
+
+class PrivateThing {
+}
+
+string sub privateFunction() {
+    return \"private function\";
+}
+
+public class Holder {
+    public {
+        RWLock lock();
+    }
+
+    string check() {
+        lock.readLock();
+        lock.readUnlock();
+        return \"member\";
+    }
+}
+
+# a module function that returns an object created by a method of a module class
+public auto sub makeViaMethod() {
+    Factory f();
+    return f.make();
+}
+
+public string sub member() {
+    Holder h();
+    return h.check();
+}
+
+# runs another Program's top-level code from module code
+public string sub runProgram(Program p) {
+    try {
+        p.run();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+    return \"no error\";
+}
+
+# a module function calling a method of a module class
+public string sub createViaMethod() {
+    Factory f();
+    return f.createObject();
+}
+
+public string sub publicFunction() {
+    return \"public function\";
+}
+
+# a module function runs in the Program that calls it, so it resolves names at run time in that Program, where only
+# the exported names of the module exist
+public string sub functionCallPrivate() {
+    return call_function(\"ClassContextMod::privateFunction\");
+}
+
+public string sub functionCallPublic() {
+    return call_function(\"ClassContextMod::publicFunction\");
+}
+
+public string sub functionCreatePrivate() {
+    return create_object(\"ClassContextMod::PrivateThing\").className();
+}
+
+public string sub functionCreatePublic() {
+    return create_object(\"ClassContextMod::Holder\").className();
+}
+
+# direct references are resolved when the module is parsed
+public string sub functionDirectPrivate() {
+    return privateFunction();
+}
+
+public string sub functionCallrefPrivate() {
+    code c = \\privateFunction();
+    return c();
+}
+
+public string sub functionNewPrivate() {
+    return (new PrivateThing()).className();
+}
+
+# a method runs in the module's Program, so it resolves the module's private names at run time
+public class Lookup {
+    static string callPrivate() {
+        return call_function(\"ClassContextMod::privateFunction\");
+    }
+
+    static string createPrivate() {
+        return create_object(\"ClassContextMod::PrivateThing\").className();
+    }
+}
+}
+";
+    }
+
+    private string contextScript() {
+        return "%modern
+%requires ClassContextMod
+
+Program p(PO_NEW_STYLE);
+p.loadModule(\"ClassContextMod\");
+p.setParseOptions(PO_LOCKDOWN);
+p.parse(\"
+auto sub static_callref() { auto l = ClassContextMod::Factory::staticMake(); code c = \\\\l.readLock(); return c(); }
+auto sub method_callref() { ClassContextMod::Factory f(); auto l = f.make(); code c = \\\\l.readLock(); return c(); }
+auto sub static_create_obj() { return ClassContextMod::Factory::staticCreateObject(); }
+auto sub method_create_obj() { ClassContextMod::Factory f(); return f.createObject(); }
+auto sub function_via_method_callref() { auto l = ClassContextMod::makeViaMethod(); code c = \\\\l.readLock();
+    return c(); }
+auto sub member() { return ClassContextMod::member(); }
+auto sub holder() { ClassContextMod::Holder h(); return h.check(); }
+auto sub private_create_obj() { ClassContextMod::Factory f(); return f.createPrivate(); }
+auto sub private_call_function() { return ClassContextMod::Factory::callPrivate(); }
+auto sub nested_create_obj() { ClassContextMod::Factory f(); return f.nested(); }
+auto sub function_via_method_create_obj() { return ClassContextMod::createViaMethod(); }
+auto sub closure_create_obj() { ClassContextMod::Factory f(); code c = f.makeClosure(); return c(); }
+\", \"probe\");
+
+# the same calls from a Program without restrictions
+Program u(PO_NEW_STYLE);
+u.loadModule(\"ClassContextMod\");
+u.parse(\"
+auto sub method_create_obj() { ClassContextMod::Factory f(); return f.createObject(); }
+auto sub nested_create_obj() { ClassContextMod::Factory f(); return f.nested(); }
+auto sub closure_create_obj() { ClassContextMod::Factory f(); code c = f.makeClosure(); return c(); }
+auto sub method_callref() { ClassContextMod::Factory f(); auto l = f.make(); code c = \\\\l.readLock(); c();
+    return 'locked'; }
+auto sub run_restricted(Program r) { return ClassContextMod::runProgram(r); }
+\", \"unrestricted\");
+
+# module code running a restricted Program's code for an unrestricted caller keeps that Program's restrictions
+Program r(PO_NEW_STYLE | PO_NO_EXTERNAL_INFO);
+r.parse(\"call_function('gethostname');\", \"restricted\");
+
+# repeated calls run the module code on every tier with tiered execution
+foreach string f in (\"static_callref\", \"method_callref\", \"static_create_obj\", \"static_create_obj\",
+        \"static_create_obj\", \"method_create_obj\", \"method_create_obj\", \"method_create_obj\",
+        \"function_via_method_callref\", \"member\", \"member\", \"holder\", \"holder\", \"private_create_obj\",
+        \"private_create_obj\", \"private_call_function\", \"private_call_function\", \"nested_create_obj\",
+        \"nested_create_obj\", \"function_via_method_create_obj\", \"function_via_method_create_obj\",
+        \"closure_create_obj\", \"closure_create_obj\") {
+    string r;
+    try {
+        r = sprintf(\"%y\", p.callFunction(f));
+    } catch (hash<ExceptionInfo> ex) {
+        r = ex.err;
+    }
+    printf(\"%s: %s\\n\", f, r);
+}
+printf(\"unrestricted run_restricted: %s\\n\", u.callFunction(\"run_restricted\", r));
+printf(\"unrestricted run_restricted: %s\\n\", u.callFunction(\"run_restricted\", r));
+foreach string f in (\"method_create_obj\", \"nested_create_obj\", \"closure_create_obj\", \"method_callref\",
+        \"method_create_obj\", \"nested_create_obj\", \"closure_create_obj\", \"method_callref\") {
+    string r;
+    try {
+        r = sprintf(\"%y\", u.callFunction(f));
+    } catch (hash<ExceptionInfo> ex) {
+        r = ex.err;
+    }
+    printf(\"unrestricted %s: %s\\n\", f, r);
+}
+";
+    }
+
+    #! module functions and methods resolving names at run time, called from a Program and from the main Program
+    private string namesScript() {
+        return "%modern
+%requires ClassContextMod
+
+Program u(PO_NEW_STYLE);
+u.loadModule(\"ClassContextMod\");
+u.parse(\"
+auto sub function_call_private() { return ClassContextMod::functionCallPrivate(); }
+auto sub function_call_public() { return ClassContextMod::functionCallPublic(); }
+auto sub function_create_private() { return ClassContextMod::functionCreatePrivate(); }
+auto sub function_create_public() { return ClassContextMod::functionCreatePublic(); }
+auto sub function_direct_private() { return ClassContextMod::functionDirectPrivate(); }
+auto sub function_callref_private() { return ClassContextMod::functionCallrefPrivate(); }
+auto sub function_new_private() { return ClassContextMod::functionNewPrivate(); }
+auto sub method_call_private() { return ClassContextMod::Lookup::callPrivate(); }
+auto sub method_create_private() { return ClassContextMod::Lookup::createPrivate(); }
+\", \"user\");
+
+# repeated calls run the module code on every tier with tiered execution
+foreach string f in (\"function_call_private\", \"function_call_public\", \"function_create_private\",
+        \"function_create_public\", \"function_direct_private\", \"function_callref_private\",
+        \"function_new_private\", \"method_call_private\", \"method_create_private\") {
+    for (int i = 0; i < 2; ++i) {
+        string r;
+        try {
+            r = sprintf(\"%y\", u.callFunction(f));
+        } catch (hash<ExceptionInfo> ex) {
+            r = ex.err;
+        }
+        printf(\"%s: %s\\n\", f, r);
+    }
+}
+
+# the main Program calling the module function directly
+for (int i = 0; i < 2; ++i) {
+    string r;
+    try {
+        r = sprintf(\"%y\", ClassContextMod::functionCallPrivate());
+    } catch (hash<ExceptionInfo> ex) {
+        r = ex.err;
+    }
+    printf(\"main function_call_private: %s\\n\", r);
+}
+";
+    }
+
+    private string writeFile(string path, string contents) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(contents);
+        f.close();
+        return path;
+    }
+
+    private compileModule(string qm_path, string qmod_path) {
+        string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s "
+            "%s -b --compile-module --output %s %s 2>&1", libqore_dir, libqore_dir, libqore_dir, qore_bin,
+            qmod_path, qm_path));
+        assertTrue(is_file(qmod_path), sprintf("compiled %s: %s", basename(qmod_path), compile_out));
+    }
+
+    private hash<ExecModeHarness::ModeRunResult> runScript(string module_dir, string script_path, string mode) {
+        return ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s "
+            "QORE_MODULE_DIR=%s %s -b --enable-debug --exec-mode=%s %s", libqore_dir, libqore_dir, libqore_dir,
+            module_dir, qore_bin, mode, script_path));
+    }
+
+    #! runs the script with the source and the AOT module in every mode against the source module's AST output
+    private checkAllModes(string script_name, string script, string expected) {
+        string script_path = writeFile(tmp.path + "/" + script_name, script);
+        hash<ExecModeHarness::ModeRunResult> reference = runScript(src_dir, script_path, "ast");
+        assertEq(expected, reference.out, script_name + ": source module, ast");
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = runScript(src_dir, script_path, mode);
+            assertEq(reference.out, r.out, sprintf("%s: source module, %s", script_name, mode));
+            r = runScript(qmod_dir, script_path, mode);
+            assertEq(reference.out, r.out, sprintf("%s: AOT module, %s", script_name, mode));
+        }
+    }
+
+    #! compiles the test module, once
+    private compileTestModule() {
+        string qmod_path = qmod_dir + "/ClassContextMod.qmod";
+        if (!is_file(qmod_path)) {
+            compileModule(src_dir + "/ClassContextMod.qm", qmod_path);
+        }
+    }
+
+    testExecutionContext() {
+        compileTestModule();
+        checkAllModes("context.q", contextScript(), ExpectedContextOutput);
+    }
+
+    testRuntimeNames() {
+        compileTestModule();
+        checkAllModes("names.q", namesScript(), ExpectedNamesOutput);
+    }
+}

@@ -80,8 +80,10 @@ privileged init: REFLECTION-ACCESS-ERROR
         #! use it, a call reflected into the module from a Program without injection is refused
         const ExpectedReflectedOutput = "direct: no error
 reflected: REFLECTION-ACCESS-ERROR
+sibling direct: INVALID-FUNCTION-ACCESS
 direct: no error
 reflected: REFLECTION-ACCESS-ERROR
+sibling direct: INVALID-FUNCTION-ACCESS
 ";
     }
 
@@ -101,6 +103,7 @@ reflected: REFLECTION-ACCESS-ERROR
         writeFile(src_dir + "/ChainA.qm", chainAModuleCode());
         writeFile(src_dir + "/ChainCallback.qm", chainCallbackModuleCode());
         writeFile(src_dir + "/ChainInit.qm", chainInitModuleCode());
+        writeFile(src_dir + "/InitNarrowProbe.qm", initNarrowModuleCode());
 
         addTestCase("a module constructs a class of a module loaded by a Program with more allowed options",
             \testFactory());
@@ -113,6 +116,8 @@ reflected: REFLECTION-ACCESS-ERROR
             \testReflectedCall());
         addTestCase("module reflection is judged by the nearest application, or strictly without one",
             \testChain());
+        addTestCase("a module's init runs with the restrictions it inherited from the restricted Program loading it",
+            \testInitNarrowed());
 
         set_return_value(main());
     }
@@ -251,6 +256,38 @@ module ChainInit {
 }
 
 public namespace ChainInit {
+class Holder {
+    public {
+        static string value = \"unset\";
+    }
+}
+
+public string sub initResult() {
+    return Holder::value;
+}
+}
+";
+    }
+
+    #! a module whose init closure uses a builtin with a functional domain
+    private string initNarrowModuleCode() {
+        return "%modern
+
+module InitNarrowProbe {
+    version = \"1.0\";
+    desc = \"init narrowing probe module\";
+    author = \"Qore\";
+    license = \"MIT\";
+    init = sub () {
+        try {
+            InitNarrowProbe::Holder::value = call_function(\"gethostname\").empty() ? \"empty\" : \"host\";
+        } catch (hash<ExceptionInfo> ex) {
+            InitNarrowProbe::Holder::value = ex.err;
+        }
+    };
+}
+
+public namespace InitNarrowProbe {
 class Holder {
     public {
         static string value = \"unset\";
@@ -485,6 +522,21 @@ printf(\"privileged init: %s\\n\", priv.callFunction(\"init_construct\"));
 ";
     }
 
+    #! a restricted Program loads the module first, so its init closure runs with the restriction
+    private string initNarrowScript() {
+        return "%modern
+
+Program loader(PO_NEW_STYLE | PO_NO_EXTERNAL_INFO);
+loader.parse(\"string sub load() { load_module('InitNarrowProbe'); return call_function('InitNarrowProbe::initResult'); }\",
+    \"loader\");
+printf(\"restricted loader init: %s\\n\", loader.callFunction(\"load\"));
+Program other(PO_NEW_STYLE);
+other.loadModule(\"InitNarrowProbe\");
+other.parse(\"string sub get() { return InitNarrowProbe::initResult(); }\", \"other\");
+printf(\"seen by an unrestricted Program: %s\\n\", other.callFunction(\"get\"));
+";
+    }
+
     #! the probe module is loaded first by a restricted Program without injection and called by one with injection
     private string narrowScript() {
         return "%modern
@@ -525,8 +577,9 @@ object sub make() { return InheritedProbe::Probe::make(); }\", \"caller\");
 
 Program sibling(PO_NEW_STYLE);
 sibling.loadModule(\"reflection\");
-sibling.parse(\"auto sub reflect(object o) { return Class::getClass(o).getNormalMethod('probe').call(o); }\",
-    \"sibling\");
+sibling.loadModule(\"InheritedProbe\");
+sibling.parse(\"auto sub reflect(object o) { return Class::getClass(o).getNormalMethod('probe').call(o); }
+string sub direct_static() { return InheritedProbe::Probe::inject(); }\", \"sibling\");
 
 for (int i = 0; i < 2; ++i) {
     printf(\"direct: %s\\n\", caller.callFunction(\"direct\"));
@@ -535,6 +588,8 @@ for (int i = 0; i < 2; ++i) {
     } catch (hash<ExceptionInfo> ex) {
         printf(\"reflected: %s\\n\", ex.err);
     }
+    # a method of the module runs with the restrictions of its caller, without injection
+    printf(\"sibling direct: %s\\n\", sibling.callFunction(\"direct_static\"));
 }
 ";
     }
@@ -591,6 +646,7 @@ for (int i = 0; i < 2; ++i) {
         compileModule("ChainA");
         compileModule("ChainCallback");
         compileModule("ChainInit");
+        compileModule("InitNarrowProbe");
     }
 
     testFactory() {
@@ -616,5 +672,12 @@ for (int i = 0; i < 2; ++i) {
     testChain() {
         compileModules();
         checkAllModes("chain.q", chainScript(), ExpectedChainOutput);
+    }
+
+    testInitNarrowed() {
+        compileModules();
+        checkAllModes("init-narrow.q", initNarrowScript(), "restricted loader init: INVALID-FUNCTION-ACCESS
+seen by an unrestricted Program: INVALID-FUNCTION-ACCESS
+");
     }
 }

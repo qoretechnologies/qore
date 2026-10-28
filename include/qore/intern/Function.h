@@ -457,6 +457,8 @@ class RuntimeConfig;
 #define ARG_DEF   (1 << 0)
 #define ARG_OTHER (1 << 1)
 
+class RuntimeParseOptionsOverrideHelper;
+
 class CodeEvaluationHelper : public QoreStackLocation, public ProgramThreadCountContextHelper {
 public:
     //! Creates the object for evaluating the given code (function, method, closure) with the given arguments
@@ -595,6 +597,11 @@ public:
         return exec_pgm;
     }
 
+    //! returns the effective runtime parse options of the caller, before the call switched Programs
+    DLLLOCAL const QoreParseOptions& getCallerRuntimeParseOptions() const {
+        return caller_runtime_po;
+    }
+
     DLLLOCAL virtual const AbstractStatement* getStatement() const override {
         return stmt;
     }
@@ -625,6 +632,10 @@ protected:
     const QoreProgramLocation* old_runtime_ctx_loc = nullptr;
     QoreParseOptions old_runtime_po;
     QoreParseOptions old_rc_po;
+    //! the effective runtime parse options of the caller
+    QoreParseOptions caller_runtime_po;
+    //! restricts code entered in a module Program with the caller's restrictions; see init()
+    std::unique_ptr<RuntimeParseOptionsOverrideHelper> module_po_override;
     QoreProgram* exec_pgm = nullptr;
     QoreProgram* old_call_program_context = nullptr;
     const QoreTypeInfo* explicit_receiver_type_info = nullptr;
@@ -860,6 +871,32 @@ class VRMutex;
     must apply them in the same way, so that the call behaves as it does with the AST interpreter
 */
 DLLLOCAL QoreParseOptions get_user_variant_runtime_po_override_mask();
+
+//! returns the parse options module code runs with when it is entered with the effective options \a caller_po
+/** Module code keeps its own Program, and so its own name resolution, but runs with the restrictions of the code that
+    calls it as well as its own: the restricting options of both, and only the explicitly-allowed options (such as
+    \c PO_ALLOW_INJECTION) that both have.  Only the options in get_user_variant_runtime_po_override_mask() are
+    combined.
+*/
+DLLLOCAL QoreParseOptions qore_compose_module_call_parse_options(const QoreParseOptions& own_po,
+        const QoreParseOptions& caller_po);
+
+//! returns true if the Program holds the code of a user module
+DLLLOCAL bool qore_program_is_module(const QoreProgram* pgm);
+
+//! returns the runtime parse options override for a call of a user variant
+/** - a variant that runs in a Program other than the one that defined it (a module function called from another
+      Program, for example) runs with the executing Program's options forced into its runtime parse options;
+    - the code of a user module (a module function, or a method of a module class, which runs in the module's
+      Program) also runs with the restrictions of its caller, \a caller_po being the effective options of the code
+      that calls it (see qore_compose_module_call_parse_options());
+    - otherwise any override of the caller is cleared for the call.
+
+    Every path that calls a user variant applies it in the same way, so that the call behaves as it does with the AST
+    interpreter.
+*/
+DLLLOCAL void qore_get_user_call_runtime_po_override(const QoreProgram* exec_pgm, const UserVariantBase* uvb,
+        const QoreParseOptions& caller_po, QoreParseOptions& mask, QoreParseOptions& value);
 
 class UserVariantExecHelper;
 class QoreJIT;

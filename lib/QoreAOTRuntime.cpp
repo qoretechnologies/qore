@@ -15067,8 +15067,12 @@ static int executeInitFunctions(
                 // raw_result stays 0 (NOTHING bits) which is what the check-based
                 // path would have written too.
                 {
-                    // the loading Program does not run the init closure on its own behalf
+                    // the loading Program does not run the init closure on its own behalf: it runs with the
+                    // module's options, not with the restrictions of the code that loads the module
                     QoreModuleLifecycleBarrierHelper lifecycle_barrier;
+                    QoreProgram* init_pgm = getProgram();
+                    LoadTimeParseOptionsHelper lifecycle_po(init_pgm ? init_pgm->getParseOptions()
+                        : runtime_get_parse_options());
                     try {
                         raw_result = info->fn_ptr(info->ctx, &xsink);
                     } catch (const QoreJITException&) {

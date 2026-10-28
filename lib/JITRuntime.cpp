@@ -10383,19 +10383,27 @@ static QoreProgram* qore_rt_function_execution_program(QoreProgram* explicit_pgm
 }
 
 //! sets the runtime parse options override of a fast call of a user variant as UserVariantBase::eval() does
-/** A user variant that runs in a Program other than the one that defined it is restricted with the executing
-    Program's restrictions; otherwise any override of the caller is cleared for the call.
+/** See qore_get_user_call_runtime_po_override(): a user variant that runs in a Program other than the one that
+    defined it is restricted with the executing Program's restrictions, module code also with its caller's, and
+    otherwise any override of the caller is cleared for the call.
 */
 class QoreRtUserCallOverrideHelper {
 public:
-    DLLLOCAL QoreRtUserCallOverrideHelper(QoreProgram* exec_pgm, const UserVariantBase* uvb)
-            : helper(exec_pgm && exec_pgm != uvb->pgm ? get_user_variant_runtime_po_override_mask()
-                    : QoreParseOptions(),
-                exec_pgm ? exec_pgm->getParseOptions() : QoreParseOptions()) {
+    //! \a caller_pgm is the Program the call was made from, before it switched to \a exec_pgm
+    DLLLOCAL QoreRtUserCallOverrideHelper(QoreProgram* exec_pgm, const UserVariantBase* uvb, QoreProgram* caller_pgm)
+            : helper(getMask(exec_pgm, uvb, caller_pgm), value) {
     }
 
 private:
+    QoreParseOptions value;
     RuntimeParseOptionsOverrideHelper helper;
+
+    DLLLOCAL QoreParseOptions getMask(QoreProgram* exec_pgm, const UserVariantBase* uvb, QoreProgram* caller_pgm) {
+        QoreParseOptions mask;
+        qore_get_user_call_runtime_po_override(exec_pgm, uvb, runtime_get_effective_parse_options_for(caller_pgm),
+            mask, value);
+        return mask;
+    }
 };
 
 static QoreProgram* qore_rt_method_execution_program(const QoreMethod* method, const UserVariantBase* uvb) {
@@ -10673,7 +10681,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
     QoreValue val{};
     {
         ArgvContextHelper argv_helper(argv.release(), xsink);
-        QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb);
+        QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb, caller_pgm);
         if (use_direct_params) {
             // Direct params path: pass args straight to IR slot cache, no TLS
             IRDirectParams dp{args, nargs};
@@ -10885,7 +10893,7 @@ static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBa
     QoreValue val{};
     {
         ArgvContextHelper argv_helper(argv.release(), xsink);
-        QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb);
+        QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb, caller_pgm);
         if (use_direct_params) {
             // Direct params path: pass args straight to IR slot cache, no TLS
             IRDirectParams dp(args, nargs, arg_cleanups);
@@ -11105,7 +11113,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast_with_target(uint64_t (*target_fn
     QoreValue val{};
     {
         ArgvContextHelper argv_helper(argv.release(), xsink);
-        QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb);
+        QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb, caller_pgm);
         execJITWithDeopt(uvb, call_name, [target_fn](ExceptionSink* xs, bool& /*inv*/) {
             return target_fn(xs);
         }, val, xsink, caller_pgm, nullptr, exec_pgm);
@@ -11235,7 +11243,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_self_recursive(const AbstractQoreFunc
     QoreValue val{};
     {
         ArgvContextHelper argv_helper(argv.release(), xsink);
-        QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb);
+        QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb, caller_pgm);
         execJITWithDeopt(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
             return uvb->execCachedFunction(xs, inv);
         }, val, xsink, caller_pgm, nullptr, exec_pgm);
@@ -11529,7 +11537,7 @@ static uint64_t qore_rt_call_method_fast_impl(const QoreMethod* method,
     QoreValue val{};
     {
         ArgvContextHelper argv_helper(argv.release(), xsink);
-        QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb);
+        QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb, caller_pgm);
         if (use_direct_params) {
             // Direct params path: pass args straight to IR slot cache, no TLS
             IRDirectParams dp{args, nargs};
@@ -15195,7 +15203,7 @@ static uint64_t qore_rt_call_direct_aot_impl(QoreAOTContext* ctx, int32_t slot,
         QoreValue val{};
         {
             ArgvContextHelper argv_helper(argv.release(), xsink);
-            QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb);
+            QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb, caller_pgm);
             if (uvb->hasCachedFunction()) {
                 execJITWithDeopt(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
                     return uvb->execCachedFunction(xs, inv);
@@ -16882,7 +16890,7 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
     QoreValue val{};
     {
         ArgvContextHelper argv_helper(argv.release(), xsink);
-        QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb);
+        QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb, caller_pgm);
         if (use_direct_params) {
             // Direct params path: pass args straight to IR slot cache, no TLS
             IRDirectParams dp{args, nargs, arg_cleanups};
@@ -18324,7 +18332,7 @@ static uint64_t qore_rt_call_static_method_direct_impl(const QoreMethod* method,
     QoreValue val{};
     {
         ArgvContextHelper argv_helper(argv.release(), xsink);
-        QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb);
+        QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb, caller_pgm);
         // Set class context for private method access (matches AST's
         // ObjectSubstitutionHelper in StaticMethodFunction::evalMethod)
         ClassOnlySubstitutionHelper cosh(qore_class_private::get(*method->getClass()));

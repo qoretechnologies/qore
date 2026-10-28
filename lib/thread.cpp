@@ -2378,11 +2378,19 @@ const QoreStackLocation* get_runtime_stack_location() {
     return thread_data.get()->current_stack_location.load(std::memory_order_relaxed);
 }
 
+// An override only narrows the options of the code running under it: it adds the restricting options of its value
+// that the mask covers, and removes the explicitly-allowed options that the mask covers and its value lacks.  It never
+// lifts a restriction of the code itself, so code of another Program that runs while it is active (a callback, a
+// closure, Program::run()) keeps its own restrictions, and a module keeps those it inherited
 static QoreParseOptions apply_runtime_po_override(ThreadData* td, const QoreParseOptions& po) {
     if (!td->runtime_po_override_mask) {
         return po;
     }
-    return (po & ~td->runtime_po_override_mask) | (td->runtime_po_override_value & td->runtime_po_override_mask);
+    const QoreParseOptions& mask = td->runtime_po_override_mask;
+    const QoreParseOptions& value = td->runtime_po_override_value;
+    QoreParseOptions positive_mask = mask & QoreParseOptions::POSITIVE_OPTIONS;
+    QoreParseOptions restricting_mask = mask & ~QoreParseOptions::POSITIVE_OPTIONS;
+    return (po | (value & restricting_mask)) & ~(positive_mask & ~value);
 }
 
 // Whether a thread that pops a call stack location can leave all the ordering to the walker's heavy barrier
@@ -4041,6 +4049,15 @@ QoreParseOptions parse_get_parse_options() {
 
 QoreParseOptions runtime_get_parse_options() {
     return (thread_data.get())->runtime_po;
+}
+
+QoreParseOptions runtime_get_effective_program_parse_options() {
+    return runtime_get_effective_parse_options_for(thread_data.get()->current_pgm);
+}
+
+QoreParseOptions runtime_get_effective_parse_options_for(const QoreProgram* pgm) {
+    ThreadData* td = thread_data.get();
+    return pgm ? apply_runtime_po_override(td, pgm->getParseOptions()) : td->runtime_po;
 }
 
 RuntimeParseOptionsOverrideHelper::RuntimeParseOptionsOverrideHelper(const QoreParseOptions& mask,

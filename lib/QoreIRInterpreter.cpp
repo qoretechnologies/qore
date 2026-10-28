@@ -3957,17 +3957,25 @@ bool qore_ir_try_execute_native_leaf(QoreIRCallDirectInstruction* inst,
 */
 class QoreIRInlineCalleeParseOptionsHelper {
 public:
+    //! \a caller_pgm is the Program the call was made from, before it switched to \a exec_pgm
     DLLLOCAL QoreIRInlineCalleeParseOptionsHelper(ExceptionSink* xsink, QoreProgram* exec_pgm,
-            const UserVariantBase* uvb)
-            : po_override(exec_pgm != uvb->pgm ? get_user_variant_runtime_po_override_mask() : QoreParseOptions(),
-                exec_pgm->getParseOptions()),
+            const UserVariantBase* uvb, QoreProgram* caller_pgm)
+            : po_override(getMask(exec_pgm, uvb, caller_pgm), po_value),
             loc_helper(xsink, uvb->getUserSignature()->getParseLocation(), nullptr,
                 uvb->getParseOptions(exec_pgm->getParseOptions())) {
     }
 
 private:
+    QoreParseOptions po_value;
     RuntimeParseOptionsOverrideHelper po_override;
     QoreProgramLocationHelper loc_helper;
+
+    DLLLOCAL QoreParseOptions getMask(QoreProgram* exec_pgm, const UserVariantBase* uvb, QoreProgram* caller_pgm) {
+        QoreParseOptions mask;
+        qore_get_user_call_runtime_po_override(exec_pgm, uvb, runtime_get_effective_parse_options_for(caller_pgm),
+            mask, po_value);
+        return mask;
+    }
 };
 
 static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* inst,
@@ -4003,7 +4011,7 @@ static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* i
     QoreIRInlineCallStackLocation stack_loc(qore_ir_call_frame_location(inst, uvb),
         qore_ir_function_call_name(inst->func), inst->variant ? inst->variant->getCallType() : CT_USER);
     // the inlined body runs with the callee's runtime parse options, as a call of the function does
-    QoreIRInlineCalleeParseOptionsHelper callee_po(xsink, exec_pgm, uvb);
+    QoreIRInlineCalleeParseOptionsHelper callee_po(xsink, exec_pgm, uvb, caller_pgm);
     if (xsink && *xsink) {
         result = QoreValue();
         return true;
@@ -4081,6 +4089,7 @@ static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const
         inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
         return false;
     }
+    QoreProgram* method_caller_pgm = getProgram();
     ProgramThreadCountContextHelper ptcch(xsink, exec_pgm, true);
     if (xsink && *xsink) {
         result = QoreValue();
@@ -4092,7 +4101,7 @@ static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const
     QoreIRInlineCallStackLocation stack_loc(qore_ir_call_frame_location(inst, uvb),
         qore_ir_method_call_name(method), inst->variant ? inst->variant->getCallType() : CT_USER);
     // the inlined body runs with the method's runtime parse options and restrictions, as a call of the method does
-    QoreIRInlineCalleeParseOptionsHelper callee_po(xsink, exec_pgm, uvb);
+    QoreIRInlineCalleeParseOptionsHelper callee_po(xsink, exec_pgm, uvb, method_caller_pgm);
     if (xsink && *xsink) {
         result = QoreValue();
         return true;

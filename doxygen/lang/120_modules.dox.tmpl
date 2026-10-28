@@ -1552,6 +1552,53 @@ public namespace MyNamespace {
     case).  User module @ref Qore::Program "Program" objects have a functional domain attribute set on the
     @ref Qore::Program "Program" level, so either a user module is imported in its entirety or not at all.
 
+    @subsection user_module_runtime_context Module Code at Run Time
+
+    Code in a user module runs with the restrictions of the code that calls it as well as its own, in every
+    @ref execution_modes "execution mode", but where it runs depends on the kind of code:
+    - a module <b>function</b> runs in the @ref Qore::Program "Program" that calls it, so the names that it resolves at
+      run time by name, with @ref Qore::call_function() "call_function()" or
+      @ref Qore::create_object() "create_object()", for example, are resolved in the calling @ref Qore::Program "Program", where only the module's
+      @ref mod_public "exported" names exist, and the @ref thread_local_data_family "thread-local data" that it uses is
+      the calling @ref Qore::Program "Program's"
+    - a <b>method</b> of a class defined in the module, and a @ref closure "closure" created in module code, run in the
+      module's own @ref Qore::Program "Program", so the names that they resolve at run time are those of the module,
+      including its private names, and the thread-local data that they use is the module's own
+
+    A module function that needs to look up a private name of its module at run time must therefore either have that
+    name exported with the <b><tt>public</tt></b> keyword or refer to it directly: a direct call, a
+    @ref call_reference "call reference" or a <tt>new</tt> expression in module code is resolved when the module is
+    parsed and so always refers to the module's own definition.
+
+    @par Example:
+    @code{.py}
+public namespace MyModule {
+class Helper {
+}
+
+string sub private_func() {
+    return "private";
+}
+
+public string sub lookup_by_name() {
+    # raises NO-FUNCTION: the name is resolved in the calling Program, where private_func() does not exist
+    return call_function("MyModule::private_func");
+}
+
+public string sub direct() {
+    # works: the direct call is resolved when the module is parsed
+    return private_func();
+}
+
+public class Lookup {
+    static string byName() {
+        # works: a method runs in the module's Program, where private_func() exists
+        return call_function("MyModule::private_func");
+    }
+}
+}
+    @endcode
+
     @subsection user_module_children Child Modules
 
     A user module can declare optional <b>child modules</b> that extend it with the

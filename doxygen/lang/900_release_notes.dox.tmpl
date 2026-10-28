@@ -744,6 +744,31 @@
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
 
+    @par Module Code Runs with the Restrictions of Its Caller
+    @parblock
+    A method of a class defined in a user module, static or not, now runs with the restrictions of the code that
+    calls it as well as its own, as the module's functions already did.  It still runs in the module's %Program, so
+    the names it resolves at run time (with @ref Qore::create_object() "create_object()" or
+    @ref Qore::call_function() "call_function()", for example) are still those of the module.  A module function, by
+    contrast, runs in the %Program that calls it, as before, so the names it resolves at run time are those of the
+    calling %Program, where only the module's exported names exist: a module function that looks up a private name of
+    its module at run time must have that name exported or use a direct reference instead (see
+    @ref user_module_runtime_context).  The same applies to
+    module code that a module function or method calls, to a closure created in module code, and to a call reference
+    to a method of an object that module code created.  Before, such code ran with the module's options only: code
+    in a restricted %Program, such as one with @ref Qore::PO_LOCKDOWN "PO_LOCKDOWN", could call a method that its own
+    parse options forbid through a call reference to an object that a module class method returned, and a module
+    class method could create objects of classes that the calling %Program may not use with
+    @ref Qore::create_object() "create_object()".  An explicitly-allowed option such as
+    @ref Qore::PO_ALLOW_INJECTION "PO_ALLOW_INJECTION" is kept only if both the caller and the module have it: a
+    module that inherited injection from the %Program that loaded it first no longer runs a method with injection for
+    a caller that does not have it.  A module's init and del closures run with the module's own options.  The
+    restrictions of a caller only ever narrow what the code running for it may do: module code keeps the restrictions
+    it inherited, and the code of another %Program that module code runs (with
+    @ref Qore::Program::run() "Program::run()", for example) keeps that %Program's restrictions.  This applies in every
+    @ref execution_modes "execution mode".
+    @endparblock
+
     @par Temporary Values Live Until the End of Their Statement
     @parblock
     An object or other value that an expression creates and that nothing else refers to, such as the object that a

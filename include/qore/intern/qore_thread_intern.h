@@ -413,6 +413,18 @@ DLLLOCAL QoreSandboxManager* qore_find_thread_sandbox_manager_ref();
 DLLLOCAL bool qore_reflection_has_module_caller(const QoreProgram* caller, const QoreProgram* target,
     ExceptionSink* xsink, const QoreClass* cls = nullptr);
 
+//! returns the effective parse options of the Program running on the current thread
+/** These are the parse options of the current Program with the active runtime parse options override applied: the
+    restrictions of the code a call is made for, without the options of the statement making the call (a module
+    header's init closure, for example, is parsed with restricted options of its own)
+*/
+DLLLOCAL QoreParseOptions runtime_get_effective_program_parse_options();
+
+//! returns the parse options of \a pgm with the active runtime parse options override applied
+/** for a call that has already switched to the Program it runs in; \a pgm is the calling Program
+*/
+DLLLOCAL QoreParseOptions runtime_get_effective_parse_options_for(const QoreProgram* pgm);
+
 //! Marks module code that runs for no application: a module's init or del closure
 /** The Program that loads or unloads a module does not call its init or del closure on its own behalf, so
     qore_reflection_has_module_caller() does not look beyond this point for an application Program; a call reflected
