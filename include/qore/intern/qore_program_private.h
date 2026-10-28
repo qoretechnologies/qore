@@ -774,6 +774,18 @@ public:
     QoreParseOptions dom,      // a mask of functional domains used in this Program
         pend_dom;                // a mask of pending function domains used in this Program
 
+    //! every functional domain that code parsed into this Program uses, whether or not its parse options allow it
+    /** recorded in AOT images, so that loading a module checks the restrictions of the Program loading it against
+        the functionality the module's code uses, as parsing the module's source does (see qore_aot_module_init_v3())
+    */
+    QoreParseOptions aot_used_dom;
+
+    //! the restrictions that an AOT module Program inherited from the Program that loaded it
+    /** source modules are parsed with these restrictions; AOT module code runs with them (see
+        attachAOTEntryStatementBlock())
+    */
+    QoreParseOptions aot_inherited_po;
+
     std::string exec_class_name, script_dir, script_path, script_name, include_path;
 
     /*  The thread-local data of a family of Programs (program_family_thread_data):
@@ -2743,6 +2755,7 @@ public:
     // returns the mask of domain options not met in the current program
     DLLLOCAL QoreParseOptions parseAddDomain(const QoreParseOptions& n_dom) {
         assert(!(n_dom & QoreParseOptions::FREE_OPTIONS));
+        aot_used_dom |= n_dom;
         QoreParseOptions rv;
 
         // handle negative and positive options separately / differently
@@ -3431,6 +3444,22 @@ public:
 
     DLLLOCAL static QoreParseOptions parseAddDomain(QoreProgram* pgm, const QoreParseOptions& n_dom) {
         return pgm->priv->parseAddDomain(n_dom);
+    }
+
+    DLLLOCAL static QoreParseOptions getAOTUsedDomain(const QoreProgram& pgm) {
+        return pgm.priv->aot_used_dom;
+    }
+
+    DLLLOCAL static void addAOTUsedDomain(QoreProgram& pgm, const QoreParseOptions& n_dom) {
+        pgm.priv->aot_used_dom |= n_dom;
+    }
+
+    DLLLOCAL static QoreParseOptions getAOTInheritedParseOptions(const QoreProgram& pgm) {
+        return pgm.priv->aot_inherited_po;
+    }
+
+    DLLLOCAL static void setAOTInheritedParseOptions(QoreProgram& pgm, const QoreParseOptions& po) {
+        pgm.priv->aot_inherited_po = po;
     }
 
     DLLLOCAL static QoreParseOptions getDomain(const QoreProgram& pgm) {

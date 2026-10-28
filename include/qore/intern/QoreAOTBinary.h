@@ -342,6 +342,7 @@ enum class QoreAOTSectionType : uint16_t {
     IMPORT_DEPENDENCIES  = 29,  //!< Direct module dependencies imported into an AOT module Program
     SOURCE_STAT_FINGERPRINT = 30,  //!< Source size and nanosecond mtime; written by earlier qcc versions only
     UNRUN_TOP_LEVEL_CODE = 31,  //!< Optional top-level statements of a script fragment's sources that never run
+    FUNCTIONAL_DOMAIN    = 32,  //!< The functional domains the code uses (u64 lo + u64 hi); absent if none
 };
 
 //! Symbol kinds written to the optional SYMBOL_INDEX section.
@@ -1698,6 +1699,38 @@ void serializeProgramMetadata(QoreAOTBinaryWriter& writer, const char* exec_clas
 */
 bool readProgramMetadata(const uint8_t* data, uint32_t size, std::string& exec_class_name, std::string& error);
 bool readProgramMetadata(const QoreAOTBinaryReader& reader, std::string& exec_class_name, std::string& error);
+
+//! Names the Program that loads an AOT module while the module's initialization runs in this thread
+/** A source module is parsed with the restrictions of the Program loading it (see
+    qore_get_inherited_module_parse_options()); an AOT module's Program inherits them from the Program named here,
+    or from the current Program if none is named (see qore_aot_module_init_v3()).
+*/
+class QoreAOTModuleInitLoaderHelper {
+public:
+    DLLLOCAL QoreAOTModuleInitLoaderHelper(QoreProgram* loader);
+    DLLLOCAL ~QoreAOTModuleInitLoaderHelper();
+
+    DLLLOCAL QoreAOTModuleInitLoaderHelper(const QoreAOTModuleInitLoaderHelper&) = delete;
+    DLLLOCAL QoreAOTModuleInitLoaderHelper& operator=(const QoreAOTModuleInitLoaderHelper&) = delete;
+
+private:
+    QoreProgram* old_loader;
+};
+
+//! returns the restrictions and permissions that a module inherits from the Program loading it
+/** see QoreModuleManager::loadSeparatedModule(); \a exclude names the options the caller handles itself
+*/
+DLLLOCAL QoreParseOptions qore_get_inherited_module_parse_options(const QoreParseOptions& parent_po,
+        const QoreParseOptions& exclude);
+
+//! Serialize the functional domains that the code of a Program uses into the FUNCTIONAL_DOMAIN section
+/** Nothing is written if \a dom is empty.  Loading an AOT module checks the restrictions of the Program loading it
+    against these domains, as parsing the module's source does (issue #5556).
+*/
+void serializeFunctionalDomain(QoreAOTBinaryWriter& writer, const QoreParseOptions& dom);
+
+//! Read the functional domains recorded in the FUNCTIONAL_DOMAIN section; empty if there is no such section
+bool readFunctionalDomain(const QoreAOTBinaryReader& reader, QoreParseOptions& dom, std::string& error);
 
 //! Serialize producer/build metadata into the BUILD_INFO binary section.
 /** Wire format: u32 count, then count x (StringRef key, StringRef value).

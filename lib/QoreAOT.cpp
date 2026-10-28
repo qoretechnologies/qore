@@ -1930,7 +1930,8 @@ static uint64_t computeFeatureFlags(const std::vector<AOTCompiledFunc>& funcs) {
 //! Emit Program-level parse side-effect sections (if non-empty) for `pgm`.
 /** Used by every AOT-binary emitter so source-stripped artifacts preserve
     program state that is not represented by the namespace tree: module search
-    path directives and `%module-cmd` directives such as JNI classpath/imports.
+    path directives, `%module-cmd` directives such as JNI classpath/imports, and
+    the functional domains the code uses.
 */
 static bool appendModulePathListSections(QoreAOTBinaryWriter& writer,
         QoreProgram* pgm, uint64_t& feature_flags,
@@ -1961,6 +1962,9 @@ static bool appendModulePathListSections(QoreAOTBinaryWriter& writer,
         commands.push_back(AOTModuleCommand{cmd.module, cmd.command});
     }
     serializeModuleCommands(writer, commands, feature_flags);
+    // the functional domains the Program's code uses: loading a module checks them against the restrictions of the
+    // Program loading it, as parsing the module's source checks its code (issue #5556)
+    serializeFunctionalDomain(writer, pp->aot_used_dom);
     writer.feature_flags = feature_flags;
     return true;
 }

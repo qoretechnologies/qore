@@ -11528,6 +11528,19 @@ static thread_local int aot_module_num_funcs = 0;
 //! Runtime .qmod path passed by the module loader to generated API-2 AOT module init adapters.
 static thread_local std::string aot_module_init_context_path;
 
+// the Program loading the AOT module whose initialization runs in this thread, if named (see
+// QoreAOTModuleInitLoaderHelper)
+static thread_local QoreProgram* aot_module_init_loader_pgm = nullptr;
+
+QoreAOTModuleInitLoaderHelper::QoreAOTModuleInitLoaderHelper(QoreProgram* loader)
+        : old_loader(aot_module_init_loader_pgm) {
+    aot_module_init_loader_pgm = loader;
+}
+
+QoreAOTModuleInitLoaderHelper::~QoreAOTModuleInitLoaderHelper() {
+    aot_module_init_loader_pgm = old_loader;
+}
+
 extern "C" DLLEXPORT void qore_aot_set_module_init_context_path(QoreModuleInitContext* ctx) {
     if (ctx && !ctx->path.empty()) {
         aot_module_init_context_path = ctx->path;
@@ -15518,9 +15531,23 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
 
     QoreProgram* parent_pgm = getProgram();
 
+    // A source module is parsed with the restrictions and permissions of the Program loading it
+    // (QoreModuleManager::loadSeparatedModule()); the AOT module's Program inherits the same ones, and its code is
+    // checked against them below and runs with them (see attachAOTEntryStatementBlock()) (#5556)
+    QoreParseOptions inherited_po;
+    {
+        QoreProgram* loader_pgm = aot_module_init_loader_pgm ? aot_module_init_loader_pgm : parent_pgm;
+        if (loader_pgm) {
+            inherited_po = qore_get_inherited_module_parse_options(loader_pgm->getParseOptions(),
+                PO_REQUIRE_TYPES | PO_NO_GLOBAL_VARS | PO_ENABLE_DEBUG);
+        }
+    }
+    parse_options |= inherited_po;
+
     // Use a local variable for the program being created (see qore_aot_module_init
     // for explanation of nested init overwrite issue)
     QoreProgram* local_pgm = new QoreProgram(parse_options);
+    qore_program_private::setAOTInheritedParseOptions(*local_pgm, inherited_po);
     if (mod_name && *mod_name && qore_program_private::get(*local_pgm)->addUserFeature(mod_name)) {
         QoreStringNode* err = new QoreStringNodeMaker(
             "AOT module init error: feature '%s' is already loaded in this Program container", mod_name);
@@ -15556,6 +15583,29 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
                 mod_name ? mod_name : "<unknown>",
                 (module_context_path && *module_context_path) ? module_context_path : "<unknown path>",
                 reader_error.c_str());
+            local_pgm->waitForTerminationAndDeref(nullptr);
+            return err;
+        }
+    }
+
+    // Parsing the module's source refuses code that uses functionality the restrictions inherited from the loading
+    // Program do not allow; the image records the functional domains its code uses, so the same code is refused
+    // here (#5556)
+    {
+        QoreParseOptions used_dom;
+        std::string dom_error;
+        if (!readFunctionalDomain(metadata_reader, used_dom, dom_error)) {
+            QoreStringNode* err = new QoreStringNodeMaker("AOT module metadata read error for module '%s' (%s): %s",
+                mod_name ? mod_name : "<unknown>", module_context_desc.c_str(), dom_error.c_str());
+            local_pgm->waitForTerminationAndDeref(nullptr);
+            return err;
+        }
+        QoreParseOptions refused = used_dom & ~QoreParseOptions::POSITIVE_OPTIONS & inherited_po;
+        if (refused) {
+            QoreStringNode* err = new QoreStringNodeMaker("AOT module '%s' (%s) uses functionality that the parse "
+                "options of the Program loading it do not allow (restricted options: 0x%llx:0x%llx)",
+                mod_name ? mod_name : "<unknown>", module_context_desc.c_str(),
+                static_cast<unsigned long long>(refused.getHi()), static_cast<unsigned long long>(refused.getLo()));
             local_pgm->waitForTerminationAndDeref(nullptr);
             return err;
         }

@@ -15119,6 +15119,18 @@ bool QoreAOTBinaryDeserializer::deserializeShellsFromOpenReader(std::string& err
         return false;
     }
 
+    // The functional domains the blob's code uses are those of the Program it is loaded into: a module loaded at
+    // runtime is checked against them, and an aggregate written from fragment blobs records their union
+    {
+        QoreParseOptions used_dom;
+        if (!readFunctionalDomain(reader, used_dom, error)) {
+            return false;
+        }
+        if (used_dom) {
+            qore_program_private::addAOTUsedDomain(*pgm, used_dom);
+        }
+    }
+
     // Create type resolver for this program
     type_resolver = new QoreAOTTypeResolver(pgm);
 
@@ -18571,7 +18583,9 @@ static void attachAOTEntryStatementBlock(QoreProgram* pgm, UserVariantBase* uvb,
         }
 
         entry = new StatementBlock(pp, loc);
-        entry->pwo.parse_options = variant_parse_options;
+        // the code runs with the restrictions its module inherited from the Program loading it, as the same code
+        // parsed from source does (#5556)
+        entry->pwo.parse_options = variant_parse_options | pp->aot_inherited_po;
         // Function-entry metadata is resolved through findFunctionStatementId().
         // Do not add it to the file/line index, or findStatementId() can
         // resolve the first executable statement line to the function entry.
@@ -20500,6 +20514,33 @@ bool readProgramMetadata(const QoreAOTBinaryReader& reader, std::string& exec_cl
         }
     }
 
+    return true;
+}
+
+void serializeFunctionalDomain(QoreAOTBinaryWriter& writer, const QoreParseOptions& dom) {
+    if (!dom) {
+        return;
+    }
+    uint32_t sec_idx = writer.beginSection(QoreAOTSectionType::FUNCTIONAL_DOMAIN);
+    writer.writeU64(static_cast<uint64_t>(dom.getLo()));
+    writer.writeU64(static_cast<uint64_t>(dom.getHi()));
+    writer.endSection(sec_idx);
+}
+
+bool readFunctionalDomain(const QoreAOTBinaryReader& reader, QoreParseOptions& dom, std::string& error) {
+    dom = QoreParseOptions();
+    const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::FUNCTIONAL_DOMAIN);
+    if (!sec) {
+        return true;
+    }
+    const uint8_t* ptr = reader.getSectionData(*sec);
+    if (!ptr || sec->size < 16) {
+        error = "invalid FUNCTIONAL_DOMAIN section";
+        return false;
+    }
+    uint64_t lo = QoreAOTBinaryReader::readU64(ptr);
+    uint64_t hi = QoreAOTBinaryReader::readU64(ptr);
+    dom = QoreParseOptions(static_cast<int64_t>(lo), static_cast<int64_t>(hi));
     return true;
 }
 
