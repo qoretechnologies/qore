@@ -51,7 +51,8 @@ class ZeroArgScalarGetterTest inherits QUnit::Test {
                     prefix + "QORE_DUMP_LLVM_IR=1 ");
                 bool enabled = prefix.find("SCALAR_MEMBER_ENTRY") < 0 && prefix.find("ZERO_ARG_GETTER") < 0;
                 foreach string name in (("Int", "Override", "Public", "Float", "InternalFloat", "Reference")) {
-                    assertEq(enabled, regex(ir, "call void @qore_rt_bind_getter_[^\n]*ZeroGetter" + name
+                    bool eligible = enabled && (name != "Reference" || !!ENV.QORE_TEST_EXPECT_REFERENCE_MEMBER_ENTRIES);
+                    assertEq(eligible, regex(ir, "call void @qore_rt_bind_getter_[^\n]*ZeroGetter" + name
                         + "__read"), name + prefix + level);
                 }
                 foreach string name in (("Effect", "TwoReads", "Constant", "ExplicitSelf", "Default", "Argv",

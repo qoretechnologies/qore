@@ -1454,19 +1454,32 @@ closure gains and the effectful-method regression, not a universal speedup.
 
 `QORE_DISABLE_AOT_CROSS_PROGRAM_CLOSURE_ENTRY=1` disables the native scalar closure retry after the generic path enters the owning Program. It is a runtime presence flag sampled once; empty and `0` values also disable it. Same-Program admission and the complete generic Program transition remain. No recompile is needed for this diagnostic control. Compare frozen optimized runtimes for before/after performance; see RESULTS for cross-Program call measurements and all control costs.
 
-`QORE_DISABLE_AOT_CROSS_PROGRAM_METHOD_ENTRY=1` disables the pure scalar method
+`QORE_DISABLE_AOT_CROSS_PROGRAM_METHOD_ENTRY=1` disables the scalar method
 retry after an AOT dispatch site completes its ordinary Program transition. This
 runtime presence flag is sampled once; empty and `0` values also disable it, and
 no recompilation is needed. The matched dispatch entry must prove exact canonical
 arguments and a ready homogeneous `int(int)` or `float(float)` companion. After
 the transition, invocation rechecks the live receiver, body, entry, signature,
 Program and debugger state using stable method metadata. The frame retains the
-original caller's Program. Unsupported, parameterized, member and effectful
-methods keep ordinary binding, as does a native miss. The same-Program compact
+original caller's Program. Compiler-proven unary member reads and integer effect
+prefixes can also retry their native companions. Unsupported and parameterized
+methods keep ordinary binding, as does a read-only native miss. A partial effect
+prefix resumes after completed updates without replaying them. The same-Program compact
 dispatch proof and the full transition's counts, locks and lifetime are unchanged.
 See RESULTS for optimized before/after timings, the disabling control and costs
 in other workloads. This changes AOT method dispatch; it does not add companions
 to bodies executed only by IR/JIT.
+
+`QORE_DISABLE_AOT_CROSS_PROGRAM_MEMBER_ENTRY=1` disables only the member/effect
+retry, retaining the pure scalar retry. It is a runtime presence control sampled
+once; empty and `0` values also disable it. The full Program transition remains,
+and the member invocation establishes eager object/class context with the original
+caller Program in its diagnostic frame. No recompilation is needed for this
+control. Compilation conservatively omits read-only unary/getter companions for
+strict reference member declarations, including inherited declarations; dynamic
+and optional declarations retain live guards, and effect prefixes remain eligible.
+Recompile to obtain that compiler refinement. See RESULTS for optimized before/after
+measurements, reference-backed controls and the remaining costs.
 
 `QORE_DISABLE_AOT_IMPORTED_CLOSURE_ENTRY=1` disables native integer closure
 admission when the closure executes in a different Program from its compiled

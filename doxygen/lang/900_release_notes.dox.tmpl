@@ -350,6 +350,9 @@
     reducing successful call overhead while retaining exception-time options and caller restoration.
     AOT calls to eligible scalar methods reuse native entries after the ordinary Program transition,
     avoiding parameter setup while preserving the original caller's stack identity and live invocation checks.
+    Eligible AOT member reads and integer member-update prefixes can also use native entries after Program
+    transitions, preserving member guards and resuming partial updates without replay. Read-only bodies with
+    strict reference member declarations retain ordinary evaluation instead of speculative scalar reads.
     Native AOT closure calls inline automatic frame setup and cleanup, reducing sustained call overhead
     while preserving diagnostic stack publication and context restoration.
     Runtime stack pops inline their publication handshake and keep rare reader waits out of the hot path,

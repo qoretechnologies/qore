@@ -28473,3 +28473,198 @@ unestablished.
 
 [Evidence](results-cross-program-method-retry-macos-arm64.json);
 [all 62 audit checks](audit-cross-program-method-retry.md).
+
+
+## Cross-Program native member retry and reference admission (2026-10-28)
+
+### Scope and baseline
+
+The optimized baseline is committed and installed `b3bf884fce`, including develop
+`ea711e75865`. Both runtimes use Release `-O3 -DNDEBUG`, allocation tracking off,
+AppleClang 21 and LLVM 22.1.8 on the same macOS ARM64 M4 Pro host. Every artifact
+is freshly compiled with matching `qcc -O3 --strip-source`; there is no runtime
+identity bypass. This is an incremental branch comparison, with no fresh Java
+or pure-develop measurement.
+
+Imported functions execute in the caller Program while their objects retain the
+class source Program. After the full ordinary Program transition, dispatch can
+retry compiler-proven unary integer/float member reads and integer effect-prefix
+companions before ordinary parameter/self setup. A positive preflight records a
+single retry kind; live body/context/entry and Program/debugger checks repeat
+after potentially reentrant initialization. Invocation metadata belongs to the
+live method variant, not the replaceable caller dispatch cache. The original
+caller Program remains in the diagnostic frame. Foreign calls use eager
+object/class context. A read-only miss preserves ordinary binding; partial
+effects resume after completed updates, without replay. Full Program lifetime,
+thread counts, initialization, member locks, return filtering, cleanup and
+frame-reader synchronization remain. Same-Program compact dispatch and native
+ABI are unchanged.
+
+Compilation conservatively leaves read-only unary/getter bodies with strict
+reference member declarations on ordinary evaluation, including ordinary-private,
+public and inherited declarations. Dynamic/optional declarations retain live
+guards; effect prefixes remain eligible. This is native AOT work, also benefiting
+AOT bodies invoked through an IR/JIT host. IR/JIT-only bodies gain no companion.
+
+### Preserved experiments and controls
+
+The initial combined dispatcher already reduced member-call time by about half,
+but its pure helper grew from 5780 to 7672 bytes and the fresh confirmation
+recorded pure boxed-integer/captured-closure costs of 2.19%/1.78%. Its full screen,
+confirmation and disabling-control campaign remains archived: 981 jobs.
+
+Outlining member admission restored the pure helper to 5780 bytes. A separate
+25-workload screen retained the large gains, but newly added strict internal
+reference reads cost 12.44%/12.56%; reference effects improved 3.91%. That
+450-job screen is preserved without a subsequent confirmation.
+
+A first compiler refinement excluded only strict internal reference reads.
+Its expanded 28-workload screen removed that large cost, while ordinary-private
+reference reads still cost 15.86%/14.19% and pure boxed-float calls cost 3.62%.
+All 504 jobs remain preserved. The final refinement applies the conservative
+read-only reference exclusion to all declared access forms and replaces two
+retry flags with one mutually exclusive state. The main dispatcher shrinks
+from 10504 to 10448 bytes (baseline 10332); the pure helper stays 5780. This code
+size observation alone does not establish a performance cause.
+
+Reference controls use class-static backing storage with the original scalar
+values, with construction outside timed windows. Ordinary-private fields use
+unique class-specific names because accessible inherited fields cannot be
+redeclared. A discarded same-object reference-initialization setup deadlocked
+on the unchanged baseline; its owned child was sampled, terminated and actually
+waited, with no timings. Another preparation was rejected by the baseline parser
+for duplicate inherited names. Both failures and their corrected controls remain
+archived. Fixture parse/assertion and prototype compile failures also remain.
+A qualification run correctly rejected stale QUnit/FsUtil/Util qmods after the
+compiler changed runtime identity; all optimized targets and 391 qmods were then
+rebuilt. Failed preparations contribute no accepted timing samples.
+
+### Final optimized results
+
+Units are whole-kernel ns/item for 4096-item batches, including loop and dispatch
+work. Each result is the median across three layouts of each layout's median
+fork mean. The screen uses three forks, fresh confirmation five forks; each has
+two warmups and three 150 ms measured samples. Confirmation retains every
+material screen shift, all member/reference/local/mixed targets, indirect and
+closure controls, both earlier pure boxed-method costs, and an additional
+list-mutation check despite its 1.88% screen cost being below the automatic 2%
+threshold. Screen-only rows are labeled. Epochs are not pooled.
+
+|!Kernel|!Baseline|!Candidate|!Change|!Phase
+|micro:direct_call|1.581015|1.584956|+0.249%|screen
+|micro:method_call|1.663952|1.656806|-0.429%|screen
+|micro:polymorphic_call|91.186702|92.275518|+1.194%|screen
+|micro:polymorphic_expression_call|64.179439|64.639236|+0.716%|screen
+|micro:polymorphic_float_call|92.215943|92.793412|+0.626%|screen
+|micro:boxed_int_method_call|111.204113|113.635767|+2.187%|confirmation
+|micro:boxed_float_method_call|122.038714|122.646512|+0.498%|confirmation
+|micro:boxed_int_method_fallback|241.943380|123.508275|-48.952%|confirmation
+|micro:boxed_float_method_fallback|259.028270|132.989722|-48.658%|confirmation
+|micro:boxed_int_method_effect|345.677108|184.595722|-46.599%|confirmation
+|micro:indirect_call|9.973833|9.929508|-0.444%|confirmation
+|micro:closure_call|18.135594|18.142024|+0.035%|confirmation
+|micro:closure_capture|23.641042|23.564277|-0.325%|confirmation
+|micro:list_mutate|196.945121|195.014617|-0.980%|confirmation
+|mixed:csv_report|955.672827|948.717949|-0.728%|confirmation
+|mixed:object_orders|3136.155870|3154.256185|+0.577%|confirmation
+|mixed:callback_pipeline|90.334786|90.940956|+0.671%|confirmation
+|mixed:text_index|1354.233515|1360.492901|+0.462%|confirmation
+|local:boxed_int_method_fallback|33.040781|32.773476|-0.809%|confirmation
+|local:boxed_float_method_fallback|33.871075|33.915490|+0.131%|confirmation
+|local:boxed_int_method_effect|91.849070|90.714090|-1.236%|confirmation
+|local:polymorphic_call|23.421625|23.404183|-0.074%|confirmation
+|reference:boxed_int_method_fallback|300.499091|305.171481|+1.555%|confirmation
+|reference:boxed_float_method_fallback|318.236629|319.802716|+0.492%|confirmation
+|reference:boxed_int_method_effect|410.459043|407.787092|-0.651%|confirmation
+|private-reference:boxed_int_method_fallback|309.643049|313.743295|+1.324%|confirmation
+|private-reference:boxed_float_method_fallback|328.009521|325.829738|-0.665%|confirmation
+|private-reference:boxed_int_method_effect|414.040096|422.529087|+2.050%|confirmation
+
+Integer/float member reads improve 48.95%/48.66%, and effects improve 46.60%,
+with gains in all target/layout combinations in both screen and confirmation.
+The earlier large reference-read regression is removed: final confirmation
+ranges from 0.66% faster to 1.55% slower across the four reference-read controls.
+The earlier 3.62% pure boxed-float cost does not repeat at aggregate level
+(+0.02% screen, +0.50% confirmation), though confirmation layouts range from
+1.98% faster to 3.66% slower. No causal claim is made for the retry-state change
+alone.
+
+Retained costs include pure boxed-integer calls (+1.55% screen, +2.19%
+confirmation) and ordinary-private reference effects (+1.63%/+2.05%). The latter
+has a +4.67% default confirmation layout with separated observed fork ranges;
+the screen's shuffle layout also has separated adverse ranges. Pure-integer
+ranges overlap. These are recorded costs, not dismissed as noise. Internal
+reference integer reads cost 1.55% in confirmation, with positive medians in all
+three layouts and overlapping ranges. Same-Program member controls range from
+1.24% faster to 0.13% slower in confirmation. Mixed results range from 0.73%
+faster to 0.67% slower; the callback pipeline's small cost repeats. List mutation
+changes from +1.88% in the screen to -0.98% in confirmation, so its first cost
+does not repeat and no list-mutation gain is attributed to this change.
+
+Retain the optimization under the authorized broader workload tradeoff: the
+large member gains repeat, while the smaller costs and mixed signs remain
+visible. There is no weighted application-wide or zero-regression claim.
+
+### Same-binary attribution
+
+`QORE_DISABLE_AOT_CROSS_PROGRAM_MEMBER_ENTRY=1` changes only runtime selection;
+candidate artifacts and library are identical. Five fresh forks and three
+layouts restore the generic cost for all three positive targets. Disabled
+admission adds some work, so that column is not a bit-identical baseline.
+Compiler-excluded reference-read bodies have no companion to disable. The
+ordinary-private reference effect remains slower with native retry than with
+it disabled, preserving a concrete follow-up target.
+
+|!Kernel|!Baseline ns/item|!Candidate|!Retry disabled
+|micro:boxed_int_method_fallback|242.397885|122.908343|247.126783
+|micro:boxed_float_method_fallback|259.085608|133.268193|262.262986
+|micro:boxed_int_method_effect|348.664078|185.456184|352.131305
+|reference:boxed_int_method_fallback|305.369569|304.178522|306.722883
+|reference:boxed_float_method_fallback|319.021272|321.709794|321.346039
+|reference:boxed_int_method_effect|407.219044|405.930888|415.429307
+|private-reference:boxed_int_method_fallback|310.866230|311.502369|311.443573
+|private-reference:boxed_float_method_fallback|324.174933|328.515146|330.035607
+|private-reference:boxed_int_method_effect|415.433515|424.372237|420.550772
+
+### Validation and limits
+
+The final campaign has 1599 independently replayed jobs / 4797 measured windows:
+504 screen, 690 confirmation and 405 attribution. Including all three retained
+prototype campaigns, 3534 jobs / 10602 windows replay from raw output and actual
+child receipts. The final preparation passes 13680 native and 4560 source
+reference checks; disabled controls add 4995. All 30 final LLVM modules verify.
+The nine non-reference pairs match after verification of the sole runtime
+identity difference in serialized build metadata and its compressed length.
+Each of the six reference pairs removes exactly six read-only companions and
+binders; all 155 retained function bodies match after removing only those
+binders and debug attachments. Other globals/code match, and only the expected
+unused helper declarations disappear. Serialized IR remains identical except
+for runtime identity. Original LLVM and debug metadata are preserved; this is
+structural verification, not a formal equivalence proof.
+
+Release and Debug each pass 33 cases / 6644 QUnit assertions; Debug also passes
+2917 native assertions. The expanded fixture passes 1133 assertions on both
+baseline and candidate. Three updated fixtures pass 10 cases / 3095 assertions
+on the frozen baseline with matching installed test modules preloaded. Coverage
+includes AST/IR/JIT/tiered, stripped AOT O0/O3, EH and disabled controls, native
+entry counts, wide integers, special floats, stack overflow, missing bindings,
+body mismatch, caller/context restoration, partial effects, destructor/reflection
+reentry, inherited shadowing and live reference-target mutation. Existing suites
+cover debugger attachment, concurrent readers/writers and module restrictions.
+All 391 Release qmod aliases are restored after Debug. All 62 audit checks pass
+or are inapplicable.
+
+No owned build, test or profiling overlaps timing; no samples are discarded.
+The shared host has background activity and no affinity, exclusivity or thermal
+control. This is targeted macOS qualification, not a full-project, sanitizer or
+other-platform claim. Startup, memory use, current Java parity and a global
+performance ceiling are not established.
+
+Next investigate imported-body local-slot guards affecting list mutation and
+object workloads, and consider continuing directly after successful updates when
+an effect tail is known to read a reference. Preserve full Program semantics and
+exact continuation. Refresh optimized develop/Java comparisons at the next
+cumulative checkpoint.
+
+[Evidence](results-cross-program-member-retry-macos-arm64.json);
+[all 62 audit checks](audit-cross-program-member-retry.md).

@@ -1069,6 +1069,15 @@ static bool isAOTScalarMemberEligible(const QoreIRFunction& ir, const UserVarian
                 const auto* info = defining && !defining->sys
                     ? defining->runtimeGetMemberInfo(member->member_name.c_str(), defining) : nullptr;
                 internal_member = info && info->isLocalInternal() && info->getClass() == defining;
+                // Do not speculate on a read-only body declared to read a
+                // strict reference. Keep its ordinary reference evaluation,
+                // including inherited declarations. Dynamic/optional members
+                // retain their live guards. An effect prefix can still do
+                // useful work before resuming the ordinary reference read.
+                if (!first_instruction && info
+                        && QoreTypeInfo::isType(info->getTypeInfo(), NT_REFERENCE)) {
+                    return false;
+                }
                 break;
             }
             case QoreIROpcode::ConstInt:

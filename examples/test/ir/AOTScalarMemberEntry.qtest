@@ -59,7 +59,8 @@ class ScalarMemberEntryTest inherits QUnit::Test {
                 assertEq(enabled && prefix != "QORE_DISABLE_AOT_SCALAR_MEMBER_PREHASH=1 ",
                     regex(ir, "call i32 @qore_rt_try_load_member_float_prehashed_v1"));
                 foreach string name in (("Int", "Override", "Float", "InternalFloat", "Auto", "Reference")) {
-                    assertEq(enabled, regex(ir, "call void @qore_rt_bind_member_[^\n]*ScalarMember" + name
+                    bool eligible = enabled && (name != "Reference" || !!ENV.QORE_TEST_EXPECT_REFERENCE_MEMBER_ENTRIES);
+                    assertEq(eligible, regex(ir, "call void @qore_rt_bind_member_[^\n]*ScalarMember" + name
                         + "__next"), name + prefix + level);
                 }
                 foreach string name in (("Effect", "TwoReads")) {

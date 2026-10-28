@@ -19456,6 +19456,11 @@ static QORE_ALWAYS_INLINE bool try_dispatch_native_method(QoreObject* object,
     return false;
 }
 
+static __attribute__((noinline)) bool try_dispatch_cross_program_member_method(QoreObject* object,
+    const QoreMethod* method,
+    const AbstractQoreFunctionVariant* variant, const UserVariantBase* uvb, uint64_t* args,
+    uint64_t** arg_cleanups, ExceptionSink* xsink, uint64_t& result, QoreProgram* caller_pgm);
+
 // The ordinary dispatcher has completed its full Program transition. Thread
 // initialization can reenter, so borrow only Program-owned method metadata here,
 // not the caller's replaceable PIC. Recheck the live body and exact signature
@@ -19660,20 +19665,34 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
     // Snapshot this immutable full-key proof before Program entry can reenter.
     // Exact canonical scalar arguments exclude enum bases, references and
     // coercions; the retry still checks the live body and homogeneous signature.
-    bool retry_native = false;
+    enum class NativeRetry : uint8_t { None, Pure, Member };
+    NativeRetry retry = NativeRetry::None;
     if (caller_pgm != exec_pgm && native_cache && native_cache->generic_scalar_params
             && nargs == 1 && uvb->hasCachedAOT() && (!receiver_type_info
                 || !QoreTypeInfo::getParameterizedClassType(receiver_type_info))) {
         QoreAOTContext* retry_ctx = uvb->getCachedAOTContext();
-        // A negative result only skips this attempt. Do not pay for a second
-        // admission of effectful/member bodies or unavailable companions. The
-        // complete body/readiness checks are repeated after the transition.
-        if (retry_ctx && !retry_ctx->uses_self && !retry_ctx->uses_argv) {
+        // A negative result only skips this attempt. Ready member companions
+        // have their own whole-body proof and cold continuation. Reacquire all
+        // body/context/entry state after the possibly reentrant transition.
+        if (retry_ctx && !retry_ctx->uses_argv) {
             const QoreTypeInfo* type = sig->getParamTypeInfo(0);
-            retry_native = type == bigIntTypeInfo
-                ? retry_ctx->native_int_unary_method_entry.load(std::memory_order_acquire) != nullptr
-                : type == floatTypeInfo
-                    && retry_ctx->native_float_unary_method_entry.load(std::memory_order_acquire) != nullptr;
+            if (!retry_ctx->uses_self) {
+                bool ready = type == bigIntTypeInfo
+                    ? retry_ctx->native_int_unary_method_entry.load(std::memory_order_acquire) != nullptr
+                    : type == floatTypeInfo
+                        && retry_ctx->native_float_unary_method_entry.load(std::memory_order_acquire) != nullptr;
+                if (ready) {
+                    retry = NativeRetry::Pure;
+                }
+            } else {
+                bool ready = type == bigIntTypeInfo
+                    ? retry_ctx->scalar_member_int_entry.load(std::memory_order_acquire) != nullptr
+                    : type == floatTypeInfo
+                        && retry_ctx->scalar_member_float_entry.load(std::memory_order_acquire) != nullptr;
+                if (ready) {
+                    retry = NativeRetry::Member;
+                }
+            }
         }
     }
     // Set up program thread context
@@ -19682,8 +19701,12 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
         result = toBits(QoreValue());
         return true;
     }
-    if (retry_native && try_dispatch_cross_program_native_method(o, method, variant, uvb, args,
+    if (retry == NativeRetry::Pure && try_dispatch_cross_program_native_method(o, method, variant, uvb, args,
                 arg_cleanups, nargs, xsink, result, caller_pgm)) {
+        return true;
+    }
+    if (retry == NativeRetry::Member && try_dispatch_cross_program_member_method(o, method, variant, uvb, args,
+                arg_cleanups, xsink, result, caller_pgm)) {
         return true;
     }
     // This fast dot-eval path bypasses CodeEvaluationHelper/UserVariantExecHelper,
@@ -20584,16 +20607,17 @@ __attribute__((noinline)) static int qore_rt_dispatch_matched_scalar_method(Qore
         args, nullptr, 1, xsink, *result, &cached) ? 2 : 0;
 }
 
+template <bool CallerProgramFrame = false, typename Cache>
 __attribute__((noinline)) static int64_t qore_rt_resume_effect_member_int(QoreObject* object,
-    const QoreAOTMethodDispatchCacheEntry& cached, QoreAOTContext* ctx,
+    const Cache& cached, QoreAOTContext* ctx,
     const QoreAOTEffectMemberIntEntryV1& entries, int32_t completed, int64_t arg, ExceptionSink* xsink);
 
 // Called only after the complete PIC key and live body/Program/debugger checks.
 // A read-only miss returns zero and may retry the normal body. Effectful misses
 // return completed-updates + 2 and must resume without replaying the prefix.
-template <bool Deferred, typename Scalar>
+template <bool Deferred, bool CallerProgramFrame = false, typename Scalar, typename Cache>
 __attribute__((noinline)) static bool qore_rt_try_scalar_member_method(QoreObject* object,
-        const QoreAOTMethodDispatchCacheEntry& cached, QoreAOTContext* ctx, Scalar arg,
+        const Cache& cached, QoreAOTContext* ctx, Scalar arg,
         Scalar& result, ExceptionSink* xsink, RuntimeConfig& rc,
         Scalar (*entry)(Scalar, QoreObject*, const qore_class_private*, RuntimeConfig*,
             int*, QoreAOTContext*, ExceptionSink*)) {
@@ -20601,6 +20625,7 @@ __attribute__((noinline)) static bool qore_rt_try_scalar_member_method(QoreObjec
     // policy. Do not reload that entry or repeat diagnostic switch guards here.
     // Separate instantiations keep the ordinary context's storage off the
     // deferred path's stack without changing either frame publication protocol.
+    static_assert(!Deferred || !CallerProgramFrame);
     assert(entry);
     if (*xsink || RuntimeConfigNativeAccess::checkStack(rc, xsink)) {
         result = 0;
@@ -20623,8 +20648,12 @@ __attribute__((noinline)) static bool qore_rt_try_scalar_member_method(QoreObjec
         invoke();
     } else {
         RuntimeConfigNativeObjectHelper context(rc, object, cached.native_scalar_class_ctx);
+        QoreProgram* caller_pgm = nullptr;
+        if constexpr (CallerProgramFrame) {
+            caller_pgm = cached.caller_program;
+        }
         QoreNativeMethodStackLocation<false, true> frame(rc, cached.call_name, cached.native_scalar_uvb,
-            cached.native_scalar_program, xsink);
+            cached.native_scalar_program, xsink, nullptr, caller_pgm);
         invoke();
     }
     if (!accepted && !*xsink) {
@@ -20636,7 +20665,8 @@ __attribute__((noinline)) static bool qore_rt_try_scalar_member_method(QoreObjec
             // before installing the ordinary observable continuation context.
             const auto* entries = ctx->effect_member_int_entry.load(std::memory_order_acquire);
             assert(entries && entries->fast == entry);
-            result = qore_rt_resume_effect_member_int(object, cached, ctx, *entries, accepted - 2, arg, xsink);
+            result = qore_rt_resume_effect_member_int<CallerProgramFrame>(object, cached, ctx,
+                *entries, accepted - 2, arg, xsink);
             return true;
         }
     }
@@ -20647,15 +20677,20 @@ __attribute__((noinline)) static bool qore_rt_try_scalar_member_method(QoreObjec
 // A cold entry resumes only at a proven statement boundary. Establish the
 // ordinary observable signature/context before any remaining operation can
 // evaluate a reference or reenter Qore. No eligibility or dispatch retry occurs.
+template <bool CallerProgramFrame, typename Cache>
 __attribute__((noinline)) static int64_t qore_rt_resume_effect_member_int(QoreObject* object,
-        const QoreAOTMethodDispatchCacheEntry& cached, QoreAOTContext* ctx,
+        const Cache& cached, QoreAOTContext* ctx,
         const QoreAOTEffectMemberIntEntryV1& entries, int32_t completed, int64_t arg, ExceptionSink* xsink) {
     assert(completed >= 0 && static_cast<uint32_t>(completed) <= entries.updates);
-    // Snapshot all PIC-owned metadata before generic code can replace the
+    // Snapshot all invocation metadata before generic code can replace the
     // caller's AOT context. The published ordinary frame owns its name copy.
     const std::string name = cached.call_name;
     const UserVariantBase* uvb = cached.native_scalar_uvb;
     QoreProgram* pgm = cached.native_scalar_program;
+    QoreProgram* caller_pgm = pgm;
+    if constexpr (CallerProgramFrame) {
+        caller_pgm = cached.caller_program;
+    }
     const qore_class_private* class_ctx = cached.native_scalar_class_ctx;
     const UserSignature* sig = uvb->getUserSignature();
     const QoreTypeInfo* receiver_type = qore_get_object_receiver_type_info(object);
@@ -20688,7 +20723,7 @@ __attribute__((noinline)) static int64_t qore_rt_resume_effect_member_int(QoreOb
         slots.param = true;
         execJITWithDeopt(uvb, name, [&](ExceptionSink* xs, bool&) {
             return resume(completed, ctx, xs);
-        }, value, xsink, pgm, receiver_type, pgm, false);
+        }, value, xsink, caller_pgm, receiver_type, pgm, false);
     }
     // Retain the ordinary post-cleanup return filter, including a parameter
     // replaced through reflection. The compiled return already performs its
@@ -20699,6 +20734,97 @@ __attribute__((noinline)) static int64_t qore_rt_resume_effect_member_int(QoreOb
     int64_t result = *xsink ? 0 : value.getAsBigInt();
     value.discard(xsink);
     return result;
+}
+
+// The caller completed ordinary Program entry and retained only the full-key
+// scalar argument proof. This invocation view owns no PIC and is valid across
+// cold resume reentry because its metadata belongs to the live method variant.
+template <typename Scalar>
+static QORE_ALWAYS_INLINE bool try_dispatch_cross_program_scalar_member(QoreObject* object,
+        const QoreMethod* method, const AbstractQoreFunctionVariant* variant, const UserVariantBase* uvb,
+        Scalar arg, uint64_t** arg_cleanups, ExceptionSink* xsink, uint64_t& result, QoreProgram* caller_pgm) {
+    constexpr bool floating = std::is_same_v<Scalar, double>;
+    static constinit QoreLazyValue<bool> enabled_setting([]() -> bool {
+        return !q_env_is_set("QORE_DISABLE_AOT_CROSS_PROGRAM_MEMBER_ENTRY")
+            && !q_env_is_set("QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY")
+            && !q_env_is_set("QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION")
+            && (!floating || (!q_env_is_set("QORE_DISABLE_AOT_NATIVE_FLOAT_METHOD_ENTRY")
+                && !q_env_is_set("QORE_DISABLE_AOT_GENERIC_NATIVE_FLOAT_METHOD_ENTRY")));
+    });
+    QoreAOTContext* ctx = uvb->getCachedAOTContext();
+    if (!enabled_setting.get() || !ctx || !uvb->hasCachedAOT() || !ctx->uses_self || ctx->uses_argv
+            || ctx->native_body_fn != uvb->getCachedAOTFunction()
+            || qore_object_private::get(*object)->sandbox_provenance) {
+        return false;
+    }
+    RuntimeConfig& rc = RuntimeConfigNativeAccess::getCurrent();
+    QoreProgram* pgm = RuntimeConfigNativeAccess::getProgram(rc);
+    if (!pgm || pgm != ctx->pgm || pgm != object->getProgram()
+            || pgm != qore_rt_method_execution_program(method, uvb)
+            || qore_program_private::get(*pgm)->hasDebuggerAttached()) {
+        return false;
+    }
+    const UserSignature* sig = uvb->getUserSignature();
+    const QoreTypeInfo* type = floating ? floatTypeInfo : bigIntTypeInfo;
+    if (sig->numParams() != 1 || sig->getParamTypeInfo(0) != type || sig->getReturnTypeInfo() != type
+            || sig->needsTypeParameterSubstitution()) {
+        return false;
+    }
+    auto entry = [&]() {
+        if constexpr (floating) {
+            return ctx->scalar_member_float_entry.load(std::memory_order_acquire);
+        } else {
+            return ctx->scalar_member_int_entry.load(std::memory_order_acquire);
+        }
+    }();
+    if (!entry) {
+        return false;
+    }
+    struct Invocation {
+        const UserVariantBase* native_scalar_uvb;
+        QoreProgram* native_scalar_program;
+        const qore_class_private* native_scalar_class_ctx;
+        const std::string& call_name;
+        QoreProgram* caller_program;
+    } invocation{uvb, pgm, METHV_const(variant)->getClassPriv(), uvb->getCallName(), caller_pgm};
+    Scalar native_result;
+    // Foreign calls use eager object/class context, leaving the same-Program
+    // compact PIC witness and deferred frame protocol unchanged.
+    if (!qore_rt_try_scalar_member_method<false, true>(object, invocation, ctx, arg, native_result,
+            xsink, rc, entry)) {
+        return false;
+    }
+    result = toBits(QoreValue());
+    QoreValue value = *xsink ? QoreValue() : QoreValue(native_result);
+    if (clearConsumedArgCleanups(arg_cleanups, 1, xsink) < 0 || *xsink) {
+        value.discard(xsink);
+    } else {
+        result = toBits(value);
+    }
+    return true;
+}
+
+// Keep the member admission and its invocation metadata out of the existing
+// pure-call dispatcher. Its caller snapshots only a positive unary proof.
+static __attribute__((noinline)) bool try_dispatch_cross_program_member_method(QoreObject* object,
+        const QoreMethod* method,
+        const AbstractQoreFunctionVariant* variant, const UserVariantBase* uvb, uint64_t* args,
+        uint64_t** arg_cleanups, ExceptionSink* xsink, uint64_t& result, QoreProgram* caller_pgm) {
+    static constinit QoreEnvFlag disabled("QORE_DISABLE_AOT_CROSS_PROGRAM_METHOD_ENTRY");
+    if (disabled.get() || !object->isValid() || !caller_pgm
+            || qore_program_private::get(*caller_pgm)->hasDebuggerAttached()) {
+        return false;
+    }
+    QoreValue arg = fromBits(args[0]);
+    if (arg.getTypeInfo() == bigIntTypeInfo && !arg.needsEval()) {
+        return try_dispatch_cross_program_scalar_member(object, method, variant, uvb, arg.getAsBigInt(),
+            arg_cleanups, xsink, result, caller_pgm);
+    }
+    if (arg.getTypeInfo() == floatTypeInfo && !arg.needsEval()) {
+        return try_dispatch_cross_program_scalar_member(object, method, variant, uvb, arg.getAsFloat(),
+            arg_cleanups, xsink, result, caller_pgm);
+    }
+    return false;
 }
 
 // The non-deferred diagnostic policy keeps its original context/frame protocol,
