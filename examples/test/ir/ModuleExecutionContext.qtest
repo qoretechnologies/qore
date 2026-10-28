@@ -49,6 +49,12 @@ create_obj_default_arg: CREATE-OBJECT-ERROR
 closure_create_obj: CREATE-OBJECT-ERROR
 closure_create_obj: CREATE-OBJECT-ERROR
 closure_create_obj: CREATE-OBJECT-ERROR
+member: \"member\"
+member: \"member\"
+member_default_arg: \"member\"
+member_default_arg: \"member\"
+holder: \"member\"
+holder: \"member\"
 ";
     }
 
@@ -78,6 +84,18 @@ module ExecContextMod {
 }
 
 public namespace ExecContextMod {
+public class Holder {
+    public {
+        RWLock lock();
+    }
+
+    string check() {
+        lock.readLock();
+        lock.readUnlock();
+        return \"member\";
+    }
+}
+
 public auto sub getLock() {
     return new RWLock();
 }
@@ -98,6 +116,15 @@ public code sub closureCreateObject() {
     return string sub () { return create_object(\"RWLock\").className(); };
 }
 
+public string sub member() {
+    Holder h();
+    return h.check();
+}
+
+public string sub memberDefaultArg(hash<auto> opts = {}) {
+    Holder h();
+    return h.check();
+}
 }
 ";
     }
@@ -116,13 +143,17 @@ auto sub direct() { auto l = ExecContextMod::getLock(); l.readLock(); return 'us
 auto sub create_obj() { return ExecContextMod::createObject(); }
 auto sub create_obj_default_arg() { return ExecContextMod::createObjectDefaultArg(); }
 auto sub closure_create_obj() { code c = ExecContextMod::closureCreateObject(); return c(); }
+auto sub member() { return ExecContextMod::member(); }
+auto sub member_default_arg() { return ExecContextMod::memberDefaultArg(); }
+auto sub holder() { ExecContextMod::Holder h(); return h.check(); }
 \", \"probe\");
 
 # repeated calls run the module code on every tier with tiered execution
 foreach string f in (\"callref\", \"callref_default_arg\", \"direct\", \"create_obj\",
         \"create_obj\", \"create_obj\", \"create_obj_default_arg\", \"create_obj_default_arg\",
         \"create_obj_default_arg\", \"closure_create_obj\", \"closure_create_obj\",
-        \"closure_create_obj\") {
+        \"closure_create_obj\", \"member\", \"member\", \"member_default_arg\", \"member_default_arg\",
+        \"holder\", \"holder\") {
     string r;
     try {
         r = sprintf(\"%y\", p.callFunction(f));

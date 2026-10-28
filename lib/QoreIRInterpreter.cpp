@@ -3948,6 +3948,28 @@ bool qore_ir_try_execute_native_leaf(QoreIRCallDirectInstruction* inst,
     }
 }
 
+//! Gives a callee body that the interpreter inlines the runtime parse options of a call of the callee
+/** A call of a user variant runs its body with the variant's own runtime parse options and, if it runs in a Program
+    other than the one that defined it, with that Program's restrictions (see UserVariantBase::eval() and
+    UserVariantBase::evalTiered()).  An inlined body must run with the same options: otherwise a variant that the body
+    resolves when it runs, such as a method called through an object whose class is not known when the body is
+    compiled, would be checked against the caller's options instead of the callee's.
+*/
+class QoreIRInlineCalleeParseOptionsHelper {
+public:
+    DLLLOCAL QoreIRInlineCalleeParseOptionsHelper(ExceptionSink* xsink, QoreProgram* exec_pgm,
+            const UserVariantBase* uvb)
+            : po_override(exec_pgm != uvb->pgm ? get_user_variant_runtime_po_override_mask() : QoreParseOptions(),
+                exec_pgm->getParseOptions()),
+            loc_helper(xsink, uvb->getUserSignature()->getParseLocation(), nullptr,
+                uvb->getParseOptions(exec_pgm->getParseOptions())) {
+    }
+
+private:
+    RuntimeParseOptionsOverrideHelper po_override;
+    QoreProgramLocationHelper loc_helper;
+};
+
 static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* inst,
         QoreProgram* caller_pgm, uint64_t* args, int nargs, QoreValue& result, ExceptionSink* xsink,
         bool* may_invalidate_external_caches = nullptr) {
@@ -3980,6 +4002,12 @@ static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* i
     const UserSignature* sig = uvb->getUserSignature();
     QoreIRInlineCallStackLocation stack_loc(qore_ir_call_frame_location(inst, uvb),
         qore_ir_function_call_name(inst->func), inst->variant ? inst->variant->getCallType() : CT_USER);
+    // the inlined body runs with the callee's runtime parse options, as a call of the function does
+    QoreIRInlineCalleeParseOptionsHelper callee_po(xsink, exec_pgm, uvb);
+    if (xsink && *xsink) {
+        result = QoreValue();
+        return true;
+    }
     unsigned num_params = sig->numParams();
     bool use_direct_params = inline_state == QORE_IR_INLINE_DIRECT_PARAMS;
     if (!use_direct_params
@@ -4063,6 +4091,12 @@ static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const
     const UserSignature* sig = uvb->getUserSignature();
     QoreIRInlineCallStackLocation stack_loc(qore_ir_call_frame_location(inst, uvb),
         qore_ir_method_call_name(method), inst->variant ? inst->variant->getCallType() : CT_USER);
+    // the inlined body runs with the method's runtime parse options and restrictions, as a call of the method does
+    QoreIRInlineCalleeParseOptionsHelper callee_po(xsink, exec_pgm, uvb);
+    if (xsink && *xsink) {
+        result = QoreValue();
+        return true;
+    }
     unsigned num_params = sig->numParams();
     // Use the executing variant's class as the runtime class context (not
     // method->getClass()): for a method injected/synthesized into a derived

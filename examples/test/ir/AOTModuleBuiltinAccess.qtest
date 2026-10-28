@@ -27,8 +27,9 @@
     \c HttpClientIo - and a module loaded on behalf of restricted code failed to load and fell back to its source
     (\c FileLocationHandler, whose base class constructor arguments construct a \c WaitGroup).
 
-    Each case runs the same scripts with the module AOT-compiled with <tt>--compile-module</tt> in every execution
-    mode, and expects the output of the source module with the AST interpreter, which is the reference.  The calling Program's SandboxManager still governs the module code's I/O, and user
+    Each case runs the same scripts with the source module and with the module AOT-compiled with
+    <tt>--compile-module</tt>, in every execution mode, and expects the output of the source module with the AST
+    interpreter, which is the reference.  The calling Program's SandboxManager still governs the module code's I/O, and user
     code in the restricted Program is still refused the builtins its own parse options forbid.
 */
 class AOTModuleBuiltinAccessTest inherits QUnit::Test {
@@ -428,7 +429,7 @@ printf(\"%s\\n\", get_module_hash().FileLocationHandler.filename ?? \"not loaded
             module_path, qore_bin, mode, script_path));
     }
 
-    #! runs \a script_path with the AOT modules in every execution mode and checks the output
+    #! runs \a script_path with the source and the AOT modules in every execution mode and checks the output
     /** the source modules with the AST interpreter are the reference
     */
     private checkAllModes(string script_name, string script, string expected) {
@@ -436,7 +437,9 @@ printf(\"%s\\n\", get_module_hash().FileLocationHandler.filename ?? \"not loaded
         hash<ExecModeHarness::ModeRunResult> reference = runScript(modulePath(src_dir), script_path, "ast");
         assertEq(expected, reference.out, script_name + ": source module, ast");
         foreach string mode in (ExecModeHarness::ExecModes) {
-            hash<ExecModeHarness::ModeRunResult> r = runScript(modulePath(qmod_dir), script_path, mode);
+            hash<ExecModeHarness::ModeRunResult> r = runScript(modulePath(src_dir), script_path, mode);
+            assertEq(reference.out, r.out, sprintf("%s: source module, %s", script_name, mode));
+            r = runScript(modulePath(qmod_dir), script_path, mode);
             assertEq(reference.out, r.out, sprintf("%s: AOT module, %s", script_name, mode));
             assertEq((), r.loader_warnings, sprintf("%s: AOT module, %s: loader warnings", script_name, mode));
         }
