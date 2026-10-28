@@ -3808,6 +3808,14 @@ while (*binary chunk = input.read(65536)) {
       - fixed @ref Util::normalize_dir() "normalize_dir()" removing the root for a \c ".." segment directly below
         it: \c "/../etc" was returned as the relative path \c "etc"
 
+    - @ref vscdebugadapterintro "VscDebugAdapter" module
+      - the output of programs that are debugged in the adapter process is sent to the IDE as \c output events;
+        it was written to the channel of the protocol and lost
+      - fixed the adapter using all the time of a CPU while waiting for requests, and not ending when the IDE
+        closes its input
+      - fixed watches and hovers returning no value when the variables of the frame had not been listed, and
+        requests without arguments, such as \c configurationDone, failing with empty arguments
+        (<a href="https://github.com/qoretechnologies/qore/issues/5560">issue 5560</a>)
     - @ref websocketclientintro "WebSocketClient" module
       - \c WebSocketPingPollOperation uses non-blocking @ref httpclientiointro "HttpClientIo" I/O, with an extended
         CONNECT handshake for HTTP/2 and HTTP/3

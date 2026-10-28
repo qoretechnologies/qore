@@ -300,6 +300,10 @@ class DebugWrapper {
                 logger.debug("Execute command: %y", opt.execute);
                 vda.execute(opt.execute);
             } else {
+                # programs debugged in this process write to stdout, which is the channel of the protocol
+                if (vda instanceof VscDebugAdapterLocal) {
+                    vda.captureProgramOutput();
+                }
                 logger.debug("Run vda adapter");
                 vda.run();
             }
@@ -312,6 +316,7 @@ class DebugWrapper {
                 local_vda.dpc.shutdown();
                 local_vda.dpc.unregisterConnection(DebugProgramControlLocal::CX);
                 local_vda.dpc.waitForTerminationAndClear();
+                vda.stopProgramOutputCapture();
                 delete vda;
             } else {
                 logger.debug("Disconnect remote adapter");

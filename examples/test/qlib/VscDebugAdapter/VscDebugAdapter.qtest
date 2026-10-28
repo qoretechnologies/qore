@@ -1,0 +1,290 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  VscDebugAdapter.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires json
+%requires FsUtil
+%requires Util
+
+%try-module process >= 2.2
+%define NoProcess
+%endtry
+
+%exec-class VscDebugAdapterTest
+
+#! A client of the Debug Adapter Protocol for an adapter process
+class DapClient {
+    public {
+        #! bytes on stdout that are not part of a protocol message
+        list<string> stray = ();
+    }
+
+    private {
+        Process proc;
+        binary buf = binary();
+        list<hash<auto>> backlog = ();
+        int seq = 0;
+
+        #! the maximum time to wait for a message before the test fails
+        const MessageTimeout = 30s;
+    }
+
+    constructor(Process proc) {
+        self.proc = proc;
+    }
+
+    #! Sends a request and returns its response
+    hash<auto> request(string command, *hash<auto> arguments, bool with_arguments = True) {
+        hash<auto> msg = {"seq": ++seq, "type": "request", "command": command};
+        if (with_arguments) {
+            msg.arguments = arguments ?? {};
+        }
+        binary content = binary(make_json(msg));
+        proc.write(sprintf("Content-Length: %d\r\n\r\n", content.size()));
+        proc.write(content);
+        int request_seq = seq;
+        return waitFor(bool sub (hash<auto> m) {
+            return m.type == "response" && m.request_seq == request_seq;
+        }, command + " response");
+    }
+
+    #! Returns the next message that matches, including messages that were received before
+    hash<auto> waitFor(code<bool(hash<auto>)> pred, string what) {
+        for (int i = 0; i < backlog.size(); ++i) {
+            if (pred(backlog[i])) {
+                return (extract backlog, i, 1)[0];
+            }
+        }
+        while (True) {
+            *hash<auto> msg = readMessage();
+            if (!msg) {
+                throw "DAP-ERROR", sprintf("no %s from the adapter", what);
+            }
+            if (pred(msg)) {
+                return msg;
+            }
+            push backlog, msg;
+        }
+    }
+
+    #! Returns the next event with the given name
+    hash<auto> waitForEvent(string event) {
+        return waitFor(bool sub (hash<auto> m) {
+            return m.type == "event" && m.event == event;
+        }, event + " event");
+    }
+
+    #! Returns the output events received so far for the given category
+    list<string> getOutput(string category) {
+        return map $1.body.output, backlog, $1.event == "output" && $1.body.category == category;
+    }
+
+    #! Reads the next message; returns NOTHING if the adapter does not send one in time
+    private *hash<auto> readMessage() {
+        while (True) {
+            int end = buf.find(<0d0a0d0a>);
+            if (end >= 0) {
+                int len = -1;
+                foreach string line in (buf.substr(0, end).toString("UTF-8").split("\r\n")) {
+                    *list<string> m = (line =~ x/^Content-Length: *([0-9]+)$/);
+                    if (m) {
+                        len = int(m[0]);
+                    } else {
+                        stray += line;
+                    }
+                }
+                if (len < 0) {
+                    splice buf, 0, end + 4;
+                    continue;
+                }
+                while (buf.size() < end + 4 + len) {
+                    if (!fill()) {
+                        return NOTHING;
+                    }
+                }
+                hash<auto> msg = parse_json(buf.substr(end + 4, len).toString("UTF-8"));
+                splice buf, 0, end + 4 + len;
+                return msg;
+            }
+            if (!fill()) {
+                return NOTHING;
+            }
+        }
+    }
+
+    #! Reads the available output of the adapter; returns False if there is none in time
+    private bool fill() {
+        *binary data = proc.readStdoutBinary(65536, MessageTimeout);
+        if (!data) {
+            return False;
+        }
+        buf += data;
+        return True;
+    }
+}
+
+public class VscDebugAdapterTest inherits QUnit::Test {
+    private {
+        #! the program that is debugged; the comments are the line numbers
+        const Program = "%modern\n"                                         # 1
+            "int sub add(int a, int b) {\n"                                  # 2
+            "    int sum = a + b;\n"                                         # 3
+            "    return sum;\n"                                              # 4
+            "}\n"                                                            # 5
+            "hash<auto> h = {\"name\": \"invoice\", \"lines\": (1, 2, 3)};\n"  # 6
+            "int total = add(2, 3);\n"                                       # 7
+            "printf(\"total: %d %y\\n\", total, h);\n";                      # 8
+
+        string qore_exe = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string adapter = normalize_dir(get_script_dir() + "/../../../../bin/qdbg-vsc-adapter");
+        string qlib_dir = normalize_dir(get_script_dir() + "/../../../../qlib");
+    }
+
+    constructor() : Test("VscDebugAdapter", "1.0", \ARGV) {
+        addTestCase("debug session over the Debug Adapter Protocol", \sessionTest());
+        addTestCase("the adapter ends when the IDE closes its input", \endOfInputTest());
+        set_return_value(main());
+    }
+
+%ifdef NoProcess
+    sessionTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
+    endOfInputTest() {
+        testSkip("no process module 2.2 or later");
+    }
+%else
+    #! Starts the adapter with the modules of this source tree
+    private Process startAdapter() {
+        *string module_dir = ENV.QORE_MODULE_DIR;
+        return new Process(qore_exe, (adapter,), {
+            "env": Process::getEnvironment() + {
+                "QORE_MODULE_DIR": qlib_dir + (module_dir ? ":" + module_dir : ""),
+            },
+        });
+    }
+
+    sessionTest() {
+        TmpDir tmp("qore-vda-test-");
+        string path = tmp.path + "/target.q";
+        {
+            File f();
+            f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(Program);
+        }
+
+        Process proc = startAdapter();
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+
+        hash<auto> r = dap.request("initialize", {"adapterID": "qore", "linesStartAt1": True,
+            "columnsStartAt1": True, "pathFormat": "path"});
+        assertTrue(r.success, r.message);
+        assertTrue(r.body.supportsConfigurationDoneRequest);
+
+        r = dap.request("launch", {"program": path, "stopOnEntry": True});
+        assertTrue(r.success, r.message);
+        dap.waitForEvent("initialized");
+
+        # requests without arguments are accepted with empty arguments, as the protocol allows
+        r = dap.request("configurationDone");
+        assertTrue(r.success, r.message);
+
+        hash<auto> stopped = dap.waitForEvent("stopped");
+        int tid = stopped.body.threadId;
+        r = dap.request("threads", NOTHING, False);
+        assertTrue(r.success, r.message);
+        assertEq((tid,), (map $1.id, r.body.threads));
+
+        # the call stack of the stopped thread
+        r = dap.request("stackTrace", {"threadId": tid});
+        assertTrue(r.success, r.message);
+        list<hash<auto>> frames = r.body.stackFrames;
+        assertTrue(frames.size() > 0);
+        assertEq(path, frames[0].source.path);
+        assertEq(6, frames[0].line);
+
+        # the variables of the frame
+        r = dap.request("scopes", {"frameId": frames[0].id});
+        assertTrue(r.success, r.message);
+        hash<string, int> scopes = map {$1.name: $1.variablesReference}, r.body.scopes;
+        assertTrue(scopes.hasKey("Locals"));
+        assertTrue(scopes.hasKey("Globals"));
+        r = dap.request("variables", {"variablesReference": scopes.Locals});
+        assertTrue(r.success, r.message);
+        list<string> locals = map $1.name, r.body.variables;
+        assertTrue(locals.contains("h"), sprintf("%y", locals));
+        assertTrue(locals.contains("total"), sprintf("%y", locals));
+
+        # after a step, the value of the local variable is shown in a watch
+        r = dap.request("next", {"threadId": tid});
+        assertTrue(r.success, r.message);
+        dap.waitForEvent("stopped");
+        r = dap.request("stackTrace", {"threadId": tid});
+        frames = r.body.stackFrames;
+        r = dap.request("evaluate", {"expression": "h", "context": "watch", "frameId": frames[0].id});
+        assertTrue(r.success, r.message);
+        assertRegex("invoice", r.body.result);
+
+        # the output of the program is sent as output events
+        r = dap.request("continue", {"threadId": tid});
+        assertTrue(r.success, r.message);
+        dap.waitFor(bool sub (hash<auto> m) {
+            return m.type == "event" && m.event == "output" && m.body.category == "stdout";
+        }, "stdout output event");
+        dap.waitForEvent("terminated");
+        r = dap.request("disconnect");
+        assertTrue(r.success, r.message);
+        proc.closeStdin();
+        assertTrue(proc.wait(30s), "the adapter ends");
+        assertEq(0, proc.exitCode());
+
+        # nothing but protocol messages is written to stdout
+        assertEq((), dap.stray);
+    }
+
+    endOfInputTest() {
+        Process proc = startAdapter();
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        hash<auto> r = dap.request("initialize", {"adapterID": "qore"});
+        assertTrue(r.success, r.message);
+
+        # the adapter waits for requests; when the IDE closes its input, it ends instead of waiting for input
+        # that cannot come
+        proc.closeStdin();
+        assertTrue(proc.wait(30s), "the adapter ends at the end of its input");
+        assertEq(0, proc.exitCode());
+    }
+%endif
+}
