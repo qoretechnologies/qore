@@ -61,6 +61,26 @@ std::mutex auto_provider_mutex;
 std::unordered_set<std::string> unusable_auto_providers;
 //! the fork handler of auto_provider_mutex, a leaf lock (see QoreForkHandler.h)
 QoreForkHandlerRegistration* auto_provider_fork_reg = nullptr;
+
+//! the ONNX Runtime environment of all models; see getOnnxEnv()
+std::unique_ptr<Ort::Env> onnx_env;
+//! creates onnx_env once
+std::once_flag onnx_env_once;
+
+//! Returns the ONNX Runtime environment shared by all models
+/** ONNX Runtime has one environment per process.  Recent versions delete a released environment after
+    unpublishing it, outside of their lock, so creating an environment in one thread while another releases the
+    last one fails with "Only one instance of LoggingManager created"; the environment is therefore created once
+    and released when the module is deleted.  The log severity of a model is set in its session options.
+
+    @throw Ort::Exception the environment could not be created; it is created again by the next call
+*/
+Ort::Env& getOnnxEnv() {
+    std::call_once(onnx_env_once, []() {
+        onnx_env = std::make_unique<Ort::Env>(ORT_LOGGING_LEVEL_WARNING, "qore-ml");
+    });
+    return *onnx_env;
+}
 using SteadyClock = std::chrono::steady_clock;
 
 bool isAutoProviderDisabled(const std::string& provider) {
@@ -1241,7 +1261,7 @@ QoreOnnxModel::QoreOnnxModel(const char* model_path, ExceptionSink* xsink)
     onnxSandboxIdentityMode(content_identity_mode);
     try {
         available_providers = getAvailableOnnxProviders();
-        env = std::make_unique<Ort::Env>(ORT_LOGGING_LEVEL_WARNING, "qore-ml");
+        env = &getOnnxEnv();
         Ort::SessionOptions session_options;
         session_options.SetIntraOpNumThreads(1);
         autoDetectProvider(session_options);
@@ -1300,7 +1320,7 @@ QoreOnnxModel::QoreOnnxModel(const void* model_data, size_t model_data_len,
     onnxSandboxIdentityMode(content_identity_mode);
     try {
         available_providers = getAvailableOnnxProviders();
-        env = std::make_unique<Ort::Env>(ORT_LOGGING_LEVEL_WARNING, "qore-ml");
+        env = &getOnnxEnv();
         Ort::SessionOptions session_options;
         session_options.SetIntraOpNumThreads(1);
         autoDetectProvider(session_options);
@@ -1369,7 +1389,9 @@ bool QoreOnnxModel::initEnvAndOptions(Ort::SessionOptions& session_options,
         log_level = static_cast<OrtLoggingLevel>(log_sev);
     }
 
-    env = std::make_unique<Ort::Env>(log_level, "qore-ml");
+    // the environment is shared by all models, so the log severity of the model is the severity of its session
+    env = &getOnnxEnv();
+    session_options.SetLogSeverityLevel(static_cast<int>(log_level));
 
     configureProviderPolicy(config, xsink);
     if (*xsink) {
@@ -6301,6 +6323,10 @@ int qore_ml_onnx_register_fork_handlers(ExceptionSink* xsink) {
 void qore_ml_onnx_unregister_fork_handlers() {
     qore_unregister_fork_handler(auto_provider_fork_reg);
     auto_provider_fork_reg = nullptr;
+}
+
+void qore_ml_onnx_release_env() {
+    onnx_env.reset();
 }
 
 #endif // HAVE_ONNXRUNTIME
