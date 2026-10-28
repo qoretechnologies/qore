@@ -62,22 +62,26 @@ std::unordered_set<std::string> unusable_auto_providers;
 //! the fork handler of auto_provider_mutex, a leaf lock (see QoreForkHandler.h)
 QoreForkHandlerRegistration* auto_provider_fork_reg = nullptr;
 
-//! the ONNX Runtime environment of all models; see getOnnxEnv()
-std::unique_ptr<Ort::Env> onnx_env;
+//! the ONNX Runtime environment of all models, which is never deleted; see getOnnxEnv()
+Ort::Env* onnx_env = nullptr;
 //! creates onnx_env once
 std::once_flag onnx_env_once;
 
 //! Returns the ONNX Runtime environment shared by all models
 /** ONNX Runtime has one environment per process.  Recent versions delete a released environment after
     unpublishing it, outside of their lock, so creating an environment in one thread while another releases the
-    last one fails with "Only one instance of LoggingManager created"; the environment is therefore created once
-    and released when the module is deleted.  The log severity of a model is set in its session options.
+    last one fails with "Only one instance of LoggingManager created"; the environment is therefore created once.
+
+    It is never deleted, as ONNX Runtime does with its environment at shutdown: releasing it locks a static mutex
+    of ONNX Runtime, which can already be destroyed when the static objects of the process are destroyed (libc++
+    then terminates the process with "mutex lock failed").  The log severity of a model is set in its session
+    options.
 
     @throw Ort::Exception the environment could not be created; it is created again by the next call
 */
 Ort::Env& getOnnxEnv() {
     std::call_once(onnx_env_once, []() {
-        onnx_env = std::make_unique<Ort::Env>(ORT_LOGGING_LEVEL_WARNING, "qore-ml");
+        onnx_env = new Ort::Env(ORT_LOGGING_LEVEL_WARNING, "qore-ml");
     });
     return *onnx_env;
 }
@@ -6323,10 +6327,6 @@ int qore_ml_onnx_register_fork_handlers(ExceptionSink* xsink) {
 void qore_ml_onnx_unregister_fork_handlers() {
     qore_unregister_fork_handler(auto_provider_fork_reg);
     auto_provider_fork_reg = nullptr;
-}
-
-void qore_ml_onnx_release_env() {
-    onnx_env.reset();
 }
 
 #endif // HAVE_ONNXRUNTIME
