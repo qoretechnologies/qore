@@ -1,0 +1,60 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+%allow-debugger
+
+int sub firstConstant() { return 17; } # CALLBACK_FIRST
+int sub secondConstant() { return 19; } # CALLBACK_SECOND
+int sub constantChoice(bool first) {
+    code<int()> fn = first ? \firstConstant() : \secondConstant();
+    return fn();
+}
+class ConstantCallbackRecorder inherits DebugProgram {
+    public { int entries = 0; int exits = 0; int locals = 0; }
+    onAttach(ProgramControl pgm, reference rs, reference rts) { rs = DebugStep; }
+    onDetach(ProgramControl pgm, reference rs, reference rts) { rs = DebugDetach; }
+    onStep(ProgramControl pgm, int blk, *int sid, *int bid, reference flow, reference rs, reference rts) {
+        if (sid && pgm.getStatementIdInfo(sid).start_line == 10) {
+            code<int()> observed = get_local_vars(1).fn.value;
+            ++locals;
+        }
+        rs = DebugStep;
+    }
+    onFunctionEnter(ProgramControl pgm, int sid, reference rs, reference rts) {
+        *hash<auto> loc = pgm.getStatementIdInfo(sid);
+        # Match the CALLBACK_FIRST / CALLBACK_SECOND source lines above.
+        if (loc.start_line == 6 || loc.start_line == 7) { ++entries; }
+        rs = DebugStep;
+    }
+    onFunctionExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {
+        *hash<auto> loc = pgm.getStatementIdInfo(sid);
+        if (loc.start_line == 6 || loc.start_line == 7) { ++exits; }
+    }
+    onException(ProgramControl pgm, int sid, hash<auto> ex, reference dismiss, reference rs, reference rts) {}
+    onExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {}
+}
+for (int i = 0; i < 32; ++i) {
+    if (call_function("constantChoice", True) != 17 || call_function("constantChoice", False) != 19) {
+        throw "CONSTANT-CALLBACK-DEBUGGER", "warmup";
+    }
+}
+ConstantCallbackRecorder recorder();
+ProgramControl pc = ProgramControl::getProgram();
+recorder.addProgram(pc);
+# Dynamic dispatch enters serialized debug IR; native intra-image direct calls do not dispatch debugger hooks.
+for (int i = 0; i < 16; ++i) {
+    if (call_function("constantChoice", True) != 17 || call_function("constantChoice", False) != 19) {
+        throw "CONSTANT-CALLBACK-DEBUGGER", "debug values";
+    }
+}
+recorder.removeProgram(pc);
+if (recorder.entries != 32 || recorder.exits != 32 || recorder.locals != 32) {
+    throw "CONSTANT-CALLBACK-DEBUGGER", sprintf("callback entry/exit/local events: %d/%d/%d",
+        recorder.entries, recorder.exits, recorder.locals);
+}
+for (int i = 0; i < 16; ++i) {
+    if (call_function("constantChoice", True) != 17 || call_function("constantChoice", False) != 19) {
+        throw "CONSTANT-CALLBACK-DEBUGGER", "restored native values";
+    }
+}
+printf("constant-callback-debugger: ok\n");

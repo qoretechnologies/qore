@@ -28066,3 +28066,61 @@ All 9024 Qore and 675 Java reference checks pass; 45 Java kernels pass C2 diagno
 Next execute the early scalar-replacement investigation recorded in the attached plan, starting with private finite callbacks selecting between two exact zero-argument constant scalar targets. Require complete no-escape/no-reentry, dominance, ownership and body-contract proofs before replacing creation/publication/calls with a native scalar PHI. Preserve ordinary fallback whenever the complete rewrite is unavailable, and keep cancellation semantics. Compare optimized batched short calls, long loops and broader controls with an independent confirmation campaign; apply all 62 audit checks before retaining and committing a change. Separately investigate redundant exception-sink loads on proven clean scalar loop paths. The current evidence does not establish a global performance maximum.
 
 [Evidence](results-post-coerce-module-macos-arm64.json); [all 62 audit checks](audit-post-coerce-checkpoint.md).
+
+## Native constant callback scalar replacement (2026-10-28)
+
+Retain a native-only AOT rewrite for private callback locals initialized from two exact, zero-argument constant integer or float targets. It replaces callback creation and calls with a native scalar PHI and snapshots. Independent confirmation reduces the four short target workloads by 73.0–78.4%; all twelve target/layout combinations improve by 72.4–78.5%. Long constant-callback loops improve by about 9.6%. This is a narrow callback improvement, not an application-wide gain or Java parity.
+
+The optimized baseline is installed production source `8276756a7a`, at documentation checkpoint `2b37579bd0`, including develop `62a415e603`. The candidate uses the same Release `-O3 -DNDEBUG` build settings with allocation tracking disabled. The comparison is incremental against this branch; the preceding cumulative develop/Java checkpoint remains separately labeled. Native artifacts are freshly compiled for each frozen runtime identity.
+
+### Batched short calls
+
+Each timer/dispatch covers 4096 changing-data helper invocations. Each helper contains one or seventeen callback operations; costs include setup and cleanup. Java uses Temurin 25/HotSpot C2 and JMH 1.37 with normal inlining, five forks, five warmups and three 300 ms samples. Qore uses three linked layouts, five confirmation forks, two warmups and three 150 ms samples. Each reported Qore value is the median across layouts of the per-layout median fork mean. Inline controls are not subtracted to manufacture isolated call latency.
+
+|!Kernel|!Before ns/invocation|!Candidate|!Compiler-disabled|!Java|!Change
+|int_zero_1|172.025589|37.238608|173.937567|1.026522|-78.353%
+|int_zero_17|181.790002|47.141672|183.888314|1.038100|-74.068%
+|int_unary_1|175.929440|177.053350|176.972791|1.033753|+0.639%
+|int_unary_17|186.945707|187.934792|187.867567|7.348617|+0.529%
+|float_zero_1|173.257465|41.296913|174.035146|0.902150|-76.164%
+|float_zero_17|188.455411|50.919376|188.583547|3.233350|-72.981%
+|float_unary_1|176.272001|177.343984|176.403626|1.056555|+0.608%
+|float_unary_17|187.944057|187.411048|188.372197|3.025082|-0.284%
+|int_zero_inline|1.155144|1.153524|1.151373|1.018813|-0.140%
+|int_unary_inline|1.683662|1.678255|1.691008|1.027003|-0.321%
+|float_zero_inline|1.161043|1.164079|1.160795|1.017886|+0.262%
+|float_unary_inline|1.428535|1.432561|1.431756|1.028563|+0.282%
+
+The one-callback integer and float cases are now approximately 36.3 and 45.8 times Java, respectively; the callback representation improvement does not remove all native frame/context/local setup. The unary callback and inline controls change by less than 0.7% in confirmation and are not claimed as optimized paths.
+
+### Broader tradeoff
+
+The first broader run covers 23 micro, float, mixed and long-loop workloads. The independent five-fork confirmation repeats every aggregate shift of at least 2%, all four mixed workloads, and the boxed-method control. Units below are whole-kernel ns/item, not short-call invocation latency.
+
+|!Confirmed kernel|!Before ns/item|!Candidate|!Change
+|direct_local_float_result|0.743138|0.768750|+3.447%
+|boxed_int_method_effect|94.458020|93.814912|-0.681%
+|csv_report|979.390607|979.913096|+0.053%
+|object_orders|1900.594504|1892.236328|-0.440%
+|callback_pipeline|129.039442|129.635143|+0.462%
+|text_index|1540.646023|1540.304769|-0.022%
+|int_zero|0.811263|0.732740|-9.679%
+|float_zero|1.084619|0.980990|-9.554%
+
+The direct-float-result control is 3.447% slower (+0.025612ns/item) in confirmation after being 2.795% faster in the first run. Its default layout is 6.002% slower with separated observed fork ranges; the other layouts overlap. This reversal is retained in the report, rather than treated as proof of zero cost. The mixed callback pipeline is 0.462% slower after 0.811% in the first run, with overlapping observed fork ranges in all confirmation layouts. Other mixed confirmation changes range from −0.440% to +0.053%. The user-authorized broader tradeoff supports retaining the large callback gains with these recorded costs; no application-weighted overall score is asserted.
+
+LLVM verification passes for all 24 broader modules. 879 normalized function bodies are unchanged, 12 intended target bodies change, and 15 startup adapters differ only in serialized metadata length. The first short run covers 324 jobs/972 windows; confirmation 540/1620; broader first run 414/1242; broader confirmation 240/720; fresh Java 60/180. All 1578 jobs/4734 windows replay independently from raw child receipts and samples. Runs share the host, without CPU affinity, exclusivity or thermal control, and do not overlap owned builds, tests or profiling.
+
+### Admission and behavior
+
+Admission requires a private required `code<int()>` or `code<float()>` body local with a single initial assignment, exactly two known constant targets, complete use/write accounting, strict dominance, exact binding/signature proofs and a fully non-reentrant scalar body. Target lookups record declaration, file, transitive and body-contract dependencies. Aliases, captures, weak stores, AST visibility, handlers, effects, escaping callbacks, deferred/imported targets, generic/preloaded entries and unsupported arithmetic retain the original objects. Unary callbacks remain on the existing path.
+
+The complete original slot map is built before rewriting. The transaction changes native instructions and SSA facts, retaining the original ABI and body-local lifecycle. Original instructions/facts are restored before metadata extraction and serialized debug IR; native lowering cannot fall back to a partially removed callback. `QORE_DISABLE_AOT_CONSTANT_CALLBACK_SCALAR_REPLACEMENT=1` disables the rewrite at compilation. Existing finite-target and scalar-import disabling controls also retain their old paths. RuntimeConfig, TLS, IR and JIT calling conventions are unchanged; loop cancellation remains.
+
+The first candidate exposed the callback local as NOTHING in serialized debug IR. A corrected dynamic-dispatch debugger test passes the baseline, fails that candidate, and passes the restored version at O0/O3. It checks 32 target entry/exit events and 32 visible callback locals across debugger attach/detach. An earlier direct-call diagnostic did not enter debug IR and was superseded. The new ordinary fixture also covers conditional and multiple groups, wide integers, signed zero, infinity/NaN, escape, effects, unsupported generic arithmetic and split/disabled/EH paths.
+
+Release and Debug each pass 47 cases/7450 assertions plus one standalone test. Debug adds 2917 native assertions and 18 cases/70 fallback assertions. The expanded fixture has 896 assertions. All 391 Release qmod aliases are restored. These are targeted macOS ARM64 checks, not a full-project, Linux or sanitizer claim. All 62 audit-changes checks pass or are inapplicable (20 Pass,42 N/A,0 Fail).
+
+Next investigate the raw-integer RefSelf path, empty callback-local lifecycle and consistent discovery/code-generation contracts for context-independent scalar entries. The emitted fast body still shows frame/context setup, a now-empty local, integer reference helpers and cancellation-state preparation. These are static code observations, not sampled CPU attribution or evidence that performance has been maximized.
+
+[Evidence](results-finite-constant-callback-macos-arm64.json); [all 62 audit checks](audit-finite-constant-callback.md).

@@ -14,6 +14,7 @@ class FiniteCallbackTargetsTest inherits QUnit::Test {
     }
     constructor() : Test("finite pure callback targets", "1.0", \ARGV) {
         addTestCase("conditional callback values and observable fallback behavior", \check());
+        addTestCase("native scalar replacement preserves debugger callback events", \debugger());
         set_return_value(main());
     }
     private static string quote(string value) {
@@ -42,6 +43,7 @@ class FiniteCallbackTargetsTest inherits QUnit::Test {
         }
         TmpDir tmp("qore-finite-callback-targets-");
         foreach string prefix in (("", "QORE_DISABLE_AOT_FINITE_CALLREF_TARGETS=1 ",
+                "QORE_DISABLE_AOT_CONSTANT_CALLBACK_SCALAR_REPLACEMENT=1 ",
                 "QORE_DISABLE_AOT_FINITE_CALLREF_RELOAD_ELISION=1 ",
                 "QORE_DISABLE_AOT_FINITE_CALLREF_BIND_ELISION=1 ",
                 "QORE_DISABLE_AOT_FINITE_CALLREF_COERCE_ELISION=1 ",
@@ -58,13 +60,35 @@ class FiniteCallbackTargetsTest inherits QUnit::Test {
                     foreach string name in (("zeroLoop", "wideChoice", "unaryChoice", "floatChoice",
                             "zeroChoice", "collisionChoice", "nestedLoop", "multipleCalls",
                             "multipleGroups", "conditionalChoice")) {
-                        assertEq(prefix == "", regex(body(ir, name), "finite_callref_result"), name + level);
+                        bool scalarized = prefix == ""
+                            && regex(name, "^(zeroLoop|wideChoice|zeroChoice|collisionChoice|nestedLoop)$");
+                        assertEq(prefix == "" && !scalarized,
+                            regex(body(ir, name), "finite_callref_result"), name + level);
                     }
                     foreach string name in (("reassigned", "unknown", "captured", "aliased",
                             "effectChoice", "throwingChoice", "defaultChoice", "maybeAssigned", "optionalInt",
                             "optionalFloat", "arbitrary", "variableSignature", "sparse", "evaluatedArg",
                             "interveningCall", "multipleExpression")) {
                         assertFalse(regex(body(ir, name), "finite_callref_result"), name + level);
+                    }
+                }
+                if (prefix == "" || prefix == "QORE_DISABLE_AOT_CONSTANT_CALLBACK_SCALAR_REPLACEMENT=1 ") {
+                    foreach string name in (("zeroLoop", "wideChoice", "zeroChoice", "collisionChoice",
+                            "nestedLoop", "constantTwice", "constantGroups",
+                            "constantConditional", "specialConstant")) {
+                        string lowered = body(ir, name);
+                        assertEq(prefix != "", regex(lowered, "@qore_rt_create_call_ref"),
+                            name + level + " callback object creation");
+                        if (prefix == "") {
+                            assertFalse(regex(lowered, "@qore_rt_call_closure"), name + level + " no indirect call");
+                            assertFalse(regex(lowered, "@qore_rt_coerce_value_aot"), name + level + " no coercion");
+                        }
+                    }
+                    foreach string name in (("unaryChoice", "reassigned", "unknown", "captured", "aliased",
+                            "effectChoice", "throwingChoice", "defaultChoice", "interveningCall",
+                            "laterEffect", "escapingConstant", "constantExpression")) {
+                        assertTrue(regex(body(ir, name), "@qore_rt_create_call_ref"),
+                            name + level + " retains callback objects");
                     }
                 }
                 if (prefix == "" || prefix == "QORE_DISABLE_AOT_FINITE_CALLREF_BIND_ELISION=1 ") {
@@ -116,6 +140,22 @@ class FiniteCallbackTargetsTest inherits QUnit::Test {
                         "QORE_DISABLE_IR_CONTEXT_ELISION=1 ")) {
                     assertEq(expected, run((executable,), runtime), prefix + level + runtime);
                 }
+            }
+        }
+    }
+    private debugger() {
+        string source = get_script_dir() + "/AOTConstantCallbackDebugger.qr";
+        string expected = "constant-callback-debugger: ok\n";
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source)), mode);
+        }
+        TmpDir tmp("qore-constant-callback-debugger-");
+        foreach string prefix in (("", "QORE_DISABLE_AOT_CONSTANT_CALLBACK_SCALAR_REPLACEMENT=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = tmp.path + "/fixture";
+                run((qcc, level, "--strip-source", "-o", executable, source), prefix);
+                assertEq(expected, run((executable,)), prefix + level);
             }
         }
     }

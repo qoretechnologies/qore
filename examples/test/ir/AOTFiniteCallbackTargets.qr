@@ -142,7 +142,59 @@ int sub interveningCall(bool first) {
     sideArg();
     return fn();
 }
+int sub constantTwice(bool first) {
+    code<int()> fn = first ? \one() : \two();
+    int a = fn();
+    int b = fn();
+    return a + b;
+}
+int sub constantExpression(bool first) {
+    code<int()> fn = first ? \one() : \two();
+    return fn() + fn();
+}
+int sub constantGroups(bool first) {
+    code<int()> a = first ? \one() : \two();
+    code<int()> b = first ? \two() : \one();
+    int x = a();
+    int y = b();
+    return x + y;
+}
+int sub constantConditional(bool active, bool first) {
+    if (active) {
+        code<int()> fn = first ? \one() : \two();
+        return fn();
+    }
+    return -1;
+}
+int sub laterEffect(bool first) {
+    code<int()> fn = first ? \one() : \two();
+    int value = fn();
+    sideArg();
+    return value;
+}
+code<int()> sub escapingConstant(bool first) {
+    code<int()> fn = first ? \one() : \two();
+    return fn;
+}
+float sub infinity() { return @inf@; }
+float sub notANumber() { return @nan@; }
+float sub specialConstant(bool first) {
+    code<float()> fn = first ? \infinity() : \notANumber();
+    return fn();
+}
 foreach bool first in ((False, True)) {
+    expect(first ? 34 : 38, constantTwice(first));
+    expect(first ? 34 : 38, constantExpression(first));
+    expect(36, constantGroups(first));
+    expect(first ? 17 : 19, constantConditional(True, first));
+    expect(-1, constantConditional(False, first));
+    calls = 0;
+    expect(first ? 17 : 19, laterEffect(first));
+    expect(1, calls);
+    code<int()> escaped = escapingConstant(first);
+    expect(first ? 17 : 19, escaped());
+    expectFloat(first ? @inf@ : @nan@, specialConstant(first));
+
     foreach int count in ((0, 1, 17, 4096)) { expect((first ? 17 : 19) * count, zeroLoop(first, count)); }
     expect(first ? 0x7fffffffffffffff : -0x7fffffffffffffff, wideChoice(first));
     foreach int value in ((0, 1, -1, 65535, 0x7fffffffffffffff, -0x7fffffffffffffff)) {

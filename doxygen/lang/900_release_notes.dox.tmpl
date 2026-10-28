@@ -301,6 +301,9 @@
     When both callback signatures exactly match the local's required typed-code declaration, AOT also omits
     redundant assignment coercion and its temporary reference. Creation and normal runtime publication
     remain; plain, optional, differently typed and externally visible callback locals keep their existing checks.
+    Private conditional callbacks selecting two exact zero-argument integer or float constants can now avoid
+    callback-object creation in AOT native code. The compiler requires complete non-escape and non-reentry
+    proofs; debugger execution retains the original callback locals and calls, and loop cancellation is preserved.
 
     AOT can pass eligible typed float callback results directly to native compound addition, avoiding
     intermediate boxing while preserving compatible fallback conversion and owned-result cleanup.
