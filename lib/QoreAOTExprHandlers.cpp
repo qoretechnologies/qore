@@ -306,7 +306,7 @@ static const char* aot_unqualified_method_name(const char* method_ref) {
 
 static const AbstractQoreFunctionVariant* resolve_aot_self_method_variant_by_ref(
         QoreProgram* pgm, const QoreMethod*& method, const QoreAOTStaticMethodRef& method_ref) {
-    if (!method || !method_ref.sig_text || !*method_ref.sig_text) {
+    if (!method || !method_ref.sig_text) {
         return nullptr;
     }
 
@@ -428,7 +428,7 @@ static QoreValue read_expr_self_method_call(AOTExprReadCtx& ctx) {
     }
     const AbstractQoreFunctionVariant* resolved_variant = nullptr;
     QoreTypeParamInstantiation type_param_instantiation;
-    if (method_ref.sig_text && *method_ref.sig_text) {
+    if (method_ref.sig_text) {
         resolved_variant = resolve_aot_self_method_variant_by_ref(ctx.pgm, m, method_ref);
     } else if (method_ref.arg_type_sig && *method_ref.arg_type_sig) {
         MethodFunctionBase* mfb = qore_method_private::get(*const_cast<QoreMethod*>(m))->getFunction();
@@ -520,7 +520,7 @@ static const QoreMethod* resolve_aot_static_call_method(const QoreClass* qc, con
 
 static const AbstractQoreFunctionVariant* resolve_aot_static_method_variant_by_ref(
         QoreProgram* pgm, const QoreMethod*& method, const QoreAOTStaticMethodRef& method_ref) {
-    if (!method || !method_ref.sig_text || !*method_ref.sig_text) {
+    if (!method || !method_ref.sig_text) {
         return nullptr;
     }
 
@@ -678,7 +678,7 @@ static QoreValue read_expr_static_method_call(AOTExprReadCtx& ctx) {
         QoreParseListNode* pln = aot_expr_args_list_to_parse_args(args_list);
         FunctionCallNode* fcn = new FunctionCallNode(&loc_builtin, fe, pln);
         QoreFunction* func = fe->getFunction();
-        if (method_ref.sig_text && *method_ref.sig_text) {
+        if (method_ref.sig_text) {
             if (const AbstractQoreFunctionVariant* v = func
                     ? func->findVariantBySignatureText(method_ref.sig_text) : nullptr) {
                 fcn->setVariant(v);
@@ -736,7 +736,7 @@ static QoreValue read_expr_static_method_call(AOTExprReadCtx& ctx) {
         return QoreValue();
     }
     const AbstractQoreFunctionVariant* resolved_variant = nullptr;
-    if (method_ref.sig_text && *method_ref.sig_text) {
+    if (method_ref.sig_text) {
         resolved_variant = resolve_aot_static_method_variant_by_ref(ctx.pgm, m, method_ref);
     }
     const QoreTypeInfo* receiver_type_info = nullptr;
@@ -780,7 +780,7 @@ static QoreValue read_expr_static_method_call(AOTExprReadCtx& ctx) {
     if (pln) {
         call_node->resolveParseArgs();
     }
-    if (method_ref.sig_text && *method_ref.sig_text) {
+    if (method_ref.sig_text) {
         if (resolved_variant) {
             call_node->setVariant(resolved_variant);
         }

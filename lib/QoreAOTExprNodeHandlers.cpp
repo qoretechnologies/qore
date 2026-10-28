@@ -129,7 +129,7 @@ static const QoreMethod* en_resolveSelfMethod(const QoreClass* qc, const char* m
 
 static const AbstractQoreFunctionVariant* en_resolveMethodVariantByRef(
         QoreProgram* pgm, const QoreMethod*& method, const QoreAOTStaticMethodRef& method_ref) {
-    if (!method || !method_ref.sig_text || !*method_ref.sig_text) {
+    if (!method || !method_ref.sig_text) {
         return nullptr;
     }
 
@@ -447,7 +447,7 @@ static QoreValue read_node_EN_SELF_CALL(AOTExprNodeReadCtx& ctx) {
     }
     const AbstractQoreFunctionVariant* resolved_variant = nullptr;
     QoreTypeParamInstantiation type_param_instantiation;
-    if (method_ref.sig_text && *method_ref.sig_text) {
+    if (method_ref.sig_text) {
         resolved_variant = en_resolveMethodVariantByRef(ctx.pgm, m, method_ref);
     } else if (method_ref.arg_type_sig && *method_ref.arg_type_sig) {
         MethodFunctionBase* mfb = qore_method_private::get(*const_cast<QoreMethod*>(m))->getFunction();
