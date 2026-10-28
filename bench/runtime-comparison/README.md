@@ -1453,3 +1453,16 @@ older runtimes; new artifacts need the v2 binder. See RESULTS for the measured
 closure gains and the effectful-method regression, not a universal speedup.
 
 `QORE_DISABLE_AOT_CROSS_PROGRAM_CLOSURE_ENTRY=1` disables the native scalar closure retry after the generic path enters the owning Program. It is a runtime presence flag sampled once; empty and `0` values also disable it. Same-Program admission and the complete generic Program transition remain. No recompile is needed for this diagnostic control. Compare frozen optimized runtimes for before/after performance; see RESULTS for cross-Program call measurements and all control costs.
+
+`OpaqueCallbackBench.java` supplies ordinary optimized Java counterparts for all four
+`opaque_callbacks.qr` kernels, with no `DONT_INLINE` controls. The choice of two
+literal functions is made once per invocation. JMH performs normal inlining and
+constant reduction; in particular the constant integer accumulation becomes
+count-scaled arithmetic, so its very small ns/item value is not a call latency.
+The committed result evidence includes the exact JDK/JMH setup and raw samples.
+
+`QORE_DISABLE_AOT_FINITE_CALLREF_TARGETS=1` disables finite target selection at
+compilation. Recompile to compare the ordinary runtime callback path. Admission
+requires two complete nonthrowing scalar targets, exact argument binding and a
+scalar caller proven not to reenter arbitrary code. This is an AOT optimization;
+IR and JIT behavior, runtime bindings, ownership and cancellation are unchanged.

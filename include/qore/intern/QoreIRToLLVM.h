@@ -318,6 +318,10 @@ public:
     }
 
 private:
+    //! Prove exact positional binding without user conversion or argument defaults.
+    bool isFiniteCallRefCallBound(const QoreIRExprInstruction* call,
+        const AbstractQoreFunctionVariant* variant, const BatchCalleeInfo* info) const;
+
     //! Publish a same-body scalar companion from an eligible normal AOT method entry.
     void emitNativeMethodBinding(llvm::Module& module, llvm::Function* normal);
 
@@ -878,6 +882,15 @@ private:
     // fast entry while retaining ordinary call-reference creation semantics.
     std::unordered_map<uint32_t, const AbstractQoreFunctionVariant*>
         known_function_call_refs;
+    // A private, single-assignment callback can select either of two complete
+    // pure scalar bodies. Keep its boxed reference and ownership unchanged;
+    // this parallel i1 PHI only selects the native result at eligible calls.
+    struct FiniteCallRefTargets {
+        const AbstractQoreFunctionVariant* variants[2] = {nullptr, nullptr};
+        llvm::PHINode* selector = nullptr;
+    };
+    std::unordered_map<uint32_t, FiniteCallRefTargets> finite_call_ref_targets;
+    std::unordered_map<uint32_t, uint32_t> finite_call_ref_loads;
     std::unordered_map<uint32_t, const AbstractQoreFunctionVariant*> function_call_ref_definitions;
     std::unordered_map<uint32_t, const AbstractQoreFunctionVariant*> known_callback_arguments;
     const void* known_callback_parameter = nullptr;

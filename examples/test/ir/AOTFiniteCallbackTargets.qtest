@@ -1,0 +1,73 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class FiniteCallbackTargetsTest
+
+class FiniteCallbackTargetsTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+    constructor() : Test("finite pure callback targets", "1.0", \ARGV) {
+        addTestCase("conditional callback values and observable fallback behavior", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private string body(string ir, string name) {
+        *list<*string> found = regex_extract(ir,
+            "(?s)define [^\n]*@" + name + "_[^\n]*\\(ptr %ctx, ptr %xsink\\)[^\n]*\n(.*?)\n\\}");
+        assertTrue(!!found, name + " normal LLVM entry");
+        return found[0] ?? "";
+    }
+    private check() {
+        string source = get_script_dir() + "/AOTFiniteCallbackTargets.qr";
+        string expected = "finite-callback-targets: ok\n";
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source)), mode);
+        }
+        TmpDir tmp("qore-finite-callback-targets-");
+        foreach string prefix in (("", "QORE_DISABLE_AOT_FINITE_CALLREF_TARGETS=1 ",
+                "QORE_AOT_EH=1 ", "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ",
+                "QORE_DISABLE_AOT_INT_EXPRESSION_IMPORT=1 ",
+                "QORE_DISABLE_AOT_FLOAT_EXPRESSION_IMPORT=1 ",
+                "QORE_DISABLE_AOT_CROSS_OBJECT_LEAF_INLINE=1 ",
+                "QORE_DISABLE_AOT_KNOWN_CALLREF_EXCEPTION_ELISION=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = tmp.path + "/fixture";
+                string ir = run((qcc, level, "--strip-source", "-o", executable, source),
+                    prefix + "QORE_DUMP_LLVM_IR=1 ");
+                if (prefix == "" || prefix == "QORE_DISABLE_AOT_FINITE_CALLREF_TARGETS=1 ") {
+                    foreach string name in (("zeroLoop", "wideChoice", "unaryChoice", "floatChoice",
+                            "zeroChoice", "collisionChoice", "nestedLoop")) {
+                        assertEq(prefix == "", regex(body(ir, name), "finite_callref_result"), name + level);
+                    }
+                    foreach string name in (("reassigned", "unknown", "captured", "aliased",
+                            "effectChoice", "throwingChoice", "defaultChoice", "maybeAssigned", "optionalInt",
+                            "optionalFloat", "arbitrary", "variableSignature", "sparse", "evaluatedArg",
+                            "interveningCall")) {
+                        assertFalse(regex(body(ir, name), "finite_callref_result"), name + level);
+                    }
+                }
+                foreach string runtime in (("", "QORE_DISABLE_FUNCREF_FAST_CALL=1 ",
+                        "QORE_DISABLE_IR_CONTEXT_ELISION=1 ")) {
+                    assertEq(expected, run((executable,), runtime), prefix + level + runtime);
+                }
+            }
+        }
+    }
+}

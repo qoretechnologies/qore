@@ -27648,3 +27648,95 @@ All 9024 Qore and 675 Java reference checks pass; 45 Java kernels pass C2 diagno
 Next preserve bounded exact function-reference targets through private conditional initializers, using the existing complete nonthrowing scalar summaries and native argument proofs. The standalone zero-argument float callback still takes about 17.7 ns/item in its separate before/after experiment; losing the two known targets at a Phi is a concrete compiler lead. First inspect actual optimized Qore IR and establish the alias/dominance/Program/debugger proof, then implement only the admitted cases. Keep reference creation/cleanup, fallback semantics, argument evaluation and every source-loop cancellation check. Compare fresh optimized before/after binaries and natural-inlining Java counterparts, confirm generated-code selection, qualify Release/Debug and broad controls, and apply all62 audit checks before retaining/committing. Follow with runtime-visible receiver-local work and short loop-bodied frame/context overhead. No performance ceiling is established.
 
 [Evidence](results-post-float-continuation-module-macos-arm64.json); [all 62 audit checks](audit-post-float-continuation-checkpoint.md).
+
+## Finite pure callback targets in scalar AOT callers (2026-10-28)
+
+A private callback initialized from a two-way choice of literal same-Program functions retains both exact targets through its boxed PHI. Eligible repeated calls select the native result of two bounded complete pure summaries. A scalar caller proof excludes arbitrary reentry and reflective replacement; original creation, binding, ownership, reloads, return checks and loop cancellation remain. No IR/JIT or runtime ABI change. See the design discussion and the compilation presence flag QORE_DISABLE_AOT_FINITE_CALLREF_TARGETS.
+
+Baseline 5ee98d8c54 (code 33b6b9735a) and the candidate both use Release -O3 -DNDEBUG with allocation tracking off, matching compiler/configuration and qcc -O3 --strip-source. Three layouts, randomized paired process order, three screen forks and five confirmation forks, three warmups and three 150 ms measurement windows. Java uses Temurin 25/JMH 1.37, ordinary C2 inlining with three forks and five warmup/three 300 ms measurement windows; no DONT_INLINE control. Results are median layout medians of per-process window means. Whole-kernel ns/item is not isolated callback latency. The Qore harness dispatches by string and reads its clock after every kernel invocation; short rows include this cost and cannot isolate callback setup or be compared as matched short-call latency against JMH. The host is shared, without affinity/exclusivity/thermal control. No owned build/test/profile/archive work overlaps timing.
+
+|!Kernel:count|!Before ns/item|!Candidate|!Disabled same runtime|!Java|!Cost change|!Speedup
+|int_zero:1|427.740510|431.076506|426.775202|1.035444|+0.780%|0.992x
+|int_unary:1|435.596726|439.336842|439.677766|1.177212|+0.859%|0.991x
+|float_zero:1|438.273296|440.816976|441.386074|1.191300|+0.580%|0.994x
+|float_unary:1|448.216682|445.196215|455.721107|1.270382|-0.674%|1.007x
+|int_zero:17|41.703253|26.209465|42.170980|0.061913|-37.152%|1.591x
+|int_unary:17|43.671499|26.717739|43.825280|0.411866|-38.821%|1.635x
+|float_zero:17|43.309462|26.740600|43.229693|0.239110|-38.257%|1.620x
+|float_unary:17|44.737399|27.135477|44.322784|0.210353|-39.345%|1.649x
+|int_zero:4096|17.308291|1.161627|17.416257|0.000257|-93.289%|14.900x
+|int_unary:4096|18.315696|1.183551|18.378129|0.890578|-93.538%|15.475x
+|float_zero:4096|17.604486|1.286579|17.453678|0.443969|-92.692%|13.683x
+|float_unary:4096|18.254823|1.173811|18.319856|0.473259|-93.570%|15.552x
+
+Java int_zero is reduced to count-scaled arithmetic in bounded chunks with safepoint polls, verified in C2 code for the kernel and measured JMH stub. Its tiny per-item result is not a physical callback cost. Other Java rows allow ordinary inlining. These are fresh Java comparisons for these four kernels, not a refresh of the cumulative 78-workload develop comparison.
+
+The broader screen covers 53 existing scalar/direct/method/closure/float/mixed controls and 5 opaque/short cases. Confirmation includes every absolute aggregate shift of at least 2%, all mixed workloads and all opaque cases. Unselected rows have no confirmation measurement.
+
+|!Workload:count|!Screen before|!Screen candidate|!Change|!Confirm before|!Confirm candidate|!Change
+|float:direct_local_float_return:4096|0.808876|0.811515|+0.326%|n/a|n/a|n/a
+|float:callback_local_float_return:4096|0.850338|0.872029|+2.551%|0.860161|0.869257|+1.058%
+|float:direct_local_float_result:4096|0.748819|0.738570|-1.369%|n/a|n/a|n/a
+|float:callback_local_float_result:4096|0.810770|0.809871|-0.111%|n/a|n/a|n/a
+|float:direct_loop_float_return:4096|5.655442|5.653594|-0.033%|n/a|n/a|n/a
+|float:callback_loop_float_return:4096|4.955252|4.945469|-0.197%|n/a|n/a|n/a
+|float:direct_float_add:4096|0.807341|0.823857|+2.046%|0.821821|0.824246|+0.295%
+|float:static_float_add:4096|0.829359|0.825450|-0.471%|n/a|n/a|n/a
+|float:typed_local_int_unary:4096|1.186993|1.186145|-0.071%|n/a|n/a|n/a
+|float:typed_local_int_result:4096|0.867697|0.816096|-5.947%|0.846205|0.847938|+0.205%
+|float:typed_local_float_unary:4096|0.904207|0.907857|+0.404%|n/a|n/a|n/a
+|float:result_float_add:4096|0.828467|0.828564|+0.012%|n/a|n/a|n/a
+|micro:arithmetic:4096|1.577529|1.575280|-0.143%|n/a|n/a|n/a
+|micro:direct_call:4096|1.579953|1.580625|+0.043%|n/a|n/a|n/a
+|micro:method_call:4096|1.659836|1.663866|+0.243%|n/a|n/a|n/a
+|micro:indirect_call:4096|60.458152|59.775729|-1.129%|n/a|n/a|n/a
+|micro:polymorphic_call:4096|23.315278|23.362798|+0.204%|n/a|n/a|n/a
+|micro:polymorphic_expression_call:4096|10.773277|10.646805|-1.174%|n/a|n/a|n/a
+|micro:monomorphic_call:4096|3.894235|3.932446|+0.981%|n/a|n/a|n/a
+|micro:optional_method_call:4096|10.417460|10.302097|-1.107%|n/a|n/a|n/a
+|micro:polymorphic_float_call:4096|23.912716|24.265450|+1.475%|n/a|n/a|n/a
+|micro:polymorphic_float_expression_call:4096|10.875372|10.764319|-1.021%|n/a|n/a|n/a
+|micro:monomorphic_float_call:4096|4.138606|4.171142|+0.786%|n/a|n/a|n/a
+|micro:optional_float_method_call:4096|10.805536|10.904668|+0.917%|n/a|n/a|n/a
+|micro:boxed_float_method_call:4096|19.826414|20.004242|+0.897%|n/a|n/a|n/a
+|micro:dynamic_int_result_call:4096|10.392292|10.194946|-1.899%|n/a|n/a|n/a
+|micro:dynamic_int_result_fallback:4096|20.344500|20.454433|+0.540%|n/a|n/a|n/a
+|micro:boxed_int_method_call:4096|16.130138|16.356995|+1.406%|n/a|n/a|n/a
+|micro:boxed_int_method_fallback:4096|32.659039|32.932748|+0.838%|n/a|n/a|n/a
+|micro:boxed_float_method_fallback:4096|34.483702|34.396261|-0.254%|n/a|n/a|n/a
+|micro:boxed_int_method_effect:4096|88.837711|91.337597|+2.814%|89.682958|92.118017|+2.715%
+|micro:dynamic_float_result_call:4096|11.186248|11.569551|+3.427%|11.367229|11.419620|+0.461%
+|micro:indirect_wide:4096|60.388039|59.599910|-1.305%|n/a|n/a|n/a
+|micro:indirect_float:4096|59.593535|58.282844|-2.199%|60.861735|59.006254|-3.049%
+|micro:indirect_int_result:4096|60.848655|58.916975|-3.175%|62.238036|61.080517|-1.860%
+|micro:indirect_float_result:4096|59.852076|58.095832|-2.934%|61.393866|59.583641|-2.949%
+|micro:indirect_tagged_float:4096|59.103117|58.600689|-0.850%|n/a|n/a|n/a
+|micro:indirect_branch_float:4096|59.034153|57.894476|-1.931%|n/a|n/a|n/a
+|micro:indirect_affine:4096|60.433103|59.040414|-2.305%|61.795549|60.523079|-2.059%
+|micro:indirect_affine_wide:4096|60.622757|59.598381|-1.690%|n/a|n/a|n/a
+|micro:indirect_branch_int:4096|60.461982|59.080288|-2.285%|62.252931|61.181024|-1.722%
+|micro:dispatch_control:4096|1.975125|1.974167|-0.049%|n/a|n/a|n/a
+|micro:list_read:4096|2.943771|2.935316|-0.287%|n/a|n/a|n/a
+|micro:list_build:4096|26.219544|26.536966|+1.211%|n/a|n/a|n/a
+|micro:list_mutate:4096|130.946477|131.851278|+0.691%|n/a|n/a|n/a
+|micro:temporary_list:4096|1.743896|1.741554|-0.134%|n/a|n/a|n/a
+|micro:temporary_hash:4096|1.745858|1.737703|-0.467%|n/a|n/a|n/a
+|micro:closure_call:4096|13.647348|13.637002|-0.076%|n/a|n/a|n/a
+|micro:closure_capture:4096|19.452124|19.227994|-1.152%|n/a|n/a|n/a
+|mixed:csv_report:4096|925.567627|929.768880|+0.454%|958.706848|951.660156|-0.735%
+|mixed:object_orders:4096|1723.366477|1740.908140|+1.018%|1842.298332|1848.942057|+0.361%
+|mixed:callback_pipeline:4096|123.230721|122.043850|-0.963%|125.493467|123.693907|-1.434%
+|mixed:text_index:4096|1468.726838|1445.798115|-1.561%|1491.399740|1479.957682|-0.767%
+|opaque:float_zero:4096|17.762972|1.291665|-92.728%|17.860058|1.331924|-92.542%
+|opaque:float_unary:17|44.267298|27.242434|-38.459%|45.152034|27.736879|-38.570%
+|opaque:float_zero:1|439.779706|447.519696|+1.760%|448.564213|450.784059|+0.495%
+|opaque:float_unary:1|450.494738|444.859184|-1.251%|459.263250|453.908608|-1.166%
+|opaque:int_zero:1|437.950876|430.604850|-1.677%|447.909246|448.660492|+0.168%
+
+Retain the optimization for the independently confirmed 13.7–15.6x long-loop gains and 37–39% reduction at 17 iterations. Single-invocation rows show essentially no improvement and include per-invocation string dispatch/clock overhead. Accept and explicitly retain the repeated effectful boxed-integer method control cost: +2.715% (+2.435059 ns/item), with layout changes +2.003%, +2.779% and +4.625%; every layout has separated observed fork ranges. The earlier +3.427% dynamic floating-result control cost becomes +0.461% in confirmation. Mixed workload confirmation ranges from -1.434% to +0.361%, without claiming an application-wide gain. All 825 inspected control function bodies match after removing only debug attachments; 12 module-initialization bodies differ only in metadata length. No control module selects the new finite path. This does not establish the runtime/layout cause of the repeated cost, and it is not dismissed as noise. Keep this method control in subsequent experiments. No general Java parity or global performance maximum claim.
+
+All 2310 timing jobs/6930 measured windows are preserved and independently replayed. Release/Debug each pass 88 cases/8577 assertions plus 3 standalone scripts; Debug adds 18 cases / 70 fallback/context assertions and 2917 native assertions. The 296-assertion fixture covers wide integers, signed zero, NaN/infinities/tag-colliding floats, repeated loop initializers, mutation/aliases/captures, unknown/effectful/default/throwing targets, uncertain argument binding and intervening calls. Additional qualification runs four source modes and 48 AOT O0/O3/EH/split/import-disabled/runtime-control executions. All 9 focused LLVM images are verified and 540 reference checks pass; broader preparation passes 4770 native and 795 source references. Java passes 60 matching references. All 391 Release qmod aliases are restored. This is targeted macOS Release/Debug coverage, not whole-project/Linux/sanitizer qualification.
+
+The next isolated candidate removes redundant callback-local reload checks using the same no-reentry proof. Source-location stores and cancellation cadence remain separate investigations. No general Java parity or global maximum claim.
+
+[Timing and validation evidence](results-finite-callback-targets-macos-arm64.json); [62-check audit](audit-finite-callback-targets.md).

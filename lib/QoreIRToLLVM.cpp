@@ -507,6 +507,37 @@ static bool isNonThrowingScalarBody(const BatchCalleeInfo* info, bool& scalar_le
     return nothrow_scalar;
 }
 
+// Finite-target speculation evaluates both summaries, so the complete body
+// must be pure and non-throwing, with no hidden context or argument binding.
+static bool isFiniteCallRefTarget(const AbstractQoreFunctionVariant* variant, const BatchCalleeInfo* info) {
+    if (!info || !info->single_variant_function || !info->approach_b_eligible
+            || !info->context_independent_fast_entry || info->preloaded_fast_entry
+            || info->generic_specialized_fast_entry || info->implicit_self_method
+            || !info->capture_locals.empty() || info->num_params > 1
+            || info->may_invalidate_external_caches || info->may_modify_runtime_locals
+            || !info->modified_runtime_locals.empty() || !info->never_returns_nothing
+            || !isFastFunctionCallEligible(variant)
+            || (info->return_kind != BatchCalleeReturnKind::NativeInt
+                && info->return_kind != BatchCalleeReturnKind::NativeFloat)) {
+        return false;
+    }
+    const UserSignature* sig = variant->getUserVariantBase()->getUserSignature();
+    if (!sig || sig->hasVarargs() || sig->numParams() != info->num_params
+            || info->param_kinds.size() != info->num_params) {
+        return false;
+    }
+    if (info->num_params) {
+        const QoreTypeInfo* type = sig->getParamTypeInfo(0);
+        if (!((type == bigIntTypeInfo && info->param_kinds[0] == BatchCalleeParamKind::NativeInt)
+                || (type == floatTypeInfo && info->param_kinds[0] == BatchCalleeParamKind::NativeFloat))) {
+            return false;
+        }
+    }
+    bool scalar_leaf_body = false;
+    return isNonThrowingScalarBody(info, scalar_leaf_body)
+        && info->int_expression.nodes.size() + info->float_expression.nodes.size() <= 16;
+}
+
 void QoreIRToLLVM::emitNativeMethodBinding(llvm::Module& module, llvm::Function* normal) {
     if (aot_mode && fast_entry_name.empty() && !receiver_method_binding.empty()) {
         llvm::Function* companion = module.getFunction(receiver_method_binding);
@@ -2602,6 +2633,40 @@ static bool qore_ir_native_closure_call_eligible(
     return true;
 }
 
+bool QoreIRToLLVM::isFiniteCallRefCallBound(const QoreIRExprInstruction* call,
+        const AbstractQoreFunctionVariant* variant, const BatchCalleeInfo* info) const {
+    const QoreIRInstruction* inst = call;
+    int nargs = static_cast<int>(inst->operands.size()) - 1;
+    bool bound = qore_ir_native_closure_call_eligible(variant, call->expr,
+        current_ir_func, inst->operands, 1, nargs, info->param_kinds);
+    if (!bound && nargs == 1 && info->num_params == 1) {
+        // Native body-local promotion runs after IR value facts.
+        // Reuse its assigned, exact-type proof, but only for an
+        // ordinary positional call with no hidden binding work.
+        const auto* ref_call = dynamic_cast<const CallReferenceCallNode*>(
+            call->expr.getInternalNode());
+        const auto* parse_args = ref_call ? ref_call->getParseArgs() : nullptr;
+        const auto* parsed_args = ref_call ? ref_call->getArgs() : nullptr;
+        const auto* args_priv = parsed_args ? qore_list_private::get(parsed_args) : nullptr;
+        auto def = value_definitions.find(inst->operands[1].id);
+        if (ref_call && (!parse_args || (!parse_args->hasNamedArgs()
+                && !parse_args->isVariableList())) && (!args_priv || !args_priv->hasCallArgEvalMap())
+                && def != value_definitions.end() && def->second->opcode == QoreIROpcode::LoadLocal) {
+            const auto* load = static_cast<const QoreIRLocalInstruction*>(def->second);
+            const LocalVar* local = load->local;
+            if (local && !load->is_ref && !load->is_closure
+                    && assigned_non_nothing_locals.count(local)) {
+                const QoreTypeInfo* type = specializeType(local->getTypeInfoForLValue());
+                bound = (type == bigIntTypeInfo && native_int_locals.count(local)
+                        && info->param_kinds[0] == BatchCalleeParamKind::NativeInt)
+                    || (type == floatTypeInfo && native_float_locals.count(local)
+                        && info->param_kinds[0] == BatchCalleeParamKind::NativeFloat);
+            }
+        }
+    }
+    return bound;
+}
+
 static bool qore_llvm_is_aot_deferred_source_function_call(const QoreValue& expr) {
     if (!expr.hasNode()) {
         return false;
@@ -3915,6 +3980,8 @@ void QoreIRToLLVM::collectLocals(const QoreIRFunction& func) {
     value_defined_by_call.clear();
     immediate_closure_creates.clear();
     known_function_call_refs.clear();
+    finite_call_ref_targets.clear();
+    finite_call_ref_loads.clear();
     function_call_ref_definitions.clear();
     known_callback_arguments.clear();
     stored_closure_capture_allocas.clear();
@@ -14009,6 +14076,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     value_defined_by_call.clear();
     immediate_closure_creates.clear();
     known_function_call_refs.clear();
+    finite_call_ref_targets.clear();
+    finite_call_ref_loads.clear();
     stored_closure_capture_allocas.clear();
     entry_promoted_closure_captures.clear();
     guarded_stored_closure_creates.clear();
@@ -14033,6 +14102,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         local_load_instructions;
     std::unordered_map<const LocalVar*, std::vector<const QoreIRLocalInstruction*>>
         local_store_instructions;
+    const bool analyze_finite_call_refs = aot_mode && batch_callees
+        && !q_env_is_set("QORE_DISABLE_AOT_FINITE_CALLREF_TARGETS");
     std::unordered_set<const LocalVar*> parameter_locals;
     parameter_locals.reserve(func.param_local_vars.size());
     size_t parameter_i = 0;
@@ -14651,6 +14722,330 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 }
                 known_function_call_refs.emplace(
                     load->result.id, definition->second);
+            }
+        }
+    }
+    if (analyze_finite_call_refs && !owner_has_parse_reference && !func.has_opaque_ast_local_access) {
+        std::unordered_map<const QoreIRInstruction*, std::pair<const QoreIRBasicBlock*, size_t>>
+            local_access_positions;
+        std::unordered_map<const LocalVar*, size_t> local_write_counts;
+        std::unique_ptr<QoreIRControlFlowGraph> cfg;
+        size_t scanned = 0;
+        for (const auto& [local, stores] : local_store_instructions) {
+            if (++scanned % 100 == 0 && qore_check_cancel(nullptr, "LLVM finite callback target analysis")) {
+                error = "cancelled during LLVM finite callback target analysis";
+                return false;
+            }
+            auto loads = local_load_instructions.find(local);
+            if (!local || stores.size() != 1
+                    || loads == local_load_instructions.end() || loads->second.empty()
+                    || !current_body_locals.count(local) || local->closureUse() || local->isTopLevel()
+                    || QoreTypeInfo::isReference(local->getTypeInfo()) || weak_assigned_locals.count(local)
+                    || func.isAstVisibleLocal(local) || !assigned_non_nothing_locals.count(local)) {
+                continue;
+            }
+            const auto* store = stores.front();
+            if (store->opcode != QoreIROpcode::StoreLocal || store->is_ref || store->is_closure
+                    || store->mode != AssignmentMode::Normal || !store->initial_assignment
+                    || store->operands.size() != 1) {
+                continue;
+            }
+            uint32_t source = store->operands[0].id;
+            auto definition = value_definitions.find(source);
+            if (definition == value_definitions.end() || definition->second->opcode != QoreIROpcode::Phi
+                    || operand_remaining_uses[source] != 1) {
+                continue;
+            }
+            const auto* phi = static_cast<const QoreIRPhiInstruction*>(definition->second);
+            if (phi->value_kind != QoreIRPhiValueKind::QoreValue || phi->incoming.size() != 2
+                    || phi->incoming[0].block == phi->incoming[1].block) {
+                continue;
+            }
+            FiniteCallRefTargets targets;
+            const BatchCalleeInfo* infos[2] = {nullptr, nullptr};
+            for (unsigned i = 0; i < 2; ++i) {
+                uint32_t id = phi->incoming[i].value.id;
+                auto ref = function_call_ref_definitions.find(id);
+                auto create = value_definitions.find(id);
+                if (ref == function_call_ref_definitions.end() || create == value_definitions.end()
+                        || create->second->opcode != QoreIROpcode::CreateCallRef) {
+                    break;
+                }
+                const auto* info = getBatchCallee(ref->second);
+                if (!isFiniteCallRefTarget(ref->second, info)) {
+                    break;
+                }
+                targets.variants[i] = ref->second;
+                infos[i] = info;
+            }
+            if (!infos[0] || !infos[1] || infos[0]->return_kind != infos[1]->return_kind
+                    || infos[0]->param_kinds != infos[1]->param_kinds) {
+                continue;
+            }
+            // Include exceptional edges: a handler must not borrow a selector
+            // from an initializer which might not have executed.
+            if (!cfg) {
+                cfg = std::make_unique<QoreIRControlFlowGraph>(func, true);
+                if (cfg->cancelled) {
+                    error = "cancelled during LLVM finite callback dominance analysis";
+                    return false;
+                }
+                // Build position and mutation metadata only when a complete
+                // target pair exists. Most functions need neither this scan
+                // nor its maps; the scan remains cancellable for large bodies.
+                for (const auto& body_block : func.blocks) {
+                    if (++scanned % 100 == 0 && qore_check_cancel(nullptr,
+                            "LLVM finite callback access analysis")) {
+                        error = "cancelled during LLVM finite callback access analysis";
+                        return false;
+                    }
+                    size_t position = 0;
+                    for (const auto& body_inst : body_block->instructions) {
+                        ++position;
+                        if (++scanned % 100 == 0 && qore_check_cancel(nullptr,
+                                "LLVM finite callback access analysis")) {
+                            error = "cancelled during LLVM finite callback access analysis";
+                            return false;
+                        }
+                        if (!body_inst) {
+                            continue;
+                        }
+                        if (body_inst->opcode == QoreIROpcode::LoadLocal
+                                || body_inst->opcode == QoreIROpcode::StoreLocal
+                                || body_inst->opcode == QoreIROpcode::StoreClosure) {
+                            local_access_positions.emplace(body_inst.get(), std::make_pair(body_block.get(), position));
+                        }
+                        // Lifetime operations are covered by assigned-state
+                        // analysis; count assignments and mutations separately.
+                        if (body_inst->opcode != QoreIROpcode::InstantiateLocal
+                                && body_inst->opcode != QoreIROpcode::UninstantiateLocal) {
+                            if (const auto* written = qore_ir_get_written_local(body_inst.get())) {
+                                ++local_write_counts[written];
+                            }
+                        }
+                    }
+                }
+            }
+            if (local_write_counts[local] != 1) {
+                continue;
+            }
+            const auto& store_pos = local_access_positions.at(store);
+            auto store_block = cfg->block_ids.find(store_pos.first);
+            auto phi_block = cfg->block_ids.find(value_def_block.at(source));
+            if (store_block == cfg->block_ids.end() || phi_block == cfg->block_ids.end()
+                    || !cfg->dominates(phi_block->second, store_block->second)) {
+                continue;
+            }
+            bool eligible = true;
+            for (const auto* load : loads->second) {
+                if (++scanned % 100 == 0 && qore_check_cancel(nullptr, "LLVM finite callback load analysis")) {
+                    error = "cancelled during LLVM finite callback load analysis";
+                    return false;
+                }
+                auto call = closure_calls_by_value.find(load->result.id);
+                const auto& load_pos = local_access_positions.at(load);
+                auto load_block = cfg->block_ids.find(load_pos.first);
+                if (load->is_closure || load->is_ref || operand_remaining_uses[load->result.id] != 1
+                        || call == closure_calls_by_value.end() || call->second->operands.empty()
+                        || call->second->operands[0].id != load->result.id
+                        || load_block == cfg->block_ids.end()
+                        || (store_pos.first == load_pos.first ? store_pos.second >= load_pos.second
+                            : !cfg->dominates(store_block->second, load_block->second))) {
+                    eligible = false;
+                    break;
+                }
+            }
+            if (!eligible) {
+                continue;
+            }
+            finite_call_ref_targets.emplace(source, targets);
+            for (const auto* load : loads->second) {
+                if (++scanned % 100 == 0 && qore_check_cancel(nullptr, "LLVM finite callback load mapping")) {
+                    error = "cancelled during LLVM finite callback load mapping";
+                    return false;
+                }
+                finite_call_ref_loads.emplace(load->result.id, source);
+            }
+        }
+        // A boxed callback body local still has a runtime slot. Syntactic
+        // single assignment alone does not prevent reflective replacement by
+        // an intervening callee. Limit this first finite-target path to scalar
+        // callers with no reentry except the already-proven pure callbacks.
+        // Unknown instructions decline the optimization, including operations
+        // that could release an object with a user destructor.
+        if (!finite_call_ref_targets.empty()) {
+            auto scalar_type = [](const QoreTypeInfo* type) {
+                return type == bigIntTypeInfo || type == floatTypeInfo || type == boolTypeInfo;
+            };
+            auto safe_instruction = [&](const QoreIRInstruction* inst) {
+                switch (inst->opcode) {
+                    case QoreIROpcode::LoadLocal:
+                    case QoreIROpcode::StoreLocal:
+                    case QoreIROpcode::InstantiateLocal:
+                    case QoreIROpcode::UninstantiateLocal: {
+                        const auto* access = static_cast<const QoreIRLocalInstruction*>(inst);
+                        const LocalVar* local = access->local;
+                        if (!local || access->is_ref || access->is_closure || local->closureUse()
+                                || local->isTopLevel() || func.isAstVisibleLocal(local)) {
+                            return false;
+                        }
+                        if (scalar_type(local->getTypeInfo())) {
+                            return true;
+                        }
+                        auto stores = local_store_instructions.find(local);
+                        return stores != local_store_instructions.end() && stores->second.size() == 1
+                            && stores->second.front()->operands.size() == 1
+                            && finite_call_ref_targets.count(stores->second.front()->operands[0].id);
+                    }
+                    case QoreIROpcode::CreateCallRef: {
+                        auto target = function_call_ref_definitions.find(inst->result.id);
+                        return target != function_call_ref_definitions.end()
+                            && isFiniteCallRefTarget(target->second, getBatchCallee(target->second));
+                    }
+                    case QoreIROpcode::CallClosureDirect: {
+                        auto load = finite_call_ref_loads.find(inst->operands[0].id);
+                        if (load == finite_call_ref_loads.end()) {
+                            return false;
+                        }
+                        const auto& pair = finite_call_ref_targets.at(load->second);
+                        const auto* call = static_cast<const QoreIRExprInstruction*>(inst);
+                        return isFiniteCallRefCallBound(call, pair.variants[0], getBatchCallee(pair.variants[0]))
+                            && isFiniteCallRefCallBound(call, pair.variants[1], getBatchCallee(pair.variants[1]));
+                    }
+                    case QoreIROpcode::AddAssignLocalInt: {
+                        const auto* add = static_cast<const QoreIRAddAssignLocalIntInstruction*>(inst);
+                        return native_int_locals.count(add->target) && native_int_locals.count(add->source);
+                    }
+                    case QoreIROpcode::IncrementLocalInt: {
+                        const auto* increment = static_cast<const QoreIRIncrementLocalIntInstruction*>(inst);
+                        return native_int_locals.count(increment->local) != 0;
+                    }
+                    case QoreIROpcode::BranchIfLtLocalInt: {
+                        const auto* branch = static_cast<const QoreIRBranchIfLtLocalIntInstruction*>(inst);
+                        return native_int_locals.count(branch->lhs) && native_int_locals.count(branch->rhs);
+                    }
+                    case QoreIROpcode::CheckReturnValue:
+                        return scalar_type(inst->element_type);
+                    case QoreIROpcode::CheckException:
+                    case QoreIROpcode::ConstInt:
+                    case QoreIROpcode::ConstFloat:
+                    case QoreIROpcode::ConstBool:
+                    case QoreIROpcode::ConstNothing:
+                    case QoreIROpcode::ConstNull:
+                    case QoreIROpcode::AddInt:
+                    case QoreIROpcode::AddFloat:
+                    case QoreIROpcode::SubInt:
+                    case QoreIROpcode::SubFloat:
+                    case QoreIROpcode::MulInt:
+                    case QoreIROpcode::MulFloat:
+                    case QoreIROpcode::DivInt:
+                    case QoreIROpcode::DivFloat:
+                    case QoreIROpcode::ModInt:
+                    case QoreIROpcode::AndInt:
+                    case QoreIROpcode::OrInt:
+                    case QoreIROpcode::XorInt:
+                    case QoreIROpcode::ShlInt:
+                    case QoreIROpcode::ShrInt:
+                    case QoreIROpcode::ShlAssignInt:
+                    case QoreIROpcode::ShrAssignInt:
+                    case QoreIROpcode::AddAssignInt:
+                    case QoreIROpcode::AddAssignFloat:
+                    case QoreIROpcode::SubAssignInt:
+                    case QoreIROpcode::SubAssignFloat:
+                    case QoreIROpcode::MulAssignInt:
+                    case QoreIROpcode::MulAssignFloat:
+                    case QoreIROpcode::DivAssignInt:
+                    case QoreIROpcode::DivAssignFloat:
+                    case QoreIROpcode::ModAssignInt:
+                    case QoreIROpcode::AndAssignInt:
+                    case QoreIROpcode::OrAssignInt:
+                    case QoreIROpcode::XorAssignInt:
+                    case QoreIROpcode::EqInt:
+                    case QoreIROpcode::EqFloat:
+                    case QoreIROpcode::NeInt:
+                    case QoreIROpcode::NeFloat:
+                    case QoreIROpcode::LtInt:
+                    case QoreIROpcode::LtFloat:
+                    case QoreIROpcode::LeInt:
+                    case QoreIROpcode::LeFloat:
+                    case QoreIROpcode::GtInt:
+                    case QoreIROpcode::GtFloat:
+                    case QoreIROpcode::GeInt:
+                    case QoreIROpcode::GeFloat:
+                    case QoreIROpcode::CmpInt:
+                    case QoreIROpcode::CmpFloat:
+                    case QoreIROpcode::ToBool:
+                    case QoreIROpcode::ToInt:
+                    case QoreIROpcode::ToFloat:
+                    case QoreIROpcode::Not:
+                    case QoreIROpcode::IsNullOrNothing:
+                    case QoreIROpcode::UnaryMinusInt:
+                    case QoreIROpcode::UnaryMinusFloat:
+                    case QoreIROpcode::Phi:
+                    case QoreIROpcode::Br:
+                    case QoreIROpcode::BrIf:
+                    case QoreIROpcode::SwitchInt:
+                    case QoreIROpcode::Return:
+                    case QoreIROpcode::ReturnNothing:
+                    case QoreIROpcode::PushTempMark:
+                    case QoreIROpcode::DiscardTemps:
+                    case QoreIROpcode::DiscardTempsKeep:
+                    case QoreIROpcode::RefSelf:
+                    case QoreIROpcode::Decref:
+                    case QoreIROpcode::DecrefNoThrow:
+                    case QoreIROpcode::DebugBlock:
+                        return true;
+                    default:
+                        return false;
+                }
+            };
+            bool no_reentry = true;
+            for (const auto& block : func.blocks) {
+                if (++scanned % 100 == 0 && qore_check_cancel(nullptr, "LLVM finite callback reentry analysis")) {
+                    error = "cancelled during LLVM finite callback reentry analysis";
+                    return false;
+                }
+                for (const auto& inst : block->instructions) {
+                    if (++scanned % 100 == 0 && qore_check_cancel(nullptr, "LLVM finite callback reentry analysis")) {
+                        error = "cancelled during LLVM finite callback reentry analysis";
+                        return false;
+                    }
+                    if (!inst || !safe_instruction(inst.get())) {
+                        no_reentry = false;
+                        break;
+                    }
+                }
+                if (!no_reentry) {
+                    break;
+                }
+            }
+            if (!no_reentry) {
+                finite_call_ref_targets.clear();
+                finite_call_ref_loads.clear();
+            }
+        }
+        // Predeclare selectors independently of block storage order, just as
+        // native scalar PHIs. Their edges are fixed with the original boxed PHI.
+        if (!finite_call_ref_targets.empty()) {
+            for (const auto& block : func.blocks) {
+                if (++scanned % 100 == 0 && qore_check_cancel(nullptr, "LLVM finite callback PHI setup")) {
+                    error = "cancelled during LLVM finite callback PHI setup";
+                    return false;
+                }
+                for (const auto& inst : block->instructions) {
+                    if (++scanned % 100 == 0 && qore_check_cancel(nullptr, "LLVM finite callback PHI setup")) {
+                        error = "cancelled during LLVM finite callback PHI setup";
+                        return false;
+                    }
+                    if (inst->opcode != QoreIROpcode::Phi) {
+                        break;
+                    }
+                    auto choice = finite_call_ref_targets.find(inst->result.id);
+                    if (choice != finite_call_ref_targets.end()) {
+                        llvm::IRBuilder<> phi_builder(block_map.at(block.get()));
+                        choice->second.selector = phi_builder.CreatePHI(i1_type, 2, "finite_callref_target");
+                    }
+                }
             }
         }
     }
@@ -15839,6 +16234,12 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     break;
             }
             phi_node->addIncoming(val, bb);
+            auto choice = finite_call_ref_targets.find(phi_inst->result.id);
+            if (choice != finite_call_ref_targets.end()) {
+                assert(choice->second.selector);
+                choice->second.selector->addIncoming(
+                    llvm::ConstantInt::get(i1_type, &inc == &phi_inst->incoming.front()), bb);
+            }
         }
     }
     pending_phis.clear();
@@ -28628,6 +29029,65 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
         case QoreIROpcode::CallClosureDirect: {
             // operands[0] = closure/callref value, operands[1..n] = args
+            auto finite_load = finite_call_ref_loads.find(inst->operands[0].id);
+            if (aot_mode && finite_load != finite_call_ref_loads.end()) {
+                const auto& targets = finite_call_ref_targets.at(finite_load->second);
+                const BatchCalleeInfo* infos[2] = {
+                    getBatchCallee(targets.variants[0]), getBatchCallee(targets.variants[1])};
+                const auto* call = static_cast<const QoreIRExprInstruction*>(inst);
+                int nargs = static_cast<int>(inst->operands.size()) - 1;
+                bool eligible = targets.selector && nargs <= 1;
+                for (unsigned i = 0; eligible && i < 2; ++i) {
+                    eligible = isFiniteCallRefTarget(targets.variants[i], infos[i]);
+                    if (!eligible) {
+                        break;
+                    }
+                    eligible = isFiniteCallRefCallBound(call, targets.variants[i], infos[i]);
+                }
+                std::vector<llvm::Value*> args;
+                if (eligible && nargs) {
+                    uint32_t id = inst->operands[1].id;
+                    auto value = values.find(id);
+                    llvm::Type* type = infos[0]->param_kinds[0] == BatchCalleeParamKind::NativeInt
+                        ? i64_type : double_type;
+                    eligible = value != values.end() && value->second->getType() == type
+                        && !nanboxed_values.count(id) && !native_boxed_sources.count(id)
+                        && !invoke_alloca_map.count(id);
+                    if (eligible) {
+                        args.push_back(value->second);
+                    }
+                }
+                if (eligible) {
+                    llvm::Value* results[2] = {nullptr, nullptr};
+                    for (unsigned i = 0; i < 2; ++i) {
+                        bool leaf = false;
+                        bool nothrow = false;
+                        isNonThrowingScalarBody(infos[i], leaf);
+                        results[i] = leaf ? emitAOTScalarLeaf(*infos[i], args)
+                            : infos[i]->return_kind == BatchCalleeReturnKind::NativeInt
+                                ? emitAOTIntExpression(*infos[i], args, module, nullptr, &nothrow)
+                                : emitAOTFloatExpression(*infos[i], args, nullptr, &nothrow);
+                        // Disabled summary imports can decline. The admitted
+                        // summaries emit only pure arithmetic, so any partial
+                        // result is dead and the ordinary call remains valid.
+                        if (!results[i] || (!leaf && !nothrow)) {
+                            eligible = false;
+                            break;
+                        }
+                    }
+                    if (eligible) {
+                        values[inst->result.id] = builder->CreateSelect(targets.selector,
+                            results[0], results[1], "finite_callref_result");
+                        native_call_result_kinds.emplace(inst->result.id, infos[0]->return_kind);
+                        known_not_nothing_values.insert(inst->result.id);
+                        if (skip_next_exception_check
+                                || q_env_is_set("QORE_DISABLE_AOT_KNOWN_CALLREF_EXCEPTION_ELISION")) {
+                            emitExceptionCheck(module, llvm_func, inst);
+                        }
+                        return true;
+                    }
+                }
+            }
             auto known_call_ref = known_function_call_refs.find(
                 inst->operands[0].id);
             if (aot_mode && known_call_ref != known_function_call_refs.end()

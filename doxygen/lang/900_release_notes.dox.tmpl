@@ -250,6 +250,10 @@
     type can also use this arithmetic path after normal return validation; runtime overload dispatch and optional
     returns retain their existing behavior.
 
+    AOT compilation can retain two known pure scalar callback targets through a conditional initializer,
+    replacing repeated dynamic calls with selected native arithmetic in scalar callers proven not to
+    reenter arbitrary code. Callback creation, ownership, return checks and loop cancellation are preserved.
+
     AOT can pass eligible typed float callback results directly to native compound addition, avoiding
     intermediate boxing while preserving compatible fallback conversion and owned-result cleanup.
 
