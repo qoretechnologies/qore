@@ -5118,6 +5118,10 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - an @ref Qore::Expression "Expression" created an object of a class with unimplemented abstract methods
+      (ex: <tt>new Expression(pgm, "new C()", "label")</tt>) instead of raising \c ABSTRACT-CLASS-ERROR as any other
+      code does, and a later parse commit of a Program that allows it (@ref Qore::PO_ALLOW_REPARSE) then failed on
+      code that does not instantiate the class
     - a module compiled with \c qcc or \c --compile-module whose hashdecl member default references a constant of the
       same module (ex: <tt>list&lt;string&gt; excludeDirs = DefaultExcludeDirs;</tt> in the \c QLS module) failed to
       load (<tt>cannot resolve const_ref</tt>), so it was loaded from its source if available

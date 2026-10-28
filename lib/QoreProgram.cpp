@@ -1914,6 +1914,10 @@ void qore_program_private::addStatement(AbstractStatement* s) {
         // initialize expression
         QoreParseContext parse_context;
         block->parseInit(parse_context);
+        // an expression is never committed: it runs the checks that a commit runs for the classes it instantiates,
+        // so "new C()" of a class with abstract methods is refused as in any other code, and no check is left for
+        // the Program's next commit
+        qore_root_ns_private::get(*RootNS)->parseCheckDeferredAbstractNew();
 
         assert(exp_set.find(block.get()) == exp_set.end());
         new_expression = block.get();
