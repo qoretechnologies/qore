@@ -621,6 +621,20 @@ public:
     */
     DLLEXPORT virtual void onConnectionClosed(HttpClientConnectionBase* conn);
 
+    //! Returns the number of live connections that send their close notification to this manager
+    /** A connection is counted from the time its manager back-pointer is set to this manager until it is cleared
+        with HttpClientConnectionBase::setManager(nullptr) or the connection is destroyed.  The manager clears the
+        back-pointer of every connection that it releases without keeping it in its pool, so the count is the number
+        of pooled connections plus those that a caller is still creating; after @ref closeAll it is 0.  A connection
+        released with its back-pointer still set can outlive the manager in the async I/O thread, which closes it and
+        calls @ref onConnectionClosed on the destroyed manager.
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL int getAttachedConnectionCount() const {
+        return attached_connections_.load(std::memory_order_acquire);
+    }
+
 protected:
     //! Parsed proxy info; @c nullptr if no proxy configured.
     //! Pushes the per-connection options to a connection
@@ -697,6 +711,22 @@ protected:
         check it without taking @c pool_lock_. */
     std::atomic<unsigned> observed_protocols_{0};
 
+    //! The number of live connections whose manager back-pointer is this manager; see @ref getAttachedConnectionCount
+    /** Changed only by HttpClientConnectionBase::setManager() and the destructor of a connection, under the
+        connection's @c onclose_lock.
+    */
+    std::atomic<int> attached_connections_{0};
+
+    //! Releases a reference to a connection that the manager does not keep in its pool
+    /** Clears the connection's manager back-pointer before the reference is released: the reference may not be
+        the last one, as the async I/O thread holds the connection while it is closing it, and the close
+        notification of a connection that the manager has released can come after the manager has been destroyed.
+
+        @param conn the connection; may be nullptr
+        @param xsink for exceptions raised by the release
+    */
+    DLLLOCAL void detachAndDeref(HttpClientConnectionBase* conn, ExceptionSink* xsink);
+
     //! The time added to @c connect_timeout_ms for a caller waiting for a new connection, in milliseconds
     static constexpr int ConnectWaitGraceMs = 30000;
 
@@ -745,6 +775,8 @@ protected:
         bool ssl_required, ExceptionSink* xsink, bool wait_for_ready = true);
 
 private:
+    friend class HttpClientConnectionBase;
+
     HttpClientConnectionManagerBase(const HttpClientConnectionManagerBase&) = delete;
 
     //! Makes one attempt of @ref request

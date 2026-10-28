@@ -3205,12 +3205,7 @@ int qore_root_ns_private::parseInit() {
     }
     qore_ns_private::parseResolveAbstract();
 
-    if (!deferred_new_check_vec.empty()) {
-        for (auto& i : deferred_new_check_vec) {
-            i.qc->parseDoCheckAbstractNew(i.loc);
-        }
-        deferred_new_check_vec.clear();
-    }
+    parseCheckDeferredAbstractNew();
 
     parseResolveClassMembers();
     return err;

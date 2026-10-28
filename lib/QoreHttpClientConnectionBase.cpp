@@ -51,6 +51,17 @@ HttpClientConnectionBase::HttpClientConnectionBase(std::string target_host, int 
 }
 
 HttpClientConnectionBase::~HttpClientConnectionBase() {
+    // a manager outlives every connection whose back-pointer it has not cleared, so a connection destroyed while
+    // its back-pointer is set leaves the manager's count of the connections that notify it
+    {
+        AutoLocker al(onclose_lock);
+        if (manager_) {
+            int prev = manager_->attached_connections_.fetch_sub(1, std::memory_order_acq_rel);
+            assert(prev > 0);
+            (void)prev;
+            manager_ = nullptr;
+        }
+    }
     if (opener_policy) {
         opener_policy->deref();
     }
@@ -162,7 +173,18 @@ void HttpClientConnectionBase::StreamingSendSetupGuard::keepOpen() {
 
 void HttpClientConnectionBase::setManager(HttpClientConnectionManagerBase* mgr) {
     AutoLocker al(onclose_lock);
+    if (manager_ == mgr) {
+        return;
+    }
+    if (manager_) {
+        int prev = manager_->attached_connections_.fetch_sub(1, std::memory_order_acq_rel);
+        assert(prev > 0);
+        (void)prev;
+    }
     manager_ = mgr;
+    if (mgr) {
+        mgr->attached_connections_.fetch_add(1, std::memory_order_acq_rel);
+    }
 }
 
 void HttpClientConnectionBase::onClosedHook() {

@@ -156,6 +156,9 @@ HttpClientConnectionManagerBase::~HttpClientConnectionManagerBase() {
     ExceptionSink xsink;
     closeAll(&xsink);
     xsink.clear();
+    // a connection whose back-pointer is still set can call onConnectionClosed() on this manager after it has been
+    // destroyed: every connection that the manager releases has its back-pointer cleared first
+    assert(!attached_connections_.load(std::memory_order_acquire));
 }
 
 // ============================================================
@@ -368,6 +371,16 @@ void HttpClientConnectionManagerBase::closeAndDerefAfterLockDrop(
     xs.clear();
 }
 
+void HttpClientConnectionManagerBase::detachAndDeref(HttpClientConnectionBase* conn, ExceptionSink* xsink) {
+    if (!conn) {
+        return;
+    }
+    // setManager(nullptr) waits for a close notification that is already running; one that has not started yet
+    // finds no manager
+    conn->setManager(nullptr);
+    conn->deref(xsink);
+}
+
 HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnection(
         const char* scheme, const char* host, int port, ExceptionSink* xsink) {
     SocketSyncPoll::assertNotOnIoThread("HttpClientConnectionManagerBase", "acquireConnection", xsink);
@@ -490,8 +503,10 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
                     mgr->closeAndDerefAfterLockDrop(c);
                 }
                 ExceptionSink xs;
+                // a connection is marked closed before its close notification is sent, so the notification of a
+                // closed connection evicted here can still be to come
                 for (auto* c : *to_deref) {
-                    c->deref(&xs);
+                    mgr->detachAndDeref(c, &xs);
                     xs.clear();
                 }
             }
@@ -565,8 +580,12 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
         // not exist or to a port with no listener does.  The
         // reservation is refused on the closed connection; it is not
         // added to the pool, and the caller gets the connection's
-        // error.  The connection has no pool key then, so its close
-        // notification does not reach the pool either.
+        // error.  Its back-pointer is cleared before the creator's
+        // reference is released: the I/O thread marks the connection
+        // closed, which wakes a thread waiting for it, before it sends
+        // the close notification, so the notification can still be to
+        // come, and the connection outlives this reference while the I/O
+        // thread holds it.
         HttpClientConnectionBase* conn_raw = conn.release();
         bool reserved;
         bool closed = false;
@@ -575,6 +594,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
             if (shutdown_) {
                 wl.unlock();
                 ExceptionSink shutdown_xs;
+                conn_raw->setManager(nullptr);
                 conn_raw->closeConnection(&shutdown_xs);
                 conn_raw->deref(&shutdown_xs);
                 shutdown_xs.clear();
@@ -600,7 +620,14 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
 
         if (closed) {
             // the reference of the creator, which the pool would have taken
-            ReferenceHolder<HttpClientConnectionBase> closed_holder(conn_raw, xsink);
+            struct DetachingReleaser {
+                HttpClientConnectionManagerBase* mgr;
+                HttpClientConnectionBase* conn;
+                ExceptionSink* xsink;
+                ~DetachingReleaser() {
+                    mgr->detachAndDeref(conn, xsink);
+                }
+            } closed_releaser{this, conn_raw, xsink};
             raise_new_connection_error(conn_raw, xsink);
             return nullptr;
         }
@@ -812,6 +839,10 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
                         xsink, this, ssl_cfg, proxy_info_->ssl),
                     xsink);
                 if (*xsink) {
+                    // the constructor can have submitted the connection to the I/O thread before it failed
+                    if (h1) {
+                        h1->setManager(nullptr);
+                    }
                     return nullptr;
                 }
 
@@ -1019,6 +1050,10 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::finalizeAsyncConnecti
                 "ALPN negotiation with %s:%d could not be handed over to a concrete "
                 "connection", neg->getTargetHost(), neg->getTargetPort());
         }
+        // a concrete connection that failed is released by the holder; the I/O thread can still hold it
+        if (concrete) {
+            concrete->setManager(nullptr);
+        }
         // The transitional connection is defunct either way; evict it so no
         // half-negotiated entry is left behind for the next acquire.
         closeAndEvict(neg, xsink);
@@ -1081,6 +1116,8 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::finalizeAsyncConnecti
             // cannot fail: a freshly-adopted connection has no streams yet
             (void)concrete_raw->tryReserveStream(false);
         }
+        // the caller's connection can outlive this manager, so it must not send its close notification here
+        concrete_raw->setManager(nullptr);
         concrete.release();
     }
     return concrete_raw;
@@ -1323,7 +1360,7 @@ void HttpClientConnectionManagerBase::processClosedConnections(ExceptionSink* xs
         }
     }
     for (auto* conn : to_deref) {
-        conn->deref(xsink);
+        detachAndDeref(conn, xsink);
     }
 }
 

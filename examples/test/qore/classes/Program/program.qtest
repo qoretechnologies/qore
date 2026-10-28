@@ -213,6 +213,7 @@ class ProgramTest inherits QUnit::Test {
         addTestCase("Combine test", \combineTest());
         addTestCase("Int assignments test", \intAssignmentsTest());
         addTestCase("constant exp test", \constantExpressionTest());
+        addTestCase("Expression abstract new test", \expressionAbstractNewTest());
         addTestCase("type error test", \typeErrorTest());
         addTestCase("broken-operators test", \brokenOperatorsTest());
         addTestCase("class test", \classTest());
@@ -606,6 +607,34 @@ class ProgramTest inherits QUnit::Test {
             p.parse("%correct-int-assignments\nany h = {}; int i = h;", "");
             assertThrows("RUNTIME-TYPE-ERROR", \p.run());
         }
+    }
+
+    #! An Expression refuses to instantiate a class with abstract methods, as any other code does
+    /** The check for "new" of a class with abstract methods is deferred until a parse commits, and an Expression never
+        commits: it created the object, and its deferred check was left for the Program's next commit, which then
+        failed on code that instantiates nothing abstract.
+    */
+    expressionAbstractNewTest() {
+        # PO_ALLOW_REPARSE: the Program commits again after the expressions, as a REPL does
+        Program p(PO_NEW_STYLE | PO_ALLOW_REPARSE);
+        p.parsePending("class AbstractBase { abstract string get(); }
+class Incomplete inherits AbstractBase {}
+class Complete inherits AbstractBase { string get() { return \"complete\"; } }", "exp-abstract-new");
+        p.parseCommit();
+        assertThrows("ABSTRACT-CLASS-ERROR", "Incomplete", \p.getExpression(), ("new Incomplete()", "abstract"));
+        assertThrows("ABSTRACT-CLASS-ERROR", "Incomplete", sub () { Expression e(p, "new Incomplete()", "ctor"); });
+        # a concrete class is created
+        Expression exp = p.getExpression("new Complete()", "concrete");
+        assertEq("complete", exp.eval().get());
+        # a later commit in the same Program is unaffected: no check is left from the refused expressions
+        p.parsePending("string sub later() { return (new Complete()).get(); }", "later");
+        p.parseCommit();
+        assertEq("complete", p.callFunction("later"));
+        # a later commit that instantiates the abstract class is still refused
+        assertThrows("ABSTRACT-CLASS-ERROR", "Incomplete", sub () {
+            p.parsePending("sub bad() { new Incomplete(); }", "bad");
+            p.parseCommit();
+        });
     }
 
     constantExpressionTest() {

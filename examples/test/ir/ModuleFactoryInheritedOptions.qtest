@@ -1,0 +1,620 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class ModuleFactoryInheritedOptionsTest
+
+#! A module constructs a class of another module through reflection whatever Program loaded each of them
+/** A user module's Program inherits the parse options of the Program that loads it first, including explicitly-allowed
+    options such as \c PO_ALLOW_INJECTION.  The cross-Program reflection check refused a call from code lacking one of
+    the target Program's explicitly-allowed options, so a factory module (like \c DataProvider) that was loaded before
+    its application enabled injection could not construct the provider class of a module loaded afterwards by another
+    Program with injection: \c REFLECTION-ACCESS-ERROR "has fewer privileges than it".  Source modules always failed
+    this way; AOT modules passed only while they did not inherit their loader's options, and failed once they did as
+    source modules do (Qorus services with a REST-schema API manager failed to start).
+
+    A module reflecting into another module now acts with the privileges of the application Program its module call
+    chain runs for, when that application restricts no domain the target module allows and allows every
+    explicitly-allowed domain it allows.  A Program without injection still cannot construct a class of an unrelated
+    Program that has it, nor call a method of an object of a module that has it.  The application is the nearest
+    one on the call chain: a closure of a restricted Program called back by module code for a privileged Program is
+    judged as the restricted Program, and so is a chain of modules called by a restricted Program.  Module code
+    running for no application (on a thread the module started, or in its init closure) is judged by the strict
+    comparison of its own Program with the target.  Inherited options only narrow what a
+    module may do: a module loaded first by a restricted Program without injection has its restrictions and no
+    injection, even when the application calling it has injection.
+
+    Each case runs the same script with the source modules and with the modules AOT-compiled with
+    <tt>--compile-module</tt>, in every execution mode, and expects the given output.
+*/
+class ModuleFactoryInheritedOptionsTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qlib_dir;
+
+        TmpDir tmp("qore-module-factory-inherited-options-");
+        string src_dir;
+        string qmod_dir;
+
+        const ExpectedFactoryOutput = "create_from: \"Impl\"
+get_create: \"Impl\"
+create_from: \"Impl\"
+get_create: \"Impl\"
+create_from: \"Impl\"
+get_create: \"Impl\"
+";
+
+        const ExpectedRefusedOutput = "sibling: REFLECTION-ACCESS-ERROR
+sibling: REFLECTION-ACCESS-ERROR
+";
+
+        #! the probe module loaded first by a restricted Program without injection, called by one with injection
+        const ExpectedNarrowOutput = "host: INVALID-FUNCTION-ACCESS
+inject: INVALID-FUNCTION-ACCESS
+host: INVALID-FUNCTION-ACCESS
+inject: INVALID-FUNCTION-ACCESS
+";
+
+        #! reflection from module code for a privileged and a restricted application
+        const ExpectedChainOutput = "privileged construct: Probe
+restricted construct: REFLECTION-ACCESS-ERROR
+privileged via A: Probe
+restricted via A: REFLECTION-ACCESS-ERROR
+restricted callback fired by privileged: REFLECTION-ACCESS-ERROR
+privileged callback fired by restricted: Probe
+privileged background: REFLECTION-ACCESS-ERROR
+privileged init: REFLECTION-ACCESS-ERROR
+";
+
+        #! the probe module loaded first by a Program with injection: a direct call from a Program with injection may
+        #! use it, a call reflected into the module from a Program without injection is refused
+        const ExpectedReflectedOutput = "direct: no error
+reflected: REFLECTION-ACCESS-ERROR
+direct: no error
+reflected: REFLECTION-ACCESS-ERROR
+";
+    }
+
+    constructor() : QUnit::Test("ModuleFactoryInheritedOptionsTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qlib_dir = realpath(get_script_dir() + "/../../../qlib");
+        src_dir = tmp.path + "/src";
+        qmod_dir = tmp.path + "/qmod";
+        mkdir(src_dir);
+        mkdir(qmod_dir);
+        writeFile(src_dir + "/InheritedFactoryBase.qm", baseModuleCode());
+        writeFile(src_dir + "/InheritedFactoryImpl.qm", implModuleCode());
+        writeFile(src_dir + "/InheritedProbe.qm", probeModuleCode());
+        writeFile(src_dir + "/ChainReflect.qm", chainReflectModuleCode());
+        writeFile(src_dir + "/ChainTarget.qm", chainTargetModuleCode());
+        writeFile(src_dir + "/ChainA.qm", chainAModuleCode());
+        writeFile(src_dir + "/ChainCallback.qm", chainCallbackModuleCode());
+        writeFile(src_dir + "/ChainInit.qm", chainInitModuleCode());
+
+        addTestCase("a module constructs a class of a module loaded by a Program with more allowed options",
+            \testFactory());
+        addTestCase("a Program without injection still cannot construct a class of an unrelated Program with it",
+            \testRefused());
+
+        addTestCase("a module loaded first by a restricted Program without injection has its restrictions",
+            \testNarrowed());
+        addTestCase("a Program without injection cannot call into a module that inherited injection with reflection",
+            \testReflectedCall());
+        addTestCase("module reflection is judged by the nearest application, or strictly without one",
+            \testChain());
+
+        set_return_value(main());
+    }
+
+    #! a module constructing a class registered with it by another module, from a method and in a background thread
+    private string chainReflectModuleCode() {
+        return "%modern
+%requires reflection
+
+module ChainReflect {
+    version = \"1.0\";
+    desc = \"chain reflection module\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace ChainReflect {
+public class Caller {
+    public {
+        static hash<string, Class> classes;
+    }
+
+    static register(string name, Class c) {
+        classes{name} = c;
+    }
+
+    static string construct() {
+        try {
+            return classes.probe.getConstructorVariantArgs(()).call().className();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    # the construction runs in a thread that the module starts
+    static string bgConstruct() {
+        Queue q();
+        background sub () { q.push(Caller::construct()); }();
+        return q.get();
+    }
+}
+}
+";
+    }
+
+    #! the target module, which registers its class with ChainReflect when it is loaded
+    private string chainTargetModuleCode() {
+        return "%modern
+%requires ChainReflect
+%requires reflection
+
+module ChainTarget {
+    version = \"1.0\";
+    desc = \"chain target module\";
+    author = \"Qore\";
+    license = \"MIT\";
+    init = sub () {
+        ChainReflect::Caller::register(\"probe\", Class::forName(\"ChainTarget::Probe\"));
+    };
+}
+
+public namespace ChainTarget {
+public class Probe {
+    constructor() {
+    }
+}
+}
+";
+    }
+
+    #! a module calling ChainReflect: two modules in a chain
+    private string chainAModuleCode() {
+        return "%modern
+%requires ChainReflect
+
+module ChainA {
+    version = \"1.0\";
+    desc = \"chain module A\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace ChainA {
+public class A {
+    static string viaReflect() {
+        return ChainReflect::Caller::construct();
+    }
+}
+}
+";
+    }
+
+    #! a module that stores a callback and calls it later
+    private string chainCallbackModuleCode() {
+        return "%modern
+
+module ChainCallback {
+    version = \"1.0\";
+    desc = \"chain callback module\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace ChainCallback {
+public class Reg {
+    public {
+        static *code cb;
+    }
+
+    static register(code c) {
+        cb = c;
+    }
+
+    static string fire() {
+        code c = cb;
+        return c();
+    }
+}
+}
+";
+    }
+
+    #! a module whose init closure reflects through ChainReflect
+    private string chainInitModuleCode() {
+        return "%modern
+%requires ChainReflect
+
+module ChainInit {
+    version = \"1.0\";
+    desc = \"chain init module\";
+    author = \"Qore\";
+    license = \"MIT\";
+    init = sub () {
+        ChainInit::Holder::value = ChainReflect::Caller::construct();
+    };
+}
+
+public namespace ChainInit {
+class Holder {
+    public {
+        static string value = \"unset\";
+    }
+}
+
+public string sub initResult() {
+    return Holder::value;
+}
+}
+";
+    }
+
+    #! a module whose class methods (which run in the module's Program) use builtins with functional domains
+    private string probeModuleCode() {
+        return "%modern
+
+module InheritedProbe {
+    version = \"1.0\";
+    desc = \"inherited options probe module\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace InheritedProbe {
+public class Probe {
+    # EXTERNAL_INFO
+    static string host() {
+        try {
+            return call_function(\"gethostname\").empty() ? \"empty\" : \"host\";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    # MODULES and INJECTION: refused with INVALID-FUNCTION-ACCESS unless both are allowed
+    static string inject() {
+        try {
+            call_function(\"reload_module\", \"InheritedProbeNoSuchModule\");
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+        return \"no error\";
+    }
+
+    # the object belongs to the module's Program
+    static Probe make() {
+        return new Probe();
+    }
+
+    string probe() {
+        return inject();
+    }
+}
+}
+";
+    }
+
+    #! a factory registry module that constructs the provider class with reflection, as DataProvider does
+    private string baseModuleCode() {
+        return "%modern
+%requires reflection
+
+module InheritedFactoryBase {
+    version = \"1.0\";
+    desc = \"factory base module\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace InheritedFactoryBase {
+public class AbstractFactory {
+    object create(*hash<auto> opts) {
+        *ConstructorMethodVariant con = findConstructorVariant(AutoHashOrNothingType);
+        return con.call(opts);
+    }
+
+    private:internal *ConstructorMethodVariant findConstructorVariant(...) {
+        Class cls = getClassImpl();
+        return cls.getConstructorVariantArgs(argv);
+    }
+
+    private abstract Class getClassImpl();
+}
+
+our hash<string, AbstractFactory> factories;
+
+public sub registerFactory(string name, AbstractFactory f) {
+    factories{name} = f;
+}
+
+public AbstractFactory sub getFactory(string name) {
+    return factories{name};
+}
+
+public object sub createFromFactory(string name, *hash<auto> opts) {
+    return factories{name}.create(opts);
+}
+}
+";
+    }
+
+    #! a module registering a factory whose provider class it defines
+    private string implModuleCode() {
+        return "%modern
+%requires(reexport) InheritedFactoryBase
+%requires reflection
+
+module InheritedFactoryImpl {
+    version = \"1.0\";
+    desc = \"factory module\";
+    author = \"Qore\";
+    license = \"MIT\";
+    init = sub () {
+        InheritedFactoryBase::registerFactory(\"impl\", new InheritedFactoryImpl::ImplFactory());
+    };
+}
+
+public class Impl {
+    public {
+        *hash<auto> o;
+    }
+
+    constructor(*hash<auto> opts) {
+        o = opts;
+    }
+}
+
+public namespace InheritedFactoryImpl {
+public class ImplFactory inherits InheritedFactoryBase::AbstractFactory {
+    private {
+        static Class cls = Class::forName(\"Impl\");
+    }
+
+    private Class getClassImpl() {
+        return cls;
+    }
+}
+}
+";
+    }
+
+    #! the base module is loaded before the application enables injection; the factory module is loaded by another
+    #! Program that has injection
+    private string factoryScript() {
+        return "%modern
+%requires InheritedFactoryBase
+%allow-injection
+
+Program loader(PO_NEW_STYLE | PO_ALLOW_INJECTION);
+loader.parse(\"sub load() { load_module('InheritedFactoryImpl'); }\", \"loader\");
+loader.callFunction(\"load\");
+
+for (int i = 0; i < 3; ++i) {
+    try {
+        printf(\"create_from: %y\\n\", InheritedFactoryBase::createFromFactory(\"impl\", {\"a\": 1}).className());
+    } catch (hash<ExceptionInfo> ex) {
+        printf(\"create_from: %s: %s\\n\", ex.err, ex.desc);
+    }
+    try {
+        printf(\"get_create: %y\\n\", InheritedFactoryBase::getFactory(\"impl\").create({\"a\": 1}).className());
+    } catch (hash<ExceptionInfo> ex) {
+        printf(\"get_create: %s: %s\\n\", ex.err, ex.desc);
+    }
+}
+";
+    }
+
+    #! a Program without injection reflecting into a sibling Program that allows injection itself
+    private string refusedScript() {
+        return "%modern
+%allow-injection
+%no-child-restrictions
+%requires reflection
+
+Program target(PO_NEW_STYLE | PO_ALLOW_INJECTION);
+target.parse(\"class T { constructor() {} }\", \"target\");
+Program sibling(PO_NEW_STYLE);
+sibling.loadModule(\"reflection\");
+sibling.parse(\"auto sub construct(Class c) { return c.getConstructorVariantArgs(()).call().className(); }\",
+    \"sibling\");
+Class c = Class::forName(target, \"T\");
+for (int i = 0; i < 2; ++i) {
+    try {
+        printf(\"sibling: %y\\n\", sibling.callFunction(\"construct\", c));
+    } catch (hash<ExceptionInfo> ex) {
+        printf(\"sibling: %s\\n\", ex.err);
+    }
+}
+";
+    }
+
+    #! the reflecting modules are loaded by a Program without injection, the target module by one with injection
+    private string chainScript() {
+        return "%modern
+%allow-injection
+%no-child-restrictions
+
+Program nloader(PO_NEW_STYLE);
+nloader.parse(\"sub l() { load_module('ChainReflect'); load_module('ChainA'); load_module('ChainCallback'); }\",
+    \"nloader\");
+nloader.callFunction(\"l\");
+Program iloader(PO_NEW_STYLE | PO_ALLOW_INJECTION);
+iloader.parse(\"sub l() { load_module('ChainTarget'); }\", \"iloader\");
+iloader.callFunction(\"l\");
+
+const Code = \"string sub construct() { return ChainReflect::Caller::construct(); }
+string sub via_a() { return ChainA::A::viaReflect(); }
+sub register() { ChainCallback::Reg::register(string sub () { return ChainReflect::Caller::construct(); }); }
+string sub fire() { return ChainCallback::Reg::fire(); }
+string sub background_construct() { return ChainReflect::Caller::bgConstruct(); }
+string sub init_construct() { load_module('ChainInit'); return call_function('ChainInit::initResult'); }\";
+
+Program priv(PO_NEW_STYLE | PO_ALLOW_INJECTION);
+Program restricted(PO_NEW_STYLE);
+foreach Program p in (priv, restricted) {
+    p.loadModule(\"ChainReflect\");
+    p.loadModule(\"ChainA\");
+    p.loadModule(\"ChainCallback\");
+    p.parse(Code, \"app\");
+}
+printf(\"privileged construct: %s\\n\", priv.callFunction(\"construct\"));
+printf(\"restricted construct: %s\\n\", restricted.callFunction(\"construct\"));
+printf(\"privileged via A: %s\\n\", priv.callFunction(\"via_a\"));
+printf(\"restricted via A: %s\\n\", restricted.callFunction(\"via_a\"));
+restricted.callFunction(\"register\");
+printf(\"restricted callback fired by privileged: %s\\n\", priv.callFunction(\"fire\"));
+priv.callFunction(\"register\");
+printf(\"privileged callback fired by restricted: %s\\n\", restricted.callFunction(\"fire\"));
+printf(\"privileged background: %s\\n\", priv.callFunction(\"background_construct\"));
+printf(\"privileged init: %s\\n\", priv.callFunction(\"init_construct\"));
+";
+    }
+
+    #! the probe module is loaded first by a restricted Program without injection and called by one with injection
+    private string narrowScript() {
+        return "%modern
+%allow-injection
+%no-child-restrictions
+
+Program loader(PO_NEW_STYLE | PO_NO_EXTERNAL_INFO);
+loader.parse(\"sub load() { load_module('InheritedProbe'); }\", \"loader\");
+loader.callFunction(\"load\");
+
+Program caller(PO_NEW_STYLE | PO_ALLOW_INJECTION);
+caller.loadModule(\"InheritedProbe\");
+caller.parse(\"string sub host() { return InheritedProbe::Probe::host(); }
+string sub inject() { return InheritedProbe::Probe::inject(); }\", \"caller\");
+for (int i = 0; i < 2; ++i) {
+    printf(\"host: %s\\n\", caller.callFunction(\"host\"));
+    printf(\"inject: %s\\n\", caller.callFunction(\"inject\"));
+}
+";
+    }
+
+    #! the probe module is loaded first by a Program with injection; a sibling Program without injection calls a
+    #! method of an object of the module with reflection
+    private string reflectedScript() {
+        return "%modern
+%allow-injection
+%no-child-restrictions
+%requires reflection
+
+Program loader(PO_NEW_STYLE | PO_ALLOW_INJECTION);
+loader.parse(\"sub load() { load_module('InheritedProbe'); }\", \"loader\");
+loader.callFunction(\"load\");
+
+Program caller(PO_NEW_STYLE | PO_ALLOW_INJECTION);
+caller.loadModule(\"InheritedProbe\");
+caller.parse(\"string sub direct() { return InheritedProbe::Probe::make().probe(); }
+object sub make() { return InheritedProbe::Probe::make(); }\", \"caller\");
+
+Program sibling(PO_NEW_STYLE);
+sibling.loadModule(\"reflection\");
+sibling.parse(\"auto sub reflect(object o) { return Class::getClass(o).getNormalMethod('probe').call(o); }\",
+    \"sibling\");
+
+for (int i = 0; i < 2; ++i) {
+    printf(\"direct: %s\\n\", caller.callFunction(\"direct\"));
+    try {
+        printf(\"reflected: %s\\n\", sibling.callFunction(\"reflect\", caller.callFunction(\"make\")));
+    } catch (hash<ExceptionInfo> ex) {
+        printf(\"reflected: %s\\n\", ex.err);
+    }
+}
+";
+    }
+
+    private string writeFile(string path, string contents) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(contents);
+        f.close();
+        return path;
+    }
+
+    #! returns the module path for the modules in \a dir
+    private string modulePath(string dir) {
+        *string env_dir = ENV.QORE_MODULE_DIR;
+        return env_dir ? dir + ":" + qlib_dir + ":" + env_dir : dir + ":" + qlib_dir;
+    }
+
+    private compileModule(string name) {
+        string qmod_path = qmod_dir + "/" + name + ".qmod";
+        string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s "
+            "QORE_MODULE_DIR=%s %s -b --compile-module --output %s %s 2>&1", libqore_dir, libqore_dir, libqore_dir,
+            modulePath(qmod_dir + ":" + src_dir), qore_bin, qmod_path, src_dir + "/" + name + ".qm"));
+        assertTrue(is_file(qmod_path), sprintf("compiled %s: %s", name, compile_out));
+    }
+
+    private hash<ExecModeHarness::ModeRunResult> runScript(string module_dir, string script_path, string mode) {
+        return ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s "
+            "QORE_MODULE_DIR=%s %s -b --enable-debug --exec-mode=%s %s", libqore_dir, libqore_dir, libqore_dir,
+            modulePath(module_dir), qore_bin, mode, script_path));
+    }
+
+    #! runs the script with the source and the AOT modules in every mode and checks the output
+    private checkAllModes(string script_name, string script, string expected) {
+        string script_path = writeFile(tmp.path + "/" + script_name, script);
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = runScript(src_dir, script_path, mode);
+            assertEq(expected, r.out, sprintf("%s: source modules, %s", script_name, mode));
+            r = runScript(qmod_dir, script_path, mode);
+            assertEq(expected, r.out, sprintf("%s: AOT modules, %s", script_name, mode));
+            assertEq((), r.loader_warnings, sprintf("%s: AOT modules, %s: loader warnings", script_name, mode));
+        }
+    }
+
+    private compileModules() {
+        if (is_file(qmod_dir + "/InheritedFactoryImpl.qmod")) {
+            return;
+        }
+        compileModule("InheritedFactoryBase");
+        compileModule("InheritedFactoryImpl");
+        compileModule("InheritedProbe");
+        compileModule("ChainReflect");
+        compileModule("ChainTarget");
+        compileModule("ChainA");
+        compileModule("ChainCallback");
+        compileModule("ChainInit");
+    }
+
+    testFactory() {
+        compileModules();
+        checkAllModes("factory.q", factoryScript(), ExpectedFactoryOutput);
+    }
+
+    testRefused() {
+        compileModules();
+        checkAllModes("refused.q", refusedScript(), ExpectedRefusedOutput);
+    }
+
+    testNarrowed() {
+        compileModules();
+        checkAllModes("narrow.q", narrowScript(), ExpectedNarrowOutput);
+    }
+
+    testReflectedCall() {
+        compileModules();
+        checkAllModes("reflected.q", reflectedScript(), ExpectedReflectedOutput);
+    }
+
+    testChain() {
+        compileModules();
+        checkAllModes("chain.q", chainScript(), ExpectedChainOutput);
+    }
+}

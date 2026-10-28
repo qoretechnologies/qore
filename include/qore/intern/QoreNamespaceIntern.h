@@ -2502,6 +2502,17 @@ public:
         deferred_new_check_vec.push_back(deferred_new_check_t(qc, loc));
     }
 
+    //! Runs the deferred checks for the instantiation of classes with abstract methods and clears them
+    /** A check is deferred until every class is resolved; a parse that is not committed (an Expression) runs them
+        itself after initializing its code, so that nothing is left for the Program's next commit
+    */
+    DLLLOCAL void parseCheckDeferredAbstractNew() {
+        for (auto& i : deferred_new_check_vec) {
+            i.qc->parseDoCheckAbstractNew(i.loc);
+        }
+        deferred_new_check_vec.clear();
+    }
+
     DLLLOCAL void runtimeImportGlobalVariable(ExceptionSink* xsink, qore_ns_private& tns, Var* v, bool readonly,
             const char* import_as) {
         Var* var = tns.var_list.import(v, xsink, readonly, import_as);

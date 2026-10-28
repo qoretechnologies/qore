@@ -245,7 +245,13 @@ public:
         @note Callers MUST clear the back-pointer (via
         @c setManager(nullptr)) before destroying the manager — otherwise
         the I/O thread could fire @ref AbstractHttpPollConnectionPriv::onClosedHook
-        on a manager that is mid-destruction (UAF).
+        on a manager that is mid-destruction (UAF).  This applies to every
+        reference the manager releases without keeping the connection in its
+        pool, also to a connection that is already closed: the connection is
+        marked closed, and its waiters are woken, before the I/O thread calls
+        the hook, so the hook of a connection found closed can still be to
+        come.  HttpClientConnectionManagerBase::getAttachedConnectionCount()
+        counts the connections whose back-pointer is set to a manager.
 
         @since %Qore 3.0
     */

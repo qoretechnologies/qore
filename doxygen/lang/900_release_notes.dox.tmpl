@@ -163,6 +163,9 @@
     permission preserves factory creation without exposing other symbols or unrelated Programs. A sandboxed
     application can use such factories: a user module %Program has no sandbox manager of its own, so the provider's
     code runs under the application's @ref Qore::SandboxManager "SandboxManager".
+    Such a factory also works when the module defining the class was loaded by a %Program that enables injection or
+    debugging and the factory's own module was not, as long as the application the factory runs for has those
+    domains: a module acts with the privileges of its application.
     See @ref reflection_caller_privilege and <a href="https://github.com/qoretechnologies/qore/issues/5483">issue 5483</a>.
 
     @ref Qore::SQL::Datasource "Datasource" and @ref Qore::SQL::DatasourcePool "DatasourcePool" serialization
@@ -5260,6 +5263,10 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - an @ref Qore::Expression "Expression" created an object of a class with unimplemented abstract methods
+      (ex: <tt>new Expression(pgm, "new C()", "label")</tt>) instead of raising \c ABSTRACT-CLASS-ERROR as any other
+      code does, and a later parse commit of a Program that allows it (@ref Qore::PO_ALLOW_REPARSE) then failed on
+      code that does not instantiate the class
     - a module compiled with \c qcc or \c --compile-module whose hashdecl member default references a constant of the
       same module (ex: <tt>list&lt;string&gt; excludeDirs = DefaultExcludeDirs;</tt> in the \c QLS module) failed to
       load (<tt>cannot resolve const_ref</tt>), so it was loaded from its source if available
