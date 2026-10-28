@@ -1466,3 +1466,10 @@ compilation. Recompile to compare the ordinary runtime callback path. Admission
 requires two complete nonthrowing scalar targets, exact argument binding and a
 scalar caller proven not to reenter arbitrary code. This is an AOT optimization;
 IR and JIT behavior, runtime bindings, ownership and cancellation are unchanged.
+
+`QORE_DISABLE_AOT_FINITE_CALLREF_RELOAD_ELISION=1` restores callback-local cache
+refresh checks at compilation while retaining finite target selection. The
+default uses the same no-reentry, assignment, lifetime and dominance proof to
+omit a refresh whose value cannot change. Original binding, cached loads,
+ownership and cancellation remain. Recompile for this diagnostic control;
+see RESULTS for optimized before/after, disabled-control and Java measurements.

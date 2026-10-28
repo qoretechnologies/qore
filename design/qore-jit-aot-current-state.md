@@ -5642,4 +5642,12 @@ Admission proves one normal initial assignment, definite assignment, no aliases/
 
 LLVM emission rechecks the actual native argument representation and rejects boxed provenance or pending owned argument cleanup. Disabled scalar-summary imports keep ordinary callback dispatch. The compilation presence flag QORE_DISABLE_AOT_FINITE_CALLREF_TARGETS disables finite target selection; no runtime helper, ABI or IR/JIT path is added.
 
-Next investigate the remaining callback-local reload and repeated source-location stores using the stronger no-reentry proof, then dynamic closure/method and imported callback costs. These results do not establish general Java parity or a global performance ceiling.
+The callback-local reload follow-up below uses this stronger no-reentry proof. Repeated source-location stores, short invocation setup, and dynamic closure/method and imported callback costs remain separate investigations. These results do not establish general Java parity or a global performance ceiling.
+
+## Finite callback local cache refresh omission (2026-10-28)
+
+An admitted `finite_call_ref_loads` entry now skips `ensureLocalCacheFresh`. The existing proof establishes a strongly owned, definitely assigned private callback local, one assignment, initializer/store/load dominance including exceptional edges, no aliases/captures/weak or opaque visibility, and no arbitrary reentry anywhere in the scalar caller. This is stronger than syntactic immutability: a boxed local still has a runtime slot, but no admitted operation can reflectively replace its value. AOT debug-step hooks remain no-ops; this proof is not extended to JIT debugging.
+
+Original reference creation and binding, boxed PHI, runtime store, ordinary cached load and ownership/cleanup remain. Disabling scalar-summary import can retain ordinary dispatch through the same pure targets, so its fallback remains valid without refresh. Other locals retain their existing refresh path. Source locations, cancellation points, RuntimeConfig, TLS and runtime ABI are unchanged. `QORE_DISABLE_AOT_FINITE_CALLREF_RELOAD_ELISION=1` is a compilation presence flag that restores the old refresh lowering while retaining finite target selection.
+
+Optimized confirmation against merged `3080c23bc1` reduces the four 4096-iteration target kernels by 6.6–37.0%. Fresh natural-inlining Java comparisons and broader controls are in `bench/runtime-comparison/RESULTS.md`. Next measure batches of short invocations against inline controls, then use the resulting setup/entry evidence to choose the next optimization. No general Java parity or maximum-performance claim.

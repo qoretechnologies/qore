@@ -42,6 +42,7 @@ class FiniteCallbackTargetsTest inherits QUnit::Test {
         }
         TmpDir tmp("qore-finite-callback-targets-");
         foreach string prefix in (("", "QORE_DISABLE_AOT_FINITE_CALLREF_TARGETS=1 ",
+                "QORE_DISABLE_AOT_FINITE_CALLREF_RELOAD_ELISION=1 ",
                 "QORE_AOT_EH=1 ", "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ",
                 "QORE_DISABLE_AOT_INT_EXPRESSION_IMPORT=1 ",
                 "QORE_DISABLE_AOT_FLOAT_EXPRESSION_IMPORT=1 ",

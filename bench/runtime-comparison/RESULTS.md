@@ -27740,3 +27740,66 @@ All 2310 timing jobs/6930 measured windows are preserved and independently repla
 The next isolated candidate removes redundant callback-local reload checks using the same no-reentry proof. Source-location stores and cancellation cadence remain separate investigations. No general Java parity or global maximum claim.
 
 [Timing and validation evidence](results-finite-callback-targets-macos-arm64.json); [62-check audit](audit-finite-callback-targets.md).
+
+## Finite callback local cache refresh omission (2026-10-28)
+
+The existing finite-target no-reentry proof also proves the callback local cannot be reflectively replaced. Its loads now omit cache refresh while retaining reference creation/binding, the boxed PHI, runtime store, ordinary cached value, ownership/cleanup and every source-loop cancellation point. Other local loads keep their checks. This is AOT only; no new runtime helper, ABI, RuntimeConfig or TLS convention. The compilation presence flag QORE_DISABLE_AOT_FINITE_CALLREF_RELOAD_ELISION restores refresh without disabling finite target selection.
+
+The baseline is merged and installed 3080c23bc1, including develop 2a9976f79e and finite-target optimization e79cbcb8ad. Both frozen runtimes use Release -O3 -DNDEBUG, allocation tracking off, matching compiler/configuration and qcc -O3 --strip-source. Default, reverse and shuffle-487 link layouts use randomized paired order, three screening forks and five independent confirmation forks. Focused Qore runs use three warmups and three measured 150 ms windows; broader controls use one warmup and three measured 150 ms windows. Fresh Java uses unchanged OpaqueCallbackBench with normal HotSpot C2 inlining, Temurin 25/JMH 1.37, three forks and five warmup/three measured 300 ms windows. No DONT_INLINE control. Values are median layout medians of per-process window means.
+
+|!Kernel:count|!Before ns/item|!Candidate|!Disabled same runtime|!Cost change
+|int_zero:1|458.793475|433.351133|458.423217|-5.545%
+|int_unary:1|463.393011|440.589877|464.128228|-4.921%
+|float_zero:1|467.110635|446.577222|463.307715|-4.396%
+|float_unary:1|470.461951|446.929519|472.518070|-5.002%
+|int_zero:17|27.588264|26.033589|27.733304|-5.635%
+|int_unary:17|28.164476|26.372711|28.380351|-6.362%
+|float_zero:17|28.433795|26.765728|28.411024|-5.866%
+|float_unary:17|28.676452|26.979901|28.488483|-5.916%
+|int_zero:4096|1.222535|0.769712|1.214077|-37.040%
+|int_unary:4096|1.240946|1.159282|1.242760|-6.581%
+|float_zero:4096|1.352836|1.100881|1.352421|-18.624%
+|float_unary:4096|1.218336|0.848430|1.223300|-30.362%
+
+All long-kernel improvements repeat in all three layouts. Counts 1 and 17 retain per-invocation string dispatch and clock reads; their approximately 4–6% improvement does not isolate callback setup or call latency. Long-loop figures also include arithmetic, loop and cancellation costs.
+
+|!Kernel at 4096 iterations|!Qore AOT ns/item|!Java ns/item|!Qore / Java time
+|int_zero|0.769712|0.000267076|not a call-latency comparison
+|int_unary|1.159282|1.008022456|1.150x
+|float_zero|1.100881|0.500286692|2.201x
+|float_unary|0.848430|0.538499179|1.576x
+
+Java int_zero strength-reduces constant accumulation to count-scaled arithmetic with safepoint bookkeeping; its near-zero normalized value is not a physical callback latency. The same source/JDK classes and earlier diagnostic evidence are preserved in the preceding finite-target report. The new timing campaign supplies fresh measurements and 60 reference checks, not a new C2 disassembly campaign.
+
+Broader controls use unchanged public module sources and all 4770 native / 795 source reference results. Nineteen representative workloads are screened; independent confirmation includes every absolute aggregate shift of at least 2%, all mixed workloads and the previously regressing effectful method.
+
+|!Control:count|!Screen before|!Screen candidate|!Screen change|!Confirm before|!Confirm candidate|!Confirm change
+|float:direct_local_float_return:4096|0.829731|0.849673|+2.403%|0.818489|0.822282|+0.463%
+|float:callback_local_float_return:4096|0.893195|0.888102|-0.570%|n/a|n/a|n/a
+|float:direct_local_float_result:4096|0.758672|0.757933|-0.097%|n/a|n/a|n/a
+|float:callback_local_float_result:4096|0.830749|0.847164|+1.976%|n/a|n/a|n/a
+|micro:direct_call:4096|1.660314|1.658625|-0.102%|n/a|n/a|n/a
+|micro:method_call:4096|1.744966|1.738521|-0.369%|n/a|n/a|n/a
+|micro:indirect_call:4096|62.667493|63.189072|+0.832%|n/a|n/a|n/a
+|micro:polymorphic_call:4096|24.223270|24.061483|-0.668%|n/a|n/a|n/a
+|micro:polymorphic_expression_call:4096|11.218324|11.190948|-0.244%|n/a|n/a|n/a
+|micro:boxed_int_method_effect:4096|95.526493|97.002707|+1.545%|95.972346|95.544108|-0.446%
+|micro:dynamic_float_result_call:4096|11.727671|11.777262|+0.423%|n/a|n/a|n/a
+|micro:indirect_affine:4096|62.145601|63.282146|+1.829%|n/a|n/a|n/a
+|micro:list_mutate:4096|138.904870|138.248179|-0.473%|n/a|n/a|n/a
+|micro:closure_call:4096|14.032374|14.136129|+0.739%|n/a|n/a|n/a
+|micro:closure_capture:4096|19.965081|19.778872|-0.933%|n/a|n/a|n/a
+|mixed:csv_report:4096|985.041669|980.309054|-0.480%|982.958826|975.943143|-0.714%
+|mixed:object_orders:4096|1892.228190|1894.873047|+0.140%|1894.449870|1880.509440|-0.736%
+|mixed:callback_pipeline:4096|128.081123|128.573287|+0.384%|127.807422|128.071640|+0.207%
+|mixed:text_index:4096|1538.622369|1541.368679|+0.178%|1532.258843|1536.755642|+0.293%
+
+Retain the confirmed target gains. The direct floating-return control changes from +2.40% in screening to +0.46% in confirmation; the effectful boxed method changes from +1.55% to -0.45%. Mixed confirmation ranges from -0.74% to +0.29%. No layout has greater than 3% extra cost with separated observed fork ranges. All 819 non-initialization control function bodies match after removing debug attachments; 18 initializer differences are only serialized metadata length. This does not establish runtime-layout performance equality. The preceding finite-target commit's +2.715% effectful-method cost remains recorded; the current incremental result does not establish that its cause is resolved. No application-weighted overall speedup is claimed.
+
+All 1182 timing jobs / 3546 measured windows replay independently. Release and Debug each pass 38 cases / 5036 assertions and one standalone call test; Debug also passes 18 cases / 70 fallback assertions and 2917 native assertions. The expanded finite-target fixture has 310 assertions, including the compilation control, O0/O3, EH/split, disabled-summary paths and generic/context runtime controls. Six pilot images pass 360 references; nine focused images pass LLVM verification and 540 references. All 391 Release qmod aliases are restored. This is targeted macOS ARM64 qualification, not whole-project/Linux/sanitizer coverage.
+
+No owned build/test/profile/heavy archive work overlaps timing. The desktop host is shared without CPU affinity, exclusivity or thermal control. Samples are retained, not filtered. There is no fresh develop comparison for this incremental change; the earlier optimized cumulative checkpoint remains separate. The merged baseline was installed with sudo make install && copy-qore-modules and verified before this experiment; experimental binaries were not installed during timing.
+
+Next measure batches of short scalar invocations and matching inline controls to amortize the timer/string-dispatch overhead, then prioritize reference creation/binding and entry costs using those results. Source-location publication and cancellation cadence remain separate investigations. General Java parity and a performance maximum have not been established.
+
+[Timing and validation evidence](results-finite-callback-reload-macos-arm64.json); [all 62 audit checks](audit-finite-callback-reload.md).

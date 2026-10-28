@@ -18025,7 +18025,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 local_allocas[key] = LocalCacheSlot(alloca);
                 it = local_allocas.find(key);
             }
-            ensureLocalCacheFresh(key, module, llvm_func);
+            // Finite callback callers cannot reenter arbitrary code, so this
+            // strongly owned, single-assignment local cannot be replaced by
+            // reflection. Keep the ordinary cache load and local ownership.
+            if (!finite_call_ref_loads.count(inst->result.id)
+                    || q_env_is_set("QORE_DISABLE_AOT_FINITE_CALLREF_RELOAD_ELISION")) {
+                ensureLocalCacheFresh(key, module, llvm_func);
+            }
             if (is_native_float) {
                 // raw local cache: a native double is never a weak reference
                 values[inst->result.id] = builder->CreateLoad(double_type, it->second.storage());
