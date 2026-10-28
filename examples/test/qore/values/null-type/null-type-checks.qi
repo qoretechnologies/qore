@@ -106,12 +106,15 @@ string sub opacity_after_null_check(auto value) {
 }
 
 #! a function with two variants, neither of which takes NULL
-string sub overloaded(int i) {
+/** public: a module function runs in the Program that calls it, where call_function() resolves the name, so the
+    module exports it
+*/
+public string sub overloaded(int i) {
     return "int";
 }
 
 #! a function with two variants, neither of which takes NULL
-string sub overloaded(string s) {
+public string sub overloaded(string s) {
     return "string";
 }
 
