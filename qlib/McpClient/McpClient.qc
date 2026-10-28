@@ -430,8 +430,9 @@ public class McpClient {
         #! Lock for thread safety
         Mutex lck();
 
-        #! Default headers to include in all requests (e.g., auth tokens)
-        hash<string, string> default_headers = {};
+        #! Default headers to include in all requests (e.g., auth tokens); a value is converted to a string, and a
+        #! list to a list of strings, which are sent as repeated headers
+        hash<string, union<softstring, list<softstring>>> default_headers = {};
 
         #! Logger interface
         *LoggerInterface logger;
@@ -591,7 +592,7 @@ public class McpClient {
             http_protocol = opts.http_protocol;
         }
         if (opts.headers.typeCode() == NT_HASH) {
-            default_headers += cast<hash<string, string>>(opts.headers);
+            default_headers += opts.headers;
         }
         if (exists opts.prefer_modern) {
             prefer_modern = opts.prefer_modern;

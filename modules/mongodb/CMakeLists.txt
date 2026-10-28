@@ -114,7 +114,7 @@ set(QORE_DOX_MONGODB_TMPL_SRC
 )
 
 # Process QPP files
-qore_wrap_qpp_value(MONGODB_QPP_SOURCES DOXLIST _dox_src ${MONGODB_QPP_SRC})
+qore_wrap_qpp_value(MONGODB_QPP_SOURCES DOXLIST _dox_src METALIST MONGODB_QPP_META_SRC ${MONGODB_QPP_SRC})
 add_custom_target(MONGODB_QPP_GENERATED_FILES DEPENDS qpp ${MONGODB_QPP_SOURCES})
 
 # Create the module library
@@ -130,6 +130,7 @@ set(QORE_DOXYGEN_IMAGES
     "${CMAKE_SOURCE_DIR}/qlib/MongoDbDataProvider/mongodb-logo.svg"
 )
 qore_binary_module_qore(${mongodb_module_name} "${VERSION}" "/${VERSION}")
+qore_install_qpp_metadata(${mongodb_module_name} ${MONGODB_QPP_META_SRC})
 
 # Exercise the real conversion code without requiring a MongoDB server.  The
 # generated ObjectId unit supplies its normal class symbols to the converter.

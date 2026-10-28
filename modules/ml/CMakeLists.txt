@@ -235,7 +235,7 @@ set(QORE_DOX_ML_TMPL_SRC
 )
 
 # Process QPP files
-qore_wrap_qpp_value(ML_QPP_SOURCES DOXLIST _dox_src ${ML_QPP_SRC})
+qore_wrap_qpp_value(ML_QPP_SOURCES DOXLIST _dox_src METALIST ML_QPP_META_SRC ${ML_QPP_SRC})
 add_custom_target(ML_QPP_GENERATED_FILES DEPENDS qpp ${ML_QPP_SOURCES})
 
 # Create the module library
@@ -278,6 +278,7 @@ set(QORE_DOXYGEN_IMAGES
     "${CMAKE_SOURCE_DIR}/qlib/DataProviderML/ml-logo.svg"
 )
 qore_binary_module_qore(${ml_module_name} "${VERSION}" "/${VERSION}")
+qore_install_qpp_metadata(${ml_module_name} ${ML_QPP_META_SRC})
 
 if (DOXYGEN_FOUND)
     qore_wrap_dox(QORE_DOX_ML_SRC ${QORE_DOX_ML_TMPL_SRC})

@@ -781,6 +781,8 @@ public:
             const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) const;
 
     // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified at run time
+    // resolved_variant, if given, is set to the variant called if it can be reused for another call with arguments of
+    // the same types, otherwise to nullptr (a variant selected by checking the elements of an argument)
     DLLLOCAL QoreValue evalMethodTmpArgs(ExceptionSink* xsink, RuntimeConfig& rc,
             const AbstractQoreFunctionVariant* variant, QoreObject* self, QoreListNode* args,
             const qore_class_private* cctx = nullptr,
@@ -814,6 +816,8 @@ public:
             const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) const;
 
     // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified at run time
+    // resolved_variant, if given, is set to the variant called if it can be reused for another call with arguments of
+    // the same types, otherwise to nullptr (a variant selected by checking the elements of an argument)
     DLLLOCAL QoreValue evalMethodTmpArgs(ExceptionSink* xsink, RuntimeConfig& rc,
             const AbstractQoreFunctionVariant* variant, QoreListNode* args,
             const qore_class_private* cctx = nullptr, const QoreTypeInfo* receiver_type_info = nullptr,

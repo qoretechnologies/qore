@@ -80,7 +80,7 @@ set(QORE_DOX_JSON_TMPL_SRC
 )
 
 # Process QPP files
-qore_wrap_qpp_value(JSON_QPP_SOURCES DOXLIST _dox_src ${JSON_QPP_SRC})
+qore_wrap_qpp_value(JSON_QPP_SOURCES DOXLIST _dox_src METALIST JSON_QPP_META_SRC ${JSON_QPP_SRC})
 add_custom_target(JSON_QPP_GENERATED_FILES DEPENDS qpp ${JSON_QPP_SOURCES})
 
 # Create the module library
@@ -104,6 +104,7 @@ set(QORE_DOXYGEN_IMAGES
     "${CMAKE_SOURCE_DIR}/qlib/JsonFileDataProvider/json-file-logo.svg"
 )
 qore_binary_module_qore(${json_module_name} "${VERSION}" "/${VERSION}")
+qore_install_qpp_metadata(${json_module_name} ${JSON_QPP_META_SRC})
 
 if (DOXYGEN_FOUND)
     qore_wrap_dox(QORE_DOX_JSON_SRC ${QORE_DOX_JSON_TMPL_SRC})

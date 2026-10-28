@@ -872,6 +872,36 @@ entries. Static methods use that same public spelling, without the native symbol
 unused method, rejects a stale consumer after a body-only provider change, then
 recompiles, links, and executes the updated calls.
 
+**A body contract is published only after discovery has finished deciding.** Recording
+method identities exposed an ordering defect that every Qorus build then hit: the QJOB
+aggregate failed with two `body_contract=<hash> actual=` mismatches, for
+`OMQ::AiTelemetryWriter::isCaptureEnabled()` and `Fsm::FsmStrategy::waitForPipelines()`.
+(The 123 unresolved imports listed with them were allowed, and qcc no longer prints
+allowed unresolved imports when another issue fails the link.)
+`resolveAOTBatchBodyDependencyProvenance()` hashes an entry's contract the first time it
+sees the entry, and the callers that bake it copy that hash into their
+`body_contract_dependencies`. Later passes only add to those rows. Discovery is still
+deciding at that point: a speculative fast entry of an overridable class (static methods
+included) loses `approach_b_eligible` unless it is context independent, a generic
+specialization that needs its runtime context loses it too, and context independence is
+itself resolved after the hash. A method that reads a global of unknown type keeps no
+contract at all once it is demoted, so its object published no hash while its callers'
+consumers imported the old one. Before method identities were recorded, those rows had
+no path and were never written, which hid the defect.
+
+`finalizeAOTBatchBodyContracts()` runs once a top-level discovery has made every
+decision. It recomputes each local contract from the entry's final state and clears the
+contract of an entry left without one. It then rewrites every row that recorded a
+superseded local hash, either to the new hash or out of the list. It leaves alone the
+contracts and rows that a preloaded sibling artifact supplied
+(`BatchCalleeInfo::preloaded_body_contract`), as well as rows naming a hash this
+compilation never computed, so a stale sibling is still detected at link time. The
+regressions batch-compile a provider whose static method is demoted. One checks that
+every imported row matches a published contract, links a partial aggregate with allowed
+unresolved imports, links and runs the executable, and checks that a stale consumer
+reports only its mismatch. The other builds the same partial aggregate through the CMake
+helpers.
+
 **The cascade of declarations is gone; what remained was body-contract granularity**
 ([#5459](https://github.com/qoretechnologies/qore/issues/5459)). With declarations
 mode-independent, a comment-only edit to `Classes/QorusRestApiHandler.qc` from a group-parse

@@ -3168,7 +3168,7 @@ bool QoreTypeSpec::acceptInputComplexHash(ExceptionSink* xsink, const QoreTypeIn
         hash_assignment_priv ha(*qore_hash_private::get(*h), *qhi_priv::get(i)->i);
         QoreValue hn(ha.swap(QoreValue()));
 
-        if (QoreTypeInfo::runtimeAcceptsValue(u.ti, hn) == QTI_NOT_EQUAL
+        if (QoreTypeInfo::runtimeAcceptsValueOrFold(u.ti, hn) == QTI_NOT_EQUAL
                 && !QoreTypeInfo::retypeValue(hn, u.ti, xsink)) {
             ha.swap(hn);
             err = true;
@@ -3229,7 +3229,7 @@ bool QoreTypeSpec::acceptInputComplexList(ExceptionSink* xsink, const QoreTypeIn
     // now we have to fold the value types into our type
     for (size_t i = 0; i < l->size(); ++i) {
         QoreValue ln(lp->takeExists(i));
-        if (QoreTypeInfo::runtimeAcceptsValue(u.ti, ln) == QTI_NOT_EQUAL
+        if (QoreTypeInfo::runtimeAcceptsValueOrFold(u.ti, ln) == QTI_NOT_EQUAL
                 && !QoreTypeInfo::retypeValue(ln, u.ti, xsink)) {
             lp->swap(i, ln);
             err = true;
@@ -3466,7 +3466,7 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
                 }
             } else if (typespec == QTS_COMPLEXSOFTLIST) {
                 // see if value matches
-                if (QoreTypeInfo::runtimeAcceptsValue(u.ti, n) > 0) {
+                if (QoreTypeInfo::runtimeAcceptsValueOrFold(u.ti, n) > 0) {
                     ok = true;
                 }
             }
@@ -3650,49 +3650,7 @@ bool QoreTypeSpec::operator!=(const QoreTypeSpec& other) const {
    return !(*this == other);
 }
 
-// returns true if a container with the given value type has no declared element type, as a container built at
-// runtime without one (ex: by a language binding) has
-static bool qore_is_untyped_container_vti(const QoreTypeInfo* ti) {
-    return !ti || is_auto_vti(ti) || ti == anyTypeInfo || !QoreTypeInfo::hasType(ti);
-}
-
-// issue #5541: matches the elements of a container with no declared element type against the element type of a
-// complex container type as arguments are matched, so that runtime variant matching accepts the container when
-// binding the argument would fold every element into the type, as an assignment does; an exact match of every
-// element ranks above a match that converts elements, and both rank below a container of the type
-static qore_type_result_e qore_untyped_container_element_match(qore_type_result_e rv, const QoreTypeInfo* elem_ti,
-        const QoreValue& v) {
-    qore_type_result_e erv = QoreTypeInfo::runtimeAcceptsValue(elem_ti, v);
-    if (erv == QTI_NOT_EQUAL) {
-        return QTI_NOT_EQUAL;
-    }
-    return erv == QTI_IDENT ? rv : QTI_WILDCARD;
-}
-
-static qore_type_result_e qore_untyped_list_accepts(const QoreTypeInfo* elem_ti, const QoreListNode& l) {
-    qore_type_result_e rv = QTI_AMBIGUOUS;
-    for (size_t i = 0, e = l.size(); i < e; ++i) {
-        rv = qore_untyped_container_element_match(rv, elem_ti, l.retrieveEntry(i));
-        if (rv == QTI_NOT_EQUAL) {
-            break;
-        }
-    }
-    return rv;
-}
-
-static qore_type_result_e qore_untyped_hash_accepts(const QoreTypeInfo* elem_ti, const QoreHashNode& h) {
-    qore_type_result_e rv = QTI_AMBIGUOUS;
-    ConstHashIterator hi(h);
-    while (hi.next()) {
-        rv = qore_untyped_container_element_match(rv, elem_ti, hi.get());
-        if (rv == QTI_NOT_EQUAL) {
-            break;
-        }
-    }
-    return rv;
-}
-
-qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool exact) const {
+qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool exact, bool fold) const {
     qore_type_t ot = n.getType();
     // issue #2928 we must ensure that each typespec only access its own data in the union
     switch (typespec) {
@@ -3820,10 +3778,12 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool ex
             if (ti && QoreTypeInfo::hasType(ti) && QoreTypeInfo::parseAccepts(u.ti, ti)) {
                 return exact ? QTI_IDENT : QTI_AMBIGUOUS;
             }
-            // acceptInputComplexHash() below folds a value whose element type the fold path can convert, so a
-            // value this returned no match for would still be accepted once it was bound; report the same
-            // verdict here, as an inexact match, so that variant selection and binding cannot disagree
-            if (ti && QoreTypeInfo::hasType(ti) && qore_container_value_may_convert_to(u.ti, ti)) {
+            // acceptInputComplexHash() folds a value whose element type the fold path can convert, so a value this
+            // returned no match for would still be accepted once it was bound; when asked for that verdict, report
+            // it as an inexact match, so that variant selection and binding cannot disagree; the value does not have
+            // this type, though, so it does not match otherwise (instanceof, and code that skips the conversion of a
+            // value that has a slot's type)
+            if (fold && ti && QoreTypeInfo::hasType(ti) && qore_container_value_may_convert_to(u.ti, ti)) {
                 return QTI_AMBIGUOUS;
             }
             // issue #2647: allow an empty hash with no specific type to be passed to any complex hash type
@@ -3831,10 +3791,6 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool ex
             // NOTE: if the hash has a specific type (ti with hasType), it must be compatible - checked above
             if (h->empty() && !h->getHashDecl() && (!ti || !QoreTypeInfo::hasType(ti))) {
                 return QTI_NEAR;
-            }
-            // issue #5541: a hash with no declared value type matches if all of its values do
-            if (!h->getHashDecl() && qore_is_untyped_container_vti(ti)) {
-                return qore_untyped_hash_accepts(u.ti, *h);
             }
             return QTI_NOT_EQUAL;
         }
@@ -3860,7 +3816,7 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool ex
                 // as in the complex hash case above: acceptInputComplexList() folds a value whose element type
                 // the fold path can convert, so reporting no match here would reject a value that binding
                 // accepts
-                if (ti && QoreTypeInfo::hasType(ti) && qore_container_value_may_convert_to(u.ti, ti)) {
+                if (fold && ti && QoreTypeInfo::hasType(ti) && qore_container_value_may_convert_to(u.ti, ti)) {
                     return QTI_AMBIGUOUS;
                 }
                 // issue #2647: allow an empty list with no specific type to be passed to any complex list type
@@ -3869,16 +3825,11 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool ex
                 if (l->empty() && (!ti || !QoreTypeInfo::hasType(ti))) {
                     return QTI_NEAR;
                 }
-                // issue #5541: a list with no declared element type matches if all of its elements do
-                if (qore_is_untyped_container_vti(ti)) {
-                    qore_type_result_e rv = qore_untyped_list_accepts(u.ti, *l);
-                    if (rv != QTI_NOT_EQUAL) {
-                        return rv;
-                    }
-                }
             }
             if (typespec == QTS_COMPLEXSOFTLIST) {
-                qore_type_result_e rv = QoreTypeInfo::runtimeAcceptsValue(u.ti, n);
+                qore_type_result_e rv = fold
+                    ? QoreTypeInfo::runtimeAcceptsValueOrFold(u.ti, n)
+                    : QoreTypeInfo::runtimeAcceptsValue(u.ti, n);
                 if (rv > 0) {
                     // do not return an exact match if we have to convert to a list
                     if (rv == QTI_IDENT) {
@@ -3987,6 +3938,203 @@ qore_type_result_e QoreTypeInfo::runtimeAcceptsValue(const QoreValue& n) const {
     }
     // SQL NULL is converted, as the values of the other types that the type converts are
     return acceptsBrokenSoftNull(n) ? QTI_AMBIGUOUS : QTI_NOT_EQUAL;
+}
+
+qore_type_result_e QoreTypeInfo::runtimeAcceptsValueOrFold(const QoreValue& n) const {
+    for (auto& t : accept_vec) {
+        qore_type_result_e rv = t.spec.runtimeAcceptsValue(n, t.exact, true);
+        if (rv != QTI_NOT_EQUAL) {
+            return rv;
+        }
+    }
+    // SQL NULL is converted, as the values of the other types that the type converts are
+    return acceptsBrokenSoftNull(n) ? QTI_AMBIGUOUS : QTI_NOT_EQUAL;
+}
+
+// returns the list or hash that a call argument is or refers to, if any, and whether its element type is untyped,
+// as the element type of a container built at runtime without a declared element type is; a hashdecl hash is a
+// declared structure, not generic data, and is left to the hashdecl rules
+static void qore_get_call_arg_container(const QoreValue& n, const QoreListNode*& l, const QoreHashNode*& h,
+        bool& untyped) {
+    l = nullptr;
+    h = nullptr;
+    untyped = false;
+    switch (n.getType()) {
+        case NT_LIST:
+            l = n.get<const QoreListNode>();
+            break;
+        case NT_WEAKREF_LIST:
+            l = n.get<const WeakListReferenceNode>()->get();
+            break;
+        case NT_HASH:
+            h = n.get<const QoreHashNode>();
+            break;
+        case NT_WEAKREF_HASH:
+            h = n.get<const WeakHashReferenceNode>()->get();
+            break;
+        default:
+            return;
+    }
+    if (h && h->getHashDecl()) {
+        h = nullptr;
+        return;
+    }
+    untyped = !QoreTypeInfo::hasType(l ? l->getValueTypeInfo() : h->getValueTypeInfo());
+}
+
+// checks every element of an untyped container against the element type of a typed container parameter type, as
+// QoreTypeSpec::acceptInputComplexList()/acceptInputComplexHash() will when the argument is bound; returns false
+// at the first element that is not accepted, otherwise lowers quality to the worst element match
+static bool qore_call_arg_elements_accepted(const QoreTypeInfo* elem_ti, const QoreListNode* l,
+        const QoreHashNode* h, int& quality, bool& content_dependent) {
+    // a hash element is converted to a hashdecl element type by QoreTypeInfo::retypeValue(), which checks its keys
+    // as it builds the typed hash; as for a typed container whose elements may be converted, the match is decided by
+    // the type here and the conversion reports a key that does not belong to the hashdecl
+    bool elem_hashdecl = QoreTypeInfo::getTypedHash(elem_ti);
+    // likewise, an object is materialized into a list<T> element type if it is an iterator, which binding finds out
+    bool elem_list = QoreTypeInfo::getComplexListValueType(elem_ti);
+    auto check = [elem_ti, elem_hashdecl, elem_list, &quality, &content_dependent] (const QoreValue& v) -> bool {
+        int elem_quality;
+        if (QoreTypeInfo::runtimeAcceptsCallArg(elem_ti, v, elem_quality, content_dependent) == QTI_NOT_EQUAL) {
+            if (!(elem_hashdecl && v.getType() == NT_HASH) && !(elem_list && v.getType() == NT_OBJECT)) {
+                return false;
+            }
+            elem_quality = QTI_AMBIGUOUS;
+        }
+        if (elem_quality < quality) {
+            quality = elem_quality;
+        }
+        return true;
+    };
+    if (l) {
+        for (size_t i = 0, e = l->size(); i < e; ++i) {
+            if (!check(l->retrieveEntry(i))) {
+                return false;
+            }
+        }
+        return true;
+    }
+    assert(h);
+    ConstHashIterator i(h);
+    while (i.next()) {
+        if (!check(i.get())) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// returns the match quality of a typed container argument for a container parameter type: the type match scores a
+// container whose element type the parameter's element type accepts only by a conversion or as a subclass (ex:
+// list<int> for list<float>) as one of the parameter's own element type, so the quality, which ranks variants with
+// equal scores, ranks the latter first (issue #5541); other arguments have the quality of their match
+static int qore_typed_container_quality(const QoreTypeInfo* ti, const QoreListNode* l, const QoreHashNode* h,
+        bool untyped, qore_type_result_e rv) {
+    if ((!l && !h) || untyped || rv <= QTI_AMBIGUOUS) {
+        return rv;
+    }
+    const QoreTypeInfo* elem_ti = l ? QoreTypeInfo::getComplexListValueType(ti)
+        : QoreTypeInfo::getComplexHashValueType(ti);
+    if (!elem_ti) {
+        return rv;
+    }
+    const QoreTypeInfo* vti = l ? l->getValueTypeInfo() : h->getValueTypeInfo();
+    return QoreTypeInfo::equal(elem_ti, vti) ? rv : QTI_AMBIGUOUS;
+}
+
+qore_type_result_e QoreTypeInfo::runtimeAcceptsCallArg(const QoreTypeInfo* ti, const QoreValue& n, int& quality,
+        bool& content_dependent) {
+    const QoreListNode* l;
+    const QoreHashNode* h;
+    bool untyped;
+    qore_get_call_arg_container(n, l, h, untyped);
+    // empty untyped containers keep the rule of issue #2647, and empty typed containers have no elements to check
+    if ((!l && !h) || (l ? l->empty() : h->empty()) || !hasType(ti)) {
+        qore_type_result_e rv = runtimeAcceptsValueOrFold(ti, n);
+        quality = qore_typed_container_quality(ti, l, h, untyped, rv);
+        return rv;
+    }
+
+    // the element type of each typed container in the type that matches the kind of the value
+    auto get_elem_ti = [l] (const QoreAcceptSpec& t) -> const QoreTypeInfo* {
+        const QoreTypeInfo* elem_ti = l ? t.spec.getComplexList() : t.spec.getComplexHash();
+        return elem_ti && !is_auto_vti(elem_ti) ? elem_ti : nullptr;
+    };
+
+    // the element type of the typed list in the type, if any; a softlist<T> type also converts any list with a mapped
+    // plain list type, whose conversion fails for the same elements
+    const QoreTypeInfo* list_elem_ti = nullptr;
+    if (l) {
+        for (auto& t : ti->accept_vec) {
+            if ((list_elem_ti = get_elem_ti(t))) {
+                break;
+            }
+        }
+    }
+    auto is_softlist_catch_all = [l, list_elem_ti] (const QoreAcceptSpec& t) -> bool {
+        return l && list_elem_ti && t.map && t.spec.isRuntimeBaseType(NT_LIST);
+    };
+
+    // as in runtimeAcceptsValue(), the first type in the type that accepts the value gives the result
+    for (auto& t : ti->accept_vec) {
+        const QoreTypeInfo* elem_ti = get_elem_ti(t);
+        if (untyped) {
+            // every element of an untyped container is checked against a typed container type
+            if (elem_ti) {
+                content_dependent = true;
+                int elem_quality = QTI_IDENT;
+                if (qore_call_arg_elements_accepted(elem_ti, l, h, elem_quality, content_dependent)) {
+                    quality = elem_quality;
+                    return QTI_AMBIGUOUS;
+                }
+                continue;
+            }
+            if (is_softlist_catch_all(t)) {
+                continue;
+            }
+            qore_type_result_e rv = t.spec.runtimeAcceptsValue(n, t.exact, true);
+            if (rv != QTI_NOT_EQUAL) {
+                quality = rv;
+                return rv;
+            }
+            continue;
+        }
+
+        // a typed container: the type decides, except where the verdict depends on the elements, which are then
+        // checked as binding will convert them; the result and its quality are those of the type, so a call that
+        // binding accepts selects the variant it selected without the check
+        qore_type_result_e rv = t.spec.runtimeAcceptsValue(n, t.exact, true);
+        if (rv == QTI_NOT_EQUAL) {
+            continue;
+        }
+        const QoreTypeInfo* check_elem_ti = nullptr;
+        if (is_softlist_catch_all(t)) {
+            check_elem_ti = list_elem_ti;
+        } else if (elem_ti) {
+            // a value whose element type is the element type needs no check; another one does if the match comes
+            // from the fold rule, which accepts nested containers by their shape, or if its element type may not
+            // match (ex: list<list<auto>> for list<list<int>>, which the type accepts as an exact match)
+            const QoreTypeInfo* vti = l ? l->getValueTypeInfo() : h->getValueTypeInfo();
+            if (vti != elem_ti && !QoreTypeInfo::equal(vti, elem_ti)) {
+                bool may_not_match = false;
+                if ((rv == QTI_AMBIGUOUS && t.spec.runtimeAcceptsValue(n, t.exact) == QTI_NOT_EQUAL)
+                        || (QoreTypeInfo::parseAccepts(elem_ti, vti, may_not_match) && may_not_match)) {
+                    check_elem_ti = elem_ti;
+                }
+            }
+        }
+        if (check_elem_ti) {
+            content_dependent = true;
+            int elem_quality = QTI_IDENT;
+            if (!qore_call_arg_elements_accepted(check_elem_ti, l, h, elem_quality, content_dependent)) {
+                continue;
+            }
+        }
+        quality = qore_typed_container_quality(ti, l, h, untyped, rv);
+        return rv;
+    }
+    quality = QTI_NOT_EQUAL;
+    return QTI_NOT_EQUAL;
 }
 
 bool QoreTypeInfo::acceptsBrokenSoftNull(const QoreValue& n) const {
@@ -6082,7 +6230,8 @@ const QoreTypeInfo* QoreTypeInfo::getComplexBufferValueType(const QoreTypeInfo* 
 //
 // The element type's own acceptance machinery is used here so that legal conversions (soft types,
 // int -> float, ...) still take place; an element that cannot be accepted fails the retype, and the
-// caller reports the type error.
+// caller reports the type error.  An element that is accepted only through such a conversion is converted
+// too: cast<list<list<softint>>>() of a list<list<string>> gave a list<list<softint>> holding strings.
 static bool qore_retype_element_accepted(QoreValue& v, const QoreTypeInfo* elem_ti, const char* key,
         ExceptionSink* xsink) {
     // auto and auto! element types accept any value without narrowing it
@@ -6109,7 +6258,11 @@ static bool qore_retype_element_accepted(QoreValue& v, const QoreTypeInfo* elem_
         default:
             break;
     }
-    if (QoreTypeInfo::runtimeAcceptsValue(elem_ti, v) != QTI_NOT_EQUAL) {
+    // an element that is accepted only through a conversion (a soft type given a string, a float given an int, ...)
+    // is converted as an assignment converts it; only an element that already has the type is left as it is, or
+    // the container would be stamped with an element type that its element does not have
+    qore_type_result_e rv = QoreTypeInfo::runtimeAcceptsValue(elem_ti, v);
+    if (rv == QTI_IDENT || (rv != QTI_NOT_EQUAL && QoreTypeInfo::superSetOf(elem_ti, v.getTypeInfo()))) {
         return true;
     }
     if (key) {

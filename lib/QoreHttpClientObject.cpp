@@ -4255,6 +4255,22 @@ QoreStringNode* QoreHttpClientObject::getHttpVersion() const {
     return new QoreStringNode(http_priv->http11 ? "HTTP/1.1" : "HTTP/1.0");
 }
 
+// copies the request headers of an extended CONNECT request into the header hash that is sent, as the other request
+// paths do with qore_httpclient_priv::addAppendHeader(): a value that is not a string is sent as a string, the
+// elements of a list as repeated headers, and an empty value is not sent; these headers were copied only if they were
+// a string or a list, so that an int header was silently dropped
+static int qore_copy_connect_request_headers(const QoreHashNode& headers, QoreHashNode& out, ExceptionSink* xsink) {
+    strcase_set_t hdrs;
+    ConstHashIterator hi(&headers);
+    while (hi.next()) {
+        qore_httpclient_priv::addAppendHeader(hdrs, out, hi.getKey(), hi.get(), xsink);
+        if (*xsink) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
 QoreHashNode* QoreHttpClientObject::sendHttp2Connect(const char* path, const QoreHashNode* headers,
         const char* protocol, QoreHashNode* info, ExceptionSink* xsink) {
     SocketSyncPoll::assertNotOnIoThread("HTTPClient", "sendHttp2Connect", xsink);
@@ -4285,17 +4301,8 @@ QoreHashNode* QoreHttpClientObject::sendHttp2Connect(const char* path, const Qor
         return nullptr;
     }
 
-    if (headers) {
-        ConstHashIterator hi(headers);
-        while (hi.next()) {
-            QoreValue val = hi.get();
-            if (val.getType() == NT_STRING || val.getType() == NT_LIST) {
-                h2_headers->setKeyValue(hi.getKey(), val.refSelf(), xsink);
-                if (*xsink) {
-                    return nullptr;
-                }
-            }
-        }
+    if (headers && qore_copy_connect_request_headers(*headers, **h2_headers, xsink)) {
+        return nullptr;
     }
 
     std::shared_ptr<HttpClientConnectionManagerBase> mgr_holder = http_priv->getConnMgr(xsink);
@@ -4494,17 +4501,8 @@ QoreHashNode* QoreHttpClientObject::sendHttp3Connect(const char* path, const Qor
         return nullptr;
     }
 
-    if (headers) {
-        ConstHashIterator hi(headers);
-        while (hi.next()) {
-            QoreValue val = hi.get();
-            if (val.getType() == NT_STRING || val.getType() == NT_LIST) {
-                h3_headers->setKeyValue(hi.getKey(), val.refSelf(), xsink);
-                if (*xsink) {
-                    return nullptr;
-                }
-            }
-        }
+    if (headers && qore_copy_connect_request_headers(*headers, **h3_headers, xsink)) {
+        return nullptr;
     }
 
     bool forced_h3 = !http_priv->http3_active.load(std::memory_order_acquire);
@@ -7278,6 +7276,46 @@ QoreHashNode* qore_httpclient_priv::send_websocket_upgrade_conn_mgr(ExceptionSin
     return ans.release();
 }
 
+// returns true if a header value has the given token, compared case-insensitively; the value is a comma-separated
+// token list (RFC 9110 section 5.6.1) given as a string, as a list of values, which are sent as repeated headers, or as
+// another value, which is sent as a string; with protocol_version, a token also matches with a "/version" suffix, as
+// in the Upgrade header (RFC 9110 section 7.8)
+static bool qore_http_header_has_token(const QoreValue& v, const char* token, bool protocol_version) {
+    if (v.getType() == NT_LIST) {
+        ConstListIterator li(v.get<const QoreListNode>());
+        while (li.next()) {
+            if (li.getValue().getType() != NT_LIST
+                    && qore_http_header_has_token(li.getValue(), token, protocol_version)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    QoreStringValueHelper str(v);
+    size_t token_len = strlen(token);
+    const char* p = str->c_str();
+    const char* end = p + str->size();
+    while (p < end) {
+        const char* comma = static_cast<const char*>(memchr(p, ',', end - p));
+        const char* elem_end = comma ? comma : end;
+        // trim optional whitespace
+        while (p < elem_end && (*p == ' ' || *p == '\t')) {
+            ++p;
+        }
+        const char* e = elem_end;
+        while (e > p && (e[-1] == ' ' || e[-1] == '\t')) {
+            --e;
+        }
+        size_t len = e - p;
+        if (len >= token_len && !strncasecmp(p, token, token_len)
+                && (len == token_len || (protocol_version && p[token_len] == '/'))) {
+            return true;
+        }
+        p = comma ? comma + 1 : end;
+    }
+    return false;
+}
+
 QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const char* mname, const char* meth,
         const char* mpath, const QoreHashNode* headers, const QoreStringNode* msg_body, const void* data,
         unsigned size, const ResolvedCallReferenceNode* send_callback, bool getbody, QoreHashNode* info,
@@ -7327,23 +7365,21 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
             // HTTP headers are case-insensitive - scan the hash looking for
             // "Connection: upgrade" + "Upgrade: websocket" irrespective of
             // the caller's header-key case.
+            // the values are comma-separated token lists (RFC 9110 sections 7.6.1 and 7.8), given as a string, as
+            // a list of values sent as repeated headers, or as another value sent as a string
             bool has_conn_upgrade = false;
             bool has_upgrade_ws = false;
             ConstHashIterator hi(headers);
             while (hi.next()) {
                 const char* key = hi.getKey();
-                QoreValue v = hi.get();
-                if (v.getType() != NT_STRING) {
-                    continue;
-                }
-                QoreStringValueHelper header_val(v);
-                const char* val = header_val->c_str();
-                if (!strcasecmp(key, "Connection") && val
-                        && strcasestr(val, "upgrade")) {
-                    has_conn_upgrade = true;
-                } else if (!strcasecmp(key, "Upgrade") && val
-                        && !strcasecmp(val, "websocket")) {
-                    has_upgrade_ws = true;
+                if (!strcasecmp(key, "Connection")) {
+                    if (qore_http_header_has_token(hi.get(), "upgrade", false)) {
+                        has_conn_upgrade = true;
+                    }
+                } else if (!strcasecmp(key, "Upgrade")) {
+                    if (qore_http_header_has_token(hi.get(), "websocket", true)) {
+                        has_upgrade_ws = true;
+                    }
                 }
             }
             is_ws_upgrade = has_conn_upgrade && has_upgrade_ws;

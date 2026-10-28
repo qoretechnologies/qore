@@ -26,7 +26,8 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MODULE_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+# the root of the Qore source tree, whose qlib directory has the modules under test
+MODULE_DIR="$(cd "$SCRIPT_DIR/../../../../.." && pwd)"
 SERVER_PID=""
 REF_SERVER_PID=""
 TEST_MODE="both"
@@ -82,7 +83,8 @@ while [ $# -gt 0 ]; do
     case "$1" in
         --install-deps)
             echo -e "${YELLOW}Installing Python dependencies...${NC}"
-            $PIP install --quiet httpx
+            # the SDK interop test runs the a2a-sdk server in uvicorn, which the http-server extra does not include
+            $PIP install --quiet httpx 'a2a-sdk[sqlite,http-server]' uvicorn
             ;;
         --test)
             shift

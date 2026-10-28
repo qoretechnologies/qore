@@ -92,6 +92,8 @@ class CMakeBuildHelpersTest inherits QUnit::Test {
             \testSubsetParseInitializerCallsPreloadedBody());
         addTestCase("an edit to a provider and its consumer compiles the provider first",
             \testIncrementalStaleProviderCompiledFirst());
+        addTestCase("a partial aggregate of a group links the contracts its members baked",
+            \testPartialAggregateBodyContracts());
 
         set_return_value(main());
     }
@@ -3436,6 +3438,94 @@ file(WRITE \"${CMAKE_BINARY_DIR}/cycle-vars.txt\"
             }
         }
         return older;
+    }
+
+    #! A link aggregate of part of an object group, as Qorus links its process groups
+    /** The provider's static method is a speculative fast entry that discovery demotes after its contract was
+        first hashed.  Its caller's dependency rows kept that hash, so the consumer imported a contract the
+        provider never published and the aggregate failed with "body_contract=<hash> actual=".
+    */
+    testPartialAggregateBodyContracts() {
+        TmpDir tmp("qore-cmake-qcc-partial-agg-");
+        string src_dir = tmp.path + "/src";
+        string build_dir = tmp.path + "/build";
+        string snippets_dir = src_dir + "/srcs";
+        mkdir(src_dir);
+        mkdir(snippets_dir);
+        write(snippets_dir + "/provider.qc", "%modern\nnamespace AggDeps {\nour auto Config;\n"
+            "class Resource {\n"
+            "    static bool enabled() {\n"
+            "        try {\n"
+            "            return (Config.options.get(\"enabled\") ?? True).toBool();\n"
+            "        } catch (hash<ExceptionInfo> ex) {\n"
+            "            return False;\n"
+            "        }\n"
+            "    }\n"
+            "    int user() { return Resource::enabled() ? 1 : 0; }\n"
+            "}\n}\n");
+        write(snippets_dir + "/holder.qc", "%modern\nclass AggOptions { auto get(string key) { return NOTHING; } }\n"
+            "class AggHolder { public { AggOptions options(); } }\n");
+        write(snippets_dir + "/consumer.qc", "%modern\npublic int sub aggUseResource(AggDeps::Resource r) {\n"
+            "    return r.user() + 1;\n}\n"
+            "public int sub aggRun() { AggDeps::Config = new AggHolder(); AggDeps::Resource r(); "
+            "return aggUseResource(r); }\n");
+        write(src_dir + "/CMakeLists.txt",
+"cmake_minimum_required(VERSION 3.16)
+project(QoreQoPartialAggregate NONE)
+find_package(Qore REQUIRED)
+
+qore_qcc_compile_objects(AGG_OBJECTS
+    GROUP AGG
+    OUTPUT_DIR \"${CMAKE_BINARY_DIR}/qo/AGG\"
+    SCRIPT_DIR \"${CMAKE_BINARY_DIR}/qo-scripts/AGG\"
+    SOURCES \"${CMAKE_SOURCE_DIR}/srcs/provider.qc\" \"${CMAKE_SOURCE_DIR}/srcs/holder.qc\"
+        \"${CMAKE_SOURCE_DIR}/srcs/consumer.qc\"
+    PARSE_OPTIONS PO_MODERN
+    WARNINGS_ARE_ERRORS
+    STAMPS_VAR AGG_STAMPS
+    CONTENT_STAMPS_VAR AGG_CONTENT_STAMPS
+    ORDER_TARGETS_VAR AGG_ORDER_TARGETS)
+list(GET AGG_OBJECTS 0 PROVIDER_QO)
+list(GET AGG_OBJECTS 2 CONSUMER_QO)
+
+# the provider and its consumer only: the holder's declarations stay unresolved imports
+qore_qcc_link_objects(AGG_PARTIAL
+    OUTPUT \"${CMAKE_BINARY_DIR}/qo/AGG_link/AGG_PARTIAL.qo\"
+    AGGREGATE_SYMBOL QORE_AGG_PARTIAL
+    INPUTS ${PROVIDER_QO} ${CONSUMER_QO}
+    INPUT_CONTENT_STAMPS ${AGG_CONTENT_STAMPS}
+    INPUT_ORDER_TARGETS ${AGG_ORDER_TARGETS}
+    ALLOW_UNRESOLVED_IMPORTS
+    WARNINGS_ARE_ERRORS
+    STAMP_VAR AGG_PARTIAL_STAMP)
+qore_qcc_link_objects(AGG_FULL
+    OUTPUT \"${CMAKE_BINARY_DIR}/qo/AGG_link/AGG_FULL.qo\"
+    AGGREGATE_SYMBOL QORE_AGG_FULL
+    INPUTS ${AGG_OBJECTS}
+    INPUT_CONTENT_STAMPS ${AGG_CONTENT_STAMPS}
+    INPUT_ORDER_TARGETS ${AGG_ORDER_TARGETS}
+    WARNINGS_ARE_ERRORS
+    STAMP_VAR AGG_FULL_STAMP)
+
+qore_qcc_finalize_managed_outputs(
+    OUTPUT_ROOT \"${CMAKE_BINARY_DIR}/qo\"
+    SCRIPT_ROOT \"${CMAKE_BINARY_DIR}/qo-scripts\")
+add_custom_target(all-qo ALL DEPENDS ${AGG_STAMPS} ${AGG_PARTIAL_STAMP} ${AGG_FULL_STAMP})
+");
+        string configure = run(sprintf("cmake -S %s -B %s%s", shellQuote(src_dir), shellQuote(build_dir),
+            qore_dir ? " -DQore_DIR=" + shellQuote(qore_dir) : ""));
+        assertTrue(is_file(build_dir + "/Makefile"), "configured the object group: " + configure);
+        string built = run(sprintf("cmake --build %s -- -j4", shellQuote(build_dir)));
+        assertTrue(is_file(build_dir + "/qo/AGG_link/AGG_PARTIAL.qo"),
+            "the partial aggregate links the contracts its members baked: " + built);
+        assertTrue(is_file(build_dir + "/qo/AGG_link/AGG_FULL.qo"), "the complete aggregate links: " + built);
+        assertEq(-1, built.find("hash mismatch"), "no contract mismatch is reported: " + built);
+        assertEq(-1, built.find("unresolved import"),
+            "the partial aggregate's allowed unresolved imports are not reported: " + built);
+
+        hash<auto> link_map = parse_json(read(build_dir + "/qo/AGG_link/AGG_PARTIAL.qo.qolink.json"));
+        assertGt(0, link_map.unresolved_imports.size(),
+            "the partial aggregate leaves the holder's declarations unresolved");
     }
 
     testManagedQccOutputPruning() {

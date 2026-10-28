@@ -1,0 +1,149 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class UntypedContainerArgsTest
+
+#! Tests runtime variant selection for untyped containers passed to typed container parameters (issue #5541)
+/** The checks are in untyped-container-args-worker.qr, which is run in each execution mode and as a program
+    compiled with qcc; every run must give the results below.
+*/
+class UntypedContainerArgsTest inherits QUnit::Test {
+    public {
+        #! the result of every check the worker makes
+        const Expected = {
+            "call-function-list": "tl:list<int>",
+            "call-function-hash": "tsh:hash<string, string>",
+            "direct-auto-arg": "tl:list<int>",
+            "plain-list": "tl:list<int>",
+            "call-ref": "tl:list<int>",
+            "call-function-args": "tsh:hash<string, string>",
+            "or-nothing-list": "tnull:list<int>",
+            "or-nothing-hash": "tnullh:hash<string, int>",
+            "soft-element-conversion": "tsoft:list<softint>:[1, 2]",
+            "caller-value-unchanged": "list<auto>",
+            "bad-element-single": "RUNTIME-OVERLOAD-ERROR",
+            "bad-hash-value": "RUNTIME-OVERLOAD-ERROR",
+            "static-single": "tl:list<int>",
+            "static-single-hash": "tsh:hash<string, string>",
+            "static-overload-ints": "ov(list<int>):list<int>",
+            "nested-list": "tnl:list<list<int>>/list<int>",
+            "nested-hash": "tnh:hash<string, list<string>>/list<string>",
+            "nested-deep": "tdeep:hash<string, list<hash<string, int>>>/list<hash<string, int>>/hash<string, int>",
+            "nested-bad": "RUNTIME-OVERLOAD-ERROR",
+            "nested-deep-bad": "RUNTIME-OVERLOAD-ERROR",
+            "overload-ints": "ov(list<int>):list<int>",
+            "overload-strings": "ov(list<string>):list<string>",
+            "overload-mixed": "RUNTIME-OVERLOAD-ERROR",
+            "overload-empty": "ov(list<int>):list<int>",
+            "fallthrough-match": "fall(list<int>):list<int>",
+            "fallthrough-auto": "fall(auto):list<auto>",
+            "fallthrough-any": "anyv(any):list<auto>",
+            "any-loses": "anyv(list<int>):list<int>",
+            "generic-list-wins": "gen(list):list",
+            "list-auto-wins": "gena(list<auto>):list<auto>",
+            "softlist-auto-wins": "gens(softlist<auto>):list<auto>",
+            "hash-auto-wins": "genh(hash<auto>):hash<auto>",
+            "quality-int-first": "qa(list<int>):list<int>",
+            "quality-int-second": "qb(list<int>):list<int>",
+            "quality-float": "qa(list<number>):list<number>",
+            "quality-hash": "qh(hash<string, int>):hash<string, int>",
+            "quality-hash-convert": "qs(hash<string, softint>):hash<string, softint>",
+            "quality-nested": "qn(list<list<int>>):list<list<int>>",
+            "softlist-ints": "sl(list<int>):list<int>",
+            "softlist-strings": "sl(softlist<string>):list<string>",
+            "softlist-mixed": "RUNTIME-OVERLOAD-ERROR",
+            "softlist-scalar": "sl(softlist<string>):list<string>",
+            "weak-list": "tl:list<int>",
+            "weak-hash": "tsh:hash<string, string>",
+            "weak-overload": "ov(list<string>):list<string>",
+            "hashdecl-param": "RUNTIME-OVERLOAD-ERROR",
+            "hashdecl-fallthrough": "hdf(auto):hash<auto>",
+            "hashdecl-element": "hdl(list<hash<D>>):list<hash<D>>",
+            "hashdecl-element-bad": "HASHDECL-INIT-ERROR",
+            "hashdecl-value": "hv(auto):hash<D>",
+            "method-alternating": "m(list<int>):list<int>,m(list<string>):list<string>,m(list<int>):list<int>,"
+                "m(list<string>):list<string>",
+            "static-alternating": "s(list<string>):list<string>,s(list<int>):list<int>,s(list<string>):list<string>,"
+                "s(list<int>):list<int>",
+            "constructor-alternating": "C(list<int>):list<int>,C(list<string>):list<string>,C(list<int>):list<int>",
+            "call-object-method": "m(list<string>):list<string>",
+            "method-ref": "m(list<int>):list<int>",
+            "method-bad": "RUNTIME-OVERLOAD-ERROR",
+            "stable": "yes",
+        };
+
+        #! the execution modes that the worker is run in
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("UntypedContainerArgsTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + DirSep + "qcc") ? libqore_dir + DirSep + "qcc"
+                : dirname(qore_bin) + DirSep + "qcc");
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("compiled program", \testCompiledProgram());
+
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModes) {
+            string out = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s",
+                libqore_dir, qore_bin, mode, getWorker()));
+            checkWorkerOutput(mode, out);
+        }
+    }
+
+    testCompiledProgram() {
+        TmpDir tmp("qore-untyped-container-args-");
+        string exe = tmp.path + DirSep + "untyped-container-args";
+        string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s --strip-source -o %s %s 2>&1", libqore_dir,
+            qcc_bin, exe, getWorker()));
+        assertTrue(is_file(exe), "compiled program: " + compile_out);
+        checkWorkerOutput("aot", backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe)));
+    }
+
+    private string getWorker() {
+        return get_script_dir() + DirSep + "untyped-container-args-worker.qr";
+    }
+
+    #! parses the "name=result" lines printed by the worker and checks them
+    private checkWorkerOutput(string label, string out) {
+        hash<string, string> results = {};
+        foreach string line in (out.split("\n")) {
+            *list<*string> parts = (line =~ x/^([-a-z]+)=(.*)$/);
+            if (!parts) {
+                if (line.val()) {
+                    fail(sprintf("%s: unexpected worker output: %y", label, out));
+                }
+                continue;
+            }
+            results{parts[0]} = parts[1];
+        }
+        assertEq(sort(keys Expected), sort(keys results), label + ": checks run");
+        foreach hash<auto> i in (Expected.pairIterator()) {
+            assertEq(i.value, results{i.key}, sprintf("%s: %s", label, i.key));
+        }
+    }
+}

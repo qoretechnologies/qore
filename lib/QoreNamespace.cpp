@@ -3736,10 +3736,10 @@ const QoreTypeInfo* TypedefEntry::parseResolve(const char* name, int& err) {
     // the flag is cleared on every exit
     struct ResolvingGuard {
         bool& flag;
-        DLLLOCAL ResolvingGuard(bool& flag) : flag(flag) {
+        ResolvingGuard(bool& flag) : flag(flag) {
             flag = true;
         }
-        DLLLOCAL ~ResolvingGuard() {
+        ~ResolvingGuard() {
             flag = false;
         }
     } resolving_guard(resolving);

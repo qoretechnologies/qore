@@ -20,7 +20,8 @@ CAVEATS:
   correct per v1.0 spec (SendMessageResponse oneof). Our server always
   returns Task, which is also valid.
 
-This requires: pip install 'a2a-sdk[sqlite,http-server]'
+This requires: pip install 'a2a-sdk[sqlite,http-server]' uvicorn
+(the a2a-sdk http-server extra does not include the uvicorn server that this test runs the SDK server in)
 
 Usage:
     python test_a2a_sdk_interop.py <qore_server_url> --sdk-port <port>
@@ -42,7 +43,6 @@ try:
     from a2a.server.agent_execution import AgentExecutor
     from a2a.server.agent_execution.context import RequestContext
     from a2a.server.tasks.inmemory_task_store import InMemoryTaskStore
-    from a2a.server.events.in_memory_queue_manager import InMemoryQueueManager
     from a2a.types import (
         AgentCard, AgentInterface, AgentCapabilities, AgentSkill,
         Part, Message,
@@ -52,8 +52,8 @@ try:
     from a2a.server.routes.agent_card_routes import create_agent_card_routes
     from starlette.applications import Starlette
 except ImportError as e:
-    print(f"ERROR: a2a-sdk not installed ({e})")
-    print("Install with: pip install 'a2a-sdk[sqlite,http-server]'")
+    print(f"ERROR: a required package is not installed ({e})")
+    print("Install with: pip install 'a2a-sdk[sqlite,http-server]' uvicorn")
     sys.exit(1)
 
 
@@ -107,7 +107,6 @@ def start_sdk_server(port):
         agent_executor=EchoExecutor(),
         task_store=InMemoryTaskStore(),
         agent_card=agent_card,
-        queue_manager=InMemoryQueueManager(),
     )
 
     # Build Starlette app from routes (v1.0.0a1+ API)
@@ -281,12 +280,12 @@ class InteropTest:
             assert "TASK_STATE_" in result2["result"]["status"]["state"]
 
         def test_v10_get_task_not_found():
-            """GetTask for non-existent ID should return error -32002."""
+            """GetTask for a non-existent ID returns TaskNotFoundError, which is -32001 in the A2A specification."""
             result, status = self._jsonrpc(qore_url, "GetTask",
                 {"id": "nonexistent-task-xyz"}, v10_headers)
             assert "error" in result, "Expected error for non-existent task"
-            assert result["error"]["code"] == -32002, \
-                f"Expected -32002, got: {result['error']['code']}"
+            assert result["error"]["code"] == -32001, \
+                f"Expected -32001, got: {result['error']['code']}"
 
         # --- v1.0 ListTasks ---
         def test_v10_list_tasks():
@@ -417,7 +416,7 @@ class InteropTest:
         self._test("sdk→qore", "contextId in message", test_v10_contextid_in_message)
         self._test("sdk→qore", "multiple messages unique IDs", test_v10_multiple_messages)
         self._test("sdk→qore", "v1.0 GetTask", test_v10_get_task)
-        self._test("sdk→qore", "GetTask not found (-32002)", test_v10_get_task_not_found)
+        self._test("sdk→qore", "GetTask not found (-32001)", test_v10_get_task_not_found)
         self._test("sdk→qore", "v1.0 ListTasks", test_v10_list_tasks)
         self._test("sdk→qore", "CancelTask on completed", test_v10_cancel_completed_task)
         self._test("sdk→qore", "unknown method (-32601)", test_unknown_method)

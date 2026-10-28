@@ -131,7 +131,7 @@ set(QORE_DOX_TOK_TMPL_SRC
 )
 
 # Process QPP files
-qore_wrap_qpp_value(TOK_QPP_SOURCES DOXLIST _dox_src ${TOK_QPP_SRC})
+qore_wrap_qpp_value(TOK_QPP_SOURCES DOXLIST _dox_src METALIST TOK_QPP_META_SRC ${TOK_QPP_SRC})
 add_custom_target(TOK_QPP_GENERATED_FILES DEPENDS qpp ${TOK_QPP_SOURCES})
 
 # Create the module library
@@ -168,6 +168,7 @@ set(QORE_DOXYGEN_IMAGES
     "${CMAKE_SOURCE_DIR}/qlib/DataProviderML/ml-logo.svg"
 )
 qore_binary_module_qore(${tok_module_name} "${VERSION}" "/${VERSION}")
+qore_install_qpp_metadata(${tok_module_name} ${TOK_QPP_META_SRC})
 
 if (DOXYGEN_FOUND)
     qore_wrap_dox(QORE_DOX_TOK_SRC ${QORE_DOX_TOK_TMPL_SRC})

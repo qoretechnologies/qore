@@ -1,0 +1,167 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# checks runtime variant selection for typed containers whose match depends on their elements; run by
+# typed-container-args.qtest
+
+/** A typed container is matched against a typed container parameter by its type.  Where that verdict depends on
+    the elements -- a nested container accepted by its shape (list<list<string>> for list<list<softint>>), a nested
+    element type that may not match (list<list<auto>> for list<list<int>>), or a softlist<T> parameter, which
+    converts any list -- the elements are checked as binding will convert them, so a variant whose binding would fail
+    is not selected: another variant is, or RUNTIME-OVERLOAD-ERROR is raised.  A call that binding accepts selects
+    the same variant as without the check.
+
+    The arguments come through untyped (auto) variables, so the calls are dispatched at runtime.  Each check prints
+    "name=result", where the result names the variant called and the type of the argument it got, or the error
+    raised.
+*/
+
+hashdecl Leaf {
+    auto value;
+    *string format;
+}
+
+# exact matches, and list and auto variants: the type decides
+string sub ex(list<int> x) { return "ex(list<int>):" + x.fullType(); }
+string sub ex(list<string> x) { return "ex(list<string>):" + x.fullType(); }
+string sub lo(list<int> x) { return "lo(list<int>):" + x.fullType(); }
+string sub lo(list x) { return "lo(list):" + x.fullType(); }
+string sub lo(auto x) { return "lo(auto):" + x.fullType(); }
+string sub ha(hash<string, int> x) { return "ha(hash<string, int>):" + x.fullType(); }
+string sub ha(hash<auto> x) { return "ha(hash<auto>):" + x.fullType(); }
+
+# softlist variants with typed lists
+string sub sl(list<int> x) { return "sl(list<int>):" + x.fullType(); }
+string sub sl(softlist<string> x) { return "sl(softlist<string>):" + x.fullType(); }
+string sub ss(softlist<softstring> x) { return "ss(softlist<softstring>):" + x.fullType(); }
+string sub ss(auto x) { return "ss(auto):" + x.fullType(); }
+string sub sa(softlist<string> x) { return "sa(softlist<string>):" + x.fullType(); }
+string sub sa(auto x) { return "sa(auto):" + x.fullType(); }
+string sub sx(softlist<string> x) { return "sx(softlist<string>):" + x.fullType(); }
+
+# nested containers folded by their shape
+string sub nf(list<list<softint>> x) { return sprintf("nf(list<list<softint>>):%s:%y", x.fullType(), x); }
+string sub nf(auto x) { return "nf(auto):" + x.fullType(); }
+string sub nb(list<list<int>> x) { return "nb(list<list<int>>):" + x.fullType(); }
+string sub nb(auto x) { return "nb(auto):" + x.fullType(); }
+string sub nbs(list<list<int>> x) { return "nbs:" + x.fullType(); }
+string sub hb(hash<string, list<int>> x) { return "hb(hash<string, list<int>>):" + x.fullType(); }
+string sub hb(auto x) { return "hb(auto):" + x.fullType(); }
+string sub lf(list<hash<Leaf>> x) { return "lf(list<hash<Leaf>>):" + x.fullType() + "/" + x[0].fullType(); }
+string sub lf(auto x) { return "lf(auto):" + x.fullType(); }
+string sub tie(list<list<softint>> x) { return "tie(list<list<softint>>):" + x.fullType(); }
+string sub tie(list<list<softfloat>> x) { return "tie(list<list<softfloat>>):" + x.fullType(); }
+
+# a nested element type that may not match
+string sub na(list<list<int>> x) { return "na(list<list<int>>):" + x.fullType(); }
+string sub na(list<list<string>> x) { return "na(list<list<string>>):" + x.fullType(); }
+string sub na(auto x) { return "na(auto):" + x.fullType(); }
+
+class C {
+    string m(list<list<int>> x) { return "m(list<list<int>>):" + x.fullType(); }
+    string m(auto x) { return "m(auto):" + x.fullType(); }
+}
+
+#! returns a list<auto> with the given elements, built at runtime
+list<auto> sub mk(softlist<auto> v) {
+    list<auto> rv = ();
+    foreach auto e in (v) {
+        push rv, e;
+    }
+    return rv;
+}
+
+#! returns the result of the call, or the error it raised
+string sub tryc(code c) {
+    try {
+        return c();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+#! makes every check and returns the results
+hash<string, string> sub run_checks() {
+    hash<string, string> r = {};
+    list<int> li_t = (1, 2);
+    auto li = li_t;
+    list<string> ls_t = ("a", "b");
+    auto ls = ls_t;
+    list<float> lf_t = (1.5,);
+    auto lfl = lf_t;
+    hash<string, int> hi_t = {"a": 1};
+    auto hi = hi_t;
+    list<list<string>> lnum_t = (("1",),);
+    auto lnum = lnum_t;
+    list<list<string>> lstr_t = (("x",),);
+    auto lstr = lstr_t;
+    list<list<int>> lli_t = ((1,),);
+    auto lli = lli_t;
+    hash<string, list<string>> hstr_t = {"a": ("x",)};
+    auto hstr = hstr_t;
+    list<hash<string, string>> leaf_t = ({"value": "x", "format": "f"},);
+    auto leaf = leaf_t;
+    list<hash<string, string>> leafbad_t = ({"value": "x", "other": "f"},);
+    auto leafbad = leafbad_t;
+    list<list<auto>> lla_good_t = (); push lla_good_t, mk((1, 2));
+    auto lla_good = lla_good_t;
+    list<list<auto>> lla_str_t = (); push lla_str_t, mk(("x",));
+    auto lla_str = lla_str_t;
+    list<list<auto>> lla_mixed_t = (); push lla_mixed_t, mk((1, "x"));
+    auto lla_mixed = lla_mixed_t;
+    list<list<int>> empty_t = ();
+    auto empty = empty_t;
+
+    # calls that bind select the variant they selected before
+    r."exact-int" = tryc(string sub () { return ex(li); });
+    r."exact-string" = tryc(string sub () { return ex(ls); });
+    r."list-overload-int" = tryc(string sub () { return lo(li); });
+    r."list-overload-string" = tryc(string sub () { return lo(ls); });
+    r."hash-overload-int" = tryc(string sub () { return ha(hi); });
+    r."softlist-typed-int" = tryc(string sub () { return sl(li); });
+    r."softlist-typed-string" = tryc(string sub () { return sl(ls); });
+    r."softlist-convert" = tryc(string sub () { return ss(li); });
+    r."softlist-scalar" = tryc(string sub () { return sa("a"); });
+    r."nested-fold" = tryc(string sub () { return nf(lnum); });
+    r."nested-exact" = tryc(string sub () { return nb(lli); });
+    r."nested-hashdecl" = tryc(string sub () { return lf(leaf); });
+    r."nested-tie" = tryc(string sub () { return tie(lnum); });
+    r."may-not-match-good" = tryc(string sub () { return na(lla_good); });
+    r."nested-empty" = tryc(string sub () { return nb(empty); });
+
+    # calls whose binding would fail select another variant, or raise RUNTIME-OVERLOAD-ERROR
+    r."nested-bad" = tryc(string sub () { return nb(lstr); });
+    r."nested-bad-single" = tryc(string sub () { return nbs(lstr); });
+    r."nested-hash-bad" = tryc(string sub () { return hb(hstr); });
+    r."softlist-bad" = tryc(string sub () { return sl(lfl); });
+    r."softlist-bad-auto" = tryc(string sub () { return sa(lfl); });
+    r."softlist-bad-single" = tryc(string sub () { return sx(lfl); });
+    r."may-not-match-string" = tryc(string sub () { return na(lla_str); });
+    r."may-not-match-mixed" = tryc(string sub () { return na(lla_mixed); });
+    # a hash element is converted to a hashdecl by binding, which reports a key the hashdecl does not declare
+    r."nested-hashdecl-bad" = tryc(string sub () { return lf(leafbad); });
+
+    # the same call site gets list<list<auto>> values that bind and values that do not in turn
+    C c();
+    list<string> calls = ();
+    foreach auto v in ((lla_good, lla_str, lla_good, lla_str)) {
+        push calls, tryc(string sub () { return c.m(v); });
+    }
+    r."method-alternating" = calls.join(",");
+    return r;
+}
+
+# called three times so that the checks also run on the IR tier and as native code with tiered execution
+hash<string, string> first = run_checks();
+bool stable = True;
+hash<string, string> results;
+for (int i = 0; i < 2; ++i) {
+    results = run_checks();
+    if (results != first) {
+        stable = False;
+    }
+}
+foreach hash<auto> i in (results.pairIterator()) {
+    printf("%s=%s\n", i.key, i.value);
+}
+printf("stable=%s\n", stable ? "yes" : "no");

@@ -1,0 +1,119 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# checks assignments of untyped hashes to hash<auto!> lvalues; run by assignment-untyped-hash.qtest
+
+%no-child-restrictions
+
+/** hash<auto!> (named hash<string, auto>) holds values of any type, as hash<auto> does, so an untyped hash, such as
+    the empty hash literal {}, can be assigned to it wherever it is declared: the parser refused it for class members
+    while it accepted hash() and the same assignment to a local or global variable.  A hash with a typed value type
+    still refuses an untyped hash.  Each check prints "name=result".
+*/
+
+our hash<auto!> g;
+
+class C {
+    public {
+        hash<auto!> pm;
+    }
+
+    private {
+        hash<auto!> m;
+        *hash<auto!> mn;
+        hash<string, any> ma;
+        static hash<auto!> s;
+    }
+
+    string member() {
+        m = {};
+        m += {"x": 1};
+        return sprintf("%s:%y", m.fullType(), m);
+    }
+
+    string selfMember() {
+        self.m = {};
+        return m.fullType();
+    }
+
+    string orNothing() {
+        mn = {};
+        return mn.fullType();
+    }
+
+    string anyMember() {
+        ma = {};
+        return ma.fullType();
+    }
+
+    static string staticMember() {
+        s = {};
+        s.y = "z";
+        return sprintf("%s:%y", s.fullType(), s);
+    }
+
+    string untypedVar(hash h) {
+        m = h;
+        return sprintf("%s:%y", m.fullType(), m);
+    }
+}
+
+#! returns the result of the closure, or the error it raised
+string sub tryc(code c) {
+    try {
+        return c();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+#! returns the error that parsing the code raises, if any
+string sub parse_error(string code) {
+    Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES);
+    try {
+        p.parse(code, "parse-check");
+        return "ok";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+#! makes every check and returns the results
+hash<string, string> sub run_checks() {
+    hash<string, string> r = {};
+    C c();
+    r."member" = tryc(string sub () { return c.member(); });
+    r."self-member" = tryc(string sub () { return c.selfMember(); });
+    r."or-nothing-member" = tryc(string sub () { return c.orNothing(); });
+    r."any-member" = tryc(string sub () { return c.anyMember(); });
+    r."static-member" = tryc(string sub () { return C::staticMember(); });
+    r."external-member" = tryc(string sub () { c.pm = {}; return c.pm.fullType(); });
+    r."untyped-var" = tryc(string sub () { hash h = {"a": 1}; return c.untypedVar(h); });
+    r."local" = tryc(string sub () { hash<auto!> l; l = {}; return l.fullType(); });
+    r."global" = tryc(string sub () { g = {}; return g.fullType(); });
+    r."closure-local" = tryc(string sub () {
+        hash<auto!> l;
+        code f = sub () { l = {}; };
+        f();
+        return l.fullType();
+    });
+    # a hash with a typed value type still refuses an untyped hash, as before
+    r."typed-member-untyped-var" = parse_error("class T { private { hash<string, int> mi; } t(hash h) { mi = h; } }");
+    r."typed-member-empty" = parse_error("class T { private { hash<string, int> mi; } t() { mi = {}; } }");
+    return r;
+}
+
+# called three times so that the checks also run on the IR tier and as native code with tiered execution
+hash<string, string> first = run_checks();
+bool stable = True;
+hash<string, string> results;
+for (int i = 0; i < 2; ++i) {
+    results = run_checks();
+    if (results != first) {
+        stable = False;
+    }
+}
+foreach hash<auto> i in (results.pairIterator()) {
+    printf("%s=%s\n", i.key, i.value);
+}
+printf("stable=%s\n", stable ? "yes" : "no");

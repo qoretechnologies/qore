@@ -1,0 +1,110 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# checks the header values that HTTPClient::sendHttp2Connect() and sendHttp3Connect() send; run by
+# connect-header-values.qtest
+
+%requires HttpServerUtil
+%requires HttpServer
+%requires Logger
+%requires ../../../../TestCertificates.qm
+
+/** The headers of an extended CONNECT request are sent as those of every other request: a value that is not a
+    string is sent as a string, the elements of a list as repeated headers, and an empty value is not sent; an int or
+    bool header was silently dropped.  The headers that a local server receives are printed as "name=result" lines;
+    the server parses repeated headers into a list.
+*/
+
+#! the headers given to every request
+const Headers = {"X-Int": 5, "X-List": ("a", 2), "X-Bool": True, "X-Float": 1.5, "X-Str": "s", "X-Empty": ""};
+
+#! the header names, as the server receives them
+const HeaderNames = ("x-int", "x-list", "x-bool", "x-float", "x-str", "x-empty");
+
+#! accepts an extended CONNECT, records its headers and ends the stream
+class Recorder inherits AbstractHttpSocketHandler {
+    public {
+        hash<string, hash<auto>> seen;
+        Mutex seen_lck();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (!is_extended_connect(cx, hdr)) {
+            return makeResponse(400, "expected extended CONNECT");
+        }
+        seen_lck.lock();
+        on_exit seen_lck.unlock();
+        seen{hdr."x-client"} = hdr;
+        return <HttpResponseInfo>{"code": 200, "streaming": True};
+    }
+
+    private bool startImpl(softstring lid, hash<auto> cx, hash<auto> hdr, Socket s) {
+        code send = cx."header-info".send_stream_data;
+        send(NOTHING, True);
+        return False;
+    }
+}
+
+#! describes the test headers received
+string sub describe(*hash<auto> hdr) {
+    if (!hdr) {
+        return "no request";
+    }
+    list<string> l = ();
+    foreach string name in (HeaderNames) {
+        auto v = hdr{name};
+        push l, sprintf("%s=%s", name, v.typeCode() == NT_LIST ? ("list(" + v.join(",") + ")") : sprintf("%y", v));
+    }
+    return l.join(" ");
+}
+
+#! returns the result of the call, or the error it raised
+string sub tryc(code c) {
+    try {
+        return c();
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf("%s: %s", ex.err, ex.desc);
+    }
+}
+
+Logger logger("connect-header-values", LoggerLevel::getLevelError());
+HttpServer server(<HttpServerOptionInfo>{"logger": logger});
+on_exit delete server;
+Recorder recorder();
+server.setHandler("rec", "/rec", NOTHING, recorder);
+server.waitForAsyncIo();
+int h2_port = server.addListener(<HttpListenerOptionInfo>{
+    "node": "127.0.0.1",
+    "service": 0,
+    "cert": new SSLCertificate(TestCertificates::CertPem),
+    "key": new SSLPrivateKey(TestCertificates::KeyPem),
+}).port;
+int h3_port = server.addListener(<HttpListenerOptionInfo>{
+    "node": "127.0.0.1",
+    "service": 0,
+    "cert": new SSLCertificate(TestCertificates::CertPem),
+    "key": new SSLPrivateKey(TestCertificates::KeyPem),
+    "enable_h3": True,
+}).port;
+server.waitForAsyncIo();
+
+hash<string, string> results;
+results."h2-connect" = tryc(string sub () {
+    HTTPClient client({"url": sprintf("https://127.0.0.1:%d", h2_port), "http_version": "2", "timeout": 30s});
+    client.acceptAllCertificates(True);
+    client.connect();
+    hash<auto> resp = client.sendHttp2Connect("/rec", Headers + {"X-Client": "h2"}, "header-test");
+    return string(resp.status_code);
+});
+results."h3-connect" = tryc(string sub () {
+    HTTPClient client({"url": sprintf("https://127.0.0.1:%d", h3_port), "http3_mode": "required", "timeout": 30s,
+        "ssl_verify_cert": False});
+    hash<auto> resp = client.sendHttp3Connect("/rec", Headers + {"X-Client": "h3"}, "header-test");
+    return string(resp.status_code);
+});
+results."h2-headers" = describe(recorder.seen.h2);
+results."h3-headers" = describe(recorder.seen.h3);
+
+foreach hash<auto> i in (results.pairIterator()) {
+    printf("%s=%s\n", i.key, i.value);
+}

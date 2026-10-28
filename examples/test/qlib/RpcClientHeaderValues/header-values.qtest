@@ -1,0 +1,136 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class RpcClientHeaderValuesTest
+
+#! Tests that the McpClient, JsonRpcClientIo and YamlRpcClientIo clients send header values of any type
+/** A \c headers option value that is not a string is converted to a string, and the elements of a list to strings,
+    which are sent as repeated headers, as with HTTPClient; an int header raised RUNTIME-TYPE-ERROR.  A hash or NULL
+    value raises RUNTIME-TYPE-ERROR when the client is created.  The checks are in
+    header-values-worker.qr, which is run in each execution mode, and as a program compiled with qcc that loads the
+    client modules compiled with --compile-module.
+*/
+class RpcClientHeaderValuesTest inherits QUnit::Test {
+    public {
+        #! the headers that every client must send
+        const Sent = "x-int=\"5\" x-list=list(a,2) x-bool=\"1\" x-str=\"s\"";
+
+        #! the result of every check the worker makes
+        const Expected = {
+            "jsonrpc-connection-call": "ok",
+            "jsonrpc-options-call": "ok",
+            "yamlrpc-connection-call": "ok",
+            "yamlrpc-options-call": "ok",
+            "mcp-connection-call": "ok",
+            "mcp-options-call": "ok",
+            "jsonrpc-connection-headers": Sent,
+            "jsonrpc-options-headers": Sent,
+            "yamlrpc-connection-headers": Sent,
+            "yamlrpc-options-headers": Sent,
+            "mcp-connection-headers": Sent,
+            "mcp-options-headers": Sent,
+            "jsonrpc-bad-hash": "RUNTIME-TYPE-ERROR",
+            "yamlrpc-bad-hash": "RUNTIME-TYPE-ERROR",
+            "mcp-bad-hash": "RUNTIME-TYPE-ERROR",
+            "jsonrpc-bad-null": "RUNTIME-TYPE-ERROR",
+            "yamlrpc-bad-null": "RUNTIME-TYPE-ERROR",
+            "mcp-bad-null": "RUNTIME-TYPE-ERROR",
+        };
+
+        #! the client modules
+        const Modules = ("McpClient", "JsonRpcClientIo", "YamlRpcClientIo");
+
+        #! the execution modes that the worker is run in
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("RpcClientHeaderValuesTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + DirSep + "qcc") ? libqore_dir + DirSep + "qcc"
+                : dirname(qore_bin) + DirSep + "qcc");
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("compiled program and modules", \testCompiled());
+
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModes) {
+            string out = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s",
+                libqore_dir, qore_bin, mode, getWorker()));
+            checkWorkerOutput(mode, out, NOTHING);
+        }
+    }
+
+    testCompiled() {
+        TmpDir tmp("qore-rpc-header-values-");
+        string qlib = get_script_dir() + "/../../../../qlib";
+        foreach string mod in (Modules) {
+            string qmod = tmp.path + DirSep + mod + ".qmod";
+            string out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --compile-module --output %s %s 2>&1",
+                libqore_dir, qore_bin, qmod, qlib + DirSep + mod + DirSep + mod + ".qm"));
+            assertTrue(is_file(qmod), sprintf("compiled module %s: %s", mod, out));
+        }
+        string module_dir = tmp.path + ":" + (ENV.QORE_MODULE_DIR ?? qlib);
+        string exe = tmp.path + DirSep + "header-values";
+        string out = backquote(sprintf("QORE_MODULE_DIR=%s LD_LIBRARY_PATH=%s %s -o %s %s 2>&1", module_dir,
+            libqore_dir, qcc_bin, exe, getWorker()));
+        assertTrue(is_file(exe), "compiled program: " + out);
+        checkWorkerOutput("aot", backquote(sprintf("QORE_MODULE_DIR=%s LD_LIBRARY_PATH=%s %s 2>&1", module_dir,
+            libqore_dir, exe)), ".qmod");
+    }
+
+    private string getWorker() {
+        return get_script_dir() + DirSep + "header-values-worker.qr";
+    }
+
+    #! parses the "name=result" lines printed by the worker and checks them
+    /** @param label the run
+        @param out the output of the worker
+        @param module_ext the extension of the files that the client modules must be loaded from, if checked
+    */
+    private checkWorkerOutput(string label, string out, *string module_ext) {
+        hash<string, string> results = {};
+        foreach string line in (out.split("\n")) {
+            *list<*string> parts = (line =~ x/^([-a-zA-Z]+)=(.*)$/);
+            if (!parts) {
+                if (line.val()) {
+                    fail(sprintf("%s: unexpected worker output: %y", label, out));
+                }
+                continue;
+            }
+            results{parts[0]} = parts[1];
+        }
+        foreach string mod in (Modules) {
+            string file = remove results{"module-" + mod};
+            if (module_ext) {
+                assertEq(mod + module_ext, file, sprintf("%s: %s loaded", label, mod));
+            }
+        }
+        assertEq(sort(keys Expected), sort(keys results), label + ": checks run");
+        foreach hash<auto> i in (Expected.pairIterator()) {
+            assertEq(i.value, results{i.key}, sprintf("%s: %s", label, i.key));
+        }
+    }
+}

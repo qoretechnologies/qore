@@ -337,6 +337,15 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
                     lhs_is_typed_hash = true;
                 }
             }
+            // hash<auto!> is named "hash<string, auto>", which the name check above takes for a typed hash, but
+            // its values are untyped like those of hash<auto>: an untyped hash (ex: the empty hash literal {})
+            // assigned to it was refused, while the same value assigned through hash() was accepted
+            if (lhs_is_typed_hash) {
+                const QoreTypeInfo* lhs_vti = QoreTypeInfo::getComplexHashValueType(check_ti);
+                if (lhs_vti && !QoreTypeInfo::hasType(lhs_vti)) {
+                    lhs_is_typed_hash = false;
+                }
+            }
 
             // RHS is an untyped hash if it's exactly "hash" (not "hash<auto>" or any specific type)
             bool rhs_is_untyped_hash = false;

@@ -395,6 +395,11 @@ QoreHashNode* qore_hash_private::newComplexHashFromHash(const QoreTypeInfo* type
     // mark new hash with new type
     assert(init->is_unique());
 
+    // a hash that already has the type has values of its value type
+    if (coerce_values && !init->priv->hashdecl && init->priv->complexTypeInfo
+            && QoreTypeInfo::equal(init->priv->complexTypeInfo, typeInfo)) {
+        coerce_values = false;
+    }
     init->priv->complexTypeInfo = typeInfo;
     // Clear any hashdecl binding - complex hash types use complexTypeInfo, not hashdecl
     if (init->priv->hashdecl) {

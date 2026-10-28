@@ -573,6 +573,7 @@ list nlist = remove l[2,5..7,8];
 
     @par Data Conversions with cast<>()
     - <tt><b>cast</b>&lt;@ref hash_type "hash"&lt;</tt><em>@ref hashdecl "hashdecl_identifier"</em><tt>&gt;&gt;(</tt><em>@ref expressions "hash_expression"</em><tt>)</tt>: performs initialization of @ref hashdecl "hashdecl" keys with initializer expressions for keys not present in the output evaluated hash expression
+    - <tt><b>cast</b>&lt;@ref hash_type "hash"&lt;string, </tt><em>@ref data_type_declarations "data_type"</em><tt>&gt;&gt;(</tt><em>@ref expressions "hash_expression"</em><tt>)</tt> and <tt><b>cast</b>&lt;@ref list_type "list"&lt;</tt><em>@ref data_type_declarations "data_type"</em><tt>&gt;&gt;(</tt><em>list_elements, ...</em><tt>)</tt>: converts the values or elements, including those of nested containers, to the value or element type as an assignment does; a value that an assignment refuses raises a \c RUNTIME-TYPE-ERROR exception
     - <tt><b>cast</b>&lt;@ref hash_type "hash"&gt;(</tt><em>@ref expressions "hash_expression"</em><tt>)</tt>: removes any type-safe information from the output evaluated hash expression
     - <tt><b>cast</b>&lt;@ref list_type "list"&gt;(</tt><em>list_elements, ...</em><tt>)</tt>: removes any type-safe information from the output evaluated list expression
 

@@ -152,6 +152,8 @@ static int qore_linenoise_user_key_cb(const char* line, int pos, char** new_line
     }
 
     ExceptionSink xsink;
+    // the callback can remove or replace its own binding, which releases the binding's reference
+    ReferenceHolder<ResolvedCallReferenceNode> cb_holder(cb->refRefSelf(), &xsink);
 
     // Create hash argument: {line: string, pos: int}
     ReferenceHolder<QoreHashNode> arg(new QoreHashNode(autoTypeInfo), &xsink);
@@ -196,12 +198,14 @@ static void qore_linenoise_completion_cb(const char *input, linenoiseCompletions
     }
 
     ExceptionSink xsink;
+    // the callback can replace itself with set_callback(), which releases the module's reference
+    ReferenceHolder<ResolvedCallReferenceNode> cb(callbackNode->refRefSelf(), &xsink);
 
     ValueHolder ret(&xsink);
     {
         ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), &xsink);
         args->push(new QoreStringNode(input, QCS_UTF8), nullptr);
-        ret = callbackNode->invoke(*args, &xsink);
+        ret = cb->invoke(*args, &xsink);
     }
 
     // Check for exceptions from callback execution
@@ -231,12 +235,14 @@ static char* qore_linenoise_hints_cb(const char* input, int* color, int* bold) {
     }
 
     ExceptionSink xsink;
+    // the callback can replace or remove itself with set_hints_callback(), which releases the module's reference
+    ReferenceHolder<ResolvedCallReferenceNode> cb(hintsCallbackNode->refRefSelf(), &xsink);
 
     ValueHolder ret(&xsink);
     {
         ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), &xsink);
         args->push(new QoreStringNode(input, QCS_UTF8), nullptr);
-        ret = hintsCallbackNode->invoke(*args, &xsink);
+        ret = cb->invoke(*args, &xsink);
     }
 
     if (xsink.isException()) {
@@ -282,12 +288,14 @@ static char* qore_linenoise_syntax_cb(const char* buf) {
     }
 
     ExceptionSink xsink;
+    // the callback can replace or remove itself with set_syntax_callback(), which releases the module's reference
+    ReferenceHolder<ResolvedCallReferenceNode> cb(syntaxCallbackNode->refRefSelf(), &xsink);
 
     ValueHolder ret(&xsink);
     {
         ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), &xsink);
         args->push(new QoreStringNode(buf, QCS_UTF8), nullptr);
-        ret = syntaxCallbackNode->invoke(*args, &xsink);
+        ret = cb->invoke(*args, &xsink);
     }
 
     if (xsink.isException()) {
@@ -303,6 +311,39 @@ static char* qore_linenoise_syntax_cb(const char* buf) {
     return NULL;
 }
 
+namespace {
+//! holds references to the history provider while one of its methods runs
+/** The method can replace or remove the provider with set_history_provider(), which releases the module's references
+    to the provider object and its private data
+*/
+class HistoryProviderCallHelper {
+public:
+    explicit HistoryProviderCallHelper(ExceptionSink* xsink)
+            : obj(ref_obj(), xsink), priv(ref_priv(), xsink) {
+    }
+
+    HistoryProviderPriv* operator->() {
+        return *priv;
+    }
+
+private:
+    ReferenceHolder<QoreObject> obj;
+    ReferenceHolder<HistoryProviderPriv> priv;
+
+    static QoreObject* ref_obj() {
+        assert(historyProviderObj);
+        historyProviderObj->ref();
+        return historyProviderObj;
+    }
+
+    static HistoryProviderPriv* ref_priv() {
+        assert(historyProviderPriv);
+        historyProviderPriv->ref();
+        return historyProviderPriv;
+    }
+};
+}
+
 // History provider C trampolines
 char* qore_history_provider_prev_cb(const char* prefix, void* userData) {
     LinenoiseLockHelper al;
@@ -310,7 +351,8 @@ char* qore_history_provider_prev_cb(const char* prefix, void* userData) {
         return NULL;
     }
     ExceptionSink xsink;
-    char* rv = historyProviderPriv->callPrev(prefix, &xsink);
+    HistoryProviderCallHelper provider(&xsink);
+    char* rv = provider->callPrev(prefix, &xsink);
     if (xsink.isException()) {
         xsink.handleExceptions();
         return NULL;
@@ -324,7 +366,8 @@ char* qore_history_provider_next_cb(const char* prefix, void* userData) {
         return NULL;
     }
     ExceptionSink xsink;
-    char* rv = historyProviderPriv->callNext(prefix, &xsink);
+    HistoryProviderCallHelper provider(&xsink);
+    char* rv = provider->callNext(prefix, &xsink);
     if (xsink.isException()) {
         xsink.handleExceptions();
         return NULL;
@@ -338,7 +381,8 @@ void qore_history_provider_reset_cb(void* userData) {
         return;
     }
     ExceptionSink xsink;
-    historyProviderPriv->callReset(&xsink);
+    HistoryProviderCallHelper provider(&xsink);
+    provider->callReset(&xsink);
     if (xsink.isException()) {
         xsink.handleExceptions();
     }
@@ -350,7 +394,8 @@ char* qore_history_provider_search_cb(const char* pattern, int direction, void* 
         return NULL;
     }
     ExceptionSink xsink;
-    char* rv = historyProviderPriv->callSearch(pattern, direction, &xsink);
+    HistoryProviderCallHelper provider(&xsink);
+    char* rv = provider->callSearch(pattern, direction, &xsink);
     if (xsink.isException()) {
         xsink.handleExceptions();
         return NULL;

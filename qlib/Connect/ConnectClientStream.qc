@@ -73,6 +73,8 @@ public class ConnectClientStream {
         bool m_reads_done = False;
         #! Whether writesDone() has been called
         bool m_writes_done = False;
+        #! Whether the HTTP status of the response has been checked
+        bool m_status_checked = False;
         #! Trailing metadata from EndStreamResponse
         *hash<auto> m_trailing_metadata;
         #! Error from EndStreamResponse
@@ -115,6 +117,8 @@ public class ConnectClientStream {
         @return a deserialized message, or NOTHING if the stream has ended
 
         @throw CONNECT-STREAM-ERROR if a stream error occurs
+        @throw CONNECT-ERROR the server answered the request with an HTTP error status (\c arg is the
+        @ref ConnectErrorInfo)
     */
     *auto read(*timeout timeout_ms) {
         if (m_reads_done) {
@@ -143,6 +147,14 @@ public class ConnectClientStream {
                 return NOTHING;
             }
             if (data.typeCode() == NT_HASH) {
+                if (exists data.status_code && !m_status_checked) {
+                    # the response headers precede the response body
+                    m_status_checked = True;
+                    if (data.status_code >= 300) {
+                        m_reads_done = True;
+                        throwHttpError(data.status_code, timeout_ms, NOTHING, data.end_stream ?? False);
+                    }
+                }
                 if (data.end_stream) {
                     m_reads_done = True;
                     # Try to parse remaining buffer
@@ -155,7 +167,21 @@ public class ConnectClientStream {
                 if (data.error) {
                     throw "CONNECT-STREAM-ERROR", sprintf("stream error: %y", data.error);
                 }
+                if (exists data.status_code) {
+                    continue;
+                }
                 return NOTHING;
+            }
+
+            if (!m_status_checked) {
+                # the response headers can be delivered with the first body data (HTTP/3), in which case only the
+                # response hash of the stream has the status
+                m_status_checked = True;
+                *int status = m_stream.getResponse().status_code;
+                if (status >= 300) {
+                    m_reads_done = True;
+                    throwHttpError(status, timeout_ms, data, False);
+                }
             }
 
             # Append data to buffer
@@ -255,6 +281,58 @@ public class ConnectClientStream {
     cancel() {
         m_reads_done = True;
         m_stream.cancel();
+    }
+
+    #! Reads the error body of a response with an HTTP error status and throws it as a Connect error
+    /** The server answers a request that it rejects before the stream starts (for example, an unknown method, or a
+        request body over its size limit) with an HTTP error status and a JSON Connect error body instead of a
+        streaming response.
+
+        @param status the HTTP status code of the response
+        @param timeout_ms the read timeout
+        @param initial_body response body data already read, if any
+        @param ended @ref True if the end of the response has already been read
+
+        @throw CONNECT-ERROR always; \c arg is the @ref ConnectErrorInfo
+    */
+    private throwHttpError(int status, timeout timeout_ms, *data initial_body, bool ended) {
+        binary body = exists initial_body ? binary(initial_body) : binary();
+        while (!ended) {
+            auto data = m_stream.readData(timeout_ms);
+            if (!exists data || (data.typeCode() == NT_HASH && (data.end_stream || data.error))) {
+                break;
+            }
+            if (data.typeCode() == NT_HASH) {
+                continue;
+            }
+            body += data.typeCode() == NT_BINARY ? data : binary(data);
+            # an error body is small; do not accumulate an arbitrarily large one, also when messages have no size
+            # limit
+            if (body.size() > (m_max_message_size > 0 ? m_max_message_size : CONNECT_DEFAULT_MAX_MESSAGE_SIZE)) {
+                body = binary();
+                break;
+            }
+        }
+
+        *hash<ConnectErrorInfo> err;
+        if (body) {
+            try {
+                err = ConnectError::parseError(body.toString("utf-8"));
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "THREAD-CANCELLED" || ex.err == "PROGRAM-INTERRUPTED") {
+                    rethrow;
+                }
+                # not a Connect error body: the error is built from the HTTP status
+            }
+        }
+        if (!err) {
+            err = <ConnectErrorInfo>{
+                "code": ConnectError::errorForHttpStatus(status),
+                "message": sprintf("HTTP %d", status),
+            };
+        }
+        m_error = err;
+        throw "CONNECT-ERROR", err.message ?? err.code, err;
     }
 
     #! Try to parse a complete Connect frame from the read buffer

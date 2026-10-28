@@ -1891,7 +1891,8 @@ ENDMACRO (QORE_WRAP_QPP_VALUE)
 
 #
 # Install qpp-generated .meta.json files into a per-module subdirectory
-# under the metadata directory.
+# under the metadata directory, with the install component of the binary
+# module (QORE_BINARY_MODULE_INSTALL_COMPONENT).
 #
 # usage:
 #   qore_install_qpp_metadata(mymodule ${QPP_META_SOURCES})
@@ -1900,7 +1901,8 @@ MACRO (QORE_INSTALL_QPP_METADATA _module_name)
     set(_meta_files ${ARGN})
     if (_meta_files AND DEFINED QORE_METADATA_DIR)
         install(FILES ${_meta_files}
-                DESTINATION ${QORE_METADATA_DIR}/${_module_name})
+                DESTINATION ${QORE_METADATA_DIR}/${_module_name}
+                COMPONENT ${QORE_BINARY_MODULE_INSTALL_COMPONENT})
     endif()
 ENDMACRO (QORE_INSTALL_QPP_METADATA)
 

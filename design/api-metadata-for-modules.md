@@ -445,6 +445,20 @@ Two changes to `CMakeLists.txt`:
    endif()
    ```
 
+`qore_install_qpp_metadata()` installs the files with the binary module's install
+component (`QORE_BINARY_MODULE_INSTALL_COMPONENT`, `Unspecified` for an external
+module), and installs nothing when `QORE_METADATA_DIR` is not defined.
+
+### QPP metadata of the binary modules built with Qore
+
+Every binary module in `modules/` with `.qpp` sources passes `METALIST` to
+`qore_wrap_qpp_value()` and calls `qore_install_qpp_metadata()` with its module name,
+so its metadata is installed in `metadata/<module>/` with the bootstrap install
+component, as the core metadata is.  The top-level `CMakeLists.txt` sets
+`QORE_METADATA_DIR` before the modules' `add_subdirectory()` calls; set after them,
+no module installed any metadata.  `examples/test/cmake/test_module_qpp_metadata_install.py`
+checks both, and installs each module directory of a build to check the installed files.
+
 ### QM metadata for external user modules (automatic)
 
 No additional changes needed. The `qore_external_user_module()` macro automatically
