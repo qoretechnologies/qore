@@ -32,11 +32,18 @@
 #include <numeric>
 #include <cmath>
 #include <limits>
+#include <cassert>
 
 // Extern declaration for hashdecl (defined in ml-module.cpp)
 extern const TypedHashDecl* hashdeclGMMResult;
 
 static constexpr double LOG_2PI = 1.8378770664093454836;
+//! Regularization added to every covariance diagonal
+static constexpr double COVARIANCE_REG = 1e-6;
+//! Responsibility mass below which a component is treated as having no data
+static constexpr double MIN_RESPONSIBILITY = 1e-12;
+//! Maximum number of Lloyd's iterations used to refine the k-means++ initialization
+static constexpr int KMEANS_INIT_MAX_ITERATIONS = 100;
 
 QoreGMM::QoreGMM(int n_components, int max_iterations, double tolerance,
     int64_t seed, const std::string& covariance_type)
@@ -82,25 +89,92 @@ void QoreGMM::initializeKMeansPP(const MatrixXd& data) {
         std::uniform_real_distribution<double> uni(0.0, total);
         double target = uni(rng);
         double cumsum = 0.0;
-        int chosen = n - 1;
+        int chosen = -1;
+        int last_positive = -1;
         for (int i = 0; i < n; ++i) {
+            // a point that is already a center has no weight and must never be chosen again, even when
+            // the random target is exactly 0
+            if (min_distances(i) <= 0.0) {
+                continue;
+            }
+            last_positive = i;
             cumsum += min_distances(i);
             if (cumsum >= target) {
                 chosen = i;
                 break;
             }
         }
+        if (chosen < 0) {
+            // rounding left the cumulative sum just below the target
+            chosen = last_positive;
+        }
+        assert(chosen >= 0);
         means[c] = data.row(chosen).transpose();
     }
 
-    // Initialize covariances as identity matrices
+    // Covariances start as the overall per-feature variance, so the initial components match the scale of
+    // the data; a component that the k-means refinement leaves empty keeps this covariance
+    VectorXd overall_mean = data.colwise().mean().transpose();
+    VectorXd overall_var = (data.rowwise() - overall_mean.transpose()).array().square().colwise().sum().transpose()
+        / static_cast<double>(n);
+    overall_var.array() += COVARIANCE_REG;
     covariances.resize(n_components);
     for (int c = 0; c < n_components; ++c) {
-        covariances[c] = MatrixXd::Identity(d, d);
+        covariances[c] = overall_var.asDiagonal();
     }
 
     // Initialize equal weights
     weights = VectorXd::Constant(n_components, 1.0 / n_components);
+}
+
+void QoreGMM::refineInitialization(const MatrixXd& data) {
+    int n = static_cast<int>(data.rows());
+
+    // Lloyd's k-means iterations starting from the k-means++ centers; k-means++ only picks seed points, and
+    // two seeds in the same well-separated group leave EM in a local optimum that splits that group and
+    // merges the others; Lloyd's iterations move such a seed to the group that has no center
+    std::vector<int> labels(n, -1);
+    for (int iter = 0; iter < KMEANS_INIT_MAX_ITERATIONS; ++iter) {
+        bool changed = false;
+        for (int i = 0; i < n; ++i) {
+            int best = 0;
+            double best_d = std::numeric_limits<double>::max();
+            for (int c = 0; c < n_components; ++c) {
+                double d_val = (data.row(i).transpose() - means[c]).squaredNorm();
+                if (d_val < best_d) {
+                    best_d = d_val;
+                    best = c;
+                }
+            }
+            if (labels[i] != best) {
+                labels[i] = best;
+                changed = true;
+            }
+        }
+        if (!changed) {
+            break;
+        }
+        std::vector<int> counts(n_components, 0);
+        std::vector<VectorXd> sums(n_components, VectorXd::Zero(n_features));
+        for (int i = 0; i < n; ++i) {
+            sums[labels[i]] += data.row(i).transpose();
+            ++counts[labels[i]];
+        }
+        for (int c = 0; c < n_components; ++c) {
+            // an empty cluster keeps its previous center
+            if (counts[c]) {
+                means[c] = sums[c] / static_cast<double>(counts[c]);
+            }
+        }
+    }
+
+    // Initial weights, means and covariances come from the hard k-means assignment
+    MatrixXd responsibilities = MatrixXd::Zero(n, n_components);
+    for (int i = 0; i < n; ++i) {
+        assert(labels[i] >= 0 && labels[i] < n_components);
+        responsibilities(i, labels[i]) = 1.0;
+    }
+    mStep(data, responsibilities);
 }
 
 double QoreGMM::logProbDensity(const RowVectorXd& point, int comp) const {
@@ -169,7 +243,7 @@ MatrixXd QoreGMM::eStep(const MatrixXd& data) const {
 void QoreGMM::mStep(const MatrixXd& data, const MatrixXd& responsibilities) {
     int n = static_cast<int>(data.rows());
     int d = n_features;
-    double reg = 1e-6;
+    double reg = COVARIANCE_REG;
 
     for (int c = 0; c < n_components; ++c) {
         double resp_sum = responsibilities.col(c).sum();
@@ -178,6 +252,12 @@ void QoreGMM::mStep(const MatrixXd& data, const MatrixXd& responsibilities) {
         weights(c) = resp_sum / n;
         if (weights(c) < 1e-10) {
             weights(c) = 1e-10;
+        }
+
+        // A component with no responsibility mass keeps its mean and covariance; dividing by the mass
+        // would make them NaN
+        if (resp_sum < MIN_RESPONSIBILITY) {
+            continue;
         }
 
         // Update mean
@@ -260,8 +340,9 @@ void QoreGMM::fit(const MatrixXd& data, ExceptionSink* xsink) {
 
     n_features = static_cast<int>(data.cols());
 
-    // Initialize parameters using k-means++
+    // Initialize parameters using k-means++ seeding refined by Lloyd's k-means iterations
     initializeKMeansPP(data);
+    refineInitialization(data);
 
     // EM iterations
     double prev_ll = -std::numeric_limits<double>::max();
@@ -322,7 +403,7 @@ void QoreGMM::update(const MatrixXd& data, ExceptionSink* xsink) {
     // Compute new parameters from the new batch only
     int n = static_cast<int>(data.rows());
     int d = n_features;
-    double reg = 1e-6;
+    double reg = COVARIANCE_REG;
 
     std::vector<VectorXd> new_means(n_components);
     std::vector<MatrixXd> new_covariances(n_components);
@@ -335,6 +416,13 @@ void QoreGMM::update(const MatrixXd& data, ExceptionSink* xsink) {
         new_weights(c) = resp_sum / n;
         if (new_weights(c) < 1e-10) {
             new_weights(c) = 1e-10;
+        }
+
+        // A component that this batch gives no responsibility mass keeps its mean and covariance
+        if (resp_sum < MIN_RESPONSIBILITY) {
+            new_means[c] = means[c];
+            new_covariances[c] = covariances[c];
+            continue;
         }
 
         // New mean from this batch

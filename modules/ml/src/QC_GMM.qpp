@@ -36,6 +36,11 @@ extern const TypedHashDecl* hashdeclGMMResult;
     (EM) algorithm to fit the parameters. Unlike K-Means, GMM provides soft (probabilistic)
     cluster assignments and can model clusters with different shapes and orientations.
 
+    The initial components come from k-means++ seeding refined by k-means (Lloyd's) iterations, so groups
+    that are clearly separated in the data get their own component whatever the seed; the initial covariances
+    follow the scale of the data.  A component that receives no data in an EM step or an online update keeps
+    its previous mean and covariance.
+
     Each instance is independent and thread-safe for concurrent prediction after fitting.
 
     @par Example:
