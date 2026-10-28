@@ -289,7 +289,7 @@ public:
 private:
     friend class QoreOnnxIoBinding;
 
-    //! the ONNX Runtime environment shared by all models, which outlives the session
+    //! the ONNX Runtime environment shared by all models, which is never deleted
     Ort::Env* env = nullptr;
     std::unique_ptr<Ort::Session> session;
     Ort::AllocatorWithDefaultOptions allocator;
@@ -993,9 +993,6 @@ DLLLOCAL int qore_ml_onnx_register_fork_handlers(ExceptionSink* xsink);
 
 //! removes the fork handlers of the ONNX support's process-wide locks
 DLLLOCAL void qore_ml_onnx_unregister_fork_handlers();
-
-//! releases the ONNX Runtime environment shared by all models, when the module is deleted
-DLLLOCAL void qore_ml_onnx_release_env();
 #else
 //! without ONNX Runtime support, there are no process-wide locks
 static inline int qore_ml_onnx_register_fork_handlers(ExceptionSink*) {
@@ -1003,10 +1000,6 @@ static inline int qore_ml_onnx_register_fork_handlers(ExceptionSink*) {
 }
 
 static inline void qore_ml_onnx_unregister_fork_handlers() {
-}
-
-//! without ONNX Runtime support, there is no ONNX Runtime environment
-static inline void qore_ml_onnx_release_env() {
 }
 #endif
 

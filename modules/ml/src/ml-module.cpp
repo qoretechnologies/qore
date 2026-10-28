@@ -560,6 +560,4 @@ static void ml_module_delete() {
     qore_ml_onnx_unregister_fork_handlers();
     ExceptionSink xsink;
     MLNS.clear(&xsink);
-    // the models are deleted with the namespace and the programs that use them
-    qore_ml_onnx_release_env();
 }
