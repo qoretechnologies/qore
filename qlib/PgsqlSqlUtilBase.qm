@@ -378,6 +378,11 @@ $function$
     - added targeted canonical-name partition metadata lookup without loading the complete child-relation catalog
     - added portable list and explicit modulus/remainder hash partitioning, recursive subpartition creation and
       introspection, and catalog-estimated row-count / allocated-size metadata
+    - fixed an insert-only upsert, and an upsert of a table whose columns are all key columns, sending \c BEGIN in
+      an open transaction and inserting a row that already exists: PostgreSQL wrote a warning and a duplicate key
+      error to its log for every such row, every time, as in each schema alignment for its reference data.  With
+      PostgreSQL 9.5 or later an existing row is now skipped with \c "on conflict do nothing", and \c BEGIN is
+      never sent
 
     @subsection pgsqlsqlutilbasev18 PgsqlSqlUtilBase v1.8
     - updated to support \c jdbc and \c odbc drivers as well as the native \c pgsql driver
@@ -5315,8 +5320,25 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         }
     }
 
+    #! Inserts a row unless a row with the same key exists
+    /** With PostgreSQL 9.5 or later, the insert has \c "on conflict do nothing": an existing row is skipped by the
+        server, which raises no error, so the statement is neither aborted nor written to the server log, and no
+        savepoint is needed.  Older servers have no \c "on conflict", so the insert runs in a savepoint and a
+        duplicate key error rolls back to it.
+
+        The statement starts the datasource's transaction if it has none; it never sends \c BEGIN itself, which
+        PostgreSQL refuses with a warning in an open transaction.
+
+        @param sql the insert statement without a conflict clause
+        @param row the row to insert; its values are bound in order
+
+        @return @ref True "True" if the row was inserted, @ref False "False" if a row with the same key exists
+    */
     private bool tryInsertImpl(string sql, hash<auto> row) {
-        ds.exec("begin");
+        if (hasAtomicUpsert()) {
+            return ds.vexec(sql + " on conflict do nothing", row.values()) > 0;
+        }
+
         ds.exec("savepoint " + PgsqlDatabase::PGSQL_TempSavepoint);
 
         try {
