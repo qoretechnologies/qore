@@ -74,6 +74,18 @@ class RecordingDatasource inherits AbstractDatasource {
         if (sql =~ /from pg_tables /) {
             return {"schemaname": vargs[0], "tablename": vargs[1]};
         }
+        # physical placement reads and sets its connection-local context
+        if (sql =~ /current_setting\('qore.physical_placement'/) {
+            statements += "<read placement context>";
+            return {"value": NOTHING};
+        }
+        if (sql =~ /from pg_catalog.pg_class c join pg_catalog.pg_namespace/) {
+            return {"schema": "public", "table": "insert_probe"};
+        }
+        if (sql =~ /set_config\('qore.physical_placement'/) {
+            statements += "<set placement context>";
+            return {"value": vargs[0]};
+        }
         throw "UNEXPECTED-SELECT", sql;
     }
     auto vselectRows(string sql, *softlist<auto> vargs) { throw "UNEXPECTED-SELECT", sql; }
@@ -109,6 +121,13 @@ class InsertProbeTable inherits PgsqlSqlUtilBase::PgsqlTable {
 
     bool tryInsert(string sql, hash<auto> row) {
         return tryInsertImpl(sql, row);
+    }
+
+    #! records a placement update instead of executing it
+    int update(hash<auto> set, hash<auto> cond) {
+        RecordingDatasource rds = cast<RecordingDatasource>(getDatasource());
+        rds.statements += "<update>";
+        return 1;
     }
 
     #! returns the insert-only upsert closure for an upsert key of the given columns
@@ -180,6 +199,8 @@ class PgsqlInsertOnlyUpsertTest inherits QUnit::Test {
         addTestCase("older servers use the savepoint insert for an insert-only upsert", \olderServerInsertOnlyTest());
         addTestCase("older servers isolate the insert in a savepoint without BEGIN", \savepointTest());
         addTestCase("older servers raise other insert errors after the savepoint", \savepointErrorTest());
+        addTestCase("physical placement joins an open transaction without BEGIN", \placementOpenTransactionTest());
+        addTestCase("physical placement starts a transaction when none is open", \placementNewTransactionTest());
         addTestCase("live: an existing row is skipped in an open transaction", \liveInsertOnlyTest());
         addTestCase("live: a key-only table upsert skips an existing row", \liveKeyOnlyTest());
         addTestCase("live: a conflict on another unique key raises", \liveOtherUniqueKeyTest());
@@ -272,6 +293,26 @@ class PgsqlInsertOnlyUpsertTest inherits QUnit::Test {
             {"id": 1}));
         assertEq(("savepoint " + PgsqlDatabase::PGSQL_TempSavepoint, "insert into insert_probe (id) values ($1)"),
             ds.statements, "the error is raised without rolling back to the savepoint");
+    }
+
+    private placementOpenTransactionTest() {
+        RecordingDatasource ds(170000);
+        InsertProbeTable t(ds);
+        ds.beginTransaction();
+        assertEq(1, t.updatePhysicalPlacement({"period": 1}, {"id": 1}, ("period",)), "one row is moved");
+        assertEq(1, t.updatePhysicalPlacement({"period": 2}, {"id": 2}, ("period",)), "another row is moved");
+        assertEq(1, (select ds.statements, $1 == "<begin transaction>").size(),
+            "the open transaction is joined; it is not started again");
+        assertEq(2, (select ds.statements, $1 == "<update>").size(), "each row is updated");
+    }
+
+    private placementNewTransactionTest() {
+        RecordingDatasource ds(170000);
+        InsertProbeTable t(ds);
+        assertEq(1, t.updatePhysicalPlacement({"period": 1}, {"id": 1}, ("period",)), "one row is moved");
+        assertEq("<begin transaction>", ds.statements[0],
+            "the transaction is started before the connection-local context is read");
+        assertEq(1, (select ds.statements, $1 == "<begin transaction>").size(), "the transaction is started once");
     }
 
     private liveInsertOnlyTest() {

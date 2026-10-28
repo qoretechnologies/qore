@@ -384,6 +384,8 @@ $function$
       PostgreSQL 9.5 or later a row with the same upsert key is now skipped with
       <tt>on conflict (</tt><em>key columns</em><tt>) do nothing</tt>, and \c BEGIN is never sent; a conflict on
       another unique key now raises an exception instead of being skipped
+    - fixed @ref SqlUtil::AbstractTable::updatePhysicalPlacement() "updatePhysicalPlacement()" starting the
+      transaction again when it is called in an open transaction, which made PostgreSQL log a warning for each call
 
     @subsection pgsqlsqlutilbasev18 PgsqlSqlUtilBase v1.8
     - updated to support \c jdbc and \c odbc drivers as well as the native \c pgsql driver
@@ -5314,8 +5316,11 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
     }
 
     private int updatePhysicalPlacementImpl(hash<auto> set, hash<auto> cond) {
-        # Pin the transaction/connection before reading or setting connection-local state.
-        ds.beginTransaction();
+        # Pin the transaction/connection before reading or setting connection-local state; a transaction that is
+        # already open has its connection pinned, and is joined without sending BEGIN again
+        if (!ds.currentThreadInTransaction()) {
+            ds.beginTransaction();
+        }
         *string active = ds.selectRow("select pg_catalog.current_setting('qore.physical_placement', true) as value").value;
         if (active) {
             throw "PHYSICAL-PLACEMENT-ERROR", "nested physical-placement context is not allowed";
