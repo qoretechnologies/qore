@@ -11191,7 +11191,8 @@ public:
     __attribute__((always_inline)) QoreDeferredNativeClosureStackLocationV2(RuntimeConfig& rc,
             const UserVariantBase* uvb,
             const QoreClosureBase* closure, QoreProgram* caller_pgm = nullptr)
-        : name(closureName()), statements(uvb->getStatementBlock()), pgm(caller_pgm ? caller_pgm : uvb->pgm),
+        : name(closureName()), statements(uvb->getStatementBlock()),
+          pgm(caller_pgm ? caller_pgm : closure->getProgram()),
           context(rc, closure, uvb), helper(rc, this, loc, context) {
     }
     __attribute__((always_inline)) ~QoreDeferredNativeClosureStackLocationV2() override = default;
@@ -11245,10 +11246,14 @@ static __attribute__((noinline)) int64_t execNativeClosureV1Context(RuntimeConfi
         ctx, xsink, caller_pgm);
 }
 
+static bool tryExecImportedNativeIntClosureScalar(RuntimeConfig& rc, const QoreClosureBase* closure,
+    const UserVariantBase* uvb, int64_t argument, int64_t& result, ExceptionSink* xsink,
+    QoreProgram* caller_pgm, bool caller_program_frame);
+
 // A cross-Program retry uses the caller's Program in the diagnostic frame, just
-// like execJITWithDeopt(), while execution stays in the already-entered owner.
+// like execJITWithDeopt(), while execution stays in the already-entered closure Program.
 // Specialize this choice so same-Program calls retain their existing frame work.
-template <bool CallerProgramFrame = false>
+template <bool CallerProgramFrame = false, bool ImportedBody = false>
 static bool tryExecNativeIntClosureScalar(RuntimeConfig& rc, const QoreClosureBase* closure,
         const UserVariantBase* uvb, int64_t argument, int64_t& result, ExceptionSink* xsink,
         QoreProgram* caller_pgm = nullptr) {
@@ -11263,14 +11268,18 @@ static bool tryExecNativeIntClosureScalar(RuntimeConfig& rc, const QoreClosureBa
         return false;
     }
     QoreProgram* pgm = RuntimeConfigNativeAccess::getProgram(rc);
-    // These metadata reads and the live Program comparison cannot execute Qore.
-    // A foreign miss needs no invocation context; the ordinary call establishes
-    // its full Program context before retrying native admission.
-    if (pgm != uvb->pgm) [[unlikely]] {
-        return false;
+    // Code ownership is distinct from the closure's executing Program. A v2
+    // entry can use module-owned metadata with the executing Program's live
+    // RuntimeConfig; the imported path establishes its runtime option override.
+    // A different executing Program still needs the ordinary full transition.
+    if constexpr (!ImportedBody) {
+        if (pgm != uvb->pgm) [[unlikely]] {
+            return tryExecImportedNativeIntClosureScalar(rc, closure, uvb, argument, result,
+                xsink, caller_pgm, CallerProgramFrame);
+        }
     }
     QoreSandboxProvenanceHelper provenance(closure);
-    if (pgm != ctx->pgm || pgm != closure->getProgram()
+    if ((!ImportedBody && pgm != ctx->pgm) || pgm != closure->getProgram()
             || !RuntimeConfigNativeAccess::hasProgramData(rc)
             || qore_program_private::get(*pgm)->hasDebuggerAttached()) {
         return false;
@@ -11301,6 +11310,14 @@ static bool tryExecNativeIntClosureScalar(RuntimeConfig& rc, const QoreClosureBa
     const bool context_v2 = !context_v2_env.get();
     auto entry_v2 = deferred && context_v2
         ? ctx->native_int_unary_closure_entry_v2.load(std::memory_order_acquire) : nullptr;
+    if constexpr (ImportedBody) {
+        // v1 still installs its code owner's context. Only v2 receives the
+        // closure's explicit execution context and can use the imported proof.
+        assert(entry_v2);
+        if (!entry_v2) {
+            return false;
+        }
+    }
     try {
         if (entry_v2) {
             QoreDeferredNativeClosureStackLocationV2 frame(rc, uvb, closure,
@@ -12144,9 +12161,42 @@ public:
                 exec_pgm ? exec_pgm->getParseOptions() : QoreParseOptions()) {
     }
 
+    DLLLOCAL QoreRtUserCallOverrideHelper(RuntimeConfig& rc, QoreProgram* exec_pgm,
+            const UserVariantBase* uvb)
+            : helper(rc, exec_pgm && exec_pgm != uvb->pgm ? get_user_variant_runtime_po_override_mask()
+                    : QoreParseOptions(),
+                exec_pgm ? exec_pgm->getParseOptions() : QoreParseOptions()) {
+    }
+
 private:
     RuntimeParseOptionsOverrideHelper helper;
 };
+
+// Keep the imported call's saved option state off the same-owner native frame.
+static __attribute__((noinline)) bool tryExecImportedNativeIntClosureScalar(RuntimeConfig& rc,
+        const QoreClosureBase* closure, const UserVariantBase* uvb, int64_t argument,
+        int64_t& result, ExceptionSink* xsink, QoreProgram* caller_pgm, bool caller_program_frame) {
+    static constinit QoreEnvFlag disabled("QORE_DISABLE_AOT_IMPORTED_CLOSURE_ENTRY");
+    static constinit QoreEnvFlag eager_context("QORE_DISABLE_AOT_DYNAMIC_CLOSURE_DEFERRED_CONTEXT");
+    static constinit QoreEnvFlag old_context("QORE_DISABLE_AOT_DYNAMIC_CLOSURE_CONTEXT_V2");
+    QoreProgram* pgm = RuntimeConfigNativeAccess::getProgram(rc);
+    if (disabled.get() || eager_context.get() || old_context.get() || !closure || !pgm
+            || pgm != closure->getProgram()) {
+        return false;
+    }
+    QoreAOTContext* ctx = uvb->getCachedAOTContext();
+    if (!ctx || ctx->pgm != uvb->pgm
+            || !ctx->native_int_unary_closure_entry_v2.load(std::memory_order_acquire)
+            || qore_program_private::get(*uvb->pgm)->hasDebuggerAttached()) {
+        return false;
+    }
+    // Match execClosureDirect(): code from another Program runs with the
+    // closure Program's restrictions, including on native stack exceptions.
+    QoreRtUserCallOverrideHelper po_override(rc, pgm, uvb);
+    return caller_program_frame
+        ? tryExecNativeIntClosureScalar<true, true>(rc, closure, uvb, argument, result, xsink, caller_pgm)
+        : tryExecNativeIntClosureScalar<false, true>(rc, closure, uvb, argument, result, xsink);
+}
 
 static QoreProgram* qore_rt_method_execution_program(const QoreMethod* method, const UserVariantBase* uvb) {
     QoreProgram* pgm = nullptr;

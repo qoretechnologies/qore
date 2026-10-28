@@ -2803,7 +2803,7 @@ __attribute__((always_inline)) RuntimeConfigNativeLeafCallHelper::RuntimeConfigN
         RuntimeConfigNativeClosureContext& context)
         : td(RuntimeConfigNativeAccess::getThreadData(rc)), closure_context(&context),
           previous(td->native_leaf_context), state(ContextState::DeferredMarkers), target_kind(TargetKind::ClosureV2) {
-    assert(context.uvb && td->current_pgm == context.uvb->pgm);
+    assert(context.uvb && td->current_pgm == context.closure->getProgram());
     call_loc = td->runtime_loc ? td->runtime_loc : context.uvb->getUserSignature()->getParseLocation();
     old_stmt = td->runtime_statement;
     old_loc = td->runtime_loc;
@@ -2835,7 +2835,7 @@ __attribute__((noinline)) void RuntimeConfigNativeLeafCallHelper::materialize() 
         parse_loc = uvb->getUserSignature()->getParseLocation();
     } else if (target_kind == TargetKind::Closure || target_kind == TargetKind::ClosureV2) {
         uvb = target_kind == TargetKind::Closure ? closure_uvb : closure_context->uvb;
-        pgm = uvb->pgm;
+        pgm = target_kind == TargetKind::Closure ? uvb->pgm : closure_context->closure->getProgram();
         parse_loc = uvb->getUserSignature()->getParseLocation();
     } else {
         uvb = callback_cache->uvb;

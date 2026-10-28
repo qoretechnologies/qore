@@ -344,6 +344,8 @@
     reducing redundant work while preserving the complete program transition and invocation context.
     Eligible native scalar closures use their compiled entry after cross-program context setup,
     reducing call overhead while preserving program counts, lifetime and caller stack identity.
+    Eligible imported integer closures use their explicit-context native entry when their execution Program
+    differs from the compiled body's owner, retaining runtime options, debugger checks and stack diagnostics.
     Native AOT closure calls inline automatic frame setup and cleanup, reducing sustained call overhead
     while preserving diagnostic stack publication and context restoration.
     Runtime stack pops inline their publication handshake and keep rare reader waits out of the hot path,

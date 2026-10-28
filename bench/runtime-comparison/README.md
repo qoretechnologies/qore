@@ -1454,6 +1454,18 @@ closure gains and the effectful-method regression, not a universal speedup.
 
 `QORE_DISABLE_AOT_CROSS_PROGRAM_CLOSURE_ENTRY=1` disables the native scalar closure retry after the generic path enters the owning Program. It is a runtime presence flag sampled once; empty and `0` values also disable it. Same-Program admission and the complete generic Program transition remain. No recompile is needed for this diagnostic control. Compare frozen optimized runtimes for before/after performance; see RESULTS for cross-Program call measurements and all control costs.
 
+`QORE_DISABLE_AOT_IMPORTED_CLOSURE_ENTRY=1` disables native integer closure
+admission when the closure executes in a different Program from its compiled
+body's owner. This runtime presence flag is sampled once; no recompile is needed.
+Admission requires the v2 explicit-context entry and the existing complete scalar
+body proof. The supplied RuntimeConfig provides live thread context for a scoped
+execution-Program option override. Both Programs' debugger guards, normal-body
+identity, capture checks, stack protection and diagnostic frames remain. A call
+from another execution Program still performs the ordinary Program transition.
+Disabling deferred context or v2 also disables this imported path. These runtime
+helpers benefit calls to eligible AOT bodies, including callers in IR/JIT mode;
+they do not add native companions to bodies executed only by IR/JIT.
+
 `OpaqueCallbackBench.java` supplies ordinary optimized Java counterparts for all four
 `opaque_callbacks.qr` kernels, with no `DONT_INLINE` controls. The choice of two
 literal functions is made once per invocation. JMH performs normal inlining and

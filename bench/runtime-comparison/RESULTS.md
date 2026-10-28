@@ -28124,3 +28124,80 @@ Release and Debug each pass 47 cases/7450 assertions plus one standalone test. D
 Next investigate the raw-integer RefSelf path, empty callback-local lifecycle and consistent discovery/code-generation contracts for context-independent scalar entries. The emitted fast body still shows frame/context setup, a now-empty local, integer reference helpers and cancellation-state preparation. These are static code observations, not sampled CPU attribution or evidence that performance has been maximized.
 
 [Evidence](results-finite-constant-callback-macos-arm64.json); [all 62 audit checks](audit-finite-constant-callback.md).
+
+## Imported closure recovery after execution-context merge (2026-10-28)
+
+The merge of develop `6becf04083` into `0736da0138` corrected module functions to execute in their caller's Program. This independently measured checkpoint exposes a substantial cost: native closure/method guards equated execution Program with code ownership. Closures created by an imported function now capture the caller Program while their code remains module-owned; objects still belong to the class source Program. The closure issue is a lost same-execution-Program fast path; many object calls now genuinely need a Program transition.
+
+### Merge checkpoint
+
+Both frozen builds use Release `-O3 -DNDEBUG`, allocation tracking disabled, and fresh `qcc -O3 --strip-source` artifacts for their matching runtime. Baseline is qualified premerge `553a8a8dd1` production source, compared with merged `0736da0138`. This is an incremental merge comparison, not pure develop. The full 29-workload screen has 522 jobs; independent five-fork confirmation has 360 jobs. Below are the confirmed whole-kernel ns/item, except the short helper row, which is ns/invocation.
+
+|!Kernel|!Before merge|!Merged|!Change
+|short:float_unary_17|187.120458|191.362663|+2.267%
+|micro:polymorphic_call|24.097907|165.855917|+588.259%
+|micro:polymorphic_expression_call|11.196154|131.529971|+1074.778%
+|micro:boxed_int_method_effect|93.902127|368.219141|+292.131%
+|micro:indirect_call|62.833025|10.398958|-83.450%
+|micro:closure_call|14.508796|124.962031|+761.285%
+|micro:closure_capture|20.099436|146.587258|+629.310%
+|micro:list_mutate|138.316908|205.999390|+48.933%
+|mixed:csv_report|986.058469|1007.459791|+2.170%
+|mixed:object_orders|1882.104492|3472.996567|+84.527%
+|mixed:callback_pipeline|128.010983|179.427551|+40.166%
+|mixed:text_index|1542.773844|1433.371519|-7.091%
+
+The previously published premerge Java/develop ratios do not describe these merged dynamic-call paths. Imported function references improve as their former Program transition disappears, but closures and object methods regress. A focused AOT/C++ probe verifies an available closure-v2 companion rejected solely when execution and body-owner Programs differ.
+
+### Imported native closure candidate
+
+Retain v2 native admission for compiler-proven imported integer unary closures. Execution stays in the closure's Program; the code-owner metadata remains distinct. The supplied RuntimeConfig supplies thread state for a scoped execution-Program option override. Both Programs' live debugger guards, normal-body identity, capture checks, stack protection, provenance and reader-visible frames remain. Cold materialization uses the closure's Program and restores captured class/object context correctly. Actual execution-Program transitions still use the complete ordinary transition before retrying. This benefits eligible AOT bodies, including calls from IR/JIT, without changing the native ABI or adding an IR/JIT body optimization.
+
+The comparison below is a separate fresh campaign against merged `0736da0138`. Each number is the median across three layouts of the per-layout median fork mean. Every fork has two warmups and three 150 ms samples, with 4096 items or short-helper invocations per timer/dispatch. Screen uses three forks; confirmation uses five fresh forks and repeats every >=2% aggregate shift, all mixed workloads and the closure/indirect controls. Epochs are not pooled.
+
+|!Kernel|!Merged baseline|!Candidate|!Change|!Phase
+|short:int_zero_1|36.742133|36.988695|+0.671%|screen
+|short:int_zero_17|47.087435|47.207725|+0.255%|screen
+|short:int_unary_1|181.049280|180.035362|-0.560%|screen
+|short:int_unary_17|188.516497|192.715520|+2.227%|confirmation
+|short:float_zero_1|40.693456|41.131082|+1.075%|screen
+|short:float_zero_17|50.408666|50.673792|+0.526%|screen
+|short:float_unary_1|180.088502|179.457108|-0.351%|screen
+|short:float_unary_17|188.408163|191.593836|+1.691%|confirmation
+|short:int_zero_inline|1.153185|1.146027|-0.621%|screen
+|short:int_unary_inline|1.680220|1.680272|+0.003%|screen
+|short:float_zero_inline|1.165848|1.168119|+0.195%|screen
+|short:float_unary_inline|1.431523|1.426744|-0.334%|screen
+|micro:direct_call|1.652845|1.653349|+0.030%|screen
+|micro:method_call|1.726340|1.742383|+0.929%|screen
+|micro:polymorphic_call|164.815989|163.288050|-0.927%|screen
+|micro:polymorphic_expression_call|131.514069|133.889150|+1.806%|screen
+|micro:boxed_int_method_effect|368.138835|369.990718|+0.503%|screen
+|micro:indirect_call|10.311342|10.394142|+0.803%|confirmation
+|micro:closure_call|123.816558|19.702248|-84.088%|confirmation
+|micro:closure_capture|146.584012|25.200497|-82.808%|confirmation
+|micro:list_mutate|203.505559|205.391246|+0.927%|screen
+|float:direct_local_float_return|0.823244|0.821950|-0.157%|screen
+|float:callback_local_float_return|0.892524|0.884657|-0.881%|screen
+|float:direct_local_float_result|0.744159|0.735886|-1.112%|screen
+|float:callback_local_float_result|0.839144|0.838368|-0.093%|screen
+|mixed:csv_report|1007.073480|1006.173899|-0.089%|confirmation
+|mixed:object_orders|3484.863281|3516.645952|+0.912%|confirmation
+|mixed:callback_pipeline|179.127526|95.389298|-46.748%|confirmation
+|mixed:text_index|1428.037986|1434.035081|+0.420%|confirmation
+
+Confirmed plain/captured closures improve 84.09%/82.81%; the mixed callback pipeline improves 46.75%, with gains in every layout. The repeated short int/float unary-17 controls cost 2.23%/1.69%, respectively (+4.20/+3.19 ns per helper invocation). Other mixed confirmation changes range from −0.09% to +0.91%. These costs remain part of the retained user-authorized workload tradeoff; there is no application-weighted overall score or zero-regression claim. All adverse confirmation layout/fork ranges overlap; this does not erase the repeated aggregate control costs. Polymorphic calls, effectful methods and list mutation still show the merge costs and need separate work.
+
+Runtime-disabled attribution uses exactly the same candidate images and libraries, with only `QORE_DISABLE_AOT_IMPORTED_CLOSURE_ENTRY=1` changed. Three layouts and five fresh forks confirm that the native path causes the recovery. Disabling it adds a small failed-admission cost compared with the baseline; it is not a bit-identical baseline reconstruction.
+
+|!Kernel|!Baseline ns/item|!Candidate|!Candidate disabled
+|closure_call|123.303143|19.683985|128.509501
+|closure_capture|146.547037|25.280120|151.942667
+
+The candidate campaign has 882 jobs / 2646 windows: 522 screen, 270 confirmation and 90 attribution. Together with the independent merge checkpoint, all 1764 jobs / 5292 windows replay from child receipts/raw samples. Both preparations each pass 5850 native and 1950 source references with 24 LLVM verifications; disabled candidate checks add 1665 references. Source/build/tool fingerprints, loaded-library checks, layout orders, raw outputs, drivers and observed fork ranges are preserved. No owned build/test/profile overlaps timing. The shared macOS ARM64 host has substantial ordinary background activity and no affinity, exclusivity or thermal control; no samples are discarded.
+
+Release validation passes 29 cases / 1453 assertions plus one standalone fixture. Debug passes 10 cases / 1354 assertions plus one standalone and 2917 native assertions. The new 322-assertion qtest covers ordinary/captured closures, wide integers, pending/overflow exceptions, body mismatch, missing companion, both debugger Programs, native rejection fallback, real Program transitions and RuntimeConfig replacement, across source modes and O0/O3 stripped AOT with EH/disabled controls. Initial fixture linkage, forced-limit instrumentation and compatibility-snapshot mistakes were corrected and their failures retained; an existing standalone fixture required recognition by the test driver. All 391 Release qmod aliases are restored. All 62 audit checks pass or are inapplicable.
+
+Next evaluate whether the proven scalar body permits deferring imported option setup to cold context materialization, then recover native method admission after genuine Program transitions and investigate imported-body local-slot guards/list mutation. Refresh optimized develop/Java comparisons after these context regressions are addressed. These measurements do not establish current Java parity, startup/memory improvements, production-wide speedup or a performance ceiling.
+
+[Evidence](results-imported-native-closure-macos-arm64.json); [all 62 audit checks](audit-imported-native-closure.md).
