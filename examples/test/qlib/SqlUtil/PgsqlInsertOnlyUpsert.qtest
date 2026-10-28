@@ -378,7 +378,7 @@ class PgsqlInsertOnlyUpsertTest inherits QUnit::Test {
         foreach string sql in (statements) {
             assertFalse(sql =~ /^\s*begin\b/i, sprintf("BEGIN is never sent: %y", sql));
             assertFalse(sql =~ /savepoint/i, sprintf("no savepoint is needed: %y", sql));
-            assertRegex(" on conflict \(id\) do nothing$", sql,
+            assertRegex(" on conflict \\(id\\) do nothing$", sql,
                 "each insert skips a row with the same key on the server");
         }
         assertGt(0, statements.size(), "the inserts are recorded");
