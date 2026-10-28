@@ -1504,3 +1504,5 @@ cleanup and cancellation. Plain, optional, differently typed, aliased and escapi
 cases retain their existing paths. Recompile for the diagnostic control. See
 RESULTS for independently confirmed short-invocation gains, broader costs and
 fresh Java measurements; these are incremental branch results, not pure develop.
+
+The [latest optimized cumulative checkpoint](RESULTS.md#optimized-module-checkpoint-after-finite-callback-coercion-omission-2026-10-28) compares branch 8276756a7a with pure develop 62a415e603 across 78 Qore workloads and 45 fresh Java counterparts. It includes mixed workloads and documents whole-kernel units, inlining controls and Program transitions. The dedicated short finite-callback experiment has a separate preceding-branch baseline.
