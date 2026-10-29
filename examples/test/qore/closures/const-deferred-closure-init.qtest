@@ -1,0 +1,76 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.  SPDX-License-Identifier: MIT
+
+# Regression test: a closure inside a constant initializer that is EXECUTED while the constant's value is
+# evaluated at parse-commit.
+#
+# A closure in a constant expression has its parse-init deferred (QoreClosureParseNode::parseInitImpl ->
+# deferCodeInitialization) so that recursive constant values resolve without spurious "recursive constant"
+# parse errors (issue #4903).  The deferred set is flushed by qore_program_private::initDeferredCode() at the
+# end of parse-commit, but a constant whose value is evaluated earlier in parse-commit can execute such a
+# closure before that flush, reaching QoreClosureParseNode::exec() while still deferred -> a null parse-init
+# result and a crash (SIGSEGV in release, assert(!is_deferred) in a debug build).  The fix forces the closure's
+# deferred parse-init on demand in exec(); parseInitDeferred() is idempotent so the later initDeferredCode()
+# pass is a no-op.
+#
+# AST is the benchmark: the constant values below must come out identically under all four execution tiers.
+# The forward-reference case (a closure referencing a constant declared later) proves the #4903 deferral still
+# works and that forcing the init on demand did not reintroduce the init-order cycle the deferral guards.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../ExecModeHarness.qm
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+string code = "%new-style
+%require-types
+
+const BASE = 10;
+# constant whose value is computed by executing an immediately-invoked closure at parse time
+const COMPUTED = (int sub (int x) { int y = x + BASE; return y; })(5);
+# constant value produced by sort() with a closure comparator at parse time
+const SORTED = sort((3, 1, 2, 5, 4), int sub (int a, int b) { return a <=> b; });
+# a closure in a constant referencing another constant declared EARLIER (no false recursive-constant error)
+const A1 = 7;
+const B1 = (int sub () { return A1 * 2; })();
+# a closure in a constant referencing a constant declared LATER (forward reference - the deferral's purpose)
+const C1 = (int sub () { return D1 + 1; })();
+const D1 = 100;
+
+printf(\"COMPUTED=%d\\n\", COMPUTED);
+printf(\"SORTED=%d%d%d%d%d\\n\", SORTED[0], SORTED[1], SORTED[2], SORTED[3], SORTED[4]);
+printf(\"B1=%d\\n\", B1);
+printf(\"C1=%d\\n\", C1);
+";
+
+string script_path = sprintf("/tmp/qore-const-deferred-closure-%d.qr", getpid());
+{
+    File script();
+    script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+    script.write(code);
+}
+on_exit {
+    unlink(script_path);
+}
+
+string expected = "COMPUTED=15\nSORTED=12345\nB1=14\nC1=101\n";
+
+int errors = 0;
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = ExecModeHarness::run(sprintf(
+        "LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s",
+        libqore_dir, libqore_dir, qore_bin, mode, script_path));
+    if (actual != expected) {
+        printf("mismatch in %s mode\nexpected:\n%sactual:\n%s", mode, expected, actual);
+        errors += 1;
+    }
+}
+
+if (errors) {
+    exit(2);
+}
+printf("OK\n");
