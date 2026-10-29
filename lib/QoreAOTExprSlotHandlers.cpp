@@ -1114,19 +1114,18 @@ static bool write_slot_CLOSURE_CREATE(AOTExprSlotWriteCtx& ctx) {
 
     // Lower closure before writing captures so embedded expression payloads
     // can contribute parent locals not present in the parser's closure vlist.
-    QoreIRFunction* closure_ir = const_cast<QoreIRFunction*>(variant->getCachedIR());
-    std::unique_ptr<QoreIRFunction> owned_ir;
+    // the native closure body is a fresh lowering of the variant whose local slot ids the runtime binds by index
+    // to this serialized IR's slot table, so this IR must be a fresh lowering too: never the runtime-warmed IR
+    // cached on the variant, whose slot ids follow the order the runtime lowered it in (and which other threads
+    // may be executing)
+    std::string closure_error;
+    std::unique_ptr<QoreIRFunction> owned_ir(::lowerClosureForSerialization(variant, &closure_error));
+    QoreIRFunction* closure_ir = owned_ir.get();
     if (!closure_ir) {
-        // Lower on the fly for serialization
-        std::string closure_error;
-        owned_ir.reset(::lowerClosureForSerialization(variant, &closure_error));
-        closure_ir = owned_ir.get();
-        if (!closure_ir) {
-            ::qoreAOTReportExprSerializationError(std::string("failed to lower closure '") + ucf->getName()
-                + "' for AOT serialization: " + (closure_error.empty() ? std::string("unknown error")
-                    : closure_error));
-            return false;
-        }
+        ::qoreAOTReportExprSerializationError(std::string("failed to lower closure '") + ucf->getName()
+            + "' for AOT serialization: " + (closure_error.empty() ? std::string("unknown error")
+                : closure_error));
+        return false;
     }
 
     const LVarSet* vlist = const_cast<UserClosureFunction*>(ucf)->getVList();

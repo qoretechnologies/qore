@@ -13164,18 +13164,18 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
                 // Lower closure before writing captures so embedded expression
                 // payloads (for example \local reference expressions) can add
                 // parent locals that are absent from the parser's closure vlist.
-                QoreIRFunction* closure_ir = const_cast<QoreIRFunction*>(variant->getCachedIR());
-                std::unique_ptr<QoreIRFunction> owned_ir;
+                // the native closure body is a fresh lowering of the variant whose local slot ids the runtime
+                // binds by index to this serialized IR's slot table, so this IR must be a fresh lowering too:
+                // never the runtime-warmed IR cached on the variant, whose slot ids follow the order the
+                // runtime lowered it in (and which other threads may be executing)
+                std::string closure_error;
+                std::unique_ptr<QoreIRFunction> owned_ir(::lowerClosureForSerialization(variant, &closure_error));
+                QoreIRFunction* closure_ir = owned_ir.get();
                 if (!closure_ir) {
-                    std::string closure_error;
-                    owned_ir.reset(::lowerClosureForSerialization(variant, &closure_error));
-                    closure_ir = owned_ir.get();
-                    if (!closure_ir) {
-                        qoreAOTSetExprSerializationError("failed to lower closure for AOT serialization in "
-                            + qoreAOTDescribeExpr(expr) + ": "
-                            + (closure_error.empty() ? std::string("unknown error") : closure_error));
-                        return false;
-                    }
+                    qoreAOTSetExprSerializationError("failed to lower closure for AOT serialization in "
+                        + qoreAOTDescribeExpr(expr) + ": "
+                        + (closure_error.empty() ? std::string("unknown error") : closure_error));
+                    return false;
                 }
 
                 const LVarSet* vlist = const_cast<UserClosureFunction*>(ucf)->getVList();
