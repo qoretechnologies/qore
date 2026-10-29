@@ -29292,3 +29292,56 @@ Release and Debug each pass 25 fixtures: 42 QUnit cases/10099 assertions plus th
 Six untimed profiles show substantial receiver-local reference management in local polymorphic calls and Program entry/exit bookkeeping in imported calls. The earlier native-only local prototype remains rejected for changed exception-path destructor ordering. A combined RuntimeConfig getter idea was rejected before implementation: the optimized unity build already inlines the getters into cached ThreadData loads. No getter calls remain to remove on this path.
 
 See [complete evidence](results-method-cache-layout-rejected-macos-arm64.json) and [all 62 audit checks](audit-method-cache-layout-rejected.md). No fresh Java/develop ratio or global performance ceiling is claimed. Next refresh the optimized feature/develop/Java checkpoint, then investigate cross-Program pure native context deferral or a stronger finite-receiver/lifetime proof.
+
+
+## Optimized checkpoint after callback policy deferral and develop integration (2026-10-29)
+
+Branch 85795742dc versus unmodified develop 38c885a6ff, after fetching origin and confirming it was already merged. Both use matching Release -O3 -DNDEBUG builds, allocation tracking disabled, LLVM 22.1.8 and qcc -O3 --strip-source on Apple M4 Pro/macOS ARM64. This is the same predeclared 32-workload control set as the rejected method-cache layout experiment, whose production change is absent. It is a targeted update, not a repeat of the older 86-workload full checkpoint.
+
+The branch is faster in all 96 Qore workload/layout cells with separated observed process ranges. Known integer callbacks are within 18% of Java; direct and final-method kernels take about 1.52 to 1.58 times Java time. Local polymorphic calls still take 9.14 times Java time and imported polymorphic calls 32.07 times. The four mixed workloads take 8.56 to 71.68% less time than develop. These are cumulative branch differences, not the effect of a single optimization or an application-wide weighted score.
+
+Qore uses three link layouts (default/reverse/shuffle-487), three processes per layout, three warmups and three measured 150 ms windows. Java uses three processes, five warmups and three measured 300 ms windows. All use 4096 items and seed 7; randomized interleaving seed 2026102911. Qore values are medians of per-layout median process means; Java values are median process means. All 651 processes and 1953 windows independently replay. Units are whole-kernel ns/item, not isolated call latency.
+
+|!Workload|!Develop ns/item|!Branch ns/item|!Develop/branch|!Java ns/item|!Branch/Java
+|local:direct_call|11.6146|1.5507|7.490x|1.0230|1.516x
+|local:method_call|11.8498|1.6411|7.220x|1.0387|1.580x
+|local:polymorphic_call|324.1675|24.3182|13.330x|2.6595|9.144x
+|local:boxed_int_method_fallback|272.6036|33.9569|8.028x|2.6715|12.711x
+|local:boxed_float_method_fallback|317.3441|35.3785|8.970x|2.6393|13.405x
+|local:boxed_int_method_effect|375.9093|92.1650|4.079x|1.9271|47.826x
+|local:list_mutate|254.0097|124.7402|2.036x|4.5755|27.263x
+|local:temporary_list|154.4080|1.6563|93.224x|1.2688|1.305x
+|micro:polymorphic_call|368.0536|86.7301|4.244x|2.7047|32.066x
+|micro:polymorphic_float_call|386.2301|87.3101|4.424x|2.6882|32.479x
+|micro:boxed_int_method_call|271.7830|112.3638|2.419x|2.6592|42.255x
+|micro:boxed_float_method_call|286.2098|116.7269|2.452x|2.6867|43.446x
+|micro:boxed_int_method_fallback|316.8277|124.1015|2.553x|2.7079|45.830x
+|micro:boxed_float_method_fallback|361.0971|126.3860|2.857x|2.6622|47.474x
+|micro:boxed_int_method_effect|422.0981|180.9785|2.332x|1.9086|94.823x
+|micro:indirect_call|256.4537|8.8724|28.905x|1.7794|4.986x
+|micro:closure_call|158.8919|18.8189|8.443x|1.7485|10.763x
+|micro:closure_capture|182.6596|24.7414|7.383x|1.8398|13.448x
+|micro:list_read|13.2250|2.9506|4.482x|0.2966|9.949x
+|micro:list_build|123.2266|23.3658|5.274x|2.6617|8.779x
+|micro:list_mutate|251.4353|124.3473|2.022x|4.5282|27.461x
+|micro:temporary_hash|347.3650|1.6799|206.778x|15.1625|0.111x
+|float:callback_local_float_return|335.8874|0.8778|382.630x|0.5467|1.606x
+|float:typed_local_int_unary|255.3115|1.2140|210.313x|1.0309|1.178x
+|float:callback_loop_float_return|551.7659|5.1501|107.137x|1.6413|3.138x
+|mixed:csv_report|1145.5013|957.3330|1.197x|N/A|N/A
+|mixed:object_orders|3749.9985|3428.8312|1.094x|N/A|N/A
+|mixed:callback_pipeline|338.8129|95.9590|3.531x|N/A|N/A
+|mixed:text_index|1838.2714|1377.9990|1.334x|N/A|N/A
+|probe:object_short|1997.1244|1683.2605|1.186x|N/A|N/A
+|probe:effect_short|2154.9711|1792.6690|1.202x|N/A|N/A
+|probe:string_result_loop|788.3171|557.0906|1.415x|N/A|N/A
+
+Java is Temurin 25.0.2+10, HotSpot C2 and JMH 1.37, with 25 fresh comparison rows covering 20 distinct benchmark methods. C2 and existing non-inlining controls were verified outside timing. Direct/final calls and known integer/float callbacks permit ordinary inlining. Dynamic methods, indirect functions and closures retain their existing DONT_INLINE controls. Container/value representations, locking and lifetime contracts differ; the temporary-hash result, for example, reflects different whole-workload optimization, not general hash-table throughput.
+
+Standalone local kernels execute in one QoreProgram. Imported indirect callbacks in this benchmark also execute in the same Program; imported object-method kernels include actual Program transitions. An imported module is not by itself proof of crossing a Program boundary. Mixed workloads compare Qore builds only. Input generation stays outside timing; harness dispatch, clocks/JMH consumption and normal optimization remain.
+
+Each Qore build passes 1518 IR and 4554 AOT references, 12144 combined; Java passes 1230 reference results, including repeated standalone/micro grids. All 30 LLVM modules and actual loaded runtime/module paths were verified. No production source changed after the fully qualified installed eb107 build; this checkpoint refreshes branch version metadata and builds develop in a new isolated worktree. The installed system remains eb107, with identical production implementation. No owned build/test/profile or heavy scan overlapped timing. Shared-host CPU load, affinity, thermals and frequency are uncontrolled. Observed process ranges are not confidence intervals; no samples were removed or historical values pooled.
+
+Next investigate the repeated exception-sink reads in fast scalar loops. Only bypass a read when an existing successful check dominates the path and no intervening operation can change the sink. Keep all cancellation polls, handler-path checks, thread-exit/deferral semantics and diagnostic materialization. No invariant-load annotation or blanket check removal. Then revisit receiver-local ownership and cross-Program pure native context with explicit lifetime and cleanup proofs.
+
+[Complete evidence](results-post-layout-rejection-checkpoint-macos-arm64.json); [all 62 audit checks](audit-post-layout-rejection-checkpoint.md). No universal Java parity or global performance ceiling is established.
