@@ -64,8 +64,9 @@ class CountedServer inherits HttpServer {
     whole cycle, including the server's reference to its async I/O controller and the controller's reference to the
     logger, or the server is never collected in a process that creates and releases servers.
 
-    Every server also gives its logger to the process-wide async I/O controller, which keeps it until another server
-    gives it its own, so the server is collected when the next server is created.
+    No other server is created after the one checked: the process-wide async I/O controller logs through a server's
+    logger only while the server runs, so the stopped server is collected without another server replacing its logger
+    on the controller.
 */
 class HttpServerLoggerCycleTest inherits QUnit::Test {
     constructor() : QUnit::Test("HttpServerLoggerCycleTest", "1.0") {
@@ -77,14 +78,12 @@ class HttpServerLoggerCycleTest inherits QUnit::Test {
     withoutListeners() {
         CountedServer::takeDestroyed();
         HttpServerLoggerCycleTest::makeServer("no-listener", False);
-        HttpServerLoggerCycleTest::replaceSharedLogger();
         assertEq(("no-listener",), CountedServer::takeDestroyed(), "the stopped server in a cycle with its logger is collected");
     }
 
     withListener() {
         CountedServer::takeDestroyed();
         HttpServerLoggerCycleTest::makeServer("listener", True);
-        HttpServerLoggerCycleTest::replaceSharedLogger();
         assertEq(("listener",), CountedServer::takeDestroyed(), "the stopped server in a cycle with its logger is collected");
     }
 
@@ -111,14 +110,6 @@ class HttpServerLoggerCycleTest inherits QUnit::Test {
                 throw "TEST-ERROR", sprintf("no response: %y", hdr);
             }
         }
-        server.stop();
-    }
-
-    #! creates and stops another server, whose logger replaces the stopped server's in the shared async I/O
-    #! controller
-    private static replaceSharedLogger() {
-        Logger other("other", LoggerLevel::getLevelInfo());
-        HttpServer server(<HttpServerOptionInfo>{"logger": other});
         server.stop();
     }
 }

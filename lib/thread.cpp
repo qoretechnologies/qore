@@ -63,6 +63,7 @@
 
 // to register object types
 #include "qore/intern/QC_Queue.h"
+#include "qore/intern/CallReferenceNode.h"
 #include "qore/intern/QC_Mutex.h"
 #include "qore/intern/QC_Condition.h"
 #include "qore/intern/QC_RWLock.h"
@@ -414,6 +415,8 @@ public:
     QoreParseOptions runtime_po_caller_restrictions;
     //! the Program of the module whose code runs with runtime_po_caller_restrictions, or nullptr
     const QoreProgram* runtime_po_module_pgm = nullptr;
+    //! the ID of the application Program that the code of runtime_po_module_pgm runs for
+    unsigned runtime_po_app_pgm_id = 0;
     int tid;
 
     VLock vlock;     // for deadlock detection
@@ -2893,7 +2896,7 @@ __attribute__((noinline)) void RuntimeConfigNativeLeafCallHelper::materialize() 
     } else if (target_kind == TargetKind::ClosureV2) {
         closure_context->materialize(td);
     } else if (target_kind == TargetKind::CallbackV2) {
-        callback_context->materialize(td);
+        callback_context->materialize(td, old_callback_app_pgm_id);
     }
     state = ContextState::Materialized;
     td->call_program_context = pgm;
@@ -2942,7 +2945,7 @@ __attribute__((noinline, cold)) void RuntimeConfigNativeLeafCallHelper::restoreM
         // Restore the caller's override before applying it to the saved options.
         closure_context->restoreOptions(td);
     } else if (target_kind == TargetKind::CallbackV2) {
-        callback_context->restoreOptions(td);
+        callback_context->restoreOptions(td, old_callback_app_pgm_id);
     }
     if (swapped) {
         td->runtime_po = apply_runtime_po_override(td, old_po);
@@ -2983,43 +2986,50 @@ __attribute__((noinline, cold)) void RuntimeConfigNativeMethodContext::restore(T
     rc.setClass(old_rc_class);
 }
 
-__attribute__((noinline, cold)) void RuntimeConfigNativeCallbackContext::materialize(ThreadData* td) {
+__attribute__((noinline, cold)) void RuntimeConfigNativeCallbackContext::materialize(ThreadData* td,
+        unsigned& old_app_pgm_id) {
     old_mask = td->runtime_po_override_mask;
     old_value = td->runtime_po_override_value;
     old_caller_restrictions = td->runtime_po_caller_restrictions;
     old_module_pgm = td->runtime_po_module_pgm;
+    old_app_pgm_id = td->runtime_po_app_pgm_id;
     // Match FunctionRefParseOptionsOverride, including its unchanged enclosing
     // scope for a same-owner non-module callback. No context is consulted by a
     // successful compiler-proven scalar body; this runs only before error work.
     if (cache.uvb->pgm != cache.pgm || qore_program_is_module(cache.uvb->pgm)) {
         QoreCallParseOptionsOverride o;
         qore_get_user_call_runtime_po_override(cache.pgm, cache.uvb,
-            apply_runtime_po_override(td, cache.pgm->getParseOptions()), o);
+            apply_runtime_po_override(td, cache.pgm->getParseOptions()), td->current_pgm, o);
         td->runtime_po_override_mask = o.mask;
         td->runtime_po_override_value = o.value;
         td->runtime_po_caller_restrictions = o.caller_restrictions;
         td->runtime_po_module_pgm = o.module_pgm;
+        td->runtime_po_app_pgm_id = o.app_pgm_id;
     }
 }
 
-__attribute__((noinline, cold)) void RuntimeConfigNativeCallbackContext::restoreOptions(ThreadData* td) {
+__attribute__((noinline, cold)) void RuntimeConfigNativeCallbackContext::restoreOptions(ThreadData* td,
+        unsigned old_app_pgm_id) {
     td->runtime_po_override_mask = old_mask;
     td->runtime_po_override_value = old_value;
     td->runtime_po_caller_restrictions = old_caller_restrictions;
     td->runtime_po_module_pgm = old_module_pgm;
+    td->runtime_po_app_pgm_id = old_app_pgm_id;
 }
 
 __attribute__((noinline, cold)) void RuntimeConfigNativeClosureContext::materialize(ThreadData* td) {
     QoreProgram* pgm = closure->getProgram();
+    QoreProgram* caller = caller_pgm ? caller_pgm : td->current_pgm;
     QoreCallParseOptionsOverride o;
     qore_get_user_call_runtime_po_override(pgm, uvb,
-        RuntimeConfigNativeAccess::getEffectiveParseOptionsFor(rc, caller_pgm ? caller_pgm : td->current_pgm), o);
+        RuntimeConfigNativeAccess::getEffectiveParseOptionsFor(rc, caller), caller, o);
     old_options.emplace(td->runtime_po_override_mask, td->runtime_po_override_value,
-        td->runtime_po_caller_restrictions, td->runtime_po_module_pgm);
+        td->runtime_po_caller_restrictions, td->runtime_po_module_pgm, td->runtime_po_app_pgm_id);
     td->runtime_po_override_mask = o.mask;
     td->runtime_po_override_value = o.value;
     td->runtime_po_caller_restrictions = o.caller_restrictions;
     td->runtime_po_module_pgm = o.module_pgm;
+    td->runtime_po_app_pgm_id = o.app_pgm_id;
     old_object = td->current_obj;
     old_class = td->current_class;
     old_rc_object = rc.getObject();
@@ -3042,6 +3052,7 @@ __attribute__((noinline, cold)) void RuntimeConfigNativeClosureContext::restoreO
         td->runtime_po_override_value = old_options->value;
         td->runtime_po_caller_restrictions = old_options->caller_restrictions;
         td->runtime_po_module_pgm = old_options->module_pgm;
+        td->runtime_po_app_pgm_id = old_options->app_pgm_id;
         old_options.reset();
     }
 }
@@ -4680,6 +4691,97 @@ QoreParseOptions runtime_get_own_program_state_parse_options(const QoreParseOpti
     return po & ~td->runtime_po_caller_restrictions;
 }
 
+unsigned runtime_get_module_call_app_id(const QoreProgram* caller_pgm) {
+    ThreadData* td = thread_data.get();
+    if (td->runtime_po_module_pgm) {
+        return td->runtime_po_app_pgm_id;
+    }
+    return caller_pgm ? caller_pgm->getProgramId() : 0;
+}
+
+bool runtime_get_module_caller_app(unsigned& app_pgm_id) {
+    ThreadData* td = thread_data.get();
+    if (!td->runtime_po_module_pgm || td->runtime_po_module_pgm != td->current_pgm) {
+        return false;
+    }
+    app_pgm_id = td->runtime_po_app_pgm_id;
+    return true;
+}
+
+// returns the description and the parse option name of the first domain in \a denied, thread control first
+static void get_denied_domain_desc(const QoreParseOptions& denied, const char*& desc, const char*& po_name,
+        const char*& caller_desc) {
+    if (denied & QoreParseOptions(QDOM_THREAD_CONTROL)) {
+        desc = "thread control";
+        po_name = "PO_NO_THREAD_CONTROL";
+        caller_desc = "control threads";
+    } else if (denied & QoreParseOptions(QDOM_PROCESS)) {
+        desc = "process control";
+        po_name = "PO_NO_PROCESS_CONTROL";
+        caller_desc = "control the process";
+    } else {
+        desc = "the functional domain of this call";
+        po_name = "its parse options";
+        caller_desc = "use it";
+    }
+}
+
+static int check_module_owned_code(const ResolvedCallReferenceNode* rcr, int64 domain, const char* name,
+        const char* action, ExceptionSink* xsink);
+
+int qore_check_module_owned_code(const QoreValue code, int64 domain, const char* name, const char* action,
+        ExceptionSink* xsink) {
+    qore_type_t t = code.getType();
+    return check_module_owned_code(t == NT_RUNTIME_CLOSURE || t == NT_FUNCREF
+        ? code.get<const ResolvedCallReferenceNode>() : nullptr, domain, name, action, xsink);
+}
+
+int qore_check_module_owned_code(const ResolvedCallReferenceNode* code, int64 domain, const char* name,
+        const char* action, ExceptionSink* xsink) {
+    return check_module_owned_code(code, domain, name, action, xsink);
+}
+
+// rcr is the code, or nullptr if the value is not code
+static int check_module_owned_code(const ResolvedCallReferenceNode* rcr, int64 domain, const char* name,
+        const char* action, ExceptionSink* xsink) {
+    assert(xsink);
+    ThreadData* td = thread_data.get();
+    // only module code running in its own Program for a caller with restrictions is checked
+    if (!td->runtime_po_module_pgm || td->runtime_po_module_pgm != td->current_pgm) {
+        return 0;
+    }
+    // the restrictions of the caller that the call needs: running code asynchronously, or with cancellation
+    // deferred, is thread control
+    QoreParseOptions needed = QoreParseOptions(domain | QDOM_THREAD_CONTROL) & td->runtime_po_caller_restrictions;
+    if (!needed) {
+        return 0;
+    }
+    // the Program whose code would run: that of a method's class for a method reference
+    const QoreProgram* pgm = rcr ? qore_call_reference_code_program(rcr) : nullptr;
+    // code without a Program of its own (a call reference to a builtin) runs with no restrictions at all
+    QoreParseOptions denied = pgm ? (pgm->getParseOptions() & needed) : needed;
+    if (!denied) {
+        return 0;
+    }
+    const char* desc;
+    const char* po_name;
+    const char* caller_desc;
+    get_denied_domain_desc(denied, desc, po_name, caller_desc);
+    if (!rcr) {
+        xsink->raiseException("INVALID-FUNCTION-ACCESS", "%s: the timer data is not code; module code running for a "
+            "caller that may not %s can %s only code of a Program that may", name, caller_desc, action);
+    } else if (!pgm) {
+        xsink->raiseException("INVALID-FUNCTION-ACCESS", "%s: the callback is a call reference to builtin code, "
+            "which has no Program; module code running for a caller that may not %s can %s only code of a Program "
+            "that may", name, caller_desc, action);
+    } else {
+        xsink->raiseException("INVALID-FUNCTION-ACCESS", "%s: the callback's Program does not allow %s (%s); module "
+            "code running for a caller that may not %s can %s only code of a Program that may", name, desc, po_name,
+            caller_desc, action);
+    }
+    return -1;
+}
+
 RuntimeParseOptionsOverrideHelper::RuntimeParseOptionsOverrideHelper(const QoreParseOptions& mask,
         const QoreParseOptions& value)
         : RuntimeParseOptionsOverrideHelper(thread_data.get(), mask, value) {
@@ -4717,10 +4819,12 @@ void RuntimeParseOptionsOverrideHelper::set(const QoreCallParseOptionsOverride& 
     old_po = td->runtime_po;
     old_caller_restrictions = td->runtime_po_caller_restrictions;
     old_module_pgm = td->runtime_po_module_pgm;
+    old_app_pgm_id = td->runtime_po_app_pgm_id;
     td->runtime_po_override_mask = o.mask;
     td->runtime_po_override_value = o.value;
     td->runtime_po_caller_restrictions = o.caller_restrictions;
     td->runtime_po_module_pgm = o.module_pgm;
+    td->runtime_po_app_pgm_id = o.app_pgm_id;
     td->runtime_po = apply_runtime_po_override(td, td->runtime_po);
 }
 
@@ -4729,6 +4833,7 @@ RuntimeParseOptionsOverrideHelper::~RuntimeParseOptionsOverrideHelper() {
     td->runtime_po_override_value = old_value;
     td->runtime_po_caller_restrictions = old_caller_restrictions;
     td->runtime_po_module_pgm = old_module_pgm;
+    td->runtime_po_app_pgm_id = old_app_pgm_id;
     td->runtime_po = old_po;
 }
 
@@ -4739,10 +4844,12 @@ LoadTimeParseOptionsHelper::LoadTimeParseOptionsHelper(const QoreParseOptions& p
     old_value = td->runtime_po_override_value;
     old_caller_restrictions = td->runtime_po_caller_restrictions;
     old_module_pgm = td->runtime_po_module_pgm;
+    old_app_pgm_id = td->runtime_po_app_pgm_id;
     td->runtime_po_override_mask = QoreParseOptions();
     td->runtime_po_override_value = QoreParseOptions();
     td->runtime_po_caller_restrictions = QoreParseOptions();
     td->runtime_po_module_pgm = nullptr;
+    td->runtime_po_app_pgm_id = 0;
     td->runtime_po = po;
 }
 
@@ -4752,6 +4859,7 @@ LoadTimeParseOptionsHelper::~LoadTimeParseOptionsHelper() {
     td->runtime_po_override_value = old_value;
     td->runtime_po_caller_restrictions = old_caller_restrictions;
     td->runtime_po_module_pgm = old_module_pgm;
+    td->runtime_po_app_pgm_id = old_app_pgm_id;
     td->runtime_po = old_po;
 }
 

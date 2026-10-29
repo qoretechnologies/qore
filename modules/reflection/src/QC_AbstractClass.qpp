@@ -305,6 +305,23 @@ const CF_NAMED_ARGS = QCF_NAMED_ARGS;
     @since %Qore 3.0
 */
 const CF_OWN_PROGRAM_STATE = QCF_OWN_PROGRAM_STATE;
+
+//! Set on builtin variants that affect or read only the calling thread
+/** Module code running in its own Program checks the functional domain of such a variant without the restrictions it
+    inherits from its caller; see @ref CURRENT_THREAD_ONLY
+
+    @since %Qore 3.0
+*/
+const CF_CURRENT_THREAD_ONLY = QCF_CURRENT_THREAD_ONLY;
+
+//! Set on builtin variants that run code passed to them asynchronously or with thread cancellation deferred, or act on timers
+/** Called by module code running in its own Program for a caller with restrictions, such a variant accepts only code
+    of a Program that allows what the caller may not and timers created for the same application; see
+    @ref MODULE_OWNED
+
+    @since %Qore 3.0
+*/
+const CF_MODULE_OWNED = QCF_MODULE_OWNED;
 ///@}
 
 //! class and inheritance access information

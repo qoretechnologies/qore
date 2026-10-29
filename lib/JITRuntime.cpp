@@ -7302,7 +7302,8 @@ public:
             QoreParseOptions caller_po = rc
                 ? RuntimeConfigNativeAccess::getEffectiveParseOptionsFor(*rc, pgm)
                 : runtime_get_effective_parse_options_for(pgm);
-            qore_get_user_call_runtime_po_override(pgm, uvb, caller_po, o);
+            qore_get_user_call_runtime_po_override(pgm, uvb, caller_po,
+                rc ? RuntimeConfigNativeAccess::getProgram(*rc) : getProgram(), o);
             if (rc) {
                 override.emplace(*rc, o);
             } else {
@@ -11251,9 +11252,9 @@ static __attribute__((noinline)) int64_t execNativeClosureV1Context(RuntimeConfi
     // Older entries install context eagerly. Preserve the same caller policy as
     // v2's cold materialization, including a module's own-state identity.
     QoreCallParseOptionsOverride o;
+    QoreProgram* policy_caller = CallerProgramFrame ? caller_pgm : RuntimeConfigNativeAccess::getProgram(rc);
     qore_get_user_call_runtime_po_override(closure->getProgram(), uvb,
-        RuntimeConfigNativeAccess::getEffectiveParseOptionsFor(rc,
-            CallerProgramFrame ? caller_pgm : RuntimeConfigNativeAccess::getProgram(rc)), o);
+        RuntimeConfigNativeAccess::getEffectiveParseOptionsFor(rc, policy_caller), policy_caller, o);
     RuntimeParseOptionsOverrideHelper po_override(rc, o);
     QoreObject* self = closure->getObject();
     std::optional<QoreClosureSelfContextHelper> self_context;
@@ -11539,7 +11540,7 @@ static __attribute__((noinline)) int tryCrossProgramFunctionRef(RuntimeConfig& r
     // transition because the captured Program is now current.
     QoreCallParseOptionsOverride o;
     qore_get_user_call_runtime_po_override(ref->getProgram(), uvb,
-        RuntimeConfigNativeAccess::getEffectiveParseOptionsFor(rc, current), o);
+        RuntimeConfigNativeAccess::getEffectiveParseOptionsFor(rc, current), current, o);
     RuntimeParseOptionsOverrideHelper po_override(rc, o);
     return tryTypedFunctionRefExplicit<Result, Signature>(rc, ref_bits, result, xsink, args...);
 }
@@ -12202,14 +12203,15 @@ private:
             const UserVariantBase* uvb, QoreProgram* caller_pgm) {
         QoreCallParseOptionsOverride o;
         qore_get_user_call_runtime_po_override(exec_pgm, uvb,
-            RuntimeConfigNativeAccess::getEffectiveParseOptionsFor(rc, caller_pgm), o);
+            RuntimeConfigNativeAccess::getEffectiveParseOptionsFor(rc, caller_pgm), caller_pgm, o);
         return o;
     }
 
     DLLLOCAL static QoreCallParseOptionsOverride get(QoreProgram* exec_pgm, const UserVariantBase* uvb,
             QoreProgram* caller_pgm) {
         QoreCallParseOptionsOverride o;
-        qore_get_user_call_runtime_po_override(exec_pgm, uvb, runtime_get_effective_parse_options_for(caller_pgm), o);
+        qore_get_user_call_runtime_po_override(exec_pgm, uvb, runtime_get_effective_parse_options_for(caller_pgm),
+            caller_pgm, o);
         return o;
     }
 };

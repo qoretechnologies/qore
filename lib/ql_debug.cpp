@@ -580,6 +580,8 @@ static void ut_native_call_options(UnitTestCounters& c) {
     const QoreParseOptions original = runtime_get_parse_options();
     const QoreParseOptions original_effective = runtime_get_effective_program_parse_options();
     const QoreParseOptions original_own = runtime_get_own_program_state_parse_options(original_effective);
+    unsigned original_app = 0;
+    const bool original_has_app = runtime_get_module_caller_app(original_app);
     for (bool copied_view : {false, true}) {
         RuntimeConfig copy(canonical);
         copy.setProgram(*other);
@@ -588,8 +590,11 @@ static void ut_native_call_options(UnitTestCounters& c) {
         {
             // The descriptor records module identity independently of the copied
             // compatibility snapshot. The live thread still executes in program.
-            auto o = qore_get_module_call_runtime_po_override(*program, PO_NO_THREAD_CONTROL);
+            auto o = qore_get_module_call_runtime_po_override(*program, PO_NO_THREAD_CONTROL, *other);
             RuntimeParseOptionsOverrideHelper outer(rc, o);
+            unsigned app = 0;
+            UT_ASSERT(c, runtime_get_module_caller_app(app) && app == other->getProgramId(),
+                "explicit module scope retains the actual caller application");
             QoreParseOptions effective = RuntimeConfigNativeAccess::getEffectiveParseOptionsFor(rc, *program);
             UT_ASSERT(c, effective == runtime_get_effective_program_parse_options(),
                 "explicit context reads live effective options despite stale snapshot fields");
@@ -602,28 +607,42 @@ static void ut_native_call_options(UnitTestCounters& c) {
                 RuntimeParseOptionsOverrideHelper nested(rc, PO_NO_THREAD_CONTROL, PO_NO_THREAD_CONTROL);
                 UT_ASSERT(c, runtime_get_own_program_state_parse_options(effective) == effective,
                     "ordinary nested override clears inherited module identity");
+                UT_ASSERT(c, !runtime_get_module_caller_app(app),
+                    "ordinary nested override clears the caller application");
             }
             UT_ASSERT(c, runtime_get_own_program_state_parse_options(effective) == own,
                 "nested override restores inherited restrictions and module identity");
+            UT_ASSERT(c, runtime_get_module_caller_app(app) && app == other->getProgramId(),
+                "nested override restores the caller application");
             {
                 LoadTimeParseOptionsHelper load(PO_MODERN);
                 UT_ASSERT(c, runtime_get_own_program_state_parse_options(effective) == effective,
                     "load-time context clears inherited module identity");
+                UT_ASSERT(c, !runtime_get_module_caller_app(app), "load-time context clears caller application");
             }
             UT_ASSERT(c, runtime_get_own_program_state_parse_options(effective) == own,
                 "load-time scope restores inherited restrictions and module identity");
+            UT_ASSERT(c, runtime_get_module_caller_app(app) && app == other->getProgramId(),
+                "load-time scope restores caller application");
             {
                 ProgramThreadCountContextHelper foreign(rc, &xsink, *other, true);
                 UT_ASSERT(c, !xsink && runtime_get_own_program_state_parse_options(effective) == effective,
                     "another Program cannot use the module's own-state allowance");
+                UT_ASSERT(c, !runtime_get_module_caller_app(app),
+                    "another Program cannot use the module's caller application");
             }
             UT_ASSERT(c, !xsink && runtime_get_own_program_state_parse_options(effective) == own,
                 "returning to the module restores its own-state allowance");
+            UT_ASSERT(c, runtime_get_module_caller_app(app) && app == other->getProgramId(),
+                "returning to the module restores its caller application");
         }
         UT_ASSERT(c, runtime_get_parse_options() == original
             && runtime_get_effective_program_parse_options() == original_effective
             && runtime_get_own_program_state_parse_options(original_effective) == original_own,
             "explicit policy scope restores the complete caller state");
+        unsigned app = 0;
+        UT_ASSERT(c, runtime_get_module_caller_app(app) == original_has_app && app == original_app,
+            "explicit policy scope restores the original caller application");
     }
 }
 
@@ -698,15 +717,21 @@ static void ut_native_callback_policy(UnitTestCounters& c) {
                     enclosing.value = PO_NO_THREAD_CONTROL;
                     enclosing.caller_restrictions = PO_NO_THREAD_CONTROL;
                     enclosing.module_pgm = *other;
+                    enclosing.app_pgm_id = other->getProgramId();
                     RuntimeParseOptionsOverrideHelper caller_policy(rc, enclosing);
                     const auto old_po = runtime_get_parse_options();
                     const auto old_effective = runtime_get_effective_program_parse_options();
                     const auto old_own = runtime_get_own_program_state_parse_options(old_effective);
+                    unsigned old_app = 0;
+                    const bool old_has_app = runtime_get_module_caller_app(old_app);
                     {
                         Frame::Scope active(frame);
                         UT_ASSERT(c, runtime_get_parse_options() == old_po
                             && runtime_get_own_program_state_parse_options(old_effective) == old_own,
                             "successful reusable callback leaves enclosing policy unchanged");
+                        unsigned app = 0;
+                        UT_ASSERT(c, runtime_get_module_caller_app(app) == old_has_app && app == old_app,
+                            "deferred callback leaves caller application unchanged");
                         if (materialize) {
                             frame.helper.materialize();
                             const auto body = runtime_get_parse_options();
@@ -721,6 +746,10 @@ static void ut_native_callback_policy(UnitTestCounters& c) {
                             UT_ASSERT(c, !(body & PO_ALLOW_INJECTION), "materialization does not grant injection");
                             UT_ASSERT(c, bool(own & PO_NO_THREAD_CONTROL) == (module ? imported : !imported),
                                 "own-module allowance preserves the established non-module execution policy");
+                            app = 0;
+                            UT_ASSERT(c, runtime_get_module_caller_app(app) == (module && !imported)
+                                && app == (module && !imported ? other->getProgramId() : 0),
+                                "materialized callback carries the application only in its owning module");
                             frame.helper.materialize();
                             UT_ASSERT(c, runtime_get_parse_options() == body
                                 && runtime_get_own_program_state_parse_options(body) == own,
@@ -730,15 +759,25 @@ static void ut_native_callback_policy(UnitTestCounters& c) {
                                     PO_NO_THREAD_CONTROL);
                                 UT_ASSERT(c, runtime_get_own_program_state_parse_options(body) == body,
                                     "nested ordinary override clears inherited module identity");
+                                UT_ASSERT(c, !runtime_get_module_caller_app(app),
+                                    "nested callback override clears caller application");
                             }
                             UT_ASSERT(c, runtime_get_own_program_state_parse_options(body) == own,
                                 "nested scope restores callback identity");
+                            app = 0;
+                            UT_ASSERT(c, runtime_get_module_caller_app(app) == (module && !imported)
+                                && app == (module && !imported ? other->getProgramId() : 0),
+                                "nested scope restores callback application after repeated materialization");
                         }
                     }
                     UT_ASSERT(c, runtime_get_parse_options() == old_po
                         && runtime_get_effective_program_parse_options() == old_effective
                         && runtime_get_own_program_state_parse_options(old_effective) == old_own,
                         "callback reuse restores all caller policy fields");
+                    unsigned app = 0;
+                    UT_ASSERT(c, runtime_get_module_caller_app(app) == old_has_app && app == old_app
+                        && runtime_get_module_call_app_id(exec) == other->getProgramId(),
+                        "callback reuse restores both visible and enclosing application identity");
                 }
             }
             UT_ASSERT(c, !xsink, "callback policy tests leave no exception");
@@ -800,6 +839,7 @@ static void ut_native_closure_context(UnitTestCounters& c) {
                 caller_options.value = PO_NO_THREAD_CONTROL;
                 caller_options.caller_restrictions = PO_NO_THREAD_CONTROL;
                 caller_options.module_pgm = *program;
+                caller_options.app_pgm_id = program->getProgramId();
                 RuntimeParseOptionsOverrideHelper caller_policy(rc, caller_options);
                 const QoreParseOptions caller_effective = runtime_get_effective_program_parse_options();
                 const QoreParseOptions caller_own = runtime_get_own_program_state_parse_options(caller_effective);
@@ -826,11 +866,16 @@ static void ut_native_closure_context(UnitTestCounters& c) {
                     UT_ASSERT(c, runtime_get_stack_object() == caller_object && !runtime_get_class(),
                         "deferred entry leaves live context untouched");
                     UT_ASSERT(c, qore_closure_self_context(caller_object), "deferred entry leaves self TLS untouched");
+                    unsigned app = 0;
+                    UT_ASSERT(c, runtime_get_module_caller_app(app) && app == program->getProgramId(),
+                        "deferred closure leaves enclosing caller application unchanged");
                     if (materialize) {
                         frame.helper.materialize();
                         frame.helper.materialize(); // Idempotence must not overwrite saved caller state.
                         UT_ASSERT(c, runtime_get_own_program_state_parse_options(caller_effective) == caller_effective,
                             "materialized non-module closure clears inherited module identity");
+                        UT_ASSERT(c, !runtime_get_module_caller_app(app),
+                            "materialized non-module closure clears enclosing caller application");
                         UT_ASSERT(c, rc.getObject() == closure->getObject() && rc.getClass() == closure->getClassCtx(),
                             "materialization installs closure snapshot context");
                         UT_ASSERT(c, runtime_get_stack_object() == closure->getObject()
@@ -868,6 +913,9 @@ static void ut_native_closure_context(UnitTestCounters& c) {
                 UT_ASSERT(c, runtime_get_effective_program_parse_options() == caller_effective
                     && runtime_get_own_program_state_parse_options(caller_effective) == caller_own,
                     "closure scope restores caller policy and module identity");
+                unsigned app = 0;
+                UT_ASSERT(c, runtime_get_module_caller_app(app) && app == program->getProgramId(),
+                    "closure scope restores caller application after repeated materialization and context moves");
             }
         }
     }
@@ -15684,6 +15732,27 @@ static QoreValue f_dbg_rset_scan(const QoreListNode* params, RuntimeConfig& rc, 
     return rv.release();
 }
 
+//! scans like dbg_rset_scan() while holding the write lock of another object, as a scan run under a lock does
+/** @param l the list
+    @param i the index of the object in the list
+    @param exclusive as for dbg_rset_scan()
+    @param lock_obj the object whose write lock is held during the scan
+    @param locked decremented once the write lock is held
+*/
+static QoreValue f_dbg_rset_scan_locked(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreObject* lock_obj = get_param_value(params, 3).get<QoreObject>();
+    ReferenceHolder<Counter> locked(get_counter_arg(params, 4, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    QoreAutoVarRWWriteLocker al(qore_object_private::get(*lock_obj)->rml);
+    locked->dec(xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return f_dbg_rset_scan(params, rc, xsink);
+}
+
 namespace {
 //! the armed hold of dbg_hold_constant_store(); one at a time
 struct ConstantStoreHold {
@@ -17053,6 +17122,10 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_rset_scan", f_dbg_rset_scan, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         hashTypeInfo, 3, listTypeInfo, QORE_PARAM_NO_ARG, "l", bigIntTypeInfo, QORE_PARAM_NO_ARG, "i",
         boolTypeInfo, QORE_PARAM_NO_ARG, "exclusive");
+    qns.addBuiltinVariant("dbg_rset_scan_locked", f_dbg_rset_scan_locked, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        hashTypeInfo, 5, listTypeInfo, QORE_PARAM_NO_ARG, "l", bigIntTypeInfo, QORE_PARAM_NO_ARG, "i",
+        boolTypeInfo, QORE_PARAM_NO_ARG, "exclusive", objectTypeInfo, QORE_PARAM_NO_ARG, "lock_obj",
+        QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "locked");
     qns.addBuiltinVariant("dbg_hold_constant_store", f_dbg_hold_constant_store,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "name",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,

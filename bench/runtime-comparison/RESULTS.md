@@ -29420,3 +29420,12 @@ Release and Debug each pass 32 fixtures: 56 QUnit cases/10371 assertions plus th
 This is a narrow AOT compiler benefit requiring recompilation; interpreter/JIT execution is unchanged. Shared M4 Pro macOS host, without affinity, frequency or thermal control. No owned build, test, profile or heavy scan overlaps timing. Observed process ranges are not confidence intervals. No fresh Java/develop ratio, weighted application speedup, universal parity or global ceiling is claimed.
 
 [Complete evidence](results-clear-cancellation-sink-macos-arm64.json); [all 62 audit checks](audit-clear-cancellation-sink.md). Next merge develop and install the optimized runtime, then evaluate the redundant deferred-method sink check identified in actual native assembly.
+
+
+## Develop integration after the clear-sink optimization (2026-10-29)
+
+Develop 9fd78f4803 is integrated with the retained AOT cancellation-sink optimization. Deferred callbacks and closures preserve the new application identity for module-owned timers and tasks without enlarging reusable callback storage. The merge also includes DGC lock-order and HTTP logger-restoration fixes.
+
+Release: 112 executed cases, 14 Debug-only skips, 4710 assertions; Debug: 126 cases, 0 skips, 6384 assertions; one additional silent fixture each. Native Debug: 3395 focused and 5057 broader assertions (overlapping). All391 Release aliases restored.
+
+The new asynchronous fixture's child Programs explicitly select their requested execution mode; child exit codes, module form, native compilation after module initialization, and a third repeated result are checked. Earlier failed coverage checks are retained in the [integration evidence](results-post-clean-sink-merge-macos-arm64.json), alongside the [complete audit](audit-post-clean-sink-merge.md). These are correctness results, not new timings or updated Java/develop ratios. The next runtime-only experiment will measure the redundant native-method sink check against the merged optimized build.

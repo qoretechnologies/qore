@@ -69,6 +69,14 @@ QoreListNode* get_code_flag_list(int64 c) {
         rv->push(new QoreStringNode("OWN_PROGRAM_STATE"), nullptr);
     }
 
+    if (c & QCF_CURRENT_THREAD_ONLY) {
+        rv->push(new QoreStringNode("CURRENT_THREAD_ONLY"), nullptr);
+    }
+
+    if (c & QCF_MODULE_OWNED) {
+        rv->push(new QoreStringNode("MODULE_OWNED"), nullptr);
+    }
+
     return rv.release();
 }
 
@@ -145,6 +153,9 @@ list<string> l = v.getCodeFlagList();
     - \c "NAMED_ARGS": the variant has the @ref Qore::Reflection::CF_NAMED_ARGS "CF_NAMED_ARGS" flag set
     - \c "OWN_PROGRAM_STATE": the variant has the @ref Qore::Reflection::CF_OWN_PROGRAM_STATE "CF_OWN_PROGRAM_STATE"
       flag set
+    - \c "CURRENT_THREAD_ONLY": the variant has the @ref Qore::Reflection::CF_CURRENT_THREAD_ONLY
+      "CF_CURRENT_THREAD_ONLY" flag set
+    - \c "MODULE_OWNED": the variant has the @ref Qore::Reflection::CF_MODULE_OWNED "CF_MODULE_OWNED" flag set
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the function or method has been destroyed
 

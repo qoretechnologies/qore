@@ -857,7 +857,7 @@ thread_yield();
 
     @since %Qore 0.8.13
 */
-nothing thread_yield() [dom=PROCESS] {
+nothing thread_yield() [dom=PROCESS;flags=CURRENT_THREAD_ONLY] {
 #ifdef _Q_WINDOWS
     // cnanot find a working mingw c++ compiler with support for std::this_thread
     SwitchToThread();
@@ -1008,7 +1008,7 @@ nothing set_thread_name(string name) [flags=NAMED_ARGS;dom=THREAD_CONTROL] {
 
     @since %Qore 2.0
 */
-bool active_exception() [dom=PROCESS] {
+bool active_exception() [dom=PROCESS;flags=CURRENT_THREAD_ONLY] {
     return q_active_exception();
 }
 
@@ -1281,8 +1281,23 @@ release() {
     - cancel_thread()
     - thread_cancelled()
     - clear_thread_cancel()
+
+    @throw INVALID-FUNCTION-ACCESS module code running for a restricted caller passed code that is not its own
+
+    @par Module Code and Restricted Callers
+    Module code that runs for a caller that may not control threads (a Qorus service, for example, has
+    @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL") can defer cancellation only for its own code: code of a
+    %Program that allows what the caller may not.  The caller's own code (a closure, or a method that a class of the
+    caller overrides) is refused with \c INVALID-FUNCTION-ACCESS, whose description gives the reason, for example
+    <em>the callback's Program does not allow thread control (PO_NO_THREAD_CONTROL)</em>; see @ref MODULE_OWNED
+
 */
-auto defer_thread_cancel(code cleanup, ...) [dom=THREAD_CONTROL] {
+auto defer_thread_cancel(code cleanup, ...) [dom=THREAD_CONTROL;flags=MODULE_OWNED] {
+    // checked before the deferral starts
+    if (qore_check_module_owned_code(cleanup, QDOM_THREAD_CONTROL, "defer_thread_cancel()",
+            "defer the cancellation of", xsink)) {
+        return QoreValue();
+    }
     // declared first so that it is destroyed last: the deferral covers the argument list's own
     // teardown, which can run destructors.  The helper's destructor releases it on every path,
     // including when the call throws.
@@ -1353,8 +1368,21 @@ list<auto> results = map $1.get(), futures;
     @see @ref parallel_map()
 
     @since %Qore 3.0
+    @throw INVALID-FUNCTION-ACCESS module code running for a restricted caller passed code that is not its own
+
+    @par Module Code and Restricted Callers
+    Module code that runs for a caller that may not control threads (a Qorus service, for example, has
+    @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL") can schedule only its own code: code of a %Program that
+    allows what the caller may not.  The caller's own code (a closure, or a method that a class of the caller
+    overrides) is refused with \c INVALID-FUNCTION-ACCESS, whose description gives the reason, for example <em>the
+    callback's Program does not allow thread control (PO_NO_THREAD_CONTROL)</em>; see @ref MODULE_OWNED
+
 */
-Future call_async(code callable, ...) [dom=THREAD_CLASS,THREAD_CONTROL] {
+Future call_async(code callable, ...) [dom=THREAD_CLASS,THREAD_CONTROL;flags=MODULE_OWNED] {
+    if (qore_check_module_owned_code(callable, QDOM_THREAD_CLASS | QDOM_THREAD_CONTROL, "call_async()",
+            "schedule", xsink)) {
+        return QoreValue();
+    }
     // Get the code reference (callable is const ResolvedCallReferenceNode* from QPP)
     ResolvedCallReferenceNode* code = const_cast<ResolvedCallReferenceNode*>(callable);
     code->ref();
@@ -1578,8 +1606,21 @@ list<auto> hashes = parallel_map(auto sub(auto pw) {
     @see @ref call_async()
 
     @since %Qore 3.0
+    @throw INVALID-FUNCTION-ACCESS module code running for a restricted caller passed code that is not its own
+
+    @par Module Code and Restricted Callers
+    Module code that runs for a caller that may not control threads (a Qorus service, for example, has
+    @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL") can run in other threads only its own code: code of a
+    %Program that allows what the caller may not.  The caller's own code (a closure, or a method that a class of the
+    caller overrides) is refused with \c INVALID-FUNCTION-ACCESS, whose description gives the reason, for example
+    <em>the callback's Program does not allow thread control (PO_NO_THREAD_CONTROL)</em>; see @ref MODULE_OWNED
+
 */
-list<auto> parallel_map(code callable, list<auto> items, int thread_count = 0) [flags=NAMED_ARGS;dom=THREAD_CLASS,THREAD_CONTROL] {
+list<auto> parallel_map(code callable, list<auto> items, int thread_count = 0) [flags=NAMED_ARGS,MODULE_OWNED;dom=THREAD_CLASS,THREAD_CONTROL] {
+    if (qore_check_module_owned_code(callable, QDOM_THREAD_CLASS | QDOM_THREAD_CONTROL, "parallel_map()",
+            "schedule", xsink)) {
+        return QoreValue();
+    }
     const QoreListNode* l = items;
     if (!l || l->empty()) {
         return new QoreListNode(autoTypeInfo);
@@ -1721,8 +1762,21 @@ try {
     @see @ref call_async()
 
     @since %Qore 3.0
+    @throw INVALID-FUNCTION-ACCESS module code running for a restricted caller passed code that is not its own
+
+    @par Module Code and Restricted Callers
+    Module code that runs for a caller that may not control threads (a Qorus service, for example, has
+    @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL") can run in other threads only its own code: code of a
+    %Program that allows what the caller may not.  The caller's own code (a closure, or a method that a class of the
+    caller overrides) is refused with \c INVALID-FUNCTION-ACCESS, whose description gives the reason, for example
+    <em>the callback's Program does not allow thread control (PO_NO_THREAD_CONTROL)</em>; see @ref MODULE_OWNED
+
 */
-nothing parallel_foreach(code callable, list<auto> items, int thread_count = 0) [flags=NAMED_ARGS;dom=THREAD_CLASS,THREAD_CONTROL] {
+nothing parallel_foreach(code callable, list<auto> items, int thread_count = 0) [flags=NAMED_ARGS,MODULE_OWNED;dom=THREAD_CLASS,THREAD_CONTROL] {
+    if (qore_check_module_owned_code(callable, QDOM_THREAD_CLASS | QDOM_THREAD_CONTROL, "parallel_foreach()",
+            "schedule", xsink)) {
+        return QoreValue();
+    }
     const QoreListNode* l = items;
     if (!l || l->empty()) {
         return QoreValue();
@@ -1904,7 +1958,7 @@ auto result = channel_select((
 
     @since %Qore 3.0
 */
-auto channel_select(list<auto> cases, timeout timeout = 0) [flags=NAMED_ARGS;dom=THREAD_CLASS,THREAD_CONTROL] {
+auto channel_select(list<auto> cases, timeout timeout = 0) [flags=NAMED_ARGS,CURRENT_THREAD_ONLY;dom=THREAD_CLASS,THREAD_CONTROL] {
     const QoreListNode* case_list = cases;
     if (!case_list || case_list->empty()) {
         xsink->raiseException("CHANNEL-SELECT-ERROR", "channel_select() called with empty cases list");

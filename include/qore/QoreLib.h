@@ -161,6 +161,8 @@ typedef std::vector<int> sig_vec_t;
 #define QCF_NO_DOMAIN_THROW        (1 << 10) //!< code raises no exception determined by its arguments or by program state (resource-exhaustion exceptions remain possible; see @ref qore_code_flags)
 #define QCF_HOST_PORTABLE          (1 << 11) //!< the result is bit-identical on every conforming host, not merely repeatable on one; see @ref qore_code_flags_portability
 #define QCF_OWN_PROGRAM_STATE      (1 << 12) //!< code changes or reads only the state that the Program running it keeps for the current thread, so module code running in its own Program checks its functional domain without the restrictions it inherits from its caller
+#define QCF_CURRENT_THREAD_ONLY    (1 << 13) //!< code affects or reads only the calling thread (it waits, yields, or reads the thread's own state), so module code running in its own Program checks its functional domain without the restrictions it inherits from its caller
+#define QCF_MODULE_OWNED           (1 << 14) //!< code runs code passed to it asynchronously or with thread cancellation deferred, or acts on timers; module code running in its own Program for a caller with restrictions checks its functional domain without them, and the variant accepts only code of a Program that allows what the caller may not, and timers created for the same application
 
 // composite flags
 

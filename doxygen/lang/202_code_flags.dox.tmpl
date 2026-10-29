@@ -54,6 +54,43 @@
     other context: called directly by restricted code, or by a module function, which runs in its caller's Program,
     the variant is checked against all the restrictions in effect.
 
+    @section CURRENT_THREAD_ONLY
+    The function or method affects or reads only the calling thread: it waits or yields (@ref Qore::sleep() "sleep()",
+    @ref Qore::usleep() "usleep()", @ref Qore::thread_yield() "thread_yield()",
+    @ref Qore::channel_select() "channel_select()") or reads the thread's own state
+    (@ref Qore::active_exception() "active_exception()",
+    @ref Qore::Program::getCallerCapabilityMask() "Program::getCallerCapabilityMask()").  A caller that runs module
+    code gives it its thread for the duration of the call, so module code running in the module's own Program checks
+    such a variant against the module's own restrictions only.  Called directly by restricted code, or by a module
+    function, which runs in its caller's Program, the variant is checked against all the restrictions in effect.
+
+    @section MODULE_OWNED
+    The function or method runs code passed to it asynchronously
+    (@ref Qore::AsyncIoController::addTimer() "AsyncIoController::addTimer()",
+    @ref Qore::AsyncIoController::submitTask() "AsyncIoController::submitTask()",
+    @ref Qore::call_async() "call_async()", @ref Qore::parallel_map() "parallel_map()",
+    @ref Qore::parallel_foreach() "parallel_foreach()") or with thread cancellation deferred
+    (@ref Qore::defer_thread_cancel() "defer_thread_cancel()"), or acts on timers
+    (@ref Qore::AsyncIoController::cancelTimer() "AsyncIoController::cancelTimer()").  Module code running in the
+    module's own Program for a caller with restrictions, such as one with
+    @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL", checks such a variant without the restrictions it inherits
+    from its caller, and the variant then checks what it acts on:
+    - the code must belong to a Program that allows what the caller may not, with thread control always included:
+      the module's own closures and methods qualify, while the caller's own code (a closure, or a method that a
+      class of the caller overrides) is refused with \c INVALID-FUNCTION-ACCESS, naming the restriction that the
+      code's Program has (for example: <em>the callback's Program does not allow thread control
+      (PO_NO_THREAD_CONTROL)</em>), and so are a call reference to builtin code and non-callable timer data, which a
+      process-wide timer callback would receive
+    - a timer can be cancelled only if module code added it for the same application, the first Program in the
+      chain of callers that is not a module; @ref Qore::AsyncIoController::cancelTimer()
+      "AsyncIoController::cancelTimer()" returns @ref False otherwise
+
+    This keeps the caller's restrictions: a caller that may not control threads cannot use module code to run its own
+    code in another thread or to escape a cancellation request, while modules such as
+    @ref asyncsocketiointro "AsyncSocketIo" and the WebSocket clients keep their
+    own timers and tasks for it.  Called directly by restricted code, the variant is checked against all the
+    restrictions in effect.
+
     @section DEPRECATED
     Code with this flag is deprecated and may be removed in a future version of %Qore; if a variant with this flag is resolved at parse time, a @ref deprecated warning is raised (assuming this warning is enabled).
 

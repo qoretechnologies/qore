@@ -381,6 +381,9 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         @param task the closure or call reference to execute on a thread pool worker
         @param cancel an optional closure or call reference to call if the task is canceled
         (e.g., during controller shutdown)
+
+        @throw INVALID-FUNCTION-ACCESS a caller that may not control threads passed code that is not its own module's;
+        see @ref Qore::AsyncIoController::submitTask() "AsyncIoController::submitTask()"
     */
     submitTask(code<nothing()> task, *code<nothing()> cancel) {
         Qore::AsyncIoController::submitTask(task: task, cancel_callback: cancel);
@@ -402,6 +405,16 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         @param callback the closure to call when the timer fires
 
         @return the unique timer ID that can be passed to cancelTimer() to cancel the timer
+
+        @par Module Code and Restricted Callers
+        For a caller that may not control threads (a Qorus service, for example, has
+        @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL"), only code of a %Program that may is accepted: a
+        module's own closures and methods qualify, while the caller's own closure, or a method that a class of the
+        caller overrides, is refused with \c INVALID-FUNCTION-ACCESS, whose description gives the reason, for example
+        <em>the callback's Program does not allow thread control (PO_NO_THREAD_CONTROL)</em>; see
+        @ref Qore::AsyncIoController::addTimer() "AsyncIoController::addTimer()"
+
+        @throw INVALID-FUNCTION-ACCESS a caller that may not control threads passed code that is not its own module's
     */
     int addTimer(date deadline, code<nothing()> callback) {
         return Qore::AsyncIoController::addTimer(deadline, callback);
@@ -420,6 +433,16 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         @ref flushCallbacksByOwner())
 
         @return the unique timer ID that can be passed to cancelTimer() to cancel the timer
+
+        @par Module Code and Restricted Callers
+        For a caller that may not control threads (a Qorus service, for example, has
+        @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL"), only code of a %Program that may is accepted: a
+        module's own closures and methods qualify, while the caller's own closure, or a method that a class of the
+        caller overrides, is refused with \c INVALID-FUNCTION-ACCESS, whose description gives the reason, for example
+        <em>the callback's Program does not allow thread control (PO_NO_THREAD_CONTROL)</em>; see
+        @ref Qore::AsyncIoController::addTimer() "AsyncIoController::addTimer()"
+
+        @throw INVALID-FUNCTION-ACCESS a caller that may not control threads passed code that is not its own module's
     */
     int addTimer(date deadline, code<nothing()> callback, string owner) {
         return Qore::AsyncIoController::addTimer(deadline, callback, owner);
@@ -428,7 +451,9 @@ public class AsyncSocketIoController inherits LoggerWrapper {
     #! Cancels a pending timer
     /** @param timer_id the timer ID returned by addTimer()
         @return @ref True "True" if the timer was found and canceled; @ref False "False" if
-        the timer had already fired or was not found
+        the timer had already fired or was not found, or if module code running for an application with restrictions
+        did not add it for the same application (see
+        @ref Qore::AsyncIoController::cancelTimer() "AsyncIoController::cancelTimer()")
     */
     bool cancelTimer(int timer_id) {
         return Qore::AsyncIoController::cancelTimer(timer_id: timer_id);
