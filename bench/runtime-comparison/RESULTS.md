@@ -29108,3 +29108,56 @@ This runtime change can apply to existing AOT/JIT artifacts without recompilatio
 Next synchronize develop and install the audited optimized runtime. Then investigate the redundant context stores and exception-state reads still present in already-inlined fast call loops, preserving cancellation polls and proving clean exception state at every incoming edge. Explicit host-CPU AOT tuning remains a separate alternative. Neither lead is an established further improvement.
 
 [Evidence](results-general-discard-macos-arm64.json); [all 62 audit checks](audit-general-discard.md).
+
+
+## Rejected AOT native backend optimization-level mapping (2026-10-29)
+
+The experiment mapped requested AOT levels 0/1/2/3 to LLVM native CodeGenOptLevel None/Less/Default/Aggressive, in addition to the existing IR optimization pipeline. Both ordinary and split target machines received the level; CPU remained generic, frame pointers and runtime checks remained, and JIT policy was unchanged. Current native code generation uses LLVM Default independently of the requested IR level. The candidate is rejected as unproven, and lib/QoreAOT.cpp is restored to 698e85116f. No production optimization from this experiment is retained.
+
+The optimized screen provides no workload with disjoint better observed fork ranges in all three layouts. Direct calls are flat (-0.06%), simple methods cost 1.83%, local effectful methods cost 1.95%, and imported effectful methods cost 1.58%. Some adverse layouts have disjoint ranges: simple-method default +2.27%, local effect default +0.32% and shuffle +2.96%, imported boxed-float default +1.90%, imported effect shuffle +3.15%, and mixed callback shuffle +0.52%. Small favorable separated layouts also occur for local integer/float members, imported virtual integer/float calls, imported floating members and list reading; all ranges remain in the evidence. The broader tradeoff has not demonstrated a practical benefit.
+
+The apparent temporary-list gain (-9.16%) and indirect-call cost (+23.87%) are especially uncertain: every layout has overlapping ranges, with temporary-list fork means spanning approximately 1.63-3.10 ns/item and indirect-call means 10.15-40.21 ns/item. Imported boxed-integer default has a +97.77% median shift with overlapping ranges. These samples are preserved, not excluded. This is a shared-host inconclusive result, not evidence that LLVM Aggressive is universally worse. No independent confirmation or candidate Debug run was performed after rejection.
+
+Clean installed baseline 698e85116f and candidate both use Release -O3 -DNDEBUG, allocation tracking off, LLVM 22.1.8 and Apple Clang 21 on Apple M4 Pro/macOS ARM64. Fifteen artifacts per variant were separately compiled with qcc -O3 --strip-source from identical source paths. All workload LLVM IR bodies are identical; startup metadata-length operands differ with the expected AOT runtime identity change. Native code changes are recorded; file sizes happen to remain equal, which does not imply equal code size. Source location, ownership, Program transitions, cancellation and exception behavior were not weakened.
+
+The screen covers 32 workloads, three default/reverse/shuffle-487 layouts, three fresh forks, three warmups and three 150 ms samples, 4096 items/seed 7. Randomized order seed 2026102991 was declared before timing. These are whole-kernel ns/item, median of per-layout median fork means; percentages are candidate time change. All 576 processes/1728 measured windows independently replay, and both variants pass 1518 IR/4554 AOT reference results (12144 combined). No owned build/test/profile or heavy archive scan overlaps timing. No CPU affinity, frequency, thermal or exclusive-host control is claimed.
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Time change
+|local:direct_call|1.567295|1.566323|-0.062%
+|local:method_call|1.629030|1.658804|+1.828%
+|local:polymorphic_call|24.294054|24.268078|-0.107%
+|local:boxed_int_method_fallback|33.930066|33.794978|-0.398%
+|local:boxed_float_method_fallback|35.534432|35.291917|-0.682%
+|local:boxed_int_method_effect|94.046432|95.876084|+1.945%
+|local:list_mutate|126.965069|125.446694|-1.196%
+|local:temporary_list|2.025790|1.840292|-9.157%
+|micro:polymorphic_call|79.881496|79.504784|-0.472%
+|micro:polymorphic_float_call|82.417190|81.683368|-0.890%
+|micro:boxed_int_method_call|104.129289|106.803348|+2.568%
+|micro:boxed_float_method_call|108.193662|108.735605|+0.501%
+|micro:boxed_int_method_fallback|114.613975|114.282833|-0.289%
+|micro:boxed_float_method_fallback|121.294296|119.182415|-1.741%
+|micro:boxed_int_method_effect|176.685146|179.481762|+1.583%
+|micro:indirect_call|10.436191|12.927310|+23.870%
+|micro:closure_call|18.610348|18.521023|-0.480%
+|micro:closure_capture|25.022617|24.760800|-1.046%
+|micro:list_read|2.967198|2.937864|-0.989%
+|micro:list_build|23.642304|23.820999|+0.756%
+|micro:list_mutate|125.553877|125.897566|+0.274%
+|micro:temporary_hash|1.664058|1.705840|+2.511%
+|float:callback_local_float_return|0.885079|0.862867|-2.510%
+|float:typed_local_int_unary|1.201949|1.207209|+0.438%
+|float:callback_loop_float_return|5.201070|5.220931|+0.382%
+|mixed:csv_report|972.800696|954.297517|-1.902%
+|mixed:object_orders|3352.820811|3352.886161|+0.002%
+|mixed:callback_pipeline|92.931530|92.406000|-0.566%
+|mixed:text_index|1378.240138|1373.483917|-0.345%
+|probe:object_short|1700.908534|1685.395212|-0.912%
+|probe:effect_short|1758.546331|1748.837954|-0.552%
+|probe:string_result_loop|563.194538|559.451434|-0.665%
+
+The retained regression extends AOTSplitCodegenDeterminism to qcc levels 0-3, each with five thread counts and four split parts. It checks byte-identical output across thread counts, actual child exit statuses and correct execution after removing source. The unchanged baseline passes 2 cases/160 assertions; candidate Release passes 23 fixtures (including two silent), 61 executed QUnit cases/12312 assertions. QUnit reports 298 registered cases because the filtered AOTSmoke run counts 237 excluded cases; those are not claimed as executed coverage. All 391 optimized qmods build successfully. Candidate artifacts remain frozen in the evidence archive; restored production source and the already installed 698e runtime retain the prior qualified behavior.
+
+Next evaluate explicit CPU-specific AOT tuning while preserving the portable generic default, with consistent ordinary/split settings and truthful build metadata. Redundant fast-loop exception/location work remains a separate proof-dependent lead. No fresh Java/develop ratio or global performance ceiling is established.
+
+[Evidence](results-backend-opt-level-rejected-macos-arm64.json); [all 62 audit checks](audit-backend-opt-level-rejected.md).

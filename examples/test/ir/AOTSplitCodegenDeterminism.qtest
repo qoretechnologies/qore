@@ -158,17 +158,30 @@ printf(\"%y\\n\", (
     private {
         string qore_bin;
         string libqore_dir;
+        string qcc_bin;
     }
 
     constructor() : QUnit::Test("AOTSplitCodegenDeterminismTest", "1.0", \ARGV) {
         qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC_EXECUTABLE ?? dirname(qore_bin) + DirSep + "qcc";
 
         addTestCase("a split module does not depend on the codegen threads", \testThreads());
+        addTestCase("qcc optimization levels preserve split module results and determinism", \testOptimizationLevels());
         set_return_value(main());
     }
 
-    testThreads() {
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    testOptimizationLevels() {
+        foreach int level in ((0, 1, 2, 3)) {
+            testThreads(level);
+        }
+    }
+
+    testThreads(int opt_level = -1) {
         TmpDir tmp("qore-aot-split-");
         string qm_path = tmp.path + DirSep + "SplitDeterminism.qm";
         File qm();
@@ -180,11 +193,15 @@ printf(\"%y\\n\", (
         # the compiled module and the compiler's output for each thread count
         hash<string, binary> modules;
         hash<string, string> outputs;
+        string compiler = opt_level < 0 ? quote(qore_bin) + " -b --compile-module"
+            : sprintf("%s -O%d -m --strip-source", quote(qcc_bin), opt_level);
         foreach int jobs in (JobCounts) {
             # MAKEFLAGS is removed so that no make jobserver limits the threads; QORE_DEBUG_OPT reports the parts
+            int status;
             string out = backquote(sprintf("env -u MAKEFLAGS QCC_JOBS=%d QCC_SPLIT_THRESHOLD=1 QORE_DEBUG_OPT=1 "
-                "QORE_LIBDIR=%s %s -b --compile-module --output %s %s 2>&1", jobs, libqore_dir, qore_bin, qmod_path,
-                qm_path));
+                "QORE_LIBDIR=%s %s --output %s %s 2>&1", jobs, quote(libqore_dir), compiler, quote(qmod_path),
+                quote(qm_path)), \status);
+            assertEq(0, status, sprintf("O%d QCC_JOBS=%d: compiler succeeded: %s", opt_level, jobs, out));
             assertTrue(is_file(qmod_path), sprintf("QCC_JOBS=%d: compiled the module: %s", jobs, out));
             modules{jobs} = ReadOnlyFile::readBinaryFile(qmod_path);
             outputs{jobs} = out;
@@ -218,8 +235,11 @@ printf(\"%y\\n\", (
         script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
         script.write(ScriptSource);
         script.close();
+        unlink(qm_path);
+        int status;
         string run_out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s 2>&1",
-            libqore_dir, libqore_dir, tmp.path, qore_bin, script_path));
+            quote(libqore_dir), quote(libqore_dir), quote(tmp.path), quote(qore_bin), quote(script_path)), \status);
+        assertEq(0, status, "the compiled module exits successfully");
         assertEq(ScriptOutput, run_out, "the compiled module runs");
     }
 }
