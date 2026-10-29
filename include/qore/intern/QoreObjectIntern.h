@@ -753,6 +753,14 @@ public:
     */
     DLLLOCAL void customRefIntern(bool real);
 
+    //! Acquires a cached reference only while the object still has a live owner.
+    /** @return true if one reference was acquired; false leaves the counts unchanged
+        @note The caller must keep the storage allocated. ProgramControl's cache lock does this because its
+        destructor unregisters the cache entry before freeing the object. This does not prevent an explicit
+        delete by another owner, and is not a resurrection operation for objects in a destructor.
+    */
+    DLLLOCAL bool tryRefExisting();
+
     // custom dereference handler - unlocked
     /** @param real if the dereference is "real" (i.e. cannot be part of a recursive cycle) or not
     */

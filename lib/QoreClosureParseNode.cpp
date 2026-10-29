@@ -183,7 +183,12 @@ int QoreClosureParseNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
 }
 
 int QoreClosureParseNode::parseInitDeferred() {
-    assert(is_deferred);
+    // Idempotent: a closure in a constant expression can have its deferred parse-init forced on demand by exec()
+    // when the constant's value is evaluated during parse-commit (before initDeferredCode() flushes the deferred
+    // set).  In that case this is called a second time from initDeferredCode(); do nothing the second time.
+    if (!is_deferred) {
+        return 0;
+    }
     assert(uf);
     is_deferred = false;
     int rc;
@@ -205,7 +210,24 @@ const char* QoreClosureParseNode::getTypeName() const {
 
 QoreValue QoreClosureParseNode::exec(const QoreClosureBase& closure_base, QoreProgram* pgm, const QoreListNode* args,
         QoreObject* self, const qore_class_private* class_ctx, ExceptionSink* xsink) const {
-    assert(!is_deferred);
+    if (is_deferred) {
+        // A closure inside a constant expression has its parse-init deferred (deferCodeInitialization() in
+        // parseInitImpl()) so that recursive constant values are available when it is initialized (#4903).  The
+        // deferred set is normally flushed by qore_program_private::initDeferredCode() at the end of parse-commit,
+        // but a constant whose value is evaluated earlier in parse-commit can execute such a closure before that
+        // flush, reaching this point while still deferred (a null uf->parseInit() result => crash in release, the
+        // assertion below in debug).  Complete the deferred parse-init now so the closure is callable.  By this
+        // phase every constant has already been parse-initialized, so forcing it here cannot reintroduce the
+        // init-order cycle the deferral guards against; parseInitDeferred() is idempotent, so the later
+        // initDeferredCode() pass is a no-op for this node.
+        if (const_cast<QoreClosureParseNode*>(this)->parseInitDeferred()) {
+            if (xsink) {
+                xsink->raiseException("CLOSURE-INITIALIZATION-ERROR", "the closure used in this constant "
+                    "expression could not be initialized");
+            }
+            return QoreValue();
+        }
+    }
     assert(uf);
     return uf->evalClosure(closure_base, pgm, args, self, class_ctx, xsink);
 }

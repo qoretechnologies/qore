@@ -30106,7 +30106,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     identity->second, "stored_closure_expected");
             }
             if ((immediate_closure || guarded_stored_closure)
-                    && aot_mode && current_ir_func
+                    && aot_mode && aot_direct_closure_fast_entry && current_ir_func
                     && !q_env_is_set("QORE_DISABLE_AOT_NATIVE_CLOSURE_CALL_ABI")) {
                 const QoreIRCreateClosureInstruction* create = immediate_create;
                 const QoreClosureParseNode* closure = immediate_closure_node;

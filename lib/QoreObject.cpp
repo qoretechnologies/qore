@@ -2319,6 +2319,27 @@ void QoreObject::customRef() const {
    priv->customRefIntern(false);
 }
 
+bool qore_object_private::tryRefExisting() {
+    if (status.load(std::memory_order_acquire) != OS_OK) {
+        return false;
+    }
+    int refs = references.load(std::memory_order_relaxed);
+    while (refs > 0) {
+        // A plain ref() can resurrect a zero count after final release has committed to deletion. The cache
+        // owns no reference, so acquisition must compete atomically with that final release.
+        if (references.compare_exchange_weak(refs, refs + 1, std::memory_order_acquire,
+                std::memory_order_relaxed)) {
+            printd(QORE_DEBUG_OBJ_REFS, "qore_object_private::tryRefExisting() this: %p obj: %p '%s' "
+                "references %d->%d\n", this, obj, getClassName(), refs, refs + 1);
+            if (qore_trace_object_refs_enabled) {
+                qore_trace_object_ref("ref", this, obj, getClassName(), refs, refs + 1, false);
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
 bool QoreObject::derefImpl(ExceptionSink* xsink) {
     // should never be called
     assert(false);

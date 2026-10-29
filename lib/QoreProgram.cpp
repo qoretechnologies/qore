@@ -4008,6 +4008,17 @@ QoreObject* QoreProgram::getQoreObject(QoreProgram* pgm) {
     return qore_program_private::getQoreObject(pgm);
 }
 
+QoreObject* qore_program_private::referenceProgramControl(QoreProgram* pgm, QoreObject*& cached) {
+    if (cached && qore_object_private::get(*cached)->tryRefExisting()) {
+        return cached;
+    }
+    // The old wrapper can still be waiting to unregister. The map lock keeps its storage allocated, but
+    // cannot stop final release from reaching zero. Replace it instead of resurrecting a retiring wrapper.
+    cached = new QoreObject(QC_PROGRAMCONTROL, getProgram(), pgm);
+    pgm->ref();
+    return cached;
+}
+
 void qore_program_private::cleanupAllPrograms(ExceptionSink* xsink) {
     if (!qore_shutdown.load(std::memory_order_relaxed)) {
         return;

@@ -133,10 +133,15 @@ class TestDebugProgramControl inherits DebugProgramControl {
     }
 
     #! returns the next interrupt event, skipping breakpoint change notifications
-    hash<auto> getInterrupt() {
+    /** @param pgmId if given, interrupt events of any other program are skipped; the debugged programs share this
+        one event queue, so without the filter an interrupt left in the queue by a previously-removed program (for
+        example its \c detach when its test case resumed it to its end in a different order under load) would be
+        returned to the next program's client as if it were that program's event
+    */
+    hash<auto> getInterrupt(*int pgmId) {
         while (True) {
             hash<auto> e = events.get(EventTimeout);
-            if (e.cmd == DebugEventCmd::Interrupt) {
+            if (e.cmd == DebugEventCmd::Interrupt && (!exists pgmId || e.pgmid == pgmId)) {
                 return e;
             }
         }
@@ -165,7 +170,7 @@ class DebuggedProgram {
         pgm = dpc.createProgram(label, NOTHING, (), script);
         pgmId = pgm.getProgram().getProgramId();
         background run();
-        hash<auto> e = dpc.getInterrupt();
+        hash<auto> e = dpc.getInterrupt(pgmId);
         if (e.func != "attach") {
             throw "TEST-ERROR", sprintf("expecting the attach event at the start of the program; got: %y", e);
         }
@@ -190,7 +195,7 @@ class DebuggedProgram {
     #! runs the program until it stops and returns the interrupt event
     hash<auto> runToStop() {
         dpc.go(tid);
-        return dpc.getInterrupt();
+        return dpc.getInterrupt(pgmId);
     }
 
     #! runs the program to its end and returns the result of the run
@@ -198,7 +203,7 @@ class DebuggedProgram {
     */
     hash<auto> finish() {
         dpc.go(tid);
-        hash<auto> e = dpc.getInterrupt();
+        hash<auto> e = dpc.getInterrupt(pgmId);
         if (e.func != "detach") {
             throw "TEST-ERROR", sprintf("expecting the detach event at the end of the program; got: %y", e);
         }
@@ -424,8 +429,13 @@ public class DebugProgramControlTest inherits QUnit::Test {
         assertEq(DebugResponseType::Error, resp.type);
         assertEq("DEBUG-HANDLER-ERROR", resp.result.err);
 
-        # "go" and a command sent right after it: the second command is answered with an error, by the thread when it
-        # was queued before the thread resumed, or at once
+        # "go" and a command sent right after it: the second command is always answered with its own unique ID and
+        # is never left hanging (the #5560 guarantee).  Which answer it gets depends on scheduling and is correct
+        # either way: if the thread had already resumed when the command was processed it is answered with the
+        # "is not stopped" error (drained from the thread's queue or answered inline); if the thread had re-stopped
+        # at the detach event at the program's end (the breakpoint is on the last statement) before the command was
+        # processed, it is answered with a normal stack response of the detach frame.  The faster IR/JIT tiers reach
+        # the re-stop sooner, so the normal-response outcome is common there and rare with the AST interpreter.
         string go_uid = string(dpc.uids.next());
         string stack_uid = string(dpc.uids.next());
         hash<auto> rv = dpc.processCommand(TestDebugProgramControl::CX, {"cmd": "thread/go/run", "tid": p.tid,
@@ -437,15 +447,25 @@ public class DebugProgramControlTest inherits QUnit::Test {
         assertEq({}, resp.result);
         if (rv.type == DebugResponseType::Thread) {
             resp = dpc.responses.get(EventTimeout);
-            assertEq(stack_uid, resp.uid);
         } else {
             resp = rv;
         }
-        assertEq(DebugResponseType::Error, resp.type);
-        assertRegex("is not stopped", resp.result.desc);
+        # answered, with the command's own unique ID
+        assertEq(stack_uid, resp.uid);
+        if (resp.type == DebugResponseType::Error) {
+            # the thread had resumed: specifically the "is not stopped" error
+            assertEq("DEBUG-HANDLER-ERROR", resp.result.err);
+            assertRegex("is not stopped", resp.result.desc);
+        } else {
+            # the thread had re-stopped at the detach event: a well-formed, non-empty call stack
+            assertEq(DebugResponseType::Response, resp.type);
+            assertEq(Type::List, resp.result.type());
+            assertGt(0, resp.result.size());
+            assertEq(Type::Hash, resp.result[0].type());
+        }
 
         # the program ends: it stops at the detach event
-        hash<auto> e = dpc.getInterrupt();
+        hash<auto> e = dpc.getInterrupt(p.pgmId);
         assertEq("detach", e.func);
         dpc.go(p.tid);
         assertEq({"rc": NOTHING}, p.done.get(EventTimeout));

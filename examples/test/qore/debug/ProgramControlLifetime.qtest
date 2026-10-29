@@ -1,0 +1,57 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+
+%modern
+%no-child-restrictions
+%allow-debugger
+
+# The cached ProgramControl is borrowed. Its final release can be in progress while another thread asks
+# for a wrapper. Hold that release before its destructor unregisters the old cache entry.
+if (!Option::HAVE_LIBRARY_DEBUGGING) {
+    printf("SKIP: deterministic reference-release hooks require a Debug build\n");
+    return;
+}
+
+foreach bool enumerate in ((False, True)) {
+    Program pgm(PO_NO_CHILD_PO_RESTRICTIONS);
+    int id = pgm.getProgram().getProgramId();
+    Counter held(1);
+    Counter release(1);
+    Counter done(1);
+    on_exit {
+        if (release.getCount()) {
+            release.dec();
+        }
+        done.waitForZero();
+    }
+    call_function("dbg_hold_deref_marked", "ProgramControl", held, release);
+    background sub () {
+        on_exit done.dec();
+        ProgramControl control = pgm.getProgram();
+    }();
+    if (held.waitForZero(30s)) {
+        throw "TEST-ERROR", "the final ProgramControl release did not reach the hold";
+    }
+    *ProgramControl replacement;
+    if (enumerate) {
+        foreach ProgramControl control in (ProgramControl::getAllPrograms()) {
+            if (control.getProgramId() == id) {
+                replacement = control;
+                break;
+            }
+        }
+    } else {
+        replacement = pgm.getProgram();
+    }
+    release.dec();
+    done.waitForZero();
+    if (!replacement || replacement.getProgramId() != id) {
+        throw "TEST-ERROR", "the replacement ProgramControl was deleted with the old wrapper";
+    }
+    # The old destructor must not clear the replacement's cache entry.
+    ProgramControl again = pgm.getProgram();
+    if (again !== replacement) {
+        throw "TEST-ERROR", "the old destructor unregistered the replacement wrapper";
+    }
+}
+printf("OK\n");

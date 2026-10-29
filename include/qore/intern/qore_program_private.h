@@ -3906,8 +3906,11 @@ public:
         QoreAutoRWWriteLocker al(&qore_program_private::lck_programMap);
         qore_program_to_object_map_t::iterator i = qore_program_private::qore_program_to_object_map.find(pgm);
         assert(i != qore_program_private::qore_program_to_object_map.end());
-        assert(i->second == o);
-        i->second = nullptr;
+        // A lookup can replace a wrapper whose final release has already started. Its delayed destructor
+        // must not unregister the new wrapper.
+        if (i->second == o) {
+            i->second = nullptr;
+        }
     }
 
     DLLLOCAL QoreObject* findQoreObject() {
@@ -3936,19 +3939,14 @@ public:
 
     DLLLOCAL int initDeferredCode();
 
+    //! Returns an owned ProgramControl reference; lck_programMap must be write locked.
+    DLLLOCAL static QoreObject* referenceProgramControl(QoreProgram* pgm, QoreObject*& cached);
+
     DLLLOCAL static QoreObject* getQoreObject(QoreProgram* pgm) {
         QoreAutoRWWriteLocker al(&lck_programMap);
         qore_program_to_object_map_t::iterator i = qore_program_to_object_map.find(pgm);
         assert(i != qore_program_to_object_map.end());
-        if (i->second) {
-            printd(5, "qore_program_private::getQoreObject() pgm: %p, pgmid: " QLLD ", second: %p\n", i->first, static_cast<int64>(i->first->getProgramId()), i->second);
-            i->second->ref();
-        } else {
-            i->second = new QoreObject(QC_PROGRAMCONTROL, getProgram(), pgm);
-            printd(5, "qore_program_private::getQoreObject() pgm: %p, pgmid: " QLLD ", new second: %p\n", pgm, static_cast<int64>(pgm->getProgramId()), i->second);
-            pgm->ref();
-        }
-        return i->second;
+        return referenceProgramControl(pgm, i->second);
     }
 
     DLLLOCAL static QoreListNode* getAllQoreObjects(ExceptionSink *xsink) {
@@ -3957,15 +3955,7 @@ public:
 
         qore_program_to_object_map_t::iterator i = qore_program_to_object_map.begin();
         while (i != qore_program_to_object_map.end()) {
-            if (i->second) {
-                printd(5, "qore_program_private::getAllQoreObjects() pgm: %p, pgmid: " QLLD ", second: %p\n", i->first, static_cast<int64>(i->first->getProgramId()), i->second);
-                i->second->ref();
-            } else {
-                i->second = new QoreObject(QC_PROGRAMCONTROL, getProgram(), i->first);
-                printd(5, "qore_program_private::getAllQoreObjects() pgm: %p, pgmid: " QLLD ", new second: %p\n", i->first, static_cast<int64>(i->first->getProgramId()), i->second);
-                i->first->ref();
-            }
-            (*l)->push(i->second, nullptr);
+            (*l)->push(referenceProgramControl(i->first, i->second), nullptr);
             ++i;
         }
         return l.release();
