@@ -3982,6 +3982,7 @@ enum class QoreIRInstGroup : uint8_t {
     TypedBase = 64,         //!< QoreIRInstruction with element_type metadata
     NewComplexBuffer = 65,  //!< QoreIRNewComplexBufferInstruction
     Plugin = 66,            //!< QoreIRPluginInstruction
+    DebugStatement = 67,    //!< QoreIRDebugStatementInstruction
     Unsupported = 0xFF,     //!< Instruction cannot be serialized
 };
 

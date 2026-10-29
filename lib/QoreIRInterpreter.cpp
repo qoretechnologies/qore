@@ -12251,46 +12251,58 @@ load_local_done:
                 // (StatementBlock::execImpl()).
                 if (debug_active && !(xsink && *xsink)) {
                     const AbstractStatement* dbg_stmt = static_cast<QoreIRDebugStatementInstruction*>(inst)->statement;
-                    int dbg_rc = tlpd->dbgStep(statements, dbg_stmt, xsink);
-                    if (ir_trace_debug_env.get()) {
-                        fprintf(stderr, "[ir-debug] func='%s' line=%d stmt=%p dbg_rc=%d xsink=%d\n",
-                            func.name.c_str(), dbg_stmt->loc->start_line + dbg_stmt->loc->offset,
-                            static_cast<const void*>(dbg_stmt), dbg_rc, *xsink ? 1 : 0);
-                        fflush(stderr);
+                    if (!dbg_stmt) {
+                        // Deserialized AOT closure IR carries no AST statement pointer: the parse tree is not
+                        // serialized, so the pointer cannot survive AOT.  Resolve the statement from the
+                        // instruction's source location (set from statement->loc at lowering, round-tripped by
+                        // the base-instruction record), as the PushTempMark-based step path does.  A debuggable
+                        // AOT program with a statement index then stops at every statement of a closure as the
+                        // AST and IR tiers do; without an index getDebugStatement() returns nullptr and no step
+                        // fires, which is the designed behavior of code compiled ahead of time.
+                        dbg_stmt = getDebugStatement(inst);
                     }
-                    if (*xsink) {
-                        // an exception raised by the debugger is raised by the statement, as with CheckException
-                        if (inst->exception_target) {
-                            cleanupToTempScope(inst->temp_scope_id, true, false, true);
-                            prev_block = block;
-                            block = inst->exception_target;
-                            ip = 0;
-                            break;
+                    if (dbg_stmt) {
+                        int dbg_rc = tlpd->dbgStep(statements, dbg_stmt, xsink);
+                        if (ir_trace_debug_env.get()) {
+                            fprintf(stderr, "[ir-debug] func='%s' line=%d stmt=%p dbg_rc=%d xsink=%d\n",
+                                func.name.c_str(), dbg_stmt->loc->start_line + dbg_stmt->loc->offset,
+                                static_cast<const void*>(dbg_stmt), dbg_rc, *xsink ? 1 : 0);
+                            fflush(stderr);
                         }
-                        tlpd->dbgFunctionExit(statements, return_value, xsink);
-                        executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache.vector());
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupLocalCaches();
-                        return false;
-                    }
-                    if (dbg_rc == RC_RETURN) {
-                        tlpd->dbgFunctionExit(statements, return_value, xsink);
-                        executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache.vector());
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupLocalCaches();
-                        return true;
-                    }
-                    if (dbg_rc == RC_BREAK) {
-                        // Debug break: exit the loop enclosing this statement, matching
-                        // AST behavior where RC_BREAK unwinds to the innermost while/for
-                        // loop.  Resolve the loop via the block's enclosing_loop_exit so
-                        // the correct loop's condition BrIf is the one diverted (an inner
-                        // if/switch BrIf must not consume the break).  Fall back to the
-                        // legacy "force next BrIf false" only when no loop is annotated.
-                        if (current_block->enclosing_loop_exit) {
-                            debug_break_target = current_block->enclosing_loop_exit;
-                        } else {
-                            debug_break_loop = true;
+                        if (*xsink) {
+                            // an exception raised by the debugger is raised by the statement, as with CheckException
+                            if (inst->exception_target) {
+                                cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                                prev_block = block;
+                                block = inst->exception_target;
+                                ip = 0;
+                                break;
+                            }
+                            tlpd->dbgFunctionExit(statements, return_value, xsink);
+                            executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache.vector());
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupLocalCaches();
+                            return false;
+                        }
+                        if (dbg_rc == RC_RETURN) {
+                            tlpd->dbgFunctionExit(statements, return_value, xsink);
+                            executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache.vector());
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupLocalCaches();
+                            return true;
+                        }
+                        if (dbg_rc == RC_BREAK) {
+                            // Debug break: exit the loop enclosing this statement, matching
+                            // AST behavior where RC_BREAK unwinds to the innermost while/for
+                            // loop.  Resolve the loop via the block's enclosing_loop_exit so
+                            // the correct loop's condition BrIf is the one diverted (an inner
+                            // if/switch BrIf must not consume the break).  Fall back to the
+                            // legacy "force next BrIf false" only when no loop is annotated.
+                            if (current_block->enclosing_loop_exit) {
+                                debug_break_target = current_block->enclosing_loop_exit;
+                            } else {
+                                debug_break_loop = true;
+                            }
                         }
                     }
                 }

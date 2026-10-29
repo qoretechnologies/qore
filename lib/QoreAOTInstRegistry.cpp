@@ -2541,6 +2541,39 @@ static std::unique_ptr<QoreIRInstruction> readPlugin(
 }
 
 // ============================================================================
+// Group 67: DebugStatement - debugger step event for a statement
+// ============================================================================
+//
+// QoreIRDebugStatementInstruction carries a raw AbstractStatement* that points into the parse tree the function
+// was lowered from.  That pointer is not serializable and must not be: AOT code is source-stripped, so the parse
+// tree does not exist when the serialized IR is deserialized.  The instruction has no operands and no result; its
+// only runtime-relevant datum besides the statement pointer is the statement's source location, which the generic
+// base-instruction record already serializes from inst->loc (set to statement->loc by
+// QoreIRBuilder::createDebugStatement()).  So nothing group-specific is written here, and the reader reconstructs
+// the instruction with a null statement pointer.  The IR interpreter's DebugStatement handler resolves the
+// statement from the instruction's source location at runtime when the raw pointer is null (see
+// QoreIRInterpreter.cpp), matching the step behavior of the AST and IR tiers for code whose statement index is
+// available, and firing no step otherwise, which is the designed behavior of code compiled ahead of time.
+static bool writeDebugStatement(AOTInstWriteCtx& ctx) {
+    // No group-specific fields: the AST statement pointer is not serializable and the source location rides on
+    // the base-instruction record.
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readDebugStatement(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    // Reconstruct with a null statement pointer: the parse tree is not available under AOT.  The source location
+    // is restored by the base-instruction reader, and the runtime resolves the statement from it on demand.
+    auto inst = std::make_unique<QoreIRDebugStatementInstruction>(nullptr);
+    inst->result = QoreIRValue(result_id);
+    inst->operands = std::move(operands);
+    inst->exception_target = exc_target;
+    return inst;
+}
+
+// ============================================================================
 // Group 37: VrnConstruct - Variant value construction
 // ============================================================================
 
@@ -3768,8 +3801,12 @@ const QoreIRInstGroupInfo AOT_INST_GROUP_REGISTRY[AOT_INST_GROUP_TABLE_SIZE] = {
     { "Plugin", 66, true, false, writePlugin, readPlugin,
       "Plugin operation dispatch" },
 
-    // Remaining 67-255: Unsupported/undefined
-    UNUSED_ENTRY(67), UNUSED_ENTRY(68), UNUSED_ENTRY(69), UNUSED_ENTRY(70), UNUSED_ENTRY(71),
+    // Index 67: DebugStatement
+    { "DebugStatement", 67, true, false, writeDebugStatement, readDebugStatement,
+      "Debugger step event for a statement (AST statement pointer not serialized; source location only)" },
+
+    // Remaining 68-255: Unsupported/undefined
+    UNUSED_ENTRY(68), UNUSED_ENTRY(69), UNUSED_ENTRY(70), UNUSED_ENTRY(71),
     UNUSED_ENTRY(72), UNUSED_ENTRY(73), UNUSED_ENTRY(74), UNUSED_ENTRY(75),
     UNUSED_ENTRY(76), UNUSED_ENTRY(77), UNUSED_ENTRY(78), UNUSED_ENTRY(79),
     UNUSED_ENTRY(80), UNUSED_ENTRY(81), UNUSED_ENTRY(82), UNUSED_ENTRY(83),

@@ -1,0 +1,115 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.  SPDX-License-Identifier: MIT
+
+# Regression test for the AOT serialization of the DebugStatement IR instruction (#5558 follow-up).
+#
+# A closure that is promoted to the IR tier (hot) in a program that allows debugging has its cached IR
+# lowered with per-statement DebugStatement hooks (QoreIROpcode::DebugStatement, opcode 412).  When such a
+# closure is then compiled ahead of time, qcc serializes that cached IR into the AOT binary.  Before the fix,
+# classifyInstruction() had no mapping for QoreIRDebugStatementInstruction, so the AOT compile failed with
+#   "cannot serialize IR instruction opcode DebugStatement (412): ... has no AOT instruction group mapping".
+# This broke every AOT build of a program built with debugging support (e.g. Qorus), whose closures are hot.
+#
+# The warmup is a const initializer, which qcc evaluates at parse-commit (i.e. during the compile itself).
+# With QORE_IR_THRESHOLD=1 the closure is promoted to the IR tier on its first call, so by the time qcc
+# serializes the enclosing function's CLOSURE_CREATE slot the closure's cached IR already carries the
+# DebugStatement hooks that the serializer must be able to encode.  The AOT compile must now succeed and the
+# AOT executable must produce the same result as all four interpreter tiers (ast, ir, tiered, jit).
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires ../ExecModeHarness.qm
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+# warmComparator() creates a multi-statement comparator closure (as OMQ::QorusMapManager::sortFields does) and
+# calls it in a loop so it is promoted to the IR tier and its body is cached as IR with per-statement
+# DebugStatement hooks.  Evaluating the const WARMUP at parse-commit runs this during the qcc compile itself,
+# so the CLOSURE_CREATE slot of warmComparator() is serialized with a warmed, debuggable closure body — the
+# exact state that failed to serialize before the fix.
+string code = "%modern
+
+int sub warmComparator() {
+    code cmp = int sub (int a, int b) {
+        int diff = a - b;
+        if (diff == 0) {
+            return 0;
+        }
+        return diff > 0 ? 1 : -1;
+    };
+    int sink = 0;
+    int i = 0;
+    while (i < 5) {
+        sink += cmp(i, i - 1);
+        i += 1;
+    }
+    return sink;
+}
+
+# evaluated at parse-commit: warms the comparator closure before AOT serialization
+const WARMUP = warmComparator();
+
+int sub getWarmup() {
+    return WARMUP;
+}
+
+printf(\"warmup=%d\\n\", getWarmup());
+";
+
+string script_path = sprintf("/tmp/qore-aot-debuggable-closure-%d.qr", getpid());
+{
+    File script();
+    script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+    script.write(code);
+}
+on_exit {
+    unlink(script_path);
+}
+
+# cmp(i, i - 1) is always +1 (a > b), summed over i in 0..4 => 5
+string expected = "warmup=5\n";
+
+# 1. all four interpreter tiers must agree, run with the debugger-step hooks active (--enable-debug) and
+#    QORE_IR_THRESHOLD=1 so the DebugStatement path through the warmed IR closure is exercised
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = ExecModeHarness::run(sprintf(
+        "QORE_IR_THRESHOLD=1 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s",
+        libqore_dir, libqore_dir, qore_bin, mode, script_path));
+    if (actual != expected) {
+        printf("mismatch in %s mode\nexpected:\n%sactual:\n%s", mode, expected, actual);
+        exit(2);
+    }
+}
+
+# 2. the AOT compile of the warmed, debuggable closure must succeed (this is the regression): the closure's
+#    cached IR carries DebugStatement, which must round-trip through AOT serialization
+string exe_path = sprintf("/tmp/qore-aot-debuggable-closure-%d", getpid());
+on_exit {
+    unlink(exe_path);
+}
+string compile_out = backquote(sprintf(
+    "QORE_IR_THRESHOLD=1 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --parse-option=PO_ALLOW_DEBUGGER -O3 -o %s %s 2>&1",
+    libqore_dir, libqore_dir, qcc_bin, exe_path, script_path));
+if (!is_file(exe_path)) {
+    printf("AOT compile of a warmed debuggable closure failed (DebugStatement serialization regression):\n%s",
+        compile_out);
+    exit(2);
+}
+
+# 3. the AOT executable must produce the same result as the interpreter tiers
+string aot_actual = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1",
+    libqore_dir, libqore_dir, exe_path));
+if (aot_actual != expected) {
+    printf("AOT result mismatch\nexpected:\n%sactual:\n%s", expected, aot_actual);
+    exit(2);
+}
+
+printf("OK\n");
