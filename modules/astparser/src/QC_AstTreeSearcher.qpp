@@ -33,6 +33,7 @@
 #include "AstTreeHolder.h"
 #include "CSTSearcher.h"
 #include "QC_AstTree.h"
+#include "QC_AstTreeSearcher.h"
 
 //! A link in the receiver chain of an expression, as returned by @ref astparser::AstTreeSearcher::getExpressionChain()
 /** The chain of \c "f.stat().size" has the variable \c f, the called method \c stat and the member \c size.

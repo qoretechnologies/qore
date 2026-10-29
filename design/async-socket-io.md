@@ -1353,6 +1353,42 @@ This contract is required for **every** wrapper that holds both a `poll_state` a
 owning reference, including HTTPClient-level wrappers, WebSocket/SSE wrappers, and any future
 poll-op composition.
 
+### HTTP Server References the Collector Does Not Follow
+
+`HttpAsyncSocketIoController` holds every open connection of a server, and every request writes to it.  A scan
+(see `design/dgc.md`) walks the whole graph reachable from its root, so two shapes made every request's scans grow
+with the number of open connections (issue #5561):
+
+- a write to `connections` scanned every connection's entry, because the entries are hashes held by the controller;
+- anything in a cycle with the controller was in one recursive set with every connection, and the poll operations
+  referred back to it.
+
+The references that close those shapes are **opaque** (`@=`, `QoreValue::makeOpaqueObject()`): owned as usual, but not
+followed by the collector.  Each is safe because the controller owns, and removes, what holds the reference, so the
+edge cannot keep a cycle alive after the controller releases it:
+
+- `HttpAsyncSocketIoController::connections{uh}` (every write): the controller owns the entry and removes it when
+  the connection is closed and in `stop()`, so an entry that leads back to the controller (through its listener, when
+  a handler refers to the server) can hold that cycle only while the connection is registered.
+- `completion_controller` of the poll operations (`HttpConnectionPollOperationBase`, `HttpAcceptPollOperation`,
+  `Http3ServerPollOperation`): the controller keeps an operation for as long as its listener or connection is
+  registered.
+- `header-info.async_io_controller` of an HTTP/1.x WebSocket connection's context: the controller keeps the context
+  in the connection's entry.
+- `async_ctrl` of a request context: the process-wide `AsyncSocketIoController` never refers to a request context.
+
+A value read from an opaque reference is an ordinary reference, so every write must use `@=` again; a write with `=`
+is not an error but brings the scans back.  `examples/test/qlib/HttpServer/scan-size/HttpServerScanSize.qtest` counts
+the nodes the scans enter per request with 4 and with 32 open connections, with a handler in a cycle with the server.
+
+`HttpServer::asyncIo` stays an ordinary reference.  Once the entries are opaque the controller's own graph no longer
+grows with the connections, so a handler in a cycle with the server - which puts the controller in that cycle too -
+does not make the scans grow.  An opaque `asyncIo` would hide a cycle that the collector needs to see: a server whose
+logger refers back to it (a log callback that refers to the server, for example) would then not be collected after
+`stop()` until its Program is torn down.  `examples/test/qlib/HttpServer/HttpServerLoggerCycle.qtest` checks that
+such a server is collected.  It is collected once another server is created: `HttpServer::init()` gives its logger to
+the process-wide `AsyncSocketIoController`, which keeps it until the next server replaces it.
+
 ### Sync I/O on Born-Non-Blocking Sockets
 
 Since the AsyncIoController redesign, sockets are born **non-blocking** — the I/O thread expects

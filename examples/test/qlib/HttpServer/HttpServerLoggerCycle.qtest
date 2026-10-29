@@ -1,0 +1,124 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+
+%exec-class HttpServerLoggerCycleTest
+
+#! a logger appender that refers back to the server logging through it, as a log callback that refers to the server
+#! does
+class BackRefAppender inherits LoggerAppenderWithLayout {
+    public {
+        *HttpServer server;
+    }
+
+    constructor() : LoggerAppenderWithLayout("back-ref", new LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+    }
+}
+
+#! a server that records its destruction
+class CountedServer inherits HttpServer {
+    public {
+        #! protects destroyed
+        static Mutex lck();
+        #! the servers destroyed so far, by tag
+        static list<string> destroyed = ();
+    }
+
+    private {
+        string tag;
+    }
+
+    constructor(string tag, hash<HttpServerOptionInfo> opts) : HttpServer(opts) {
+        self.tag = tag;
+    }
+
+    destructor() {
+        AutoLock al(lck);
+        destroyed += tag;
+    }
+
+    #! returns and clears the servers destroyed so far
+    static list<string> takeDestroyed() {
+        AutoLock al(lck);
+        list<string> rv = destroyed;
+        destroyed = ();
+        return rv;
+    }
+}
+
+#! Tests that a server in a cycle with its logger is collected once it is stopped and released
+/** The server refers to its logger, and the logger's appender refers back to the server.  The collector must see the
+    whole cycle, including the server's reference to its async I/O controller and the controller's reference to the
+    logger, or the server is never collected in a process that creates and releases servers.
+
+    Every server also gives its logger to the process-wide async I/O controller, which keeps it until another server
+    gives it its own, so the server is collected when the next server is created.
+*/
+class HttpServerLoggerCycleTest inherits QUnit::Test {
+    constructor() : QUnit::Test("HttpServerLoggerCycleTest", "1.0") {
+        addTestCase("a server without listeners is collected", \withoutListeners());
+        addTestCase("a server that served on a listener is collected", \withListener());
+        set_return_value(main());
+    }
+
+    withoutListeners() {
+        CountedServer::takeDestroyed();
+        HttpServerLoggerCycleTest::makeServer("no-listener", False);
+        HttpServerLoggerCycleTest::replaceSharedLogger();
+        assertEq(("no-listener",), CountedServer::takeDestroyed(), "the stopped server in a cycle with its logger is collected");
+    }
+
+    withListener() {
+        CountedServer::takeDestroyed();
+        HttpServerLoggerCycleTest::makeServer("listener", True);
+        HttpServerLoggerCycleTest::replaceSharedLogger();
+        assertEq(("listener",), CountedServer::takeDestroyed(), "the stopped server in a cycle with its logger is collected");
+    }
+
+    #! creates a server in a cycle with its logger, optionally serves one request on a listener, stops it and
+    #! releases it
+    private static makeServer(string tag, bool listen) {
+        Logger logger(tag, LoggerLevel::getLevelInfo());
+        BackRefAppender appender();
+        logger.addAppender(appender);
+        CountedServer server(tag, <HttpServerOptionInfo>{"logger": logger});
+        appender.server = server;
+        if (listen) {
+            int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+            if (!server.waitForAsyncIo(10s)) {
+                throw "TEST-ERROR", "async I/O not ready";
+            }
+            # a request makes the server register and release a connection
+            Socket s();
+            s.connect("127.0.0.1:" + port, 10s);
+            on_exit s.close();
+            s.send("GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+            hash<auto> hdr = s.readHTTPHeader(10000);
+            if (!hdr.status_code) {
+                throw "TEST-ERROR", sprintf("no response: %y", hdr);
+            }
+        }
+        server.stop();
+    }
+
+    #! creates and stops another server, whose logger replaces the stopped server's in the shared async I/O
+    #! controller
+    private static replaceSharedLogger() {
+        Logger other("other", LoggerLevel::getLevelInfo());
+        HttpServer server(<HttpServerOptionInfo>{"logger": other});
+        server.stop();
+    }
+}

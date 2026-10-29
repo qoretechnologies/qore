@@ -49,6 +49,7 @@
 #include <vector>
 #include <qore/QoreValue.h>
 #include <qore/QoreEnumDecl.h>
+#include <qore/QoreParseOptions.h>
 #include <qore/SystemEnvironment.h>
 #include <qore/TypedHashDecl.h>
 #include "qore/intern/qore_aot_deps.h"

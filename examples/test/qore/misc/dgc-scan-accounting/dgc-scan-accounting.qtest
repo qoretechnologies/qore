@@ -162,6 +162,10 @@ class DgcScanAccountingTest inherits QUnit::Test {
         assertEq("WaitPeer", waits[0].wait_on, "the object it waits for");
         assertEq(holder_tid, waits[0].owner_tid, "the thread holding it");
         assertTrue(waits[0].waiting_ms >= 0.0, "a wait time");
+        # a write lock is not a scan's, so the scan waits for its release
+        assertFalse(waits[0].scan_wait, "the scan waits for the lock's release");
+        assertEq(1, waits[0].restarts, "the scan has given up one pass");
+        assertTrue(waits[0].nodes > 0, "the abandoned pass had entered the root");
 
         release.dec();
         done.waitForZero();

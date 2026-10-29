@@ -1,0 +1,155 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class HttpServerScanSizeTest
+
+#! the scans of one scan root made while a worker served one request on each of its open connections
+hashdecl ScanSizeRow {
+    #! the scans that ran
+    int scans;
+    #! the graph nodes they entered
+    int nodes;
+}
+
+#! the scans a worker made while it served one request on each of its open connections
+hashdecl ScanSizeResult {
+    #! the requests served
+    int requests;
+    #! the scans by root
+    hash<string, hash<ScanSizeRow>> rows = {};
+}
+
+#! Tests that the scans made to serve a request do not grow with the number of connections open to the server
+/** A server's async I/O controller holds every open connection, and every request writes to it.  A write to the
+    controller scanned every connection's entry, and anything in a cycle with the controller - through the server's
+    reference to it, any handler or other object in a cycle with the server - reached every connection's entry, so
+    its scans walked them all too (issue #5561).
+
+    The scans are counted by the scan accounting (QORE_SCAN_STATS), which is enabled when a process starts, so a
+    worker process serves the requests: it opens a number of keep-alive connections, makes one more request on each,
+    and reports the scans those requests made.  The nodes a scan enters are fixed by the shape of the graph it walks,
+    not by timing, so the test compares the nodes entered per request and per scan with few and with many open
+    connections.
+*/
+class HttpServerScanSizeTest inherits QUnit::Test {
+    public {
+        #! the connections open in the small run
+        const Few = 4;
+
+        #! the connections open in the large run
+        const Many = 32;
+
+        #! an application object in a cycle with a handler that refers to the server; its scans walk everything in
+        #! a cycle with the server
+        const RequestRoot = "ScanSizeRequest";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("HttpServerScanSizeTest", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("the scans of a request do not grow with the open connections", \scansDoNotGrow());
+        addTestCase("the scans of the requests are counted", \scansAreCounted());
+        set_return_value(main());
+    }
+
+    #! the nodes the scans enter per request, and per scan of a request's object, are about the same with few and
+    #! with many open connections
+    scansDoNotGrow() {
+        TmpDir tmp("qore-http-scan-size-");
+        hash<ScanSizeResult> few = runWorker(tmp.path, Few);
+        hash<ScanSizeResult> many = runWorker(tmp.path, Many);
+        assertEq(Few, few.requests, "the small run's requests");
+        assertEq(Many, many.requests, "the large run's requests");
+
+        # all scans; scans that walk every connection enter about 8 times as many nodes per request with 8 times the
+        # connections, and scans that do not enter about the same number either way
+        float few_per_request = HttpServerScanSizeTest::totalNodes(few).toFloat() / few.requests;
+        float many_per_request = HttpServerScanSizeTest::totalNodes(many).toFloat() / many.requests;
+        if (m_options.verbose) {
+            printf("all scans: %d connections: %.1f nodes per request; %d connections: %.1f nodes per request\n",
+                Few, few_per_request, Many, many_per_request);
+        }
+        assertLe(few_per_request * 1.5, many_per_request, sprintf("the nodes the scans enter per request do not "
+            "grow with the open connections: %.1f with %d, %.1f with %d", few_per_request, Few, many_per_request,
+            Many));
+
+        # the scans of an object in a cycle with the server
+        *hash<ScanSizeRow> f = few.rows{RequestRoot};
+        *hash<ScanSizeRow> m = many.rows{RequestRoot};
+        if (!f || !m) {
+            fail(sprintf("no scans of %y: %y %y", RequestRoot, few, many));
+            return;
+        }
+        float few_per_scan = f.nodes.toFloat() / f.scans;
+        float many_per_scan = m.nodes.toFloat() / m.scans;
+        if (m_options.verbose) {
+            printf("%s: %d connections: %d scans, %.1f nodes per scan; %d connections: %d scans, %.1f nodes per "
+                "scan\n", RequestRoot, Few, f.scans, few_per_scan, Many, m.scans, many_per_scan);
+        }
+        assertLe(few_per_scan * 1.5, many_per_scan, sprintf("the scans of %y do not grow with the open "
+            "connections: %.1f nodes per scan with %d, %.1f with %d", RequestRoot, few_per_scan, Few, many_per_scan,
+            Many));
+    }
+
+    #! the worker reports the scans that serving the requests made, so the comparison above is not vacuous
+    scansAreCounted() {
+        TmpDir tmp("qore-http-scan-size-");
+        hash<ScanSizeResult> rv = runWorker(tmp.path, Few);
+        int scans = rv.rows{RequestRoot}.scans ?? 0;
+        assertGt(0, scans, sprintf("scans of %y were made: %y", RequestRoot, rv));
+        # each scan of a request's object enters at least the object, its handler and the handler's server
+        assertGe(3 * scans, rv.rows{RequestRoot}.nodes ?? 0, sprintf("the scans of %y walk the handler's cycle: %y",
+            RequestRoot, rv));
+    }
+
+    #! returns the nodes all scans of the run entered
+    private static int totalNodes(hash<ScanSizeResult> rv) {
+        int rc = 0;
+        foreach hash<ScanSizeRow> row in (rv.rows.iterator()) {
+            rc += row.nodes;
+        }
+        return rc;
+    }
+
+    #! runs the worker with \a connections open connections and returns the scans it reported
+    private hash<ScanSizeResult> runWorker(string dir, int connections) {
+        string worker = get_script_dir() + DirSep + "HttpServerScanSizeWorker.q";
+        string stats = dir + DirSep + "stats";
+        string out = backquote(sprintf("env QORE_SCAN_STATS=%s LD_LIBRARY_PATH=%s %s -b %s %d 2>&1", stats,
+            libqore_dir, qore_bin, worker, connections));
+        hash<ScanSizeResult> rv();
+        foreach string line in (out.split("\n")) {
+            if (!line.val()) {
+                continue;
+            }
+            *list<*string> req = (line =~ x/^requests=([0-9]+)$/);
+            if (req) {
+                rv.requests = req[0].toInt();
+                continue;
+            }
+            *list<*string> row = (line =~ x/^root=(.+) scans=([0-9]+) nodes=([0-9]+)$/);
+            if (!row) {
+                fail(sprintf("unexpected worker output: %y", out));
+                continue;
+            }
+            rv.rows{row[0]} = <ScanSizeRow>{
+                "scans": row[1].toInt(),
+                "nodes": row[2].toInt(),
+            };
+        }
+        return rv;
+    }
+}
