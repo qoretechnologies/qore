@@ -790,6 +790,13 @@ public:
     // decrements the real reference count without decrementing the actual reference count
     DLLLOCAL void unsetRealReference();
 
+    //! Attempts to release an ordinary local's real-reference owner through the combined release path.
+    /** The caller must publish its cleared slot before calling. Returns false without changing ownership when
+        custom handlers, reference diagnostics, or the last real reference require the ordinary split release.
+        A true result consumes the reference; the caller must not access the object afterwards.
+    */
+    DLLLOCAL bool tryDerefLocalRealReference(ExceptionSink* xsink);
+
     DLLLOCAL const char* getClassName() const {
         return theclass->getName();
     }

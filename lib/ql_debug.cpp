@@ -1878,6 +1878,155 @@ static void ut_aot_first_public_base(UnitTestCounters& c) {
     UT_ASSERT(c, !xsink, "first-public-base native checks raise no unexpected exception");
 }
 
+//! Observe the custom dereference contract and cleanup publication of a C++ object subclass.
+class UtAOTLocalReleaseObject : public QoreObject {
+public:
+    UtAOTLocalReleaseObject(const QoreClass* cls, UnitTestCounters& counters, LocalVarValue& slot,
+            int& calls, bool& clearing)
+        : QoreObject(cls, ::getProgram()), counters(counters), slot(slot), calls(calls), clearing(clearing) {
+    }
+
+    void setSingleton(bool singleton) { there_can_be_only_one = singleton; }
+
+protected:
+    void customDeref(ExceptionSink* xsink) override {
+        ++calls;
+        if (clearing) {
+            UT_ASSERT(counters, slot.block_cleared && !slot.val.assigned,
+                "slot state is published before the custom release can reenter");
+            qore_object_private* data = qore_object_private::get(*this);
+            UT_ASSERT_EQ(counters, 1, data->rrefs.load(std::memory_order_relaxed),
+                "the slot real-reference mark is removed before custom dereference");
+        }
+        QoreObject::customDeref(xsink);
+    }
+
+private:
+    UnitTestCounters& counters;
+    LocalVarValue& slot;
+    int& calls;
+    bool& clearing;
+};
+
+//! Exercise the AOT clear entry against live ownership modes, custom handlers, and pending events.
+static void ut_aot_class_local_release(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    QoreClassHolder cls_owner(new QoreClass("UtAOTLocalRelease", "::UtAOTLocalRelease"));
+    QoreClass* cls = cls_owner;
+    struct LocalScope {
+        LocalVar var;
+        ExceptionSink& xsink;
+        LocalScope(const QoreTypeInfo* ti, ExceptionSink& sink) : var("release_receiver", ti), xsink(sink) {
+            var.instantiateIntern(QoreValue(), false);
+        }
+        ~LocalScope() { var.uninstantiate(&xsink); }
+    } local(cls->getTypeInfo(), xsink);
+    LocalVarValue* slot = thread_try_find_lvar(&local.var);
+    UT_ASSERT(c, slot && !slot->val.assigned, "release fixture starts with an empty runtime slot");
+    if (!slot) {
+        return;
+    }
+    struct BorrowedLocalContext : QoreAOTContext {
+        ~BorrowedLocalContext() { locals = nullptr; }
+    } context;
+    LocalVar* locals[] = {&local.var};
+    context.locals = locals;
+    context.num_locals = 1;
+    context.pgm = getProgram();
+    // All loops have fixed small bounds. The external real owner makes a combined release eligible,
+    // while the borrowed C++ holder keeps the object available for assertions after clearing the slot.
+    for (int kind = 0; kind < 3; ++kind) {
+        for (int mode = 0; mode < 3; ++mode) {
+            for (int event = 0; event < 3; ++event) {
+                int calls = 0;
+                bool clearing = false;
+                ReferenceHolder<QoreObject> object(kind
+                    ? new UtAOTLocalReleaseObject(cls, c, *slot, calls, clearing)
+                    : new QoreObject(cls, getProgram()), &xsink);
+                if (kind != 2) {
+                    object->realRef();
+                }
+                if (kind == 2) {
+                    static_cast<UtAOTLocalReleaseObject*>(*object)->setSingleton(true);
+                }
+                qore_object_private* data = qore_object_private::get(**object);
+                slot->block_cleared = false;
+                slot->val.is_closure = mode != 0;
+                slot->val.closure_lent = mode == 2;
+                slot->val.assignInitialNode(object->objectRefSelf());
+                UT_ASSERT_EQ(c, kind == 2 ? 1 : 3, object->reference_count(),
+                    "initial assignment acquires only a reference-counted slot owner");
+                UT_ASSERT_EQ(c, (kind != 2) + (mode != 1), data->rrefs.load(std::memory_order_relaxed),
+                    "ordinary and lent slots mark real ownership; captured slots do not");
+                if (event == 1) {
+                    xsink.raiseException("AOT-LOCAL-RELEASE-TEST", "pending exception");
+                } else if (event == 2) {
+                    xsink.raiseThreadExit();
+                }
+                clearing = true;
+                qore_rt_clear_class_local_slot_aot_v1(&context, 0, slot, &xsink);
+                clearing = false;
+                UT_ASSERT(c, slot->block_cleared && !slot->val.assigned,
+                    "class-local cleanup leaves the slot cleared and unassigned");
+                UT_ASSERT_EQ(c, kind == 2 ? 1 : 2, object->reference_count(),
+                    "cleanup releases exactly the slot owner");
+                UT_ASSERT_EQ(c, kind != 2, data->rrefs.load(std::memory_order_relaxed),
+                    "cleanup balances the live slot real-reference mode");
+                UT_ASSERT_EQ(c, kind == 1 ? 1 : 0, calls,
+                    "C++ custom dereference is observed and singleton dereference is suppressed");
+                UT_ASSERT_EQ(c, event == 1, xsink.isException(), "cleanup preserves a pending exception");
+                UT_ASSERT_EQ(c, event == 2, xsink.isThreadExit(), "cleanup preserves pending thread exit");
+                xsink.clear();
+                qore_rt_clear_class_local_slot_aot_v1(&context, 0, slot, &xsink);
+                UT_ASSERT_EQ(c, kind == 2 ? 1 : 2, object->reference_count(),
+                    "repeated clear releases no second reference");
+                if (kind == 2) {
+                    static_cast<UtAOTLocalReleaseObject*>(*object)->setSingleton(false);
+                }
+                if (kind != 2) {
+                    object->realDeref(&xsink);
+                }
+                UT_ASSERT_EQ(c, 1, object->reference_count(), "the external real owner is balanced separately");
+                UT_ASSERT_EQ(c, 0, data->rrefs.load(std::memory_order_relaxed),
+                    "no real-reference marker leaks from a completed case");
+                UT_ASSERT(c, !xsink, "cleanup raises no unexpected exception");
+            }
+        }
+    }
+    // Independently prove admission of the combined primitive and its last-real-reference fallback.
+    {
+        ReferenceHolder<QoreObject> object(new QoreObject(cls, getProgram()), &xsink);
+        qore_object_private* data = qore_object_private::get(**object);
+        object->realRef();
+        object->realRef();
+        QoreEnvironmentValue trace("QORE_TRACE_OBJECT_REFS");
+        bool expected = (!trace.c_str() || !*trace.c_str()) && debug < QORE_DEBUG_OBJ_REFS && debug < QRO_LVL;
+        bool handled = data->tryDerefLocalRealReference(&xsink);
+        UT_ASSERT_EQ(c, expected, handled, "combined release is admitted only outside reference diagnostics");
+        if (!handled) {
+            object->realDeref(&xsink);
+        }
+        UT_ASSERT_EQ(c, 2, object->reference_count(), "combined release drops exactly one reference");
+        UT_ASSERT_EQ(c, 1, data->rrefs.load(std::memory_order_relaxed),
+            "combined release drops exactly one real-reference marker");
+        UT_ASSERT(c, !data->tryDerefLocalRealReference(&xsink), "last real reference retains ordinary cleanup");
+        UT_ASSERT_EQ(c, 2, object->reference_count(), "rejected combined release does not change ownership");
+        object->realRef();
+        auto previous = RObject::dbg_before_fast_release.exchange([](RObject*) {});
+        UT_ASSERT(c, !data->tryDerefLocalRealReference(&xsink),
+            "instrumented releases retain the original Debug hook path");
+        RObject::dbg_before_fast_release.store(previous);
+        UT_ASSERT_EQ(c, 3, object->reference_count(), "hook fallback leaves references unchanged");
+        UT_ASSERT_EQ(c, 2, data->rrefs.load(std::memory_order_relaxed),
+            "hook fallback leaves real-reference markers unchanged");
+        object->realDeref(&xsink);
+        object->realDeref(&xsink);
+        UT_ASSERT(c, !xsink, "combined primitive checks leave a clean sink");
+    }
+    slot->val.is_closure = false;
+    slot->val.closure_lent = false;
+}
+
 enum class IndexedReadTestEntry { Compatibility, LiveContext, NullContext };
 
 static void ut_indexed_read_policy(UnitTestCounters& c, RuntimeConfig& rc,
@@ -15102,6 +15251,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_local_discard(c);
     ut_aot_scalar_local_store(c);
     ut_aot_first_public_base(c);
+    ut_aot_class_local_release(c);
     ut_aot_prepared_local_reload(c);
     ut_aot_prepared_indexed_int_add(c);
     ut_indexed_read_policy(c, rc);
@@ -15138,6 +15288,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_local_discard(c);
     ut_aot_scalar_local_store(c);
     ut_aot_first_public_base(c);
+    ut_aot_class_local_release(c);
     ut_aot_prepared_local_reload(c);
     ut_aot_prepared_indexed_int_add(c);
     ut_indexed_read_policy(c, rc);

@@ -14246,6 +14246,10 @@ extern "C" DLLEXPORT void qore_rt_clear_class_local_slot_aot_v1(QoreAOTContext* 
             slot->block_cleared = true;
             value.assigned = false;
             if (value.tracksRealRefs()) {
+                auto* object = static_cast<QoreObject*>(value.v.n);
+                if (qore_object_private::get(*object)->tryDerefLocalRealReference(xsink)) {
+                    return;
+                }
                 check_lvalue_object_in_out(nullptr, value.v.n);
             }
             value.v.n->deref(xsink);

@@ -56,6 +56,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <typeinfo>
 #include <vector>
 
 // Monotonic counter for globally unique object hashes.  Pointer addresses
@@ -1640,6 +1641,32 @@ std::atomic<qore_dbg_deref_decide_hook_t> qore_dbg_deref_decide_hook{nullptr};
 std::atomic<qore_dbg_deref_marked_hook_t> qore_dbg_deref_marked_hook{nullptr};
 std::atomic<qore_dbg_deref_collect_hook_t> qore_dbg_deref_collect_hook{nullptr};
 #endif
+
+bool qore_object_private::tryDerefLocalRealReference(ExceptionSink* xsink) {
+    // Preserve virtual custom handlers and singleton behavior, and the split release's trace events.
+    // The real-count check is only an admission hint: customDeref() handles races and final release itself.
+    if (qore_trace_object_refs_enabled || !obj->isReferenceCounted() || typeid(*obj) != typeid(QoreObject)
+            || rrefs.load(std::memory_order_relaxed) <= 1) {
+        return false;
+    }
+#ifdef DEBUG
+    // Instrumented releases keep their original diagnostic and concurrency-test hook sites.
+    if (debug >= QORE_DEBUG_OBJ_REFS || debug >= QRO_LVL
+            || references.load(std::memory_order_relaxed) > 10000000
+            || references.load(std::memory_order_relaxed) <= 0
+            || dbg_after_fast_real_release.load(std::memory_order_acquire)
+            || dbg_before_fast_release.load(std::memory_order_acquire)
+            || dbg_before_deref_scan.load(std::memory_order_acquire)
+            || dbg_deref_decides.load(std::memory_order_acquire)
+            || qore_dbg_deref_decide_hook.load(std::memory_order_acquire)
+            || qore_dbg_deref_marked_hook.load(std::memory_order_acquire)
+            || qore_dbg_deref_collect_hook.load(std::memory_order_acquire)) {
+        return false;
+    }
+#endif
+    customDeref(xsink, true);
+    return true;
+}
 
 void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
     assert(qore_var_rwlock_priv::get(rml)->write_tid >= -1);

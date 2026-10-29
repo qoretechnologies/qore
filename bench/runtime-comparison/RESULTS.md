@@ -29487,3 +29487,57 @@ Develop c0391665d7 is integrated after the rejected redundant method-sink experi
 Release: 93 executed cases, 0 runtime skips, 12505 assertions; Debug: 93 executed cases, 0 runtime skips, 12505 assertions; two additional silent fixtures each. The selected AOTSmoke optimization-level case excludes 237 other cases in Release and 237 in Debug; excluded cases are not counted as executed. Native Debug: 3416 focused and 5081 broader assertions (overlapping). All 391 Release aliases restored.
 
 The [integration evidence](results-post-debug-format-merge-macos-arm64.json) and [complete audit](audit-post-debug-format-merge.md) record correctness checks and the original failure. Two diagnostic-only counter-format corrections are validated separately after full-suite qualification; Release printd removes those calls. These are not new timings or updated Java/develop ratios. The next experiment evaluates receiver ownership-release overhead against a fresh optimized merged baseline.
+
+
+## Combined AOT receiver-local release retained (2026-10-29)
+
+The optimized baseline is `7cb3060831`, including develop `c0391665d7`. An ordinary AOT class-local owner can now use the existing combined real-reference release instead of separate unmarking and virtual dereference. The slot is cleared before release; custom C++ handlers, singleton objects, non-real owners, reference diagnostics and last-real-reference admission retain their ordinary paths. Races, hazard publication, collection and final release remain in the canonical algorithm. The existing AOT entry and runtime identity are unchanged, so already-compiled compatible artifacts benefit after a runtime upgrade; this does not change interpreter/JIT lowering.
+
+All 33 workloads are preserved in both campaigns: 594 screen processes/1,782 measured windows, then 990 independent confirmation processes/2,970 windows. Both optimized runtimes execute the same 15 source-stripped O3 artifacts in default, reverse and shuffle-487 layouts. Confirmation uses five forks per layout and variant, three warmup and three measured 150 ms windows, 4,096 items, seed 7 and a fresh randomized order. Values are medians of layout medians of fork means, measuring whole kernels rather than isolated call latency.
+
+|!Workload|!Before ns/item|!After ns/item|!Confirmation time change|!Screen time change
+|local:direct_call|1.5668|1.5551|-0.747%|+0.430%
+|local:method_call|1.6346|1.6420|+0.453%|+0.632%
+|local:polymorphic_call|24.1004|23.1586|-3.908%|-3.374%
+|local:polymorphic_float_call|24.4542|23.7035|-3.070%|-3.122%
+|local:boxed_int_method_fallback|33.4132|33.4767|+0.190%|-0.522%
+|local:boxed_float_method_fallback|35.3026|35.5392|+0.670%|+0.852%
+|local:boxed_int_method_effect|93.5805|93.1422|-0.468%|-0.513%
+|local:list_mutate|122.6968|122.8287|+0.107%|+0.807%
+|local:temporary_list|1.6507|1.6454|-0.323%|+0.229%
+|micro:polymorphic_call|86.1149|85.1240|-1.151%|-1.069%
+|micro:polymorphic_float_call|86.4424|85.2645|-1.363%|-2.252%
+|micro:boxed_int_method_call|111.6290|113.0368|+1.261%|-0.344%
+|micro:boxed_float_method_call|115.5768|114.6000|-0.845%|-1.494%
+|micro:boxed_int_method_fallback|122.0417|121.8061|-0.193%|+0.344%
+|micro:boxed_float_method_fallback|126.3315|125.9362|-0.313%|+0.156%
+|micro:boxed_int_method_effect|180.8593|180.2464|-0.339%|-2.790%
+|micro:indirect_call|8.6158|8.7379|+1.417%|-0.613%
+|micro:closure_call|18.3435|18.6566|+1.707%|+2.234%
+|micro:closure_capture|24.6621|24.8676|+0.833%|+2.538%
+|micro:list_read|2.9058|2.8945|-0.390%|-0.327%
+|micro:list_build|23.2230|23.3484|+0.540%|+1.417%
+|micro:list_mutate|122.7106|122.7091|-0.001%|+1.260%
+|micro:temporary_hash|1.6475|1.6580|+0.640%|-0.973%
+|float:callback_local_float_return|0.8666|0.8574|-1.057%|-0.490%
+|float:typed_local_int_unary|1.1974|1.2045|+0.597%|+0.231%
+|float:callback_loop_float_return|5.0119|5.0230|+0.221%|-0.841%
+|mixed:csv_report|955.8352|952.2152|-0.379%|+0.232%
+|mixed:object_orders|3351.5452|3353.0304|+0.044%|-0.374%
+|mixed:callback_pipeline|96.8571|97.4121|+0.573%|+0.682%
+|mixed:text_index|1351.1944|1352.0846|+0.066%|+0.621%
+|probe:object_short|1699.0570|1700.3100|+0.074%|+0.075%
+|probe:effect_short|1752.8168|1750.5348|-0.130%|+1.004%
+|probe:string_result_loop|555.1897|551.8045|-0.610%|+0.635%
+
+Local polymorphic integer and floating time improves 3.91% and 3.07% in confirmation; both targets improve in every layout in both campaigns. Integer confirmation ranges are disjoint in all three layouts. Imported counterparts improve 1.15% and 1.36% in aggregate, with overlapping ranges. These observations support a narrow call-path improvement.
+
+The tradeoff is retained explicitly: plain closure time rises 2.23% in the screen and 1.71% in confirmation (about 0.31 ns/item in confirmation); captured closure rises 2.54% then 0.83%. Captured closures are faster in the default layout and slower in reverse in both campaigns; confirmation ranges are disjoint in those opposite directions. Other controls and all observed ranges remain in the evidence. Mixed application changes stay within 0.6% in confirmation, without an established overall application gain. Retention follows the authorized broader-tradeoff evaluation, not a claim that every workload improves.
+
+Release and Debug each pass 20 fixtures: 45 QUnit cases/6,807 assertions plus two silent fixtures. Native Debug passes 3,768 focused and 5,433 broader assertions (overlapping). Both frozen runtimes pass 9,108 independent reference outputs total. The added same-artifact concurrent-alias control passes baseline, candidate and Debug with 98,304 releases per run, including cyclic objects; the committed fixture also checks AST/IR/JIT, O0/O3 AOT and generic cleanup. All 391 Release qmod aliases are restored. Initial fixture-constructor, loader-log parser and confirmation-label mistakes are corrected and preserved in the evidence.
+
+Shared host without affinity, frequency or thermal control; no owned build, test, profile or heavy scan overlaps timing. Runtime-library code placement is not independently randomized. Observed ranges are not confidence intervals. No fresh Java/develop ratio, weighted application gain, universal parity or performance ceiling is claimed.
+
+Next inspect reference-release TLS work in actual optimized assembly. A possible explicit RuntimeConfig context must preserve unregister-before-thread-data-destruction and the locking fallback during teardown; a valid TID alone is insufficient. Compiler-proven receiver specialization remains a larger, separate direction.
+
+[Complete evidence](results-aot-class-local-release-macos-arm64.json); [all 62 audit checks](audit-aot-class-local-release.md).

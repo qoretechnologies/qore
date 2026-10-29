@@ -1,0 +1,50 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class ClassLocalReleaseTest
+
+class ClassLocalReleaseTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+
+    constructor() : Test("AOT shared and cyclic receiver-local release", "1.0", \ARGV) {
+        addTestCase("concurrent receiver aliases preserve ownership and collect cycles", \check());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+
+    private check() {
+        string source = get_script_dir() + "/AOTClassLocalRelease.qr";
+        string expected = "concurrent-class-local-release: ok\n";
+        foreach string mode in (("ast", "ir", "jit")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source)), mode);
+        }
+        TmpDir dir("qore-aot-class-local-release-");
+        foreach string level in (("-O0", "-O3")) {
+            string executable = dir.path + "/fixture";
+            run((qcc, level, "--strip-source", "-o", executable, source));
+            assertEq(expected, run((executable,)), level);
+            assertEq(expected, run((executable,), "QORE_DISABLE_AOT_STRONG_CLASS_LOCAL_CLEAR=1 "),
+                "generic cleanup " + level);
+        }
+    }
+}
