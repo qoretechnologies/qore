@@ -28998,3 +28998,57 @@ Untimed profiles identified ownership, member lookup and scalar cleanup as large
 Shared-host limits remain: no exclusive CPU, affinity, thermal or frequency control. No owned build/test/profile or heavy archive scan overlaps timing. No samples were discarded or old timing pooled.
 
 [Evidence](results-method-stack-inline-rejected-macos-arm64.json); [all 62 audit checks](audit-method-stack-inline-rejected.md).
+
+## Retained runtime cleanup for non-owning values (2026-10-29)
+
+The existing qore_rt_decref and qore_rt_decref_nothrow helpers now test QoreValue::needsRef() before entering a shared noinline discard helper. Values without an owned payload return without constructing a stack frame on the measured ARM64 optimized build. Enum declarations, opaque owners and ordinary nodes still use the complete QoreValue::discard implementation with the original sink, including null for the nothrow entry. The skipped operation would only clear a dead temporary's bits. No ABI, caller lowering, RuntimeConfig/TLS, Program transition, lifetime, lock, frame visibility or cancellation contract changes. Existing AOT/JIT artifacts can benefit from the runtime replacement; no separate IR or JIT speedup is measured here.
+
+Retained under the user-authorized broader workload tradeoff. Same-Program list mutation improves 9.15%/9.00%, imported list mutation 10.39%/7.00%, and imported list building 10.93%/12.25% in screen/confirmation. Every layout in both epochs has disjoint better observed fork ranges for these three workloads. CSV improves 1.09%/2.95% in aggregate; every confirmation layout improves with disjoint ranges. The first local integer-member gain of 2.63% is only 0.32% in confirmation; local virtual-call improvement does not repeat. Do not advertise those first-run call gains as established.
+
+Costs are retained explicitly: imported boxed-integer calls cost 1.70%/2.59%, imported integer virtual calls 0.79%/1.20%, and floating virtual calls 0.29%/1.30%. The reverse captured-closure layout costs 5.42%/6.24% with disjoint observed ranges in both epochs, despite aggregate changes of +0.53%/-0.04%. The cause of this layout-dependent cost is not isolated; generated runtime layout also changes. Other small gains/losses and ranges remain in the evidence. The repeatable list gains justify retention, not a claim of zero regressions or application-weighted speedup. No favorable rescue epoch or dropped samples follows.
+
+Measurements use matching Release -O3 -DNDEBUG runtimes, allocation tracking off, LLVM 22.1.8 and Apple Clang 21 on Apple M4 Pro/macOS ARM64. Baseline source is 75754639bc (an evidence-only successor of installed ff12d02f2b); the candidate changes only the two C++ files recorded in the evidence. Both runtime variants execute the exact same 15 qcc -O3 stripped native executables/modules from baseline. Eight local controls execute standalone within one Program; module suites execute imported AOT bodies from an IR host. Each of two independent epochs has 32 workloads, three fixed default/reverse/shuffle-487 layouts, three forks, three warmups and three 150 ms samples, 4096 items/seed 7. Jobs are randomly interleaved, using different predeclared random seeds for the two epochs. Values are whole-kernel ns/item, median of per-layout median fork means. Epochs are not pooled. These are not isolated call costs or a fresh Java/develop comparison.
+
+|!Workload|!Screen before|!Screen candidate|!Screen time change|!Confirmation before|!Confirmation candidate|!Confirmation time change
+|local:direct_call|1.520250|1.526903|+0.438%|1.533965|1.525096|-0.578%
+|local:method_call|1.593403|1.593163|-0.015%|1.601882|1.613223|+0.708%
+|local:polymorphic_call|23.347165|22.935686|-1.762%|23.114237|23.250630|+0.590%
+|local:boxed_int_method_fallback|32.884158|32.020313|-2.627%|32.041674|31.937785|-0.324%
+|local:boxed_float_method_fallback|34.585997|34.701935|+0.335%|35.319843|35.156914|-0.461%
+|local:boxed_int_method_effect|88.018770|87.240278|-0.884%|88.513187|88.376196|-0.155%
+|local:list_mutate|129.978443|118.092028|-9.145%|132.959154|120.995944|-8.998%
+|local:temporary_list|1.683672|1.652891|-1.828%|1.687828|1.666033|-1.291%
+|micro:polymorphic_call|75.768579|76.365160|+0.787%|76.261804|77.180351|+1.204%
+|micro:polymorphic_float_call|77.044230|77.269632|+0.293%|77.208409|78.215661|+1.305%
+|micro:boxed_int_method_call|96.851535|98.494753|+1.697%|96.895995|99.405120|+2.590%
+|micro:boxed_float_method_call|102.384863|103.020802|+0.621%|103.732325|103.916260|+0.177%
+|micro:boxed_int_method_fallback|109.120542|107.266949|-1.699%|108.478373|108.339289|-0.128%
+|micro:boxed_float_method_fallback|112.429736|111.952320|-0.425%|112.705942|111.162797|-1.369%
+|micro:boxed_int_method_effect|162.100539|163.141831|+0.642%|162.850893|162.877947|+0.017%
+|micro:indirect_call|10.043547|10.008721|-0.347%|10.046932|10.055583|+0.086%
+|micro:closure_call|17.824988|17.936008|+0.623%|18.137906|17.900608|-1.308%
+|micro:closure_capture|23.352996|23.477228|+0.532%|23.637072|23.628288|-0.037%
+|micro:list_read|2.885655|2.869832|-0.548%|2.901379|2.870636|-1.060%
+|micro:list_build|26.435382|23.545802|-10.931%|27.100942|23.782325|-12.245%
+|micro:list_mutate|132.283558|118.543950|-10.386%|131.065803|121.888720|-7.002%
+|micro:temporary_hash|1.688053|1.658678|-1.740%|1.691212|1.660907|-1.792%
+|float:callback_local_float_return|0.858767|0.846048|-1.481%|0.851645|0.851738|+0.011%
+|float:typed_local_int_unary|1.198231|1.171359|-2.243%|1.192347|1.179487|-1.079%
+|float:callback_loop_float_return|4.952164|4.967724|+0.314%|4.971048|4.965235|-0.117%
+|mixed:csv_report|916.838061|906.851420|-1.089%|931.426272|903.935775|-2.951%
+|mixed:object_orders|3068.325467|3063.679491|-0.151%|3068.971813|3087.779510|+0.613%
+|mixed:callback_pipeline|87.546908|87.672288|+0.143%|88.093488|88.131754|+0.043%
+|mixed:text_index|1303.770469|1300.374349|-0.260%|1312.522750|1305.385646|-0.544%
+|probe:object_short|1574.932891|1558.041043|-1.073%|1606.264271|1600.506032|-0.358%
+|probe:effect_short|1615.542204|1617.070737|+0.095%|1663.842323|1640.366706|-1.411%
+|probe:string_result_loop|524.874507|523.420929|-0.277%|522.679741|532.458132|+1.871%
+
+All 1152 jobs/3456 measured windows replay independently. Each runtime passes 1518 IR and 4554 AOT reference results (12144 combined), with exact loaded runtime images verified for the shared artifacts. Release and Debug each pass 19 selected fixtures, including two silent exit-status fixtures, 52 QUnit cases and 12110 assertions. Debug additionally passes 2962 focused native assertions (including 45 new cleanup assertions) and 4620 broader native assertions; these are separate runs with overlapping coverage, not a unique assertion count. All 391 Release qmod aliases are restored. Native cases cover inline scalars/strings/chars, ordinary nodes, opaque containers, enum declaration lifetime, wide integers and escaped doubles; existing execution-mode regressions cover object ownership, destruction order, exceptions, reflective reload and cancellation cleanup.
+
+The first untimed prototype used the same predicate but retained scalar stack frames. It was refined to the shared noinline owning helper before any timing. Its codegen preflight rejected literal LLVM equality because serialized git-revision metadata changed across the intervening evidence commit; decoding a representative module confirmed only that revision changed in the payload. The final measurement instead uses identical native artifacts with both runtimes. The first test driver also incorrectly required a QUnit summary from a successful silent fixture; its failed driver and successful child receipt remain preserved. The corrected final qualification covers both silent fixtures. No v1 prototype performance samples exist.
+
+ARM64 inspection proves frame-free returns in both wrappers and tail branches into the owning helper, preserving the original/null sink. It does not prove other architectures generate the same sequence. The optimized runtime changes helper code layout, so individual unrelated timing changes cannot be attributed solely to a predicate instruction. Shared-host limits remain: no exclusive CPU, affinity, thermal or frequency control. No owned build/test/profile or heavy archive scan overlaps either timing epoch. Startup, memory, production-wide throughput and universal Java parity are not established.
+
+Next synchronize develop and install the optimized retained runtime as requested. Then investigate the remaining owning-cleanup/call costs and generic AOT CPU targeting as separate experiments; neither is an established further benefit. A global performance ceiling has not been reached.
+
+[Evidence](results-runtime-scalar-cleanup-macos-arm64.json); [all 62 audit checks](audit-runtime-scalar-cleanup.md).

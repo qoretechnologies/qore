@@ -739,6 +739,67 @@ static void ut_lvalue_object_count_records(UnitTestCounters& c) {
     UT_ASSERT(c, !xsink, "object-count bookkeeping tests raise no exception");
 }
 
+//! Runtime cleanup must distinguish inline values from every owned representation.
+static void ut_runtime_value_cleanup(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    for (bool nothrow : {false, true}) {
+        auto release = [&](QoreValue value) {
+            if (nothrow) {
+                qore_rt_decref_nothrow(value.rawBits());
+            } else {
+                qore_rt_decref(value.rawBits(), &xsink);
+            }
+        };
+        for (QoreValue value : {QoreValue(), QoreValue::makeNull(), QoreValue(false), QoreValue(true),
+                QoreValue(int64_t{0}), QoreValue(int64_t{-17}), QoreValue(int64_t{17}),
+                QoreValue(0.0), QoreValue(-0.0), QoreValue(1.5),
+                QoreValue(std::numeric_limits<double>::infinity()),
+                QoreValue::makeShortString("abc", 3), QoreValue::makeChar(0x1f642)}) {
+            release(value);
+            UT_ASSERT(c, !xsink, "inline runtime cleanup raises no exception");
+        }
+        {
+            ReferenceHolder<QoreStringNode> owner(new QoreStringNode("runtime cleanup node"), &xsink);
+            release(QoreValue(owner->refSelf()));
+            UT_ASSERT_EQ(c, 1, owner->reference_count(), "runtime cleanup releases an ordinary node reference");
+        }
+        {
+            ReferenceHolder<QoreHashNode> owner(new QoreHashNode(autoTypeInfo), &xsink);
+            release(QoreValue::makeOpaqueHash(*owner));
+            UT_ASSERT_EQ(c, 1, owner->reference_count(), "runtime cleanup releases an opaque hash reference");
+        }
+        {
+            ReferenceHolder<QoreListNode> owner(new QoreListNode(autoTypeInfo), &xsink);
+            release(QoreValue::makeOpaqueList(*owner));
+            UT_ASSERT_EQ(c, 1, owner->reference_count(), "runtime cleanup releases an opaque list reference");
+        }
+        {
+            ReferenceHolder<QoreStringNode> owner(new QoreStringNode("runtime cleanup enum"), &xsink);
+            QoreValue value;
+            {
+                QoreEnumDeclHolder decl(new QoreEnumDecl("CleanupEnum", "CleanupEnum", stringTypeInfo));
+                decl->addMember("Member", owner->refSelf());
+                value = QoreValue::makeEnum(decl->findMember("Member"));
+            }
+            UT_ASSERT_EQ(c, 2, owner->reference_count(), "enum value retains its declaration after scope exit");
+            release(value);
+            UT_ASSERT_EQ(c, 1, owner->reference_count(), "runtime cleanup releases the enum declaration");
+        }
+        for (bool floating : {false, true}) {
+            uint64_t escaped_bits = QoreValue::RAW_DOUBLE_TAG_COLLISION_FIRST;
+            double escaped;
+            memcpy(&escaped, &escaped_bits, sizeof(escaped));
+            ValueHolder value(floating ? QoreValue(escaped)
+                : QoreValue(std::numeric_limits<int64_t>::max()), &xsink);
+            const AbstractQoreNode* node = value->get<const AbstractQoreNode>();
+            UT_ASSERT(c, node, "wide integers and escaped doubles retain node storage");
+            release(value->refSelf());
+            UT_ASSERT_EQ(c, 1, node->reference_count(), "runtime cleanup releases the numeric box reference");
+        }
+    }
+    UT_ASSERT(c, !xsink, "runtime value cleanup leaves no exception");
+}
+
 static void ut_local_discard(UnitTestCounters& c) {
     ExceptionSink xsink;
     // A deletion must not read the inactive payload for unassigned or inline scalar storage.
@@ -14578,6 +14639,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_native_closure_context(c);
     ut_program_context_snapshot(c);
     ut_lvalue_object_count_records(c);
+    ut_runtime_value_cleanup(c);
     ut_local_discard(c);
     ut_aot_scalar_local_store(c);
     ut_aot_first_public_base(c);
@@ -14608,6 +14670,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_native_closure_context(c);
     ut_program_context_snapshot(c);
     ut_lvalue_object_count_records(c);
+    ut_runtime_value_cleanup(c);
     ut_local_discard(c);
     ut_aot_scalar_local_store(c);
     ut_aot_first_public_base(c);

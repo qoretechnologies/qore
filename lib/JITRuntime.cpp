@@ -1081,14 +1081,25 @@ extern "C" DLLEXPORT void qore_rt_incref(uint64_t val) {
     }
 }
 
-extern "C" DLLEXPORT void qore_rt_decref(uint64_t val, ExceptionSink* xsink) {
+// Keep the temporary's address and discard() call out of the scalar entry paths so they
+// can return without a stack frame. Owned values can tail-call this complete release path.
+static __attribute__((noinline)) void qore_rt_discard_owned_value(uint64_t val, ExceptionSink* xsink) {
     QoreValue v = fromBits(val);
     v.discard(xsink);
 }
 
+extern "C" DLLEXPORT void qore_rt_decref(uint64_t val, ExceptionSink* xsink) {
+    // For non-owning values, discard() would only clear this local copy.
+    // needsRef() includes enum declarations and opaque owners as well as ordinary nodes.
+    if (fromBits(val).needsRef()) {
+        qore_rt_discard_owned_value(val, xsink);
+    }
+}
+
 extern "C" DLLEXPORT void qore_rt_decref_nothrow(uint64_t val) {
-    QoreValue v = fromBits(val);
-    v.discard(nullptr);
+    if (fromBits(val).needsRef()) {
+        qore_rt_discard_owned_value(val, nullptr);
+    }
 }
 
 static int clearConsumedArgCleanups(uint64_t** arg_cleanups, int nargs,
