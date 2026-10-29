@@ -902,6 +902,20 @@ void Http3ServerPollOperationPriv::closeSessionStreams(int64_t session_id) {
     }
 }
 
+// Stores the controller an operation reports its completion to as an opaque reference: owned as normally, but
+// not followed by the collector.  The controller keeps the operation for as long as its listener or connection is
+// registered and removes it with them, so while the controller is reachable so is the operation, and this edge
+// cannot hold up a collectable cycle.  Followed, it put the operation - and everything that refers to it, such as
+// the callbacks of every HTTP/3 request on the listener - in one recursive set with the controller and everything
+// the controller holds, and a scan of any of them walked it all; see
+// HttpServerAsyncIo::HttpConnectionPollOperationBase::completion_controller for the same reference in Qore.
+static void set_completion_controller(QoreObject* self, const QoreValue& ctrl_arg, ExceptionSink* xsink) {
+    // makeOpaqueObject() takes its own reference to the object
+    self->setMemberValue("completion_controller", QC_HTTP3SERVERPOLLOPERATION,
+        QoreValue::makeOpaqueObject(const_cast<QoreObject*>(ctrl_arg.resolveIndirect().get<const QoreObject>())),
+        xsink);
+}
+
 // Stores the callback for the transmission result of the response on a stream in the "response_send_callbacks"
 // member hash; returns false if an exception was raised
 static bool setResponseSendCallback(QoreObject* self, Http3ServerPollOperationPriv* priv, const std::string& skey,
@@ -1224,8 +1238,7 @@ nothing Http3ServerPollOperation::setCompletionContext(object controller, object
     QoreValue lsnr_arg = args->retrieveEntry(1);
     QoreValue tgt_arg = args->retrieveEntry(2);
     if (ctrl_arg.getType() == NT_OBJECT) {
-        self->setMemberValue("completion_controller", QC_HTTP3SERVERPOLLOPERATION,
-            const_cast<QoreObject*>(ctrl_arg.get<const QoreObject>())->refSelf(), xsink);
+        set_completion_controller(self, ctrl_arg, xsink);
     }
     if (lsnr_arg.getType() == NT_OBJECT) {
         self->setMemberValue("completion_listener", QC_HTTP3SERVERPOLLOPERATION,
@@ -1248,8 +1261,7 @@ nothing Http3ServerPollOperation::setConnectionCompletionContext(object controll
         string connection_unique_hash, string state) [flags=NAMED_ARGS] {
     QoreValue ctrl_arg = args->retrieveEntry(0);
     if (ctrl_arg.getType() == NT_OBJECT) {
-        self->setMemberValue("completion_controller", QC_HTTP3SERVERPOLLOPERATION,
-            const_cast<QoreObject*>(ctrl_arg.get<const QoreObject>())->refSelf(), xsink);
+        set_completion_controller(self, ctrl_arg, xsink);
     }
     self->setMemberValue("conn_completion_uh", QC_HTTP3SERVERPOLLOPERATION,
         connection_unique_hash->refSelf(), xsink);
@@ -1266,7 +1278,9 @@ nothing Http3ServerPollOperation::onComplete(hash<SocketPollResultInfo> result) 
     if (*xsink || ctrl->isNullOrNothing()) {
         return QoreValue();
     }
-    QoreObject* ctrl_obj = ctrl->get<QoreObject>();
+    // the member holds an opaque reference (see set_completion_controller()), which get<QoreObject>() does not
+    // read; ctrl keeps the reference for the call
+    QoreObject* ctrl_obj = ctrl->resolveIndirect().get<QoreObject>();
 
     ValueHolder conn_uh(self->getReferencedMemberNoMethod("conn_completion_uh", xsink), xsink);
     if (*xsink) {

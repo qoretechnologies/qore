@@ -37,6 +37,9 @@
 
 %modern
 %allow-weak-references
+# the request contexts' references to the async I/O controllers are not followed by the collector; see the "@="
+# comments where they are assigned
+%allow-opaque-references
 %enable-debug
 
 module HttpServer {
@@ -4836,7 +4839,11 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                     hash<auto> ws_cx = cx + {"listener": listener};
                     if (ws_poll_op) {
                         ws_cx."header-info".ws_poll_op = ws_poll_op;
-                        ws_cx."header-info".async_io_controller = asyncIo;
+                        # the controller keeps this context in the connection's entry for the life of the
+                        # connection, so the reference back to the controller is opaque, as the controller's
+                        # references to its connections' entries are (see
+                        # HttpAsyncSocketIoController::connections)
+                        ws_cx."header-info".async_io_controller @= asyncIo;
                         ws_cx."header-info".async_target = asyncTarget;
                     }
 
@@ -6170,7 +6177,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         @return context hash for new connection
     */
     hash<auto> getContextTemplate(hash<auto> info) {
-        return {
+        hash<auto!> cx = {
             "socket": socket,
             "socket-info": socket_info,
             "peer-info": info,
@@ -6178,8 +6185,12 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             "ssl": ssl,
             "listener-id": id,
             "listener-name": name,
-            "async_ctrl": serv.getGlobalAsyncCtrl(),
         };
+        # Every request context refers to the process-wide async I/O controller, which never refers to a request
+        # context, so the reference is opaque: an ordinary one made every scan of a request's data also walk the
+        # shared controller and its logger, which every other request's scans walk too
+        cx.async_ctrl @= serv.getGlobalAsyncCtrl();
+        return cx;
     }
 
     #! Returns the listener ID

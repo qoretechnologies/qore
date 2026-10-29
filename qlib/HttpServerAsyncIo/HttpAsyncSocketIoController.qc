@@ -171,6 +171,17 @@ public class HttpAsyncSocketIoController {
         hash<string, string> quic_listener_hash_by_http_listener;
 
         #! Active connections: socket unique hash -> connection info
+        /** Each entry is assigned with the opaque reference operator \c "@=": the controller owns it as
+            normally, but the collector does not follow it.  Every request writes to this hash, and each write
+            starts a scan at the controller that walks the hashes it holds; with ordinary references it walked
+            every open connection's entry, so the work of every request grew with the number of open
+            connections.  An entry can lead back to the controller - through its listener, when a handler
+            refers to the server, for example - but the controller removes an entry when its connection is
+            closed and removes them all in stop(), so this edge can hold such a cycle only while the connection
+            is registered, when the cycle is in use anyway; an entry's own objects are still collected by the
+            scans that start at them.  Every write to an entry must use \c "@=": a value written with \c "="
+            is an ordinary reference again.
+        */
         hash<string, hash<HttpActiveConnectionInfo>> connections;
 
         #! Non-blocking delayed responses pending on the shared controller timer
@@ -1185,7 +1196,7 @@ public class HttpAsyncSocketIoController {
             } else {
                 ka_op = new HttpKeepAlivePollOperation(sock, ttl);
             }
-            cinfo = connections{uh} = <HttpActiveConnectionInfo>{
+            cinfo = connections{uh} @= <HttpActiveConnectionInfo>{
                 "sock": sock,
                 "listener": listener,
                 "cx": cx,
@@ -1223,7 +1234,7 @@ public class HttpAsyncSocketIoController {
                 poll_op.onComplete(<SocketPollResultInfo>{});
                 return;
             }
-            cinfo = connections{uh} = <HttpActiveConnectionInfo>{
+            cinfo = connections{uh} @= <HttpActiveConnectionInfo>{
                 "sock": sock,
                 "listener": listener,
                 "cx": cx,
@@ -1572,7 +1583,7 @@ public class HttpAsyncSocketIoController {
             hash<HttpActiveConnectionInfo> cinfo;
             {
                 AutoWriteLock al(m);
-                cinfo = connections{uh} = new_cinfo;
+                cinfo = connections{uh} @= new_cinfo;
             }
 
             # Submit SSL handshake operation
@@ -1599,7 +1610,7 @@ public class HttpAsyncSocketIoController {
             hash<HttpActiveConnectionInfo> cinfo;
             {
                 AutoWriteLock al(m);
-                cinfo = connections{uh} = new_cinfo;
+                cinfo = connections{uh} @= new_cinfo;
             }
 
             log(LoggerLevel::DEBUG, "Starting HTTP/2 connection handling for %y", uh);
@@ -1623,7 +1634,7 @@ public class HttpAsyncSocketIoController {
         hash<HttpActiveConnectionInfo> cinfo;
         {
             AutoWriteLock al(m);
-            cinfo = connections{uh} = new_cinfo;
+            cinfo = connections{uh} @= new_cinfo;
         }
 
         log(LoggerLevel::DEBUG, "Starting HTTP/1.x header reading for %y", uh);
@@ -1845,7 +1856,7 @@ public class HttpAsyncSocketIoController {
             if (old_uh != uh) {
                 remove connections{old_uh};
             }
-            connections{uh} = new_cinfo;
+            connections{uh} @= new_cinfo;
         }
         submitConnectionOp(uh, new_cinfo);
 
@@ -2387,7 +2398,7 @@ public class HttpAsyncSocketIoController {
                     } else {
                         remove conn_info.cx{"peer-info-future"};
                     }
-                    cinfo = connections{uh} = conn_info;
+                    cinfo = connections{uh} @= conn_info;
                 }
             } else {
                 {
@@ -2410,7 +2421,7 @@ public class HttpAsyncSocketIoController {
                     } else {
                         remove conn_info.cx{"peer-info-future"};
                     }
-                    cinfo = connections{uh} = conn_info;
+                    cinfo = connections{uh} @= conn_info;
                 }
             }
 
@@ -2463,7 +2474,7 @@ public class HttpAsyncSocketIoController {
                     cast<hash<HttpActiveConnectionInfo>>(connections{uh});
                 conn_info_upd.stream_op = stream_op;
                 conn_info_upd.state = state;
-                resumed_cinfo = connections{uh} = conn_info_upd;
+                resumed_cinfo = connections{uh} @= conn_info_upd;
             }
         }
         if (resumed_cinfo) {
@@ -2774,9 +2785,13 @@ public class HttpAsyncSocketIoController {
                     self, uh, cinfo.state);
                 submit_op = op;
             } else {
+                # the closure captures only the state it reports, not the connection's entry: the operation is
+                # held by the I/O controller for as long as it runs, and the entry would keep a stale copy of the
+                # connection's listener, target and operations reachable from it
+                string state = cinfo.state;
                 submit_op = new DelegatingPollOperation(op,
                     sub (hash<SocketPollResultInfo> result) {
-                        handleConnectionResult(result, uh, cinfo.state);
+                        handleConnectionResult(result, uh, state);
                     });
             }
             hash<SocketPollOperationInfo> submit_info = <SocketPollOperationInfo>{
@@ -2999,7 +3014,7 @@ public class HttpAsyncSocketIoController {
                             hash<HttpActiveConnectionInfo> conn_info = cast<hash<HttpActiveConnectionInfo>>(connections{uh});
                             conn_info.stream_op = h3op;
                             conn_info.state = HttpConnectionState::Http3;
-                            new_cinfo = connections{uh} = conn_info;
+                            new_cinfo = connections{uh} @= conn_info;
                         }
                         submitConnectionOp(uh, new_cinfo);
                     }
@@ -3030,7 +3045,7 @@ public class HttpAsyncSocketIoController {
                         hash<HttpActiveConnectionInfo> conn_info = cast<hash<HttpActiveConnectionInfo>>(connections{uh});
                         conn_info.stream_op = h3op;
                         conn_info.state = HttpConnectionState::Http3;
-                        new_cinfo = connections{uh} = conn_info;
+                        new_cinfo = connections{uh} @= conn_info;
                     }
                     submitConnectionOp(uh, new_cinfo);
                 } else if (h3op.isClosed() || h3op.hasError()) {
@@ -3093,7 +3108,7 @@ public class HttpAsyncSocketIoController {
                             upd.stream_op = cinfo.pending_stream_op;
                             remove upd.pending_stream_type;
                             remove upd.pending_stream_op;
-                            new_cinfo = connections{uh} = upd;
+                            new_cinfo = connections{uh} @= upd;
                         }
                         submitConnectionOp(uh, new_cinfo);
                         # Wake the socket to flush any data queued during
@@ -3214,7 +3229,7 @@ public class HttpAsyncSocketIoController {
         hash<HttpActiveConnectionInfo> cinfo;
         {
             AutoWriteLock al(m);
-            cinfo = connections{uh} = <HttpActiveConnectionInfo>{
+            cinfo = connections{uh} @= <HttpActiveConnectionInfo>{
                 "sock": sock,
                 "listener": listener,
                 "cx": cx,
@@ -3322,7 +3337,7 @@ public class HttpAsyncSocketIoController {
         };
         {
             AutoWriteLock al(m);
-            connections{uh} = new_cinfo;
+            connections{uh} @= new_cinfo;
         }
         submitConnectionOp(uh, new_cinfo);
         return True;
@@ -3391,7 +3406,7 @@ public class HttpAsyncSocketIoController {
                         upd.stream_op = body_op;
                         upd.pending_hdr = output.hdr;
                         upd.pending_header_info = output.info;
-                        new_cinfo = connections{dispatch_uh} = upd;
+                        new_cinfo = connections{dispatch_uh} @= upd;
                     }
                     submitConnectionOp(dispatch_uh, new_cinfo);
                     return;
@@ -3622,7 +3637,7 @@ public class HttpAsyncSocketIoController {
                     try { sock.close(); } catch () {}
                     return;
                 }
-                connections{uh} = <HttpActiveConnectionInfo>{
+                connections{uh} @= <HttpActiveConnectionInfo>{
                     "sock": sock,
                     "listener": linfo.listener,
                     "cx": cx,
@@ -3720,7 +3735,7 @@ public class HttpAsyncSocketIoController {
                 hash<HttpActiveConnectionInfo> cinfo;
                 {
                     AutoWriteLock al(m);
-                    cinfo = connections{uh} = new_cinfo;
+                    cinfo = connections{uh} @= new_cinfo;
                 }
                 submitConnectionOp(uh, cinfo);
             } catch (hash<ExceptionInfo> ex) {
@@ -3762,7 +3777,7 @@ public class HttpAsyncSocketIoController {
                 hash<HttpActiveConnectionInfo> cinfo;
                 {
                     AutoWriteLock al(m);
-                    cinfo = connections{uh} = new_cinfo;
+                    cinfo = connections{uh} @= new_cinfo;
                 }
                 submitConnectionOp(uh, cinfo);
             } catch (hash<ExceptionInfo> ex) {
@@ -3800,7 +3815,7 @@ public class HttpAsyncSocketIoController {
                 hash<HttpActiveConnectionInfo> cinfo;
                 {
                     AutoWriteLock al(m);
-                    cinfo = connections{uh} = new_cinfo;
+                    cinfo = connections{uh} @= new_cinfo;
                 }
                 submitConnectionOp(uh, cinfo);
             } catch (hash<ExceptionInfo> ex) {
@@ -3836,7 +3851,7 @@ public class HttpAsyncSocketIoController {
                 hash<HttpActiveConnectionInfo> cinfo;
                 {
                     AutoWriteLock al(m);
-                    cinfo = connections{uh} = new_cinfo;
+                    cinfo = connections{uh} @= new_cinfo;
                 }
                 submitConnectionOp(uh, cinfo);
             } catch (hash<ExceptionInfo> ex) {
@@ -3890,7 +3905,7 @@ public class HttpAsyncSocketIoController {
                     hash<HttpActiveConnectionInfo> cinfo;
                     {
                         AutoWriteLock al(m);
-                        cinfo = connections{uh} = new_cinfo;
+                        cinfo = connections{uh} @= new_cinfo;
                     }
                     submitConnectionOp(uh, cinfo);
                     return;
@@ -3924,7 +3939,7 @@ public class HttpAsyncSocketIoController {
                     hash<HttpActiveConnectionInfo> cinfo;
                     {
                         AutoWriteLock al(m);
-                        cinfo = connections{uh} = <HttpActiveConnectionInfo>{
+                        cinfo = connections{uh} @= <HttpActiveConnectionInfo>{
                             "sock": sock,
                             "listener": linfo.listener,
                             "cx": cx,
@@ -3948,7 +3963,7 @@ public class HttpAsyncSocketIoController {
                 hash<HttpActiveConnectionInfo> cinfo;
                 {
                     AutoWriteLock al(m);
-                    cinfo = connections{uh} = <HttpActiveConnectionInfo>{
+                    cinfo = connections{uh} @= <HttpActiveConnectionInfo>{
                         "sock": sock,
                         "listener": linfo.listener,
                         "cx": cx,
@@ -4017,7 +4032,7 @@ public class HttpAsyncSocketIoController {
             # Cast to typed hash to update fields and assign back
             hash<HttpActiveConnectionInfo> conn_info = cast<hash<HttpActiveConnectionInfo>>(connections{uh});
             conn_info.state = HttpConnectionState::ReadHeader;
-            cinfo = connections{uh} = conn_info;
+            cinfo = connections{uh} @= conn_info;
         }
 
         submitConnectionOpUnlocked(uh, cinfo);
@@ -4177,7 +4192,7 @@ public class HttpAsyncSocketIoController {
                 hash<HttpActiveConnectionInfo> conn_info = cast<hash<HttpActiveConnectionInfo>>(connections{uh});
                 conn_info.stream_op = h2op;
                 conn_info.state = HttpConnectionState::Http2;
-                new_cinfo = connections{uh} = conn_info;
+                new_cinfo = connections{uh} @= conn_info;
             }
             submitConnectionOp(uh, new_cinfo);
             return;
@@ -4252,7 +4267,7 @@ public class HttpAsyncSocketIoController {
                         cast<hash<HttpActiveConnectionInfo>>(connections{uh});
                     conn_info_upd.stream_op = h2op;
                     conn_info_upd.state = HttpConnectionState::Http2;
-                    new_cinfo = connections{uh} = conn_info_upd;
+                    new_cinfo = connections{uh} @= conn_info_upd;
                 }
                 submitConnectionOp(uh, new_cinfo);
             } catch () {
@@ -4499,7 +4514,7 @@ public class HttpAsyncSocketIoController {
                                 cast<hash<HttpActiveConnectionInfo>>(connections{dispatch_uh});
                             conn_info_upd.stream_op = dispatch_h2op;
                             conn_info_upd.state = HttpConnectionState::Http2;
-                            resumed_cinfo = connections{dispatch_uh} = conn_info_upd;
+                            resumed_cinfo = connections{dispatch_uh} @= conn_info_upd;
                         }
                     }
                     if (resumed_cinfo) {
@@ -4595,7 +4610,7 @@ public class HttpAsyncSocketIoController {
             hash<HttpActiveConnectionInfo> conn_info = cast<hash<HttpActiveConnectionInfo>>(connections{dispatch_uh});
             conn_info.stream_op = dispatch_h2op;
             conn_info.state = HttpConnectionState::Http2;
-            new_cinfo = connections{dispatch_uh} = conn_info;
+            new_cinfo = connections{dispatch_uh} @= conn_info;
         }
         submitConnectionOp(dispatch_uh, new_cinfo);
 
@@ -4972,7 +4987,7 @@ public class HttpAsyncSocketIoController {
                 hash<HttpActiveConnectionInfo> conn_info = cast<hash<HttpActiveConnectionInfo>>(connections{uh});
                 conn_info.stream_op = h2op;
                 conn_info.state = HttpConnectionState::Http2;
-                new_cinfo = connections{uh} = conn_info;
+                new_cinfo = connections{uh} @= conn_info;
             }
             submitConnectionOp(uh, new_cinfo);
         } else {
