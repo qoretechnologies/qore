@@ -35,7 +35,7 @@
 
 #include <qore/common.h>
 
-DLLEXPORT int printe(const char *fmt, ...);
+DLLEXPORT int printe(const char *fmt, ...) QORE_PRINTF_FORMAT(1, 2);
 DLLEXPORT char *remove_trailing_newlines(char *str);
 DLLEXPORT char *remove_trailing_blanks(char *str);
 

@@ -1941,9 +1941,11 @@ nothing Program::importFunction(string function_name, string import_as, *softboo
     TempEncodingHelper timport_as(import_as, QCS_DEFAULT, xsink);
     if (!timport_as)
         return QoreValue();
-    if (timport_as->empty())
+    if (timport_as->empty()) {
         xsink->raiseException("FUNCTION-IMPORT-ERROR",
-            "the new function name while importing function '%s' may not be empty", function_name);
+            "the new function name while importing function '%s' may not be empty", function_name->c_str());
+        return QoreValue();
+    }
 
     qore_program_private::exportFunction(getProgram(), xsink, p, tfunc->c_str(), timport_as->c_str(), inject);
 }

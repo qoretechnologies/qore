@@ -325,7 +325,7 @@ private:
                             xsink->raiseException("PARSE-URL-ERROR", "URL '%s' has an invalid non-numeric character "
                                 "in the port specification (char: '%c' ue: %lld sbuf: '%s')",
                                 q_mask_url_password(buf).c_str(), sbuf[i],
-                                username_end, sbuf.c_str());
+                                (int64)username_end, sbuf.c_str());
                         invalidate();
                         return;
                     }

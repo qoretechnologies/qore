@@ -332,7 +332,7 @@ assertEq((10, 25, 30, 40), ids.toList());
 auto <buffer>::view(int start, int count) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
    if (start < 0 || count < 0 || start > (int64)b->size() || count > (int64)b->size() - start)
       return xsink->raiseException("BUFFER-RANGE-ERROR", "buffer.view(start: " QLLD ", count: " QLLD
-         ") is out of range for buffer length " QSD, start, count, b->size());
+         ") is out of range for buffer length " QLLD, start, count, (int64)b->size());
    return b->view(static_cast<size_t>(start), static_cast<size_t>(count));
 }
 

@@ -3351,9 +3351,9 @@ httpclient.setEventQueue(queue);
 nothing HTTPClient::setEventQueue(Qore::Thread::Queue[Queue] queue, auto argument, *bool with_data)
         [flags=NAMED_ARGS] {
     if (queue->getMax() != -1)
-        return xsink->raiseException("QUEUE-ERROR", "the Queue object passed as a maximum size of %d entr%s, which "
+        return xsink->raiseException("QUEUE-ERROR", "the Queue object passed as a maximum size of " QLLD " entr%s, which "
             "could cause internal I/O to freeze in the HttpClient object if used; use a Queue object with no maximum "
-            "size for I/O monitoring", queue->getMax(), queue->getMax() == 1 ? "y" : "ies");
+            "size for I/O monitoring", (int64)(queue->getMax()), queue->getMax() == 1 ? "y" : "ies");
     // pass reference from QoreObject::getReferencedPrivateData() to function
     client->setEventQueue(xsink, queue.release(), argument.refSelf(), with_data);
 }
@@ -3746,9 +3746,9 @@ httpclient.setWarningQueue(5000, 5000, queue, "socket-1");
 nothing HTTPClient::setWarningQueue(int warning_ms, int warning_bytes, Queue[Queue] queue, auto argument,
         timeout min_ms = 1s) [flags=NAMED_ARGS] {
     if (queue->getMax() != -1)
-        return xsink->raiseException("QUEUE-ERROR", "the Queue object passed as a maximum size of %d entr%s, which "
+        return xsink->raiseException("QUEUE-ERROR", "the Queue object passed as a maximum size of " QLLD " entr%s, which "
             "could cause internal I/O to freeze in the Socket object if used; use a Queue object with no maximum "
-            "size for I/O monitoring", queue->getMax(), queue->getMax() == 1 ? "y" : "ies");
+            "size for I/O monitoring", (int64)(queue->getMax()), queue->getMax() == 1 ? "y" : "ies");
     // pass reference from QoreObject::getReferencedPrivateData() to function
     client->setWarningQueue(xsink, warning_ms, warning_bytes, queue.release(), argument.refSelf(), min_ms);
 }

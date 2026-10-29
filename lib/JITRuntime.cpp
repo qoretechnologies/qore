@@ -1105,7 +1105,7 @@ extern "C" DLLEXPORT void qore_rt_check_throw(ExceptionSink* xsink) {
 
 extern "C" DLLEXPORT void qore_rt_throw(ExceptionSink* xsink, const char* err, const char* desc) {
     if (xsink) {
-        xsink->raiseException(err, desc);
+        xsink->raiseException(err, "%s", desc);
     }
 }
 
@@ -3062,7 +3062,7 @@ static uint64_t qore_rt_cast_by_type_path_in_program(uint64_t inner_bits,
                 desc.sprintf("of type '%s'", inner.getTypeName());
             }
             desc.sprintf(" to enum '%s'; value is not a valid enum member", ed->getName());
-            xsink->raiseException("RUNTIME-CAST-ERROR", desc.c_str());
+            xsink->raiseException("RUNTIME-CAST-ERROR", "%s", desc.c_str());
             return toBits(QoreValue());
         }
         const QoreEnumMember* member = ed->findMemberByValue(inner);
@@ -4727,7 +4727,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_to_string(uint64_t val_bits) {
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_int_to_string(int64_t value) {
-    return toBits(QoreValue(new QoreStringNodeMaker(QLLD, value)));
+    return toBits(QoreValue(new QoreStringNodeMaker(QLLD, (int64)value)));
 }
 
 extern "C" DLLEXPORT int64_t qore_rt_int_to_string_measure(int64_t value) {
@@ -6114,7 +6114,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
             }
             if (index < 0) {
                 xsink->raiseException("NEGATIVE-LIST-INDEX", "list index " QLLD " is invalid (index must evaluate "
-                    "to a non-negative integer)", index);
+                    "to a non-negative integer)", (int64)index);
                 return toBits(QoreValue());
             }
         }
@@ -6136,7 +6136,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
     } else if (lv.isNothing()) {
         if (index < 0) {
             xsink->raiseException("NEGATIVE-LIST-INDEX", "list index " QLLD " is invalid (index must evaluate to a "
-                "non-negative integer)", index);
+                "non-negative integer)", (int64)index);
             return toBits(QoreValue());
         }
         // Auto-vivify: create new list from NOTHING, set element, assign to variable
@@ -6206,7 +6206,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
             }
             if (index < 0) {
                 xsink->raiseException("NEGATIVE-LIST-INDEX", "list index " QLLD " is invalid (index must evaluate "
-                    "to a non-negative integer)", index);
+                    "to a non-negative integer)", (int64)index);
                 return toBits(QoreValue());
             }
         }
@@ -6226,7 +6226,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
     } else if (lv.isNothing()) {
         if (index < 0) {
             xsink->raiseException("NEGATIVE-LIST-INDEX", "list index " QLLD " is invalid (index must evaluate to a "
-                "non-negative integer)", index);
+                "non-negative integer)", (int64)index);
             return toBits(QoreValue());
         }
         // Auto-vivify: create new list from NOTHING, set element, assign to variable

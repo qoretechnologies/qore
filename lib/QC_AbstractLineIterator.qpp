@@ -194,7 +194,7 @@ list<string> AbstractLineIterator::getSplitLine(string separator, string quote, 
         ExceptionSink xsink2;
         ValueHolder line_num(self->evalMethod("index", nullptr, &xsink2), xsink);
         if (line_num->getType() == NT_INT) {
-            xsink->appendLastDescription(": error iterating input line " QLLD, (int)line_num->getAsBigInt());
+            xsink->appendLastDescription(": error iterating input line " QLLD, line_num->getAsBigInt());
         }
         return QoreValue();
     }

@@ -4371,7 +4371,7 @@ QoreHashNode* QoreHttpClientObject::sendHttp2Connect(const char* path, const Qor
     if (submitted_stream_id <= 0 || submitted_stream_id > INT32_MAX) {
         cleanup_failed_connect();
         xsink->raiseException("HTTP2-CONNECT-ERROR", "invalid HTTP/2 CONNECT stream id " QLLD,
-            submitted_stream_id);
+            (int64)submitted_stream_id);
         return nullptr;
     }
     int32_t stream_id = static_cast<int32_t>(submitted_stream_id);
@@ -4593,7 +4593,7 @@ QoreHashNode* QoreHttpClientObject::sendHttp3Connect(const char* path, const Qor
         cleanup_failed_connect();
         restore_forced_h3();
         xsink->raiseException("HTTP3-CONNECT-ERROR", "invalid HTTP/3 CONNECT stream id " QLLD,
-            stream_id);
+            (int64)stream_id);
         return nullptr;
     }
 
@@ -4912,7 +4912,7 @@ int QoreHttpClientObject::sendHttp3StreamData(int64_t stream_id, const BinaryNod
             if (stream_id != http_priv->h3_connect_stream_id) {
                 xsink->raiseException("HTTP3-ERROR",
                     "HTTP/3 stream id " QLLD " is not active on this HTTPClient",
-                    stream_id);
+                    (int64)stream_id);
                 return -1;
             }
             conn = http_priv->h3_connect_conn;
@@ -4949,7 +4949,7 @@ BinaryNode* QoreHttpClientObject::readHttp3StreamData(int64_t stream_id, int tim
             if (stream_id != http_priv->h3_connect_stream_id) {
                 xsink->raiseException("HTTP3-ERROR",
                     "HTTP/3 stream id " QLLD " is not active on this HTTPClient",
-                    stream_id);
+                    (int64)stream_id);
                 return nullptr;
             }
             if (http_priv->h3_connect_stream_closed) {
@@ -7197,7 +7197,8 @@ QoreHashNode* qore_httpclient_priv::send_websocket_upgrade_conn_mgr(ExceptionSin
             QoreStringDataHelper desc_data(h->getKeyValue("desc"));
             const char* err_str = err_data ? err_data.c_str() : "HTTP-CLIENT-RECEIVE-ERROR";
             const char* desc_str = desc_data ? desc_data.c_str() : "WebSocket Upgrade request failed";
-            xsink->raiseException(err_str, desc_str);
+            // the description is text, not a format
+            xsink->raiseException(err_str, "%s", desc_str);
             return nullptr;
         }
 

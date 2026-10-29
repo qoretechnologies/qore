@@ -304,7 +304,7 @@ binary <int>::encodeLsb(int size = 4) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
       }
 
       default:
-         return xsink->raiseException("SIZE-ERROR", "the size given to <int>::encodeLsb(%d) is not 1, 2, 4, or 8", size);
+         return xsink->raiseException("SIZE-ERROR", "the size given to <int>::encodeLsb(" QLLD ") is not 1, 2, 4, or 8", size);
    }
    return b.release();
 }

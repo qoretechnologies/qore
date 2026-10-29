@@ -490,7 +490,7 @@ QoreListNode* split_with_quote(ExceptionSink* xsink, const char* pat, size_t pat
                 // the field must be followed by a separator or by the end of the line
                 if (len && (len < pl || memcmp(tpattern, ststr, pl))) {
                     xsink->raiseException("SPLIT-ERROR", "separator pattern '%s' does not follow end quote in "
-                        "field " QSD " (starting with 1)", tpattern, l->size() + 1);
+                        "field " QLLD " (starting with 1)", tpattern, (int64)(l->size() + 1));
                     return nullptr;
                 }
                 l->push(field.release(), nullptr);
@@ -535,8 +535,8 @@ QoreListNode* split_with_quote(ExceptionSink* xsink, const char* pat, size_t pat
                         // advance line index to add the next line to the current one
                         if (!h->next(xsink)) {
                             if (!*xsink) {
-                                xsink->raiseException("SPLIT-ERROR", "cannot find closing quote '%s' in field " QSD
-                                    " (starting with 1); no more line content in iterator", quote, l->size() + 1);
+                                xsink->raiseException("SPLIT-ERROR", "cannot find closing quote '%s' in field " QLLD
+                                    " (starting with 1); no more line content in iterator", quote, (int64)(l->size() + 1));
                             }
                         }
                         if (*xsink) {
@@ -604,8 +604,8 @@ QoreListNode* split_with_quote(ExceptionSink* xsink, const char* pat, size_t pat
                         continue;
                     }
 
-                    xsink->raiseException("SPLIT-ERROR", "cannot find closing quote '%s' in field " QSD " (starting "
-                        "with 1)", quote, l->size() + 1);
+                    xsink->raiseException("SPLIT-ERROR", "cannot find closing quote '%s' in field " QLLD " (starting "
+                        "with 1)", quote, (int64)(l->size() + 1));
                     return nullptr;
                 }
                 //printd(5, "f " QSD " found closing quote in pos " QSD " (len " QSD ") str: '%s' ('%s')\n",
@@ -634,7 +634,7 @@ QoreListNode* split_with_quote(ExceptionSink* xsink, const char* pat, size_t pat
                 // if we have an odd number of quotes, then we have found the end of the field
                 num_quotes = count_quotes(ststr, len, quote, quotelen) + 1;
 
-                //printd(5, "f " QSD " found " QSD " quote(s) ('%s')\n", l->size() + 1, num_quotes, field->c_str());
+                //printd(5, "f " QLLD " found " QLLD " quote(s) ('%s')\n", l->size() + 1, num_quotes, field->c_str());
 
                 // process double quotes to single quote
                 while (num_quotes >= 2) {
@@ -651,7 +651,7 @@ QoreListNode* split_with_quote(ExceptionSink* xsink, const char* pat, size_t pat
             // or a separator string comes next
             if (len && (len < pl || memcmp(tpattern, ststr, pl))) {
                 xsink->raiseException("SPLIT-ERROR", "separator pattern '%s' does not follow end quote in field "
-                    QSD " (starting with 1)", tpattern, l->size() + 1);
+                    QLLD " (starting with 1)", tpattern, (int64)(l->size() + 1));
                 return nullptr;
             }
 
@@ -678,11 +678,11 @@ QoreListNode* split_with_quote(ExceptionSink* xsink, const char* pat, size_t pat
         if (!p) {
             field->concat(ststr, len);
             QoreString fstr(ststr, len);
-            //printd(5, "f " QSD " adding whole unquoted text: '%s' (len " QSD ") ('%s')\n", l->size() + 1, fstr.c_str(), fstr.size(), field->c_str());
+            //printd(5, "f " QLLD " adding whole unquoted text: '%s' (len " QLLD ") ('%s')\n", l->size() + 1, fstr.c_str(), fstr.size(), field->c_str());
         } else {
             field->concat(ststr, p - ststr);
             QoreString fstr(ststr, p - ststr);
-            //printd(5, "f " QSD " adding unquoted text: '%s' (len " QSD ") ('%s')\n", l->size() + 1, fstr.c_str(), fstr.size(), field->c_str());
+            //printd(5, "f " QLLD " adding unquoted text: '%s' (len " QLLD ") ('%s')\n", l->size() + 1, fstr.c_str(), fstr.size(), field->c_str());
         }
 
         if (trim_unquoted && field->trim(xsink)) {
@@ -701,7 +701,7 @@ QoreListNode* split_with_quote(ExceptionSink* xsink, const char* pat, size_t pat
         len -= text_len;
         ended_on_separator = true;
 
-        //printd(5, "f " QSD " now setting ststr: '%s' len: " QSD "\n", l->size() + 1, ststr, len);
+        //printd(5, "f " QLLD " now setting ststr: '%s' len: " QLLD "\n", l->size() + 1, ststr, len);
     }
 
     if (keep_trailing_empty && (ended_on_separator || empty_subject)) {
@@ -2538,7 +2538,7 @@ string strmul(softstring str, softint count, *softint offset) [flags=RET_VALUE_O
 
    if (offset) {
       if (offset > (int64)ret->length())
-         return xsink->raiseException("STRMUL-ERROR", "Offset (" QLLD ") is greater than string length (" QSD ")", offset, ret->length());
+         return xsink->raiseException("STRMUL-ERROR", "Offset (" QLLD ") is greater than string length (" QLLD ")", offset, (int64)(ret->length()));
       ret->splice(ret->length() - offset, xsink);
       if (*xsink)
          return QoreValue();

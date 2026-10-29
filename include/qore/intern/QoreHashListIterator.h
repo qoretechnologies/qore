@@ -63,7 +63,8 @@ protected:
 
         const QoreListNode* l = n.get<const QoreListNode>();
         if (l->size() != (size_t)limit) {
-            xsink->raiseException("HASHLISTITERATOR-ERROR", "hash key '%s' is assigned to a list of size " QSD "; expecting a list of size " QSD, key, l->size(), limit);
+            xsink->raiseException("HASHLISTITERATOR-ERROR", "hash key '%s' is assigned to a list of size " QLLD "; expecting a list of size "
+                QLLD, key, (int64)l->size(), (int64)limit);
             return QoreValue();
         }
 

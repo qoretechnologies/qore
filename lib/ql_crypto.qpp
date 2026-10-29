@@ -224,8 +224,8 @@ private:
         if (pt.getType() == NT_STRING) {
             QoreStringValueHelper str(pt);
             if (str->strlen() < 8) {
-                xsink->raiseException(err, "the input vector must be at least 8 bytes long (%d bytes passed)",
-                    str->strlen());
+                xsink->raiseException(err, "the input vector must be at least 8 bytes long (" QLLD " bytes passed)",
+                    (int64)str->strlen());
                 return -1;
             }
             iv_storage.assign(str->getBuffer(), str->strlen());
@@ -236,8 +236,8 @@ private:
         assert(pt.getType() == NT_BINARY);
         const BinaryNode* b = pt.get<const BinaryNode>();
         if (b->size() < 8) {
-            xsink->raiseException(err, "the input vector must be at least 8 bytes long (%d bytes passed)",
-                b->size());
+            xsink->raiseException(err, "the input vector must be at least 8 bytes long (" QLLD " bytes passed)",
+                (int64)b->size());
             return -1;
         }
         iv = (unsigned char*)b->getPtr();

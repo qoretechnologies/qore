@@ -956,9 +956,9 @@ nothing ReadOnlyFile::setEventQueue(Queue[Queue] queue, auto argument, *bool wit
         return QoreValue();
 
     if (queue->getMax() != -1)
-        return xsink->raiseException("QUEUE-ERROR", "the Queue object passed as a maximum size of %d entr%s, which " \
-            "could cause internal I/O to freeze in the File object if used; use a Queue object with no maximum " \
-            "size for I/O monitoring", queue->getMax(), queue->getMax() == 1 ? "y" : "ies");
+        return xsink->raiseException("QUEUE-ERROR", "the Queue object passed as a maximum size of " QLLD " entr%s, "
+            "which could cause internal I/O to freeze in the File object if used; use a Queue object with no maximum "
+            "size for I/O monitoring", (int64)queue->getMax(), queue->getMax() == 1 ? "y" : "ies");
 
     // pass reference from QoreObject::getReferencedPrivateData() to function
     f->setEventQueue(xsink, queue.release(), argument.refSelf(), with_data);

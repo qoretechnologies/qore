@@ -506,7 +506,7 @@ public:
         }
         if (str->size() < size) {
             xsink->raiseException("END-OF-STREAM-ERROR", QLLD " byte%s read of " QLLD "-byte string; end of stream "
-                "encountered", str->size(), str->size() == 1 ? "" : "s", size);
+                "encountered", (int64)(str->size()), str->size() == 1 ? "" : "s", (int64)size);
             return nullptr;
         }
         assert(str->size() == size);
@@ -937,8 +937,8 @@ private:
             if (!rc) {
                 if (require_all) {
                     xsink->raiseException("END-OF-STREAM-ERROR", "there is not enough data available in the stream; "
-                        QSD " byte%s requested, but only " QSD " could be read", limit,
-                        limit == 1 ? " was" : "s were", read);
+                        QLLD " byte%s requested, but only " QLLD " could be read", (int64)limit,
+                        limit == 1 ? " was" : "s were", (int64)read);
                     return -1;
                 }
                 break;

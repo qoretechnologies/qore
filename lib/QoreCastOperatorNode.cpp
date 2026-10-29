@@ -1051,7 +1051,7 @@ int QoreEnumCastOperatorNode::checkValue(ExceptionSink* xsink, const QoreValue& 
             desc.sprintf("of type '%s'", val.getTypeName());
         }
         desc.sprintf(" to enum '%s'; value is not a valid enum member", ed->getName());
-        xsink->raiseException("RUNTIME-CAST-ERROR", desc.c_str());
+        xsink->raiseException("RUNTIME-CAST-ERROR", "%s", desc.c_str());
         return -1;
     }
 

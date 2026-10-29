@@ -86,7 +86,8 @@ static int lock_intern(struct flock& fl, const QoreListNode* args, ExceptionSink
     fl.l_start = (off_t)HARD_QORE_VALUE_INT(args, 1);
     fl.l_len = (off_t)HARD_QORE_VALUE_INT(args, 2);
     if (fl.l_len < 0) {
-        xsink->raiseException("FILE-LOCK-ERROR", "length of locked area cannot be negative (value passed=%d)", fl.l_len);
+        xsink->raiseException("FILE-LOCK-ERROR", "length of locked area cannot be negative (value passed=" QLLD ")",
+            (int64)fl.l_len);
         return -1;
     }
     fl.l_whence = (short)HARD_QORE_VALUE_INT(args, 3);

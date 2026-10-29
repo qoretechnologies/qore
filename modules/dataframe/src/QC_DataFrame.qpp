@@ -119,7 +119,7 @@ static std::vector<int64_t> qdfListToRowIndices(const QoreListNode* indices, int
         if (index < 0 || index >= row_count) {
             xsink->raiseException("DATAFRAME-RANGE-ERROR",
                 "row index " QLLD " at offset " QLLD " is outside row range 0.." QLLD,
-                index, static_cast<int64>(i), row_count ? row_count - 1 : 0);
+                (int64)index, static_cast<int64>(i), (int64)(row_count ? row_count - 1 : 0));
             return {};
         }
         rv.push_back(index);

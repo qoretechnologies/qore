@@ -666,7 +666,7 @@ QoreDataFrame* QoreDataFrame::fromRecords(const QoreListNode* records,
             const QoreHashNode* row = records->retrieveEntry(i).get<const QoreHashNode>();
             if (!row) {
                 xsink->raiseException("DATAFRAME-ERROR",
-                    "expected hash at index " QLLD ", got non-hash", i);
+                    "expected hash at index " QLLD ", got non-hash", (int64)i);
                 delete df;
                 return nullptr;
             }
@@ -699,7 +699,7 @@ QoreDataFrame* QoreDataFrame::fromRecords(const QoreListNode* records,
         const QoreHashNode* row = records->retrieveEntry(i).get<const QoreHashNode>();
         if (!row) {
             xsink->raiseException("DATAFRAME-ERROR",
-                "expected hash at index " QLLD ", got non-hash", i);
+                "expected hash at index " QLLD ", got non-hash", (int64)i);
             return nullptr;
         }
         rows.push_back(row);
@@ -769,7 +769,7 @@ QoreDataFrame* QoreDataFrame::fromColumns(const QoreHashNode* columns,
         } else if (col_rows != expected_rows) {
             xsink->raiseException("DATAFRAME-ERROR",
                 "column '%s' has " QLLD " rows, expected " QLLD,
-                hi.getKey(), col_rows, expected_rows);
+                hi.getKey(), (int64)col_rows, (int64)expected_rows);
             delete df;
             return nullptr;
         }
@@ -851,7 +851,7 @@ QoreDataFrame* QoreDataFrame::fromColumnarResult(const QoreColumnarResult* resul
         if (col.data && col.data->n_rows != df->n_rows) {
             xsink->raiseException("DATAFRAME-ERROR",
                 "ColumnarResult column '%s' has " QLLD " rows, expected " QLLD,
-                src->name.c_str(), col.data->n_rows, df->n_rows);
+                src->name.c_str(), (int64)col.data->n_rows, (int64)df->n_rows);
             delete df;
             return nullptr;
         }
@@ -933,12 +933,12 @@ QoreHashNode* QoreDataFrame::getRow(int64_t index, ExceptionSink* xsink) const {
     std::lock_guard<std::mutex> lk(mtx);
     if (n_rows == 0) {
         xsink->raiseException("DATAFRAME-INDEX-ERROR",
-            "row index " QLLD " out of range: DataFrame is empty", index);
+            "row index " QLLD " out of range: DataFrame is empty", (int64)index);
         return nullptr;
     }
     if (index < 0 || index >= n_rows) {
         xsink->raiseException("DATAFRAME-INDEX-ERROR",
-            "row index " QLLD " out of range (0.." QLLD ")", index, n_rows - 1);
+            "row index " QLLD " out of range (0.." QLLD ")", (int64)index, (int64)(n_rows - 1));
         return nullptr;
     }
 
@@ -1947,7 +1947,7 @@ QoreDataFrame* QoreDataFrame::filterMask(const std::vector<uint8_t>& mask, Excep
     if (static_cast<int64_t>(mask.size()) != n_rows) {
         xsink->raiseException("DATAFRAME-FILTER-ERROR",
             "row mask length " QLLD " does not match DataFrame row count " QLLD,
-            static_cast<int64_t>(mask.size()), n_rows);
+            (int64)(static_cast<int64_t>(mask.size())), (int64)n_rows);
         return nullptr;
     }
 
@@ -2225,7 +2225,7 @@ QoreDataFrame* QoreDataFrame::concat(const QoreListNode* dataframes, int axis,
             delete result;
             xsink->raiseException("DATAFRAME-ERROR",
                 "concat list element %zu has " QLLD " rows, expected " QLLD,
-                d, cur_df->n_rows, expected_rows);
+                d, (int64)cur_df->n_rows, (int64)expected_rows);
             return nullptr;
         }
 
@@ -2845,7 +2845,7 @@ void QoreDataFrame::addColumn(QoreObject& self, const std::string& name, const Q
     if (n_rows > 0 && col_rows != n_rows) {
         xsink->raiseException("DATAFRAME-COLUMN-ERROR",
             "column '%s' has " QLLD " rows, expected " QLLD,
-            name.c_str(), col_rows, n_rows);
+            name.c_str(), (int64)col_rows, (int64)n_rows);
         return;
     }
 

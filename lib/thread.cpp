@@ -4179,7 +4179,7 @@ QoreParseOptions runtime_get_parse_options_stack(ExceptionSink* xsink, size_t n)
         ++i;
         w = w->getNext();
     }
-    xsink->raiseException("INVALD-STACK-FRAME", "Stack frame " QLLD " is invalid", n);
+    xsink->raiseException("INVALD-STACK-FRAME", "Stack frame " QLLD " is invalid", (int64)n);
     return 0;
 }
 

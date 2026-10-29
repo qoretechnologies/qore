@@ -48,7 +48,7 @@ static int64_t qore_tensor_normalize_axis(const QoreTensor* tensor, int64_t axis
     }
     if (axis < 0 || axis >= rank) {
         xsink->raiseException("ML-TENSOR-SHAPE-ERROR",
-            "%s axis " QLLD " is outside tensor rank " QLLD, method, axis, rank);
+            "%s axis " QLLD " is outside tensor rank " QLLD, method, (int64)axis, (int64)rank);
         return -1;
     }
     return axis;
@@ -62,7 +62,7 @@ static int64_t qore_tensor_normalize_insert_axis(const QoreTensor* tensor, int64
     }
     if (axis < 0 || axis > rank) {
         xsink->raiseException("ML-TENSOR-SHAPE-ERROR",
-            "%s axis " QLLD " is outside insert range [0, " QLLD "]", method, axis, rank);
+            "%s axis " QLLD " is outside insert range [0, " QLLD "]", method, (int64)axis, (int64)rank);
         return -1;
     }
     return axis;
@@ -1127,7 +1127,7 @@ hash<auto> Tensor::topK(int k, int axis = -1) [flags=RET_VALUE_ONLY,NAMED_ARGS] 
     int64_t axis_dim = shape[static_cast<size_t>(resolved_axis)];
     if (k <= 0 || k > axis_dim) {
         xsink->raiseException("ML-TENSOR-SHAPE-ERROR",
-            "topK() k must be between 1 and axis length " QLLD "; got %d", axis_dim, k);
+            "topK() k must be between 1 and axis length " QLLD "; got " QLLD "", (int64)axis_dim, (int64)k);
         return QoreValue();
     }
     if (tensor->getBuffer()->hasNullableElements() || tensor->getBuffer()->ensureHostStorage(xsink)) {
@@ -1229,7 +1229,7 @@ Tensor Tensor::poolTokenEmbeddings(Tensor[QoreTensor] attention_mask, string str
     if (mask_shape.size() != 2 || mask_shape[0] != shape[0] || mask_shape[1] != shape[1]) {
         xsink->raiseException("ML-TENSOR-SHAPE-ERROR",
             "poolTokenEmbeddings() attention mask shape must be (" QLLD ", " QLLD "); got rank %zu",
-            shape[0], shape[1], mask_shape.size());
+            (int64)(shape[0]), (int64)(shape[1]), mask_shape.size());
         return QoreValue();
     }
     if (attention_mask->getBuffer()->hasNullableElements()

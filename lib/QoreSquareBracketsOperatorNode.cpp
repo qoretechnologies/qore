@@ -351,7 +351,7 @@ int QoreSquareBracketsOperatorNode::parseCheckValueTypes(const QoreListNode* ln)
             // check if we have a cosntant value that's not an int
             if (v.isConstant() && v.getType() != NT_INT) {
                 QoreStringNode* edesc = new QoreStringNodeMaker("the offset operand expression with the '[]' "
-                    "operator in list element %d (starting with 1) is a constant of ", i.index() + 1);
+                    "operator in list element " QLLD " (starting with 1) is a constant of ", (int64)(i.index() + 1));
                 QoreTypeInfo::getThisType(vti, *edesc);
                 edesc->sprintf(" and will be automatically converted to an integer when evaluated; use a constant "
                     "integer operand instead");

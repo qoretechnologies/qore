@@ -819,7 +819,7 @@ Datasource::constructor(string driver, *string username, *string password, *stri
     if (port) {
         if (port < 0) {
             xsink->raiseException(DSC_ERR, "port value must be zero (meaning use the default port) or positive "
-                "(value given: %d)", port);
+                "(value given: " QLLD ")", (int64)port);
             return;
         }
         ds->setPendingPort((int)port);
@@ -2174,7 +2174,7 @@ string Datasource::getConfigString() [flags=CONSTANT] {
 */
 nothing Datasource::setEventQueue(Qore::Thread::Queue[Queue] queue, auto argument) [flags=NAMED_ARGS] {
     if (queue->getMax() != -1)
-        return xsink->raiseException("QUEUE-ERROR", "the Queue object passed as a maximum size of %d entr%s, which could cause internal I/O to freeze in the Datasource object if used; use a Queue object with no maximum size for datasource event monitoring", queue->getMax(), queue->getMax() == 1 ? "y" : "ies");
+        return xsink->raiseException("QUEUE-ERROR", "the Queue object passed as a maximum size of " QLLD " entr%s, which could cause internal I/O to freeze in the Datasource object if used; use a Queue object with no maximum size for datasource event monitoring", (int64)(queue->getMax()), queue->getMax() == 1 ? "y" : "ies");
 
     ds->setEventQueue(queue.release(), argument.refSelf(), xsink);
 }

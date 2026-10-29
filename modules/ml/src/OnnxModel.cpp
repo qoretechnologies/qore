@@ -384,7 +384,7 @@ int64_t tensorShapeElementCount(const std::vector<int64_t>& shape, ExceptionSink
     for (int64_t dim : shape) {
         if (dim < 0) {
             xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
-                "cannot use unresolved dynamic tensor shape dimension " QLLD " for inference", dim);
+                "cannot use unresolved dynamic tensor shape dimension " QLLD " for inference", (int64)dim);
             return -1;
         }
         total *= dim;
@@ -474,7 +474,7 @@ int qoreValueToUInt64(QoreValue value, uint64_t max_value, const char* type_name
     if (v < 0 || static_cast<uint64_t>(v) > max_value) {
         xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
             "%s tensor value " QLLD " is outside the supported range 0..%llu",
-            type_name, v, static_cast<unsigned long long>(max_value));
+            type_name, (int64)v, static_cast<unsigned long long>(max_value));
         return -1;
     }
     out = static_cast<uint64_t>(v);
@@ -2687,7 +2687,7 @@ void QoreOnnxModel::flattenToInt16(const QoreValue& val, std::vector<int16_t>& o
         int64_t v = val.getAsBigInt();
         if (v < std::numeric_limits<int16_t>::min() || v > std::numeric_limits<int16_t>::max()) {
             xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
-                "int16 tensor value " QLLD " is outside the supported range", v);
+                "int16 tensor value " QLLD " is outside the supported range", (int64)v);
             return;
         }
         out.push_back((int16_t)v);
@@ -2711,7 +2711,7 @@ void QoreOnnxModel::flattenToInt8(const QoreValue& val, std::vector<int8_t>& out
         int64_t v = val.getAsBigInt();
         if (v < std::numeric_limits<int8_t>::min() || v > std::numeric_limits<int8_t>::max()) {
             xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
-                "int8 tensor value " QLLD " is outside the supported range", v);
+                "int8 tensor value " QLLD " is outside the supported range", (int64)v);
             return;
         }
         out.push_back((int8_t)v);
@@ -2933,12 +2933,12 @@ std::vector<int64_t> QoreOnnxModel::inferShape(const QoreValue& val, const Tenso
         } else if (shape[i] > 0 && shape[i] != supplied_shape[i]) {
             xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
                 "input tensor '%s': model expects dimension %zu to be " QLLD ", but call supplies " QLLD,
-                meta.name.c_str(), i, shape[i], supplied_shape[i]);
+                meta.name.c_str(), i, (int64)(shape[i]), (int64)(supplied_shape[i]));
             return {};
         } else if (shape[i] < -1) {
             xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
                 "input tensor '%s': unsupported negative dimension " QLLD " at index %zu",
-                meta.name.c_str(), shape[i], i);
+                meta.name.c_str(), (int64)(shape[i]), i);
             return {};
         }
     }
@@ -3044,7 +3044,7 @@ static int resolveFlatBufferShape(const TensorMeta& meta, size_t element_count,
         } else if (shape[i] < -1) {
             xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
                 "input tensor '%s': unsupported negative dimension " QLLD,
-                meta.name.c_str(), shape[i]);
+                meta.name.c_str(), (int64)(shape[i]));
             return -1;
         } else if (shape[i] && known > std::numeric_limits<int64_t>::max() / shape[i]) {
             xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
@@ -3060,7 +3060,7 @@ static int resolveFlatBufferShape(const TensorMeta& meta, size_t element_count,
             xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
                 "input tensor '%s': cannot infer dynamic dimension from %zu buffer elements and known "
                 "shape product " QLLD,
-                meta.name.c_str(), element_count, known);
+                meta.name.c_str(), element_count, (int64)known);
             return -1;
         }
         shape[dynamic_idx] = static_cast<int64_t>(element_count / known);
@@ -3080,7 +3080,7 @@ static int validateDirectTensorShape(const TensorMeta& meta, const std::vector<i
         if (meta.shape[i] > 0 && meta.shape[i] != shape[i]) {
             xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
                 "input tensor '%s': model expects dimension %zu to be " QLLD ", %s has " QLLD,
-                meta.name.c_str(), i, meta.shape[i], source, shape[i]);
+                meta.name.c_str(), i, (int64)(meta.shape[i]), source, (int64)(shape[i]));
             return -1;
         }
     }
@@ -3132,7 +3132,7 @@ static int validateDirectBuffer(const TensorMeta& meta, const QoreBufferNode* bu
     if (total_elements != static_cast<int64_t>(buffer->size())) {
         xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
             "input tensor '%s': shape expects " QLLD " elements, got %zu",
-            meta.name.c_str(), total_elements, buffer->size());
+            meta.name.c_str(), (int64)total_elements, buffer->size());
         return -1;
     }
     return 0;
@@ -3364,7 +3364,7 @@ std::unique_ptr<OnnxBoundOrtValue> QoreOnnxModel::prepareInputValue(const Tensor
             if (static_cast<int64_t>(bound->floats->size()) != total_elements) {
                 xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
                     "input tensor '%s': expected " QLLD " elements, got %zu",
-                    meta.name.c_str(), total_elements, bound->floats->size());
+                    meta.name.c_str(), (int64)total_elements, bound->floats->size());
                 return nullptr;
             }
             bound->value = Ort::Value::CreateTensor<float>(mem_info, bound->floats->data(), bound->floats->size(),
@@ -3379,7 +3379,7 @@ std::unique_ptr<OnnxBoundOrtValue> QoreOnnxModel::prepareInputValue(const Tensor
             if (static_cast<int64_t>(bound->doubles->size()) != total_elements) {
                 xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
                     "input tensor '%s': expected " QLLD " elements, got %zu",
-                    meta.name.c_str(), total_elements, bound->doubles->size());
+                    meta.name.c_str(), (int64)total_elements, bound->doubles->size());
                 return nullptr;
             }
             bound->value = Ort::Value::CreateTensor<double>(mem_info, bound->doubles->data(), bound->doubles->size(),
@@ -3394,7 +3394,7 @@ std::unique_ptr<OnnxBoundOrtValue> QoreOnnxModel::prepareInputValue(const Tensor
             if (static_cast<int64_t>(bound->float16s->size()) != total_elements) {
                 xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
                     "input tensor '%s': expected " QLLD " elements, got %zu",
-                    meta.name.c_str(), total_elements, bound->float16s->size());
+                    meta.name.c_str(), (int64)total_elements, bound->float16s->size());
                 return nullptr;
             }
             bound->value = Ort::Value::CreateTensor<Ort::Float16_t>(mem_info, bound->float16s->data(),
@@ -3409,7 +3409,7 @@ std::unique_ptr<OnnxBoundOrtValue> QoreOnnxModel::prepareInputValue(const Tensor
             if (static_cast<int64_t>(bound->bfloat16s->size()) != total_elements) {
                 xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
                     "input tensor '%s': expected " QLLD " elements, got %zu",
-                    meta.name.c_str(), total_elements, bound->bfloat16s->size());
+                    meta.name.c_str(), (int64)total_elements, bound->bfloat16s->size());
                 return nullptr;
             }
             bound->value = Ort::Value::CreateTensor<Ort::BFloat16_t>(mem_info, bound->bfloat16s->data(),
@@ -3424,7 +3424,7 @@ std::unique_ptr<OnnxBoundOrtValue> QoreOnnxModel::prepareInputValue(const Tensor
             if (static_cast<int64_t>(bound->int8s->size()) != total_elements) {
                 xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
                     "input tensor '%s': expected " QLLD " elements, got %zu",
-                    meta.name.c_str(), total_elements, bound->int8s->size());
+                    meta.name.c_str(), (int64)total_elements, bound->int8s->size());
                 return nullptr;
             }
             bound->value = Ort::Value::CreateTensor<int8_t>(mem_info, bound->int8s->data(), bound->int8s->size(),
@@ -3439,7 +3439,7 @@ std::unique_ptr<OnnxBoundOrtValue> QoreOnnxModel::prepareInputValue(const Tensor
             if (static_cast<int64_t>(bound->uint8s->size()) != total_elements) {
                 xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
                     "input tensor '%s': expected " QLLD " elements, got %zu",
-                    meta.name.c_str(), total_elements, bound->uint8s->size());
+                    meta.name.c_str(), (int64)total_elements, bound->uint8s->size());
                 return nullptr;
             }
             bound->value = Ort::Value::CreateTensor<uint8_t>(mem_info, bound->uint8s->data(), bound->uint8s->size(),
@@ -3454,7 +3454,7 @@ std::unique_ptr<OnnxBoundOrtValue> QoreOnnxModel::prepareInputValue(const Tensor
             if (static_cast<int64_t>(bound->int16s->size()) != total_elements) {
                 xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
                     "input tensor '%s': expected " QLLD " elements, got %zu",
-                    meta.name.c_str(), total_elements, bound->int16s->size());
+                    meta.name.c_str(), (int64)total_elements, bound->int16s->size());
                 return nullptr;
             }
             bound->value = Ort::Value::CreateTensor<int16_t>(mem_info, bound->int16s->data(), bound->int16s->size(),
@@ -3469,7 +3469,7 @@ std::unique_ptr<OnnxBoundOrtValue> QoreOnnxModel::prepareInputValue(const Tensor
             if (static_cast<int64_t>(bound->uint16s->size()) != total_elements) {
                 xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
                     "input tensor '%s': expected " QLLD " elements, got %zu",
-                    meta.name.c_str(), total_elements, bound->uint16s->size());
+                    meta.name.c_str(), (int64)total_elements, bound->uint16s->size());
                 return nullptr;
             }
             bound->value = Ort::Value::CreateTensor<uint16_t>(mem_info, bound->uint16s->data(),
@@ -3484,7 +3484,7 @@ std::unique_ptr<OnnxBoundOrtValue> QoreOnnxModel::prepareInputValue(const Tensor
             if (static_cast<int64_t>(bound->int32s->size()) != total_elements) {
                 xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
                     "input tensor '%s': expected " QLLD " elements, got %zu",
-                    meta.name.c_str(), total_elements, bound->int32s->size());
+                    meta.name.c_str(), (int64)total_elements, bound->int32s->size());
                 return nullptr;
             }
             bound->value = Ort::Value::CreateTensor<int32_t>(mem_info, bound->int32s->data(), bound->int32s->size(),
@@ -3499,7 +3499,7 @@ std::unique_ptr<OnnxBoundOrtValue> QoreOnnxModel::prepareInputValue(const Tensor
             if (static_cast<int64_t>(bound->uint32s->size()) != total_elements) {
                 xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
                     "input tensor '%s': expected " QLLD " elements, got %zu",
-                    meta.name.c_str(), total_elements, bound->uint32s->size());
+                    meta.name.c_str(), (int64)total_elements, bound->uint32s->size());
                 return nullptr;
             }
             bound->value = Ort::Value::CreateTensor<uint32_t>(mem_info, bound->uint32s->data(),
@@ -3514,7 +3514,7 @@ std::unique_ptr<OnnxBoundOrtValue> QoreOnnxModel::prepareInputValue(const Tensor
             if (static_cast<int64_t>(bound->int64s->size()) != total_elements) {
                 xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
                     "input tensor '%s': expected " QLLD " elements, got %zu",
-                    meta.name.c_str(), total_elements, bound->int64s->size());
+                    meta.name.c_str(), (int64)total_elements, bound->int64s->size());
                 return nullptr;
             }
             bound->value = Ort::Value::CreateTensor<int64_t>(mem_info, bound->int64s->data(), bound->int64s->size(),
@@ -3529,7 +3529,7 @@ std::unique_ptr<OnnxBoundOrtValue> QoreOnnxModel::prepareInputValue(const Tensor
             if (static_cast<int64_t>(bound->uint64s->size()) != total_elements) {
                 xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
                     "input tensor '%s': expected " QLLD " elements, got %zu",
-                    meta.name.c_str(), total_elements, bound->uint64s->size());
+                    meta.name.c_str(), (int64)total_elements, bound->uint64s->size());
                 return nullptr;
             }
             bound->value = Ort::Value::CreateTensor<uint64_t>(mem_info, bound->uint64s->data(),
@@ -3544,7 +3544,7 @@ std::unique_ptr<OnnxBoundOrtValue> QoreOnnxModel::prepareInputValue(const Tensor
             if (static_cast<int64_t>(bound->bool_bytes->size()) != total_elements) {
                 xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
                     "input tensor '%s': expected " QLLD " elements, got %zu",
-                    meta.name.c_str(), total_elements, bound->bool_bytes->size());
+                    meta.name.c_str(), (int64)total_elements, bound->bool_bytes->size());
                 return nullptr;
             }
             bound->value = Ort::Value::CreateTensor<bool>(mem_info,
@@ -3560,7 +3560,7 @@ std::unique_ptr<OnnxBoundOrtValue> QoreOnnxModel::prepareInputValue(const Tensor
             if (static_cast<int64_t>(bound->strings->size()) != total_elements) {
                 xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
                     "input tensor '%s': expected " QLLD " elements, got %zu",
-                    meta.name.c_str(), total_elements, bound->strings->size());
+                    meta.name.c_str(), (int64)total_elements, bound->strings->size());
                 return nullptr;
             }
             if (makeOrtStringTensor(allocator, bound->shape, *bound->strings, meta.name, bound->value, xsink)) {
@@ -3598,7 +3598,7 @@ std::unique_ptr<OnnxBoundOrtValue> QoreOnnxModel::prepareOutputTensorValue(const
         if (meta.shape[i] > 0 && meta.shape[i] != shape[i]) {
             xsink->raiseException("ML-ONNX-BINDING-ERROR",
                 "output tensor '%s': model expects dimension %zu to be " QLLD ", preallocated Tensor has " QLLD,
-                meta.name.c_str(), i, meta.shape[i], shape[i]);
+                meta.name.c_str(), i, (int64)(meta.shape[i]), (int64)(shape[i]));
             return nullptr;
         }
     }
@@ -3641,7 +3641,7 @@ std::unique_ptr<OnnxBoundOrtValue> QoreOnnxModel::prepareOutputTensorValue(const
     if (total_elements != static_cast<int64_t>(buffer->size())) {
         xsink->raiseException("ML-ONNX-BINDING-ERROR",
             "output tensor '%s': shape expects " QLLD " elements, got %zu",
-            meta.name.c_str(), total_elements, buffer->size());
+            meta.name.c_str(), (int64)total_elements, buffer->size());
         return nullptr;
     }
 
@@ -3993,7 +3993,7 @@ QoreValue QoreOnnxModel::convertOutputTensorToTensor(Ort::Value&& tensor, Except
     if (static_cast<uint64_t>(total_elements) > std::numeric_limits<size_t>::max()) {
         xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
             "output tensor element count " QLLD " exceeds this platform's addressable buffer size",
-            total_elements);
+            (int64)total_elements);
         return QoreValue();
     }
 
@@ -4798,7 +4798,7 @@ QoreHashNode* QoreOnnxModel::runImpl(const QoreHashNode* inputs, bool return_ten
                 if (meta.shape[i] > 0 && meta.shape[i] != direct_shape[i]) {
                     xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
                         "input tensor '%s': model expects dimension %zu to be " QLLD ", ML::Tensor has " QLLD,
-                        meta.name.c_str(), i, meta.shape[i], direct_shape[i]);
+                        meta.name.c_str(), i, (int64)(meta.shape[i]), (int64)(direct_shape[i]));
                     return nullptr;
                 }
             }
@@ -4825,7 +4825,7 @@ QoreHashNode* QoreOnnxModel::runImpl(const QoreHashNode* inputs, bool return_ten
                     } else if (direct_shape[i] < -1) {
                         xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
                             "input tensor '%s': unsupported negative dimension " QLLD,
-                            meta.name.c_str(), direct_shape[i]);
+                            meta.name.c_str(), (int64)(direct_shape[i]));
                         return nullptr;
                     } else {
                         known *= direct_shape[i];
@@ -4836,7 +4836,7 @@ QoreHashNode* QoreOnnxModel::runImpl(const QoreHashNode* inputs, bool return_ten
                         xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
                             "input tensor '%s': cannot infer dynamic dimension from %zu buffer elements and known "
                             "shape product " QLLD,
-                            meta.name.c_str(), direct_buffer->size(), known);
+                            meta.name.c_str(), direct_buffer->size(), (int64)known);
                         return nullptr;
                     }
                     direct_shape[dynamic_idx] = static_cast<int64_t>(direct_buffer->size() / known);
@@ -4864,7 +4864,7 @@ QoreHashNode* QoreOnnxModel::runImpl(const QoreHashNode* inputs, bool return_ten
             if (total_elements != static_cast<int64_t>(direct_buffer->size())) {
                 xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
                     "input tensor '%s': shape expects " QLLD " elements, got %zu",
-                    meta.name.c_str(), total_elements, direct_buffer->size());
+                    meta.name.c_str(), (int64)total_elements, direct_buffer->size());
                 return nullptr;
             }
 

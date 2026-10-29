@@ -1203,8 +1203,8 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, Runtime
 int LValueHelper::setBufferElementLValue(QoreBufferNode* b, size_t index) {
     assert(b);
     if (index >= b->size()) {
-        vl.xsink->raiseException("BUFFER-INDEX-ERROR", "buffer<%s> index " QSD " is out of range for buffer "
-            "length " QSD, qore_buffer_element_type_name(b->getElementType()), index, b->size());
+        vl.xsink->raiseException("BUFFER-INDEX-ERROR", "buffer<%s> index " QLLD " is out of range for buffer "
+            "length " QLLD, qore_buffer_element_type_name(b->getElementType()), (int64)index, (int64)(b->size()));
         clearPtr();
         return -1;
     }
@@ -1927,7 +1927,7 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
                     }
                     if (idx < 0) {
                         vl.xsink->raiseException("NEGATIVE-BUFFER-INDEX", "buffer index " QLLD " is invalid "
-                            "(index must evaluate to a non-negative integer)", original_idx);
+                            "(index must evaluate to a non-negative integer)", (int64)original_idx);
                         return -1;
                     }
                     if (!b->isUniqueForMutation()) {
@@ -1944,7 +1944,7 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
                 if (t == NT_HASH || t == NT_WEAKREF_HASH) {
                     if (idx < 0) {
                         vl.xsink->raiseException("NEGATIVE-LIST-INDEX", "list index " QLLD " is invalid "
-                            "(index must evaluate to a non-negative integer)", original_idx);
+                            "(index must evaluate to a non-negative integer)", (int64)original_idx);
                         return -1;
                     }
                     ensureUnique();
@@ -1976,7 +1976,7 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
                     }
                     if (idx < 0) {
                         vl.xsink->raiseException("NEGATIVE-LIST-INDEX", "list index " QLLD " is invalid "
-                            "(index must evaluate to a non-negative integer)", original_idx);
+                            "(index must evaluate to a non-negative integer)", (int64)original_idx);
                         return -1;
                     }
                 } else {
@@ -1985,7 +1985,7 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
                     }
                     if (idx < 0) {
                         vl.xsink->raiseException("NEGATIVE-LIST-INDEX", "list index " QLLD " is invalid "
-                            "(index must evaluate to a non-negative integer)", original_idx);
+                            "(index must evaluate to a non-negative integer)", (int64)original_idx);
                         return -1;
                     }
                     // if the lvalue is not already a list, then make it one

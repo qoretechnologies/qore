@@ -806,7 +806,7 @@ int edit_feed(int session, int byte_val) {
     auto it = activeSessions.find(session);
     if (it == activeSessions.end()) {
         xsink->raiseException("LINENOISE-SESSION-ERROR",
-                              "invalid session ID: %d", session);
+                              "invalid session ID: " QLLD "", (int64)session);
         return -1;
     }
     return linenoiseEditFeed(it->second, static_cast<char>(byte_val & 0xFF));
@@ -842,7 +842,7 @@ if (Linenoise::edit_feed(sid, byte_val) == 1) {
     auto it = activeSessions.find(session);
     if (it == activeSessions.end()) {
         xsink->raiseException("LINENOISE-SESSION-ERROR",
-                              "invalid session ID: %d", session);
+                              "invalid session ID: " QLLD "", (int64)session);
         return QoreValue();
     }
     char* line = linenoiseEditGetLine(it->second);
@@ -872,7 +872,7 @@ nothing edit_stop(int session) {
     auto it = activeSessions.find(session);
     if (it == activeSessions.end()) {
         xsink->raiseException("LINENOISE-SESSION-ERROR",
-                              "invalid session ID: %d", session);
+                              "invalid session ID: " QLLD "", (int64)session);
         return QoreValue();
     }
     linenoiseEditStop(it->second);
@@ -906,7 +906,7 @@ int edit_fd(int session) {
     auto it = activeSessions.find(session);
     if (it == activeSessions.end()) {
         xsink->raiseException("LINENOISE-SESSION-ERROR",
-                              "invalid session ID: %d", session);
+                              "invalid session ID: " QLLD "", (int64)session);
         return -1;
     }
     return linenoiseEditFd(it->second);
@@ -940,7 +940,7 @@ hash<auto> edit_get_buffer(int session) {
     auto it = activeSessions.find(session);
     if (it == activeSessions.end()) {
         xsink->raiseException("LINENOISE-SESSION-ERROR",
-                              "invalid session ID: %d", session);
+                              "invalid session ID: " QLLD "", (int64)session);
         return QoreValue();
     }
     int cursor_pos = 0;
@@ -979,7 +979,7 @@ nothing edit_set_silent(int session, bool silent) {
     auto it = activeSessions.find(session);
     if (it == activeSessions.end()) {
         xsink->raiseException("LINENOISE-SESSION-ERROR",
-                              "invalid session ID: %d", session);
+                              "invalid session ID: " QLLD "", (int64)session);
         return QoreValue();
     }
     linenoiseEditSetSilent(it->second, silent ? 1 : 0);
@@ -1017,7 +1017,7 @@ int edit_key_type(int session) {
     auto it = activeSessions.find(session);
     if (it == activeSessions.end()) {
         xsink->raiseException("LINENOISE-SESSION-ERROR",
-                              "invalid session ID: %d", session);
+                              "invalid session ID: " QLLD "", (int64)session);
         return 0;
     }
     return linenoiseEditKeyType(it->second);

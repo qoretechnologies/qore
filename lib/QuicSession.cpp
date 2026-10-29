@@ -5974,7 +5974,7 @@ int QuicSession::submitDatagram(int64_t stream_id, const uint8_t* data, size_t l
     if (stream_id < 0 || (stream_id & 3) != 0) {
         xsink->raiseException("QUIC-DATAGRAM-ERROR",
             "invalid stream_id " QLLD " for datagram: must be a non-negative multiple of 4",
-            stream_id);
+            (int64)stream_id);
         return -1;
     }
 

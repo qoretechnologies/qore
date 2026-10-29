@@ -136,7 +136,8 @@ static void dni(ExceptionSink* xsink, QoreStringNode* s, nset_t& nset, const Qor
 
     if (ntype == NT_STRING) {
         QoreStringValueHelper str(n);
-        s->sprintf("val: (enc: %s, %d:%d) \"%s\"", str->getEncoding()->getCode(), str->length(), str->strlen(),
+        s->sprintf("val: (enc: %s, " QLLD ":" QLLD ") \"%s\"", str->getEncoding()->getCode(), (int64)str->length(),
+            (int64)str->strlen(),
             str->c_str());
         return;
     }
@@ -174,13 +175,13 @@ static void dni(ExceptionSink* xsink, QoreStringNode* s, nset_t& nset, const Qor
 
     if (ntype == NT_LIST) {
         const QoreListNode *l = n.get<const QoreListNode>();
-        s->sprintf("elements: %d", l->size());
+        s->sprintf("elements: " QLLD, (int64)l->size());
         if (!shallow) {
             ConstListIterator li(l);
             while (li.next()) {
                 s->concat('\n');
                 strindent(s, indent);
-                s->sprintf("list element %d/%d: ", li.index(), l->size());
+                s->sprintf("list element " QLLD "/" QLLD ": ", (int64)li.index(), (int64)l->size());
                 dni(xsink, s, nset, li.getValue(), indent + 3, false);
             }
         }
@@ -224,7 +225,7 @@ static void dni(ExceptionSink* xsink, QoreStringNode* s, nset_t& nset, const Qor
                     s->concat('\n');
                     strindent(s, indent);
                     QoreStringValueHelper entry(l->retrieveEntry(i));
-                    s->sprintf("key %d/%d \"%s\" = ", i, l->size(), entry->c_str());
+                    s->sprintf("key %d/" QLLD " \"%s\" = ", i, (int64)l->size(), entry->c_str());
                     QoreValue nn{};
                     dni(xsink, s, nset, nn = o->getReferencedMemberNoMethod(entry->c_str(), xsink), indent + 3,
                         false);
@@ -237,14 +238,14 @@ static void dni(ExceptionSink* xsink, QoreStringNode* s, nset_t& nset, const Qor
 
     if (ntype == NT_HASH) {
         const QoreHashNode *h = n.get<const QoreHashNode>();
-        s->sprintf("elements: %d", h->size());
+        s->sprintf("elements: " QLLD, (int64)h->size());
         if (!shallow) {
             int i = 0;
             ConstHashIterator hi(h);
             while (hi.next()) {
                 s->concat('\n');
                 strindent(s, indent);
-                s->sprintf("key %d/%d \"%s\" = ", i++, h->size(), hi.getKey());
+                s->sprintf("key %d/" QLLD " \"%s\" = ", i++, (int64)h->size(), hi.getKey());
                 dni(xsink, s, nset, hi.get(), indent + 3, false);
             }
         }
@@ -268,7 +269,7 @@ static void dni(ExceptionSink* xsink, QoreStringNode* s, nset_t& nset, const Qor
 
     if (ntype == NT_BINARY) {
         const BinaryNode *b = n.get<const BinaryNode>();
-        s->sprintf("ptr: %p len: %d", b->getPtr(), b->size());
+        s->sprintf("ptr: %p len: " QLLD, b->getPtr(), (int64)b->size());
         return;
     }
 
@@ -11372,6 +11373,25 @@ static void ut_manager_proxy_url_parse(UnitTestCounters& c) {
         ReferenceHolder<HttpClientConnectionManagerBase> mgr(
             new HttpClientConnectionManagerBase(opts, &xsink), &xsink);
         UT_ASSERT(c, xsink.isException(), "invalid proxy scheme rejected");
+        if (xsink) {
+            // the message gives the scheme; it was formatted with Qore's %y, which is no C conversion
+            QoreStringValueHelper desc(xsink.getExceptionDesc());
+            UT_ASSERT(c, strstr(desc->c_str(), "scheme 'ftp'"), "invalid proxy scheme message gives the scheme");
+        }
+        xsink.clear();
+    }
+
+    // Invalid proxy port
+    {
+        HttpClientConnectionManagerBase::Options opts;
+        opts.proxy_url = "http://proxy.example.com:port";
+        ReferenceHolder<HttpClientConnectionManagerBase> mgr(
+            new HttpClientConnectionManagerBase(opts, &xsink), &xsink);
+        UT_ASSERT(c, xsink.isException(), "invalid proxy port rejected");
+        if (xsink) {
+            QoreStringValueHelper desc(xsink.getExceptionDesc());
+            UT_ASSERT(c, strstr(desc->c_str(), "port 'port'"), "invalid proxy port message gives the port");
+        }
         xsink.clear();
     }
 }
@@ -13130,7 +13150,7 @@ static QoreValue f_dbg_make_short_string(const QoreListNode* params, RuntimeConf
     QoreValue rv;
     if (!QoreValue::tryMakeShortString(rv, str.c_str(), str.size())) {
         xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_make_short_string() requires a string of no more than "
-            QSD " bytes; got " QSD " bytes", (size_t)QoreValue::SHORTSTR_MAX_BYTES, str.size());
+            QLLD " bytes; got " QLLD " bytes", (int64)QoreValue::SHORTSTR_MAX_BYTES, (int64)str.size());
         return QoreValue();
     }
     return rv;

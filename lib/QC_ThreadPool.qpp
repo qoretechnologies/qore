@@ -306,29 +306,29 @@ ThreadPool::constructor(int max_threads = 0, int min_idle_threads = 0, int max_i
     if (max_threads > 0) {
         if (min_idle_threads > max_threads) {
             xsink->raiseException("THREADPOOL-ERROR",
-                "cannot create a ThreadPool object with min_idle_threads (%d) > max_threads (%d)",
-                min_idle_threads, max_threads);
+                "cannot create a ThreadPool object with min_idle_threads (" QLLD ") > max_threads (" QLLD ")",
+                (int64)min_idle_threads, (int64)max_threads);
             return;
         }
         if (max_idle_threads > max_threads) {
             xsink->raiseException("THREADPOOL-ERROR",
-                "cannot create a ThreadPool object with max_idle_threads (%d) > max_threads (%d)",
-                max_idle_threads, max_threads);
+                "cannot create a ThreadPool object with max_idle_threads (" QLLD ") > max_threads (" QLLD ")",
+                (int64)max_idle_threads, (int64)max_threads);
             return;
         }
     }
     if (max_idle_threads > 0) {
         if (min_idle_threads > max_idle_threads) {
             xsink->raiseException("THREADPOOL-ERROR",
-                "cannot create a ThreadPool object with min_idle_threads (%d) > max_idle_threads (%d)",
-                min_idle_threads, max_idle_threads);
+                "cannot create a ThreadPool object with min_idle_threads (" QLLD ") > max_idle_threads (" QLLD ")",
+                (int64)min_idle_threads, (int64)max_idle_threads);
             return;
         }
     }
     if (idle_release_timeout < 0) {
         xsink->raiseException("THREADPOOL-ERROR",
-            "cannot create a ThreadPool object with idle_release_timeout < 0 (value passed: %d)",
-            idle_release_timeout);
+            "cannot create a ThreadPool object with idle_release_timeout < 0 (value passed: " QLLD ")",
+            (int64)idle_release_timeout);
         return;
     }
 

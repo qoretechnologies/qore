@@ -9343,7 +9343,7 @@ load_local_done:
                         // %negative-offsets; matches the JIT and AOT auto-vivify paths.
                         if (index < 0) {
                             xsink->raiseException("NEGATIVE-LIST-INDEX", "list index " QLLD " is invalid (index must "
-                                "evaluate to a non-negative integer)", index);
+                                "evaluate to a non-negative integer)", (int64)index);
                             break;
                         }
                         // Auto-vivify: use container's declared type so the element
@@ -16366,7 +16366,7 @@ load_local_done:
                 if (xsink) {
                     std::string msg = "unsupported opcode in executor: ";
                     msg += std::to_string(static_cast<int>(inst->opcode));
-                    xsink->raiseException("IR-EXEC-ERROR", msg.c_str());
+                    xsink->raiseException("IR-EXEC-ERROR", "%s", msg.c_str());
                 }
                 cleanupValues(values, cleanup, xsink, true, cleanup_log);
                 cleanupLocalCaches();

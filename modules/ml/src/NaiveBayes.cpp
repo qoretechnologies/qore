@@ -37,7 +37,7 @@ void QoreNaiveBayes::fit(const MatrixXd& X, const VectorXd& y,
     if (X.rows() != y.size()) {
         xsink->raiseException("ML-NAIVE-BAYES-ERROR",
             "X has " QLLD " rows but y has " QLLD " elements",
-            (int64_t)X.rows(), (int64_t)y.size());
+            (int64)((int64_t)X.rows()), (int64)((int64_t)y.size()));
         return;
     }
 

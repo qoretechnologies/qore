@@ -50,7 +50,7 @@ QoreSSLCertificate::QoreSSLCertificate(const BinaryNode* bin, ExceptionSink* xsi
         long e = ERR_get_error();
         char buf[121];
         ERR_error_string(e, buf);
-        xsink->raiseException("SSLCERTIFICATE-CONSTRUCTOR-ERROR", buf);
+        xsink->raiseException("SSLCERTIFICATE-CONSTRUCTOR-ERROR", "%s", buf);
     }
 }
 

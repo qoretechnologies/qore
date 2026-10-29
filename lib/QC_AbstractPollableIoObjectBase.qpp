@@ -46,7 +46,7 @@ qclass AbstractPollableIoObjectBase [ns=Qore; arg=AbstractPollableIoObjectBase* 
 /** @throw INTERNAL-ONLY this class is not usable by %Qore classes
 */
 AbstractPollableIoObjectBase::constructor() {
-    xsink->raiseException("INTERNAL-ONLY", "the AbstractPollableIoObjectBase class is not usable by %Qore classes; "
+    xsink->raiseException("INTERNAL-ONLY", "the AbstractPollableIoObjectBase class is not usable by Qore classes; "
         "inherit a builtin derived class");
 }
 

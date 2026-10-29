@@ -1756,13 +1756,15 @@ val = "string";      # OK
       specifiers are unchanged
     @endparblock
 
-    @par C++ API: The Arguments of printd() Are Checked Against Its Format
-    <tt>print_debug()</tt>, which the <tt>printd()</tt> macro calls in a library or binary module built with
-    \c DEBUG, is declared with the new \c QORE_PRINTF_FORMAT() macro, so that GCC and Clang check its arguments
-    against the format string; a binary module whose <tt>printd()</tt> calls pass an argument that does not match
-    its conversion gets a \c -Wformat warning.  Such an argument is undefined behavior: a library built with
-    \c DEBUG crashed at debugging level 5 (<tt>qore -d5</tt>) when it printed a %Queue holding values, as an
-    integer was passed for a <tt>%%s</tt> conversion
+    @par C++ API: The Arguments of printf-Style Functions Are Checked Against Their Format
+    The printf-style functions of the C++ API, <tt>ExceptionSink::raiseException()</tt>,
+    <tt>raiseErrnoException()</tt>, <tt>raiseExceptionArg()</tt>, <tt>appendLastDescription()</tt>,
+    <tt>QoreString::sprintf()</tt>, \c QoreStringMaker, \c QoreStringNodeMaker, <tt>printe()</tt> and
+    <tt>print_debug()</tt> (the <tt>printd()</tt> macro), are declared with the new \c QORE_PRINTF_FORMAT() macro, so
+    that GCC and Clang check their arguments against the format string; a binary module that passes an argument that
+    does not match its conversion, or a string that is not a format as the format, gets a \c -Wformat warning.  Such
+    a call is undefined behavior: an argument passed for a <tt>%%s</tt> conversion that is not a string, or a
+    <tt>%%s</tt> in text used as the format, crashes the process when the call formats it
 
     @par C++ API: HTTP Client Objects Must Be Allocated on the Heap
     @parblock
@@ -5183,6 +5185,17 @@ while (*binary chunk = input.read(65536)) {
       program: a command written for the next stop was sent while the thread still ran and failed; with such input
       the first command is now processed when the program has attached to the debugger, and a command that resumes
       a thread returns when the thread stops again or stops being debugged
+    - the C++ code formatted some messages with arguments that did not match their conversions, or used text that is
+      not a format as the format, which the compiler now checks (see the C++ API compatibility notes):
+      - a failed WebSocket upgrade raised an exception whose description, the error text of the connection, was used
+        as the format, so a <tt>%%s</tt> in it crashed the client
+      - the error of a cast of a value to an enum, of a value thrown by native code and of some internal errors used
+        their description as the format, so a <tt>%%s</tt> in a cast value crashed the process
+      - @ref Qore::Program::importFunction() "Program::importFunction()" with an empty new name crashed formatting
+        its error, and imported the function with the empty name
+      - the error of an invalid day of the month in a date gave wrong values
+      - the errors of an invalid proxy URL scheme or port showed \c %%y instead of the value
+      - many errors printed 64-bit values with \c %%d, which shows only their lower 32 bits
     - the local variables of a frame of a thread stopped in a debugger (@ref Qore::get_local_vars() "get_local_vars()")
       included the temporary variables (\c ref_arg_helper) that the runtime creates for the arguments that a debugger
       callback takes by reference

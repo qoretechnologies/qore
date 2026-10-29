@@ -3923,8 +3923,8 @@ int QoreStatefulTextDecoder::checkEnd(const QoreEncoding* enc, ExceptionSink* xs
     if (pending.empty()) {
         return 0;
     }
-    xsink->raiseException("STREAM-ENCODING-ERROR", "the end of the data was reached after " QSD " byte%s of an "
-        "incomplete character or shift sequence according to the input encoding: '%s'", pending.size(),
+    xsink->raiseException("STREAM-ENCODING-ERROR", "the end of the data was reached after " QLLD " byte%s of an "
+        "incomplete character or shift sequence according to the input encoding: '%s'", (int64)(pending.size()),
         pending.size() == 1 ? "" : "s", enc->getCode());
     pending.clear();
     return -1;
@@ -4141,7 +4141,7 @@ QoreStringNode* q_read_string(ExceptionSink* xsink, int64 size, const QoreEncodi
             int cc = enc->getCharLen(p, e - p);
             if (!cc) {
                 xsink->raiseException("STREAM-ENCODING-ERROR", "invalid multi-byte character received in byte offset "
-                    QSD " according to the input encoding: '%s'", last_char, enc->getCode());
+                    QLLD " according to the input encoding: '%s'", (int64)last_char, enc->getCode());
 
                 return 0;
             }
@@ -4230,7 +4230,7 @@ QoreStringNode* q_read_string_short(ExceptionSink* xsink, int64 size, const Qore
         int cc = enc->getCharLen(p, e - p);
         if (!cc) {
             xsink->raiseException("STREAM-ENCODING-ERROR", "invalid multi-byte character received in byte offset "
-                QSD " according to the input encoding: '%s'", last_char, enc->getCode());
+                QLLD " according to the input encoding: '%s'", (int64)last_char, enc->getCode());
             return nullptr;
         }
         if (cc < 0) {

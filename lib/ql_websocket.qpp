@@ -114,7 +114,7 @@ binary unmasked = ws_unmask_data(masked_payload, mask_key);
 binary ws_unmask_data(binary data, binary mask) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     if (mask->size() != 4) {
         xsink->raiseException("WEBSOCKET-ERROR",
-            "mask must be exactly 4 bytes; got " QSD " bytes", mask->size());
+            "mask must be exactly 4 bytes; got " QLLD " bytes", (int64)(mask->size()));
         return QoreValue();
     }
 

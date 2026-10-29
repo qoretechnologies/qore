@@ -115,7 +115,7 @@ hash getpwuid2(softint uid) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=EXTERNAL_INFO] 
    QoreHashNode *h = q_getpwuid(uid);
    if (!h) {
       if (!errno)
-         xsink->raiseException("GETPWUID2-ERROR", "uid %d not found", uid);
+         xsink->raiseException("GETPWUID2-ERROR", "uid " QLLD " not found", (int64)uid);
       else
          xsink->raiseException("GETPWUID2-ERROR", q_strerror(errno));
    }
@@ -244,7 +244,7 @@ hash getgrgid2(softint gid) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=EXTERNAL_INFO] 
    QoreHashNode *h = q_getgrgid(gid);
    if (!h) {
       if (!errno)
-         xsink->raiseException("GETGRGID2-ERROR", "gid %d not found", gid);
+         xsink->raiseException("GETGRGID2-ERROR", "gid " QLLD " not found", (int64)gid);
       else
          xsink->raiseException("GETGRGID2-ERROR", q_strerror(errno));
    }

@@ -127,7 +127,7 @@ static void dsp_constructor_hash(const QoreHashNode* opts, QoreObject* self, Que
             return;
          }
          if (!max) {
-            xsink->raiseException(DSPC_ERR, "maximum connections must be > 0 (value given: %d)", min, max);
+            xsink->raiseException(DSPC_ERR, "maximum connections must be > 0 (value given: %d)", max);
             return;
          }
       }
@@ -1307,7 +1307,7 @@ int DatasourcePool::getErrorTimeout() [flags=CONSTANT] {
  */
 nothing DatasourcePool::setEventQueue(Qore::Thread::Queue[Queue] queue, auto argument) [flags=NAMED_ARGS] {
    if (queue->getMax() != -1)
-      return xsink->raiseException("QUEUE-ERROR", "the Queue object passed as a maximum size of %d entr%s, which could cause internal I/O to freeze in the Datasource object if used; use a Queue object with no maximum size for datasource event monitoring", queue->getMax(), queue->getMax() == 1 ? "y" : "ies");
+      return xsink->raiseException("QUEUE-ERROR", "the Queue object passed as a maximum size of " QLLD " entr%s, which could cause internal I/O to freeze in the Datasource object if used; use a Queue object with no maximum size for datasource event monitoring", (int64)(queue->getMax()), queue->getMax() == 1 ? "y" : "ies");
 
    ds->setEventQueue(queue.release(), argument.refSelf(), xsink);
 }
