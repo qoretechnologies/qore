@@ -13,14 +13,18 @@
 #
 # Requirements:
 #   - qore with A2aServerHandler and A2aClient modules
-#   - Python 3.10+ with 'httpx' package
+#   - Python 3.10+ with the 'venv' module
 #
 # Usage:
 #   ./run_integration_test.sh [--install-deps] [--test server|client|both]
 #
+# --install-deps installs the Python packages into a virtual environment of their own ($VENVDIR/a2a), as the MCP
+# runner does; once it exists, the tests run with its Python.  Packages are never installed into the system Python,
+# which can have no pip, or refuse packages outside a virtual environment (PEP 668).
+#
 # Environment:
-#   PYTHON - Python interpreter to use (default: auto-detect)
-#   PIP - Pip to use (default: pip for $PYTHON)
+#   PYTHON - Python interpreter that creates the virtual environment (default: auto-detect)
+#   VENVDIR - the directory of the virtual environments (default: .venvs next to this script)
 #
 
 set -e
@@ -52,19 +56,8 @@ if [ -z "$PYTHON" ]; then
     fi
 fi
 
-# Find pip for the Python version
-if [ -z "$PIP" ]; then
-    PY_VERSION=$($PYTHON -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
-    for pip_cmd in "pip${PY_VERSION}" "$PYTHON -m pip" "pip3"; do
-        if $pip_cmd --version &>/dev/null 2>&1; then
-            PIP="$pip_cmd"
-            break
-        fi
-    done
-fi
-
-echo -e "${YELLOW}Using Python: $PYTHON${NC}"
-echo -e "${YELLOW}Using pip: $PIP${NC}"
+VENVDIR="${VENVDIR:-$SCRIPT_DIR/.venvs}"
+A2A_VENV="$VENVDIR/a2a"
 
 cleanup() {
     echo -e "${YELLOW}Cleaning up...${NC}"
@@ -82,9 +75,14 @@ trap cleanup EXIT
 while [ $# -gt 0 ]; do
     case "$1" in
         --install-deps)
+            if [ ! -x "$A2A_VENV/bin/python" ]; then
+                echo -e "${YELLOW}Creating the virtual environment $A2A_VENV with $PYTHON...${NC}"
+                "$PYTHON" -m venv "$A2A_VENV"
+                "$A2A_VENV/bin/pip" install --quiet --upgrade pip
+            fi
             echo -e "${YELLOW}Installing Python dependencies...${NC}"
             # the SDK interop test runs the a2a-sdk server in uvicorn, which the http-server extra does not include
-            $PIP install --quiet httpx 'a2a-sdk[sqlite,http-server]' uvicorn
+            "$A2A_VENV/bin/pip" install --quiet httpx 'a2a-sdk[sqlite,http-server]' uvicorn
             ;;
         --test)
             shift
@@ -98,12 +96,17 @@ while [ $# -gt 0 ]; do
     shift
 done
 
+# the tests run with the Python of the virtual environment, once --install-deps has created it
+if [ -x "$A2A_VENV/bin/python" ]; then
+    PYTHON="$A2A_VENV/bin/python"
+fi
+echo -e "${YELLOW}Using Python: $PYTHON${NC}"
+
 # Check Python dependencies
 echo -e "${YELLOW}Checking Python dependencies...${NC}"
-if ! $PYTHON -c "import httpx" 2>/dev/null; then
+if ! "$PYTHON" -c "import httpx" 2>/dev/null; then
     echo -e "${RED}ERROR: httpx not installed${NC}"
-    echo "Run: $PIP install httpx"
-    echo "Or: $0 --install-deps"
+    echo "Run: $0 --install-deps"
     exit 2
 fi
 

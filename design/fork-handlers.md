@@ -235,6 +235,10 @@ starts such an initialization then blocks inside the guard.
 
 Besides the locks:
 
+- **Scan completion waits**: the process-wide scan wait mutex and its condition variable are registered before
+  threads start and recreated in the child. Registration has no function-local static initialization guard, and
+  the state stays alive during process exit. As with other collector locks, this does not make a copied object
+  whose r-section is held by a vanished parent thread usable in the child.
 - **Thread list**: only the forking thread's entry is kept; the entries of the other threads are freed (their
   thread data is not, since Programs can still refer to it), with their cancellation state, wait registrations
   and wakeup descriptors.

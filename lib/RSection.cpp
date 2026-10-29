@@ -33,7 +33,7 @@
 #include <qore/intern/RSection.h>
 
 // does not block if the rsection cannot be acquired, returns -1 if the lock cannot be acquired and sets a notification
-int qore_rsection_priv::tryRSectionLockNotifyWaitRead(RNotifier* rn) {
+int qore_rsection_priv::tryRSectionLockNotifyWaitRead(RNotifier* rn, uint64_t scan) {
     assert(has_notify);
 
     int tid = q_gettid();
@@ -53,7 +53,8 @@ int qore_rsection_priv::tryRSectionLockNotifyWaitRead(RNotifier* rn) {
     // ourselves that nothing can end.  This is reachable whenever code holding an object's write lock
     // runs Qore code that dereferences an object in the same recursive set - a destructor run from an
     // lvalue operation, for example.  The read count is balanced by the matching rSectionUnlock() and
-    // cannot admit another thread while the write lock is held.
+    // cannot admit another thread while the write lock is held.  The rsection is held under a lock that
+    // the thread took before its scan, so it is not recorded as the scan's (rs_scan).
     if (write_tid == tid) {
         ++readers;
         rs_tid = tid;
@@ -62,10 +63,11 @@ int qore_rsection_priv::tryRSectionLockNotifyWaitRead(RNotifier* rn) {
 
     while (true) {
         // If another thread owns the write lock or the rsection, abort this scan and retry after that owner
-        // releases it.  RSet scanning calls this while holding RSet read locks; blocking for one of those
-        // owners can deadlock with a writer that needs to invalidate the same RSet.
+        // releases it, or after the scan holding it completes.  RSet scanning calls this while holding RSet read
+        // locks; blocking for one of those owners can deadlock with a writer that needs to invalidate the same
+        // RSet.
         if (write_tid != -1 || rs_tid != -1) {
-            setNotificationIntern(rn);
+            setConflictIntern(rn, scan);
             return -1;
         }
 
@@ -87,11 +89,12 @@ int qore_rsection_priv::tryRSectionLockNotifyWaitRead(RNotifier* rn) {
 
     // grab the rsection
     rs_tid = tid;
+    rs_scan = scan;
     return 0;
 }
 
 // does not block if the rsection cannot be taken in shared mode, returns -1 and sets a notification
-int qore_rsection_priv::tryRSectionLockSharedNotifyWaitRead(RNotifier* rn, bool& shared) {
+int qore_rsection_priv::tryRSectionLockSharedNotifyWaitRead(RNotifier* rn, bool& shared, uint64_t scan) {
     assert(has_notify);
 
     int tid = q_gettid();
@@ -116,7 +119,7 @@ int qore_rsection_priv::tryRSectionLockSharedNotifyWaitRead(RNotifier* rn, bool&
     // the rsection must not be overtaken by an unbounded stream of scans: a dereference deciding whether a
     // recursive set can be collected waits there, and starving it would stop collection altogether.
     if (write_tid != -1 || rs_tid != -1 || rsection_waiting) {
-        setNotificationIntern(rn);
+        setConflictIntern(rn, scan);
         return -1;
     }
 

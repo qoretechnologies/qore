@@ -29215,3 +29215,29 @@ Two fresh randomized epochs use the exact same 15 native artifacts with frozen o
 |probe:string_result_loop|568.711259|546.892469|-3.837%|562.537785|556.281395|-1.112%
 
 Corrected Release and Debug each pass 14 fixtures, 28 cases and 3232 assertions; native Debug passes 3232 focused and 4890 broader assertions (overlapping). Frozen runtime checks validate 6072 reference answers per variant. All 62 audit checks pass or are inapplicable. Failed ABI/test/verifier attempts, the separate merge measurement, and installation evidence remain in [results-callback-policy-deferral-macos-arm64.json](results-callback-policy-deferral-macos-arm64.json). No fresh Java/develop ratio or performance ceiling is claimed.
+
+
+## DGC and HTTP develop merge checkpoint (2026-10-29)
+
+Merged develop `38c885a6ff` into the retained callback implementation at `cfb9e85404`. The merge fixes colliding collector scans and scopes HTTP connection graphs. Audit additions register the new scan completion mutex and condition with fork handlers before threads start, check scan-size worker exit status and quote paths, and type the collision-test closure.
+
+Both runtimes use optimized `-O3 -DNDEBUG` builds with allocation tracking disabled and execute the same 15 AOT artifacts. The randomized 32-workload, three-layout, three-process checkpoint contains 576 processes and 1,728 measured windows (three warmups and three 150 ms samples per process). Values below are median-of-layout process medians in ns/item for complete kernels, not isolated call latency.
+
+|!Workload|!Before merge|!After merge|!Time change
+|Same-Program direct|1.554743|1.540595|-0.910%
+|Same-Program method|1.629989|1.617419|-0.771%
+|Same-Program polymorphic|24.086188|24.148180|+0.257%
+|Imported indirect, same Program|8.704885|8.790618|+0.985%
+|Imported polymorphic|84.987106|86.300273|+1.545%
+|Closure|18.594083|18.787548|+1.040%
+|Captured closure|24.458612|24.243819|-0.878%
+|CSV report|960.148326|956.219408|-0.409%
+|Object orders|3392.689098|3400.442412|+0.229%
+|Callback pipeline|95.499246|96.321469|+0.861%
+|Text index|1387.610918|1375.637155|-0.863%
+
+No workload has non-overlapping slower process ranges in all three layouts. Most per-layout ranges overlap. Six individual cells are separated slower: imported float polymorphic (shuffle), boxed float method (default and shuffle), closure (reverse), local floating callback (shuffle) and typed integer callback (shuffle), by 0.88–2.75%. The imported floating member fallback aggregate is +2.49%, with overlapping ranges in all layouts. Captured closure improves 6.00% in the reverse layout, while its other layouts overlap; this supports reporting layout sensitivity rather than attributing every small change to a mechanism. The four mixed applications change between -0.86% and +0.86%, all with overlapping ranges in every layout.
+
+Retain this correctness merge. The previously retained callback improvement remains visible near 8.79 ns/item; its original benefit is measured in its own matched epochs, not recomputed by mixing runs. This checkpoint has no fresh Java/develop ratio and does not establish a global performance ceiling. A2A shell syntax was checked; its external Python interoperability suite was not rerun. The host is shared, without affinity or thermal control.
+
+Validation: Release 88 executed cases/3805 assertions (13 Debug-only skips), Debug 101 cases/5470 assertions (0 skips); each also has one silent fixture. Native Debug passes 3237 focused/4899 broader assertions (overlapping). All 391 Release qmod aliases restored. All 62 audit checks pass or are inapplicable. Raw process exits, output hashes, sources and timing windows are retained in [results-post-callback-merge-macos-arm64.json](results-post-callback-merge-macos-arm64.json).
