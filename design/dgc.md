@@ -736,8 +736,9 @@ under one lock, and `wait_scan_complete()` first follows the scans that the scan
 if they lead back to the waiting scan, it starts over at once. The scans of the cycle are all waiting and hold
 nothing, so it cannot collide with them.
 
-**Why this cannot deadlock.** A waiting scan holds no r-section (only its own scan lock, `RObject::rscan`, as
-before), so no scan collides with it. A wait for a scan is only registered for a scan that held an r-section at that
+**Why this cannot deadlock.** A waiting scan holds no r-section, so no scan collides with it; it holds its root's
+scan lock (`RObject::rscan`) only while it waits for another scan (see "A scan that waits holds no lock"). A wait
+for a scan is only registered for a scan that held an r-section at that
 moment, so was running a pass; the waits form chains, no chain closes on itself, and each ends in a running scan,
 which completes, waits for another running scan, or waits for a release — which ends the waits of the scans waiting
 for it. Every wait that involves a lock other than a scan's is a wait for a release, as it always was. A scan
@@ -761,6 +762,27 @@ chosen member) and checks that a scan keeps waiting while the scan it collided w
 that both then take the third scan's result, and that 16 threads scanning one set from their own members complete;
 `ut_dgc_scan_wait_cycle()` in the C++ unit tests checks that a wait that would close a cycle is not made and that a
 wait for a scan waiting for a release ends.
+
+### A scan that waits holds no lock
+
+A scan holds its root's scan lock (`RObject::rscan`, taken by `RScanHelper`) for as long as it runs, so that scans
+of the same root run one at a time and a scan that waited for the lock can use the result of the scan that held it.
+It used to keep the scan lock while it waited for a lock held by something other than a scan as well, and that wait
+could close on itself: a thread that holds an object's write lock or r-section and starts a scan of the root waits
+for the scan lock, while the scan holding the scan lock reaches that object and waits for the thread to release it.
+Neither completes.
+
+A scan waiting for a release therefore gives up its scan lock for the wait (`RScanReleaseHelper`), and takes it again
+before it checks the generation, so a scan of the same root made meanwhile is used (`needScan()`); it keeps the scan
+lock only while it waits for another scan to complete, which holds no lock it could need. The rule is the same as
+for r-sections: whatever a waiting scan holds is something no thread it waits for can need.
+
+Reaching this takes a thread that starts a scan while it holds a lock on an object the scan reaches - code that
+releases a reference under an object's write lock, which Qore code does not do (see "A scan may be re-entered under
+a write lock the calling thread already holds"): no scan of the DGC, closure, thread, HTTP, WebSocket or async I/O
+tests entered an object through a lock its thread held before the scan. The case "a scan waiting for a lock gives up
+its scan lock" in `dgc-scan-collisions.qtest` makes it deterministically with `dbg_rset_scan_locked()`, which scans
+while holding another object's write lock, and never returns with the scan lock kept.
 
 ### Scans that change nothing share the r-section
 
