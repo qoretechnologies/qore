@@ -28946,3 +28946,55 @@ All 13464 Qore and 1230 Java reference results pass. The 53 C2 diagnostics cover
 Next profile the exact frozen branch/develop binaries for standalone and imported virtual, member/effect and list-mutation workloads. Inspect prepared-method stack checks and frame/context work. If profiles and machine code support it, evaluate scoped inlining of the existing full physical stack guard, preserving every guard and cold overflow/materialization path; do not omit guards or Program transitions. Retain direct, callback, closure, short-invocation and mixed controls and take fresh optimized before/after measurements before retaining a candidate. Reference-valued effect continuations and residual list ownership/navigation remain subsequent leads. Java parity and a global performance ceiling have not been established.
 
 [Evidence](results-post-imported-slots-checkpoint-macos-arm64.json); [all 62 audit checks](audit-post-imported-slots-checkpoint.md).
+
+## Rejected prepared method stack-check inlining (2026-10-29)
+
+The prototype is rejected and production sources are restored to ff12d02f2b. It force-inlined the existing complete physical stack guard at three selected method helper sites, sharing the callback helper. No guard predicate, cold frame materialization, Program transition, exception or cancellation check was omitted. Twelve runtime functions were inspected: eight out-of-line guard calls disappeared, but all six member-helper instantiations already inlined the guard before. Fifteen before/after LLVM module pairs are byte-identical; this experiment changes runtime helpers, not AOT caller lowering.
+
+Fresh matching optimized Release -O3 -DNDEBUG runtimes and qcc -O3 stripped artifacts on Apple M4 Pro/macOS ARM64 cover 32 workloads, three fixed default/reverse/shuffle-487 link layouts and five forks. Every invocation uses 4096 items/seed 7, three warmups and three 150 ms measured windows. Jobs are randomly interleaved. Values are whole-kernel ns/item, summarized as the median of per-layout median fork means; these are not isolated call latencies or a new Java/develop comparison. All 960 jobs/2880 measured windows are preserved and independently replayed.
+
+Local integer virtual calls improve 22.9482 to 22.4498 ns/item (-2.17%); imported virtual calls improve 76.0918 to 74.5032 (-2.09%). Every layout median improves for those targets. The local gain is only 0.498 ns/item, while local floating-member reads cost 0.489 ns/item (+1.42%). The latter has a +2.66% default-layout cost with disjoint observed fork ranges. Orders cost 1.31%, text indexing 0.85%, indirect calls 0.60% and captured closures 0.91% in aggregate. Most other ranges overlap; those costs remain reported. No >3% disjoint adverse flag fires, but that does not mean there is no separated regression. The narrow improvement does not justify the overall tradeoff. This is judgment under the user's broader-workload authorization, not an automatic rule rejecting every regression. No rescue or confirmation timing follows.
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Time change
+|local:direct_call|1.518609|1.516086|-0.166%
+|local:method_call|1.596590|1.598272|+0.105%
+|local:polymorphic_call|22.948241|22.449802|-2.172%
+|local:boxed_int_method_fallback|32.353339|32.524921|+0.530%
+|local:boxed_float_method_fallback|34.456951|34.945966|+1.419%
+|local:boxed_int_method_effect|88.784466|89.128052|+0.387%
+|local:list_mutate|131.487552|130.432505|-0.802%
+|local:temporary_list|1.674466|1.679611|+0.307%
+|micro:polymorphic_call|76.091833|74.503177|-2.088%
+|micro:polymorphic_float_call|76.623787|76.240292|-0.500%
+|micro:boxed_int_method_call|96.837857|96.286423|-0.569%
+|micro:boxed_float_method_call|102.272468|102.361519|+0.087%
+|micro:boxed_int_method_fallback|108.096246|107.338925|-0.701%
+|micro:boxed_float_method_fallback|112.577622|113.582841|+0.893%
+|micro:boxed_int_method_effect|162.501499|162.996326|+0.305%
+|micro:indirect_call|9.875716|9.935270|+0.603%
+|micro:closure_call|17.920896|17.746587|-0.973%
+|micro:closure_capture|23.242885|23.454224|+0.909%
+|micro:list_read|2.878340|2.888541|+0.354%
+|micro:list_build|26.563503|26.298061|-0.999%
+|micro:list_mutate|131.279328|128.771485|-1.910%
+|micro:temporary_hash|1.686240|1.678930|-0.434%
+|float:callback_local_float_return|0.855441|0.852363|-0.360%
+|float:typed_local_int_unary|1.180962|1.185134|+0.353%
+|float:callback_loop_float_return|4.951749|4.941884|-0.199%
+|mixed:csv_report|920.863504|914.837944|-0.654%
+|mixed:object_orders|3020.658053|3060.115456|+1.306%
+|mixed:callback_pipeline|88.081706|87.887439|-0.221%
+|mixed:text_index|1300.969367|1311.978345|+0.846%
+|probe:object_short|1580.528960|1575.222439|-0.336%
+|probe:effect_short|1648.695633|1623.528080|-1.527%
+|probe:string_result_loop|521.003241|521.718331|+0.137%
+
+Both paired variants pass 6072 reference checks (1518 IR and 4554 AOT), 12144 combined. Candidate and restored baseline each pass 17 Release fixtures/42 QUnit cases/8008 assertions, including stack overflow, methods, members, imported calls, frame/context, exception and cancellation coverage. The full restored optimized build and all 391 Release qmod aliases are verified. Candidate Debug drivers were prepared but not run after rejection; no Debug result is claimed. The first candidate artifact preparation was untimed and superseded only to use the exact same frozen source paths for byte-identical LLVM comparison. Its records are preserved.
+
+Before this experiment, develop 5a4e629506 was merged into ff12d02f2b and the optimized runtime was installed with `sudo make install && copy-qore-modules`. Installed qualification passes 52 cases/14941 assertions, 391 qmods and ten headers. The rejected candidate was never installed; the system remains on that verified baseline. The preceding Java/develop checkpoint is a separate d088fffea1/cced3d9bd0 measurement and is not relabeled as this merge.
+
+Untimed profiles identified ownership, member lookup and scalar cleanup as larger remaining costs. Profile setup failures (macOS path redaction, then a loader-output pipe stall) were preserved; successful file-backed captures verify exact runtime images. Profile durations are excluded from timing and sampling counts are not precise cost attribution. Next inspect whether the shared runtime decref helpers can skip a nested discard call for representations with no owned payload, retaining enum/opaque/node release and exception behavior. Broad compiler cleanup guards already have code-growth costs; do not revive them unchanged. Native parameter caching around lvalue operations also needs a proof that reflective reentry remains visible. No global performance ceiling is established.
+
+Shared-host limits remain: no exclusive CPU, affinity, thermal or frequency control. No owned build/test/profile or heavy archive scan overlaps timing. No samples were discarded or old timing pooled.
+
+[Evidence](results-method-stack-inline-rejected-macos-arm64.json); [all 62 audit checks](audit-method-stack-inline-rejected.md).
