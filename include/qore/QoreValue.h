@@ -422,6 +422,12 @@ private:
         return nullptr;
     }
 
+    //! Releases an enum owner before clearing this value
+    DLLLOCAL void discardEnumOwned();
+
+    //! Releases a node owner before clearing this value
+    DLLLOCAL void discardNodeOwned(AbstractQoreNode* n, ExceptionSink* xsink);
+
     //! Sets a large integer value (allocates QoreBigIntNode)
     DLLEXPORT void setLargeInt(int64 i);
 

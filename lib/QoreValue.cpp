@@ -804,17 +804,28 @@ void QoreValue::clear() {
     bits = VAL_NOTHING;
 }
 
+// Keep owning releases out of the scalar path so it needs no call frame.
+__attribute__((noinline)) void QoreValue::discardEnumOwned() {
+    getEnumMember()->deref();
+    bits = VAL_NOTHING;
+}
+
+__attribute__((noinline)) void QoreValue::discardNodeOwned(AbstractQoreNode* n, ExceptionSink* xsink) {
+    opaqueDeregister();
+    n->deref(xsink);
+    bits = VAL_NOTHING;
+}
+
 void QoreValue::discard(ExceptionSink* xsink) {
     if (isEnum()) {
-        getEnumMember()->deref();
-        bits = VAL_NOTHING;
+        discardEnumOwned();
         return;
     }
     // an opaque reference owns its payload exactly like a pointer value does
     AbstractQoreNode* n = getOwnedNodeIntern();
     if (n) {
-        opaqueDeregister();
-        n->deref(xsink);
+        discardNodeOwned(n, xsink);
+        return;
     }
     bits = VAL_NOTHING;
 }

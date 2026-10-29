@@ -739,12 +739,32 @@ static void ut_lvalue_object_count_records(UnitTestCounters& c) {
     UT_ASSERT(c, !xsink, "object-count bookkeeping tests raise no exception");
 }
 
-//! Runtime cleanup must distinguish inline values from every owned representation.
+//! Public discard preserves the value until its owning release has completed.
+class UtDiscardVisibilityString : public QoreStringNode {
+public:
+    UtDiscardVisibilityString(QoreValue& value, UnitTestCounters& counters)
+        : QoreStringNode("public discard release visibility"), value(value), counters(counters) {
+    }
+
+    ~UtDiscardVisibilityString() override {
+        UT_ASSERT(counters, value.getInternalNode() == this, "discard clears only after the owning release");
+    }
+
+private:
+    QoreValue& value;
+    UnitTestCounters& counters;
+};
+
+//! Runtime and public cleanup must distinguish inline values from every owned representation.
 static void ut_runtime_value_cleanup(UnitTestCounters& c) {
     ExceptionSink xsink;
-    for (bool nothrow : {false, true}) {
+    enum class CleanupMode { Runtime, RuntimeNothrow, PublicDiscard };
+    for (CleanupMode mode : {CleanupMode::Runtime, CleanupMode::RuntimeNothrow, CleanupMode::PublicDiscard}) {
         auto release = [&](QoreValue value) {
-            if (nothrow) {
+            if (mode == CleanupMode::PublicDiscard) {
+                value.discard(&xsink);
+                UT_ASSERT_EQ(c, QoreValue().rawBits(), value.rawBits(), "public discard clears the representation");
+            } else if (mode == CleanupMode::RuntimeNothrow) {
                 qore_rt_decref_nothrow(value.rawBits());
             } else {
                 qore_rt_decref(value.rawBits(), &xsink);
@@ -796,6 +816,12 @@ static void ut_runtime_value_cleanup(UnitTestCounters& c) {
             release(value->refSelf());
             UT_ASSERT_EQ(c, 1, node->reference_count(), "runtime cleanup releases the numeric box reference");
         }
+    }
+    {
+        ValueHolder value(&xsink);
+        *value = QoreValue(new UtDiscardVisibilityString(*value, c));
+        value->discard(&xsink);
+        UT_ASSERT_EQ(c, QoreValue().rawBits(), value->rawBits(), "public discard clears a final owner");
     }
     UT_ASSERT(c, !xsink, "runtime value cleanup leaves no exception");
 }

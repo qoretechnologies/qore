@@ -29052,3 +29052,59 @@ ARM64 inspection proves frame-free returns in both wrappers and tail branches in
 Next synchronize develop and install the optimized retained runtime as requested. Then investigate the remaining owning-cleanup/call costs and generic AOT CPU targeting as separate experiments; neither is an established further benefit. A global performance ceiling has not been reached.
 
 [Evidence](results-runtime-scalar-cleanup-macos-arm64.json); [all 62 audit checks](audit-runtime-scalar-cleanup.md).
+
+## Retained general value-discard cleanup (2026-10-29)
+
+QoreValue::discard now keeps enum and node ownership release in two private noinline helpers. Its non-owning path still clears the actual value to NOTHING; the owning paths retain the original enum/node selection, opaque deregistration, exception sink and release-before-clear order. The measured ARM64 public entry has no scalar stack frame and tail-branches to the owning helpers. ValueHolder destructors still have stack frames; moving code into helpers does not establish a net instruction-count reduction everywhere. No object layout, exported public signature, AOT runtime identity, Program/TLS/context, synchronization or cancellation contract changes.
+
+Retained under the user-authorized broader workload tradeoff. Two independent optimized epochs reduce whole-kernel time for direct-call loops by 2.43%/2.54%, simple-method loops by 2.52%/2.12%, list reading by 2.79%/2.66%, list building by 4.58%/3.92%, temporary hashes by 3.89%/4.15%, temporary lists by 4.16%/4.59%, and typed integer callbacks by 2.15%/2.07% (screen/confirmation). Every layout of both epochs has disjoint better observed fork ranges for direct calls, simple methods, list read/build and temporary hashes. Temporary-list and typed-callback confirmation each have one overlapping layout. These are complete workload measurements, not isolated call latency or a proof of the instruction responsible for each improvement.
+
+The costs are real parts of this decision: local effectful methods take 2.08%/3.33% more time and imported effectful methods 2.77%/2.51% more. Imported effectful shuffle-487 has disjoint worse ranges in both epochs (+2.77%/+1.60%); the local default layout costs 4.36% with disjoint ranges in confirmation. Local integer-member methods cost 1.53%/1.01%, and imported floating-member methods 0.48%/1.38% in aggregate. Other separated adverse layouts include screen local effect reverse +2.78%, imported floating-member reverse +0.31%, imported effect reverse +2.76% and CSV shuffle +1.46%; confirmation local integer-member shuffle +2.80%, imported effect default +2.51%, short effect shuffle +2.60% and string-result default +1.40%. All samples and ranges remain in the evidence. There is no zero-regression or application-weighted overall gain claim.
+
+Local/imported list mutation changes by less than 1% in both epochs and is essentially flat; it is not the justification for retention. CSV aggregate time falls 0.91%/2.82%, but its confirmation ranges overlap in every layout and the first screen has an adverse shuffled layout. The callback pipeline falls 1.13%/0.58%; object orders are essentially flat, and text indexing changes +0.65%/-0.48%. These mixed results are weaker than the repeated scalar/list-build gains. No samples were dropped or favorable extra epochs added.
+
+Baseline is clean installed 11e6273c8c, including origin/develop 5a4e629506. Both variants are Release -O3 -DNDEBUG with allocation tracking off, LLVM 22.1.8 and Apple Clang 21 on Apple M4 Pro/macOS ARM64. Both execute the same 15 qcc -O3 --strip-source native executables/modules; the generated AOT runtime identity is equal. Standalone local kernels run within one Program, while module suites invoke imported AOT bodies from an IR host. Each epoch covers 32 workloads, three default/reverse/shuffle-487 layouts, three forks, three warmups and three 150 ms samples, 4096 items/seed 7. Jobs are interleaved with predeclared order seeds 2026102981 and 2026102982. Results are ns/item, median of per-layout median fork means; epochs are not pooled.
+
+|!Workload|!Screen before|!Screen candidate|!Screen time change|!Confirmation before|!Confirmation candidate|!Confirmation time change
+|local:direct_call|1.516164|1.479368|-2.427%|1.525913|1.487192|-2.538%
+|local:method_call|1.597865|1.557538|-2.524%|1.594043|1.560267|-2.119%
+|local:polymorphic_call|23.256846|23.192037|-0.279%|23.389624|23.555395|+0.709%
+|local:boxed_int_method_fallback|31.806254|32.292850|+1.530%|32.119560|32.444833|+1.013%
+|local:boxed_float_method_fallback|34.877477|33.842333|-2.968%|34.839729|34.078332|-2.185%
+|local:boxed_int_method_effect|87.715667|89.542582|+2.083%|87.122737|90.024903|+3.331%
+|local:list_mutate|119.031556|118.375278|-0.551%|118.476484|118.194845|-0.238%
+|local:temporary_list|1.650215|1.581620|-4.157%|1.663828|1.587507|-4.587%
+|micro:polymorphic_call|76.240802|75.391406|-1.114%|77.040328|76.550770|-0.635%
+|micro:polymorphic_float_call|77.654341|78.001321|+0.447%|77.802998|77.836948|+0.044%
+|micro:boxed_int_method_call|98.961933|97.534526|-1.442%|98.339469|96.275920|-2.098%
+|micro:boxed_float_method_call|101.536414|102.426036|+0.876%|103.400497|102.363290|-1.003%
+|micro:boxed_int_method_fallback|108.489280|107.745860|-0.685%|109.424396|108.310584|-1.018%
+|micro:boxed_float_method_fallback|111.991559|112.528243|+0.479%|111.949288|113.489035|+1.375%
+|micro:boxed_int_method_effect|163.045615|167.555400|+2.766%|163.095222|167.196975|+2.515%
+|micro:indirect_call|9.892867|9.877791|-0.152%|9.972473|9.907134|-0.655%
+|micro:closure_call|17.837048|17.881113|+0.247%|18.036090|17.807753|-1.266%
+|micro:closure_capture|23.524919|23.690436|+0.704%|23.876933|23.499919|-1.579%
+|micro:list_read|2.864686|2.784903|-2.785%|2.874004|2.797494|-2.662%
+|micro:list_build|23.300415|22.233584|-4.579%|23.272589|22.360107|-3.921%
+|micro:list_mutate|119.117044|118.078863|-0.872%|119.420684|119.156297|-0.221%
+|micro:temporary_hash|1.653031|1.588746|-3.889%|1.658782|1.589873|-4.154%
+|float:callback_local_float_return|0.829778|0.837902|+0.979%|0.840428|0.815699|-2.942%
+|float:typed_local_int_unary|1.172135|1.146878|-2.155%|1.175893|1.151497|-2.075%
+|float:callback_loop_float_return|4.917358|4.912671|-0.095%|4.929726|4.923313|-0.130%
+|mixed:csv_report|891.119189|882.986438|-0.913%|922.180647|896.182862|-2.819%
+|mixed:object_orders|3022.797935|3017.515525|-0.175%|3050.662831|3051.351955|+0.023%
+|mixed:callback_pipeline|88.215901|87.215825|-1.134%|88.339876|87.831217|-0.576%
+|mixed:text_index|1288.304822|1296.619635|+0.645%|1298.600822|1292.328933|-0.483%
+|probe:object_short|1557.196723|1548.038466|-0.588%|1565.578885|1580.020481|+0.922%
+|probe:effect_short|1628.488734|1627.933226|-0.034%|1644.131425|1628.570114|-0.946%
+|probe:string_result_loop|528.919524|523.494450|-1.026%|530.505160|527.206762|-0.622%
+
+All 1152 jobs/3456 windows replay independently. Baseline, initial candidate and corrected-test candidate each pass 1518 IR and 4554 AOT reference results, 18216 combined. Release and Debug each pass 21 fixtures, including two silent fixtures, 58 QUnit cases and 12138 assertions. Debug passes 3005 focused native assertions, including 43 new public-discard/visibility checks, and 4663 broader native assertions. These separate suites have overlapping coverage, so their counts are not a unique total. The new tests exercise exact clearing for inline values, ordinary/opaque/enum/numeric ownership, and value visibility during a sole owner's destruction. Existing fixtures cover explicit destruction, exceptions, cancellation, reflection, Program context and stack limits. All 391 Release qmod aliases are restored.
+
+The first Debug build rejected two test expressions that accessed the private VAL_NOTHING constant. They were corrected to the public QoreValue().rawBits() expression. The failed build and restoration receipt remain preserved. Exact reverse-replacement hashes prove this was the only source change after screening; all production files stayed identical. A complete optimized rebuild produced byte-identical qore, qcc and libqore, so the original Release qualification, assembly and screen remain applicable. Fresh references and the complete Debug/native suite pass after correction. Confirmation uses the same optimized runtime bytes and shared native artifacts.
+
+This runtime change can apply to existing AOT/JIT artifacts without recompilation. No separate IR/AST/JIT performance campaign is reported. Runtime code layout and inlining also change; the full measured difference is not attributed solely to eliminating one stack frame. Other architectures, startup, memory use and production-wide throughput remain unmeasured. This is a shared host without exclusive CPU, affinity, thermal or frequency controls; no owned build/test/profile or heavy scan overlapped either timing epoch. This is not a fresh Java/develop comparison and does not establish Java parity or a global performance ceiling.
+
+Next synchronize develop and install the audited optimized runtime. Then investigate the redundant context stores and exception-state reads still present in already-inlined fast call loops, preserving cancellation polls and proving clean exception state at every incoming edge. Explicit host-CPU AOT tuning remains a separate alternative. Neither lead is an established further improvement.
+
+[Evidence](results-general-discard-macos-arm64.json); [all 62 audit checks](audit-general-discard.md).
