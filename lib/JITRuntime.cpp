@@ -1174,10 +1174,9 @@ DLLLOCAL bool qore_jit_deopt_requested() {
 // Debug-step hook (issue #5352): fires a per-statement debugger step event from
 // JIT-compiled native code so single-stepping / breakpoints / LineCoverage work for
 // a function already running as native code when a debugger attaches mid-execution.
-// Mirrors the IR interpreter's per-statement dbgStep at PushTempMark boundaries
-// (QoreIRInterpreter.cpp).  `file`/`abs_line` identify the statement (resolved at
-// runtime via the current program's statement index); `statements_block` is the
-// function's top-level StatementBlock passed as the onStep `blockStatement` context.
+// Mirrors the IR interpreter's DebugStatement handler (QoreIRInterpreter.cpp).
+// `statement` is the statement that follows; `statements_block` is the function's
+// top-level StatementBlock passed as the onStep `blockStatement` context.
 //
 // Flow-control return codes from dbgStep (RC_RETURN/RC_BREAK/RC_CONTINUE) are
 // intentionally NOT honored here: a fixed native frame cannot redirect control flow
@@ -1185,22 +1184,13 @@ DLLLOCAL bool qore_jit_deopt_requested() {
 // UserVariantBase::evalTiered() deopts to the AST/IR interpreter (hasDebuggerAttached
 // downgrade).  A debugger-raised exception IS honored: the caller emits an exception
 // check immediately after this call.
-extern "C" DLLEXPORT void qore_rt_dbg_step(const char* file, int64_t abs_line,
-        void* statements_block, ExceptionSink* xsink) {
+extern "C" DLLEXPORT void qore_rt_dbg_step(const AbstractStatement* statement, void* statements_block,
+        ExceptionSink* xsink) {
     ThreadLocalProgramData* tlpd = get_thread_local_program_data();
     if (!tlpd || !tlpd->runtimeCheck()) {
         return;
     }
-    QoreProgram* pgm = getProgram();
-    if (!pgm) {
-        return;
-    }
-    AbstractStatement* stmt = qore_program_private::get(*pgm)->getStatementFromIndex(file,
-            static_cast<int>(abs_line));
-    if (!stmt) {
-        return;
-    }
-    tlpd->dbgStep(static_cast<const StatementBlock*>(statements_block), stmt, xsink);
+    tlpd->dbgStep(static_cast<const StatementBlock*>(statements_block), statement, xsink);
 }
 
 // Synthetic block-entry debug event from JIT native code (issue #5352): mirrors the IR

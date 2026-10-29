@@ -1,0 +1,172 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# Regression test for issue #5558: a debugger gets a step event for every statement in every execution mode, as with
+# the AST interpreter, so that breakpoints and stepping stop at every statement.
+#
+# The step events of the IR and JIT tiers were emitted at the PushTempMark of a statement, which the lowering emits
+# only for a statement that can create temporaries, so statements such as `int sum = a + b;`, `return sum;`, if
+# statements, break and continue had no step event and their breakpoints were never hit.  The events are now emitted
+# by a DebugStatement instruction before each statement.
+#
+# The child script attaches a stepping debugger to its own program and runs functions with such statements; each
+# statement is tagged with a "### <tag>" comment, and the steps must be the tagged statements in the order in which
+# they run.  The debugger is attached before the functions are called, so they run with the AST or IR interpreter in
+# every execution mode; JitDebugStep.qtest tests the step events of native code.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class DebugStatementStepTest
+
+public class DebugStatementStepTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+
+        const ChildScript = '%allow-debugger
+
+class StepRecorder inherits DebugProgram {
+    public {
+        list<int> step_lines = ();
+    }
+    onAttach(ProgramControl pgm, reference rs, reference rts) {
+        rs = DebugStep;
+    }
+    onDetach(ProgramControl pgm, reference rs, reference rts) {
+        rs = DebugDetach;
+    }
+    onStep(ProgramControl pgm, int blk, *int sid, *int bid, reference flow, reference rs, reference rts) {
+        rs = DebugStep;
+        if (sid) {
+            *hash<auto> loc = pgm.getStatementIdInfo(sid);
+            if (loc.start_line) {
+                push step_lines, loc.start_line;
+            }
+        }
+    }
+    onFunctionEnter(ProgramControl pgm, int sid, reference rs, reference rts) {
+        rs = DebugStep;
+    }
+    onFunctionExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {
+    }
+    onException(ProgramControl pgm, int sid, hash<auto> ex, reference dismiss, reference rs, reference rts) {
+    }
+    onExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {
+    }
+}
+
+int sub add(int a, int b) {
+    int sum = a + b;                ### sum
+    return sum;                     ### add_return
+}
+
+int sub loop(int n) {
+    int t = 0;                      ### t
+    for (int i = 0; i < n; ++i) {   ### for
+        if (i == 1) {               ### if1
+            continue;               ### continue
+        }
+        if (i == 3) {               ### if3
+            break;                  ### break
+        }
+        t += add(t, i);             ### add
+    }
+    on_exit {                       ### on_exit
+        t += 0;                     ### on_exit_body
+    }
+    return t;                       ### loop_return
+}
+
+string sub caught() {
+    try {                           ### try
+        int x = 1;                  ### x
+        x++;                        ### inc
+        throw "ERR";                ### throw
+    } catch (hash<ExceptionInfo> ex) {
+        string err = ex.err;        ### err
+        return err;                 ### caught_return
+    }
+}
+
+our StepRecorder dbg = new StepRecorder();
+ProgramControl pc = ProgramControl::getProgram();
+dbg.addProgram(pc);
+int r = loop(5);                    ### call_loop
+string c = caught();                ### call_caught
+dbg.removeProgram(pc);              ### remove
+printf("RESULT:%d:%s\\n", r, c);
+printf("STEPLINES:%y\\n", dbg.step_lines);
+';
+
+        #! the tags of the statements of the child script in the order in which they run
+        const ExpectedSteps = (
+            "call_loop",
+                "t", "for",
+                # i = 0
+                "if1", "if3", "add", "sum", "add_return",
+                # i = 1
+                "if1", "continue",
+                # i = 2
+                "if1", "if3", "add", "sum", "add_return",
+                # i = 3
+                "if1", "if3", "break",
+                "on_exit", "loop_return", "on_exit_body",
+            "call_caught",
+                "try", "x", "inc", "throw", "err", "caught_return",
+            "remove",
+        );
+    }
+
+    constructor() : QUnit::Test("DebugStatementStep", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        addTestCase("step events of every statement", \testStepEvents());
+        set_return_value(main());
+    }
+
+    #! returns the 1-based line numbers of the tagged statements of the child script
+    private hash<string, int> tagLines() {
+        hash<string, int> ret = {};
+        list<string> script_lines = ChildScript.split("\n");
+        for (int i = 0; i < script_lines.size(); ++i) {
+            *list<*string> tag = script_lines[i] =~ x/### ([a-z_0-9]+)/;
+            if (tag) {
+                ret{tag[0]} = i + 1;
+            }
+        }
+        return ret;
+    }
+
+    private hash<auto> runChild(string exec_mode) {
+        TmpFile tmp(NOTHING, ".qr");
+        tmp.file.write(ChildScript);
+        tmp.file.close();
+        # the debugger makes the functions run with the interpreter, so no native code is required
+        string out = ExecModeHarness::run(sprintf("%s --enable-debug --exec-mode=%s %s", qore_bin, exec_mode,
+            tmp.path), ExecModeHarness::NativeCheck::None);
+        *list<*string> steps = out =~ x/STEPLINES:\[([0-9, ]*)\]/;
+        list<int> step_lines = steps ? (map trim($1).toInt(), steps[0].split(","), trim($1) != "") : ();
+        return {
+            "out": out,
+            "step_lines": step_lines,
+        };
+    }
+
+    testStepEvents() {
+        hash<string, int> tags = tagLines();
+        list<int> expected = map tags{$1}, ExpectedSteps;
+        # every tag of the expected steps is in the script
+        assertEq(ExpectedSteps.size(), (select expected, exists $1).size());
+
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<auto> res = runChild(mode);
+            assertRegex("RESULT:2:ERR", res.out, mode + ": the child script ran to completion");
+            assertEq(expected, res.step_lines, mode + ": step events of every statement in the order of execution");
+        }
+    }
+}

@@ -3914,6 +3914,13 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         // draining the entire cleanup vector, preserving OUTER-scope temps —
         // critical for e.g. a `foreach` list expression's iterator temp, which
         // lives in the cleanup vector across every body-statement boundary.
+        //
+        // In a function that can be debugged, the debugger's step event for the statement comes first, as with
+        // the AST interpreter (StatementBlock::execImpl()); an exception that the debugger raises is raised by the
+        // statement.
+        if (builder.getFunction()->source_dpgm_addr) {
+            builder.createDebugStatement(*it)->exception_target = getCurrentExceptionTarget();
+        }
         bool statement_needs_cleanup = statementMayCreateNodeTemp(*it);
         uint32_t previous_exception_temp_scope_id = builder.getExceptionTempScopeId();
         if (statement_needs_cleanup) {
@@ -4491,6 +4498,9 @@ QoreIRFunction* QoreIRLowering::compileHandlerToIR(
     // Phase 3b: Compile handler to IR function with captured variables as parameters
     // Create a new IR function for the handler
     auto handler_func = std::make_unique<QoreIRFunction>(qore_ir_next_handler_name());
+    // the statements of the handler are debugged as those of the function that it belongs to
+    handler_func->source_statement_block = builder.getFunction()->source_statement_block;
+    handler_func->source_dpgm_addr = builder.getFunction()->source_dpgm_addr;
 
     // Populate pre_instantiated_locals with handler body locals
     // so the IR interpreter knows which variables need instantiation
@@ -4707,6 +4717,9 @@ int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& han
 
         // Create handler IR function
         auto handler_func = std::make_unique<QoreIRFunction>(qore_ir_next_handler_name());
+        // the statements of the handler are debugged as those of the function that it belongs to
+        handler_func->source_statement_block = parent_func->source_statement_block;
+        handler_func->source_dpgm_addr = parent_func->source_dpgm_addr;
 
         // Phase B1: Pre-seed handler's local_var_slots with parent's entries
         uint32_t parent_slot_count = parent_func->local_var_slots.size();
@@ -4823,6 +4836,9 @@ int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
 
         // Create handler IR function
         auto handler_func = std::make_unique<QoreIRFunction>(qore_ir_next_handler_name());
+        // the statements of the handler are debugged as those of the function that it belongs to
+        handler_func->source_statement_block = parent_func->source_statement_block;
+        handler_func->source_dpgm_addr = parent_func->source_dpgm_addr;
 
         // Phase B1: Pre-seed handler's local_var_slots with parent's entries
         // This allows handler code to reference parent-scope variables by their parent slot IDs

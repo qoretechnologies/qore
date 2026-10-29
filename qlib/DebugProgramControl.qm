@@ -33,7 +33,7 @@
 %no-child-restrictions
 
 module DebugProgramControl {
-    version = "0.1.2";
+    version = "0.1.3";
     desc = "user module providing common debug server stuff";
     author = "Tomas Mandys <tomas.mandys@qoretechnologies.org>";
     url = "http://qoretechnologies.org";
@@ -47,6 +47,10 @@ module DebugProgramControl {
     @section debugprogramcontrolintro Introduction to the DebugProgramControl Module
 
     The %DebugProgramControl module provides common functionality for implementing debugger server utilities
+
+    @subsection dc_v0_1_3 v0.1.3
+    - a statement can be given as a function name without the types of its parameters when the function has one
+      variant (<a href="https://github.com/qoretechnologies/qore/issues/5558">issue 5558</a>)
 
     @subsection dc_v0_1_2 v0.1.2
     - return breakpointId and statementId when creating breakpoint
@@ -841,6 +845,15 @@ public namespace DebugProgramControl {
                 return value.id;
             }
             if (exists value.function) {
+                if (!exists value.args) {
+                    # a function given by its name only is the function's only variant
+                    list<hash<auto>> variants = pgm.findFunctionVariants(value.function);
+                    if (variants.size() != 1) {
+                        throw "DEBUG-HANDLER-ERROR", sprintf("%y has %d variants; give the parameter types of one "
+                            "of them: %s", value.function, variants.size(), (map $1.desc, variants).join(", "));
+                    }
+                    return pgm.findFunctionStatementId(value.function, variants[0].params);
+                }
                 return pgm.findFunctionStatementId(value.function, value.args);
             }
             if (exists value.lineno) {

@@ -7047,6 +7047,101 @@ static void ut_debug_skips_foreign_thread_callbacks(UnitTestCounters& c, QorePro
     UT_ASSERT(c, !xsink, "foreign debug target program cleanup succeeds");
 }
 
+//! records the line of every statement step and raises an exception at the step of one line, once
+class StepExceptionDebugProgram : public QoreDebugProgram {
+public:
+    std::vector<int> step_lines;
+    int raise_line = -1;
+    bool raised = false;
+
+    DLLLOCAL void onAttach(QoreProgram* pgm, DebugRunStateEnum& rs, const AbstractStatement*& rts,
+            ExceptionSink* xsink) override {
+        rs = DBG_RS_STEP;
+    }
+
+    DLLLOCAL void onStep(QoreProgram* pgm, const StatementBlock* blockStatement, const AbstractStatement* statement,
+            unsigned bkptId, int& flow, DebugRunStateEnum& rs, const AbstractStatement*& rts,
+            ExceptionSink* xsink) override {
+        rs = DBG_RS_STEP;
+        if (!statement || !statement->loc) {
+            return;
+        }
+        step_lines.push_back(statement->loc->start_line);
+        if (statement->loc->start_line == raise_line && !raised) {
+            raised = true;
+            xsink->raiseException("DEBUGGER-ERROR", "raised by the debugger at line %d", raise_line);
+        }
+    }
+};
+
+//! issue #5558: every statement has a step event, including statements without temporaries, and an exception raised
+//! by the debugger at a step is raised by the statement, so a try block of the program catches it
+static void ut_debug_step_every_statement(UnitTestCounters& c, QoreProgram* parent) {
+    ExceptionSink xsink;
+    QoreProgram* pgm = parent
+        ? new QoreProgram(parent, PO_NO_CHILD_PO_RESTRICTIONS | PO_ALLOW_DEBUGGER)
+        : new QoreProgram(PO_NO_CHILD_PO_RESTRICTIONS | PO_ALLOW_DEBUGGER);
+    pgm->parse("%modern\n"
+        "int sub steps() {\n"              // 2
+        "    int a = 1;\n"                 // 3
+        "    a++;\n"                       // 4
+        "    if (a > 1) {\n"               // 5
+        "        a += 2;\n"                // 6
+        "    }\n"
+        "    return a;\n"                  // 8
+        "}\n"
+        "string sub caught() {\n"          // 10
+        "    try {\n"                      // 11
+        "        int x = 1;\n"             // 12
+        "        x++;\n"                   // 13
+        "        return \"not raised\";\n" // 14
+        "    } catch (hash<ExceptionInfo> ex) {\n"
+        "        return ex.err;\n"         // 16
+        "    }\n"
+        "}\n",
+        "debug-step-test", &xsink, nullptr, 0);
+    UT_ASSERT(c, !xsink, "debug step target program parses");
+    if (xsink) {
+        xsink.handleExceptions();
+        xsink.clear();
+        pgm->waitForTerminationAndDeref(&xsink);
+        return;
+    }
+
+    StepExceptionDebugProgram dbg;
+    dbg.raise_line = 13;
+    dbg.addProgram(pgm, &xsink);
+    UT_ASSERT(c, !xsink, "debugger attaches to debug step target program");
+
+    QoreValue rv = pgm->callFunction("steps", nullptr, &xsink);
+    UT_ASSERT(c, !xsink, "statements run under the debugger");
+    UT_ASSERT_EQ(c, (int64)4, rv.getAsBigInt(), "statements run under the debugger return the right value");
+    rv.discard(&xsink);
+    std::vector<int> expected = {3, 4, 5, 6, 8};
+    UT_ASSERT(c, dbg.step_lines == expected, "every statement has a step event");
+
+    dbg.step_lines.clear();
+    rv = pgm->callFunction("caught", nullptr, &xsink);
+    UT_ASSERT(c, !xsink, "an exception raised by the debugger is caught by the program");
+    UT_ASSERT(c, dbg.raised, "the debugger raised its exception");
+    UT_ASSERT(c, rv.getType() == NT_STRING && !strcmp(rv.get<const QoreStringNode>()->c_str(), "DEBUGGER-ERROR"),
+        "the catch block of the program gets the exception raised by the debugger");
+    rv.discard(&xsink);
+    // the statement where the debugger raised the exception is not executed; the catch block is
+    expected = {11, 12, 13, 16};
+    UT_ASSERT(c, dbg.step_lines == expected, "an exception raised by the debugger leaves the statement");
+    if (xsink) {
+        xsink.handleExceptions();
+        xsink.clear();
+    }
+
+    dbg.removeProgram(pgm);
+    dbg.waitForTerminationAndClear(&xsink);
+    UT_ASSERT(c, !xsink, "debugger cleanup succeeds");
+    pgm->waitForTerminationAndDeref(&xsink);
+    UT_ASSERT(c, !xsink, "debug step target program cleanup succeeds");
+}
+
 static void ut_asyncio_autostop(UnitTestCounters& c) {
     ExceptionSink xsink;
     AsyncIoControllerPriv* ctrl = new AsyncIoControllerPriv(true, &xsink);
@@ -12700,6 +12795,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_rsection_try_notify_does_not_block_on_writer(c);
     ut_dgc_scan_generation(c);
     ut_debug_skips_foreign_thread_callbacks(c, rc.getProgram());
+    ut_debug_step_every_statement(c, rc.getProgram());
     return make_unit_test_result(c, xsink);
 }
 
@@ -12716,6 +12812,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_rsection_try_notify_does_not_block_on_writer(c);
     ut_dgc_scan_generation(c);
     ut_debug_skips_foreign_thread_callbacks(c, rc.getProgram());
+    ut_debug_step_every_statement(c, rc.getProgram());
     ut_event_loop_remove_recycled_fd(c);
     ut_event_loop_sub_ms_timer_wakeups(c);
     ut_event_loop_registrations(c);

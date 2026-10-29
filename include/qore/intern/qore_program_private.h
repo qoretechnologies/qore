@@ -1241,6 +1241,9 @@ public:
     struct section_sline_statement_map {
         section_offset_map_t sectionMap;
         sline_statement_map_t statementMap;
+        //! the name of the file normalized as an absolute path, made absolute with the working directory when the
+        //! file was parsed, so that a debugger can give the file with another path than it was parsed with
+        std::string abs_path;
     };
 
     typedef section_sline_statement_map section_sline_statement_map_t;
@@ -3796,6 +3799,17 @@ public:
                         }
                     }
                     ++it;
+                }
+                if (it == statementByFileIndex.end()) {
+                    // the file can be given with another path than it was parsed with, such as an absolute path
+                    // for a file parsed with a relative path, as an IDE gives it
+                    QoreString abs_name(name);
+                    q_normalize_path(abs_name);
+                    for (it = statementByFileIndex.begin(); it != statementByFileIndex.end(); ++it) {
+                        if (it->second->abs_path == abs_name.c_str()) {
+                            break;
+                        }
+                    }
                 }
                 if (it == statementByFileIndex.end()) {
                     printd(5, "qore_program_private::getStatementFromIndex('%s',%d) no suffix match, this: %p\n", name, line, this);

@@ -31,6 +31,7 @@
 
 #include "qore/intern/QoreJITIncludes.h"
 #include <qore/intern/QoreIRBuilder.h>
+#include <qore/intern/AbstractStatement.h>
 #include <qore/intern/FunctionCallNode.h>
 #include <qore/intern/QoreAOTBinary.h>
 #include <qore/intern/QoreTypeInfo.h>
@@ -1575,6 +1576,13 @@ void QoreIRBuilder::abandonTempScope() {
 QoreIRInstruction* QoreIRBuilder::createDebugBlock(const QoreProgramLocation* loc) {
     auto inst = append<QoreIRInstruction>(QoreIROpcode::DebugBlock);
     inst->loc = loc;
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createDebugStatement(const AbstractStatement* statement) {
+    assert(statement);
+    auto inst = append<QoreIRDebugStatementInstruction>(statement);
+    inst->loc = statement->loc;
     return inst;
 }
 

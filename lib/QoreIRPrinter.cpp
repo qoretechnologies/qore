@@ -450,6 +450,7 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::Sprintf: return "sprintf";
         case QoreIROpcode::RefSelf: return "ref.self";
         case QoreIROpcode::DebugBlock: return "debug.block";
+        case QoreIROpcode::DebugStatement: return "debug.statement";
         case QoreIROpcode::CheckException: return "check.exception";
         case QoreIROpcode::PluginUnary: return "plugin.unary";
         case QoreIROpcode::PluginBinary: return "plugin.binary";

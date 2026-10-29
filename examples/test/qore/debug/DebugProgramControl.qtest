@@ -1,5 +1,9 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# Tests the debug server (DebugProgramControl) as qdbg and the VS Code debug adapter use it
 
 %modern
 %allow-debugger
@@ -8,6 +12,8 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
 %requires DebugProgramControl
+%requires DebugCmdLine
+%requires Util
 
 %exec-class DebugProgramControlTest
 
@@ -23,6 +29,29 @@ printf(\"%d %y\\n\", total, h);
 ";
 
 const TargetLabel = "dpc-target.q";
+
+#! a program with an overloaded function
+const OverloadScript = "%modern
+int sub f(int i) {
+    return i;
+}
+int sub f(string s) {
+    return s.size();
+}
+int sub g() {
+    return f(1) + f(\"ab\");
+}
+printf(\"%d\\n\", g());
+";
+
+#! a command line that sends no commands, for its parsing of commands
+class TestCommandLine inherits DebugCommandLine {
+    public printfImpl(string fmt, ...) {
+    }
+
+    public *hash<auto> doCommandImpl(hash<auto> data) {
+    }
+}
 
 #! how long a test waits for an event of the debugged program before it fails
 const EventTimeout = 30s;
@@ -185,6 +214,11 @@ public class DebugProgramControlTest inherits QUnit::Test {
         addTestCase("thread stack of all threads", \allThreadStacksTest());
         addTestCase("thread stack frame", \threadStackFrameTest());
         addTestCase("breakpoint on top-level statement", \topLevelBreakpointTest());
+        addTestCase("breakpoint on statement without temporaries", \noTempBreakpointTest());
+        addTestCase("breakpoint on file given with another path", \filePathBreakpointTest());
+        addTestCase("breakpoint on function", \functionBreakpointTest());
+        addTestCase("breakpoint on overloaded function", \overloadedFunctionBreakpointTest());
+        addTestCase("statement identification of the command line", \commandLineStatementTest());
         addTestCase("breakpoint errors", \breakpointErrorTest());
         set_return_value(main());
     }
@@ -291,6 +325,112 @@ public class DebugProgramControlTest inherits QUnit::Test {
         assertEq(8, e.line);
 
         assertEq({"rc": NOTHING}, p.finish());
+    }
+
+    # issue #5558: statements that create no temporaries, such as a declaration with an int expression or a return
+    # statement, had no step event with the IR and JIT tiers, so their breakpoints were never hit
+    noTempBreakpointTest() {
+        DebuggedProgram p(dpc);
+        on_exit p.cleanup();
+        hash<auto> bp7 = p.breakAt(7);
+        hash<auto> bp3 = p.breakAt(3);
+        hash<auto> bp4 = p.breakAt(4);
+
+        hash<auto> e = p.runToStop();
+        assertEq(bp7.bkptid, e.bkptid);
+        assertEq(7, e.line);
+        e = p.runToStop();
+        assertEq(bp3.bkptid, e.bkptid);
+        assertEq(3, e.line);
+        # the stack of a stop in a function
+        list<auto> stack = dpc.threadCommand(p.tid, "thread/stack");
+        assertEq(3, stack[0].line);
+        assertEq("add", stack[1].function);
+        assertEq(7, stack[1].line);
+        e = p.runToStop();
+        assertEq(bp4.bkptid, e.bkptid);
+        assertEq(4, e.line);
+
+        assertEq({"rc": NOTHING}, p.finish());
+    }
+
+    # issue #5558: a file parsed with a relative path can be given with an absolute path, as an IDE gives it
+    filePathBreakpointTest() {
+        DebuggedProgram p(dpc);
+        on_exit p.cleanup();
+        string abs_path = normalize_dir(getcwd() + DirSep + TargetLabel);
+        hash<auto> bp_abs = p.breakAt(8, abs_path);
+        hash<auto> bp_dot = p.breakAt(8, "." + DirSep + TargetLabel);
+        hash<auto> bp_dotdot = p.breakAt(8, normalize_dir(getcwd()) + DirSep + "x" + DirSep + ".." + DirSep
+            + TargetLabel);
+        hash<auto> bp = p.breakAt(8);
+        assertEq(bp.stmtid, bp_abs.stmtid);
+        assertEq(bp.stmtid, bp_dot.stmtid);
+        assertEq(bp.stmtid, bp_dotdot.stmtid);
+        # the file in another directory is another file
+        assertThrows("PROGRAM-STATEMENT-ERROR", \p.breakAt(), (8, DirSep + "no-such-dir" + DirSep + TargetLabel));
+
+        hash<auto> e = p.runToStop();
+        assertEq(8, e.line);
+        assertEq(bp_abs.stmtid, e.statementid);
+
+        assertEq({"rc": NOTHING}, p.finish());
+    }
+
+    # issue #5558: a function given by its name only is its only variant
+    functionBreakpointTest() {
+        DebuggedProgram p(dpc);
+        on_exit p.cleanup();
+        string cmd = sprintf("program/%d/breakpoint//create", p.pgmId);
+        hash<auto> bp = dpc.command(cmd, {"value": {"function": "add"}});
+        # the same statement as the variant given with its parameter types
+        hash<auto> bp_args = dpc.command(cmd, {"value": {"function": "add", "args": ("int", "int")}});
+        assertEq(bp.stmtid, bp_args.stmtid);
+        # a variant without parameters does not exist
+        assertThrows("VARIANT-MATCH-ERROR", \dpc.command(), (cmd, {"value": {"function": "add", "args": ()}}));
+        # a function that does not exist
+        assertThrows("PROGRAM-ERROR", \dpc.command(), (cmd, {"value": {"function": "no_such_function"}}));
+
+        hash<auto> e = p.runToStop();
+        assertEq("step", e.func);
+        assertEq(bp_args.bkptid, e.bkptid);
+        list<auto> stack = dpc.threadCommand(p.tid, "thread/stack");
+        assertEq("add", stack[1].function);
+
+        assertEq({"rc": NOTHING}, p.finish());
+    }
+
+    overloadedFunctionBreakpointTest() {
+        DebuggedProgram p(dpc, OverloadScript, "dpc-overload.q");
+        on_exit p.cleanup();
+        string cmd = sprintf("program/%d/breakpoint//create", p.pgmId);
+        # a function with more than one variant needs the parameter types
+        assertThrows("DEBUG-HANDLER-ERROR", "\"f\" has 2 variants", \dpc.command(), (cmd, {"value": {"function": "f"}}));
+        hash<auto> bp_string = dpc.command(cmd, {"value": {"function": "f", "args": ("string",)}});
+        hash<auto> bp_int = dpc.command(cmd, {"value": {"function": "f", "args": ("int",)}});
+        assertNeq(bp_int.stmtid, bp_string.stmtid);
+
+        hash<auto> e = p.runToStop();
+        assertEq(bp_int.bkptid, e.bkptid);
+        e = p.runToStop();
+        assertEq(bp_string.bkptid, e.bkptid);
+
+        assertEq({"rc": NOTHING}, p.finish());
+    }
+
+    commandLineStatementTest() {
+        TestCommandLine cl();
+        assertEq({"file": "", "lineno": 7}, cl.getStatementValue(("7",)));
+        assertEq({"file": "x.q", "lineno": 7}, cl.getStatementValue(("x.q", "7")));
+        assertEq({"id": 3}, cl.getStatementValue(("#3",)));
+        assertEq({"function": "add", "args": ("int", "int")}, cl.getStatementValue(("add(int, int)",)));
+        assertEq({"function": "add", "args": ()}, cl.getStatementValue(("add()",)));
+        # issue #5558: a function given by its name only
+        assertEq({"function": "add"}, cl.getStatementValue(("add",)));
+        assertEq({"function": "Ns::add"}, cl.getStatementValue(("Ns::add",)));
+        assertThrows("DEBUG-PROGRAM-HELPER", "Statement description is missing", \cl.getStatementValue(), ((),));
+        assertThrows("DEBUG-PROGRAM-HELPER", "expecting", \cl.getStatementValue(), (("x.q",),));
+        assertThrows("DEBUG-PROGRAM-HELPER", "expecting", \cl.getStatementValue(), (("x.q", "y"),));
     }
 
     breakpointErrorTest() {

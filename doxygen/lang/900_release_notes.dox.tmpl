@@ -5155,6 +5155,12 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a breakpoint set with a file name that is not the name that the file was parsed with, such as an absolute path
+      for a program started with a relative path, as an IDE gives it, found no statement; the file name is also
+      matched as an absolute path, made absolute with the working directory that the file was parsed in, and a
+      function can be given by its name only when it has one variant (see the
+      @ref debugprogramcontrolintro "DebugProgramControl" module;
+      <a href="https://github.com/qoretechnologies/qore/issues/5558">issue 5558</a>)
     - an @ref Qore::Expression "Expression" created an object of a class with unimplemented abstract methods
       (ex: <tt>new Expression(pgm, "new C()", "label")</tt>) instead of raising \c ABSTRACT-CLASS-ERROR as any other
       code does, and a later parse commit of a Program that allows it (@ref Qore::PO_ALLOW_REPARSE) then failed on

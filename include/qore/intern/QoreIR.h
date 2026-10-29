@@ -55,6 +55,7 @@ class OnBlockExitStatement;
 class QoreFunction;
 class UserVariantBase;
 class StatementBlock;
+class AbstractStatement;
 class CaseNodeRegex;
 class QoreIRFunction;
 class FunctionalOperator;
@@ -832,7 +833,16 @@ enum class QoreIROpcode : uint16_t {
     //! end of the frame finds nothing to release.  See design/temporary-lifetime.md.
     ReleaseOwnedTemp = 411,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (412, 413, ...)
+    //! Fire the debugger's step event for the statement that follows (QoreIRDebugStatementInstruction).
+    //!
+    //! No operands and no result.  Emitted before each statement of a StatementBlock when the function can be
+    //! debugged (QoreIRFunction::source_dpgm_addr is set), where the AST interpreter calls
+    //! ThreadLocalProgramData::dbgStep() for the statement (StatementBlock::execImpl()), so that breakpoints and
+    //! stepping stop at every statement as they do with the AST interpreter.  Executing it costs a check whether a
+    //! debugger is attached.  Never emitted in code compiled ahead of time, which has no debug events.
+    DebugStatement = 412,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (413, 414, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -841,8 +851,8 @@ enum class QoreIROpcode : uint16_t {
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
 constexpr uint16_t QORE_IR_MAX_OPCODE
-    = static_cast<uint16_t>(QoreIROpcode::ReleaseOwnedTemp);
-static_assert(QORE_IR_MAX_OPCODE == 411, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+    = static_cast<uint16_t>(QoreIROpcode::DebugStatement);
+static_assert(QORE_IR_MAX_OPCODE == 412, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Include the central opcode registry (must come after QoreIROpcode enum definition)
@@ -1107,6 +1117,18 @@ public:
     }
 
     QoreIRPluginOperationRef operation;
+};
+
+//! The step event of the debugger for a statement (QoreIROpcode::DebugStatement)
+class QoreIRDebugStatementInstruction : public QoreIRInstruction {
+public:
+    explicit QoreIRDebugStatementInstruction(const AbstractStatement* n_statement)
+            : QoreIRInstruction(QoreIROpcode::DebugStatement), statement(n_statement) {
+    }
+
+    //! the statement that the step event is for; it lives as long as the parse tree that the function was lowered
+    //! from
+    const AbstractStatement* statement;
 };
 
 class QoreIRConstInstruction : public QoreIRInstruction {

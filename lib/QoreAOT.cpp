@@ -6304,6 +6304,7 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
                 case QoreIROpcode::Return:
                 case QoreIROpcode::ReturnNothing:
                 case QoreIROpcode::DebugBlock:
+                case QoreIROpcode::DebugStatement:
                 case QoreIROpcode::CheckException:
                 case QoreIROpcode::PushTempMark:
                 case QoreIROpcode::DiscardTemps:
@@ -6476,6 +6477,7 @@ static bool qore_aot_get_fixed_hash_remap(const QoreIRFunction& func,
         const QoreIRInstruction* inst = inst_ptr.get();
         switch (inst->opcode) {
             case QoreIROpcode::DebugBlock:
+            case QoreIROpcode::DebugStatement:
             case QoreIROpcode::PushTempMark:
             case QoreIROpcode::DiscardTemps:
                 break;
@@ -6567,6 +6569,7 @@ static bool qore_aot_get_string_op(const QoreIRFunction& func,
         const QoreIRInstruction* inst = inst_ptr.get();
         switch (inst->opcode) {
             case QoreIROpcode::DebugBlock:
+            case QoreIROpcode::DebugStatement:
             case QoreIROpcode::PushTempMark:
             case QoreIROpcode::DiscardTemps:
                 break;
@@ -7131,6 +7134,7 @@ static bool qore_aot_get_string_expression(const QoreIRFunction& func,
         const QoreIRInstruction* inst = inst_ptr.get();
         switch (inst->opcode) {
             case QoreIROpcode::DebugBlock:
+            case QoreIROpcode::DebugStatement:
             case QoreIROpcode::PushTempMark:
             case QoreIROpcode::DiscardTemps:
                 break;
@@ -7469,6 +7473,7 @@ static bool qore_aot_get_collection_op(const QoreIRFunction& func,
         const QoreIRInstruction* inst = inst_ptr.get();
         switch (inst->opcode) {
             case QoreIROpcode::DebugBlock:
+            case QoreIROpcode::DebugStatement:
             case QoreIROpcode::PushTempMark:
             case QoreIROpcode::DiscardTemps:
                 break;
@@ -7851,6 +7856,7 @@ static bool qore_aot_get_conditional_aggregate_shape(
             const QoreIRInstruction* inst = inst_ptr.get();
             switch (inst->opcode) {
                 case QoreIROpcode::DebugBlock:
+                case QoreIROpcode::DebugStatement:
                 case QoreIROpcode::PushTempMark:
                 case QoreIROpcode::DiscardTemps:
                     break;
@@ -8325,6 +8331,7 @@ static bool qore_aot_get_aggregate_return(const QoreIRFunction& func,
         const QoreIRInstruction* inst = inst_ptr.get();
         switch (inst->opcode) {
             case QoreIROpcode::DebugBlock:
+            case QoreIROpcode::DebugStatement:
             case QoreIROpcode::PushTempMark:
             case QoreIROpcode::DiscardTemps:
                 break;
@@ -8888,6 +8895,7 @@ static bool qore_aot_collect_composed_aggregate_return_summaries(
             const QoreIRInstruction* inst = inst_ptr.get();
             switch (inst->opcode) {
                 case QoreIROpcode::DebugBlock:
+                case QoreIROpcode::DebugStatement:
                 case QoreIROpcode::PushTempMark:
                 case QoreIROpcode::DiscardTemps:
                     break;
@@ -9361,6 +9369,7 @@ static int8_t qore_aot_get_boxed_return_param(const QoreIRFunction& func,
         const QoreIRInstruction* inst = inst_ptr.get();
         switch (inst->opcode) {
             case QoreIROpcode::DebugBlock:
+            case QoreIROpcode::DebugStatement:
             case QoreIROpcode::PushTempMark:
             case QoreIROpcode::DiscardTemps:
                 break;
@@ -9439,6 +9448,7 @@ static int8_t qore_aot_get_forwarded_return_param(const QoreIRFunction& func,
         const QoreIRInstruction* inst = inst_ptr.get();
         switch (inst->opcode) {
             case QoreIROpcode::DebugBlock:
+            case QoreIROpcode::DebugStatement:
             case QoreIROpcode::PushTempMark:
             case QoreIROpcode::DiscardTemps:
                 break;
@@ -9680,6 +9690,7 @@ static int8_t qore_aot_get_composed_boxed_return_param(
                 }
                 switch (inst->opcode) {
                     case QoreIROpcode::DebugBlock:
+                    case QoreIROpcode::DebugStatement:
                     case QoreIROpcode::PushTempMark:
                     case QoreIROpcode::DiscardTemps:
                     case QoreIROpcode::Br:
@@ -9997,6 +10008,7 @@ static bool qore_aot_get_composed_int(const QoreIRFunction& func,
         const QoreIRInstruction* inst = inst_ptr.get();
         switch (inst->opcode) {
             case QoreIROpcode::DebugBlock:
+            case QoreIROpcode::DebugStatement:
             case QoreIROpcode::PushTempMark:
             case QoreIROpcode::DiscardTemps:
                 break;
@@ -10164,6 +10176,7 @@ static bool qore_aot_get_context_int(const QoreIRFunction& func,
         const QoreIRInstruction* inst = inst_ptr.get();
         switch (inst->opcode) {
             case QoreIROpcode::DebugBlock:
+            case QoreIROpcode::DebugStatement:
             case QoreIROpcode::PushTempMark:
             case QoreIROpcode::DiscardTemps:
                 break;
@@ -10298,6 +10311,7 @@ static bool qore_aot_get_global_int(const QoreIRFunction& func,
         const QoreIRInstruction* inst = inst_ptr.get();
         switch (inst->opcode) {
             case QoreIROpcode::DebugBlock:
+            case QoreIROpcode::DebugStatement:
             case QoreIROpcode::PushTempMark:
             case QoreIROpcode::DiscardTemps:
                 break;
@@ -11301,6 +11315,7 @@ static bool qore_aot_collect_int_expression_summaries(
         };
         auto is_ignored = [](QoreIROpcode opcode) {
             return opcode == QoreIROpcode::DebugBlock
+                || opcode == QoreIROpcode::DebugStatement
                 || opcode == QoreIROpcode::PushTempMark
                 || opcode == QoreIROpcode::DiscardTemps;
         };
@@ -12003,6 +12018,7 @@ static bool qore_aot_collect_float_expression_summaries(
         AOTFloatExpressionInfo expression;
         auto is_ignored = [](QoreIROpcode opcode) {
             return opcode == QoreIROpcode::DebugBlock
+                || opcode == QoreIROpcode::DebugStatement
                 || opcode == QoreIROpcode::PushTempMark
                 || opcode == QoreIROpcode::DiscardTemps;
         };
@@ -13275,7 +13291,7 @@ bool qore_ir_resolve_batch_function_summaries(
                 return false;
             }
             const QoreIRInstruction* inst = inst_ptr.get();
-            if (inst->opcode == QoreIROpcode::DebugBlock) {
+            if (inst->opcode == QoreIROpcode::DebugBlock || inst->opcode == QoreIROpcode::DebugStatement) {
                 continue;
             }
             if (inst->opcode == QoreIROpcode::LoadLocal
@@ -13329,7 +13345,7 @@ bool qore_ir_resolve_batch_function_summaries(
                     return false;
                 }
                 const QoreIRInstruction* inst = inst_ptr.get();
-                if (inst->opcode == QoreIROpcode::DebugBlock) {
+                if (inst->opcode == QoreIROpcode::DebugBlock || inst->opcode == QoreIROpcode::DebugStatement) {
                     continue;
                 }
                 if (inst->opcode == QoreIROpcode::LoadLocal
@@ -13398,7 +13414,7 @@ bool qore_ir_resolve_batch_function_summaries(
                         return false;
                     }
                     const QoreIRInstruction* inst = inst_ptr.get();
-                    if (inst->opcode == QoreIROpcode::DebugBlock) {
+                    if (inst->opcode == QoreIROpcode::DebugBlock || inst->opcode == QoreIROpcode::DebugStatement) {
                         continue;
                     }
                     if (inst->opcode == QoreIROpcode::LoadLocal) {
@@ -13500,6 +13516,7 @@ bool qore_ir_resolve_batch_function_summaries(
             }
             const QoreIRInstruction* inst = inst_ptr.get();
             if (inst->opcode == QoreIROpcode::DebugBlock
+                    || inst->opcode == QoreIROpcode::DebugStatement
                     || inst->opcode == QoreIROpcode::PushTempMark) {
                 continue;
             }
@@ -13559,6 +13576,7 @@ bool qore_ir_resolve_batch_function_summaries(
             const QoreIRInstruction* inst = inst_ptr.get();
             switch (inst->opcode) {
                 case QoreIROpcode::DebugBlock:
+                case QoreIROpcode::DebugStatement:
                 case QoreIROpcode::PushTempMark:
                 case QoreIROpcode::DiscardTemps:
                     break;
@@ -13689,6 +13707,7 @@ bool qore_ir_resolve_batch_function_summaries(
             const QoreIRInstruction* inst = inst_ptr.get();
             switch (inst->opcode) {
                 case QoreIROpcode::DebugBlock:
+                case QoreIROpcode::DebugStatement:
                 case QoreIROpcode::PushTempMark:
                 case QoreIROpcode::DiscardTemps:
                     break;
@@ -14411,6 +14430,7 @@ bool qore_ir_resolve_batch_function_summaries(
                 const QoreIRInstruction* inst = inst_ptr.get();
                 switch (inst->opcode) {
                     case QoreIROpcode::DebugBlock:
+                    case QoreIROpcode::DebugStatement:
                     case QoreIROpcode::PushTempMark:
                     case QoreIROpcode::DiscardTemps:
                         break;

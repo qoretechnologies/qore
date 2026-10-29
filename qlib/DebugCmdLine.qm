@@ -32,7 +32,7 @@
 %no-debugging
 
 module DebugCmdLine {
-    version = "0.1.2";
+    version = "0.1.3";
     desc = "user module providing common command line debug stuff";
     author = "Tomas Mandys <tomas.mandys@qoretechnologies.org>";
     url = "http://qoretechnologies.org";
@@ -46,6 +46,10 @@ module DebugCmdLine {
     @section debugcmdlineintro Introduction to the DebugCmdLine Module
 
     The %DebugCmdLine module provides common functionality for implementing debugger client utilities
+
+    @subsection dcl_v0_1_3 v0.1.3
+    - a statement can be given as a function name without the types of its parameters when the function has one
+      variant (<a href="https://github.com/qoretechnologies/qore/issues/5558">issue 5558</a>)
 
     @subsection dcl_v0_1_2 v0.1.2
     - removed Linenoise stuff to new module
@@ -710,7 +714,7 @@ public namespace DebugCmdLine {
                             'create': (
                                 'desc': 'create breakpoint and get breakpointId. Optionally assign to a particular "
                                     "statement, i.e. code line, or do it later using "statement assign". "
-                                    "args: [function([args, ...])] | [file] lineno | #statementId',
+                                    "args: function[([param types, ...])] | [file] lineno | #statementId',
                                 'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                                     hash<auto> data.cmd = 'program/'+dcl.checkProgramId()+'/breakpoint//create';
                                     if (args) {
@@ -855,7 +859,7 @@ public namespace DebugCmdLine {
                                         dcl.doCommand(data, True);
                                     },
                                 ),
-                                'desc': 'assign statement to breakpoint, args: breakpointId [function([args, ...])] | [file] lineno | #statementId',
+                                'desc': 'assign statement to breakpoint, args: breakpointId function[([param types, ...])] | [file] lineno | #statementId',
                             ),
                             'unassign': (
                                 '*': (
@@ -868,7 +872,7 @@ public namespace DebugCmdLine {
                                         dcl.doCommand(data, True);
                                     },
                                 ),
-                                'desc': 'unassign statement from breakpoint, args: breakpointId [function([args, ...])] | [file] lineno | #statementId',
+                                'desc': 'unassign statement from breakpoint, args: breakpointId function[([param types, ...])] | [file] lineno | #statementId',
                             ),
                             'get': (
                                 'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
@@ -885,7 +889,7 @@ public namespace DebugCmdLine {
                                         }
                                     }
                                 },
-                                'desc': 'get statement info and list related breakpoints, args: [function([args, ...])] | [file] lineno | #statementId',
+                                'desc': 'get statement info and list related breakpoints, args: function[([param types, ...])] | [file] lineno | #statementId',
                             ),
                         ),
                         'desc': 'statement related commands',
@@ -1117,7 +1121,7 @@ public namespace DebugCmdLine {
                                 dcl.doCommand(data, True);
                             },
                         ),
-                        'desc': sprintf('go thread with specified runstate and optionally to specified statement, arg: %s [ [function([args, ...])] | [file] lineno | #statementId ]', (keys AbstractDebugControl::runStateStrings).join('|')),
+                        'desc': sprintf('go thread with specified runstate and optionally to specified statement, arg: %s [ function[([param types, ...])] | [file] lineno | #statementId ]', (keys AbstractDebugControl::runStateStrings).join('|')),
                         'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                             hash<auto> data.cmd = 'thread/go';
                             data.tid = dcl.checkThreadId();
@@ -1355,7 +1359,12 @@ public namespace DebugCmdLine {
             if (args[0] =~ /^[0-9]+$/) {
                 return {'file': s, 'lineno': int(args[0])};
             }
-            throw "DEBUG-PROGRAM-HELPER", sprintf("Wrong statement identification");
+            # a function given by its name only, which must have one variant
+            if (!args && s =~ /^[A-Za-z_][A-Za-z0-9_]*(::[A-Za-z_][A-Za-z0-9_]*)*$/) {
+                return {'function': s};
+            }
+            throw "DEBUG-PROGRAM-HELPER", sprintf("Wrong statement identification %y; expecting <line>, <file> "
+                "<line>, <function>, <function>(<param types>) or #<statement id>", s);
         }
 
         private hash<auto> splitCmd(string line) {
