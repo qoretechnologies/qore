@@ -120,7 +120,7 @@ public:
         chain is made of stack-allocated ProgramThreadCountContextHelper objects in the target's
         own frames and therefore cannot be walked safely from another thread.
     */
-    std::atomic<unsigned> cancel_scope_pgm_id{0};
+    std::atomic<qore_program_id_t> cancel_scope_pgm_id{0};
 
     //! the condition the thread is blocked on in a cancellable wait, or nullptr; guarded by the wait registry lock
     /** Registered by qore_cond_wait_cancellable() (QoreCondition::waitWithInterrupt()) before the thread checks
@@ -485,7 +485,7 @@ public:
         Acquire pairs with the release store in cancelThread(), which publishes the scope before
         the request flag; a thread that has observed the flag therefore observes the scope.
     */
-    DLLLOCAL unsigned getCancelScopeProgramId(int tid) const {
+    DLLLOCAL qore_program_id_t getCancelScopeProgramId(int tid) const {
         return (tid >= 0 && tid < MAX_QORE_THREADS)
             ? entry[tid].cancel_scope_pgm_id.load(std::memory_order_acquire)
             : 0;
@@ -507,7 +507,7 @@ public:
 
         @return 0 if the request was delivered, -1 if the thread is not active
     */
-    DLLLOCAL int cancelThread(int tid, const char* reason, unsigned scope_pgm_id);
+    DLLLOCAL int cancelThread(int tid, const char* reason, qore_program_id_t scope_pgm_id);
 
     //! Clear cancellation for the given thread; acquires lock internally
     DLLLOCAL void clearCancel(int tid);
@@ -521,7 +521,7 @@ public:
         @param tid the thread whose request should be dropped
         @param scope_pgm_id the scope that was evaluated and found not to apply
     */
-    DLLLOCAL void dropCancelRequest(int tid, unsigned scope_pgm_id);
+    DLLLOCAL void dropCancelRequest(int tid, qore_program_id_t scope_pgm_id);
 
 protected:
     //! Clears all cancellation state for the given thread; lck must be held

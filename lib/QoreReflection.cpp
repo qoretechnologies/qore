@@ -727,8 +727,9 @@ int QoreReflectionCaller::checkProgramAccess(const QoreProgram* target, const ch
     if (privileged) {
         return 0;
     }
-    xsink->raiseException("REFLECTION-ACCESS-ERROR", "code in Program %u cannot %s Program %u: it is not that "
-        "Program, did not create it, and has fewer privileges than it", pgm_id, what, target->getProgramId());
+    xsink->raiseException("REFLECTION-ACCESS-ERROR", "code in Program " QLLD " cannot %s Program " QLLD ": it is not "
+        "that Program, did not create it, and has fewer privileges than it", (int64)pgm_id, what,
+        (int64)target->getProgramId());
     return -1;
 }
 

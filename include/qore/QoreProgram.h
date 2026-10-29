@@ -1025,17 +1025,21 @@ public:
 
     //! get the program id
     /**
-        @return the program id
+        @return the program id, unique in the process and never reused; see qore_program_id_t
+
+        @since %Qore 3.0 the id has the type qore_program_id_t (64 bits); it was \c unsigned
     */
-    DLLEXPORT unsigned getProgramId() const;
+    DLLEXPORT qore_program_id_t getProgramId() const;
 
     //! get the program from program id
     /**
         @param programId provided by @ref QoreProgram::getProgramId
 
         @return the original program or null if program cannot be resolved
+
+        @since %Qore 3.0 the id has the type qore_program_id_t (64 bits); it was \c unsigned
     */
-    DLLEXPORT static QoreProgram* resolveProgramId(unsigned programId);
+    DLLEXPORT static QoreProgram* resolveProgramId(qore_program_id_t programId);
 
     //! register link to Qore script object
     DLLEXPORT void registerQoreObject(QoreObject *o, ExceptionSink* xsink) const;

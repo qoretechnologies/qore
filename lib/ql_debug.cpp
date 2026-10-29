@@ -14530,6 +14530,23 @@ static QoreValue f_dbg_cares_set_hosts_file(const QoreListNode* params, RuntimeC
     return new QoreStringNode(qore_dbg_cares_set_hosts_file(path->c_str()));
 }
 
+//! makes the next Program get at least the given ID
+/** Program IDs are never reused, so the ID that the next Program gets is only moved forward; a test uses it to create
+    Programs whose IDs do not fit in 32 bits.
+
+    @param id the ID that the next Program gets at least; it must be positive
+
+    @return the ID that the next Program would have had
+*/
+static QoreValue f_dbg_set_next_program_id(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64 id = get_param_value(params, 0).getAsBigInt();
+    if (id < 1) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "invalid Program ID " QLLD, id);
+        return QoreValue();
+    }
+    return static_cast<int64>(qore_program_private::setNextProgramId(static_cast<qore_program_id_t>(id)));
+}
+
 namespace {
 //! the state of dbg_fork_lock_cycle_arm(): a stand-in for the lock of the dynamic linker, and what the forking thread
 //! and a thread creating a c-ares channel hold and wait for
@@ -15090,6 +15107,8 @@ void init_debug_functions(QoreNamespace& qns) {
         stringTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "servers");
     qns.addBuiltinVariant("dbg_cares_set_hosts_file", f_dbg_cares_set_hosts_file, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         stringTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "path");
+    qns.addBuiltinVariant("dbg_set_next_program_id", f_dbg_set_next_program_id, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        bigIntTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "id");
     qns.addBuiltinVariant("dbg_fork_lock_cycle_arm", f_dbg_fork_lock_cycle_arm, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 1, QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "entered");
     qns.addBuiltinVariant("dbg_fork_lock_cycle_result", f_dbg_fork_lock_cycle_result, QCF_NO_FLAGS,

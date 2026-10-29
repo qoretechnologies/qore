@@ -95,7 +95,7 @@ ProgramControl::copy() {
 /**
  */
 ProgramControl::destructor() {
-   printd(5, "ProgramControl::constructor() pgm: %p, pgmid: %d, self: %p\n", p, p->getProgramId(), self);
+   printd(5, "ProgramControl::constructor() pgm: %p, pgmid: " QLLD ", self: %p\n", p, (int64)p->getProgramId(), self);
    p->unregisterQoreObject(self, xsink);
    // the underlying object is created from C++ then it has reference and cannot be terminated
    p->deref(xsink);
@@ -195,7 +195,9 @@ int ProgramControl::getProgramId() [flags=RET_VALUE_ONLY;] {
 
  */
 static ProgramControl ProgramControl::resolveProgramId(int program_id) [flags=NAMED_ARGS;dom=DEBUGGER] {
-   QoreProgram* pgm = QoreProgram::resolveProgramId(program_id);
+   // a Program ID is positive
+   QoreProgram* pgm = program_id > 0 ? QoreProgram::resolveProgramId(static_cast<qore_program_id_t>(program_id))
+      : nullptr;
    if (!pgm) {
       return xsink->raiseException("PROGRAM-ERROR", "cannot find program for programId (" QLLD ")", (int64)program_id);
    }

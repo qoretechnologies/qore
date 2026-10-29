@@ -451,7 +451,7 @@ DLLLOCAL QoreParseOptions runtime_get_own_program_state_parse_options(const Qore
 /** If module code already runs for an application with that application's restrictions, it is that application;
     otherwise it is \a caller_pgm, or 0 if there is none
 */
-DLLLOCAL unsigned runtime_get_module_call_app_id(const QoreProgram* caller_pgm);
+DLLLOCAL qore_program_id_t runtime_get_module_call_app_id(const QoreProgram* caller_pgm);
 
 //! returns true if module code runs in its own Program for an application with restrictions
 /** @param app_pgm_id set to the ID of the application Program that the module code runs for
@@ -460,7 +460,7 @@ DLLLOCAL unsigned runtime_get_module_call_app_id(const QoreProgram* caller_pgm);
     the module code inherits from its caller, and check what they act on themselves (see
     qore_check_module_owned_code())
 */
-DLLLOCAL bool runtime_get_module_caller_app(unsigned& app_pgm_id);
+DLLLOCAL bool runtime_get_module_caller_app(qore_program_id_t& app_pgm_id);
 
 //! checks code that a builtin variant flagged with @ref QCF_MODULE_OWNED runs for module code
 /** Module code that runs in its own Program for a caller with restrictions may run code asynchronously, or with
@@ -540,9 +540,9 @@ public:
     //! The manager for policy checks (referenced), or nullptr; see qore_find_thread_sandbox_policy_manager_ref()
     QoreSandboxManager* policy_manager = nullptr;
     //! The ID of the Program that @ref manager was found on, or 0
-    unsigned pgm_id = 0;
+    qore_program_id_t pgm_id = 0;
     //! All contributing Program IDs, without retaining their Programs
-    std::vector<unsigned> program_ids;
+    std::vector<qore_program_id_t> program_ids;
     //! Provenance is additive even when an ordinary inherited sandbox is shadowed by a nearer Program.
     QoreSandboxManager* provenance_manager = nullptr;
     QoreSandboxManager* provenance_policy_manager = nullptr;
@@ -675,7 +675,7 @@ private:
     QoreParseOptions old_value;
     QoreParseOptions old_caller_restrictions;
     const QoreProgram* old_module_pgm;
-    unsigned old_app_pgm_id;
+    qore_program_id_t old_app_pgm_id;
 };
 
 //! Makes the next user call on the current thread a call made on behalf of another Program
@@ -717,7 +717,7 @@ struct QoreCallParseOptionsOverride {
     /** The application is the first Program in the chain of callers that is not a module: the Program whose
         restrictions the module code inherits
     */
-    unsigned app_pgm_id = 0;
+    qore_program_id_t app_pgm_id = 0;
 };
 
 class RuntimeParseOptionsOverrideHelper {
@@ -737,7 +737,7 @@ private:
     QoreParseOptions old_po;
     QoreParseOptions old_caller_restrictions;
     const QoreProgram* old_module_pgm;
-    unsigned old_app_pgm_id;
+    qore_program_id_t old_app_pgm_id;
 
     DLLLOCAL void set(const QoreCallParseOptionsOverride& o);
 };

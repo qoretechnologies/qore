@@ -1140,10 +1140,10 @@ protected:
         code without a parent.  Reflection allows a Program that created another Program to navigate it; see
         design/reflection-caller-privilege.md.
     */
-    std::vector<unsigned> creator_ids;
+    std::vector<qore_program_id_t> creator_ids;
 
     //! Returns true if the Program with the given ID created this Program, directly or through Programs it created
-    DLLLOCAL bool isCreatedBy(unsigned pgm_id) const {
+    DLLLOCAL bool isCreatedBy(qore_program_id_t pgm_id) const {
         return std::find(creator_ids.begin(), creator_ids.end(), pgm_id) != creator_ids.end();
     }
 
@@ -3124,7 +3124,7 @@ public:
     }
 
     //! Returns true if the Program with the given ID created \a pgm, directly or through Programs it created
-    DLLLOCAL static bool programCreatedBy(const QoreProgram& pgm, unsigned pgm_id) {
+    DLLLOCAL static bool programCreatedBy(const QoreProgram& pgm, qore_program_id_t pgm_id) {
         return pgm.priv->isCreatedBy(pgm_id);
     }
 
@@ -3707,7 +3707,7 @@ public:
         return rv.release();
     }
 
-    DLLLOCAL unsigned getProgramId() const {
+    DLLLOCAL qore_program_id_t getProgramId() const {
         return programId;
     }
 
@@ -3733,8 +3733,21 @@ public:
         qore_root_ns_private::clearData(*RootNS, xsink);
     }
 
-    DLLLOCAL static QoreProgram* resolveProgramId(unsigned programId) {
-        printd(5, "qore_program_private::resolveProgramId(%x)\n", programId);
+    //! Moves the ID that the next Program gets forward to the given ID; returns the ID it would have had
+    /** IDs are never reused, so the ID is not moved back: an ID before the next one is ignored.  For tests of IDs
+        beyond 32 bits (dbg_set_next_program_id()).
+    */
+    DLLLOCAL static qore_program_id_t setNextProgramId(qore_program_id_t next) {
+        QoreAutoRWWriteLocker al(&lck_programMap);
+        qore_program_id_t rv = programIdCounter;
+        if (next > programIdCounter) {
+            programIdCounter = next;
+        }
+        return rv;
+    }
+
+    DLLLOCAL static QoreProgram* resolveProgramId(qore_program_id_t programId) {
+        printd(5, "qore_program_private::resolveProgramId(" QLLD ")\n", (int64)programId);
         QoreAutoRWReadLocker al(&lck_programMap);
         programid_to_program_map_t::iterator i = programid_to_program_map.find(programId);
         return i == programid_to_program_map.end() ? nullptr : i->second;
@@ -3869,7 +3882,7 @@ public:
     }
 
     DLLLOCAL void registerQoreObject(QoreObject *o, ExceptionSink* xsink) {
-        printd(5, "qore_program_private::registerQoreObject() pgm: %p, pgmid: %d\n", pgm, getProgramId());
+        printd(5, "qore_program_private::registerQoreObject() pgm: %p, pgmid: " QLLD "\n", pgm, (int64)getProgramId());
         QoreAutoRWWriteLocker al(&qore_program_private::lck_programMap);
         qore_program_to_object_map_t::iterator i = qore_program_private::qore_program_to_object_map.find(pgm);
         assert(i != qore_program_private::qore_program_to_object_map.end());
@@ -3881,7 +3894,7 @@ public:
     }
 
     DLLLOCAL void unregisterQoreObject(QoreObject *o, ExceptionSink* xsink) {
-        printd(5, "qore_program_private::unregisterQoreObject() pgm: %p, pgmid: %d\n", pgm, getProgramId());
+        printd(5, "qore_program_private::unregisterQoreObject() pgm: %p, pgmid: " QLLD "\n", pgm, (int64)getProgramId());
         QoreAutoRWWriteLocker al(&qore_program_private::lck_programMap);
         qore_program_to_object_map_t::iterator i = qore_program_private::qore_program_to_object_map.find(pgm);
         assert(i != qore_program_private::qore_program_to_object_map.end());
@@ -3920,11 +3933,11 @@ public:
         qore_program_to_object_map_t::iterator i = qore_program_to_object_map.find(pgm);
         assert(i != qore_program_to_object_map.end());
         if (i->second) {
-            printd(5, "qore_program_private::getQoreObject() pgm: %p, pgmid: %d, second: %p\n", i->first, i->first->getProgramId(), i->second);
+            printd(5, "qore_program_private::getQoreObject() pgm: %p, pgmid: " QLLD ", second: %p\n", i->first, (int64)i->first->getProgramId(), i->second);
             i->second->ref();
         } else {
             i->second = new QoreObject(QC_PROGRAMCONTROL, getProgram(), pgm);
-            printd(5, "qore_program_private::getQoreObject() pgm: %p, pgmid: %d, new second: %p\n", pgm, pgm->getProgramId(), i->second);
+            printd(5, "qore_program_private::getQoreObject() pgm: %p, pgmid: " QLLD ", new second: %p\n", pgm, (int64)pgm->getProgramId(), i->second);
             pgm->ref();
         }
         return i->second;
@@ -3937,11 +3950,11 @@ public:
         qore_program_to_object_map_t::iterator i = qore_program_to_object_map.begin();
         while (i != qore_program_to_object_map.end()) {
             if (i->second) {
-                printd(5, "qore_program_private::getAllQoreObjects() pgm: %p, pgmid: %d, second: %p\n", i->first, i->first->getProgramId(), i->second);
+                printd(5, "qore_program_private::getAllQoreObjects() pgm: %p, pgmid: " QLLD ", second: %p\n", i->first, (int64)i->first->getProgramId(), i->second);
                 i->second->ref();
             } else {
                 i->second = new QoreObject(QC_PROGRAMCONTROL, getProgram(), i->first);
-                printd(5, "qore_program_private::getAllQoreObjects() pgm: %p, pgmid: %d, new second: %p\n", i->first, i->first->getProgramId(), i->second);
+                printd(5, "qore_program_private::getAllQoreObjects() pgm: %p, pgmid: " QLLD ", new second: %p\n", i->first, (int64)i->first->getProgramId(), i->second);
                 i->first->ref();
             }
             (*l)->push(i->second, nullptr);
@@ -4021,7 +4034,7 @@ private:
     // Parallel programId -> QoreProgram* map maintained alongside
     // qore_program_to_object_map under lck_programMap.  Provides O(1)
     // resolveProgramId() lookup instead of an O(N) linear scan.
-    typedef std::unordered_map<unsigned, QoreProgram*> programid_to_program_map_t;
+    typedef std::unordered_map<qore_program_id_t, QoreProgram*> programid_to_program_map_t;
     static programid_to_program_map_t programid_to_program_map;
     static QoreRWLock lck_programMap; // to protect program list manipulation
 
@@ -4048,8 +4061,8 @@ public:
     DLLLOCAL static QoreRWLock& getBreakpointLockForFork();
 
 private:
-    static unsigned programIdCounter;   // to generate programId
-    unsigned programId;
+    static qore_program_id_t programIdCounter;   // to generate programId
+    qore_program_id_t programId;
 };
 
 class ParseWarnHelper : public ParseWarnOptions {
