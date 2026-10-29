@@ -29345,3 +29345,78 @@ Each Qore build passes 1518 IR and 4554 AOT references, 12144 combined; Java pas
 Next investigate the repeated exception-sink reads in fast scalar loops. Only bypass a read when an existing successful check dominates the path and no intervening operation can change the sink. Keep all cancellation polls, handler-path checks, thread-exit/deferral semantics and diagnostic materialization. No invariant-load annotation or blanket check removal. Then revisit receiver-local ownership and cross-Program pure native context with explicit lifetime and cleanup proofs.
 
 [Complete evidence](results-post-layout-rejection-checkpoint-macos-arm64.json); [all 62 audit checks](audit-post-layout-rejection-checkpoint.md). No universal Java parity or global performance ceiling is established.
+
+
+## Proven-clear cancellation checks in AOT (2026-10-29)
+
+Retain the conservative AOT pass for consecutive cancellation checks with no successor PHIs. Unknown calls and writes invalidate the clear-sink proof; all polls, slow handling and diagnostics remain.
+
+Floating-loop accumulation improves 1.69% in the 32-workload screen (5.1333 to 5.0467 ns/item) and 2.29% in independent confirmation (5.1720 to 5.0537). The same-runtime disabled/enabled comparison improves 1.55% (5.1333 to 5.0537). This is a narrow kernel benefit; direct/simple and indirect calls gain no established additional speed.
+
+Optimized Release -O3 -DNDEBUG, allocation tracking off, LLVM 22.1.8 and qcc -O3 --strip-source. All comparisons retain identical frozen source paths, explicit RPATH and three symbol orders (default/reverse/shuffle-487). The screen uses 32 workloads, three forks per layout, three warmups and three measured 150 ms windows. Independent confirmation uses nine predeclared controls, original/disabled/enabled variants, three forks per layout and three warmups/three samples at 200 ms. Five adverse controls were selected after the screen, before seeing the nine-workload confirmation, and measured with the same confirmation settings. All 954 final processes and 2862 windows independently replay; every sample is retained. Values are medians of layout medians of process means, in whole-kernel ns/item.
+
+|!Workload|!Before ns/item|!After ns/item|!Time change
+|local:direct_call|1.5488|1.5467|-0.132%
+|local:method_call|1.6206|1.6246|+0.246%
+|local:polymorphic_call|24.0210|24.2067|+0.773%
+|local:boxed_int_method_fallback|34.0500|33.6774|-1.094%
+|local:boxed_float_method_fallback|34.5996|35.1044|+1.459%
+|local:boxed_int_method_effect|91.6997|94.2258|+2.755%
+|local:list_mutate|124.0702|123.5929|-0.385%
+|local:temporary_list|1.6525|1.6542|+0.103%
+|micro:polymorphic_call|85.5659|86.4088|+0.985%
+|micro:polymorphic_float_call|86.8273|86.9332|+0.122%
+|micro:boxed_int_method_call|112.0306|112.6391|+0.543%
+|micro:boxed_float_method_call|116.2966|115.6797|-0.530%
+|micro:boxed_int_method_fallback|123.2597|122.6708|-0.478%
+|micro:boxed_float_method_fallback|128.5923|128.0769|-0.401%
+|micro:boxed_int_method_effect|180.9130|181.8645|+0.526%
+|micro:indirect_call|8.7606|8.7814|+0.237%
+|micro:closure_call|18.7146|18.3929|-1.719%
+|micro:closure_capture|24.3138|24.2442|-0.286%
+|micro:list_read|2.9180|2.9487|+1.052%
+|micro:list_build|23.1505|23.2964|+0.630%
+|micro:list_mutate|124.7506|124.3420|-0.328%
+|micro:temporary_hash|1.6524|1.6507|-0.100%
+|float:callback_local_float_return|0.8746|0.8690|-0.637%
+|float:typed_local_int_unary|1.2098|1.2083|-0.120%
+|float:callback_loop_float_return|5.1333|5.0467|-1.686%
+|mixed:csv_report|953.1354|967.2016|+1.476%
+|mixed:object_orders|3405.3992|3366.9434|-1.129%
+|mixed:callback_pipeline|96.1259|95.2536|-0.907%
+|mixed:text_index|1386.7157|1383.7567|-0.213%
+|probe:object_short|1682.4211|1672.9625|-0.562%
+|probe:effect_short|1760.3113|1739.8949|-1.160%
+|probe:string_result_loop|555.6878|554.3739|-0.236%
+
+Independent confirmation; disabled and enabled share the identical final runtime:
+
+|!Workload|!Original ns/item|!Disabled ns/item|!Enabled ns/item|!Enabled/disabled time change
+|local:direct_call|1.5512|1.5591|1.5535|-0.357%
+|local:method_call|1.6291|1.6244|1.6271|+0.164%
+|local:polymorphic_call|24.3164|24.1218|23.9927|-0.535%
+|micro:indirect_call|9.0905|9.0050|8.6547|-3.889%
+|micro:closure_capture|24.8025|24.4345|24.3738|-0.248%
+|float:callback_local_float_return|0.8765|0.8639|0.8733|+1.081%
+|float:typed_local_int_unary|1.2130|1.2100|1.2153|+0.438%
+|float:callback_loop_float_return|5.1720|5.1333|5.0537|-1.550%
+|mixed:callback_pipeline|96.3098|95.6167|95.8131|+0.205%
+
+Adaptive adverse-control follow-up; disabled and enabled share the identical final runtime:
+
+|!Workload|!Original ns/item|!Disabled ns/item|!Enabled ns/item|!Enabled/disabled time change
+|local:boxed_int_method_effect|92.3540|91.6247|91.9299|+0.333%
+|mixed:csv_report|953.5996|956.7363|963.1806|+0.674%
+|micro:polymorphic_call|85.4269|85.5402|85.9244|+0.449%
+|micro:polymorphic_float_call|87.2907|87.4716|86.4704|-1.145%
+|micro:boxed_int_method_call|113.0382|111.4895|114.3668|+2.581%
+
+The former reverse indirect regression does not repeat: final confirmation is -1.23% versus original and -0.04% versus disabled, both overlapping ranges. Local effect time rises 2.75% in the screen but falls 0.46% in the adverse follow-up; the earlier separated default-layout cost does not repeat. CSV rises 1.48% and 1.00%, with all layout ranges overlapping; imported boxed-integer time rises 0.54% and 1.18% versus original, and 2.58% versus the disabled control in the follow-up, again with overlapping ranges. Preserve these possible costs without a neutrality or weighted application-speedup claim. No slower separated-range control in the screen repeats as a slower separated-range cell in its confirmation.
+
+The broad prototype improved floating-loop time by 4.13% in its screen and 5.18% against its same-runtime disabled control, but the reverse indirect layout repeatedly regressed (+10.22% versus original in the screen; +4.76% versus disabled in the diagnostic). It was not retained. A natural-loop-only gate missed the profitable region because LLVM had already unrolled it. The retained pass seeds facts only from cancellation checks and refuses successors with PHIs. All 155 micro and 151 local function bodies match the disabled control after dropping compiler metadata and accounting for startup-length arguments. Only four floating-loop workload bodies change per layout. The inspected direct-call native body is byte-identical in disassembly.
+
+Release and Debug each pass 32 fixtures: 56 QUnit cases/10371 assertions plus three silent fixtures. The new fixture includes 37 native proof cases. Debug also passes 3237 focused/4899 broader native checks (overlapping); all 391 Release aliases are restored. Final preparation validates 15180 reference outputs, 15 candidate LLVM modules and 45 actual artifact/runtime combinations. Every poll, slow handler and diagnostic update remains. A verifier initially rejected differing startup metadata lengths; it now validates those lengths against the corresponding constant arrays before normalizing only that argument. Failed receipts, the early atomic-load proof correction, and all 1008 processes/3024 windows from the broader prototype remain in the evidence.
+
+This is a narrow AOT compiler benefit requiring recompilation; interpreter/JIT execution is unchanged. Shared M4 Pro macOS host, without affinity, frequency or thermal control. No owned build, test, profile or heavy scan overlaps timing. Observed process ranges are not confidence intervals. No fresh Java/develop ratio, weighted application speedup, universal parity or global ceiling is claimed.
+
+[Complete evidence](results-clear-cancellation-sink-macos-arm64.json); [all 62 audit checks](audit-clear-cancellation-sink.md). Next merge develop and install the optimized runtime, then evaluate the redundant deferred-method sink check identified in actual native assembly.

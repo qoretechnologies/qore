@@ -50,6 +50,7 @@
 #include <llvm/Analysis/ValueTracking.h>
 #include <llvm/IR/CFG.h>
 #include <llvm/IR/Dominators.h>
+#include <llvm/IR/IntrinsicInst.h>
 
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
@@ -2141,6 +2142,313 @@ bool QoreIRToLLVM::selectInvariantFunctionRefs(llvm::Module& module, std::string
     }
     if (q_env_is_set("QORE_IR_OPT_STATS")) {
         fprintf(stderr, "IR-OPT-AOT-LLVM: invariant-funcref-calls=%zu\n", selected.size());
+    }
+    llvm::raw_string_ostream diagnostic(error);
+    return !llvm::verifyModule(module, &diagnostic);
+}
+
+namespace {
+
+// These are provenance tags, not LLVM memory attributes. Recognize the actual
+// post-optimization loads and predicates again; a dropped tag just loses an optimization.
+struct QoreClearSinkCheck {
+    llvm::BranchInst* branch = nullptr;
+    llvm::Argument* sink = nullptr;
+    std::vector<llvm::Instruction*> reads;
+};
+
+static bool qore_preserves_clear_sink(const llvm::Instruction& inst) {
+    if (auto* load = llvm::dyn_cast<llvm::LoadInst>(&inst)) {
+        // LLVM conservatively treats ordered loads as memory writes for some
+        // analyses. Polling is still a read: preserve its ordering and do not
+        // confuse the atomic flag read with an update of the exception sink.
+        return !load->isVolatile();
+    }
+    if (auto* store = llvm::dyn_cast<llvm::StoreInst>(&inst)) {
+        return !store->isVolatile() && !store->isAtomic()
+            && store->getMetadata("qore.runtime.location");
+    }
+    if (llvm::isa<llvm::CallBase>(inst)) {
+        // Even readonly external calls are unknown here. In particular, do not
+        // infer anything about runtime helpers from their names or attributes.
+        return llvm::isa<llvm::IntrinsicInst>(inst) && !inst.mayHaveSideEffects()
+            && !inst.mayReadOrWriteMemory();
+    }
+    return !inst.mayWriteToMemory();
+}
+
+static QoreClearSinkCheck qore_recognize_clear_sink_check(llvm::BasicBlock& block) {
+    QoreClearSinkCheck result;
+    auto* branch = llvm::dyn_cast<llvm::BranchInst>(block.getTerminator());
+    if (!branch || !branch->isConditional() || branch->getSuccessor(0) == branch->getSuccessor(1)) {
+        return result;
+    }
+    auto* either = llvm::dyn_cast<llvm::BinaryOperator>(branch->getCondition());
+    // Seed only from another cancellation checkpoint. Restoring the fact from
+    // ordinary post-call checks also rewrites dispatch loops, which did not
+    // provide a stable benefit. This is a conservative profitability boundary.
+    if (!either || either->getOpcode() != llvm::Instruction::Or || either->getParent() != &block
+            || !either->getMetadata("qore.cancel.sink")) {
+        return result;
+    }
+    llvm::LoadInst* head = nullptr;
+    llvm::LoadInst* thread_exit = nullptr;
+    std::vector<llvm::Instruction*> reads{branch, either};
+    for (llvm::Value* operand : either->operands()) {
+        auto* test = llvm::dyn_cast<llvm::ICmpInst>(operand);
+        if (!test || test->getPredicate() != llvm::CmpInst::ICMP_NE) {
+            return result;
+        }
+        auto* zero = llvm::dyn_cast<llvm::Constant>(test->getOperand(1));
+        auto* load = llvm::dyn_cast<llvm::LoadInst>(test->getOperand(0));
+        if (!zero || !zero->isNullValue() || !load || !load->isSimple()) {
+            return result;
+        }
+        if (load->getType()->isPointerTy() && !head) {
+            head = load;
+        } else if (load->getType()->isIntegerTy(8) && !thread_exit) {
+            thread_exit = load;
+        } else {
+            return result;
+        }
+        reads.push_back(test);
+        reads.push_back(load);
+    }
+    if (!head || !thread_exit) {
+        return result;
+    }
+    auto* priv = llvm::dyn_cast<llvm::LoadInst>(head->getPointerOperand());
+    auto* offset = llvm::dyn_cast<llvm::GetElementPtrInst>(thread_exit->getPointerOperand());
+    if (!priv || !priv->isSimple() || !priv->getMetadata("qore.xsink.priv")
+            || !offset || offset->getPointerOperand() != priv
+            || !offset->getSourceElementType()->isIntegerTy(8) || offset->getNumIndices() != 1) {
+        return result;
+    }
+    auto* index = llvm::dyn_cast<llvm::ConstantInt>(offset->getOperand(1));
+    auto* sink = llvm::dyn_cast<llvm::Argument>(priv->getPointerOperand()->stripPointerCasts());
+    if (!index || !index->equalsInt(20) || !sink || sink->getParent() != block.getParent()) {
+        return result;
+    }
+    reads.push_back(priv);
+    reads.push_back(offset);
+    // All three loads must be current, in this block. A call/store after any
+    // load would make even the nominal success edge insufficient evidence.
+    for (llvm::Instruction* inst : reads) {
+        if (inst->getParent() != &block) {
+            return result;
+        }
+    }
+    // A bounded reverse scan: the recognized DAG has eight instructions. This
+    // deliberately excludes checks with intervening unrelated instructions.
+    auto it = block.rbegin();
+    for (size_t i = 0; i < reads.size(); ++i, ++it) {
+        if (it == block.rend() || std::find(reads.begin(), reads.end(), &*it) == reads.end()) {
+            return result;
+        }
+    }
+    result.branch = branch;
+    result.sink = sink;
+    result.reads = std::move(reads);
+    return result;
+}
+
+} // namespace
+
+bool QoreIRToLLVM::bypassClearCancellationChecks(llvm::Module& module, std::string& error) {
+    if (q_env_is_set("QORE_DISABLE_LLVM_CLEAR_CANCEL_SINK")) {
+        return true;
+    }
+    size_t checked = 0, bypassed = 0;
+    auto cancelled = [&]() {
+        if (++checked % 100 == 0 && qore_check_cancel(nullptr, "LLVM cancellation sink analysis")) {
+            error = "cancelled during LLVM cancellation sink analysis";
+            return true;
+        }
+        return false;
+    };
+    std::vector<llvm::Function*> changed;
+    for (llvm::Function& function : module) {
+        if (cancelled()) {
+            return false;
+        }
+        if (function.isDeclaration()) {
+            continue;
+        }
+        llvm::DominatorTree dom(function);
+        std::unordered_map<llvm::BasicBlock*, QoreClearSinkCheck> checks;
+        std::vector<llvm::BasicBlock*> check_order;
+        std::unordered_set<llvm::BasicBlock*> dirty;
+        std::vector<llvm::BasicBlock*> work;
+        auto mark_dirty = [&](llvm::BasicBlock* block) {
+            if (dom.isReachableFromEntry(block) && dirty.insert(block).second) {
+                work.push_back(block);
+            }
+        };
+        llvm::Argument* sink = nullptr;
+        bool mixed_sinks = false;
+        mark_dirty(&function.getEntryBlock());
+        for (llvm::BasicBlock& block : function) {
+            if (cancelled()) {
+                return false;
+            }
+            if (!dom.isReachableFromEntry(&block)) {
+                continue;
+            }
+            auto check = qore_recognize_clear_sink_check(block);
+            if (check.branch) {
+                mixed_sinks |= sink && sink != check.sink;
+                sink = check.sink;
+                checks.emplace(&block, std::move(check));
+                check_order.push_back(&block);
+            }
+            for (llvm::Instruction& inst : block) {
+                if (cancelled()) {
+                    return false;
+                }
+                if (!qore_preserves_clear_sink(inst)) {
+                    mark_dirty(&block);
+                }
+            }
+        }
+        if (mixed_sinks || checks.empty()) {
+            continue;
+        }
+        // Descending must-analysis. Entry, unknown effects, and failure edges
+        // start dirty. Every block changes at most once, so loops are proved by
+        // induction from their real entry edges, in O(instructions + CFG edges).
+        for (auto* block : check_order) {
+            if (cancelled()) {
+                return false;
+            }
+            mark_dirty(checks.at(block).branch->getSuccessor(0));
+        }
+        for (size_t i = 0; i < work.size(); ++i) {
+            if (cancelled()) {
+                return false;
+            }
+            auto* block = work[i];
+            if (checks.count(block)) {
+                // The full, current predicate establishes a clear success
+                // edge independently of the block's incoming state/effects.
+                continue;
+            }
+            for (auto* successor : llvm::successors(block)) {
+                if (cancelled()) {
+                    return false;
+                }
+                mark_dirty(successor);
+            }
+        }
+        struct Bypass {
+            llvm::BranchInst* from;
+            unsigned edge;
+            llvm::BasicBlock* success;
+        };
+        std::vector<Bypass> rewrites;
+        std::unordered_set<llvm::BasicBlock*> selected_predecessors;
+        // Use source CFG order, not hash-table order, when choosing at most one
+        // rewritten edge per predecessor. This also makes generated code stable.
+        for (auto* block : check_order) {
+            if (cancelled()) {
+                return false;
+            }
+            auto& check = checks.at(block);
+            if (block->size() != check.reads.size()) {
+                continue;
+            }
+            // Bypass only a standalone, side-effect-free check. No definitions
+            // may escape it, including values reused by successor PHIs.
+            bool local = true;
+            for (auto* inst : check.reads) {
+                for (auto* user : inst->users()) {
+                    if (cancelled()) {
+                        return false;
+                    }
+                    auto* use = llvm::dyn_cast<llvm::Instruction>(user);
+                    if (!use || use->getParent() != block) {
+                        local = false;
+                        break;
+                    }
+                }
+                if (!local) {
+                    break;
+                }
+            }
+            if (!local) {
+                continue;
+            }
+            auto* success = check.branch->getSuccessor(1);
+            // Profitability: expanding loop-carried PHIs regressed a callback
+            // dispatch control. Keep those merges unchanged; unrolled arithmetic
+            // regions can bypass the check without adding any PHI inputs.
+            // This restriction never establishes a clear-sink fact.
+            if (!success->phis().empty()) {
+                continue;
+            }
+            for (auto* pred : llvm::predecessors(block)) {
+                if (cancelled()) {
+                    return false;
+                }
+                auto* branch = llvm::dyn_cast<llvm::BranchInst>(pred->getTerminator());
+                if (!branch || pred == block || pred == success || success == block
+                        || !dom.isReachableFromEntry(pred) || selected_predecessors.count(pred)) {
+                    continue;
+                }
+                unsigned edge = 0, matches = 0;
+                bool already_success = false;
+                for (unsigned i = 0; i < branch->getNumSuccessors(); ++i) {
+                    if (branch->getSuccessor(i) == block) {
+                        edge = i;
+                        ++matches;
+                    }
+                    already_success |= branch->getSuccessor(i) == success;
+                }
+                auto previous = checks.find(pred);
+                bool clear = previous == checks.end() ? !dirty.count(pred)
+                    : previous->second.branch->getSuccessor(1) == block;
+                if (!clear || matches != 1 || already_success) {
+                    continue;
+                }
+                rewrites.push_back({branch, edge, success});
+                selected_predecessors.insert(pred);
+            }
+        }
+        for (const auto& rewrite : rewrites) {
+            if (cancelled()) {
+                return false;
+            }
+            rewrite.from->setSuccessor(rewrite.edge, rewrite.success);
+            ++bypassed;
+        }
+        if (!rewrites.empty()) {
+            changed.push_back(&function);
+        }
+    }
+    // Fresh analyses after CFG edits, without another inlining/unrolling pass.
+    llvm::LoopAnalysisManager lam;
+    llvm::FunctionAnalysisManager fam;
+    llvm::CGSCCAnalysisManager cgam;
+    llvm::ModuleAnalysisManager mam;
+    llvm::PassBuilder pb;
+    pb.registerModuleAnalyses(mam);
+    pb.registerCGSCCAnalyses(cgam);
+    pb.registerFunctionAnalyses(fam);
+    pb.registerLoopAnalyses(lam);
+    pb.crossRegisterProxies(lam, fam, cgam, mam);
+    llvm::FunctionPassManager passes;
+    passes.addPass(llvm::InstCombinePass());
+    passes.addPass(llvm::SimplifyCFGPass());
+    passes.addPass(llvm::InstCombinePass());
+    checked = 0;
+    for (auto* function : changed) {
+        if (++checked % 10 == 0 && qore_check_cancel(nullptr, "LLVM cancellation sink simplification")) {
+            error = "cancelled during LLVM cancellation sink simplification";
+            return false;
+        }
+        passes.run(*function, fam);
+    }
+    if (q_env_is_set("QORE_IR_OPT_STATS")) {
+        fprintf(stderr, "IR-OPT-AOT-LLVM: clear-cancel-sink-edges=%zu\n", bypassed);
     }
     llvm::raw_string_ostream diagnostic(error);
     return !llvm::verifyModule(module, &diagnostic);
@@ -7638,18 +7946,25 @@ void QoreIRToLLVM::emitRuntimeLocationUpdate(const QoreIRInstruction* inst, llvm
     }
     last_runtime_line = inst->loc->start_line;
 
+    // Provenance only, not an LLVM alias or memory-effect promise. These slots are
+    // ThreadData's diagnostic fields, separate from every valid ExceptionSink.
+    auto store_location = [&](llvm::Value* value, llvm::Value* slot) {
+        auto* store = builder->CreateStore(value, slot);
+        store->setMetadata("qore.runtime.location", llvm::MDNode::get(ctx, {}));
+    };
+
     if (aot_mode) {
         // AOT mode: store the location that the image holds, inline, as the JIT stores the location pointer
-        builder->CreateStore(llvm::ConstantPointerNull::get(llvm::PointerType::getUnqual(ctx)), stmt_cache_ptr);
-        builder->CreateStore(getAotLocationConstant(inst->loc, module), loc_cache_ptr);
+        store_location(llvm::ConstantPointerNull::get(llvm::PointerType::getUnqual(ctx)), stmt_cache_ptr);
+        store_location(getAotLocationConstant(inst->loc, module), loc_cache_ptr);
     } else {
         // JIT mode: inline store of statement + location pointers
-        builder->CreateStore(llvm::ConstantPointerNull::get(llvm::PointerType::getUnqual(ctx)),
+        store_location(llvm::ConstantPointerNull::get(llvm::PointerType::getUnqual(ctx)),
             stmt_cache_ptr);
         llvm::Value* loc_val = builder->CreateIntToPtr(
             llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(inst->loc)),
             llvm::PointerType::getUnqual(ctx));
-        builder->CreateStore(loc_val, loc_cache_ptr);
+        store_location(loc_val, loc_cache_ptr);
     }
 }
 
@@ -12424,7 +12739,17 @@ void QoreIRToLLVM::emitCancellationCheck(llvm::Module& module, llvm::Function* l
             builder->CreateCall(check, {xsink_arg, label, loop_runtime_config});
         }
     }
+    auto* check_block = builder->GetInsertBlock();
     emitExceptionCheck(module, llvm_func, inst);
+    if (builder->GetInsertBlock() != check_block) {
+        if (auto* branch = llvm::dyn_cast<llvm::BranchInst>(check_block->getTerminator())) {
+            if (branch->isConditional()) {
+                if (auto* condition = llvm::dyn_cast<llvm::Instruction>(branch->getCondition())) {
+                    condition->setMetadata("qore.cancel.sink", llvm::MDNode::get(ctx, {}));
+                }
+            }
+        }
+    }
 }
 
 void QoreIRToLLVM::emitExceptionCheck(llvm::Module& module, llvm::Function* llvm_func,
@@ -12470,6 +12795,7 @@ void QoreIRToLLVM::emitExceptionCheck(llvm::Module& module, llvm::Function* llvm
 
     // Load priv pointer from xsink at offset 0
     auto* xsink_priv_ptr = builder->CreateLoad(ptr_type, xsink_arg, "xsink_priv_ptr");
+    xsink_priv_ptr->setMetadata("qore.xsink.priv", llvm::MDNode::get(ctx, {}));
 
     // Load head pointer from priv at offset 0
     auto* head_ptr = builder->CreateLoad(ptr_type, xsink_priv_ptr, "priv_head");

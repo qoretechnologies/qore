@@ -84,6 +84,13 @@ public:
     //! @return the number of calls removed
     static size_t pruneNoopDecrefs(llvm::Module& module);
 
+    //! Bypass cancellation sink checks on paths proved clear after LLVM inlining.
+    //! @param module optimized AOT module with compiler-authored sink-read provenance
+    //! @param error receives cancellation or LLVM-verification diagnostics
+    //! @return false on cancellation or invalid IR; no object may be emitted on failure
+    //! @note Retains every cancellation poll and slow-path check; unknown calls and writes revoke the proof.
+    static bool bypassClearCancellationChecks(llvm::Module& module, std::string& error);
+
     //! Guard immediate-scalar cleanup in AOT native callback/method callers after the main LLVM pipeline.
     //! @param module lowered module with finalized debug information
     //! @param error receives a cancellation or LLVM-verification diagnostic on failure

@@ -654,7 +654,8 @@ than skipping a poll. Thread-local addresses cannot outlive the acquiring
 thread's invocation or survive thread teardown/re-registration. The global
 counter's request-before-publication and clear-before-decrement ordering is
 unchanged. Pending requests are always rechecked by the full helper, and
-exception-sink checking remains after the merged fast/slow paths.
+exception-sink checking remains after the merged fast/slow paths except for the
+proven-clear AOT edges described below.
 
 Ordinary language loops still poll every iteration; fused internal loops keep
 their existing 100-element interval. `QORE_DISABLE_LLVM_INLINE_CANCEL_POLL`
@@ -662,6 +663,31 @@ retains helper calls for comparison, while
 `QORE_DISABLE_LLVM_CANCEL_RUNTIME_CONFIG` selects the original TLS entry.
 These are compilation controls. The interpreter and previously compiled AOT
 artifacts retain their existing cancellation paths.
+
+### Proven-clear AOT cancellation sink checks
+
+After the main LLVM optimization pipeline, AOT can bypass a redundant full sink
+predicate on an edge proved clear by an earlier cancellation checkpoint. It
+recognizes the actual private-pointer, exception-head and thread-exit loads,
+with compiler provenance and one function-argument sink. Entry, unknown calls,
+unknown writes and failure edges invalidate the fact. Only current full
+cancellation checks reestablish it; ordinary post-call checks do not seed this
+optimization. The forward must-analysis handles loops by induction from their
+real entry edges. Atomic polling reads preserve the fact without changing their
+ordering.
+
+Only a standalone check whose definitions do not escape can be bypassed. Its
+successor must have no PHIs; expanding loop merges did not give a stable
+performance tradeoff. ThreadData location stores are retained and recognized
+only through compiler-authored provenance. Checks on unproved entry paths,
+slow-helper checks, seq_cst thread/program polls, deferral behavior, source
+locations and checkpoint frequencies remain. No invariant-memory annotation or
+new alias assumption is introduced. Missing proof leaves the original CFG.
+
+`QORE_DISABLE_LLVM_CLEAR_CANCEL_SINK` retains the original checks for compilation
+comparisons. Interpreter/JIT execution and existing AOT artifacts are unchanged.
+See `bench/runtime-comparison/results-clear-cancellation-sink-macos-arm64.json`
+for the retained narrow transform, rejected broader prototype and measurements.
 
 ### `qore_cancel_thread()` Implementation
 
