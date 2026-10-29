@@ -80,7 +80,8 @@ module VscDebugAdapter {
       (<a href="https://github.com/qoretechnologies/qore/issues/5560">issue 5560</a>)
     - the \c stopOnEntry argument of a \c launch request is supported: with \c false, a launched program does not
       stop at its first statement, but only at a breakpoint, an exception or its end; it stops there when the
-      argument is \c true or not given, as before
+      argument is \c true or not given, as before; in either case the launched program runs only after the \c
+      configurationDone request, so breakpoints set during the configuration phase are always honored
 
     @subsection vda_v0_2
     - updated to use a Logger
@@ -535,12 +536,25 @@ vda.run();
                     if (event.func == "attach") {
                         m_programState{event.pgmid}.bootstrap.processFlag = 1;
                         m_programState{event.pgmid}.bootstrap.file = event.intrInfo.file;
+                        # The DAP protocol requires a launched program not to run until the client has finished the
+                        # configuration phase (set its breakpoints) and sent "configurationDone".  Hold the program
+                        # at this first bootstrap stop until then, so that it cannot run - and a short program
+                        # cannot finish and be removed - before a "setBreakpoints" request is handled against it.
+                        # vsc_configurationDone() resumes it.  If "configurationDone" has already been received, do
+                        # not hold: continue the bootstrap at once.  This is a race-free handshake in both
+                        # directions, as the request and event handling are serialized by m_lock.
+                        if (!m_programState{event.pgmid}.bootstrap.configurationDone) {
+                            m_programState{event.pgmid}.bootstrap.entryHold = event;
+                            return;
+                        }
                     } else if (m_programState{event.pgmid}.bootstrap.processFlag == 1 && event.file != m_programState{event.pgmid}.bootstrap.file) {
                         m_programState{event.pgmid}.bootstrap.processFlag = 2;
                         m_programState{event.pgmid}.bootstrap.frameCnt = event.framecnt-1;
                         # the first statement of the program: it stops there only with "stopOnEntry", which is
                         # true when it is not given; a breakpoint on the statement stops it in any case, and as the
-                        # thread arrives there by a step, the event does not give the breakpoint
+                        # thread arrives there by a step, the event does not give the breakpoint.  The program was
+                        # held at the attach stop until "configurationDone", so the client's breakpoints are
+                        # already created and the decision here is final.
                         if (m_programState{event.pgmid}.launchArgs.stopOnEntry === False && !exists event.bkptid
                             && !hasBreakpointOnStatement(event.pgmid, event.statementid)) {
                             vsc_continue(("threadId": event.tid));
@@ -949,6 +963,20 @@ vda.run();
     }
 
     public nothing vsc_configurationDone(*hash args) {
+        # the configuration phase has ended: the launched program held at its first bootstrap stop (see the
+        # attach handling in processEvents()) may now run.  Resume it if it is held; if it has not yet reached
+        # that stop, the recorded flag makes it continue at once when it does.  The request and event handling
+        # are serialized by m_lock, so the flag and the held event are set and read without a race.
+        if (m_currentPgmId && exists m_programState{m_currentPgmId}) {
+            m_programState{m_currentPgmId}.bootstrap.configurationDone = True;
+            if (exists m_programState{m_currentPgmId}.bootstrap.entryHold) {
+                hash<auto> held = remove m_programState{m_currentPgmId}.bootstrap.entryHold;
+                # resume the bootstrap from the attach stop, as the bootstrap stepping (case 1) would have; it
+                # steps to the program's first statement, where "stopOnEntry" and any created breakpoint are
+                # honoured
+                vsc_stepIn(("threadId": held.tid));
+            }
+        }
     }
 
     public hash vsc_threads(*hash args) {
