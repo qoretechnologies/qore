@@ -758,6 +758,14 @@ public:
     */
     DLLLOCAL void customDeref(ExceptionSink* xsink, bool real);
 
+    //! Completes a release that requires final-reference or recursive-set processing.
+    /** @param xsink receives destructor exceptions
+        @param real whether the released reference is a real reference
+        @param released_last true when tryFastDeref() already consumed the last reference
+        @note Kept out of line so successful fast releases do not allocate the cleanup frame.
+    */
+    DLLLOCAL __attribute__((noinline)) void customDerefSlow(ExceptionSink* xsink, bool real, bool released_last);
+
     //! Runs the destructor and releases the object's data; see RObject::deleteOrDefer()
     DLLLOCAL virtual void deleteNow(ExceptionSink* xsink) {
         doDeleteIntern(xsink);

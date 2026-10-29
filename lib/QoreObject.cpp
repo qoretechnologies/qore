@@ -1687,6 +1687,11 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
         return;
     }
 
+    customDerefSlow(xsink, real, !fast);
+}
+
+void qore_object_private::customDerefSlow(ExceptionSink* xsink, bool real, bool released_last) {
+
     // Keep this object ALLOCATED for the duration of the call.
     //
     // A scan started here holds references on the graph it walks and releases them when it ends
@@ -1706,7 +1711,7 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
 
     {
         // if the fast path released the last reference, the helper only registers this dereference in progress
-        robject_dereference_helper qodh(this, real, !fast);
+        robject_dereference_helper qodh(this, real, released_last);
         int ref_copy = qodh.getRefs();
 
         // in case this is the last reference (even in recursive cases), ref_copy will remain equal to references throughout this code

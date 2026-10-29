@@ -5869,3 +5869,57 @@ Release: 110 executed QUnit cases/12841 assertions, 12 runtime skips; Debug: 113
 See [integration evidence](../bench/runtime-comparison/results-post-program-id-merge-macos-arm64.json) and the [complete audit](../bench/runtime-comparison/audit-post-program-id-merge.md). Oracle database-dependent checks are explicitly skipped without a connection; no live query-plan result is claimed. The class-local release measurements remain premerge results, with no fresh Java/develop ratio here.
 
 After the requested optimized installation, the next experiment separates the object-release slow path so successful releases need not allocate its large stack frame. Actual optimized assembly shows six saved register pairs, 912 additional stack bytes and a stack canary before the fast-release test. This is a hypothesis to measure; TLS hazard-context passing remains a separate lifetime-sensitive candidate.
+
+
+## Object-release slow-body outlining (2026-10-29)
+
+The ordinary object-release entry now handles diagnostics and the canonical fast release before entering a separate noinline cleanup helper. The helper retains the exact weak-allocation guard, recursive-set processing, locks, destructor ordering and exception handling. An explicit bool carries the already-released-last result, avoiding a repeated decrement. No refcount/hazard algorithm, object layout, AOT symbol signature or runtime identity changes. Compatible existing AOT artifacts benefit from the runtime upgrade; other execution modes share this runtime path but their gains are not measured here.
+
+On this optimized Apple M4 Pro build, the successful-release stack frame falls from 1008 to 48 bytes. The slow path retains its 1008-byte frame and is reached by a tail branch. The compiler may inline the small wrapper; that decision remains enabled in the retained version.
+
+The 33-workload screen uses 3 forks and the confirmation 5 forks per each of three link layouts. All 594/990 processes and 4752 measured windows replay independently, using identical O3 artifacts and frozen runtimes. Values below are whole-kernel ns/item; negative time change means faster. Before is the merged branch c735fd76a8, not pure develop.
+
+|!Workload|!Before ns/item|!Retained ns/item|!Screen time change|!Confirmation time change
+|local:direct_call|1.5136|1.5109|-0.71%|-0.18%
+|local:method_call|1.5697|1.5554|-0.61%|-0.91%
+|local:polymorphic_call|22.7711|21.3084|-4.49%|-6.42%
+|local:polymorphic_float_call|22.5236|21.7183|-4.30%|-3.58%
+|local:boxed_int_method_fallback|32.0834|32.7984|+2.35%|+2.23%
+|local:boxed_float_method_fallback|34.7663|33.9481|-2.46%|-2.35%
+|local:boxed_int_method_effect|88.7397|89.5435|+0.37%|+0.91%
+|local:list_mutate|119.1616|118.6075|+0.09%|-0.46%
+|local:temporary_list|1.5976|1.5890|-0.61%|-0.54%
+|micro:polymorphic_call|81.6590|80.9551|-1.51%|-0.86%
+|micro:polymorphic_float_call|83.3265|82.0476|-0.67%|-1.53%
+|micro:boxed_int_method_call|105.1260|104.9044|-0.92%|-0.21%
+|micro:boxed_float_method_call|112.6019|110.5392|-0.99%|-1.83%
+|micro:boxed_int_method_fallback|117.1491|117.8624|-1.07%|+0.61%
+|micro:boxed_float_method_fallback|123.6947|122.9297|-0.83%|-0.62%
+|micro:boxed_int_method_effect|173.1315|171.7911|+0.57%|-0.77%
+|micro:indirect_call|8.3453|8.5102|+0.51%|+1.98%
+|micro:closure_call|17.9393|17.8330|+3.30%|-0.59%
+|micro:closure_capture|23.3157|23.6800|-0.43%|+1.56%
+|micro:list_read|2.8203|2.8173|-0.26%|-0.11%
+|micro:list_build|23.0907|21.9532|-5.14%|-4.93%
+|micro:list_mutate|118.7450|118.1417|-0.33%|-0.51%
+|micro:temporary_hash|1.6022|1.5941|-0.56%|-0.51%
+|float:callback_local_float_return|0.8342|0.8332|-0.81%|-0.12%
+|float:typed_local_int_unary|1.1654|1.1565|-0.46%|-0.76%
+|float:callback_loop_float_return|4.8398|4.8660|+0.03%|+0.54%
+|mixed:csv_report|911.1886|909.1423|-0.46%|-0.22%
+|mixed:object_orders|3078.5413|3115.1394|+2.56%|+1.19%
+|mixed:callback_pipeline|91.4636|91.7313|+0.42%|+0.29%
+|mixed:text_index|1315.7415|1324.0531|-0.47%|+0.63%
+|probe:object_short|1603.2651|1593.5721|+0.36%|-0.60%
+|probe:effect_short|1664.1896|1666.5668|-0.24%|+0.14%
+|probe:string_result_loop|522.3263|521.6197|-1.60%|-0.14%
+
+The narrow gains are retained under the authorized broader-tradeoff evaluation. Same-Program integer/float polymorphic calls improve in both full campaigns; list building also improves. The boxed integer fallback regression repeats in all layouts, and object-orders has a smaller aggregate regression with mixed layout directions. No weighted application benefit is inferred. The initial plain-closure slowdown does not repeat in confirmation.
+
+A separate variant also marked the small wrapper noinline. In a 270-process interleaved comparison, its boxed-fallback aggregate improves relative to the first candidate, but local integer/float polymorphic calls are 1.08%/1.68% slower, list building 2.07% slower and object-orders 1.00% slower than the retained candidate. It is rejected at the predeclared early screen; no broad performance claim is made for it. A server restart interrupted the first attempt after 120 of 270 jobs. That incomplete campaign is preserved and excluded in full; the complete retry is independently verified.
+
+Retained v1 Release and Debug each pass 20 fixtures: 45 QUnit cases/6807 assertions plus 2 silent fixtures. Native Debug passes 3770 focused and 5435 broader assertions (overlapping), with tracing, lock counters, three deterministic collection races and compiled concurrent references. Both optimized runtimes pass 9108 reference outputs against 15 identical artifacts. V2 separately passes 13662 references and eight focused fixtures per tree (23 cases/343 assertions), plus native/race controls. Restoring v1 produces byte-identical Release qore/qcc/libqore binaries. Debug byte identity failed despite exact production source restoration, so the complete Debug qualification was rerun successfully on the current binaries. No old Debug binary equivalence is claimed. All 391 Release qmod aliases remain intact.
+
+See the [complete evidence](../bench/runtime-comparison/results-aot-release-outlining-macos-arm64.json) and [62-check audit](../bench/runtime-comparison/audit-aot-release-outlining.md). Shared-host conditions remain uncontrolled; observed ranges are not confidence intervals. There is no new Java/develop ratio or maximum-performance claim.
+
+The next distinct experiment can pass the already available same-thread RuntimeConfig view to a versioned AOT cleanup helper, avoiding reacquisition of hazard context through TLS. It must preserve canonical registration/unregistration, teardown fallback, TID reuse and the shared release algorithm. ThreadData existence alone does not prove an active hazard slot. This remains research, with no implemented or measured saving yet.
