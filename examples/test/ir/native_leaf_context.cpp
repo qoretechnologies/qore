@@ -561,6 +561,53 @@ static void checkPrivateForwardReceivers(QoreProgram* program) {
     }
 }
 
+// A pending exception or thread exit must prevent both scalar ABI variants from
+// entering the warmed native target, without touching the boxed fallback result.
+template <typename Scalar>
+static void checkPendingMethodSink(QoreAOTContext* ctx, int slot, QoreValue receiver, Scalar arg,
+        RuntimeConfig* rc) {
+    enum class Pending { Exception, ThreadExit, Both };
+    QoreProgram* caller = qore_get_call_program_context();
+    QoreObject* object = rc->getObject();
+    const auto* cls = rc->getClass();
+    for (Pending pending : {Pending::Exception, Pending::ThreadExit, Pending::Both}) {
+        for (bool fallback_abi : {false, true}) {
+            ExceptionSink xsink;
+            if (pending != Pending::ThreadExit) {
+                xsink.raiseException("NATIVE-METHOD-PENDING", "pre-existing method exception");
+            }
+            if (pending != Pending::Exception) {
+                xsink.raiseThreadExit();
+            }
+            Scalar result = -123;
+            const uint64_t sentinel = QoreValue(true).rawBits();
+            uint64_t boxed = sentinel;
+            int handled;
+            if constexpr (std::is_same_v<Scalar, double>) {
+                handled = fallback_abi
+                    ? qore_rt_try_method_float_unary_v2(ctx, slot, receiver.rawBits(), arg, &result,
+                        &boxed, &xsink, rc)
+                    : qore_rt_try_method_float_unary_v1(ctx, slot, receiver.rawBits(), arg, &result, &xsink, rc);
+            } else {
+                handled = fallback_abi
+                    ? qore_rt_try_method_int_unary_v2(ctx, slot, receiver.rawBits(), arg, &result,
+                        &boxed, &xsink, rc)
+                    : qore_rt_try_method_int_unary_v1(ctx, slot, receiver.rawBits(), arg, &result, &xsink, rc);
+            }
+            assert(handled == 1 && result == 0 && boxed == sentinel);
+            assert(xsink.isException() == (pending != Pending::ThreadExit));
+            assert(xsink.isThreadExit() == (pending != Pending::Exception));
+            if (xsink.isException()) {
+                assert(xsink.getExceptionErr().get<const QoreStringNode>()->equal("NATIVE-METHOD-PENDING"));
+                assert(xsink.getExceptionDesc().get<const QoreStringNode>()->equal("pre-existing method exception"));
+            }
+            assert(qore_get_call_program_context() == caller);
+            assert(rc->getObject() == object && rc->getClass() == cls);
+            xsink.clear();
+        }
+    }
+}
+
 // Exercise the receiver gate itself after the ordinary caller has populated its
 // real PIC. Successful strong/opaque calls must actually use the continuation;
 // rejected representations must leave result, exception and context untouched.
@@ -681,6 +728,10 @@ static void checkMethodReceivers(QoreProgram* program, const char* caller_name) 
     ValueHolder opaque(QoreValue::makeOpaqueObject(object->get<QoreObject>()), &xsink);
     assert(opaque->isOpaqueObject() && opaque->isPointer());
     check(*opaque, true);
+    if (std::strcmp(caller_name, "nativeForwardMethodProbe")) {
+        checkPendingMethodSink(ctx, slot, *object, int64_t{7}, rc);
+        checkPendingMethodSink(ctx, slot, *opaque, int64_t{7}, rc);
+    }
     uint64_t weak_bits = qore_rt_make_weak_value(object->rawBits(), &xsink);
     assert(!xsink);
     QoreValue weak_value;
@@ -998,12 +1049,8 @@ static void checkFloatMethodReceivers(QoreProgram* program, const char* caller_n
     call(*object, 1.25, false, -123.0);
     ctx->native_float_unary_method_entry_v2.store(saved_v2, std::memory_order_release);
     ctx->native_float_unary_method_entry_v3.store(saved_v3, std::memory_order_release);
-    xsink.raiseException("FLOAT-METHOD-PENDING", "pre-existing exception");
-    double pending_result = -123.0;
-    assert(qore_rt_try_method_float_unary_v1(caller_ctx, slot, object->rawBits(), 1.25,
-        &pending_result, &xsink, rc) == 1);
-    assert(pending_result == 0.0 && xsink.getExceptionErr().get<const QoreStringNode>()->equal("FLOAT-METHOD-PENDING"));
-    xsink.clear();
+    checkPendingMethodSink(caller_ctx, slot, *object, 1.25, rc);
+    checkPendingMethodSink(caller_ctx, slot, *opaque, 1.25, rc);
     call(*object, 1.25, true, 1.75);
     ValueHolder snapshot(program->callFunction("makeFloatIdentityProbe", nullptr, &xsink), &xsink);
     assert(!xsink && snapshot->getType() == NT_OBJECT);

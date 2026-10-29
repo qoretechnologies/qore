@@ -29429,3 +29429,52 @@ Develop 9fd78f4803 is integrated with the retained AOT cancellation-sink optimiz
 Release: 112 executed cases, 14 Debug-only skips, 4710 assertions; Debug: 126 cases, 0 skips, 6384 assertions; one additional silent fixture each. Native Debug: 3395 focused and 5057 broader assertions (overlapping). All391 Release aliases restored.
 
 The new asynchronous fixture's child Programs explicitly select their requested execution mode; child exit codes, module form, native compilation after module initialization, and a third repeated result are checked. Earlier failed coverage checks are retained in the [integration evidence](results-post-clean-sink-merge-macos-arm64.json), alongside the [complete audit](audit-post-clean-sink-merge.md). These are correctness results, not new timings or updated Java/develop ratios. The next runtime-only experiment will measure the redundant native-method sink check against the merged optimized build.
+
+
+## Redundant native-method sink check rejected (2026-10-29)
+
+The merged optimized baseline is 6c2228b28f, including develop 9fd78f4803. Removing the second exception/thread-exit check after non-fallible deferred scalar-method frame publication reduces the integer-v1, floating-v1 and floating-v2 wrappers by five static instructions and integer-v2 by six. The initial event check, stack guard, eager-context check, all live admission guards and reader-safe frame restoration remain. No target speedup is established, so the runtime change is rejected.
+
+Same-Program polymorphic time is 24.4386 to 24.4580 ns/item (+0.08%), with overlapping observed process ranges in all three layouts. All 576 processes/1728 windows replay independently. Both optimized runtime variants run the same 15 source-stripped AOT artifacts: three fixed layouts, three forks, three warmup and three measured 150 ms windows, 4096 items and seed 7. Values below are medians of the layout medians of fork means; they measure whole kernels, not isolated call latency.
+
+|!Workload|!Before ns/item|!Rejected candidate ns/item|!Time change
+|local:direct_call|1.5489|1.5694|+1.323%
+|local:method_call|1.6311|1.6273|-0.228%
+|local:polymorphic_call|24.4386|24.4580|+0.080%
+|local:boxed_int_method_fallback|34.2438|34.5090|+0.774%
+|local:boxed_float_method_fallback|36.7846|35.8382|-2.573%
+|local:boxed_int_method_effect|94.1152|92.7650|-1.435%
+|local:list_mutate|123.0550|125.0779|+1.644%
+|local:temporary_list|1.6498|1.6569|+0.431%
+|micro:polymorphic_call|86.2306|86.3158|+0.099%
+|micro:polymorphic_float_call|87.1279|87.4364|+0.354%
+|micro:boxed_int_method_call|111.4253|115.2500|+3.433%
+|micro:boxed_float_method_call|117.6808|117.1302|-0.468%
+|micro:boxed_int_method_fallback|123.1340|124.2068|+0.871%
+|micro:boxed_float_method_fallback|127.1640|128.1825|+0.801%
+|micro:boxed_int_method_effect|182.8230|182.2352|-0.321%
+|micro:indirect_call|8.9983|8.7441|-2.825%
+|micro:closure_call|18.6154|18.6891|+0.396%
+|micro:closure_capture|24.3454|24.3122|-0.137%
+|micro:list_read|2.9234|2.9432|+0.677%
+|micro:list_build|23.2251|23.2609|+0.154%
+|micro:list_mutate|125.2247|127.6988|+1.976%
+|micro:temporary_hash|1.6468|1.6539|+0.433%
+|float:callback_local_float_return|0.8761|0.8722|-0.453%
+|float:typed_local_int_unary|1.2021|1.2094|+0.601%
+|float:callback_loop_float_return|5.0520|5.0821|+0.596%
+|mixed:csv_report|961.8424|962.3273|+0.050%
+|mixed:object_orders|3341.5293|3367.7128|+0.784%
+|mixed:callback_pipeline|97.4859|96.5493|-0.961%
+|mixed:text_index|1368.1764|1398.5404|+2.219%
+|probe:object_short|1691.2583|1679.9094|-0.671%
+|probe:effect_short|1772.5772|1751.7324|-1.176%
+|probe:string_result_loop|557.6204|563.0318|+0.970%
+
+The target ranges overlap in every layout. Some unrelated controls improve and others worsen; imported boxed integer calls rise 3.43%, imported list mutation 1.98%, and text indexing 2.22% in aggregate. No confirmation was run because the target screen showed no useful gain. These are unconfirmed control observations, not claims of repeatable regressions or global neutrality. Shared-host frequency, thermal state and unrelated load are uncontrolled; observed ranges are not confidence intervals.
+
+Baseline-positive regression controls remain: pre-existing exception, thread exit, and both together prevent integer/floating v1/v2 native entry for strong and opaque receivers, preserving boxed result and caller/object/class state. Candidate Release/Debug each pass 15 fixtures (31 QUnit cases/6483 assertions plus 2 silent); Debug native 3395 focused/5057 broader checks overlap. Both frozen runtimes pass 9108 reference outputs total. The restored Release qore/qcc/libqore are byte-identical to the baseline; restored Debug passes the pending-event fixture (1 case/652 assertions). All 391 Release aliases are verified. The installed system remains 6c2228b28f, already installed with `sudo make install && copy-qore-modules` and ready for external module rebuilds.
+
+No production speedup, fresh Java/develop ratio, universal parity or performance ceiling is claimed. Next investigate receiver-local ownership bookkeeping while preserving runtime slot ownership, custom reference handlers, real-reference/cycle-collection semantics, and destructor ordering on normal and exceptional exits.
+
+[Complete evidence](results-native-method-sink-rejected-macos-arm64.json); [all 62 audit checks](audit-native-method-sink-rejected.md).
