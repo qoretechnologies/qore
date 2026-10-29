@@ -3624,6 +3624,10 @@ while (*binary chunk = input.read(65536)) {
     - @ref oraclesqlutilbaseintro "OracleSqlUtilBase" module
       - fixed modifying a column named like a clause of <tt>ALTER TABLE ... MODIFY</tt>, such as \c scope, in
         table alignment, which failed with \c ORA-03050
+      - a date value compared with a \c DATE or \c TIMESTAMP column in a where clause or a comparison expression
+        is bound in the column's type, so that an index on the column can be used; before, the column was converted
+        to the type of the bound value, so a query such as a page of rows after a date key read the whole index or
+        table (<a href="https://github.com/qoretechnologies/qore/issues/5563">issue 5563</a>)
 
     - @ref pgsqlsqlutilbaseintro "PgsqlSqlUtilBase" module
       - tables, sequences, and materialized views are listed only from the schemas of the connection's

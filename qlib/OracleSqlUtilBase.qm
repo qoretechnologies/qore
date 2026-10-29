@@ -119,6 +119,48 @@ ds.vselectRows("select * from schema.table where type = %v order by type offset 
     There universal collections are limited to 32767 elements. And \c SYS.ODCIVARCHAR2LIST element size is
     \c VARCHAR2(4000).
 
+    @subsection ora_date_comparisons Date Comparisons on Oracle
+
+    The Oracle driver binds a Qore date value as a \c TIMESTAMP \c WITH \c TIME \c ZONE.  When such a value is
+    compared with a \c DATE or \c TIMESTAMP column, Oracle converts the column to the type of the value, so an index
+    on the column cannot be used for a range of values, and a query such as a page of rows after a key value reads
+    the whole index or table.
+
+    In a where clause, and in a comparison expression of a column with a value, the %OracleSqlUtilBase module binds a
+    date value compared with a \c DATE or \c TIMESTAMP column in the column's type, so that its index can be used:
+
+    |!Column Type|!Bound As
+    |\c DATE|<tt>cast(\%v as date)</tt>
+    |\c TIMESTAMP, \c TIMESTAMP(n)|<tt>cast(\%v as timestamp)</tt>
+
+    For example, the following query on a table whose \c created column is a \c DATE:
+    @code{.py}
+list<hash<auto>> l = table.selectRows({"where": {"created": op_gt(2026-03-01T10:00:00)}});
+    @endcode
+
+    Results in the equivalent of the following SQL:
+    @code{.py}
+list<hash<auto>> l = ds.selectRows("select * from schema.table where created > cast(%v as date)",
+    2026-03-01T10:00:00);
+    @endcode
+
+    This applies to the @ref SqlUtil::op_lt() "op_lt()", @ref SqlUtil::op_le() "op_le()",
+    @ref SqlUtil::op_gt() "op_gt()", @ref SqlUtil::op_ge() "op_ge()", @ref SqlUtil::op_eq() "op_eq()",
+    @ref SqlUtil::op_ne() "op_ne()" and @ref SqlUtil::op_between() "op_between()" operators, a date given as the
+    value of a column in a where clause, and the corresponding comparison expressions.  The result of each comparison
+    is the same as before:
+    - a \c DATE has whole seconds, so a value with fractional seconds is compared as the whole second that gives the
+      same result: the second before the value for \c > and \c <=, and the second after it for \c >= and \c <;
+      for \c = and \c !=, which a \c DATE cannot satisfy with such a value, the value is bound as before
+    - a \c TIMESTAMP keeps the microseconds of the value
+    - the value is bound in the time zone of the connection, as before, so the cast gives the same date and time as
+      the comparison with the time zone
+
+    A relative date, a value of another type, a column of another type, and a \c TIMESTAMP \c WITH \c TIME
+    \c ZONE or \c TIMESTAMP \c WITH \c LOCAL \c TIME \c ZONE column are compared as before; a
+    \c TIMESTAMP \c WITH \c TIME \c ZONE value is compared in UTC, so an index on such a column cannot be used for a
+    range of values in any case.
+
     @subsection ora_partitioning_select Partition Support in Selects
 
     The generic @ref SqlUtil::AbstractTable::SelectOptions "select options" define the \c "partition" key;
@@ -328,6 +370,12 @@ hash schema = (
     @section ora_relnotes Release Notes
 
     @subsection oracle17 OracleSqlUtilBase v1.7
+    - a date value compared with a \c DATE or \c TIMESTAMP column in a where clause or a comparison expression is
+      bound in the column's type, so that an index on the column can be used; before, Oracle converted the column to
+      the \c TIMESTAMP \c WITH \c TIME \c ZONE type of the bound value, which prevented an index range scan and
+      made a query such as a page of rows after a date key read the whole index or table; the results of the
+      comparisons do not change (<a href="https://github.com/qoretechnologies/qore/issues/5563">issue 5563</a>);
+      see @ref ora_date_comparisons
     - names that are not ordinary identifiers, such as table or column names from files or data providers with
       spaces, quotes, semicolons or comment markers, are quoted in all generated SQL, so a name can no longer change
       the SQL statement that it is part of; such a name is quoted in upper case, as Oracle stores an unquoted name,
@@ -2647,6 +2695,31 @@ public class OracleTable inherits SqlUtil::AbstractTable {
         const ForUpdatePageJoin = " where " + ForUpdatePageTableAlias + ".rowid = " + ForUpdatePageViewAlias + "."
             + ForUpdatePageRowidColumn + " order by ";
 
+        #! The SQL operators of the comparisons in which a date value is bound in the type of a \c DATE or \c TIMESTAMP column
+        /** @see @ref ora_date_comparisons
+
+            @since OracleSqlUtilBase 1.7
+        */
+        const DateComparisonSqlOps = {
+            OP_LT: "<",
+            OP_LE: "<=",
+            OP_GT: ">",
+            OP_GE: ">=",
+            OP_EQ: "=",
+            OP_NE: "!=",
+            OP_BETWEEN: "between",
+        };
+
+        #! The comparison operators that give the same result with their arguments exchanged
+        /** @since OracleSqlUtilBase 1.7
+        */
+        const ReverseDateComparisonOps = {
+            OP_LT: OP_GT,
+            OP_LE: OP_GE,
+            OP_GT: OP_LT,
+            OP_GE: OP_LE,
+        };
+
         #! maps oracle type names to type descriptions
         const OraTypeMap = {
             "number": ("qore": Type::Number, "size": SZ_NUM, "size_range": (1, 38), "scale_range": (-84, 127)),
@@ -3027,6 +3100,55 @@ public class OracleTable inherits SqlUtil::AbstractTable {
                     }
                     # for timestamps
                     return sprintf("cast (%s as date)", exp0);
+                },
+            },
+            # a date value compared with a DATE or TIMESTAMP column is bound in the column's type
+            OP_LT: DefaultExpressionMap{OP_LT} + {
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    return info.table.getDateColumnComparisonExpression(\info, OP_LT, args)
+                        ?? DefaultExpressionMap{OP_LT}.code(\info, role, args);
+                },
+            },
+            # a date value compared with a DATE or TIMESTAMP column is bound in the column's type
+            OP_LE: DefaultExpressionMap{OP_LE} + {
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    return info.table.getDateColumnComparisonExpression(\info, OP_LE, args)
+                        ?? DefaultExpressionMap{OP_LE}.code(\info, role, args);
+                },
+            },
+            # a date value compared with a DATE or TIMESTAMP column is bound in the column's type
+            OP_GT: DefaultExpressionMap{OP_GT} + {
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    return info.table.getDateColumnComparisonExpression(\info, OP_GT, args)
+                        ?? DefaultExpressionMap{OP_GT}.code(\info, role, args);
+                },
+            },
+            # a date value compared with a DATE or TIMESTAMP column is bound in the column's type
+            OP_GE: DefaultExpressionMap{OP_GE} + {
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    return info.table.getDateColumnComparisonExpression(\info, OP_GE, args)
+                        ?? DefaultExpressionMap{OP_GE}.code(\info, role, args);
+                },
+            },
+            # a date value compared with a DATE or TIMESTAMP column is bound in the column's type
+            OP_EQ: DefaultExpressionMap{OP_EQ} + {
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    return info.table.getDateColumnComparisonExpression(\info, OP_EQ, args)
+                        ?? DefaultExpressionMap{OP_EQ}.code(\info, role, args);
+                },
+            },
+            # a date value compared with a DATE or TIMESTAMP column is bound in the column's type
+            OP_NE: DefaultExpressionMap{OP_NE} + {
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    return info.table.getDateColumnComparisonExpression(\info, OP_NE, args)
+                        ?? DefaultExpressionMap{OP_NE}.code(\info, role, args);
+                },
+            },
+            # a date value compared with a DATE or TIMESTAMP column is bound in the column's type
+            OP_BETWEEN: DefaultExpressionMap{OP_BETWEEN} + {
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    return info.table.getDateColumnComparisonExpression(\info, OP_BETWEEN, args)
+                        ?? DefaultExpressionMap{OP_BETWEEN}.code(\info, role, args);
                 },
             },
             OP_IN: {
@@ -5048,6 +5170,131 @@ group by p.index_name", schema.upr(), name.upr());
     #! returns a hash of valid pseudocolumns
     private *hash<auto> getPseudoColumnHash() {
         return OraclePseudoColumnHash;
+    }
+
+    #! Returns the SQL comparing a \c DATE or \c TIMESTAMP column with a date value in an expression
+    /** The value is bound in the column's type, so that an index on the column can be used; see
+        @ref ora_date_comparisons
+
+        @param info the query information; a value bound in the returned SQL is appended to \c info.args
+        @param op the operator code: @ref SqlUtil::OP_LT "OP_LT", @ref SqlUtil::OP_LE "OP_LE",
+        @ref SqlUtil::OP_GT "OP_GT", @ref SqlUtil::OP_GE "OP_GE", @ref SqlUtil::OP_EQ "OP_EQ",
+        @ref SqlUtil::OP_NE "OP_NE" or @ref SqlUtil::OP_BETWEEN "OP_BETWEEN"
+        @param args the arguments of the operator
+
+        @return the SQL of the comparison, or @ref nothing if the arguments are not a \c DATE or \c TIMESTAMP column
+        and a date value that can be bound in the column's type, in which case the generic comparison is used
+
+        @note this method is called by the comparison operators of the expression map; it is not meant to be called
+        directly
+
+        @since OracleSqlUtilBase 1.7
+    */
+    *string getDateColumnComparisonExpression(reference<hash<QueryInfo>> info, string op, list<auto> args) {
+        if (!(args[0] instanceof hash<DataProviderFieldReference>)) {
+            # a value compared with a column is compared as the column with the value
+            if (op == OP_BETWEEN || !(args[1] instanceof hash<DataProviderFieldReference>)) {
+                return;
+            }
+            op = ReverseDateComparisonOps{op} ?? op;
+            args = (args[1], args[0]);
+        }
+        string column_name = args[0].field;
+        return getDateComparisonIntern(\info, getColumnNameIntern(info, column_name), column_name, NOTHING, op,
+            op == OP_BETWEEN ? (args[1], args[2]) : args[1]);
+    }
+
+    #! Returns the SQL comparing a \c DATE or \c TIMESTAMP column with a date value in a where clause
+    /** The value is bound in the column's type, so that an index on the column can be used; see
+        @ref ora_date_comparisons
+
+        @since OracleSqlUtilBase 1.7
+    */
+    private *string getWhereColumnComparisonIntern(reference<hash<QueryInfo>> info, string cn, string column_name,
+            *string cprefix, string op, auto arg) {
+        *string sql = getDateComparisonIntern(\info, cn, column_name, cprefix, op, arg);
+        # op_ne() is also true for a null column
+        return (sql && op == OP_NE) ? sprintf("(%s or %s is null)", sql, cn) : sql;
+    }
+
+    # Returns the SQL comparing a DATE or TIMESTAMP column with date values bound in the column's type, or NOTHING if
+    # the column or a value does not allow it
+    private *string getDateComparisonIntern(reference<hash<QueryInfo>> info, string cn, string column_name,
+            *string cprefix, string op, auto arg) {
+        *string sql_op = DateComparisonSqlOps{op};
+        # look up the column only for a comparison with a date
+        if (!sql_op || (op == OP_BETWEEN ? arg[0] : arg).typeCode() != NT_DATE) {
+            return;
+        }
+        *string cast_type = getDateCastType(getWhereColumnIntern(info, column_name, cprefix));
+        if (!cast_type) {
+            return;
+        }
+        string bind = sprintf("cast(%%v as %s)", cast_type);
+        if (op == OP_BETWEEN) {
+            if (arg.typeCode() != NT_LIST || arg.size() != 2) {
+                return;
+            }
+            # the range of whole seconds in the range of the values
+            *date v0 = getDateBindValue(cast_type, OP_GE, arg[0]);
+            *date v1 = getDateBindValue(cast_type, OP_LE, arg[1]);
+            if (!exists v0 || !exists v1) {
+                return;
+            }
+            info.args += v0;
+            info.args += v1;
+            return sprintf("%s between %s and %s", cn, bind, bind);
+        }
+        *date v = getDateBindValue(cast_type, op, arg);
+        if (!exists v) {
+            return;
+        }
+        info.args += v;
+        return sprintf("%s %s %s", cn, sql_op, bind);
+    }
+
+    # Returns the type that a date value compared with the column is bound in, or NOTHING if the column is not a
+    # DATE or TIMESTAMP column
+    private static *string getDateCastType(*AbstractColumn col) {
+        if (!col) {
+            return;
+        }
+        string type = col.native_type.lwr();
+        if (type == "date") {
+            return "date";
+        }
+        # a timestamp with a time zone is compared in UTC, so an index on such a column cannot be used for a range
+        if (type =~ /^timestamp(\([0-9]\))?$/) {
+            return "timestamp";
+        }
+    }
+
+    # Returns the value to bind in the given type to compare a column of that type with the given value with the
+    # given operator, or NOTHING if the value cannot be compared in that type with the same result
+    private static *date getDateBindValue(string cast_type, string op, auto v) {
+        if (v.typeCode() != NT_DATE || !v.absolute()) {
+            return;
+        }
+        # a cast to timestamp keeps the microseconds of the value
+        if (cast_type == "timestamp") {
+            return v;
+        }
+        int us = v.microseconds();
+        if (!us) {
+            return v;
+        }
+        # a cast to date rounds fractional seconds; a DATE has whole seconds, so the comparison is made with the
+        # whole second that gives the same result: for "x > v" and "x <= v" the second before v, and for "x >= v" and
+        # "x < v" the second after v
+        switch (op) {
+            case OP_GT:
+            case OP_LE:
+                return v - microseconds(us);
+            case OP_GE:
+            case OP_LT:
+                return v - microseconds(us) + 1s;
+        }
+        # a DATE never equals a value with fractional seconds; the generic comparison is used
     }
 
     #! returns a string for use in SQL queries representing the DB-specific value of the argument; returns NOTHING if the type cannot be converted to an SQL string

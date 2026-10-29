@@ -1,0 +1,433 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires DataProvider
+%requires SqlUtil
+%requires OracleSqlUtilBase
+%requires OracleSqlUtil
+%requires QUnit
+
+%try-module oracle
+%define NoOracle
+%endtry
+
+%exec-class OracleDateComparisonTest
+
+#! Tests that a date value compared with a DATE or TIMESTAMP column is bound in the column's type (issue #5563)
+class OracleDateComparisonTest inherits QUnit::Test {
+    public {
+        const MyOpts = Opts + {
+            "connstr": "c,conn=s",
+        };
+
+        const TableName = "ora_date_cmp_test";
+        const JoinTableName = "ora_date_cmp_test2";
+        const PlanTableName = "ora_date_cmp_plan";
+
+        #! the whole second around which the rows and the compared values are
+        const Base = 2026-03-01T10:00:00;
+
+        #! the DATE values of the rows, in seconds from Base
+        const DateOffsets = (-2, -1, 0, 1, 2);
+
+        #! the TIMESTAMP values of the rows, in microseconds from Base
+        const TimestampOffsets = (-1000000, -500000, 0, 250000, 500000, 750000, 1000000);
+
+        #! the values compared with the columns, in microseconds from Base
+        const ValueOffsets = (-1500000, -1000000, -1, 0, 1, 250000, 500000, 999999, 1000000, 1500000);
+
+        #! the comparisons tested, with the result of each for a column value and a compared value
+        const hash<string, code<bool(date, date)>> Comparisons = {
+            OP_GT: bool sub (date c, date v) { return c > v; },
+            OP_GE: bool sub (date c, date v) { return c >= v; },
+            OP_LT: bool sub (date c, date v) { return c < v; },
+            OP_LE: bool sub (date c, date v) { return c <= v; },
+            OP_EQ: bool sub (date c, date v) { return c == v; },
+            OP_NE: bool sub (date c, date v) { return c != v; },
+        };
+
+        #! the expressions of the comparisons
+        const ExpressionOps = {
+            OP_GT: DP_SEARCH_OP_GT,
+            OP_GE: DP_SEARCH_OP_GE,
+            OP_LT: DP_SEARCH_OP_LT,
+            OP_LE: DP_SEARCH_OP_LE,
+            OP_EQ: DP_SEARCH_OP_EQ,
+            OP_NE: DP_SEARCH_OP_NE,
+        };
+    }
+
+    private {
+        *Datasource ds;
+        *OracleTable table;
+        *OracleTable table2;
+        *OracleTable plan_table;
+
+        #! row id -> hash of the row's d and ts values; ts is null in the row of a null d
+        hash<string, hash<auto>> rows;
+    }
+
+    constructor() : Test("OracleDateComparisonTest", "1.0", \ARGV, MyOpts) {
+        try {
+            ds = getDatasource();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("%s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        if (ds) {
+            setupTables();
+        }
+
+        addTestCase("where SQL", \testWhereSql());
+        addTestCase("where results", \testWhereResults());
+        addTestCase("expression SQL", \testExpressionSql());
+        addTestCase("expression results", \testExpressionResults());
+        addTestCase("unchanged comparisons", \testUnchanged());
+        addTestCase("join", \testJoin());
+        addTestCase("update and delete", \testUpdateDelete());
+        addTestCase("index range scan", \testIndexRangeScan());
+
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        foreach *OracleTable t in (table, table2, plan_table) {
+            if (t) {
+                t.dropCommit();
+            }
+        }
+    }
+
+    private Datasource getDatasource() {
+%ifdef NoOracle
+        testSkip("no oracle module");
+%endif
+        string connstr = m_options.connstr ?? ENV.QORE_DB_CONNSTR_ORACLE ?? "";
+        if (!connstr.val()) {
+            testSkip("no DB connection");
+        }
+        Datasource ds(connstr);
+        if (ds.getDriverName() != "oracle") {
+            testSkip("not an oracle connection");
+        }
+        ds.open();
+        return ds;
+    }
+
+    private dropIfExists(string name) {
+        OracleTable t(ds, name);
+        if (t.checkExistence()) {
+            t.dropCommit();
+        }
+    }
+
+    private setupTables() {
+        map dropIfExists($1), (TableName, JoinTableName, PlanTableName);
+
+        ds.execRaw("create table " + TableName + " (id number(14) primary key, d date, ts timestamp(6), "
+            "tz timestamp(6) with time zone, name varchar2(20))");
+        ds.execRaw("create table " + JoinTableName + " (id number(14) primary key, d date)");
+        ds.commit();
+        table = new OracleTable(ds, TableName);
+        table2 = new OracleTable(ds, JoinTableName);
+
+        # a row for each DATE value and each TIMESTAMP value, and a row of nulls
+        int id = 0;
+        for (int i = 0; i < max(DateOffsets.size(), TimestampOffsets.size()); ++i) {
+            *date d = exists DateOffsets[i] ? Base + seconds(DateOffsets[i]) : NOTHING;
+            *date ts = exists TimestampOffsets[i] ? Base + microseconds(TimestampOffsets[i]) : NOTHING;
+            ++id;
+            table.insert({"id": id, "d": d ?? NULL, "ts": ts ?? NULL, "tz": ts ?? NULL, "name": "r" + id});
+            table2.insert({"id": id, "d": d ?? NULL});
+            rows{id} = {"d": d, "ts": ts};
+        }
+        ++id;
+        table.insert({"id": id, "d": NULL, "ts": NULL, "tz": NULL, "name": "r" + id});
+        table2.insert({"id": id, "d": NULL});
+        rows{id} = {};
+        ds.commit();
+    }
+
+    #! returns the ids of the rows whose column value has the given result with the given comparison
+    private list<int> expectedIds(string column, code<bool(date, date)> cmp, date v) {
+        return sort(map $1.key.toInt(), rows.pairIterator(), exists $1.value{column} && cmp($1.value{column}, v));
+    }
+
+    private list<int> selectIds(auto cond, *hash<auto> sh) {
+        return sort(map $1.id, table.selectRows(sh + {"columns": "id", "where": cond}));
+    }
+
+    #! returns the where clause and arguments of a select
+    private hash<auto> getWhere(auto cond, *hash<auto> sh, *AbstractTable t) {
+        list<auto> args;
+        string sql = (t ?? table).getSelectSql(sh + {"where": cond}, \args);
+        return {"where": (sql =~ x/ where (.*)$/)[0], "args": args};
+    }
+
+    private static hash<DataProviderFieldReference> fref(string field) {
+        return <DataProviderFieldReference>{"field": field};
+    }
+
+    private static hash<DataProviderExpression> exp(string op, list<auto> args) {
+        return <DataProviderExpression>{"exp": op, "args": args};
+    }
+
+    testWhereSql() {
+        if (!ds) {
+            testSkip("no DB connection");
+        }
+
+        date v = Base + 500ms;
+        date floor = Base;
+        date ceil = Base + 1s;
+
+        # a DATE column: the value is the whole second with the same result
+        assertEq({"where": "d > cast(%v as date)", "args": (floor,)}, getWhere({"d": op_gt(v)}));
+        assertEq({"where": "d <= cast(%v as date)", "args": (floor,)}, getWhere({"d": op_le(v)}));
+        assertEq({"where": "d >= cast(%v as date)", "args": (ceil,)}, getWhere({"d": op_ge(v)}));
+        assertEq({"where": "d < cast(%v as date)", "args": (ceil,)}, getWhere({"d": op_lt(v)}));
+        assertEq({"where": "d between cast(%v as date) and cast(%v as date)", "args": (ceil, floor + 1h)},
+            getWhere({"d": op_between(v, v + 1h)}));
+        assertEq({"where": "not (d < cast(%v as date))", "args": (ceil,)}, getWhere({"d": op_not(op_lt(v))}));
+        # a whole second is bound as given with every operator
+        assertEq({"where": "d = cast(%v as date)", "args": (Base,)}, getWhere({"d": Base}));
+        assertEq({"where": "d = cast(%v as date)", "args": (Base,)}, getWhere({"d": op_eq(Base)}));
+        assertEq({"where": "(d != cast(%v as date) or d is null)", "args": (Base,)}, getWhere({"d": op_ne(Base)}));
+        assertEq({"where": "d >= cast(%v as date)", "args": (Base,)}, getWhere({"d": op_ge(Base)}));
+        # a DATE never equals a value with fractional seconds: the timestamp comparison is kept
+        assertEq({"where": "d = %v", "args": (v,)}, getWhere({"d": v}));
+        assertEq({"where": "(d != %v or d is null)", "args": (v,)}, getWhere({"d": op_ne(v)}));
+
+        # a TIMESTAMP column: the value is bound with its microseconds
+        assertEq({"where": "ts > cast(%v as timestamp)", "args": (v,)}, getWhere({"ts": op_gt(v)}));
+        assertEq({"where": "ts = cast(%v as timestamp)", "args": (v,)}, getWhere({"ts": v}));
+        assertEq({"where": "ts between cast(%v as timestamp) and cast(%v as timestamp)", "args": (v, v + 1h)},
+            getWhere({"ts": op_between(v, v + 1h)}));
+
+        # a column designator with a unique prefix
+        assertEq({"where": "d > cast(%v as date)", "args": (floor,)}, getWhere({"1:d": op_gt(v)}));
+        # several conditions, each with its own bind
+        assertEq({"where": "d > cast(%v as date) and ts < cast(%v as timestamp)", "args": (floor, v)},
+            getWhere({"d": op_gt(v), "ts": op_lt(v)}));
+    }
+
+    testWhereResults() {
+        if (!ds) {
+            testSkip("no DB connection");
+        }
+
+        foreach string column in ("d", "ts") {
+            foreach int off in (ValueOffsets) {
+                date v = Base + microseconds(off);
+                foreach hash<auto> i in (Comparisons.pairIterator()) {
+                    string label = sprintf("%s %s %y", column, i.key, v);
+                    list<int> expected = expectedIds(column, i.value, v);
+                    hash<auto> cond = {column: make_op(i.key, v)};
+                    # op_ne() is also true for a null column
+                    if (i.key == OP_NE) {
+                        expected = sort(expected + nullIds(column));
+                    }
+                    assertEq(expected, selectIds(cond), label);
+                    # op_not() gives the rows with a value and the other result
+                    if (i.key != OP_NE) {
+                        list<int> not_expected = expectedIds(column, bool sub (date c, date x) {
+                            return !i.value(c, x);
+                        }, v);
+                        assertEq(not_expected, selectIds({column: op_not(make_op(i.key, v))}), "not " + label);
+                    }
+                }
+                # a range starting at the value
+                foreach int len in (0, 1, 500000, 1000000, 1500000) {
+                    date v1 = v + microseconds(len);
+                    list<int> expected = expectedIds(column, bool sub (date c, date x) { return c >= x && c <= v1; },
+                        v);
+                    assertEq(expected, selectIds({column: op_between(v, v1)}),
+                        sprintf("%s between %y and %y", column, v, v1));
+                }
+            }
+        }
+    }
+
+    #! returns the ids of the rows whose column value is null
+    private list<int> nullIds(string column) {
+        return map $1.key.toInt(), rows.pairIterator(), !exists $1.value{column};
+    }
+
+    testExpressionSql() {
+        if (!ds) {
+            testSkip("no DB connection");
+        }
+
+        date v = Base + 500ms;
+        assertEq({"where": "d > cast(%v as date)", "args": (Base,)},
+            getWhere(exp(DP_SEARCH_OP_GT, (fref("d"), v))));
+        assertEq({"where": "d < cast(%v as date)", "args": (Base + 1s,)},
+            getWhere(exp(DP_SEARCH_OP_LT, (fref("d"), v))));
+        # a value compared with a column
+        assertEq({"where": "d > cast(%v as date)", "args": (Base,)},
+            getWhere(exp(DP_SEARCH_OP_LT, (v, fref("d")))));
+        assertEq({"where": "d <= cast(%v as date)", "args": (Base,)},
+            getWhere(exp(DP_SEARCH_OP_GE, (v, fref("d")))));
+        assertEq({"where": "d != cast(%v as date)", "args": (Base,)},
+            getWhere(exp(DP_SEARCH_OP_NE, (fref("d"), Base))));
+        assertEq({"where": "d = %v", "args": (v,)}, getWhere(exp(DP_SEARCH_OP_EQ, (fref("d"), v))));
+        assertEq({"where": "ts between cast(%v as timestamp) and cast(%v as timestamp)", "args": (v, v + 1h)},
+            getWhere(exp(DP_SEARCH_OP_BETWEEN, (fref("ts"), v, v + 1h))));
+        # a comparison inside another expression
+        assertEq({"where": "(d >= cast(%v as date) and ts < cast(%v as timestamp))", "args": (Base + 1s, v)},
+            getWhere(exp(DP_OP_AND, (exp(DP_SEARCH_OP_GE, (fref("d"), v)), exp(DP_SEARCH_OP_LT, (fref("ts"), v))))));
+        # a null value is compared as before
+        assertEq({"where": "d is null", "args": ()}, getWhere(exp(DP_SEARCH_OP_EQ, (fref("d"), NULL))));
+    }
+
+    testExpressionResults() {
+        if (!ds) {
+            testSkip("no DB connection");
+        }
+
+        foreach string column in ("d", "ts") {
+            foreach int off in (ValueOffsets) {
+                date v = Base + microseconds(off);
+                foreach hash<auto> i in (Comparisons.pairIterator()) {
+                    string label = sprintf("expression %s %s %y", column, i.key, v);
+                    list<int> expected = expectedIds(column, i.value, v);
+                    assertEq(expected, selectIds(exp(ExpressionOps{i.key}, (fref(column), v))), label);
+                    # the same comparison with the value first
+                    *string rop = OracleTable::ReverseDateComparisonOps{i.key} ?? i.key;
+                    assertEq(expected, selectIds(exp(ExpressionOps{rop}, (v, fref(column)))), "reversed " + label);
+                }
+                date v1 = v + 1500ms;
+                assertEq(expectedIds(column, bool sub (date c, date x) { return c >= x && c <= v1; }, v),
+                    selectIds(exp(DP_SEARCH_OP_BETWEEN, (fref(column), v, v1))),
+                    sprintf("expression %s between %y and %y", column, v, v1));
+            }
+        }
+    }
+
+    testUnchanged() {
+        if (!ds) {
+            testSkip("no DB connection");
+        }
+
+        date v = Base + 500ms;
+        # a timestamp with a time zone is compared in UTC; a cast does not allow an index to be used
+        assertEq({"where": "tz > %v", "args": (v,)}, getWhere({"tz": op_gt(v)}));
+        assertEq({"where": "tz > %v", "args": (v,)}, getWhere(exp(DP_SEARCH_OP_GT, (fref("tz"), v))));
+        # a relative date
+        assertEq({"where": "d > %v", "args": (1D,)}, getWhere({"d": op_gt(1D)}));
+        # a value of another type
+        assertEq({"where": "d > %v", "args": ("2026-03-01",)}, getWhere({"d": op_gt("2026-03-01")}));
+        assertEq({"where": "d between %v and %v", "args": ("2026-03-01", v)},
+            getWhere({"d": op_between("2026-03-01", v)}));
+        # a column of another type
+        assertEq({"where": "name > %v", "args": (v,)}, getWhere({"name": op_gt(v)}));
+        assertEq({"where": "id = %v", "args": (1,)}, getWhere({"id": 1}));
+        # null comparisons
+        assertEq({"where": "d is null", "args": ()}, getWhere({"d": NULL}));
+        assertEq({"where": "d is not null", "args": ()}, getWhere({"d": op_ne(NULL)}));
+        # a column comparison
+        assertEq({"where": "d > ts", "args": ()}, getWhere({"d": op_cgt("ts")}));
+        # an operator without a date comparison
+        assertEq({"where": "name like %v", "args": ("r%",)}, getWhere({"name": op_like("r%")}));
+        # a column alias of the select
+        assertEq({"where": "d > %v", "args": (v,)},
+            getWhere({"dd": op_gt(v)}, {"columns": ("id", cop_as("d", "dd"))}));
+
+        # the time zone column gives the same results as the TIMESTAMP column, whose values it has
+        foreach int off in (ValueOffsets) {
+            date tv = Base + microseconds(off);
+            assertEq(selectIds({"ts": op_gt(tv)}), selectIds({"tz": op_gt(tv)}), sprintf("tz > %y", tv));
+        }
+    }
+
+    testJoin() {
+        if (!ds) {
+            testSkip("no DB connection");
+        }
+
+        date v = Base + 500ms;
+        list<int> expected = expectedIds("d", Comparisons{OP_GT}, v);
+
+        # a where clause naming a column of the joined table
+        hash<auto> sh = {
+            "columns": "t1.id",
+            "alias": "t1",
+            "join": join_inner(table2, "t2", {"id": "id"}),
+        };
+        hash<auto> w = getWhere({"t2.d": op_gt(v)}, sh);
+        assertEq("t2.d > cast(%v as date)", w.where);
+        assertEq((Base,), w.args);
+        assertEq(expected, sort(map $1.id, table.selectRows(sh + {"where": {"t2.d": op_gt(v)}})));
+
+        # a join condition on a column of the joined table
+        sh.join = join_inner(table2, "t2", {"id": "id"}, {"d": op_ge(v)});
+        list<auto> args;
+        string sql = table.getSelectSql(sh, \args);
+        assertRegex("t2\\.d >= cast\\(%v as date\\)", sql);
+        assertEq((Base + 1s,), args);
+        assertEq(expectedIds("d", Comparisons{OP_GE}, v), sort(map $1.id, table.selectRows(sh)));
+    }
+
+    testUpdateDelete() {
+        if (!ds) {
+            testSkip("no DB connection");
+        }
+
+        date v = Base + 500ms;
+        on_exit ds.rollback();
+
+        int count = table.update({"name": "updated"}, {"d": op_gt(v)});
+        assertEq(expectedIds("d", Comparisons{OP_GT}, v).size(), count);
+        assertEq(expectedIds("d", Comparisons{OP_GT}, v), selectIds({"name": "updated"}));
+
+        count = table.del({"ts": op_le(v)});
+        assertEq(expectedIds("ts", Comparisons{OP_LE}, v).size(), count);
+        assertEq((), selectIds({"ts": op_le(v)}));
+    }
+
+    #! checks that Oracle executes the comparisons as generated with an index range scan
+    /** The plan of the statement as executed with its binds is checked; "explain plan" cannot be used, as it does not
+        bind the values, and a placeholder without a bound value is compared as the column's type
+    */
+    testIndexRangeScan() {
+        if (!ds) {
+            testSkip("no DB connection");
+        }
+
+        if (!plan_table) {
+            ds.execRaw("create table " + PlanTableName + " (id number(14) primary key, d date not null, "
+                "ts timestamp(6) not null)");
+            ds.execRaw("insert into " + PlanTableName + " select level, date '2020-01-01' + level / 1440, "
+                "timestamp '2020-01-01 00:00:00' + numtodsinterval(level, 'minute') from dual "
+                "connect by level <= 20000");
+            ds.execRaw("create index " + PlanTableName + "_d on " + PlanTableName + " (d)");
+            ds.execRaw("create index " + PlanTableName + "_ts on " + PlanTableName + " (ts)");
+            ds.execRaw("begin dbms_stats.gather_table_stats(user, '" + PlanTableName.upr() + "'); end;");
+            ds.commit();
+            plan_table = new OracleTable(ds, PlanTableName);
+        }
+
+        date v = 2020-01-10T00:00:00.5;
+        foreach hash<auto> i in ({"d": PlanTableName + "_d", "ts": PlanTableName + "_ts"}.pairIterator()) {
+            foreach auto cond in ({i.key: op_gt(v)}, exp(DP_SEARCH_OP_GT, (fref(i.key), v))) {
+                list<hash<auto>> l = plan_table.selectRows({"columns": "id", "where": cond, "orderby": i.key,
+                    "limit": 10});
+                # the plan of the last statement of this session
+                list<string> plan = map $1.plan_table_output, ds.selectRows("select plan_table_output from "
+                    "table(dbms_xplan.display_cursor(null, null, 'BASIC'))");
+                if ((select plan, $1 =~ /no SELECT privilege|cannot fetch plan/).size()) {
+                    testSkip(sprintf("cannot read the plan of a statement: %y", plan));
+                }
+                assertEq(10, l.size());
+                assertEq(1, (select plan, regex($1, "INDEX RANGE SCAN *\\| *" + i.value.upr() + " ")).size(),
+                    sprintf("%y: %y", cond, plan));
+            }
+        }
+    }
+}
