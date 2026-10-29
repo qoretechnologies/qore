@@ -39,6 +39,19 @@ class CycleZ inherits Counted {
     }
 }
 
+#! The members of a cycle whose second member a thread holds locked while it scans from the first
+class LockedY inherits Counted {
+    public {
+        any next;
+    }
+}
+
+class LockedW inherits Counted {
+    public {
+        any next;
+    }
+}
+
 #! A member of a larger cycle that every thread changes from its own member
 class Ring inherits Counted {
     public {
@@ -68,6 +81,7 @@ public class DgcScanCollisionsTest inherits QUnit::Test {
     constructor() : Test("DGC scan collisions", "1.0", \ARGV) {
         addTestCase("a scan waits for the scan it collided with to complete", \chainTest());
         addTestCase("scans from every member of one set complete", \ringTest());
+        addTestCase("a scan waiting for a lock gives up its scan lock", \lockedTest());
         set_return_value(main());
     }
 
@@ -190,6 +204,87 @@ public class DgcScanCollisionsTest inherits QUnit::Test {
         if (c.getCount()) {
             c.dec();
         }
+    }
+
+    #! A scan waiting for a lock held by a thread that waits for the scan's own scan lock
+    /** Scan A (root Y) holds Y's scan lock with Y locked.  Thread T holds W's write lock and starts a scan of Y,
+        which waits for Y's scan lock.  A then reaches W and waits for T to release it.  A used to keep Y's scan lock
+        while it waited, so T waited for A and A for T, and neither completed.  A now gives up its scan lock while it
+        waits for the release: T's scan runs, takes W's rsection on its own write lock and commits, T releases W, and A
+        takes its scan lock again and finds that T's scan has made its own unnecessary.  The second round finds the
+        set in place.
+    */
+    private lockedTest() {
+        checkHooks();
+        list<auto> l;
+        {
+            LockedY y();
+            LockedW w();
+            y.next = w;
+            w.next = y;
+            l = (y, w);
+        }
+        for (int round = 0; round < 2; ++round) {
+            lockedRound(l, round);
+        }
+
+        Counted::dc = 0;
+        l = ();
+        assertEq(2, Counted::dc, "the cycle is collected once the list is released");
+    }
+
+    private lockedRound(list<auto> l, int round) {
+        string prefix = sprintf("round %d: ", round);
+        Counter a_held(1);
+        Counter a_release(1);
+        Counter t_locked(1);
+        # the scans running
+        Counter done();
+        hash<auto> results;
+        Mutex m();
+
+        # a failed assertion releases the hold and waits for the scans, so that no thread is left holding a scan
+        on_exit {
+            release(a_release);
+            done.waitForZero();
+        }
+
+        # A holds its root, Y, and Y's scan lock
+        call_function("dbg_hold_scan", "LockedY", a_held, a_release);
+        done.inc();
+        background sub () {
+            on_exit done.dec();
+            hash<auto> h = call_function("dbg_rset_scan", l, 0, True);
+            m.lock();
+            on_exit m.unlock();
+            results.A = h;
+        }();
+        a_held.waitForZero();
+
+        # T holds W's write lock and scans from Y, which needs Y's scan lock
+        done.inc();
+        int t_tid = background sub () {
+            on_exit done.dec();
+            hash<auto> h = call_function("dbg_rset_scan_locked", l, 0, True, l[1], t_locked);
+            m.lock();
+            on_exit m.unlock();
+            results.T = h;
+        }();
+        t_locked.waitForZero();
+
+        # A reaches W, which T holds, and waits for its release
+        Counter a_waits(1);
+        call_function("dbg_scan_wait_notify", a_waits);
+        a_release.dec();
+        a_waits.waitForZero();
+
+        # a scan that kept its scan lock while waiting shows up here as a test that never returns
+        done.waitForZero();
+
+        assertFalse(results.T.skipped, prefix + "T made its scan once A gave up Y's scan lock");
+        assertEq(0, results.T.restarts, prefix + "T's scan entered W on its own write lock");
+        assertTrue(results.A.skipped, prefix + "A took T's result as current");
+        assertEq(1, results.A.restarts, prefix + "A gave up one pass, waiting for W");
     }
 
     #! Returns the scan wait of a thread, if it is waiting

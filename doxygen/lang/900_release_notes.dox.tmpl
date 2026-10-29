@@ -5988,6 +5988,9 @@ while (*binary chunk = input.read(65536)) {
       anything other than a scan still waits for the lock's release, so no wait can deadlock.  32 threads scanning
       a set of 2,000 objects from their own members went from 872 restarts per scan to 8, and from 150 seconds
       to 7
+    - Fixed a deadlock between a recursive reference scan waiting for a lock held by another thread and that thread
+      starting a scan at the same object: the waiting scan kept the object's scan lock, which the other thread waited
+      for; a scan now gives up its scan lock while it waits for a lock's release
     - Fixed every dereference of an object taking that object's r-section exclusively, which serialized all
       threads calling any method on a shared object -- whatever the object held and whatever the method did,
       since a method call releases a reference to the object when its frame is torn down.  An object that is

@@ -5040,6 +5040,16 @@ void AsyncIoControllerPriv::setLogger(QoreObject* logger_obj, ExceptionSink* xsi
     }
 }
 
+QoreObject* AsyncIoControllerPriv::getLogger() const {
+    AutoLocker al(m);
+    if (!logger) {
+        return nullptr;
+    }
+    QoreObject* obj = logger->getObject();
+    obj->ref();
+    return obj;
+}
+
 int64_t AsyncIoControllerPriv::addTimer(const DateTimeNode* deadline, QoreValue udata,
         ExceptionSink* xsink, const std::string& owner) {
     if (checkForked("addTimer", xsink)) {

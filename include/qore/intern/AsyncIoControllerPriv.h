@@ -833,6 +833,9 @@ public:
     */
     DLLLOCAL void setLogger(QoreObject* logger_obj, ExceptionSink* xsink);
 
+    //! Returns the logger object set with setLogger(), referenced for the caller, or nullptr if none is set
+    DLLLOCAL QoreObject* getLogger() const;
+
     //! Drops timer_callback and timer user-data values (may hold cross-module
     //! QoreObject refs). Safe to call while the controller is still running —
     //! timer firings after this simply see no callback/data.
