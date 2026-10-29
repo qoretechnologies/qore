@@ -924,7 +924,7 @@ sleep(10s);
 
     @since %Qore 3.0 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
  */
-int sleep(softint seconds) [flags=NAMED_ARGS;dom=PROCESS] {
+int sleep(softint seconds) [flags=NAMED_ARGS,CURRENT_THREAD_ONLY;dom=PROCESS] {
    if (!seconds) {
       return 0;
    }
@@ -936,7 +936,7 @@ int sleep(softint seconds) [flags=NAMED_ARGS;dom=PROCESS] {
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
 /**
  */
-nothing sleep() [flags=RUNTIME_NOOP;dom=PROCESS] {
+nothing sleep() [flags=RUNTIME_NOOP,CURRENT_THREAD_ONLY;dom=PROCESS] {
 }
 
 //! Causes the current thread to sleep for a certain number of microseconds
@@ -957,7 +957,7 @@ usleep(5000);
 
     @since %Qore 3.0 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
  */
-int usleep(softint microseconds) [flags=NAMED_ARGS;dom=PROCESS] {
+int usleep(softint microseconds) [flags=NAMED_ARGS,CURRENT_THREAD_ONLY;dom=PROCESS] {
    if (!microseconds) {
       return 0;
    }
@@ -984,7 +984,7 @@ usleep(250ms);
 
     @since %Qore 3.0 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
  */
-int usleep(date duration) [flags=NAMED_ARGS;dom=PROCESS] {
+int usleep(date duration) [flags=NAMED_ARGS,CURRENT_THREAD_ONLY;dom=PROCESS] {
    int64 usecs = duration->getRelativeMicroseconds();
    if (!usecs) {
       return 0;
@@ -997,7 +997,7 @@ int usleep(date duration) [flags=NAMED_ARGS;dom=PROCESS] {
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
 /**
  */
-nothing usleep() [flags=RUNTIME_NOOP;dom=PROCESS] {
+nothing usleep() [flags=RUNTIME_NOOP,CURRENT_THREAD_ONLY;dom=PROCESS] {
 }
 
 //! Returns the PID (process ID) of the current process
@@ -2033,7 +2033,7 @@ nothing set_global_http2_mode(enum<HTTP2Mode> mode) [flags=NAMED_ARGS;dom=PROCES
 
     @since %Qore 3.0
 */
-string get_global_http2_mode() [dom=PROCESS] {
+string get_global_http2_mode() {
     int mode = qore_global_http2_mode.load(std::memory_order_relaxed);
     switch (mode) {
         case HTTP2_MODE_DISABLED:

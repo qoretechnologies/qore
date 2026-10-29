@@ -640,6 +640,44 @@ QoreProgram* RunTimeObjectMethodReferenceNode::getProgram() const {
     return obj->getProgram();
 }
 
+const QoreMethod* RunTimeObjectMethodReferenceNode::findMethod() const {
+    return obj ? obj->getClass()->findMethod(method.c_str()) : nullptr;
+}
+
+const QoreProgram* qore_call_reference_code_program(const ResolvedCallReferenceNode* rcr) {
+    assert(rcr);
+    const QoreMethod* m = nullptr;
+    // the object a method is called on, if any: the call is dispatched on its class
+    const QoreObject* obj = nullptr;
+    if (const RunTimeResolvedMethodReferenceNode* r = dynamic_cast<const RunTimeResolvedMethodReferenceNode*>(rcr)) {
+        m = r->getMethod();
+        obj = r->getObject();
+    } else if (const RunTimeObjectMethodReferenceNode* r
+            = dynamic_cast<const RunTimeObjectMethodReferenceNode*>(rcr)) {
+        m = r->findMethod();
+    } else if (const MethodCallReferenceNode* r = dynamic_cast<const MethodCallReferenceNode*>(rcr)) {
+        m = r->getMethod();
+        obj = r->getObject();
+    } else if (const LocalStaticMethodCallReferenceNode* r
+            = dynamic_cast<const LocalStaticMethodCallReferenceNode*>(rcr)) {
+        m = r->getMethod();
+    }
+    if (m && obj && !m->isStatic()) {
+        // the method that the call is dispatched to on the object's class
+        const QoreMethod* dm = obj->getClass()->findMethod(m->getName());
+        if (dm) {
+            m = dm;
+        }
+    }
+    if (!m) {
+        return rcr->getProgram();
+    }
+    // the code of a method runs in the Program that defines its class; a builtin class has none
+    const QoreClass* cls = m->getClass();
+    const QoreProgram* pgm = cls->getSourceProgram();
+    return pgm ? pgm : cls->getProgram();
+}
+
 bool RunTimeObjectMethodReferenceNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const {
     const RunTimeObjectMethodReferenceNode* vc = dynamic_cast<const RunTimeObjectMethodReferenceNode*>(v);
     return vc && obj == vc->obj && method == vc->method;

@@ -1261,6 +1261,13 @@ private:
         QoreValue udata;                //!< Referenced Qore user data
         std::string owner;              //!< Owner identifier for per-owner callback flush (empty if untracked)
         AsyncIoSandboxContext sandbox_ctx; //!< The sandbox of the code that added the timer, for its callback
+        //! True if module code added the timer for an application with restrictions (see app_pgm_id)
+        bool for_app = false;
+        //! The ID of the application Program that module code added the timer for, if for_app is set
+        /** Module code running for an application with restrictions can cancel only the timers added for the same
+            application; see runtime_get_module_caller_app()
+        */
+        unsigned app_pgm_id = 0;
     };
 
     //! Per-I/O-thread context — each thread owns its own event loop, cache, and socket state

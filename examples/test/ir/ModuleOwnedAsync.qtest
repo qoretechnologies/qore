@@ -1,0 +1,514 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class ModuleOwnedAsyncTest
+
+#! Module code running for a restricted caller schedules its own code and uses calling-thread builtins in every mode
+/** Module code runs with the restrictions of its caller as well as its own, so a Qorus service (a caller with
+    \c PO_NO_THREAD_CONTROL and \c PO_NO_PROCESS_CONTROL) using DiscordWebSocketClient failed in its \c init method:
+    the client's HELLO watchdog timer, which AsyncSocketIoController::addTimer() adds with the native
+    AsyncIoController::addTimer(), was refused with \c INVALID-FUNCTION-ACCESS.
+
+    Builtins flagged with \c QCF_MODULE_OWNED run code passed to them asynchronously or with thread cancellation
+    deferred (AsyncIoController::addTimer() and submitTask(), call_async(), parallel_map(), parallel_foreach() and
+    defer_thread_cancel()), or act on timers (AsyncIoController::cancelTimer()).  Called by module code for a caller
+    with restrictions, they accept only code whose own Program allows what the caller may not, so the module's own
+    closures run and a restricted caller's closure is refused with an error that says why, and a timer can be
+    cancelled only by the application it was created for.  Builtins flagged with \c QCF_CURRENT_THREAD_ONLY (sleep(),
+    usleep(), thread_yield(), active_exception(), Program::getCallerCapabilityMask() and channel_select()) affect or
+    read only the calling thread and are checked against the module's own restrictions; get_global_http2_mode() has
+    no functional domain any more.  Direct calls by restricted code are refused as before.
+
+    The tests include the two probes that found the regression: the Discord HELLO watchdog of an unconnected client
+    is armed and cancelled for a restricted caller, and a caller adding a timer with its own closure through
+    AsyncSocketIoController: scheduling code is thread control (the timer methods' domain), so the probe's own
+    caller, which has \c PO_NO_PROCESS_CONTROL only, adds it, while a caller with \c PO_NO_THREAD_CONTROL, and one
+    with the options of a Qorus service, is refused.  Each case runs with the test module as source and AOT-compiled, with the AsyncSocketIo,
+    WebSocketClient and DiscordWebSocketClient modules from source and (when the build has them) AOT-compiled, in
+    every execution mode, against the output of the source module with the AST interpreter.
+*/
+class ModuleOwnedAsyncTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qlib_dir;
+
+        TmpDir tmp("qore-module-owned-async-");
+        string src_dir;
+        string qmod_dir;
+        #! a module directory with only the sources of the qlib modules under test
+        string qlib_src_dir;
+
+        #! the qlib modules under test
+        const QlibModules = ("AsyncSocketIo", "WebSocketClient", "DiscordWebSocketClient");
+
+        #! the refusal of a restricted caller's closure
+        const CallerClosureRefusal = "INVALID-FUNCTION-ACCESS: %s: the callback's Program does not allow thread "
+            "control (PO_NO_THREAD_CONTROL); module code running for a caller that may not control threads can "
+            "%s only code of a Program that may";
+
+        #! the output of the source module with the AST interpreter, after the line that gives the qlib module form
+        const ExpectedOutput = "restricted discord_watchdog: \"armed and cancelled\"
+restricted discord_watchdog: \"armed and cancelled\"
+restricted controller_caller_timer: " + sprintf(CallerClosureRefusal, "AsyncIoController::addTimer()",
+            "schedule") + "
+restricted controller_caller_timer: " + sprintf(CallerClosureRefusal, "AsyncIoController::addTimer()",
+            "schedule") + "
+restricted own_timer: True
+restricted own_timer: True
+restricted own_native_timer: True
+restricted own_native_timer: True
+restricted module_method_timer: True
+restricted module_method_timer: True
+restricted overridden_method_timer: " + sprintf(CallerClosureRefusal, "AsyncIoController::addTimer()",
+            "schedule") + "
+restricted overridden_method_timer: " + sprintf(CallerClosureRefusal, "AsyncIoController::addTimer()",
+            "schedule") + "
+restricted caller_timer: " + sprintf(CallerClosureRefusal, "AsyncIoController::addTimer()", "schedule") + "
+restricted caller_timer: " + sprintf(CallerClosureRefusal, "AsyncIoController::addTimer()", "schedule") + "
+restricted data_timer: INVALID-FUNCTION-ACCESS: AsyncIoController::addTimer(): the timer data is not code; module "
+            "code running for a caller that may not control threads can schedule only code of a Program that may
+restricted data_timer: INVALID-FUNCTION-ACCESS: AsyncIoController::addTimer(): the timer data is not code; module "
+            "code running for a caller that may not control threads can schedule only code of a Program that may
+restricted own_task: \"task ran\"
+restricted own_task: \"task ran\"
+restricted caller_task: " + sprintf(CallerClosureRefusal, "AsyncIoController::submitTask()", "schedule") + "
+restricted caller_task: " + sprintf(CallerClosureRefusal, "AsyncIoController::submitTask()", "schedule") + "
+restricted own_call_async: \"async\"
+restricted own_call_async: \"async\"
+restricted caller_call_async: " + sprintf(CallerClosureRefusal, "call_async()", "schedule") + "
+restricted caller_call_async: " + sprintf(CallerClosureRefusal, "call_async()", "schedule") + "
+restricted own_parallel_map: [2, 4, 6]
+restricted own_parallel_map: [2, 4, 6]
+restricted caller_parallel_map: " + sprintf(CallerClosureRefusal, "parallel_map()", "schedule") + "
+restricted caller_parallel_map: " + sprintf(CallerClosureRefusal, "parallel_map()", "schedule") + "
+restricted own_parallel_foreach: 6
+restricted own_parallel_foreach: 6
+restricted caller_parallel_foreach: " + sprintf(CallerClosureRefusal, "parallel_foreach()", "schedule") + "
+restricted caller_parallel_foreach: " + sprintf(CallerClosureRefusal, "parallel_foreach()", "schedule") + "
+restricted own_defer: \"deferred\"
+restricted own_defer: \"deferred\"
+restricted caller_defer: " + sprintf(CallerClosureRefusal, "defer_thread_cancel()", "defer the cancellation of")
+            + "
+restricted caller_defer: " + sprintf(CallerClosureRefusal, "defer_thread_cancel()", "defer the cancellation of")
+            + "
+restricted current_thread: \"ok False True 1\"
+restricted current_thread: \"ok False True 1\"
+restricted http2_mode: True
+restricted http2_mode: True
+restricted cancel_unowned: False
+restricted cancel_unowned: False
+main cancel_unowned_after: True
+other_app cancel_other_app_timer: False
+restricted cancel_own_app_timer: True
+hoppy timer probe: \"added\"
+hoppy timer probe without thread control: " + sprintf(CallerClosureRefusal, "AsyncIoController::addTimer()",
+            "schedule") + "
+restricted direct parse: PARSE-EXCEPTION
+user caller_timer: True
+user caller_timer: True
+user caller_call_async: \"user async\"
+user caller_call_async: \"user async\"
+user caller_defer: \"user deferred\"
+user caller_defer: \"user deferred\"
+user current_thread: \"ok False False 1\"
+user current_thread: \"ok False False 1\"
+";
+    }
+
+    constructor() : QUnit::Test("ModuleOwnedAsyncTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qlib_dir = realpath(get_script_dir() + "/../../../qlib");
+        src_dir = tmp.path + "/src";
+        qmod_dir = tmp.path + "/qmod";
+        qlib_src_dir = tmp.path + "/qlib-src";
+        mkdir(src_dir);
+        mkdir(qmod_dir);
+        writeFile(src_dir + "/OwnedAsyncMod.qm", moduleCode());
+        makeQlibSourceDir();
+
+        addTestCase("module code schedules its own code for a restricted caller with source qlib modules in every "
+            "mode", \testSourceQlib());
+        addTestCase("module code schedules its own code for a restricted caller with AOT qlib modules in every mode",
+            \testAotQlib());
+
+        set_return_value(main());
+    }
+
+    #! links the sources of the qlib modules under test, without any AOT form, in a module directory
+    private makeQlibSourceDir() {
+        mkdir(qlib_src_dir);
+        foreach string mod in (QlibModules) {
+            if (is_file(qlib_dir + "/" + mod + ".qm")) {
+                symlink(qlib_dir + "/" + mod + ".qm", qlib_src_dir + "/" + mod + ".qm");
+                continue;
+            }
+            string dir = qlib_src_dir + "/" + mod;
+            mkdir(dir);
+            foreach string path in (glob(qlib_dir + "/" + mod + "/*")) {
+                if (path =~ /\.qmod$/) {
+                    continue;
+                }
+                symlink(path, dir + "/" + basename(path));
+            }
+        }
+    }
+
+    #! returns a directory with the AOT forms of the qlib modules under test, if the build has them
+    private *string getQlibAotDir() {
+        foreach string dir in (dirname(qore_bin) + "/qlib-qmod", qlib_dir) {
+            if (is_file(dir + "/AsyncSocketIo/AsyncSocketIo.qmod") && is_file(dir + "/WebSocketClient.qmod")
+                    && is_file(dir + "/DiscordWebSocketClient.qmod")) {
+                return dir;
+            }
+        }
+    }
+
+    private string moduleCode() {
+        return "%modern
+
+%requires AsyncSocketIo
+
+module OwnedAsyncMod {
+    version = \"1.0\";
+    desc = \"module-owned asynchronous code regression module\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace OwnedAsyncMod {
+public class Async {
+    # a timer with a module closure, through AsyncSocketIoController (named-argument calls resolved at run time)
+    static bool ownTimer() {
+        AsyncSocketIo::AsyncSocketIoController c = AsyncSocketIo::getGlobalAsyncIoController();
+        int id = c.addTimer(now_us() + 1h, sub () {}, \"owned-async-test\");
+        return c.cancelTimer(id);
+    }
+
+    # a timer with a module closure that stays pending
+    static int keepTimer() {
+        return AsyncSocketIo::getGlobalAsyncIoController().addTimer(now_us() + 1h, sub () {}, \"owned-async-test\");
+    }
+
+    # a timer with a module closure, added natively
+    static bool ownNativeTimer() {
+        int id = AsyncIoController::addTimer(now_us() + 1h, sub () {});
+        return AsyncIoController::cancelTimer(id);
+    }
+
+    # a timer with the caller's closure
+    static bool callerTimer(code<nothing()> cb) {
+        AsyncSocketIo::AsyncSocketIoController c = AsyncSocketIo::getGlobalAsyncIoController();
+        int id = c.addTimer(now_us() + 1h, cb);
+        return c.cancelTimer(id);
+    }
+
+    # a timer with non-callable data, which the process-wide timer callback receives
+    static bool dataTimer() {
+        int id = AsyncIoController::addTimer(now_us() + 1h, \"data\");
+        return AsyncIoController::cancelTimer(id);
+    }
+
+    static bool cancel(int id) {
+        return AsyncSocketIo::getGlobalAsyncIoController().cancelTimer(id);
+    }
+
+    static string ownTask() {
+        Queue q();
+        AsyncIoController::submitTask(sub () { q.push(\"task ran\"); });
+        return q.get(60000);
+    }
+
+    static string callerTask(code<nothing()> task) {
+        AsyncIoController::submitTask(task);
+        return \"submitted\";
+    }
+
+    static auto ownCallAsync() {
+        return call_async(string sub () { return \"async\"; }).get();
+    }
+
+    static auto callerCallAsync(code c) {
+        return call_async(c).get();
+    }
+
+    static auto ownParallelMap() {
+        return parallel_map(int sub (int i) { return i * 2; }, (1, 2, 3));
+    }
+
+    static auto callerParallelMap(code c) {
+        return parallel_map(c, (1, 2, 3));
+    }
+
+    static int ownParallelForeach() {
+        Queue q();
+        parallel_foreach(sub (int i) { q.push(i); }, (1, 2, 3));
+        int sum = 0;
+        while (q.size()) {
+            sum += q.get();
+        }
+        return sum;
+    }
+
+    static string callerParallelForeach(code c) {
+        parallel_foreach(c, (1, 2, 3));
+        return \"done\";
+    }
+
+    static auto ownDefer() {
+        return defer_thread_cancel(string sub () { return \"deferred\"; });
+    }
+
+    static auto callerDefer(code c) {
+        return defer_thread_cancel(c);
+    }
+
+    # builtins that affect or read only the calling thread, resolved when parsed and at run time
+    static string currentThread() {
+        sleep(0);
+        usleep(0);
+        usleep(0s);
+        thread_yield();
+        call_function(\"sleep\", 0);
+        call_function(\"usleep\", 0);
+        call_function(\"thread_yield\");
+        bool ae = active_exception() || call_function(\"active_exception\");
+        int mask = Program::getCallerCapabilityMask();
+        Channel ch(1);
+        ch.send(1);
+        auto r = channel_select(({\"channel\": ch, \"op\": \"recv\"},), 1s);
+        return sprintf(\"ok %y %y %y\", ae, (mask & PO_NO_THREAD_CONTROL) != 0, r.value);
+    }
+}
+
+# schedules a reference to its own method, which a subclass can override
+public class Watcher {
+    bool armAndCancel() {
+        int id = AsyncIoController::addTimer(now_us() + 1h, \\fire());
+        return AsyncIoController::cancelTimer(id);
+    }
+
+    fire() {
+    }
+}
+}
+";
+    }
+
+    private string script() {
+        return "%modern
+%requires OwnedAsyncMod
+%requires AsyncSocketIo
+%requires DiscordWebSocketClient
+
+# the form of the qlib modules under test
+string sub form(string mod) {
+    return get_module_hash(){mod}.filename =~ /\\.qmod$/ ? \"aot\" : \"source\";
+}
+printf(\"qlib: %s %s %s\\n\", form(\"AsyncSocketIo\"), form(\"WebSocketClient\"), form(\"DiscordWebSocketClient\"));
+
+# a Qorus service's restrictions
+const ServiceOptions = PO_NO_THREAD_CONTROL | PO_NO_PROCESS_CONTROL;
+
+Program sub restricted(string label, string code) {
+    Program p(PO_NEW_STYLE);
+    p.loadModule(\"OwnedAsyncMod\");
+    p.loadModule(\"AsyncSocketIo\");
+    p.loadModule(\"DiscordWebSocketClient\");
+    p.setParseOptions(ServiceOptions);
+    p.parse(code, label);
+    return p;
+}
+
+string sub result(code c) {
+    try {
+        return sprintf(\"%y\", c());
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err == \"INVALID-FUNCTION-ACCESS\" ? ex.err + \": \" + ex.desc : ex.err;
+    }
+}
+
+sub call(string label, Program pgm, string f, *softlist<auto> args) {
+    # repeated calls run the code on every tier with tiered execution
+    for (int i = 0; i < 2; ++i) {
+        printf(\"%s %s: %s\\n\", label, f, result(auto sub () { return pgm.callFunctionArgs(f, args); }));
+    }
+}
+
+Program p = restricted(\"restricted\", \"
+class Probe inherits DiscordWebSocketClient {
+    constructor() : DiscordWebSocketClient({'url': 'ws://127.0.0.1:1/', 'token': 'offline-placeholder'}) {}
+    run() { armHelloWatchdog(); cancelHelloWatchdog(); }
+}
+auto sub discord_watchdog() { Probe pr(); pr.run(); return 'armed and cancelled'; }
+auto sub controller_caller_timer() {
+    AsyncSocketIo::AsyncSocketIoController c = AsyncSocketIo::getGlobalAsyncIoController();
+    int id = c.addTimer(now_us() + 1h, sub () {}, 'restricted caller closure');
+    c.cancelTimer(id);
+    return 'added';
+}
+auto sub own_timer() { return OwnedAsyncMod::Async::ownTimer(); }
+auto sub own_native_timer() { return OwnedAsyncMod::Async::ownNativeTimer(); }
+auto sub caller_timer() { return OwnedAsyncMod::Async::callerTimer(sub () {}); }
+auto sub data_timer() { return OwnedAsyncMod::Async::dataTimer(); }
+auto sub own_task() { return OwnedAsyncMod::Async::ownTask(); }
+auto sub caller_task() { return OwnedAsyncMod::Async::callerTask(sub () {}); }
+auto sub own_call_async() { return OwnedAsyncMod::Async::ownCallAsync(); }
+auto sub caller_call_async() { return OwnedAsyncMod::Async::callerCallAsync(string sub () { return 'caller'; }); }
+auto sub own_parallel_map() { return OwnedAsyncMod::Async::ownParallelMap(); }
+auto sub caller_parallel_map() { return OwnedAsyncMod::Async::callerParallelMap(int sub (int i) { return i; }); }
+auto sub own_parallel_foreach() { return OwnedAsyncMod::Async::ownParallelForeach(); }
+auto sub caller_parallel_foreach() { return OwnedAsyncMod::Async::callerParallelForeach(sub (int i) {}); }
+auto sub own_defer() { return OwnedAsyncMod::Async::ownDefer(); }
+auto sub caller_defer() { return OwnedAsyncMod::Async::callerDefer(string sub () { return 'caller'; }); }
+auto sub current_thread() { return OwnedAsyncMod::Async::currentThread(); }
+auto sub http2_mode() { return call_function('get_global_http2_mode').size() > 0; }
+auto sub cancel_unowned(int id) { return OwnedAsyncMod::Async::cancel(id); }
+auto sub keep_timer() { return OwnedAsyncMod::Async::keepTimer(); }
+class PlainWatcher inherits OwnedAsyncMod::Watcher {
+}
+class OverridingWatcher inherits OwnedAsyncMod::Watcher {
+    fire() {}
+}
+auto sub module_method_timer() { PlainWatcher w(); return w.armAndCancel(); }
+auto sub overridden_method_timer() { OverridingWatcher w(); return w.armAndCancel(); }
+\");
+
+foreach string f in (\"discord_watchdog\", \"controller_caller_timer\", \"own_timer\", \"own_native_timer\",
+        \"module_method_timer\", \"overridden_method_timer\", \"caller_timer\", \"data_timer\", \"own_task\", \"caller_task\", \"own_call_async\", \"caller_call_async\",
+        \"own_parallel_map\", \"caller_parallel_map\", \"own_parallel_foreach\", \"caller_parallel_foreach\",
+        \"own_defer\", \"caller_defer\", \"current_thread\", \"http2_mode\") {
+    call(\"restricted\", p, f);
+}
+
+# a timer that the main Program adds: module code running for a restricted caller cannot cancel it
+int main_timer = AsyncIoController::addTimer(now_us() + 1h, sub () {});
+call(\"restricted\", p, \"cancel_unowned\", main_timer);
+printf(\"main cancel_unowned_after: %y\\n\", AsyncIoController::cancelTimer(main_timer));
+
+# a timer that module code adds for one restricted application cannot be cancelled for another
+Program other = restricted(\"other_app\", \"auto sub cancel_other_app_timer(int id) {
+    return OwnedAsyncMod::Async::cancel(id); }\");
+int app_timer = p.callFunction(\"keep_timer\");
+printf(\"other_app cancel_other_app_timer: %s\\n\", result(auto sub () { return other.callFunction(\"cancel_other_app_timer\",
+    app_timer); }));
+printf(\"restricted cancel_own_app_timer: %s\\n\", result(auto sub () { return p.callFunction(\"cancel_unowned\",
+    app_timer); }));
+
+# the hoppy timer probe: a caller adds a timer with its own closure; scheduling code is thread control, so a caller
+# that may control threads (with PO_NO_PROCESS_CONTROL, as in the probe) may, and one with PO_NO_THREAD_CONTROL may not
+sub timer_probe(string label, int po) {
+    Program h(PO_NEW_STYLE | po);
+    h.parse(\"%requires AsyncSocketIo
+sub probe() {
+    AsyncSocketIo::AsyncSocketIoController c = AsyncSocketIo::getGlobalAsyncIoController();
+    int id = c.addTimer(now_us() + 1h, sub () {}, 'hoppy-runtime-qualification');
+    c.cancelTimer(id);
+}
+\", \"restricted timer probe\");
+    printf(\"%s: %s\\n\", label, result(auto sub () { h.callFunction(\"probe\"); return 'added'; }));
+}
+timer_probe(\"hoppy timer probe\", PO_NO_PROCESS_CONTROL);
+timer_probe(\"hoppy timer probe without thread control\", PO_NO_THREAD_CONTROL);
+
+# restricted code calling a flagged builtin directly
+string direct_err;
+try {
+    Program d(PO_NEW_STYLE | ServiceOptions);
+    d.parse(\"sleep(0);\", \"direct\");
+    direct_err = \"no error\";
+} catch (hash<ExceptionInfo> ex) {
+    direct_err = ex.err;
+}
+printf(\"restricted direct parse: %s\\n\", direct_err);
+
+# a caller without restrictions passes its own closures
+Program u(PO_NEW_STYLE);
+u.loadModule(\"OwnedAsyncMod\");
+u.parse(\"
+auto sub caller_timer() { return OwnedAsyncMod::Async::callerTimer(sub () {}); }
+auto sub caller_call_async() { return OwnedAsyncMod::Async::callerCallAsync(string sub () { return 'user async'; }); }
+auto sub caller_defer() { return OwnedAsyncMod::Async::callerDefer(string sub () { return 'user deferred'; }); }
+auto sub current_thread() { return OwnedAsyncMod::Async::currentThread(); }
+\", \"user\");
+foreach string f in (\"caller_timer\", \"caller_call_async\", \"caller_defer\", \"current_thread\") {
+    call(\"user\", u, f);
+}
+";
+    }
+
+    private string writeFile(string path, string contents) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(contents);
+        f.close();
+        return path;
+    }
+
+    private compileModule(string qm_path, string qmod_path, string module_path) {
+        string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s "
+            "QORE_MODULE_DIR=%s %s -b --compile-module --output %s %s 2>&1", libqore_dir, libqore_dir, libqore_dir,
+            module_path, qore_bin, qmod_path, qm_path));
+        assertTrue(is_file(qmod_path), sprintf("compiled %s: %s", basename(qmod_path), compile_out));
+    }
+
+    #! returns the module path with the inherited module path appended
+    /** The inherited module path provides the binary modules that the qlib modules under test require, which a test
+        environment can provide only through it
+    */
+    private string modulePath(string module_path) {
+        return ENV.QORE_MODULE_DIR ? module_path + ":" + ENV.QORE_MODULE_DIR : module_path;
+    }
+
+    #! runs the script with the given module directories first in the module path
+    private hash<ExecModeHarness::ModeRunResult> runScript(string module_path, string script_path, string mode) {
+        return ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s "
+            "QORE_MODULE_DIR=%s %s -b --enable-debug --exec-mode=%s %s", libqore_dir, libqore_dir, libqore_dir,
+            modulePath(module_path), qore_bin, mode, script_path));
+    }
+
+    #! runs the script with the source and the AOT test module in every mode against the source module's AST output
+    /** @param qlib_path the module path that provides the qlib modules under test
+        @param qlib_form the form of the qlib modules under test that the module path provides
+    */
+    private checkAllModes(string qlib_path, string qlib_form) {
+        string script_path = tmp.path + "/owned-async-" + qlib_form + ".q";
+        writeFile(script_path, script());
+        # the AOT test module is compiled against the qlib modules of the run
+        string qmod_path = qmod_dir + "/" + qlib_form;
+        mkdir(qmod_path);
+        compileModule(src_dir + "/OwnedAsyncMod.qm", qmod_path + "/OwnedAsyncMod.qmod", modulePath(qlib_path));
+        string expected = sprintf("qlib: %s %s %s\n", qlib_form, qlib_form, qlib_form) + ExpectedOutput;
+        hash<ExecModeHarness::ModeRunResult> reference = runScript(src_dir + ":" + qlib_path, script_path, "ast");
+        assertEq(expected, reference.out, sprintf("qlib %s, source module, ast", qlib_form));
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = runScript(src_dir + ":" + qlib_path, script_path, mode);
+            assertEq(reference.out, r.out, sprintf("qlib %s, source module, %s", qlib_form, mode));
+            r = runScript(qmod_path + ":" + qlib_path, script_path, mode);
+            assertEq(reference.out, r.out, sprintf("qlib %s, AOT module, %s", qlib_form, mode));
+        }
+    }
+
+    testSourceQlib() {
+        checkAllModes(qlib_src_dir + ":" + qlib_dir, "source");
+    }
+
+    testAotQlib() {
+        *string aot_dir = getQlibAotDir();
+        if (!aot_dir) {
+            testSkip("the build has no AOT forms of the qlib modules under test");
+        }
+        checkAllModes(aot_dir + ":" + qlib_dir, "aot");
+    }
+}

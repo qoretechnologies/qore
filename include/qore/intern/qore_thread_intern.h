@@ -440,6 +440,46 @@ DLLLOCAL QoreParseOptions runtime_get_effective_parse_options_for(const QoreProg
 */
 DLLLOCAL QoreParseOptions runtime_get_own_program_state_parse_options(const QoreParseOptions& po);
 
+//! returns the ID of the application Program that module code calling from \a caller_pgm runs for
+/** If module code already runs for an application with that application's restrictions, it is that application;
+    otherwise it is \a caller_pgm, or 0 if there is none
+*/
+DLLLOCAL unsigned runtime_get_module_call_app_id(const QoreProgram* caller_pgm);
+
+//! returns true if module code runs in its own Program for an application with restrictions
+/** @param app_pgm_id set to the ID of the application Program that the module code runs for
+
+    In this context, builtin variants flagged with @ref QCF_MODULE_OWNED are checked without the restrictions that
+    the module code inherits from its caller, and check what they act on themselves (see
+    qore_check_module_owned_code())
+*/
+DLLLOCAL bool runtime_get_module_caller_app(unsigned& app_pgm_id);
+
+//! checks code that a builtin variant flagged with @ref QCF_MODULE_OWNED runs for module code
+/** Module code that runs in its own Program for a caller with restrictions may run code asynchronously, or with
+    thread cancellation deferred, only if the code's own Program allows what the caller may not: the module's own
+    closures run, while a restricted caller's own closure, a call reference to a builtin, and non-callable data
+    (which a process-wide callback would receive) are refused.  This keeps the caller's restrictions: the caller
+    cannot use module code to run its own code in another thread or to escape a cancellation request.  In every
+    other context, nothing is checked.
+
+    This is the only place that implements the rule.
+
+    @param code the code to check (or the non-callable value that would be delivered instead)
+    @param domain the functional domain of the variant; thread control is always required as well
+    @param name the name of the builtin, for the exception
+    @param action what the builtin does with the code, for the exception (ex: \c "schedule")
+    @param xsink raises \c INVALID-FUNCTION-ACCESS if the code may not be run for the caller
+
+    @return 0 if the code may be run, -1 if an exception was raised
+*/
+DLLLOCAL int qore_check_module_owned_code(const QoreValue code, int64 domain, const char* name, const char* action,
+        ExceptionSink* xsink);
+
+//! checks code that a builtin variant flagged with @ref QCF_MODULE_OWNED runs for module code; see above
+DLLLOCAL int qore_check_module_owned_code(const ResolvedCallReferenceNode* code, int64 domain, const char* name,
+        const char* action, ExceptionSink* xsink);
+
 //! Marks module code that runs for no application: a module's init or del closure
 /** The Program that loads or unloads a module does not call its init or del closure on its own behalf, so
     qore_reflection_has_module_caller() does not look beyond this point for an application Program; a call reflected
@@ -628,6 +668,7 @@ private:
     QoreParseOptions old_value;
     QoreParseOptions old_caller_restrictions;
     const QoreProgram* old_module_pgm;
+    unsigned old_app_pgm_id;
 };
 
 //! the runtime parse options override of a call; see qore_get_user_call_runtime_po_override()
@@ -640,6 +681,11 @@ struct QoreCallParseOptionsOverride {
     QoreParseOptions caller_restrictions;
     //! the Program of the module whose code inherits \a caller_restrictions, or nullptr
     const QoreProgram* module_pgm = nullptr;
+    //! the ID of the application Program that the module code runs for, if \a module_pgm is set
+    /** The application is the first Program in the chain of callers that is not a module: the Program whose
+        restrictions the module code inherits
+    */
+    unsigned app_pgm_id = 0;
 };
 
 class RuntimeParseOptionsOverrideHelper {
@@ -659,6 +705,7 @@ private:
     QoreParseOptions old_po;
     QoreParseOptions old_caller_restrictions;
     const QoreProgram* old_module_pgm;
+    unsigned old_app_pgm_id;
 
     DLLLOCAL void set(const QoreCallParseOptionsOverride& o);
 };

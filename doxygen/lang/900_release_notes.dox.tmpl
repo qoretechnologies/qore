@@ -779,6 +779,32 @@
     @ref mapperintro "Mapper" and @ref dataproviderintro "DataProvider", therefore keep working for such callers.  A
     module function runs in its caller's %Program and uses its caller's thread-local data, so it can use them only if
     its caller may.
+
+    Module code running in its own %Program also checks the builtins that affect or read only the calling thread
+    (@ref Qore::sleep() "sleep()", @ref Qore::usleep() "usleep()", @ref Qore::thread_yield() "thread_yield()",
+    @ref Qore::channel_select() "channel_select()", @ref Qore::active_exception() "active_exception()" and
+    @ref Qore::Program::getCallerCapabilityMask() "Program::getCallerCapabilityMask()") against its own restrictions
+    (see @ref CURRENT_THREAD_ONLY), and @ref Qore::get_global_http2_mode() "get_global_http2_mode()", which only reads
+    a setting, no longer requires @ref Qore::PO_NO_PROCESS_CONTROL "process control".  The builtins that run code
+    asynchronously or with thread cancellation deferred
+    (@ref Qore::AsyncIoController::addTimer() "AsyncIoController::addTimer()",
+    @ref Qore::AsyncIoController::submitTask() "AsyncIoController::submitTask()", @ref Qore::call_async()
+    "call_async()", @ref Qore::parallel_map() "parallel_map()", @ref Qore::parallel_foreach() "parallel_foreach()" and
+    @ref Qore::defer_thread_cancel() "defer_thread_cancel()") accept from module code running for a caller with
+    restrictions only code of a %Program that allows what the caller may not (see @ref MODULE_OWNED): a module's own
+    timers and tasks work for a caller that may not control threads, such as a Qorus service using
+    @ref discordwebsocketclientintro "DiscordWebSocketClient" or the WebSocket
+    clients, while the caller's own closure passed through a module, for example to
+    @ref asyncsocketiointro "AsyncSocketIo"'s \c AsyncSocketIoController::addTimer(), is refused with
+    \c INVALID-FUNCTION-ACCESS: <em>the callback's Program does not allow thread control (PO_NO_THREAD_CONTROL)</em>.
+    Such module code can cancel only the timers that module code added for the same application with
+    @ref Qore::AsyncIoController::cancelTimer() "AsyncIoController::cancelTimer()".  Scheduling code is thread
+    control, so @ref Qore::AsyncIoController::addTimer() "AsyncIoController::addTimer()",
+    @ref Qore::AsyncIoController::submitTask() "submitTask()" and
+    @ref Qore::AsyncIoController::cancelTimer() "cancelTimer()" now require
+    @ref Qore::PO_NO_THREAD_CONTROL "thread control" instead of process control, and
+    @ref Qore::AsyncIoController::setTimerCallback() "setTimerCallback()", which installs a process-wide callback,
+    requires both.
     @endparblock
 
     @par Temporary Values Live Until the End of Their Statement

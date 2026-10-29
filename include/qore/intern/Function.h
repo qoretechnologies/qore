@@ -900,11 +900,19 @@ DLLLOCAL bool qore_program_is_module(const QoreProgram* pgm);
     interpreter.
 */
 DLLLOCAL void qore_get_user_call_runtime_po_override(const QoreProgram* exec_pgm, const UserVariantBase* uvb,
-        const QoreParseOptions& caller_po, QoreCallParseOptionsOverride& o);
+        const QoreParseOptions& caller_po, const QoreProgram* caller_pgm, QoreCallParseOptionsOverride& o);
 
-//! returns the override for module code entered in its own Program \a module_pgm with the effective options \a caller_po
+//! returns the override for module code entered in its own Program \a module_pgm from \a caller_pgm
+/** @param module_pgm the module's Program
+    @param caller_po the effective options of the code making the call
+    @param caller_pgm the Program making the call, or nullptr
+*/
 DLLLOCAL QoreCallParseOptionsOverride qore_get_module_call_runtime_po_override(const QoreProgram* module_pgm,
-        const QoreParseOptions& caller_po);
+        const QoreParseOptions& caller_po, const QoreProgram* caller_pgm);
+
+//! the code flags of builtin variants that module code running in its own Program calls without the restrictions
+//! inherited from its caller (see runtime_get_own_program_state_parse_options())
+#define QCF_CALLER_RESTRICTION_RELIEF (QCF_OWN_PROGRAM_STATE | QCF_CURRENT_THREAD_ONLY | QCF_MODULE_OWNED)
 
 class UserVariantExecHelper;
 class QoreJIT;

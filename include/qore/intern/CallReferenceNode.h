@@ -250,6 +250,11 @@ protected:
 public:
     DLLLOCAL MethodCallReferenceNode(const QoreProgramLocation* loc, const QoreMethod* n_method, QoreProgram* n_pgm);
 
+    //! returns the object that the method is called on, if any
+    DLLLOCAL const QoreObject* getObject() const {
+        return obj;
+    }
+
     DLLLOCAL virtual QoreValue execValue(const QoreListNode* args, ExceptionSink* xsink) const;
 };
 
@@ -346,6 +351,9 @@ public:
         return nullptr;
     }
 
+    //! returns the method that a call of the reference would run now, or nullptr if there is none
+    DLLLOCAL const QoreMethod* findMethod() const;
+
 private:
     QoreObject* obj;
     std::string method;
@@ -373,6 +381,16 @@ public:
 
     DLLLOCAL virtual QoreFunction* getFunction() const;
 
+    //! returns the method that the reference was resolved to
+    DLLLOCAL const QoreMethod* getMethod() const {
+        return method;
+    }
+
+    //! returns the object that the method is called on
+    DLLLOCAL const QoreObject* getObject() const {
+        return obj;
+    }
+
 private:
     QoreObject* obj;
     const QoreMethod* method;
@@ -381,5 +399,13 @@ private:
 
     DLLLOCAL virtual ~RunTimeResolvedMethodReferenceNode();
 };
+
+//! returns the Program whose code a call of the given call reference runs
+/** For a method reference, this is the Program that defines the class of the method that a call would run now: calls
+    of a method reference are dispatched on the class of the object, so a subclass that overrides the method runs
+    its own code; for any other reference, it is ResolvedCallReferenceNode::getProgram().  Returns nullptr for builtin
+    code, which has no Program.
+*/
+DLLLOCAL const QoreProgram* qore_call_reference_code_program(const ResolvedCallReferenceNode* rcr);
 
 #endif
