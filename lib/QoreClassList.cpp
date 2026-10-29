@@ -255,7 +255,7 @@ void QoreClassList::assimilate(QoreClassList& n, qore_ns_private& ns,
                 ns.name.c_str());
             qore_class_private::derefClass(*i.second.cls, !ns_const, !ns_vars);
         } else {
-            printd(5, "QoreClassList::assimilate() this: %p adding: %p '%s::%s'\n", this, i.second,
+            printd(5, "QoreClassList::assimilate() this: %p adding: %p '%s::%s'\n", this, i.second.cls,
                 ns.name.c_str(), i.second.cls->getName());
             // "move" data to new list
             hm[i.first] = i.second;

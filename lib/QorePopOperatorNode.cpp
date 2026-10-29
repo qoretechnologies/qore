@@ -60,7 +60,7 @@ QoreValue QorePopOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink)
     QoreListNode* l = val.getValue().get<QoreListNode>();
 
     printd(5, "QorePopOperatorNode::evalImpl() about to call QoreListNode::pop() on list node %p (%d)\n", l,
-        l->size());
+        (int)(l->size()));
     // the list reference will now be the reference for the return value
     // therefore no need to reference again
     return l->pop();

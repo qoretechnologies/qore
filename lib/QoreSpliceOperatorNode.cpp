@@ -205,15 +205,15 @@ QoreValue QoreSpliceOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsi
 #ifdef DEBUG
     if (vt == NT_LIST) {
         QoreListNode *vl = val.getValue().get<QoreListNode>();
-        printd(5, "op_splice() val: %p (size: " QSD ") offset: " QSD "\n", vl, vl->size(), offset);
+        printd(5, "op_splice() val: %p (size: " QLLD ") offset: " QLLD "\n", vl, (int64)(vl->size()), (int64)offset);
     }
     else if (vt == NT_STRING) {
         QoreStringNode *vs = val.getValue().get<QoreStringNode>();
-        printd(5, "op_splice() val: %p (strlen: " QSD ") offset: " QSD "\n", vs, vs->strlen(), offset);
+        printd(5, "op_splice() val: %p (strlen: " QLLD ") offset: " QLLD "\n", vs, (int64)(vs->strlen()), (int64)offset);
     }
     else if (vt == NT_STRING) {
         QoreStringNode *vs = val.getValue().get<QoreStringNode>();
-        printd(5, "op_splice() val: %p (strlen: " QSD ") offset: " QSD "\n", vs, vs->strlen(), offset);
+        printd(5, "op_splice() val: %p (strlen: " QLLD ") offset: " QLLD "\n", vs, (int64)(vs->strlen()), (int64)offset);
     }
 #endif
 

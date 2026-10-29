@@ -3053,7 +3053,8 @@ QoreListNode* QoreFunction::runtimeGetCallVariants() const {
 
         // ignore "runtime noop" variants if necessary
         if (strict_args && (vflags & QCF_RUNTIME_NOOP)) {
-            printd(5, "QoreFunction::runtimeGetCallVariants() this: %p, skip runtime noop, vflags: %p\n", this, vflags);
+            printd(5, "QoreFunction::runtimeGetCallVariants() this: %p, skip runtime noop, vflags: 0x%llx\n", this,
+                (unsigned long long)vflags);
             continue;
         }
 
@@ -3062,7 +3063,8 @@ QoreListNode* QoreFunction::runtimeGetCallVariants() const {
         if ((vfflags & po & ~PO_POSITIVE_OPTIONS)
             || ((vfflags & PO_POSITIVE_OPTIONS)
                 && (((vfflags & PO_POSITIVE_OPTIONS) & po) != (vfflags & PO_POSITIVE_OPTIONS)))) {
-            printd(5, "QoreFunction::runtimeGetCallVariants() this: %p, skip functionality, vfflags: %p\n", this, vfflags);
+            printd(5, "QoreFunction::runtimeGetCallVariants() this: %p, skip functionality, vfflags: 0x%llx\n",
+                this, (unsigned long long)vfflags);
             continue;
         }
 
@@ -4346,7 +4348,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
     unsigned num_args = argTypeInfo.size();
 
     printd(5, "QoreFunction::parseFindVariant() this: %p %s() vlist: %d ilist: %d num_args: %d\n", this, getName(),
-        vlist.size(), ilist.size(), num_args);
+        (int)(vlist.size()), (int)(ilist.size()), num_args);
 
     QoreFunction* aqf = nullptr;
 

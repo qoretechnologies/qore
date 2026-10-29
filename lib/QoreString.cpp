@@ -1534,8 +1534,8 @@ void qore_string_private::terminate(size_t size) {
 
 int qore_string_private::substr_simple(QoreString* ns, qore_offset_t offset, qore_offset_t length) const {
     const char* data = effective_buf();
-    printd(5, "qore_string_private::substr_simple(offset=" QSD ", length=" QSD ") string=\"%s\" (this=%p len="
-        QSD ")\n", offset, length, data, this, len);
+    printd(5, "qore_string_private::substr_simple(offset=" QLLD ", length=" QLLD ") string=\"%s\" (this=%p len="
+        QLLD ")\n", (int64)offset, (int64)length, data, this, (int64)len);
 
     size_t n_offset;
     if (offset < 0)
@@ -1563,8 +1563,8 @@ int qore_string_private::substr_simple(QoreString* ns, qore_offset_t offset, qor
 
 int qore_string_private::substr_simple(QoreString* ns, qore_offset_t offset) const {
     const char* data = effective_buf();
-    printd(5, "qore_string_private::substr_simple(offset=" QSD ") string=\"%s\" (this=%p len=" QSD ")\n",
-            offset, data, this, len);
+    printd(5, "qore_string_private::substr_simple(offset=" QLLD ") string=\"%s\" (this=%p len=" QLLD ")\n",
+            (int64)offset, data, this, (int64)len);
 
     size_t n_offset;
     if (offset < 0)
@@ -1584,8 +1584,8 @@ int qore_string_private::substr_complex(QoreString* ns, qore_offset_t offset, qo
     const char* data = effective_buf();
     assert(xsink);
     QORE_TRACE("qore_string_private::substr_complex(offset, length)");
-    printd(5, "qore_string_private::substr_complex(offset=" QSD ", length=" QSD ") string=\"%s\" (this=%p len="
-        QSD ")\n", offset, length, data, this, len);
+    printd(5, "qore_string_private::substr_complex(offset=" QLLD ", length=" QLLD ") string=\"%s\" (this=%p len="
+        QLLD ")\n", (int64)offset, (int64)length, data, this, (int64)len);
 
     const char* pend = data + len;
     if (offset < 0) {

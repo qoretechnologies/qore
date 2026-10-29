@@ -57,6 +57,22 @@
 #define PACK
 #endif
 
+//! declares a function that formats its arguments like printf(), so that the compiler checks them against the format
+/** @param fmt the position of the format string argument, counting the implicit \c this argument of a non-static
+    member function as 1
+    @param first the position of the first argument to format
+
+    An argument that does not match its conversion is undefined behavior; with a \c %s conversion, it crashes the
+    process when the call formats it.
+
+    @since %Qore 3.0
+*/
+#ifdef __GNUC__
+#define QORE_PRINTF_FORMAT(fmt, first) __attribute__((format(printf, fmt, first)))
+#else
+#define QORE_PRINTF_FORMAT(fmt, first)
+#endif
+
 //! Qore's base type info class
 class QoreTypeInfo;
 class RuntimeConfig;

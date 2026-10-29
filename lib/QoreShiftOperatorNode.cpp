@@ -124,7 +124,7 @@ QoreValue QoreShiftOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsin
 
     QoreListNode* l = val.getValue().get<QoreListNode>();
 
-    printd(5, "QoreShiftOperatorNode::evalImpl() about to call QoreListNode::shift() on list node %p (%d)\n", l, l->size());
+    printd(5, "QoreShiftOperatorNode::evalImpl() about to call QoreListNode::shift() on list node %p (%d)\n", l, (int)(l->size()));
     // the list reference will now be the reference for the return value
     // therefore no need to reference again
     return l->shift();

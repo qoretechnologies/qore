@@ -838,7 +838,7 @@ static int process_opt(QoreString *cstr, char* param, QoreValue qv, int type, bo
 #ifdef DEBUG
     if (t == NT_STRING) {
         QoreStringValueHelper nstr(qv);
-        printd(5, "process_opt() %p (%d) \"%s\"\n", nstr->getBuffer(), nstr->strlen(), nstr->getBuffer());
+        printd(5, "process_opt() %p (%d) \"%s\"\n", nstr->getBuffer(), (int)(nstr->strlen()), nstr->getBuffer());
     }
 #endif
 

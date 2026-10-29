@@ -649,7 +649,7 @@ QoreValue QoreSquareBracketsOperatorNode::doSquareBrackets(const QoreValue l, co
                     ret->push(entry.release(), xsink);
 
                     printd(5, "QoreSquareBracketsOperatorNode::doSquareBrackets() i: %d: vc: %d vtype: '%s' " \
-                        "et: '%s'\n", it.index(), (int)vcommon, QoreTypeInfo::getName(vtype),
+                        "et: '%s'\n", (int)(it.index()), (int)vcommon, QoreTypeInfo::getName(vtype),
                         QoreTypeInfo::getName(entry->getTypeInfo()));
                 }
 

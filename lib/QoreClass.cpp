@@ -1484,7 +1484,7 @@ int qore_class_private::initMembers(QoreObject& o, bool& need_scan, ExceptionSin
         printd(5, "qore_class_private::initMembers() this: %p %s '%s::%s' ctx %p '%s' (access '%s') has parent " \
             "members: %d\n", this, name.c_str(), i.info->getClass()->name.c_str(), i.name, i.member_class_ctx,
             i.member_class_ctx ? i.member_class_ctx->name.c_str() : "n/a", privpub(i.info->access),
-            i.info->numParentMembers());
+            (int)(i.info->numParentMembers()));
 
         if (initMember(o, need_scan, i.name, *i.info, i.member_class_ctx, xsink)) {
             assert(*xsink);

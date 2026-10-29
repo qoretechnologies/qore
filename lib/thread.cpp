@@ -655,7 +655,7 @@ public:
                 if (!getrlimit(RLIMIT_STACK, &rl) && rl.rlim_cur
                         && rl.rlim_cur != RLIM_INFINITY) {
                     stack_size = rl.rlim_cur;
-                    printd(5, "rlimit: stack size: %lld bytes\n", rl.rlim_cur);
+                    printd(5, "rlimit: stack size: %lld bytes\n", (int64)rl.rlim_cur);
                 } else
 #endif
                 {
@@ -664,7 +664,7 @@ public:
                     // on Alpine Linux get_stack_size() will report a 128K stack size, so we hardcode it here
                     // in case it's too small
                     stack_size = 8 * 1024 * 1024;
-                    printd(5, "stack size: %lld (%lld)\n", stack_size, get_stack_size());
+                    printd(5, "stack size: %lld (%lld)\n", (int64)stack_size, (int64)(get_stack_size()));
                 }
 #endif
                 // issue #4392: add 64K of additional stack in the primary thread
@@ -677,7 +677,7 @@ public:
             // limit wrapping around and never being reached
             size_t stack_adjusted_size = stack_size > stack_guard ? stack_size - stack_guard : 0;
             printd(5, "ThreadData::ThreadData() stack_adjusted_size: %lld qore_thread_stack_limit: %lld\n",
-                stack_adjusted_size, qore_thread_stack_limit);
+                (int64)stack_adjusted_size, (int64)qore_thread_stack_limit);
 #ifdef STACK_DIRECTION_DOWN
             stack_limit = stack_start - stack_adjusted_size;
 #else
@@ -882,7 +882,7 @@ public:
         stack_limit = primary_stack_top + usable;
 #endif
         printd(5, "ThreadData::enforcePrimaryStackSize() max: %lld protected: %lld size: %lld usable: %lld\n",
-            max_size, protected_size, size, usable);
+            (int64)max_size, (int64)protected_size, (int64)size, (int64)usable);
     }
 #endif
 };
@@ -1669,7 +1669,7 @@ size_t linux_get_stack_start_pos() {
             }
             if (ok) {
                 size_t npos = strtoll(ln.c_str() + off, 0, 10);
-                printd(5, "linux_get_stack_start_pos() stack start: %llx\n", npos);
+                printd(5, "linux_get_stack_start_pos() stack start: %llx\n", (unsigned long long)npos);
                 return npos;
             }
         }

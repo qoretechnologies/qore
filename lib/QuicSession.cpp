@@ -1315,7 +1315,7 @@ int QuicSession::resetHttp3(ExceptionSink* xsink) {
     has_completed_streams_.store(false, std::memory_order_release);
 
     printd(2, "QuicSession::resetHttp3(): HTTP/3 layer torn down for re-initialization "
-        "(session %lld)\n", session_id_);
+        "(session %lld)\n", (int64)session_id_);
 
     return setupHttp3(xsink);
 }
@@ -1760,7 +1760,7 @@ int QuicSession::writePacketsLocked(QuicPacketBatch& packets, ExceptionSink* xsi
                 ASYNC_IO_TRACE("QuicSession::writePacketsLocked nghttp3_writev session=%lld stream_id=%lld fin=%d sveccnt=%d vec_total=%zu\n",
                     (long long)getSessionId(), (long long)stream_id, fin, (int)sveccnt, vec_total);
                 printd(5, "writePacketsLocked() nghttp3_writev: stream_id=" QLLD " fin=%d sveccnt=%d vec_total=%d\n",
-                    stream_id, fin, (int)sveccnt, (int)vec_total);
+                    (int64)stream_id, fin, (int)sveccnt, (int)vec_total);
             }
         } else if (h3_conn_) {
             ASYNC_IO_TRACE("QuicSession::writePacketsLocked max_data_left=0 session=%lld (peer flow-control blocked)\n",
@@ -1792,14 +1792,14 @@ int QuicSession::writePacketsLocked(QuicPacketBatch& packets, ExceptionSink* xsi
                 assert(ndatalen == -1);
                 ASYNC_IO_TRACE("QuicSession::writePacketsLocked STREAM_DATA_BLOCKED session=%lld stream_id=%lld\n",
                     (long long)getSessionId(), (long long)stream_id);
-                printd(5, "writePacketsLocked() STREAM_DATA_BLOCKED stream_id=" QLLD "\n", stream_id);
+                printd(5, "writePacketsLocked() STREAM_DATA_BLOCKED stream_id=" QLLD "\n", (int64)stream_id);
                 if (h3_conn_) {
                     nghttp3_conn_block_stream(h3_conn_, stream_id);
                 }
                 continue;
             case NGTCP2_ERR_STREAM_SHUT_WR:
                 assert(ndatalen == -1);
-                printd(5, "writePacketsLocked() STREAM_SHUT_WR stream_id=" QLLD "\n", stream_id);
+                printd(5, "writePacketsLocked() STREAM_SHUT_WR stream_id=" QLLD "\n", (int64)stream_id);
                 if (h3_conn_) {
                     nghttp3_conn_shutdown_stream_write(h3_conn_, stream_id);
                 }
@@ -1826,7 +1826,7 @@ int QuicSession::writePacketsLocked(QuicPacketBatch& packets, ExceptionSink* xsi
             case NGTCP2_ERR_WRITE_MORE:
                 assert(ndatalen >= 0);
                 printd(5, "writePacketsLocked() WRITE_MORE stream_id=" QLLD " ndatalen=%d\n",
-                    stream_id, (int)ndatalen);
+                    (int64)stream_id, (int)ndatalen);
                 if (h3_conn_) {
                     nghttp3_conn_add_write_offset(h3_conn_, stream_id,
                                                    static_cast<uint64_t>(ndatalen));
@@ -1889,7 +1889,7 @@ int QuicSession::writePacketsLocked(QuicPacketBatch& packets, ExceptionSink* xsi
                 (unsigned long long)ngtcp2_conn_get_cwnd_left(conn_),
                 pending_datagrams_.size());
             printd(5, "writePacketsLocked() nwrite=0 stream_id=" QLLD " total_packets=%d\n",
-                stream_id, total_packets);
+                (int64)stream_id, total_packets);
             // Only clear pending_write_ when there is genuinely nothing more
             // to write.  When stream_id >= 0, nghttp3 has queued stream data
             // but ngtcp2 cannot write it right now (congestion or flow control);
@@ -1910,7 +1910,7 @@ int QuicSession::writePacketsLocked(QuicPacketBatch& packets, ExceptionSink* xsi
         ++total_packets;
         total_bytes += static_cast<size_t>(nwrite);
         printd(5, "writePacketsLocked() packet #%d: %d bytes, stream_id=" QLLD " ndatalen=%d\n",
-            total_packets, (int)nwrite, stream_id, (int)ndatalen);
+            total_packets, (int)nwrite, (int64)stream_id, (int)ndatalen);
 
         // Update stored addresses from ngtcp2's output path.  During migration,
         // ngtcp2 updates the active path and outputs packets for the new address;
@@ -2800,13 +2800,13 @@ int QuicSession::submitResponseStreaming(int64_t stream_id, int status_code,
     updateKeepAliveAfterStreamStateChangeLocked();
 
     printd(5, "QuicSession::submitResponseStreaming() stream_id=" QLLD " status=%d - streaming_body_data_ entry created\n",
-        stream_id, status_code);
+        (int64)stream_id, status_code);
     return 0;
 }
 
 int QuicSession::sendOnClosedStream(int64_t stream_id, size_t len, bool end_stream, ExceptionSink* xsink) {
     printd(2, "QuicSession::sendStreamData() stream " QLLD " closed for sending without an error: len=%zu "
-        "end_stream=%d\n", stream_id, len, end_stream ? 1 : 0);
+        "end_stream=%d\n", (int64)stream_id, len, end_stream ? 1 : 0);
     if (!len && end_stream) {
         // the send side of the stream is already closed; a half-close has nothing to do
         return 0;
@@ -2855,7 +2855,7 @@ int QuicSession::sendStreamData(int64_t stream_id, const void* data, size_t len,
         ASYNC_IO_TRACE("QuicSession::sendStreamData NOT_FOUND session=%lld stream_id=%lld\n",
             (long long)getSessionId(), (long long)stream_id);
         printd(1, "QuicSession::sendStreamData() stream_id=" QLLD " NOT FOUND in streaming_body_data_\n",
-            stream_id);
+            (int64)stream_id);
         // A stream that closed without an error (a reset with an error is reported above), including one the
         // peer closed with STOP_SENDING(H3_NO_ERROR) after its complete response, is closed for sending, so
         // producer loops can distinguish "the stream is closed" from an internal logic error
@@ -2880,7 +2880,7 @@ int QuicSession::sendStreamData(int64_t stream_id, const void* data, size_t len,
             (long long)getSessionId(), (long long)stream_id, len,
             sbd.data.size(), sbd.sent_bufs.size());
         printd(5, "QuicSession::sendStreamData() stream_id=" QLLD " BACKPRESSURE pending=%d\n",
-            stream_id, (int)sbd.data.size());
+            (int64)stream_id, (int)sbd.data.size());
         return 1;
     }
 
@@ -2899,7 +2899,7 @@ int QuicSession::sendStreamData(int64_t stream_id, const void* data, size_t len,
     // Resume the deferred data reader if it was waiting
     if (sbd.deferred && h3_conn_) {
         printd(5, "QuicSession::sendStreamData() stream_id=" QLLD " resuming deferred stream\n",
-            stream_id);
+            (int64)stream_id);
         int rv = nghttp3_conn_resume_stream(h3_conn_, stream_id);
         if (rv != 0 && rv != NGHTTP3_ERR_STREAM_NOT_FOUND) {
             xsink->raiseException("QUIC-HTTP3-ERROR",
@@ -2913,7 +2913,7 @@ int QuicSession::sendStreamData(int64_t stream_id, const void* data, size_t len,
         (long long)getSessionId(), (long long)stream_id, len, end_stream,
         sbd.data.size(), sbd.sent_bufs.size(), (sbd.deferred ? 0 : 1));
     printd(5, "QuicSession::sendStreamData() stream_id=" QLLD " len=%d eof=%d pending=%d deferred=%d\n",
-        stream_id, (int)len, end_stream, (int)sbd.data.size(), sbd.deferred);
+        (int64)stream_id, (int)len, end_stream, (int)sbd.data.size(), sbd.deferred);
     pending_write_.store(true, std::memory_order_release);
 #ifdef DEBUG
     connect_response_hold_until_ = 0;
@@ -3165,7 +3165,7 @@ void QuicSession::registerConnectStreamQueue(int64_t stream_id, Queue* queue) {
         SimpleRefHolder<BinaryNode> bin(new BinaryNode());
         bin->append(it->second.data(), it->second.size());
         printd(5, "QuicSession::registerConnectStreamQueue() stream_id=" QLLD
-            " flushing %d buffered bytes to Queue\n", stream_id, (int)it->second.size());
+            " flushing %d buffered bytes to Queue\n", (int64)stream_id, (int)it->second.size());
         queue->pushAndTakeRef(bin.release());
         it->second.clear();
     }
@@ -3174,7 +3174,7 @@ void QuicSession::registerConnectStreamQueue(int64_t stream_id, Queue* queue) {
     // If END_STREAM already arrived before registration, push sentinel and release
     if (already_complete) {
         printd(5, "QuicSession::registerConnectStreamQueue() stream_id=" QLLD
-            " END_STREAM already received, pushing sentinel\n", stream_id);
+            " END_STREAM already received, pushing sentinel\n", (int64)stream_id);
         queue->pushAndTakeRef(QoreValue());
         connect_stream_queues_.erase(stream_id);
         queue->deref(&xsink);
@@ -3291,7 +3291,7 @@ void QuicSession::markStreamComplete(int64_t stream_id) {
     auto it = streams_.find(stream_id);
     if (it != streams_.end() && !it->second->body_complete) {
         printd(5, "QuicSession::markStreamComplete() stream_id=" QLLD " body_size=%d status=%d dispatched=%d\n",
-            stream_id, (int)it->second->body.size(), it->second->status_code,
+            (int64)stream_id, (int)it->second->body.size(), it->second->status_code,
             it->second->dispatched ? 1 : 0);
         it->second->state = QuicStreamState::Closed;
         it->second->body_complete = true;
@@ -3301,7 +3301,7 @@ void QuicSession::markStreamComplete(int64_t stream_id) {
         // to completed_streams or erase. Wake controller-backed stream data waiters.
         if (it->second->dispatched) {
             printd(5, "QuicSession::markStreamComplete() stream_id=" QLLD " dispatched, keeping in map\n",
-                stream_id);
+                (int64)stream_id);
             notifyStreamData();
             return;
         }
@@ -3311,7 +3311,7 @@ void QuicSession::markStreamComplete(int64_t stream_id) {
         // keep the stream in the map so takeHeadersReadyStreamCopy() can find it.
         if (headers_only_mode_ && it->second->headers_complete) {
             printd(5, "QuicSession::markStreamComplete() stream_id=" QLLD " headers-only mode, keeping in map\n",
-                stream_id);
+                (int64)stream_id);
             return;
         }
 
@@ -3443,7 +3443,7 @@ std::unique_ptr<QuicStreamInfo> QuicSession::takeHeadersReadyStreamCopy() {
             // hasDispatchedStreams() for the race this prevents.
             dispatched_stream_count_.fetch_add(1, std::memory_order_release);
 
-            printd(5, "QuicSession::takeHeadersReadyStreamCopy() stream_id=" QLLD "\n", id);
+            printd(5, "QuicSession::takeHeadersReadyStreamCopy() stream_id=" QLLD "\n", (int64)id);
             return copy;
         }
     }
@@ -3528,7 +3528,7 @@ bool QuicSession::cleanupStream(int64_t stream_id) {
             ASYNC_IO_TRACE("QuicSession::cleanupStream KEEP_CONNECT_TUNNEL session=%lld stream_id=%lld\n",
                 (long long)getSessionId(), (long long)stream_id);
             printd(5, "QuicSession::cleanupStream() stream_id=" QLLD
-                " preserving active CONNECT tunnel\n", stream_id);
+                " preserving active CONNECT tunnel\n", (int64)stream_id);
             // Active CONNECT tunnel — leave everything in place:
             // - streams_ entry so h3RecvDataCallback can route incoming DATA
             // - connect_stream_queues_ / connect_stream_frame_states_ so the
@@ -3542,7 +3542,7 @@ bool QuicSession::cleanupStream(int64_t stream_id) {
             (long long)getSessionId(), (long long)stream_id,
             (int)isc, (int)cta);
         printd(5, "QuicSession::cleanupStream() stream_id=" QLLD " removing dispatched stream\n",
-            stream_id);
+            (int64)stream_id);
         // The handler is done with the request, so the rest of an unfinished request is never read: ask the
         // client to stop sending (RFC 9114 section 4.1.2).  H3_NO_ERROR, because the server answers the request
         // and the client must not discard the response.  Without this, a client that does not finish its request
@@ -3596,7 +3596,7 @@ void QuicSession::stopReadingStreamLocked(int64_t stream_id) {
         int rv = ngtcp2_conn_shutdown_stream_read(conn_, 0, stream_id, NGHTTP3_H3_NO_ERROR);
         if (rv != 0 && rv != NGTCP2_ERR_STREAM_NOT_FOUND) {
             printd(1, "QuicSession::stopReadingStreamLocked() stream_id=" QLLD
-                " ngtcp2_conn_shutdown_stream_read failed: %s\n", stream_id, ngtcp2_strerror(rv));
+                " ngtcp2_conn_shutdown_stream_read failed: %s\n", (int64)stream_id, ngtcp2_strerror(rv));
             return;
         }
         // STOP_SENDING is written on the next I/O cycle
@@ -3636,7 +3636,7 @@ const char* QuicSession::getStreamBodyIncompleteReason(int64_t stream_id) const 
 
 int QuicSession::resetStream(int64_t stream_id) {
     std::lock_guard<std::recursive_mutex> lock(mtx_);
-    printd(5, "QuicSession::resetStream() stream_id=" QLLD "\n", stream_id);
+    printd(5, "QuicSession::resetStream() stream_id=" QLLD "\n", (int64)stream_id);
     int result = 0;
     if (h3_conn_) {
         nghttp3_conn_shutdown_stream_read(h3_conn_, stream_id);
@@ -4071,7 +4071,7 @@ int QuicSession::recvStreamDataCallback(ngtcp2_conn* conn, uint32_t flags,
     // Forward to HTTP/3 layer if available
     if (session->h3_conn_) {
         printd(5, "recvStreamDataCallback() stream_id=" QLLD " datalen=%d fin=%d\n",
-            stream_id, (int)datalen, fin);
+            (int64)stream_id, (int)datalen, fin);
         nghttp3_ssize nconsumed = nghttp3_conn_read_stream2(
             session->h3_conn_, stream_id, data, datalen,
             fin ? 1 : 0, ngtcp2_conn_get_timestamp(conn));
@@ -4172,7 +4172,7 @@ int QuicSession::streamCloseCallback(ngtcp2_conn* /* conn */, uint32_t flags,
         (long long)session->getSessionId(), (long long)stream_id, flags,
         (unsigned long long)app_error_code);
     printd(5, "QuicSession::streamCloseCallback() stream_id=" QLLD " flags=0x%x error_code=%llu\n",
-        stream_id, flags, (unsigned long long)app_error_code);
+        (int64)stream_id, flags, (unsigned long long)app_error_code);
 
     bool peer_reset = (flags & NGTCP2_STREAM_CLOSE_FLAG_APP_ERROR_CODE_SET)
         && app_error_code != NGHTTP3_H3_NO_ERROR;
@@ -4268,7 +4268,7 @@ int QuicSession::streamCloseCallback(ngtcp2_conn* /* conn */, uint32_t flags,
                 q->pushAndTakeRef(QoreValue());
                 q->deref(&xsink);
                 printd(5, "QuicSession::streamCloseCallback() stream_id=" QLLD
-                    " pushed sentinel to Queue on stream close\n", stream_id);
+                    " pushed sentinel to Queue on stream close\n", (int64)stream_id);
             }
             // Drop frame-state registration (if any); push a NOTHING
             // sentinel onto its msg_queue first so the handler notices the
@@ -5011,11 +5011,11 @@ int QuicSession::h3EndHeadersCallback(nghttp3_conn* /* conn */, int64_t stream_i
                 session->dispatched_stream_count_.fetch_add(1,
                     std::memory_order_release);
                 printd(5, "QuicSession::h3EndHeadersCallback() stream_id=" QLLD
-                    " CONNECT dispatched (body_complete=false, tunnel open)\n", stream_id);
+                    " CONNECT dispatched (body_complete=false, tunnel open)\n", (int64)stream_id);
             } else {
                 printd(5, "QuicSession::h3EndHeadersCallback() stream_id=" QLLD
                     " client CONNECT headers ready (body_complete=false, tunnel open)\n",
-                    stream_id);
+                    (int64)stream_id);
             }
             return 0;
         }
@@ -5025,7 +5025,7 @@ int QuicSession::h3EndHeadersCallback(nghttp3_conn* /* conn */, int64_t stream_i
             if (fin) {
                 // FIN on HEADERS = no body; mark truly complete
                 printd(5, "QuicSession::h3EndHeadersCallback() stream_id=" QLLD " headers-only mode "
-                    "FIN on HEADERS - marking complete\n", stream_id);
+                    "FIN on HEADERS - marking complete\n", (int64)stream_id);
                 stream->fin_received = true;
                 session->markStreamComplete(stream_id);
             } else {
@@ -5033,7 +5033,7 @@ int QuicSession::h3EndHeadersCallback(nghttp3_conn* /* conn */, int64_t stream_i
                 // (set above) so takeHeadersReadyStreamCopy() can find it.
                 // body_complete is NOT set — DATA frames are expected.
                 printd(5, "QuicSession::h3EndHeadersCallback() stream_id=" QLLD " headers-only mode "
-                    "no FIN - headers ready for dispatch\n", stream_id);
+                    "no FIN - headers ready for dispatch\n", (int64)stream_id);
             }
             return 0;
         }
@@ -5041,12 +5041,12 @@ int QuicSession::h3EndHeadersCallback(nghttp3_conn* /* conn */, int64_t stream_i
         // If fin is set, the stream has no body — mark it complete now
         if (fin) {
             printd(5, "QuicSession::h3EndHeadersCallback() stream_id=" QLLD " FIN set - marking complete (body=%d)\n",
-                stream_id, (int)stream->body.size());
+                (int64)stream_id, (int)stream->body.size());
             stream->fin_received = true;
             session->markStreamComplete(stream_id);
         } else {
             printd(5, "QuicSession::h3EndHeadersCallback() stream_id=" QLLD " no FIN - waiting for body\n",
-                stream_id);
+                (int64)stream_id);
         }
     } catch (...) {
         return NGHTTP3_ERR_CALLBACK_FAILURE;
@@ -5070,7 +5070,7 @@ int QuicSession::h3RecvDataCallback(nghttp3_conn* /* conn */, int64_t stream_id,
             ASYNC_IO_TRACE("QuicSession::h3RecvDataCallback DISCARD_CLEANED session=%lld stream_id=%lld datalen=%zu\n",
                 (long long)session->getSessionId(), (long long)stream_id, datalen);
             printd(5, "h3RecvDataCallback() stream_id=" QLLD " datalen=%d — stream already cleaned up\n",
-                stream_id, (int)datalen);
+                (int64)stream_id, (int)datalen);
             ngtcp2_conn_extend_max_stream_offset(session->conn_, stream_id,
                                                   static_cast<uint64_t>(datalen));
             ngtcp2_conn_extend_max_offset(session->conn_, static_cast<uint64_t>(datalen));
@@ -5078,7 +5078,7 @@ int QuicSession::h3RecvDataCallback(nghttp3_conn* /* conn */, int64_t stream_id,
         }
         auto* stream = it->second.get();
         printd(5, "h3RecvDataCallback() stream_id=" QLLD " datalen=%d body_total=%d\n",
-            stream_id, (int)datalen, (int)(stream->body.size() + datalen));
+            (int64)stream_id, (int)datalen, (int)(stream->body.size() + datalen));
         ASYNC_IO_TRACE("QuicSession::h3RecvDataCallback STREAM_STATE session=%lld stream_id=%lld datalen=%zu is_connect=%d is_server=%d dispatched=%d streaming=%d connect_tunnel_active=%d\n",
             (long long)session->getSessionId(), (long long)stream_id, datalen,
             (int)stream->is_connect, (int)session->is_server_,
@@ -5112,7 +5112,7 @@ int QuicSession::h3RecvDataCallback(nghttp3_conn* /* conn */, int64_t stream_id,
                             (long long)session->getSessionId(), (long long)stream_id, datalen);
                         printd(5, "h3RecvDataCallback() stream_id=" QLLD
                             " datalen=%d direct-push to Queue\n",
-                            stream_id, (int)datalen);
+                            (int64)stream_id, (int)datalen);
                     } else {
                         // Fallback: buffer for later (neither frame-state
                         // nor Queue registered yet)
@@ -5124,7 +5124,7 @@ int QuicSession::h3RecvDataCallback(nghttp3_conn* /* conn */, int64_t stream_id,
                             datalen, buf.size());
                         printd(5, "h3RecvDataCallback() stream_id=" QLLD
                             " datalen=%d buffered (no Queue registered)\n",
-                            stream_id, (int)datalen);
+                            (int64)stream_id, (int)datalen);
                     }
                 }
             }
@@ -5214,7 +5214,7 @@ int QuicSession::h3RecvDataCallback(nghttp3_conn* /* conn */, int64_t stream_id,
         if (session->is_server_ && session->max_request_body_size_ > 0
                 && (int64_t)(stream->body.size() + datalen) > session->max_request_body_size_) {
             printd(1, "h3RecvDataCallback: body too large (%zu + %zu > " QLLD ") stream %lld\n",
-                stream->body.size(), datalen, session->max_request_body_size_,
+                stream->body.size(), datalen, (int64)session->max_request_body_size_,
                 (long long)stream_id);
             // The buffered bytes and this chunk are kept, so the request is answered with 413 instead of being
             // dispatched with a truncated body, and a reader of the stream's data gets HTTP-BODY-TOO-LARGE after
@@ -5319,7 +5319,7 @@ int QuicSession::h3EndStreamCallback(nghttp3_conn* /* conn */, int64_t stream_id
                     q->deref(&xsink);
                     printd(5, "QuicSession::h3EndStreamCallback() stream_id=" QLLD
                         " CONNECT tunnel END_STREAM — sentinel pushed to Queue\n",
-                        stream_id);
+                        (int64)stream_id);
                 } else {
                     // Also handle frame-state registration symmetrically
                     auto fit = session->connect_stream_frame_states_.find(stream_id);
@@ -5328,10 +5328,10 @@ int QuicSession::h3EndStreamCallback(nghttp3_conn* /* conn */, int64_t stream_id
                         session->connect_stream_frame_states_.erase(fit);
                         printd(5, "QuicSession::h3EndStreamCallback() stream_id=" QLLD
                             " CONNECT tunnel END_STREAM — sentinel pushed to frame_state queue\n",
-                            stream_id);
+                            (int64)stream_id);
                     } else {
                         printd(5, "QuicSession::h3EndStreamCallback() stream_id=" QLLD
-                            " CONNECT tunnel END_STREAM — no Queue registered\n", stream_id);
+                            " CONNECT tunnel END_STREAM — no Queue registered\n", (int64)stream_id);
                     }
                 }
             }
@@ -5534,7 +5534,7 @@ nghttp3_ssize QuicSession::h3ReadDataCallback(nghttp3_conn* /* conn */, int64_t 
                     (long long)session->getSessionId(), (long long)stream_id,
                     buf.size(), sbd.eof, sbd.sent_bufs.size());
                 printd(5, "h3ReadDataCallback() stream_id=" QLLD " providing %d bytes eof=%d sent_bufs=%d\n",
-                    stream_id, (int)buf.size(), sbd.eof, (int)sbd.sent_bufs.size());
+                    (int64)stream_id, (int)buf.size(), sbd.eof, (int)sbd.sent_bufs.size());
 
                 // Notify waitForStreamDrain() that buffer space freed up
                 session->notifyStreamDrain();
@@ -5560,7 +5560,7 @@ nghttp3_ssize QuicSession::h3ReadDataCallback(nghttp3_conn* /* conn */, int64_t 
         // No data available and not EOF: defer (WOULDBLOCK)
         ASYNC_IO_TRACE("QuicSession::h3ReadDataCallback WOULDBLOCK session=%lld stream_id=%lld sent_bufs=%zu\n",
             (long long)session->getSessionId(), (long long)stream_id, sbd.sent_bufs.size());
-        printd(5, "h3ReadDataCallback() stream_id=" QLLD " WOULDBLOCK (no data, not eof)\n", stream_id);
+        printd(5, "h3ReadDataCallback() stream_id=" QLLD " WOULDBLOCK (no data, not eof)\n", (int64)stream_id);
         sbd.deferred = true;
         return NGHTTP3_ERR_WOULDBLOCK;
     }
@@ -5593,7 +5593,7 @@ int QuicSession::h3AckedStreamDataCallback(nghttp3_conn* /* conn */, int64_t str
             (long long)session->getSessionId(), (long long)stream_id,
             (unsigned long long)datalen, sbd.sent_bufs.size(), sbd.data.size());
         printd(5, "h3AckedStreamDataCallback() stream_id=" QLLD " datalen=%d remaining_bufs=%d\n",
-            stream_id, (int)datalen, (int)sbd.sent_bufs.size());
+            (int64)stream_id, (int)datalen, (int)sbd.sent_bufs.size());
     }
 
     return 0;
@@ -5656,7 +5656,7 @@ void QuicSession::setStreamInputStream(int64_t stream_id, InputStream* is, Excep
     has_active_input_streams_.store(true, std::memory_order_release);
     updateKeepAliveAfterStreamStateChangeLocked();
     printd(5, "QuicSession::setStreamInputStream() stream_id=" QLLD " pollable=%d fd=%d\n",
-        stream_id, stream_input_streams_[stream_id].is_pollable,
+        (int64)stream_id, stream_input_streams_[stream_id].is_pollable,
         stream_input_streams_[stream_id].stream_fd);
 }
 
@@ -5717,19 +5717,19 @@ void QuicSession::processStreamInputStreams(ExceptionSink* xsink) {
             SimpleRefHolder<BinaryNode> chunk(info.input_stream->readHelper(65536, xsink));
             if (*xsink) {
                 printd(1, "QuicSession::processStreamInputStreams() stream_id=" QLLD " readHelper exception\n",
-                    stream_id);
+                    (int64)stream_id);
                 info.eof = true;
                 continue;
             }
             if (!chunk || !chunk->size()) {
                 printd(5, "QuicSession::processStreamInputStreams() stream_id=" QLLD " EOF\n",
-                    stream_id);
+                    (int64)stream_id);
                 info.eof = true;
                 sendStreamData(stream_id, nullptr, 0, true, xsink);
             } else {
                 printd(5, "QuicSession::processStreamInputStreams() stream_id=" QLLD
                     " read %d bytes, calling sendStreamData\n",
-                    stream_id, (int)chunk->size());
+                    (int64)stream_id, (int)chunk->size());
                 sendStreamData(stream_id, chunk->getPtr(), chunk->size(), false, xsink);
             }
         }
@@ -5904,7 +5904,7 @@ int QuicSession::recvDatagramCallback(ngtcp2_conn* conn, uint32_t flags,
     } catch (...) {
         // C callback — must not propagate C++ exceptions through ngtcp2's C code
         printd(0, "recvDatagramCallback(): exception while queuing datagram "
-            "(stream_id=" QLLD ")\n", stream_id);
+            "(stream_id=" QLLD ")\n", (int64)stream_id);
     }
 
     return 0;

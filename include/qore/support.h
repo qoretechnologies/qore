@@ -45,7 +45,10 @@ DLLEXPORT char *remove_trailing_blanks(char *str);
 //! do not call this function directly, use the macro QORE_TRACE()
 DLLEXPORT void trace_function(int code, const char *funcname);
 //! do not call this function directly, use the macro printd()
-DLLEXPORT int print_debug(int level, const char *fmt, ...);
+/** the arguments are checked against the format string by the compiler, as an argument that does not match its
+    conversion can crash the process when the debugging level makes the call print
+*/
+DLLEXPORT int print_debug(int level, const char *fmt, ...) QORE_PRINTF_FORMAT(2, 3);
 
 DLLEXPORT extern int qore_trace;
 DLLEXPORT extern int debug;
