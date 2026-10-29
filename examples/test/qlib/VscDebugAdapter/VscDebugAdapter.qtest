@@ -160,7 +160,7 @@ public class VscDebugAdapterTest inherits QUnit::Test {
             "int total = add(2, 3);\n"                                       # 7
             "printf(\"total: %d %y\\n\", total, h);\n";                      # 8
 
-        string qore_exe = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qore_exe = executablePath(ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore");
         string adapter = normalize_dir(get_script_dir() + "/../../../../bin/qdbg-vsc-adapter");
         string qlib_dir = normalize_dir(get_script_dir() + "/../../../../qlib");
     }
@@ -169,6 +169,24 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         addTestCase("debug session over the Debug Adapter Protocol", \sessionTest());
         addTestCase("the adapter ends when the IDE closes its input", \endOfInputTest());
         set_return_value(main());
+    }
+
+    #! Returns the absolute path of the given Qore executable
+    /** A Process is started with an absolute path or with a name that is found in the search path, so a path
+        relative to the working directory, as \c QORE_ARGV[0] is when the test is run with \c build/qore, is made
+        absolute; whether the process module finds such a path depends on the version of Boost.Process
+    */
+    private static string executablePath(string name) {
+        if (name.regex("/")) {
+            return realpath(name);
+        }
+        foreach string dir in (split(":", ENV.PATH ?? "")) {
+            string path = (dir ? dir : ".") + "/" + name;
+            if (is_executable(path)) {
+                return realpath(path);
+            }
+        }
+        throw "TEST-SETUP-ERROR", sprintf("cannot locate Qore executable %y", name);
     }
 
 %ifdef NoProcess
