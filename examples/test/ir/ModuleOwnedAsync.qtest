@@ -60,6 +60,8 @@ class ModuleOwnedAsyncTest inherits QUnit::Test {
         #! the output of the source module with the AST interpreter, after the line that gives the qlib module form
         const ExpectedOutput = "restricted discord_watchdog: \"armed and cancelled\"
 restricted discord_watchdog: \"armed and cancelled\"
+restricted discord_watchdog_call_wrapper: \"armed and cancelled\"
+restricted discord_watchdog_call_wrapper: \"armed and cancelled\"
 restricted controller_caller_timer: " + sprintf(CallerClosureRefusal, "AsyncIoController::addTimer()",
             "schedule") + "
 restricted controller_caller_timer: " + sprintf(CallerClosureRefusal, "AsyncIoController::addTimer()",
@@ -352,6 +354,14 @@ class Probe inherits DiscordWebSocketClient {
     run() { armHelloWatchdog(); cancelHelloWatchdog(); }
 }
 auto sub discord_watchdog() { Probe pr(); pr.run(); return 'armed and cancelled'; }
+# with a call wrapper, as the Qorus discord-bot service has, the client schedules a closure of its own module that
+# calls the wrapper, created while it runs a method for an object of the caller's class
+class WrappedProbe inherits DiscordWebSocketClient {
+    constructor() : DiscordWebSocketClient({'url': 'ws://127.0.0.1:1/', 'token': 'offline-placeholder',
+        'call_wrapper': sub (code c) { c(); }}) {}
+    run() { armHelloWatchdog(); cancelHelloWatchdog(); }
+}
+auto sub discord_watchdog_call_wrapper() { WrappedProbe pr(); pr.run(); return 'armed and cancelled'; }
 auto sub controller_caller_timer() {
     AsyncSocketIo::AsyncSocketIoController c = AsyncSocketIo::getGlobalAsyncIoController();
     int id = c.addTimer(now_us() + 1h, sub () {}, 'restricted caller closure');
@@ -385,7 +395,7 @@ auto sub module_method_timer() { PlainWatcher w(); return w.armAndCancel(); }
 auto sub overridden_method_timer() { OverridingWatcher w(); return w.armAndCancel(); }
 \");
 
-foreach string f in (\"discord_watchdog\", \"controller_caller_timer\", \"own_timer\", \"own_native_timer\",
+foreach string f in (\"discord_watchdog\", \"discord_watchdog_call_wrapper\", \"controller_caller_timer\", \"own_timer\", \"own_native_timer\",
         \"module_method_timer\", \"overridden_method_timer\", \"caller_timer\", \"data_timer\", \"own_task\", \"caller_task\", \"own_call_async\", \"caller_call_async\",
         \"own_parallel_map\", \"caller_parallel_map\", \"own_parallel_foreach\", \"caller_parallel_foreach\",
         \"own_defer\", \"caller_defer\", \"current_thread\", \"http2_mode\") {

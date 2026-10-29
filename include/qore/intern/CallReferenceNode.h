@@ -403,8 +403,8 @@ private:
 //! returns the Program whose code a call of the given call reference runs
 /** For a method reference, this is the Program that defines the class of the method that a call would run now: calls
     of a method reference are dispatched on the class of the object, so a subclass that overrides the method runs
-    its own code; for any other reference, it is ResolvedCallReferenceNode::getProgram().  Returns nullptr for builtin
-    code, which has no Program.
+    its own code; for a closure, it is the Program that defines the closure's code; for any other reference, it is
+    ResolvedCallReferenceNode::getProgram().  Returns nullptr for builtin code, which has no Program.
 */
 DLLLOCAL const QoreProgram* qore_call_reference_code_program(const ResolvedCallReferenceNode* rcr);
 
