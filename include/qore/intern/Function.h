@@ -892,11 +892,19 @@ DLLLOCAL bool qore_program_is_module(const QoreProgram* pgm);
       that calls it (see qore_compose_module_call_parse_options());
     - otherwise any override of the caller is cleared for the call.
 
+    For module code that runs in the module's own Program, \a o also records the restrictions inherited from the
+    caller, which do not apply to builtin variants that change only the module's own state (see
+    runtime_get_own_program_state_parse_options()).
+
     Every path that calls a user variant applies it in the same way, so that the call behaves as it does with the AST
     interpreter.
 */
 DLLLOCAL void qore_get_user_call_runtime_po_override(const QoreProgram* exec_pgm, const UserVariantBase* uvb,
-        const QoreParseOptions& caller_po, QoreParseOptions& mask, QoreParseOptions& value);
+        const QoreParseOptions& caller_po, QoreCallParseOptionsOverride& o);
+
+//! returns the override for module code entered in its own Program \a module_pgm with the effective options \a caller_po
+DLLLOCAL QoreCallParseOptionsOverride qore_get_module_call_runtime_po_override(const QoreProgram* module_pgm,
+        const QoreParseOptions& caller_po);
 
 class UserVariantExecHelper;
 class QoreJIT;

@@ -8997,6 +8997,7 @@ void init() {
     fset.insert("DETERMINISTIC");
     fset.insert("NO_DOMAIN_THROW");
     fset.insert("HOST_PORTABLE");
+    fset.insert("OWN_PROGRAM_STATE");
     fset.insert("PURE");
     fset.insert("TOTAL");
 }

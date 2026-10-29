@@ -3960,21 +3960,20 @@ public:
     //! \a caller_pgm is the Program the call was made from, before it switched to \a exec_pgm
     DLLLOCAL QoreIRInlineCalleeParseOptionsHelper(ExceptionSink* xsink, QoreProgram* exec_pgm,
             const UserVariantBase* uvb, QoreProgram* caller_pgm)
-            : po_override(getMask(exec_pgm, uvb, caller_pgm), po_value),
+            : po_override(get(exec_pgm, uvb, caller_pgm)),
             loc_helper(xsink, uvb->getUserSignature()->getParseLocation(), nullptr,
                 uvb->getParseOptions(exec_pgm->getParseOptions())) {
     }
 
 private:
-    QoreParseOptions po_value;
     RuntimeParseOptionsOverrideHelper po_override;
     QoreProgramLocationHelper loc_helper;
 
-    DLLLOCAL QoreParseOptions getMask(QoreProgram* exec_pgm, const UserVariantBase* uvb, QoreProgram* caller_pgm) {
-        QoreParseOptions mask;
-        qore_get_user_call_runtime_po_override(exec_pgm, uvb, runtime_get_effective_parse_options_for(caller_pgm),
-            mask, po_value);
-        return mask;
+    DLLLOCAL static QoreCallParseOptionsOverride get(QoreProgram* exec_pgm, const UserVariantBase* uvb,
+            QoreProgram* caller_pgm) {
+        QoreCallParseOptionsOverride o;
+        qore_get_user_call_runtime_po_override(exec_pgm, uvb, runtime_get_effective_parse_options_for(caller_pgm), o);
+        return o;
     }
 };
 

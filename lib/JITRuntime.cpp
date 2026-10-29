@@ -10391,18 +10391,17 @@ class QoreRtUserCallOverrideHelper {
 public:
     //! \a caller_pgm is the Program the call was made from, before it switched to \a exec_pgm
     DLLLOCAL QoreRtUserCallOverrideHelper(QoreProgram* exec_pgm, const UserVariantBase* uvb, QoreProgram* caller_pgm)
-            : helper(getMask(exec_pgm, uvb, caller_pgm), value) {
+            : helper(get(exec_pgm, uvb, caller_pgm)) {
     }
 
 private:
-    QoreParseOptions value;
     RuntimeParseOptionsOverrideHelper helper;
 
-    DLLLOCAL QoreParseOptions getMask(QoreProgram* exec_pgm, const UserVariantBase* uvb, QoreProgram* caller_pgm) {
-        QoreParseOptions mask;
-        qore_get_user_call_runtime_po_override(exec_pgm, uvb, runtime_get_effective_parse_options_for(caller_pgm),
-            mask, value);
-        return mask;
+    DLLLOCAL static QoreCallParseOptionsOverride get(QoreProgram* exec_pgm, const UserVariantBase* uvb,
+            QoreProgram* caller_pgm) {
+        QoreCallParseOptionsOverride o;
+        qore_get_user_call_runtime_po_override(exec_pgm, uvb, runtime_get_effective_parse_options_for(caller_pgm), o);
+        return o;
     }
 };
 

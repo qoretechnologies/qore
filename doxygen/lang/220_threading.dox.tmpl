@@ -144,6 +144,13 @@ x=null@endverbatim
     by the end of the root's destruction, and a child Program that is still alive then has thread-local data of its
     own, empty at first.
 
+    A user module's Program is created without a parent, so it is the root of a family of its own: code that runs in
+    the module's Program (a method of a module class, or a closure created in module code) uses the module's
+    thread-local data, which the Programs that use the module cannot read or change, and the module code cannot read
+    or change theirs.  A module function is the exception: it runs in its caller's Program and so uses its caller's
+    thread-local data.  For this reason, module code running in its own Program can use these functions even when
+    its caller may not (see @ref OWN_PROGRAM_STATE).
+
     @section thread_synchronization Thread Management and Inter-Thread Communication
 
     @anchor synchronized

@@ -384,6 +384,14 @@ const CF_RUNTIME_NOOP = QCF_RUNTIME_NOOP;
 //! indicates that a builtin variant accepts named-argument calls
 const CF_NAMED_ARGS = QCF_NAMED_ARGS;
 
+//! indicates that a builtin variant changes or reads only the state that the Program running it keeps for the current thread
+/** Module code running in its own Program checks the functional domain of such a variant without the restrictions it
+    inherits from its caller; see @ref OWN_PROGRAM_STATE
+
+    @since %Qore 3.0
+*/
+const CF_OWN_PROGRAM_STATE = QCF_OWN_PROGRAM_STATE;
+
 //! indicates that the code is safe to use in a constant expression (i.e. has no side effects and is deterministic)
 const CF_CONSTANT = QCF_CONSTANT;
 ///@}

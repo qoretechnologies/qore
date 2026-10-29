@@ -283,7 +283,7 @@ save_thread_data(h);
     by being overwritten with a new value, and the value is an object that goes out of scope, then such an object
     could throw an exception in its destructor
 */
-nothing save_thread_data(hash<auto> data) [flags=NAMED_ARGS;dom=THREAD_CONTROL] {
+nothing save_thread_data(hash<auto> data) [flags=NAMED_ARGS,OWN_PROGRAM_STATE;dom=THREAD_CONTROL] {
     ReferenceHolder<QoreHashNode> thread_data(get_thread_data_ref(true), xsink);
     qore_hash_private::get(**thread_data)->merge(*qore_hash_private::get(*data), xsink);
 }
@@ -303,7 +303,7 @@ save_thread_data("key1", value);
 
     @throw HASH-KEY-ERROR a key has a NUL character, which a hash key cannot contain
 */
-nothing save_thread_data(string key, auto value) [flags=NAMED_ARGS;dom=THREAD_CONTROL] {
+nothing save_thread_data(string key, auto value) [flags=NAMED_ARGS,OWN_PROGRAM_STATE;dom=THREAD_CONTROL] {
     // the key in the default encoding; a key with a NUL character raises HASH-KEY-ERROR
     QoreHashKeyHelper tmp(*key, xsink);
     if (*xsink) {
@@ -316,7 +316,7 @@ nothing save_thread_data(string key, auto value) [flags=NAMED_ARGS;dom=THREAD_CO
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
 /**
  */
-nothing save_thread_data() [dom=THREAD_CONTROL;flags=RUNTIME_NOOP] {
+nothing save_thread_data() [dom=THREAD_CONTROL;flags=RUNTIME_NOOP,OWN_PROGRAM_STATE] {
 }
 
 //! Deletes the data associated to one or more keys in the thread-local data hash; if the data is an object, then it is destroyed
@@ -337,7 +337,7 @@ delete_thread_data("key1", "key2");
 
     @throw HASH-KEY-ERROR a key has a NUL character, which a hash key cannot contain
 */
-nothing delete_thread_data(...) [dom=THREAD_CONTROL] {
+nothing delete_thread_data(...) [dom=THREAD_CONTROL;flags=OWN_PROGRAM_STATE] {
     if (num_args(args))
         delete_thread_data_intern(args, xsink);
 }
@@ -360,7 +360,7 @@ delete_thread_data(list_of_keys);
 
     @throw HASH-KEY-ERROR a key has a NUL character, which a hash key cannot contain
 */
-nothing delete_thread_data(list<softstring> key_list) [flags=NAMED_ARGS;dom=THREAD_CONTROL] {
+nothing delete_thread_data(list<softstring> key_list) [flags=NAMED_ARGS,OWN_PROGRAM_STATE;dom=THREAD_CONTROL] {
     delete_thread_data_intern(key_list, xsink);
 }
 
@@ -380,7 +380,7 @@ hash<auto> h = remove_thread_data("filename");
 
     @throw HASH-KEY-ERROR a key has a NUL character, which a hash key cannot contain
 */
-*hash<auto> remove_thread_data(...) [dom=THREAD_CONTROL] {
+*hash<auto> remove_thread_data(...) [dom=THREAD_CONTROL;flags=OWN_PROGRAM_STATE] {
     return num_args(args) ? remove_thread_data_intern(args, xsink) : nullptr;
 }
 
@@ -400,7 +400,7 @@ hash<auto> h = remove_thread_data(key_list);
 
     @throw HASH-KEY-ERROR a key has a NUL character, which a hash key cannot contain
 */
-hash<auto> remove_thread_data(list<softstring> key_list) [flags=NAMED_ARGS;dom=THREAD_CONTROL] {
+hash<auto> remove_thread_data(list<softstring> key_list) [flags=NAMED_ARGS,OWN_PROGRAM_STATE;dom=THREAD_CONTROL] {
     return remove_thread_data_intern(key_list, xsink);
 }
 
@@ -413,7 +413,7 @@ delete_all_thread_data();
 
     @note This function does not throw any exceptions, however if an object is deleted from the thread-local data hash, then it could throw an exception in its destructor
 */
-nothing delete_all_thread_data() [dom=THREAD_CONTROL] {
+nothing delete_all_thread_data() [dom=THREAD_CONTROL;flags=OWN_PROGRAM_STATE] {
     qore_program_private::get(*getProgram())->clearThreadData(xsink);
 }
 
@@ -428,7 +428,7 @@ auto data = get_thread_data("key1");
 
     @throw HASH-KEY-ERROR a key has a NUL character, which a hash key cannot contain
 */
-auto get_thread_data(string key) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=THREAD_CONTROL,THREAD_INFO] {
+auto get_thread_data(string key) [flags=RET_VALUE_ONLY,NAMED_ARGS,OWN_PROGRAM_STATE;dom=THREAD_CONTROL,THREAD_INFO] {
     // the key in the default encoding; a key with a NUL character raises HASH-KEY-ERROR
     QoreHashKeyHelper tmp(*key, xsink);
     if (*xsink) {
@@ -441,7 +441,7 @@ auto get_thread_data(string key) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=THREAD_CON
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
 /**
  */
-nothing get_thread_data() [dom=THREAD_CONTROL,THREAD_INFO;flags=RUNTIME_NOOP] {
+nothing get_thread_data() [dom=THREAD_CONTROL,THREAD_INFO;flags=RUNTIME_NOOP,OWN_PROGRAM_STATE] {
 }
 
 //! Returns the entire thread-local data hash
@@ -455,7 +455,7 @@ hash<auto> th = get_all_thread_data();
 
     @note this function is not flagged with @ref CONSTANT since its value could change at runtime
 */
-hash<auto> get_all_thread_data() [flags=RET_VALUE_ONLY;dom=THREAD_CONTROL,THREAD_INFO] {
+hash<auto> get_all_thread_data() [flags=RET_VALUE_ONLY,OWN_PROGRAM_STATE;dom=THREAD_CONTROL,THREAD_INFO] {
     ReferenceHolder<QoreHashNode> h(get_thread_data_ref(false), xsink);
     return h ? h->copy() : new QoreHashNode(autoTypeInfo);
 }

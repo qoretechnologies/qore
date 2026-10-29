@@ -767,6 +767,18 @@
     it inherited, and the code of another %Program that module code runs (with
     @ref Qore::Program::run() "Program::run()", for example) keeps that %Program's restrictions.  This applies in every
     @ref execution_modes "execution mode".
+
+    The functions that use a %Program's @ref thread_local_data_family "thread-local data"
+    (@ref Qore::save_thread_data() "save_thread_data()", @ref Qore::get_thread_data() "get_thread_data()",
+    @ref Qore::get_all_thread_data() "get_all_thread_data()", @ref Qore::remove_thread_data() "remove_thread_data()",
+    @ref Qore::delete_thread_data() "delete_thread_data()" and
+    @ref Qore::delete_all_thread_data() "delete_all_thread_data()") are the exception (see @ref OWN_PROGRAM_STATE): a
+    module's %Program has thread-local data of its own, which the code that calls the module cannot reach, so module
+    code running in the module's %Program can use them for a caller that may not, such as one with
+    @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL".  Modules that keep a context in thread-local data, such as
+    @ref mapperintro "Mapper" and @ref dataproviderintro "DataProvider", therefore keep working for such callers.  A
+    module function runs in its caller's %Program and uses its caller's thread-local data, so it can use them only if
+    its caller may.
     @endparblock
 
     @par Temporary Values Live Until the End of Their Statement

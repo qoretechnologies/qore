@@ -44,6 +44,16 @@
     evaluates a call on one host and stores its result in an executable for another host. It implies
     @ref DETERMINISTIC; determinism alone does not guarantee identical results on different hosts.
 
+    @section OWN_PROGRAM_STATE
+    The function or method changes or reads only the state that the Program running it keeps for the current thread,
+    such as its @ref thread_local_data_family "thread-local data": it cannot affect another Program, another thread, or the
+    process.  Code of a user module runs with the restrictions of the code that calls it as well as its own, but a
+    variant with this flag that module code calls while running in the module's own Program (a method of a module
+    class, or a closure created in module code) is checked against the module's own restrictions only, since it can
+    reach only the module's own state, which the caller cannot reach in any case.  The flag changes nothing in any
+    other context: called directly by restricted code, or by a module function, which runs in its caller's Program,
+    the variant is checked against all the restrictions in effect.
+
     @section DEPRECATED
     Code with this flag is deprecated and may be removed in a future version of %Qore; if a variant with this flag is resolved at parse time, a @ref deprecated warning is raised (assuming this warning is enabled).
 

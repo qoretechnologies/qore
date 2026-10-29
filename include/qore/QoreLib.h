@@ -160,6 +160,7 @@ typedef std::vector<int> sig_vec_t;
 #define QCF_DETERMINISTIC          (1 << 9)  //!< the result depends only on the arguments and on immutable state; no clock, RNG, PID/TID, environment, locale, time zone, filesystem, network, or mutable global is read
 #define QCF_NO_DOMAIN_THROW        (1 << 10) //!< code raises no exception determined by its arguments or by program state (resource-exhaustion exceptions remain possible; see @ref qore_code_flags)
 #define QCF_HOST_PORTABLE          (1 << 11) //!< the result is bit-identical on every conforming host, not merely repeatable on one; see @ref qore_code_flags_portability
+#define QCF_OWN_PROGRAM_STATE      (1 << 12) //!< code changes or reads only the state that the Program running it keeps for the current thread, so module code running in its own Program checks its functional domain without the restrictions it inherits from its caller
 
 // composite flags
 
