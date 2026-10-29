@@ -392,6 +392,23 @@ const CF_NAMED_ARGS = QCF_NAMED_ARGS;
 */
 const CF_OWN_PROGRAM_STATE = QCF_OWN_PROGRAM_STATE;
 
+//! indicates that a builtin variant affects or reads only the calling thread
+/** Module code running in its own Program checks the functional domain of such a variant without the restrictions it
+    inherits from its caller; see @ref CURRENT_THREAD_ONLY
+
+    @since %Qore 3.0
+*/
+const CF_CURRENT_THREAD_ONLY = QCF_CURRENT_THREAD_ONLY;
+
+//! indicates that a builtin variant runs code passed to it asynchronously or with thread cancellation deferred, or acts on timers
+/** Called by module code running in its own Program for a caller with restrictions, such a variant accepts only code
+    of a Program that allows what the caller may not and timers created for the same application; see
+    @ref MODULE_OWNED
+
+    @since %Qore 3.0
+*/
+const CF_MODULE_OWNED = QCF_MODULE_OWNED;
+
 //! indicates that the code is safe to use in a constant expression (i.e. has no side effects and is deterministic)
 const CF_CONSTANT = QCF_CONSTANT;
 ///@}
@@ -3433,7 +3450,8 @@ nothing Program::setJitOptimizationLevel(softint level) [flags=NAMED_ARGS] {
 
     @since %Qore 2.0
 */
-static int Program::getCallerCapabilityMask(int frame_offset = 1) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=PROCESS] {
+static int Program::getCallerCapabilityMask(int frame_offset = 1)
+        [flags=RET_VALUE_ONLY,NAMED_ARGS,CURRENT_THREAD_ONLY;dom=PROCESS] {
     if (frame_offset < 0) {
         xsink->raiseException("INVALID-STACK-FRAME", "The stack frame argument must be a non-negative number; got "
             QLLD, frame_offset);

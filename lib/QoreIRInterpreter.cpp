@@ -3992,7 +3992,8 @@ private:
     DLLLOCAL static QoreCallParseOptionsOverride get(QoreProgram* exec_pgm, const UserVariantBase* uvb,
             QoreProgram* caller_pgm) {
         QoreCallParseOptionsOverride o;
-        qore_get_user_call_runtime_po_override(exec_pgm, uvb, runtime_get_effective_parse_options_for(caller_pgm), o);
+        qore_get_user_call_runtime_po_override(exec_pgm, uvb, runtime_get_effective_parse_options_for(caller_pgm),
+            caller_pgm, o);
         return o;
     }
 };
@@ -4373,6 +4374,13 @@ static bool tryExecuteInterpreterInlineIRStaticMethod(QoreIRCallStaticDirectInst
     const UserSignature* sig = uvb->getUserSignature();
     QoreIRInlineCallStackLocation stack_loc(qore_ir_call_frame_location(inst, uvb),
         qore_ir_method_call_name(inst->method), inst->variant ? inst->variant->getCallType() : CT_USER);
+    // the inlined body runs with the static method's runtime parse options and restrictions, as a call of the
+    // method does: module code also with the restrictions of its caller
+    QoreIRInlineCalleeParseOptionsHelper callee_po(xsink, exec_pgm, uvb, caller_pgm);
+    if (xsink && *xsink) {
+        result = QoreValue();
+        return true;
+    }
     unsigned num_params = sig->numParams();
     ClassOnlySubstitutionHelper cosh(qore_class_private::get(*inst->method->getClass()));
     bool use_direct_params = inline_state == QORE_IR_INLINE_DIRECT_PARAMS;

@@ -1145,7 +1145,7 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
         // its body see them
         if (old_pgm && old_pgm != pgm_ctx && qore_program_is_module(pgm_ctx)) {
             module_po_override.reset(new RuntimeParseOptionsOverrideHelper(
-                qore_get_module_call_runtime_po_override(pgm_ctx, caller_runtime_po)));
+                qore_get_module_call_runtime_po_override(pgm_ctx, caller_runtime_po, old_pgm)));
         }
         set(xsink, pgm_ctx, true);
         if (*xsink) {
@@ -3356,7 +3356,7 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
         if (pgm) {
             // get runtime parse options; a variant that changes only the state of the Program running it is checked
             // without the restrictions that module code inherits from its caller
-            QoreParseOptions po = variant->getParseOptions((variant->getFlags() & QCF_OWN_PROGRAM_STATE)
+            QoreParseOptions po = variant->getParseOptions((variant->getFlags() & QCF_CALLER_RESTRICTION_RELIEF)
                 ? runtime_get_own_program_state_parse_options(ppo) : ppo);
 
             // check parse options
@@ -3524,7 +3524,7 @@ DLLLOCAL const AbstractQoreFunctionVariant* QoreFunction::checkVariantDomain(Exc
         const QoreParseOptions& ppo, const AbstractQoreFunctionVariant* variant) const {
     // get runtime parse options; a variant that changes only the state of the Program running it is checked without
     // the restrictions that module code inherits from its caller
-    QoreParseOptions po = variant->getParseOptions((variant->getFlags() & QCF_OWN_PROGRAM_STATE)
+    QoreParseOptions po = variant->getParseOptions((variant->getFlags() & QCF_CALLER_RESTRICTION_RELIEF)
         ? runtime_get_own_program_state_parse_options(ppo) : ppo);
 
     // check parse options
@@ -4879,7 +4879,7 @@ bool qore_program_is_module(const QoreProgram* pgm) {
 }
 
 QoreCallParseOptionsOverride qore_get_module_call_runtime_po_override(const QoreProgram* module_pgm,
-        const QoreParseOptions& caller_po) {
+        const QoreParseOptions& caller_po, const QoreProgram* caller_pgm) {
     assert(qore_program_is_module(module_pgm));
     QoreCallParseOptionsOverride o;
     o.mask = get_user_variant_runtime_po_override_mask();
@@ -4889,12 +4889,13 @@ QoreCallParseOptionsOverride qore_get_module_call_runtime_po_override(const Qore
     o.caller_restrictions = o.value & o.mask & ~own_po & ~QoreParseOptions::POSITIVE_OPTIONS;
     if (o.caller_restrictions) {
         o.module_pgm = module_pgm;
+        o.app_pgm_id = runtime_get_module_call_app_id(caller_pgm);
     }
     return o;
 }
 
 void qore_get_user_call_runtime_po_override(const QoreProgram* exec_pgm, const UserVariantBase* uvb,
-        const QoreParseOptions& caller_po, QoreCallParseOptionsOverride& o) {
+        const QoreParseOptions& caller_po, const QoreProgram* caller_pgm, QoreCallParseOptionsOverride& o) {
     bool module_code = qore_program_is_module(uvb->pgm);
     if (exec_pgm && exec_pgm != uvb->pgm) {
         // the code runs in another Program, so its caller restrictions all apply: a module function runs in its
@@ -4907,7 +4908,7 @@ void qore_get_user_call_runtime_po_override(const QoreProgram* exec_pgm, const U
         return;
     }
     if (module_code) {
-        o = qore_get_module_call_runtime_po_override(uvb->pgm, caller_po);
+        o = qore_get_module_call_runtime_po_override(uvb->pgm, caller_po, caller_pgm);
         return;
     }
     o = QoreCallParseOptionsOverride();
@@ -7187,13 +7188,15 @@ QoreValue UserVariantBase::eval(const char* name, CodeEvaluationHelper* ceh, Qor
     // the effective options of the caller, before the call switched to the Program the variant runs in
     QoreParseOptions caller_po = ceh ? ceh->getCallerRuntimeParseOptions()
         : runtime_get_effective_program_parse_options();
+    // the Program making the call, before the call switches to the Program the variant runs in
+    const QoreProgram* caller_pgm = getProgram();
     UserVariantExecHelper uveh(this, ceh, xsink);
     if (!uveh) {
         return QoreValue();
     }
     QoreProgram* exec_pgm = uveh.getProgram();
     QoreCallParseOptionsOverride po_o;
-    qore_get_user_call_runtime_po_override(exec_pgm, this, caller_po, po_o);
+    qore_get_user_call_runtime_po_override(exec_pgm, this, caller_po, caller_pgm, po_o);
     RuntimeParseOptionsOverrideHelper po_override(po_o);
 
     // This is a normal function/method call, not a closure invocation.  If the
@@ -7217,13 +7220,15 @@ QoreValue UserClosureVariant::evalClosure(CodeEvaluationHelper& ceh, const QoreC
     }
 
     QoreParseOptions caller_po = ceh.getCallerRuntimeParseOptions();
+    // the Program making the call, before the call switches to the Program the variant runs in
+    const QoreProgram* caller_pgm = getProgram();
     UserVariantExecHelper uveh(this, &ceh, xsink);
     if (!uveh) {
         return QoreValue();
     }
     QoreProgram* exec_pgm = uveh.getProgram();
     QoreCallParseOptionsOverride po_o;
-    qore_get_user_call_runtime_po_override(exec_pgm, this, caller_po, po_o);
+    qore_get_user_call_runtime_po_override(exec_pgm, this, caller_po, caller_pgm, po_o);
     RuntimeParseOptionsOverrideHelper po_override(po_o);
 
     CodeContextHelper cch(xsink, CT_USER, "<anonymous closure>", self, ceh.getClass(), ref_obj);

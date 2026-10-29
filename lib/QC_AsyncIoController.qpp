@@ -32,6 +32,7 @@
 #include <qore/Qore.h>
 #include <qore/QoreSocketObject.h>
 #include "qore/intern/AsyncIoControllerPriv.h"
+#include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/QC_Socket.h"
 
 extern qore_classid_t CID_QUEUE;
@@ -703,13 +704,30 @@ static *LoggerInterfaceBase AsyncIoController::getLogger() {
     worker thread).  With no callback installed, non-callable \a user_data is silently
     dropped.
 
+    @par Module Code and Restricted Callers
+    Module code that runs for a caller that may not control threads (a Qorus service, for example, has
+    @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL") can schedule only its own code: code of a %Program that
+    allows what the caller may not.  The caller's own code (a closure, or a method that a class of the caller
+    overrides) is refused with \c INVALID-FUNCTION-ACCESS, whose description gives the reason, for example <em>the
+    callback's Program does not allow thread control (PO_NO_THREAD_CONTROL)</em>, and so is non-callable timer data,
+    which the process-wide timer callback would receive; see @ref MODULE_OWNED
+
     @param deadline the absolute deadline for the timer
     @param user_data either a closure/call-reference to dispatch, or arbitrary user data
         to deliver through the @ref setTimerCallback() handler
     @return the unique timer ID
+
+    @throw INVALID-FUNCTION-ACCESS module code running for a restricted caller added a timer with code that is not
+    its own, or with non-callable data
+
     @since %Qore 3.0
 */
-static int AsyncIoController::addTimer(date deadline, auto user_data) [dom=NETWORK,PROCESS;flags=NAMED_ARGS] {
+static int AsyncIoController::addTimer(date deadline, auto user_data)
+        [dom=NETWORK,THREAD_CONTROL;flags=NAMED_ARGS,MODULE_OWNED] {
+    if (qore_check_module_owned_code(user_data, QDOM_NETWORK | QDOM_THREAD_CONTROL, "AsyncIoController::addTimer()",
+            "schedule", xsink)) {
+        return 0;
+    }
     QoreObject* obj;
     AsyncIoControllerPriv* ctrl = get_singleton(obj, xsink);
     if (!ctrl) {
@@ -727,14 +745,31 @@ static int AsyncIoController::addTimer(date deadline, auto user_data) [dom=NETWO
     This closes the teardown race where a timer fires, its callback is dispatched to a worker, and the
     owning object is destroyed before the callback runs.
 
+    @par Module Code and Restricted Callers
+    Module code that runs for a caller that may not control threads (a Qorus service, for example, has
+    @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL") can schedule only its own code: code of a %Program that
+    allows what the caller may not.  The caller's own code (a closure, or a method that a class of the caller
+    overrides) is refused with \c INVALID-FUNCTION-ACCESS, whose description gives the reason, for example <em>the
+    callback's Program does not allow thread control (PO_NO_THREAD_CONTROL)</em>, and so is non-callable timer data,
+    which the process-wide timer callback would receive; see @ref MODULE_OWNED
+
     @param deadline the absolute deadline for the timer
     @param udata either a closure/call-reference to dispatch, or arbitrary user data
         to deliver through the @ref setTimerCallback() handler
     @param owner the owner identifier to tag the timer's callback dispatch with
     @return the unique timer ID
+
+    @throw INVALID-FUNCTION-ACCESS module code running for a restricted caller added a timer with code that is not
+    its own, or with non-callable data
+
     @since %Qore 3.0
 */
-static int AsyncIoController::addTimer(date deadline, auto udata, string owner) [dom=NETWORK,PROCESS] {
+static int AsyncIoController::addTimer(date deadline, auto udata, string owner)
+        [dom=NETWORK,THREAD_CONTROL;flags=MODULE_OWNED] {
+    if (qore_check_module_owned_code(udata, QDOM_NETWORK | QDOM_THREAD_CONTROL, "AsyncIoController::addTimer()",
+            "schedule", xsink)) {
+        return 0;
+    }
     QoreObject* obj;
     AsyncIoControllerPriv* ctrl = get_singleton(obj, xsink);
     if (!ctrl) {
@@ -748,9 +783,16 @@ static int AsyncIoController::addTimer(date deadline, auto udata, string owner) 
 //! Cancels a timer on the global singleton
 /** @param timer_id the timer ID returned by @ref addTimer()
     @return @ref True "True" if the timer was found and canceled
+
+    @par Module Code and Restricted Callers
+    Module code that runs for an application with restrictions (a Qorus service, for example) can cancel only the
+    timers that module code added for the same application, the first %Program in the chain of callers that is not a
+    module; for any other timer, this method returns @ref False "False", so a restricted caller cannot use module code
+    to cancel timers of other applications or of the host; see @ref MODULE_OWNED
+
     @since %Qore 3.0
 */
-static bool AsyncIoController::cancelTimer(int timer_id) [dom=NETWORK,PROCESS;flags=NAMED_ARGS] {
+static bool AsyncIoController::cancelTimer(int timer_id) [dom=NETWORK,THREAD_CONTROL;flags=NAMED_ARGS,MODULE_OWNED] {
     QoreObject* obj;
     AsyncIoControllerPriv* ctrl = get_singleton(obj, xsink);
     if (!ctrl) {
@@ -772,7 +814,7 @@ static bool AsyncIoController::cancelTimer(int timer_id) [dom=NETWORK,PROCESS;fl
 
     @since %Qore 3.0
 */
-static nothing AsyncIoController::setTimerCallback(*code callback) [dom=NETWORK,PROCESS;flags=NAMED_ARGS] {
+static nothing AsyncIoController::setTimerCallback(*code callback) [dom=NETWORK,PROCESS,THREAD_CONTROL;flags=NAMED_ARGS] {
     QoreObject* obj;
     AsyncIoControllerPriv* ctrl = get_singleton(obj, xsink);
     if (!ctrl) {
@@ -789,11 +831,25 @@ static nothing AsyncIoController::setTimerCallback(*code callback) [dom=NETWORK,
     to execute if the pool is stopped before the task can be executed
 
     @throw ASYNC-IO-ERROR if the controller's thread pool has been stopped
+    @throw INVALID-FUNCTION-ACCESS module code running for a restricted caller submitted code that is not its own
+
+    @par Module Code and Restricted Callers
+    Module code that runs for a caller that may not control threads (a Qorus service, for example, has
+    @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL") can submit only its own code: code of a %Program that
+    allows what the caller may not.  The caller's own code (a closure, or a method that a class of the caller
+    overrides) is refused with \c INVALID-FUNCTION-ACCESS, whose description gives the reason, for example <em>the
+    callback's Program does not allow thread control (PO_NO_THREAD_CONTROL)</em>; see @ref MODULE_OWNED
 
     @since %Qore 3.0
 */
 static nothing AsyncIoController::submitTask(code<nothing()> task, *code<nothing()> cancel_callback)
-        [dom=NETWORK,PROCESS;flags=NAMED_ARGS] {
+        [dom=NETWORK,THREAD_CONTROL;flags=NAMED_ARGS,MODULE_OWNED] {
+    if (qore_check_module_owned_code(task, QDOM_NETWORK | QDOM_THREAD_CONTROL, "AsyncIoController::submitTask()",
+            "schedule", xsink)
+        || (cancel_callback && qore_check_module_owned_code(cancel_callback, QDOM_NETWORK | QDOM_THREAD_CONTROL,
+            "AsyncIoController::submitTask()", "schedule", xsink))) {
+        return QoreValue();
+    }
     QoreObject* obj;
     AsyncIoControllerPriv* ctrl = get_singleton(obj, xsink);
     if (!ctrl) {

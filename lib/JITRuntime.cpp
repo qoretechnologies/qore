@@ -10403,7 +10403,8 @@ private:
     DLLLOCAL static QoreCallParseOptionsOverride get(QoreProgram* exec_pgm, const UserVariantBase* uvb,
             QoreProgram* caller_pgm) {
         QoreCallParseOptionsOverride o;
-        qore_get_user_call_runtime_po_override(exec_pgm, uvb, runtime_get_effective_parse_options_for(caller_pgm), o);
+        qore_get_user_call_runtime_po_override(exec_pgm, uvb, runtime_get_effective_parse_options_for(caller_pgm),
+            caller_pgm, o);
         return o;
     }
 };
