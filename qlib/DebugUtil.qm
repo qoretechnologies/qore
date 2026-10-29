@@ -49,7 +49,8 @@ module DebugUtil {
     @subsection du_v0_2 v0.2
     - added string enums: @ref DebugUtil::DebugResponseType, @ref DebugUtil::DebugRunStateName, @ref DebugUtil::DebugFlowName,
       @ref DebugUtil::DebugPolicyName, @ref DebugUtil::DebugEventCmd for type-safe debug protocol constants
-    - added @ref DebugUtil::ResponseSync class for thread-safe single-response synchronization
+    - added @ref DebugUtil::ResponseSync class for thread-safe single-response synchronization, matching responses by
+      the unique ID of the command and waiting without a timeout
 
     @subsection du_v0_1_1 v0.1.1
     - fixed issues with debug logging
@@ -63,20 +64,23 @@ module DebugUtil {
 public namespace DebugUtil {
     #! Thread-safe single-response synchronization helper
     /**
-        Replaces the non-atomic Counter-based while(getCount() > 0) { dec(); } pattern
-        with a Mutex-guarded flag that safely handles concurrent access from sender and
-        receiver threads.
+        A thread that sends a command prepares to wait for the response with the command's unique ID, sends the
+        command, and waits; the thread that receives the responses delivers each one, and only the response with the
+        ID that is waited for is delivered.
 
         @par Example:
         @code{.py}
         ResponseSync sync();
         # sender thread:
-        sync.prepare();
+        data.uid = uid;
+        sync.prepare(uid);
         sendCommand(data);
-        *auto result = sync.waitForResponse(1500ms);
+        *auto result = sync.waitForResponse();
 
         # receiver thread:
-        sync.deliver(responseData);
+        if (!sync.deliver(responseData)) {
+            # not a response that is waited for
+        }
         @endcode
     */
     public class ResponseSync {
@@ -84,40 +88,68 @@ public namespace DebugUtil {
             Mutex m();
             Condition cond();
             bool pending = False;
+            #! the unique ID of the command whose response is waited for
+            *string uid;
             auto responseData;
         }
 
-        #! Prepare to wait for a response (call before sending command)
-        prepare() {
+        #! Prepare to wait for a response (call before sending the command)
+        /** @param n_uid the unique ID of the command; only a response with this ID is delivered; if not given, any
+            response is delivered
+        */
+        prepare(*string n_uid) {
             AutoLock al(m);
             pending = True;
+            uid = n_uid;
             responseData = NOTHING;
         }
 
-        #! Wait for response with timeout; returns NOTHING on timeout
-        *auto waitForResponse(timeout to) {
+        #! Stops waiting for a response, for a command that was answered without being sent to the receiver
+        cancel() {
             AutoLock al(m);
-            if (!pending) {
-                return responseData;
-            }
-            if (!cond.wait(m, to)) {
-                # signaled — response arrived
-                return responseData;
-            }
-            # timeout
             pending = False;
-            return NOTHING;
+            remove uid;
         }
 
-        #! Deliver a response (called from receiver thread)
-        /** @return True if response was delivered, False if no one was waiting */
+        #! Waits for the response
+        /** @param to an optional timeout; if not given, waits until the response is delivered
+
+            @return the response, or @ref nothing if the timeout expired
+        */
+        *auto waitForResponse(*timeout to) {
+            AutoLock al(m);
+            if (!exists to) {
+                while (pending) {
+                    cond.wait(m);
+                }
+                return responseData;
+            }
+            date deadline = now_us() + milliseconds(to);
+            while (pending) {
+                int remaining = (deadline - now_us()).durationMilliseconds();
+                if (remaining <= 0 || cond.wait(m, remaining)) {
+                    if (pending) {
+                        # timeout
+                        pending = False;
+                        remove uid;
+                        return NOTHING;
+                    }
+                }
+            }
+            return responseData;
+        }
+
+        #! Delivers a response (called from the receiver thread)
+        /** @return True if the response was delivered, False if no one waits for it
+        */
         bool deliver(auto data) {
             AutoLock al(m);
-            if (!pending) {
+            if (!pending || (exists uid && data.uid != uid)) {
                 return False;
             }
             responseData = data;
             pending = False;
+            remove uid;
             cond.signal();
             return True;
         }

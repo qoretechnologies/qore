@@ -49,6 +49,9 @@ module DebugProgramControl {
     The %DebugProgramControl module provides common functionality for implementing debugger server utilities
 
     @subsection dc_v0_1_3 v0.1.3
+    - a stopped thread answers every command of a client, a command without a result with an empty hash, and a
+      command queued for a thread that resumed is answered with an error, so that a client can wait for the answer
+      without a timeout
     - a statement can be given as a function name without the types of its parameters when the function has one
       variant (<a href="https://github.com/qoretechnologies/qore/issues/5558">issue 5558</a>)
 
@@ -1304,7 +1307,14 @@ public namespace DebugProgramControl {
                             result.ex = ex;
                         }
                     }
-                    if (exists result) {
+                    # every command of a client is answered, so that the client can wait for the answer; a command with
+                    # no result, such as "go", is answered with an empty hash; the commands queued by shutdown() have
+                    # no client
+                    if (cx) {
+                        if (!exists result) {
+                            result = {};
+                            sd.type = DebugResponseType::Response;
+                        }
                         sd.tid = tid;
                         sd.stamp = now_us();
                         sd.cmd = rd.cmd;
@@ -1325,6 +1335,28 @@ public namespace DebugProgramControl {
                 rwlThread.writeLock();
                 on_exit rwlThread.writeUnlock();
                 remove ctxThread{tid};
+            }
+            # commands that were queued after the command that resumed the thread are not processed; no command is
+            # queued any more, as the thread is no longer registered as stopped
+            while (ctx.queue.size()) {
+                hash<auto> qrd = ctx.queue.get();
+                if (qrd.cx) {
+                    try {
+                        sendDataImpl(qrd.cx, {
+                            "type": DebugResponseType::Error,
+                            "tid": tid,
+                            "stamp": now_us(),
+                            "cmd": qrd.data.cmd,
+                            "uid": qrd.data.uid,
+                            "result": {
+                                "err": "DEBUG-HANDLER-ERROR",
+                                "desc": sprintf("threadId %y is not stopped", tid),
+                            },
+                        });
+                    } catch (hash<ExceptionInfo> ex) {
+                        # the client cannot be reached; the remaining commands are answered
+                    }
+                }
             }
             # notify program is running again
             hash<auto> sd = {

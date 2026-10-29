@@ -444,5 +444,58 @@ public class DebugUtilTest inherits QUnit::Test {
                 assertEq(i, result);
             }
         }
+        # only the response with the unique ID that is waited for is delivered
+        {
+            ResponseSync sync();
+            sync.prepare("2");
+            assertFalse(sync.deliver({"uid": "1", "result": "stale"}));
+            assertFalse(sync.deliver({"result": "no uid"}));
+            assertTrue(sync.isPending());
+            assertTrue(sync.deliver({"uid": "2", "result": "ok"}));
+            assertFalse(sync.isPending());
+            assertEq("ok", sync.waitForResponse().result);
+            # nothing is waited for any more
+            assertFalse(sync.deliver({"uid": "2", "result": "again"}));
+        }
+
+        # a wait without a timeout returns when the response is delivered by another thread
+        {
+            ResponseSync sync();
+            sync.prepare("3");
+            Counter started(1);
+            background sub () {
+                started.waitForZero();
+                sync.deliver({"uid": "3", "result": "from thread"});
+            }();
+            started.dec();
+            assertEq("from thread", sync.waitForResponse().result);
+        }
+
+        # a wait without a timeout returns at once when the response was delivered before
+        {
+            ResponseSync sync();
+            sync.prepare("4");
+            sync.deliver({"uid": "4", "result": "early"});
+            assertEq("early", sync.waitForResponse().result);
+        }
+
+        # cancel() stops waiting for a response
+        {
+            ResponseSync sync();
+            sync.prepare("5");
+            sync.cancel();
+            assertFalse(sync.isPending());
+            assertFalse(sync.deliver({"uid": "5"}));
+            assertNothing(sync.waitForResponse());
+        }
+
+        # a timeout is still possible with a unique ID
+        {
+            ResponseSync sync();
+            sync.prepare("6");
+            assertNothing(sync.waitForResponse(10ms));
+            assertFalse(sync.isPending());
+            assertFalse(sync.deliver({"uid": "6"}));
+        }
     }
 }

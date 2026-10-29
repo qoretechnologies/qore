@@ -42,6 +42,8 @@ class VscDebugAdapterLocal inherits VscDebugAdapter {
     public {
         DebugProgramControlLocal dpc;
         ResponseSync sync();
+        #! gives the commands sent to stopped threads their unique IDs
+        Sequence uidSeq();
         *hash<auto> programOpts;
     }
     constructor(Logger logger, DebugProgramControlLocal n_dpc, hash<auto> opts) : VscDebugAdapter(logger) {
@@ -50,15 +52,20 @@ class VscDebugAdapterLocal inherits VscDebugAdapter {
         programOpts = opts;
     }
     public *hash<auto> doCommandImpl(hash<auto> data) {
-        if (exists data.tid) {
-            sync.prepare();
+        if (!exists data.tid) {
+            return dpc.processCommand(DebugProgramControlLocal::CX, data);
         }
+        # the stopped thread answers every command, with the unique ID of the command
+        data.uid = string(uidSeq.next());
+        sync.prepare(data.uid);
+        on_error sync.cancel();
         *hash<auto> ret = dpc.processCommand(DebugProgramControlLocal::CX, data);
         if (ret.type == DebugResponseType::Thread) {
-            return sync.waitForResponse(200ms);
-        } else {
-            return ret;
+            return sync.waitForResponse();
         }
+        # answered without the thread, such as a thread that is not stopped
+        sync.cancel();
+        return ret;
     }
 }
 

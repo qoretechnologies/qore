@@ -66,6 +66,9 @@ class TestDebugProgramControl inherits DebugProgramControl {
 
         #! events broadcast to all clients
         Queue events();
+
+        #! gives the commands sent to stopped threads their unique IDs
+        Sequence uids();
     }
 
     constructor() : DebugProgramControl("DebugProgramControlTest") {
@@ -91,29 +94,42 @@ class TestDebugProgramControl inherits DebugProgramControl {
     }
 
     #! sends a command to a stopped thread and returns the response the thread sends
+    /** a stopped thread answers every command, with the unique ID of the command
+    */
     auto threadCommand(int tid, string cmd, *hash<auto> args) {
-        hash<auto> rv = processCommand(CX, {"cmd": cmd, "tid": tid} + args);
-        if (rv.type == DebugResponseType::Error) {
-            throw rv.result.err, rv.result.desc;
-        }
-        @assert(rv.type == DebugResponseType::Thread);
-        hash<auto> resp = responses.get(EventTimeout);
+        hash<auto> resp = threadRequest(tid, cmd, args);
         if (resp.type == DebugResponseType::Error) {
             throw resp.result.err, resp.result.desc;
         }
         return resp.result;
     }
 
-    #! sends a command to a stopped thread for which the thread sends no response, such as "debug/frame/set"
-    threadSend(int tid, string cmd, *hash<auto> args) {
-        hash<auto> rv = processCommand(CX, {"cmd": cmd, "tid": tid} + args);
+    #! sends a command to a stopped thread and returns the whole answer
+    hash<auto> threadRequest(int tid, string cmd, *hash<auto> args) {
+        string uid = string(uids.next());
+        hash<auto> rv = processCommand(CX, {"cmd": cmd, "tid": tid, "uid": uid} + args);
+        if (rv.type == DebugResponseType::Error) {
+            throw rv.result.err, rv.result.desc;
+        }
         @assert(rv.type == DebugResponseType::Thread);
+        hash<auto> resp = responses.get(EventTimeout);
+        if (resp.uid != uid) {
+            throw "TEST-ERROR", sprintf("expecting the answer to command %y (uid %y); got: %y", cmd, uid, resp);
+        }
+        return resp;
     }
 
-    #! resumes a stopped thread; a thread sends no response to "go"
+    #! sends a command to a stopped thread whose answer has no result, such as "debug/frame/set"
+    threadSend(int tid, string cmd, *hash<auto> args) {
+        auto result = threadCommand(tid, cmd, args);
+        if (result != {}) {
+            throw "TEST-ERROR", sprintf("expecting an empty answer to command %y; got: %y", cmd, result);
+        }
+    }
+
+    #! resumes a stopped thread; the thread answers "go" with an empty hash before it resumes
     go(int tid, string runState = "run") {
-        hash<auto> rv = processCommand(CX, {"cmd": "thread/go/" + runState, "tid": tid});
-        @assert(rv.type == DebugResponseType::Thread);
+        threadSend(tid, "thread/go/" + runState);
     }
 
     #! returns the next interrupt event, skipping breakpoint change notifications
@@ -215,6 +231,7 @@ public class DebugProgramControlTest inherits QUnit::Test {
         addTestCase("thread stack frame", \threadStackFrameTest());
         addTestCase("breakpoint on top-level statement", \topLevelBreakpointTest());
         addTestCase("local variables of the frames of a stopped thread", \localVariableTest());
+        addTestCase("every command of a stopped thread is answered", \threadAnswerTest());
         addTestCase("breakpoint on statement without temporaries", \noTempBreakpointTest());
         addTestCase("breakpoint on file given with another path", \filePathBreakpointTest());
         addTestCase("breakpoint on function", \functionBreakpointTest());
@@ -351,6 +368,52 @@ public class DebugProgramControlTest inherits QUnit::Test {
         assertEq(10, AbstractDebugControl::unserialize(total.value));
 
         assertEq({"rc": NOTHING}, p.finish());
+    }
+
+    # a stopped thread answers every command of a client, so that the client can wait for the answer without a
+    # timeout, and a command queued for a thread that resumed is answered with an error
+    threadAnswerTest() {
+        DebuggedProgram p(dpc);
+        on_exit p.cleanup();
+        p.breakAt(8);
+        p.runToStop();
+
+        # commands with no result are answered with an empty hash, with the unique ID of the command
+        hash<auto> resp = dpc.threadRequest(p.tid, "thread/debug/frame/set", {"value": AbstractDebugControl::serialize(0)});
+        assertEq(DebugResponseType::Response, resp.type);
+        assertEq({}, resp.result);
+        assertEq(p.tid, resp.tid);
+        # an error is answered as an error
+        resp = dpc.threadRequest(p.tid, "thread/go/no-such-state");
+        assertEq(DebugResponseType::Error, resp.type);
+        assertEq("DEBUG-HANDLER-ERROR", resp.result.err);
+
+        # "go" and a command sent right after it: the second command is answered with an error, by the thread when it
+        # was queued before the thread resumed, or at once
+        string go_uid = string(dpc.uids.next());
+        string stack_uid = string(dpc.uids.next());
+        hash<auto> rv = dpc.processCommand(TestDebugProgramControl::CX, {"cmd": "thread/go/run", "tid": p.tid,
+            "uid": go_uid});
+        assertEq(DebugResponseType::Thread, rv.type);
+        rv = dpc.processCommand(TestDebugProgramControl::CX, {"cmd": "thread/stack", "tid": p.tid, "uid": stack_uid});
+        resp = dpc.responses.get(EventTimeout);
+        assertEq(go_uid, resp.uid);
+        assertEq({}, resp.result);
+        if (rv.type == DebugResponseType::Thread) {
+            resp = dpc.responses.get(EventTimeout);
+            assertEq(stack_uid, resp.uid);
+        } else {
+            resp = rv;
+        }
+        assertEq(DebugResponseType::Error, resp.type);
+        assertRegex("is not stopped", resp.result.desc);
+
+        # the program ends: it stops at the detach event
+        hash<auto> e = dpc.getInterrupt();
+        assertEq("detach", e.func);
+        dpc.go(p.tid);
+        assertEq({"rc": NOTHING}, p.done.get(EventTimeout));
+        p.finished = True;
     }
 
     # issue #5558: statements that create no temporaries, such as a declaration with an int expression or a return

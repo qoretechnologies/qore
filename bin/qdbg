@@ -20,21 +20,28 @@ class DebugCommandLineLocal inherits DebugLinenoiseCommandLine {
     public {
         DebugProgramControlLocal dpc;
         ResponseSync sync();
+        #! gives the commands sent to stopped threads their unique IDs
+        Sequence uidSeq();
     }
     constructor(DebugProgramControlLocal n_dpc): DebugLinenoiseCommandLine() {
         dpc = n_dpc;
         dpc.dcl = self;
     }
     public *hash<auto> doCommandImpl(hash<auto> data) {
-        if (exists data.tid) {
-            sync.prepare();
+        if (!exists data.tid) {
+            return dpc.processCommand(DebugProgramControlLocal::CX, data);
         }
+        # the stopped thread answers every command, with the unique ID of the command
+        data.uid = string(uidSeq.next());
+        sync.prepare(data.uid);
+        on_error sync.cancel();
         *hash<auto> ret = dpc.processCommand(DebugProgramControlLocal::CX, data);
         if (ret.type == DebugResponseType::Thread) {
-            return sync.waitForResponse(200ms);
-        } else {
-            return ret;
+            return sync.waitForResponse();
         }
+        # answered without the thread, such as a thread that is not stopped
+        sync.cancel();
+        return ret;
     }
 }
 
