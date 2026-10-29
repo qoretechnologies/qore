@@ -650,6 +650,12 @@ static hash<auto> AsyncIoController::getInfo() {
 //! Sets the logger on the global singleton
 /** @param logger a @ref Qore::LoggerInterfaceBase "LoggerInterfaceBase" object for logging,
     or @ref nothing "NOTHING" to disable per-controller logging
+
+    @note an \c HttpServer sets its logger here while it runs and gives back the logger it replaced when it stops,
+    unless the logger has been replaced since
+
+    @see getLogger()
+
     @since %Qore 3.0
 */
 static nothing AsyncIoController::setLogger(*LoggerInterfaceBase logger) [flags=NAMED_ARGS] {
@@ -661,6 +667,29 @@ static nothing AsyncIoController::setLogger(*LoggerInterfaceBase logger) [flags=
     ReferenceHolder<AsyncIoControllerPriv> ctrl_holder(ctrl, xsink);
     ReferenceHolder<QoreObject> obj_holder(obj, xsink);
     ctrl->setLogger(const_cast<QoreObject*>(logger), xsink);
+}
+
+//! Returns the logger of the global singleton
+/** @return the logger set with @ref setLogger(), or @ref nothing "NOTHING" if none is set
+
+    @par Example:
+    @code{.py}
+*LoggerInterfaceBase logger = AsyncIoController::getLogger();
+    @endcode
+
+    @see setLogger()
+
+    @since %Qore 3.0
+*/
+static *LoggerInterfaceBase AsyncIoController::getLogger() {
+    QoreObject* obj;
+    AsyncIoControllerPriv* ctrl = get_singleton(obj, xsink);
+    if (!ctrl) {
+        return QoreValue();
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctrl_holder(ctrl, xsink);
+    ReferenceHolder<QoreObject> obj_holder(obj, xsink);
+    return ctrl->getLogger();
 }
 
 //! Adds a timer on the global singleton

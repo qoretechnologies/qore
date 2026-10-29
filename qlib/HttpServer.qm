@@ -602,6 +602,13 @@ public hashdecl HttpServerOptionInfo {
     date ttl = 0s;
 
     #! HTTP server logger
+    /** The process-wide async I/O controller (see @ref AsyncSocketIo::getGlobalAsyncIoController()) also logs through
+        this logger while the server runs (see
+        @ref Qore::AsyncIoController::setLogger() "AsyncIoController::setLogger()"); when the server stops, the
+        controller gets back the logger it had before, unless its logger has been replaced since.  The controller has
+        one logger for the whole process: with more than one server running, it logs through the logger of the server
+        created last of them.
+    */
     *LoggerInterface logger;
 
     #! Idle thread count for the connection thread pool
@@ -1055,6 +1062,13 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         #! Epoch second when cache was last updated
         static int cached_date_epoch = 0;
 
+        #! The running servers that set their loggers on the global async I/O controller, in the order they set them
+        /** See setControllerLogger() and restoreControllerLogger()
+        */
+        static list<hash<Priv::ControllerLoggerInfo>> controller_loggers = ();
+
+        #! Protects @ref controller_loggers and the global async I/O controller's logger as servers set and restore it
+        static Mutex controller_logger_lck();
     }
     #! @endcond
 
@@ -2059,6 +2073,8 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
             }
             stopping = True;
         }
+        # the global controller logs through this server's logger until the server has stopped
+        on_exit restoreControllerLogger();
         if (callback_appender) {
             try {
                 logger.removeAppender(callback_appender);
@@ -2996,8 +3012,9 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         alt_svc_max_age = opts.alt_svc_max_age ?? 3600;
         # Initialize async I/O
         AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
-        # Set logger on the global controller for async I/O logging
-        ctrl.setLogger(logger);
+        # the global controller logs through the server's logger while the server runs
+        setControllerLogger();
+        on_error restoreControllerLogger();
         asyncTarget = new Priv::HttpServerNativeAsyncTarget(logger);
         asyncIo = new HttpServerAsyncIo::HttpAsyncSocketIoController(ctrl, logger, {
             "max_handler_threads": opts.max_handler_threads,
@@ -3008,6 +3025,57 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             "lingering_close_timeout": opts.lingering_close_timeout,
         });
         asyncIo.start();
+    }
+
+    #! Sets the server's logger on the global async I/O controller
+    /** The controller is shared by the whole process and has a single logger, so the logger of the server that set
+        it last is used; restoreControllerLogger() gives the controller back the logger this server replaced when the
+        server stops, so a stopped server's logger is not kept by the controller and the controller's logger is that
+        of a server still running, or the one it had before the servers set theirs.
+    */
+    private:internal setControllerLogger() {
+        AutoLock al(controller_logger_lck);
+        controller_loggers += <Priv::ControllerLoggerInfo>{
+            "owner": self.uniqueHash(),
+            "logger": logger,
+            "prev": Qore::AsyncIoController::getLogger(),
+        };
+        Qore::AsyncIoController::setLogger(logger);
+    }
+
+    #! Gives the global async I/O controller back the logger that this server replaced; see setControllerLogger()
+    /** Does nothing if the server did not set its logger on the controller or has already restored it.
+    */
+    private:internal restoreControllerLogger() {
+        string owner = self.uniqueHash();
+        # holds the entry removed until after the lock has been released, so that a logger released here is
+        # destroyed without the lock held: its destructor can run code that creates or stops a server
+        *hash<Priv::ControllerLoggerInfo> info;
+        {
+            AutoLock al(controller_logger_lck);
+            *int i;
+            foreach hash<Priv::ControllerLoggerInfo> entry in (controller_loggers) {
+                if (entry.owner == owner) {
+                    i = $#;
+                    break;
+                }
+            }
+            if (!exists i) {
+                return;
+            }
+            info = controller_loggers[i];
+            if (i < (controller_loggers.size() - 1)) {
+                # a later server replaced this server's logger: that server restores the logger this server
+                # replaced
+                if (controller_loggers[i + 1].prev == info.logger) {
+                    controller_loggers[i + 1].prev = info.prev;
+                }
+            } else if (Qore::AsyncIoController::getLogger() == info.logger) {
+                # this server's logger is replaced only if nothing else has replaced it on the controller since
+                Qore::AsyncIoController::setLogger(info.prev);
+            }
+            splice controller_loggers, i, 1;
+        }
     }
 
     #! Updates the per-listener Alt-Svc response headers based on active QUIC listeners
@@ -7512,6 +7580,16 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
 #! Private namespace
 namespace Priv {
+#! a running server's logger set on the global async I/O controller; see HttpServer::setControllerLogger()
+hashdecl ControllerLoggerInfo {
+    #! the server's unique hash
+    string owner;
+    #! the server's logger
+    LoggerInterface logger;
+    #! the controller's logger that the server's replaced, restored when the server stops
+    *LoggerInterfaceBase prev;
+}
+
 # class containing handler info
 class HandlerInfo {
     public {
