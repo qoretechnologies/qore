@@ -29623,3 +29623,31 @@ Repeated adapter checks also exposed a ProgramControl cache lifetime race: a loo
 build: 78 executed QUnit cases/1957 assertions, 4 additional silent fixtures, 0 QUnit skips, 1 Debug-hook skips; build-debug: 78 executed QUnit cases/1957 assertions, 5 additional silent fixtures, 0 QUnit skips, 0 Debug-hook skips. Each tree runs 25 fixtures; the deterministic ProgramControl fixture runs its two interleavings in Debug and explicitly skips in Release. Native Debug passes 3770 focused and 5435 broader assertions (overlapping); trace, DGC lock counters and compiled concurrent references pass. All 391 Release qmod aliases are restored. The unmodified Release adapter test passes 50 repeats (250 cases/3800 assertions) after the cache fix.
 
 See [integration evidence](results-post-outlining-merge-macos-arm64.json) and the [62-check audit](audit-post-outlining-merge.md). These checks establish integration correctness, not a new performance comparison. The outlining figures remain premerge measurements. The next step is the requested optimized committed build and system installation, followed by the explicit RuntimeConfig release-context experiment with a newly frozen baseline.
+
+
+## Explicit AOT release context rejected (2026-10-29)
+
+The candidate passed the already acquired RuntimeConfig to a versioned AOT class-local cleanup helper. A same-thread live view followed canonical hazard registration/unregistration, including teardown and reused thread IDs. The fast-release algorithm stayed textually identical apart from slot selection. Optimized assembly removed its TLS resolver call, but added context loads and increased the cleanup helper frame from 64 to 80 bytes. Both helper versions and their fallbacks were tested.
+
+The prospectively allowed early pilot does not justify retaining this implementation. Against optimized merged 0800e5e231, same-Program integer polymorphic time improves only 0.82% with mixed layout directions; floating-point polymorphic time rises 1.62%. Imported calls and boxed-float fallback improve, but indirect calls and list building cost 4.94%/4.70%, with separated observed ranges in all three layouts. This is an unfavorable target/control tradeoff, not a zero-regression rule or an application-weighted conclusion. The whole candidate is rejected and removed. No full 33-workload campaign or confirmation was run.
+
+All 198 processes/594 windows replay independently. Both runtimes are Release (`-O3 -DNDEBUG`), allocation tracking off; each has 15 fresh identity-matched stripped O3 artifacts. Three layouts and three forks use three warmup and three 150 ms measurement windows per process. Values are whole-kernel ns/item, not isolated call latency.
+
+|!Workload|!Baseline ns/item|!Rejected candidate ns/item|!Time change
+|local:direct_call|1.4703|1.4863|+1.09%
+|local:method_call|1.5447|1.5578|+0.85%
+|local:polymorphic_call|21.5993|21.4220|-0.82%
+|local:polymorphic_float_call|21.4939|21.8425|+1.62%
+|local:boxed_int_method_fallback|32.5441|32.0878|-1.40%
+|local:boxed_float_method_fallback|34.8888|33.6649|-3.51%
+|micro:polymorphic_call|81.5456|79.7939|-2.15%
+|micro:polymorphic_float_call|82.2594|81.3247|-1.14%
+|micro:indirect_call|8.3771|8.7913|+4.94%
+|micro:list_build|21.9850|23.0174|+4.70%
+|mixed:object_orders|3067.2691|3103.5360|+1.18%
+
+Baseline and candidate each pass 6,072 reference outputs. Release/Debug each pass 22 fixtures with 45 QUnit cases/6,807 assertions. Release additionally has 3 silent fixtures and 1 explicit Debug-hook skip; Debug has 4 silent fixtures. Native Debug passes 5,221 focused/6,886 broader assertions, with overlapping coverage. Live/null/empty/unregistered contexts, foreign-thread teardown and TID reuse, tracing, lock counters, collector races and compiled concurrent references pass. The first Debug build failed because the new test heap-allocated a stack-only foreign-thread helper; the corrected stack-based test passes. Release rebuilds after that test-only correction are byte-identical. The initial summary missed the uppercase SKIP: marker; the published review corrects that count from raw output.
+
+Production source is restored exactly, Release qore/qcc/libqore are byte-identical to the validated baseline, and 391 Release qmods are rebuilt. The installed 0800e5e231 build is unchanged. Current build-debug is candidate output and must be rebuilt before reuse; no restored Debug binary equivalence is claimed. All failed attempts and final candidate patch remain in the [evidence](results-aot-release-context-rejected-macos-arm64.json); see the [62-check audit](audit-aot-release-context-rejected.md).
+
+No fresh Java/develop ratio or global ceiling is established. The next investigation measures the existing expression-only/monomorphic controls alongside the unchanged original receiver-local kernels. That source-level decomposition can guide a separate borrowing proof, but is not itself a runtime speedup. Any ownership optimization must preserve live runtime locals, fallback materialization, debugger/reflection behavior, concurrent deletion, cancellation and destructor order; the earlier native-only local prototype failed exception-path destructor order.
