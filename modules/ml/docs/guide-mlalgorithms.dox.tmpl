@@ -77,8 +77,8 @@
       new data arrives.
     - @ref Qore::ML::GMM "GMM" — Assigns each record a probability for each group rather than a hard
       label. A customer might be 70%% "budget shopper" and 30%% "impulse buyer," reflecting
-      genuine overlap. Uses Gaussian mixtures (EM algorithm) and supports full, diagonal, and
-      spherical covariance types. Supports online learning via incremental EM updates.
+      genuine overlap. Uses Gaussian mixtures (EM algorithm, initialized with k-means) and supports
+      full and diagonal covariance types. Supports online learning via incremental EM updates.
 
     @section mlalgo_classification Classification
 

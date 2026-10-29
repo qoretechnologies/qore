@@ -111,6 +111,8 @@ in_module_call_ref: INVALID-FUNCTION-ACCESS: parse options do not allow access t
 thread_data: 1|2|gone
 named_args: 3
 constructors: 1|0|5|0
+inherited_local: True|True
+inherited_via_methods: False|-1|True|True
 maybe_nothing: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::Mutex::lock()'
 untyped: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::RWLock::readLock(timeout timeout_ms)'
 ";
@@ -285,6 +287,23 @@ public namespace AOTBuiltinCallMod {
 public class Locks {
     public {
         RWLock rw();
+        static Mutex slck();
+    }
+
+    # methods that the thread classes inherit from AbstractSmartLock, on a member and a static member
+    string inheritedMember() {
+        return sprintf(\"%y|%y\", rw.lockOwner(), rw.lockTID());
+    }
+
+    static string inheritedStatic() {
+        bool needs_lock = !slck.lockOwner();
+        if (needs_lock) {
+            slck.lock();
+        }
+        on_exit if (needs_lock) {
+            slck.unlock();
+        }
+        return sprintf(\"%y|%y\", needs_lock, slck.lockOwner());
     }
 
     # RWLock::readLock() and RWLock::writeLock() have a variant with and one without a timeout
@@ -362,6 +381,19 @@ public string sub namedArgs() {
     return sprintf(\"%d\", v);
 }
 
+# a method that Mutex inherits from AbstractSmartLock, on a local
+public string sub inheritedLocal() {
+    Mutex m();
+    m.lock();
+    on_exit m.unlock();
+    return sprintf(\"%y|%y\", m.lockOwner(), m.lockTID() == gettid());
+}
+
+public string sub inheritedViaMethods() {
+    Locks lk();
+    return lk.inheritedMember() + \"|\" + Locks::inheritedStatic();
+}
+
 public string sub constructors() {
     Queue q(10);
     q.push(1);
@@ -422,6 +454,8 @@ string sub in_module_call_ref() { return AOTBuiltinCallMod::inModuleCallRef(); }
 string sub thread_data() { return AOTBuiltinCallMod::threadData(); }
 string sub named_args() { return AOTBuiltinCallMod::namedArgs(); }
 string sub constructors() { return AOTBuiltinCallMod::constructors(); }
+string sub inherited_local() { return AOTBuiltinCallMod::inheritedLocal(); }
+string sub inherited_via_methods() { return AOTBuiltinCallMod::inheritedViaMethods(); }
 string sub maybe_nothing() { return AOTBuiltinCallMod::maybeNothing(); }
 string sub untyped() { return AOTBuiltinCallMod::untyped(1s); }
 \", \"probe\");
@@ -429,6 +463,7 @@ string sub untyped() { return AOTBuiltinCallMod::untyped(1s); }
 # each function runs three times so that tiered execution runs it on more than one tier
 foreach string f in (\"local\", \"local_default_arg\", \"member\", \"static\", \"objects\", \"member_direct\",
         \"static_direct\", \"closure\", \"in_module_call_ref\", \"thread_data\", \"named_args\", \"constructors\",
+        \"inherited_local\", \"inherited_via_methods\",
         \"maybe_nothing\", \"untyped\") {
     *string first;
     for (int i = 0; i < 3; ++i) {

@@ -172,6 +172,10 @@ public class MlTest inherits QUnit::Test {
         addTestCase("GMM error cases", \gmmErrorTest());
         addTestCase("GMM copy error", \gmmCopyTest());
         addTestCase("GMM online EM update", \gmmUpdateTest());
+        addTestCase("GMM separates well-separated groups for every seed", \gmmSeparatedGroupsSeedTest());
+        addTestCase("GMM separation is independent of the data scale", \gmmSeparatedGroupsScaleTest());
+        addTestCase("GMM online update keeps a component with no data finite", \gmmUpdateEmptyComponentTest());
+        addTestCase("GMM fit with more components than distinct points", \gmmDuplicatePointsTest());
         addTestCase("OnnxModel load and metadata", \onnxLoadTest());
         addTestCase("OnnxModel inference", \onnxInferenceTest());
         addTestCase("OnnxModel tensor inference", \onnxTensorInferenceTest());
@@ -3324,6 +3328,115 @@ public class MlTest inherits QUnit::Test {
         });
     }
 
+
+    # two tight groups of four points, 14 units apart: (0, 0) and (10, 10)
+    static list<list<float>> gmmTwoGroups(float scale = 1.0) {
+        return map (($1[0] * scale), ($1[1] * scale)), (
+            (0.0, 0.0), (0.1, 0.1), (0.2, 0.0), (0.0, 0.2),
+            (10.0, 10.0), (10.1, 10.1), (10.2, 10.0), (10.0, 10.2),
+        );
+    }
+
+    # asserts that a fit put the first four points in one cluster and the last four in the other
+    private assertTwoGroups(ML::GMM gmm, list<list<float>> data, string label) {
+        list<int> clusters = map $1.cluster, gmm.predictMatrix(data);
+        int a = clusters[0];
+        int b = clusters[4];
+        assertNeq(a, b, label + ": the two groups get different clusters");
+        assertEq((a, a, a, a, b, b, b, b), clusters, label + ": each group is one cluster");
+    }
+
+    gmmSeparatedGroupsSeedTest() {
+        list<list<float>> data = gmmTwoGroups();
+        # seeds whose k-means++ seeding put both initial centers in one group, so EM split that group and
+        # merged the other; the k-means++ random draws differ between C++ standard libraries, so the list
+        # holds the seeds found with libc++ (macOS) and with libstdc++ (glibc and musl)
+        list<int> seeds = (
+            # libc++
+            545, 12831, 56094, 58789, 60349, 69916, 86948, 91231, 95561, 117051, 132683,
+            # libstdc++
+            368, 18419, 47287, 61605, 129072, 132410, 137602,
+        );
+        # and a contiguous range, so the test does not depend only on the pinned seeds
+        seeds += (map $1, xrange(1, 2000));
+        foreach string cov_type in (("full", "diagonal")) {
+            foreach int seed in (seeds) {
+                ML::GMM gmm({"n_components": 2, "covariance_type": cov_type, "seed": seed});
+                gmm.fitMatrix(data);
+                list<int> clusters = map $1.cluster, gmm.predictMatrix(data);
+                int a = clusters[0];
+                int b = clusters[4];
+                if (a == b || clusters != (a, a, a, a, b, b, b, b)) {
+                    # report only failures; one assertion per seed would flood the output
+                    assertEq((a, a, a, a, b, b, b, b), clusters,
+                        sprintf("covariance %y seed %d: each group is one cluster", cov_type, seed));
+                    assertNeq(a, b, sprintf("covariance %y seed %d: the groups differ", cov_type, seed));
+                }
+            }
+        }
+        # one positive assertion so a passing run records what it checked
+        ML::GMM gmm({"n_components": 2, "seed": 12831});
+        gmm.fitMatrix(data);
+        assertTwoGroups(gmm, data, "seed 12831");
+    }
+
+    gmmSeparatedGroupsScaleTest() {
+        # the initial covariances follow the scale of the data, so tiny and huge values separate the same way
+        foreach float scale in ((1e-4, 1e5)) {
+            list<list<float>> data = gmmTwoGroups(scale);
+            # 545 failed with libc++ and 18419 with libstdc++ at a scale of 1e-4; 12831 failed with both
+            foreach int seed in ((545, 18419, 12831, 42)) {
+                ML::GMM gmm({"n_components": 2, "seed": seed});
+                gmm.fitMatrix(data);
+                assertTwoGroups(gmm, data, sprintf("scale %g seed %d", scale, seed));
+            }
+        }
+    }
+
+    gmmUpdateEmptyComponentTest() {
+        list<list<float>> data = gmmTwoGroups();
+        foreach string cov_type in (("full", "diagonal")) {
+            ML::GMM gmm({"n_components": 2, "covariance_type": cov_type, "seed": 42});
+            gmm.fitMatrix(data);
+            int b = gmm.predictMatrix(((10.1, 10.1),))[0].cluster;
+            # a batch from the first group only gives the other component no responsibility at all
+            gmm.updateMatrix(((0.05, 0.05), (0.15, 0.1), (0.1, 0.15), (0.0, 0.1)));
+            foreach list<auto> mean in (gmm.getMeans()) {
+                foreach float v in (mean) {
+                    assertFalse(v.nanp(), cov_type + ": every mean stays a number after the update");
+                }
+            }
+            hash<ML::GMMResult> r = gmm.predictMatrix(((10.1, 10.1),))[0];
+            assertEq(b, r.cluster, cov_type + ": the second group keeps its cluster");
+            assertFalse(r.log_likelihood.nanp(), cov_type + ": the log-likelihood stays a number");
+            assertFloatEq(1.0, r.max_probability, 1e-9, cov_type + ": the second group's point is certain");
+        }
+    }
+
+    gmmDuplicatePointsTest() {
+        # three components but only two distinct points: one component is left without data
+        list<list<float>> data = ((0.0, 0.0), (0.0, 0.0), (0.0, 0.0), (10.0, 10.0), (10.0, 10.0), (10.0, 10.0));
+        foreach string cov_type in (("full", "diagonal")) {
+            foreach int seed in (xrange(1, 50)) {
+                ML::GMM gmm({"n_components": 3, "covariance_type": cov_type, "seed": seed});
+                gmm.fitMatrix(data);
+                list<hash<ML::GMMResult>> r = gmm.predictMatrix(((0.0, 0.0), (10.0, 10.0)));
+                string label = sprintf("covariance %y seed %d", cov_type, seed);
+                if (r[0].cluster == r[1].cluster || r[0].max_probability < 0.99 || r[1].max_probability < 0.99
+                    || r[0].log_likelihood.nanp()) {
+                    assertNeq(r[0].cluster, r[1].cluster, label + ": the two points get different clusters");
+                    assertGe(0.99, r[0].max_probability, label + ": the first point is certain");
+                    assertGe(0.99, r[1].max_probability, label + ": the second point is certain");
+                    assertFalse(r[0].log_likelihood.nanp(), label + ": the log-likelihood is a number");
+                }
+            }
+        }
+        ML::GMM gmm({"n_components": 3, "seed": 7});
+        gmm.fitMatrix(data);
+        list<hash<ML::GMMResult>> r = gmm.predictMatrix(((0.0, 0.0), (10.0, 10.0)));
+        assertNeq(r[0].cluster, r[1].cluster, "seed 7: the two points get different clusters");
+        assertGe(0.99, r[1].max_probability, "seed 7: the second point is certain");
+    }
 
     #
     # ONNX loaded-content identity

@@ -111,6 +111,9 @@ private:
     //! Initialize parameters using k-means++
     DLLLOCAL void initializeKMeansPP(const MatrixXd& data);
 
+    //! Refine the k-means++ centers with Lloyd's k-means iterations and set the initial parameters from them
+    DLLLOCAL void refineInitialization(const MatrixXd& data);
+
     //! E-step: compute responsibilities
     DLLLOCAL MatrixXd eStep(const MatrixXd& data) const;
 
