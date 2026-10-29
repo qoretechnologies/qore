@@ -29,6 +29,11 @@ The \fBqdbg\fR family provides debugging support for Qore programs.
 Interactive local debugger with command-line editing via linenoise.
 Supports breakpoints, stepping, variable inspection, and session
 save/restore.
+When its input is not a terminal, \fBqdbg\fR runs a script of commands:
+the first command is processed when the program has attached to the
+debugger, and a command that resumes a thread returns when the thread
+stops again or stops being debugged, so that each command is processed at
+the stop that it is written for.
 .SS qdbg-remote
 Connects to a running \fBqdbg-server\fR instance via WebSocket for
 remote debugging.
@@ -181,6 +186,11 @@ Show help text and exit.
 Debug a program locally:
 .RS
 .B qdbg \-v myprogram.q \-\-arg1 value
+.RE
+.PP
+Run a script of debugger commands, without command history:
+.RS
+.B qdbg \-y . myprogram.q < commands
 .RE
 .PP
 Start a debug server:

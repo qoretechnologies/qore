@@ -948,7 +948,8 @@ public namespace DebugCmdLine {
                                         } else {
                                             data.cmd += 'get';
                                             *hash<auto> vh = dcl.doCommand(data, False);
-                                            if (!vh) {
+                                            # a variable that does not exist is answered without a value
+                                            if (!vh.result) {
                                                 printfImpl("there is no local var %y; use \"thread local\" to list local vars in this frame\n", var);
                                             }
                                             else {

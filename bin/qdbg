@@ -22,6 +22,20 @@ class DebugCommandLineLocal inherits DebugLinenoiseCommandLine {
         ResponseSync sync();
         #! gives the commands sent to stopped threads their unique IDs
         Sequence uidSeq();
+        #! True if a command that resumes a thread returns when the thread stops again; for input that is not a
+        #! terminal, so that each command of a script is processed when the program is stopped
+        bool waitForStops;
+    }
+
+    private {
+        #! guards the wait for a thread to stop
+        Mutex stopLock();
+        #! signaled when the thread that is waited for stops
+        Condition stopCond();
+        #! True while a thread is waited for to stop
+        bool stopPending;
+        #! the thread that is waited for to stop; any thread if not set
+        *int stopTid;
     }
     constructor(DebugProgramControlLocal n_dpc): DebugLinenoiseCommandLine() {
         dpc = n_dpc;
@@ -31,17 +45,70 @@ class DebugCommandLineLocal inherits DebugLinenoiseCommandLine {
         if (!exists data.tid) {
             return dpc.processCommand(DebugProgramControlLocal::CX, data);
         }
+        # a command that resumes the thread returns when it stops again; the wait starts before the command is sent,
+        # as the thread can stop again before the answer to the command is received
+        bool resumes = waitForStops && data.cmd =~ /^thread\/go(\/|$)/;
+        if (resumes) {
+            expectStop(data.tid);
+        }
+        on_error if (resumes) {
+            cancelStop();
+        }
         # the stopped thread answers every command, with the unique ID of the command
         data.uid = string(uidSeq.next());
         sync.prepare(data.uid);
         on_error sync.cancel();
         *hash<auto> ret = dpc.processCommand(DebugProgramControlLocal::CX, data);
         if (ret.type == DebugResponseType::Thread) {
-            return sync.waitForResponse();
+            ret = sync.waitForResponse();
+        } else {
+            # answered without the thread, such as a thread that is not stopped
+            sync.cancel();
         }
-        # answered without the thread, such as a thread that is not stopped
-        sync.cancel();
+        if (resumes) {
+            if (ret.type == DebugResponseType::Error) {
+                cancelStop();
+            } else {
+                waitForStop();
+            }
+        }
         return ret;
+    }
+
+    #! Starts waiting for a thread to stop; for any thread if \a tid is not given
+    expectStop(*int tid) {
+        AutoLock al(stopLock);
+        stopTid = tid;
+        stopPending = True;
+    }
+
+    #! Stops waiting for a thread to stop
+    cancelStop() {
+        AutoLock al(stopLock);
+        stopPending = False;
+        stopCond.broadcast();
+    }
+
+    #! Waits until the thread that is waited for stops, stops being debugged, or the program ends
+    waitForStop() {
+        AutoLock al(stopLock);
+        while (stopPending) {
+            stopCond.wait(stopLock);
+        }
+    }
+
+    #! Processes an event of the debug server: a thread that is waited for stops or stops being debugged
+    eventReceived(hash<auto> data) {
+        if (data.type != DebugResponseType::Event
+            || (data.cmd != DebugEventCmd::Interrupt
+                && (data.cmd != DebugEventCmd::Run || data.runstate != "detach"))) {
+            return;
+        }
+        AutoLock al(stopLock);
+        if (stopPending && (!exists stopTid || data.tid == stopTid)) {
+            stopPending = False;
+            stopCond.broadcast();
+        }
     }
 }
 
@@ -69,6 +136,9 @@ class DebugProgramControlLocal inherits DebugProgramControl {
     public nothing broadcastDataImpl(any data) {
         debug("broadcastDataImpl: %y", data);
         dcl.printData(data);
+        if (data.typeCode() == NT_HASH) {
+            dcl.eventReceived(data);
+        }
     }
 }
 
@@ -140,12 +210,25 @@ class DebugWrapper {
             if (fileName == "--") {
                 fileName = "/dev/stdin";
             }
+            # with input that is not a terminal (a script), the commands are processed when the program is stopped
+            dcl.waitForStops = !stdin.isTty();
             if (exists fileName) {
                 Program pgm = dcl.dpc.createProgram(fileName, opt, ARGV);
                 logger.info("run program");
-                background pgm.run();
+                if (dcl.waitForStops) {
+                    # the first command is processed when the program has attached to the debugger
+                    dcl.expectStop();
+                }
+                background sub () {
+                    # a wait for the program ends with it
+                    on_exit dcl.cancelStop();
+                    pgm.run();
+                }();
             }
             dcl.init(opt);
+            if (dcl.waitForStops) {
+                dcl.waitForStop();
+            }
             dcl.runCmdLine();
 
             # explicit cleanup before program exit to avoid PROGRAM-ERROR
@@ -177,6 +260,10 @@ class DebugWrapper {
             "  -s, --session=file           load session from file\n"
             "  --color                      force color output\n"
             "  --no-color                   disable color output\n"
+            "\n"
+            "When the input is not a terminal, the commands are a script: the first command is processed when the\n"
+            "program has attached to the debugger, and a command that resumes a thread returns when the thread stops\n"
+            "again or stops being debugged.\n"
             "\n"
             "Keyboard shortcuts:\n"
             "  Ctrl+D                       quit debugger\n"

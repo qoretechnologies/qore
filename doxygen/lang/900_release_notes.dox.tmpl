@@ -5171,6 +5171,10 @@ while (*binary chunk = input.read(65536)) {
       function can be given by its name only when it has one variant (see the
       @ref debugprogramcontrolintro "DebugProgramControl" module;
       <a href="https://github.com/qoretechnologies/qore/issues/5558">issue 5558</a>)
+    - \c qdbg processed the commands of a script on its input (input that is not a terminal) without waiting for the
+      program: a command written for the next stop was sent while the thread still ran and failed; with such input
+      the first command is now processed when the program has attached to the debugger, and a command that resumes
+      a thread returns when the thread stops again or stops being debugged
     - the local variables of a frame of a thread stopped in a debugger (@ref Qore::get_local_vars() "get_local_vars()")
       included the temporary variables (\c ref_arg_helper) that the runtime creates for the arguments that a debugger
       callback takes by reference

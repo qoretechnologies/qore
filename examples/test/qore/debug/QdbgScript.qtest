@@ -1,0 +1,123 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# Runs qdbg with a script of commands on its input: with input that is not a terminal, a command that resumes a
+# thread returns when the thread stops again or stops being debugged, and the first command is processed when the
+# program has attached to the debugger, so each command of the script is processed at the stop that it is written
+# for, without waiting for any time
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires Util
+
+%exec-class QdbgScriptTest
+
+public class QdbgScriptTest inherits QUnit::Test {
+    private {
+        #! the program that is debugged; the comments are the line numbers
+        const Program = "%modern\n"                                         # 1
+            "int sub add(int a, int b) {\n"                                  # 2
+            "    int sum = a + b;\n"                                         # 3
+            "    return sum;\n"                                              # 4
+            "}\n"                                                            # 5
+            "hash<auto> h = {\"name\": \"invoice\", \"lines\": (1, 2, 3)};\n"  # 6
+            "int total = add(2, 3);\n"                                       # 7
+            "printf(\"total: %d %y\\n\", total, h);\n";                      # 8
+
+        string qore_exe = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qdbg = normalize_dir(get_script_dir() + "/../../../../bin/qdbg");
+        string qlib_dir = normalize_dir(get_script_dir() + "/../../../../qlib");
+    }
+
+    constructor() : Test("QdbgScript", "1.0", \ARGV) {
+        addTestCase("a script of commands", \scriptTest());
+        addTestCase("a program without statements", \emptyProgramTest());
+        set_return_value(main());
+    }
+
+    #! runs qdbg for the program with the commands on its input and returns its output and exit code
+    private hash<auto> runQdbg(string program, list<string> commands) {
+        TmpDir tmp("qore-qdbg-test-");
+        File f();
+        f.open2(tmp.path + "/target.q", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(program);
+        f.close();
+        f.open2(tmp.path + "/commands", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(commands.join("\n") + "\n");
+        f.close();
+        *string module_dir = ENV.QORE_MODULE_DIR;
+        # -y . disables the command history file
+        string cmd = sprintf("cd '%s' && QORE_MODULE_DIR='%s' '%s' '%s' -y . --no-color target.q < commands 2>&1",
+            tmp.path, qlib_dir + (module_dir ? ":" + module_dir : ""), qore_exe, qdbg);
+        int rc;
+        string out = backquote(cmd, \rc);
+        # loader warnings of AOT modules that are out of date are about the environment, not output of qdbg
+        out = (select out.split("\n"), $1 !~ /^warning: (AOT|binary) module/).join("\n");
+        if (m_options.verbose > 1) {
+            printf("%s\n", out);
+        }
+        return {"out": out, "rc": rc};
+    }
+
+    #! asserts that the strings are in the output in the order given
+    private assertInOrder(string out, list<string> strings) {
+        int pos = 0;
+        foreach string s in (strings) {
+            int i = out.find(s, pos);
+            assertGt(-1, i, sprintf("%y after offset %d", s, pos));
+            if (i < 0) {
+                return;
+            }
+            pos = i + s.size();
+        }
+    }
+
+    scriptTest() {
+        hash<auto> res = runQdbg(Program, (
+            "break create add",
+            "break create target.q 8",
+            "go run",
+            "bt",
+            "thread local",
+            "thread local a",
+            "thread local nosuch",
+            "go run",
+            "thread local total",
+            "go run",
+            "go run",
+            "quit",
+        ));
+        assertEq(0, res.rc);
+        assertInOrder(res.out, (
+            "interrupt/attach",
+            "bkptid : 1",
+            "bkptid : 2",
+            # the commands after "go run" are processed at the stop in add()
+            "interrupt/step", "bkptid: 1", "(target.q:3",
+            "TID 2 call stack:", " - 0*: interrupt: step()", " - 1 : add()",
+            "local vars in frame: sum, argv, b, a",
+            "integer a = 2",
+            "there is no local var \"nosuch\"",
+            # and at the stop at line 8
+            "interrupt/step", "bkptid: 2", "(target.q:8",
+            "integer total = 5",
+            "total: 5",
+            "interrupt/detach",
+        ));
+        # no command was processed when the thread was not stopped
+        assertFalse(res.out =~ /is not stopped/, "no command is processed when the thread is not stopped");
+        assertFalse(res.out =~ /Program is not set/, "no command is processed before the program attaches");
+    }
+
+    # a program that never attaches to the debugger, as it has no statements, does not keep qdbg waiting
+    emptyProgramTest() {
+        hash<auto> res = runQdbg("%modern\n", ("quit",));
+        assertEq(0, res.rc);
+        assertFalse(res.out =~ /Program is not set/, "no command is processed before the program attaches");
+    }
+}
