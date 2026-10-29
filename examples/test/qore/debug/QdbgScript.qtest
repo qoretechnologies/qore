@@ -29,9 +29,19 @@ public class QdbgScriptTest inherits QUnit::Test {
             "int total = add(2, 3);\n"                                       # 7
             "printf(\"total: %d %y\\n\", total, h);\n";                      # 8
 
-        string qore_exe = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qore_exe = QdbgScriptTest::getQoreExecutable();
         string qdbg = normalize_dir(get_script_dir() + "/../../../../bin/qdbg");
         string qlib_dir = normalize_dir(get_script_dir() + "/../../../../qlib");
+    }
+
+    #! returns the qore executable to run qdbg with; a relative path is made absolute, as qdbg runs in a temporary
+    #! directory
+    static string getQoreExecutable() {
+        string exe = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        if (exe =~ /\// && !absolute_path(exe)) {
+            exe = normalize_dir(getcwd() + DirSep + exe);
+        }
+        return exe;
     }
 
     constructor() : Test("QdbgScript", "1.0", \ARGV) {
