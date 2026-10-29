@@ -3856,6 +3856,8 @@ while (*binary chunk = input.read(65536)) {
       - fixed watches and hovers returning no value when the variables of the frame had not been listed, and
         requests without arguments, such as \c configurationDone, failing with empty arguments
         (<a href="https://github.com/qoretechnologies/qore/issues/5560">issue 5560</a>)
+      - the \c stopOnEntry argument of a \c launch request is supported: with \c false, a launched program stops
+        only at a breakpoint, an exception or its end, not at its first statement; it was always stopped there
     - @ref websocketclientintro "WebSocketClient" module
       - \c WebSocketPingPollOperation uses non-blocking @ref httpclientiointro "HttpClientIo" I/O, with an extended
         CONNECT handshake for HTTP/2 and HTTP/3
