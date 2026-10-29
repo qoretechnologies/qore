@@ -8383,6 +8383,11 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
                         static_cast<size_t>(ptr - func_start));
                 }
             }
+            if (inst->opcode == QoreIROpcode::DebugStatement) {
+                // New serialized IR carries complete statement events. Do not also synthesize legacy
+                // PushTempMark steps, including when both representations use the same format version.
+                func->legacy_debug_steps = false;
+            }
             func->blocks[i]->instructions.push_back(std::move(inst));
         }
     }

@@ -78,6 +78,9 @@ module VscDebugAdapter {
     - watches and hovers load the variables of the frame when they have not been listed
     - requests without arguments, such as \c configurationDone, are also accepted with empty arguments
       (<a href="https://github.com/qoretechnologies/qore/issues/5560">issue 5560</a>)
+    - the \c stopOnEntry argument of a \c launch request is supported: with \c false, a launched program does not
+      stop at its first statement, but only at a breakpoint, an exception or its end; it stops there when the
+      argument is \c true or not given, as before
 
     @subsection vda_v0_2
     - updated to use a Logger
@@ -535,6 +538,14 @@ vda.run();
                     } else if (m_programState{event.pgmid}.bootstrap.processFlag == 1 && event.file != m_programState{event.pgmid}.bootstrap.file) {
                         m_programState{event.pgmid}.bootstrap.processFlag = 2;
                         m_programState{event.pgmid}.bootstrap.frameCnt = event.framecnt-1;
+                        # the first statement of the program: it stops there only with "stopOnEntry", which is
+                        # true when it is not given; a breakpoint on the statement stops it in any case, and as the
+                        # thread arrives there by a step, the event does not give the breakpoint
+                        if (m_programState{event.pgmid}.launchArgs.stopOnEntry === False && !exists event.bkptid
+                            && !hasBreakpointOnStatement(event.pgmid, event.statementid)) {
+                            vsc_continue(("threadId": event.tid));
+                            return;
+                        }
                     } else if (m_programState{event.pgmid}.bootstrap.processFlag == 2 && event.file == m_programState{event.pgmid}.bootstrap.file) {
                         # we want exit event, so we cannot detach
                         m_programState{event.pgmid}.bootstrap.processFlag = 3;
@@ -613,6 +624,26 @@ vda.run();
             info("Connected: %y", event.result);
             break;
         }
+    }
+
+    #! Returns True if a source or function breakpoint of the given program is on the given statement
+    private:internal bool hasBreakpointOnStatement(softstring pgmId, *softint statementId) {
+        if (!exists statementId) {
+            return False;
+        }
+        foreach hash<auto> source_bkpts in (m_programState{pgmId}.sourceBreakpoints.iterator()) {
+            foreach hash<auto> b in (source_bkpts.iterator()) {
+                if (b.statementId == statementId) {
+                    return True;
+                }
+            }
+        }
+        foreach hash<auto> b in (m_programState{pgmId}.functionBreakpoints.iterator()) {
+            if (b.statementId == statementId) {
+                return True;
+            }
+        }
+        return False;
     }
 
     #! refuse interrupt and continue

@@ -699,7 +699,7 @@ private:
         const QoreClass* cls) const;
 
     QoreProgram* pgm;
-    unsigned pgm_id;
+    qore_program_id_t pgm_id;
     QoreParseOptions po;
     //! the sandbox manager that governs the caller (referenced), or nullptr
     class QoreSandboxManager* sm;

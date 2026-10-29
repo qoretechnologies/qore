@@ -14425,6 +14425,9 @@ static QoreIRInstGroup classifyInstruction(const QoreIRInstruction* inst, std::s
     if (dynamic_cast<const QoreIRExprInstruction*>(inst)) {
         return QoreIRInstGroup::Expr;
     }
+    if (dynamic_cast<const QoreIRDebugStatementInstruction*>(inst)) {
+        return QoreIRInstGroup::DebugStatement;
+    }
     if (typeid(*inst) == typeid(QoreIRInstruction)) {
         return inst->element_type ? QoreIRInstGroup::TypedBase : QoreIRInstGroup::Base;
     }

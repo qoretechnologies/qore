@@ -6648,11 +6648,67 @@ string sql = table.getSelectSql(sh, \args);
         return
             map doWhereExpressionIntern(\info, cprefix
                 ? sprintf("%s.%s", cprefix, getColumnSqlName(regex_subst($1.key, "^[0-9]+:", "")))
-                : getColumnNameIntern(info, $1.key), $1.value),
+                : getColumnNameIntern(info, $1.key), $1.value, $1.key, cprefix),
             cond.pairIterator();
     }
 
-    private string doWhereExpressionIntern(reference<hash<QueryInfo>> info, string cn, auto we) {
+    #! Returns the column that a column designator in a where clause names, if it names a column of a table
+    /** @param info the query information
+        @param column_name the column designator as given in the where clause, such as \c "name", \c "t2.name" or
+        \c "1:name"
+        @param cprefix the alias of this table when the where clause is a join condition of this table
+
+        @return the column, or @ref nothing if the designator names a column alias, a column of a subquery or no
+        column
+
+        @note the columns of this table are read before a where clause is made, so this method does not query the
+        database for this table; it may for a joined table whose columns have not been read yet
+
+        @since SqlUtil 3.11.0
+    */
+    private *AbstractColumn getWhereColumnIntern(hash<QueryInfo> info, string column_name, *string cprefix) {
+        # remove any disposable unique prefix
+        column_name =~ s/^[0-9]+://;
+        *Columns cols;
+        if (cprefix) {
+            # a join condition of this table names columns of this table
+            cols = describe();
+        } else {
+            *string table_prefix = (column_name =~ x/(\w+)\..+/)[0];
+            if (table_prefix) {
+                splice column_name, 0, table_prefix.size() + 1;
+                cols = info.join_map{table_prefix}.describe();
+            } else if (!info.pseudo_column_map{column_name} && !info.subquery_column_map) {
+                cols = columns;
+            }
+        }
+        if (cols && cols.hasKey(column_name)) {
+            return cols.memberGate(column_name);
+        }
+    }
+
+    #! Returns the SQL comparing a column with a value in a where clause, or @ref nothing to use the operator as given
+    /** The default implementation returns @ref nothing; a database whose comparison depends on the column's type,
+        such as to bind a value in the column's type so that an index on the column can be used, overrides it
+
+        @param info the query information; a value bound in the returned SQL is appended to \c info.args
+        @param cn the column as given in the SQL
+        @param column_name the column designator as given in the where clause; see getWhereColumnIntern()
+        @param cprefix the alias of this table when the where clause is a join condition of this table
+        @param op the operator code, such as @ref SqlUtil::OP_GT "OP_GT"; @ref SqlUtil::OP_EQ "OP_EQ" for a value
+        given without an operator
+        @param arg the argument of the operator
+
+        @return the SQL of the comparison, or @ref nothing to use the operator's own code
+
+        @since SqlUtil 3.11.0
+    */
+    private *string getWhereColumnComparisonIntern(reference<hash<QueryInfo>> info, string cn, string column_name,
+            *string cprefix, string op, auto arg) {
+    }
+
+    private string doWhereExpressionIntern(reference<hash<QueryInfo>> info, string cn, auto we, *string column_name,
+            *string cprefix) {
         int wt = we.typeCode();
         if (wt == NT_HASH) {
             if (we.hasKey("cop")) {
@@ -6677,19 +6733,30 @@ string sql = table.getSelectSql(sh, \args);
             }
 
             if (cmd.recursive) {
-                cn = doWhereExpressionIntern(\info, cn, we.arg);
+                cn = doWhereExpressionIntern(\info, cn, we.arg, column_name, cprefix);
                 delete we.arg;
             } else if (cmd.argcolumn) {
                 if (!we.arg || we.arg.typeCode() != NT_STRING)
                     throw "WHERE-ERROR", sprintf("%s: operator hash for key %y expects a string column name; got "
                         "type %y instead", getDesc(), cn, we.arg.type());
                 we.arg = getColumnNameIntern(info, we.arg);
+            } else if (column_name) {
+                *string sql = getWhereColumnComparisonIntern(\info, cn, column_name, cprefix, we.op, we.arg);
+                if (exists sql) {
+                    return sql;
+                }
             }
 
             return cmd.code(\info, cn, we.arg);
         }
         if (we === NULL || !exists we) {
             return sprintf("%s is null", cn);
+        }
+        if (column_name) {
+            *string sql = getWhereColumnComparisonIntern(\info, cn, column_name, cprefix, OP_EQ, we);
+            if (exists sql) {
+                return sql;
+            }
         }
         info.args += we;
         return sprintf("%s = %v", cn);

@@ -10796,22 +10796,15 @@ public:
         : context(cache), helper(rc, context) {
     }
     ~QoreReusableFunctionRefFrame() override {
-        assert(!active);
+        assert(!helper.isActive());
     }
     class Scope {
     public:
         __attribute__((always_inline)) explicit Scope(QoreReusableFunctionRefFrame& frame) : frame(frame) {
-            assert(!frame.active);
-#ifndef NDEBUG
-            frame.active = true;
-#endif
             frame.helper.enter(&frame, frame.loc, frame.context.getCache());
         }
         __attribute__((always_inline)) ~Scope() {
             frame.helper.leave();
-#ifndef NDEBUG
-            frame.active = false;
-#endif
         }
         Scope(const Scope&) = delete;
         Scope& operator=(const Scope&) = delete;
@@ -10826,9 +10819,6 @@ public:
 
 private:
     const QoreProgramLocation* loc = nullptr;
-#ifndef NDEBUG
-    bool active = false;
-#endif
     RuntimeConfigNativeCallbackContext context;
     RuntimeConfigReusableNativeLeafCallHelper helper;
 };

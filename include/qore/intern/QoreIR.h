@@ -3325,9 +3325,9 @@ public:
     //! (qore_program_private::getAttachedDebugProgramAddr()), used as the inline
     //! gate for the JIT debug-step hook.  Null in AOT mode / when unavailable.
     void* source_dpgm_addr = nullptr;
-    //! Serialized AOT IR through format v22 uses line-based PushTempMark debug boundaries rather than
-    //! DebugStatement instructions.  The reader sets this compatibility flag before publishing the IR;
-    //! source-lowered IR always uses explicit statement events instead.
+    //! Older serialized AOT IR uses line-based PushTempMark debug boundaries. The reader keeps this
+    //! compatibility flag only when the function contains no explicit DebugStatement instructions;
+    //! source-lowered IR and new serialized statement events leave it false.
     bool legacy_debug_steps = false;
     //! Owning program of this lowered IR function. Used by the per-Program background
     //! JIT-compile drain (QoreJIT::waitForBgCompileQueue(QoreProgram*)) to cancel/await

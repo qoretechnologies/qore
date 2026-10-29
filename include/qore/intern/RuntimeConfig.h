@@ -252,10 +252,9 @@ private:
     QoreParseOptions old_value;
     QoreParseOptions old_caller_restrictions;
     const QoreProgram* old_module_pgm;
-    // The leaf helper owns the saved application ID in its existing tag padding,
-    // preserving the fixed generated-code storage for reusable callback frames.
-    DLLLOCAL void materialize(ThreadData* td, unsigned& old_app_pgm_id);
-    DLLLOCAL void restoreOptions(ThreadData* td, unsigned old_app_pgm_id);
+    qore_program_id_t old_app_pgm_id;
+    DLLLOCAL void materialize(ThreadData* td);
+    DLLLOCAL void restoreOptions(ThreadData* td);
 };
 
 //! Invocation-owned object context for a compiler-proven non-reentrant native method.
@@ -323,7 +322,7 @@ private:
     struct SavedOptions {
         SavedOptions(const QoreParseOptions& mask, const QoreParseOptions& value,
                 const QoreParseOptions& caller_restrictions, const QoreProgram* module_pgm,
-                unsigned app_pgm_id) noexcept
+                qore_program_id_t app_pgm_id) noexcept
             : mask(mask), value(value), caller_restrictions(caller_restrictions), module_pgm(module_pgm),
               app_pgm_id(app_pgm_id) {
         }
@@ -331,7 +330,7 @@ private:
         QoreParseOptions value;
         QoreParseOptions caller_restrictions;
         const QoreProgram* module_pgm;
-        unsigned app_pgm_id;
+        qore_program_id_t app_pgm_id;
     };
     // Disengaged on the successful path; only cold materialization saves an override.
     std::optional<SavedOptions> old_options;
@@ -423,8 +422,11 @@ private:
     enum class TargetKind : uint8_t { Callback, Method, Closure, ClosureV2, CallbackV2 };
     TargetKind target_kind;
     bool swapped; //!< Initialized only when context is materialized
-    //! Cold callback policy state; fits beside the tags without growing the fixed frame ABI.
-    unsigned old_callback_app_pgm_id;
+#ifndef NDEBUG
+protected:
+    //! Reusable-frame diagnostics share the existing tag padding, preserving its fixed AOT storage.
+    bool reusable_active = false;
+#endif
 };
 
 //! Deferred scalar-closure context, owned entirely by the current invocation.
@@ -476,13 +478,23 @@ public:
     */
     __attribute__((always_inline)) void enter(QoreStackLocation* stack_loc, const QoreProgramLocation*& call_loc,
             const QorePreparedFunctionRefV3& cache) {
+#ifndef NDEBUG
+        assert(!reusable_active);
+        reusable_active = true;
+#endif
         enterReusableCallback(stack_loc, call_loc, cache);
     }
     //! Restore context and wait for every reader before the frame or cache can be reused.
     /** @note Called by the per-call RAII scope, including on exceptional exits. */
     __attribute__((always_inline)) void leave() {
         restoreDeferred();
+#ifndef NDEBUG
+        reusable_active = false;
+#endif
     }
+#ifndef NDEBUG
+    bool isActive() const { return reusable_active; }
+#endif
 };
 
 //! Compile-time marker policy keeps eager floating cleanup free of a runtime policy branch.

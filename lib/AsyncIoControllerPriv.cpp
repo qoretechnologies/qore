@@ -5064,7 +5064,7 @@ int64_t AsyncIoControllerPriv::addTimer(const DateTimeNode* deadline, QoreValue 
     // captured outside the lock: capturing resolves the sandbox through the thread's Program context
     AsyncIoSandboxContext sandbox_ctx = capture_async_io_sandbox_context();
     // the application that module code adds the timer for, if it runs for one with restrictions
-    unsigned app_pgm_id = 0;
+    qore_program_id_t app_pgm_id = 0;
     bool for_app = runtime_get_module_caller_app(app_pgm_id);
 
     {
@@ -5122,7 +5122,7 @@ bool AsyncIoControllerPriv::cancelTimer(int64_t id, ExceptionSink* xsink) {
     bool found = false;
     QoreValue discard_udata;
     // module code running for an application with restrictions can cancel only the timers added for it
-    unsigned app_pgm_id = 0;
+    qore_program_id_t app_pgm_id = 0;
     bool for_app = runtime_get_module_caller_app(app_pgm_id);
 
     {

@@ -1937,6 +1937,15 @@ val = "string";      # OK
     a call is undefined behavior: an argument passed for a <tt>%%s</tt> conversion that is not a string, or a
     <tt>%%s</tt> in text used as the format, crashes the process when the call formats it
 
+    @par C++ API: Program IDs Have 64 Bits
+    \c QoreProgram::getProgramId() returns, and \c QoreProgram::resolveProgramId() takes, the new type
+    \c qore_program_id_t (64 bits) instead of \c unsigned.  The ID was a 32-bit counter: after 2^32 Programs it wrapped
+    to 0, which is not the ID of any Program, and then gave new Programs the IDs of earlier ones, which are kept in
+    the records of the Programs that created a Program and of the application that module code runs for, so a new
+    Program could have been taken for a deleted one.  IDs are never reused.  A binary module that stores an ID in a
+    32-bit integer must use \c qore_program_id_t; @ref Qore::Program::getProgramId() "Program::getProgramId()" and
+    @ref Qore::ProgramControl::resolveProgramId() "ProgramControl::resolveProgramId()" already used 64-bit integers
+
     @par C++ API: HTTP Client Objects Must Be Allocated on the Heap
     @parblock
     The destructors of the \c QoreHttpClientObject and \c QoreHTTPClient C++ classes are now protected, as the
@@ -3769,6 +3778,10 @@ while (*binary chunk = input.read(65536)) {
     - @ref oraclesqlutilbaseintro "OracleSqlUtilBase" module
       - fixed modifying a column named like a clause of <tt>ALTER TABLE ... MODIFY</tt>, such as \c scope, in
         table alignment, which failed with \c ORA-03050
+      - a date value compared with a \c DATE or \c TIMESTAMP column in a where clause or a comparison expression
+        is bound in the column's type, so that an index on the column can be used; before, the column was converted
+        to the type of the bound value, so a query such as a page of rows after a date key read the whole index or
+        table (<a href="https://github.com/qoretechnologies/qore/issues/5563">issue 5563</a>)
 
     - @ref pgsqlsqlutilbaseintro "PgsqlSqlUtilBase" module
       - tables, sequences, and materialized views are listed only from the schemas of the connection's
@@ -3997,6 +4010,8 @@ while (*binary chunk = input.read(65536)) {
       - fixed watches and hovers returning no value when the variables of the frame had not been listed, and
         requests without arguments, such as \c configurationDone, failing with empty arguments
         (<a href="https://github.com/qoretechnologies/qore/issues/5560">issue 5560</a>)
+      - the \c stopOnEntry argument of a \c launch request is supported: with \c false, a launched program stops
+        only at a breakpoint, an exception or its end, not at its first statement; it was always stopped there
     - @ref websocketclientintro "WebSocketClient" module
       - \c WebSocketPingPollOperation uses non-blocking @ref httpclientiointro "HttpClientIo" I/O, with an extended
         CONNECT handshake for HTTP/2 and HTTP/3

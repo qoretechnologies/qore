@@ -1,0 +1,120 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%allow-debugger
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires reflection
+
+%exec-class ProgramIdTest
+
+#! Program IDs are unique in the process and are never reused, also beyond 32 bits
+/** A Program's ID is kept in the records of the Programs that created a Program and of the application that module
+    code runs for, after the Program itself is deleted.  The ID was a 32-bit counter: after 2^32 Programs it wrapped
+    to 0, which is not the ID of any Program, and then repeated the IDs of earlier Programs.  The cases beyond 32 bits
+    move the next ID forward with dbg_set_next_program_id() (debug builds).
+*/
+class ProgramIdTest inherits QUnit::Test {
+    public {
+        #! the last 32-bit Program ID
+        const Max32 = 0xffffffff;
+
+        #! a target Program with a namespace for reflection
+        const TargetSource = "namespace Model { class Record {} }";
+    }
+
+    constructor() : QUnit::Test("ProgramIdTest", "1.0") {
+        addTestCase("IDs are positive, unique and increasing", \uniqueTest());
+        addTestCase("ProgramControl::resolveProgramId()", \resolveTest());
+        addTestCase("IDs continue beyond 32 bits", \beyond32BitsTest());
+        addTestCase("a Program with an ID beyond 32 bits is the creator of the Programs it creates", \creatorTest());
+        addTestCase("negative: the next ID is not moved back", \noMoveBackTest());
+        set_return_value(main());
+    }
+
+    uniqueTest() {
+        list<Program> pgms = map new Program(PO_NEW_STYLE), xrange(10);
+        list<int> ids = map $1.getProgramId(), pgms;
+        assertTrue((select ids, $1 < 1).empty(), sprintf("%y", ids));
+        # each ID is greater than the one before it
+        for (int i = 1; i < ids.size(); ++i) {
+            assertTrue(ids[i] > ids[i - 1], sprintf("%y", ids));
+        }
+        # an ID is not given again after its Program is deleted
+        int last = ids.last();
+        delete pgms;
+        assertTrue(new Program(PO_NEW_STYLE).getProgramId() > last);
+    }
+
+    resolveTest() {
+        Program pgm(PO_NEW_STYLE);
+        int id = pgm.getProgramId();
+        assertEq(id, ProgramControl::resolveProgramId(id).getProgramId());
+        # IDs are positive
+        foreach int bad in (0, -1, -id) {
+            assertThrows("PROGRAM-ERROR", \ProgramControl::resolveProgramId(), (bad,), sprintf("%d", bad));
+        }
+        # the ID of a deleted Program is not resolved
+        delete pgm;
+        assertThrows("PROGRAM-ERROR", \ProgramControl::resolveProgramId(), (id,));
+    }
+
+    beyond32BitsTest() {
+        moveNextId(Max32);
+        list<Program> pgms = map new Program(PO_NEW_STYLE), xrange(3);
+        list<int> ids = map $1.getProgramId(), pgms;
+        assertEq((Max32, Max32 + 1, Max32 + 2), ids);
+        # each Program is found by its ID
+        foreach int id in (ids) {
+            assertEq(id, ProgramControl::resolveProgramId(id).getProgramId());
+        }
+    }
+
+    creatorTest() {
+        Program target(PO_NEW_STYLE);
+        target.parse(TargetSource, "target");
+
+        moveNextId(Max32 * 2);
+        # a reader with fewer privileges than the target and than the Programs it creates
+        Program reader(PO_NEW_STYLE | PO_NO_NETWORK);
+        assertTrue(reader.getProgramId() > Max32);
+        reader.parse("%modern\n%requires reflection\n"
+            "hash<auto> sub own(string src) {\n"
+            "    Program c(PO_NEW_STYLE);\n"
+            "    c.parse(src, 'child');\n"
+            "    return {'id': c.getProgramId(), 'classes': Namespace::forName(c, 'Model').getClasses().size()};\n"
+            "}\n"
+            "auto sub other(Program pgm) {\n"
+            "    try { return Namespace::forName(pgm, 'Model').getClasses().size(); }\n"
+            "    catch (hash<ExceptionInfo> ex) { return ex.err; }\n"
+            "}\n", "reader");
+
+        # the reader created the child, whose ID also does not fit in 32 bits
+        hash<auto> h = reader.callFunction("own", TargetSource);
+        assertTrue(h.id > reader.getProgramId());
+        assertEq(1, h.classes);
+        # a Program that the reader did not create is refused
+        assertEq("REFLECTION-ACCESS-ERROR", reader.callFunction("other", target));
+    }
+
+    noMoveBackTest() {
+        int next = new Program(PO_NEW_STYLE).getProgramId() + 1;
+        # moving the next ID back is ignored
+        assertEq(next, moveNextId(1));
+        assertEq(next, new Program(PO_NEW_STYLE).getProgramId());
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            assertThrows("DBG-ARGUMENT-ERROR", \call_function(), ("dbg_set_next_program_id", 0));
+        }
+    }
+
+    #! moves the next Program ID forward to at least the given ID; returns the ID the next Program would have had
+    private int moveNextId(int id) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("moving the next Program ID needs a debug build");
+        }
+        return call_function("dbg_set_next_program_id", id);
+    }
+}

@@ -569,11 +569,15 @@ static void ut_program_context_snapshot(UnitTestCounters& c) {
 
 //! Explicit context scopes restore both policy and the Program owning inherited restrictions.
 static void ut_native_call_options(UnitTestCounters& c) {
+    // IDs are never reused, so leave the monotonic counter advanced for the following callback/closure fixtures.
+    qore_program_private::setNextProgramId(qore_program_id_t{1} << 40);
     ExceptionSink xsink;
     QoreProgramHelper program(PO_MODERN | PO_IN_MODULE | PO_NO_NETWORK, xsink);
     QoreProgramHelper other(PO_MODERN, xsink);
     QoreExternalProgramContextHelper program_context(&xsink, *program);
     UT_ASSERT(c, !xsink, "native call policy fixture enters its Program");
+    UT_ASSERT(c, program->getProgramId() > UINT32_MAX && other->getProgramId() > UINT32_MAX,
+        "native policy fixtures preserve actual Program IDs above 32 bits");
     if (xsink) {
         return;
     }
@@ -581,7 +585,7 @@ static void ut_native_call_options(UnitTestCounters& c) {
     const QoreParseOptions original = runtime_get_parse_options();
     const QoreParseOptions original_effective = runtime_get_effective_program_parse_options();
     const QoreParseOptions original_own = runtime_get_own_program_state_parse_options(original_effective);
-    unsigned original_app = 0;
+    qore_program_id_t original_app = 0;
     const bool original_has_app = runtime_get_module_caller_app(original_app);
     for (bool copied_view : {false, true}) {
         RuntimeConfig copy(canonical);
@@ -593,7 +597,7 @@ static void ut_native_call_options(UnitTestCounters& c) {
             // compatibility snapshot. The live thread still executes in program.
             auto o = qore_get_module_call_runtime_po_override(*program, PO_NO_THREAD_CONTROL, *other);
             RuntimeParseOptionsOverrideHelper outer(rc, o);
-            unsigned app = 0;
+            qore_program_id_t app = 0;
             UT_ASSERT(c, runtime_get_module_caller_app(app) && app == other->getProgramId(),
                 "explicit module scope retains the actual caller application");
             QoreParseOptions effective = RuntimeConfigNativeAccess::getEffectiveParseOptionsFor(rc, *program);
@@ -641,7 +645,7 @@ static void ut_native_call_options(UnitTestCounters& c) {
             && runtime_get_effective_program_parse_options() == original_effective
             && runtime_get_own_program_state_parse_options(original_effective) == original_own,
             "explicit policy scope restores the complete caller state");
-        unsigned app = 0;
+        qore_program_id_t app = 0;
         UT_ASSERT(c, runtime_get_module_caller_app(app) == original_has_app && app == original_app,
             "explicit policy scope restores the original caller application");
     }
@@ -723,14 +727,14 @@ static void ut_native_callback_policy(UnitTestCounters& c) {
                     const auto old_po = runtime_get_parse_options();
                     const auto old_effective = runtime_get_effective_program_parse_options();
                     const auto old_own = runtime_get_own_program_state_parse_options(old_effective);
-                    unsigned old_app = 0;
+                    qore_program_id_t old_app = 0;
                     const bool old_has_app = runtime_get_module_caller_app(old_app);
                     {
                         Frame::Scope active(frame);
                         UT_ASSERT(c, runtime_get_parse_options() == old_po
                             && runtime_get_own_program_state_parse_options(old_effective) == old_own,
                             "successful reusable callback leaves enclosing policy unchanged");
-                        unsigned app = 0;
+                        qore_program_id_t app = 0;
                         UT_ASSERT(c, runtime_get_module_caller_app(app) == old_has_app && app == old_app,
                             "deferred callback leaves caller application unchanged");
                         if (materialize) {
@@ -775,7 +779,7 @@ static void ut_native_callback_policy(UnitTestCounters& c) {
                         && runtime_get_effective_program_parse_options() == old_effective
                         && runtime_get_own_program_state_parse_options(old_effective) == old_own,
                         "callback reuse restores all caller policy fields");
-                    unsigned app = 0;
+                    qore_program_id_t app = 0;
                     UT_ASSERT(c, runtime_get_module_caller_app(app) == old_has_app && app == old_app
                         && runtime_get_module_call_app_id(exec) == other->getProgramId(),
                         "callback reuse restores both visible and enclosing application identity");
@@ -788,8 +792,11 @@ static void ut_native_callback_policy(UnitTestCounters& c) {
 
 //! Test hidden closure-self TLS without exposing additional runtime APIs to an external fixture.
 static void ut_native_closure_context(UnitTestCounters& c) {
+    // Exercise saved closure policy with IDs that cannot fit in the legacy unsigned fields.
+    qore_program_private::setNextProgramId(qore_program_id_t{1} << 40);
     ExceptionSink xsink;
     QoreProgramHelper program(PO_MODERN, xsink);
+    UT_ASSERT(c, program->getProgramId() > UINT32_MAX, "closure context preserves 64-bit program IDs");
     {
         ProgramRuntimeExternalParseContextHelper parse(*program);
         UT_ASSERT(c, parse, "closure context fixture has a parse context");
@@ -867,7 +874,7 @@ static void ut_native_closure_context(UnitTestCounters& c) {
                     UT_ASSERT(c, runtime_get_stack_object() == caller_object && !runtime_get_class(),
                         "deferred entry leaves live context untouched");
                     UT_ASSERT(c, qore_closure_self_context(caller_object), "deferred entry leaves self TLS untouched");
-                    unsigned app = 0;
+                    qore_program_id_t app = 0;
                     UT_ASSERT(c, runtime_get_module_caller_app(app) && app == program->getProgramId(),
                         "deferred closure leaves enclosing caller application unchanged");
                     if (materialize) {
@@ -914,7 +921,7 @@ static void ut_native_closure_context(UnitTestCounters& c) {
                 UT_ASSERT(c, runtime_get_effective_program_parse_options() == caller_effective
                     && runtime_get_own_program_state_parse_options(caller_effective) == caller_own,
                     "closure scope restores caller policy and module identity");
-                unsigned app = 0;
+                qore_program_id_t app = 0;
                 UT_ASSERT(c, runtime_get_module_caller_app(app) && app == program->getProgramId(),
                     "closure scope restores caller application after repeated materialization and context moves");
             }
@@ -16932,6 +16939,23 @@ static QoreValue f_dbg_cares_set_hosts_file(const QoreListNode* params, RuntimeC
     return new QoreStringNode(qore_dbg_cares_set_hosts_file(path->c_str()));
 }
 
+//! makes the next Program get at least the given ID
+/** Program IDs are never reused, so the ID that the next Program gets is only moved forward; a test uses it to create
+    Programs whose IDs do not fit in 32 bits.
+
+    @param id the ID that the next Program gets at least; it must be positive
+
+    @return the ID that the next Program would have had
+*/
+static QoreValue f_dbg_set_next_program_id(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64 id = get_param_value(params, 0).getAsBigInt();
+    if (id < 1) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "invalid Program ID " QLLD, id);
+        return QoreValue();
+    }
+    return static_cast<int64>(qore_program_private::setNextProgramId(static_cast<qore_program_id_t>(id)));
+}
+
 namespace {
 //! the state of dbg_fork_lock_cycle_arm(): a stand-in for the lock of the dynamic linker, and what the forking thread
 //! and a thread creating a c-ares channel hold and wait for
@@ -17492,6 +17516,8 @@ void init_debug_functions(QoreNamespace& qns) {
         stringTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "servers");
     qns.addBuiltinVariant("dbg_cares_set_hosts_file", f_dbg_cares_set_hosts_file, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         stringTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "path");
+    qns.addBuiltinVariant("dbg_set_next_program_id", f_dbg_set_next_program_id, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        bigIntTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "id");
     qns.addBuiltinVariant("dbg_fork_lock_cycle_arm", f_dbg_fork_lock_cycle_arm, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 1, QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "entered");
     qns.addBuiltinVariant("dbg_fork_lock_cycle_result", f_dbg_fork_lock_cycle_result, QCF_NO_FLAGS,

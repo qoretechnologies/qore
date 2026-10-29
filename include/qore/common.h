@@ -307,6 +307,15 @@ typedef long long int64;
 //! runtime code execution flags
 typedef uint64_t q_rt_flags_t;
 
+//! the unique ID of a Program in the process; see QoreProgram::getProgramId()
+/** IDs are never reused: they count up from 1, and 0 is not the ID of any Program.  A Program's ID is kept in
+    records of what created a Program and of the application that module code runs for after the Program is deleted,
+    so an ID that was reused would give a new Program the identity of a deleted one; 64 bits cannot be exhausted.
+
+    @since %Qore 3.0
+*/
+typedef uint64_t qore_program_id_t;
+
 //! runtime execution mode
 enum qore_exec_mode_t {
     QEM_AST = 0,

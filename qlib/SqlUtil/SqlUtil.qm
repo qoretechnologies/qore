@@ -151,6 +151,12 @@ module SqlUtil {
     @section sqlutil_relnotes Release Notes for the SqlUtil Module
 
     @subsection sqlutilv3_11_0 SqlUtil v3.11.0
+    - a database module can give the SQL of the comparison of a column with a value in a where clause from the
+      column's type with @ref SqlUtil::AbstractTable::getWhereColumnComparisonIntern()
+      "AbstractTable::getWhereColumnComparisonIntern()" and
+      @ref SqlUtil::AbstractTable::getWhereColumnIntern() "AbstractTable::getWhereColumnIntern()"; the Oracle
+      module uses it to bind a date compared with a \c DATE or \c TIMESTAMP column in the column's type
+      (<a href="https://github.com/qoretechnologies/qore/issues/5563">issue 5563</a>)
     - serialized tables and schemas retain structured datasource configuration so driver-option types and string
       delimiters survive reconstruction; legacy serialized data and string-based custom deserializers remain supported
     - Security: the names of database objects that reach generated SQL (tables, columns, indexes, constraints,

@@ -5854,3 +5854,18 @@ See `bench/runtime-comparison/results-post-debug-format-merge-macos-arm64.json` 
 Two optimized same-artifact campaigns retain the narrow gain: confirmation local polymorphic integer/float times improve 3.91%/3.07%; imported counterparts improve 1.15%/1.36%. Plain closures rise 1.71%, captured closures 0.83% in aggregate, with layout-dependent effects; application kernels stay within 0.6% without an established aggregate gain. The broader tradeoff is explicit, and no Java parity or global ceiling is claimed. See [measurements and controls](../bench/runtime-comparison/results-aot-class-local-release-macos-arm64.json) and [the complete audit](../bench/runtime-comparison/audit-aot-class-local-release.md).
 
 Further work should first quantify TLS in the canonical release routine, then consider an explicit same-thread invocation context. Thread cleanup unregisters its hazard slot before destroying ThreadData, so RuntimeConfig validity or TID alone must never admit an unregistered slot. Receiver borrowing and finite-target inlining need separate proofs for fallback materialization, reflection, custom handlers, destructor ordering and concurrent deletion. Any inlining comparison with Java must include natural Java inlining as well as the existing forced-boundary controls.
+
+
+## Program IDs and warmed AOT closures (2026-10-29)
+
+Develop 8004006ee2 is integrated after the class-local release optimization. Deferred native callback and closure contexts preserve the new 64-bit Program IDs, including materialized slow paths. Debug activity tracking moves into existing helper padding so reusable AOT callback storage remains 192 bytes within the 208-byte public frame.
+
+Warmed closure IR can assign local slots differently from fresh native lowering. Native lowering now seeds its slot identities from that cached IR before lowering the body and nested handlers. The regression exercises mixed local types, captures and same-named locals in sibling cleanup scopes. This changes compile-time metadata alignment and adds no per-call lookup.
+
+The reader disables legacy step synthesis when serialized IR contains explicit DebugStatement records. Native AOT debug IR without such records retains its existing cleanup-line boundaries; this change does not claim statement-complete native AOT debugging.
+
+Release: 110 executed QUnit cases/12841 assertions, 12 runtime skips; Debug: 113 executed cases/12852 assertions, 9 runtime skips. Each tree runs 40 fixtures including 3 additional silent fixtures. AOTSmoke/HTTP filters exclude 263 cases in Release and 263 in Debug; these are not executed cases. Native Debug passes 3770 focused and 5435 broader assertions (overlapping). Trace, DGC lock-counter and compiled concurrent-reference controls pass; all 391 Release qmod aliases are restored.
+
+See [integration evidence](../bench/runtime-comparison/results-post-program-id-merge-macos-arm64.json) and the [complete audit](../bench/runtime-comparison/audit-post-program-id-merge.md). Oracle database-dependent checks are explicitly skipped without a connection; no live query-plan result is claimed. The class-local release measurements remain premerge results, with no fresh Java/develop ratio here.
+
+After the requested optimized installation, the next experiment separates the object-release slow path so successful releases need not allocate its large stack frame. Actual optimized assembly shows six saved register pairs, 912 additional stack bytes and a stack canary before the fast-release test. This is a hypothesis to measure; TLS hazard-context passing remains a separate lifetime-sensitive candidate.

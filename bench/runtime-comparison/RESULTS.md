@@ -29541,3 +29541,18 @@ Shared host without affinity, frequency or thermal control; no owned build, test
 Next inspect reference-release TLS work in actual optimized assembly. A possible explicit RuntimeConfig context must preserve unregister-before-thread-data-destruction and the locking fallback during teardown; a valid TID alone is insufficient. Compiler-proven receiver specialization remains a larger, separate direction.
 
 [Complete evidence](results-aot-class-local-release-macos-arm64.json); [all 62 audit checks](audit-aot-class-local-release.md).
+
+
+## Program IDs and warmed AOT closures (2026-10-29)
+
+Develop 8004006ee2 is integrated after the class-local release optimization. Deferred native callback and closure contexts preserve the new 64-bit Program IDs, including materialized slow paths. Debug activity tracking moves into existing helper padding so reusable AOT callback storage remains 192 bytes within the 208-byte public frame.
+
+Warmed closure IR can assign local slots differently from fresh native lowering. Native lowering now seeds its slot identities from that cached IR before lowering the body and nested handlers. The regression exercises mixed local types, captures and same-named locals in sibling cleanup scopes. This changes compile-time metadata alignment and adds no per-call lookup.
+
+The reader disables legacy step synthesis when serialized IR contains explicit DebugStatement records. Native AOT debug IR without such records retains its existing cleanup-line boundaries; this change does not claim statement-complete native AOT debugging.
+
+Release: 110 executed QUnit cases/12841 assertions, 12 runtime skips; Debug: 113 executed cases/12852 assertions, 9 runtime skips. Each tree runs 40 fixtures including 3 additional silent fixtures. AOTSmoke/HTTP filters exclude 263 cases in Release and 263 in Debug; these are not executed cases. Native Debug passes 3770 focused and 5435 broader assertions (overlapping). Trace, DGC lock-counter and compiled concurrent-reference controls pass; all 391 Release qmod aliases are restored.
+
+See [integration evidence](results-post-program-id-merge-macos-arm64.json) and the [complete audit](audit-post-program-id-merge.md). Oracle database-dependent checks are explicitly skipped without a connection; no live query-plan result is claimed. The class-local release measurements remain premerge results, with no fresh Java/develop ratio here.
+
+After the requested optimized installation, the next experiment separates the object-release slow path so successful releases need not allocate its large stack frame. Actual optimized assembly shows six saved register pairs, 912 additional stack bytes and a stack canary before the fast-release test. This is a hypothesis to measure; TLS hazard-context passing remains a separate lifetime-sensitive candidate.

@@ -420,7 +420,7 @@ public:
     //! the Program running on the thread when callback_caller_pgm was set
     const QoreProgram* callback_from_pgm = nullptr;
     //! the ID of the application Program that the code of runtime_po_module_pgm runs for
-    unsigned runtime_po_app_pgm_id = 0;
+    qore_program_id_t runtime_po_app_pgm_id = 0;
     int tid;
 
     VLock vlock;     // for deadlock detection
@@ -2900,7 +2900,7 @@ __attribute__((noinline)) void RuntimeConfigNativeLeafCallHelper::materialize() 
     } else if (target_kind == TargetKind::ClosureV2) {
         closure_context->materialize(td);
     } else if (target_kind == TargetKind::CallbackV2) {
-        callback_context->materialize(td, old_callback_app_pgm_id);
+        callback_context->materialize(td);
     }
     state = ContextState::Materialized;
     td->call_program_context = pgm;
@@ -2949,7 +2949,7 @@ __attribute__((noinline, cold)) void RuntimeConfigNativeLeafCallHelper::restoreM
         // Restore the caller's override before applying it to the saved options.
         closure_context->restoreOptions(td);
     } else if (target_kind == TargetKind::CallbackV2) {
-        callback_context->restoreOptions(td, old_callback_app_pgm_id);
+        callback_context->restoreOptions(td);
     }
     if (swapped) {
         td->runtime_po = apply_runtime_po_override(td, old_po);
@@ -2990,8 +2990,7 @@ __attribute__((noinline, cold)) void RuntimeConfigNativeMethodContext::restore(T
     rc.setClass(old_rc_class);
 }
 
-__attribute__((noinline, cold)) void RuntimeConfigNativeCallbackContext::materialize(ThreadData* td,
-        unsigned& old_app_pgm_id) {
+__attribute__((noinline, cold)) void RuntimeConfigNativeCallbackContext::materialize(ThreadData* td) {
     old_mask = td->runtime_po_override_mask;
     old_value = td->runtime_po_override_value;
     old_caller_restrictions = td->runtime_po_caller_restrictions;
@@ -3012,8 +3011,7 @@ __attribute__((noinline, cold)) void RuntimeConfigNativeCallbackContext::materia
     }
 }
 
-__attribute__((noinline, cold)) void RuntimeConfigNativeCallbackContext::restoreOptions(ThreadData* td,
-        unsigned old_app_pgm_id) {
+__attribute__((noinline, cold)) void RuntimeConfigNativeCallbackContext::restoreOptions(ThreadData* td) {
     td->runtime_po_override_mask = old_mask;
     td->runtime_po_override_value = old_value;
     td->runtime_po_caller_restrictions = old_caller_restrictions;
@@ -3864,9 +3862,10 @@ ProgramThreadCountContextHelper::~ProgramThreadCountContextHelper() {
 
     QoreProgram* pgm = td->current_pgm;
     printd(5, "ProgramThreadCountContextHelper::~ProgramThreadCountContextHelper() this: %p current_pgm: %p " \
-        "pgmid: %d, restoring old pgm: %p old_pgmid: %d old tlpd: %p old_ctx: %p savefc: %d oldfc: %d " \
-        "init_tlpd: %d\n", this, td->current_pgm, td->current_pgm?td->current_pgm->getProgramId():-1, old_pgm,
-        old_pgm?old_pgm->getProgramId():-1, old_tlpd, old_ctx, save_frameCount, old_frameCount, init_tlpd);
+        "pgmid: " QLLD ", restoring old pgm: %p old_pgmid: " QLLD " old tlpd: %p old_ctx: %p savefc: %d oldfc: %d " \
+        "init_tlpd: %d\n", this, td->current_pgm, td->current_pgm ? static_cast<int64>(td->current_pgm->getProgramId()) : -1LL,
+        old_pgm, old_pgm ? static_cast<int64>(old_pgm->getProgramId()) : -1LL, old_tlpd, old_ctx, save_frameCount, old_frameCount,
+        init_tlpd);
     if (td->tlpd->dbgIsAttached()) {
         // find if tlpd is in lower context and if not then notify dbgDetach()
         if (isFirstThreadLocalProgramData(td->tlpd)) {
@@ -3909,8 +3908,8 @@ void ProgramThreadCountContextHelper::setWithThreadData(ThreadData* td, Exceptio
     old_ctx = td->current_pgm_ctx;
 
     printd(5, "ProgramThreadCountContextHelper::set() this:%p current_pgm:%p "
-        "pgmid:%d new_pgm: %p new_pgmid:%d cur_tlpd:%p cur_ctx:%p fc:%d\n", this, old_pgm,
-        old_pgm ? old_pgm->getProgramId() : -1, pgm, pgm?pgm->getProgramId():-1, old_tlpd, old_ctx,
+        "pgmid:" QLLD " new_pgm: %p new_pgmid:" QLLD " cur_tlpd:%p cur_ctx:%p fc:%d\n", this, old_pgm,
+        old_pgm ? static_cast<int64>(old_pgm->getProgramId()) : -1LL, pgm, pgm ? static_cast<int64>(pgm->getProgramId()) : -1LL, old_tlpd, old_ctx,
         old_frameCount);
     qore_program_private* pp = qore_program_private::get(*pgm);
     this->xsink = xsink;
@@ -3978,8 +3977,8 @@ ThreadLocalProgramData* ProgramThreadCountContextHelper::getContextFrame(int& fr
     int frameCount = tlpd->lvstack.getFrameCount();
     const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx;
     QoreProgram* pgm = td->current_pgm;
-    printd(5, "ProgramThreadCountContextHelper::getContextFrame(): frame:%d ch:%p tlpd:%p (%d/%d) pgm:%p pgmid:%d inst:%d init_tlpd:%d\n",
-        frame, ch, tlpd, ch ? ch->save_frameCount : -1, frameCount, pgm, pgm->getProgramId(), tlpd->inst, ch?ch->init_tlpd:-1
+    printd(5, "ProgramThreadCountContextHelper::getContextFrame(): frame:%d ch:%p tlpd:%p (%d/%d) pgm:%p pgmid:" QLLD " inst:%d init_tlpd:%d\n",
+        frame, ch, tlpd, ch ? ch->save_frameCount : -1, frameCount, pgm, static_cast<int64>(pgm->getProgramId()), tlpd->inst, ch?ch->init_tlpd:-1
     );
     /*
         ThreadFrameBoundaryHelper increments lvstack.getFrameCount after ProgramThreadCountContextHelper saved current frame count
@@ -4014,8 +4013,8 @@ ThreadLocalProgramData* ProgramThreadCountContextHelper::getContextFrame(int& fr
             return nullptr;
         }
         printd(5, "ProgramThreadCountContextHelper::getContextFrame() L: frame:%d ch:%p tlpd:%p (%d/%d) pgm:%p " \
-            "pgmid:%d, inst:%d init_tlpd:%d\n", frame, ch, tlpd, ch ? ch->save_frameCount : -1, frameCount, pgm,
-            pgm->getProgramId(), tlpd->inst, ch ? ch->init_tlpd: -1);
+            "pgmid:" QLLD ", inst:%d init_tlpd:%d\n", frame, ch, tlpd, ch ? ch->save_frameCount : -1, frameCount, pgm,
+            static_cast<int64>(pgm->getProgramId()), tlpd->inst, ch ? ch->init_tlpd: -1);
     }
     if (!pgm->checkAllowDebugging(xsink)) {
         return nullptr;
@@ -4023,7 +4022,8 @@ ThreadLocalProgramData* ProgramThreadCountContextHelper::getContextFrame(int& fr
     /* now we know that desired frame should be in tlpd and we must add frame index to consider frames above */
     frame += tlpd->lvstack.getFrameCount() - frameCount;
     printd(5, "ProgramThreadCountContextHelper::getContextFrame(): frame:%d ch:%p tlpd:%p (%d/%d) pgm:%p " \
-        "pgmid:%d inst:%d\n", frame, ch, tlpd, frameCount, tlpd->lvstack.getFrameCount(), pgm, pgm->getProgramId(),
+        "pgmid:" QLLD " inst:%d\n", frame, ch, tlpd, frameCount, tlpd->lvstack.getFrameCount(), pgm,
+        static_cast<int64>(pgm->getProgramId()),
         tlpd->inst);
     return tlpd;
 }
@@ -4040,7 +4040,7 @@ ThreadLocalProgramData* ProgramThreadCountContextHelper::getContextFrame(int& fr
 
     @return the referenced manager (the caller owns the reference), or nullptr if there is none
 */
-static QoreSandboxManager* find_thread_sandbox_stack_ref_intern(unsigned* pgm_id = nullptr,
+static QoreSandboxManager* find_thread_sandbox_stack_ref_intern(qore_program_id_t* pgm_id = nullptr,
         bool policy = false) {
     if (pgm_id) {
         *pgm_id = 0;
@@ -4140,7 +4140,7 @@ static QoreSandboxManager* find_thread_provenance_ref(bool policy) {
     return QoreSandboxComposition::combine(managers);
 }
 
-static QoreSandboxManager* find_thread_sandbox_manager_ref_intern(unsigned* pgm_id = nullptr,
+static QoreSandboxManager* find_thread_sandbox_manager_ref_intern(qore_program_id_t* pgm_id = nullptr,
         bool policy = false) {
     ReferenceHolder<QoreSandboxManager> base(find_thread_sandbox_stack_ref_intern(pgm_id, policy), nullptr);
     ReferenceHolder<QoreSandboxManager> provenance(find_thread_provenance_ref(policy), nullptr);
@@ -4721,7 +4721,7 @@ QoreParseOptions runtime_get_own_program_state_parse_options(const QoreParseOpti
     return po & ~td->runtime_po_caller_restrictions;
 }
 
-unsigned runtime_get_module_call_app_id(const QoreProgram* caller_pgm) {
+qore_program_id_t runtime_get_module_call_app_id(const QoreProgram* caller_pgm) {
     ThreadData* td = thread_data.get();
     if (td->runtime_po_module_pgm) {
         return td->runtime_po_app_pgm_id;
@@ -4729,7 +4729,7 @@ unsigned runtime_get_module_call_app_id(const QoreProgram* caller_pgm) {
     return caller_pgm ? caller_pgm->getProgramId() : 0;
 }
 
-bool runtime_get_module_caller_app(unsigned& app_pgm_id) {
+bool runtime_get_module_caller_app(qore_program_id_t& app_pgm_id) {
     ThreadData* td = thread_data.get();
     if (!td->runtime_po_module_pgm || td->runtime_po_module_pgm != td->current_pgm) {
         return false;
@@ -6542,7 +6542,7 @@ int q_remove_thread_local_data(int key, q_user_tld& data, bool run_destructor) {
 
 // --- Thread Cancellation API ---
 
-int QoreThreadList::cancelThread(int tid, const char* reason, unsigned scope_pgm_id) {
+int QoreThreadList::cancelThread(int tid, const char* reason, qore_program_id_t scope_pgm_id) {
     AutoLocker al(lck);
     if (tid <= 0 || tid >= MAX_QORE_THREADS) {
         return -1;
@@ -7087,7 +7087,7 @@ void QoreThreadList::clearCancel(int tid) {
     }
 }
 
-void QoreThreadList::dropCancelRequest(int tid, unsigned scope_pgm_id) {
+void QoreThreadList::dropCancelRequest(int tid, qore_program_id_t scope_pgm_id) {
     AutoLocker al(lck);
     if (tid < 0 || tid >= MAX_QORE_THREADS) {
         return;
@@ -7116,8 +7116,8 @@ void QoreThreadList::dropCancelRequest(int tid, unsigned scope_pgm_id) {
     the current Program in that case would widen it to every thread that has entered the (possibly
     shared) module Program, including threads that never entered the sandboxed Program.
 */
-static unsigned get_cancel_scope_pgm_id() {
-    unsigned pgm_id = 0;
+static qore_program_id_t get_cancel_scope_pgm_id() {
+    qore_program_id_t pgm_id = 0;
     QoreSandboxManager* sm = find_thread_sandbox_manager_ref_intern(&pgm_id);
     if (!sm) {
         return 0;
@@ -7138,7 +7138,7 @@ static unsigned get_cancel_scope_pgm_id() {
     @return true if the request applies to this thread, false if there was no request in scope
 */
 static bool check_cancel_in_scope(int tid) {
-    unsigned scope = thread_list.getCancelScopeProgramId(tid);
+    qore_program_id_t scope = thread_list.getCancelScopeProgramId(tid);
     if (!scope) {
         return true;
     }

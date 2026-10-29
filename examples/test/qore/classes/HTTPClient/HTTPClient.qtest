@@ -437,6 +437,9 @@ public class Main inherits QUnit::Test {
         const Utf8Str = "Hät";
         const Iso88591Str = convert_encoding(Utf8Str, "iso-8859-1");
 
+        #! the reply of a proxy that refuses to open a tunnel
+        const ProxyConnectRefusedReply = "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n";
+
         const ErrorReply1 = sprintf("HTTP/1.1 200 OK\r\nServer: Test/1.0\r\nContent-Encoding: identity\r\nContent-Type: text/html\r\nDate: %s GMT\r\nContent-Length: 0\r\n\r\n",
                                     gmtime().format("Dy, DD Mon YYYY HH:mm:SS"));
         const ErrorReply2 = sprintf("HTTP/1.1 200 OK\r\nServer: Test/1.0\r\nContent-Encoding: identity\r\nContent-Type: text/html\r\nDate: %s GMT\r\n\r\n",
@@ -2049,24 +2052,31 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
             assertEq(False, h.send_aborted);
         }
 
-        {
-            HTTPClient hc(("url": "http://localhost"));
-            hash info;
-            try { hc.get("", NOTHING, \info); } catch () {}
-            assertEq(Type::String, info.headers.Host.type());
-            assertEq(True, info.headers.Host !~ /:/);
-            hc.setURL("http://localhost:80");
-            try { hc.get("", NOTHING, \info); } catch () {}
-            assertEq(Type::String, info.headers.Host.type());
-            assertEq(True, info.headers.Host !~ /:/);
-            hc.setURL("https://localhost");
-            try { hc.get("", NOTHING, \info); } catch () {}
-            assertEq(Type::String, info.headers.Host.type());
-            assertEq(True, info.headers.Host !~ /:/);
-            hc.setURL("https://localhost:443");
-            try { hc.get("", NOTHING, \info); } catch () {}
-            assertEq(Type::String, info.headers.Host.type());
-            assertEq(True, info.headers.Host !~ /:/);
+        # the Host header of a request to the default port of its scheme has no port; each request goes through a
+        # local test server as its proxy, so the test does not depend on what listens on ports 80 and 443 of this
+        # host, where a port that accepts a connection and never answers would make a request wait for its timeout
+        foreach string url in ("http://localhost", "http://localhost:80") {
+            HttpTestServer proxy(ErrorReply1);
+            on_exit proxy.done();
+            HTTPClient hc({"url": url, "proxy": "http://localhost:" + proxy.port, "connect_timeout": 10s});
+            hash<auto> info;
+            hc.get("", NOTHING, \info);
+            assertEq("localhost", info.headers.Host, url);
+            # the proxy receives the request with the same Host header
+            assertEq("localhost", proxy.getHeader().host, url);
+        }
+        foreach string url in ("https://localhost", "https://localhost:443") {
+            # the proxy refuses the tunnel to the target
+            HttpTestServer proxy(ProxyConnectRefusedReply);
+            on_exit proxy.done();
+            HTTPClient hc({"url": url, "proxy": "http://localhost:" + proxy.port, "connect_timeout": 10s});
+            hash<auto> info;
+            assertThrows("HTTP1-CONNECT-ERROR", "HTTP 403", \hc.get(), ("", NOTHING, \info));
+            assertEq("localhost", info.headers.Host, url);
+            # RFC 7231 section 4.3.6: a tunnel is requested with the port of the target
+            hash<auto> hdr = proxy.getHeader();
+            assertEq("CONNECT", hdr.method, url);
+            assertEq("localhost:443", hdr.path, url);
         }
 
         {

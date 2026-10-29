@@ -1270,7 +1270,7 @@ private:
         /** Module code running for an application with restrictions can cancel only the timers added for the same
             application; see runtime_get_module_caller_app()
         */
-        unsigned app_pgm_id = 0;
+        qore_program_id_t app_pgm_id = 0;
     };
 
     //! Per-I/O-thread context — each thread owns its own event loop, cache, and socket state
