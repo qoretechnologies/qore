@@ -77,8 +77,9 @@ void ThreadLocalVariableData::getLocalVars(QoreHashNode& h, int frame, Exception
             if (var.frame_boundary)
                 return;
             // Skip pre-instantiated block-scoped locals that were cleared at
-            // block exit — they stay on the stack but are no longer active
-            if (var.block_cleared)
+            // block exit — they stay on the stack but are no longer active, and internal temporaries of the
+            // runtime, which are not variables of the code
+            if (var.block_cleared || var.hidden)
                 continue;
 
             ReferenceHolder<QoreHashNode> v(new QoreHashNode(autoTypeInfo), xsink);
@@ -106,6 +107,9 @@ int ThreadLocalVariableData::setVarValue(int frame, const char* name, const Qore
             const LocalVarValue& var = w->var[p];
             if (var.frame_boundary)
                 return 1;
+            if (var.hidden) {
+                continue;
+            }
 
             if (!strcmp(var.id, name)) {
                 LValueHelper lvh(xsink);

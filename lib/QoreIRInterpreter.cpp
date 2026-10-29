@@ -2882,7 +2882,9 @@ static bool getSimpleClosureStringLeaf(const QoreIRFunction* callee_ir,
 
 //! Returns true if a debugger is attached to the program of a function that can be debugged
 /** The shortcuts that evaluate a callee's IR without executing it, such as the native leaf functions, skip its debug
-    events (QoreIROpcode::DebugStatement), so they are not taken while a debugger is attached; the check is the same
+    events (QoreIROpcode::DebugStatement), and the inlined calls of functions and closures give the callee no frame on
+    the stack of local variables, where a debugger finds the frames and local variables of a stopped thread, so they
+    are not taken while a debugger is attached; the check is the same
     racy, cheap gate as the one in native code (QoreIRToLLVM::emitDebugStepHook()), and execution of the IR checks the
     precise state of the thread.
 */
@@ -4002,6 +4004,12 @@ static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* i
     if (inline_state <= 0) {
         return false;
     }
+    // the inlined callee has no frame of its own on the stack of local variables, which is where a debugger finds
+    // the frames and local variables of a stopped thread, so the callee is called through the call path while a
+    // debugger is attached
+    if (irFunctionDebuggerAttached(inst->cached_callee_ir)) {
+        return false;
+    }
 
     const UserVariantBase* uvb = inst->cached_uvb;
     if (uvb->hasCachedFunction()) {
@@ -4510,6 +4518,12 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
     if (nargs != static_cast<int>(num_params)) {
         return false;
     }
+    // the inlined closure has no frame of its own on the stack of local variables, where a debugger finds the
+    // frames and local variables of a stopped thread, so it is called through the call path while a debugger is
+    // attached
+    if (irFunctionDebuggerAttached(callee_ir)) {
+        return false;
+    }
     for (int i = 0; i < nargs; ++i) {
         if (i && !(i % 100)
                 && qore_check_cancel(xsink,
@@ -4521,7 +4535,7 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
             return false;
         }
     }
-    if (nargs == 0 && simple_increment && !irFunctionDebuggerAttached(callee_ir)
+    if (nargs == 0 && simple_increment
             && tryExecuteSimpleClosureIncrement(cb, simple_increment->local,
                 simple_increment->delta, result, xsink)) {
         if (may_invalidate_external_caches) {

@@ -39,7 +39,8 @@ struct lvih_intern {
 
     DLLLOCAL lvih_intern(QoreValue val, const QoreTypeInfo* typeInfo, ExceptionSink* xs) : lv("ref_arg_helper", typeInfo), xsink(xs) {
         printd(5, "ReferenceArgumentHelper::ReferenceArgumentHelper() instantiating %p (type: %d, val->node: %p) \n", &lv, val.getType(), val.hasNode() ? val.getInternalNode() : nullptr);
-        lv.instantiate(val);
+        // the variable is not a variable of the code whose frame it is created in
+        lv.instantiateHidden(val);
         VarRefNode* vr = new VarRefNode(get_runtime_location(), strdup("ref_arg_helper"), VT_LOCAL);
         vr->ref.id = &lv;
         ref = new ReferenceNode(vr, typeInfo, nullptr, vr, nullptr);

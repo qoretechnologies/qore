@@ -110,14 +110,17 @@ public:
     bool finalized : 1;
     bool frame_boundary : 1;
     bool block_cleared : 1;  // set by del() when block-scoped var is cleared at block exit
+    //! an internal temporary of the runtime, such as the variable of a ReferenceArgumentHelper, which is not a
+    //! variable of the code whose frame it is in, so frames of local variables do not list it
+    bool hidden : 1;
 
-    DLLLOCAL VarValueBase(const char* n_id, valtype_t t = QV_Node) : val(t), id(n_id), local_var(nullptr), finalized(false), frame_boundary(false), block_cleared(false) {
+    DLLLOCAL VarValueBase(const char* n_id, valtype_t t = QV_Node) : val(t), id(n_id), local_var(nullptr), finalized(false), frame_boundary(false), block_cleared(false), hidden(false) {
     }
 
-    DLLLOCAL VarValueBase(const char* n_id, const QoreTypeInfo* varTypeInfo) : val(varTypeInfo), id(n_id), local_var(nullptr), finalized(false), frame_boundary(false), block_cleared(false) {
+    DLLLOCAL VarValueBase(const char* n_id, const QoreTypeInfo* varTypeInfo) : val(varTypeInfo), id(n_id), local_var(nullptr), finalized(false), frame_boundary(false), block_cleared(false), hidden(false) {
     }
 
-    DLLLOCAL VarValueBase() : val(QV_Bool), id(nullptr), local_var(nullptr), finalized(false), frame_boundary(false), block_cleared(false) {
+    DLLLOCAL VarValueBase() : val(QV_Bool), id(nullptr), local_var(nullptr), finalized(false), frame_boundary(false), block_cleared(false), hidden(false) {
     }
 
     DLLLOCAL void setDeclOrder(uint64_t order) {
@@ -215,6 +218,7 @@ public:
         local_var = n_local_var;
         type_substitution_cache.reset();
         block_cleared = false;
+        hidden = false;
 
         // try to set an optimized value type for the value holder if possible
         val.set(varTypeInfo);
@@ -716,6 +720,17 @@ public:
 
     DLLLOCAL void instantiate(QoreValue nval, const QoreTypeInfo* runtimeTypeInfo) {
         instantiateIntern(nval, true, runtimeTypeInfo);
+    }
+
+    //! instantiates an internal temporary of the runtime, which frames of local variables do not list
+    /** For a variable that the runtime creates on the stack of the code that runs on the thread, such as the
+        variable of a ReferenceArgumentHelper that a callback from C++ code passes by reference
+    */
+    DLLLOCAL void instantiateHidden(QoreValue nval) {
+        assert(!closure_use);
+        LocalVarValue* val = thread_instantiate_lvar();
+        val->set(name.c_str(), this, typeInfo, nval, true, false);
+        val->hidden = true;
     }
 
     DLLLOCAL void instantiateIntern(QoreValue nval, bool assign, const QoreTypeInfo* runtimeTypeInfo = nullptr) {

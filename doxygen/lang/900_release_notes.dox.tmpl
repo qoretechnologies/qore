@@ -5171,6 +5171,9 @@ while (*binary chunk = input.read(65536)) {
       function can be given by its name only when it has one variant (see the
       @ref debugprogramcontrolintro "DebugProgramControl" module;
       <a href="https://github.com/qoretechnologies/qore/issues/5558">issue 5558</a>)
+    - the local variables of a frame of a thread stopped in a debugger (@ref Qore::get_local_vars() "get_local_vars()")
+      included the temporary variables (\c ref_arg_helper) that the runtime creates for the arguments that a debugger
+      callback takes by reference
     - an @ref Qore::Expression "Expression" created an object of a class with unimplemented abstract methods
       (ex: <tt>new Expression(pgm, "new C()", "label")</tt>) instead of raising \c ABSTRACT-CLASS-ERROR as any other
       code does, and a later parse commit of a Program that allows it (@ref Qore::PO_ALLOW_REPARSE) then failed on

@@ -231,6 +231,7 @@ public class DebugProgramControlTest inherits QUnit::Test {
         addTestCase("thread stack frame", \threadStackFrameTest());
         addTestCase("breakpoint on top-level statement", \topLevelBreakpointTest());
         addTestCase("local variables of the frames of a stopped thread", \localVariableTest());
+        addTestCase("local variables of the frames of a thread stopped in a function", \functionFrameVariableTest());
         addTestCase("every command of a stopped thread is answered", \threadAnswerTest());
         addTestCase("breakpoint on statement without temporaries", \noTempBreakpointTest());
         addTestCase("breakpoint on file given with another path", \filePathBreakpointTest());
@@ -367,6 +368,41 @@ public class DebugProgramControlTest inherits QUnit::Test {
         total = dpc.threadCommand(p.tid, "thread/local/total/get");
         assertEq(10, AbstractDebugControl::unserialize(total.value));
 
+        assertEq({"rc": NOTHING}, p.finish());
+    }
+
+    # each frame of a thread stopped in a function has the local variables of its code: the callee of a call that
+    # the interpreter would inline or make through a fast path has a frame of its own while a debugger is attached,
+    # and the temporaries of the debugger's callbacks are not variables of the stopped code
+    functionFrameVariableTest() {
+        DebuggedProgram p(dpc);
+        on_exit p.cleanup();
+        p.breakAt(4);
+        hash<auto> e = p.runToStop();
+        assertEq(4, e.line);
+
+        # the frame of add()
+        list<auto> names = dpc.threadCommand(p.tid, "thread/local//list");
+        assertEq(("a", "argv", "b", "sum"), sort(names));
+        hash<auto> sum = dpc.threadCommand(p.tid, "thread/local/sum/get");
+        assertEq(5, AbstractDebugControl::unserialize(sum.value));
+        hash<auto> a = dpc.threadCommand(p.tid, "thread/local/a/get", {"frameid": 0});
+        assertEq(2, AbstractDebugControl::unserialize(a.value));
+
+        # the frame of the top-level code that called add()
+        names = dpc.threadCommand(p.tid, "thread/local//list", {"frameid": 1});
+        assertEq(("h", "total"), sort(names));
+        hash<auto> h = dpc.threadCommand(p.tid, "thread/local/h/get", {"frameid": 1});
+        assertEq("invoice", AbstractDebugControl::unserialize(h.value).name);
+        # a variable of another frame is not found: the answer has no value
+        assertEq({}, dpc.threadCommand(p.tid, "thread/local/h/get"));
+
+        # a local variable of the stopped function set by the debugger changes what the function returns
+        dpc.threadSend(p.tid, "thread/local/sum/set", {"value": AbstractDebugControl::serialize(42)});
+        sum = dpc.threadCommand(p.tid, "thread/local/sum/get");
+        assertEq(42, AbstractDebugControl::unserialize(sum.value));
+
+        # the program prints the value returned by add()
         assertEq({"rc": NOTHING}, p.finish());
     }
 

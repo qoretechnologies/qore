@@ -6841,6 +6841,16 @@ static bool closureDirectArgsNeedNoBinding(const UserVariantBase* uvb,
     return true;
 }
 
+//! Returns true if a debugger is attached to the Program of a user variant
+/** The fast call paths give the callee's local variables slots of their own instead of instantiating them on the
+    stack of local variables, where a debugger finds the frames and local variables of a stopped thread, so they are
+    not taken while a debugger is attached: the callee is called through the call path, which runs it as
+    UserVariantBase::evalTiered() does with a debugger attached
+*/
+static bool qore_rt_debugger_attached(const UserVariantBase* uvb) {
+    return uvb->pgm && qore_program_private::get(*uvb->pgm)->hasDebuggerAttached();
+}
+
 static bool tryExecClosureNativeLeaf(const AbstractQoreNode* node,
         const UserVariantBase* uvb, uint64_t* args, int nargs,
         uint64_t** arg_cleanups, uint64_t& result_bits) {
@@ -6911,6 +6921,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_0(uint64_t ref_bits, Exceptio
         const UserVariantBase* uvb = variant->getUserVariantBase();
         if (uvb && !uvb->hasLazyAOTClosureIR()
                 && (uvb->hasCachedFunction() || uvb->getCachedIR())
+                && !qore_rt_debugger_attached(uvb)
                 && closureDirectArgsNeedNoBinding(uvb, nullptr, 0, xsink)) {
             uint64_t leaf_result;
             if (!uvb->hasCachedAOT()
@@ -6962,6 +6973,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_1(uint64_t ref_bits, uint64_t
         const UserVariantBase* uvb = variant->getUserVariantBase();
         if (uvb && !uvb->hasLazyAOTClosureIR()
                 && (uvb->hasCachedFunction() || uvb->getCachedIR())
+                && !qore_rt_debugger_attached(uvb)
                 && closureDirectArgsNeedNoBinding(uvb, &arg0_bits, 1, xsink)) {
             uint64_t leaf_result;
             if (!uvb->hasCachedAOT()
@@ -7021,6 +7033,7 @@ static uint64_t qore_rt_call_closure_fast_impl(uint64_t ref_bits, uint64_t* args
         const UserVariantBase* uvb = variant->getUserVariantBase();
         if (uvb && !uvb->hasLazyAOTClosureIR()
                 && (uvb->hasCachedFunction() || uvb->getCachedIR())
+                && !qore_rt_debugger_attached(uvb)
                 && closureDirectArgsNeedNoBinding(uvb, args, nargs, xsink)) {
             uint64_t leaf_result;
             if (!uvb->hasCachedAOT()
@@ -10589,7 +10602,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
         return qore_rt_call_function_direct(func, variant, pgm, args, nargs, xsink);
     }
 
-    if (!uvb->isStaticallyFastCallEligible()) {
+    if (!uvb->isStaticallyFastCallEligible() || qore_rt_debugger_attached(uvb)) {
         return qore_rt_call_function_direct(func, variant, pgm, args, nargs, xsink);
     }
 
@@ -10969,6 +10982,7 @@ static uint64_t qore_rt_call_immediate_closure_impl(const QoreClosureParseNode* 
             && !uvb->hasLazyAOTClosureIR()
             && uvb->isStaticallyFastCallEligible()
             && (uvb->hasCachedFunction() || uvb->getCachedIR())
+            && !qore_rt_debugger_attached(uvb)
             && closureDirectArgsNeedNoBinding(uvb, args, nargs, xsink)) {
         uint64_t leaf_result;
         if (!uvb->hasCachedAOT()
@@ -11424,7 +11438,7 @@ static uint64_t qore_rt_call_method_fast_impl(const QoreMethod* method,
         return qore_rt_call_method_direct_impl(method, args, arg_cleanups, nargs, xsink);
     }
 
-    if (!qore_rt_method_fast_call_eligible(variant)) {
+    if (!qore_rt_method_fast_call_eligible(variant) || qore_rt_debugger_attached(uvb)) {
         return qore_rt_call_method_direct_impl(method, args, arg_cleanups, nargs, xsink);
     }
 
@@ -16776,7 +16790,7 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
         // Builtin method — fall back to slow path for proper soft type coercion
         return false;
     }
-    if (!qore_rt_method_fast_call_eligible(variant)) {
+    if (!qore_rt_method_fast_call_eligible(variant) || qore_rt_debugger_attached(uvb)) {
         return false;
     }
     if (!uvb->hasCachedFunction() && !uvb->getCachedIR()) {
@@ -18244,6 +18258,7 @@ static uint64_t qore_rt_call_static_method_direct_impl(const QoreMethod* method,
     const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
     if (!uvb || explicit_type_param_instantiation
             || !qore_rt_method_fast_call_eligible(variant)
+            || qore_rt_debugger_attached(uvb)
             || (receiver_type_info && QoreTypeInfo::getParameterizedClassType(receiver_type_info))
             || (!uvb->hasCachedFunction() && !uvb->getCachedIR())) {
         // Use evalTmpArgs to preserve ReferenceNode values in pre-evaluated args
