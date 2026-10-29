@@ -1,0 +1,246 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+
+%exec-class HttpServerControllerLoggerTest
+
+#! records the destruction of tagged objects
+class Destroyed {
+    public {
+        #! protects tags
+        static Mutex lck();
+        #! the objects destroyed so far, by tag
+        static list<string> tags = ();
+    }
+
+    static add(string tag) {
+        AutoLock al(lck);
+        tags += tag;
+    }
+
+    #! returns and clears the objects destroyed so far
+    static list<string> take() {
+        AutoLock al(lck);
+        list<string> rv = tags;
+        tags = ();
+        return rv;
+    }
+}
+
+#! a logger appender that records its destruction and optionally refers back to the server logging through it
+class TaggedAppender inherits LoggerAppenderWithLayout {
+    public {
+        *HttpServer server;
+    }
+
+    private {
+        string tag;
+    }
+
+    constructor(string tag) : LoggerAppenderWithLayout("tagged", new LoggerLayoutPattern("%m")) {
+        self.tag = tag;
+        open();
+    }
+
+    destructor() {
+        Destroyed::add("appender-" + tag);
+    }
+
+    processEventImpl(int type, auto params) {
+    }
+}
+
+#! a server that records its destruction
+class CountedServer inherits HttpServer {
+    private {
+        string tag;
+    }
+
+    constructor(string tag, hash<HttpServerOptionInfo> opts) : HttpServer(opts) {
+        self.tag = tag;
+    }
+
+    destructor() {
+        Destroyed::add("server-" + tag);
+    }
+}
+
+#! Tests that the process-wide async I/O controller does not keep a server's logger after the server stops
+/** Every server sets its logger on the global async I/O controller.  No test case creates another server after
+    releasing the one it checks: a server's logger must be released without another server replacing it on the
+    controller.
+*/
+class HttpServerControllerLoggerTest inherits QUnit::Test {
+    constructor() : QUnit::Test("HttpServerControllerLoggerTest", "1.0") {
+        addTestCase("a server in a cycle with its logger is collected", \cycle());
+        addTestCase("a server's logger is released with the server", \loggerReleased());
+        addTestCase("a running server's logger is restored when a later server stops", \twoServers());
+        addTestCase("servers stopped in the order they were created", \twoServersStoppedInOrder());
+        addTestCase("servers sharing one logger", \sharedLogger());
+        addTestCase("an application logger set between two servers", \applicationLoggerBetweenServers());
+        addTestCase("the application's controller logger is restored", \applicationLogger());
+        addTestCase("a logger the application set later is kept", \applicationLoggerSetLater());
+        addTestCase("a server restores the controller's logger once", \stopTwice());
+        set_return_value(main());
+    }
+
+    setUp() {
+        Destroyed::take();
+        AsyncIoController::setLogger();
+    }
+
+    cycle() {
+        {
+            Logger logger("cycle", LoggerLevel::getLevelInfo());
+            TaggedAppender appender("cycle");
+            logger.addAppender(appender);
+            CountedServer server("cycle", <HttpServerOptionInfo>{"logger": logger});
+            appender.server = server;
+            server.stop();
+        }
+        # the cycle server -> logger -> appender -> server is collected once nothing outside it refers to it
+        assertEq(("appender-cycle", "server-cycle"), sort(Destroyed::take()));
+        assertNothing(AsyncIoController::getLogger());
+    }
+
+    loggerReleased() {
+        {
+            Logger logger("plain", LoggerLevel::getLevelInfo());
+            logger.addAppender(new TaggedAppender("plain"));
+            CountedServer server("plain", <HttpServerOptionInfo>{"logger": logger});
+            server.stop();
+        }
+        # the logger and its appender are released with the server
+        assertEq(("appender-plain", "server-plain"), sort(Destroyed::take()));
+        assertNothing(AsyncIoController::getLogger());
+    }
+
+    twoServers() {
+        Logger a("a", LoggerLevel::getLevelInfo());
+        Logger b("b", LoggerLevel::getLevelInfo());
+        HttpServer sa(<HttpServerOptionInfo>{"logger": a});
+        on_exit sa.stop();
+        assertTrue(AsyncIoController::getLogger() == a);
+        {
+            HttpServer sb(<HttpServerOptionInfo>{"logger": b});
+            assertTrue(AsyncIoController::getLogger() == b);
+            sb.stop();
+        }
+        # the stopped server's logger is not left on the controller while another server is still running
+        assertTrue(AsyncIoController::getLogger() == a);
+        sa.stop();
+        assertNothing(AsyncIoController::getLogger());
+    }
+
+    twoServersStoppedInOrder() {
+        Logger a("a", LoggerLevel::getLevelInfo());
+        Logger b("b", LoggerLevel::getLevelInfo());
+        HttpServer sa(<HttpServerOptionInfo>{"logger": a});
+        on_exit sa.stop();
+        HttpServer sb(<HttpServerOptionInfo>{"logger": b});
+        on_exit sb.stop();
+        # the first server stops while the later one's logger is on the controller
+        sa.stop();
+        assertTrue(AsyncIoController::getLogger() == b);
+        # the later server restores the logger that the first one replaced
+        sb.stop();
+        assertNothing(AsyncIoController::getLogger());
+    }
+
+    sharedLogger() {
+        Logger shared("shared", LoggerLevel::getLevelInfo());
+        Logger app("app", LoggerLevel::getLevelInfo());
+        AsyncIoController::setLogger(app);
+        on_exit AsyncIoController::setLogger();
+        {
+            HttpServer sa(<HttpServerOptionInfo>{"logger": shared});
+            on_exit sa.stop();
+            HttpServer sb(<HttpServerOptionInfo>{"logger": shared});
+            on_exit sb.stop();
+            sb.stop();
+            # the first server still runs with the same logger
+            assertTrue(AsyncIoController::getLogger() == shared);
+            sa.stop();
+        }
+        assertTrue(AsyncIoController::getLogger() == app);
+        {
+            HttpServer sa(<HttpServerOptionInfo>{"logger": shared});
+            on_exit sa.stop();
+            HttpServer sb(<HttpServerOptionInfo>{"logger": shared});
+            on_exit sb.stop();
+            sa.stop();
+            assertTrue(AsyncIoController::getLogger() == shared);
+            sb.stop();
+        }
+        assertTrue(AsyncIoController::getLogger() == app);
+    }
+
+    applicationLoggerBetweenServers() {
+        Logger a("a", LoggerLevel::getLevelInfo());
+        Logger b("b", LoggerLevel::getLevelInfo());
+        Logger app("app", LoggerLevel::getLevelInfo());
+        on_exit AsyncIoController::setLogger();
+        HttpServer sa(<HttpServerOptionInfo>{"logger": a});
+        on_exit sa.stop();
+        # the application replaces the first server's logger, and then a second server replaces the application's
+        AsyncIoController::setLogger(app);
+        HttpServer sb(<HttpServerOptionInfo>{"logger": b});
+        on_exit sb.stop();
+        sa.stop();
+        assertTrue(AsyncIoController::getLogger() == b);
+        # the second server restores the application's logger, not the first server's
+        sb.stop();
+        assertTrue(AsyncIoController::getLogger() == app);
+    }
+
+    applicationLogger() {
+        Logger app("app", LoggerLevel::getLevelInfo());
+        AsyncIoController::setLogger(app);
+        on_exit AsyncIoController::setLogger();
+        {
+            Logger logger("server", LoggerLevel::getLevelInfo());
+            HttpServer server(<HttpServerOptionInfo>{"logger": logger});
+            assertTrue(AsyncIoController::getLogger() == logger);
+            server.stop();
+        }
+        assertTrue(AsyncIoController::getLogger() == app);
+    }
+
+    applicationLoggerSetLater() {
+        Logger app("app", LoggerLevel::getLevelInfo());
+        on_exit AsyncIoController::setLogger();
+        {
+            Logger logger("server", LoggerLevel::getLevelInfo());
+            HttpServer server(<HttpServerOptionInfo>{"logger": logger});
+            # the application replaces the server's logger on the controller while the server runs
+            AsyncIoController::setLogger(app);
+            server.stop();
+        }
+        # the stopping server does not replace a logger that is not its own
+        assertTrue(AsyncIoController::getLogger() == app);
+    }
+
+    stopTwice() {
+        Logger logger("server", LoggerLevel::getLevelInfo());
+        HttpServer server(<HttpServerOptionInfo>{"logger": logger});
+        on_exit server.stop();
+        assertTrue(AsyncIoController::getLogger() == logger);
+        server.stop();
+        assertNothing(AsyncIoController::getLogger());
+        Logger app("app", LoggerLevel::getLevelInfo());
+        AsyncIoController::setLogger(app);
+        on_exit AsyncIoController::setLogger();
+        # a second stop() does not restore the logger again
+        server.stop();
+        assertTrue(AsyncIoController::getLogger() == app);
+    }
+}

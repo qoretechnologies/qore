@@ -2468,6 +2468,15 @@ public:
     int rcycle;
 
     DLLLOCAL RScanHelper(RObject& o) : obj(o), rcycle(o.rcycle.load()) {
+        acquire();
+    }
+
+    DLLLOCAL ~RScanHelper() {
+        release();
+    }
+
+    //! Takes the object's scan lock, waiting for a scan of the object in another thread to give it up
+    DLLLOCAL void acquire() {
         AutoLocker al(obj.rlck);
         while (obj.rscan) {
             ++obj.rwaiting;
@@ -2477,7 +2486,8 @@ public:
         obj.rscan = q_gettid();
     }
 
-    DLLLOCAL ~RScanHelper() {
+    //! Gives up the object's scan lock
+    DLLLOCAL void release() {
         AutoLocker al(obj.rlck);
         assert(obj.rscan == q_gettid());
         // we have to use broadcast here because the condition variable is shared
@@ -2494,6 +2504,26 @@ public:
     DLLLOCAL bool needScan() const {
         return rcycle == obj.rcycle;
     }
+};
+
+//! Gives up a scan's scan lock while it exists, and takes it again when it is destroyed
+/** Used while a scan waits for a lock to be released by something other than a scan: that holder can be waiting
+    for the scan lock itself - a thread that held a write lock or an rsection when its own scan of the same object
+    started - so a scan that kept the scan lock while waiting would wait for that thread while the thread waited for
+    it.  See design/dgc.md, "A scan that waits holds no lock".
+*/
+class RScanReleaseHelper {
+public:
+    DLLLOCAL RScanReleaseHelper(RScanHelper& rsh) : rsh(rsh) {
+        rsh.release();
+    }
+
+    DLLLOCAL ~RScanReleaseHelper() {
+        rsh.acquire();
+    }
+
+private:
+    RScanHelper& rsh;
 };
 
 RSetHelper::RSetHelper(RObject& obj, ExceptionSink* xsink, const std::vector<const RObject*>* write_removed)
@@ -2580,8 +2610,12 @@ RSetHelper::RSetHelper(RObject& obj, ExceptionSink* xsink, const std::vector<con
                     wait_scan_complete(notifier.owner_tid, notifier.owner_scan, scan_id);
                 } else {
                     // The lock is held by something other than a scan, which can be waiting for a thread that
-                    // waits for this scan, so the scans waiting for this one stop waiting meanwhile.
+                    // waits for this scan, so the scans waiting for this one stop waiting meanwhile, and this
+                    // scan gives up its scan lock, which that holder can be waiting for too; the scan lock is
+                    // taken again before the generation is checked below, so a scan of this object made
+                    // meanwhile is used
                     ScanReleaseWaitHelper rwh;
+                    RScanReleaseHelper rrh(rsh);
                     notifier.wait();
                 }
                 if (sah.enabled()) {

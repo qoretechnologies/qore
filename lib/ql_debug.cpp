@@ -13481,6 +13481,27 @@ static QoreValue f_dbg_rset_scan(const QoreListNode* params, RuntimeConfig& rc, 
     return rv.release();
 }
 
+//! scans like dbg_rset_scan() while holding the write lock of another object, as a scan run under a lock does
+/** @param l the list
+    @param i the index of the object in the list
+    @param exclusive as for dbg_rset_scan()
+    @param lock_obj the object whose write lock is held during the scan
+    @param locked decremented once the write lock is held
+*/
+static QoreValue f_dbg_rset_scan_locked(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreObject* lock_obj = get_param_value(params, 3).get<QoreObject>();
+    ReferenceHolder<Counter> locked(get_counter_arg(params, 4, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    QoreAutoVarRWWriteLocker al(qore_object_private::get(*lock_obj)->rml);
+    locked->dec(xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return f_dbg_rset_scan(params, rc, xsink);
+}
+
 namespace {
 //! the armed hold of dbg_hold_constant_store(); one at a time
 struct ConstantStoreHold {
@@ -14850,6 +14871,10 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_rset_scan", f_dbg_rset_scan, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         hashTypeInfo, 3, listTypeInfo, QORE_PARAM_NO_ARG, "l", bigIntTypeInfo, QORE_PARAM_NO_ARG, "i",
         boolTypeInfo, QORE_PARAM_NO_ARG, "exclusive");
+    qns.addBuiltinVariant("dbg_rset_scan_locked", f_dbg_rset_scan_locked, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        hashTypeInfo, 5, listTypeInfo, QORE_PARAM_NO_ARG, "l", bigIntTypeInfo, QORE_PARAM_NO_ARG, "i",
+        boolTypeInfo, QORE_PARAM_NO_ARG, "exclusive", objectTypeInfo, QORE_PARAM_NO_ARG, "lock_obj",
+        QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "locked");
     qns.addBuiltinVariant("dbg_hold_constant_store", f_dbg_hold_constant_store,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "name",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,

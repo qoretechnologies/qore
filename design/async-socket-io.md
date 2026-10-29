@@ -132,6 +132,34 @@ a helper that reports through it and is not checked at that call site survives t
 which then reports it as its own failure and logs it.  Every phase clears the sink with
 `logAndClearStrayException()` for this reason.
 
+### The controller's logger and HttpServer
+
+The global controller has a single logger for the whole process (`AsyncIoController::setLogger()`, read back with
+`AsyncIoController::getLogger()`); it holds a strong reference to it through its `QoreLoggerBridge`.  Besides the
+controller's own messages, it receives the messages of `qore_async_io_log()` (QUIC, HTTP/2, protocol negotiation) when
+no global async I/O logger is set (`set_async_io_logger()`).
+
+Each `HttpServer` sets its logger on the controller in `init()` (`setControllerLogger()`), so that an application
+that configures only its server's logger, as qorus-core does, gets these messages too.  The server records the
+logger it replaced, and `stop()` gives it back (`restoreControllerLogger()`), under the static
+`HttpServer::controller_logger_lck`:
+
+- if the controller's logger is still the server's, it gets back the logger that the server replaced;
+- if a later server replaced the server's logger, that server gets the logger to restore when it stops;
+- if anything else replaced it since (the application calling `AsyncIoController::setLogger()`), it is left alone.
+
+So the controller's logger is that of the server created last of those still running, or the one it had before
+the servers set theirs.  Before this, a server's logger stayed on the controller until the next server replaced it:
+the controller kept a stopped server's logger and its appenders (open files, a log callback) and, through an appender
+that refers back to the server, the server itself, which was then destroyed only at Program teardown, after its
+Program had been deleted (its destructors failed with `PROGRAM-ERROR`).  An application's own controller logger was
+replaced for good by the first server.
+
+The logger is still one for the process: with more than one server running, the messages about every server's
+connections go to the newest server's logger.  Routing a message to the logger of the operation's owner would need
+the owner at the `qore_async_io_log()` call sites.  `examples/test/qlib/HttpServer/HttpServerControllerLogger.qtest`
+tests the restoring.
+
 ## EventNotifier and Command Queue
 
 The controller uses an EventNotifier (registered in the persistent EventLoop) to wake the I/O thread
@@ -1386,8 +1414,8 @@ grows with the connections, so a handler in a cycle with the server - which puts
 does not make the scans grow.  An opaque `asyncIo` would hide a cycle that the collector needs to see: a server whose
 logger refers back to it (a log callback that refers to the server, for example) would then not be collected after
 `stop()` until its Program is torn down.  `examples/test/qlib/HttpServer/HttpServerLoggerCycle.qtest` checks that
-such a server is collected.  It is collected once another server is created: `HttpServer::init()` gives its logger to
-the process-wide `AsyncSocketIoController`, which keeps it until the next server replaces it.
+such a server is collected without another server being created: the process-wide controller logs through a server's
+logger only while the server runs (see [The controller's logger and HttpServer](#the-controllers-logger-and-httpserver)).
 
 ### Sync I/O on Born-Non-Blocking Sockets
 
