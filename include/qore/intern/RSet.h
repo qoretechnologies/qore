@@ -262,6 +262,17 @@ public:
     // RScanHelper in lib/RSet.cpp).
     std::atomic_int rcycle{0};
 
+    //! The number of scans started at this object that are in progress
+    /** A scan that confirms the recursive sets it finds in place advances the scan generation of the object it
+        started at, and of every object it enters for which this is non-zero: the scans in progress there, which
+        sampled the generation before, can then take its result as current once they have waited for another thread
+        (RScanHelper::needScan()) instead of walking the same set again.  Advancing it for every object entered would
+        make every scan that changes nothing a writer of every object of a shared graph.  See design/dgc.md, "A scan
+        waits for the scan it collided with to complete".  At most one per thread, so it cannot overflow
+        (MAX_QORE_THREADS is below its range; asserted in RSet.cpp).
+    */
+    std::atomic<uint16_t> scan_awaiting{0};
+
     // the number of "real" refs (i.e. refs not possibly part of a recursive graph)
     // atomic because it is read without rlck in some paths (customDeref, scanMembersIntern)
     std::atomic_int rrefs{0};
@@ -1107,6 +1118,14 @@ public:
     */
     DLLLOCAL void waitHazards();
 
+#ifdef DEBUG
+    //! Test hook run by scan() in every pass once it holds the rsection of the scan's root, before following any edge
+    /** Tests hold a scan here to make another scan collide with it deterministically; see dbg_hold_scan().
+    */
+    typedef void (*dbg_root_locked_t)(RObject& root);
+    DLLLOCAL static std::atomic<dbg_root_locked_t> dbg_root_locked;
+#endif
+
 private:
     enum class NodeKind : unsigned char {
         Object,
@@ -1227,6 +1246,10 @@ private:
         looks at it.
     */
     bool retry_notified = false;
+    //! this scan's sequence number, recorded on the rsections it takes exclusively; see RNotifier::owner_scan
+    uint64_t scan_id = 0;
+    //! the passes this scan has abandoned on a lock conflict
+    uint64_t abandoned = 0;
     int next_index = 0;
     // the node whose edges are being reported
     int current = -1;
@@ -1488,6 +1511,12 @@ struct QoreScanWaitRecord {
     int owner_tid;
     //! when the wait started (monotonic clock, microseconds)
     int64_t since_us;
+    //! true if the thread waits for the holder's scan to complete, false if it waits for the rsection's release
+    bool scan_wait;
+    //! the passes the scan has abandoned so far, this one included
+    uint64_t restarts;
+    //! the graph nodes the abandoned pass had entered: the size of the graph walked before the collision
+    uint64_t nodes;
 };
 
 //! returns the threads currently waiting in a scan for another thread's rsection
@@ -1497,6 +1526,34 @@ DLLLOCAL std::vector<QoreScanWaitRecord> qore_scan_wait_snapshot();
 class Counter;
 //! debug builds: sets a Counter to be decremented (once) when the next scan starts waiting for another thread
 DLLLOCAL void q_set_scan_wait_notify(Counter* c);
+
+//! the state of another thread's scan, faked by q_dbg_wait_scan_complete()
+struct QoreDbgScanSlot {
+    //! the thread; a TID that no running thread uses
+    int tid;
+    //! the scan it runs, or 0
+    uint64_t scan;
+    //! the thread whose scan it waits for to complete, or -1
+    int wait_tid;
+    //! that scan, or 0
+    uint64_t wait_scan;
+    //! whether it waits for an rsection to be released by something other than a scan
+    bool release_waiting;
+};
+
+//! debug builds: makes the calling thread's scan wait for a scan of a faked thread to complete
+/** The slots of the faked threads are restored to idle before this returns.  The wait must end without another
+    thread: the scan waited for is complete or waits for a release in \a slots, or the wait would close a cycle.
+
+    @param slots the faked threads
+    @param tid the thread whose scan to wait for
+    @param scan the scan to wait for
+    @param self the calling thread's scan
+
+    @return false if the wait was not made because it would close a cycle, true if it ended
+*/
+DLLLOCAL bool q_dbg_wait_scan_complete(const std::vector<QoreDbgScanSlot>& slots, int tid, uint64_t scan,
+        uint64_t self);
 #endif
 
 #endif

@@ -46,6 +46,13 @@ public:
     //! the thread holding the lock this notification waits for, or -1 when only shared holders or a waiting
     //! exclusive acquisition conflicted; written under the lock's own mutex when the notification is registered
     int owner_tid = -1;
+    //! the scan holding the rsection that could not be taken, or 0 when the conflicting owner is not a scan
+    /** When it is set, no notification is registered: the thread waits for that scan to complete instead of for
+        the rsection to be released, which happens at every rollback of the scan as well; see
+        RSetHelper::RSetHelper() and design/dgc.md, "A scan waits for the scan it collided with to complete".
+        Written under the lock's own mutex.
+    */
+    uint64_t owner_scan = 0;
     QoreThreadLock m;
     QoreCondition c;
 
@@ -99,14 +106,22 @@ public:
 
     // returns -1 and sets a notification if the rsection or the write lock is held by another thread; waits
     // only for scans holding the rsection in shared mode, which cannot block in turn
-    DLLLOCAL int tryRSectionLockNotifyWaitRead(RNotifier* rn);
+    /** @param scan the scan taking the rsection (RSetHelper's sequence number), or 0 for a thread that cannot wait
+        for a scan to complete; recorded while it holds the rsection, so that a scan that cannot take it waits for
+        that scan to complete (RNotifier::owner_scan), and only a scan with a number waits for one to complete
+    */
+    DLLLOCAL int tryRSectionLockNotifyWaitRead(RNotifier* rn, uint64_t scan = 0);
 
     //! Takes the rsection in shared mode, which excludes writers and exclusive holders but not other scans
     /** Scans read the graph; only a scan that has to change a recursive set needs the rsection to itself, and
         RSetHelper starts that scan over in exclusive mode.  Does not block: returns -1 and registers a
-        notification when the rsection cannot be taken.  See design/dgc.md.
+        notification, or records the scan holding the rsection, when the rsection cannot be taken.  See
+        design/dgc.md.
+
+        @param scan the scan taking the rsection, or 0; a scan with a number waits for a scan holding the rsection
+        exclusively to complete, as in tryRSectionLockNotifyWaitRead()
     */
-    DLLLOCAL int tryRSectionLockSharedNotifyWaitRead(RNotifier* rn, bool& shared);
+    DLLLOCAL int tryRSectionLockSharedNotifyWaitRead(RNotifier* rn, bool& shared, uint64_t scan = 0);
 
     DLLLOCAL void upgradeReadToRSection(int tid = q_gettid()) {
         AutoLocker al(l);
@@ -131,6 +146,7 @@ public:
 
         // unlock rsection
         rs_tid = -1;
+        rs_scan = 0;
 
         // Threads that registered a notification while this thread also held the write lock cannot
         // acquire the rsection until that lock is released, and qore_var_rwlock_priv::unlock() notifies
@@ -189,6 +205,13 @@ protected:
     // atomic because it is read without lock in hasRSectionLock() and checkRSectionExclusive()
     std::atomic_int rs_tid{-1};
 
+    //! the scan that took the rsection exclusively, or 0 if it is not held or is held by anything else
+    /** Anything else is a dereference deciding a verdict, or a thread that held the rsection or the write lock before
+        its scan started; a scan that collides with one of those waits for the rsection to be released, as that holder
+        can be waiting for the colliding scan's thread.  Written and read under l.
+    */
+    uint64_t rs_scan = 0;
+
     // number of threads waiting on the rsection lock
     int rsection_waiting = 0;
 
@@ -215,8 +238,28 @@ protected:
         assert(write_tid != -1 || rs_tid != -1 || rs_shared.load(std::memory_order_relaxed) || rsection_waiting);
         list.push_back(rn);
         rn->owner_tid = write_tid != -1 ? write_tid : rs_tid;
+        rn->owner_scan = 0;
         rn->set();
         //printd(5, "qrp::sNI t: %p r: %p\n", this, rn);
+    }
+
+    //! Records a conflict with another scan, or registers a notification for any other conflict
+    /** A scan that holds the rsection exclusively is waited for until it completes rather than until it releases the
+        rsection, which it does at every rollback too: waking on a rollback restarts the waiting scan beside the scan
+        it collided with, and scans of one graph from different roots that keep doing that never complete.  See
+        design/dgc.md, "A scan waits for the scan it collided with to complete".
+
+        @param rn the notification of the scan that could not take the rsection
+        @param scan that scan's number, or 0 if its thread cannot wait for a scan to complete, as it has no scan
+        slot; it then waits for the release
+    */
+    DLLLOCAL void setConflictIntern(RNotifier* rn, uint64_t scan) {
+        if (scan && write_tid == -1 && rs_tid != -1 && rs_scan) {
+            rn->owner_tid = rs_tid;
+            rn->owner_scan = rs_scan;
+            return;
+        }
+        setNotificationIntern(rn);
     }
 
 private:
@@ -233,14 +276,14 @@ public:
     }
 
     // does not block under any circumstances, returns -1 if the lock cannot be acquired and sets a notification
-    DLLLOCAL int tryRSectionLockNotifyWaitRead(RNotifier* rn) {
+    DLLLOCAL int tryRSectionLockNotifyWaitRead(RNotifier* rn, uint64_t scan = 0) {
         assert(priv->write_tid >= -1);
-        return static_cast<qore_rsection_priv*>(priv)->tryRSectionLockNotifyWaitRead(rn);
+        return static_cast<qore_rsection_priv*>(priv)->tryRSectionLockNotifyWaitRead(rn, scan);
     }
 
-    DLLLOCAL int tryRSectionLockSharedNotifyWaitRead(RNotifier* rn, bool& shared) {
+    DLLLOCAL int tryRSectionLockSharedNotifyWaitRead(RNotifier* rn, bool& shared, uint64_t scan = 0) {
         assert(priv->write_tid >= -1);
-        return static_cast<qore_rsection_priv*>(priv)->tryRSectionLockSharedNotifyWaitRead(rn, shared);
+        return static_cast<qore_rsection_priv*>(priv)->tryRSectionLockSharedNotifyWaitRead(rn, shared, scan);
     }
 
     DLLLOCAL void rSectionUnlock() {

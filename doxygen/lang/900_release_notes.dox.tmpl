@@ -2439,7 +2439,9 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
       scans, restarts, graph nodes walked, time spent and time spent waiting for other threads), read with
       @ref Qore::get_scan_stats() "get_scan_stats()" and written to a file when the process exits; and
       @ref Qore::get_scan_waits() "get_scan_waits()" (or the C function \c qore_dump_scan_waits() from a
-      debugger) names, for each thread waiting in a scan, the object it waits for and the thread holding it
+      debugger) names, for each thread waiting in a scan, the object it waits for and the thread holding it,
+      whether it waits for that thread's scan to complete or for the lock to be released, how many passes the scan
+      has given up and how large a graph the last one had walked
     - fixed reference cycles closed only by values stored in a @ref Qore::Thread::Queue "Queue" or a
       @ref Qore::TreeMap "TreeMap" (for example a reference to an object's member pushed into a queue held by that
       object) being kept for the life of the process
@@ -5948,6 +5950,15 @@ while (*binary chunk = input.read(65536)) {
       unchanged graph run at the same time instead of aborting and restarting each other, while a scan that has
       to assign a recursive set still takes the r-section to itself.  Threads that repeatedly scan one shared
       graph without changing it went from no gain at all on eight threads to four times the throughput of one
+    - Fixed recursive reference scans of one large recursive set, started at different objects of the set by different
+      threads, never completing: a scan that found an object locked by another scan waited only until that scan
+      released the lock, which it also did each time it gave up a pass itself, so the scans kept waking each other,
+      starting over and colliding again, and the threads making them stopped; an HTTP server whose connections,
+      listeners and logger were in one set stopped answering requests this way.  A scan now waits until the scan it
+      collided with has completed and then uses that scan's result when it covers its own, while a collision with
+      anything other than a scan still waits for the lock's release, so no wait can deadlock.  32 threads scanning
+      a set of 2,000 objects from their own members went from 872 restarts per scan to 8, and from 150 seconds
+      to 7
     - Fixed every dereference of an object taking that object's r-section exclusively, which serialized all
       threads calling any method on a shared object -- whatever the object held and whatever the method did,
       since a method call releases a reference to the object when its frame is torn down.  An object that is

@@ -277,9 +277,10 @@ QoreForkStdMutex scan_wait_fork_handler(scan_wait_lock, QFLR_LEAF, "scan_waits")
 //! registers the current thread as waiting in a scan while it exists
 class ScanWaitHelper {
 public:
-    ScanWaitHelper(const RObject& root, const std::string& wait_on, int owner_tid) : tid(q_gettid()) {
+    ScanWaitHelper(const RObject& root, const std::string& wait_on, int owner_tid, bool scan_wait, uint64_t restarts,
+            uint64_t nodes) : tid(q_gettid()) {
         QoreScanWaitRecord rec{tid, root.getName() ? root.getName() : "<unknown>", wait_on, owner_tid,
-            q_clock_getmicros_monotonic()};
+            q_clock_getmicros_monotonic(), scan_wait, restarts, nodes};
         {
             std::lock_guard<std::mutex> lg(scan_wait_lock);
             if (!scan_waits) {
@@ -302,7 +303,239 @@ public:
 private:
     int tid;
 };
+
+//! The scan a thread is running, and what it waits for; see design/dgc.md, "A scan waits for the scan it collided
+//! with to complete"
+/** A scan that cannot take an rsection that another scan holds waits until that scan completes, not until it
+    releases the rsection: a scan releases every rsection it holds at each rollback too, and a scan woken by that
+    restarts beside the scan it collided with, so that scans of one graph from different roots that keep colliding
+    never complete.
+
+    Only the slot's thread writes scan and release_waiting; wait_tid and wait_scan are written and read under the
+    lock of scan_done_wait().  Zero-initialized static storage, like the hazard slots: a page is only touched once a
+    TID it holds a slot for has scanned.
+*/
+struct ScanSlot {
+    //! the scan the thread is running (RSetHelper::scan_id), or 0
+    std::atomic<uint64_t> scan{0};
+    //! true while the scan waits for an rsection to be released by something other than a scan
+    /** That holder can be waiting in turn for a thread that waits for this scan to complete - a thread that held a
+        write lock or an rsection before its own scan started - so the scans waiting for this one stop waiting and
+        start over, exactly as when every wait was for a release.
+    */
+    std::atomic<bool> release_waiting{false};
+    //! the number of threads waiting for the slot's scan to complete or to start waiting for a release
+    std::atomic<unsigned> waiters{0};
+    //! the thread whose scan this thread's scan waits for, when it waits for one to complete
+    int wait_tid = -1;
+    //! the scan it waits for, or 0
+    uint64_t wait_scan = 0;
+};
+
+ScanSlot scan_slots[MAX_QORE_THREADS];
+
+//! the sequence number of the last scan started; a scan's number is never reused
+std::atomic<uint64_t> scan_id_seq{0};
+
+//! the lock and condition of the threads waiting for scans to complete; only taken when a thread waits
+struct ScanDoneWait {
+    std::mutex lock;
+    std::condition_variable cond;
+};
+
+//! Returns the lock and condition, created once and never destroyed, as scans run during process exit
+ScanDoneWait& scan_done_wait() {
+    static ScanDoneWait* wait = new ScanDoneWait;
+    return *wait;
 }
+
+//! Returns the slot of a thread, or nullptr for a TID that has none
+/** TID 0 is never assigned to a thread: q_gettid() returns it for every thread whose thread data has been destroyed,
+    so it has no slot, as more than one thread can use it at once.
+*/
+ScanSlot* get_scan_slot(int tid) {
+    return tid > 0 && tid < MAX_QORE_THREADS ? &scan_slots[tid] : nullptr;
+}
+
+//! Wakes the threads waiting for the slot's scan, if any, after it has completed or started waiting for a release
+/** The state was stored before this, sequentially consistent, and a waiter announces itself in waiters before it
+    reads the state, so either the waiter sees the state or this sees the waiter.
+*/
+void scan_slot_changed(ScanSlot& slot) {
+    if (slot.waiters.load(std::memory_order_seq_cst)) {
+        ScanDoneWait& w = scan_done_wait();
+        std::lock_guard<std::mutex> l(w.lock);
+        w.cond.notify_all();
+    }
+}
+
+//! Marks the thread's scan as running while it exists, and as complete when it is destroyed or done() is called
+class ScanRunHelper {
+public:
+    ScanRunHelper(uint64_t id) : slot(get_scan_slot(q_gettid())) {
+        if (slot) {
+            // a scan started while another is running in the same thread restores it when it completes
+            prev = slot->scan.load(std::memory_order_relaxed);
+            slot->scan.store(id, std::memory_order_seq_cst);
+        }
+    }
+
+    ~ScanRunHelper() {
+        done();
+    }
+
+    //! Marks the scan as complete, and wakes the threads waiting for it
+    void done() {
+        if (!slot) {
+            return;
+        }
+        assert(!slot->release_waiting.load(std::memory_order_relaxed));
+        slot->scan.store(prev, std::memory_order_seq_cst);
+        scan_slot_changed(*slot);
+        slot = nullptr;
+    }
+
+private:
+    ScanSlot* slot;
+    uint64_t prev = 0;
+};
+
+//! Marks the thread's scan as waiting for a release while it exists, which ends the waits of the scans waiting for it
+class ScanReleaseWaitHelper {
+public:
+    ScanReleaseWaitHelper() : slot(get_scan_slot(q_gettid())) {
+        if (slot) {
+            slot->release_waiting.store(true, std::memory_order_seq_cst);
+            scan_slot_changed(*slot);
+        }
+    }
+
+    ~ScanReleaseWaitHelper() {
+        if (slot) {
+            slot->release_waiting.store(false, std::memory_order_seq_cst);
+        }
+    }
+
+private:
+    ScanSlot* slot;
+};
+
+//! Waits for another thread's scan to complete or to start waiting for a release
+/** @param owner_tid the thread running the scan
+    @param owner_scan the scan
+    @param id the waiting scan
+
+    @return false if the wait would close a cycle of scans waiting for each other, which can happen when scans collide
+    with each other at once, before either has rolled back; the scan then starts over at once instead, as every other
+    scan of the cycle waits and holds nothing.  True once the scan waited for has completed or started waiting for a
+    release.
+
+    Deadlock-free: a scan that waits holds no rsection, so no scan collides with it; every wait is registered under
+    the lock of scan_done_wait(), and one that would close a cycle is not made, so the waits form chains, each of
+    which ends in a running scan or in one waiting for a release, which ends the waits of the scans waiting for it.
+*/
+bool wait_scan_complete(int owner_tid, uint64_t owner_scan, uint64_t id) {
+    ScanSlot* target = get_scan_slot(owner_tid);
+    ScanSlot* self = get_scan_slot(q_gettid());
+    // only a scan with a number records it on an rsection or waits for a recorded one, and only a thread with a slot
+    // numbers its scans (see RSetHelper::RSetHelper() and qore_rsection_priv::setConflictIntern()), so both have one
+    assert(target && self);
+    if (!target || !self) {
+        return false;
+    }
+
+    ScanDoneWait& w = scan_done_wait();
+    std::unique_lock<std::mutex> l(w.lock);
+    // follow the scans that the scan waited for is waiting for; at most one per thread unless there is a cycle
+    {
+        int tid = owner_tid;
+        uint64_t scan = owner_scan;
+        for (int steps = 0; steps < MAX_QORE_THREADS; ++steps) {
+            if (scan == id) {
+                return false;
+            }
+            const ScanSlot& s = scan_slots[tid];
+            if (s.scan.load(std::memory_order_seq_cst) != scan || !s.wait_scan) {
+                break;
+            }
+            tid = s.wait_tid;
+            scan = s.wait_scan;
+        }
+    }
+
+    self->wait_tid = owner_tid;
+    self->wait_scan = owner_scan;
+    target->waiters.fetch_add(1, std::memory_order_seq_cst);
+    while (target->scan.load(std::memory_order_seq_cst) == owner_scan
+        && !target->release_waiting.load(std::memory_order_seq_cst)) {
+        w.cond.wait(l);
+    }
+    target->waiters.fetch_sub(1, std::memory_order_relaxed);
+    self->wait_tid = -1;
+    self->wait_scan = 0;
+    return true;
+}
+
+//! Counts a scan in progress at its root while it exists; see RObject::scan_awaiting
+class ScanAwaitHelper {
+public:
+    ScanAwaitHelper(RObject& obj) : obj(obj) {
+        obj.scan_awaiting.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    ~ScanAwaitHelper() {
+        obj.scan_awaiting.fetch_sub(1, std::memory_order_relaxed);
+    }
+
+private:
+    RObject& obj;
+};
+}
+
+// a thread makes one scan at a time; see RObject::scan_awaiting
+static_assert(MAX_QORE_THREADS < 65536, "RObject::scan_awaiting cannot count a wait by every thread");
+
+#ifdef DEBUG
+bool q_dbg_wait_scan_complete(const std::vector<QoreDbgScanSlot>& slots, int tid, uint64_t scan, uint64_t self) {
+    ScanSlot* own = get_scan_slot(q_gettid());
+    assert(own && !own->scan.load(std::memory_order_relaxed));
+    // restores every slot used, also if the wait throws
+    auto restore = [&]() {
+        ScanDoneWait& w = scan_done_wait();
+        std::lock_guard<std::mutex> l(w.lock);
+        for (const QoreDbgScanSlot& s : slots) {
+            ScanSlot& fs = scan_slots[s.tid];
+            fs.scan.store(0, std::memory_order_relaxed);
+            fs.release_waiting.store(false, std::memory_order_relaxed);
+            fs.wait_tid = -1;
+            fs.wait_scan = 0;
+        }
+        own->scan.store(0, std::memory_order_relaxed);
+    };
+    {
+        ScanDoneWait& w = scan_done_wait();
+        std::lock_guard<std::mutex> l(w.lock);
+        for (const QoreDbgScanSlot& s : slots) {
+            assert(get_scan_slot(s.tid) && s.tid != q_gettid());
+            ScanSlot& fs = scan_slots[s.tid];
+            fs.scan.store(s.scan, std::memory_order_relaxed);
+            fs.release_waiting.store(s.release_waiting, std::memory_order_relaxed);
+            fs.wait_tid = s.wait_tid;
+            fs.wait_scan = s.wait_scan;
+        }
+        own->scan.store(self, std::memory_order_relaxed);
+    }
+    bool rv;
+    try {
+        rv = wait_scan_complete(tid, scan, self);
+    } catch (...) {
+        restore();
+        throw;
+    }
+    restore();
+    return rv;
+}
+#endif
 
 bool qore_scan_accounting_enabled() {
     return scan_acct_on;
@@ -361,8 +594,10 @@ extern "C" DLLEXPORT void qore_dump_scan_waits() {
     if (scan_waits) {
         for (const auto& i : *scan_waits) {
             const QoreScanWaitRecord& r = i.second;
-            fprintf(stderr, "  TID %d: scan of %s waits for %s held by TID %d for %.3f ms\n", r.tid, r.root.c_str(),
-                r.wait_on.c_str(), r.owner_tid, (now - r.since_us) / 1000.0);
+            fprintf(stderr, "  TID %d: scan of %s waits for %s held by TID %d for %.3f ms (%s; restarts: %llu, "
+                "nodes: %llu)\n", r.tid, r.root.c_str(), r.wait_on.c_str(), r.owner_tid, (now - r.since_us) / 1000.0,
+                r.scan_wait ? "until its scan completes" : "until it is released",
+                static_cast<unsigned long long>(r.restarts), static_cast<unsigned long long>(r.nodes));
         }
     }
 }
@@ -723,6 +958,7 @@ std::atomic<RObject::dbg_scan_contended_t> RObject::dbg_scan_contended{nullptr};
 std::atomic<RObject::dbg_deref_decides_t> RObject::dbg_deref_decides{nullptr};
 std::atomic<RObject::dbg_before_fast_release_t> RObject::dbg_before_fast_release{nullptr};
 std::atomic<RObject::dbg_hazard_wait_t> RObject::dbg_hazard_wait{nullptr};
+std::atomic<RSetHelper::dbg_root_locked_t> RSetHelper::dbg_root_locked{nullptr};
 #endif
 
 namespace {
@@ -1786,8 +2022,8 @@ int RSetHelper::getNode(void* ptr, NodeKind kind, bool& lock_error) {
     // scans; a pass that has to change a recursive set takes it to itself
     bool shared = false;
     int rc = exclusive
-        ? obj.rml.tryRSectionLockNotifyWaitRead(&notifier)
-        : obj.rml.tryRSectionLockSharedNotifyWaitRead(&notifier, shared);
+        ? obj.rml.tryRSectionLockNotifyWaitRead(&notifier, scan_id)
+        : obj.rml.tryRSectionLockSharedNotifyWaitRead(&notifier, shared, scan_id);
     if (rc) {
         printd(QRO_LVL, "RSetHelper::getNode() obj %p '%s' cannot enter rsection: rsection tid: %d\n", &obj,
             obj.getName(), obj.rml.rSectionTid());
@@ -1924,6 +2160,12 @@ bool RSetHelper::scan(RObject& root) {
     root_region = root.getRegionRef(root_region_comp);
     // before any edge is followed; see RSet::edgesUnchangedSinceScan()
     scan_epoch = RSet::untracked_edge_epoch.load(std::memory_order_seq_cst);
+
+#ifdef DEBUG
+    if (dbg_root_locked_t hook = dbg_root_locked.load(std::memory_order_acquire)) {
+        hook(root);
+    }
+#endif
 
     // Tarjan's strongly connected components algorithm with an explicit stack, as the graph can be deeper than the
     // thread's stack allows
@@ -2180,7 +2422,7 @@ bool RSetHelper::removeInvalidate(RSet* ors, int tid) {
             if ((*ri)->rml.hasRSectionLock(tid))
                 continue;
 
-            if ((*ri)->rml.tryRSectionLockNotifyWaitRead(&notifier)) {
+            if ((*ri)->rml.tryRSectionLockNotifyWaitRead(&notifier, scan_id)) {
                 printd(QRO_LVL, "RSetHelper::removeInvalidate() obj %p '%s' cannot enter rsection: tid: %d\n", *ri,
                     (*ri)->getName(), (*ri)->rml.rSectionTid());
 
@@ -2276,6 +2518,11 @@ RSetHelper::RSetHelper(RObject& obj, ExceptionSink* xsink, const std::vector<con
     // that from the last scan made here avoids walking the graph twice when it does have to change a set
     exclusive = obj.scan_wrote.load(std::memory_order_relaxed);
 
+    // A scan that confirms the set this one would walk advances this object's scan generation from now on, so that
+    // this one does not walk the set again once it has waited; counted before the generation is sampled, as a commit
+    // made after the sample is one that this scan can use.  See RObject::scan_awaiting.
+    ScanAwaitHelper await(obj);
+
     RScanHelper rsh(obj);
 
     // The scan lock serializes scans of this object, so threads that arrive while a scan is in flight
@@ -2294,25 +2541,49 @@ RSetHelper::RSetHelper(RObject& obj, ExceptionSink* xsink, const std::vector<con
         return;
     }
 
+    // the rsections this scan takes exclusively record it, so that a scan colliding with it waits for it to complete;
+    // a thread with no scan slot cannot be waited for, nor wait for a scan, so its scan has no number, and its
+    // collisions, and those of the scans colliding with it, are waited for until the lock is released
+    if (get_scan_slot(q_gettid())) {
+        scan_id = scan_id_seq.fetch_add(1, std::memory_order_relaxed) + 1;
+    }
+    ScanRunHelper run(scan_id);
+
     while (true) {
         if (scan(obj)) {
-            // The retry below only makes progress because notifier.wait() blocks until the owner of the lock
-            // this pass could not take releases it.  A pass abandoned without registering that notification
-            // has nothing to wait for, so this loop would spin at 100% CPU forever, walking the graph from
-            // scratch every time, producing no output and never completing - a shape that is indistinguishable
-            // from a slow compile from outside the process.
+            // The retry below only makes progress because it waits until the scan this pass collided with
+            // completes, or until the owner of the lock this pass could not take releases it.  A pass abandoned
+            // without registering either has nothing to wait for, so this loop would spin at 100% CPU forever,
+            // walking the graph from scratch every time, producing no output and never completing - a shape that
+            // is indistinguishable from a slow compile from outside the process.
             assert(retry_notified);
 #ifdef DEBUG
             ++rset_restart_count;
 #endif
+            ++abandoned;
+            uint64_t pass_nodes = nodes.size();
             rollback();
             sah.restarted();
             // wait for foreign transaction to finish if necessary; the wait is registered while it lasts, so that a
             // thread parked here can be traced to the object and the thread it waits for
             {
                 uint64_t wait_start = sah.enabled() ? scan_acct_now_ns() : 0;
-                ScanWaitHelper swh(obj, wait_on, notifier.owner_tid);
-                notifier.wait();
+                bool scan_wait = notifier.owner_scan != 0;
+                ScanWaitHelper swh(obj, wait_on, notifier.owner_tid, scan_wait, abandoned, pass_nodes);
+                if (scan_wait) {
+                    // The pass collided with another scan: wait until that scan has completed, not until it
+                    // releases the rsection, which it also does when it rolls back to wait in turn.  A scan
+                    // that waited for the release restarted beside the scan it collided with, and scans of one
+                    // graph from different roots that kept doing that never completed.  The wait is not made
+                    // when it would close a cycle; the scans of the cycle wait and hold nothing, so this one
+                    // starts over at once.
+                    wait_scan_complete(notifier.owner_tid, notifier.owner_scan, scan_id);
+                } else {
+                    // The lock is held by something other than a scan, which can be waiting for a thread that
+                    // waits for this scan, so the scans waiting for this one stop waiting meanwhile.
+                    ScanReleaseWaitHelper rwh;
+                    notifier.wait();
+                }
                 if (sah.enabled()) {
                     sah.addWait(scan_acct_now_ns() - wait_start);
                 }
@@ -2348,6 +2619,10 @@ RSetHelper::RSetHelper(RObject& obj, ExceptionSink* xsink, const std::vector<con
 
     // record what this scan had to do, so the next scan started here picks the mode that fits
     obj.scan_wrote.store(changed, std::memory_order_relaxed);
+
+    // the scans waiting for this one can use its result now; they are released before the wait below, which is for
+    // releases made by other threads, one of which could be waiting for this scan
+    run.done();
 
     // the lock-free releases of objects that this commit put in a set, which read no set, land before any verdict is
     // made with their counts
@@ -2619,7 +2894,8 @@ void RSetHelper::commit() {
     if (!changed) {
         // The scan found every recursive set it would have assigned already in place, so there is nothing to
         // invalidate, nothing to create and nothing to replace: confirm each object and release it.  Only the
-        // object the scan started at advances its generation; see RObject::confirmRSet().
+        // object the scan started at, and each object at which a scan waits for another thread, advances its
+        // generation; see RObject::confirmRSet() and RObject::scan_awaiting.
         assert(tr_invalidate.empty());
         assert(tr_out.empty());
         for (const ScanNode& n : nodes) {
@@ -2628,7 +2904,8 @@ void RSetHelper::commit() {
             }
             RObject* obj = static_cast<RObject*>(n.ptr);
             assert(qore_var_rwlock_priv::get(obj->rml)->write_tid >= -1);
-            obj->confirmRSet(obj == root_obj && !contended, n.edge_gen, n.remove_gen);
+            obj->confirmRSet((obj == root_obj || obj->scan_awaiting.load(std::memory_order_relaxed)) && !contended,
+                n.edge_gen, n.remove_gen);
             RSet* rs = obj->rset.load(std::memory_order_relaxed);
             if (rs) {
                 rs->setScanEpoch(scan_epoch);

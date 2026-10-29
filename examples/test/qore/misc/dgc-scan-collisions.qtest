@@ -1,0 +1,246 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class DgcScanCollisionsTest
+
+#! Counts destructor calls so the test can show that the graph is collected
+class Counted {
+    public {
+        static int dc = 0;
+    }
+
+    destructor() {
+        ++Counted::dc;
+    }
+}
+
+#! The members of one cycle, each its own class so that a scan can be held by the class of its root
+class CycleX inherits Counted {
+    public {
+        any next;
+    }
+}
+
+class CycleY inherits Counted {
+    public {
+        any next;
+    }
+}
+
+class CycleZ inherits Counted {
+    public {
+        any next;
+    }
+}
+
+#! A member of a larger cycle that every thread changes from its own member
+class Ring inherits Counted {
+    public {
+        any next;
+        any data;
+    }
+}
+
+#! Scans of one recursive set from different roots
+/** A scan that cannot take an rsection that another scan holds waits until that scan has completed.  It used to
+    wait only until the rsection was released, which the other scan also does when it rolls back to wait in turn:
+    scans of one large set from different roots then kept waking each other, restarting and colliding again, and
+    none of them completed.  A qorus-core HTTP server stopped answering requests this way (issue #5561).
+*/
+public class DgcScanCollisionsTest inherits QUnit::Test {
+    public {
+        const RingSize = 64;
+        const Threads = 16;
+        const Iterations = 100;
+    }
+
+    private {
+        Counter cnt();
+        list<auto> ring_holder = ();
+    }
+
+    constructor() : Test("DGC scan collisions", "1.0", \ARGV) {
+        addTestCase("a scan waits for the scan it collided with to complete", \chainTest());
+        addTestCase("scans from every member of one set complete", \ringTest());
+        set_return_value(main());
+    }
+
+    #! Skips the test case in a build without the debug hooks
+    private checkHooks() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the hooks that start and hold scans are only in debug builds");
+        }
+    }
+
+    #! Returns a cycle X -> Z -> Y -> X held only by a list, so that a scan of a member is not deferred
+    private list<auto> makeCycle() {
+        list<auto> l;
+        {
+            CycleX x();
+            CycleY y();
+            CycleZ z();
+            y.next = x;
+            x.next = z;
+            z.next = y;
+            l = (x, y, z);
+        }
+        return l;
+    }
+
+    #! Three scans of one set from different roots, where the second waits for the first, which waits for the third
+    /** Scan A (root X) holds X; scan B (root Y) reaches X and waits for A; A then reaches Z, which scan C (root Z)
+        holds, and waits for C.  A releases X when it rolls back, which used to wake B, so that B restarted and
+        collided with C in turn.  Now B waits until A has completed; when C completes, A finds its set current and
+        skips its scan, and so does B.  The second round finds the set in place, so C only confirms it.
+    */
+    private chainTest() {
+        checkHooks();
+        list<auto> l = makeCycle();
+        for (int round = 0; round < 2; ++round) {
+            chainRound(l, round);
+        }
+
+        Counted::dc = 0;
+        l = ();
+        assertEq(3, Counted::dc, "the cycle is collected once the list is released");
+    }
+
+    private chainRound(list<auto> l, int round) {
+        string prefix = sprintf("round %d: ", round);
+        Counter c_held(1);
+        Counter c_release(1);
+        Counter a_held(1);
+        Counter a_release(1);
+        # the scans running
+        Counter done();
+        hash<auto> results;
+        Mutex m();
+
+        # a failed assertion releases every hold and waits for the scans, so that no thread is left holding a scan
+        on_exit {
+            release(c_release);
+            release(a_release);
+            done.waitForZero();
+        }
+
+        code scan = sub (string name, int i) {
+            on_exit done.dec();
+            hash<auto> h = call_function("dbg_rset_scan", l, i, True);
+            m.lock();
+            on_exit m.unlock();
+            results{name} = h + {"tid": gettid()};
+        };
+
+        # C holds its root, Z
+        call_function("dbg_hold_scan", "CycleZ", c_held, c_release);
+        done.inc();
+        background scan("C", 2);
+        c_held.waitForZero();
+
+        # A holds its root, X
+        call_function("dbg_hold_scan", "CycleX", a_held, a_release);
+        done.inc();
+        int a_tid = background scan("A", 0);
+        a_held.waitForZero();
+
+        # B reaches X and waits for A
+        Counter b_waits(1);
+        call_function("dbg_scan_wait_notify", b_waits);
+        done.inc();
+        int b_tid = background scan("B", 1);
+        b_waits.waitForZero();
+        *hash<ScanWaitInfo> b = getWait(b_tid);
+        assertEq("CycleX", b.wait_on, prefix + "B waits for X");
+        assertEq(a_tid, b.owner_tid, prefix + "B waits for A's thread");
+        assertEq(1, b.restarts, prefix + "B has given up one pass");
+        bool b_scan_wait = b.scan_wait;
+
+        # A reaches Z, which C holds, and waits for C: A releases X, but B keeps waiting for A
+        Counter a_waits(1);
+        call_function("dbg_scan_wait_notify", a_waits);
+        a_release.dec();
+        a_waits.waitForZero();
+        *hash<ScanWaitInfo> a = getWait(a_tid);
+        assertEq("CycleZ", a.wait_on, prefix + "A waits for Z");
+        b = getWait(b_tid);
+        assertEq("CycleX", b.wait_on, prefix + "B still waits for A after A rolled back");
+        assertEq(1, b.restarts, prefix + "B did not restart when A rolled back");
+        assertTrue(b_scan_wait, prefix + "B waits for A's scan to complete");
+        assertTrue(a.scan_wait, prefix + "A waits for C's scan to complete");
+
+        c_release.dec();
+        done.waitForZero();
+
+        assertFalse(results.C.skipped, prefix + "C made its scan");
+        assertEq(0, results.C.restarts, prefix + "C collided with no other scan");
+        assertTrue(results.A.skipped, prefix + "A took C's result as current");
+        assertEq(1, results.A.restarts, prefix + "A gave up one pass");
+        assertTrue(results.B.skipped, prefix + "B took the result as current");
+        assertEq(1, results.B.restarts, prefix + "B gave up one pass");
+    }
+
+    #! Lets a held scan go on, unless it has already been released
+    private static release(Counter c) {
+        if (c.getCount()) {
+            c.dec();
+        }
+    }
+
+    #! Returns the scan wait of a thread, if it is waiting
+    private *hash<ScanWaitInfo> getWait(int tid) {
+        foreach hash<ScanWaitInfo> i in (get_scan_waits()) {
+            if (i.tid == tid) {
+                return i;
+            }
+        }
+    }
+
+    #! Changes edges inside the ring from one member and releases the ring's members from scans of that member
+    private ringWorker(int k) {
+        on_exit cnt.dec();
+        for (int i = 0; i < Iterations; ++i) {
+            int j = (k + i) % RingSize;
+            # adding and removing an edge inside the set makes each write's scan change the set
+            ring_holder[0][j].data = ring_holder[0][(j + RingSize / 2) % RingSize];
+            ring_holder[0][j].data = NOTHING;
+            hash<auto> h = call_function("dbg_rset_scan", ring_holder[0], j, True);
+            assertFalse(h.deferred, "a ring member held only by the list has no real reference");
+        }
+    }
+
+    #! Every thread changes and scans the set from its own member
+    /** Every scan has to change the set, so every pass takes the rsections exclusively.  The test completes only
+        if the scans complete.
+    */
+    private ringTest() {
+        checkHooks();
+        Counted::dc = 0;
+        {
+            list<auto> ring = ();
+            for (int i = 0; i < RingSize; ++i) {
+                ring += new Ring();
+            }
+            for (int i = 0; i < RingSize; ++i) {
+                ring[i].next = ring[(i + 1) % RingSize];
+            }
+            ring_holder = (ring,);
+        }
+
+        for (int i = 0; i < Threads; ++i) {
+            cnt.inc();
+            background ringWorker(i * RingSize / Threads);
+        }
+        # scans that never complete show up here as a test that never returns
+        cnt.waitForZero();
+
+        assertEq(0, Counted::dc, "the ring is alive while it is referenced");
+        ring_holder = ();
+        assertEq(RingSize, Counted::dc, "the ring is collected once its last reference goes");
+    }
+}

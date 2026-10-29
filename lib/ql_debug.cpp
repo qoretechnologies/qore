@@ -1419,6 +1419,29 @@ static void ut_dgc_scan_generation(UnitTestCounters& c) {
     UT_ASSERT(c, obj.rcycle != gen2, "the second committed scan advances the generation again");
 }
 
+//! A scan that collided with another scan waits for it to complete, unless the wait would close a cycle
+/** Two scans can each find an rsection the other holds before either has rolled back; each would then wait for the
+    other to complete, and neither would.  See wait_scan_complete() in lib/RSet.cpp and design/dgc.md, "A scan waits
+    for the scan it collided with to complete".  The other threads' scans are faked in TIDs that no thread uses.
+*/
+static void ut_dgc_scan_wait_cycle(UnitTestCounters& c) {
+    const int tid = q_gettid();
+    const int f1 = MAX_QORE_THREADS - 1;
+    const int f2 = MAX_QORE_THREADS - 2;
+    const uint64_t self = 1;
+
+    UT_ASSERT(c, q_dbg_wait_scan_complete({{f1, 0, -1, 0, false}}, f1, 100, self),
+        "waiting for a scan that has already completed ends at once");
+    UT_ASSERT(c, q_dbg_wait_scan_complete({{f1, 100, -1, 0, true}}, f1, 100, self),
+        "waiting for a scan that waits for a release ends at once, as its holder can be waiting for this thread");
+    UT_ASSERT(c, q_dbg_wait_scan_complete({{f1, 101, -1, 0, false}}, f1, 100, self),
+        "waiting for a scan ends once its thread runs another scan");
+    UT_ASSERT(c, !q_dbg_wait_scan_complete({{f1, 100, tid, self, false}}, f1, 100, self),
+        "a scan does not wait for a scan that waits for it");
+    UT_ASSERT(c, !q_dbg_wait_scan_complete({{f1, 100, f2, 200, false}, {f2, 200, tid, self, false}}, f1, 100, self),
+        "a scan does not wait for a scan that waits for it through another scan");
+}
+
 //! Unregistering a file descriptor that has been closed - however it has been recycled since
 /** The async I/O controller unregisters an fd it may no longer own: a socket can be closed by
     another thread between the registration and the release, which is why remove() treats EBADF (the
@@ -12699,6 +12722,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_qorefile_open_sandbox_policy(c);
     ut_rsection_try_notify_does_not_block_on_writer(c);
     ut_dgc_scan_generation(c);
+    ut_dgc_scan_wait_cycle(c);
     ut_debug_skips_foreign_thread_callbacks(c, rc.getProgram());
     return make_unit_test_result(c, xsink);
 }
@@ -12715,6 +12739,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_qorefile_open_sandbox_policy(c);
     ut_rsection_try_notify_does_not_block_on_writer(c);
     ut_dgc_scan_generation(c);
+    ut_dgc_scan_wait_cycle(c);
     ut_debug_skips_foreign_thread_callbacks(c, rc.getProgram());
     ut_event_loop_remove_recycled_fd(c);
     ut_event_loop_sub_ms_timer_wakeups(c);
@@ -13345,6 +13370,115 @@ static QoreValue f_dbg_hold_object_lock(const QoreListNode* params, RuntimeConfi
     }
     release->waitForZero(xsink);
     return QoreValue();
+}
+
+namespace {
+//! an armed hold of dbg_hold_scan()
+struct ScanRootHold {
+    std::string cls;
+    Counter* held;
+    Counter* release;
+};
+
+std::mutex scan_root_hold_lock;
+std::vector<ScanRootHold> scan_root_holds;
+
+//! runs in a scan once it holds the rsection of its root; holds the first pass whose root matches an armed hold
+void dbg_scan_root_hold_hook(RObject& root) {
+    const char* name = root.getName();
+    if (!name) {
+        return;
+    }
+    ExceptionSink xsink;
+    ReferenceHolder<Counter> held(&xsink);
+    ReferenceHolder<Counter> release(&xsink);
+    {
+        std::lock_guard<std::mutex> l(scan_root_hold_lock);
+        for (auto i = scan_root_holds.begin(), e = scan_root_holds.end(); i != e; ++i) {
+            if (i->cls == name) {
+                held = i->held;
+                release = i->release;
+                scan_root_holds.erase(i);
+                break;
+            }
+        }
+    }
+    if (!held) {
+        return;
+    }
+    held->dec(&xsink);
+    if (!xsink) {
+        release->waitForZero(&xsink);
+    }
+}
+}
+
+//! holds the next pass of a recursive-reference scan whose root is an object of a class, with the root locked
+/** The pass holds the rsection of its root until \a release reaches zero, so that another scan reaching the root
+    collides with it; tests use this to make scans collide deterministically.  Each call arms one hold, which is used
+    once.
+
+    @param cls the class name of the root
+    @param held decremented once the pass holds its root
+    @param release the pass goes on when this Counter reaches zero
+*/
+static QoreValue f_dbg_hold_scan(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreStringNodeValueHelper cls(get_param_value(params, 0));
+    ReferenceHolder<Counter> held(get_counter_arg(params, 1, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<Counter> release(get_counter_arg(params, 2, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    {
+        std::lock_guard<std::mutex> l(scan_root_hold_lock);
+        scan_root_holds.push_back({cls->c_str(), *held, *release});
+        // the armed hold owns the references now
+        held.release();
+        release.release();
+    }
+    // the hook stays installed; it does nothing while no hold is armed
+    RSetHelper::dbg_root_locked.store(dbg_scan_root_hold_hook, std::memory_order_release);
+    return QoreValue();
+}
+
+//! scans the graph reachable from an object in a list, as a dereference that has to rescan does
+/** The object is taken from the list so that the call holds no real reference to it, which would defer the scan.
+
+    @param l the list
+    @param i the index of the object in the list
+    @param exclusive if true, the scan takes the rsections it needs exclusively from its first pass, as a scan that
+    changes a recursive set does
+
+    @return a hash: \c skipped: another thread's scan made this one unnecessary; \c deferred: the object has real
+    references; \c restarts: the passes the scan abandoned on a lock conflict
+*/
+static QoreValue f_dbg_rset_scan(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreListNode* l = get_param_value(params, 0).get<const QoreListNode>();
+    int64 i = get_param_value(params, 1).getAsBigInt();
+    QoreValue v = l->retrieveEntry(i);
+    if (v.getType() != NT_OBJECT) {
+        xsink->raiseException("DBG-RSET-SCAN-ERROR", "element %lld of the list is not an object", i);
+        return QoreValue();
+    }
+    qore_object_private* o = qore_object_private::get(*v.get<QoreObject>());
+    if (get_param_value(params, 2).getAsBool()) {
+        o->scan_wrote.store(true, std::memory_order_relaxed);
+    }
+    int64 restarts = q_get_rset_restart_count();
+    bool skipped, deferred;
+    {
+        RSetHelper rsh(*o, xsink);
+        skipped = rsh.skipped();
+        deferred = rsh.deferred();
+    }
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("skipped", skipped, xsink);
+    rv->setKeyValue("deferred", deferred, xsink);
+    rv->setKeyValue("restarts", q_get_rset_restart_count() - restarts, xsink);
+    return rv.release();
 }
 
 namespace {
@@ -14710,6 +14844,12 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_hold_object_lock", f_dbg_hold_object_lock, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 3, objectTypeInfo, QORE_PARAM_NO_ARG, "obj", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
         "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "release");
+    qns.addBuiltinVariant("dbg_hold_scan", f_dbg_hold_scan, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "cls", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
+        "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "release");
+    qns.addBuiltinVariant("dbg_rset_scan", f_dbg_rset_scan, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        hashTypeInfo, 3, listTypeInfo, QORE_PARAM_NO_ARG, "l", bigIntTypeInfo, QORE_PARAM_NO_ARG, "i",
+        boolTypeInfo, QORE_PARAM_NO_ARG, "exclusive");
     qns.addBuiltinVariant("dbg_hold_constant_store", f_dbg_hold_constant_store,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "name",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,

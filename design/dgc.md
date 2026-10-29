@@ -581,14 +581,16 @@ not have to be locked for an invalidation that will not happen. When *no* compon
 nothing to invalidate, create or replace, so it confirms and releases each object in one pass instead of the
 four it makes when it has sets to assign.
 
-**Only the object a scan started at advances its scan generation when nothing changed.** `RScanHelper` samples
-the generation of the scan's own root and of no other object, so that is the only one a waiting scan reads. A
-scan that changed something still advances the generation of every object it entered — that is what stops the
-scans waiting on those objects from repeating work and making every scan in flight restart, and such a scan
-holds the r-section exclusively anyway. A scan that changed nothing conflicts with no other scan, so writing
-the generation of every object of a shared graph, in every scan, would buy only the occasional avoided rescan
-while costing a contended cache line per object per scan. That write was 21% of an eight-thread read-only
-scan before it was removed.
+**Only the object a scan started at, and the objects at which other scans are in progress, advance their scan
+generation when nothing changed.** `RScanHelper` samples the generation of the scan's own root and of no other
+object, so that is the only one a waiting scan reads. A scan that changed something still advances the generation
+of every object it entered — that is what stops the scans waiting on those objects from repeating work and making
+every scan in flight restart, and such a scan holds the r-section exclusively anyway. Writing the generation of
+every object of a shared graph, in every scan that changed nothing, would cost a contended cache line per object
+per scan; that write was 21% of an eight-thread read-only scan before it was removed. The objects at which a scan
+is in progress (`RObject::scan_awaiting`, a relaxed load of a line the confirmation writes anyway) are the ones
+whose scans would otherwise walk the same set again after waiting; see "A scan waits for the scan it collided with
+to complete".
 
 Debug builds count the recursive sets that scans have created (`dbg_get_rset_create_count()`), and
 `examples/test/qore/misc/dgc-unchanged-sets.qtest` uses it to check that a second scan of an unchanged graph
@@ -607,16 +609,18 @@ is a try-lock:
 - Pattern B private-data scanners (below) use `trylock()` and skip a contended container, making the scan due
   again; see "A container that a scan finds locked".
 
-On a conflict the scan **rolls back** — releasing every r-section it holds — waits on the notifier until the
-conflicting owner releases, and starts over. Because a waiting scan holds nothing, scans can never wait on each
-other, and no lock ordering has to be maintained across a graph whose shape is only discovered as it is walked.
+On a conflict the scan **rolls back** — releasing every r-section it holds — waits, and starts over. It waits until
+the scan it collided with has completed, or, when the conflicting owner is not a scan, until that owner releases
+the lock (see "A scan waits for the scan it collided with to complete"). Because a waiting scan holds nothing, no
+scan can collide with it, and no lock ordering has to be maintained across a graph whose shape is only discovered as
+it is walked.
 
 Two fields on `RObject` make the restart loop terminate:
 
 | Field | Role |
 |---|---|
 | `rscan` | The scan lock: the TID of the thread scanning this object. One scan per object at a time; other threads wait for it. |
-| `rcycle` | The scan generation: incremented by `setRSet()` for every object a scan commits. |
+| `rcycle` | The scan generation: incremented by `setRSet()` for every object a scan commits, and by `confirmRSet()` for the root of a scan that changed nothing and for every object it entered at which another scan is in progress (`scan_awaiting`). |
 
 `RScanHelper` samples `rcycle` **before** waiting for `rscan`, and the sampled value is compared with the
 current one after **both** waits — after acquiring the scan lock, and after waiting for a conflicting
@@ -679,14 +683,15 @@ decision to make (`RObject::dbg_deref_decides`).
 ### Every abandoned pass registers the notification its retry waits on
 
 The restart loop in `RSetHelper::RSetHelper()` is deliberately unbounded: a scan that loses a race has to keep
-trying until it wins. What makes it terminate is not a retry limit but `RNotifier::wait()`, which blocks until
-the owner of the lock the pass could not take releases it. Every path that abandons a pass therefore goes
-through `tryRSectionLockNotifyWaitRead()` or `tryRSectionLockSharedNotifyWaitRead()`, which register that
-notification before returning `-1`: `RSetHelper::getNode()` when it cannot enter an object's r-section, and
-`RSetHelper::removeInvalidate()` when it cannot lock a member of a set it has to replace.
+trying until it wins. What makes it terminate is not a retry limit but the wait before each retry: for the scan
+the pass collided with to complete, or `RNotifier::wait()`, which blocks until the owner of the lock the pass
+could not take releases it. Every path that abandons a pass therefore goes through
+`tryRSectionLockNotifyWaitRead()` or `tryRSectionLockSharedNotifyWaitRead()`, which record the scan holding the
+lock or register that notification before returning `-1`: `RSetHelper::getNode()` when it cannot enter an object's
+r-section, and `RSetHelper::removeInvalidate()` when it cannot lock a member of a set it has to replace.
 
-**A pass must never ask to be retried without registering a notification.** Such a retry has nothing to wait
-for, so `notifier.wait()` returns at once and the loop becomes a busy spin: the graph is walked from scratch,
+**A pass must never ask to be retried without registering a notification or recording the scan it collided
+with.** Such a retry has nothing to wait for, so `notifier.wait()` returns at once and the loop becomes a busy spin: the graph is walked from scratch,
 abandoned at the same point, and walked again, at 100% CPU, forever. Nothing is written and no lock is held,
 so from outside the process this is indistinguishable from a slow compile or a long-running script — a single
 `qcc` invocation in this state consumed seven hours of CPU before it was noticed. `RSetHelper::retry_notified`
@@ -694,6 +699,68 @@ records that the notification was registered — it is not read back from the no
 release the lock and clear the notification before the constructor looks at it — and the constructor asserts
 it on every retry, so a new abandon path that forgets the notification fails immediately in a debug build
 instead of hanging.
+
+### A scan waits for the scan it collided with to complete
+
+A scan that cannot take an r-section that **another scan** holds waits until that scan has completed — committed,
+or found its work done by another — not until it releases the r-section. A scan releases every r-section it holds
+at each rollback too, so a scan that waited for the release woke whenever the scan it collided with gave up a pass,
+restarted beside it, and collided with it or with a third scan again. Scans of one large recursive set from
+different roots kept doing that without end: no scan completed, `RScanHelper::needScan()` never found a
+generation that had moved, and every thread doing the work that made the scans sat in `RSetHelper::RSetHelper()`.
+A qorus-core process whose HTTP server connections, listeners and logger formed one set stopped answering requests
+this way (issue #5561). 32 threads changing and scanning one set of 2,000 objects from their own members restarted
+872 times per scan and took 150 s; with the scans waiting for each other to complete, they restarted 8 times per
+scan, mostly for dereferences deciding verdicts, and took 7 s.
+
+How it works:
+
+- A scan has a sequence number (`RSetHelper::scan_id`), and an r-section it takes exclusively records it
+  (`qore_rsection_priv::rs_scan`) until the scan releases it. An r-section held for anything else — a dereference
+  deciding a verdict (`upgradeReadToRSection()`), or one held by a thread before its scan started, including the
+  r-section granted on the thread's own write lock — records none.
+- A pass that collides with a recorded scan (`setConflictIntern()`) registers no notification: it records the
+  scan in `RNotifier::owner_scan`, rolls back and waits in `wait_scan_complete()` (`lib/RSet.cpp`) until the
+  scan's thread runs another scan or none (`ScanSlot::scan`, one slot per TID like the hazard slots).
+- A collision with anything else, including a write lock or an r-section waited for by a dereference
+  (`rsection_waiting`), waits for the release, as before.
+
+**The scans that wait for a scan stop waiting while it waits for a release.** The holder of a lock that is not a
+scan's can be a thread waiting for this scan — a thread that held a write lock or an r-section before its own scan
+started, and whose scan collided with this one — so a scan waiting for a release sets `ScanSlot::release_waiting`,
+and the scans waiting for it start over, exactly as when every wait was for a release.
+
+**A wait that would close a cycle is not made.** Two scans can each find an r-section the other holds before either
+has rolled back; each would then wait for the other to complete. Every wait for a scan is registered in the slots
+under one lock, and `wait_scan_complete()` first follows the scans that the scan it would wait for is waiting for:
+if they lead back to the waiting scan, it starts over at once. The scans of the cycle are all waiting and hold
+nothing, so it cannot collide with them.
+
+**Why this cannot deadlock.** A waiting scan holds no r-section (only its own scan lock, `RObject::rscan`, as
+before), so no scan collides with it. A wait for a scan is only registered for a scan that held an r-section at that
+moment, so was running a pass; the waits form chains, no chain closes on itself, and each ends in a running scan,
+which completes, waits for another running scan, or waits for a release — which ends the waits of the scans waiting
+for it. Every wait that involves a lock other than a scan's is a wait for a release, as it always was. A scan
+releases the scans waiting for it as soon as it has committed, before `waitHazards()`, which waits for other
+threads' lock-free releases.
+
+**A scan that waited takes the result of the scan it waited for when that result covers it.** A scan that
+changes a set advances the generation of every object it entered, so the scans in progress at those objects find
+their sets current (`needScan()`). A scan that changes nothing used to advance only its own root's generation (see
+"A scan that finds the set already in place"), so the scans of other roots of the same set walked it again after
+waiting. It now also advances the generation of every object it entered at which a scan is in progress:
+`RObject::scan_awaiting` counts the scans started at an object, from before they sample its generation until they
+complete. That is correct because the scan entered the object and followed every edge reachable from it, or found
+it in a current region, and committed after the scan in progress sampled the generation: an edge changed before the
+sample was changed before the committing scan entered the object, or the change would have waited for its
+r-section. A commit that skipped a container it found locked advances no generation, as before.
+
+Regression coverage: `examples/test/qore/misc/dgc-scan-collisions.qtest` makes three scans of one set collide
+deterministically (`dbg_hold_scan()` holds a scan with its root locked, `dbg_rset_scan()` starts a scan from a
+chosen member) and checks that a scan keeps waiting while the scan it collided with rolls back to wait for a third,
+that both then take the third scan's result, and that 16 threads scanning one set from their own members complete;
+`ut_dgc_scan_wait_cycle()` in the C++ unit tests checks that a wait that would close a cycle is not made and that a
+wait for a scan waiting for a release ends.
 
 ### Scans that change nothing share the r-section
 
@@ -1292,7 +1359,10 @@ its Program while the table lives as long as the process.
 abandons on a lock held by another thread, `setNotificationIntern()` records that thread on the notifier, the scan
 records the name of the object it could not lock (copied then, since the object can be freed while the scan waits),
 and the constructor registers the wait in a small registry for as long as it lasts. `get_scan_waits()` returns the
-waiting threads with their scan root, the object each waits for and the thread holding it; a debugger attached to a
+waiting threads with their scan root, the object each waits for and the thread holding it, whether the thread waits
+for that thread's scan to complete or for the lock's release, how many passes the scan has given up and how many
+nodes the last one had entered — a scan that keeps restarting over a large graph is visible without
+`QORE_SCAN_STATS`; a debugger attached to a
 process calls `qore_dump_scan_waits()` (exported C function, no debug information needed), which only tries the
 registry lock, so it cannot hang a process stopped while another thread updates the registry.
 
