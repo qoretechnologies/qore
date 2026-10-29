@@ -39,6 +39,7 @@ DLLLOCAL QoreClass *initDebugProgramClass(QoreNamespace& ns);
 
 #include <qore/QoreDebugProgram.h>
 #include <qore/ReferenceArgumentHelper.h>
+#include "qore/intern/qore_thread_intern.h"
 
 // class needed to handle calls from C++ to Qore script instance
 class QoreDebugProgramWithQoreObject: public QoreDebugProgram {
@@ -59,7 +60,13 @@ private:
       ReferenceArgumentHelper rtsah(sid, &xsink2);
       args->push(rtsah.getArg(), nullptr); // caller owns ref
       printd(5, "QoreDebugProgramWithCoreObject::callMethod(%s) this: %p, pgm: %p, param#: %d, rs: %d, rts: %d, xsink2: %d\n", name, this, pgm, paramCount, rs, sid, xsink2.isEvent());
-      qo->evalMethod(name, *args, &xsink2);
+      {
+         // a debugger callback is not a call made by the debugged code that runs on the thread, which does not
+         // allow debugging: it is made on behalf of the debugger, with the options of the debugger object's Program
+         assert(qo->getProgram());
+         QoreCallbackCallerHelper caller(qo->getProgram());
+         qo->evalMethod(name, *args, &xsink2);
+      }
       QoreValue rsv(rsah.getOutputValue());
       rs = (DebugRunStateEnum) rsv.getAsBigInt();
       rsv.discard(&xsink2);

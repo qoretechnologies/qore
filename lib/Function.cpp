@@ -1129,7 +1129,7 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
     }
 #endif
 
-    caller_runtime_po = runtime_get_effective_program_parse_options();
+    caller_runtime_po = runtime_take_call_caller_parse_options();
 
     // set the program context if necessary
     QoreProgram* old_pgm = pgm_ctx ? qore_get_call_program_context() : nullptr;

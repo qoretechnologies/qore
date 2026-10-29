@@ -409,6 +409,10 @@ public:
     QoreParseOptions runtime_po_caller_restrictions;
     //! the Program of the module whose code runs with runtime_po_caller_restrictions, or nullptr
     const QoreProgram* runtime_po_module_pgm = nullptr;
+    //! the Program that the next user call is made on behalf of, or nullptr; see QoreCallbackCallerHelper
+    const QoreProgram* callback_caller_pgm = nullptr;
+    //! the Program running on the thread when callback_caller_pgm was set
+    const QoreProgram* callback_from_pgm = nullptr;
     int tid;
 
     VLock vlock;     // for deadlock detection
@@ -4059,6 +4063,32 @@ QoreParseOptions runtime_get_parse_options() {
 
 QoreParseOptions runtime_get_effective_program_parse_options() {
     return runtime_get_effective_parse_options_for(thread_data.get()->current_pgm);
+}
+
+QoreParseOptions runtime_take_call_caller_parse_options() {
+    ThreadData* td = thread_data.get();
+    if (td->callback_caller_pgm && td->current_pgm == td->callback_from_pgm) {
+        const QoreProgram* caller = td->callback_caller_pgm;
+        // the call made on behalf of the Program is the first call only; the code it calls, and any code of the
+        // Program running on the thread that it calls back, have the effective options of their own callers
+        td->callback_caller_pgm = nullptr;
+        return caller->getParseOptions();
+    }
+    return runtime_get_effective_program_parse_options();
+}
+
+QoreCallbackCallerHelper::QoreCallbackCallerHelper(const QoreProgram* caller) : po(caller->getParseOptions()) {
+    ThreadData* td = thread_data.get();
+    old_caller_pgm = td->callback_caller_pgm;
+    old_from_pgm = td->callback_from_pgm;
+    td->callback_caller_pgm = caller;
+    td->callback_from_pgm = td->current_pgm;
+}
+
+QoreCallbackCallerHelper::~QoreCallbackCallerHelper() {
+    ThreadData* td = thread_data.get();
+    td->callback_caller_pgm = old_caller_pgm;
+    td->callback_from_pgm = old_from_pgm;
 }
 
 QoreParseOptions runtime_get_effective_parse_options_for(const QoreProgram* pgm) {

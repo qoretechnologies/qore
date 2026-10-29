@@ -7070,6 +7070,53 @@ static void ut_debug_skips_foreign_thread_callbacks(UnitTestCounters& c, QorePro
     UT_ASSERT(c, !xsink, "foreign debug target program cleanup succeeds");
 }
 
+//! the first user call in the scope of a QoreCallbackCallerHelper, while the Program that was running when it was
+//! created still runs, is made with the options of the helper's Program; later calls and calls made in another
+//! Program have the effective options of their own callers
+static void ut_callback_caller_parse_options(UnitTestCounters& c, QoreProgram* parent) {
+    ExceptionSink xsink;
+    // the Program that callbacks are made for has no restriction that the running Program has
+    QoreProgram* caller = parent
+        ? new QoreProgram(parent, PO_NO_CHILD_PO_RESTRICTIONS)
+        : new QoreProgram(PO_NO_CHILD_PO_RESTRICTIONS);
+    QoreProgram* running = parent
+        ? new QoreProgram(parent, PO_NO_CHILD_PO_RESTRICTIONS | PO_NO_FILESYSTEM)
+        : new QoreProgram(PO_NO_CHILD_PO_RESTRICTIONS | PO_NO_FILESYSTEM);
+    const QoreParseOptions no_fs(PO_NO_FILESYSTEM);
+    UT_ASSERT(c, !caller->getParseOptions().hasAny(no_fs), "the callback's Program is not restricted");
+    {
+        ProgramThreadCountContextHelper tch(&xsink, running, true);
+        UT_ASSERT(c, !xsink, "the running Program is entered");
+        UT_ASSERT(c, runtime_get_effective_program_parse_options().hasAny(no_fs), "the running Program is restricted");
+        {
+            QoreCallbackCallerHelper cch(caller);
+            QoreParseOptions po = runtime_take_call_caller_parse_options();
+            UT_ASSERT(c, po == caller->getParseOptions(),
+                "the first call is made with the options of the callback's Program");
+            po = runtime_take_call_caller_parse_options();
+            UT_ASSERT(c, po.hasAny(no_fs), "a later call of the running Program has its restrictions");
+        }
+        {
+            QoreCallbackCallerHelper cch(caller);
+            {
+                // a call made in another Program does not take the callback's options
+                ProgramThreadCountContextHelper tch2(&xsink, caller, true);
+                UT_ASSERT(c, !xsink, "another Program is entered");
+                QoreParseOptions po = runtime_take_call_caller_parse_options();
+                UT_ASSERT(c, po == caller->getParseOptions(), "a call in another Program has its options");
+            }
+            QoreParseOptions po = runtime_take_call_caller_parse_options();
+            UT_ASSERT(c, po == caller->getParseOptions(),
+                "the callback's call is still made with the options of its Program");
+        }
+        UT_ASSERT(c, runtime_take_call_caller_parse_options().hasAny(no_fs),
+            "a call after the callback has the restrictions of the running Program");
+    }
+    running->waitForTerminationAndDeref(&xsink);
+    caller->waitForTerminationAndDeref(&xsink);
+    UT_ASSERT(c, !xsink, "the Programs are destroyed");
+}
+
 //! records the line of every statement step and raises an exception at the step of one line, once
 class StepExceptionDebugProgram : public QoreDebugProgram {
 public:
@@ -12820,6 +12867,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_dgc_scan_wait_cycle(c);
     ut_debug_skips_foreign_thread_callbacks(c, rc.getProgram());
     ut_debug_step_every_statement(c, rc.getProgram());
+    ut_callback_caller_parse_options(c, rc.getProgram());
     return make_unit_test_result(c, xsink);
 }
 
@@ -12838,6 +12886,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_dgc_scan_wait_cycle(c);
     ut_debug_skips_foreign_thread_callbacks(c, rc.getProgram());
     ut_debug_step_every_statement(c, rc.getProgram());
+    ut_callback_caller_parse_options(c, rc.getProgram());
     ut_event_loop_remove_recycled_fd(c);
     ut_event_loop_sub_ms_timer_wakeups(c);
     ut_event_loop_registrations(c);

@@ -214,6 +214,7 @@ public class DebugProgramControlTest inherits QUnit::Test {
         addTestCase("thread stack of all threads", \allThreadStacksTest());
         addTestCase("thread stack frame", \threadStackFrameTest());
         addTestCase("breakpoint on top-level statement", \topLevelBreakpointTest());
+        addTestCase("local variables of the frames of a stopped thread", \localVariableTest());
         addTestCase("breakpoint on statement without temporaries", \noTempBreakpointTest());
         addTestCase("breakpoint on file given with another path", \filePathBreakpointTest());
         addTestCase("breakpoint on function", \functionBreakpointTest());
@@ -323,6 +324,31 @@ public class DebugProgramControlTest inherits QUnit::Test {
         e = p.runToStop();
         assertEq(bp8.bkptid, e.bkptid);
         assertEq(8, e.line);
+
+        assertEq({"rc": NOTHING}, p.finish());
+    }
+
+    # the debugger's callbacks run with the options of the debugger, not with the restrictions of the debugged
+    # code, and see the frames of the debugged code
+    localVariableTest() {
+        DebuggedProgram p(dpc);
+        on_exit p.cleanup();
+        p.breakAt(8);
+        hash<auto> e = p.runToStop();
+        assertEq(8, e.line);
+
+        list<auto> names = dpc.threadCommand(p.tid, "thread/local//list");
+        assertTrue(inlist("h", names));
+        assertTrue(inlist("total", names));
+        hash<auto> total = dpc.threadCommand(p.tid, "thread/local/total/get");
+        assertEq(5, AbstractDebugControl::unserialize(total.value));
+        hash<auto> h = dpc.threadCommand(p.tid, "thread/local/h/get");
+        assertEq("invoice", AbstractDebugControl::unserialize(h.value).name);
+
+        # a local variable set by the debugger
+        dpc.threadSend(p.tid, "thread/local/total/set", {"value": AbstractDebugControl::serialize(10)});
+        total = dpc.threadCommand(p.tid, "thread/local/total/get");
+        assertEq(10, AbstractDebugControl::unserialize(total.value));
 
         assertEq({"rc": NOTHING}, p.finish());
     }

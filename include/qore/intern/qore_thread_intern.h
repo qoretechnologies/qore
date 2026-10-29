@@ -420,6 +420,13 @@ DLLLOCAL bool qore_reflection_has_module_caller(const QoreProgram* caller, const
 */
 DLLLOCAL QoreParseOptions runtime_get_effective_program_parse_options();
 
+//! returns the effective parse options of the caller of a user call that is about to be made
+/** These are the options returned by runtime_get_effective_program_parse_options(), except for the first call made
+    in the scope of a QoreCallbackCallerHelper while the Program that was running when it was created still runs:
+    that call is made on behalf of the helper's Program, so the options are those of that Program
+*/
+DLLLOCAL QoreParseOptions runtime_take_call_caller_parse_options();
+
 //! returns the parse options of \a pgm with the active runtime parse options override applied
 /** for a call that has already switched to the Program it runs in; \a pgm is the calling Program
 */
@@ -628,6 +635,31 @@ private:
     QoreParseOptions old_value;
     QoreParseOptions old_caller_restrictions;
     const QoreProgram* old_module_pgm;
+};
+
+//! Makes the next user call on the current thread a call made on behalf of another Program
+/** For a callback that the runtime makes for a Program from a thread running the code of another Program, such as
+    the callbacks of a debugger, which run while the debugged code is stopped: the callback is not a call made by the
+    code running on the thread, so it does not run with the restrictions of that code but with the options of the
+    Program that it is made for (see runtime_take_call_caller_parse_options()).  The runtime parse options are set
+    to the options of that Program, and any runtime parse options override of the code running on the thread is
+    suspended, as by LoadTimeParseOptionsHelper.  No Program context is entered, so the frames that the callback sees
+    on the thread are those of the code running on it.
+*/
+class QoreCallbackCallerHelper {
+public:
+    //! makes the next user call a call made on behalf of \a caller, which must not be nullptr
+    DLLLOCAL QoreCallbackCallerHelper(const QoreProgram* caller);
+    DLLLOCAL ~QoreCallbackCallerHelper();
+
+    DLLLOCAL QoreCallbackCallerHelper(const QoreCallbackCallerHelper&) = delete;
+    DLLLOCAL QoreCallbackCallerHelper& operator=(const QoreCallbackCallerHelper&) = delete;
+
+private:
+    //! sets the caller's options and suspends any override of the code running on the thread
+    LoadTimeParseOptionsHelper po;
+    const QoreProgram* old_caller_pgm;
+    const QoreProgram* old_from_pgm;
 };
 
 //! the runtime parse options override of a call; see qore_get_user_call_runtime_po_override()
