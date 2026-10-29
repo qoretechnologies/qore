@@ -142,14 +142,24 @@ class DapClient {
         }
     }
 
-    #! Reads the available output of the adapter; returns False if there is none in time
+    #! Reads more output of the adapter; returns False only when the adapter's stdout is at end of file
+    /** readStdoutBinary() returns nothing both at end of file and when nothing arrives within the timeout.  The
+        latter is not the end of the stream: under load the adapter can be starved and produce no output for a
+        while, which must not be mistaken for a missing message.  Wait on the real signal - data, or the adapter
+        actually exiting - by reading again while the adapter is still running; give up only once it has exited
+        (then readStdoutBinary() returns nothing at once, so this does not spin).
+    */
     private bool fill() {
-        *binary data = proc.readStdoutBinary(65536, MessageTimeout);
-        if (!data) {
-            return False;
+        while (True) {
+            *binary data = proc.readStdoutBinary(65536, MessageTimeout);
+            if (data) {
+                buf += data;
+                return True;
+            }
+            if (!proc.running()) {
+                return False;
+            }
         }
-        buf += data;
-        return True;
     }
 }
 
