@@ -757,12 +757,16 @@ public namespace DebugProgramControl {
                         if (!exists receiveData.tid) {
                             switch (cmd[0]) {
                                 case 'stack':
-                                    hash<auto> stacks = get_all_thread_call_stacks();
-                                    foreach softint tid in (keys stacks) {
+                                    # the stacks are returned in an untyped hash, as the adjusted stacks are lists of
+                                    # untyped frames
+                                    hash<auto> stacks = {};
+                                    foreach hash<auto> i in (get_all_thread_call_stacks().pairIterator()) {
                                         rwlThread.readLock();
                                         on_exit rwlThread.readUnlock();
-                                        if (exists ctxThread{tid}) {
-                                            stacks{tid} = adjustStack(stacks{tid}, ctxThread{tid});
+                                        if (exists ctxThread{i.key}) {
+                                            stacks{i.key} = adjustStack(i.value, ctxThread{i.key});
+                                        } else {
+                                            stacks{i.key} = i.value;
                                         }
                                     }
                                     result = stacks;
@@ -990,7 +994,12 @@ public namespace DebugProgramControl {
             return vals;
         }
 
-        private list<auto> adjustStack(list<auto> stack, *hash<auto> ctx) {
+        #! returns the call stack as untyped frame hashes with the debugged statement's frame adjusted
+        /** the frames of the call stack are @ref Qore::CallStackInfo "CallStackInfo" hashes; they are returned as
+            untyped hashes, as the debugger adds keys of its own to them, such as \c current
+        */
+        private list<hash<auto>> adjustStack(list<auto> stack, *hash<auto> ctx) {
+            stack = map hash($1), stack;
             if (ctx && ctx.stackSize >= frameOffset) {
                 @assert(ctx.stackSize >= frameOffset);
                 while (stack.size() > ctx.stackSize - frameOffset) {

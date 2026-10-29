@@ -1,0 +1,311 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%allow-debugger
+%no-debugging
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DebugProgramControl
+
+%exec-class DebugProgramControlTest
+
+#! the debugged program; the line numbers are referenced by the tests
+const TargetScript = "%modern
+int sub add(int a, int b) {
+    int sum = a + b;
+    return sum;
+}
+hash<auto> h = {\"name\": \"invoice\", \"lines\": (1, 2, 3)};
+int total = add(2, 3);
+printf(\"%d %y\\n\", total, h);
+";
+
+const TargetLabel = "dpc-target.q";
+
+#! how long a test waits for an event of the debugged program before it fails
+const EventTimeout = 30s;
+
+#! a debug server that queues what it sends to its client so that a test can act on it deterministically
+class TestDebugProgramControl inherits DebugProgramControl {
+    public {
+        const CX = {"id": 1};
+
+        #! responses sent by the debugged threads
+        Queue responses();
+
+        #! events broadcast to all clients
+        Queue events();
+    }
+
+    constructor() : DebugProgramControl("DebugProgramControlTest") {
+        registerConnection(CX);
+    }
+
+    public nothing sendDataImpl(hash<auto> cx, auto data) {
+        responses.push(data);
+    }
+
+    public nothing broadcastDataImpl(auto data) {
+        events.push(data);
+    }
+
+    #! sends a command that is processed in the server thread and returns its result
+    auto command(string cmd, *hash<auto> args) {
+        hash<auto> rv = processCommand(CX, {"cmd": cmd} + args);
+        if (rv.type == DebugResponseType::Error) {
+            throw rv.result.err, rv.result.desc;
+        }
+        @assert(rv.type == DebugResponseType::Response);
+        return rv.result;
+    }
+
+    #! sends a command to a stopped thread and returns the response the thread sends
+    auto threadCommand(int tid, string cmd, *hash<auto> args) {
+        hash<auto> rv = processCommand(CX, {"cmd": cmd, "tid": tid} + args);
+        if (rv.type == DebugResponseType::Error) {
+            throw rv.result.err, rv.result.desc;
+        }
+        @assert(rv.type == DebugResponseType::Thread);
+        hash<auto> resp = responses.get(EventTimeout);
+        if (resp.type == DebugResponseType::Error) {
+            throw resp.result.err, resp.result.desc;
+        }
+        return resp.result;
+    }
+
+    #! sends a command to a stopped thread for which the thread sends no response, such as "debug/frame/set"
+    threadSend(int tid, string cmd, *hash<auto> args) {
+        hash<auto> rv = processCommand(CX, {"cmd": cmd, "tid": tid} + args);
+        @assert(rv.type == DebugResponseType::Thread);
+    }
+
+    #! resumes a stopped thread; a thread sends no response to "go"
+    go(int tid, string runState = "run") {
+        hash<auto> rv = processCommand(CX, {"cmd": "thread/go/" + runState, "tid": tid});
+        @assert(rv.type == DebugResponseType::Thread);
+    }
+
+    #! returns the next interrupt event, skipping breakpoint change notifications
+    hash<auto> getInterrupt() {
+        while (True) {
+            hash<auto> e = events.get(EventTimeout);
+            if (e.cmd == DebugEventCmd::Interrupt) {
+                return e;
+            }
+        }
+    }
+}
+
+#! a debugged program run in a background thread, stopped at its start
+class DebuggedProgram {
+    public {
+        TestDebugProgramControl dpc;
+        Program pgm;
+        int pgmId;
+
+        #! TID of the thread running the program, which the debugger stopped at its start
+        int tid;
+
+        #! receives the result of the program run when it ends
+        Queue done();
+
+        #! True when the program run has ended
+        bool finished;
+    }
+
+    constructor(TestDebugProgramControl dpc, string script = TargetScript, string label = TargetLabel) {
+        self.dpc = dpc;
+        pgm = dpc.createProgram(label, NOTHING, (), script);
+        pgmId = pgm.getProgram().getProgramId();
+        background run();
+        hash<auto> e = dpc.getInterrupt();
+        if (e.func != "attach") {
+            throw "TEST-ERROR", sprintf("expecting the attach event at the start of the program; got: %y", e);
+        }
+        tid = e.tid;
+    }
+
+    private run() {
+        try {
+            done.push({"rc": pgm.run()});
+        } catch (hash<ExceptionInfo> ex) {
+            done.push({"ex": ex});
+        }
+    }
+
+    #! creates a breakpoint on a line of the program and returns the result
+    hash<auto> breakAt(int line, string file = TargetLabel) {
+        return dpc.command(sprintf("program/%d/breakpoint//create", pgmId), {
+            "value": {"file": file, "lineno": line},
+        });
+    }
+
+    #! runs the program until it stops and returns the interrupt event
+    hash<auto> runToStop() {
+        dpc.go(tid);
+        return dpc.getInterrupt();
+    }
+
+    #! runs the program to its end and returns the result of the run
+    /** the debugger stops the thread again when the program ends, at the detach event
+    */
+    hash<auto> finish() {
+        dpc.go(tid);
+        hash<auto> e = dpc.getInterrupt();
+        if (e.func != "detach") {
+            throw "TEST-ERROR", sprintf("expecting the detach event at the end of the program; got: %y", e);
+        }
+        dpc.go(tid);
+        hash<auto> rv = done.get(EventTimeout);
+        finished = True;
+        return rv;
+    }
+
+    #! ends debugging of the program and the program run, also when a test failed while the program was stopped
+    cleanup() {
+        dpc.removeProgram(pgm.getProgram());
+        if (!finished) {
+            # releases the thread if it is stopped; it does not stop again as the program is no longer debugged
+            dpc.shutdown();
+            done.get(EventTimeout);
+            finished = True;
+        }
+    }
+}
+
+public class DebugProgramControlTest inherits QUnit::Test {
+    private {
+        TestDebugProgramControl dpc;
+    }
+
+    constructor() : QUnit::Test("DebugProgramControl", "1.0", \ARGV) {
+        addTestCase("thread stack", \threadStackTest());
+        addTestCase("thread stack of all threads", \allThreadStacksTest());
+        addTestCase("thread stack frame", \threadStackFrameTest());
+        addTestCase("breakpoint on top-level statement", \topLevelBreakpointTest());
+        addTestCase("breakpoint errors", \breakpointErrorTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        dpc = new TestDebugProgramControl();
+    }
+
+    globalTearDown() {
+        dpc.shutdown();
+    }
+
+    threadStackTest() {
+        DebuggedProgram p(dpc);
+        on_exit p.cleanup();
+        hash<auto> bp = p.breakAt(8);
+        assertEq(Type::Int, bp.bkptid.type());
+
+        hash<auto> e = p.runToStop();
+        assertEq("step", e.func);
+        assertEq(bp.bkptid, e.bkptid);
+        assertEq(8, e.line);
+
+        list<auto> stack = dpc.threadCommand(p.tid, "thread/stack");
+        assertGt(0, stack.size());
+        # the frames are untyped hashes so that the debugger can add keys of its own
+        foreach hash<auto> frame in (stack) {
+            assertEq("hash", frame.fullType());
+        }
+        # the frame of the debugged statement is the current one by default
+        assertTrue(stack[0].current);
+        assertEq(1, (select stack, $1.current).size());
+        assertEq("interrupt: step", stack[0].function);
+        assertEq(TargetLabel, stack[0].file);
+        assertEq(8, stack[0].line);
+
+        # the event carries the same stack, without a current frame
+        assertEq(stack.size(), e.stack.size());
+        assertEq(8, e.stack[0].line);
+        assertNothing(e.stack[0].current);
+
+        assertEq({"rc": NOTHING}, p.finish());
+    }
+
+    allThreadStacksTest() {
+        DebuggedProgram p(dpc);
+        on_exit p.cleanup();
+        p.breakAt(8);
+        hash<auto> e = p.runToStop();
+        assertEq(8, e.line);
+
+        hash<auto> stacks = dpc.command("thread/stack");
+        list<auto> stack = stacks{p.tid};
+        assertGt(0, stack.size());
+        # the stack of the stopped thread is adjusted to the debugged statement
+        assertEq("hash", stack[0].fullType());
+        assertEq("interrupt: step", stack[0].function);
+        assertEq(8, stack[0].line);
+        assertEq(p.pgmId, stack[0].programid);
+        # the stack of this thread, which is not stopped, is returned unchanged
+        assertEq(Type::List, stacks{gettid()}.type());
+
+        assertEq({"rc": NOTHING}, p.finish());
+    }
+
+    threadStackFrameTest() {
+        DebuggedProgram p(dpc);
+        on_exit p.cleanup();
+        p.breakAt(8);
+        p.runToStop();
+
+        list<auto> stack = dpc.threadCommand(p.tid, "thread/stack");
+        # a frame given in the command is the current one
+        if (stack.size() > 1) {
+            list<auto> stack1 = dpc.threadCommand(p.tid, "thread/stack", {"frameid": 1});
+            assertNothing(stack1[0].current);
+            assertTrue(stack1[1].current);
+        }
+        # a frame beyond the stack marks no frame as current
+        list<auto> stack2 = dpc.threadCommand(p.tid, "thread/stack", {"frameid": stack.size()});
+        assertEq(0, (select stack2, $1.current).size());
+        # the frame set with "debug/frame/set" is the current one by default
+        dpc.threadSend(p.tid, "thread/debug/frame/set", {"value": AbstractDebugControl::serialize(stack.size() - 1)});
+        assertEq(stack.size() - 1, dpc.threadCommand(p.tid, "thread/debug/frame/get"));
+        list<auto> stack3 = dpc.threadCommand(p.tid, "thread/stack");
+        assertTrue(stack3[stack.size() - 1].current);
+        assertEq(1, (select stack3, $1.current).size());
+
+        assertEq({"rc": NOTHING}, p.finish());
+    }
+
+    topLevelBreakpointTest() {
+        DebuggedProgram p(dpc);
+        on_exit p.cleanup();
+        hash<auto> bp6 = p.breakAt(6);
+        hash<auto> bp8 = p.breakAt(8);
+        assertNeq(bp6.stmtid, bp8.stmtid);
+
+        hash<auto> e = p.runToStop();
+        assertEq(bp6.bkptid, e.bkptid);
+        assertEq(6, e.line);
+        e = p.runToStop();
+        assertEq(bp8.bkptid, e.bkptid);
+        assertEq(8, e.line);
+
+        assertEq({"rc": NOTHING}, p.finish());
+    }
+
+    breakpointErrorTest() {
+        DebuggedProgram p(dpc);
+        on_exit p.cleanup();
+        # a line with no statement
+        assertThrows("PROGRAM-STATEMENT-ERROR", \p.breakAt(), (100,));
+        # a file the program was not parsed from
+        assertThrows("PROGRAM-STATEMENT-ERROR", \p.breakAt(), (6, "other.q"));
+        # a program that does not exist
+        assertThrows("PROGRAM-ERROR", \dpc.command(), ("program/2147483647/breakpoint//create",
+            {"value": {"file": TargetLabel, "lineno": 6}}));
+        # a thread that is not stopped
+        assertThrows("DEBUG-HANDLER-ERROR", \dpc.threadCommand(), (gettid(), "thread/stack"));
+
+        assertEq({"rc": NOTHING}, p.finish());
+    }
+}
