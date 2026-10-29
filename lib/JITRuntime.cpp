@@ -10789,7 +10789,7 @@ static_assert(sizeof(QorePreparedFunctionRefStackLocation<>) < sizeof(QoreExplic
 class QoreReusableFunctionRefFrame final : public QoreStackLocation {
 public:
     QoreReusableFunctionRefFrame(RuntimeConfig& rc, const QorePreparedFunctionRefV3& cache)
-        : cache(cache), helper(rc, cache) {
+        : context(cache), helper(rc, context) {
     }
     ~QoreReusableFunctionRefFrame() override {
         assert(!active);
@@ -10801,7 +10801,7 @@ public:
 #ifndef NDEBUG
             frame.active = true;
 #endif
-            frame.helper.enter(&frame, frame.loc);
+            frame.helper.enter(&frame, frame.loc, frame.context.getCache());
         }
         __attribute__((always_inline)) ~Scope() {
             frame.helper.leave();
@@ -10815,17 +10815,17 @@ public:
         QoreReusableFunctionRefFrame& frame;
     };
     const QoreProgramLocation& getLocation() const override { return loc ? *loc : loc_builtin; }
-    const std::string& getCallName() const override { return *cache.name; }
+    const std::string& getCallName() const override { return *context.getCache().name; }
     qore_call_t getCallType() const override { return CT_USER; }
-    QoreProgram* getProgram() const override { return cache.pgm; }
-    const AbstractStatement* getStatement() const override { return cache.statements; }
+    QoreProgram* getProgram() const override { return context.getCache().pgm; }
+    const AbstractStatement* getStatement() const override { return context.getCache().statements; }
 
 private:
-    const QorePreparedFunctionRefV3& cache;
     const QoreProgramLocation* loc = nullptr;
 #ifndef NDEBUG
     bool active = false;
 #endif
+    RuntimeConfigNativeCallbackContext context;
     RuntimeConfigReusableNativeLeafCallHelper helper;
 };
 
@@ -11695,7 +11695,8 @@ __attribute__((always_inline)) static int tryReusableFunctionRef(RuntimeConfig& 
     if (*xsink || RuntimeConfigNativeAccess::checkStack(rc, xsink)) {
         return 1;
     }
-    FunctionRefParseOptionsOverride po_override(cache.uvb, cache.pgm, &rc);
+    // The complete native-v3 proof excludes context observation and reentry.
+    // The reusable frame materializes caller policy before any stack exception.
     auto* reusable = static_cast<QoreReusableFunctionRefFrame*>(frame_slot->frame);
     if (!reusable) {
         reusable = initReusableFunctionRefFrame(rc, cache, *frame_slot);
@@ -11743,7 +11744,8 @@ __attribute__((always_inline)) static int tryInvariantFunctionRef(RuntimeConfig&
     if (*xsink || RuntimeConfigNativeAccess::checkStackForPreparedCallback(rc, xsink)) {
         return 1;
     }
-    FunctionRefParseOptionsOverride po_override(cache.uvb, cache.pgm, &rc);
+    // The complete native-v3 proof excludes context observation and reentry.
+    // The reusable frame materializes caller policy before any stack exception.
     auto* reusable = static_cast<QoreReusableFunctionRefFrame*>(frame_slot->frame);
     // One initialization per lifetime; keep its argument spills off repeated hits.
     if (!reusable) [[unlikely]] {

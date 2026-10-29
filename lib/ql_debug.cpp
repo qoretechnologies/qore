@@ -46,6 +46,7 @@
 #include "qore/intern/LocalVar.h"
 #include "qore/intern/Variable.h"
 #include "qore/intern/JITRuntime.h"
+#include "qore/intern/CallReferenceNode.h"
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/RuntimeConfig.h"
 #include "qore/intern/QoreClosureNode.h"
@@ -623,6 +624,125 @@ static void ut_native_call_options(UnitTestCounters& c) {
             && runtime_get_effective_program_parse_options() == original_effective
             && runtime_get_own_program_state_parse_options(original_effective) == original_own,
             "explicit policy scope restores the complete caller state");
+    }
+}
+
+//! Reusable callback policy is installed only on materialization and restored across reuse.
+static void ut_native_callback_policy(UnitTestCounters& c) {
+    for (bool module : {false, true}) {
+        ExceptionSink xsink;
+        QoreProgramHelper program(PO_MODERN | PO_NO_NETWORK | (module ? PO_IN_MODULE : 0), xsink);
+        QoreProgramHelper other(PO_MODERN, xsink);
+        {
+            ProgramRuntimeExternalParseContextHelper parse(*program);
+            UT_ASSERT(c, parse, "callback policy fixture has parse context");
+            program->parse("%modern\nint sub identity(int x) { return x; }\n"
+                "code<int(int)> sub make() { return \\identity(); }\n", "native-callback-policy-unit", &xsink);
+        }
+        UT_ASSERT(c, !xsink, "callback policy fixture parses");
+        if (xsink) {
+            return;
+        }
+        QoreExternalProgramContextHelper owner_context(&xsink, *program);
+        ValueHolder value(program->callFunction("make", nullptr, &xsink), &xsink);
+        auto* ref = value->getType() == NT_FUNCREF
+            ? dynamic_cast<FunctionCallReferenceNode*>(value->getInternalNode()) : nullptr;
+        UT_ASSERT(c, !xsink && ref, "callback policy fixture returns a named function reference");
+        if (xsink || !ref) {
+            return;
+        }
+        const auto* uvb = ref->getFastCallMetadata().uvb;
+        UT_ASSERT(c, uvb && uvb->pgm == *program, "callback keeps its defining Program");
+        if (!uvb) {
+            return;
+        }
+        for (bool imported : {false, true}) {
+            QoreProgram* exec = imported ? *other : *program;
+            ProgramThreadCountContextHelper exec_context(&xsink, exec, true);
+            RuntimeConfig& canonical = RuntimeConfigNativeAccess::getCurrent();
+            for (bool copied_view : {false, true}) {
+                RuntimeConfig copy(canonical);
+                copy.setProgram(imported ? *program : *other);
+                copy.setParseOptions(QoreParseOptions());
+                RuntimeConfig& rc = copied_view ? copy : canonical;
+                QorePreparedFunctionRefV3 cache{};
+                cache.uvb = uvb;
+                cache.pgm = exec;
+                cache.parse_loc = uvb->getUserSignature()->getParseLocation();
+                struct Frame : QoreStackLocation {
+                    const QorePreparedFunctionRefV3& cache;
+                    const std::string name = "native callback policy unit";
+                    const QoreProgramLocation* loc = nullptr;
+                    RuntimeConfigNativeCallbackContext context;
+                    RuntimeConfigReusableNativeLeafCallHelper helper;
+                    Frame(RuntimeConfig& rc, const QorePreparedFunctionRefV3& cache)
+                        : cache(cache), context(cache), helper(rc, context) {}
+                    QoreProgram* getProgram() const override { return cache.pgm; }
+                    const AbstractStatement* getStatement() const override { return cache.uvb->getStatementBlock(); }
+                    const std::string& getCallName() const override { return name; }
+                    qore_call_t getCallType() const override { return CT_USER; }
+                    const QoreProgramLocation& getLocation() const override { return loc ? *loc : loc_builtin; }
+                    struct Scope {
+                        Frame& frame;
+                        explicit Scope(Frame& frame) : frame(frame) {
+                            frame.helper.enter(&frame, frame.loc, frame.cache);
+                        }
+                        ~Scope() { frame.helper.leave(); }
+                    };
+                } frame(rc, cache);
+                for (bool materialize : {false, true, true, false}) {
+                    // Use a distinguishable enclosing identity to detect both
+                    // same-owner preservation and module/imported replacement.
+                    QoreCallParseOptionsOverride enclosing;
+                    enclosing.mask = get_user_variant_runtime_po_override_mask();
+                    enclosing.value = PO_NO_THREAD_CONTROL;
+                    enclosing.caller_restrictions = PO_NO_THREAD_CONTROL;
+                    enclosing.module_pgm = *other;
+                    RuntimeParseOptionsOverrideHelper caller_policy(rc, enclosing);
+                    const auto old_po = runtime_get_parse_options();
+                    const auto old_effective = runtime_get_effective_program_parse_options();
+                    const auto old_own = runtime_get_own_program_state_parse_options(old_effective);
+                    {
+                        Frame::Scope active(frame);
+                        UT_ASSERT(c, runtime_get_parse_options() == old_po
+                            && runtime_get_own_program_state_parse_options(old_effective) == old_own,
+                            "successful reusable callback leaves enclosing policy unchanged");
+                        if (materialize) {
+                            frame.helper.materialize();
+                            const auto body = runtime_get_parse_options();
+                            const auto own = runtime_get_own_program_state_parse_options(body);
+                            UT_ASSERT(c, body & PO_NO_NETWORK,
+                                "materialized callback retains its body restrictions");
+                            // A non-module body executing in another Program uses
+                            // that Program's options. Module bodies additionally
+                            // inherit the caller's active restrictions.
+                            UT_ASSERT(c, bool(body & PO_NO_THREAD_CONTROL) == (module || !imported),
+                                "materialized callback uses its execution and module caller policy");
+                            UT_ASSERT(c, !(body & PO_ALLOW_INJECTION), "materialization does not grant injection");
+                            UT_ASSERT(c, bool(own & PO_NO_THREAD_CONTROL) == (module ? imported : !imported),
+                                "own-module allowance preserves the established non-module execution policy");
+                            frame.helper.materialize();
+                            UT_ASSERT(c, runtime_get_parse_options() == body
+                                && runtime_get_own_program_state_parse_options(body) == own,
+                                "callback materialization is idempotent");
+                            {
+                                RuntimeParseOptionsOverrideHelper nested(rc, PO_NO_THREAD_CONTROL,
+                                    PO_NO_THREAD_CONTROL);
+                                UT_ASSERT(c, runtime_get_own_program_state_parse_options(body) == body,
+                                    "nested ordinary override clears inherited module identity");
+                            }
+                            UT_ASSERT(c, runtime_get_own_program_state_parse_options(body) == own,
+                                "nested scope restores callback identity");
+                        }
+                    }
+                    UT_ASSERT(c, runtime_get_parse_options() == old_po
+                        && runtime_get_effective_program_parse_options() == old_effective
+                        && runtime_get_own_program_state_parse_options(old_effective) == old_own,
+                        "callback reuse restores all caller policy fields");
+                }
+            }
+            UT_ASSERT(c, !xsink, "callback policy tests leave no exception");
+        }
     }
 }
 
@@ -14741,6 +14861,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_native_closure_context(c);
     ut_program_context_snapshot(c);
     ut_native_call_options(c);
+    ut_native_callback_policy(c);
     ut_lvalue_object_count_records(c);
     ut_runtime_value_cleanup(c);
     ut_local_discard(c);
@@ -14773,6 +14894,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_native_closure_context(c);
     ut_program_context_snapshot(c);
     ut_native_call_options(c);
+    ut_native_callback_policy(c);
     ut_lvalue_object_count_records(c);
     ut_runtime_value_cleanup(c);
     ut_local_discard(c);

@@ -228,6 +228,34 @@ private:
 struct QorePreparedFunctionRefV3;
 struct QoreAOTMethodDispatchCacheEntry;
 
+//! Cold policy state for a reusable, proven non-reentrant scalar callback.
+/** The descriptor is borrowed for the native invocation. Only materialize() reads
+    live policy; saved fields are consumed only after successful materialization.
+    Keep alive until the leaf helper has unpublished its frame and waited for readers.
+*/
+class RuntimeConfigNativeCallbackContext {
+public:
+    //! @param cache invocation-owned immutable admitted callback descriptor
+    explicit RuntimeConfigNativeCallbackContext(const QorePreparedFunctionRefV3& cache) : cache(cache) {
+    }
+    //! @return the borrowed descriptor, unchanged until the frame is unpublished
+    const QorePreparedFunctionRefV3& getCache() const {
+        return cache;
+    }
+    RuntimeConfigNativeCallbackContext(const RuntimeConfigNativeCallbackContext&) = delete;
+    RuntimeConfigNativeCallbackContext& operator=(const RuntimeConfigNativeCallbackContext&) = delete;
+
+private:
+    friend class RuntimeConfigNativeLeafCallHelper;
+    const QorePreparedFunctionRefV3& cache;
+    QoreParseOptions old_mask;
+    QoreParseOptions old_value;
+    QoreParseOptions old_caller_restrictions;
+    const QoreProgram* old_module_pgm;
+    DLLLOCAL void materialize(ThreadData* td);
+    DLLLOCAL void restoreOptions(ThreadData* td);
+};
+
 //! Invocation-owned object context for a compiler-proven non-reentrant native method.
 /** Keep alive until its leaf helper has unpublished the diagnostic frame and
     restored any materialized state. Construction only borrows the receiver and
@@ -341,8 +369,9 @@ public:
 
 protected:
     // Initialize an inactive callback context owned by one native invocation.
-    DLLLOCAL RuntimeConfigNativeLeafCallHelper(RuntimeConfig& rc, const QorePreparedFunctionRefV3& cache);
-    DLLLOCAL void enterReusableCallback(QoreStackLocation* stack_loc, const QoreProgramLocation*& call_loc);
+    DLLLOCAL RuntimeConfigNativeLeafCallHelper(RuntimeConfig& rc, RuntimeConfigNativeCallbackContext& context);
+    DLLLOCAL void enterReusableCallback(QoreStackLocation* stack_loc, const QoreProgramLocation*& call_loc,
+        const QorePreparedFunctionRefV3& cache);
     // Compiler-proven scalar closure-v1 body; both dispatch and callee guard the live stack.
     DLLLOCAL RuntimeConfigNativeLeafCallHelper(RuntimeConfig& rc, QoreStackLocation* stack_loc,
         const QoreProgramLocation*& call_loc, const UserVariantBase* closure_uvb);
@@ -371,6 +400,7 @@ private:
     // Only materialize() discriminates metadata; successful cleanup does not.
     union {
         const QorePreparedFunctionRefV3* callback_cache;
+        RuntimeConfigNativeCallbackContext* callback_context;
         RuntimeConfigNativeMethodContext* method_context;
         const UserVariantBase* closure_uvb;
         RuntimeConfigNativeClosureContext* closure_context;
@@ -385,7 +415,7 @@ private:
     QoreParseOptions old_po;
     enum class ContextState : uint8_t { EagerMarkers, DeferredMarkers, Materialized };
     ContextState state;
-    enum class TargetKind : uint8_t { Callback, Method, Closure, ClosureV2 };
+    enum class TargetKind : uint8_t { Callback, Method, Closure, ClosureV2, CallbackV2 };
     TargetKind target_kind;
     bool swapped; //!< Initialized only when context is materialized
 };
@@ -426,18 +456,20 @@ class RuntimeConfigReusableNativeLeafCallHelper final : public RuntimeConfigNati
 public:
     //! Borrow stable thread/cache addresses for one native invocation, without publishing a frame.
     /** @param rc the current thread's runtime context
-        @param cache the invocation-owned prepared callback descriptor; must outlive this helper
+        @param context invocation-owned deferred policy, alive until the last leave() completes
     */
-    RuntimeConfigReusableNativeLeafCallHelper(RuntimeConfig& rc, const QorePreparedFunctionRefV3& cache)
-        : RuntimeConfigNativeLeafCallHelper(rc, cache) {
+    RuntimeConfigReusableNativeLeafCallHelper(RuntimeConfig& rc, RuntimeConfigNativeCallbackContext& context)
+        : RuntimeConfigNativeLeafCallHelper(rc, context) {
     }
     //! Publish fresh per-call state only after all live admission and entry-stack checks succeed.
     /** @param stack_loc the fully initialized diagnostic frame
         @param call_loc receives the current caller location, valid until leave() completes
+        @param cache the same descriptor borrowed by this helper's context
         @note Pair every successful enter() with leave() before modifying the frame or descriptor.
     */
-    __attribute__((always_inline)) void enter(QoreStackLocation* stack_loc, const QoreProgramLocation*& call_loc) {
-        enterReusableCallback(stack_loc, call_loc);
+    __attribute__((always_inline)) void enter(QoreStackLocation* stack_loc, const QoreProgramLocation*& call_loc,
+            const QorePreparedFunctionRefV3& cache) {
+        enterReusableCallback(stack_loc, call_loc, cache);
     }
     //! Restore context and wait for every reader before the frame or cache can be reused.
     /** @note Called by the per-call RAII scope, including on exceptional exits. */

@@ -29168,3 +29168,50 @@ Next evaluate explicit CPU-specific AOT tuning while preserving the portable gen
 Merged upstream `b30dbfbca1` into the performance branch at `c1c4fae43c`. The explicit `RuntimeConfig` and deferred closure paths carry the full caller-policy descriptor; cross-Program native retries and older closure entries retain the same policy as ordinary calls. An explicit-mode regression exposed a missing IR inline static-method policy scope, now corrected. Module fixtures select child execution modes explicitly and check process exits, loader fallback and native traces. Native probes now preserve the upstream rule that both caller and module must permit injection and inspect deferred context only after actual materialization.
 
 Release qualification: 30 fixtures, 95 executed cases and 17412 assertions. Debug: 95 executed cases and 17412 assertions, plus 3044 focused/4702 broader native assertions (overlapping suites). All 391 Release qmod aliases restored. The 237 filtered smoke cases are excluded. All 62 audit checks pass or are inapplicable; failed attempts and corrections remain in [results-module-own-state-merge-macos-arm64.json](results-module-own-state-merge-macos-arm64.json). No fresh timing or Java/develop comparison is claimed. The next checkpoint installs the committed optimized build, measures the merge, then evaluates deferred callback policy under the existing non-reentrant scalar-body proof.
+
+
+## Reusable callback policy deferral (2026-10-29)
+
+Copyright 2026 Qore Technologies, s.r.o.
+
+The optimized merge baseline 89e57e129b is installed and verified (391 qmods, 72 cases, 15440 assertions, native checks and fresh AOT artifacts). Its paired checkpoint against 698e85116f showed imported indirect calls increasing from 10.4721 to 13.8836 ns/item; local direct calls were nearly flat. That checkpoint is separate from the candidate comparison below.
+
+Reusable scalar callback wrappers (v4/v5/v9), after the existing complete native-v3 body proof and live admission guards, defer policy setup until diagnostic materialization. Imported functions in this benchmark execute in the caller's QoreProgram: this is a same-Program fast-call improvement. Ordinary automatic entries, lazy contexts and cross-Program fallbacks retain eager policy. The 208-byte generated frame ABI is unchanged; removing a duplicate private cache pointer keeps Debug within its 192-byte storage.
+
+Two fresh randomized epochs use the exact same 15 native artifacts with frozen optimized runtimes: 32 workloads, three layouts, three forks, 1152 processes and 3456 measured windows. The target callback improves 38.0% and 36.8%, with separated ranges in every layout. The captured-closure reverse-layout control costs 1.38/1.23 ns/item (5.69/4.94%) in both epochs; its cross-layout aggregate is flat to slightly faster. The first-pass boxed-method regression does not repeat. Retain under the authorized broader tradeoff; mixed workloads show small, mostly overlapping changes, and no general application speedup is inferred.
+
+|!Workload|!Screen before ns/item|!Screen after|!Change|!Confirmation before|!Confirmation after|!Change
+|local:direct_call|1.566382|1.571353|+0.317%|1.587436|1.573612|-0.871%
+|local:method_call|1.641181|1.652226|+0.673%|1.650754|1.651833|+0.065%
+|local:polymorphic_call|24.186004|23.899226|-1.186%|24.667780|24.776993|+0.443%
+|local:boxed_int_method_fallback|34.310183|33.912892|-1.158%|34.826282|34.539380|-0.824%
+|local:boxed_float_method_fallback|35.660541|35.648227|-0.035%|35.686376|36.179497|+1.382%
+|local:boxed_int_method_effect|94.799668|92.199081|-2.743%|95.598552|92.944575|-2.776%
+|local:list_mutate|127.266125|125.486790|-1.398%|125.993499|125.469214|-0.416%
+|local:temporary_list|1.654713|1.650728|-0.241%|1.672677|1.673528|+0.051%
+|micro:polymorphic_call|84.413480|84.093245|-0.379%|87.124377|85.866722|-1.444%
+|micro:polymorphic_float_call|85.590923|86.375034|+0.916%|86.496975|87.994505|+1.731%
+|micro:boxed_int_method_call|109.137389|112.574588|+3.149%|112.350666|112.033625|-0.282%
+|micro:boxed_float_method_call|115.032702|114.237258|-0.691%|114.396425|115.539870|+1.000%
+|micro:boxed_int_method_fallback|122.126333|122.490338|+0.298%|123.115684|124.534445|+1.152%
+|micro:boxed_float_method_fallback|125.978702|125.302863|-0.536%|129.128556|129.336030|+0.161%
+|micro:boxed_int_method_effect|185.534241|182.127126|-1.836%|183.294668|184.500932|+0.658%
+|micro:indirect_call|13.902598|8.622963|-37.976%|13.903192|8.784971|-36.813%
+|micro:closure_call|18.638579|18.733482|+0.509%|18.804381|18.710237|-0.501%
+|micro:closure_capture|24.317783|24.407777|+0.370%|24.816592|24.462052|-1.429%
+|micro:list_read|2.955516|2.936217|-0.653%|2.970223|2.968023|-0.074%
+|micro:list_build|23.722544|23.533190|-0.798%|23.588541|23.434688|-0.652%
+|micro:list_mutate|125.047987|125.618569|+0.456%|126.005762|126.905929|+0.714%
+|micro:temporary_hash|1.670102|1.668185|-0.115%|1.688123|1.689444|+0.078%
+|float:callback_local_float_return|0.889589|0.886274|-0.373%|0.869748|0.877504|+0.892%
+|float:typed_local_int_unary|1.204996|1.207495|+0.207%|1.212223|1.210992|-0.102%
+|float:callback_loop_float_return|5.170900|5.142891|-0.542%|5.257184|5.209488|-0.907%
+|mixed:csv_report|953.581465|958.499520|+0.516%|973.373022|964.331582|-0.929%
+|mixed:object_orders|3439.512311|3403.446082|-1.049%|3418.893525|3396.550959|-0.654%
+|mixed:callback_pipeline|96.386502|95.665396|-0.748%|96.842113|95.118620|-1.780%
+|mixed:text_index|1380.790142|1364.068141|-1.211%|1389.160156|1375.512394|-0.982%
+|probe:object_short|1693.252101|1686.460553|-0.401%|1705.751361|1719.611010|+0.813%
+|probe:effect_short|1765.577264|1774.126237|+0.484%|1789.894128|1769.075732|-1.163%
+|probe:string_result_loop|568.711259|546.892469|-3.837%|562.537785|556.281395|-1.112%
+
+Corrected Release and Debug each pass 14 fixtures, 28 cases and 3232 assertions; native Debug passes 3232 focused and 4890 broader assertions (overlapping). Frozen runtime checks validate 6072 reference answers per variant. All 62 audit checks pass or are inapplicable. Failed ABI/test/verifier attempts, the separate merge measurement, and installation evidence remain in [results-callback-policy-deferral-macos-arm64.json](results-callback-policy-deferral-macos-arm64.json). No fresh Java/develop ratio or performance ceiling is claimed.

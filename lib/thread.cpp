@@ -2730,24 +2730,25 @@ __attribute__((always_inline)) RuntimeConfigNativeCallHelper::~RuntimeConfigNati
 }
 
 RuntimeConfigNativeLeafCallHelper::RuntimeConfigNativeLeafCallHelper(RuntimeConfig& rc,
-        const QorePreparedFunctionRefV3& cache)
-        : td(RuntimeConfigNativeAccess::getThreadData(rc)), callback_cache(&cache), previous(nullptr),
-          state(ContextState::DeferredMarkers), target_kind(TargetKind::Callback) {
+        RuntimeConfigNativeCallbackContext& context)
+        : td(RuntimeConfigNativeAccess::getThreadData(rc)), callback_context(&context), previous(nullptr),
+          state(ContextState::DeferredMarkers), target_kind(TargetKind::CallbackV2) {
 }
 
 __attribute__((always_inline)) void RuntimeConfigNativeLeafCallHelper::enterReusableCallback(
-        QoreStackLocation* stack_loc, const QoreProgramLocation*& call_loc) {
-    assert(td->current_pgm == callback_cache->pgm);
+        QoreStackLocation* stack_loc, const QoreProgramLocation*& call_loc, const QorePreparedFunctionRefV3& cache) {
+    assert(&cache == &callback_context->cache);
+    assert(td->current_pgm == cache.pgm);
     previous = td->native_leaf_context;
     state = ContextState::DeferredMarkers;
-    call_loc = td->runtime_loc ? td->runtime_loc : callback_cache->parse_loc;
+    call_loc = td->runtime_loc ? td->runtime_loc : cache.parse_loc;
     old_stmt = td->runtime_statement;
     old_loc = td->runtime_loc;
     td->native_leaf_context = this;
     old_stack = publish_pushed_stack_location(td, stack_loc);
     td->runtime_statement = nullptr;
-    const QoreProgramLocation* body_loc = callback_cache->uvb->getAOTBodyLocation();
-    td->runtime_loc = body_loc ? body_loc : callback_cache->parse_loc;
+    const QoreProgramLocation* body_loc = cache.uvb->getAOTBodyLocation();
+    td->runtime_loc = body_loc ? body_loc : cache.parse_loc;
 }
 
 __attribute__((always_inline)) RuntimeConfigNativeLeafCallHelper::RuntimeConfigNativeLeafCallHelper(RuntimeConfig& rc,
@@ -2864,9 +2865,10 @@ __attribute__((noinline)) void RuntimeConfigNativeLeafCallHelper::materialize() 
         pgm = target_kind == TargetKind::Closure ? uvb->pgm : closure_context->closure->getProgram();
         parse_loc = uvb->getUserSignature()->getParseLocation();
     } else {
-        uvb = callback_cache->uvb;
-        pgm = callback_cache->pgm;
-        parse_loc = callback_cache->parse_loc;
+        const auto& cache = target_kind == TargetKind::CallbackV2 ? callback_context->cache : *callback_cache;
+        uvb = cache.uvb;
+        pgm = cache.pgm;
+        parse_loc = cache.parse_loc;
     }
     // Cross-thread observers inspect the published diagnostic chain, not these
     // thread-private variable stacks. The admitted body cannot observe them or
@@ -2890,6 +2892,8 @@ __attribute__((noinline)) void RuntimeConfigNativeLeafCallHelper::materialize() 
         method_context->materialize(td);
     } else if (target_kind == TargetKind::ClosureV2) {
         closure_context->materialize(td);
+    } else if (target_kind == TargetKind::CallbackV2) {
+        callback_context->materialize(td);
     }
     state = ContextState::Materialized;
     td->call_program_context = pgm;
@@ -2937,6 +2941,8 @@ __attribute__((noinline, cold)) void RuntimeConfigNativeLeafCallHelper::restoreM
     if (target_kind == TargetKind::ClosureV2) {
         // Restore the caller's override before applying it to the saved options.
         closure_context->restoreOptions(td);
+    } else if (target_kind == TargetKind::CallbackV2) {
+        callback_context->restoreOptions(td);
     }
     if (swapped) {
         td->runtime_po = apply_runtime_po_override(td, old_po);
@@ -2975,6 +2981,32 @@ __attribute__((noinline, cold)) void RuntimeConfigNativeMethodContext::restore(T
     td->current_class = old_class;
     rc.setObject(old_rc_object);
     rc.setClass(old_rc_class);
+}
+
+__attribute__((noinline, cold)) void RuntimeConfigNativeCallbackContext::materialize(ThreadData* td) {
+    old_mask = td->runtime_po_override_mask;
+    old_value = td->runtime_po_override_value;
+    old_caller_restrictions = td->runtime_po_caller_restrictions;
+    old_module_pgm = td->runtime_po_module_pgm;
+    // Match FunctionRefParseOptionsOverride, including its unchanged enclosing
+    // scope for a same-owner non-module callback. No context is consulted by a
+    // successful compiler-proven scalar body; this runs only before error work.
+    if (cache.uvb->pgm != cache.pgm || qore_program_is_module(cache.uvb->pgm)) {
+        QoreCallParseOptionsOverride o;
+        qore_get_user_call_runtime_po_override(cache.pgm, cache.uvb,
+            apply_runtime_po_override(td, cache.pgm->getParseOptions()), o);
+        td->runtime_po_override_mask = o.mask;
+        td->runtime_po_override_value = o.value;
+        td->runtime_po_caller_restrictions = o.caller_restrictions;
+        td->runtime_po_module_pgm = o.module_pgm;
+    }
+}
+
+__attribute__((noinline, cold)) void RuntimeConfigNativeCallbackContext::restoreOptions(ThreadData* td) {
+    td->runtime_po_override_mask = old_mask;
+    td->runtime_po_override_value = old_value;
+    td->runtime_po_caller_restrictions = old_caller_restrictions;
+    td->runtime_po_module_pgm = old_module_pgm;
 }
 
 __attribute__((noinline, cold)) void RuntimeConfigNativeClosureContext::materialize(ThreadData* td) {
