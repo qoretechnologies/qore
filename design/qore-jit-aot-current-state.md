@@ -5964,3 +5964,29 @@ Baseline and candidate each pass 6,072 reference outputs. Release/Debug each pas
 Production source is restored exactly, Release qore/qcc/libqore are byte-identical to the validated baseline, and 391 Release qmods are rebuilt. The installed 0800e5e231 build is unchanged. Current build-debug is candidate output and must be rebuilt before reuse; no restored Debug binary equivalence is claimed. All failed attempts and final candidate patch remain in the [evidence](../bench/runtime-comparison/results-aot-release-context-rejected-macos-arm64.json); see the [62-check audit](../bench/runtime-comparison/audit-aot-release-context-rejected.md).
 
 No fresh Java/develop ratio or global ceiling is established. The next investigation measures the existing expression-only/monomorphic controls alongside the unchanged original receiver-local kernels. That source-level decomposition can guide a separate borrowing proof, but is not itself a runtime speedup. Any ownership optimization must preserve live runtime locals, fallback materialization, debugger/reflection behavior, concurrent deletion, cancellation and destructor order; the earlier native-only local prototype failed exception-path destructor order.
+
+
+## Receiver source-form decomposition (2026-10-29)
+
+This diagnostic uses unchanged optimized merged 0800e5e231: Release `-O3 -DNDEBUG`, allocation tracking off, identity-matched stripped O3 AOT artifacts. The original receiver-local workloads remain alongside existing expression-only, monomorphic and optional-receiver controls. All 198 processes/594 windows replay independently: 22 workloads, three layouts and three forks, each with three warmup and three measured 150 ms windows at 4096 items. The frozen artifacts previously passed 6072 reference outputs; runtime/source/dependency identities are rechecked. Results are medians of layout medians of process means, in whole-kernel ns/item.
+
+|!Source form|!Same Program ns/item|!Imported ns/item
+|direct_call|1.4698|1.4820
+|method_call|1.5493|1.5596
+|polymorphic_call|21.9954|81.2933
+|polymorphic_expression_call|10.5334|70.1805
+|monomorphic_call|3.8218|3.7335
+|optional_method_call|10.3024|98.3835
+|polymorphic_float_call|22.1451|81.6951
+|polymorphic_float_expression_call|10.6173|71.9654
+|monomorphic_float_call|3.9943|4.0446
+|optional_float_method_call|10.6716|99.1367
+|dispatch_control|1.8127|1.8210
+
+The integer/float receiver-local forms take 21.9954/22.1451 ns/item; their expression forms take 10.5334/10.6173. The roughly 11.5 ns/item difference motivates further local-slot work, but it is not an isolated measurement of reference-count cost or a runtime optimization. Source shape also changes generated branches, caching and cleanup. Static LLVM inspection finds prepared local assignment and cleanup in the original forms, absent from the expression forms; static site counts are not dynamic call counts.
+
+Exact-class monomorphic calls take 3.8218/3.9943 ns/item locally and 3.7335/4.0446 when imported. Generated code can guard and inline a proven exact target. Polymorphic expressions retain dispatch; optional receivers lack the same parse-selected target. The existing immutable PIC already holds four entries, covering the three benchmark targets. Cache capacity is therefore not this workload's missing optimization. Native cached admission deliberately requires caller, receiver and execution Program identity; imported ordinary dispatch retains Program transition and native retry work.
+
+The next experiment targets repeated class acceptance at pinned local initialization. A narrow positive proof may be prepared once for an already-owned entry receiver, with identity checked at every use; private/access-dependent and parameterized constraints must keep live acceptance. Runtime slot ownership, custom reference handlers, real-reference marks, reflection, exceptions and ordered cleanup must remain. Do not revive the rejected native-only local scheme. Pure method invocation already outlines member/eager paths; its remaining frame contains live diagnostic/context state, so no stack-frame reduction is inferred from outlining again.
+
+The shared M4 Pro/macOS host has no affinity/frequency/thermal control. No owned build, test, profiler or heavy scan overlapped timing; observed process ranges are not confidence intervals. There is no new Java/develop comparison, implementation speedup or maximum-performance conclusion. The installed optimized 0800e5e231 runtime is unchanged. See [complete raw evidence](../bench/runtime-comparison/results-receiver-source-forms-macos-arm64.json) and the [62-check audit](../bench/runtime-comparison/audit-receiver-source-forms.md).
