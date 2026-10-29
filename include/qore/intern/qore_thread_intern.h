@@ -413,6 +413,33 @@ DLLLOCAL QoreSandboxManager* qore_find_thread_sandbox_manager_ref();
 DLLLOCAL bool qore_reflection_has_module_caller(const QoreProgram* caller, const QoreProgram* target,
     ExceptionSink* xsink, const QoreClass* cls = nullptr);
 
+//! returns the effective parse options of the Program running on the current thread
+/** These are the parse options of the current Program with the active runtime parse options override applied: the
+    restrictions of the code a call is made for, without the options of the statement making the call (a module
+    header's init closure, for example, is parsed with restricted options of its own)
+*/
+DLLLOCAL QoreParseOptions runtime_get_effective_program_parse_options();
+
+//! returns the parse options of \a pgm with the active runtime parse options override applied
+/** for a call that has already switched to the Program it runs in; \a pgm is the calling Program
+*/
+DLLLOCAL QoreParseOptions runtime_get_effective_parse_options_for(const QoreProgram* pgm);
+
+//! returns the runtime parse options \a po without the restrictions that module code inherits from its caller
+/** Module code runs with the restrictions of its caller as well as its own (see
+    qore_compose_module_call_parse_options()), but a builtin variant flagged with @ref QCF_OWN_PROGRAM_STATE changes
+    only the state of the Program running it on the current thread: called by module code running in its own Program,
+    it can reach only the module's own state, which the caller cannot reach in any case, so it is checked against
+    \a po without the restrictions inherited from the caller.  In every other context, \a po is returned unchanged.
+
+    The module's own restrictions are those of its Program: a restriction that module code sets for a block of its own
+    with %push-parse-options and that its caller also has applies to such a variant only when the variant is resolved
+    when the module is parsed.
+
+    @param po the thread's runtime parse options (runtime_get_parse_options())
+*/
+DLLLOCAL QoreParseOptions runtime_get_own_program_state_parse_options(const QoreParseOptions& po);
+
 //! Marks module code that runs for no application: a module's init or del closure
 /** The Program that loads or unloads a module does not call its init or del closure on its own behalf, so
     qore_reflection_has_module_caller() does not look beyond this point for an application Program; a call reflected
@@ -599,15 +626,37 @@ private:
     QoreParseOptions old_po;
     QoreParseOptions old_mask;
     QoreParseOptions old_value;
+    QoreParseOptions old_caller_restrictions;
+    const QoreProgram* old_module_pgm;
+};
+
+//! the runtime parse options override of a call; see qore_get_user_call_runtime_po_override()
+struct QoreCallParseOptionsOverride {
+    //! the options that the override covers
+    QoreParseOptions mask;
+    //! the value of the options that the override covers
+    QoreParseOptions value;
+    //! the restrictions that module code inherits from its caller (see runtime_get_own_program_state_parse_options())
+    QoreParseOptions caller_restrictions;
+    //! the Program of the module whose code inherits \a caller_restrictions, or nullptr
+    const QoreProgram* module_pgm = nullptr;
 };
 
 class RuntimeParseOptionsOverrideHelper {
 public:
+    //! sets an override that inherits no caller restrictions
     DLLLOCAL RuntimeParseOptionsOverrideHelper(const QoreParseOptions& mask, const QoreParseOptions& value);
     //! Use an already acquired same-thread native context for this scope.
     DLLLOCAL RuntimeParseOptionsOverrideHelper(RuntimeConfig& rc, const QoreParseOptions& mask,
         const QoreParseOptions& value);
+    //! sets the override of a call
+    DLLLOCAL RuntimeParseOptionsOverrideHelper(const QoreCallParseOptionsOverride& o);
+    //! sets the override of a call using an already acquired same-thread context
+    DLLLOCAL RuntimeParseOptionsOverrideHelper(RuntimeConfig& rc, const QoreCallParseOptionsOverride& o);
     DLLLOCAL ~RuntimeParseOptionsOverrideHelper();
+
+    DLLLOCAL RuntimeParseOptionsOverrideHelper(const RuntimeParseOptionsOverrideHelper&) = delete;
+    DLLLOCAL RuntimeParseOptionsOverrideHelper& operator=(const RuntimeParseOptionsOverrideHelper&) = delete;
 
 private:
     DLLLOCAL RuntimeParseOptionsOverrideHelper(ThreadData* td, const QoreParseOptions& mask,
@@ -616,6 +665,10 @@ private:
     QoreParseOptions old_mask;
     QoreParseOptions old_value;
     QoreParseOptions old_po;
+    QoreParseOptions old_caller_restrictions;
+    const QoreProgram* old_module_pgm;
+
+    DLLLOCAL void set(const QoreCallParseOptionsOverride& o);
 };
 
 DLLLOCAL RootQoreNamespace* getRootNS();

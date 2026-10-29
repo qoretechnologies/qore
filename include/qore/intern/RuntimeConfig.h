@@ -127,6 +127,11 @@ public:
     //! @param rc live same-thread invocation view
     //! @return effective runtime parse options, not the compatibility snapshot
     DLLLOCAL static QoreParseOptions getParseOptions(const RuntimeConfig& rc);
+    //! Read a caller Program's effective options after a call has switched Programs, without a TLS lookup.
+    //! @param rc live same-thread invocation view
+    //! @param pgm caller Program, or nullptr to use the live runtime options
+    //! @return the Program's options with the active runtime override applied
+    DLLLOCAL static QoreParseOptions getEffectiveParseOptionsFor(const RuntimeConfig& rc, const QoreProgram* pgm);
     //! Whether this invocation has the variable stacks required by a native observable frame.
     DLLLOCAL static bool hasProgramData(const RuntimeConfig& rc);
     //! Admit a native cache only for an unchanged, ordinary strong-object slot.
@@ -265,8 +270,10 @@ public:
     //! @param rc initialized same-thread invocation context
     //! @param closure borrowed closure, alive throughout this invocation
     //! @param uvb matching immutable closure variant
+    //! @param caller_pgm caller before a Program transition, or nullptr for the current Program
     RuntimeConfigNativeClosureContext(RuntimeConfig& rc, const QoreClosureBase* closure,
-            const UserVariantBase* uvb) : rc(rc), closure(closure), uvb(uvb) {
+            const UserVariantBase* uvb, QoreProgram* caller_pgm = nullptr)
+        : rc(rc), closure(closure), uvb(uvb), caller_pgm(caller_pgm) {
     }
     RuntimeConfigNativeClosureContext(const RuntimeConfigNativeClosureContext&) = delete;
     RuntimeConfigNativeClosureContext& operator=(const RuntimeConfigNativeClosureContext&) = delete;
@@ -276,6 +283,7 @@ private:
     RuntimeConfig& rc;
     const QoreClosureBase* closure;
     const UserVariantBase* uvb;
+    QoreProgram* caller_pgm;
     QoreObject* old_object;
     const qore_class_private* old_class;
     QoreObject* old_rc_object;
@@ -283,13 +291,16 @@ private:
     const QoreObject* old_self;
     bool restore_self;
     struct SavedOptions {
-        SavedOptions(const QoreParseOptions& mask, const QoreParseOptions& value) noexcept : mask(mask), value(value) {
+        SavedOptions(const QoreParseOptions& mask, const QoreParseOptions& value,
+                const QoreParseOptions& caller_restrictions, const QoreProgram* module_pgm) noexcept
+            : mask(mask), value(value), caller_restrictions(caller_restrictions), module_pgm(module_pgm) {
         }
         QoreParseOptions mask;
         QoreParseOptions value;
+        QoreParseOptions caller_restrictions;
+        const QoreProgram* module_pgm;
     };
-    // Disengaged on the successful path; do not initialize two option snapshots
-    // there. Only cold imported-body materialization saves an override.
+    // Disengaged on the successful path; only cold materialization saves an override.
     std::optional<SavedOptions> old_options;
     DLLLOCAL void materialize(ThreadData* td);
     DLLLOCAL void restoreOptions(ThreadData* td);

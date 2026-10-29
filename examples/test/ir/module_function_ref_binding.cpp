@@ -76,7 +76,21 @@ static int64_t inspectExplicit(int64_t, QoreAOTContext*, ExceptionSink* xsink, R
     return inspectOptions(xsink);
 }
 
-static int64_t inspectInline(int64_t, QoreAOTContext*, ExceptionSink* xsink, RuntimeConfig*, const size_t*) {
+static int64_t inspectInline(int64_t, QoreAOTContext*, ExceptionSink* xsink, RuntimeConfig* rc, const size_t* limit) {
+#if defined(__aarch64__) || defined(__x86_64__)
+    // A successful scalar entry cannot inspect its deferred context. Force the
+    // real cold edge before observing it through a builtin, as an overflow does.
+    CHECK(limit);
+    size_t* mutable_limit = const_cast<size_t*>(limit);
+    size_t saved = *mutable_limit;
+    *mutable_limit = get_stack_pos() + 4096;
+    ExceptionSink overflow;
+    int error = qore_rt_check_stack_v2(&overflow, rc);
+    *mutable_limit = saved;
+    CHECK(error && overflow);
+    CHECK(overflow.getExceptionErr().get<const QoreStringNode>()->equal("STACK-LIMIT-EXCEEDED"));
+    overflow.clear();
+#endif
     return inspectOptions(xsink);
 }
 
@@ -103,32 +117,38 @@ static void checkCallerOptions(QoreProgram* pgm, bool enabled) {
         reinterpret_cast<QoreFunctionRefTypedEntry>(inspectTyped), 5);
     qore_rt_bind_function_call_ref_typed_v2(bits(*value), normal,
         reinterpret_cast<QoreFunctionRefTypedEntry>(inspectExplicit), 5);
-    qore_rt_bind_function_call_ref_typed_v3(bits(*value), normal,
-        reinterpret_cast<QoreFunctionRefTypedEntry>(inspectInline), 5);
     RuntimeConfig* rc = qore_rt_get_fast_runtime_config();
+    // Unsupported stack-limit targets retain the eager v2 probe; the typed v2
+    // binding above clears any previous inline-stack binding on this test ref.
+    if (qore_rt_get_stack_limit_v1(rc)) {
+        qore_rt_bind_function_call_ref_typed_v3(bits(*value), normal,
+            reinterpret_cast<QoreFunctionRefTypedEntry>(inspectInline), 5);
+    }
     int64_t original = inspectOptions(&xsink);
     uint64_t args[] = {bits(QoreValue(int64_t(0)))};
     uint64_t result_bits = qore_rt_call_closure_fast(bits(*value), args, 1, &xsink);
     QoreValue generic;
     std::memcpy(&generic, &result_bits, sizeof(generic));
     ValueHolder result_value(generic, &xsink);
-    CHECK(!xsink && result_value->getAsBigInt() == 1);
+    // Injection requires both the importing caller and the module defining the
+    // body to allow it. This module explicitly lacks it (checked above).
+    CHECK(!xsink && result_value->getAsBigInt() == 0);
     CHECK(inspectOptions(&xsink) == original);
     int64_t result = -1;
     CHECK(qore_rt_try_funcref_int_int_v1(bits(*value), 0, &result, &xsink) == 1);
-    CHECK(!xsink && result == 1 && inspectOptions(&xsink) == original);
+    CHECK(!xsink && result == 0 && inspectOptions(&xsink) == original);
     CHECK(qore_rt_try_funcref_int_int_v2(bits(*value), 0, &result, &xsink, rc) == 1);
-    CHECK(!xsink && result == 1 && inspectOptions(&xsink) == original);
+    CHECK(!xsink && result == 0 && inspectOptions(&xsink) == original);
     Prepared prepared(xsink);
     CHECK(qore_rt_try_funcref_int_int_v3(bits(*value), 0, &result, &xsink, rc, &prepared.cache) == 1);
-    CHECK(!xsink && result == 1 && inspectOptions(&xsink) == original);
+    CHECK(!xsink && result == 0 && inspectOptions(&xsink) == original);
     for (unsigned i = 0; i < 3; ++i) {
         CHECK(qore_rt_try_funcref_int_int_v5(bits(*value), 0, &result, &xsink, rc,
             &prepared.cache, &prepared.frame) == 1);
-        CHECK(!xsink && result == 1 && inspectOptions(&xsink) == original);
+        CHECK(!xsink && result == 0 && inspectOptions(&xsink) == original);
         CHECK(qore_rt_try_funcref_int_int_v9(bits(*value), 0, &result, &xsink, rc,
             &prepared.cache, &prepared.frame) == 1);
-        CHECK(!xsink && result == 1 && inspectOptions(&xsink) == original);
+        CHECK(!xsink && result == 0 && inspectOptions(&xsink) == original);
     }
     {
         QoreExternalProgramContextHelper owner_context(&xsink, uvb->pgm);
@@ -138,7 +158,7 @@ static void checkCallerOptions(QoreProgram* pgm, bool enabled) {
         result = -1;
         CHECK(qore_rt_try_funcref_int_int_v9(bits(*value), 0, &result, &xsink, rc,
             &prepared.cache, &prepared.frame) == cross);
-        CHECK(!xsink && result == (cross ? 1 : -1));
+        CHECK(!xsink && result == (cross ? 0 : -1));
         CHECK(rc->getProgram() == uvb->pgm && inspectOptions(&xsink) == owner_original);
     }
     CHECK(rc->getProgram() == pgm && inspectOptions(&xsink) == original && !xsink);

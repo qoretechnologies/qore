@@ -133,7 +133,9 @@ struct EntryProbe {
             // has materialized the frame; no private TLS symbol is exported.
             // Preserve the original stack exception while executing the builtin.
             ExceptionSink options_sink;
-            CHECK(liveAllowsInjection(&options_sink));
+            // The caller permits injection, but the module defining this body
+            // does not. Imported module code keeps both sets of restrictions.
+            CHECK(!liveAllowsInjection(&options_sink));
             // A cold call may replace the RuntimeConfig implementation; restoration
             // must update the current implementation, not a retained old pointer.
             RuntimeConfig replacement(*rc);

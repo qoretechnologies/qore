@@ -80,8 +80,10 @@ privileged init: REFLECTION-ACCESS-ERROR
         #! use it, a call reflected into the module from a Program without injection is refused
         const ExpectedReflectedOutput = "direct: no error
 reflected: REFLECTION-ACCESS-ERROR
+sibling direct: INVALID-FUNCTION-ACCESS
 direct: no error
 reflected: REFLECTION-ACCESS-ERROR
+sibling direct: INVALID-FUNCTION-ACCESS
 ";
     }
 
@@ -101,6 +103,7 @@ reflected: REFLECTION-ACCESS-ERROR
         writeFile(src_dir + "/ChainA.qm", chainAModuleCode());
         writeFile(src_dir + "/ChainCallback.qm", chainCallbackModuleCode());
         writeFile(src_dir + "/ChainInit.qm", chainInitModuleCode());
+        writeFile(src_dir + "/InitNarrowProbe.qm", initNarrowModuleCode());
 
         addTestCase("a module constructs a class of a module loaded by a Program with more allowed options",
             \testFactory());
@@ -113,6 +116,8 @@ reflected: REFLECTION-ACCESS-ERROR
             \testReflectedCall());
         addTestCase("module reflection is judged by the nearest application, or strictly without one",
             \testChain());
+        addTestCase("a module's init runs with the restrictions it inherited from the restricted Program loading it",
+            \testInitNarrowed());
 
         set_return_value(main());
     }
@@ -264,6 +269,38 @@ public string sub initResult() {
 ";
     }
 
+    #! a module whose init closure uses a builtin with a functional domain
+    private string initNarrowModuleCode() {
+        return "%modern
+
+module InitNarrowProbe {
+    version = \"1.0\";
+    desc = \"init narrowing probe module\";
+    author = \"Qore\";
+    license = \"MIT\";
+    init = sub () {
+        try {
+            InitNarrowProbe::Holder::value = call_function(\"gethostname\").empty() ? \"empty\" : \"host\";
+        } catch (hash<ExceptionInfo> ex) {
+            InitNarrowProbe::Holder::value = ex.err;
+        }
+    };
+}
+
+public namespace InitNarrowProbe {
+class Holder {
+    public {
+        static string value = \"unset\";
+    }
+}
+
+public string sub initResult() {
+    return Holder::value;
+}
+}
+";
+    }
+
     #! a module whose class methods (which run in the module's Program) use builtins with functional domains
     private string probeModuleCode() {
         return "%modern
@@ -400,7 +437,8 @@ public class ImplFactory inherits InheritedFactoryBase::AbstractFactory {
 %requires InheritedFactoryBase
 %allow-injection
 
-Program loader(PO_NEW_STYLE | PO_ALLOW_INJECTION);
+Program loader(PO_MODERN | PO_ALLOW_INJECTION);
+loader.setExecMode(__QORE_TEST_EXEC_MODE__);
 loader.parse(\"sub load() { load_module('InheritedFactoryImpl'); }\", \"loader\");
 loader.callFunction(\"load\");
 
@@ -426,9 +464,11 @@ for (int i = 0; i < 3; ++i) {
 %no-child-restrictions
 %requires reflection
 
-Program target(PO_NEW_STYLE | PO_ALLOW_INJECTION);
+Program target(PO_MODERN | PO_ALLOW_INJECTION);
+target.setExecMode(__QORE_TEST_EXEC_MODE__);
 target.parse(\"class T { constructor() {} }\", \"target\");
-Program sibling(PO_NEW_STYLE);
+Program sibling(PO_MODERN);
+sibling.setExecMode(__QORE_TEST_EXEC_MODE__);
 sibling.loadModule(\"reflection\");
 sibling.parse(\"auto sub construct(Class c) { return c.getConstructorVariantArgs(()).call().className(); }\",
     \"sibling\");
@@ -449,11 +489,13 @@ for (int i = 0; i < 2; ++i) {
 %allow-injection
 %no-child-restrictions
 
-Program nloader(PO_NEW_STYLE);
+Program nloader(PO_MODERN);
+nloader.setExecMode(__QORE_TEST_EXEC_MODE__);
 nloader.parse(\"sub l() { load_module('ChainReflect'); load_module('ChainA'); load_module('ChainCallback'); }\",
     \"nloader\");
 nloader.callFunction(\"l\");
-Program iloader(PO_NEW_STYLE | PO_ALLOW_INJECTION);
+Program iloader(PO_MODERN | PO_ALLOW_INJECTION);
+iloader.setExecMode(__QORE_TEST_EXEC_MODE__);
 iloader.parse(\"sub l() { load_module('ChainTarget'); }\", \"iloader\");
 iloader.callFunction(\"l\");
 
@@ -464,8 +506,10 @@ string sub fire() { return ChainCallback::Reg::fire(); }
 string sub background_construct() { return ChainReflect::Caller::bgConstruct(); }
 string sub init_construct() { load_module('ChainInit'); return call_function('ChainInit::initResult'); }\";
 
-Program priv(PO_NEW_STYLE | PO_ALLOW_INJECTION);
-Program restricted(PO_NEW_STYLE);
+Program priv(PO_MODERN | PO_ALLOW_INJECTION);
+priv.setExecMode(__QORE_TEST_EXEC_MODE__);
+Program restricted(PO_MODERN);
+restricted.setExecMode(__QORE_TEST_EXEC_MODE__);
 foreach Program p in (priv, restricted) {
     p.loadModule(\"ChainReflect\");
     p.loadModule(\"ChainA\");
@@ -485,17 +529,36 @@ printf(\"privileged init: %s\\n\", priv.callFunction(\"init_construct\"));
 ";
     }
 
+    #! a restricted Program loads the module first, so its init closure runs with the restriction
+    private string initNarrowScript() {
+        return "%modern
+
+Program loader(PO_MODERN | PO_NO_EXTERNAL_INFO);
+loader.setExecMode(__QORE_TEST_EXEC_MODE__);
+loader.parse(\"string sub load() { load_module('InitNarrowProbe'); return call_function('InitNarrowProbe::initResult'); }\",
+    \"loader\");
+printf(\"restricted loader init: %s\\n\", loader.callFunction(\"load\"));
+Program other(PO_MODERN);
+other.setExecMode(__QORE_TEST_EXEC_MODE__);
+other.loadModule(\"InitNarrowProbe\");
+other.parse(\"string sub get() { return InitNarrowProbe::initResult(); }\", \"other\");
+printf(\"seen by an unrestricted Program: %s\\n\", other.callFunction(\"get\"));
+";
+    }
+
     #! the probe module is loaded first by a restricted Program without injection and called by one with injection
     private string narrowScript() {
         return "%modern
 %allow-injection
 %no-child-restrictions
 
-Program loader(PO_NEW_STYLE | PO_NO_EXTERNAL_INFO);
+Program loader(PO_MODERN | PO_NO_EXTERNAL_INFO);
+loader.setExecMode(__QORE_TEST_EXEC_MODE__);
 loader.parse(\"sub load() { load_module('InheritedProbe'); }\", \"loader\");
 loader.callFunction(\"load\");
 
-Program caller(PO_NEW_STYLE | PO_ALLOW_INJECTION);
+Program caller(PO_MODERN | PO_ALLOW_INJECTION);
+caller.setExecMode(__QORE_TEST_EXEC_MODE__);
 caller.loadModule(\"InheritedProbe\");
 caller.parse(\"string sub host() { return InheritedProbe::Probe::host(); }
 string sub inject() { return InheritedProbe::Probe::inject(); }\", \"caller\");
@@ -514,19 +577,23 @@ for (int i = 0; i < 2; ++i) {
 %no-child-restrictions
 %requires reflection
 
-Program loader(PO_NEW_STYLE | PO_ALLOW_INJECTION);
+Program loader(PO_MODERN | PO_ALLOW_INJECTION);
+loader.setExecMode(__QORE_TEST_EXEC_MODE__);
 loader.parse(\"sub load() { load_module('InheritedProbe'); }\", \"loader\");
 loader.callFunction(\"load\");
 
-Program caller(PO_NEW_STYLE | PO_ALLOW_INJECTION);
+Program caller(PO_MODERN | PO_ALLOW_INJECTION);
+caller.setExecMode(__QORE_TEST_EXEC_MODE__);
 caller.loadModule(\"InheritedProbe\");
 caller.parse(\"string sub direct() { return InheritedProbe::Probe::make().probe(); }
 object sub make() { return InheritedProbe::Probe::make(); }\", \"caller\");
 
-Program sibling(PO_NEW_STYLE);
+Program sibling(PO_MODERN);
+sibling.setExecMode(__QORE_TEST_EXEC_MODE__);
 sibling.loadModule(\"reflection\");
-sibling.parse(\"auto sub reflect(object o) { return Class::getClass(o).getNormalMethod('probe').call(o); }\",
-    \"sibling\");
+sibling.loadModule(\"InheritedProbe\");
+sibling.parse(\"auto sub reflect(object o) { return Class::getClass(o).getNormalMethod('probe').call(o); }
+string sub direct_static() { return InheritedProbe::Probe::inject(); }\", \"sibling\");
 
 for (int i = 0; i < 2; ++i) {
     printf(\"direct: %s\\n\", caller.callFunction(\"direct\"));
@@ -535,6 +602,8 @@ for (int i = 0; i < 2; ++i) {
     } catch (hash<ExceptionInfo> ex) {
         printf(\"reflected: %s\\n\", ex.err);
     }
+    # a method of the module runs with the restrictions of its caller, without injection
+    printf(\"sibling direct: %s\\n\", sibling.callFunction(\"direct_static\"));
 }
 ";
     }
@@ -553,18 +622,35 @@ for (int i = 0; i < 2; ++i) {
         return env_dir ? dir + ":" + qlib_dir + ":" + env_dir : dir + ":" + qlib_dir;
     }
 
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
     private compileModule(string name) {
         string qmod_path = qmod_dir + "/" + name + ".qmod";
+        int status;
         string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s "
-            "QORE_MODULE_DIR=%s %s -b --compile-module --output %s %s 2>&1", libqore_dir, libqore_dir, libqore_dir,
-            modulePath(qmod_dir + ":" + src_dir), qore_bin, qmod_path, src_dir + "/" + name + ".qm"));
+            "QORE_MODULE_DIR=%s %s -b --compile-module --output %s %s 2>&1",
+            quote(libqore_dir), quote(libqore_dir), quote(libqore_dir),
+            quote(modulePath(qmod_dir + ":" + src_dir)), quote(qore_bin), quote(qmod_path),
+            quote(src_dir + "/" + name + ".qm")), \status);
+        assertEq(0, status, compile_out);
         assertTrue(is_file(qmod_path), sprintf("compiled %s: %s", name, compile_out));
     }
 
     private hash<ExecModeHarness::ModeRunResult> runScript(string module_dir, string script_path, string mode) {
-        return ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s "
-            "QORE_MODULE_DIR=%s %s -b --enable-debug --exec-mode=%s %s", libqore_dir, libqore_dir, libqore_dir,
-            modulePath(module_dir), qore_bin, mode, script_path));
+        # Child Programs choose their execution mode independently of the process.
+        script_path = writeFile(script_path + "." + mode + ".q",
+            replace(ReadOnlyFile::readTextFile(script_path), "__QORE_TEST_EXEC_MODE__", "EM_" + toupper(mode)));
+        hash<ExecModeHarness::ModeRunResult> result = ExecModeHarness::run_command(sprintf(
+            "LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s "
+            "QORE_MODULE_DIR=%s %s -b --enable-debug --exec-mode=%s %s",
+            quote(libqore_dir), quote(libqore_dir), quote(libqore_dir),
+            quote(modulePath(module_dir)), quote(qore_bin), mode, quote(script_path)));
+        assertEq(0, result.rc, result.out);
+        assertEq((), result.loader_warnings, "module calls use the requested source/AOT modules");
+        ExecModeHarness::check_native(result);
+        return result;
     }
 
     #! runs the script with the source and the AOT modules in every mode and checks the output
@@ -591,6 +677,7 @@ for (int i = 0; i < 2; ++i) {
         compileModule("ChainA");
         compileModule("ChainCallback");
         compileModule("ChainInit");
+        compileModule("InitNarrowProbe");
     }
 
     testFactory() {
@@ -616,5 +703,12 @@ for (int i = 0; i < 2; ++i) {
     testChain() {
         compileModules();
         checkAllModes("chain.q", chainScript(), ExpectedChainOutput);
+    }
+
+    testInitNarrowed() {
+        compileModules();
+        checkAllModes("init-narrow.q", initNarrowScript(), "restricted loader init: INVALID-FUNCTION-ACCESS
+seen by an unrestricted Program: INVALID-FUNCTION-ACCESS
+");
     }
 }

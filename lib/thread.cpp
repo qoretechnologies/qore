@@ -408,6 +408,12 @@ public:
     QoreParseOptions runtime_po;
     QoreParseOptions runtime_po_override_mask;
     QoreParseOptions runtime_po_override_value;
+    //! the restrictions that the code of runtime_po_module_pgm inherits from its caller
+    /** see runtime_get_own_program_state_parse_options()
+    */
+    QoreParseOptions runtime_po_caller_restrictions;
+    //! the Program of the module whose code runs with runtime_po_caller_restrictions, or nullptr
+    const QoreProgram* runtime_po_module_pgm = nullptr;
     int tid;
 
     VLock vlock;     // for deadlock detection
@@ -2408,11 +2414,19 @@ const QoreStackLocation* get_runtime_stack_location() {
     return thread_data.get()->current_stack_location.load(std::memory_order_relaxed);
 }
 
+// An override only narrows the options of the code running under it: it adds the restricting options of its value
+// that the mask covers, and removes the explicitly-allowed options that the mask covers and its value lacks.  It never
+// lifts a restriction of the code itself, so code of another Program that runs while it is active (a callback, a
+// closure, Program::run()) keeps its own restrictions, and a module keeps those it inherited
 static QoreParseOptions apply_runtime_po_override(ThreadData* td, const QoreParseOptions& po) {
     if (!td->runtime_po_override_mask) {
         return po;
     }
-    return (po & ~td->runtime_po_override_mask) | (td->runtime_po_override_value & td->runtime_po_override_mask);
+    const QoreParseOptions& mask = td->runtime_po_override_mask;
+    const QoreParseOptions& value = td->runtime_po_override_value;
+    QoreParseOptions positive_mask = mask & QoreParseOptions::POSITIVE_OPTIONS;
+    QoreParseOptions restricting_mask = mask & ~QoreParseOptions::POSITIVE_OPTIONS;
+    return (po | (value & restricting_mask)) & ~(positive_mask & ~value);
 }
 
 // Whether a thread that pops a call stack location can leave all the ordering to the walker's heavy barrier
@@ -2581,6 +2595,12 @@ const qore_class_private* RuntimeConfigNativeAccess::getClass(const RuntimeConfi
 
 QoreParseOptions RuntimeConfigNativeAccess::getParseOptions(const RuntimeConfig& rc) {
     return getThreadData(rc)->runtime_po;
+}
+
+QoreParseOptions RuntimeConfigNativeAccess::getEffectiveParseOptionsFor(const RuntimeConfig& rc,
+        const QoreProgram* pgm) {
+    ThreadData* td = getThreadData(rc);
+    return pgm ? apply_runtime_po_override(td, pgm->getParseOptions()) : td->runtime_po;
 }
 
 extern "C" DLLEXPORT void qore_rt_get_cancel_poll_state_v1(RuntimeConfig* rc, QoreCancelPollStateV1* state) {
@@ -2959,11 +2979,15 @@ __attribute__((noinline, cold)) void RuntimeConfigNativeMethodContext::restore(T
 
 __attribute__((noinline, cold)) void RuntimeConfigNativeClosureContext::materialize(ThreadData* td) {
     QoreProgram* pgm = closure->getProgram();
-    if (pgm != uvb->pgm) {
-        old_options.emplace(td->runtime_po_override_mask, td->runtime_po_override_value);
-        td->runtime_po_override_mask = get_user_variant_runtime_po_override_mask();
-        td->runtime_po_override_value = pgm->getParseOptions();
-    }
+    QoreCallParseOptionsOverride o;
+    qore_get_user_call_runtime_po_override(pgm, uvb,
+        RuntimeConfigNativeAccess::getEffectiveParseOptionsFor(rc, caller_pgm ? caller_pgm : td->current_pgm), o);
+    old_options.emplace(td->runtime_po_override_mask, td->runtime_po_override_value,
+        td->runtime_po_caller_restrictions, td->runtime_po_module_pgm);
+    td->runtime_po_override_mask = o.mask;
+    td->runtime_po_override_value = o.value;
+    td->runtime_po_caller_restrictions = o.caller_restrictions;
+    td->runtime_po_module_pgm = o.module_pgm;
     old_object = td->current_obj;
     old_class = td->current_class;
     old_rc_object = rc.getObject();
@@ -2984,6 +3008,8 @@ __attribute__((noinline, cold)) void RuntimeConfigNativeClosureContext::restoreO
     if (old_options) {
         td->runtime_po_override_mask = old_options->mask;
         td->runtime_po_override_value = old_options->value;
+        td->runtime_po_caller_restrictions = old_options->caller_restrictions;
+        td->runtime_po_module_pgm = old_options->module_pgm;
         old_options.reset();
     }
 }
@@ -4603,6 +4629,25 @@ QoreParseOptions runtime_get_parse_options() {
     return (thread_data.get())->runtime_po;
 }
 
+QoreParseOptions runtime_get_effective_program_parse_options() {
+    return runtime_get_effective_parse_options_for(thread_data.get()->current_pgm);
+}
+
+QoreParseOptions runtime_get_effective_parse_options_for(const QoreProgram* pgm) {
+    ThreadData* td = thread_data.get();
+    return pgm ? apply_runtime_po_override(td, pgm->getParseOptions()) : td->runtime_po;
+}
+
+QoreParseOptions runtime_get_own_program_state_parse_options(const QoreParseOptions& po) {
+    ThreadData* td = thread_data.get();
+    // only code running in the module's own Program reaches only the module's own state: a module function runs in
+    // its caller's Program, and code of another Program can run while the module's override is active
+    if (!td->runtime_po_module_pgm || td->runtime_po_module_pgm != td->current_pgm) {
+        return po;
+    }
+    return po & ~td->runtime_po_caller_restrictions;
+}
+
 RuntimeParseOptionsOverrideHelper::RuntimeParseOptionsOverrideHelper(const QoreParseOptions& mask,
         const QoreParseOptions& value)
         : RuntimeParseOptionsOverrideHelper(thread_data.get(), mask, value) {
@@ -4615,18 +4660,43 @@ RuntimeParseOptionsOverrideHelper::RuntimeParseOptionsOverrideHelper(RuntimeConf
 
 RuntimeParseOptionsOverrideHelper::RuntimeParseOptionsOverrideHelper(ThreadData* td,
         const QoreParseOptions& mask, const QoreParseOptions& value) : td(td) {
+    QoreCallParseOptionsOverride o;
+    o.mask = mask;
+    o.value = value;
+    set(o);
+}
+
+RuntimeParseOptionsOverrideHelper::RuntimeParseOptionsOverrideHelper(const QoreCallParseOptionsOverride& o)
+        : td(thread_data.get()) {
+    set(o);
+}
+
+RuntimeParseOptionsOverrideHelper::RuntimeParseOptionsOverrideHelper(RuntimeConfig& rc,
+        const QoreCallParseOptionsOverride& o) : td(RuntimeConfigNativeAccess::getThreadData(rc)) {
+    set(o);
+}
+
+void RuntimeParseOptionsOverrideHelper::set(const QoreCallParseOptionsOverride& o) {
+    // the caller restrictions apply only to the code of the given module Program
+    assert(!o.caller_restrictions || o.module_pgm);
     assert(td);
     old_mask = td->runtime_po_override_mask;
     old_value = td->runtime_po_override_value;
     old_po = td->runtime_po;
-    td->runtime_po_override_mask = mask;
-    td->runtime_po_override_value = value;
+    old_caller_restrictions = td->runtime_po_caller_restrictions;
+    old_module_pgm = td->runtime_po_module_pgm;
+    td->runtime_po_override_mask = o.mask;
+    td->runtime_po_override_value = o.value;
+    td->runtime_po_caller_restrictions = o.caller_restrictions;
+    td->runtime_po_module_pgm = o.module_pgm;
     td->runtime_po = apply_runtime_po_override(td, td->runtime_po);
 }
 
 RuntimeParseOptionsOverrideHelper::~RuntimeParseOptionsOverrideHelper() {
     td->runtime_po_override_mask = old_mask;
     td->runtime_po_override_value = old_value;
+    td->runtime_po_caller_restrictions = old_caller_restrictions;
+    td->runtime_po_module_pgm = old_module_pgm;
     td->runtime_po = old_po;
 }
 
@@ -4635,8 +4705,12 @@ LoadTimeParseOptionsHelper::LoadTimeParseOptionsHelper(const QoreParseOptions& p
     old_po = td->runtime_po;
     old_mask = td->runtime_po_override_mask;
     old_value = td->runtime_po_override_value;
+    old_caller_restrictions = td->runtime_po_caller_restrictions;
+    old_module_pgm = td->runtime_po_module_pgm;
     td->runtime_po_override_mask = QoreParseOptions();
     td->runtime_po_override_value = QoreParseOptions();
+    td->runtime_po_caller_restrictions = QoreParseOptions();
+    td->runtime_po_module_pgm = nullptr;
     td->runtime_po = po;
 }
 
@@ -4644,6 +4718,8 @@ LoadTimeParseOptionsHelper::~LoadTimeParseOptionsHelper() {
     ThreadData* td = thread_data.get();
     td->runtime_po_override_mask = old_mask;
     td->runtime_po_override_value = old_value;
+    td->runtime_po_caller_restrictions = old_caller_restrictions;
+    td->runtime_po_module_pgm = old_module_pgm;
     td->runtime_po = old_po;
 }
 

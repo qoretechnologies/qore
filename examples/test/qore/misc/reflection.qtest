@@ -2845,8 +2845,8 @@ class ReflectionTest inherits QUnit::Test {
 
         {
             AbstractReflectionFunction f = Function::forName("get_thread_data");
-            assertEq(CF_RET_VALUE_ONLY | CF_NAMED_ARGS, f.getCodeFlags());
-            assertEq(("RET_VALUE_ONLY", "NAMED_ARGS"), f.getCodeFlagList());
+            assertEq(CF_RET_VALUE_ONLY | CF_NAMED_ARGS | CF_OWN_PROGRAM_STATE, f.getCodeFlags());
+            assertEq(("RET_VALUE_ONLY", "NAMED_ARGS", "OWN_PROGRAM_STATE"), f.getCodeFlagList());
             assertEq(DOM_THREAD_CONTROL | DOM_THREAD_INFO, f.getDomain());
             assertEq(("THREAD_CONTROL", "THREAD_INFO"), f.getDomainStringList());
         }

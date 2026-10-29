@@ -7291,17 +7291,22 @@ static bool functionRefOwnerHasDebugger(const UserVariantBase* uvb, QoreProgram*
     return uvb->pgm != pgm && qore_program_private::get(*uvb->pgm)->hasDebuggerAttached();
 }
 
-// Imported native bodies need the same caller-option override as eval(), even
-// when the reference's captured Program is already current. Keep an enclosing
-// override untouched for the existing same-owner path.
+// Imported/module native bodies need the same caller-option override as eval(),
+// even when the reference's captured Program is already current. Keep an enclosing
+// override untouched for the existing same-owner non-module path.
 class FunctionRefParseOptionsOverride {
 public:
     FunctionRefParseOptionsOverride(const UserVariantBase* uvb, QoreProgram* pgm, RuntimeConfig* rc = nullptr) {
-        if (uvb->pgm != pgm) {
+        if (uvb->pgm != pgm || qore_program_is_module(uvb->pgm)) {
+            QoreCallParseOptionsOverride o;
+            QoreParseOptions caller_po = rc
+                ? RuntimeConfigNativeAccess::getEffectiveParseOptionsFor(*rc, pgm)
+                : runtime_get_effective_parse_options_for(pgm);
+            qore_get_user_call_runtime_po_override(pgm, uvb, caller_po, o);
             if (rc) {
-                override.emplace(*rc, get_user_variant_runtime_po_override_mask(), pgm->getParseOptions());
+                override.emplace(*rc, o);
             } else {
-                override.emplace(get_user_variant_runtime_po_override_mask(), pgm->getParseOptions());
+                override.emplace(o);
             }
         }
     }
@@ -11204,7 +11209,7 @@ public:
             const QoreClosureBase* closure, QoreProgram* caller_pgm = nullptr)
         : name(closureName()), statements(uvb->getStatementBlock()),
           pgm(caller_pgm ? caller_pgm : closure->getProgram()),
-          context(rc, closure, uvb), helper(rc, this, loc, context) {
+          context(rc, closure, uvb, caller_pgm), helper(rc, this, loc, context) {
     }
     __attribute__((always_inline)) ~QoreDeferredNativeClosureStackLocationV2() override = default;
     const QoreProgramLocation& getLocation() const override { return loc ? *loc : loc_builtin; }
@@ -11243,6 +11248,13 @@ static __attribute__((noinline)) int64_t execNativeClosureV1Context(RuntimeConfi
         const UserVariantBase* uvb, QoreAOTContext::NativeIntUnaryClosureEntry entry,
         int64_t argument, const QoreClosureBase* closure, int* accepted,
         QoreAOTContext* ctx, ExceptionSink* xsink, bool deferred, QoreProgram* caller_pgm) {
+    // Older entries install context eagerly. Preserve the same caller policy as
+    // v2's cold materialization, including a module's own-state identity.
+    QoreCallParseOptionsOverride o;
+    qore_get_user_call_runtime_po_override(closure->getProgram(), uvb,
+        RuntimeConfigNativeAccess::getEffectiveParseOptionsFor(rc,
+            CallerProgramFrame ? caller_pgm : RuntimeConfigNativeAccess::getProgram(rc)), o);
+    RuntimeParseOptionsOverrideHelper po_override(rc, o);
     QoreObject* self = closure->getObject();
     std::optional<QoreClosureSelfContextHelper> self_context;
     if (self) {
@@ -11525,6 +11537,10 @@ static __attribute__((noinline)) int tryCrossProgramFunctionRef(RuntimeConfig& r
     // concurrent debugger change can still cause a miss; RAII restores the
     // caller before its ordinary fallback. The nested miss cannot reenter this
     // transition because the captured Program is now current.
+    QoreCallParseOptionsOverride o;
+    qore_get_user_call_runtime_po_override(ref->getProgram(), uvb,
+        RuntimeConfigNativeAccess::getEffectiveParseOptionsFor(rc, current), o);
+    RuntimeParseOptionsOverrideHelper po_override(rc, o);
     return tryTypedFunctionRefExplicit<Result, Signature>(rc, ref_bits, result, xsink, args...);
 }
 
@@ -12161,26 +12177,39 @@ static QoreProgram* qore_rt_function_execution_program(QoreProgram* explicit_pgm
 }
 
 //! sets the runtime parse options override of a fast call of a user variant as UserVariantBase::eval() does
-/** A user variant that runs in a Program other than the one that defined it is restricted with the executing
-    Program's restrictions; otherwise any override of the caller is cleared for the call.
+/** See qore_get_user_call_runtime_po_override(): a user variant that runs in a Program other than the one that
+    defined it is restricted with the executing Program's restrictions, module code also with its caller's, and
+    otherwise any override of the caller is cleared for the call.
 */
 class QoreRtUserCallOverrideHelper {
 public:
-    DLLLOCAL QoreRtUserCallOverrideHelper(QoreProgram* exec_pgm, const UserVariantBase* uvb)
-            : helper(exec_pgm && exec_pgm != uvb->pgm ? get_user_variant_runtime_po_override_mask()
-                    : QoreParseOptions(),
-                exec_pgm ? exec_pgm->getParseOptions() : QoreParseOptions()) {
+    //! \a caller_pgm is the Program the call was made from, before it switched to \a exec_pgm
+    DLLLOCAL QoreRtUserCallOverrideHelper(QoreProgram* exec_pgm, const UserVariantBase* uvb, QoreProgram* caller_pgm)
+            : helper(get(exec_pgm, uvb, caller_pgm)) {
     }
 
     DLLLOCAL QoreRtUserCallOverrideHelper(RuntimeConfig& rc, QoreProgram* exec_pgm,
-            const UserVariantBase* uvb)
-            : helper(rc, exec_pgm && exec_pgm != uvb->pgm ? get_user_variant_runtime_po_override_mask()
-                    : QoreParseOptions(),
-                exec_pgm ? exec_pgm->getParseOptions() : QoreParseOptions()) {
+            const UserVariantBase* uvb, QoreProgram* caller_pgm)
+            : helper(rc, get(rc, exec_pgm, uvb, caller_pgm)) {
     }
 
 private:
     RuntimeParseOptionsOverrideHelper helper;
+
+    DLLLOCAL static QoreCallParseOptionsOverride get(RuntimeConfig& rc, QoreProgram* exec_pgm,
+            const UserVariantBase* uvb, QoreProgram* caller_pgm) {
+        QoreCallParseOptionsOverride o;
+        qore_get_user_call_runtime_po_override(exec_pgm, uvb,
+            RuntimeConfigNativeAccess::getEffectiveParseOptionsFor(rc, caller_pgm), o);
+        return o;
+    }
+
+    DLLLOCAL static QoreCallParseOptionsOverride get(QoreProgram* exec_pgm, const UserVariantBase* uvb,
+            QoreProgram* caller_pgm) {
+        QoreCallParseOptionsOverride o;
+        qore_get_user_call_runtime_po_override(exec_pgm, uvb, runtime_get_effective_parse_options_for(caller_pgm), o);
+        return o;
+    }
 };
 
 // The eager diagnostic control has its own frame, so its saved option state
@@ -12188,7 +12217,8 @@ private:
 static __attribute__((noinline)) bool execImportedNativeIntClosureEagerOptions(RuntimeConfig& rc,
         const QoreClosureBase* closure, const UserVariantBase* uvb, int64_t argument,
         int64_t& result, ExceptionSink* xsink, QoreProgram* caller_pgm, bool caller_program_frame) {
-    QoreRtUserCallOverrideHelper po_override(rc, closure->getProgram(), uvb);
+    QoreRtUserCallOverrideHelper po_override(rc, closure->getProgram(), uvb,
+        caller_program_frame ? caller_pgm : RuntimeConfigNativeAccess::getProgram(rc));
     return caller_program_frame
         ? tryExecNativeIntClosureScalar<true, true>(rc, closure, uvb, argument, result, xsink, caller_pgm)
         : tryExecNativeIntClosureScalar<false, true>(rc, closure, uvb, argument, result, xsink);
@@ -12504,7 +12534,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
         // function body must not inherit its caller's object/class privileges.
         ObjectSubstitutionHelper function_context(nullptr, nullptr);
         ArgvContextHelper argv_helper(argv.release(), xsink);
-        QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb);
+        QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb, caller_pgm);
         if (use_direct_params) {
             // Direct params path: pass args straight to IR slot cache, no TLS
             IRDirectParams dp{args, nargs};
@@ -12735,7 +12765,7 @@ static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBa
     QoreValue val{};
     {
         ArgvContextHelper argv_helper(argv.release(), xsink);
-        QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb);
+        QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb, caller_pgm);
         if (use_direct_params) {
             // Direct params path: pass args straight to IR slot cache, no TLS
             IRDirectParams dp(args, nargs, arg_cleanups);
@@ -12956,7 +12986,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast_with_target(uint64_t (*target_fn
     {
         ObjectSubstitutionHelper function_context(nullptr, nullptr);
         ArgvContextHelper argv_helper(argv.release(), xsink);
-        QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb);
+        QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb, caller_pgm);
         execJITWithDeopt(uvb, call_name, [target_fn](ExceptionSink* xs, bool& /*inv*/) {
             return target_fn(xs);
         }, val, xsink, caller_pgm, nullptr, exec_pgm);
@@ -13087,7 +13117,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_self_recursive(const AbstractQoreFunc
     QoreValue val{};
     {
         ArgvContextHelper argv_helper(argv.release(), xsink);
-        QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb);
+        QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb, caller_pgm);
         execJITWithDeopt(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
             return uvb->execCachedFunction(xs, inv);
         }, val, xsink, caller_pgm, nullptr, exec_pgm);
@@ -13381,7 +13411,7 @@ static uint64_t qore_rt_call_method_fast_impl(const QoreMethod* method,
     QoreValue val{};
     {
         ArgvContextHelper argv_helper(argv.release(), xsink);
-        QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb);
+        QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb, caller_pgm);
         if (use_direct_params) {
             // Direct params path: pass args straight to IR slot cache, no TLS
             IRDirectParams dp{args, nargs};
@@ -17606,7 +17636,7 @@ static uint64_t qore_rt_call_direct_aot_impl(QoreAOTContext* ctx, int32_t slot,
             // context, then clear object/class context for the function body.
             ObjectSubstitutionHelper function_context(nullptr, nullptr);
             ArgvContextHelper argv_helper(argv.release(), xsink);
-            QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb);
+            QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb, caller_pgm);
             if (uvb->hasCachedFunction()) {
                 execJITWithDeopt(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
                     return uvb->execCachedFunction(xs, inv);
@@ -19718,13 +19748,18 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
         result = toBits(QoreValue());
         return true;
     }
-    if (retry == NativeRetry::Pure && try_dispatch_cross_program_native_method(o, method, variant, uvb, args,
-                arg_cleanups, nargs, xsink, result, caller_pgm)) {
-        return true;
-    }
-    if (retry == NativeRetry::Member && try_dispatch_cross_program_member_method(o, method, variant, uvb, args,
-                arg_cleanups, xsink, result, caller_pgm)) {
-        return true;
+    if (retry != NativeRetry::None) {
+        // These entries bypass the ordinary body scope below. Preserve the caller's effective restrictions
+        // and the module's own-state identity even when the native body defers its other context until error.
+        QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb, caller_pgm);
+        if (retry == NativeRetry::Pure && try_dispatch_cross_program_native_method(o, method, variant, uvb, args,
+                    arg_cleanups, nargs, xsink, result, caller_pgm)) {
+            return true;
+        }
+        if (retry == NativeRetry::Member && try_dispatch_cross_program_member_method(o, method, variant, uvb, args,
+                    arg_cleanups, xsink, result, caller_pgm)) {
+            return true;
+        }
     }
     // This fast dot-eval path bypasses CodeEvaluationHelper/UserVariantExecHelper,
     // so it must establish the callee frame itself, like qore_rt_call_method_fast().
@@ -19819,7 +19854,7 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
         if (use_argv) {
             argv_helper.emplace(argv.release(), xsink);
         }
-        QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb);
+        QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb, caller_pgm);
         if (use_direct_params) {
             // Direct params path: pass args straight to IR slot cache, no TLS
             IRDirectParams dp{args, nargs, arg_cleanups};
@@ -22127,7 +22162,7 @@ static uint64_t qore_rt_call_static_method_direct_impl(const QoreMethod* method,
     QoreValue val{};
     {
         ArgvContextHelper argv_helper(argv.release(), xsink);
-        QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb);
+        QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb, caller_pgm);
         // Set class context for private method access (matches AST's
         // ObjectSubstitutionHelper in StaticMethodFunction::evalMethod)
         ClassOnlySubstitutionHelper cosh(qore_class_private::get(*method->getClass()));

@@ -297,6 +297,14 @@ const CF_RUNTIME_NOOP = QCF_RUNTIME_NOOP;
 
 //! Set on builtin variants that accept named-argument calls
 const CF_NAMED_ARGS = QCF_NAMED_ARGS;
+
+//! Set on builtin variants that change or read only the state that the Program running them keeps for the current thread
+/** Module code running in its own Program checks the functional domain of such a variant without the restrictions it
+    inherits from its caller; see @ref OWN_PROGRAM_STATE
+
+    @since %Qore 3.0
+*/
+const CF_OWN_PROGRAM_STATE = QCF_OWN_PROGRAM_STATE;
 ///@}
 
 //! class and inheritance access information

@@ -565,6 +565,67 @@ static void ut_program_context_snapshot(UnitTestCounters& c) {
     canonical.setThreadLocalProgramData(caller_tlpd);
 }
 
+//! Explicit context scopes restore both policy and the Program owning inherited restrictions.
+static void ut_native_call_options(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    QoreProgramHelper program(PO_MODERN | PO_IN_MODULE | PO_NO_NETWORK, xsink);
+    QoreProgramHelper other(PO_MODERN, xsink);
+    QoreExternalProgramContextHelper program_context(&xsink, *program);
+    UT_ASSERT(c, !xsink, "native call policy fixture enters its Program");
+    if (xsink) {
+        return;
+    }
+    RuntimeConfig& canonical = RuntimeConfigNativeAccess::getCurrent();
+    const QoreParseOptions original = runtime_get_parse_options();
+    const QoreParseOptions original_effective = runtime_get_effective_program_parse_options();
+    const QoreParseOptions original_own = runtime_get_own_program_state_parse_options(original_effective);
+    for (bool copied_view : {false, true}) {
+        RuntimeConfig copy(canonical);
+        copy.setProgram(*other);
+        copy.setParseOptions(QoreParseOptions());
+        RuntimeConfig& rc = copied_view ? copy : canonical;
+        {
+            // The descriptor records module identity independently of the copied
+            // compatibility snapshot. The live thread still executes in program.
+            auto o = qore_get_module_call_runtime_po_override(*program, PO_NO_THREAD_CONTROL);
+            RuntimeParseOptionsOverrideHelper outer(rc, o);
+            QoreParseOptions effective = RuntimeConfigNativeAccess::getEffectiveParseOptionsFor(rc, *program);
+            UT_ASSERT(c, effective == runtime_get_effective_program_parse_options(),
+                "explicit context reads live effective options despite stale snapshot fields");
+            UT_ASSERT(c, (effective & PO_NO_THREAD_CONTROL) && (effective & PO_NO_NETWORK),
+                "module call retains its own and inherited restrictions");
+            QoreParseOptions own = runtime_get_own_program_state_parse_options(effective);
+            UT_ASSERT(c, !(own & PO_NO_THREAD_CONTROL) && (own & PO_NO_NETWORK),
+                "own-state access removes only inherited restrictions");
+            {
+                RuntimeParseOptionsOverrideHelper nested(rc, PO_NO_THREAD_CONTROL, PO_NO_THREAD_CONTROL);
+                UT_ASSERT(c, runtime_get_own_program_state_parse_options(effective) == effective,
+                    "ordinary nested override clears inherited module identity");
+            }
+            UT_ASSERT(c, runtime_get_own_program_state_parse_options(effective) == own,
+                "nested override restores inherited restrictions and module identity");
+            {
+                LoadTimeParseOptionsHelper load(PO_MODERN);
+                UT_ASSERT(c, runtime_get_own_program_state_parse_options(effective) == effective,
+                    "load-time context clears inherited module identity");
+            }
+            UT_ASSERT(c, runtime_get_own_program_state_parse_options(effective) == own,
+                "load-time scope restores inherited restrictions and module identity");
+            {
+                ProgramThreadCountContextHelper foreign(rc, &xsink, *other, true);
+                UT_ASSERT(c, !xsink && runtime_get_own_program_state_parse_options(effective) == effective,
+                    "another Program cannot use the module's own-state allowance");
+            }
+            UT_ASSERT(c, !xsink && runtime_get_own_program_state_parse_options(effective) == own,
+                "returning to the module restores its own-state allowance");
+        }
+        UT_ASSERT(c, runtime_get_parse_options() == original
+            && runtime_get_effective_program_parse_options() == original_effective
+            && runtime_get_own_program_state_parse_options(original_effective) == original_own,
+            "explicit policy scope restores the complete caller state");
+    }
+}
+
 //! Test hidden closure-self TLS without exposing additional runtime APIs to an external fixture.
 static void ut_native_closure_context(UnitTestCounters& c) {
     ExceptionSink xsink;
@@ -612,6 +673,16 @@ static void ut_native_closure_context(UnitTestCounters& c) {
                 RuntimeConfig& rc = RuntimeConfigNativeAccess::getCurrent();
                 RuntimeConfigNativeObjectHelper caller_context(rc, caller_object, nullptr);
                 QoreClosureSelfContextHelper caller_self(caller_object);
+                // Install a synthetic enclosing module descriptor to check that
+                // this non-module closure clears it and restores it on return.
+                QoreCallParseOptionsOverride caller_options;
+                caller_options.mask = get_user_variant_runtime_po_override_mask();
+                caller_options.value = PO_NO_THREAD_CONTROL;
+                caller_options.caller_restrictions = PO_NO_THREAD_CONTROL;
+                caller_options.module_pgm = *program;
+                RuntimeParseOptionsOverrideHelper caller_policy(rc, caller_options);
+                const QoreParseOptions caller_effective = runtime_get_effective_program_parse_options();
+                const QoreParseOptions caller_own = runtime_get_own_program_state_parse_options(caller_effective);
                 // Deliberately distinct live and compatibility-snapshot views.
                 rc.setObject(nullptr);
                 rc.setClass(caller_class);
@@ -638,6 +709,8 @@ static void ut_native_closure_context(UnitTestCounters& c) {
                     if (materialize) {
                         frame.helper.materialize();
                         frame.helper.materialize(); // Idempotence must not overwrite saved caller state.
+                        UT_ASSERT(c, runtime_get_own_program_state_parse_options(caller_effective) == caller_effective,
+                            "materialized non-module closure clears inherited module identity");
                         UT_ASSERT(c, rc.getObject() == closure->getObject() && rc.getClass() == closure->getClassCtx(),
                             "materialization installs closure snapshot context");
                         UT_ASSERT(c, runtime_get_stack_object() == closure->getObject()
@@ -672,6 +745,9 @@ static void ut_native_closure_context(UnitTestCounters& c) {
                 UT_ASSERT(c, runtime_get_stack_object() == caller_object && !runtime_get_class(),
                     "closure scope restores the live caller independently");
                 UT_ASSERT(c, qore_closure_self_context(caller_object), "closure scope restores caller self TLS");
+                UT_ASSERT(c, runtime_get_effective_program_parse_options() == caller_effective
+                    && runtime_get_own_program_state_parse_options(caller_effective) == caller_own,
+                    "closure scope restores caller policy and module identity");
             }
         }
     }
@@ -14664,6 +14740,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_aot_string_split(c);
     ut_native_closure_context(c);
     ut_program_context_snapshot(c);
+    ut_native_call_options(c);
     ut_lvalue_object_count_records(c);
     ut_runtime_value_cleanup(c);
     ut_local_discard(c);
@@ -14695,6 +14772,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_aot_string_split(c);
     ut_native_closure_context(c);
     ut_program_context_snapshot(c);
+    ut_native_call_options(c);
     ut_lvalue_object_count_records(c);
     ut_runtime_value_cleanup(c);
     ut_local_discard(c);

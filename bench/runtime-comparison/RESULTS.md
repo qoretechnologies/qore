@@ -29161,3 +29161,10 @@ The retained regression extends AOTSplitCodegenDeterminism to qcc levels 0-3, ea
 Next evaluate explicit CPU-specific AOT tuning while preserving the portable generic default, with consistent ordinary/split settings and truthful build metadata. Redundant fast-loop exception/location work remains a separate proof-dependent lead. No fresh Java/develop ratio or global performance ceiling is established.
 
 [Evidence](results-backend-opt-level-rejected-macos-arm64.json); [all 62 audit checks](audit-backend-opt-level-rejected.md).
+
+
+## Module own-state merge qualification (2026-10-29)
+
+Merged upstream `b30dbfbca1` into the performance branch at `c1c4fae43c`. The explicit `RuntimeConfig` and deferred closure paths carry the full caller-policy descriptor; cross-Program native retries and older closure entries retain the same policy as ordinary calls. An explicit-mode regression exposed a missing IR inline static-method policy scope, now corrected. Module fixtures select child execution modes explicitly and check process exits, loader fallback and native traces. Native probes now preserve the upstream rule that both caller and module must permit injection and inspect deferred context only after actual materialization.
+
+Release qualification: 30 fixtures, 95 executed cases and 17412 assertions. Debug: 95 executed cases and 17412 assertions, plus 3044 focused/4702 broader native assertions (overlapping suites). All 391 Release qmod aliases restored. The 237 filtered smoke cases are excluded. All 62 audit checks pass or are inapplicable; failed attempts and corrections remain in [results-module-own-state-merge-macos-arm64.json](results-module-own-state-merge-macos-arm64.json). No fresh timing or Java/develop comparison is claimed. The next checkpoint installs the committed optimized build, measures the merge, then evaluates deferred callback policy under the existing non-reentrant scalar-body proof.

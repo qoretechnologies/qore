@@ -360,6 +360,8 @@ list<string> l = f.getCodeFlagList();
     - \c "RET_VALUE_ONLY": the variant has the @ref Qore::Reflection::CF_RET_VALUE_ONLY "CF_RET_VALUE_ONLY" flag set
     - \c "RUNTIME_NOOP": the variant has the @ref Qore::Reflection::CF_RUNTIME_NOOP "CF_RUNTIME_NOOP" flag set
     - \c "NAMED_ARGS": the variant has the @ref Qore::Reflection::CF_NAMED_ARGS "CF_NAMED_ARGS" flag set
+    - \c "OWN_PROGRAM_STATE": the variant has the @ref Qore::Reflection::CF_OWN_PROGRAM_STATE "CF_OWN_PROGRAM_STATE"
+      flag set
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the function or method has been destroyed
 
