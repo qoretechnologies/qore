@@ -29241,3 +29241,54 @@ No workload has non-overlapping slower process ranges in all three layouts. Most
 Retain this correctness merge. The previously retained callback improvement remains visible near 8.79 ns/item; its original benefit is measured in its own matched epochs, not recomputed by mixing runs. This checkpoint has no fresh Java/develop ratio and does not establish a global performance ceiling. A2A shell syntax was checked; its external Python interoperability suite was not rerun. The host is shared, without affinity or thermal control.
 
 Validation: Release 88 executed cases/3805 assertions (13 Debug-only skips), Debug 101 cases/5470 assertions (0 skips); each also has one silent fixture. Native Debug passes 3237 focused/4899 broader assertions (overlapping). All 391 Release qmod aliases restored. All 62 audit checks pass or are inapplicable. Raw process exits, output hashes, sources and timing windows are retained in [results-post-callback-merge-macos-arm64.json](results-post-callback-merge-macos-arm64.json).
+
+
+## Rejected method-cache key layout (2026-10-29)
+
+No production optimization is retained. The candidate grouped the immutable native scalar method-cache key into the first 56 bytes, previously spread through byte 207, preserving 240-byte size and 8-byte alignment on ARM64. All guards, ownership, defaults and publication rules remained. The optimized helper still has 506 static instructions and 118 static loads, including fallback/error branches; these are not dynamic instruction counts.
+
+The screen does not demonstrate a useful dispatch benefit. Same-Program polymorphic calls measure 23.8441 to 24.1236 ns/item (+1.172%), with overlapping process ranges in every layout. Integer and floating member cases are essentially flat. All mixed-application ranges overlap. Imported polymorphic and list-mutation shuffle controls are separated slower by 1.60% and 1.25%; imported floating polymorphic default is separated faster by 1.40%. Single-epoch ranges are not confidence intervals. No confirmed general regression, favorable-layout selection or confirmation run is claimed.
+
+Both runtimes use Release -O3 -DNDEBUG, allocation tracking disabled, LLVM 22.1.8 and Apple Clang 21 on Apple M4 Pro. The interleaved run covers 32 workloads, three layouts (default/reverse/shuffle-487), three processes per variant, three warmups/three measured 150 ms windows, 4096 items and seed 7; order seed 2026102910. All 576 processes and 1728 measured windows replay independently. Below: whole-workload ns/item, median of per-layout median process means.
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Time change
+|local:direct_call|1.5445|1.5444|-0.009%
+|local:method_call|1.6138|1.6150|+0.076%
+|local:polymorphic_call|23.8441|24.1236|+1.172%
+|local:boxed_int_method_fallback|33.5234|33.5171|-0.019%
+|local:boxed_float_method_fallback|35.0445|34.9355|-0.311%
+|local:boxed_int_method_effect|91.5932|90.5927|-1.092%
+|local:list_mutate|123.3076|122.7173|-0.479%
+|local:temporary_list|1.6369|1.6375|+0.031%
+|micro:polymorphic_call|85.0996|85.7896|+0.811%
+|micro:polymorphic_float_call|86.4497|86.6226|+0.200%
+|micro:boxed_int_method_call|112.5635|111.4748|-0.967%
+|micro:boxed_float_method_call|115.1764|116.2098|+0.897%
+|micro:boxed_int_method_fallback|124.9187|126.0903|+0.938%
+|micro:boxed_float_method_fallback|126.5539|126.6782|+0.098%
+|micro:boxed_int_method_effect|179.7889|178.7620|-0.571%
+|micro:indirect_call|8.8531|8.8516|-0.017%
+|micro:closure_call|18.3613|18.7526|+2.131%
+|micro:closure_capture|24.1988|24.3254|+0.523%
+|micro:list_read|2.8928|2.9111|+0.629%
+|micro:list_build|23.5721|23.6010|+0.122%
+|micro:list_mutate|122.8574|123.9718|+0.907%
+|micro:temporary_hash|1.6531|1.6565|+0.203%
+|float:callback_local_float_return|0.8786|0.8680|-1.207%
+|float:typed_local_int_unary|1.2034|1.2043|+0.078%
+|float:callback_loop_float_return|5.0989|5.1360|+0.727%
+|mixed:csv_report|936.8647|945.4815|+0.920%
+|mixed:object_orders|3412.4941|3377.5592|-1.024%
+|mixed:callback_pipeline|96.0505|95.4454|-0.630%
+|mixed:text_index|1368.5438|1368.8975|+0.026%
+|probe:object_short|1666.6022|1673.0177|+0.385%
+|probe:effect_short|1737.3343|1741.9768|+0.267%
+|probe:string_result_loop|551.4987|555.5760|+0.739%
+
+The entry is created by the runtime rather than embedded in generated LLVM, but QoreAOT.h contributes to AOT runtime identity. Reusing old module bytes correctly failed LOAD-MODULE-ERROR; the failed attempt is preserved. All 15 candidate artifacts were rebuilt from identical source paths and link orders. Workload LLVM bodies match; native instruction counts and file sizes match, while metadata lengths and data-address immediates differ. These are corresponding separately compiled binaries, not byte-identical artifacts.
+
+Release and Debug each pass 25 fixtures: 42 QUnit cases/10099 assertions plus three silent fixtures, with no skips. Native Debug passes 3237 focused/4899 broader checks (overlapping). Each frozen runtime passes 1518 IR and 4554 AOT references. The first fixture verifier expected a QUnit summary from a successful silent generic fixture. Corrected verification reused 18 completed processes only after checking source, runtime and output hashes; production code was unchanged. All 391 Release qmod aliases were restored. The rollback build reproduces byte-identical qualified baseline qore/qcc/libqore and rebuilds 391 matching modules. The system installation remains verified eb107c7f7b.
+
+Six untimed profiles show substantial receiver-local reference management in local polymorphic calls and Program entry/exit bookkeeping in imported calls. The earlier native-only local prototype remains rejected for changed exception-path destructor ordering. A combined RuntimeConfig getter idea was rejected before implementation: the optimized unity build already inlines the getters into cached ThreadData loads. No getter calls remain to remove on this path.
+
+See [complete evidence](results-method-cache-layout-rejected-macos-arm64.json) and [all 62 audit checks](audit-method-cache-layout-rejected.md). No fresh Java/develop ratio or global performance ceiling is claimed. Next refresh the optimized feature/develop/Java checkpoint, then investigate cross-Program pure native context deferral or a stronger finite-receiver/lifetime proof.

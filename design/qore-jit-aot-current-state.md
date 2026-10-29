@@ -5797,3 +5797,10 @@ The generated frame ABI remains 208 bytes with 192 bytes of opaque storage; the 
 ## DGC/HTTP upstream integration (2026-10-29)
 
 The performance branch integrates develop 38c885a6ff while retaining the reusable callback policy optimization. Collector scan-completion waits are registered with the fork handlers before threads start; HTTP graph edges avoid scanning all open connections per request. Release and Debug qualification and an optimized interleaved merge checkpoint are recorded in `bench/runtime-comparison/results-post-callback-merge-macos-arm64.json`. Imported pure-method context and finite receiver specialization remain next leads; no Java parity or global performance ceiling is established.
+
+
+## Method-cache layout experiment rejected (2026-10-29)
+
+Grouping the native scalar cache key reduced its footprint but not the optimized helper instruction count. The 576-process/1728-window screen showed no useful target benefit: local polymorphic 23.8441 to 24.1236 ns/item, all three layout ranges overlapping. The original header and byte-identical optimized runtime were restored. Release/Debug each pass 25 fixtures (42 cases/10099 assertions plus three silent fixtures), with 6072 references per runtime. QoreAOT.h changes require a new AOT identity and matching module compilation even when workload LLVM is unchanged.
+
+Profiles still identify receiver-local ownership and cross-Program entry/exit as major costs. A combined RuntimeConfig getter offers no call removal because the getters already inline in the unity build. See `bench/runtime-comparison/results-method-cache-layout-rejected-macos-arm64.json` and its 62-check audit. Refresh the optimized develop/branch/Java comparison before the next distinct hypothesis; parity and a global ceiling remain unestablished.
