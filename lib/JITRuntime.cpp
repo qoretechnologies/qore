@@ -1275,7 +1275,7 @@ extern "C" DLLEXPORT void qore_rt_check_throw(ExceptionSink* xsink) {
 
 extern "C" DLLEXPORT void qore_rt_throw(ExceptionSink* xsink, const char* err, const char* desc) {
     if (xsink) {
-        xsink->raiseException(err, desc);
+        xsink->raiseException(err, "%s", desc);
     }
 }
 
@@ -1361,10 +1361,9 @@ DLLLOCAL bool qore_jit_deopt_requested() {
 // Debug-step hook (issue #5352): fires a per-statement debugger step event from
 // JIT-compiled native code so single-stepping / breakpoints / LineCoverage work for
 // a function already running as native code when a debugger attaches mid-execution.
-// Mirrors the IR interpreter's per-statement dbgStep at PushTempMark boundaries
-// (QoreIRInterpreter.cpp).  `file`/`abs_line` identify the statement (resolved at
-// runtime via the current program's statement index); `statements_block` is the
-// function's top-level StatementBlock passed as the onStep `blockStatement` context.
+// Mirrors the IR interpreter's DebugStatement handler (QoreIRInterpreter.cpp).
+// `statement` is the statement that follows; `statements_block` is the function's
+// top-level StatementBlock passed as the onStep `blockStatement` context.
 //
 // Flow-control return codes from dbgStep (RC_RETURN/RC_BREAK/RC_CONTINUE) are
 // intentionally NOT honored here: a fixed native frame cannot redirect control flow
@@ -1372,22 +1371,13 @@ DLLLOCAL bool qore_jit_deopt_requested() {
 // UserVariantBase::evalTiered() deopts to the AST/IR interpreter (hasDebuggerAttached
 // downgrade).  A debugger-raised exception IS honored: the caller emits an exception
 // check immediately after this call.
-extern "C" DLLEXPORT void qore_rt_dbg_step(const char* file, int64_t abs_line,
-        void* statements_block, ExceptionSink* xsink) {
+extern "C" DLLEXPORT void qore_rt_dbg_step(const AbstractStatement* statement, void* statements_block,
+        ExceptionSink* xsink) {
     ThreadLocalProgramData* tlpd = get_thread_local_program_data();
     if (!tlpd || !tlpd->runtimeCheck()) {
         return;
     }
-    QoreProgram* pgm = getProgram();
-    if (!pgm) {
-        return;
-    }
-    AbstractStatement* stmt = qore_program_private::get(*pgm)->getStatementFromIndex(file,
-            static_cast<int>(abs_line));
-    if (!stmt) {
-        return;
-    }
-    tlpd->dbgStep(static_cast<const StatementBlock*>(statements_block), stmt, xsink);
+    tlpd->dbgStep(static_cast<const StatementBlock*>(statements_block), statement, xsink);
 }
 
 // Synthetic block-entry debug event from JIT native code (issue #5352): mirrors the IR
@@ -3317,7 +3307,7 @@ static uint64_t qore_rt_cast_by_type_path_in_program(uint64_t inner_bits,
                 desc.sprintf("of type '%s'", inner.getTypeName());
             }
             desc.sprintf(" to enum '%s'; value is not a valid enum member", ed->getName());
-            xsink->raiseException("RUNTIME-CAST-ERROR", desc.c_str());
+            xsink->raiseException("RUNTIME-CAST-ERROR", "%s", desc.c_str());
             return toBits(QoreValue());
         }
         const QoreEnumMember* member = ed->findMemberByValue(inner);
@@ -5066,7 +5056,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_to_string(uint64_t val_bits) {
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_int_to_string(int64_t value) {
-    return toBits(QoreValue(new QoreStringNodeMaker(QLLD, value)));
+    return toBits(QoreValue(new QoreStringNodeMaker(QLLD, (int64)value)));
 }
 
 extern "C" DLLEXPORT int64_t qore_rt_int_to_string_measure(int64_t value) {
@@ -6453,7 +6443,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
             }
             if (index < 0) {
                 xsink->raiseException("NEGATIVE-LIST-INDEX", "list index " QLLD " is invalid (index must evaluate "
-                    "to a non-negative integer)", index);
+                    "to a non-negative integer)", (int64)index);
                 return toBits(QoreValue());
             }
         }
@@ -6475,7 +6465,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
     } else if (lv.isNothing()) {
         if (index < 0) {
             xsink->raiseException("NEGATIVE-LIST-INDEX", "list index " QLLD " is invalid (index must evaluate to a "
-                "non-negative integer)", index);
+                "non-negative integer)", (int64)index);
             return toBits(QoreValue());
         }
         // Auto-vivify: create new list from NOTHING, set element, assign to variable
@@ -6545,7 +6535,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
             }
             if (index < 0) {
                 xsink->raiseException("NEGATIVE-LIST-INDEX", "list index " QLLD " is invalid (index must evaluate "
-                    "to a non-negative integer)", index);
+                    "to a non-negative integer)", (int64)index);
                 return toBits(QoreValue());
             }
         }
@@ -6565,7 +6555,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
     } else if (lv.isNothing()) {
         if (index < 0) {
             xsink->raiseException("NEGATIVE-LIST-INDEX", "list index " QLLD " is invalid (index must evaluate to a "
-                "non-negative integer)", index);
+                "non-negative integer)", (int64)index);
             return toBits(QoreValue());
         }
         // Auto-vivify: create new list from NOTHING, set element, assign to variable
@@ -7377,6 +7367,16 @@ static bool tryExecFunctionRef(const AbstractQoreNode* node, uint64_t* args,
     return true;
 }
 
+//! Returns true if a debugger is attached to the Program of a user variant
+/** The fast call paths give the callee's local variables slots of their own instead of instantiating them on the
+    stack of local variables, where a debugger finds the frames and local variables of a stopped thread, so they are
+    not taken while a debugger is attached: the callee is called through the call path, which runs it as
+    UserVariantBase::evalTiered() does with a debugger attached
+*/
+static bool qore_rt_debugger_attached(const UserVariantBase* uvb) {
+    return uvb->pgm && qore_program_private::get(*uvb->pgm)->hasDebuggerAttached();
+}
+
 static bool tryExecClosureNativeLeaf(const AbstractQoreNode* node,
         const UserVariantBase* uvb, uint64_t* args, int nargs,
         uint64_t** arg_cleanups, uint64_t& result_bits) {
@@ -7447,6 +7447,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_0(uint64_t ref_bits, Exceptio
         const UserVariantBase* uvb = variant->getUserVariantBase();
         if (uvb && !uvb->hasLazyAOTClosureIR()
                 && (uvb->hasCachedFunction() || uvb->getCachedIR())
+                && !qore_rt_debugger_attached(uvb)
                 && closureDirectArgsNeedNoBinding(uvb, nullptr, 0, xsink)) {
             uint64_t leaf_result;
             if (!uvb->hasCachedAOT()
@@ -7512,6 +7513,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_1(uint64_t ref_bits, uint64_t
         }
         if (uvb && !uvb->hasLazyAOTClosureIR()
                 && (uvb->hasCachedFunction() || uvb->getCachedIR())
+                && !qore_rt_debugger_attached(uvb)
                 && closureDirectArgsNeedNoBinding(uvb, &arg0_bits, 1, xsink)) {
             uint64_t leaf_result;
             if (!uvb->hasCachedAOT()
@@ -7584,6 +7586,7 @@ static uint64_t qore_rt_call_closure_fast_impl(uint64_t ref_bits, uint64_t* args
         }
         if (uvb && !uvb->hasLazyAOTClosureIR()
                 && (uvb->hasCachedFunction() || uvb->getCachedIR())
+                && !qore_rt_debugger_attached(uvb)
                 && closureDirectArgsNeedNoBinding(uvb, args, nargs, xsink)) {
             uint64_t leaf_result;
             if (!uvb->hasCachedAOT()
@@ -12454,7 +12457,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
         return qore_rt_call_function_direct(func, variant, pgm, args, nargs, xsink);
     }
 
-    if (!uvb->isStaticallyFastCallEligible()) {
+    if (!uvb->isStaticallyFastCallEligible() || qore_rt_debugger_attached(uvb)) {
         return qore_rt_call_function_direct(func, variant, pgm, args, nargs, xsink);
     }
 
@@ -12856,6 +12859,7 @@ static uint64_t qore_rt_call_immediate_closure_impl(const QoreClosureParseNode* 
             && !uvb->hasLazyAOTClosureIR()
             && uvb->isStaticallyFastCallEligible()
             && (uvb->hasCachedFunction() || uvb->getCachedIR())
+            && !qore_rt_debugger_attached(uvb)
             && closureDirectArgsNeedNoBinding(uvb, args, nargs, xsink)) {
         uint64_t leaf_result;
         if (!uvb->hasCachedAOT()
@@ -13313,7 +13317,7 @@ static uint64_t qore_rt_call_method_fast_impl(const QoreMethod* method,
         return qore_rt_call_method_direct_impl(method, args, arg_cleanups, nargs, xsink);
     }
 
-    if (!qore_rt_method_fast_call_eligible(variant)) {
+    if (!qore_rt_method_fast_call_eligible(variant) || qore_rt_debugger_attached(uvb)) {
         return qore_rt_call_method_direct_impl(method, args, arg_cleanups, nargs, xsink);
     }
 
@@ -19653,7 +19657,8 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
     QoreProgram* exec_pgm = qore_rt_method_execution_program(method, uvb);
     // A cache hit still has to enter evalTiered's AST/lazy-debug-IR fallback
     // after debugger attachment; the generic native entry has no step hooks.
-    if (exec_pgm && qore_program_private::get(*exec_pgm)->hasDebuggerAttached()) {
+    if ((exec_pgm && qore_program_private::get(*exec_pgm)->hasDebuggerAttached())
+            || qore_rt_debugger_attached(uvb)) {
         return false;
     }
     if (!uvb->hasCachedFunction() && !uvb->getCachedIR()) {
@@ -22089,6 +22094,7 @@ static uint64_t qore_rt_call_static_method_direct_impl(const QoreMethod* method,
     const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
     if (!uvb || explicit_type_param_instantiation
             || !qore_rt_method_fast_call_eligible(variant)
+            || qore_rt_debugger_attached(uvb)
             || (receiver_type_info && QoreTypeInfo::getParameterizedClassType(receiver_type_info))
             || (!uvb->hasCachedFunction() && !uvb->getCachedIR())) {
         // Use evalTmpArgs to preserve ReferenceNode values in pre-evaluated args

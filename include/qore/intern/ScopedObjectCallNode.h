@@ -103,7 +103,7 @@ public:
     DLLLOCAL virtual int getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
         str.sprintf("new operator expression (class '%s')", oc ? oc->getName()
             : !dynamic_class_name.empty() ? dynamic_class_name.c_str()
-            : name ? name->ostr : "<null>", this);
+            : name ? name->ostr : "<null>");
         return 0;
     }
 

@@ -128,7 +128,8 @@ protected:
             return 0;
         QoreValue n = getValue();
         if (n.getType() != NT_HASH) {
-            xsink->raiseException("ITERATOR-ERROR", "The %s object is not a list of hashes, element " QSD " (starting with 0) is type '%s' instead (expected 'hash')", getName(), index(), n.getTypeName());
+            xsink->raiseException("ITERATOR-ERROR", "The %s object is not a list of hashes, element " QLLD " (starting with 0) is type '%s' "
+                "instead (expected 'hash')", getName(), (int64)index(), n.getTypeName());
             return 0;
         }
         return n.get<const QoreHashNode>();
@@ -138,7 +139,8 @@ protected:
         bool exists = false;
         QoreValue n = h->getKeyValueExistence(key, exists);
         if (!exists) {
-            xsink->raiseException("LISTHASHITERATOR-ERROR", "key '%s' does not exist in the hash at element " QSD " (starting with 0)", key, index());
+            xsink->raiseException("LISTHASHITERATOR-ERROR", "key '%s' does not exist in the hash at element " QLLD
+                " (starting with 0)", key, (int64)index());
             return 0;
         }
         return n.refSelf();

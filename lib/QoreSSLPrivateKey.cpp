@@ -78,7 +78,7 @@ QoreSSLPrivateKey::QoreSSLPrivateKey(const BinaryNode* bin, ExceptionSink* xsink
         long e = ERR_get_error();
         char buf[121];
         ERR_error_string(e, buf);
-        xsink->raiseException("SSLPRIVATEKEY-CONSTRUCTOR-ERROR", buf);
+        xsink->raiseException("SSLPRIVATEKEY-CONSTRUCTOR-ERROR", "%s", buf);
     }
 }
 

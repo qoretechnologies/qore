@@ -444,11 +444,19 @@ hash<auto> sub run() {
 }
 ", "cleanup_interrupt_test");
 
+        # the function is called once without an interrupt, so that it has been prepared for execution when it is
+        # called with the interrupt: preparing a function for the IR interpreter (lowering and analysis) is a
+        # cancellation point of its own, depending on the size of the function, which would raise the interrupt
+        # before the code of the function runs
+        hash<auto> res = p.callFunction("run");
+        assertTrue(res.released, "the cleanup completed without an interrupt");
+        assertNothing(res.err, "no exception without an interrupt");
+
         # the interrupt is pending before the cleanup starts
         sm.requestInterrupt();
         on_exit sm.clearInterrupt();
 
-        hash<auto> res = p.callFunction("run");
+        res = p.callFunction("run");
         assertTrue(res.released, "the cleanup completed with a program interrupt pending");
         assertEq("PROGRAM-INTERRUPTED", res.err, "the interrupt is still raised after the cleanup");
     }

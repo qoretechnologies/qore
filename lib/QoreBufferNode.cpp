@@ -261,7 +261,7 @@ static int qore_buffer_parse_decimal_string(const std::string& input, qore_buffe
     }
     if (scale > QORE_BUFFER_DECIMAL128_DEFAULT_PRECISION) {
         xsink->raiseException("BUFFER-RANGE-ERROR", "cannot assign decimal value '%s' to buffer<decimal128> %s; "
-            "scale " QLLD " exceeds decimal128 maximum scale %d", input.c_str(), context, scale,
+            "scale " QLLD " exceeds decimal128 maximum scale %d", input.c_str(), context, (int64)scale,
             QORE_BUFFER_DECIMAL128_DEFAULT_PRECISION);
         return -1;
     }
@@ -270,8 +270,8 @@ static int qore_buffer_parse_decimal_string(const std::string& input, qore_buffe
     size_t significant_digits = first_non_zero == std::string::npos ? 1 : digits.size() - first_non_zero;
     if (significant_digits > QORE_BUFFER_DECIMAL128_DEFAULT_PRECISION) {
         xsink->raiseException("BUFFER-RANGE-ERROR", "cannot assign decimal value '%s' to buffer<decimal128> %s; "
-            "precision " QSD " exceeds decimal128 maximum precision %d", input.c_str(), context,
-            significant_digits, QORE_BUFFER_DECIMAL128_DEFAULT_PRECISION);
+            "precision " QLLD " exceeds decimal128 maximum precision %d", input.c_str(), context,
+            (int64)significant_digits, QORE_BUFFER_DECIMAL128_DEFAULT_PRECISION);
         return -1;
     }
 
@@ -890,10 +890,10 @@ static int qore_buffer_validate_runtime_operands(const qore_buffer_runtime_opera
     assert(left.buffer || right.buffer);
 
     if (left.buffer && right.buffer && left.buffer->size() != right.buffer->size()) {
-        xsink->raiseException("BUFFER-SIZE-ERROR", "cannot apply '%s' to buffer<%s> with length " QSD
-            " and buffer<%s> with length " QSD "; buffer operands must have the same length",
+        xsink->raiseException("BUFFER-SIZE-ERROR", "cannot apply '%s' to buffer<%s> with length " QLLD
+            " and buffer<%s> with length " QLLD "; buffer operands must have the same length",
             qore_buffer_op_symbol(op), qore_buffer_element_type_name(left.buffer->getElementType()),
-            left.buffer->size(), qore_buffer_element_type_name(right.buffer->getElementType()), right.buffer->size());
+            (int64)(left.buffer->size()), qore_buffer_element_type_name(right.buffer->getElementType()), (int64)(right.buffer->size()));
         return -1;
     }
 
@@ -1469,7 +1469,7 @@ QoreBufferNode* QoreBufferNode::wrapExternalStorageImpl(QoreBufferElementType el
     }
     if (offset > std::numeric_limits<size_t>::max() - length) {
         xsink->raiseException("BUFFER-EXTERNAL-STORAGE-ERROR",
-            "external buffer offset " QSD " and length " QSD " overflow storage size", offset, length);
+            "external buffer offset " QLLD " and length " QLLD " overflow storage size", (int64)offset, (int64)length);
         return nullptr;
     }
     size_t root_length = offset + length;
@@ -1488,19 +1488,19 @@ QoreBufferNode* QoreBufferNode::wrapExternalStorageImpl(QoreBufferElementType el
     if (nullable_elements && !validity && null_count > 0) {
         xsink->raiseException("BUFFER-EXTERNAL-STORAGE-ERROR",
             "external nullable buffer<%s> storage with null_count " QLLD " requires a validity bitmap",
-            qore_buffer_element_type_name(element_type), null_count);
+            qore_buffer_element_type_name(element_type), (int64)null_count);
         return nullptr;
     }
     if (null_count < -1) {
         xsink->raiseException("BUFFER-EXTERNAL-STORAGE-ERROR",
             "external buffer<%s> null_count must be >= -1; got " QLLD,
-            qore_buffer_element_type_name(element_type), null_count);
+            qore_buffer_element_type_name(element_type), (int64)null_count);
         return nullptr;
     }
     if (nullable_elements && null_count > static_cast<int64>(length)) {
         xsink->raiseException("BUFFER-EXTERNAL-STORAGE-ERROR",
-            "external buffer<%s> null_count " QLLD " exceeds length " QSD,
-            qore_buffer_element_type_name(element_type), null_count, length);
+            "external buffer<%s> null_count " QLLD " exceeds length " QLLD,
+            qore_buffer_element_type_name(element_type), (int64)null_count, (int64)length);
         return nullptr;
     }
 
@@ -1602,19 +1602,19 @@ QoreBufferNode* QoreBufferNode::wrapExternalDeviceStorageImpl(QoreBufferElementT
     if (nullable_elements && !device_validity && null_count > 0) {
         xsink->raiseException("BUFFER-EXTERNAL-STORAGE-ERROR",
             "external nullable device buffer<%s> storage with null_count " QLLD " requires a validity bitmap",
-            qore_buffer_element_type_name(element_type), null_count);
+            qore_buffer_element_type_name(element_type), (int64)null_count);
         return nullptr;
     }
     if (null_count < -1) {
         xsink->raiseException("BUFFER-EXTERNAL-STORAGE-ERROR",
             "external device buffer<%s> null_count must be >= -1; got " QLLD,
-            qore_buffer_element_type_name(element_type), null_count);
+            qore_buffer_element_type_name(element_type), (int64)null_count);
         return nullptr;
     }
     if (nullable_elements && null_count > static_cast<int64>(length)) {
         xsink->raiseException("BUFFER-EXTERNAL-STORAGE-ERROR",
-            "external device buffer<%s> null_count " QLLD " exceeds length " QSD,
-            qore_buffer_element_type_name(element_type), null_count, length);
+            "external device buffer<%s> null_count " QLLD " exceeds length " QLLD,
+            qore_buffer_element_type_name(element_type), (int64)null_count, (int64)length);
         return nullptr;
     }
     if (nullable_elements && !device_validity) {
@@ -2263,8 +2263,8 @@ bool QoreBufferNode::getAsBoolImpl() const {
 }
 
 int QoreBufferNode::getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
-    str.sprintf("%sbuffer<%s> object %p (" QSD " element%s)",
-        nullable_elements ? "nullable " : "", qore_buffer_element_type_name(element_type), this, size(),
+    str.sprintf("%sbuffer<%s> object %p (" QLLD " element%s)",
+        nullable_elements ? "nullable " : "", qore_buffer_element_type_name(element_type), this, (int64)(size()),
         size() == 1 ? "" : "s");
     return 0;
 }
@@ -2601,8 +2601,8 @@ int QoreBufferNode::setEntry(size_t index, QoreValue value, ExceptionSink* xsink
         return -1;
     }
     if (index >= length) {
-        xsink->raiseException("BUFFER-INDEX-ERROR", "buffer<%s> index %d is out of range for buffer length " QSD,
-            qore_buffer_element_type_name(element_type), (int)index, length);
+        xsink->raiseException("BUFFER-INDEX-ERROR", "buffer<%s> index %d is out of range for buffer length " QLLD,
+            qore_buffer_element_type_name(element_type), (int)index, (int64)length);
         return -1;
     }
     if (value.isNothing() || value.getType() == NT_NULL) {

@@ -2666,7 +2666,7 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponse(int status_code, s
     // Validate status code (must be between 100 and 599)
     if (status_code < 100 || status_code >= 600) {
         xsink->raiseException("SOCKET-STARTPOLLSENDHTTPRESPONSE-ERROR",
-            "expecting valid HTTP status code between 100 and 599, got value %d instead", status_code);
+            "expecting valid HTTP status code between 100 and 599, got value " QLLD " instead", (int64)status_code);
         return QoreValue();
     }
 
@@ -2674,7 +2674,7 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponse(int status_code, s
     QoreString hdr(s->getEncoding());
 
     // Write HTTP response status line
-    hdr.sprintf("HTTP/%s %03d %s", http_version->c_str(), status_code, status_description->c_str());
+    hdr.sprintf("HTTP/%s " QLLDx(03) " %s", http_version->c_str(), (int64)status_code, status_description->c_str());
     hdr.concat("\r\n");
 
     // Get body data and size
@@ -2745,7 +2745,7 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponseAndReadHeader(int s
     // Validate status code (must be between 100 and 599)
     if (status_code < 100 || status_code >= 600) {
         xsink->raiseException("SOCKET-STARTPOLLSENDHTTPRESPONSEANDREADHEADER-ERROR",
-            "expecting valid HTTP status code between 100 and 599, got value %d instead", status_code);
+            "expecting valid HTTP status code between 100 and 599, got value " QLLD " instead", (int64)status_code);
         return QoreValue();
     }
 
@@ -2753,7 +2753,7 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponseAndReadHeader(int s
     QoreString hdr(s->getEncoding());
 
     // Write HTTP response status line
-    hdr.sprintf("HTTP/%s %03d %s", http_version->c_str(), status_code, status_description->c_str());
+    hdr.sprintf("HTTP/%s " QLLDx(03) " %s", http_version->c_str(), (int64)status_code, status_description->c_str());
     hdr.concat("\r\n");
 
     // Get body data and size
@@ -2832,7 +2832,7 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponseWithStreamAndReadHe
     // Validate status code (must be between 100 and 599)
     if (status_code < 100 || status_code >= 600) {
         xsink->raiseException("SOCKET-STARTPOLLSENDHTTPRESPONSEWITHSTREAMANDREADHEADER-ERROR",
-            "expecting valid HTTP status code between 100 and 599, got value %d instead", status_code);
+            "expecting valid HTTP status code between 100 and 599, got value " QLLD " instead", (int64)status_code);
         return QoreValue();
     }
 
@@ -2852,7 +2852,7 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponseWithStreamAndReadHe
 
     // Build the HTTP response headers in a buffer
     QoreString hdr(s->getEncoding());
-    hdr.sprintf("HTTP/%s %03d %s", http_version->c_str(), status_code, status_description->c_str());
+    hdr.sprintf("HTTP/%s " QLLDx(03) " %s", http_version->c_str(), (int64)status_code, status_description->c_str());
     hdr.concat("\r\n");
 
     // Add headers (body size is set from Content-Length header, not body itself)
@@ -2937,7 +2937,7 @@ AbstractPollOperation<auto> Socket::startPollSendHttpChunkedResponseAndReadHeade
     }
     if (status_code < 100 || status_code >= 600) {
         xsink->raiseException("SOCKET-STARTPOLLSENDHTTPCHUNKEDRESPONSEWITHSTREAMANDREADHEADER-ERROR",
-            "expecting valid HTTP status code between 100 and 599, got value %d instead", status_code);
+            "expecting valid HTTP status code between 100 and 599, got value " QLLD " instead", (int64)status_code);
         return QoreValue();
     }
 
@@ -2957,7 +2957,7 @@ AbstractPollOperation<auto> Socket::startPollSendHttpChunkedResponseAndReadHeade
     hdr_copy->removeKey("Content-Length", xsink);
 
     QoreString hdr_str(s->getEncoding());
-    hdr_str.sprintf("HTTP/%s %03d %s", http_version->c_str(), status_code, status_description->c_str());
+    hdr_str.sprintf("HTTP/%s " QLLDx(03) " %s", http_version->c_str(), (int64)status_code, status_description->c_str());
     hdr_str.concat("\r\n");
     qore_socket_private::do_headers(hdr_str, *hdr_copy, 0);
 
@@ -3040,7 +3040,7 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponseWithStream(int stat
     // Validate status code (must be between 100 and 599)
     if (status_code < 100 || status_code >= 600) {
         xsink->raiseException("SOCKET-STARTPOLLSENDHTTPRESPONSEWITHSTREAM-ERROR",
-            "expecting valid HTTP status code between 100 and 599, got value %d instead", status_code);
+            "expecting valid HTTP status code between 100 and 599, got value " QLLD " instead", (int64)status_code);
         return QoreValue();
     }
 
@@ -3060,7 +3060,7 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponseWithStream(int stat
 
     // Build the HTTP response headers in a buffer
     QoreString hdr(s->getEncoding());
-    hdr.sprintf("HTTP/%s %03d %s", http_version->c_str(), status_code, status_description->c_str());
+    hdr.sprintf("HTTP/%s " QLLDx(03) " %s", http_version->c_str(), (int64)status_code, status_description->c_str());
     hdr.concat("\r\n");
 
     // Add headers
@@ -3137,7 +3137,7 @@ AbstractPollOperation<auto> Socket::startPollSendHttpChunkedResponseWithStream(i
     }
     if (status_code < 100 || status_code >= 600) {
         xsink->raiseException("SOCKET-STARTPOLLSENDHTTPCHUNKEDRESPONSEWITHSTREAM-ERROR",
-            "expecting valid HTTP status code between 100 and 599, got value %d instead", status_code);
+            "expecting valid HTTP status code between 100 and 599, got value " QLLD " instead", (int64)status_code);
         return QoreValue();
     }
 
@@ -3154,7 +3154,7 @@ AbstractPollOperation<auto> Socket::startPollSendHttpChunkedResponseWithStream(i
     hdr_copy->removeKey("Content-Length", xsink);
 
     QoreString hdr_str(s->getEncoding());
-    hdr_str.sprintf("HTTP/%s %03d %s", http_version->c_str(), status_code, status_description->c_str());
+    hdr_str.sprintf("HTTP/%s " QLLDx(03) " %s", http_version->c_str(), (int64)status_code, status_description->c_str());
     hdr_str.concat("\r\n");
     qore_socket_private::do_headers(hdr_str, *hdr_copy, 0);
 
@@ -6578,9 +6578,9 @@ sock.setEventQueue(queue);
 nothing Socket::setEventQueue(Qore::Thread::Queue[Queue] queue, auto argument,
         *bool with_data) [flags=NAMED_ARGS] {
     if (queue->getMax() != -1)
-        return xsink->raiseException("QUEUE-ERROR", "the Queue object passed as a maximum size of %d entr%s, which " \
-            "could cause internal I/O to freeze in the Socket object if used; use a Queue object with no maximum " \
-            "size for I/O monitoring", queue->getMax(), queue->getMax() == 1 ? "y" : "ies");
+        return xsink->raiseException("QUEUE-ERROR", "the Queue object passed as a maximum size of " QLLD " entr%s, "
+            "which could cause internal I/O to freeze in the Socket object if used; use a Queue object with no maximum "
+            "size for I/O monitoring", (int64)queue->getMax(), queue->getMax() == 1 ? "y" : "ies");
 
     // pass reference from QoreObject::getReferencedPrivateData() to function
     s->setEventQueue(xsink, queue.release(), argument.refSelf(), with_data);
@@ -6830,9 +6830,9 @@ sock.setWarningQueue(5000, 5000, queue, "socket-1");
 nothing Socket::setWarningQueue(int warning_ms, int warning_bytes, Queue[Queue] queue, auto argument,
         timeout min_ms = 1s) [flags=NAMED_ARGS] {
     if (queue->getMax() != -1)
-        return xsink->raiseException("QUEUE-ERROR", "the Queue object passed as a maximum size of %d entr%s, which "
+        return xsink->raiseException("QUEUE-ERROR", "the Queue object passed as a maximum size of " QLLD " entr%s, which "
             "could cause internal I/O to freeze in the Socket object if used; use a Queue object with no maximum "
-            "size for I/O monitoring", queue->getMax(), queue->getMax() == 1 ? "y" : "ies");
+            "size for I/O monitoring", (int64)(queue->getMax()), queue->getMax() == 1 ? "y" : "ies");
 
     // pass reference from QoreObject::getReferencedPrivateData() to function
     s->setWarningQueue(xsink, warning_ms, warning_bytes, queue.release(), argument.refSelf(), min_ms);

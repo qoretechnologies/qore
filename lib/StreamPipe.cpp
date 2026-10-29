@@ -117,7 +117,7 @@ int64 PipeInputStream::read(void *ptr, int64 limit, ExceptionSink *xsink) {
         printd(1, "read - size: " QLLD ", count: " QLLD ", readPtr: " QLLD ", limit: " QLLD "\n", pipe->size,
             pipe->count, pipe->readPtr, limit);
         int64 willRead = QORE_MIN(limit, QORE_MIN(pipe->count, pipe->size - pipe->readPtr));
-        printd(1, "read - copying %d bytes\n", willRead);
+        printd(1, "read - copying %d bytes\n", (int)willRead);
         memcpy(dst, pipe->buffer.data() + pipe->readPtr, willRead);
         dst += willRead;
         pipe->count -= willRead;
@@ -127,7 +127,7 @@ int64 PipeInputStream::read(void *ptr, int64 limit, ExceptionSink *xsink) {
     printd(1, "read - wake up writer - size: " QLLD ", count: " QLLD ", readPtr: " QLLD ", limit: " QLLD "\n",
         pipe->size, pipe->count, pipe->readPtr, limit);
     pipe->writeCondVar.broadcast();
-    printd(1, "read - done, releasing lock, returning " QLLD "\n", dst - static_cast<uint8_t *>(ptr));
+    printd(1, "read - done, releasing lock, returning " QLLD "\n", (int64)(dst - static_cast<uint8_t *>(ptr)));
     return dst - static_cast<uint8_t *>(ptr);
 }
 
@@ -248,7 +248,7 @@ void PipeOutputStream::write(const void *ptr, int64 toWrite, ExceptionSink *xsin
         if (canWrite > 0) {
             int64 writePtr = (pipe->readPtr + pipe->count) % pipe->size;
             int64 willWrite = QORE_MIN(toWrite, QORE_MIN(canWrite, pipe->size - writePtr));
-            printd(1, "write - copying %d bytes\n", willWrite);
+            printd(1, "write - copying %d bytes\n", (int)willWrite);
             memcpy(pipe->buffer.data() + writePtr, src, willWrite);
             src += willWrite;
             pipe->count += willWrite;

@@ -226,7 +226,7 @@ QoreValue QoreHashMapSelectOperatorNode::evalImpl(bool& needs_deref, ExceptionSi
                 if (ref_rv) {
                     const QoreTypeInfo* vtype = val->getTypeInfo();
                     printd(5, "QoreHashMapSelectOperatorNode::evalImpl() i: %d vcommon: %d vtype: %p '%s' " \
-                        "valueType: %p '%s'\n", li.index(), vcommon, vtype, QoreTypeInfo::getName(vtype), valueType,
+                        "valueType: %p '%s'\n", (int)(li.index()), vcommon, vtype, QoreTypeInfo::getName(vtype), valueType,
                         QoreTypeInfo::getName(valueType));
                     if (!li.index()) {
                         if (vtype && vtype != anyTypeInfo) {
@@ -306,7 +306,7 @@ QoreValue QoreHashMapSelectOperatorNode::mapIterator(AbstractIteratorHelper& h, 
             if (ref_rv) {
                 const QoreTypeInfo* vtype = val->getTypeInfo();
                 printd(5, "QoreHashMapSelectOperatorNode::mapIterator() i: %d vcommon: %d vtype: %p '%s' " \
-                    "valueType: %p '%s'\n", i, vcommon, vtype, QoreTypeInfo::getName(vtype), valueType,
+                    "valueType: %p '%s'\n", (int)i, vcommon, vtype, QoreTypeInfo::getName(vtype), valueType,
                     QoreTypeInfo::getName(valueType));
                 if (i == 1) {
                     if (vtype && vtype != anyTypeInfo) {

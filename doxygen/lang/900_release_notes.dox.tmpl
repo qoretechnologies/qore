@@ -1927,6 +1927,16 @@ val = "string";      # OK
       specifiers are unchanged
     @endparblock
 
+    @par C++ API: The Arguments of printf-Style Functions Are Checked Against Their Format
+    The printf-style functions of the C++ API, <tt>ExceptionSink::raiseException()</tt>,
+    <tt>raiseErrnoException()</tt>, <tt>raiseExceptionArg()</tt>, <tt>appendLastDescription()</tt>,
+    <tt>QoreString::sprintf()</tt>, \c QoreStringMaker, \c QoreStringNodeMaker, <tt>printe()</tt> and
+    <tt>print_debug()</tt> (the <tt>printd()</tt> macro), are declared with the new \c QORE_PRINTF_FORMAT() macro, so
+    that GCC and Clang check their arguments against the format string; a binary module that passes an argument that
+    does not match its conversion, or a string that is not a format as the format, gets a \c -Wformat warning.  Such
+    a call is undefined behavior: an argument passed for a <tt>%%s</tt> conversion that is not a string, or a
+    <tt>%%s</tt> in text used as the format, crashes the process when the call formats it
+
     @par C++ API: HTTP Client Objects Must Be Allocated on the Heap
     @parblock
     The destructors of the \c QoreHttpClientObject and \c QoreHTTPClient C++ classes are now protected, as the
@@ -3979,6 +3989,14 @@ while (*binary chunk = input.read(65536)) {
       - fixed @ref Util::normalize_dir() "normalize_dir()" removing the root for a \c ".." segment directly below
         it: \c "/../etc" was returned as the relative path \c "etc"
 
+    - @ref vscdebugadapterintro "VscDebugAdapter" module
+      - the output of programs that are debugged in the adapter process is sent to the IDE as \c output events;
+        it was written to the channel of the protocol and lost
+      - fixed the adapter using all the time of a CPU while waiting for requests, and not ending when the IDE
+        closes its input
+      - fixed watches and hovers returning no value when the variables of the frame had not been listed, and
+        requests without arguments, such as \c configurationDone, failing with empty arguments
+        (<a href="https://github.com/qoretechnologies/qore/issues/5560">issue 5560</a>)
     - @ref websocketclientintro "WebSocketClient" module
       - \c WebSocketPingPollOperation uses non-blocking @ref httpclientiointro "HttpClientIo" I/O, with an extended
         CONNECT handshake for HTTP/2 and HTTP/3
@@ -5328,6 +5346,30 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a breakpoint set with a file name that is not the name that the file was parsed with, such as an absolute path
+      for a program started with a relative path, as an IDE gives it, found no statement; the file name is also
+      matched as an absolute path, made absolute with the working directory that the file was parsed in, and a
+      function can be given by its name only when it has one variant (see the
+      @ref debugprogramcontrolintro "DebugProgramControl" module;
+      <a href="https://github.com/qoretechnologies/qore/issues/5558">issue 5558</a>)
+    - \c qdbg processed the commands of a script on its input (input that is not a terminal) without waiting for the
+      program: a command written for the next stop was sent while the thread still ran and failed; with such input
+      the first command is now processed when the program has attached to the debugger, and a command that resumes
+      a thread returns when the thread stops again or stops being debugged
+    - the C++ code formatted some messages with arguments that did not match their conversions, or used text that is
+      not a format as the format, which the compiler now checks (see the C++ API compatibility notes):
+      - a failed WebSocket upgrade raised an exception whose description, the error text of the connection, was used
+        as the format, so a <tt>%%s</tt> in it crashed the client
+      - the error of a cast of a value to an enum, of a value thrown by native code and of some internal errors used
+        their description as the format, so a <tt>%%s</tt> in a cast value crashed the process
+      - @ref Qore::Program::importFunction() "Program::importFunction()" with an empty new name crashed formatting
+        its error, and imported the function with the empty name
+      - the error of an invalid day of the month in a date gave wrong values
+      - the errors of an invalid proxy URL scheme or port showed \c %%y instead of the value
+      - many errors printed 64-bit values with \c %%d, which shows only their lower 32 bits
+    - the local variables of a frame of a thread stopped in a debugger (@ref Qore::get_local_vars() "get_local_vars()")
+      included the temporary variables (\c ref_arg_helper) that the runtime creates for the arguments that a debugger
+      callback takes by reference
     - an @ref Qore::Expression "Expression" created an object of a class with unimplemented abstract methods
       (ex: <tt>new Expression(pgm, "new C()", "label")</tt>) instead of raising \c ABSTRACT-CLASS-ERROR as any other
       code does, and a later parse commit of a Program that allows it (@ref Qore::PO_ALLOW_REPARSE) then failed on

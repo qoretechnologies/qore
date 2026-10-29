@@ -291,7 +291,7 @@ int QoreTensor::parseShape(const QoreListNode* shape, std::vector<int64_t>& out,
         int64_t dim = v.getAsBigInt();
         if (dim < 0) {
             xsink->raiseException("ML-TENSOR-SHAPE-ERROR",
-                "tensor shape dimension %zu is " QLLD "; dimensions must be >= 0", i, dim);
+                "tensor shape dimension %zu is " QLLD "; dimensions must be >= 0", i, (int64)dim);
             return -1;
         }
         out.push_back(dim);
@@ -487,7 +487,7 @@ QoreTensor* QoreTensor::fromValue(QoreValue data, const QoreListNode* shape_arg,
         if (count != static_cast<int64_t>(source->size())) {
             xsink->raiseException("ML-TENSOR-SHAPE-ERROR",
                 "tensor shape expects " QLLD " elements, but source buffer contains %zu",
-                count, source->size());
+                (int64)count, source->size());
             return nullptr;
         }
         if (zero_copy) {
@@ -516,7 +516,7 @@ QoreTensor* QoreTensor::fromValue(QoreValue data, const QoreListNode* shape_arg,
         if (count != static_cast<int64_t>((*flat)->size())) {
             xsink->raiseException("ML-TENSOR-SHAPE-ERROR",
                 "tensor shape expects " QLLD " elements, but source data contains %zu",
-                count, (*flat)->size());
+                (int64)count, (*flat)->size());
             return nullptr;
         }
         buffer_holder = new QoreBufferNode(element_type, false, *flat, xsink);
@@ -721,7 +721,7 @@ QoreTensor* QoreTensor::concatRows(const QoreListNode* tensors_arg, ExceptionSin
             if (shape[dim] != first_shape[dim]) {
                 xsink->raiseException("ML-TENSOR-SHAPE-ERROR",
                     "concatRows() tensor %zu dimension %zu is " QLLD "; expected " QLLD,
-                    i, dim, shape[dim], first_shape[dim]);
+                    i, dim, (int64)(shape[dim]), (int64)(first_shape[dim]));
                 return nullptr;
             }
         }
@@ -793,7 +793,7 @@ QoreTensor* QoreTensor::reshape(const QoreListNode* shape_arg, ExceptionSink* xs
     if (new_count != static_cast<int64_t>(buffer->size())) {
         xsink->raiseException("ML-TENSOR-SHAPE-ERROR",
             "reshape() shape expects " QLLD " elements, but tensor has %zu",
-            new_count, buffer->size());
+            (int64)new_count, buffer->size());
         return nullptr;
     }
     return new QoreTensor(static_cast<const QoreBufferNode*>(buffer), std::move(n_shape));
@@ -809,7 +809,7 @@ QoreTensor* QoreTensor::sliceRows(int64_t offset, int64_t count, bool zero_copy,
     if (offset < 0 || count < 0 || offset > rows || count > rows - offset) {
         xsink->raiseException("ML-TENSOR-SHAPE-ERROR",
             "sliceRows() requested offset " QLLD " and count " QLLD " for tensor with " QLLD " rows",
-            offset, count, rows);
+            (int64)offset, (int64)count, (int64)rows);
         return nullptr;
     }
 

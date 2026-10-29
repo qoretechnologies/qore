@@ -588,7 +588,7 @@ public:
         if (day > 28) {
             int dom = qore_date_info::getLastDayOfMonth(month, year);
             if (day > dom) {
-                xsink->raiseException("INVALID-DATE", "invalid day of the month: %d; %04d-%02 has %d days", day, year,
+                xsink->raiseException("INVALID-DATE", "invalid day of the month: %d; %04d-%02d has %d days", day, year,
                     month, dom);
                 return;
             }

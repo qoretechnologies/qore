@@ -29478,3 +29478,12 @@ Baseline-positive regression controls remain: pre-existing exception, thread exi
 No production speedup, fresh Java/develop ratio, universal parity or performance ceiling is claimed. Next investigate receiver-local ownership bookkeeping while preserving runtime slot ownership, custom reference handlers, real-reference/cycle-collection semantics, and destructor ordering on normal and exceptional exits.
 
 [Complete evidence](results-native-method-sink-rejected-macos-arm64.json); [all 62 audit checks](audit-native-method-sink-rejected.md).
+
+
+## Develop debugger and diagnostic integration (2026-10-29)
+
+Develop c0391665d7 is integrated after the rejected redundant method-sink experiment. The merge preserves native call paths, adds upstream debugger and diagnostic fixes, and retains compatibility with line-based stepping in existing AOT debug IR. The initial Release regression caught missing AOT local-step events; four unchanged O0/O3 standalone binaries with stripped or embedded source reproduce the failure before the fix and pass afterwards.
+
+Release: 93 executed cases, 0 runtime skips, 12505 assertions; Debug: 93 executed cases, 0 runtime skips, 12505 assertions; two additional silent fixtures each. The selected AOTSmoke optimization-level case excludes 237 other cases in Release and 237 in Debug; excluded cases are not counted as executed. Native Debug: 3416 focused and 5081 broader assertions (overlapping). All 391 Release aliases restored.
+
+The [integration evidence](results-post-debug-format-merge-macos-arm64.json) and [complete audit](audit-post-debug-format-merge.md) record correctness checks and the original failure. Two diagnostic-only counter-format corrections are validated separately after full-suite qualification; Release printd removes those calls. These are not new timings or updated Java/develop ratios. The next experiment evaluates receiver ownership-release overhead against a fresh optimized merged baseline.

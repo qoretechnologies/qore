@@ -1186,7 +1186,7 @@ binary bin = compress(str_data);
 */
 binary compress(string data, int level = Z_DEFAULT_COMPRESSION) [flags=NAMED_ARGS] {
    if ((level < 1 && level != -1) || level > 9)
-      return xsink->raiseException("ZLIB-LEVEL-ERROR", "level must be between 1 - 9 or -1 (value passed: %d)", level);
+      return xsink->raiseException("ZLIB-LEVEL-ERROR", "level must be between 1 - 9 or -1 (value passed: " QLLD ")", (int64)level);
 
    if (!data->strlen())
       return new BinaryNode;
@@ -1212,7 +1212,7 @@ binary bin = compress(bin_data);
 */
 binary compress(binary data, int level = Z_DEFAULT_COMPRESSION) [flags=NAMED_ARGS] {
    if ((level < 1 && level != -1) || level > 9)
-      return xsink->raiseException("ZLIB-LEVEL-ERROR", "level must be between 1 - 9 or -1 (value passed: %d)", level);
+      return xsink->raiseException("ZLIB-LEVEL-ERROR", "level must be between 1 - 9 or -1 (value passed: " QLLD ")", (int64)level);
 
    if (!data->size())
       return new BinaryNode;
@@ -1321,7 +1321,7 @@ binary bin = deflate_raw(str_data);
 */
 binary deflate_raw(string data, int level = Z_DEFAULT_COMPRESSION) [flags=NAMED_ARGS] {
    if ((level < 1 && level != -1) || level > 9)
-      return xsink->raiseException("ZLIB-LEVEL-ERROR", "level must be between 1 - 9 or -1 (value passed: %d)", level);
+      return xsink->raiseException("ZLIB-LEVEL-ERROR", "level must be between 1 - 9 or -1 (value passed: " QLLD ")", (int64)level);
 
    if (!data->strlen())
       return new BinaryNode;
@@ -1353,7 +1353,7 @@ binary bin = deflate_raw(bin_data);
 */
 binary deflate_raw(binary data, int level = Z_DEFAULT_COMPRESSION) [flags=NAMED_ARGS] {
    if ((level < 1 && level != -1) || level > 9)
-      return xsink->raiseException("ZLIB-LEVEL-ERROR", "level must be between 1 - 9 or -1 (value passed: %d)", level);
+      return xsink->raiseException("ZLIB-LEVEL-ERROR", "level must be between 1 - 9 or -1 (value passed: " QLLD ")", (int64)level);
 
    if (!data->size())
       return new BinaryNode;
@@ -1465,7 +1465,7 @@ binary data = gzip(str);
 */
 binary gzip(string data, int level = Z_DEFAULT_COMPRESSION) [flags=NAMED_ARGS] {
    if ((level < 1 && level != -1) || level > 9)
-      return xsink->raiseException("ZLIB-LEVEL-ERROR", "level must be between 1 - 9 or -1 (value passed: %d)", level);
+      return xsink->raiseException("ZLIB-LEVEL-ERROR", "level must be between 1 - 9 or -1 (value passed: " QLLD ")", (int64)level);
 
    if (!data->strlen())
       return new BinaryNode;
@@ -1490,7 +1490,7 @@ binary data = gzip(bin);
 */
 binary gzip(binary data, int level = Z_DEFAULT_COMPRESSION) [flags=NAMED_ARGS] {
    if ((level < 1 && level != -1) || level > 9)
-      return xsink->raiseException("ZLIB-LEVEL-ERROR", "level must be between 1 - 9 or -1 (value passed: %d)", level);
+      return xsink->raiseException("ZLIB-LEVEL-ERROR", "level must be between 1 - 9 or -1 (value passed: " QLLD ")", (int64)level);
 
    if (!data->size())
       return new BinaryNode;
@@ -1590,7 +1590,7 @@ binary bin = bzip2(data);
 */
 binary bzip2(binary data, softint level = BZ2_DEFAULT_COMPRESSION) [flags=NAMED_ARGS] {
    if (level < 1 || level > 9)
-      return xsink->raiseException("BZLIB2-LEVEL-ERROR", "level must be between 1 - 9 (value passed: %d)", level);
+      return xsink->raiseException("BZLIB2-LEVEL-ERROR", "level must be between 1 - 9 (value passed: " QLLD ")", (int64)level);
 
    return qore_bzip2(data->getPtr(), data->size(), level, xsink);
 }
@@ -1613,7 +1613,7 @@ binary bin = bzip2(str);
 */
 binary bzip2(string data, softint level = BZ2_DEFAULT_COMPRESSION) [flags=NAMED_ARGS] {
    if (level < 1 || level > 9)
-      return xsink->raiseException("BZLIB2-LEVEL-ERROR", "level must be between 1 - 9 (value passed: %d)", level);
+      return xsink->raiseException("BZLIB2-LEVEL-ERROR", "level must be between 1 - 9 (value passed: " QLLD ")", (int64)level);
 
    return qore_bzip2(data->getBuffer(), data->strlen(), level, xsink);
 }
@@ -1714,8 +1714,8 @@ binary bin = brotli(str);
 */
 binary brotli(string data, int quality = BROTLI_DEFAULT_QUALITY) [flags=NAMED_ARGS] {
    if ((quality < BROTLI_MIN_QUALITY && quality != -1) || quality > BROTLI_MAX_QUALITY)
-      return xsink->raiseException("BROTLI-LEVEL-ERROR", "quality must be between %d - %d or -1 (value passed: %d)",
-         BROTLI_MIN_QUALITY, BROTLI_MAX_QUALITY, quality);
+      return xsink->raiseException("BROTLI-LEVEL-ERROR", "quality must be between %d - %d or -1 (value passed: " QLLD ")",
+         BROTLI_MIN_QUALITY, BROTLI_MAX_QUALITY, (int64)quality);
 
    if (quality == -1)
       quality = BROTLI_DEFAULT_QUALITY;
@@ -1744,8 +1744,8 @@ binary bin = brotli(data);
 */
 binary brotli(binary data, int quality = BROTLI_DEFAULT_QUALITY) [flags=NAMED_ARGS] {
    if ((quality < BROTLI_MIN_QUALITY && quality != -1) || quality > BROTLI_MAX_QUALITY)
-      return xsink->raiseException("BROTLI-LEVEL-ERROR", "quality must be between %d - %d or -1 (value passed: %d)",
-         BROTLI_MIN_QUALITY, BROTLI_MAX_QUALITY, quality);
+      return xsink->raiseException("BROTLI-LEVEL-ERROR", "quality must be between %d - %d or -1 (value passed: " QLLD ")",
+         BROTLI_MIN_QUALITY, BROTLI_MAX_QUALITY, (int64)quality);
 
    if (quality == -1)
       quality = BROTLI_DEFAULT_QUALITY;
@@ -1859,8 +1859,8 @@ binary bin = zstd(str);
 */
 binary zstd(string data, int level = 3) [flags=NAMED_ARGS] {
    if ((level < 1 && level != -1) || level > ZSTD_maxCLevel())
-      return xsink->raiseException("ZSTD-LEVEL-ERROR", "level must be between %d - %d or -1 (value passed: %d)",
-         1, ZSTD_maxCLevel(), level);
+      return xsink->raiseException("ZSTD-LEVEL-ERROR", "level must be between %d - %d or -1 (value passed: " QLLD ")",
+         1, ZSTD_maxCLevel(), (int64)level);
 
    if (level == -1)
       level = ZSTD_CLEVEL_DEFAULT;
@@ -1889,8 +1889,8 @@ binary bin = zstd(data);
 */
 binary zstd(binary data, int level = 3) [flags=NAMED_ARGS] {
    if ((level < 1 && level != -1) || level > ZSTD_maxCLevel())
-      return xsink->raiseException("ZSTD-LEVEL-ERROR", "level must be between %d - %d or -1 (value passed: %d)",
-         1, ZSTD_maxCLevel(), level);
+      return xsink->raiseException("ZSTD-LEVEL-ERROR", "level must be between %d - %d or -1 (value passed: " QLLD ")",
+         1, ZSTD_maxCLevel(), (int64)level);
 
    if (level == -1)
       level = ZSTD_CLEVEL_DEFAULT;
@@ -2007,8 +2007,8 @@ binary bin = lz4(str);
 */
 binary lz4(string data, int acceleration = 1) [flags=NAMED_ARGS] {
    if (acceleration < 1 || acceleration > 65537)
-      return xsink->raiseException("LZ4-ACCELERATION-ERROR", "acceleration must be between %d - %d (value passed: %d)",
-         1, 65537, acceleration);
+      return xsink->raiseException("LZ4-ACCELERATION-ERROR", "acceleration must be between %d - %d (value passed: " QLLD ")",
+         1, 65537, (int64)acceleration);
 
    if (!data->strlen())
       return new BinaryNode;
@@ -2037,8 +2037,8 @@ binary bin = lz4(data);
 */
 binary lz4(binary data, int acceleration = 1) [flags=NAMED_ARGS] {
    if (acceleration < 1 || acceleration > 65537)
-      return xsink->raiseException("LZ4-ACCELERATION-ERROR", "acceleration must be between %d - %d (value passed: %d)",
-         1, 65537, acceleration);
+      return xsink->raiseException("LZ4-ACCELERATION-ERROR", "acceleration must be between %d - %d (value passed: " QLLD ")",
+         1, 65537, (int64)acceleration);
 
    if (!data->size())
       return new BinaryNode;

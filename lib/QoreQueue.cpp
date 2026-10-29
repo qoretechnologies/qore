@@ -68,7 +68,8 @@ void qore_queue_private::destructor(ExceptionSink* xsink) {
 
 void qore_queue_private::clearIntern(ExceptionSink* xsink) {
     while (head) {
-        printd(5, "qore_queue_private::clearIntern() this: %p deleting %p (node '%s' %s)\n", this, head, head->node.getTypeName(), head->node.getType());
+        printd(5, "qore_queue_private::clearIntern() this: %p deleting %p (node '%s' %d)\n", this, head,
+            head->node.getTypeName(), head->node.getType());
         QoreQueueNode* w = head->next;
         head->del(xsink);
         head = w;

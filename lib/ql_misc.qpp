@@ -701,7 +701,7 @@ set_signal_handler(SIGINT, \signal_handler());
 nothing set_signal_handler(softint signal, code handler) [dom=PROCESS;flags=NAMED_ARGS] {
 #ifdef HAVE_SIGNAL_HANDLING
     if (signal <= 0 || signal > QORE_SIGNAL_MAX)
-        return xsink->raiseException("SET-SIGNAL-HANDLER-ERROR", "%d is not a valid signal", signal);
+        return xsink->raiseException("SET-SIGNAL-HANDLER-ERROR", "" QLLD " is not a valid signal", (int64)signal);
 
     QSM.setHandler(signal, handler, xsink);
 #else
@@ -731,7 +731,7 @@ remove_signal_handler(SIGINT);
 nothing remove_signal_handler(softint signal) [dom=PROCESS;flags=NAMED_ARGS] {
 #ifdef HAVE_SIGNAL_HANDLING
     if (signal <= 0 || signal > QORE_SIGNAL_MAX) {
-        return xsink->raiseException("REMOVE-SIGNAL-HANDLER-ERROR", "%d is not a valid signal", signal);
+        return xsink->raiseException("REMOVE-SIGNAL-HANDLER-ERROR", "" QLLD " is not a valid signal", (int64)signal);
     }
     QSM.removeHandler(signal, xsink);
 #else

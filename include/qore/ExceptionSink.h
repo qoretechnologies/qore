@@ -88,7 +88,7 @@ public:
         @param fmt the format string for the description for the exception
         @return always returns nullptr
     */
-    DLLEXPORT AbstractQoreNode* raiseException(const char *err, const char *fmt, ...);
+    DLLEXPORT AbstractQoreNode* raiseException(const char *err, const char *fmt, ...) QORE_PRINTF_FORMAT(3, 4);
 
     //! appends a Qore-language exception to the list and appends the result of strerror(errno) to the description
     /** The AbstractQoreNode pointer returned is always 0; used to simplify error handling code.
@@ -97,7 +97,8 @@ public:
         @param fmt the format string for the description for the exception
         @return always returns nullptr
     */
-    DLLEXPORT AbstractQoreNode* raiseErrnoException(const char *err, int en, const char *fmt, ...);
+    DLLEXPORT AbstractQoreNode* raiseErrnoException(const char *err, int en, const char *fmt, ...)
+        QORE_PRINTF_FORMAT(4, 5);
 
     //! appends a Qore-language exception to the list and appends the result of strerror(errno) to the description
     /** The AbstractQoreNode pointer returned is always 0; used to simplify error handling code.
@@ -115,7 +116,8 @@ public:
         @param fmt the format string for the description for the exception
         @return always returns nullptr
     */
-    DLLEXPORT AbstractQoreNode* raiseExceptionArg(const char* err, QoreValue arg, const char* fmt, ...);
+    DLLEXPORT AbstractQoreNode* raiseExceptionArg(const char* err, QoreValue arg, const char* fmt, ...)
+        QORE_PRINTF_FORMAT(4, 5);
 
     //! appends a Qore-language exception to the list, and sets the 'arg' member (this object takes over the reference counts of 'arg' and 'desc')
     /** The AbstractQoreNode pointer returned is always 0; used to simplify error handling code.
@@ -215,7 +217,8 @@ public:
 
         @since %Qore 0.9.0
     */
-    DLLEXPORT void raiseException(const QoreProgramLocation& loc, const char* err, QoreValue arg, const char* fmt, ...);
+    DLLEXPORT void raiseException(const QoreProgramLocation& loc, const char* err, QoreValue arg, const char* fmt, ...)
+        QORE_PRINTF_FORMAT(5, 6);
 
     //! sets the "thread_exit" flag; will cause the current thread to terminate
     DLLEXPORT void raiseThreadExit();
@@ -248,7 +251,7 @@ public:
 
         @since %Qore 0.9
     */
-    DLLEXPORT int appendLastDescription(const char* fmt, ...);
+    DLLEXPORT int appendLastDescription(const char* fmt, ...) QORE_PRINTF_FORMAT(2, 3);
 
     // Renames the "err" key of the top exception and prepends a string description to any desc value
     /** @return -1 for error, not added, or 0 = OK

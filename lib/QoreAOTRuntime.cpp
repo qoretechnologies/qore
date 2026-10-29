@@ -7943,6 +7943,7 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
     }
 
     auto func = std::make_unique<QoreIRFunction>(func_name ? func_name : "");
+    func->legacy_debug_steps = true;
     func->max_value_id = max_value_id;
     func->max_local_slot_id = max_local_slot_id;
     func->num_guards = num_guards;

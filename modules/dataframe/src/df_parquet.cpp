@@ -226,7 +226,7 @@ static bool qoreParquetReadIntListOption(const QoreHashNode* options, const char
         if (v < 0 || v > std::numeric_limits<int>::max()) {
             xsink->raiseException("DATAFRAME-IO-ERROR",
                 "Parquet option '%s' row group " QLLD " is outside the supported range",
-                key, v);
+                key, (int64)v);
             return false;
         }
         out.push_back(static_cast<int>(v));
@@ -243,7 +243,7 @@ static bool qoreParquetReadIntListOption(const QoreHashNode* options, const char
         if (v < 0 || v > std::numeric_limits<int>::max()) {
             xsink->raiseException("DATAFRAME-IO-ERROR",
                 "Parquet option '%s' entry " QLLD " row group " QLLD " is outside the supported range",
-                key, static_cast<int64>(i), v);
+                key, static_cast<int64>(i), (int64)v);
             return false;
         }
         out.push_back(static_cast<int>(v));
@@ -268,13 +268,13 @@ static bool qoreParquetReadFilterHash(const QoreHashNode* filter, int64_t index,
     if (column.getType() != NT_STRING) {
         xsink->raiseException("DATAFRAME-IO-ERROR",
             "Parquet option 'filters' entry " QLLD " key 'column' expects a string, got %s",
-            index, column.getFullTypeName());
+            (int64)index, column.getFullTypeName());
         return false;
     }
     out.column = qoreParquetStringValue(column);
     if (out.column.empty()) {
         xsink->raiseException("DATAFRAME-IO-ERROR",
-            "Parquet option 'filters' entry " QLLD " key 'column' must not be empty", index);
+            "Parquet option 'filters' entry " QLLD " key 'column' must not be empty", (int64)index);
         return false;
     }
 
@@ -282,7 +282,7 @@ static bool qoreParquetReadFilterHash(const QoreHashNode* filter, int64_t index,
     if (op.getType() != NT_STRING) {
         xsink->raiseException("DATAFRAME-IO-ERROR",
             "Parquet option 'filters' entry " QLLD " key 'op' expects a string, got %s",
-            index, op.getFullTypeName());
+            (int64)index, op.getFullTypeName());
         return false;
     }
     out.op = qoreParquetStringValue(op);
@@ -290,7 +290,7 @@ static bool qoreParquetReadFilterHash(const QoreHashNode* filter, int64_t index,
         xsink->raiseException("DATAFRAME-IO-ERROR",
             "Parquet option 'filters' entry " QLLD " has unsupported operator '%s'; expected one of: "
             "==, !=, <, <=, >, >=, in, not_in, contains, startswith, endswith, is_null, not_null",
-            index, out.op.c_str());
+            (int64)index, out.op.c_str());
         return false;
     }
 
@@ -299,13 +299,13 @@ static bool qoreParquetReadFilterHash(const QoreHashNode* filter, int64_t index,
     if (qoreParquetFilterNeedsValue(out.op) && !value_exists) {
         xsink->raiseException("DATAFRAME-IO-ERROR",
             "Parquet option 'filters' entry " QLLD " operator '%s' requires key 'value'",
-            index, out.op.c_str());
+            (int64)index, out.op.c_str());
         return false;
     }
     if ((out.op == "in" || out.op == "not_in") && out.value.getType() != NT_LIST) {
         xsink->raiseException("DATAFRAME-IO-ERROR",
             "Parquet option 'filters' entry " QLLD " operator '%s' expects key 'value' to be a list, got %s",
-            index, out.op.c_str(), out.value.getFullTypeName());
+            (int64)index, out.op.c_str(), out.value.getFullTypeName());
         return false;
     }
     return true;
@@ -365,7 +365,7 @@ static bool qoreParquetReadOptions(const QoreHashNode* options, QoreParquetReadO
         if (parsed.batch_size <= 0) {
             xsink->raiseException("DATAFRAME-IO-ERROR",
                 "Parquet option 'batch_size' must be greater than zero; got " QLLD,
-                parsed.batch_size);
+                (int64)parsed.batch_size);
             return false;
         }
     }
@@ -419,7 +419,7 @@ static bool qoreParquetWriteOptions(const QoreHashNode* options, QoreParquetWrit
         if (parsed.row_group_size <= 0) {
             xsink->raiseException("DATAFRAME-IO-ERROR",
                 "Parquet option 'row_group_size' must be greater than zero; got " QLLD,
-                parsed.row_group_size);
+                (int64)parsed.row_group_size);
             return false;
         }
     }
@@ -1728,7 +1728,7 @@ static QoreValue arrowScalarToQore(const std::shared_ptr<arrow::Array>& array,
             if (dict_index < 0 || dict_index >= dictionary->length()) {
                 xsink->raiseException("DATAFRAME-IO-ERROR",
                     "Arrow dictionary index " QLLD " out of range (0.." QLLD ")",
-                    dict_index, dictionary->length() - 1);
+                    (int64)dict_index, (int64)(dictionary->length() - 1));
                 return QoreValue();
             }
             return arrowScalarToQore(dictionary, dict_index, xsink);

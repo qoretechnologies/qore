@@ -2758,7 +2758,7 @@ QoreHashNode* SocketQuicSendResponsePollOperation::continuePoll(ExceptionSink* x
                         printd(5, "SocketQuicSendResponsePollOperation::continuePoll() "
                             "FLUSHING stream_id=" QLLD " migration detected, "
                             "waiting for ACKs (bytes_in_flight=%" PRIu64 ")\n",
-                            stream_id_, quic_session->getBytesInFlight());
+                            (int64)stream_id_, quic_session->getBytesInFlight());
                         QoreHashNode* poll_info = getSocketPollInfoHash(xsink, SOCK_POLLIN);
                         if (poll_info) {
                             setPollTimeoutFromExpiry(poll_info, next_expiry, xsink);

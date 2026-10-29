@@ -288,11 +288,11 @@ QoreListNode* QoreRegex::extractWithPattern(const QoreString& target, bool inclu
         PCRE2_SIZE* ovector = pcre2_get_ovector_pointer(md);
         int pos = (rc - 1) * 2;
         int new_offset = ovector[pos + (include_pattern ? 1 : 0)];
-        printd(5, "QoreRegex::extractWithPattern() offset: %d new_offset: %d size: %d ovector[%d..]: %d %d\n", offset,
-            new_offset, t->strlen(), pos, ovector[pos], ovector[pos + 1]);
+        printd(5, "QoreRegex::extractWithPattern() offset: %d new_offset: %d size: %d ovector[%d..]: %d %d\n", (int)offset,
+            new_offset, (int)(t->strlen()), pos, (int)ovector[pos], (int)(ovector[pos + 1]));
         SimpleRefHolder<QoreStringNode> tstr(new QoreStringNode(t->c_str() + offset, new_offset - offset, t->getEncoding()));
-        printd(5, "substring %d: %d - %d (len %d) tstr: '%s' (%d)\n", rc, ovector[pos], ovector[pos + 1],
-            ovector[pos + 1] - ovector[pos], tstr->c_str(), (int)tstr->size());
+        printd(5, "substring %d: %d - %d (len %d) tstr: '%s' (%d)\n", rc, (int)ovector[pos], (int)(ovector[pos + 1]),
+            (int)(ovector[pos + 1] - ovector[pos]), tstr->c_str(), (int)tstr->size());
         l->push(tstr.release(), xsink);
         offset = ovector[pos + 1];
         ++split_count;

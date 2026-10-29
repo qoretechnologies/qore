@@ -195,7 +195,7 @@ QoreDataFrame* QoreDataFrame::withColumn(const std::string& name,
     if (data && (int64_t)data->size() != n_rows) {
         xsink->raiseException("DATAFRAME-COLUMN-ERROR",
             "withColumn data has " QLLD " elements, expected " QLLD,
-            (int64_t)data->size(), n_rows);
+            (int64)((int64_t)data->size()), (int64)n_rows);
         return nullptr;
     }
 

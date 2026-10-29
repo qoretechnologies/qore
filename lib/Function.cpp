@@ -1129,7 +1129,7 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
     }
 #endif
 
-    caller_runtime_po = runtime_get_effective_program_parse_options();
+    caller_runtime_po = runtime_take_call_caller_parse_options();
 
     // set the program context if necessary
     QoreProgram* old_pgm = pgm_ctx ? qore_get_call_program_context() : nullptr;
@@ -3053,7 +3053,8 @@ QoreListNode* QoreFunction::runtimeGetCallVariants() const {
 
         // ignore "runtime noop" variants if necessary
         if (strict_args && (vflags & QCF_RUNTIME_NOOP)) {
-            printd(5, "QoreFunction::runtimeGetCallVariants() this: %p, skip runtime noop, vflags: %p\n", this, vflags);
+            printd(5, "QoreFunction::runtimeGetCallVariants() this: %p, skip runtime noop, vflags: 0x%llx\n", this,
+                (unsigned long long)vflags);
             continue;
         }
 
@@ -3062,7 +3063,8 @@ QoreListNode* QoreFunction::runtimeGetCallVariants() const {
         if ((vfflags & po & ~PO_POSITIVE_OPTIONS)
             || ((vfflags & PO_POSITIVE_OPTIONS)
                 && (((vfflags & PO_POSITIVE_OPTIONS) & po) != (vfflags & PO_POSITIVE_OPTIONS)))) {
-            printd(5, "QoreFunction::runtimeGetCallVariants() this: %p, skip functionality, vfflags: %p\n", this, vfflags);
+            printd(5, "QoreFunction::runtimeGetCallVariants() this: %p, skip functionality, vfflags: 0x%llx\n",
+                this, (unsigned long long)vfflags);
             continue;
         }
 
@@ -4346,7 +4348,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
     unsigned num_args = argTypeInfo.size();
 
     printd(5, "QoreFunction::parseFindVariant() this: %p %s() vlist: %d ilist: %d num_args: %d\n", this, getName(),
-        vlist.size(), ilist.size(), num_args);
+        (int)(vlist.size()), (int)(ilist.size()), num_args);
 
     QoreFunction* aqf = nullptr;
 
@@ -6674,8 +6676,8 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
         // read once for the call, so that argv and self are uninstantiated exactly when they were instantiated
         const bool call_uses_argv = uses_argv.load(std::memory_order_acquire);
         const bool call_uses_self = uses_self.load(std::memory_order_acquire);
-        printd(3, "evalTiered JIT/AOT '%s' exec_count=%lu aot_ctx=%p\n",
-            name, exec_count.load(), static_cast<void*>(aot_ctx));
+        printd(3, "evalTiered JIT/AOT '%s' exec_count=%llu aot_ctx=%p\n",
+            name, static_cast<unsigned long long>(exec_count.load()), static_cast<void*>(aot_ctx));
 
         // self might be 0 if instantiated by a constructor call
         // Only instantiate if actually used in the function body
@@ -6959,9 +6961,10 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
 
         // Check for JIT promotion while on IR tier
         uint64_t count = exec_count.fetch_add(1, std::memory_order_relaxed) + 1;
-        printd(3, "evalTiered IR '%s' exec_count=%lu jit_threshold=%lu is_closure=%d jit_failed=%d\n",
-            name, count, (unsigned long)QoreJIT::getJITThreshold(), (int)is_closure,
-            (int)jit_compile_failed.load(std::memory_order_acquire));
+        printd(3, "evalTiered IR '%s' exec_count=%llu jit_threshold=%llu is_closure=%d jit_failed=%d\n",
+            name, static_cast<unsigned long long>(count),
+            static_cast<unsigned long long>(QoreJIT::getJITThreshold()), static_cast<int>(is_closure),
+            static_cast<int>(jit_compile_failed.load(std::memory_order_acquire)));
         // OSR: hot loop detected by IR interpreter — trigger JIT compilation early
         // On-demand promotion: explicit --exec-mode=jit promotes on the first call
         // (threshold 1); tiered mode promotes once the function is hot.

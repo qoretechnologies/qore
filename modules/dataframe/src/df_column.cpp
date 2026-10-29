@@ -399,7 +399,7 @@ int64_t ColumnData::countNull() const {
 QoreValue ColumnData::getValueAt(int64_t i, ExceptionSink* xsink) const {
     if (i < 0 || i >= n_rows) {
         xsink->raiseException("DATAFRAME-INDEX-ERROR",
-            "row index " QLLD " out of range (0.." QLLD ")", i, n_rows - 1);
+            "row index " QLLD " out of range (0.." QLLD ")", (int64)i, (int64)(n_rows - 1));
         return QoreValue();
     }
     if (isNull(i)) {
@@ -975,7 +975,7 @@ std::shared_ptr<ColumnData> buildColumnDataFromBuffer(const QoreBufferNode* valu
                     ValueHolder value(values->getReferencedEntry(i, xsink), xsink);
                     if (!getDataFrameString(*value, col->str_data[i])) {
                         xsink->raiseException("DATAFRAME-ERROR",
-                            "buffer<string> element " QLLD " could not be converted to a DataFrame string", i);
+                            "buffer<string> element " QLLD " could not be converted to a DataFrame string", (int64)i);
                         return nullptr;
                     }
                 }
@@ -1108,7 +1108,7 @@ QoreListNode* columnToQoreListRange(const ColumnData& col, int64_t start,
     if (start < 0 || count < 0 || start + count > col.n_rows) {
         xsink->raiseException("DATAFRAME-INDEX-ERROR",
             "column slice start " QLLD " count " QLLD " out of range for " QLLD " rows",
-            start, count, col.n_rows);
+            (int64)start, (int64)count, (int64)col.n_rows);
         return nullptr;
     }
 

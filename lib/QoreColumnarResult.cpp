@@ -739,7 +739,7 @@ static std::vector<size_t> columnar_take_indices(const QoreListNode* indices, si
         if (index < 0 || static_cast<size_t>(index) >= row_count) {
             xsink->raiseException("COLUMNAR-RESULT-ERROR",
                 "row index " QLLD " at offset " QLLD " is outside row range 0.." QLLD,
-                index, static_cast<int64>(i), static_cast<int64>(row_count ? row_count - 1 : 0));
+                (int64)index, static_cast<int64>(i), static_cast<int64>(row_count ? row_count - 1 : 0));
             return {};
         }
         rv.push_back(static_cast<size_t>(index));
@@ -1365,8 +1365,8 @@ static int columnar_checked_storage_size(QoreBufferElementType element_type, siz
     }
     if (length > std::numeric_limits<size_t>::max() / element_size) {
         xsink->raiseException(error,
-            "buffer<%s> length " QSD " overflows serialized byte size",
-            qore_buffer_element_type_name(element_type), length);
+            "buffer<%s> length " QLLD " overflows serialized byte size",
+            qore_buffer_element_type_name(element_type), (int64)length);
         return -1;
     }
     byte_count = length * element_size;
@@ -1697,8 +1697,8 @@ static QoreValue columnar_deserialize_raw_buffer(const QoreHashNode* h, Exceptio
     }
     if (data_bin->size() != expected_data_size) {
         xsink->raiseException("DESERIALIZATION-ERROR",
-            "raw columnar buffer data has " QSD " bytes; expecting " QSD,
-            data_bin->size(), expected_data_size);
+            "raw columnar buffer data has " QLLD " bytes; expecting " QLLD,
+            (int64)(data_bin->size()), (int64)expected_data_size);
         return QoreValue();
     }
 
@@ -1721,8 +1721,8 @@ static QoreValue columnar_deserialize_raw_buffer(const QoreHashNode* h, Exceptio
         size_t expected_validity_size = columnar_bitmap_bytes(length);
         if (validity_bin->size() != expected_validity_size) {
             xsink->raiseException("DESERIALIZATION-ERROR",
-                "raw columnar buffer validity has " QSD " bytes; expecting " QSD,
-                validity_bin->size(), expected_validity_size);
+                "raw columnar buffer validity has " QLLD " bytes; expecting " QLLD,
+                (int64)(validity_bin->size()), (int64)expected_validity_size);
             return QoreValue();
         }
     }
@@ -2216,7 +2216,7 @@ static int qore_arrow_checked_scale_temporal(int64_t value, int64_t multiplier, 
     __int128 scaled = static_cast<__int128>(value) * multiplier;
     if (scaled > std::numeric_limits<int64_t>::max() || scaled < std::numeric_limits<int64_t>::min()) {
         xsink->raiseException("ARROW-C-DATA-ERROR", "%s temporal value " QLLD " exceeds Qore int64 range",
-            context ? context : "Arrow C Data", value);
+            context ? context : "Arrow C Data", (int64)value);
         return -1;
     }
     result = static_cast<int64_t>(scaled);
@@ -2330,7 +2330,7 @@ static QoreBufferElementType qore_arrow_buffer_type_from_schema(const QoreColumn
 
 static int64_t qore_arrow_int64_length(size_t length, ExceptionSink* xsink, const char* context) {
     if (length > static_cast<size_t>(std::numeric_limits<int64_t>::max())) {
-        xsink->raiseException("ARROW-C-DATA-ERROR", "%s length " QSD " exceeds Arrow int64 range", context, length);
+        xsink->raiseException("ARROW-C-DATA-ERROR", "%s length " QLLD " exceeds Arrow int64 range", context, (int64)length);
         return -1;
     }
     return static_cast<int64_t>(length);
@@ -2640,8 +2640,8 @@ static int qore_arrow_export_binary_array(const QoreArrowValueSource& source,
         }
         if (row->getType() != NT_BINARY) {
             xsink->raiseException("ARROW-C-DATA-ERROR",
-                "binary column '%s' row " QSD " has type '%s'; expected binary or NOTHING",
-                name ? name : "", i, row->getTypeName());
+                "binary column '%s' row " QLLD " has type '%s'; expected binary or NOTHING",
+                name ? name : "", (int64)i, row->getTypeName());
             return -1;
         }
         if (schema_desc.nullable) {
@@ -2650,8 +2650,8 @@ static int qore_arrow_export_binary_array(const QoreArrowValueSource& source,
         const BinaryNode* bin = row->get<const BinaryNode>();
         if (fixed && static_cast<int64_t>(bin->size()) != schema_desc.fixed_size) {
             xsink->raiseException("ARROW-C-DATA-ERROR",
-                "fixed_size_binary column '%s' row " QSD " has " QSD " bytes; expected %d",
-                name ? name : "", i, bin->size(), schema_desc.fixed_size);
+                "fixed_size_binary column '%s' row " QLLD " has " QLLD " bytes; expected %d",
+                name ? name : "", (int64)i, (int64)(bin->size()), schema_desc.fixed_size);
             return -1;
         }
         if (!fixed && bin->size() > static_cast<size_t>(std::numeric_limits<int64_t>::max() - current)) {
@@ -2752,22 +2752,22 @@ static int qore_arrow_export_temporal_array(const QoreArrowValueSource& source,
         }
         if (row->getType() != NT_DATE) {
             xsink->raiseException("ARROW-C-DATA-ERROR",
-                "temporal column '%s' row " QSD " has type '%s'; expected date or NOTHING",
-                name ? name : "", i, row->getTypeName());
+                "temporal column '%s' row " QLLD " has type '%s'; expected date or NOTHING",
+                name ? name : "", (int64)i, row->getTypeName());
             return -1;
         }
         const DateTimeNode* dt = row->get<const DateTimeNode>();
         bool duration = schema_desc.kind == QoreColumnarTypeKind::Duration;
         if (duration && !dt->isRelative()) {
             xsink->raiseException("ARROW-C-DATA-ERROR",
-                "duration column '%s' row " QSD " has an absolute date; expected relative date duration",
-                name ? name : "", i);
+                "duration column '%s' row " QLLD " has an absolute date; expected relative date duration",
+                name ? name : "", (int64)i);
             return -1;
         }
         if (!duration && dt->isRelative()) {
             xsink->raiseException("ARROW-C-DATA-ERROR",
-                "timestamp column '%s' row " QSD " has a relative date; expected absolute date/time",
-                name ? name : "", i);
+                "timestamp column '%s' row " QLLD " has a relative date; expected absolute date/time",
+                name ? name : "", (int64)i);
             return -1;
         }
         if (schema_desc.nullable) {
@@ -2836,8 +2836,8 @@ static int qore_arrow_export_list_array(const QoreArrowValueSource& source,
         }
         if (row->getType() != NT_LIST) {
             xsink->raiseException("ARROW-C-DATA-ERROR",
-                "list column '%s' row " QSD " has type '%s'; expected list or NOTHING",
-                name ? name : "", i, row->getTypeName());
+                "list column '%s' row " QLLD " has type '%s'; expected list or NOTHING",
+                name ? name : "", (int64)i, row->getTypeName());
             return -1;
         }
         if (schema_desc.nullable) {
@@ -2927,15 +2927,15 @@ static int qore_arrow_export_fixed_size_list_array(const QoreArrowValueSource& s
         }
         if (row->getType() != NT_LIST) {
             xsink->raiseException("ARROW-C-DATA-ERROR",
-                "fixed_size_list column '%s' row " QSD " has type '%s'; expected list or NOTHING",
-                name ? name : "", i, row->getTypeName());
+                "fixed_size_list column '%s' row " QLLD " has type '%s'; expected list or NOTHING",
+                name ? name : "", (int64)i, row->getTypeName());
             return -1;
         }
         const QoreListNode* row_list = row->get<const QoreListNode>();
         if (static_cast<int32_t>(row_list->size()) != schema_desc.fixed_size) {
             xsink->raiseException("ARROW-C-DATA-ERROR",
-                "fixed_size_list column '%s' row " QSD " has " QSD " values; expected %d",
-                name ? name : "", i, row_list->size(), schema_desc.fixed_size);
+                "fixed_size_list column '%s' row " QLLD " has " QLLD " values; expected %d",
+                name ? name : "", (int64)i, (int64)(row_list->size()), schema_desc.fixed_size);
             return -1;
         }
         if (schema_desc.nullable) {
@@ -2998,8 +2998,8 @@ static int qore_arrow_export_struct_array(const QoreArrowValueSource& source,
         }
         if (row->getType() != NT_HASH) {
             xsink->raiseException("ARROW-C-DATA-ERROR",
-                "struct column '%s' row " QSD " has type '%s'; expected hash or NOTHING",
-                name ? name : "", i, row->getTypeName());
+                "struct column '%s' row " QLLD " has type '%s'; expected hash or NOTHING",
+                name ? name : "", (int64)i, row->getTypeName());
             return -1;
         }
         if (schema_desc.nullable) {
@@ -3091,8 +3091,8 @@ static int qore_arrow_export_map_array(const QoreArrowValueSource& source,
         }
         if (row->getType() != NT_HASH) {
             xsink->raiseException("ARROW-C-DATA-ERROR",
-                "map column '%s' row " QSD " has type '%s'; expected hash or NOTHING",
-                name ? name : "", i, row->getTypeName());
+                "map column '%s' row " QLLD " has type '%s'; expected hash or NOTHING",
+                name ? name : "", (int64)i, row->getTypeName());
             return -1;
         }
         if (schema_desc.nullable) {
@@ -3624,7 +3624,7 @@ static QoreValue qore_arrow_value_at(const ArrowSchema* schema, const ArrowArray
         if (dictionary_index < 0 || dictionary_index >= array->dictionary->length) {
             xsink->raiseException("ARROW-C-DATA-ERROR",
                 "Arrow dictionary array '%s' index " QLLD " out of range (0.." QLLD ")",
-                schema->name ? schema->name : "", dictionary_index, array->dictionary->length - 1);
+                schema->name ? schema->name : "", (int64)dictionary_index, (int64)(array->dictionary->length - 1));
             return QoreValue();
         }
         return qore_arrow_value_at(schema->dictionary, array->dictionary, dictionary_index, xsink);
@@ -3784,7 +3784,7 @@ static QoreValue qore_arrow_value_at(const ArrowSchema* schema, const ArrowArray
         if (schema->n_children != array->n_children) {
             xsink->raiseException("ARROW-C-DATA-ERROR",
                 "Arrow struct array '%s' has " QLLD " schema children and " QLLD " array children",
-                schema->name ? schema->name : "", schema->n_children, array->n_children);
+                schema->name ? schema->name : "", (int64)schema->n_children, (int64)array->n_children);
             return QoreValue();
         }
         ReferenceHolder<QoreHashNode> hash(new QoreHashNode(autoTypeInfo), xsink);
@@ -4254,7 +4254,7 @@ QoreHashNode* QoreColumnarResult::serialize(ExceptionSink* xsink) const {
     assert(xsink);
     if (row_count > static_cast<size_t>(std::numeric_limits<int64>::max())) {
         xsink->raiseException("SERIALIZATION-ERROR",
-            "columnar result row count " QSD " cannot be represented in serialized data", row_count);
+            "columnar result row count " QLLD " cannot be represented in serialized data", (int64)row_count);
         return nullptr;
     }
 
@@ -4342,8 +4342,8 @@ QoreColumnarResult* QoreColumnarResult::deserialize(const QoreHashNode* sdata, E
         QoreValue column_value = serialized_columns->retrieveEntry(i);
         if (column_value.getType() != NT_HASH) {
             xsink->raiseException("DESERIALIZATION-ERROR",
-                "serialized columnar result column " QSD " has type '%s'; expecting 'hash'",
-                i, column_value.getTypeName());
+                "serialized columnar result column " QLLD " has type '%s'; expecting 'hash'",
+                (int64)i, column_value.getTypeName());
             return nullptr;
         }
         const QoreHashNode* column_hash = column_value.get<const QoreHashNode>();
@@ -4939,19 +4939,19 @@ QoreColumnarResult* qore_columnar_result_import_arrow_c_data(ArrowSchema* schema
     if (schema->n_children != array->n_children) {
         xsink->raiseException("ARROW-C-DATA-ERROR",
             "Arrow C Data import got " QLLD " schema children and " QLLD " array children",
-            schema->n_children, array->n_children);
+            (int64)schema->n_children, (int64)array->n_children);
         return nullptr;
     }
     if (array->length < 0 || array->offset < 0) {
         xsink->raiseException("ARROW-C-DATA-ERROR",
             "Arrow C Data import requires non-negative top-level length and offset; got length " QLLD
-            ", offset " QLLD, array->length, array->offset);
+            ", offset " QLLD, (int64)array->length, (int64)array->offset);
         return nullptr;
     }
     if (array->offset > std::numeric_limits<int64_t>::max() - array->length) {
         xsink->raiseException("ARROW-C-DATA-ERROR",
             "Arrow C Data import top-level offset " QLLD " and length " QLLD " exceed Arrow int64 range",
-            array->offset, array->length);
+            (int64)array->offset, (int64)array->length);
         return nullptr;
     }
 
@@ -4973,14 +4973,14 @@ QoreColumnarResult* qore_columnar_result_import_arrow_c_data(ArrowSchema* schema
         const ArrowArray* child_array = root_array->children[i];
         if (!child_schema || !child_array) {
             xsink->raiseException("ARROW-C-DATA-ERROR",
-                "Arrow C Data import child " QLLD " is missing schema or array", i);
+                "Arrow C Data import child " QLLD " is missing schema or array", (int64)i);
             return nullptr;
         }
         if (child_array->length < 0 || child_array->offset < 0) {
             xsink->raiseException("ARROW-C-DATA-ERROR",
                 "Arrow C Data import child '%s' requires non-negative length and offset; got length " QLLD
-                ", offset " QLLD, child_schema->name ? child_schema->name : "", child_array->length,
-                child_array->offset);
+                ", offset " QLLD, child_schema->name ? child_schema->name : "", (int64)child_array->length,
+                (int64)child_array->offset);
             return nullptr;
         }
         int64_t required_child_length = root_array->offset + root_array->length;
@@ -4988,8 +4988,8 @@ QoreColumnarResult* qore_columnar_result_import_arrow_c_data(ArrowSchema* schema
             xsink->raiseException("ARROW-C-DATA-ERROR",
                 "Arrow C Data import child '%s' has length " QLLD ", but top-level offset " QLLD
                 " and length " QLLD " require at least " QLLD " child values",
-                child_schema->name ? child_schema->name : "", child_array->length, root_array->offset,
-                root_array->length, required_child_length);
+                child_schema->name ? child_schema->name : "", (int64)child_array->length, (int64)root_array->offset,
+                (int64)root_array->length, (int64)required_child_length);
             return nullptr;
         }
 
@@ -5003,7 +5003,7 @@ QoreColumnarResult* qore_columnar_result_import_arrow_c_data(ArrowSchema* schema
                 xsink->raiseException("ARROW-C-DATA-ERROR",
                     "Arrow C Data import child '%s' offset " QLLD " plus top-level offset " QLLD
                     " exceeds Arrow int64 range", child_schema->name ? child_schema->name : "",
-                    child_array->offset, root_array->offset);
+                    (int64)child_array->offset, (int64)root_array->offset);
                 return nullptr;
             }
             adjusted_child.offset = child_array->offset + root_array->offset;

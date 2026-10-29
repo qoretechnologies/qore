@@ -80,12 +80,12 @@ void QoreTextFeatures::fit(const QoreListNode* documents, ExceptionSink* xsink) 
         QoreValue v = documents->retrieveEntry(i);
         if (v.isNullOrNothing()) {
             xsink->raiseException("ML-TEXT-FEATURES-ERROR",
-                "document at index " QLLD " is NOTHING/NULL", i);
+                "document at index " QLLD " is NOTHING/NULL", (int64)i);
             return;
         }
         if (v.getType() != NT_STRING) {
             xsink->raiseException("ML-TEXT-FEATURES-ERROR",
-                "document at index " QLLD " is not a string (type: %s)", i,
+                "document at index " QLLD " is not a string (type: %s)", (int64)i,
                 v.getTypeName());
             return;
         }
@@ -177,12 +177,12 @@ QoreListNode* QoreTextFeatures::transform(const QoreListNode* documents,
         QoreValue v = documents->retrieveEntry(i);
         if (v.isNullOrNothing()) {
             xsink->raiseException("ML-TEXT-FEATURES-ERROR",
-                "document at index " QLLD " is NOTHING/NULL", i);
+                "document at index " QLLD " is NOTHING/NULL", (int64)i);
             return nullptr;
         }
         if (v.getType() != NT_STRING) {
             xsink->raiseException("ML-TEXT-FEATURES-ERROR",
-                "document at index " QLLD " is not a string (type: %s)", i,
+                "document at index " QLLD " is not a string (type: %s)", (int64)i,
                 v.getTypeName());
             return nullptr;
         }

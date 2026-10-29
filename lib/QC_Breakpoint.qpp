@@ -287,6 +287,6 @@ int Breakpoint::getBreakpointId() [flags=RET_VALUE_ONLY;] {
 static Breakpoint Breakpoint::resolveBreakpointId(int breakpoint_id) [flags=NAMED_ARGS] {
    QoreBreakpoint* b = QoreBreakpoint::resolveBreakpointId(breakpoint_id);
    if (!b)
-      return xsink->raiseException("BREAKPOINT-ERROR", "wrong breakpointId (%d)", breakpoint_id);
+      return xsink->raiseException("BREAKPOINT-ERROR", "wrong breakpointId (" QLLD ")", (int64)breakpoint_id);
    return b->getQoreObject();
 }

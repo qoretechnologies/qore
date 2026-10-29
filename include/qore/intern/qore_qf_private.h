@@ -662,16 +662,16 @@ struct qore_qf_private {
                     }
                     if (wait_rc) {
                         if (xsink) {
-                            xsink->raiseErrnoException("FILE-WRITE-ERROR", errno, "failed waiting to write " QSD
-                                " byte%s to File", remaining, remaining == 1 ? "" : "s");
+                            xsink->raiseErrnoException("FILE-WRITE-ERROR", errno, "failed waiting to write " QLLD
+                                " byte%s to File", (int64)remaining, remaining == 1 ? "" : "s");
                         }
                         return -1;
                     }
                     continue;
                 }
                 if (xsink) {
-                    xsink->raiseErrnoException("FILE-WRITE-ERROR", write_errno, "failed writing " QSD
-                        " byte%s to File", len, len == 1 ? "" : "s");
+                    xsink->raiseErrnoException("FILE-WRITE-ERROR", write_errno, "failed writing " QLLD
+                        " byte%s to File", (int64)len, len == 1 ? "" : "s");
                 }
                 return rc;
             } else {

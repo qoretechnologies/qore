@@ -1117,7 +1117,7 @@ bool cancel_thread(int thread_id, *string reason) [flags=NAMED_ARGS;dom=THREAD_C
     }
     if (thread_id <= 0) {
         return xsink->raiseException("THREAD-CANCEL-ERROR",
-            "cannot cancel TID %d", thread_id), false;
+            "cannot cancel TID " QLLD "", (int64)thread_id), false;
     }
     int rc = qore_cancel_thread(thread_id, reason ? reason->c_str() : nullptr);
     return rc == 0;

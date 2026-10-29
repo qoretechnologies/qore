@@ -1,0 +1,78 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# The messages of exceptions that the C++ code formats with printf-style functions: the arguments match their
+# conversions, which the compiler now checks, and text that is not a format, such as a value given by the caller,
+# is never used as one (a "%s" in it crashed the process)
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class FormatMessagesTest
+
+public enum FormatMessageColor : string {
+    Red = "red",
+    Green = "green",
+}
+
+sub format_messages_imported() {
+}
+
+public class FormatMessagesTest inherits QUnit::Test {
+    # the descriptions of the expected exceptions are regular expressions
+    constructor() : QUnit::Test("FormatMessages", "1.0", \ARGV) {
+        addTestCase("import a function with an empty name", \importFunctionTest());
+        addTestCase("enum cast of a value with conversions", \enumCastTest());
+        addTestCase("invalid day of the month", \invalidDateTest());
+        addTestCase("64-bit values in messages", \wideValueTest());
+        addTestCase("hash list iterator sizes", \hashListIteratorTest());
+        set_return_value(main());
+    }
+
+    # the function name was passed as a QoreStringNode* for a %s conversion, and the empty name was exported
+    importFunctionTest() {
+        Program p();
+        assertThrows("FUNCTION-IMPORT-ERROR",
+            "the new function name while importing function 'format_messages_imported' may not be empty",
+            \p.importFunction(), ("format_messages_imported", ""));
+        # nothing was imported
+        p.parse("bool sub has_func() { return exists_function(\"format_messages_imported\"); }", "test");
+        assertFalse(p.callFunction("has_func"));
+    }
+
+    # the value is part of the message, which was used as a format: conversions in it read arguments that do not
+    # exist
+    enumCastTest() {
+        string value = "100%s%s%s%s%p%x";
+        assertThrows("RUNTIME-CAST-ERROR", "cannot cast value '100%s%s%s%s%p%x' to enum 'FormatMessageColor'",
+            sub () { auto v = cast<FormatMessageColor>(value); });
+        assertEq(FormatMessageColor::Red, cast<FormatMessageColor>("red"));
+    }
+
+    # "%04d-%02 has %d days" shifted the arguments of the message
+    invalidDateTest() {
+        assertThrows("INVALID-DATE", "invalid day of the month: 30; 2023-02 has 28 days",
+            \date(), ("2023-02-30", "YYYY-MM-DD"));
+        assertThrows("INVALID-DATE", "invalid day of the month: 31; 2024-04 has 30 days",
+            \date(), ("2024-04-31", "YYYY-MM-DD"));
+    }
+
+    # 64-bit values were printed with %d, which shows only their lower 32 bits
+    wideValueTest() {
+        assertThrows("SIZE-ERROR", "the size given to <int>::encodeLsb\\(4294967298\\) is not 1, 2, 4, or 8",
+            sub () { int i = 1; i.encodeLsb(4294967298); });
+        buffer<int64> ids = new buffer<int64>((10, 20));
+        assertThrows("BUFFER-RANGE-ERROR",
+            "buffer\\.view\\(start: 0, count: 5\\) is out of range for buffer length 2$", sub () { ids.view(0, 5); });
+    }
+
+    hashListIteratorTest() {
+        assertThrows("HASHLISTITERATOR-ERROR",
+            "hash key 'b' is assigned to a list of size 1; expecting a list of size 2",
+            sub () { HashListIterator i({"a": (1, 2), "b": (1,)}); while (i.next()) { i.getValue(); } });
+    }
+}

@@ -2642,8 +2642,13 @@ void qore_program_private::addStatementToIndexIntern(name_section_sline_statemen
     name_section_sline_statement_map_t::iterator it = statementIndex->find(key);
     if (it == statementIndex->end()) {
         printd(5, "qore_program_private::addStatementToIndexIntern(%p,'%s',%d,'%s',%d) key not found, this: %p\n", statementIndex, key, offs, section ? section : (const char*)"(null)",sectionOffs, this);
-        sssm = new section_sline_statement_map_t();
-        statementIndex->insert(name_section_sline_statement_map_t::value_type(key, sssm));
+        std::unique_ptr<section_sline_statement_map_t> new_sssm(new section_sline_statement_map_t());
+        // the working directory is the one that a relative file name was given in
+        QoreString abs_path(key);
+        q_normalize_path(abs_path);
+        new_sssm->abs_path = abs_path.c_str();
+        statementIndex->insert(name_section_sline_statement_map_t::value_type(key, new_sssm.get()));
+        sssm = new_sssm.release();
     } else {
         sssm = it->second;
         if (statement && statement->loc) {
@@ -3263,7 +3268,7 @@ QoreHashNode* qore_program_private::getThreadDataRef(bool create, bool ref) {
 
 void qore_program_private::clearThreadData(ExceptionSink* xsink) {
     ReferenceHolder<QoreHashNode> h(getThreadDataRef(false), xsink);
-    printd(5, "qore_program_private::clearThreadData() this: %p h: %p (size: %d)\n", this, *h, h ? h->size() : 0);
+    printd(5, "qore_program_private::clearThreadData() this: %p h: %p (size: %d)\n", this, *h, (int)(h ? h->size() : 0));
     if (h) {
         // no lock is held here: clearing the hash can run destructors
         qore_hash_private::get(**h)->clear(xsink, false);

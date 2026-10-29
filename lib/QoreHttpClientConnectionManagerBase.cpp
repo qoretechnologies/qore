@@ -103,7 +103,7 @@ HttpClientConnectionManagerBase::HttpClientConnectionManagerBase(const Options& 
             } else if (scheme != "http") {
                 // the proxy URL is not given in errors, since it can contain the password for the proxy
                 xsink->raiseException("HTTPCLIENT-OPTION-ERROR",
-                    "invalid proxy URL scheme %y; must be http or https", scheme.c_str());
+                    "invalid proxy URL scheme '%s'; must be http or https", scheme.c_str());
                 return;
             }
             host_start = scheme_end + 3;
@@ -136,7 +136,7 @@ HttpClientConnectionManagerBase::HttpClientConnectionManagerBase(const Options& 
                 proxy_port = std::stoi(hostport.substr(colon + 1));
             } catch (...) {
                 xsink->raiseException("HTTPCLIENT-OPTION-ERROR",
-                    "invalid proxy port %y", hostport.substr(colon + 1).c_str());
+                    "invalid proxy port '%s'", hostport.substr(colon + 1).c_str());
                 return;
             }
         } else {

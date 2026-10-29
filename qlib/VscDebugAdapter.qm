@@ -34,7 +34,7 @@
 %allow-weak-references
 
 module VscDebugAdapter {
-    version = "0.2";
+    version = "0.3";
     desc = "Implements Visual Studio Code Debug Adapter protocol";
     author = "Tomas Mandys <tomas.mandys@qoretechnologies.com>";
     url = "http://qore.org";
@@ -68,6 +68,16 @@ module VscDebugAdapter {
     - display own data type and custom data editor
     - exception info is asked but the value is not displayed
     - some capabilities are not implemented
+
+    @subsection vda_v0_3
+    - the output of programs that are debugged in the adapter process is sent to the IDE as \c output events instead
+      of being written to the channel of the protocol; see
+      @ref VscDebugAdapter::VscDebugAdapter::captureProgramOutput() "VscDebugAdapter::captureProgramOutput()"
+    - the adapter waits for requests and events instead of checking for them continuously, which used all the time
+      of a CPU, and it ends when the IDE closes its input
+    - watches and hovers load the variables of the frame when they have not been listed
+    - requests without arguments, such as \c configurationDone, are also accepted with empty arguments
+      (<a href="https://github.com/qoretechnologies/qore/issues/5560">issue 5560</a>)
 
     @subsection vda_v0_2
     - updated to use a Logger
@@ -167,6 +177,18 @@ public class VscDebugAdapter inherits DebugCommandLine {
         #! vsc program
         int m_currentPgmId;
 
+        #! serializes the handling of requests and events, and the messages to the IDE
+        Mutex m_lock();
+
+        #! the file that messages to the IDE are written to
+        File m_out = stdout;
+
+        #! the original stdout and stderr while the output of programs is captured
+        *File m_savedStdout;
+        *File m_savedStderr;
+
+        #! counts the threads that forward the output of programs while it is captured
+        *Counter m_outputForwarders;
     }
 
     public {
@@ -201,101 +223,247 @@ public class VscDebugAdapter inherits DebugCommandLine {
     }
 
     #! run processing loop till @ref m_running is True
+    /** Requests are read from stdin and handled in the calling thread, and events from the debug server and the
+        output of programs are handled in a background thread; the handling of requests and events is serialized, so
+        no event is handled while a request is handled.  The loop ends when a request such as \c disconnect ends
+        the session or when the IDE closes the input.
+    */
     public run() {
+        Counter events_done(1);
+        background processEvents(events_done);
         try {
-            int len = -1;
-            binary buff;
-            bool payload = False;
             info("Run: %y", now_us());
             while (m_running) {
-                while (stdin.isDataAvailable()) {
-                    *binary c = stdin.readBinary(1);
-                    if (!exists c) {
-                        break;
-                    }
-                    if (payload) {
-                        buff += c;
-                        if (buff.size() >= len) {
-                            string s = buff.size() > 0 ? buff.substr(0, len).toString("UTF-8"): "";
-                            debug("%s", s);
-                            payload = False;
-                            splice buff, 0, len;
-                            len = -1;
-                            hash request;
-                            hash resp.type = "response";
-                            try {
-                                request = parseVscRequest(s);
-                                string m = "vsc_" + request.command;
-                                if (!self.hasCallableMethod(m)) {
-                                    throw "VDA-ERROR", sprintf("Command %y not implemented", request.command);
-                                }
-                                if (!m_initializeArgs && request.command != "initialize") {
-                                    throw "VDA-ERROR", "Debug adapter is not initialized";
-                                }
-                                auto r = call_object_method(self, m, request.arguments);
-                                resp.success = True;
-                                if (r) {
-                                    resp.body = r;
-                                }
-                            } catch (hash<ExceptionInfo> ex) {
-                                switch (ex.err) {
-                                case "VDA-ERROR":
-                                default:
-                                    resp.success = False;
-                                    resp.message = ex.err + ": " + ex.desc;
-                                    debug("%s", get_exception_string(ex));
-                                }
-                            }
-                            if (resp) {
-                                resp.request_seq = request.seq;
-                                resp.command = request.command;
-                                sendVscMessage(resp);
-                            }
-                        }
-                    } else if (c == <0A>) {
-                        if (buff.size() == 0) {
-                            #if (len < 0 ) {
-                                #throw "VDA-ERROR", "Missing content length";
-                            #}
-                            payload = len > 0;
-                        } else {
-                            string s = buff.toString("UTF-8");
-                            # read headers
-                            *list l = s =~ x/^([A-Za-z\-]+):(.+)$/;
-                            if (l[0] == "Content-Length") {
-                                trim l[1];
-                                len = int(l[1]);
-                                debug("Content-Length: %d", len);
-                            }
-                        }
-                        remove buff;
-                    } else if (c != <0D>) {
-                        buff += c;
-                    }
+                *string s = readVscMessage();
+                if (!exists s) {
+                    # the IDE closed the input
+                    break;
                 }
-                while (m_queue.size() > 0) {
-                    auto msg = m_queue.get();
-                    try {
-                        # event from debug server
-                        if (msg.type == "event" ) {
-                            processDebugEvent(msg);
-                        }
-                        if (msg.type == "vsc_output") {
-                            hash h.category = msg.category;
-                            h.output = msg.output;
-                            stderr.printf("vscOutput: %y\n", h);
-                            sendVscEvent("output", h);
-                        }
-                    } catch (hash<ExceptionInfo> ex) {
-                        info("ex: %y", ex);
-                    }
-                }
+                debug("%s", s);
+                m_lock.lock();
+                on_exit m_lock.unlock();
+                handleVscRequest(s);
             }
-            sendVscEvent("terminated");
         } catch (hash<ExceptionInfo> ex) {
             info("ex: %y", ex);
+            stopEvents(events_done);
             rethrow;
         }
+        stopEvents(events_done);
+        sendVscEvent("terminated");
+    }
+
+    #! Sends the output of programs that are debugged in this process to the IDE as output events
+    /** The adapter communicates with the IDE on stdout, which the programs that it runs share with it.  The
+        protocol is therefore written to a duplicate of stdout, and the standard output and standard error of the
+        process are redirected to pipes whose contents are sent as \c "stdout" and \c "stderr" output events.
+
+        @return @ref True if the output is captured, @ref False if it is already captured or if stdout and stderr
+        cannot be duplicated on this platform; the output of programs is then written to stdout and stderr
+
+        @par Example:
+        @code{.py}
+VscDebugAdapter vda = new VscDebugAdapterLocal(logger, dpc, opts);
+vda.captureProgramOutput();
+on_exit vda.stopProgramOutputCapture();
+vda.run();
+        @endcode
+
+        @see stopProgramOutputCapture()
+    */
+    public bool captureProgramOutput() {
+        if (PlatformOS == "Windows" || m_outputForwarders) {
+            return False;
+        }
+        File saved_out();
+        File saved_err();
+        try {
+            saved_out.open2("/dev/stdout", O_WRONLY | O_APPEND);
+            saved_err.open2("/dev/stderr", O_WRONLY | O_APPEND);
+        } catch (hash<ExceptionInfo> ex) {
+            debug("the output of programs is not captured: %s", get_exception_string(ex));
+            return False;
+        }
+        hash<PipeInfo> out_pipe = File::getPipe();
+        hash<PipeInfo> err_pipe = File::getPipe();
+        m_out = saved_out;
+        m_savedStdout = saved_out;
+        m_savedStderr = saved_err;
+        stdout.redirect(out_pipe.write);
+        stderr.redirect(err_pipe.write);
+        # stdout and stderr are now the only writers of the pipes, so the readers get the end of the input when
+        # they are restored
+        out_pipe.write.close();
+        err_pipe.write.close();
+        m_outputForwarders = new Counter(2);
+        background forwardOutput(out_pipe.read, "stdout", m_outputForwarders);
+        background forwardOutput(err_pipe.read, "stderr", m_outputForwarders);
+        return True;
+    }
+
+    #! Restores stdout and stderr after captureProgramOutput()
+    /** Waits until the output that was captured has been queued for the IDE.
+    */
+    public stopProgramOutputCapture() {
+        if (!m_outputForwarders) {
+            return;
+        }
+        stdout.redirect(m_savedStdout);
+        stderr.redirect(m_savedStderr);
+        m_outputForwarders.waitForZero();
+        m_out = stdout;
+        remove m_outputForwarders;
+        remove m_savedStdout;
+        remove m_savedStderr;
+    }
+
+    #! Returns the size of the leading part of the data that ends with a complete UTF-8 character
+    /** @param data UTF-8 data, which can end with a part of a character
+
+        @return the size of the data without a trailing incomplete character
+    */
+    static int getCompleteUtf8Size(binary data) {
+        int size = data.size();
+        # a character has at most 4 bytes; find the first byte of the last character
+        for (int i = size - 1; i >= 0 && i >= size - 4; --i) {
+            int c = data[i];
+            if ((c & 0xc0) != 0x80) {
+                int len = c < 0xc0 ? 1 : (c < 0xe0 ? 2 : (c < 0xf0 ? 3 : 4));
+                return i + len <= size ? size : i;
+            }
+        }
+        return size;
+    }
+
+    #! Queues the output read from a pipe as output events until the end of the input
+    private:internal forwardOutput(ReadOnlyFile reader, string category, Counter done) {
+        on_exit done.dec();
+        binary pending;
+        while (True) {
+            # waits for the next output; the rest of what is available is read with it
+            *binary b = reader.readBinary(1);
+            if (!exists b) {
+                break;
+            }
+            pending += b;
+            while (pending.size() < 65536 && reader.isDataAvailable(0)) {
+                *binary more = reader.readBinary(1);
+                if (!exists more) {
+                    break;
+                }
+                pending += more;
+            }
+            int size = VscDebugAdapter::getCompleteUtf8Size(pending);
+            if (size) {
+                pushEvent({
+                    "type": "vsc_output",
+                    "category": category,
+                    "output": pending.substr(0, size).toString("UTF-8"),
+                });
+                splice pending, 0, size;
+            }
+        }
+        if (pending) {
+            pushEvent({
+                "type": "vsc_output",
+                "category": category,
+                "output": pending.toString("UTF-8"),
+            });
+        }
+    }
+
+    #! Stops the thread of processEvents() after the events that are queued
+    private:internal stopEvents(Counter events_done) {
+        m_queue.push({"type": "vsc_stop"});
+        events_done.waitForZero();
+    }
+
+    #! Handles events from the debug server and output until the stop event
+    private:internal processEvents(Counter done) {
+        on_exit done.dec();
+        while (True) {
+            auto msg = m_queue.get();
+            if (msg.type == "vsc_stop") {
+                break;
+            }
+            m_lock.lock();
+            on_exit m_lock.unlock();
+            try {
+                # event from debug server
+                if (msg.type == "event") {
+                    processDebugEvent(msg);
+                } else if (msg.type == "vsc_output") {
+                    sendVscEvent("output", {"category": msg.category, "output": msg.output});
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                info("ex: %y", ex);
+            }
+        }
+    }
+
+    #! Reads the next message from the IDE
+    /** @return the content of the message, or @ref nothing at the end of the input
+    */
+    private:internal *string readVscMessage() {
+        int len = -1;
+        binary line;
+        while (True) {
+            *binary c = stdin.readBinary(1);
+            if (!exists c) {
+                return NOTHING;
+            }
+            if (c == <0A>) {
+                if (!line.size()) {
+                    # the end of the headers
+                    if (len > 0) {
+                        *binary content = stdin.readBinary(len);
+                        if (!exists content || content.size() < len) {
+                            return NOTHING;
+                        }
+                        return content.toString("UTF-8");
+                    }
+                    # a message without content is ignored
+                    len = -1;
+                    continue;
+                }
+                *list<auto> l = line.toString("UTF-8") =~ x/^([A-Za-z\-]+):(.+)$/;
+                if (l[0] == "Content-Length") {
+                    len = int(trim(l[1]));
+                    debug("Content-Length: %d", len);
+                }
+                remove line;
+            } else if (c != <0D>) {
+                line += c;
+            }
+        }
+    }
+
+    #! Handles a request from the IDE and sends the response
+    private:internal handleVscRequest(string s) {
+        hash request;
+        hash resp.type = "response";
+        try {
+            request = parseVscRequest(s);
+            string m = "vsc_" + request.command;
+            if (!self.hasCallableMethod(m)) {
+                throw "VDA-ERROR", sprintf("Command %y not implemented", request.command);
+            }
+            if (!m_initializeArgs && request.command != "initialize") {
+                throw "VDA-ERROR", "Debug adapter is not initialized";
+            }
+            auto r = call_object_method(self, m, request.arguments);
+            resp.success = True;
+            if (r) {
+                resp.body = r;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            resp.success = False;
+            resp.message = ex.err + ": " + ex.desc;
+            debug("%s", get_exception_string(ex));
+        }
+        resp.request_seq = request.seq;
+        resp.command = request.command;
+        sendVscMessage(resp);
     }
 
     #! execute command (and exit)
@@ -477,8 +645,8 @@ public class VscDebugAdapter inherits DebugCommandLine {
         }
         string resp = make_json(msg);
         binary b = binary(resp);
-        stdout.printf("Content-Length: %d\r\n\r\n", b.size());
-        stdout.write(b);
+        m_out.printf("Content-Length: %d\r\n\r\n", b.size());
+        m_out.write(b);
     }
 
     #! send event for VSC frontend
@@ -749,10 +917,10 @@ public class VscDebugAdapter inherits DebugCommandLine {
         }
     }
 
-    public nothing vsc_configurationDone() {
+    public nothing vsc_configurationDone(*hash args) {
     }
 
-    public hash vsc_threads() {
+    public hash vsc_threads(*hash args) {
         #debug("pgmid: %y, state: %y", m_currentPgmId, m_programState);
         hash res.threads = ();
         if (m_currentPgmId) {
@@ -850,22 +1018,7 @@ public class VscDebugAdapter inherits DebugCommandLine {
         int threadId = args.frameId >> 16;
         int frameId = args.frameId & 0xFFFF;
         hash res.scopes = ();
-        *list l = m_programState{m_currentPgmId}.thread{threadId}.locals{frameId};
-        if (!exists l) {
-            try {
-                l = doCommand((
-                    "cmd": "thread/local//list",
-                    "tid": threadId,
-                    "frameid": frameId,
-                )).result;
-                if (frameId == 0 && exists m_programState{m_currentPgmId}.thread{threadId}.debugVar) {
-                    push l, DEBUGVAR_PREFIX+m_programState{m_currentPgmId}.thread{threadId}.debugVar;
-                }
-                m_programState{m_currentPgmId}.thread{threadId}.locals{frameId} = l;
-            } catch (hash<ExceptionInfo> ex) {
-                l = ();
-            }
-        }
+        list l = getFrameLocals(threadId, frameId);
         hash sc;
         sc.name = "Locals";
         sc.variablesReference = args.frameId;  # only one scope in frame ... local
@@ -876,17 +1029,7 @@ public class VscDebugAdapter inherits DebugCommandLine {
 
         remove sc;
         sc.name = "Globals";
-        l = m_programState{m_currentPgmId}.thread{threadId}.globals;
-        if (!exists l) {
-            try {
-                l = doCommand((
-                    "cmd": "program/"+m_currentPgmId+"/global//list",
-                )).result;
-                m_programState{m_currentPgmId}.thread{0}.globals = l;
-            } catch (hash<ExceptionInfo> ex) {
-                l = ();
-            }
-        }
+        l = getGlobals();
         sc.variablesReference = 1; # non zero value
         sc.expensive = False;
         sc.namedVariables = l.size();
@@ -894,6 +1037,46 @@ public class VscDebugAdapter inherits DebugCommandLine {
         push res.scopes, sc;
 
         return res;
+    }
+
+    #! Returns the names of the local variables of a frame of a stopped thread, which are loaded when needed
+    private:internal list getFrameLocals(int threadId, int frameId) {
+        *list l = m_programState{m_currentPgmId}.thread{threadId}.locals{frameId};
+        if (exists l) {
+            return l;
+        }
+        try {
+            l = doCommand((
+                "cmd": "thread/local//list",
+                "tid": threadId,
+                "frameid": frameId,
+            )).result;
+            if (frameId == 0 && exists m_programState{m_currentPgmId}.thread{threadId}.debugVar) {
+                push l, DEBUGVAR_PREFIX+m_programState{m_currentPgmId}.thread{threadId}.debugVar;
+            }
+            m_programState{m_currentPgmId}.thread{threadId}.locals{frameId} = l;
+        } catch (hash<ExceptionInfo> ex) {
+            debug("cannot list the local variables of thread %d frame %d: %s", threadId, frameId,
+                get_exception_string(ex));
+        }
+        return l ?? ();
+    }
+
+    #! Returns the names of the global variables of the program, which are loaded when needed
+    private:internal list getGlobals() {
+        *list l = m_programState{m_currentPgmId}.thread{0}.globals;
+        if (exists l) {
+            return l;
+        }
+        try {
+            l = doCommand((
+                "cmd": "program/"+m_currentPgmId+"/global//list",
+            )).result;
+            m_programState{m_currentPgmId}.thread{0}.globals = l;
+        } catch (hash<ExceptionInfo> ex) {
+            debug("cannot list the global variables: %s", get_exception_string(ex));
+        }
+        return l ?? ();
     }
 
     public hash vsc_variables(hash args) {
@@ -974,14 +1157,15 @@ public class VscDebugAdapter inherits DebugCommandLine {
             # event from watch, just return local or global value
             int threadId = (args.frameId ?? 0) >> 16;
             int frameId = (args.frameId ?? 0) & 0xFFFF;
-            *list l;
+            # the variables of the frame are loaded if they have not been listed in the IDE since the thread stopped
+            list l;
             if (threadId == 0) {
-                l = m_programState{m_currentPgmId}.thread{threadId}.globals;
+                l = getGlobals();
             } else {
-                l = m_programState{m_currentPgmId}.thread{threadId}.locals{frameId};
+                l = getFrameLocals(threadId, frameId);
                 if (!inlist(args.expression, l)) {
                     threadId = 0;
-                    l = m_programState{m_currentPgmId}.thread{threadId}.globals;
+                    l = getGlobals();
                 }
             }
             if (inlist(args.expression, l)) {
@@ -1112,7 +1296,7 @@ public class VscDebugAdapter inherits DebugCommandLine {
         return res;
     }
 
-    public hash vsc_loadedSources() {
+    public hash vsc_loadedSources(*hash args) {
         hash res.sources = ();
         if (m_currentPgmId) {
             foreach string id in (keys m_programState{m_currentPgmId}.loadedSourceById) {

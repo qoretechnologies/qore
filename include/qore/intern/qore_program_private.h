@@ -922,8 +922,8 @@ public:
             parsing_stub_declarations(false),
             pwo(n_parse_options),
             pgm(n_pgm) {
-        printd(QPP_DBG_LVL, "qore_program_private_base::qore_program_private_base() this: %p pgm: %p po: " QLLD "\n",
-            this, pgm, n_parse_options);
+        printd(QPP_DBG_LVL, "qore_program_private_base::qore_program_private_base() this: %p pgm: %p po: " QLLD "/"
+            QLLD "\n", this, pgm, n_parse_options.getHi(), n_parse_options.getLo());
 
         // must set priv before calling setParent()
         pgm->priv = (qore_program_private*)this;
@@ -1241,6 +1241,9 @@ public:
     struct section_sline_statement_map {
         section_offset_map_t sectionMap;
         sline_statement_map_t statementMap;
+        //! the name of the file normalized as an absolute path, made absolute with the working directory when the
+        //! file was parsed, so that a debugger can give the file with another path than it was parsed with
+        std::string abs_path;
     };
 
     typedef section_sline_statement_map section_sline_statement_map_t;
@@ -3551,9 +3554,8 @@ public:
         if (dpgm.load(std::memory_order_relaxed) == n_dpgm)
             return;
         dpgm.store(const_cast<qore_debug_program_private*>(n_dpgm), std::memory_order_release);
-        printd(5, "qore_program_private::attachDebug, dpgm: %p, pgm_data_map: size:%d, begin: %p, end: %p\n",
-            dpgm.load(std::memory_order_relaxed),
-            pgm_data_map.size(), pgm_data_map.begin(), pgm_data_map.end());
+        printd(5, "qore_program_private::attachDebug, dpgm: %p, pgm_data_map: size:%d\n",
+            dpgm.load(std::memory_order_relaxed), (int)(pgm_data_map.size()));
         for (auto& i : pgm_data_map) {
             if (!i.first->canRunDebugCallbacks()) {
                 continue;
@@ -3572,9 +3574,8 @@ public:
         if (!n_dpgm)
             return;
         dpgm.store(nullptr, std::memory_order_release);
-        printd(5, "qore_program_private::detachDebug, dpgm: %p, pgm_data_map: size:%d, begin: %p, end: %p\n",
-            dpgm.load(std::memory_order_relaxed),
-            pgm_data_map.size(), pgm_data_map.begin(), pgm_data_map.end());
+        printd(5, "qore_program_private::detachDebug, dpgm: %p, pgm_data_map: size:%d\n",
+            dpgm.load(std::memory_order_relaxed), (int)(pgm_data_map.size()));
         for (auto& i : pgm_data_map) {
             if (!i.first->canRunDebugCallbacks()) {
                 continue;
@@ -3773,7 +3774,7 @@ public:
     }
 
     DLLLOCAL AbstractStatement* getStatementFromIndex(const char* name, int line) {
-        printd(5, "qore_program_private::getStatementFromIndex('%s',%d), this: %p, file#: %d, label#: %d\n", name, line, this, statementByFileIndex.size(), statementByLabelIndex.size());
+        printd(5, "qore_program_private::getStatementFromIndex('%s',%d), this: %p, file#: %d, label#: %d\n", name, line, this, (int)(statementByFileIndex.size()), (int)(statementByLabelIndex.size()));
         AutoLocker al(&plock);
         name_section_sline_statement_map_t::iterator it;
         if (statementByFileIndex.empty()) {
@@ -3806,6 +3807,17 @@ public:
                     ++it;
                 }
                 if (it == statementByFileIndex.end()) {
+                    // the file can be given with another path than it was parsed with, such as an absolute path
+                    // for a file parsed with a relative path, as an IDE gives it
+                    QoreString abs_name(name);
+                    q_normalize_path(abs_name);
+                    for (it = statementByFileIndex.begin(); it != statementByFileIndex.end(); ++it) {
+                        if (it->second->abs_path == abs_name.c_str()) {
+                            break;
+                        }
+                    }
+                }
+                if (it == statementByFileIndex.end()) {
                     printd(5, "qore_program_private::getStatementFromIndex('%s',%d) no suffix match, this: %p\n", name, line, this);
                     return nullptr;
                 }
@@ -3819,7 +3831,7 @@ public:
             }
         }
         sline_statement_map_t *ssm = &it->second->statementMap;
-        printd(5, "qore_program_private::getStatementFromIndex('%s',%d) found '%s', this: %p, ssm#: %d\n", name, line, it->first, this, ssm->size());
+        printd(5, "qore_program_private::getStatementFromIndex('%s',%d) found '%s', this: %p, ssm#: %d\n", name, line, it->first, this, (int)(ssm->size()));
         if (ssm->size() == 0)
             return nullptr;
 
@@ -4095,8 +4107,8 @@ public:
             return;
         QoreAutoRWWriteLocker al(&tlock);
         qore_program_map_t::iterator i = qore_program_map.find(pgm);
-        printd(5, "qore_debug_program_private::addProgram(), this: %p, pgm: %p, i: %p, end: %p\n", this, pgm, i,
-            qore_program_map.end());
+        printd(5, "qore_debug_program_private::addProgram(), this: %p, pgm: %p, found: %d\n", this, pgm,
+            (int)(i != qore_program_map.end()));
         if (i != qore_program_map.end())
             return;  // already exists
         qore_program_map.insert(qore_program_map_t::value_type(pgm, pgm->priv));
@@ -4107,8 +4119,8 @@ public:
     DLLLOCAL void removeProgram(QoreProgram* pgm) {
         QoreAutoRWWriteLocker al(&tlock);
         qore_program_map_t::iterator i = qore_program_map.find(pgm);
-        printd(5, "qore_debug_program_private::removeProgram(), this: %p, pgm: %p, i: %p, end: %p\n", this, pgm, i,
-            qore_program_map.end());
+        printd(5, "qore_debug_program_private::removeProgram(), this: %p, pgm: %p, found: %d\n", this, pgm,
+            (int)(i != qore_program_map.end()));
         if (i == qore_program_map.end())
             return;
         pgm->priv->detachDebug(this);
@@ -4216,8 +4228,8 @@ public:
 
         QoreAutoRWReadLocker al(&tlock);
         qore_program_map_t::iterator i = qore_program_map.find(pgm);
-        printd(5, "qore_debug_program_private::breakProgramThread(), this: %p, pgm: %p, i: %p, end: %p, tid: %d\n",
-            this, pgm, i, qore_program_map.end(), tid);
+        printd(5, "qore_debug_program_private::breakProgramThread(), this: %p, pgm: %p, found: %d, tid: %d\n",
+            this, pgm, (int)(i != qore_program_map.end()), tid);
         if (i == qore_program_map.end())
             return -2;
         if (i->second->breakProgramThread(tid))
@@ -4233,8 +4245,8 @@ public:
 
         QoreAutoRWReadLocker al(&tlock);
         qore_program_map_t::iterator i = qore_program_map.find(pgm);
-        printd(5, "qore_debug_program_private::breakProgram(), this: %p, pgm: %p, i: %p, end: %p\n", this, pgm, i,
-            qore_program_map.end());
+        printd(5, "qore_debug_program_private::breakProgram(), this: %p, pgm: %p, found: %d\n", this, pgm,
+            (int)(i != qore_program_map.end()));
         if (i == qore_program_map.end()) {
             return -2;
         }

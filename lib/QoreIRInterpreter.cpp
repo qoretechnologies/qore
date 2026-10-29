@@ -80,7 +80,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 413,
+static_assert(QORE_IR_MAX_OPCODE == 414,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -2817,6 +2817,7 @@ static const QoreIRIncrementLocalIntInstruction* getSimpleClosureIncrementInstru
             }
             switch (inst_ptr->opcode) {
                 case QoreIROpcode::DebugBlock:
+                case QoreIROpcode::DebugStatement:
                 case QoreIROpcode::PushTempMark:
                 case QoreIROpcode::DiscardTemps:
                     break;
@@ -2859,6 +2860,7 @@ static bool getSimpleClosureStringLeaf(const QoreIRFunction* callee_ir,
         }
         switch (inst_ptr->opcode) {
             case QoreIROpcode::DebugBlock:
+            case QoreIROpcode::DebugStatement:
             case QoreIROpcode::PushTempMark:
             case QoreIROpcode::DiscardTemps:
                 break;
@@ -2909,6 +2911,20 @@ static bool getSimpleClosureStringLeaf(const QoreIRFunction* callee_ir,
     }
     local = load->local;
     return true;
+}
+
+//! Returns true if a debugger is attached to the program of a function that can be debugged
+/** The shortcuts that evaluate a callee's IR without executing it, such as the native leaf functions, skip its debug
+    events (QoreIROpcode::DebugStatement), and the inlined calls of functions and closures give the callee no frame on
+    the stack of local variables, where a debugger finds the frames and local variables of a stopped thread, so they
+    are not taken while a debugger is attached; the check is the same
+    racy, cheap gate as the one in native code (QoreIRToLLVM::emitDebugStepHook()), and execution of the IR checks the
+    precise state of the thread.
+*/
+static bool irFunctionDebuggerAttached(const QoreIRFunction* func) {
+    return func && func->source_dpgm_addr
+        && static_cast<const std::atomic<qore_debug_program_private*>*>(func->source_dpgm_addr)->load(
+            std::memory_order_relaxed);
 }
 
 static bool tryExecuteSimpleClosureIncrement(const QoreClosureBase* cb,
@@ -2981,6 +2997,7 @@ static bool isInterpreterNativeIntProgram(const QoreIRFunction* ir,
             };
             switch (inst_ptr->opcode) {
                 case QoreIROpcode::DebugBlock:
+                case QoreIROpcode::DebugStatement:
                 case QoreIROpcode::PushTempMark:
                 case QoreIROpcode::DiscardTemps:
                 case QoreIROpcode::ConstInt:
@@ -3153,6 +3170,7 @@ static bool ensureInterpreterNativeLeafState(QoreIRCallDirectInstruction* inst, 
             }
             switch (inst_ptr->opcode) {
                 case QoreIROpcode::DebugBlock:
+                case QoreIROpcode::DebugStatement:
                 case QoreIROpcode::PushTempMark:
                 case QoreIROpcode::DiscardTemps:
                     break;
@@ -3289,6 +3307,7 @@ static bool ensureInterpreterNativeLeafState(QoreIRCallDirectInstruction* inst, 
         }
         switch (inst_ptr->opcode) {
             case QoreIROpcode::DebugBlock:
+            case QoreIROpcode::DebugStatement:
             case QoreIROpcode::PushTempMark:
             case QoreIROpcode::DiscardTemps:
                 break;
@@ -3473,7 +3492,7 @@ bool qore_ir_get_aot_scalar_leaf(const QoreIRFunction* ir, const UserVariantBase
 
 bool qore_ir_try_execute_native_leaf(QoreIRCallDirectInstruction* inst,
         uint64_t* args, int nargs, QoreValue& result, const QoreClosureBase* closure) {
-    if (!ensureInterpreterNativeLeafState(inst, nargs)) {
+    if (irFunctionDebuggerAttached(inst->cached_callee_ir) || !ensureInterpreterNativeLeafState(inst, nargs)) {
         return false;
     }
     QoreValue arg_values[2];
@@ -3660,6 +3679,7 @@ bool qore_ir_try_execute_native_leaf(QoreIRCallDirectInstruction* inst,
                 };
                 switch (operation->opcode) {
                     case QoreIROpcode::DebugBlock:
+                    case QoreIROpcode::DebugStatement:
                     case QoreIROpcode::PushTempMark:
                     case QoreIROpcode::DiscardTemps:
                         break;
@@ -4049,6 +4069,12 @@ static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* i
         bool* may_invalidate_external_caches = nullptr) {
     int8_t inline_state = ensureInterpreterInlineIRFunctionState(inst, caller_pgm, nargs);
     if (inline_state <= 0) {
+        return false;
+    }
+    // the inlined callee has no frame of its own on the stack of local variables, which is where a debugger finds
+    // the frames and local variables of a stopped thread, so the callee is called through the call path while a
+    // debugger is attached
+    if (irFunctionDebuggerAttached(inst->cached_callee_ir)) {
         return false;
     }
 
@@ -4565,6 +4591,12 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
         };
     }
     if (nargs != static_cast<int>(num_params)) {
+        return false;
+    }
+    // the inlined closure has no frame of its own on the stack of local variables, where a debugger finds the
+    // frames and local variables of a stopped thread, so it is called through the call path while a debugger is
+    // attached
+    if (irFunctionDebuggerAttached(callee_ir)) {
         return false;
     }
     for (int i = 0; i < nargs; ++i) {
@@ -6782,7 +6814,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // Only runtimeCheck() can change (debugger attaches mid-execution).
     bool can_debug = tlpd && statements && pgm;
     bool debug_active = can_debug && tlpd->runtimeCheck();
-    int last_debug_line = -1;  // track line changes for dbgStep
+    int last_legacy_debug_line = -1;
     bool debug_break_loop = false;  // set by dbgStep RC_BREAK to exit current loop (legacy fallback)
     // Set by dbgStep RC_BREAK to the exit block of the loop enclosing the break point.
     // Execution then continues normally (running statement/scope cleanups) until the
@@ -7305,8 +7337,8 @@ next_instruction:
         // read it post-return without plumbing it through the return value.
         tls_last_silent_fail_opcode = inst->opcode;
         tls_last_silent_fail_loc = inst->loc;
-        // Unified per-line overhead: only update runtime_loc, check ephemeral refs,
-        // and fire debug events when the source line changes.  Multiple IR instructions
+        // Unified per-line overhead: only update runtime_loc and check ephemeral refs
+        // when the source line changes.  Multiple IR instructions
         // on the same source line share the same location, so we only need one check
         // per line transition.  Same-line instructions skip the update entirely —
         // the runtime_loc was set on line entry and remains valid (same line number).
@@ -7314,23 +7346,27 @@ next_instruction:
         // (pthread_getspecific + std::map::find per call).
         // Uses cached_start_line (-1 = no loc, >=0 = loc->start_line) to avoid
         // pointer dereferences on the hot path.
-        // Debug: check for debugger attach/detach on every instruction (not gated
-        // by line change). runtimeCheck() is very cheap (2 booleans + 1 enum, no locks)
-        // and only runs when can_debug is true (program has PO_ALLOW_DEBUGGER).
-        // This ensures breakProgramThread() signals are detected even in tight loops
-        // where all instructions share the same source line.
+        // Debug: check for debugger attach/detach on every instruction, so that a debugger
+        // attaching while the function runs gets the step event of the next statement
+        // (QoreIROpcode::DebugStatement).  runtimeCheck() is very cheap (2 booleans + 1 enum,
+        // no locks) and only runs when can_debug is true.
         if (can_debug) {
             bool runtime_check = tlpd->runtimeCheck();
-            if (!debug_active && runtime_check) {
-                debug_active = true;
+            if (func.legacy_debug_steps && !debug_active && runtime_check) {
                 if (tlpd->hasBreakFlag()) {
-                    last_debug_line = -1;
+                    last_legacy_debug_line = -1;
                 } else if (inst->cached_start_line >= 0 && inst->cached_start_line == last_ephemeral_line) {
-                    last_debug_line = inst->cached_start_line;
+                    last_legacy_debug_line = inst->cached_start_line;
                 }
-            } else if (debug_active && !runtime_check) {
-                debug_active = false;
             }
+            debug_active = runtime_check;
+        }
+        if (inst->opcode == QoreIROpcode::DebugStatement && !debug_active) {
+            // without a debugger, the step event of a statement is skipped without the rest of the dispatch; a
+            // statement follows it, so it is never the last instruction of its block
+            assert(ip + 1 < block->instructions.size());
+            ++ip;
+            goto next_instruction;
         }
         if (inst->cached_start_line >= 0 && inst->cached_start_line != last_ephemeral_line) {
             // Update runtime_loc for exception/callstack reporting via cached pointers
@@ -7338,56 +7374,40 @@ next_instruction:
             *rl_cache.loc_ptr = inst->loc;
             last_ephemeral_line = inst->cached_start_line;
             if (!debug_active) {
-                last_debug_line = inst->cached_start_line;
+                last_legacy_debug_line = inst->cached_start_line;
             }
         }
-        bool debug_statement_boundary = inst->opcode == QoreIROpcode::PushTempMark
-            && block->name.find(".cond") == std::string::npos;
-        if (debug_active && debug_statement_boundary && inst->cached_start_line >= 0
-                && inst->cached_start_line != last_debug_line && !(xsink && *xsink)) {
-            last_debug_line = inst->cached_start_line;
-            AbstractStatement* dbg_stmt = getDebugStatement(inst);
-            if (ir_trace_debug_env.get()) {
-                fprintf(stderr, "[ir-debug] func='%s' line=%d stmt=%p op=%d debug_active=%d\n",
-                    func.name.c_str(), inst->cached_start_line + inst->loc->offset,
-                    static_cast<void*>(dbg_stmt), static_cast<int>(inst->opcode), debug_active ? 1 : 0);
-                fflush(stderr);
-            }
-            if (dbg_stmt) {
+        // AOT format v22 and earlier has no DebugStatement records.  Preserve its line-based step events,
+        // including for binaries compiled before the explicit statement opcode was introduced.  This path is
+        // never used by source-lowered IR, where every statement has its own event (including on the same line).
+        if (debug_active && func.legacy_debug_steps && inst->opcode == QoreIROpcode::PushTempMark
+                && inst->cached_start_line >= 0 && inst->cached_start_line != last_legacy_debug_line
+                && block->name.find(".cond") == std::string::npos && !(xsink && *xsink)) {
+            last_legacy_debug_line = inst->cached_start_line;
+            if (AbstractStatement* dbg_stmt = getDebugStatement(inst)) {
                 int dbg_rc = tlpd->dbgStep(statements, dbg_stmt, xsink);
                 if (ir_trace_debug_env.get()) {
-                    fprintf(stderr, "[ir-debug] func='%s' line=%d dbg_rc=%d xsink=%d\n",
-                        func.name.c_str(), inst->cached_start_line + inst->loc->offset, dbg_rc,
-                        xsink && *xsink ? 1 : 0);
+                    fprintf(stderr, "[ir-debug] func='%s' line=%d stmt=%p dbg_rc=%d xsink=%d legacy=1\n",
+                        func.name.c_str(), dbg_stmt->loc->start_line + dbg_stmt->loc->offset,
+                        static_cast<void*>(dbg_stmt), dbg_rc, *xsink ? 1 : 0);
                     fflush(stderr);
                 }
-                if (dbg_rc || *xsink) {
-                    if (dbg_rc == RC_RETURN || *xsink) {
-                        if (debug_active) {
-                            tlpd->dbgFunctionExit(statements, return_value, xsink);
-                        }
-                        executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache.vector());
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupLocalCaches();
-                        return dbg_rc == RC_RETURN;
-                    }
-                    if (dbg_rc == RC_BREAK) {
-                        // Debug break: exit the loop enclosing this statement, matching
-                        // AST behavior where RC_BREAK unwinds to the innermost while/for
-                        // loop.  Resolve the loop via the block's enclosing_loop_exit so
-                        // the correct loop's condition BrIf is the one diverted (an inner
-                        // if/switch BrIf must not consume the break).  Fall back to the
-                        // legacy "force next BrIf false" only when no loop is annotated.
-                        if (current_block->enclosing_loop_exit) {
-                            debug_break_target = current_block->enclosing_loop_exit;
-                        } else {
-                            debug_break_loop = true;
-                        }
+                if (dbg_rc == RC_RETURN || *xsink) {
+                    tlpd->dbgFunctionExit(statements, return_value, xsink);
+                    executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache.vector());
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return dbg_rc == RC_RETURN;
+                }
+                if (dbg_rc == RC_BREAK) {
+                    if (current_block->enclosing_loop_exit) {
+                        debug_break_target = current_block->enclosing_loop_exit;
+                    } else {
+                        debug_break_loop = true;
                     }
                 }
             }
         }
-
         // Verbose IR lowering diagnostics: enable with QORE_IR_DEBUG env var
         // Zero-cost when disabled: single static bool check only initialized once
         static constinit QoreEnvFlag ir_verbose_enabled_env("QORE_IR_DEBUG");
@@ -9447,7 +9467,7 @@ load_local_done:
                         // %negative-offsets; matches the JIT and AOT auto-vivify paths.
                         if (index < 0) {
                             xsink->raiseException("NEGATIVE-LIST-INDEX", "list index " QLLD " is invalid (index must "
-                                "evaluate to a non-negative integer)", index);
+                                "evaluate to a non-negative integer)", (int64)index);
                             break;
                         }
                         // Auto-vivify: use container's declared type so the element
@@ -12341,6 +12361,57 @@ load_local_done:
                             } else {
                                 debug_break_loop = true;
                             }
+                        }
+                    }
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::DebugStatement: {
+                // The step event of the statement that follows, where the AST interpreter calls dbgStep() for it
+                // (StatementBlock::execImpl()).
+                if (debug_active && !(xsink && *xsink)) {
+                    const AbstractStatement* dbg_stmt = static_cast<QoreIRDebugStatementInstruction*>(inst)->statement;
+                    int dbg_rc = tlpd->dbgStep(statements, dbg_stmt, xsink);
+                    if (ir_trace_debug_env.get()) {
+                        fprintf(stderr, "[ir-debug] func='%s' line=%d stmt=%p dbg_rc=%d xsink=%d\n",
+                            func.name.c_str(), dbg_stmt->loc->start_line + dbg_stmt->loc->offset,
+                            static_cast<const void*>(dbg_stmt), dbg_rc, *xsink ? 1 : 0);
+                        fflush(stderr);
+                    }
+                    if (*xsink) {
+                        // an exception raised by the debugger is raised by the statement, as with CheckException
+                        if (inst->exception_target) {
+                            cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                            prev_block = block;
+                            block = inst->exception_target;
+                            ip = 0;
+                            break;
+                        }
+                        tlpd->dbgFunctionExit(statements, return_value, xsink);
+                        executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache.vector());
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return false;
+                    }
+                    if (dbg_rc == RC_RETURN) {
+                        tlpd->dbgFunctionExit(statements, return_value, xsink);
+                        executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache.vector());
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return true;
+                    }
+                    if (dbg_rc == RC_BREAK) {
+                        // Debug break: exit the loop enclosing this statement, matching
+                        // AST behavior where RC_BREAK unwinds to the innermost while/for
+                        // loop.  Resolve the loop via the block's enclosing_loop_exit so
+                        // the correct loop's condition BrIf is the one diverted (an inner
+                        // if/switch BrIf must not consume the break).  Fall back to the
+                        // legacy "force next BrIf false" only when no loop is annotated.
+                        if (current_block->enclosing_loop_exit) {
+                            debug_break_target = current_block->enclosing_loop_exit;
+                        } else {
+                            debug_break_loop = true;
                         }
                     }
                 }
@@ -16459,7 +16530,7 @@ load_local_done:
                 if (xsink) {
                     std::string msg = "unsupported opcode in executor: ";
                     msg += std::to_string(static_cast<int>(inst->opcode));
-                    xsink->raiseException("IR-EXEC-ERROR", msg.c_str());
+                    xsink->raiseException("IR-EXEC-ERROR", "%s", msg.c_str());
                 }
                 cleanupValues(values, cleanup, xsink, true, cleanup_log);
                 cleanupLocalCaches();

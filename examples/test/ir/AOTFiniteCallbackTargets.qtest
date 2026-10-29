@@ -153,9 +153,18 @@ class FiniteCallbackTargetsTest inherits QUnit::Test {
         foreach string prefix in (("", "QORE_DISABLE_AOT_CONSTANT_CALLBACK_SCALAR_REPLACEMENT=1 ",
                 "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
             foreach string level in (("-O0", "-O3")) {
-                string executable = tmp.path + "/fixture";
-                run((qcc, level, "--strip-source", "-o", executable, source), prefix);
-                assertEq(expected, run((executable,)), prefix + level);
+                # Both AOT forms use serialized debug IR when the debugger attaches after native warmup.
+                # Its line-based boundaries must keep reporting the callback local as well as entry/exit events.
+                foreach bool stripped in ((True, False)) {
+                    string executable = tmp.path + "/fixture";
+                    list<string> args = (qcc, level);
+                    if (stripped) {
+                        push args, "--strip-source";
+                    }
+                    args += ("-o", executable, source);
+                    run(args, prefix);
+                    assertEq(expected, run((executable,)), prefix + level + (stripped ? " stripped" : " embedded"));
+                }
             }
         }
     }

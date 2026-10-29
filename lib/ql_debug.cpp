@@ -148,7 +148,8 @@ static void dni(ExceptionSink* xsink, QoreStringNode* s, nset_t& nset, const Qor
 
     if (ntype == NT_STRING) {
         QoreStringValueHelper str(n);
-        s->sprintf("val: (enc: %s, %d:%d) \"%s\"", str->getEncoding()->getCode(), str->length(), str->strlen(),
+        s->sprintf("val: (enc: %s, " QLLD ":" QLLD ") \"%s\"", str->getEncoding()->getCode(), (int64)str->length(),
+            (int64)str->strlen(),
             str->c_str());
         return;
     }
@@ -186,13 +187,13 @@ static void dni(ExceptionSink* xsink, QoreStringNode* s, nset_t& nset, const Qor
 
     if (ntype == NT_LIST) {
         const QoreListNode *l = n.get<const QoreListNode>();
-        s->sprintf("elements: %d", l->size());
+        s->sprintf("elements: " QLLD, (int64)l->size());
         if (!shallow) {
             ConstListIterator li(l);
             while (li.next()) {
                 s->concat('\n');
                 strindent(s, indent);
-                s->sprintf("list element %d/%d: ", li.index(), l->size());
+                s->sprintf("list element " QLLD "/" QLLD ": ", (int64)li.index(), (int64)l->size());
                 dni(xsink, s, nset, li.getValue(), indent + 3, false);
             }
         }
@@ -236,7 +237,7 @@ static void dni(ExceptionSink* xsink, QoreStringNode* s, nset_t& nset, const Qor
                     s->concat('\n');
                     strindent(s, indent);
                     QoreStringValueHelper entry(l->retrieveEntry(i));
-                    s->sprintf("key %d/%d \"%s\" = ", i, l->size(), entry->c_str());
+                    s->sprintf("key %d/" QLLD " \"%s\" = ", i, (int64)l->size(), entry->c_str());
                     QoreValue nn{};
                     dni(xsink, s, nset, nn = o->getReferencedMemberNoMethod(entry->c_str(), xsink), indent + 3,
                         false);
@@ -249,14 +250,14 @@ static void dni(ExceptionSink* xsink, QoreStringNode* s, nset_t& nset, const Qor
 
     if (ntype == NT_HASH) {
         const QoreHashNode *h = n.get<const QoreHashNode>();
-        s->sprintf("elements: %d", h->size());
+        s->sprintf("elements: " QLLD, (int64)h->size());
         if (!shallow) {
             int i = 0;
             ConstHashIterator hi(h);
             while (hi.next()) {
                 s->concat('\n');
                 strindent(s, indent);
-                s->sprintf("key %d/%d \"%s\" = ", i++, h->size(), hi.getKey());
+                s->sprintf("key %d/" QLLD " \"%s\" = ", i++, (int64)h->size(), hi.getKey());
                 dni(xsink, s, nset, hi.get(), indent + 3, false);
             }
         }
@@ -280,7 +281,7 @@ static void dni(ExceptionSink* xsink, QoreStringNode* s, nset_t& nset, const Qor
 
     if (ntype == NT_BINARY) {
         const BinaryNode *b = n.get<const BinaryNode>();
-        s->sprintf("ptr: %p len: %d", b->getPtr(), b->size());
+        s->sprintf("ptr: %p len: " QLLD, b->getPtr(), (int64)b->size());
         return;
     }
 
@@ -9286,6 +9287,148 @@ static void ut_debug_skips_foreign_thread_callbacks(UnitTestCounters& c, QorePro
     UT_ASSERT(c, !xsink, "foreign debug target program cleanup succeeds");
 }
 
+//! the first user call in the scope of a QoreCallbackCallerHelper, while the Program that was running when it was
+//! created still runs, is made with the options of the helper's Program; later calls and calls made in another
+//! Program have the effective options of their own callers
+static void ut_callback_caller_parse_options(UnitTestCounters& c, QoreProgram* parent) {
+    ExceptionSink xsink;
+    // the Program that callbacks are made for has no restriction that the running Program has
+    QoreProgram* caller = parent
+        ? new QoreProgram(parent, PO_NO_CHILD_PO_RESTRICTIONS)
+        : new QoreProgram(PO_NO_CHILD_PO_RESTRICTIONS);
+    QoreProgram* running = parent
+        ? new QoreProgram(parent, PO_NO_CHILD_PO_RESTRICTIONS | PO_NO_FILESYSTEM)
+        : new QoreProgram(PO_NO_CHILD_PO_RESTRICTIONS | PO_NO_FILESYSTEM);
+    const QoreParseOptions no_fs(PO_NO_FILESYSTEM);
+    UT_ASSERT(c, !caller->getParseOptions().hasAny(no_fs), "the callback's Program is not restricted");
+    {
+        ProgramThreadCountContextHelper tch(&xsink, running, true);
+        UT_ASSERT(c, !xsink, "the running Program is entered");
+        UT_ASSERT(c, runtime_get_effective_program_parse_options().hasAny(no_fs), "the running Program is restricted");
+        {
+            QoreCallbackCallerHelper cch(caller);
+            QoreParseOptions po = runtime_take_call_caller_parse_options();
+            UT_ASSERT(c, po == caller->getParseOptions(),
+                "the first call is made with the options of the callback's Program");
+            po = runtime_take_call_caller_parse_options();
+            UT_ASSERT(c, po.hasAny(no_fs), "a later call of the running Program has its restrictions");
+        }
+        {
+            QoreCallbackCallerHelper cch(caller);
+            {
+                // a call made in another Program does not take the callback's options
+                ProgramThreadCountContextHelper tch2(&xsink, caller, true);
+                UT_ASSERT(c, !xsink, "another Program is entered");
+                QoreParseOptions po = runtime_take_call_caller_parse_options();
+                UT_ASSERT(c, po == caller->getParseOptions(), "a call in another Program has its options");
+            }
+            QoreParseOptions po = runtime_take_call_caller_parse_options();
+            UT_ASSERT(c, po == caller->getParseOptions(),
+                "the callback's call is still made with the options of its Program");
+        }
+        UT_ASSERT(c, runtime_take_call_caller_parse_options().hasAny(no_fs),
+            "a call after the callback has the restrictions of the running Program");
+    }
+    running->waitForTerminationAndDeref(&xsink);
+    caller->waitForTerminationAndDeref(&xsink);
+    UT_ASSERT(c, !xsink, "the Programs are destroyed");
+}
+
+//! records the line of every statement step and raises an exception at the step of one line, once
+class StepExceptionDebugProgram : public QoreDebugProgram {
+public:
+    std::vector<int> step_lines;
+    int raise_line = -1;
+    bool raised = false;
+
+    DLLLOCAL void onAttach(QoreProgram* pgm, DebugRunStateEnum& rs, const AbstractStatement*& rts,
+            ExceptionSink* xsink) override {
+        rs = DBG_RS_STEP;
+    }
+
+    DLLLOCAL void onStep(QoreProgram* pgm, const StatementBlock* blockStatement, const AbstractStatement* statement,
+            unsigned bkptId, int& flow, DebugRunStateEnum& rs, const AbstractStatement*& rts,
+            ExceptionSink* xsink) override {
+        rs = DBG_RS_STEP;
+        if (!statement || !statement->loc) {
+            return;
+        }
+        step_lines.push_back(statement->loc->start_line);
+        if (statement->loc->start_line == raise_line && !raised) {
+            raised = true;
+            xsink->raiseException("DEBUGGER-ERROR", "raised by the debugger at line %d", raise_line);
+        }
+    }
+};
+
+//! issue #5558: every statement has a step event, including statements without temporaries, and an exception raised
+//! by the debugger at a step is raised by the statement, so a try block of the program catches it
+static void ut_debug_step_every_statement(UnitTestCounters& c, QoreProgram* parent) {
+    ExceptionSink xsink;
+    QoreProgram* pgm = parent
+        ? new QoreProgram(parent, PO_NO_CHILD_PO_RESTRICTIONS | PO_ALLOW_DEBUGGER)
+        : new QoreProgram(PO_NO_CHILD_PO_RESTRICTIONS | PO_ALLOW_DEBUGGER);
+    pgm->parse("%modern\n"
+        "int sub steps() {\n"              // 2
+        "    int a = 1;\n"                 // 3
+        "    a++;\n"                       // 4
+        "    if (a > 1) {\n"               // 5
+        "        a += 2;\n"                // 6
+        "    }\n"
+        "    return a;\n"                  // 8
+        "}\n"
+        "string sub caught() {\n"          // 10
+        "    try {\n"                      // 11
+        "        int x = 1;\n"             // 12
+        "        x++;\n"                   // 13
+        "        return \"not raised\";\n" // 14
+        "    } catch (hash<ExceptionInfo> ex) {\n"
+        "        return ex.err;\n"         // 16
+        "    }\n"
+        "}\n",
+        "debug-step-test", &xsink, nullptr, 0);
+    UT_ASSERT(c, !xsink, "debug step target program parses");
+    if (xsink) {
+        xsink.handleExceptions();
+        xsink.clear();
+        pgm->waitForTerminationAndDeref(&xsink);
+        return;
+    }
+
+    StepExceptionDebugProgram dbg;
+    dbg.raise_line = 13;
+    dbg.addProgram(pgm, &xsink);
+    UT_ASSERT(c, !xsink, "debugger attaches to debug step target program");
+
+    QoreValue rv = pgm->callFunction("steps", nullptr, &xsink);
+    UT_ASSERT(c, !xsink, "statements run under the debugger");
+    UT_ASSERT_EQ(c, (int64)4, rv.getAsBigInt(), "statements run under the debugger return the right value");
+    rv.discard(&xsink);
+    std::vector<int> expected = {3, 4, 5, 6, 8};
+    UT_ASSERT(c, dbg.step_lines == expected, "every statement has a step event");
+
+    dbg.step_lines.clear();
+    rv = pgm->callFunction("caught", nullptr, &xsink);
+    UT_ASSERT(c, !xsink, "an exception raised by the debugger is caught by the program");
+    UT_ASSERT(c, dbg.raised, "the debugger raised its exception");
+    UT_ASSERT(c, rv.getType() == NT_STRING && !strcmp(rv.get<const QoreStringNode>()->c_str(), "DEBUGGER-ERROR"),
+        "the catch block of the program gets the exception raised by the debugger");
+    rv.discard(&xsink);
+    // the statement where the debugger raised the exception is not executed; the catch block is
+    expected = {11, 12, 13, 16};
+    UT_ASSERT(c, dbg.step_lines == expected, "an exception raised by the debugger leaves the statement");
+    if (xsink) {
+        xsink.handleExceptions();
+        xsink.clear();
+    }
+
+    dbg.removeProgram(pgm);
+    dbg.waitForTerminationAndClear(&xsink);
+    UT_ASSERT(c, !xsink, "debugger cleanup succeeds");
+    pgm->waitForTerminationAndDeref(&xsink);
+    UT_ASSERT(c, !xsink, "debug step target program cleanup succeeds");
+}
+
 static void ut_asyncio_autostop(UnitTestCounters& c) {
     ExceptionSink xsink;
     AsyncIoControllerPriv* ctrl = new AsyncIoControllerPriv(true, &xsink);
@@ -13446,6 +13589,25 @@ static void ut_manager_proxy_url_parse(UnitTestCounters& c) {
         ReferenceHolder<HttpClientConnectionManagerBase> mgr(
             new HttpClientConnectionManagerBase(opts, &xsink), &xsink);
         UT_ASSERT(c, xsink.isException(), "invalid proxy scheme rejected");
+        if (xsink) {
+            // the message gives the scheme; it was formatted with Qore's %y, which is no C conversion
+            QoreStringValueHelper desc(xsink.getExceptionDesc());
+            UT_ASSERT(c, strstr(desc->c_str(), "scheme 'ftp'"), "invalid proxy scheme message gives the scheme");
+        }
+        xsink.clear();
+    }
+
+    // Invalid proxy port
+    {
+        HttpClientConnectionManagerBase::Options opts;
+        opts.proxy_url = "http://proxy.example.com:port";
+        ReferenceHolder<HttpClientConnectionManagerBase> mgr(
+            new HttpClientConnectionManagerBase(opts, &xsink), &xsink);
+        UT_ASSERT(c, xsink.isException(), "invalid proxy port rejected");
+        if (xsink) {
+            QoreStringValueHelper desc(xsink.getExceptionDesc());
+            UT_ASSERT(c, strstr(desc->c_str(), "port 'port'"), "invalid proxy port message gives the port");
+        }
         xsink.clear();
     }
 }
@@ -14958,6 +15120,8 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_dgc_scan_generation(c);
     ut_dgc_scan_wait_cycle(c);
     ut_debug_skips_foreign_thread_callbacks(c, rc.getProgram());
+    ut_debug_step_every_statement(c, rc.getProgram());
+    ut_callback_caller_parse_options(c, rc.getProgram());
     return make_unit_test_result(c, xsink);
 }
 
@@ -14991,6 +15155,8 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_dgc_scan_generation(c);
     ut_dgc_scan_wait_cycle(c);
     ut_debug_skips_foreign_thread_callbacks(c, rc.getProgram());
+    ut_debug_step_every_statement(c, rc.getProgram());
+    ut_callback_caller_parse_options(c, rc.getProgram());
     ut_event_loop_remove_recycled_fd(c);
     ut_event_loop_sub_ms_timer_wakeups(c);
     ut_event_loop_registrations(c);
@@ -15235,7 +15401,7 @@ static QoreValue f_dbg_make_short_string(const QoreListNode* params, RuntimeConf
     QoreValue rv;
     if (!QoreValue::tryMakeShortString(rv, str.c_str(), str.size())) {
         xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_make_short_string() requires a string of no more than "
-            QSD " bytes; got " QSD " bytes", (size_t)QoreValue::SHORTSTR_MAX_BYTES, str.size());
+            QLLD " bytes; got " QLLD " bytes", (int64)QoreValue::SHORTSTR_MAX_BYTES, (int64)str.size());
         return QoreValue();
     }
     return rv;

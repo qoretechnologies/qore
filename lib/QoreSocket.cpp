@@ -5223,8 +5223,8 @@ private:
         const BinaryNode* bin = data_val->get<const BinaryNode>();
         size_t chunk_size = static_cast<size_t>(current_chunk_size);
         if (bin->size() < chunk_size + 2) {
-            xsink->raiseException("READ-HTTP-CHUNK-ERROR", "read " QSD " bytes for HTTP chunk size " QSD,
-                bin->size(), chunk_size);
+            xsink->raiseException("READ-HTTP-CHUNK-ERROR", "read " QLLD " bytes for HTTP chunk size " QLLD,
+                (int64)(bin->size()), (int64)chunk_size);
             return -1;
         }
 
@@ -18191,8 +18191,8 @@ int SocketReadHttpChunkedBodyPollOperation::handleChunkData(ExceptionSink* xsink
     const BinaryNode* bin = data_val->get<const BinaryNode>();
     size_t chunk_size = static_cast<size_t>(current_chunk_size);
     if (bin->size() < chunk_size + 2) {
-        xsink->raiseException("READ-HTTP-CHUNK-ERROR", "read " QSD " bytes for HTTP chunk size " QSD,
-            bin->size(), chunk_size);
+        xsink->raiseException("READ-HTTP-CHUNK-ERROR", "read " QLLD " bytes for HTTP chunk size " QLLD,
+            (int64)(bin->size()), (int64)chunk_size);
         return -1;
     }
 
@@ -20150,7 +20150,7 @@ QoreHashNode* SocketHttp2SendStreamingResponsePollOperation::continuePollIntern(
                         xsink->raiseException("HTTP-STREAM-ERROR",
                             "InputStream provided " QLLD " bytes but "
                             "Content-Length is " QLLD,
-                            bytes_sent, content_length);
+                            (int64)bytes_sent, (int64)content_length);
                         return nullptr;
                     }
                     // Send END_STREAM

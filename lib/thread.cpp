@@ -415,6 +415,10 @@ public:
     QoreParseOptions runtime_po_caller_restrictions;
     //! the Program of the module whose code runs with runtime_po_caller_restrictions, or nullptr
     const QoreProgram* runtime_po_module_pgm = nullptr;
+    //! the Program that the next user call is made on behalf of, or nullptr; see QoreCallbackCallerHelper
+    const QoreProgram* callback_caller_pgm = nullptr;
+    //! the Program running on the thread when callback_caller_pgm was set
+    const QoreProgram* callback_from_pgm = nullptr;
     //! the ID of the application Program that the code of runtime_po_module_pgm runs for
     unsigned runtime_po_app_pgm_id = 0;
     int tid;
@@ -662,7 +666,7 @@ public:
                 if (!getrlimit(RLIMIT_STACK, &rl) && rl.rlim_cur
                         && rl.rlim_cur != RLIM_INFINITY) {
                     stack_size = rl.rlim_cur;
-                    printd(5, "rlimit: stack size: %lld bytes\n", rl.rlim_cur);
+                    printd(5, "rlimit: stack size: %lld bytes\n", (int64)rl.rlim_cur);
                 } else
 #endif
                 {
@@ -671,7 +675,7 @@ public:
                     // on Alpine Linux get_stack_size() will report a 128K stack size, so we hardcode it here
                     // in case it's too small
                     stack_size = 8 * 1024 * 1024;
-                    printd(5, "stack size: %lld (%lld)\n", stack_size, get_stack_size());
+                    printd(5, "stack size: %lld (%lld)\n", (int64)stack_size, (int64)(get_stack_size()));
                 }
 #endif
                 // issue #4392: add 64K of additional stack in the primary thread
@@ -684,7 +688,7 @@ public:
             // limit wrapping around and never being reached
             size_t stack_adjusted_size = stack_size > stack_guard ? stack_size - stack_guard : 0;
             printd(5, "ThreadData::ThreadData() stack_adjusted_size: %lld qore_thread_stack_limit: %lld\n",
-                stack_adjusted_size, qore_thread_stack_limit);
+                (int64)stack_adjusted_size, (int64)qore_thread_stack_limit);
 #ifdef STACK_DIRECTION_DOWN
             stack_limit = stack_start - stack_adjusted_size;
 #else
@@ -889,7 +893,7 @@ public:
         stack_limit = primary_stack_top + usable;
 #endif
         printd(5, "ThreadData::enforcePrimaryStackSize() max: %lld protected: %lld size: %lld usable: %lld\n",
-            max_size, protected_size, size, usable);
+            (int64)max_size, (int64)protected_size, (int64)size, (int64)usable);
     }
 #endif
 };
@@ -1692,7 +1696,7 @@ size_t linux_get_stack_start_pos() {
             }
             if (ok) {
                 size_t npos = strtoll(ln.c_str() + off, 0, 10);
-                printd(5, "linux_get_stack_start_pos() stack start: %llx\n", npos);
+                printd(5, "linux_get_stack_start_pos() stack start: %llx\n", (unsigned long long)npos);
                 return npos;
             }
         }
@@ -4676,6 +4680,32 @@ QoreParseOptions runtime_get_effective_program_parse_options() {
     return runtime_get_effective_parse_options_for(thread_data.get()->current_pgm);
 }
 
+QoreParseOptions runtime_take_call_caller_parse_options() {
+    ThreadData* td = thread_data.get();
+    if (td->callback_caller_pgm && td->current_pgm == td->callback_from_pgm) {
+        const QoreProgram* caller = td->callback_caller_pgm;
+        // the call made on behalf of the Program is the first call only; the code it calls, and any code of the
+        // Program running on the thread that it calls back, have the effective options of their own callers
+        td->callback_caller_pgm = nullptr;
+        return caller->getParseOptions();
+    }
+    return runtime_get_effective_program_parse_options();
+}
+
+QoreCallbackCallerHelper::QoreCallbackCallerHelper(const QoreProgram* caller) : po(caller->getParseOptions()) {
+    ThreadData* td = thread_data.get();
+    old_caller_pgm = td->callback_caller_pgm;
+    old_from_pgm = td->callback_from_pgm;
+    td->callback_caller_pgm = caller;
+    td->callback_from_pgm = td->current_pgm;
+}
+
+QoreCallbackCallerHelper::~QoreCallbackCallerHelper() {
+    ThreadData* td = thread_data.get();
+    td->callback_caller_pgm = old_caller_pgm;
+    td->callback_from_pgm = old_from_pgm;
+}
+
 QoreParseOptions runtime_get_effective_parse_options_for(const QoreProgram* pgm) {
     ThreadData* td = thread_data.get();
     return pgm ? apply_runtime_po_override(td, pgm->getParseOptions()) : td->runtime_po;
@@ -4876,7 +4906,7 @@ QoreParseOptions runtime_get_parse_options_stack(ExceptionSink* xsink, size_t n)
         ++i;
         w = w->getNext();
     }
-    xsink->raiseException("INVALD-STACK-FRAME", "Stack frame " QLLD " is invalid", n);
+    xsink->raiseException("INVALD-STACK-FRAME", "Stack frame " QLLD " is invalid", (int64)n);
     return 0;
 }
 

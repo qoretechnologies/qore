@@ -1284,7 +1284,7 @@ nothing Http2PollOperationBase::registerStreamQueue(int stream_id,
     // the I/O thread must never block pushing to the queue
     if (queue->getMax() != -1) {
         xsink->raiseException("HTTP2-QUEUE-ERROR", "the Queue passed to register a stream's body has a maximum size "
-            "of %d; an unlimited Queue (size -1) is required", queue->getMax());
+            "of " QLLD "; an unlimited Queue (size -1) is required", (int64)(queue->getMax()));
         return QoreValue();
     }
     // Transfer the Queue ref from the ReferenceHolder to the C++ priv

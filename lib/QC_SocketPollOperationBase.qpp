@@ -57,7 +57,7 @@ qclass SocketPollOperationBase<T> [
 /** @throw INTERNAL-ONLY this class is not usable by %Qore classes
 */
 SocketPollOperationBase::constructor() {
-    xsink->raiseException("INTERNAL-ONLY", "the SocketPollOperationBase class is not usable by %Qore classes; "
+    xsink->raiseException("INTERNAL-ONLY", "the SocketPollOperationBase class is not usable by Qore classes; "
         "inherit a builtin derived class");
 }
 

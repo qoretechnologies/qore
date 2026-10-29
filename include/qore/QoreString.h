@@ -577,7 +577,7 @@ public:
         @return 0; nothing is concatenated if the output cannot be formatted, such as an output longer than
         \c INT_MAX characters
     */
-    DLLEXPORT int sprintf(const char* fmt, ...);
+    DLLEXPORT int sprintf(const char* fmt, ...) QORE_PRINTF_FORMAT(2, 3);
 
     //! this will concatentate a formatted string to the existing string according to the format string and the arguments
     /** NOTE that the formatted string is concatenated to the end of the current string!
@@ -1155,12 +1155,12 @@ public:
     //! creates a string with a sprintf-style constructor
     /** @since %Qore 0.8.7
     */
-    DLLEXPORT QoreStringMaker(const char* fmt, ...);
+    DLLEXPORT QoreStringMaker(const char* fmt, ...) QORE_PRINTF_FORMAT(2, 3);
 
     //! creates a string with an explicit encoding and a sprintf-style constructor
     /** @since %Qore 0.8.7
     */
-    DLLEXPORT QoreStringMaker(const QoreEncoding* enc, const char* fmt, ...);
+    DLLEXPORT QoreStringMaker(const QoreEncoding* enc, const char* fmt, ...) QORE_PRINTF_FORMAT(3, 4);
 
 private:
     DLLLOCAL QoreStringMaker(const QoreStringMaker& str) = delete;

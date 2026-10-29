@@ -327,7 +327,7 @@ public:
 
 class QoreStringNodeMaker : public QoreStringNode {
 public:
-    DLLEXPORT QoreStringNodeMaker(const char* fmt, ...);
+    DLLEXPORT QoreStringNodeMaker(const char* fmt, ...) QORE_PRINTF_FORMAT(2, 3);
 
 private:
     QoreStringNodeMaker(const QoreStringNodeMaker& str) = delete;

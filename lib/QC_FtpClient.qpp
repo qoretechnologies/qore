@@ -818,7 +818,7 @@ ftp.setPort(2021);
 nothing FtpClient::setPort(int port) [flags=NAMED_ARGS] {
     if (port <= 0) {
         xsink->raiseException("FTPCLIENT-SETPORT-PARAMETER-ERROR", "expecting positive port number as first "
-            "parameter of FtpClient::setPort(softint port); got %d", port);
+            "parameter of FtpClient::setPort(softint port); got " QLLD "", (int64)port);
     } else {
         f->setPort(port);
     }
@@ -1239,9 +1239,9 @@ ftp.setEventQueue(queue);
 nothing FtpClient::setEventQueue(Qore::Thread::Queue[Queue] queue, auto argument, *bool with_data)
         [flags=NAMED_ARGS] {
     if (queue->getMax() != -1) {
-        return xsink->raiseException("QUEUE-ERROR", "the Queue object passed as a maximum size of %d entr%s, which "
+        return xsink->raiseException("QUEUE-ERROR", "the Queue object passed as a maximum size of " QLLD " entr%s, which "
             "could cause internal I/O to freeze in the FtpClient object if used; use a Queue object with no maximum "
-            "size for I/O monitoring", queue->getMax(), queue->getMax() == 1 ? "y" : "ies");
+            "size for I/O monitoring", (int64)(queue->getMax()), queue->getMax() == 1 ? "y" : "ies");
     }
     // pass reference from QoreObject::getReferencedPrivateData() to function
     f->setEventQueue(xsink, queue.release(), argument.refSelf(), with_data);
@@ -1277,9 +1277,9 @@ ftp.setDataEventQueue(queue);
 nothing FtpClient::setDataEventQueue(Qore::Thread::Queue[Queue] queue, auto argument, *bool with_data)
         [flags=NAMED_ARGS] {
     if (queue->getMax() != -1) {
-        return xsink->raiseException("QUEUE-ERROR", "the Queue object passed as a maximum size of %d entr%s, which "
+        return xsink->raiseException("QUEUE-ERROR", "the Queue object passed as a maximum size of " QLLD " entr%s, which "
             "could cause internal I/O to freeze in the FtpClient object if used; use a Queue object with no maximum "
-            "size for I/O monitoring", queue->getMax(), queue->getMax() == 1 ? "y" : "ies");
+            "size for I/O monitoring", (int64)(queue->getMax()), queue->getMax() == 1 ? "y" : "ies");
     }
     // pass reference from QoreObject::getReferencedPrivateData() to function
     f->setDataEventQueue(xsink, queue.release(), argument.refSelf(), with_data);
@@ -1315,9 +1315,9 @@ ftp.setControlEventQueue(queue);
 nothing FtpClient::setControlEventQueue(Qore::Thread::Queue[Queue] queue, auto argument, *bool with_data)
         [flags=NAMED_ARGS] {
     if (queue->getMax() != -1) {
-        return xsink->raiseException("QUEUE-ERROR", "the Queue object passed as a maximum size of %d entr%s, which "
+        return xsink->raiseException("QUEUE-ERROR", "the Queue object passed as a maximum size of " QLLD " entr%s, which "
             "could cause internal I/O to freeze in the FtpClient object if used; use a Queue object with no maximum "
-            "size for I/O monitoring", queue->getMax(), queue->getMax() == 1 ? "y" : "ies");
+            "size for I/O monitoring", (int64)(queue->getMax()), queue->getMax() == 1 ? "y" : "ies");
     }
     // pass reference from QoreObject::getReferencedPrivateData() to function
     f->setControlEventQueue(xsink, queue.release(), argument.refSelf(), with_data);
@@ -1373,9 +1373,9 @@ ftp.setWarningQueue(warning_ms: 5000, warning_bytes: 5000, queue: queue, argumen
 nothing FtpClient::setWarningQueue(int warning_ms, int warning_bytes, Queue[Queue] queue, auto argument,
         timeout min_ms = 1s) [flags=NAMED_ARGS] {
     if (queue->getMax() != -1) {
-        return xsink->raiseException("QUEUE-ERROR", "the Queue object passed as a maximum size of %d entr%s, which "
+        return xsink->raiseException("QUEUE-ERROR", "the Queue object passed as a maximum size of " QLLD " entr%s, which "
             "could cause internal I/O to freeze in the Socket object if used; use a Queue object with no maximum "
-            "size for I/O monitoring", queue->getMax(), queue->getMax() == 1 ? "y" : "ies");
+            "size for I/O monitoring", (int64)(queue->getMax()), queue->getMax() == 1 ? "y" : "ies");
     }
     // pass reference from QoreObject::getReferencedPrivateData() to function
     f->setWarningQueue(xsink, warning_ms, warning_bytes, queue.release(), argument.refSelf(), min_ms);

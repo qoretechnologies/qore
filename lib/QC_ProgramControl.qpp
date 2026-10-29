@@ -197,7 +197,7 @@ int ProgramControl::getProgramId() [flags=RET_VALUE_ONLY;] {
 static ProgramControl ProgramControl::resolveProgramId(int program_id) [flags=NAMED_ARGS;dom=DEBUGGER] {
    QoreProgram* pgm = QoreProgram::resolveProgramId(program_id);
    if (!pgm) {
-      return xsink->raiseException("PROGRAM-ERROR", "cannot find program for programId (%d)", program_id);
+      return xsink->raiseException("PROGRAM-ERROR", "cannot find program for programId (" QLLD ")", (int64)program_id);
    }
    return QoreProgram::getQoreObject(pgm);
 }
@@ -359,7 +359,7 @@ hash<StatementInfo> ProgramControl::getStatementIdInfo(int statement_id, bool li
       return QoreValue();
    AbstractStatement* s = p->resolveStatementId(statement_id);
    if (!s) {
-      return xsink->raiseException("PROGRAM-STATEMENT-ERROR", "cannot resolve statement id from (%d)", statement_id);
+      return xsink->raiseException("PROGRAM-STATEMENT-ERROR", "cannot resolve statement id from (" QLLD ")", (int64)statement_id);
    }
    QoreHashNode* h = new QoreHashNode(hashdeclStatementInfo, nullptr);
    qore_hash_private* ph = qore_hash_private::get(*h);
@@ -417,7 +417,7 @@ int ProgramControl::findStatementId(string file, int line) [flags=NAMED_ARGS] {
         return 0;
     AbstractStatement* s = p->findStatement(file->c_str(), line);
     if (!s) {
-        return xsink->raiseException("PROGRAM-STATEMENT-ERROR", "cannot find statement for \"%s:%d\"", file->c_str(), line);
+        return xsink->raiseException("PROGRAM-STATEMENT-ERROR", "cannot find statement for \"%s:" QLLD "\"", file->c_str(), (int64)line);
     }
     return p->getStatementId(s);
 }
