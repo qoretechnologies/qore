@@ -885,7 +885,15 @@ protected:
         normalize_units<int, int>(year, month, 12);
     }
 
-    DLLLOCAL void setIso8601(const char* str);
+    //! Sets the duration from an ISO 8601 duration string: \c "P" followed by components (\c nY, \c nM, \c nW,
+    //! \c nD, and after the time designator \c "T": \c nH, \c nM, \c nS and the %Qore extension \c nu)
+    /** @param str the string, which starts with \c "P" or \c "p"
+        @param xsink for an \c INVALID-DATE exception if the string cannot be read; can be nullptr, in which case the
+        duration keeps the components read before the error
+
+        @return 0 if the string was read, -1 if not
+    */
+    DLLLOCAL int setIso8601(const char* str, ExceptionSink* xsink);
 
 public:
     DLLLOCAL void set(int n_year, int n_month, int n_day, int n_hour, int n_minute, int n_second, int n_us) {
@@ -900,7 +908,7 @@ public:
 
     DLLLOCAL void set(const QoreValue v);
 
-    DLLLOCAL void set(const char* str);
+    DLLLOCAL void set(const char* str, ExceptionSink* xsink = nullptr);
 
     DLLLOCAL void set(const qore_relative_time& p) {
         year = p.year;
@@ -1294,7 +1302,7 @@ public:
     }
 
     DLLLOCAL void setAbsoluteDate(const char* str, const AbstractQoreZoneInfo* zone = currentTZ(), ExceptionSink* xsink = 0);
-    DLLLOCAL void setRelativeDate(const char* str);
+    DLLLOCAL void setRelativeDate(const char* str, ExceptionSink* xsink = nullptr);
 
     DLLLOCAL void setDate(const char* str);
     DLLLOCAL void setDate(const char* str, ExceptionSink* xsink);

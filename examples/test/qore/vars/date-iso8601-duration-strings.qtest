@@ -1,0 +1,208 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+%exec-class DateIso8601DurationStringsTest
+
+#! ISO 8601 duration strings read by date(string) and by the conversions without an exception sink
+class DateIso8601DurationStringsTest inherits QUnit::Test {
+    public {
+        #! strings that cannot be read as a duration; before the fix, the parser stepped over the terminating NUL
+        #! of some of them ("P1", "PT1", "P1D2", "PT1H2", ...) and read the bytes after the string
+        const Malformed = (
+            # no component
+            "P", "PT", "p", "pt", "P ", "PT ",
+            # a number without a designator
+            "P1", "PT1", "P1D2", "PT1H2", "P1DT1H2", "P-1", "PT-1", "P1.5", "PT1.5", "P1,5", "P0",
+            # a time designator without a time component
+            "P1DT", "P1DT ", "P1YT",
+            # a decimal sign without digits, or a sign or a decimal sign without a number
+            "P1.", "PT1H1.", "P1.D", "PT1,S", "P.5D", "P,5D", "P-", "PT-", "P--1D", "P-.5D", "P+1D",
+            # text that is not a component
+            "P1D-", "P1Dx", "P1X", "PX", "P1D x", "P 1D", "P1 D", "PT1H\t1M", "P1DT1H-", "PT1Hz",
+            # a time component before the time designator, a date component after it
+            "P1H", "P1S", "P1u", "P1D2H", "PT1D", "PT1Y", "PT1W", "P1DT1H1D",
+            # a repeated time designator
+            "PTT1H", "PT1HT1M", "P1DTT1H",
+            # values out of range
+            "P2147483648D", "P99999999999999999999Y", "P2147483647D1D", "P-2147483647D-2D", "P306783379W",
+            # the long format, which only the parser reads, as a literal
+            "P0001-02-03", "P0001-02-03T04:05:06", "P00:01:00", "PT01:00:00",
+        );
+    }
+
+    constructor() : QUnit::Test("ISO 8601 duration strings", "1.0") {
+        addTestCase("valid durations", \validDurations());
+        addTestCase("malformed durations raise INVALID-DATE", \malformedDurations());
+        addTestCase("the terminating NUL ends the string", \terminatingNul());
+        addTestCase("conversions without an exception sink", \lenientConversions());
+        addTestCase("format IF round trip", \formatRoundTrip());
+        set_return_value(main());
+    }
+
+    private validDurations() {
+        # the expected values are built from single-unit literals and functions, which do not use the parser of
+        # ISO 8601 durations
+        hash<string, date> cases = {
+            "P1D": 1D,
+            "PT1H": 1h,
+            "P1W": 7D,
+            "P2W": 14D,
+            "P1M": 1M,
+            "PT1M": 1m,
+            "P1Y": 1Y,
+            "PT1S": 1s,
+            "P0D": 0s,
+            "PT0S": 0s,
+            "P1Y2M3DT4H5M6S": 1Y + 2M + 3D + 4h + 5m + 6s,
+            "P1Y2M1W3DT4H5M6S": 1Y + 2M + 10D + 4h + 5m + 6s,
+            "P3DT21H": 3D + 21h,
+            "PT4M551u": 4m + microseconds(551),
+            "PT1.5S": 1s + 500ms,
+            "PT0.000001S": microseconds(1),
+            "PT1,5S": 1s + 500ms,
+            "PT19.1S": 19s + 100ms,
+            "P1.5D": 1D + 12h,
+            "P0.5W": 3D + 12h,
+            "PT1.5H": 1h + 30m,
+            "PT1.5M": 1m + 30s,
+            "P1.5Y": 1Y + 182D + 12h,
+            "P1.5M": 1M + 15D,
+            "P-1D": -1D,
+            "PT-1H": -1h,
+            "P-1W": -7D,
+            "P-1.5D": -1D - 12h,
+            "P-0.5D": -12h,
+            "PT-1.5S": -1s - 500ms,
+            "PT1H-30M": 1h - 30m,
+            "p1d": 1D,
+            "p1y2m3dt4h5m6s": 1Y + 2M + 3D + 4h + 5m + 6s,
+            "P1D ": 1D,
+            "PT1H\t\r\n": 1h,
+            "P1D1D": 2D,
+            "P2147483647D": days(2147483647),
+            "P-2147483647D": days(-2147483647),
+            "P306783378W": days(2147483646),
+        };
+        foreach hash<auto> i in (cases.pairIterator()) {
+            date d = date(i.key);
+            assertTrue(d.relative(), "relative: " + i.key);
+            assertEq(i.value, d, i.key);
+            # the same string gives the same value every time
+            assertEq(d, date(i.key), "again: " + i.key);
+            # a conversion without an exception sink gives the same value
+            softdate sd = i.key;
+            assertEq(d, sd, "softdate: " + i.key);
+        }
+
+        # a literal is read by the same parser: the fraction of a negative value is negative
+        assertEq(-1D - 12h, P-1.5D, "literal P-1.5D");
+        assertEq(-12h, P-0.5D, "literal P-0.5D");
+        assertEq(1D + 12h, P1.5D, "literal P1.5D");
+
+        # the components are kept as given, not normalized
+        assertEq(25, date("PT25H").hours(), "PT25H hours");
+        assertEq(0, date("PT25H").days(), "PT25H days");
+        assertEq(14, date("P2W").days(), "P2W days");
+        assertEq(86400000, date("P1D").durationMilliseconds(), "P1D ms");
+    }
+
+    private malformedDurations() {
+        foreach string str in (Malformed) {
+            assertThrows("INVALID-DATE", "ISO 8601 duration string", \date(), (str,), str);
+            # the message names the string
+            string prefix = sprintf("cannot parse ISO 8601 duration string '%s'; ", str);
+            try {
+                date d = date(str);
+                fail(sprintf("no exception for %y: %y", str, d));
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq(prefix, ex.desc.substr(0, prefix.length()), "message: " + str);
+            }
+        }
+
+        # the message says where the string cannot be read
+        assertThrows("INVALID-DATE", "a number has no designator at the end of the string", \date(), ("P1",));
+        assertThrows("INVALID-DATE", "a number has no designator at the end of the string", \date(), ("PT1H2",));
+        assertThrows("INVALID-DATE", "the time designator 'T' is not followed by a time component", \date(),
+            ("P1DT",));
+        assertThrows("INVALID-DATE", "the duration has no component", \date(), ("P",));
+        assertThrows("INVALID-DATE", "unknown designator at offset 2 \\(char 'X'\\)", \date(), ("P1X",));
+        assertThrows("INVALID-DATE", "a time component \\(H, S or u\\) does not follow", \date(), ("P1H",));
+        assertThrows("INVALID-DATE", "a date component \\(Y, W or D\\) follows", \date(), ("PT1D",));
+        assertThrows("INVALID-DATE", "the time designator 'T' is repeated", \date(), ("PT1HT1M",));
+        assertThrows("INVALID-DATE", "a decimal sign is not followed by digits", \date(), ("P1.",));
+        assertThrows("INVALID-DATE", "a number is too large", \date(), ("P2147483648D",));
+        assertThrows("INVALID-DATE", "a component value is out of range", \date(), ("P2147483647D1D",));
+        assertThrows("INVALID-DATE", "unexpected text after white space", \date(), ("P1D x",));
+
+        # named argument
+        assertThrows("INVALID-DATE", date sub () { return date(date_string: "PT1"); });
+
+        # a valid string still converts after an error
+        assertEq(1D, date("P1D"), "after errors");
+    }
+
+    #! a string can contain a NUL character: the parser reads the duration up to it and never reads past it; the
+    #! old parser stepped over the NUL after "P1" and read the "5D" after it as 5 days
+    private terminatingNul() {
+        string p1_5d = (<5031003544>).toString();
+        assertEq(5, p1_5d.size());
+        assertThrows("INVALID-DATE", "a number has no designator at the end of the string", \date(), (p1_5d,));
+        softdate sd = p1_5d;
+        assertEq(0s, sd, "softdate P1<NUL>5D");
+
+        string pt1h2_5m = (<505431483200354d>).toString();
+        assertThrows("INVALID-DATE", "a number has no designator", \date(), (pt1h2_5m,));
+        sd = pt1h2_5m;
+        assertEq(1h, sd, "softdate PT1H2<NUL>5M");
+
+        string p1_ = (<503100>).toString();
+        assertThrows("INVALID-DATE", "a number has no designator", \date(), (p1_,));
+    }
+
+    #! conversions without an exception sink, such as an assignment to a softdate, do not raise an exception for a
+    #! string that cannot be read; they keep the components read before the error, every time
+    private lenientConversions() {
+        hash<string, date> cases = {
+            "P1": 0s,
+            "PT1": 0s,
+            "P1D2": 1D,
+            "PT1H2": 1h,
+            "P1DT1H2": 1D + 1h,
+            "P1.5": 0s,
+            "P1DT": 1D,
+            "P1Dx": 1D,
+            "P1H": 0s,
+            "P1D2H": 1D,
+            "PT1D": 0s,
+            "PT1HT1M": 1h,
+            "P2147483647D1D": days(2147483647),
+            "P0001-02-03": 0s,
+        };
+        foreach hash<auto> i in (cases.pairIterator()) {
+            for (int n = 0; n < 20; ++n) {
+                softdate sd = i.key;
+                assertEq(i.value, sd, sprintf("softdate %y (%d)", i.key, n));
+            }
+        }
+        foreach string str in (Malformed) {
+            softdate first = str;
+            assertTrue(first.relative(), "relative: " + str);
+            for (int n = 0; n < 5; ++n) {
+                softdate again = str;
+                assertEq(first, again, sprintf("deterministic %y (%d)", str, n));
+            }
+        }
+    }
+
+    private formatRoundTrip() {
+        foreach date d in ((P2Y1M3DT5H7M9S, P2Y1M3DT5H7M9.002S, 1D, 25h, 1s + 500ms, microseconds(1), -1D, -1h - 30m,
+                1Y + 2M + 3D + 4h + 5m + 6s + microseconds(7))) {
+            string str = d.format("IF");
+            assertEq(d, date(str), str);
+        }
+    }
+}
