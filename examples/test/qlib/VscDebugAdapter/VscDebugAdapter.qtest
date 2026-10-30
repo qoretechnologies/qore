@@ -1558,6 +1558,8 @@ print('exit code: %d' % p.wait(30))
         assertEq("done\n", readServerOutput(server, "done\n"));
         # no other thread was reported as stopped
         assertEq((), dap.getEvents("stopped"));
+        # the events of the debug server are not written to the debug console
+        assertEq((), (select dap.getOutput("console"), $1 =~ /(interrupt|run)\//));
 
         r = dap.request("disconnect");
         assertTrue(r.success, r.message);

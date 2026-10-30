@@ -177,8 +177,8 @@ class VscDebugAdapterRemote inherits VscDebugAdapter {
                     return;
                 }
             }
+            # the event is handled for the IDE; it is not written to the debug console
             pushEvent(d);
-            printData(d);
         } catch (hash<ExceptionInfo> ex) {
             wscErr(sprintf("wscEvent: %Y", ex));
         }
