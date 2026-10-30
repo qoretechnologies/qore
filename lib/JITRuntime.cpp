@@ -666,6 +666,8 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_object_has_exact_aot_target_class) },
     { "qore_rt_object_has_exact_aot_target_class_only",
         reinterpret_cast<void*>(&qore_rt_object_has_exact_aot_target_class_only) },
+    { "qore_rt_object_has_exact_aot_override_v1",
+        reinterpret_cast<void*>(&qore_rt_object_has_exact_aot_override_v1) },
     { "qore_rt_load_object_getter_aot",
         reinterpret_cast<void*>(&qore_rt_load_object_getter_aot) },
     { "qore_rt_load_object_getter_checked_aot",
@@ -17847,6 +17849,33 @@ extern "C" DLLEXPORT int qore_rt_object_has_exact_aot_target_class_only(
     const QoreClass* target_class = ctx->call_targets[slot].qc;
     return target_class && object->getClass() == target_class
         && !qore_object_private::get(*object)->sandbox_provenance;
+}
+
+extern "C" DLLEXPORT int qore_rt_object_has_exact_aot_override_v1(QoreAOTContext* ctx,
+        int32_t base_slot, int32_t target_slot, uint64_t value) {
+    if (!ctx || !ctx->call_targets || base_slot < 0 || base_slot >= ctx->num_exprs
+            || target_slot < 0 || target_slot >= ctx->num_exprs) {
+        return 0;
+    }
+    const auto& base = ctx->call_targets[base_slot];
+    const auto& target = ctx->call_targets[target_slot];
+    // Resolved dispatch deliberately retains the parse-selected variant when
+    // imported classes share an ID. Such a receiver must not select an override.
+    if (!base.qc || !base.variant || !target.qc || !target.method || !target.variant
+            || base.qc->getID() == target.qc->getID()) {
+        return 0;
+    }
+    const QoreObject* object = qore_rt_get_strong_object(fromBits(value));
+    if (!object || !object->isValid() || object->getClass() != target.qc
+            || !ctx->pgm || object->getProgram() != ctx->pgm
+            || qore_object_private::get(*object)->sandbox_provenance) {
+        return 0;
+    }
+    // Class identity alone does not establish the Program boundary: C++ can
+    // construct an object with a class from a different Program, and imported
+    // method bodies can retain a distinct source Program.
+    const UserVariantBase* uvb = target.variant->getUserVariantBase();
+    return uvb && qore_rt_method_execution_program(target.method, uvb) == ctx->pgm;
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_call_direct_aot(QoreAOTContext* ctx,

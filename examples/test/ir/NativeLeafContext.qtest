@@ -133,7 +133,11 @@ class NativeLeafContextTest inherits QUnit::Test {
             bool inline_callback = prefix.find("FUNCREF") < 0;
             bool inline_method = prefix.find("NATIVE_METHOD") < 0;
             foreach string level in (("-O0", "-O3")) {
-                output = backquote(env + prefix + "QORE_DUMP_LLVM_IR=1 " + quote(qcc) + " " + level
+                # These probes exercise the native dispatch caches and lazily prepared callee contexts.
+                # Keep the call present; exact override inlining is covered by AOTPolymorphicScalar.
+                output = backquote(env + prefix
+                    + "QORE_DISABLE_AOT_POLYMORPHIC_SCALAR_IMPORT=1 QORE_DUMP_LLVM_IR=1 "
+                    + quote(qcc) + " " + level
                     + " -c --batch-script-aggregate=NATIVE_LEAF_CONTEXT --script-aggregate-native-registers"
                     + " --batch-script-aggregate-output=" + quote(dir.path + "/aggregate.qo")
                     + " --output-dir=" + quote(dir.path) + " " + quote(source) + " " + quote(control)

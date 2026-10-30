@@ -30456,3 +30456,65 @@ Default-layout optimized target instruction counts fall181to171 for integer and2
 Release and fullDebug each pass7fixtures/12cases/4212assertions; Debug native4003/all5668 pass.36fresh primary artifacts verify4698reference outputs per variant and LLVM; additional stress artifacts pass independent arithmetic references. All391Release qlib aliases/hashes were restored after Debug. A separate24process boxed-fallback comparison preserves16identical outputs and six owned destructions per execution. Fixture corrections and abandoned diagnostic receipts are retained separately from successful qualification and timing.
 
 See the [complete evidence](results-native-binary-call-macos-arm64.json) and [62-item audit](audit-native-binary-call.md). No fresh Java/develop ratio, universal parity or global ceiling is claimed. Next investigate outer-method context costs, bounded exact-receiver summary specialization, and native-result SSA lifetimes; broader companions must address the separately preserved native-parameter reflection limitation.
+
+
+## Bounded polymorphic scalar calls (2026-10-30)
+
+AOT now imports pure scalar bodies for up to three known public overrides of a resolved unary integer or floating method. Compilation proves concrete signatures, inherited overload selection and context independence. Load-bound target identities use the existing DOT_EVAL_TARGET format and shared checked expression-slot numbering. Runtime checks the live strong receiver, exact class, differing class IDs and both object/method Program owners. Unknown subclasses, imported same-ID behavior, effectful targets and cross-Program receivers retain ordinary dispatch. Existing inline frames, argument cleanup and native/boxed result continuations are reused. QORE_DISABLE_AOT_POLYMORPHIC_SCALAR_IMPORT disables this extension.
+
+Frozen baseline7a657ea38b and candidate use optimized -O3 -DNDEBUG builds with allocation tracking off, Apple clang2100.4.1.1/SDK27.2/LLVM22.1.8 on M4 Pro. AOT is -O3 --strip-source. Three layouts and three forks per variant/layout each collect three warmup and three measured windows of at least100ms,4096items,seed7. These are whole-kernel ns/item; negative changes are faster.
+
+|!Confirmation workload|!Before ns/item|!Candidate ns/item|!Change
+|matched:forward_float|33.7680|32.4909|-3.78%
+|matched:forward_int|27.8765|28.6022|+2.60%
+|matched:context_int|176.6195|177.9783|+0.77%
+|matched:context_float|174.3937|174.8150|+0.24%
+|local:direct_call|1.4904|1.5000|+0.64%
+|local:method_call|1.6484|1.6368|-0.70%
+|local:polymorphic_call|21.4986|20.9127|-2.73%
+|local:polymorphic_float_call|22.0110|20.9834|-4.67%
+|local:boxed_int_method_fallback|31.7355|32.4357|+2.21%
+|local:boxed_float_method_fallback|34.3857|34.9245|+1.57%
+|local:boxed_int_method_effect|88.1167|86.4612|-1.88%
+|local:list_mutate|118.9301|118.4899|-0.37%
+|local:temporary_list|1.6048|1.6023|-0.16%
+|local:polymorphic_expression_call|11.1816|9.2854|-16.96%
+|local:polymorphic_float_expression_call|11.2196|9.3973|-16.24%
+|local:monomorphic_call|3.7956|3.9664|+4.50%
+|local:monomorphic_float_call|4.1346|4.0202|-2.77%
+|micro:polymorphic_call|77.2752|20.5454|-73.41%
+|micro:polymorphic_float_call|78.9062|21.1105|-73.25%
+|micro:boxed_int_method_call|108.1972|109.2845|+1.00%
+|micro:boxed_float_method_call|107.9861|108.8446|+0.79%
+|micro:boxed_int_method_fallback|121.3041|123.5254|+1.83%
+|micro:boxed_float_method_fallback|122.8429|121.2232|-1.32%
+|micro:boxed_int_method_effect|172.3992|171.8958|-0.29%
+|micro:indirect_call|8.8502|8.3975|-5.11%
+|micro:closure_call|18.7026|18.7199|+0.09%
+|micro:closure_capture|24.1968|23.7586|-1.81%
+|micro:list_read|2.9421|2.9719|+1.01%
+|micro:list_build|23.2803|24.0782|+3.43%
+|micro:list_mutate|124.6382|125.3449|+0.57%
+|micro:temporary_hash|1.6034|1.6181|+0.92%
+|micro:polymorphic_expression_call|68.2437|8.9077|-86.95%
+|micro:polymorphic_float_expression_call|72.9935|9.2153|-87.38%
+|float:callback_local_float_return|0.8581|0.8651|+0.82%
+|float:typed_local_int_unary|1.2156|1.2313|+1.29%
+|float:callback_loop_float_return|4.9677|4.8397|-2.58%
+|mixed:csv_report|917.5106|913.6151|-0.42%
+|mixed:object_orders|3126.9531|3002.3148|-3.99%
+|mixed:callback_pipeline|93.2481|94.1927|+1.01%
+|mixed:text_index|1297.7665|1317.6612|+1.53%
+|probe:object_short|1612.3630|1641.4605|+1.80%
+|probe:effect_short|1679.2318|1669.5312|-0.58%
+|probe:string_result_loop|526.4832|528.7114|+0.42%
+
+Retention decision: All eight polymorphic targets improve in every layout in both independent campaigns. Confirmation reduces module scalar calls by about73% and module scalar expression calls by about87%; local expressions improve about16-17%, local calls about3-5%, and object orders3.99%. Preserve costs including monomorphic local+4.50%(0.1708ns/item), module list building+3.43%, integer forwarding+2.60%, local boxed integer fallback+2.21% and text index+1.53%. The broader tradeoff is authorized; no weighted application improvement or universal Java parity is inferred.
+
+The independent22-workload pilot and43-workload confirmation preserve1170processes/3510measured windows. All eight target kernels improve in all three layouts in each campaign. Module integer calls improve83.4951to22.0008ns/item in the pilot and77.2752to20.5454 in confirmation; module integer expression calls improve71.4732to9.4197 and68.2437to8.9077 respectively. Campaign absolute times are not pooled. Slower controls are retained in the full table and evidence; shared-host variation limits interpretation of small differences.
+
+Release and focused Debug each pass five fixtures/2072QUnit assertions; Debug native runners pass4003/5668. Six additional Release metadata fixtures pass18cases/1903assertions plus one raw OK fixture. Final preparation verifies36artifacts,144child exits and4698reference outputs per variant. All391Release qlib aliases and hashes are restored after Debug. New coverage includes full-width integer arithmetic, special floats, inherited overloads, ordinary/invoke calls, deleted/throwing/unknown receivers, imported classes and C++ exact-class objects owned by another Program. A native-dispatch cache fixture explicitly disables this new inlining so its call remains present.
+
+Each target has two override branches plus ordinary fallback in every layout. An untimed diagnostic validates20532misses/41076hits and555reference outputs per local/module/layout execution. Direct/final control LLVM bodies remain identical. Runtime executable sections grow17328bytes; the default standalone and module artifacts each grow220bytes. Static counts do not identify the cause of small control timing changes. Early qualification and Debug-preflight failures, fixes and receipts are preserved.
+
+See the [complete evidence](results-polymorphic-scalar-macos-arm64.json) and [62-item audit](audit-polymorphic-scalar.md). Next refresh optimized branch/develop/Java measurements, then investigate sharing receiver classification and hoisting immutable target metadata out of loop calls. Live validity, receiver identity, Program boundaries, ownership and reflection behavior remain required. No universal Java parity or global performance ceiling is established.

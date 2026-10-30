@@ -42,6 +42,7 @@
 #include <functional>
 #include <memory>
 #include <list>
+#include <map>
 #include <mutex>
 #include <string>
 #include <stdexcept>
@@ -519,6 +520,9 @@ struct AOTSlotMap {
     std::unordered_map<const void*, int32_t> lv_path_slots;  //!< QoreIRLValuePathInstruction* -> slot
     std::unordered_set<uint64_t> dot_eval_direct_bits;  //!< expr bits from DotEvalMethodDirect (classify as DOT_EVAL_TARGET)
     std::unordered_map<uint64_t, DotEvalDirectTarget> dot_eval_direct_targets; //!< expr bits -> IR-selected target
+    //! Additional compile-selected targets have no AST expression; their slots share the expression index space.
+    std::map<int32_t, DotEvalDirectTarget> additional_method_targets;
+    std::unordered_map<const AbstractQoreFunctionVariant*, int32_t> additional_method_slots;
     std::unordered_set<uint64_t> static_call_pre_evaluated_bits;  //!< CallStatic* expr bits whose args are IR operands
     std::unordered_map<uint64_t, QoreAOTCallRelocationTargetKind> call_relocation_kinds; //!< expr bits -> direct call relocation target kind
 
@@ -573,6 +577,7 @@ struct AOTSlotMap {
     }
 
     //! Get or assign a slot for an expression (NaN-boxed QoreValue bits)
+    //! @throw std::length_error if another slot cannot fit in the signed context size
     int32_t getExprSlot(uint64_t expr_bits, const std::string& source = std::string()) {
         if (!source.empty() && expr_slot_sources.find(expr_bits) == expr_slot_sources.end()) {
             expr_slot_sources[expr_bits] = source;
@@ -581,9 +586,31 @@ struct AOTSlotMap {
         if (it != expr_slots.end()) {
             return it->second;
         }
-        int32_t slot = static_cast<int32_t>(expr_slots.size());
+        int32_t slot = allocateExprSlot();
         expr_slots[expr_bits] = slot;
         return slot;
+    }
+
+    //! Get or assign a load-bound exact method target without fabricating an expression.
+    //! @param target complete class/method/variant identity, owned by the compilation
+    //! @return its index in the expression and call-target tables
+    //! @throw std::length_error if another slot cannot fit in the signed context size
+    int32_t getAdditionalMethodSlot(const DotEvalDirectTarget& target) {
+        assert(target.qc && target.method && target.variant && !target.pseudo);
+        auto it = additional_method_slots.find(target.variant);
+        if (it != additional_method_slots.end()) {
+            return it->second;
+        }
+        int32_t slot = allocateExprSlot();
+        additional_method_targets.emplace(slot, target);
+        additional_method_slots.emplace(target.variant, slot);
+        return slot;
+    }
+
+    //! Return the expression-table bound, including targets without AST expressions.
+    //! @return the required size of the expression and call-target tables
+    int32_t getNumExprSlots() const {
+        return next_expr_slot;
     }
 
     //! Get or assign a slot for a QoreIRLValuePathInstruction*
@@ -610,6 +637,14 @@ struct AOTSlotMap {
 
 private:
     int32_t next_local_slot = 0;
+    int32_t next_expr_slot = 0;
+
+    int32_t allocateExprSlot() {
+        if (next_expr_slot == INT32_MAX) {
+            throw std::length_error("AOT expression slot table exceeds the context size limit");
+        }
+        return next_expr_slot++;
+    }
 };
 
 //! AOT function pointer type: takes QoreAOTContext* and ExceptionSink*

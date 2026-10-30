@@ -2560,6 +2560,19 @@ int qore_rt_object_has_exact_aot_target_class(QoreAOTContext* ctx, int32_t slot,
 int qore_rt_object_has_exact_aot_target_class_only(QoreAOTContext* ctx, int32_t slot,
         uint64_t value);
 
+//! Check a load-bound exact receiver alternative to a resolved method call.
+/** @param ctx active AOT context owning both target slots
+    @param base_slot original resolved call target
+    @param target_slot compile-proven scalar override target
+    @param value borrowed boxed receiver
+    @return true for a live, untagged exact receiver with a different class ID
+    whose object and method execute in the context's Program; false retains
+    ordinary dispatch, including same-ID imported class behavior
+    @note Neither the receiver nor the target metadata is retained or modified.
+*/
+int qore_rt_object_has_exact_aot_override_v1(QoreAOTContext* ctx, int32_t base_slot,
+        int32_t target_slot, uint64_t value);
+
 //! AOT fast direct call with consumed caller temp cleanup slots.
 uint64_t qore_rt_call_direct_aot_consume_args(QoreAOTContext* ctx, int32_t slot,
     uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);

@@ -78,6 +78,58 @@ static void checkLocalSlots() {
     assert(slots.getLocalSlot(&keys[0]) == 129);
 }
 
+static void checkAdditionalMethodTargets(QoreValue receiver, QoreValue base) {
+    const QoreClass* qc = receiver.get<const QoreObject>()->getClass();
+    const QoreMethod* method = qc->findMethod("next");
+    const auto* variant = qore_method_private::get(*method)->getFunction()->first();
+    const QoreClass* base_qc = base.get<const QoreObject>()->getClass();
+    const QoreMethod* base_method = base_qc->findMethod("next");
+    const auto* base_variant = qore_method_private::get(*base_method)->getFunction()->first();
+    AOTSlotMap slots;
+    assert(slots.getExprSlot(QoreValue().rawBits()) == 0);
+    int32_t target_slot = slots.getAdditionalMethodSlot({qc, method, variant, nullptr, false});
+    assert(target_slot == 1);
+    assert(slots.getExprSlot(QoreValue(int64_t{1}).rawBits()) == 2);
+    assert(slots.getAdditionalMethodSlot({qc, method, variant, nullptr, false}) == target_slot);
+    AOTSlotMap copy = slots;
+    assert(copy.getAdditionalMethodSlot({base_qc, base_method, base_variant, nullptr, false}) == 3);
+    assert(copy.getExprSlot(QoreValue(int64_t{2}).rawBits()) == 4);
+    assert(copy.getNumExprSlots() == 5 && slots.getNumExprSlots() == 3);
+    assert(slots.getExprSlot(QoreValue(int64_t{2}).rawBits()) == 3);
+
+    QoreAOTContext ctx;
+    ctx.pgm = receiver.get<const QoreObject>()->getProgram();
+    ctx.num_exprs = 2;
+    ctx.allocate();
+    ctx.call_targets[0].qc = base_qc;
+    ctx.call_targets[0].variant = base_variant;
+    ctx.call_targets[1].qc = qc;
+    ctx.call_targets[1].method = method;
+    ctx.call_targets[1].variant = variant;
+    assert(qc->getID() != base_qc->getID());
+    assert(qore_rt_object_has_exact_aot_override_v1(&ctx, 0, 1, receiver.rawBits()));
+    assert(!qore_rt_object_has_exact_aot_override_v1(&ctx, 0, 1, base.rawBits()));
+    assert(!qore_rt_object_has_exact_aot_override_v1(&ctx, 0, 1, QoreValue().rawBits()));
+    assert(!qore_rt_object_has_exact_aot_override_v1(nullptr, 0, 1, receiver.rawBits()));
+    assert(!qore_rt_object_has_exact_aot_override_v1(&ctx, -1, 1, receiver.rawBits()));
+    assert(!qore_rt_object_has_exact_aot_override_v1(&ctx, 0, 2, receiver.rawBits()));
+    ExceptionSink xsink;
+    QoreProgramHelper foreign(PO_MODERN, xsink);
+    assert(!xsink);
+    // The public C++ constructor permits the exact class with a different owning Program.
+    ReferenceHolder<QoreObject> foreign_object(new QoreObject(qc, *foreign), &xsink);
+    assert(!qore_rt_object_has_exact_aot_override_v1(&ctx, 0, 1, QoreValue(*foreign_object).rawBits()));
+    QoreProgram* saved_program = ctx.pgm;
+    ctx.pgm = *foreign;
+    assert(!qore_rt_object_has_exact_aot_override_v1(&ctx, 0, 1, receiver.rawBits()));
+    ctx.pgm = saved_program;
+    ctx.call_targets[0].qc = qc;
+    assert(!qore_rt_object_has_exact_aot_override_v1(&ctx, 0, 1, receiver.rawBits()));
+    ctx.call_targets[0].qc = base_qc;
+    ctx.call_targets[1].variant = nullptr;
+    assert(!qore_rt_object_has_exact_aot_override_v1(&ctx, 0, 1, receiver.rawBits()));
+}
+
 static uint64_t mismatchedNormalBody(QoreAOTContext*, ExceptionSink*) { return 0; }
 static uint64_t mismatchedReceiverEntry(int64_t, uint64_t, RuntimeConfig*, QoreAOTContext*, ExceptionSink*) {
     return 0;
@@ -615,6 +667,9 @@ static void checkMethodReceivers(QoreProgram* program, const char* caller_name) 
     ExceptionSink xsink;
     ValueHolder object(program->callFunction("makeMethodProbe", nullptr, &xsink), &xsink);
     assert(!xsink && object->getType() == NT_OBJECT);
+    ValueHolder base_object(program->callFunction("makeBaseMethodProbe", nullptr, &xsink), &xsink);
+    assert(!xsink && base_object->getType() == NT_OBJECT);
+    checkAdditionalMethodTargets(*object, *base_object);
     ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), &xsink);
     args->push(object->refSelf(), &xsink);
     assert(!xsink);

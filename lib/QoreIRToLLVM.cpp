@@ -11405,6 +11405,74 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
     fast_bb = builder->GetInsertBlock();
 
     builder->SetInsertPoint(fallback_bb);
+    struct ScalarOverrideResult {
+        llvm::BasicBlock* block;
+        llvm::Value* boxed;
+        llvm::Value* native;
+    };
+    std::vector<ScalarOverrideResult> scalar_overrides;
+    if (object_base && require_exact_object_class && nargs == 1 && aot_slots && batch_callees
+            && callee_info.scalar_overrides.size() <= 3
+            && !q_env_is_set("QORE_DISABLE_AOT_POLYMORPHIC_SCALAR_IMPORT")) {
+        for (const auto* variant : callee_info.scalar_overrides) {
+            auto found = findBatchCallee(variant);
+            if (found == batch_callees->end()) {
+                continue;
+            }
+            const auto& info = found->second;
+            if (!info.approach_b_eligible || !info.implicit_self_method
+                    || !info.context_independent_fast_entry || info.generic_specialized_fast_entry
+                    || info.return_kind != callee_info.return_kind
+                    || info.num_params != 1 || info.param_kinds != callee_info.param_kinds) {
+                continue;
+            }
+            llvm::Function* override_fn = module.getFunction(info.fast_name);
+            if (!override_fn) {
+                continue;
+            }
+            const auto* method_variant = static_cast<const MethodVariantBase*>(variant);
+            int32_t override_slot = const_cast<AOTSlotMap*>(aot_slots)->getAdditionalMethodSlot(
+                {variant->getClass(), method_variant->method(), variant, nullptr, false});
+            auto guard = module.getOrInsertFunction("qore_rt_object_has_exact_aot_override_v1",
+                llvm::FunctionType::get(i32_type, {ptr_type, i32_type, i32_type, i64_type}, false));
+            llvm::Value* matches = builder->CreateCall(guard,
+                {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot),
+                 llvm::ConstantInt::get(i32_type, override_slot), object_base});
+            matches = builder->CreateICmpNE(matches, llvm::ConstantInt::get(i32_type, 0));
+            if (fastEntryParamRejectsNothing(info, 0) && !boxed_args.empty() && boxed_args[0]
+                    && (raw_arg_ids.empty()
+                        || ((nanboxed_values.count(raw_arg_ids[0])
+                                || native_boxed_sources.count(raw_arg_ids[0]))
+                            && !fastEntryArgumentKnownNotNothing(raw_arg_ids[0])))) {
+                matches = builder->CreateAnd(matches, builder->CreateICmpNE(boxed_args[0],
+                    llvm::ConstantInt::get(i64_type, VAL_NOTHING)));
+            }
+            auto* body = llvm::BasicBlock::Create(ctx, "scalar_override", llvm_func);
+            auto* next = llvm::BasicBlock::Create(ctx, "scalar_override_miss", llvm_func);
+            builder->CreateCondBr(matches, body, next);
+            builder->SetInsertPoint(body);
+            std::vector<llvm::Value*> override_args{
+                getFastEntryCallArgument(info, 0, raw_args, raw_arg_ids, boxed_args, module),
+                aot_ctx_arg, xsink_arg};
+            AotInlineCallFrame override_frame = emitPushAotInlineCallFrame(
+                override_slot, info, inst, module, llvm_func);
+            bool override_nothrow = false;
+            llvm::Value* value = emitAOTImportedSummary(info, override_args, aot_ctx_arg,
+                module, override_fn, &override_nothrow);
+            if (!value) {
+                value = builder->CreateCall(override_fn, override_args);
+            }
+            endAotInlineCallFrame(override_frame, !override_nothrow, module);
+            llvm::Value* boxed = native_continuation ? llvm::ConstantInt::get(i64_type, VAL_NOTHING)
+                : (floating_method ? boxFloat(value) : boxIntInline(value));
+            if (has_arg_cleanups) {
+                emitArgCleanupClear(module, arg_cleanups, nargs, override_nothrow);
+            }
+            scalar_overrides.push_back({builder->GetInsertBlock(), boxed, value});
+            builder->CreateBr(merge_bb);
+            builder->SetInsertPoint(next);
+        }
+    }
     llvm::BasicBlock* native_bb = nullptr;
     llvm::Value* native_result = nullptr;
     llvm::Value* native_boxed_result = nullptr;
@@ -11561,6 +11629,9 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
     llvm::PHINode* result = builder->CreatePHI(fast_result->getType(), 2, "aot_batch_result");
     result->addIncoming(fast_result, fast_bb);
     result->addIncoming(fallback_result, fallback_bb);
+    for (const auto& alternative : scalar_overrides) {
+        result->addIncoming(alternative.boxed, alternative.block);
+    }
     if (native_bb) {
         result->addIncoming(native_boxed_result, native_bb);
         // The generic invoke only guarantees its own edge is sink-clean.
@@ -11577,6 +11648,10 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
         payload->addIncoming(exact_native_result, fast_bb);
         payload->addIncoming(native_result, native_bb);
         payload->addIncoming(llvm::Constant::getNullValue(method_native_type), fallback_bb);
+        for (const auto& alternative : scalar_overrides) {
+            handled->addIncoming(llvm::ConstantInt::getTrue(ctx), alternative.block);
+            payload->addIncoming(alternative.native, alternative.block);
+        }
         native_funcref_results.emplace(inst->result.id, NativeFunctionRefResult{handled, payload});
     }
     (void)inst;

@@ -538,6 +538,9 @@ struct BatchCalleeInfo {
     AOTScalarLeafInfo scalar_leaf;       //!< Importable pure scalar body summary
     AOTIntExpressionInfo int_expression; //!< Importable bounded pure native-int/bool expression
     AOTFloatExpressionInfo float_expression; //!< Importable bounded pure native-float expression
+    //! Bounded, compile-time-only exact receiver alternatives with the same unary scalar ABI.
+    //! Every target is independently type-resolved and has a pure body summary in this compilation.
+    std::vector<const AbstractQoreFunctionVariant*> scalar_overrides;
     AOTFixedHashRemapInfo fixed_hash_remap; //!< Importable two-key hash remap body
     AOTStringOpInfo string_op;            //!< Importable encoding-aware string operation
     AOTStringExpressionInfo string_expression; //!< Importable bounded typed string expression

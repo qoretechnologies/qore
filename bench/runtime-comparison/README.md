@@ -1612,3 +1612,6 @@ The [matched forwarding comparison](RESULTS.md#matched-forwarding-comparison-wit
 
 
 [Native binary call arithmetic](RESULTS.md#native-binary-call-arithmetic-2026-10-30) removes reboxing between eligible single-use scalar method calls and typed arithmetic. Common-case, allocation-stress and all broader control results are reported separately, including integer stack-frame growth. See the [audit](audit-native-binary-call.md).
+
+
+[Bounded polymorphic scalar calls](RESULTS.md#bounded-polymorphic-scalar-calls-2026-10-30) imports known pure override bodies behind load-bound receiver/Program checks. Both optimized campaigns and all control costs are recorded with the [audit](audit-polymorphic-scalar.md).

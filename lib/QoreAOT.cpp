@@ -5237,7 +5237,7 @@ static bool compileModuleInitClosureAsInitFunc(const QoreValue& init_c, const ch
     cif.llvm_symbol = ir_func->name;
     cif.num_locals = static_cast<int>(slots.local_slots.size());
     cif.num_globals = static_cast<int>(slots.global_slots.size());
-    cif.num_exprs = static_cast<int>(slots.expr_slots.size());
+    cif.num_exprs = slots.getNumExprSlots();
     cif.num_regex_cases = static_cast<int>(slots.regex_case_slots.size());
     cif.num_lv_path_insts = static_cast<int>(slots.lv_path_slots.size());
     extractAOTSlotIdentities(*ir_func, slots, uvb, cif.slot_ids, const_reverse_map, pgm);
@@ -13353,6 +13353,106 @@ const QoreProgramLocation* qore_ir_get_body_location(const QoreIRFunction& func)
     return first;
 }
 
+// Index only small, locally compiled scalar method families. Capping buckets before
+// comparing hierarchies keeps this scan linear even for generated classes sharing a name.
+static bool collectAOTScalarOverrides(
+        const std::vector<std::pair<const AbstractQoreFunctionVariant*,
+            const QoreIRFunction*>>& functions,
+        std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& callees) {
+    using Variant = const AbstractQoreFunctionVariant*;
+    struct Bucket {
+        std::vector<Variant> variants;
+        bool overflow = false;
+    };
+    std::unordered_map<std::string, Bucket> buckets;
+    size_t count = 0;
+    for (const auto& [variant, func] : functions) {
+        if (++count % 10 == 0 && qore_check_cancel(nullptr, "AOT scalar override indexing")) {
+            return false;
+        }
+        auto found = callees.find(variant);
+        if (!func || found == callees.end()) {
+            continue;
+        }
+        auto& info = found->second;
+        info.scalar_overrides.clear();
+        const auto* mv = dynamic_cast<const MethodVariantBase*>(variant);
+        // Context independence is finalized after body summaries. Index the
+        // candidates now and require that final proof again when lowering.
+        if (!mv || !info.approach_b_eligible || !info.implicit_self_method
+                || info.generic_specialized_fast_entry
+                || info.preloaded_fast_entry || info.preloaded_body_contract
+                || info.num_params != 1 || info.param_kinds.size() != 1
+                || mv->getAccess() != Public || mv->isAbstract()
+                || !mv->isStaticallyFastMethodCallEligible()) {
+            continue;
+        }
+        const QoreMethod* method = mv->method();
+        if (method->isStatic() || method->getAccess() != Public
+                || method->getClass()->hasTypeParameters()
+                || variant->getSignature()->needsTypeParameterSubstitution()) {
+            continue;
+        }
+        bool floating = info.return_kind == BatchCalleeReturnKind::NativeFloat;
+        const QoreTypeInfo* type = floating ? floatTypeInfo : bigIntTypeInfo;
+        if ((!floating && info.return_kind != BatchCalleeReturnKind::NativeInt)
+                || info.param_kinds[0] != (floating
+                    ? BatchCalleeParamKind::NativeFloat : BatchCalleeParamKind::NativeInt)
+                || variant->getSignature()->getParamTypeInfo(0) != type
+                || variant->getReturnTypeInfo() != type
+                || (info.scalar_leaf.kind == AOTScalarLeafKind::None
+                    && !(floating ? static_cast<bool>(info.float_expression)
+                        : static_cast<bool>(info.int_expression)))) {
+            continue;
+        }
+        // A single locally declared variant can still inherit overloads. Resolve
+        // with the same exact scalar type that the generated branch accepts.
+        ExceptionSink xsink;
+        auto* mf = qore_method_private::get(*method)->getFunction();
+        const auto* selected = mf->runtimeFindVariant(&xsink, type_vec_t{type}, nullptr);
+        if (xsink || selected != variant) {
+            xsink.clear();
+            continue;
+        }
+        auto& bucket = buckets[method->getNameStr() + (floating ? "\nfloat" : "\nint")];
+        if (!bucket.overflow) {
+            if (bucket.variants.size() == 8) {
+                bucket.variants.clear();
+                bucket.overflow = true;
+            } else {
+                bucket.variants.push_back(variant);
+            }
+        }
+    }
+    for (auto& [key, bucket] : buckets) {
+        if (++count % 100 == 0 && qore_check_cancel(nullptr, "AOT scalar override families")) {
+            return false;
+        }
+        std::sort(bucket.variants.begin(), bucket.variants.end(), [](Variant a, Variant b) {
+            return a->getClass()->getNamespacePath(true) < b->getClass()->getNamespacePath(true);
+        });
+        for (Variant base : bucket.variants) {
+            auto& alternatives = callees.at(base).scalar_overrides;
+            for (Variant child : bucket.variants) {
+                if (++count % 10 == 0 && qore_check_cancel(nullptr, "AOT scalar override hierarchy")) {
+                    return false;
+                }
+                if (base == child || base->getClass()->getID() == child->getClass()->getID()) {
+                    continue;
+                }
+                ClassAccess access = Public;
+                if (child->getClass()->inHierarchyStrict(*base->getClass(), access) && access == Public) {
+                    alternatives.push_back(child);
+                }
+            }
+            if (alternatives.size() > 3) {
+                alternatives.clear();
+            }
+        }
+    }
+    return true;
+}
+
 bool qore_ir_resolve_batch_function_summaries(
         const std::vector<std::pair<const AbstractQoreFunctionVariant*,
             const QoreIRFunction*>>& functions,
@@ -15014,6 +15114,10 @@ bool qore_ir_resolve_batch_function_summaries(
     }
     if (!qore_aot_collect_float_expression_summaries(
             functions, batch_callees, check_count)) {
+        return false;
+    }
+    if (!q_env_is_set("QORE_DISABLE_AOT_POLYMORPHIC_SCALAR_IMPORT")
+            && !collectAOTScalarOverrides(functions, batch_callees)) {
         return false;
     }
     return !collect_body_dependency_provenance
@@ -19076,7 +19180,7 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
         cf.llvm_symbol = llvm_symbol;
         cf.num_locals = static_cast<int>(slots.local_slots.size());
         cf.num_globals = static_cast<int>(slots.global_slots.size());
-        cf.num_exprs = static_cast<int>(slots.expr_slots.size());
+        cf.num_exprs = slots.getNumExprSlots();
         cf.num_regex_cases = static_cast<int>(slots.regex_case_slots.size());
         cf.num_lv_path_insts = static_cast<int>(slots.lv_path_slots.size());
         cf.const_reverse_map_exclude_fqns =
@@ -22061,7 +22165,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     cf.llvm_symbol = ir_func->name;
                     cf.num_locals = static_cast<int>(slots.local_slots.size());
                     cf.num_globals = static_cast<int>(slots.global_slots.size());
-                    cf.num_exprs = static_cast<int>(slots.expr_slots.size());
+                    cf.num_exprs = slots.getNumExprSlots();
                     cf.num_regex_cases = static_cast<int>(slots.regex_case_slots.size());
                     cf.num_lv_path_insts = static_cast<int>(slots.lv_path_slots.size());
                     cf.const_reverse_map_exclude_fqns = pending_init_constant_fqn_list;
@@ -22099,7 +22203,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     }
                     printd(2, "AOT: compiled function '%s' to LLVM IR (locals=%d, globals=%d, exprs=%d)\n",
                         variant_key.c_str(), (int)slots.local_slots.size(), (int)slots.global_slots.size(),
-                        (int)slots.expr_slots.size());
+                        slots.getNumExprSlots());
                 } else {
                     printd(2, "AOT: LLVM lowering failed for '%s': %s\n", variant_key.c_str(), llvm_error.c_str());
                     if (q_env_is_set("QORE_AOT_DEBUG")) {
@@ -22752,7 +22856,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         cf.llvm_symbol = ir_func->name;
                         cf.num_locals = static_cast<int>(slots.local_slots.size());
                         cf.num_globals = static_cast<int>(slots.global_slots.size());
-                        cf.num_exprs = static_cast<int>(slots.expr_slots.size());
+                        cf.num_exprs = slots.getNumExprSlots();
                         cf.num_regex_cases = static_cast<int>(slots.regex_case_slots.size());
                         cf.num_lv_path_insts = static_cast<int>(slots.lv_path_slots.size());
                         cf.const_reverse_map_exclude_fqns = pending_init_constant_fqn_list;
@@ -22791,11 +22895,11 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         if (q_env_is_set("QORE_AOT_DEBUG")) {
                             fprintf(stderr, "AOT: compiled method '%s' to LLVM IR (locals=%d, globals=%d, exprs=%d)\n",
                                 variant_key.c_str(), (int)slots.local_slots.size(),
-                                (int)slots.global_slots.size(), (int)slots.expr_slots.size());
+                                (int)slots.global_slots.size(), slots.getNumExprSlots());
                         }
                         printd(2, "AOT: compiled method '%s' to LLVM IR (locals=%d, globals=%d, exprs=%d)\n",
                             variant_key.c_str(), (int)slots.local_slots.size(),
-                            (int)slots.global_slots.size(), (int)slots.expr_slots.size());
+                            (int)slots.global_slots.size(), slots.getNumExprSlots());
                     } else {
                         printd(2, "AOT: LLVM lowering failed for '%s': %s\n",
                             variant_key.c_str(), llvm_error.c_str());
@@ -22977,7 +23081,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             cif.llvm_symbol = ir_func->name;
             cif.num_locals = static_cast<int>(slots.local_slots.size());
             cif.num_globals = static_cast<int>(slots.global_slots.size());
-            cif.num_exprs = static_cast<int>(slots.expr_slots.size());
+            cif.num_exprs = slots.getNumExprSlots();
             cif.num_regex_cases = static_cast<int>(slots.regex_case_slots.size());
             cif.num_lv_path_insts = static_cast<int>(slots.lv_path_slots.size());
             cif.const_reverse_map_exclude_direct_fqn = direct_exclude_fqn;
@@ -23066,7 +23170,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 fprintf(stderr, "AOT: compiled init function '%s' (globals=%d, exprs=%d"
                     ", %zu helpers)\n", init_name.c_str(),
                     (int)slots.global_slots.size(),
-                    (int)slots.expr_slots.size(),
+                    slots.getNumExprSlots(),
                     outlined_helpers.size());
             }
         } else {
@@ -25110,7 +25214,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
                     cf.llvm_symbol = ir_func->name;
                     cf.num_locals = static_cast<int>(slots.local_slots.size());
                     cf.num_globals = static_cast<int>(slots.global_slots.size());
-                    cf.num_exprs = static_cast<int>(slots.expr_slots.size());
+                    cf.num_exprs = slots.getNumExprSlots();
                     cf.num_regex_cases = static_cast<int>(slots.regex_case_slots.size());
                     cf.num_lv_path_insts = static_cast<int>(slots.lv_path_slots.size());
                     // Extract slot identities (no uvb for toplevel)
@@ -25143,7 +25247,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
                     toplevel_ok = true;
                     printd(2, "AOT: compiled _toplevel to LLVM IR (locals=%d, globals=%d, exprs=%d)\n",
                         (int)slots.local_slots.size(), (int)slots.global_slots.size(),
-                        (int)slots.expr_slots.size());
+                        slots.getNumExprSlots());
                 } else {
                     if (q_env_is_set("QORE_AOT_DEBUG")) {
                         fprintf(stderr, "AOT: LLVM lowering failed for _toplevel: %s\n",
@@ -36316,6 +36420,18 @@ bool serializeExprTreeToBlob(QoreValue v, const AOTSlotMap& slots, std::vector<u
     Uses AOTExprKind::UNSUPPORTED only as a compile-time sentinel; the serializer
     rejects it before writing any fallback marker.
 */
+static AOTExprSlotId classifyAdditionalMethodTarget(const AOTSlotMap::DotEvalDirectTarget& target) {
+    AOTExprSlotId id;
+    id.kind = AOTExprKind::DOT_EVAL_TARGET;
+    id.ref1 = qore_aot_encode_class_ref(target.qc);
+    id.ref2 = target.method->getName();
+    id.ref2.append("\n");
+    id.ref2.append(qore_aot_encode_class_ref(target.variant->getClass()));
+    id.ref2.append("\n");
+    id.ref2.append(target.variant->getSignature()->getSignatureText());
+    return id;
+}
+
 static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         const AOTConstantReverseMap* const_reverse_map) {
     AOTExprSlotId id;
@@ -37724,7 +37840,7 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
     // (e.g. IR optimisation passes) may remove entries without compacting.
     // Resize to max(slot)+1 so indexed writes never go out of bounds.
     {
-        int32_t max_slot = -1;
+        int32_t max_slot = slots.getNumExprSlots() - 1;
         for (auto& [bits, slot] : slots.expr_slots) {
             if (slot > max_slot) {
                 max_slot = slot;
@@ -37807,6 +37923,17 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
                 out.has_closure_exprs = true;
             }
         }
+    }
+
+    size_t additional_count = 0;
+    for (const auto& [slot, target] : slots.additional_method_targets) {
+        if (++additional_count % 100 == 0
+                && qore_check_cancel(nullptr, "AOT additional method target serialization")) {
+            out.has_unsupported_exprs = true;
+            out.unsupported_expr_details.push_back("cancelled while serializing additional method targets");
+            return;
+        }
+        out.exprs.at(slot) = classifyAdditionalMethodTarget(target);
     }
 
     std::unordered_map<const void*, uint32_t> body_local_ordinals;
