@@ -56,7 +56,8 @@ module DebugProgramControl {
       variant (<a href="https://github.com/qoretechnologies/qore/issues/5558">issue 5558</a>)
     - new commands of stopped threads: \c thread/variable/get and \c thread/variable/set read and set the values of
       variables and their elements, keys and members, also private ones, by their paths, and \c thread/evaluate
-      (with \c serialize, also the whole value in \c serialized)
+      (with \c serialize, also the whole value in \c serialized); expressions can refer to all code of the program
+      (see @ref Qore::ProgramControl::createEvalProgram() "ProgramControl::createEvalProgram()")
       evaluates expressions with the variables of a frame (see
       @ref DebugProgramControl::DebugProgramControl::evaluateExpression() "evaluateExpression()")
     - added @ref DebugProgramControl::DebugProgramControl::captureOutput() "captureOutput()", which sends the output of
@@ -111,8 +112,19 @@ public namespace DebugProgramControl {
             #! number of frames related to DebugProgramControl library when handleInterrupt() is invoked
             const frameOffset = 2;
 
-            #! the name of the function that an expression is evaluated in; see evaluateExpression()
+            #! the prefix of the names of the functions that expressions are evaluated in; see evaluateExpression()
             const EvalFunction = "qore_debug_evaluate";
+            #! the maximum number of expressions that are kept compiled for a Program; see evaluateExpression()
+            const MaxEvalFunctions = 256;
+
+            #! the Programs that expressions are evaluated in, by the ID of the debugged Program
+            /** each with the \c program, the names of the compiled \c functions by expression and variable names,
+                the number \c n of functions, and the number of evaluations that are running in the program
+                (\c calls); see evaluateExpression()
+            */
+            hash<string, hash<auto>> evalPrograms = {};
+            #! serializes the access to evalPrograms and the parsing of expressions
+            Mutex evalLock();
             #! the name of the parameter of the function that an expression is evaluated in
             const EvalVars = "qore_debug_vars";
         }
@@ -1203,21 +1215,26 @@ public namespace DebugProgramControl {
         }
 
         #! Evaluates an expression with the given local variables and the global variables of a Program
-        /** The expression is evaluated in a new Program with @ref Qore::PO_LOCKDOWN "PO_LOCKDOWN", which cannot access
-            the file system, the network or processes, as a function whose local variables are the global variables
-            of the Program and the given local variables, which hide global variables with the same names.  Values are
+        /** The expression is evaluated in a Program with @ref Qore::PO_LOCKDOWN "PO_LOCKDOWN", which cannot access
+            the file system, the network or processes, and which inherits all code of the debugged Program (see
+            @ref Qore::ProgramControl::createEvalProgram() "ProgramControl::createEvalProgram()"), so the expression can
+            refer to its functions, classes, constants and other code; functions and methods run in the debugged
+            Program.  The expression is the body of a function whose local variables are the global variables of the
+            Program and the given local variables, which hide global variables with the same names.  Values are
             copied into the variables, so assigning a variable in the expression does not change the program's
-            variable; the members of objects are changed in the objects.  Methods of objects can be called; the
-            functions, classes and constants of the program cannot be referred to by name, as they are not in the
-            Program of the expression.
+            variable; the members of objects are changed in the objects.
 
-            @param pgm the Program whose global variables can be used in the expression
+            The Program and the function of an expression are kept, so an expression that is evaluated again, such as
+            the condition of a breakpoint, is not parsed again; code that the debugged Program parses later is not
+            available.
+
+            @param pgm the Program whose code and global variables can be used in the expression
             @param expr the expression
             @param lv the local variables, as returned by @ref Qore::get_local_vars() "get_local_vars()"
 
             @return the value of the expression
 
-            @throw DEBUG-EVALUATE-ERROR the expression cannot be parsed
+            @throw DEBUG-EVALUATE-ERROR the expression cannot be parsed, or the Program is being parsed
         */
         private auto evaluateExpression(ProgramControl pgm, string expr, *hash<auto> lv) {
             hash<auto> vars = {};
@@ -1231,18 +1248,71 @@ public namespace DebugProgramControl {
                     vars{i.key} = i.value.value;
                 }
             }
-            string code = sprintf("auto sub %s(hash<auto> %s) {\n", EvalFunction, EvalVars);
-            foreach string name in (keys vars) {
-                code += sprintf("auto %s = %s{%y};\n", name, EvalVars, name);
+            list<string> names = sort(keys vars);
+            # the function of an expression depends on the names of the variables, which are identifiers, so the first
+            # ":" ends them
+            string key = names.join(",") + ":" + expr;
+            Program epgm;
+            string fname;
+            Counter calls;
+            {
+                evalLock.lock();
+                on_exit evalLock.unlock();
+                string id = string(pgm.getProgramId());
+                *string f = evalPrograms{id}.functions{key};
+                # a Program is parsed only when no evaluation runs in it; another thread can evaluate an expression,
+                # which can wait for a thread that is stopped
+                if (!evalPrograms{id} || (!f && (evalPrograms{id}.n >= MaxEvalFunctions
+                    || evalPrograms{id}.calls.getCount()))) {
+                    pruneEvalPrograms();
+                    try {
+                        evalPrograms{id} = {
+                            "program": pgm.createEvalProgram(PO_NEW_STYLE | PO_LOCKDOWN | PO_ALLOW_REPARSE),
+                            "functions": {},
+                            "n": 0,
+                            "calls": new Counter(),
+                        };
+                    } catch (hash<ExceptionInfo> ex) {
+                        throw "DEBUG-EVALUATE-ERROR", ex.desc;
+                    }
+                    f = NOTHING;
+                }
+                epgm = evalPrograms{id}.program;
+                calls = evalPrograms{id}.calls;
+                if (f) {
+                    fname = f;
+                } else {
+                    fname = sprintf("%s_%d", EvalFunction, evalPrograms{id}.n + 1);
+                    string code = sprintf("auto sub %s(hash<auto> %s) {\n", fname, EvalVars);
+                    foreach string name in (names) {
+                        code += sprintf("auto %s = %s{%y};\n", name, EvalVars, name);
+                    }
+                    code += sprintf("return (\n%s\n);\n}\n", expr);
+                    try {
+                        epgm.parse(code, "<expression>", WARN_NONE);
+                    } catch (hash<ExceptionInfo> ex) {
+                        throw "DEBUG-EVALUATE-ERROR", ex.desc;
+                    }
+                    evalPrograms{id}.functions{key} = fname;
+                    ++evalPrograms{id}.n;
+                }
+                # the evaluation runs; no expression is parsed in the Program until it has ended
+                calls.inc();
             }
-            code += sprintf("return (\n%s\n);\n}\n", expr);
-            Program epgm(PO_NEW_STYLE | PO_LOCKDOWN);
-            try {
-                epgm.parse(code, "<expression>", WARN_NONE);
-            } catch (hash<ExceptionInfo> ex) {
-                throw "DEBUG-EVALUATE-ERROR", ex.desc;
+            on_exit calls.dec();
+            return epgm.callFunction(fname, vars);
+        }
+
+        #! Removes the Programs of expressions whose debugged Programs are no longer debugged; evalLock must be held
+        /** A Program of expressions keeps the code of the debugged Program
+        */
+        private:internal pruneEvalPrograms() {
+            hash<string, bool> debugged = map {$1.getProgramId(): True}, getAllPrograms();
+            foreach string id in (keys evalPrograms) {
+                if (!debugged{id}) {
+                    remove evalPrograms{id};
+                }
             }
-            return epgm.callFunction(EvalFunction, vars);
         }
 
         private *hash<auto> handleInterrupt(string func, ProgramControl pgm, reference runState, reference runToStatementId, *int statementId, *string refName, *reference refValue, *int breakpointId, *hash<auto> except) {

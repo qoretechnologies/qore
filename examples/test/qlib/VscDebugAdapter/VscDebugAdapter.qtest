@@ -1149,6 +1149,11 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         assertTrue(r.success, r.message);
         assertEq("", r.body.result);
 
+        # the code of the program: a function, and a class whose private member is read by its method
+        r = evaluate(dap, tid, "work(n) + new Account().getBalance()", "repl");
+        assertTrue(r.success, r.message);
+        assertEq("110", r.body.result);
+
         # negative: a syntax error, an unknown variable, and code that the expressions may not run
         r = evaluate(dap, tid, "n +");
         assertFalse(r.success);

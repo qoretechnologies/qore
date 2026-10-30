@@ -964,7 +964,7 @@ QoreNamespaceList::QoreNamespaceList(const QoreNamespaceList& old, const QorePar
     nsmap_t::iterator last = nsmap.begin();
     for (nsmap_t::const_iterator i = old.nsmap.begin(), e = old.nsmap.end(); i != e; ++i) {
         // issue #3504: do not copy namespaces if API should not be imported
-        if (!qore_ns_private::isPublic(*i->second)
+        if ((!qore_ns_private::isPublic(*i->second) && !q_inherit_all_user_code)
             || (skip_builtin && i->second->priv->builtin)
             || (skip_user && !i->second->priv->builtin)) {
             continue;

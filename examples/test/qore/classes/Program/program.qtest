@@ -221,6 +221,7 @@ class ProgramTest inherits QUnit::Test {
         addTestCase("var test", \varTest());
         addTestCase("Program info test", \programInfoTest());
 	    addTestCase("Find runtime function test", \findRuntimeTest());
+        addTestCase("a failed parse with PO_ALLOW_REPARSE", \reparseErrorTest());
     	set_return_value(main());
     }
 
@@ -1055,5 +1056,38 @@ class Complete inherits AbstractBase { string get() { return \"complete\"; } }",
         } catch (hash<ExceptionInfo> ex) {
             printf("%s\n", get_exception_string(ex));
         }
+    }
+
+    # after a failed parse, a Program with PO_ALLOW_REPARSE is in its committed state and is used at runtime
+    reparseErrorTest() {
+        Program p(PO_NEW_STYLE | PO_ALLOW_REPARSE);
+        p.parse("auto sub f1() { return 1; }", "f1");
+        assertEq(1, p.callFunction("f1"));
+        # a syntax error and an error resolving a name
+        assertThrows("PARSE-EXCEPTION", \p.parse(), ("auto sub f2() { return (1 +); }", "f2"));
+        assertEq(1, p.callFunction("f1"));
+        assertThrows("PARSE-EXCEPTION", \p.parse(), ("auto sub f3() { return no_such_function(); }", "f3"));
+        assertEq(1, p.callFunction("f1"));
+        # the failed functions do not exist
+        assertThrows("NO-FUNCTION", \p.callFunction(), ("f2",));
+        p.parse("auto sub f4() { return 4; }", "f4");
+        assertEq(4, p.callFunction("f4"));
+
+        # the top-level local variables of the parent are not visible to the code of a child Program, also when it
+        # is parsed again
+        Program parent(PO_NEW_STYLE | PO_ALLOW_REPARSE, True);
+        parent.parse("int x = 1;
+string sub child_parse() {
+    Program child(PO_NEW_STYLE | PO_ALLOW_REPARSE);
+    child.parse(\"int sub c1() { return 1; }\", \"c1\");
+    try {
+        child.parse(\"auto sub c2() { return x; }\", \"c2\");
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.desc;
+    }
+    return \"resolved\";
+}", "parent");
+        parent.run();
+        assertEq("cannot resolve bareword 'x' to any reachable object", parent.callFunction("child_parse"));
     }
 }

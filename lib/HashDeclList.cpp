@@ -90,7 +90,8 @@ HashDeclList::HashDeclList(const HashDeclList& old, const QoreParseOptions& po, 
     for (auto& i : old.hm) {
         //printd(5, "HashDeclList::HashDeclList() this: %p hd: %p '%s' po & PO_NO_INHERIT_USER_HASHDECLS: %s sys: %s pub: %s\n", this, i.second, i.second->getName(), po & PO_NO_INHERIT_USER_HASHDECLS ? "true": "false", i.second->isSystem() ? "true": "false", typed_hash_decl_private::get(*i.second)->isPublic() ? "true": "false");
         if (!i.second->isSystem()) {
-            if (po & PO_NO_INHERIT_USER_HASHDECLS || !typed_hash_decl_private::get(*i.second)->isPublic())
+            if (po & PO_NO_INHERIT_USER_HASHDECLS
+                || (!typed_hash_decl_private::get(*i.second)->isPublic() && !q_inherit_all_user_code))
                 continue;
         } else
             if (po & PO_NO_INHERIT_SYSTEM_HASHDECLS)

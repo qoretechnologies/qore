@@ -31,6 +31,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/QC_ProgramControl.h"
+#include "qore/intern/QC_Program.h"
 #include "qore/intern/QC_Breakpoint.h"
 #include "qore/intern/QC_TimeZone.h"
 #include "qore/intern/qore_program_private.h"
@@ -98,6 +99,59 @@ ProgramControl::destructor() {
    printd(5, "ProgramControl::destructor() pgm: %p, pgmid: " QLLD ", self: %p\n", p, (int64)p->getProgramId(), self);
    // the object holds its own reference to the Program
    p->deref(xsink);
+}
+
+//! Creates a Program whose code can refer to all code of this Program, for evaluating expressions in a debugger
+/** The new Program inherits all user code of this Program: its functions, classes, constants, hashdecls, enums,
+    typedefs, namespaces and global variables, also those that are not public, which a Program created with
+    @ref Qore::Program::constructor() "Program::constructor()" does not inherit.  Functions and methods run in this
+    Program, classes are the same classes, so the objects of this Program can be used, and global variables are
+    shared.  This Program is not changed; code that is added to it later is not inherited.
+
+    @param parse_options the parse options of the new Program; the restrictions of this Program apply as well;
+    @ref Qore::PO_ALLOW_REPARSE "PO_ALLOW_REPARSE" is kept also when this Program does not have it, as it only
+    allows code to be parsed in the new Program more than once
+
+    @return the new Program
+
+    @par Example:
+    @code{.py}
+Program pgm = pc.createEvalProgram(PO_NEW_STYLE | PO_LOCKDOWN | PO_ALLOW_REPARSE);
+pgm.parse("auto sub eval() { return calculate(Limit); }", "eval");
+auto v = pgm.callFunction("eval");
+    @endcode
+
+    @throw PROGRAM-OPTION-ERROR the parse options contain options that can only be set by the system
+    @throw PROGRAM-ERROR this Program is being parsed
+
+    @since %Qore 3.0
+*/
+Program ProgramControl::createEvalProgram(softint parse_options = PO_DEFAULT) [flags=NAMED_ARGS] {
+    if (parse_options & PO_SYSTEM_OPS) {
+        return xsink->raiseException("PROGRAM-OPTION-ERROR", "parse options (0x" QLLX ") contain restricted "
+            "options that can only be set by the system", parse_options);
+    }
+    // the namespace of this Program is copied when the new Program is created
+    if (qore_program_private::get(*p)->parsing_in_progress) {
+        return xsink->raiseException("PROGRAM-ERROR", "the Program is currently undergoing parsing; its code "
+            "cannot be inherited");
+    }
+    QoreProgram* pgm;
+    {
+        InheritAllUserCodeHelper all_user_code;
+        pgm = new QoreProgram(p, parse_options);
+    }
+    // a child Program has only the positive options of its parent; this one only allows the new Program to be
+    // parsed again
+    if (parse_options & PO_ALLOW_REPARSE) {
+        qore_program_private::get(*pgm)->setParseOptionsIntern(PO_ALLOW_REPARSE);
+    }
+    // the code that creates the Program controls it, as for an independent Program
+    const QoreProgram* creator = getProgram();
+    if (creator) {
+        qore_program_private::setCreator(*pgm, *creator);
+    }
+    return new QoreObject(QC_PROGRAM, getProgram(), pgm);
 }
 
 //! Returns the current binary-or'ed parse option mask for the Program object

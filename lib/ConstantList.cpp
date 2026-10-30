@@ -883,8 +883,8 @@ ConstantList::ConstantList(const ConstantList& old, const QoreParseOptions& po, 
         assert(i->second->init);
         // only check copying criteria when copying a constant list in a namespace
         if (p.isNs()) {
-            // check the public flag
-            if (!i->second->pub)
+            // check the public flag; all constants are copied for a debugger
+            if (!i->second->pub && !q_inherit_all_user_code)
                 continue;
             if (po & PO_NO_INHERIT_USER_CONSTANTS && i->second->isUser())
                 continue;

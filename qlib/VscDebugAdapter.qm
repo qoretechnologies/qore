@@ -69,8 +69,9 @@ module VscDebugAdapter {
     Expressions are evaluated in a separate Program with @ref Qore::PO_LOCKDOWN "PO_LOCKDOWN", which cannot access
     the file system, the network or processes; the local variables of the frame and the global variables of the
     program are copied into variables of the expression, so an assignment in an expression does not change a variable
-    of the program, while the members of objects are changed in the objects.  Methods of objects can be called, but
-    the functions, classes and constants of the program cannot be referred to by name.
+    of the program, while the members of objects are changed in the objects.  Expressions can refer to all code of
+    the program: its functions, classes, constants and other declarations, also those that are not public; the
+    functions and methods that they call run in the program, with its permissions.
 
     Limitations:
     - data breakpoints, stepping back, jumping to a line, restarting a frame, stepping into a chosen call, and column

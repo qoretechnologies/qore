@@ -2023,4 +2023,25 @@ DLLLOCAL void qore_thread_local_storage_init();
 // destroy thread-local storage
 DLLLOCAL void qore_thread_local_storage_destroy();
 
+//! True while the namespace of a Program is copied for a debugger: also the non-public user code is inherited
+/** Set with InheritAllUserCodeHelper; the namespace copy constructors, which copy only public user code otherwise,
+    check it when a Program is created
+*/
+DLLLOCAL extern thread_local bool q_inherit_all_user_code;
+
+//! Makes a Program created in its scope inherit all user code of its parent, also the non-public code
+class InheritAllUserCodeHelper {
+public:
+    DLLLOCAL InheritAllUserCodeHelper() : old(q_inherit_all_user_code) {
+        q_inherit_all_user_code = true;
+    }
+
+    DLLLOCAL ~InheritAllUserCodeHelper() {
+        q_inherit_all_user_code = old;
+    }
+
+private:
+    bool old;
+};
+
 #endif

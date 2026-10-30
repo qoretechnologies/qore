@@ -1,0 +1,135 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%allow-debugger
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class ProgramControlEvalTest
+
+#! ProgramControl::createEvalProgram() creates a Program whose code can refer to all code of the controlled Program
+class ProgramControlEvalTest inherits QUnit::Test {
+    private {
+        #! code of the debugged Program, none of which is public
+        const Source = "%modern
+int sub twice(int i) { return i * 2; }
+class Account {
+    private { int balance = 100; }
+    int getBalance() { return balance; }
+}
+namespace Bank {
+    const Rate = 3;
+    int sub interest(int i) { return i * Rate; }
+}
+hashdecl Item { string name = \"x\"; int qty = 1; }
+enum Color { Red = 0, Green = 1 }
+our int counter = 5;
+our Account acct = new Account();
+";
+
+        #! a public function of the debugged Program that does what the evaluation Program may not
+        const WriteSource = "%modern
+public nothing sub write_file(string path) { File f(); f.open2(path, O_CREAT | O_WRONLY | O_TRUNC); f.write(\"ok\"); }
+";
+    }
+
+    constructor() : QUnit::Test("ProgramControlEvalTest", "1.0") {
+        addTestCase("all code of the controlled Program is inherited", \inheritTest());
+        addTestCase("the controlled Program is not changed", \unchangedTest());
+        addTestCase("the restrictions of the evaluation Program", \restrictionTest());
+        addTestCase("errors", \errorTest());
+        set_return_value(main());
+    }
+
+    #! returns a debugged Program with the test code
+    private Program getProgram(string source = Source) {
+        Program pgm(PO_NEW_STYLE | PO_ALLOW_REPARSE, True);
+        pgm.parse(source, "debugged");
+        pgm.run();
+        return pgm;
+    }
+
+    inheritTest() {
+        Program pgm = getProgram();
+        # with PO_ALLOW_REPARSE, code is parsed in the evaluation Program more than once
+        Program epgm = pgm.getProgram().createEvalProgram(PO_NEW_STYLE | PO_LOCKDOWN | PO_ALLOW_REPARSE);
+        epgm.parse("auto sub e1() { return twice(Bank::interest(Bank::Rate)); }
+auto sub e2() { return new Account().getBalance(); }
+auto sub e3() { return cast<hash<Item>>({\"name\": \"y\"}).qty; }
+auto sub e4() { return Color::Green; }
+auto sub e5() { return counter; }
+auto sub e6() { return acct; }
+", "eval");
+        # functions, also in namespaces, and constants
+        assertEq(18, epgm.callFunction("e1"));
+        # classes, whose methods run in the debugged Program
+        assertEq(100, epgm.callFunction("e2"));
+        # hashdecls and enums
+        assertEq(1, epgm.callFunction("e3"));
+        assertEq(1, epgm.callFunction("e4"));
+        # global variables are shared
+        assertEq(5, epgm.callFunction("e5"));
+        pgm.setGlobalVarValue("counter", 7);
+        assertEq(7, epgm.callFunction("e5"));
+        # the objects of the debugged Program are of the same class
+        object acct = epgm.callFunction("e6");
+        assertEq(100, acct.getBalance());
+        epgm.parse("bool sub e7(object o) { return o instanceof Account; }", "eval2");
+        assertTrue(epgm.callFunction("e7", acct));
+    }
+
+    unchangedTest() {
+        Program pgm = getProgram();
+        Program epgm = pgm.getProgram().createEvalProgram(PO_NEW_STYLE | PO_ALLOW_REPARSE);
+        epgm.parse("int sub added() { return 1; }", "eval");
+        assertEq(1, epgm.callFunction("added"));
+        # the function parsed in the evaluation Program is not in the debugged Program
+        assertThrows("NO-FUNCTION", \pgm.callFunction(), ("added",));
+        assertEq(4, pgm.callFunction("twice", 2));
+        # code added to the debugged Program later is not inherited
+        pgm.parse("int sub later() { return 2; }", "later");
+        assertThrows("PARSE-EXCEPTION", \epgm.parse(), ("auto sub e() { return later(); }", "eval2"));
+        # a new evaluation Program inherits it
+        Program epgm2 = pgm.getProgram().createEvalProgram(PO_NEW_STYLE);
+        epgm2.parse("auto sub e() { return later(); }", "eval");
+        assertEq(2, epgm2.callFunction("e"));
+
+        # the top-level local variables of the debugged Program are not inherited, also when the evaluation Program
+        # is parsed again
+        Program tpgm = getProgram("%modern\nint total = 5;\n");
+        Program tepgm = tpgm.getProgram().createEvalProgram(PO_NEW_STYLE | PO_ALLOW_REPARSE);
+        assertThrows("PARSE-EXCEPTION", "total", \tepgm.parse(), ("auto sub e1() { return total; }", "e1"));
+        tepgm.parse("auto sub e2() { return 2; }", "e2");
+        assertThrows("PARSE-EXCEPTION", "total", \tepgm.parse(), ("auto sub e3() { return total; }", "e3"));
+    }
+
+    restrictionTest() {
+        TmpDir tmp("qore-eval-program-test-");
+        Program pgm = getProgram(Source + WriteSource);
+        Program epgm = pgm.getProgram().createEvalProgram(PO_NEW_STYLE | PO_LOCKDOWN | PO_ALLOW_REPARSE);
+        # the evaluation Program cannot access the file system itself
+        assertThrows("ILLEGAL-CLASS-INSTANTIATION", \epgm.parse(), ("sub w() { File f(); }", "eval"));
+        # a function of the debugged Program runs with its permissions
+        string path = tmp.path + "/written";
+        epgm.parse("sub w(string path) { write_file(path); }", "eval");
+        epgm.callFunction("w", path);
+        assertEq("ok", ReadOnlyFile::readTextFile(path));
+    }
+
+    errorTest() {
+        Program pgm = getProgram();
+        ProgramControl pc = pgm.getProgram();
+        # negative: options that only the system can set
+        assertThrows("PROGRAM-OPTION-ERROR", \pc.createEvalProgram(), (PO_IN_MODULE,));
+        # a name that does not exist in either Program
+        Program epgm = pc.createEvalProgram(PO_NEW_STYLE | PO_ALLOW_REPARSE);
+        assertThrows("PARSE-EXCEPTION", \epgm.parse(), ("auto sub e() { return no_such_function(); }", "eval"));
+        # the evaluation Program can be used after a parse error
+        epgm.parse("auto sub e() { return twice(4); }", "eval2");
+        assertEq(8, epgm.callFunction("e"));
+    }
+}

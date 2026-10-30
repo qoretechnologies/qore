@@ -1376,6 +1376,9 @@ void qore_program_private_base::setParent(QoreProgram* p_pgm, const QoreParseOpt
     ext_parent = !(n_parse_options & PO_NO_INHERIT_PROGRAM_DATA) ? p_pgm : nullptr;
 }
 
+// see InheritAllUserCodeHelper
+thread_local bool q_inherit_all_user_code = false;
+
 #ifdef DEBUG
 namespace {
 // the Program whose external data the current thread copies in copyExternalData(), if any
@@ -1484,6 +1487,12 @@ void qore_program_private::internParseRollback(ExceptionSink* xsink) {
 
     // roll back pending domain
     pend_dom = 0;
+
+    // with PO_ALLOW_REPARSE, the Program is back in its committed state, so it can be used at runtime again; without
+    // it, it cannot be parsed again
+    if (atomic_rollback) {
+        parsing_in_progress = false;
+    }
 }
 
 void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {

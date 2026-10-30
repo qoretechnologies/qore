@@ -2475,6 +2475,9 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
       @ref Qore::channel_select() "channel_select()" to wait on several channels at once; and
       @ref Qore::parallel_map() "parallel_map()" / @ref Qore::parallel_foreach() "parallel_foreach()" for
       parallel collection processing.  All of them honor cooperative cancellation
+    - new @ref Qore::ProgramControl::createEvalProgram() "ProgramControl::createEvalProgram()" method: creates a
+      Program that inherits all code of a debugged Program, also the code that is not public, for evaluating
+      expressions in a debugger
     - new @ref Qore::Program::applySourceDefaults() "Program::applySourceDefaults()" method: applies the parse
       options that the interpreter gives a source file by its name, so that code parsed with
       @ref Qore::Program::parse() "Program::parse()" is parsed as the interpreter parses the file
@@ -3907,7 +3910,8 @@ while (*binary chunk = input.read(65536)) {
       - lists, hashes and objects are shown as trees in Visual Studio Code, and their elements, keys and members can
         be set; they were shown as text that could not be expanded
       - expressions are evaluated for watches, hovers and the debug console, and variables are set to the values of
-        expressions; only the names of variables were evaluated
+        expressions; they can refer to all code of the program, its functions, classes and constants; only the names
+        of variables were evaluated
       - conditional breakpoints, hit conditions and logpoints are supported
       - the output of programs that are debugged in the adapter process is sent to the IDE as \c output events;
         it was written to the channel of the protocol and lost

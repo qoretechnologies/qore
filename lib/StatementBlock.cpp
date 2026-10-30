@@ -681,8 +681,9 @@ int TopLevelStatementBlock::parseInit() {
     bool repl_mode = (current_parse_options & QoreParseOptions(PO_ALLOW_REPARSE)) == QoreParseOptions(PO_ALLOW_REPARSE);
 
     if (!first && lvars) {
-        // push already-registered local variables on the stack
-        for (unsigned i = 0; i < lvars->size(); ++i)
+        // push the already-registered local variables of this program on the stack; the inherited ones are not visible
+        // to its code
+        for (unsigned i = inherited_lvars; i < lvars->size(); ++i)
             push_top_level_local_var(lvars->lv[i], loc);
     }
 
@@ -712,8 +713,8 @@ int TopLevelStatementBlock::parseInit() {
         setupLVList(parse_context);
         first = false;
     } else {
-        // Save count of existing local vars before adding new ones
-        unsigned existing_lvars = lvars ? lvars->size() : 0;
+        // Save count of existing local vars that were pushed before adding new ones
+        unsigned existing_lvars = lvars ? lvars->size() - inherited_lvars : 0;
 
         if (repl_mode) {
             // In REPL mode, save new local variables to lvars instead of discarding
