@@ -70,8 +70,9 @@ class NativeMarkerGrowthTest inherits QUnit::Test {
                 string exe = dir.path + "/fixture";
                 string ir = run((qcc, level, "--strip-source", "-o", exe, source),
                     prefix + "QORE_DUMP_LLVM_IR=1 ");
-                assertRegex("qore_rt_try_funcref_int_int_v3", ir, "prepared native calls");
-                assertRegex("markerLeaf[^\n]*funcref_typed_v2", ir, "native leaf binding");
+                # Keep failure output bounded: this stress fixture produces a large LLVM module.
+                assertTrue(regex(ir, "qore_rt_try_funcref_int_int_v5"), "prepared native calls");
+                assertTrue(regex(ir, "markerLeaf[^\n]*funcref_typed_v2"), "native leaf binding");
                 assertEq(prefix.empty(), regex(ir, "markerLeaf[^\n]*funcref_typed_v3"), "inline or eager entry");
                 assertEq(Expected, run((exe,)), "AOT " + level);
                 assertEq(Expected, run((exe,), "QORE_DISABLE_FUNCREF_FAST_CALL=1 "), "runtime fallback");

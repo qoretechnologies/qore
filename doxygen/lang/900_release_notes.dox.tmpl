@@ -4,6 +4,11 @@
 
     @section qore_3_0_0 Qore 3.0.0
 
+    Pure native AOT integer and floating method calls now defer object/class context and empty local-frame
+    markers after an ordinary cross-%Program transition. A failing stack guard materializes the context before
+    constructing its exception; diagnostics and normal %Program entry semantics are preserved. This reduces
+    setup for existing guarded native companions, including calls from IR/JIT hosts.
+
     Objects and runtime call references retain the sandbox under which they were created. Their methods and
     callbacks remain restricted when trusted code invokes them later, including inherited module methods and
     asynchronous callbacks. Access must satisfy both the caller's policy and the retained policies; interruption

@@ -1571,3 +1571,6 @@ remain. Existing runtime presence controls
 recompilation is required for this helper-only change. See the
 [optimized incremental results](RESULTS.md#prepared-body-local-storage-in-imported-aot-functions-2026-10-29)
 for imported calls, list mutation, mixed workloads, retained costs and attribution.
+
+
+`QORE_DISABLE_AOT_CROSS_PROGRAM_DEFERRED_CONTEXT=1` restores eager object/class and empty-marker setup for pure native method-v2/v3 retries after a normal Program transition. It is a runtime presence flag, sampled once; empty and `0` values also disable the optimization. The common `QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT` control restores this setup too. No recompilation is needed. The new path borrows invocation/Program-owned metadata, retains the caller Program in the logical frame, and materializes context before a failing stack guard constructs its exception. Full Program transitions, live admission, diagnostics and ownership remain. See [optimized results](results-cross-program-deferred-context-macos-arm64.json) for gains and retained costs.

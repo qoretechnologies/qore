@@ -6048,3 +6048,91 @@ All seven candidate source/test files are restored exactly. Rebuilt Release qore
 Next profile imported pure native-method setup after the ordinary Program transition. Current retry revalidates the live body and uses eager object/class and logical-frame setup. A deferred alternative must borrow stable Program-owned metadata rather than retain the caller PIC across reentrant Program entry, preserve caller identity, restrictions, application identity, diagnostics and cleanup, and avoid adding storage or traffic to the same-Program path. This is a new hypothesis, with no implemented or measured gain yet.
 
 Shared-host frequency, affinity and thermal state remain uncontrolled; no owned build/test/profile or heavy scan overlapped timing. Observed ranges are not confidence intervals. No fresh Java/develop ratio or global performance ceiling is established.
+
+
+## Deferred pure native context after Program entry (2026-10-30)
+
+Pure native method-v2/v3 retries now defer object/class substitution and empty variable-frame markers after the full ordinary Program transition. An invocation-owned descriptor borrows live Program-owned variant, defining-class and receiver metadata; it never retains the caller's replaceable dispatch cache across reentrant initialization. The logical frame keeps the original caller Program. A failing native stack guard materializes both native ThreadData and RuntimeConfig context before constructing an exception, and each view restores its own saved values. Full Program thread counts, locks, initialization, caller option/application overrides, live body/signature/debugger checks, ownership and diagnostic reader synchronization remain.
+
+`QORE_DISABLE_AOT_CROSS_PROGRAM_DEFERRED_CONTEXT=1` restores the eager path at runtime, as does the common native-method deferred-context control. These are presence flags sampled once; empty and `0` values also disable the optimization. Existing v1-only and unsupported entries retain eager setup. No exported helper signature or public RuntimeConfig layout changes. This benefits existing native AOT method bodies, including invocations through IR/JIT hosts; it adds no companion to IR/JIT-only bodies.
+
+The cross-Program helper's optimized stack frame grows from 384 to 480 bytes. Existing leaf/method/callback/closure context storage remains 96/56/72/152 bytes, and the inspected same-Program integer/float helpers keep their 304-byte frames and instruction counts. Static counts alone are not a speedup estimate. Canonical scalar argument cleanup is tied to the same argument SSA value and cannot run a node destructor after the deferred frame exits; no general ownership or cleanup elision is introduced.
+
+Measurements compare frozen performance-branch 06ef4cae3b against the candidate. Both runtimes are Release `-O3 -DNDEBUG`, with allocation tracking off. Both freshly compiled sets of fifteen stripped O3 artifacts are byte-identical and use the same runtime identity. Timed variants use the exact same executable/AOT artifact and host paths, changing only the runtime library and, for attribution, the disabling flag. Each campaign uses three layouts and three fresh processes per cell, three warmup and three measured 150 ms windows, 4096 items, seed 7, with randomized variant ordering. Values are whole-kernel ns/item, computed as median of layout medians of process means, not isolated call latency.
+
+The initial 16-workload pilot (288 processes/864 windows) improves six imported scalar targets by 3.37–4.95%. A local integer-expression control rises 2.57%, so qualification and controls were broadened. The 37-workload screen follows:
+
+|!Workload|!Baseline ns/item|!Candidate ns/item|!Time change
+|local:direct_call|1.5392|1.5438|+0.30%
+|local:method_call|1.6308|1.6184|-0.76%
+|local:polymorphic_call|22.4087|22.5471|+0.62%
+|local:polymorphic_float_call|22.7396|22.6750|-0.28%
+|local:boxed_int_method_fallback|34.0893|34.1313|+0.12%
+|local:boxed_float_method_fallback|36.7556|36.4746|-0.76%
+|local:boxed_int_method_effect|92.3432|91.6076|-0.80%
+|local:list_mutate|124.2945|122.4015|-1.52%
+|local:temporary_list|1.6309|1.6496|+1.14%
+|local:polymorphic_expression_call|11.0379|11.0985|+0.55%
+|local:polymorphic_float_expression_call|11.0895|11.1472|+0.52%
+|micro:polymorphic_call|85.3740|82.5547|-3.30%
+|micro:polymorphic_float_call|86.4041|83.7563|-3.06%
+|micro:boxed_int_method_call|114.2687|111.5053|-2.42%
+|micro:boxed_float_method_call|118.2942|113.9617|-3.66%
+|micro:boxed_int_method_fallback|123.7157|123.5944|-0.10%
+|micro:boxed_float_method_fallback|130.0390|127.6060|-1.87%
+|micro:boxed_int_method_effect|178.8605|180.6072|+0.98%
+|micro:indirect_call|8.4477|8.8987|+5.34%
+|micro:closure_call|18.6706|18.6198|-0.27%
+|micro:closure_capture|24.2708|24.3947|+0.51%
+|micro:list_read|2.8980|2.9077|+0.34%
+|micro:list_build|23.4535|23.2867|-0.71%
+|micro:list_mutate|123.7616|125.1953|+1.16%
+|micro:temporary_hash|1.6467|1.6607|+0.85%
+|micro:polymorphic_expression_call|74.6699|71.4640|-4.29%
+|micro:polymorphic_float_expression_call|76.3207|72.3125|-5.25%
+|float:callback_local_float_return|0.8729|0.8679|-0.58%
+|float:typed_local_int_unary|1.1995|1.2261|+2.21%
+|float:callback_loop_float_return|5.0187|5.0384|+0.39%
+|mixed:csv_report|955.5184|960.4542|+0.52%
+|mixed:object_orders|3367.6314|3446.8883|+2.35%
+|mixed:callback_pipeline|96.6701|95.4257|-1.29%
+|mixed:text_index|1370.6477|1398.0216|+2.00%
+|probe:object_short|1699.2207|1700.1347|+0.05%
+|probe:effect_short|1746.1189|1764.4961|+1.05%
+|probe:string_result_loop|564.2240|553.5348|-1.89%
+
+The screen's imported targets improve 2.42–5.25%, but indirect calls rise 5.34%, object-orders 2.35%, and text-index 2.00%. The independent repeat therefore expands to twenty workloads and three variants (540 processes/1620 windows). The disabled variant uses the same candidate library and artifacts, restoring eager context. It still executes the new flag checks, so it attributes the deferred path without exactly recreating the baseline binary.
+
+|!Workload|!Baseline ns/item|!Candidate ns/item|!Candidate eager ns/item|!Candidate vs baseline
+|local:direct_call|1.5359|1.5348|1.5417|-0.07%
+|local:method_call|1.6099|1.6045|1.6137|-0.34%
+|local:polymorphic_expression_call|11.0107|11.0084|11.0538|-0.02%
+|local:polymorphic_float_expression_call|10.9263|10.9397|10.9415|+0.12%
+|local:temporary_list|1.6333|1.6384|1.6423|+0.31%
+|micro:polymorphic_call|84.4367|82.4028|85.4890|-2.41%
+|micro:polymorphic_float_call|85.8767|83.0919|86.7559|-3.24%
+|micro:polymorphic_expression_call|74.4426|71.1414|75.6048|-4.43%
+|micro:polymorphic_float_expression_call|75.3620|72.3653|75.2389|-3.98%
+|micro:boxed_int_method_call|111.7742|109.0543|114.6963|-2.43%
+|micro:boxed_float_method_call|119.7752|113.2224|118.1203|-5.47%
+|micro:indirect_call|8.7727|8.7817|8.6820|+0.10%
+|micro:list_mutate|123.1914|122.7280|123.3450|-0.38%
+|micro:boxed_int_method_effect|178.1504|181.2750|182.0719|+1.75%
+|mixed:object_orders|3377.4192|3385.3045|3391.3858|+0.23%
+|mixed:callback_pipeline|95.7336|95.5187|95.9288|-0.22%
+|mixed:text_index|1358.3646|1384.6209|1364.8230|+1.93%
+|mixed:csv_report|954.5773|963.0629|964.3488|+0.89%
+|float:typed_local_int_unary|1.1932|1.1947|1.2006|+0.13%
+|probe:effect_short|1745.6081|1742.7075|1740.9654|-0.17%
+
+Retain this implementation under the authorized broader workload tradeoff. All six imported pure-scalar targets improve in every layout against both baseline and the same-candidate eager control. Aggregate gains are 2.41–5.47% against baseline and 3.61–5.90% against the eager control. The local-expression, indirect-call and object-orders concerns do not repeat at their earlier magnitude. Same-Program direct and method controls remain around 1.5–1.6 ns/item with changes below 0.4%.
+
+Retained costs include the effectful integer method control (+1.75%), text-index (+1.93%) and CSV report (+0.89%). The effectful default layout has adversely separated process ranges; its other layouts overlap, and the eager candidate control is also slower than baseline. Text-index medians are adverse in all layouts but process ranges overlap in each. CSV layout directions are mixed, with a wider default-layout range. These observations do not establish their causes or a weighted application speedup. The full screen and all earlier observations remain in the evidence.
+
+All three campaigns independently replay: 1494 processes/4482 measured windows. Fresh baseline and candidate preparations each pass 6072 reference outputs (1518 IR, 4554 AOT); the exact baseline artifacts run with the candidate and its eager control each pass 4554 outputs. Release qualification selects 34 fixtures: 33 successful, one explicit Debug-only skip, 61 QUnit cases/10743 assertions and three silent successes. Debug passes all 22 selected fixtures with 44 cases/4850 assertions, plus separate native suites with 3770 and 5435 checks (potentially overlapping). All 391 Release module aliases are restored and hash-checked.
+
+The extended Release run exposed an existing stale compiler assertion in `AOTNativeMarkerGrowth`: it expected callback entry v3, while both frozen baseline and candidate emit v5. A reduced unchanged padded-caller source proves this in both runtimes and executes correctly. The corrected full 71-padding matrix passes source modes, O0/O3, native/eager stack checks and runtime fallback; failed assertions now avoid dumping the entire large LLVM module. The original failed process and its 293 MB output hash remain archived. A preliminary codegen-selector script also selected lambda symbols by mistake; its failed attempt and corrected review are retained. The same-artifact preparation driver's terminal response was lost across compaction; its exit code is explicitly unknown, while completion and all fifteen waited child receipts were independently verified.
+
+`origin/develop` was fetched again and remains e1abc01cb4, already contained in this branch. This checkpoint does not provide a new Java/develop ratio or prove maximum performance. Shared-host frequency, affinity and thermal state remain uncontrolled; no owned build, test, profiler or heavy scan overlapped timing. Observed ranges are not confidence intervals. Qualification is targeted macOS Release/Debug coverage, not a full-project, sanitizer or other-platform claim.
+
+Next profile the retained runtime and evaluate sharing one live RuntimeConfig reference through call-option setup and the internal native retry chain. The current retry still uses the TLS option-helper overload and separately acquires RuntimeConfig in scalar admission. Existing explicit-context helpers may remove redundant lookups, but lifetime, Program identity, overrides, fallback and frame size need their own source review and optimized measurements. See the [complete evidence](../bench/runtime-comparison/results-cross-program-deferred-context-macos-arm64.json) and [62-check audit](../bench/runtime-comparison/audit-cross-program-deferred-context.md).

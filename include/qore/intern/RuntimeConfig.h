@@ -289,6 +289,42 @@ private:
     DLLLOCAL void restore(ThreadData* td);
 };
 
+//! Deferred pure-method context after an ordinary, possibly reentrant Program transition.
+/** Borrow only invocation-owned or Program-owned metadata. The caller's replaceable
+    dispatch cache must not survive Program entry. Keep this descriptor and the
+    receiver alive until the leaf helper has unpublished and restored its frame.
+    Construction neither substitutes context nor acquires ownership.
+*/
+class RuntimeConfigNativeUncachedMethodContext {
+public:
+    //! @param rc current thread's live invocation context after Program entry
+    //! @param object borrowed receiver retained throughout the invocation
+    //! @param uvb live, revalidated pure scalar method variant
+    //! @param pgm execution Program already entered by the ordinary dispatcher
+    //! @param class_ctx immutable defining class of the executable variant
+    RuntimeConfigNativeUncachedMethodContext(RuntimeConfig& rc, QoreObject* object,
+            const UserVariantBase* uvb, QoreProgram* pgm, const qore_class_private* class_ctx)
+            : rc(rc), object(object), uvb(uvb), pgm(pgm), class_ctx(class_ctx) {
+    }
+    RuntimeConfigNativeUncachedMethodContext(const RuntimeConfigNativeUncachedMethodContext&) = delete;
+    RuntimeConfigNativeUncachedMethodContext& operator=(const RuntimeConfigNativeUncachedMethodContext&) = delete;
+
+private:
+    friend class RuntimeConfigNativeLeafCallHelper;
+    RuntimeConfig& rc;
+    QoreObject* object;
+    const UserVariantBase* uvb;
+    QoreProgram* pgm;
+    const qore_class_private* class_ctx;
+    // Saved values are read only after materialization installs all four.
+    QoreObject* old_object;
+    const qore_class_private* old_class;
+    QoreObject* old_rc_object;
+    const qore_class_private* old_rc_class;
+    DLLLOCAL void materialize(ThreadData* td);
+    DLLLOCAL void restore(ThreadData* td);
+};
+
 //! Invocation-owned deferred object/class/self context for a proven closure-v2 body.
 /** The closure and variant are borrowed until the leaf helper has unpublished its
     frame and waited for readers. Construction performs no context lookup or write.
@@ -391,6 +427,10 @@ protected:
     DLLLOCAL RuntimeConfigNativeLeafCallHelper(RuntimeConfig& rc, QoreStackLocation* stack_loc,
         const QoreProgramLocation*& call_loc, RuntimeConfigNativeMethodContext& context,
         ExceptionSink* xsink, const QoreProgramLocation* caller_loc = nullptr);
+    // Pure method-v2/v3 retry after ordinary Program entry and live uncached admission.
+    DLLLOCAL RuntimeConfigNativeLeafCallHelper(RuntimeConfig& rc, QoreStackLocation* stack_loc,
+        const QoreProgramLocation*& call_loc, RuntimeConfigNativeUncachedMethodContext& context,
+        ExceptionSink* xsink);
     ~RuntimeConfigNativeLeafCallHelper() = default;
     DLLLOCAL void restoreEager();
     DLLLOCAL void restoreDeferred();
@@ -406,6 +446,7 @@ private:
         const QorePreparedFunctionRefV3* callback_cache;
         RuntimeConfigNativeCallbackContext* callback_context;
         RuntimeConfigNativeMethodContext* method_context;
+        RuntimeConfigNativeUncachedMethodContext* uncached_method_context;
         const UserVariantBase* closure_uvb;
         RuntimeConfigNativeClosureContext* closure_context;
     };
@@ -419,7 +460,7 @@ private:
     QoreParseOptions old_po;
     enum class ContextState : uint8_t { EagerMarkers, DeferredMarkers, Materialized };
     ContextState state;
-    enum class TargetKind : uint8_t { Callback, Method, Closure, ClosureV2, CallbackV2 };
+    enum class TargetKind : uint8_t { Callback, Method, Closure, ClosureV2, CallbackV2, UncachedMethod };
     TargetKind target_kind;
     bool swapped; //!< Initialized only when context is materialized
 #ifndef NDEBUG
@@ -530,6 +571,21 @@ public:
             const QoreProgramLocation* caller_loc = nullptr)
             : RuntimeConfigNativeLeafCallHelper(rc, stack_loc, call_loc, context, xsink, caller_loc) {
         static_assert(DeferMarkers, "method-v2 leaf contexts use deferred empty markers");
+    }
+    /** Publish a pure native method retry after the ordinary Program transition.
+        @param rc current thread's live runtime context
+        @param stack_loc initialized logical frame retaining the caller's Program identity
+        @param call_loc caller-location slot initialized before publication
+        @param context invocation-owned metadata, alive until restoration and reader completion
+        @param xsink retained for the common construction signature, not modified
+        @note Requires live body/signature checks and guarded v2/v3 entry. The ordinary
+            dispatcher retains the Program transition and caller option/application overrides.
+    */
+    __attribute__((always_inline)) RuntimeConfigNativeLeafCallHelperFor(RuntimeConfig& rc,
+            QoreStackLocation* stack_loc, const QoreProgramLocation*& call_loc,
+            RuntimeConfigNativeUncachedMethodContext& context, ExceptionSink* xsink)
+            : RuntimeConfigNativeLeafCallHelper(rc, stack_loc, call_loc, context, xsink) {
+        static_assert(DeferMarkers, "uncached method-v2 leaf contexts use deferred empty markers");
     }
     //! Restore installed state and unpublish the frame, waiting for diagnostic readers before it dies.
     __attribute__((always_inline)) ~RuntimeConfigNativeLeafCallHelperFor() {

@@ -43,6 +43,8 @@ static unsigned checks = 0;
 static NativeEntry target;
 static NativeEntry1 target1;
 static QoreProgram* caller;
+static QoreObject* receiver;
+static const qore_class_private* defining_class;
 static unsigned calls = 0;
 static bool force_overflow = false;
 class StackProbe final : public QoreExternalRuntimeStackLocationHelper {
@@ -81,7 +83,25 @@ static Scalar invokeBody(Scalar arg, QoreAOTContext* ctx, ExceptionSink* xsink,
         CHECK(false);
 #endif
     }
-    return legacy ? target1(arg, ctx, xsink) : target(arg, ctx, xsink, rc, limit);
+    auto check_materialized = [&]() {
+        if (force_overflow) {
+            CHECK(*xsink);
+            CHECK(rc->getObject() == receiver && rc->getClass() == defining_class);
+            CHECK(rc->getProgram() == ctx->pgm && getProgram() == ctx->pgm);
+            StackProbe observer;
+            const auto* frame = observer.getNext();
+            CHECK(frame && frame->getProgram() == caller);
+        }
+    };
+    try {
+        Scalar result = legacy ? target1(arg, ctx, xsink) : target(arg, ctx, xsink, rc, limit);
+        check_materialized();
+        return result;
+    } catch (...) {
+        // Inspect while the dispatch scope still owns its context, before RAII restores the caller.
+        check_materialized();
+        throw;
+    }
 }
 static Scalar invoke(Scalar arg, QoreAOTContext* ctx, ExceptionSink* xsink,
         RuntimeConfig* rc, const size_t* limit) {
@@ -135,6 +155,8 @@ static void run(bool expected) {
     CHECK(method);
     const auto* uvb = qore_method_private::get(*method)->getFunction()->first()->getUserVariantBase();
     CHECK(uvb && uvb->hasCachedAOT());
+    receiver = object;
+    defining_class = qore_class_private::get(*object->getClass());
     auto* ctx = uvb->getCachedAOTContext();
     CHECK(ctx && ctx->pgm == object->getProgram() && !ctx->uses_self && !ctx->uses_argv);
     target = entry3(ctx).load(std::memory_order_acquire);

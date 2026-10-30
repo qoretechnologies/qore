@@ -91,10 +91,14 @@ printf(\"cross-program-method-source: ok\\n\");
                     dir.path + "/modules/CrossProgramMethodEntry.qmod", source),
                     dir.path + "/source", compile_prefix);
                 foreach string prefix in (("", "QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION=1 ",
+                        "QORE_DISABLE_AOT_CROSS_PROGRAM_DEFERRED_CONTEXT=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 ",
                         "QORE_DISABLE_AOT_CROSS_PROGRAM_METHOD_ENTRY=1 ",
                         "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 ",
                         "QORE_DISABLE_AOT_SCALAR_PARAM_BINDING_CACHE=1 ")) {
-                    string enabled = (!prefix || prefix.startsWith("QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION"))
+                    string enabled = (!prefix || prefix.startsWith("QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION")
+                        || prefix.startsWith("QORE_DISABLE_AOT_CROSS_PROGRAM_DEFERRED_CONTEXT")
+                        || prefix.startsWith("QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT"))
                         && !ENV.QORE_TEST_EXPECT_NO_CROSS_PROGRAM_METHOD ? "1" : "0";
                     foreach string probe in (probes) {
                         assertRegex("cross-program-method-entry: [0-9]+ entries; [0-9]+ checks passed",

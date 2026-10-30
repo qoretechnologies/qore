@@ -2816,6 +2816,27 @@ __attribute__((always_inline)) RuntimeConfigNativeLeafCallHelper::RuntimeConfigN
 
 __attribute__((always_inline)) RuntimeConfigNativeLeafCallHelper::RuntimeConfigNativeLeafCallHelper(
         RuntimeConfig& rc, QoreStackLocation* stack_loc, const QoreProgramLocation*& call_loc,
+        RuntimeConfigNativeUncachedMethodContext& context, ExceptionSink*)
+        : td(RuntimeConfigNativeAccess::getThreadData(rc)), uncached_method_context(&context),
+          previous(td->native_leaf_context), state(ContextState::DeferredMarkers),
+          target_kind(TargetKind::UncachedMethod) {
+    assert(context.uvb && td->current_pgm == context.pgm);
+    const QoreProgramLocation* parse_loc = context.uvb->getUserSignature()->getParseLocation();
+    call_loc = td->runtime_loc ? td->runtime_loc : parse_loc;
+    old_stmt = td->runtime_statement;
+    old_loc = td->runtime_loc;
+    td->native_leaf_context = this;
+    old_stack = publish_pushed_stack_location(td, stack_loc);
+    td->runtime_statement = nullptr;
+    const QoreProgramLocation* body_loc = context.uvb->getAOTBodyLocation();
+    td->runtime_loc = body_loc ? body_loc : parse_loc;
+    // Ordinary Program entry and override setup already completed. This pure
+    // v2/v3 body checks its live stack before work and cannot observe context
+    // or reenter. Materialize object/class state only for its failing guard.
+}
+
+__attribute__((always_inline)) RuntimeConfigNativeLeafCallHelper::RuntimeConfigNativeLeafCallHelper(
+        RuntimeConfig& rc, QoreStackLocation* stack_loc, const QoreProgramLocation*& call_loc,
         const UserVariantBase* uvb)
         : td(RuntimeConfigNativeAccess::getThreadData(rc)), closure_uvb(uvb),
           previous(td->native_leaf_context), state(ContextState::DeferredMarkers), target_kind(TargetKind::Closure) {
@@ -2867,6 +2888,10 @@ __attribute__((noinline)) void RuntimeConfigNativeLeafCallHelper::materialize() 
         uvb = method_context->cache.native_scalar_uvb;
         pgm = method_context->cache.native_scalar_program;
         parse_loc = uvb->getUserSignature()->getParseLocation();
+    } else if (target_kind == TargetKind::UncachedMethod) {
+        uvb = uncached_method_context->uvb;
+        pgm = uncached_method_context->pgm;
+        parse_loc = uvb->getUserSignature()->getParseLocation();
     } else if (target_kind == TargetKind::Closure || target_kind == TargetKind::ClosureV2) {
         uvb = target_kind == TargetKind::Closure ? closure_uvb : closure_context->uvb;
         pgm = target_kind == TargetKind::Closure ? uvb->pgm : closure_context->closure->getProgram();
@@ -2897,6 +2922,8 @@ __attribute__((noinline)) void RuntimeConfigNativeLeafCallHelper::materialize() 
     swapped = parse_loc != nullptr;
     if (target_kind == TargetKind::Method) {
         method_context->materialize(td);
+    } else if (target_kind == TargetKind::UncachedMethod) {
+        uncached_method_context->materialize(td);
     } else if (target_kind == TargetKind::ClosureV2) {
         closure_context->materialize(td);
     } else if (target_kind == TargetKind::CallbackV2) {
@@ -2964,6 +2991,8 @@ __attribute__((noinline, cold)) void RuntimeConfigNativeLeafCallHelper::restoreM
     td->call_program_context = old_call_pgm;
     if (target_kind == TargetKind::Method) {
         method_context->restore(td);
+    } else if (target_kind == TargetKind::UncachedMethod) {
+        uncached_method_context->restore(td);
     } else if (target_kind == TargetKind::ClosureV2) {
         closure_context->restore(td);
     }
@@ -2984,6 +3013,24 @@ __attribute__((noinline, cold)) void RuntimeConfigNativeMethodContext::materiali
 }
 
 __attribute__((noinline, cold)) void RuntimeConfigNativeMethodContext::restore(ThreadData* td) {
+    td->current_obj = old_object;
+    td->current_class = old_class;
+    rc.setObject(old_rc_object);
+    rc.setClass(old_rc_class);
+}
+
+__attribute__((noinline, cold)) void RuntimeConfigNativeUncachedMethodContext::materialize(ThreadData* td) {
+    old_object = td->current_obj;
+    old_class = td->current_class;
+    old_rc_object = rc.getObject();
+    old_rc_class = rc.getClass();
+    td->current_obj = object;
+    td->current_class = class_ctx;
+    rc.setObject(object);
+    rc.setClass(class_ctx);
+}
+
+__attribute__((noinline, cold)) void RuntimeConfigNativeUncachedMethodContext::restore(ThreadData* td) {
     td->current_obj = old_object;
     td->current_class = old_class;
     rc.setObject(old_rc_object);

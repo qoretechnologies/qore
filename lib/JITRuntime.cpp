@@ -19249,13 +19249,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_object_nb_aot_consume_args(
 
 // The name is owned by the immutable PIC entry or the live method variant. All
 // observable members precede the helper, whose destructor waits for stack readers.
-template <bool Deferred = false, bool Logical = false>
+template <bool Deferred = false, bool Logical = false, typename Context = RuntimeConfigNativeMethodContext>
 class QoreNativeMethodStackLocation : public QoreStackLocation {
 public:
     __attribute__((always_inline)) QoreNativeMethodStackLocation(RuntimeConfig& rc,
             const std::string& name,
             const UserVariantBase* uvb, QoreProgram* pgm, ExceptionSink* xsink,
-            RuntimeConfigNativeMethodContext* context = nullptr, QoreProgram* caller_pgm = nullptr)
+            Context* context = nullptr, QoreProgram* caller_pgm = nullptr)
         : name(name), statements(uvb->getStatementBlock()), pgm(caller_pgm ? caller_pgm : pgm),
           helper([&]() __attribute__((always_inline)) {
               if constexpr (Deferred) {
@@ -19459,8 +19459,25 @@ static QORE_ALWAYS_INLINE bool try_dispatch_native_scalar_method(QoreObject* obj
             }
             return finish();
         }
+    } else if constexpr (CallerProgramFrame) {
+        static constinit QoreEnvFlag defer_context_env("QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT");
+        static constinit QoreEnvFlag disabled_env("QORE_DISABLE_AOT_CROSS_PROGRAM_DEFERRED_CONTEXT");
+        if (!defer_context_env.get() && !disabled_env.get() && (inline_entry || explicit_entry)) {
+            // The full Program transition can reenter and replace a caller PIC.
+            // This retry has revalidated the live pure body and signature using
+            // only Program-owned method metadata. Preserve the caller's logical
+            // frame identity while deferring object/class and empty markers.
+            RuntimeConfigNativeUncachedMethodContext context(rc, object, uvb, pgm,
+                METHV_const(cache.variant)->getClassPriv());
+            {
+                QoreNativeMethodStackLocation<true, true, RuntimeConfigNativeUncachedMethodContext>
+                    frame(rc, cache.call_name, uvb, pgm, xsink, &context, caller_pgm);
+                invoke();
+            }
+            return finish();
+        }
     }
-    // Uncached admission and v1 entries retain eager object/class state. Even a
+    // Other uncached admission and v1 entries retain eager object/class state. Even a
     // pure body must preserve method context on error and stack observation.
     const qore_class_private* class_ctx = [&]() {
         if constexpr (CachedAdmission) {
