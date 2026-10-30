@@ -56,6 +56,7 @@ module DebugProgramControl {
       variant (<a href="https://github.com/qoretechnologies/qore/issues/5558">issue 5558</a>)
     - new commands of stopped threads: \c thread/variable/get and \c thread/variable/set read and set the values of
       variables and their elements, keys and members, also private ones, by their paths, and \c thread/evaluate
+      (with \c serialize, also the whole value in \c serialized)
       evaluates expressions with the variables of a frame (see
       @ref DebugProgramControl::DebugProgramControl::evaluateExpression() "evaluateExpression()")
     - added @ref DebugProgramControl::DebugProgramControl::captureOutput() "captureOutput()", which sends the output of
@@ -1527,6 +1528,10 @@ public namespace DebugProgramControl {
                                     "bool": boolean(v),
                                     "text": v.typeCode() == NT_STRING ? v : AbstractDebugControl::describe(v).value,
                                 };
+                                # the whole value, for clients that show it
+                                if (rd.serialize) {
+                                    result.serialized = AbstractDebugControl::serialize(v);
+                                }
                                 break;
                             }
 

@@ -98,6 +98,8 @@ public class QdbgScriptTest inherits QUnit::Test {
             "thread local nosuch",
             "go run",
             "thread local total",
+            "eval h.lines[1] + total",
+            "eval nosuch",
             "go run",
             "go run",
             "quit",
@@ -117,6 +119,9 @@ public class QdbgScriptTest inherits QUnit::Test {
             # and at the stop at line 8
             "interrupt/step", "bkptid: 2", "(target.q:8",
             "integer total = 5",
+            # an expression with the local variables of the frame
+            "integer h.lines[1] + total = 7",
+            "DEBUG-EVALUATE-ERROR",
             "total: 5",
             "interrupt/detach",
         ));

@@ -47,6 +47,9 @@ public class DebugCmdLineTest inherits QUnit::Test {
         addTestCase("validateInt tests", \validateIntTests());
         addTestCase("color output tests", \colorOutputTests());
         addTestCase("version command tests", \versionCommandTests());
+        addTestCase("output events", \outputEventTests());
+        addTestCase("eval command", \evalCommandTests());
+        addTestCase("thread names", \threadNameTests());
         set_return_value(main());
     }
 
@@ -433,5 +436,48 @@ public class DebugCmdLineTest inherits QUnit::Test {
         string allOutput = dcl.outputLines.join("\n");
         string stripped = TerminalColor::stripAnsi(allOutput);
         assertTrue(stripped.find("qore") >= 0 || stripped.find("Qore") >= 0);
+    }
+
+    # the output of a program of the debug server is printed as it was written
+    outputEventTests() {
+        TestDebugCommandLine dcl();
+        dcl.printData({"type": DebugResponseType::Event, "cmd": DebugEventCmd::Output, "stamp": now_us(),
+            "category": "stdout", "output": "line 1\nline 2"});
+        assertEq(("line 1\nline 2",), dcl.outputLines);
+    }
+
+    # an expression is evaluated by the stopped thread, and the whole value is printed
+    evalCommandTests() {
+        TestDebugCommandLine dcl();
+        dcl.setContextValue("threadId", 5);
+        dcl.commandResponse = {"result": {"serialized": AbstractDebugControl::serialize({"a": (1, 2)})}};
+        dcl.processCmdLine("eval h.a + 1");
+        assertEq("thread/evaluate", dcl.lastCommandData.cmd);
+        assertEq(5, dcl.lastCommandData.tid);
+        assertEq("h.a + 1", dcl.lastCommandData.expression);
+        assertTrue(dcl.lastCommandData.serialize);
+        string out = dcl.outputLines.join("");
+        assertRegex("h\\.a \\+ 1", out);
+        assertRegex("a:", out);
+
+        # negative: no expression
+        dcl.outputLines = ();
+        remove dcl.lastCommandData;
+        dcl.processCmdLine("eval");
+        assertRegex("syntax: eval <expression>\n", dcl.outputLines.join(""));
+        assertEq(NOTHING, dcl.lastCommandData);
+    }
+
+    # the names of threads come from the program list of the debug server
+    threadNameTests() {
+        TestDebugCommandLine dcl();
+        dcl.commandResponse = {"result": {
+            "1": {"threads": (1, 2), "threadNames": {"1": "main", "2": "worker"}},
+            "2": {"threads": (3,), "threadNames": {"3": NOTHING}},
+            # a debug server that does not give the names of threads
+            "3": {"threads": (4,)},
+        }};
+        assertEq({"1": "main", "2": "worker", "3": NOTHING}, dcl.getThreadNames());
+        assertEq("program//list", dcl.lastCommandData.cmd);
     }
 }

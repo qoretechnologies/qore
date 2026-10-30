@@ -52,6 +52,9 @@ module DebugCmdLine {
       variant (<a href="https://github.com/qoretechnologies/qore/issues/5558">issue 5558</a>)
     - the results of commands and the values of variables are printed in YAML style (the \c "%Y" format of
       @ref Qore::printf() "printf()")
+    - added the \c eval command, which evaluates an expression with the variables of the current frame
+    - \c thread \c list shows the names of threads
+    - the output of programs of a debug server is printed as the programs wrote it
 
     @subsection dcl_v0_1_2 v0.1.2
     - removed Linenoise stuff to new module
@@ -183,6 +186,24 @@ public namespace DebugCmdLine {
                             } catch (hash<ExceptionInfo> ex) {
                             }
                             dcl.printHuman(res);
+                        },
+                    ),
+                    'eval': (
+                        'desc': 'evaluate an expression with the variables of the current frame of the current thread, '
+                            'args: expression',
+                        'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
+                            string expr = args.join(" ");
+                            if (!expr.val()) {
+                                printfImpl("syntax: eval <expression>\n");
+                                return;
+                            }
+                            *hash<auto> r = dcl.doCommand({
+                                "cmd": "thread/evaluate",
+                                "tid": dcl.checkThreadId(),
+                                "expression": expr,
+                                "serialize": True,
+                            }, False).result;
+                            dcl.printVar(expr, r.serialized);
                         },
                     ),
                     'cmd': (
@@ -1041,8 +1062,12 @@ public namespace DebugCmdLine {
                                     hash<auto> data.cmd = 'thread/stack';
                                     *hash<auto> threads = dcl.doCommand(data, False).result;
                                     if (threads) {
+                                        # the current names of the threads of the debugged programs
+                                        hash<string, *string> names = dcl.getThreadNames();
                                         foreach softint tid in (keys threads) {
-                                            printfImpl(" %4d : %s\n", tid, dcl.getThreadStackStr(threads{tid}[0]));
+                                            *string name = names{tid};
+                                            printfImpl(" %4d%s : %s\n", tid, name ? sprintf(" (%s)", name) : "",
+                                                dcl.getThreadStackStr(threads{tid}[0]));
                                         }
                                     }
                                 },
@@ -1746,6 +1771,11 @@ public namespace DebugCmdLine {
                     printHuman(data.result);
                     return; # already printed
                 case DebugResponseType::Event:
+                    if (data.cmd == DebugEventCmd::Output) {
+                        # the output of a program of the debug server, as the program wrote it
+                        printfImpl("%s", data.output);
+                        return;
+                    }
                     outs = tc.dim(data.stamp.format("YYYY-MM-DD HH:mm:SS.xx")) + ": ";
                     switch (data.cmd) {
                         case DebugEventCmd::Interrupt:
@@ -1835,6 +1865,14 @@ public namespace DebugCmdLine {
                 outs = sprintf("%Y", data);
             }
             printfImpl("%s\n", outs);
+        }
+
+        #! Returns the current names of the threads of the debugged programs, if the debug server gives them
+        public hash<string, *string> getThreadNames() {
+            *hash<auto> pgm_info = doCommand({"cmd": "program//list"}, False).result;
+            hash<string, *string> rv = {};
+            map rv += $1.threadNames, pgm_info.iterator(), $1.threadNames;
+            return rv;
         }
 
         public int checkProgramId() {
