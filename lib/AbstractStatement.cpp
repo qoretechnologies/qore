@@ -228,6 +228,8 @@ int AbstractStatement::parseInit(QoreParseContext& parse_context) {
     // set parse options and warning mask for this statement
     ParseWarnHelper pwh(pwo);
 
+    in_try = (parse_context.pflag & PF_IN_TRY) != 0;
+
     return parseInitImpl(parse_context);
 }
 

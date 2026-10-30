@@ -5576,9 +5576,12 @@ void QoreIRToLLVM::emitRuntimeLocationUpdate(const QoreIRInstruction* inst, llvm
         builder->CreateStore(llvm::ConstantPointerNull::get(llvm::PointerType::getUnqual(ctx)), stmt_cache_ptr);
         builder->CreateStore(getAotLocationConstant(inst->loc, module), loc_cache_ptr);
     } else {
-        // JIT mode: inline store of statement + location pointers
-        builder->CreateStore(llvm::ConstantPointerNull::get(llvm::PointerType::getUnqual(ctx)),
-            stmt_cache_ptr);
+        // JIT mode: inline store of statement + location pointers; in a function of a debuggable program, the
+        // statement is set by the step hook of each statement instead (see emitDebugStepHook())
+        if (!current_ir_func || !current_ir_func->source_dpgm_addr) {
+            builder->CreateStore(llvm::ConstantPointerNull::get(llvm::PointerType::getUnqual(ctx)),
+                stmt_cache_ptr);
+        }
         llvm::Value* loc_val = builder->CreateIntToPtr(
             llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(inst->loc)),
             llvm::PointerType::getUnqual(ctx));
@@ -10029,6 +10032,11 @@ void QoreIRToLLVM::emitDebugStepHook(llvm::Module& module, llvm::Function* llvm_
         const AbstractStatement* statement = static_cast<const QoreIRDebugStatementInstruction*>(inst)->statement;
         llvm::Value* stmt_ptr = builder->CreateIntToPtr(
                 llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(statement)), ptr_type);
+        // while a debugger is attached, the statement is the current statement of the frame, which the frames of
+        // its calls record (QoreThreadList::getCallStackHash())
+        if (stmt_cache_ptr && statement) {
+            builder->CreateStore(stmt_ptr, stmt_cache_ptr);
+        }
         auto fn = module.getOrInsertFunction("qore_rt_dbg_step",
                 llvm::FunctionType::get(void_type, {ptr_type, ptr_type, ptr_type}, false));
         builder->CreateCall(fn, {stmt_ptr, sb_ptr, xsink_arg});
@@ -11034,6 +11042,12 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         native_call_thread_data = load_slot(0, "thread_data");
         loc_cache_ptr = load_slot(1, "loc_ptr");
         stmt_cache_ptr = load_slot(2, "stmt_ptr");
+        // in a function of a debuggable program, the current statement is set by the step hook of each statement
+        // while a debugger is attached (emitDebugStepHook()), and it is not cleared at each line, so that the frames
+        // of the calls of the statement record it; it is cleared once here
+        if (!aot_mode && current_ir_func && current_ir_func->source_dpgm_addr) {
+            builder->CreateStore(llvm::ConstantPointerNull::get(llvm::PointerType::getUnqual(ctx)), stmt_cache_ptr);
+        }
     }
 
     // Compute remaining use counts for each register and identify registers

@@ -254,6 +254,25 @@ public class VscDebugAdapterTest inherits QUnit::Test {
             "    printf(\"caught %s\\n\", ex.err);\n"                         # 5
             "}\n";                                                           # 6
 
+        #! a program with exceptions that are caught in different ways, and one that is not caught; the comments are
+        #! the line numbers
+        const UncaughtProgram = "%modern\n"                                # 1
+            "sub fail(string err) {\n"                                       # 2
+            "    throw err, \"test\";\n"                                    # 3
+            "}\n"                                                            # 4
+            "try {\n"                                                        # 5
+            "    fail(\"CAUGHT-1\");\n"                                     # 6
+            "} catch (hash<ExceptionInfo> ex) {\n"                           # 7
+            "    try {\n"                                                    # 8
+            "        fail(\"CAUGHT-2\");\n"                                 # 9
+            "    } catch () {\n"                                             # 10
+            "    }\n"                                                        # 11
+            "}\n"                                                            # 12
+            "code c = sub () { fail(\"CAUGHT-3\"); };\n"                    # 13
+            "try { c(); } catch () {}\n"                                     # 14
+            "printf(\"before\\n\");\n"                                      # 15
+            "fail(\"UNCAUGHT\");\n";                                        # 16
+
         #! a program that runs until its variable \c done is set; the comments are the line numbers
         const LoopProgram = "%modern\n"                                     # 1
             "bool done = False;\n"                                           # 2
@@ -301,6 +320,8 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         addTestCase("breakpoints that cannot be set", \unverifiedBreakpointTest());
         addTestCase("exception breakpoints", \exceptionTest());
         addTestCase("exceptions without an exception breakpoint", \exceptionNoFilterTest());
+        addTestCase("uncaught exceptions", \uncaughtExceptionTest());
+        addTestCase("the exception filters that stop a thread", \exceptionFilterTest());
         addTestCase("threads started by the program", \threadTest());
         addTestCase("pausing a running program", \pauseTest());
         addTestCase("structured variables are shown as trees", \variablesTest());
@@ -380,6 +401,10 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         testSkip("no process module 2.2 or later");
     }
 
+    uncaughtExceptionTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
     threadTest() {
         testSkip("no process module 2.2 or later");
     }
@@ -456,6 +481,21 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         testSkip("no process module 2.2 or later");
     }
 %endif
+
+    # an exception stops the thread if its type is selected, or if it is not caught and uncaught exceptions are
+    exceptionFilterTest() {
+        hash<auto> user = {"exception": {"type": "User"}, "uncaught": False};
+        hash<auto> uncaught_system = {"exception": {"type": "System"}, "uncaught": True};
+        assertTrue(VscDebugAdapter::stopsAtException(user, ("User",)));
+        assertFalse(VscDebugAdapter::stopsAtException(user, ("System",)));
+        assertFalse(VscDebugAdapter::stopsAtException(user, ("uncaught",)));
+        assertTrue(VscDebugAdapter::stopsAtException(uncaught_system, ("uncaught",)));
+        assertTrue(VscDebugAdapter::stopsAtException(uncaught_system, ("System", "uncaught")));
+        assertFalse(VscDebugAdapter::stopsAtException(uncaught_system, ("User",)));
+        # a debug server that does not give "uncaught"
+        assertFalse(VscDebugAdapter::stopsAtException({"exception": {"type": "User"}}, ("uncaught",)));
+        assertFalse(VscDebugAdapter::stopsAtException(user, NOTHING));
+    }
 
     # the default names that Qore gives threads are not shown
     threadNameTest() {
@@ -814,6 +854,47 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         proc.closeStdin();
         assertTrue(proc.wait(30s), "the adapter ends");
         assertEq(0, proc.exitCode());
+    }
+
+    # with the "uncaught" filter, only an exception that no try statement catches stops the thread
+    uncaughtExceptionTest() {
+        TmpDir tmp("qore-vda-test-");
+        string path = writeProgram(tmp, UncaughtProgram);
+
+        Process proc = startAdapter();
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        hash<auto> r = dap.request("initialize", {"adapterID": "qore", "linesStartAt1": True,
+            "columnsStartAt1": True, "pathFormat": "path"});
+        assertTrue(r.success, r.message);
+        assertEq(("User", "System", "uncaught"), map $1.filter, r.body.exceptionBreakpointFilters);
+        r = dap.request("launch", {"program": path});
+        assertTrue(r.success, r.message);
+        dap.waitForEvent("initialized");
+        r = dap.request("setExceptionBreakpoints", {"filters": ("uncaught",)});
+        assertTrue(r.success, r.message);
+        r = dap.request("configurationDone");
+        assertTrue(r.success, r.message);
+
+        # the exceptions caught in a calling function, in a catch block and in a closure do not stop the thread
+        hash<auto> stopped = dap.waitForEvent("stopped");
+        assertEq("exception", stopped.body.reason);
+        assertEq("UNCAUGHT", stopped.body.text);
+        assertEq(("before\n",), dap.getOutput("stdout"));
+        int tid = stopped.body.threadId;
+        assertEq(3, topFrame(dap, tid).line);
+
+        # the program ends with the exception
+        r = dap.request("continue", {"threadId": tid});
+        assertTrue(r.success, r.message);
+        dap.waitForEvent("terminated");
+        assertEq((), dap.getEvents("stopped"));
+        r = dap.request("disconnect");
+        assertTrue(r.success, r.message);
+        proc.closeStdin();
+        assertTrue(proc.wait(30s), "the adapter ends");
     }
 
     exceptionNoFilterTest() {

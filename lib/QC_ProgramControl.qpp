@@ -63,6 +63,8 @@ hashdecl StatementInfo {
     int end_line;
     //! list of assigned breakpoints, unavailable if @ref no-debugging "%no-debugging" (since 0.9)
     *list breakpoints;
+    //! @ref True if the statement is in the body of a try statement of its function, method or top-level code, so an exception that it raises can be caught there (since %Qore 3.0)
+    bool in_try = False;
 }
 
 //! The ProgramControl class provides safe information about a Qore program
@@ -428,6 +430,7 @@ hash<StatementInfo> ProgramControl::getStatementIdInfo(int statement_id, bool li
    ph->setKeyValueIntern("offset", s->loc->offset);
    ph->setKeyValueIntern("start_line", s->loc->start_line);
    ph->setKeyValueIntern("end_line", s->loc->end_line);
+   ph->setKeyValueIntern("in_try", s->isInTry());
    if (list_breakpoints && p->checkAllowDebugging(xsink)) {
       QoreBreakpointList_t bl;
       p->getStatementBreakpoints(s, bl);

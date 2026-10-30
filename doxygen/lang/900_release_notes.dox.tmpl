@@ -2475,6 +2475,8 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
       @ref Qore::channel_select() "channel_select()" to wait on several channels at once; and
       @ref Qore::parallel_map() "parallel_map()" / @ref Qore::parallel_foreach() "parallel_foreach()" for
       parallel collection processing.  All of them honor cooperative cancellation
+    - @ref Qore::ProgramControl::getStatementIdInfo() "ProgramControl::getStatementIdInfo()" tells with \c in_try if a
+      statement is in the body of a try statement of its function, for debuggers
     - new @ref Qore::ProgramControl::createEvalProgram() "ProgramControl::createEvalProgram()" method: creates a
       Program that inherits all code of a debugged Program, also the code that is not public, for evaluating
       expressions in a debugger
@@ -3937,6 +3939,8 @@ while (*binary chunk = input.read(65536)) {
         event at the end of the program
       - fixed \c qdbg-vsc-adapter writing nothing to its log file
       - threads are shown with their current names
+      - added the "Uncaught exceptions" exception filter: the program stops at an exception that no try statement of
+        the debugged code catches
       - when a thread stops, the other threads of the program stop, and \c continue continues them all, as in other
         debuggers of Visual Studio Code; only the thread that stops was stopped; the \c stopAllThreads argument of
         \c launch and \c attach requests set to \c false keeps that

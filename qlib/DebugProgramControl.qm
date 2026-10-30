@@ -64,6 +64,8 @@ module DebugProgramControl {
       the process to the clients as \c "output" events, and
       @ref DebugProgramControl::DebugProgramControl::setOutputCapture() "setOutputCapture()"; the output that a thread
       writes before an interrupt is sent before the interrupt
+    - interrupt events of exceptions give \c uncaught: @ref True if no try statement of debuggable code in the call
+      stack catches the exception
     - interrupt events give the name of the thread in \c threadname, and program lists give the current names of the
       threads of programs in \c threadNames
     - @ref DebugProgramControl::DebugProgramControl::createProgram() "createProgram()" parses a script in the mode
@@ -1303,6 +1305,29 @@ public namespace DebugProgramControl {
             return epgm.callFunction(fname, vars);
         }
 
+        #! Returns True if no statement in the call stack is in the body of a try statement
+        /** The current statement of each frame with a statement of a debugged Program is checked: an exception that
+            is raised there is caught by a try statement around it in its function; the frames of builtin code and of
+            Programs that cannot be debugged are not, so an exception that such code catches is regarded as uncaught
+
+            @param stack the call stack of the thread, with the statement that raised the exception in its first frame
+        */
+        static bool isUncaught(list<auto> stack) {
+            foreach hash<auto> frame in (stack) {
+                if (!frame.statementid || !frame.programid) {
+                    continue;
+                }
+                try {
+                    if (ProgramControl::resolveProgramId(frame.programid).getStatementIdInfo(frame.statementid).in_try) {
+                        return False;
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    # a Program that cannot be debugged or that has ended
+                }
+            }
+            return True;
+        }
+
         #! Removes the Programs of expressions whose debugged Programs are no longer debugged; evalLock must be held
         /** A Program of expressions keeps the code of the debugged Program
         */
@@ -1397,6 +1422,10 @@ public namespace DebugProgramControl {
 
             # debugger client cannot ask for stack when procession message as it dead lock thread handler so we add it to original message
             ctx.intrInfo.stack = adjustStack(get_thread_call_stack(), ctx);
+            # an exception that no debuggable code in the call stack catches
+            if (exists except) {
+                ctx.intrInfo.uncaught = isUncaught(ctx.intrInfo.stack);
+            }
 
 %ifdef DEBUG_ADD_LOCAL_VARS
             for (int i=0; i < 8; i++) {

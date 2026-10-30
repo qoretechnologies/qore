@@ -54,7 +54,10 @@ module VscDebugAdapter {
 
     Supported:
     - launch, and attach to a program of a remote debug server
-    - source, function and exception breakpoints, with conditions, hit conditions and log messages (logpoints)
+    - source, function and exception breakpoints, with conditions, hit conditions and log messages (logpoints);
+      exceptions stop the program by their type (user or system exceptions) or when no try statement of the
+      debugged code catches them (uncaught exceptions; the try statements of code that cannot be debugged are not
+      seen)
     - step over, into and out, continue and pause of a thread; all threads of the program stop when one of them
       stops, and continue together, unless the \c stopAllThreads argument of the \c launch or \c attach request is
       \c false
@@ -118,6 +121,7 @@ module VscDebugAdapter {
     - conditional breakpoints, hit conditions and logpoints
     - an IDE attaching to a remote debug server that cannot be reached is told why, and a session ends with a
       message when the connection to the debug server is closed
+    - the \c "uncaught" exception filter: exceptions that no try statement of the debugged code catches
     - threads are shown with their current names, when the debug server gives them (see
       @ref Qore::get_thread_name(softint) "get_thread_name(tid)"), otherwise with the names in their last events
     - when a thread stops, the other threads of the program stop at their next statement and are reported as
@@ -677,7 +681,10 @@ vda.run();
                         return;
                     }
                 }
-                if (event.func == "exception" && !inlist(event.exception.type, m_programState{event.pgmid}.exceptionBreakpoints.filters)) {
+                # an exception stops the thread if its type is selected, or if it is not caught and uncaught exceptions
+                # are selected
+                if (event.func == "exception" && !VscDebugAdapter::stopsAtException(event,
+                    m_programState{event.pgmid}.exceptionBreakpoints.filters)) {
                     refuseInterrupt(event);
                     break;
                 }
@@ -837,6 +844,15 @@ vda.run();
             return m_programState{event.pgmid}.launchArgs.stopOnEntry === True;
         }
         return event.runstate != DebugRunStateName::Run;
+    }
+
+    #! Returns True if a thread stops at an exception with the given exception filters of the client
+    /** @param event the exception event, with the \c exception and, from debug servers that give it, \c uncaught
+        @param filters the selected filters: \c "User" and \c "System" for all exceptions of the type, and
+        \c "uncaught" for exceptions that no try statement of the debugged code catches
+    */
+    static bool stopsAtException(hash<auto> event, *softlist<string> filters) {
+        return inlist(event.exception.type, filters) || (inlist("uncaught", filters) && event.uncaught);
     }
 
     #! Keeps the state of a thread that is reported as stopped; a step of the client ends with the stop
@@ -1913,6 +1929,11 @@ vda.run();
                 (
                     "filter": "System",
                     "label": "System exception",
+                ),
+                (
+                    "filter": "uncaught",
+                    "label": "Uncaught exceptions",
+                    "description": "Exceptions that no try statement of the debugged code catches",
                 ),
             ),
 

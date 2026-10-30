@@ -6784,6 +6784,18 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         return qore_program_private::get(*pgm)->getStatementFromIndex(
             dbg_inst->loc->getFile(), dbg_inst->cached_start_line + dbg_inst->loc->offset);
     };
+    // the statement of an exception event for the debugger: the current statement of the frame, which the
+    // DebugStatement instructions set while a debugger is attached, if its location contains the instruction; the
+    // statement found by the instruction's location otherwise, which on a line with several statements is the first
+    // of them
+    auto get_exception_statement = [&](const QoreIRInstruction* inst) -> const AbstractStatement* {
+        const AbstractStatement* stmt = *rl_cache.stmt_ptr;
+        if (stmt && inst->loc && stmt->loc && stmt->loc->getFile() == inst->loc->getFile()
+            && stmt->loc->start_line <= inst->loc->start_line && stmt->loc->end_line >= inst->loc->start_line) {
+            return stmt;
+        }
+        return getDebugStatement(inst);
+    };
 
     auto findDismissTarget = [](QoreIRBasicBlock* start, QoreIRBasicBlock*& target_block,
             size_t& target_ip) -> bool {
@@ -7287,8 +7299,12 @@ next_instruction:
             goto next_instruction;
         }
         if (inst->cached_start_line >= 0 && inst->cached_start_line != last_ephemeral_line) {
-            // Update runtime_loc for exception/callstack reporting via cached pointers
-            *rl_cache.stmt_ptr = nullptr;
+            // Update runtime_loc for exception/callstack reporting via cached pointers; while a debugger is attached,
+            // the current statement is set by the DebugStatement instruction of each statement and kept, so that the
+            // call stack gives the statement of each frame (QoreThreadList::getCallStackHash())
+            if (!debug_active) {
+                *rl_cache.stmt_ptr = nullptr;
+            }
             *rl_cache.loc_ptr = inst->loc;
             last_ephemeral_line = inst->cached_start_line;
         }
@@ -8173,7 +8189,7 @@ next_instruction:
                         fflush(stderr);
                     }
                     if (debug_active) {
-                        tlpd->dbgException(getDebugStatement(inst), xsink);
+                        tlpd->dbgException(get_exception_statement(inst), xsink);
                         if (ir_trace_exceptions_env.get()) {
                             fprintf(stderr, "[ir-exception] func='%s' after-dbgException xsink=%d ex-target=%p\n",
                                 func.name.c_str(), xsink && *xsink ? 1 : 0,
@@ -12262,6 +12278,8 @@ load_local_done:
                         dbg_stmt = getDebugStatement(inst);
                     }
                     if (dbg_stmt) {
+                        // the current statement of the frame, which the frames of its calls record
+                        *rl_cache.stmt_ptr = dbg_stmt;
                         int dbg_rc = tlpd->dbgStep(statements, dbg_stmt, xsink);
                         if (ir_trace_debug_env.get()) {
                             fprintf(stderr, "[ir-debug] func='%s' line=%d stmt=%p dbg_rc=%d xsink=%d\n",
@@ -16184,7 +16202,7 @@ load_local_done:
                     }
                 }
                 if (debug_active && xsink && *xsink) {
-                    tlpd->dbgException(getDebugStatement(inst), xsink);
+                    tlpd->dbgException(get_exception_statement(inst), xsink);
                 }
                 if (throw_inst->exception_target) {
                     // The landing pad is in this frame, so only the throwing statement's own
@@ -16244,7 +16262,7 @@ load_local_done:
                     }
                 }
                 if (debug_active && *xsink) {
-                    tlpd->dbgException(getDebugStatement(inst), xsink);
+                    tlpd->dbgException(get_exception_statement(inst), xsink);
                 }
                 // Clean up ALL active catch scopes (catch_depth levels)
                 for (int i = 0; i < rethrow_inst->catch_depth; ++i) {

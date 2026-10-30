@@ -222,6 +222,7 @@ class ProgramTest inherits QUnit::Test {
         addTestCase("Program info test", \programInfoTest());
 	    addTestCase("Find runtime function test", \findRuntimeTest());
         addTestCase("a failed parse with PO_ALLOW_REPARSE", \reparseErrorTest());
+        addTestCase("the code context of top-level code and expressions", \topLevelContextTest());
     	set_return_value(main());
     }
 
@@ -1089,5 +1090,31 @@ string sub child_parse() {
 }", "parent");
         parent.run();
         assertEq("cannot resolve bareword 'x' to any reachable object", parent.callFunction("child_parse"));
+    }
+
+    # the top-level code of a Program and an Expression run in the Program, with no object or class context: a
+    # closure that they create and call has no class, and its frame is that of the Program
+    topLevelContextTest() {
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+            p.setExecMode(cast<ExecMode>(mode == "ast" ? EM_AST : (mode == "ir" ? EM_IR : (mode == "jit" ? EM_JIT
+                : EM_TIERED))));
+            p.parse("%modern
+hash<auto> sub frame() { return get_thread_call_stack()[2]; }
+our hash<auto> top_frame;
+code c = sub () { top_frame = frame(); };
+c();
+", "child");
+            p.run();
+            hash<auto> f = p.getGlobalVariable("top_frame");
+            assertEq("<anonymous closure>", f.function, mode);
+            assertEq(p.getProgramId(), f.programid, mode);
+            assertEq(5, f.line, mode);
+
+            Expression e(p, "(hash<auto> sub () { return frame(); })()", "expr");
+            f = e.eval();
+            assertEq("<anonymous closure>", f.function, mode);
+            assertEq(p.getProgramId(), f.programid, mode);
+        }
     }
 }

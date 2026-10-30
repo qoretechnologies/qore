@@ -10021,8 +10021,9 @@ public:
         return pgm ? pgm : saved_pgm;
     }
 
+    //! returns the statement of the caller that made the call, as the frames of the AST interpreter do
     DLLLOCAL const AbstractStatement* getStatement() const override {
-        return statements;
+        return saved_stmt;
     }
 
 private:
@@ -10083,8 +10084,9 @@ public:
         return saved_pgm;
     }
 
+    //! returns the statement of the caller that made the call, as the frames of the AST interpreter do
     DLLLOCAL const AbstractStatement* getStatement() const override {
-        return statements;
+        return saved_stmt;
     }
 
 private:

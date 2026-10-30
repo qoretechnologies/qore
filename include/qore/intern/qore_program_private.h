@@ -2845,6 +2845,27 @@ public:
         }
         ThreadFrameBoundaryHelper tfbh(true);
 
+        // the expression runs in this Program with no object or class context, with its parse options and no
+        // statement, as top-level code does (see QoreProgram::runTopLevel())
+        ProgramCallContextHelper pcch(pgm);
+        ObjectSubstitutionHelper osh(nullptr, nullptr);
+        class RuntimeLocationGuard {
+        public:
+            DLLLOCAL RuntimeLocationGuard(ExceptionSink* xsink, const QoreParseOptions& po) {
+                swap_runtime_statement_location(xsink, nullptr, get_runtime_location(), po, stmt, loc, saved_po);
+            }
+            DLLLOCAL ~RuntimeLocationGuard() {
+                update_runtime_statement_location(stmt, loc, saved_po);
+            }
+        private:
+            const AbstractStatement* stmt = nullptr;
+            const QoreProgramLocation* loc = nullptr;
+            QoreParseOptions saved_po;
+        } rlg(xsink, pwo.parse_options);
+        if (*xsink) {
+            return QoreValue();
+        }
+
         ValueHolder rv(exp->exec(xsink), xsink);
         if (*xsink) {
             return QoreValue();

@@ -52,6 +52,7 @@
 #define PF_NARROWED_TYPE         (1 << 9) //!< current expression involves a narrowed auto type
 #define PF_CONST_METHOD          (1 << 10) //!< parsing a const method body
 #define PF_EXISTENCE_CHECK       (1 << 11) //!< parsing the operand of exists; an unassigned value is intentional
+#define PF_IN_TRY                (1 << 12) //!< parsing the body of a try statement of the function being parsed
 
 // all definitions in this file are private to the library and subject to change
 // forward references
@@ -79,6 +80,13 @@ public:
     DLLLOCAL int parseInit(QoreParseContext& parse_context);
 
     DLLLOCAL void finalizeBlock(int sline, int eline);
+
+    //! Returns true if the statement is in the body of a try statement of its function, method or top-level code
+    /** An exception that the statement raises can then be caught in its function; set at parse time, for debuggers
+    */
+    DLLLOCAL bool isInTry() const {
+        return in_try;
+    }
 
     DLLLOCAL bool getBreakpointFlag() const {
         return breakpointFlag;
@@ -127,6 +135,7 @@ public:
 protected:
     QoreBreakpointList_t* breakpoints = nullptr;
     volatile bool breakpointFlag = false;  // fast access to check if breakpoints are non-empty
+    bool in_try = false;  // in the body of a try statement of its function; see isInTry()
 
     DLLLOCAL virtual int execImpl(QoreValue& return_value, ExceptionSink* xsink) = 0;
     DLLLOCAL virtual int execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);

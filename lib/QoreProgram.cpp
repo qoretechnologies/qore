@@ -3444,6 +3444,12 @@ QoreValue QoreProgram::runTopLevel(ExceptionSink* xsink) {
     if (*xsink)
         return QoreValue();
 
+    // the top-level code runs in this Program with no object or class context: the code that runs it, such as the
+    // builtin Program::run() method, has the Program object and class and the calling Program as its context, which
+    // the closures created and the frames of the calls made in the top-level code would otherwise get
+    ProgramCallContextHelper pcch(this);
+    ObjectSubstitutionHelper osh(nullptr, nullptr);
+
     // Save and set runtime_po for this program's top-level code.
     // Without this, runtime_po retains the outer program's value,
     // causing runtime_check_parse_option() to check the wrong program's

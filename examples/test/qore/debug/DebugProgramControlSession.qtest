@@ -30,6 +30,24 @@ printf(\"%d %y\\n\", total, h);
 
 const TargetLabel = "dpc-target.q";
 
+#! a program with exceptions that are caught in different ways, and one that is not caught
+const UncaughtScript = "%modern
+sub fail(string err) {
+    throw err, \"test\";
+}
+try {
+    fail(\"CAUGHT-1\");
+} catch (hash<ExceptionInfo> ex) {
+    try {
+        fail(\"CAUGHT-2\");
+    } catch () {
+    }
+}
+code c = sub () { fail(\"CAUGHT-3\"); };
+try { c(); } catch () {}
+fail(\"UNCAUGHT\");
+";
+
 #! a program with an overloaded function
 const OverloadScript = "%modern
 int sub f(int i) {
@@ -246,6 +264,7 @@ public class DebugProgramControlTest inherits QUnit::Test {
         addTestCase("breakpoint errors", \breakpointErrorTest());
         addTestCase("structured variables of a stopped thread", \variableCommandTest());
         addTestCase("expressions evaluated with the variables of a stopped thread", \evaluateCommandTest());
+        addTestCase("exceptions that no try statement catches", \uncaughtTest());
         set_return_value(main());
     }
 
@@ -454,6 +473,26 @@ public class DebugProgramControlTest inherits QUnit::Test {
             {"root": {"local": "total"}, "children": True}));
 
         assertEq({"rc": NOTHING}, p.finish());
+    }
+
+    # the interrupts of exceptions tell if a try statement in the call stack catches them
+    uncaughtTest() {
+        DebuggedProgram p(dpc, UncaughtScript);
+        on_exit p.cleanup();
+        hash<string, bool> uncaught = {};
+        p.dpc.go(p.tid);
+        while (True) {
+            hash<auto> e = dpc.getInterrupt(p.pgmId);
+            if (e.func == "detach") {
+                break;
+            }
+            if (e.func == "exception") {
+                uncaught{e.exception.err} = e.uncaught;
+            }
+            dpc.go(e.tid);
+        }
+        dpc.go(p.tid);
+        assertEq({"CAUGHT-1": False, "CAUGHT-2": False, "CAUGHT-3": False, "UNCAUGHT": True}, uncaught);
     }
 
     # expressions are evaluated with the local variables of a frame, and their values are kept while the thread is
