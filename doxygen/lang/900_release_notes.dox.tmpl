@@ -4,6 +4,10 @@
 
     @section qore_3_0_0 Qore 3.0.0
 
+    Native AOT scalar and member method retries share their live runtime context with call-option setup
+    after ordinary cross-%Program entry, reducing redundant thread-local lookups while preserving
+    Program accounting, live admission, context restoration and fallback behavior.
+
     Pure native AOT integer and floating method calls now defer object/class context and empty local-frame
     markers after an ordinary cross-%Program transition. A failing stack guard materializes the context before
     constructing its exception; diagnostics and normal %Program entry semantics are preserved. This reduces

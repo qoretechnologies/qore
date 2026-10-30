@@ -29838,3 +29838,94 @@ Release and Debug each pass all 22 selected fixtures without skips: 34 QUnit cas
 The next optimization experiment shares one live RuntimeConfig through option setup and the pure/member native retry after complete Program entry. Freeze the installed merged baseline before applying that separate patch, then compare optimized runtimes with identical artifacts and broad controls.
 
 See the [integration evidence](results-deferred-context-merge-macos-arm64.json) and [62-check audit](audit-deferred-context-merge.md).
+
+
+## Shared RuntimeConfig after Program entry (2026-10-30)
+
+Retain the internal runtime-context reuse candidate against optimized, installed `266db2c39f`. After the complete ordinary Program transition, the dispatcher acquires one live `RuntimeConfig&`, uses the explicit call-option helper and forwards that reference to the pure/member native retry. The previous option helpers each obtained thread data through TLS; they now read it from the supplied live view. The retry's existing `getCurrent()` acquisition moves to the enclosing scope: this is not removal of every TLS lookup. Live body/signature/object/Program/debugger/stack checks, thread accounting, option lifetime, fallback and cleanup remain.
+
+The ordinary dispatcher borrows no replaceable PIC across Program initialization. The pure retry carries the reference only in its invocation-owned descriptor, selected by `CallerProgramFrame` at compile time; same-Program cache storage is unchanged. The generated AOT contract is unchanged, and all fifteen freshly compiled artifact pairs are byte-identical. Timings use the exact same artifact and executable paths across the two frozen runtime libraries, with `-O3 -DNDEBUG`, allocation tracking disabled, three layouts, three fresh processes per cell and three 150 ms measured windows after three warmup windows (count 4096, seed 7).
+
+Optimized assembly confirms both existing typed method entries remain 304-byte frames with unchanged instruction counts. The pure retry remains 480 bytes; the member retry grows from 192 to 208 bytes and the generic dispatcher from 656 to 672 bytes. These costs remain part of the measured candidate. The scalar retry helpers no longer acquire RuntimeConfig independently; the enclosing retry calls the existing explicit option helper.
+
+The 16-workload pilot (288 processes/864 windows) improves all six pure cross-Program targets by 2.25–3.75%, with gains in every layout. The complete 37-workload screen follows (666 processes/1998 windows):
+
+|!Workload|!Baseline ns/item|!Candidate ns/item|!Change
+|local:direct_call|1.5428|1.5463|+0.23%
+|local:method_call|1.6233|1.6278|+0.28%
+|local:polymorphic_call|22.0357|22.0993|+0.29%
+|local:polymorphic_float_call|22.2406|22.2655|+0.11%
+|local:boxed_int_method_fallback|33.9311|33.5523|-1.12%
+|local:boxed_float_method_fallback|35.7319|35.0112|-2.02%
+|local:boxed_int_method_effect|92.8797|93.3563|+0.51%
+|local:list_mutate|122.9655|122.6170|-0.28%
+|local:temporary_list|1.6446|1.6328|-0.72%
+|local:polymorphic_expression_call|10.9251|11.1107|+1.70%
+|local:polymorphic_float_expression_call|11.0193|11.0581|+0.35%
+|micro:polymorphic_call|83.7169|81.7632|-2.33%
+|micro:polymorphic_float_call|84.1312|81.9888|-2.55%
+|micro:boxed_int_method_call|111.6469|108.3993|-2.91%
+|micro:boxed_float_method_call|115.8439|113.3343|-2.17%
+|micro:boxed_int_method_fallback|123.8507|121.3927|-1.98%
+|micro:boxed_float_method_fallback|129.3503|126.3956|-2.28%
+|micro:boxed_int_method_effect|183.7452|180.9986|-1.49%
+|micro:indirect_call|8.5068|8.8476|+4.01%
+|micro:closure_call|18.7348|18.6314|-0.55%
+|micro:closure_capture|24.3896|24.5220|+0.54%
+|micro:list_read|2.9214|2.9480|+0.91%
+|micro:list_build|23.1339|22.9687|-0.71%
+|micro:list_mutate|122.1642|124.3697|+1.81%
+|micro:temporary_hash|1.6416|1.6390|-0.16%
+|micro:polymorphic_expression_call|71.8174|69.8410|-2.75%
+|micro:polymorphic_float_expression_call|73.4248|70.8648|-3.49%
+|float:callback_local_float_return|0.8637|0.8541|-1.11%
+|float:typed_local_int_unary|1.1939|1.1946|+0.06%
+|float:callback_loop_float_return|4.9803|5.0334|+1.07%
+|mixed:csv_report|967.1708|945.1570|-2.28%
+|mixed:object_orders|3357.6882|3347.1236|-0.31%
+|mixed:callback_pipeline|97.9462|97.9866|+0.04%
+|mixed:text_index|1373.2970|1369.9273|-0.25%
+|probe:object_short|1670.8171|1678.8833|+0.48%
+|probe:effect_short|1749.0183|1773.4885|+1.40%
+|probe:string_result_loop|554.8375|556.5627|+0.31%
+
+The full screen improves the six pure targets by 2.17–3.49%, but also records indirect calls +4.01% with mixed layout directions, same-Program integer-expression calls +1.70%, imported list mutation +1.81%, short effectful objects +1.40%, and callback float loops +1.07%. The independent confirmation therefore expands to 25 workloads and a new randomized order (450 processes/1350 windows):
+
+|!Workload|!Baseline ns/item|!Candidate ns/item|!Change
+|local:direct_call|1.5336|1.5323|-0.09%
+|local:method_call|1.6017|1.5945|-0.45%
+|local:polymorphic_expression_call|10.9924|11.0444|+0.47%
+|local:polymorphic_float_expression_call|11.0115|11.0046|-0.06%
+|local:boxed_int_method_effect|93.3903|93.1694|-0.24%
+|micro:polymorphic_call|82.9654|81.0411|-2.32%
+|micro:polymorphic_float_call|84.5766|82.1546|-2.86%
+|micro:polymorphic_expression_call|71.5634|69.7150|-2.58%
+|micro:polymorphic_float_expression_call|73.1563|70.6980|-3.36%
+|micro:boxed_int_method_call|110.5024|105.9565|-4.11%
+|micro:boxed_float_method_call|115.3751|112.7759|-2.25%
+|micro:boxed_int_method_fallback|123.9948|120.4757|-2.84%
+|micro:boxed_float_method_fallback|128.9445|127.4385|-1.17%
+|micro:boxed_int_method_effect|183.2896|181.9597|-0.73%
+|micro:indirect_call|8.7106|8.4097|-3.45%
+|micro:list_mutate|122.9102|123.7911|+0.72%
+|micro:list_read|2.9017|2.8819|-0.68%
+|micro:closure_capture|24.3198|24.1868|-0.55%
+|float:callback_loop_float_return|4.9816|4.9823|+0.02%
+|float:typed_local_int_unary|1.1930|1.1928|-0.01%
+|mixed:csv_report|952.5846|948.4532|-0.43%
+|mixed:object_orders|3348.7179|3307.6123|-1.23%
+|mixed:callback_pipeline|97.2983|98.1372|+0.86%
+|mixed:text_index|1348.3878|1356.7452|+0.62%
+|probe:effect_short|1738.3947|1747.8961|+0.55%
+
+Confirmation improves all six pure targets by 2.25–4.11%; 17 of 18 target/layout medians improve. The exception is integer polymorphic dispatch in the shuffled layout (+0.19%, with overlapping process ranges). Integer/float boxed fallback controls improve 2.84%/1.17% and the effectful integer method 0.73%. Same-Program direct and method loops remain around 1.53 and 1.59 ns/item.
+
+Retain the candidate under the authorized broader workload tradeoff. The indirect-call slowdown does not repeat (the repeat is -3.45%); the local integer-expression cost falls to +0.47% with mixed layout directions and overlapping ranges. Retained costs include imported list mutation +0.72% (all layout medians adverse, ranges overlap), callback pipeline +0.86% (the default layout has adversely separated ranges; the other two overlap), text indexing +0.62% (mixed directions, all ranges overlap), and the short effectful-object probe +0.55% (mixed directions). These data do not establish a cause for the control costs or a weighted application speedup. All earlier observations remain in the evidence.
+
+All 1404 processes/4212 windows independently replay from raw output. Baseline and candidate preparations each pass 6072 reference outputs (1518 IR and 4554 AOT); the identical baseline artifact paths also pass 4554 outputs with the candidate. Release and Debug each pass nine focused fixtures, 14 QUnit cases and 2751 assertions. Separate native Debug suites pass 3810 and 5475 checks (potentially overlapping), and all 391 Release aliases restore with matching hashes. Four untimed profiles verify the loaded artifact/library UUIDs; their durations are excluded from comparisons. They still show Program entry and option setup, including the remaining RuntimeConfig acquisition, as leads for the next iteration.
+
+This is targeted macOS ARM64 coverage, not a full-project, sanitizer or other-platform result. The shared host has no affinity/frequency/thermal control; no owned build, test, profile or heavy scan overlaps timing. Observed ranges are not confidence intervals. These are whole-kernel ns/item, not isolated call latency. No new Java/develop ratio or maximum-performance conclusion is claimed.
+
+Next inspect whether an existing live caller RuntimeConfig can reach the ordinary dispatcher through the native fallback route, and whether option storage can leave the generic frame without shifting more cost onto other calls. Both require lifetime/reentry proof and separate optimized before/after measurements.
+
+See the [complete evidence](results-cross-program-shared-context-macos-arm64.json) and [62-check audit](audit-cross-program-shared-context.md).

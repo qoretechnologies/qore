@@ -19373,7 +19373,14 @@ static QORE_ALWAYS_INLINE bool try_dispatch_native_scalar_method(QoreObject* obj
     if (!entry || ctx->uses_self || ctx->uses_argv) {
         return false;
     }
-    RuntimeConfig& rc = RuntimeConfigNativeAccess::getCurrent();
+    RuntimeConfig& rc = [&]() -> RuntimeConfig& {
+        if constexpr (CallerProgramFrame) {
+            // The ordinary dispatcher acquired this live view after completing Program entry.
+            return cache.rc;
+        } else {
+            return RuntimeConfigNativeAccess::getCurrent();
+        }
+    }();
     QoreProgram* pgm = RuntimeConfigNativeAccess::getProgram(rc);
     QoreProgram* exec_pgm = [&]() {
         if constexpr (CachedAdmission) {
@@ -19522,7 +19529,8 @@ static QORE_ALWAYS_INLINE bool try_dispatch_native_method(QoreObject* object,
     return false;
 }
 
-static __attribute__((noinline)) bool try_dispatch_cross_program_member_method(QoreObject* object,
+static __attribute__((noinline)) bool try_dispatch_cross_program_member_method(RuntimeConfig& rc,
+        QoreObject* object,
     const QoreMethod* method,
     const AbstractQoreFunctionVariant* variant, const UserVariantBase* uvb, uint64_t* args,
     uint64_t** arg_cleanups, ExceptionSink* xsink, uint64_t& result, QoreProgram* caller_pgm);
@@ -19531,7 +19539,8 @@ static __attribute__((noinline)) bool try_dispatch_cross_program_member_method(Q
 // initialization can reenter, so borrow only Program-owned method metadata here,
 // not the caller's replaceable PIC. Recheck the live body and exact signature
 // through uncached admission; this does not relax the same-Program PIC witness.
-static __attribute__((noinline)) bool try_dispatch_cross_program_native_method(QoreObject* object,
+static __attribute__((noinline)) bool try_dispatch_cross_program_native_method(RuntimeConfig& rc,
+        QoreObject* object,
         const QoreMethod* method, const AbstractQoreFunctionVariant* variant, const UserVariantBase* uvb,
         uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink,
         uint64_t& result, QoreProgram* caller_pgm) {
@@ -19544,7 +19553,8 @@ static __attribute__((noinline)) bool try_dispatch_cross_program_native_method(Q
         const QoreMethod* method;
         const AbstractQoreFunctionVariant* variant;
         const std::string& call_name;
-    } invocation{method, variant, uvb->getCallName()};
+        RuntimeConfig& rc;
+    } invocation{method, variant, uvb->getCallName(), rc};
     return try_dispatch_native_method<false, true>(object, invocation, uvb, args, arg_cleanups,
         nargs, xsink, result, caller_pgm);
 }
@@ -19771,12 +19781,13 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
     if (retry != NativeRetry::None) {
         // These entries bypass the ordinary body scope below. Preserve the caller's effective restrictions
         // and the module's own-state identity even when the native body defers its other context until error.
-        QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb, caller_pgm);
-        if (retry == NativeRetry::Pure && try_dispatch_cross_program_native_method(o, method, variant, uvb, args,
+        RuntimeConfig& rc = RuntimeConfigNativeAccess::getCurrent();
+        QoreRtUserCallOverrideHelper po_override(rc, exec_pgm, uvb, caller_pgm);
+        if (retry == NativeRetry::Pure && try_dispatch_cross_program_native_method(rc, o, method, variant, uvb, args,
                     arg_cleanups, nargs, xsink, result, caller_pgm)) {
             return true;
         }
-        if (retry == NativeRetry::Member && try_dispatch_cross_program_member_method(o, method, variant, uvb, args,
+        if (retry == NativeRetry::Member && try_dispatch_cross_program_member_method(rc, o, method, variant, uvb, args,
                     arg_cleanups, xsink, result, caller_pgm)) {
             return true;
         }
@@ -20817,7 +20828,8 @@ __attribute__((noinline)) static int64_t qore_rt_resume_effect_member_int(QoreOb
 // scalar argument proof. This invocation view owns no PIC and is valid across
 // cold resume reentry because its metadata belongs to the live method variant.
 template <typename Scalar>
-static QORE_ALWAYS_INLINE bool try_dispatch_cross_program_scalar_member(QoreObject* object,
+static QORE_ALWAYS_INLINE bool try_dispatch_cross_program_scalar_member(RuntimeConfig& rc,
+        QoreObject* object,
         const QoreMethod* method, const AbstractQoreFunctionVariant* variant, const UserVariantBase* uvb,
         Scalar arg, uint64_t** arg_cleanups, ExceptionSink* xsink, uint64_t& result, QoreProgram* caller_pgm) {
     constexpr bool floating = std::is_same_v<Scalar, double>;
@@ -20834,7 +20846,6 @@ static QORE_ALWAYS_INLINE bool try_dispatch_cross_program_scalar_member(QoreObje
             || qore_object_private::get(*object)->sandbox_provenance) {
         return false;
     }
-    RuntimeConfig& rc = RuntimeConfigNativeAccess::getCurrent();
     QoreProgram* pgm = RuntimeConfigNativeAccess::getProgram(rc);
     if (!pgm || pgm != ctx->pgm || pgm != object->getProgram()
             || pgm != qore_rt_method_execution_program(method, uvb)
@@ -20883,7 +20894,8 @@ static QORE_ALWAYS_INLINE bool try_dispatch_cross_program_scalar_member(QoreObje
 
 // Keep the member admission and its invocation metadata out of the existing
 // pure-call dispatcher. Its caller snapshots only a positive unary proof.
-static __attribute__((noinline)) bool try_dispatch_cross_program_member_method(QoreObject* object,
+static __attribute__((noinline)) bool try_dispatch_cross_program_member_method(RuntimeConfig& rc,
+        QoreObject* object,
         const QoreMethod* method,
         const AbstractQoreFunctionVariant* variant, const UserVariantBase* uvb, uint64_t* args,
         uint64_t** arg_cleanups, ExceptionSink* xsink, uint64_t& result, QoreProgram* caller_pgm) {
@@ -20894,11 +20906,11 @@ static __attribute__((noinline)) bool try_dispatch_cross_program_member_method(Q
     }
     QoreValue arg = fromBits(args[0]);
     if (arg.getTypeInfo() == bigIntTypeInfo && !arg.needsEval()) {
-        return try_dispatch_cross_program_scalar_member(object, method, variant, uvb, arg.getAsBigInt(),
+        return try_dispatch_cross_program_scalar_member(rc, object, method, variant, uvb, arg.getAsBigInt(),
             arg_cleanups, xsink, result, caller_pgm);
     }
     if (arg.getTypeInfo() == floatTypeInfo && !arg.needsEval()) {
-        return try_dispatch_cross_program_scalar_member(object, method, variant, uvb, arg.getAsFloat(),
+        return try_dispatch_cross_program_scalar_member(rc, object, method, variant, uvb, arg.getAsFloat(),
             arg_cleanups, xsink, result, caller_pgm);
     }
     return false;

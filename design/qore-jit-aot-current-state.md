@@ -6151,3 +6151,14 @@ Release and Debug each pass all 22 selected fixtures without skips: 34 QUnit cas
 The next optimization experiment shares one live RuntimeConfig through option setup and the pure/member native retry after complete Program entry. Freeze the installed merged baseline before applying that separate patch, then compare optimized runtimes with identical artifacts and broad controls.
 
 See the [integration evidence](../bench/runtime-comparison/results-deferred-context-merge-macos-arm64.json) and [62-check audit](../bench/runtime-comparison/audit-deferred-context-merge.md).
+
+
+## Shared RuntimeConfig after Program entry (2026-10-30)
+
+Cross-Program AOT pure/member retries now share one live RuntimeConfig with call-option setup after complete Program entry. This removes duplicate option-helper TLS lookups while retaining the existing RuntimeConfig acquisition, all live admission checks, accounting, fallback and context restoration. The invocation reference never escapes its thread/call; no replaceable PIC crosses initialization. The generated AOT contract and all fifteen fresh artifact pairs are unchanged.
+
+Against optimized `266db2c39f`, three campaigns independently replay 1404 processes/4212 windows. Confirmation improves six pure scalar workloads by 2.25–4.11% (17 of 18 target/layout medians improve; the remaining +0.19% overlaps). Same-Program direct/method loops stay near 1.53/1.59 ns/item. Retained confirmation costs include list mutation +0.72%, callback pipeline +0.86%, text index +0.62%, and the short effectful-object probe +0.55%. The generic/member frames grow by 16 bytes; pure and existing typed frames stay 480/304 bytes. Full controls, ranges and the earlier indirect-call slowdown that did not repeat remain in the linked report.
+
+Release and Debug each pass nine focused fixtures / 14 cases / 2751 assertions, plus separate 3810- and 5475-check native suites. Baseline/candidate reference outputs, identical-artifact execution, LLVM verification, loaded-image UUIDs and restored Release module aliases are verified. All 62 audit checks are resolved. No new Java/develop comparison, weighted application gain or global performance ceiling is claimed. The next experiment should inspect forwarding an already-live caller context into ordinary dispatch and the generic-frame storage cost, retaining complete Program-entry semantics.
+
+See [full results and controls](../bench/runtime-comparison/RESULTS.md), [raw evidence](../bench/runtime-comparison/results-cross-program-shared-context-macos-arm64.json), and [audit](../bench/runtime-comparison/audit-cross-program-shared-context.md).
