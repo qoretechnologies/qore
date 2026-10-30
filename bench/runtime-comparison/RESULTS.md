@@ -29935,3 +29935,45 @@ See the [complete evidence](results-cross-program-shared-context-macos-arm64.jso
 Merged develop `8c57c4afe6` after `27daae3f04`. The incoming changes update QLS bounded interpreter-line reads and installed source discovery, and debugger stop reasons, stack frame names and background-thread behavior. No C++ runtime source changes. Two new exception-output tests initially failed because captured output arrived after the termination event; explicit output waits now join fragments and preserve the assertions without relying on event ordering.
 
 The optimized full build preserves all 391 Release module aliases. Eight focused fixtures pass 30 QUnit cases / 2118 assertions plus three exact/silent scripts; three additional debug-adapter processes each pass all 11 cases / 176 assertions. The first diagnostic accidentally excluded every case and is retained but rejected as execution evidence. No new timing or global performance claim accompanies this integration. See the [full evidence](results-shared-context-develop-merge-macos-arm64.json) and [62-check audit](audit-shared-context-develop-merge.md).
+
+
+## Rejected matched-call context dispatcher experiments (2026-10-30)
+
+Three runtime-only candidates reused a matched same-Program caller's live `RuntimeConfig` in ordinary scalar-method fallback. All were rejected and the audited `eb530528af` source and optimized runtime restored. The installed runtime was never changed by these experiments.
+
+V1 added an optional context argument; its integer target improved 1.12%, floating target worsened 0.58%, and control costs did not justify retention. V2 isolated legacy and explicit-context dispatch with a template: targets improved about 1%, but all six target process ranges overlapped and executable code grew 20,108 bytes. V3 also reused the existing native object/class guard, acquiring the actual TLS compatibility view once so copied invocation views do not replace that snapshot. It still retained a compatibility lookup and all ordinary Program/frame/parameter/cleanup behavior.
+
+V3's target gains repeated through pilot, 39-workload screen and 23-workload confirmation. Confirmation found 2.32% and 2.22% lower target times, but the local boxed-field controls remained 1.51–1.54% slower. Mixed changes did not establish an overall workload gain. Executable code grew 20,768 bytes and the matched wrapper plus dispatcher required 16 additional stack bytes; legacy dispatcher frame/instruction counts remained unchanged. The broader tradeoff did not justify retaining the specialization. This is not a rule rejecting every small regression.
+
+Both runtimes were Release `-O3 -DNDEBUG`, allocation tracking disabled, on the M4 Pro with LLVM 22.1.8. The same 18 executable/artifact paths ran under each frozen runtime. New nested-call probes use three receiver classes and two inner virtual calls per outer call; the results below are complete kernel ns/item, not isolated call latency. There is no qualified Java equivalent for these new probes.
+
+|!Workload|!Audited baseline ns/item|!Rejected v3 ns/item|!Elapsed-time change
+|matched:context_int|191.6260|187.1754|-2.32%
+|matched:context_float|204.3239|199.7942|-2.22%
+|local:direct_call|1.4821|1.4777|-0.30%
+|local:method_call|1.5566|1.5578|+0.08%
+|local:polymorphic_float_call|21.6222|21.9056|+1.31%
+|local:boxed_int_method_fallback|32.1579|32.6449|+1.51%
+|local:boxed_float_method_fallback|33.4255|33.9400|+1.54%
+|local:boxed_int_method_effect|88.9230|89.5912|+0.75%
+|local:polymorphic_expression_call|10.4246|10.5014|+0.74%
+|local:polymorphic_float_expression_call|10.6979|10.5737|-1.16%
+|micro:polymorphic_call|76.7970|76.9599|+0.21%
+|micro:polymorphic_float_call|78.6533|77.7572|-1.14%
+|micro:boxed_float_method_fallback|119.9743|120.8856|+0.76%
+|micro:boxed_int_method_effect|173.5226|171.1874|-1.35%
+|micro:indirect_call|8.3686|8.3817|+0.16%
+|micro:closure_capture|23.3237|23.4177|+0.40%
+|micro:list_build|21.9240|22.0437|+0.55%
+|micro:list_mutate|118.5376|117.0583|-1.25%
+|float:callback_local_float_return|0.8281|0.8211|-0.85%
+|mixed:csv_report|903.4692|909.6819|+0.69%
+|mixed:object_orders|3096.9306|3064.5721|-1.04%
+|mixed:callback_pipeline|93.7082|93.6939|-0.02%
+|mixed:text_index|1291.1082|1289.2477|-0.14%
+
+All five campaigns are retained separately: three 288-process pilots, a 702-process screen and a 690-process confirmation, totaling 2256 fresh processes and 6768 measured windows. Every candidate passed 12 Release fixtures / 23 QUnit cases / 7656 assertions, with no skips. Debug and copied-context test drafts were not executed or applied after rejection. Finalized preparation checks include 4554 existing reference outputs and 96 new source/AOT checks; candidate preparations additionally check the same old probe paths. Initial fixture/finalization failures and the screen driver's incorrect terminal workload label are explicitly documented.
+
+The [complete evidence](results-rejected-matched-call-context-macos-arm64.json) includes raw timing receipts/output, independent replays, layout medians/ranges, source and driver provenance, candidate patches, reference checks, profile samples, frame/code costs, rejected preparation history and restored-runtime verification. The [62-item audit](audit-rejected-matched-call-context.md) covers this evidence-only commit. Shared-host process ranges are not confidence intervals; no weighted application benefit, fresh Java/develop ratio or global performance maximum is claimed.
+
+Next: investigate native execution of multiple nested scalar self calls. The existing forwarding proof accepts exactly `return self.method(value)`. Extending it requires a compiler proof and versioned descriptor that preflights every callee, preserves call order and logical exception frames, and falls back before observable work when any proof fails. This is a proposed next implementation, not a completed optimization.
