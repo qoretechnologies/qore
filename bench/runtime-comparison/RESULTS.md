@@ -30248,3 +30248,58 @@ Native tests cover normal return and C++ unwinding, an optional enclosing deferr
 The [complete evidence](results-paired-frames-macos-arm64.json) contains all raw timing receipts, plans, prototype patches, source hashes and qualification records. The [62-item audit](audit-paired-frames.md) records every check and the revalidated test fix. This checkpoint does not establish current Java parity, a fresh develop comparison, a global performance ceiling, or sanitizer/full-project/other-platform coverage.
 
 Next: install the audited optimized commit after refreshing develop, then run a fresh cumulative optimized branch/develop/Java comparison. Add matched Java forwarding controls where needed, distinguishing unrestricted C2 optimization from leaf-only no-inline controls, before choosing the next dynamic-call/compiler optimization from measured profiles.
+
+
+## Optimized checkpoint after paired forwarding frames (2026-10-30)
+
+Branch 9cd852e16e versus unmodified develop a3ee195ea2, after fetching origin and confirming develop was merged. Both use matched Release -O3 -DNDEBUG builds with allocation tracking disabled, Apple clang 2100.4.1.1 / SDK 27.2 / LLVM 22.1.8, and qcc -O3 --strip-source on Apple M4 Pro/macOS ARM64. Java is freshly compiled Temurin 25.0.2+10 HotSpot C2 with JMH 1.37. These are cumulative branch differences, not the incremental effect of the paired-frame change.
+
+Known integer callbacks take 1.176 times Java time; direct and final-method kernels take 1.521 and 1.592 times. Same-program polymorphic calls still take 8.484 times Java time, indirect calls 5.202 times, and capturing closures 13.776 times. Mixed CSV, orders, callback-pipeline and text-index workloads take 16.12%, 10.87%, 71.50% and 23.21% less time than develop, respectively. These improvements do not establish a weighted application speedup or a performance ceiling.
+
+This targeted checkpoint keeps the preceding 32-workload set, including calls, collections and four mixed workloads. It is not the historical 86-workload full comparison, and it does not include the new forwarding probes. Qore uses three layouts, three forks per layout/variant, three warmups and three measured 150 ms windows. Java uses three forks, five warmups and three measured 300 ms windows. All use 4096 items and seed 7; interleaving seed 2026103013. Values are whole-kernel ns/item: median of layout medians of process means for Qore, median process means for Java. Lower is faster.
+
+|!Workload|!Develop ns/item|!Branch ns/item|!Develop/branch|!Java ns/item|!Branch/Java
+|local:direct_call|11.2440|1.5444|7.281x|1.0151|1.521x
+|local:method_call|11.4502|1.6172|7.080x|1.0156|1.592x
+|local:polymorphic_call|323.0794|22.2831|14.499x|2.6265|8.484x
+|local:boxed_int_method_fallback|276.3393|33.1291|8.341x|2.7033|12.255x
+|local:boxed_float_method_fallback|313.1980|35.2892|8.875x|2.6140|13.500x
+|local:boxed_int_method_effect|377.6650|92.0419|4.103x|1.9570|47.032x
+|local:list_mutate|249.1288|122.1187|2.040x|4.5842|26.639x
+|local:temporary_list|152.8226|1.6570|92.229x|1.2679|1.307x
+|micro:polymorphic_call|366.5344|80.6041|4.547x|2.6216|30.746x
+|micro:polymorphic_float_call|386.2182|82.5149|4.681x|2.6358|31.306x
+|micro:boxed_int_method_call|273.9272|105.7842|2.589x|2.6143|40.463x
+|micro:boxed_float_method_call|288.6494|112.3678|2.569x|2.6397|42.569x
+|micro:boxed_int_method_fallback|315.1848|120.3381|2.619x|2.6217|45.902x
+|micro:boxed_float_method_fallback|365.9026|126.3533|2.896x|2.6260|48.117x
+|micro:boxed_int_method_effect|423.3044|177.7887|2.381x|1.9468|91.322x
+|micro:indirect_call|260.5442|8.8736|29.362x|1.7057|5.202x
+|micro:closure_call|159.0937|18.5986|8.554x|1.7148|10.846x
+|micro:closure_capture|182.3984|24.5809|7.420x|1.7844|13.776x
+|micro:list_read|12.8921|2.9103|4.430x|0.3005|9.684x
+|micro:list_build|122.2654|23.5953|5.182x|2.6620|8.864x
+|micro:list_mutate|249.9891|121.3847|2.059x|4.5261|26.819x
+|micro:temporary_hash|339.5706|1.6523|205.520x|14.9588|0.110x
+|float:callback_local_float_return|330.0857|0.8576|384.875x|0.5450|1.574x
+|float:typed_local_int_unary|255.8668|1.1977|213.636x|1.0183|1.176x
+|float:callback_loop_float_return|552.4144|4.9986|110.513x|1.6248|3.076x
+|mixed:csv_report|1130.5782|948.3271|1.192x|N/A|N/A
+|mixed:object_orders|3752.8564|3344.8973|1.122x|N/A|N/A
+|mixed:callback_pipeline|336.7555|95.9834|3.508x|N/A|N/A
+|mixed:text_index|1781.1337|1367.7689|1.302x|N/A|N/A
+|probe:object_short|1964.3769|1686.7385|1.165x|N/A|N/A
+|probe:effect_short|2128.1015|1740.5257|1.223x|N/A|N/A
+|probe:string_result_loop|792.8746|556.1507|1.426x|N/A|N/A
+
+Observed range relationships across the 96 Qore workload/layout cells: branch-faster=96. These ranges are not confidence intervals; every cell and raw sample is retained.
+
+All 651 processes /1953 windows independently replay. Each Qore build passes 1518 IR and 4554 AOT reference results, 12144 combined; Java passes 1230 reference results, including repeated standalone/micro grids. All 30 LLVM modules, actual loaded runtimes/modules, 25 Java C2 diagnostics and existing boundary controls were checked before timing. The branch is the audited, installed paired-frame implementation, with no intervening production changes; develop was rebuilt in a new isolated worktree with matching settings.
+
+Direct/final and known integer/float callbacks permit ordinary optimization. Dynamic methods, indirect functions and closures retain the existing Java DONT_INLINE controls. These controls expose call boundaries; they do not represent unrestricted JVM optimization or make Qore and Java object, lifetime, locking and collection contracts identical. Whole-kernel results, including temporary containers, must not be interpreted as isolated invocation latency or general collection throughput.
+
+Local standalone kernels execute in one QoreProgram. Imported function callbacks here also execute in one Program; imported object-method kernels include actual Program transitions. Mixed workloads compare only Qore builds. Input setup stays outside timing; harness dispatch, consumption and normal optimizations remain. No owned builds, tests, profiles or heavy scans overlapped timing. Host load, thermals, frequency and affinity are uncontrolled; no samples were discarded and no historical values were pooled. No weighted application gain, universal Java parity, global ceiling, startup/memory, or IR/JIT throughput claim follows.
+
+Next qualify a matched Java forwarding benchmark, distinguishing unrestricted C2 from a leaf-only no-inline control. Then test whether immutable explicit type-argument checks can move from each forwarding call to descriptor binding. Establish initialization and lifetime proofs first; retain all live program, object, options, debugger, epoch, ownership and stack checks, and measure broader controls before retention.
+
+[Complete evidence](results-post-paired-frame-checkpoint-macos-arm64.json); [all 62 audit checks](audit-post-paired-frame-checkpoint.md).

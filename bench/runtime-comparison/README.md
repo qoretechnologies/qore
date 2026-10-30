@@ -1600,3 +1600,6 @@ Immutable dot-call type-metadata caching was [measured and rejected](RESULTS.md#
 
 
 Reader-safe paired forwarding frames are [measured and retained](RESULTS.md#paired-forwarding-frames-2026-10-30): roughly 3% integer and 3.6% floating forwarding reductions, with all slower controls reported. Both logical frames and native frame sizes are preserved. See the [full 62-item audit](audit-paired-frames.md). A fresh cumulative optimized develop/Java comparison is the next checkpoint.
+
+
+The [post-paired-frame optimized checkpoint](RESULTS.md#optimized-checkpoint-after-paired-forwarding-frames-2026-10-30) refreshes all 32 workloads against current develop and 25 fresh Java rows. All 651 processes /1953 measured windows are preserved; see the full table and optimizer/Program-context qualifications.
