@@ -222,11 +222,16 @@ class DebugTest inherits QUnit::Test {
 
 
     private {
+        #! the time after which a break that did not happen fails the test instead of hanging it
+        const BreakFailureTimeout = 60s;
+
         hash stack;
         hash line;
         int main_tid;
         Mutex semaphore;
         Counter counter();
+        # set when the loop of tstBreakProgram() is to end without a break of the debugger
+        Counter loopStop();
         ProgramControl thisProgram;
         MyDebugProgram debugProgram;
     }
@@ -239,7 +244,7 @@ class DebugTest inherits QUnit::Test {
         addTestCase("BreakpointTest", \breakpointTest());
         addTestCase("SingleThreadDebugTest", \singleThreadDebugTest());
         addTestCase("SingleThreadBreakpointTest", \singleThreadBreakpointTest());
-        addTestCase("MultiThreadBreakTest", \multiThreadBreakTest());   # problem in valrind because of timing ?
+        addTestCase("MultiThreadBreakTest", \multiThreadBreakTest());
         addTestCase("ConcurrentAttachDetachTest", \concurrentAttachDetachTest());
         addTestCase("DebugCallbackLifetimeTest",
             \debugCallbackLifetimeTest());
@@ -314,17 +319,16 @@ class DebugTest inherits QUnit::Test {
         return s;
     }
     bool tstBreakProgram() {
-        int max_ms = 1000;
-        int i=0;
-        int stamp = clock_getmillis();
-        while (clock_getmillis() - stamp < max_ms) {
+        int i = 0;
+        while (!loopStop.getCount()) {
             if (counter.getCount() > 0) {
                 counter.dec();
             }
             usleep(1);  # yield
             i++;
         }
-        return clock_getmillis() - stamp < max_ms;
+        # True if the debugger ended the loop
+        return !loopStop.getCount();
     }
     # end of tested program
 
@@ -395,28 +399,41 @@ class DebugTest inherits QUnit::Test {
         testAssertionValue(sprintf(name+':getAllPrograms size 0'), l.size(), 0);
     }
 
-    debugBreakThread(int tid) {
-        #printf("debugBreakThread running %d\n", tid);
+    #! Breaks the loop of tstBreakProgram() running in the main thread
+    /** The loop decrements the counter, so a decremented counter shows that the loop runs.  If the break is not
+        expected to stop the loop, the loop is ended when it has run statements after the break was requested, as a
+        break would have stopped it at its next statement.  The timeouts only end a test whose break or loop does not
+        behave as expected.
+    */
+    debugBreakThread(int tid, bool expect_break, Counter done) {
+        # the thread has ended when the program has been removed from the debugger
+        on_exit done.dec();
         debugProgram.addProgram(thisProgram);
-        counter.inc();  # to avoid race loop vs. attach
-        if (counter.waitForZero(200ms) != 0) {   # leave some time to reach loop block
+        on_exit debugProgram.removeProgram(thisProgram);
+        # the loop runs when the break is requested
+        counter.inc();
+        if (counter.waitForZero(BreakFailureTimeout)) {
             printf("ERROR: loop not reached\n");
         }
         if (tid >= 0) {
-            #printf("debugBreakThread breakProgramThread(%d)\n", tid);
             debugProgram.breakProgramThread(thisProgram, tid);
         } else {
-            #printf("debugBreakThread breakProgram()\n");
             debugProgram.breakProgram(thisProgram);
         }
-        #printf("debugBreakThread waiting for program finish\n");
-        if (semaphore.lock(1200ms) < 0) {  # wait till tst program finishes because of break infinite loop  etc.
-            printf("ERROR: semaphore locked\n");
-        } else {
-            #printf("debugBreakThread done unlock itself\n");
-            semaphore.unlock();
+        if (!expect_break) {
+            counter.inc();
+            if (counter.waitForZero(BreakFailureTimeout)) {
+                printf("ERROR: loop stopped\n");
+            }
+            loopStop.inc();
         }
-        debugProgram.removeProgram(thisProgram);
+        # waits until the loop has ended
+        if (semaphore.lock(BreakFailureTimeout) < 0) {
+            printf("ERROR: loop not broken\n");
+            loopStop.inc();
+            semaphore.lock();
+        }
+        semaphore.unlock();
     }
 
     checkBreakProgram(string name, int tid, bool breakRes) {
@@ -425,11 +442,14 @@ class DebugTest inherits QUnit::Test {
         }
         debugProgram.waitForTerminationAndClear();
         debugProgram.setActions(list(DebugRun, ("flow": DebugFlowBreak, "runState": DebugDetach)), main_tid);
+        loopStop = new Counter();
         semaphore.lock();
         counter.inc();
-        background debugBreakThread(tid);
+        Counter done(1);
+        background debugBreakThread(tid, breakRes, done);
         auto res = tstBreakProgram();
         semaphore.unlock();
+        done.waitForZero();
         debugProgram.waitForTerminationAndClear();
         testAssertionValue(sprintf(name+':program finished'), res, breakRes);  # do when debug is over not to make QUnit exception
         if (breakRes) {
