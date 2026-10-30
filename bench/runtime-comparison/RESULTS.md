@@ -30713,3 +30713,30 @@ Complete default-layout artifact sizes are unchanged for local, micro, float, pr
 Earlier failed integration/harness stages and the rejected v4 measurements are retained separately from final qualification. The full optimized postcommit build and authorized system installation are recorded subsequently. Shared-host noise and layout sensitivity limit attribution of small timing differences. See the [complete evidence](results-guard-develop-merge-macos-arm64.json) and [62-item audit](audit-guard-develop-merge.md).
 
 The next optimization remains receiver classification for already-retained parameter objects and selected expressions, preserving current-value identity, live validity, reflection and ordinary fallback. No global performance ceiling has been established.
+
+
+## Develop annotation followup (2026-10-31)
+
+Develop4544bec includes the native-summary debugger annotation fix and a localhost test readiness fix. The merge retains separate native/debug IR, bounded cancellable instruction collection and statement-aware effect resume. The latter now ignores DebugBlock as well as DebugStatement. Shared JIT summaries receive the upstream changes too.
+
+Both variants use optimized Release builds and fresh -O3 --strip-source AOT artifacts under the same toolchain. Before is the qualified f94d21 implementation (precommit binary revision1d7d4c); after is the followup merge (precommit binary revisionf94d21). All 18 suite/layout native LLVM modules are identical except explicit runtime identity, compressed metadata and startup metadata-length fields. Measurements cover 12 workloads, 216 processes and 648 windows across 3 layouts and 3 forks. These are whole-kernel ns/item; negative changes are faster.
+
+|!Workload|!Before ns/item|!After ns/item|!Change
+|local:direct_call|1.4969|1.4886|-0.56%
+|local:method_call|1.5725|1.5663|-0.39%
+|local:polymorphic_call|17.6841|17.8630|+1.01%
+|local:polymorphic_expression_call|6.8091|6.8330|+0.35%
+|local:boxed_int_method_effect|88.1430|90.1561|+2.28%
+|local:temporary_list|1.5921|1.5924|+0.02%
+|micro:closure_call|18.1093|18.2140|+0.58%
+|micro:indirect_call|8.7529|8.7172|-0.41%
+|micro:temporary_hash|1.6041|1.5937|-0.65%
+|float:callback_local_float_return|0.8270|0.8279|+0.11%
+|mixed:text_index|1293.3495|1309.8056|+1.27%
+|probe:object_short|1625.7979|1616.5731|-0.57%
+
+Retain the upstream fixes under the authorized broader workload tradeoff. Direct/final/indirect calls and temporary aggregates remain near their qualified baseline. Polymorphic and closure kernels change by +1.01% and +0.58%, with mixed directions across layouts. Effectful methods are +2.28% slower (all three layouts +1.33% to +4.25%) and text processing +1.27% slower (all three +1.10% to +1.60%); these are recorded as adverse results, not dismissed as noise. Identical native LLVM limits attribution but does not prove identical runtime cost: runtime library layout and shared-host conditions can differ. This small merge checkpoint establishes neither a speedup nor a ceiling; effectful call overhead remains an optimization target.
+
+All 23 followup fixtures pass: 17 QUnit cases/1362 assertions, 2 raw-OK and 12 silent-success fixtures. Includes real JIT aggregate/transitive compilation, composed-expression debugger coverage, AOT statement/mutation/closure/effect/return/constructor/string/collection paths and the upstream connection test. All 36 fresh O3 artifacts / 144 processes / 4698 reference outputs per variant pass; all 391 qmods build. No fresh Debug-build/sanitizer/other-platform claim.
+
+The complete [evidence](results-guard-develop-followup-macos-arm64.json) retains all results and raw process ranges; the [audit](audit-guard-develop-followup.md) records every checklist item. This is a merge checkpoint, not a new Java or develop-versus-branch comparison. The next performance experiment reuses receiver classification for existing retained entry objects while preserving receiver identity and live deletion checks.

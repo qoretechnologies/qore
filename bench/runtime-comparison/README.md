@@ -1624,3 +1624,6 @@ The [post-polymorphic optimized checkpoint](RESULTS.md#optimized-checkpoint-afte
 
 
 [Develop debugger integration](RESULTS.md#develop-debugger-merge-and-native-admission-2026-10-31) preserves native call admission while recording every AOT debug statement. Optimized before/after results and qualification are in the [evidence](results-guard-develop-merge-macos-arm64.json) and [audit](audit-guard-develop-merge.md).
+
+
+[Develop annotation followup](RESULTS.md#develop-annotation-followup-2026-10-31): optimized merge checkpoint, shared JIT/AOT summary validation and [62-item audit](audit-guard-develop-followup.md).

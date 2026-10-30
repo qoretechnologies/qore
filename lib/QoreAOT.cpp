@@ -821,6 +821,14 @@ std::string qore_aot_encode_class_ref(const QoreClass* qc, bool pseudo) {
     return rv;
 }
 
+//! Returns true for an instruction of the step events of a debugger, which native AOT code ignores
+/** The IR of a Program that can be debugged has them (QoreIRFunction::emit_debug_statements), as it is also
+    serialized as the debug IR of the function; the analyses of the native code skip them (#5558)
+*/
+static bool qore_aot_is_debug_instruction(const QoreIRInstruction& inst) {
+    return inst.opcode == QoreIROpcode::DebugStatement || inst.opcode == QoreIROpcode::DebugBlock;
+}
+
 //! AOT compile-time optimization Phase 1: emit_debug_info flag.
 //! Returns true if DWARF debug info should be emitted (default: true).
 //! Opt-out via QORE_AOT_NO_DEBUG_INFO=1 (qcc --strip-debug-info flag sets this).
@@ -984,7 +992,7 @@ static bool getAOTNativeBodyInstructions(const QoreIRFunction& ir, size_t limit,
         if (!inst) {
             return false;
         }
-        if (inst->opcode == QoreIROpcode::DebugStatement) {
+        if (qore_aot_is_debug_instruction(*inst)) {
             continue;
         }
         if (native_count++ == limit) {
@@ -6931,6 +6939,9 @@ static bool qore_aot_get_string_op(const QoreIRFunction& func,
                 && qore_check_cancel(nullptr, "AOT native body summary")) {
             return false;
         }
+        if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+            continue;
+        }
         if (!inst_ptr || inst_ptr->exception_target || ret) {
             return false;
         }
@@ -7496,6 +7507,9 @@ static bool qore_aot_get_string_expression(const QoreIRFunction& func,
         return index;
     };
     for (const auto& inst_ptr : func.blocks.front()->instructions) {
+        if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+            continue;
+        }
         if (!inst_ptr || inst_ptr->exception_target || ret) {
             return false;
         }
@@ -7839,6 +7853,9 @@ static bool qore_aot_get_collection_op(const QoreIRFunction& func,
         if (++native_body_scanned % 100 == 0
                 && qore_check_cancel(nullptr, "AOT native body summary")) {
             return false;
+        }
+        if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+            continue;
         }
         if (!inst_ptr || inst_ptr->exception_target || ret) {
             return false;
@@ -8223,6 +8240,9 @@ static bool qore_aot_get_conditional_aggregate_shape(
                 return false;
             }
             const auto& inst_ptr = block->instructions[offset];
+            if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+                continue;
+            }
             if (!inst_ptr || inst_ptr->exception_target || terminated) {
                 return false;
             }
@@ -8716,6 +8736,9 @@ static bool qore_aot_get_aggregate_return(const QoreIRFunction& func,
                 && qore_check_cancel(nullptr,
                     "AOT aggregate-return instruction analysis")) {
             return false;
+        }
+        if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+            continue;
         }
         if (!inst_ptr || inst_ptr->exception_target || ret) {
             return false;
@@ -9299,6 +9322,9 @@ static bool qore_aot_collect_composed_aggregate_return_summaries(
                 cancelled = true;
                 return fail();
             }
+            if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+                continue;
+            }
             if (!inst_ptr || inst_ptr->exception_target || ret) {
                 return fail();
             }
@@ -9778,6 +9804,9 @@ static int8_t qore_aot_get_boxed_return_param(const QoreIRFunction& func,
                 && qore_check_cancel(nullptr, "AOT native body summary")) {
             return -1;
         }
+        if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+            continue;
+        }
         if (!inst_ptr || inst_ptr->exception_target || ret) {
             return -1;
         }
@@ -9861,6 +9890,9 @@ static int8_t qore_aot_get_forwarded_return_param(const QoreIRFunction& func,
         if (++native_body_scanned % 100 == 0
                 && qore_check_cancel(nullptr, "AOT native body summary")) {
             return -1;
+        }
+        if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+            continue;
         }
         if (!inst_ptr || inst_ptr->exception_target || returned) {
             return -1;
@@ -10105,6 +10137,9 @@ static int8_t qore_aot_get_composed_boxed_return_param(
         for (const auto& block : func.blocks) {
             for (const auto& inst_ptr : block->instructions) {
                 const QoreIRInstruction* inst = inst_ptr.get();
+                if (inst && qore_aot_is_debug_instruction(*inst)) {
+                    continue;
+                }
                 if (!inst || inst->exception_target) {
                     return -1;
                 }
@@ -10427,6 +10462,9 @@ static bool qore_aot_get_composed_int(const QoreIRFunction& func,
                 && qore_check_cancel(nullptr, "AOT native body summary")) {
             return false;
         }
+        if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+            continue;
+        }
         if (!inst_ptr || inst_ptr->exception_target || ret) {
             return false;
         }
@@ -10600,6 +10638,9 @@ static bool qore_aot_get_context_int(const QoreIRFunction& func,
                 && qore_check_cancel(nullptr, "AOT native body summary")) {
             return false;
         }
+        if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+            continue;
+        }
         if (!inst_ptr || inst_ptr->exception_target || ret) {
             return false;
         }
@@ -10739,6 +10780,9 @@ static bool qore_aot_get_global_int(const QoreIRFunction& func,
         if (++native_body_scanned % 100 == 0
                 && qore_check_cancel(nullptr, "AOT native body summary")) {
             return false;
+        }
+        if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+            continue;
         }
         if (!inst_ptr || inst_ptr->exception_target || ret) {
             return false;
@@ -11757,6 +11801,9 @@ static bool qore_aot_collect_int_expression_summaries(
         if (func->blocks.size() >= 3) {
             const QoreIRBranchIfInstruction* branch = nullptr;
             for (const auto& inst_ptr : func->blocks.front()->instructions) {
+                if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+                    continue;
+                }
                 if (!inst_ptr || inst_ptr->exception_target || branch) {
                     state = VisitState::Failed;
                     return false;
@@ -11816,6 +11863,9 @@ static bool qore_aot_collect_int_expression_summaries(
                 std::unordered_map<const LocalVar*, int> nested_locals = local_values;
                 const QoreIRBranchIfInstruction* nested_branch = nullptr;
                 for (const auto& inst_ptr : nested_block->instructions) {
+                    if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+                        continue;
+                    }
                     if (!inst_ptr || inst_ptr->exception_target || nested_branch) {
                         state = VisitState::Failed;
                         return false;
@@ -11866,6 +11916,9 @@ static bool qore_aot_collect_int_expression_summaries(
                     std::unordered_map<const LocalVar*, int> block_locals = initial_locals;
                     const QoreIRReturnInstruction* ret = nullptr;
                     for (const auto& inst_ptr : block->instructions) {
+                        if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+                            continue;
+                        }
                         if (!inst_ptr || inst_ptr->exception_target || ret) {
                             return -1;
                         }
@@ -11928,6 +11981,9 @@ static bool qore_aot_collect_int_expression_summaries(
                     block_values = values;
                     block_locals = local_values;
                     for (const auto& inst_ptr : block->instructions) {
+                        if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+                            continue;
+                        }
                         if (!inst_ptr || inst_ptr->exception_target || target) {
                             return false;
                         }
@@ -12003,6 +12059,9 @@ static bool qore_aot_collect_int_expression_summaries(
                 std::unordered_map<uint32_t, int> merge_values = values;
                 const QoreIRReturnInstruction* ret = nullptr;
                 for (const auto& inst_ptr : true_merge->instructions) {
+                    if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+                        continue;
+                    }
                     if (!inst_ptr || inst_ptr->exception_target || ret) {
                         state = VisitState::Failed;
                         return false;
@@ -12069,6 +12128,9 @@ static bool qore_aot_collect_int_expression_summaries(
                 std::unordered_map<const LocalVar*, int> block_locals = local_values;
                 const QoreIRReturnInstruction* ret = nullptr;
                 for (const auto& inst_ptr : block->instructions) {
+                    if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+                        continue;
+                    }
                     if (!inst_ptr || inst_ptr->exception_target || ret) {
                         return -1;
                     }
@@ -12108,6 +12170,9 @@ static bool qore_aot_collect_int_expression_summaries(
 
         const QoreIRReturnInstruction* ret = nullptr;
         for (const auto& inst_ptr : func->blocks.front()->instructions) {
+            if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+                continue;
+            }
             if (!inst_ptr || inst_ptr->exception_target || ret) {
                 state = VisitState::Failed;
                 return false;
@@ -13972,6 +14037,9 @@ bool qore_ir_resolve_batch_function_summaries(
         const QoreIRInstruction* comparison = nullptr;
         const QoreIRBranchIfInstruction* branch = nullptr;
         for (const auto& inst_ptr : entry->instructions) {
+            if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+                continue;
+            }
             if (!inst_ptr || inst_ptr->exception_target || branch) {
                 return false;
             }
@@ -14026,6 +14094,9 @@ bool qore_ir_resolve_batch_function_summaries(
             std::unordered_map<uint32_t, ScalarIntOperand> values = entry_values;
             const QoreIRReturnInstruction* ret = nullptr;
             for (const auto& inst_ptr : block->instructions) {
+                if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+                    continue;
+                }
                 if (!inst_ptr || inst_ptr->exception_target || ret) {
                     return false;
                 }
@@ -14095,6 +14166,9 @@ bool qore_ir_resolve_batch_function_summaries(
                 }
                 const QoreIRReturnInstruction* ret = nullptr;
                 for (const auto& inst_ptr : block->instructions) {
+                    if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+                        continue;
+                    }
                     if (!inst_ptr || inst_ptr->exception_target || ret) {
                         return false;
                     }
@@ -14201,6 +14275,9 @@ bool qore_ir_resolve_batch_function_summaries(
                     && qore_check_cancel(nullptr, "AOT native body summary")) {
                 return false;
             }
+            if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+                continue;
+            }
             if (!inst_ptr || inst_ptr->exception_target || ret) {
                 return false;
             }
@@ -14264,6 +14341,9 @@ bool qore_ir_resolve_batch_function_summaries(
             if (++native_body_scanned % 100 == 0
                     && qore_check_cancel(nullptr, "AOT native body summary")) {
                 return false;
+            }
+            if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+                continue;
             }
             if (!inst_ptr || inst_ptr->exception_target || returned) {
                 return false;
@@ -14400,6 +14480,9 @@ bool qore_ir_resolve_batch_function_summaries(
             if (++native_body_scanned % 100 == 0
                     && qore_check_cancel(nullptr, "AOT native body summary")) {
                 return false;
+            }
+            if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+                continue;
             }
             if (!inst_ptr || inst_ptr->exception_target || returned) {
                 return false;

@@ -16311,7 +16311,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             // on its native path. Branch before location updates or debug hooks.
             // Serialized statement annotations are native no-ops and do not
             // change the three-instruction update boundaries proved at admission.
-            bool effect_debug_annotation = inst->opcode == QoreIROpcode::DebugStatement;
+            bool effect_debug_annotation = inst->opcode == QoreIROpcode::DebugStatement
+                || inst->opcode == QoreIROpcode::DebugBlock;
             if (effect_member_resume && !effect_debug_annotation
                     && effect_resume_instruction < effect_member_updates * 3
                     && effect_resume_instruction % 3 == 0) {
