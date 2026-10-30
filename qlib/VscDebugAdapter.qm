@@ -55,8 +55,9 @@ module VscDebugAdapter {
     Supported:
     - launch, and attach to a program of a remote debug server
     - source, function and exception breakpoints, with conditions, hit conditions and log messages (logpoints)
-    - step over, into and out, continue and pause of a thread; with the \c stopAllThreads argument of a \c launch
-      or \c attach request, all threads of the program stop when one of them stops, and continue together
+    - step over, into and out, continue and pause of a thread; all threads of the program stop when one of them
+      stops, and continue together, unless the \c stopAllThreads argument of the \c launch or \c attach request is
+      \c false
     - threads with their names; the default names that %Qore gives threads are not shown
     - call stacks, and the local and global variables of their frames as trees: the elements of lists, the keys of
       hashes and the members of objects, also private ones, are read when they are shown, and the elements of long
@@ -74,9 +75,9 @@ module VscDebugAdapter {
     Limitations:
     - data breakpoints, stepping back, jumping to a line, restarting a frame, stepping into a chosen call, and column
       breakpoints are not supported
-    - a breakpoint or a pause stops only the thread that reaches it, unless the \c stopAllThreads argument is
-      \c true; then the other threads stop at their next statement, so a thread that waits, as for input, stops when it
-      runs again
+    - when a thread stops, the other threads stop at their next statement, so a thread that waits, as for input,
+      stops when it runs again; with \c stopAllThreads \c false, a breakpoint or a pause stops only the thread that
+      reaches it
     - the client is not notified when another debugger client changes a breakpoint
 
     @subsection vda_v0_3
@@ -88,9 +89,9 @@ module VscDebugAdapter {
     - watches and hovers load the variables of the frame when they have not been listed
     - requests without arguments, such as \c configurationDone, are also accepted with empty arguments
       (<a href="https://github.com/qoretechnologies/qore/issues/5560">issue 5560</a>)
-    - the \c stopOnEntry argument of a \c launch request is supported: with \c false, a launched program does not
-      stop at its first statement, but only at a breakpoint or an exception; it stops there when the argument is
-      \c true or not given, as before; in either case the launched program runs only after the \c
+    - the \c stopOnEntry argument of a \c launch request is supported: a launched program stops at its first
+      statement only when it is \c true; otherwise it runs until a breakpoint or an exception, as in other debuggers
+      of Visual Studio Code; it always stopped there before; in either case the launched program runs only after the \c
       configurationDone request, so breakpoints set during the configuration phase are always honored
     - \c stopped events give the reasons of the Debug Adapter Protocol: \c "breakpoint" and
       \c "function breakpoint" with the IDs of the breakpoints that are hit in \c hitBreakpointIds, \c "entry",
@@ -115,9 +116,10 @@ module VscDebugAdapter {
       variables are set to the values of expressions
     - conditional breakpoints, hit conditions and logpoints
     - threads are shown with their names
-    - the \c stopAllThreads argument of \c launch and \c attach requests: when a thread stops, the other threads of
-      the program stop at their next statement and are reported as paused without taking the focus, and a
-      \c continue request continues all stopped threads
+    - when a thread stops, the other threads of the program stop at their next statement and are reported as
+      paused without taking the focus, and a \c continue request continues all stopped threads, as in other
+      debuggers of Visual Studio Code; the \c stopAllThreads argument of \c launch and \c attach requests set to
+      \c false stops only the thread that reaches a breakpoint or is paused
     - attaching to a program of a remote debug server: the IDE can set its breakpoints as soon as the program is
       attached; threads that were stopped when it was attached, threads that the runtime stops at their next
       statement when it is attached, and threads that start during the configuration phase run on after the
@@ -945,7 +947,7 @@ vda.run();
             return True;
         }
         if (entry) {
-            return m_programState{event.pgmid}.launchArgs.stopOnEntry !== False;
+            return m_programState{event.pgmid}.launchArgs.stopOnEntry === True;
         }
         return event.runstate != DebugRunStateName::Run;
     }
@@ -1319,8 +1321,8 @@ vda.run();
         m_programState{pgmId} += (
             "startMethod": START_LAUNCH,
             "launchArgs": args,
-            # all threads stop together; see stopOtherThreads()
-            "stopAllThreads": boolean(args.stopAllThreads),
+            # all threads stop together unless the client disables it; see stopOtherThreads()
+            "stopAllThreads": args.stopAllThreads !== False,
             "startThreadId": p.result{pgmId}.threads[0],
         );
         # we are ready receive breakpoints
@@ -1351,8 +1353,8 @@ vda.run();
         m_currentPgmId = int(pgmId);
         m_programState{pgmId} += (
             "startMethod": START_ATTACH,
-            # all threads stop together; see stopOtherThreads()
-            "stopAllThreads": boolean(args.stopAllThreads),
+            # all threads stop together unless the client disables it; see stopOtherThreads()
+            "stopAllThreads": args.stopAllThreads !== False,
         );
         # the program is debugged: the client can set its breakpoints now, before a thread of the program reaches
         # them; a thread that starts before the configuration phase has ended is held until then

@@ -3902,8 +3902,9 @@ while (*binary chunk = input.read(65536)) {
       - fixed watches and hovers returning no value when the variables of the frame had not been listed, and
         requests without arguments, such as \c configurationDone, failing with empty arguments
         (<a href="https://github.com/qoretechnologies/qore/issues/5560">issue 5560</a>)
-      - the \c stopOnEntry argument of a \c launch request is supported: with \c false, a launched program stops
-        only at a breakpoint or an exception, not at its first statement; it was always stopped there
+      - a launched program runs until a breakpoint or an exception, as in other debuggers of Visual Studio Code; it
+        stops at its first statement only with the \c stopOnEntry argument of the \c launch request set to
+        \c true; it was always stopped there
       - fixed the reasons of stops: a breakpoint stop was reported as a step, without the breakpoints that are hit,
         and the whole debugger event was shown as the text of the stop
       - fixed the names of stack frames: the top frame was named after the debugger event, and each other frame
@@ -3918,8 +3919,9 @@ while (*binary chunk = input.read(65536)) {
         event at the end of the program
       - fixed \c qdbg-vsc-adapter writing nothing to its log file
       - threads are shown with their names
-      - added the \c stopAllThreads argument of \c launch and \c attach requests: when a thread stops, the other
-        threads of the program stop, and \c continue continues them all
+      - when a thread stops, the other threads of the program stop, and \c continue continues them all, as in other
+        debuggers of Visual Studio Code; only the thread that stops was stopped; the \c stopAllThreads argument of
+        \c launch and \c attach requests set to \c false keeps that
       - fixed attaching to a program of a remote debug server: breakpoints could be set only after an event of the
         program, and threads that were stopped when the program was attached, or that the runtime stopped when it
         was attached, were neither resumed nor reported as stopped

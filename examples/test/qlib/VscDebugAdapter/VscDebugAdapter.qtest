@@ -296,7 +296,7 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         addTestCase("debug session over the Debug Adapter Protocol", \sessionTest());
         addTestCase("stopOnEntry false: the first stop is a breakpoint", \noStopOnEntryTest());
         addTestCase("stopOnEntry false: a breakpoint on the first statement stops", \firstStatementBreakpointTest());
-        addTestCase("stopOnEntry not given: the program stops at entry", \defaultStopOnEntryTest());
+        addTestCase("stopOnEntry not given: the program runs to its end", \defaultStopOnEntryTest());
         addTestCase("function breakpoints", \functionBreakpointTest());
         addTestCase("breakpoints that cannot be set", \unverifiedBreakpointTest());
         addTestCase("exception breakpoints", \exceptionTest());
@@ -316,6 +316,7 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         addTestCase("marks in the output of programs", \outputMarkTest());
         addTestCase("names of threads", \threadNameTest());
         addTestCase("all threads stop and continue together", \stopAllThreadsTest());
+        addTestCase("stopAllThreads false: only the thread that stops is stopped", \stopOneThreadTest());
         addTestCase("attaching to a program of a debug server", \attachTest());
         addTestCase("the adapter ends when the IDE closes its input", \endOfInputTest());
         set_return_value(main());
@@ -429,6 +430,10 @@ public class VscDebugAdapterTest inherits QUnit::Test {
     }
 
     stopAllThreadsTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
+    stopOneThreadTest() {
         testSkip("no process module 2.2 or later");
     }
 %endif
@@ -687,20 +692,19 @@ public class VscDebugAdapterTest inherits QUnit::Test {
             proc.terminate();
         }
         DapClient dap(proc);
-        # "stopOnEntry" is true by default, as the qore-vscode extension documents it
+        # "stopOnEntry" is false by default, as in other debuggers of Visual Studio Code
         launch(dap, {"program": path});
         hash<auto> r = dap.request("configurationDone");
         assertTrue(r.success, r.message);
 
-        hash<auto> stopped = dap.waitForEvent("stopped");
-        assertEq("entry", stopped.body.reason);
-        assertFalse(stopped.body.hasKey("hitBreakpointIds"));
-        int tid = stopped.body.threadId;
-        hash<auto> frame = topFrame(dap, tid);
-        assertEq(path, frame.source.path);
-        assertEq(6, frame.line);
-
-        finish(dap, proc, tid);
+        dap.waitForEvent("terminated");
+        assertEq((), dap.getEvents("stopped"));
+        r = dap.request("disconnect");
+        assertTrue(r.success, r.message);
+        proc.closeStdin();
+        assertTrue(proc.wait(30s), "the adapter ends");
+        assertEq(0, proc.exitCode());
+        assertEq((), dap.stray);
     }
 
     functionBreakpointTest() {
@@ -1567,7 +1571,8 @@ print('exit code: %d' % p.wait(30))
             proc.terminate();
         }
         DapClient dap(proc);
-        launch(dap, {"program": path, "stopOnEntry": False, "stopAllThreads": True});
+        # all threads stop together by default
+        launch(dap, {"program": path, "stopOnEntry": False});
         hash<auto> r = dap.request("setBreakpoints", {"source": {"path": path}, "breakpoints": ({"line": 33},)});
         assertTrue(r.success, r.message);
         r = dap.request("configurationDone");
@@ -1608,6 +1613,41 @@ print('exit code: %d' % p.wait(30))
         list<int> continued = map $1.body.threadId, dap.getEvents("continued");
         assertTrue(inlist(main_tid, continued), sprintf("%y", continued));
         assertTrue(inlist(busy_tid, continued), sprintf("%y", continued));
+
+        r = dap.request("disconnect");
+        assertTrue(r.success, r.message);
+        proc.closeStdin();
+        assertTrue(proc.wait(30s), "the adapter ends");
+        assertEq(0, proc.exitCode());
+        assertEq((), dap.stray);
+    }
+
+    stopOneThreadTest() {
+        TmpDir tmp("qore-vda-test-");
+        string path = writeProgram(tmp, StopAllProgram);
+
+        Process proc = startAdapter();
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        launch(dap, {"program": path, "stopAllThreads": False});
+        hash<auto> r = dap.request("setBreakpoints", {"source": {"path": path}, "breakpoints": ({"line": 33},)});
+        assertTrue(r.success, r.message);
+        r = dap.request("configurationDone");
+        assertTrue(r.success, r.message);
+
+        hash<auto> stopped = dap.waitForEvent("stopped");
+        assertEq("breakpoint", stopped.body.reason);
+        int main_tid = stopped.body.threadId;
+
+        # only the main thread continues; the program ends only if the other threads were not stopped
+        r = dap.request("continue", {"threadId": main_tid});
+        assertTrue(r.success, r.message);
+        assertFalse(r.body.allThreadsContinued);
+        dap.waitForEvent("terminated");
+        assertEq(("done\n",), dap.getOutput("stdout"));
+        assertEq((), dap.getEvents("stopped"));
 
         r = dap.request("disconnect");
         assertTrue(r.success, r.message);
