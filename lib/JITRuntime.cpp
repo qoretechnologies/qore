@@ -19324,6 +19324,38 @@ private:
 };
 static_assert(sizeof(QoreCompactNativeMethodStackLocation) < sizeof(QoreNativeMethodStackLocation<true>));
 
+// Both diagnostic objects are initialized before the last member publishes
+// their chain. Its destructor waits for readers before either vtable changes.
+class QoreCompactNativeMethodFramePair {
+    struct Frame final : QoreStackLocation {
+        const QoreAOTMethodDispatchCacheEntry& cache;
+        const QoreProgramLocation* loc = nullptr;
+        explicit Frame(const QoreAOTMethodDispatchCacheEntry& cache) : cache(cache) {
+        }
+        const QoreProgramLocation& getLocation() const override { return loc ? *loc : loc_builtin; }
+        const std::string& getCallName() const override { return cache.call_name; }
+        qore_call_t getCallType() const override { return CT_USER; }
+        QoreProgram* getProgram() const override { return cache.native_scalar_program; }
+        const AbstractStatement* getStatement() const override { return cache.native_scalar_uvb->getStatementBlock(); }
+    };
+
+public:
+    __attribute__((always_inline)) QoreCompactNativeMethodFramePair(RuntimeConfig& rc,
+            const QoreAOTMethodDispatchCacheEntry& outer_cache,
+            const QoreAOTMethodDispatchCacheEntry& inner_cache,
+            RuntimeConfigNativeMethodContext& outer_context,
+            RuntimeConfigNativeMethodContext& inner_context, const QoreProgramLocation* caller_loc)
+            : outer(outer_cache), inner(inner_cache),
+              helper(rc, &outer, outer.loc, outer_context, &inner, inner.loc, inner_context, caller_loc) {
+    }
+    __attribute__((always_inline)) ~QoreCompactNativeMethodFramePair() = default;
+
+private:
+    Frame outer;
+    Frame inner;
+    RuntimeConfigNativeMethodFramePairHelper helper;
+};
+
 // Program identity and the actual canonical argument kind share one immutable
 // comparison word. Never recover or dereference a pointer from this key; frame
 // metadata keeps its ordinary, unmodified native_scalar_program pointer.
@@ -20680,9 +20712,8 @@ static bool try_dispatch_forwarded_scalar_leaf_native(QoreObject* object,
     result = 0;
     if (!*xsink && !RuntimeConfigNativeAccess::checkStack(rc, xsink)) {
         RuntimeConfigNativeMethodContext outer_context(rc, object, outer);
-        QoreCompactNativeMethodStackLocation outer_frame(rc, outer, xsink, outer_context);
         RuntimeConfigNativeMethodContext inner_context(rc, object, *inner);
-        QoreCompactNativeMethodStackLocation inner_frame(rc, *inner, xsink, inner_context, loc);
+        QoreCompactNativeMethodFramePair frames(rc, outer, *inner, outer_context, inner_context, loc);
         try {
             result = inline_entry
                 ? inline_entry(arg, ctx, xsink, &rc, qore_rt_get_stack_limit_v1(&rc))

@@ -2515,18 +2515,11 @@ static __attribute__((noinline, cold)) void wait_for_stack_walk(ThreadData* td) 
     AutoLocker al(td->stack_walk_lck);
 }
 
-static __attribute__((always_inline)) void publish_popped_stack_location(ThreadData* td,
+// The caller must remove only its own complete head chain, and retain every
+// removed location until this handshake finishes. Single-frame and exact-pair
+// owners check their respective LIFO invariants before entering this backend.
+static __attribute__((always_inline)) void finish_stack_location_pop(ThreadData* td,
         const QoreStackLocation* stack_loc) {
-#ifdef DEBUG
-    {
-        // The handshake below only protects the locations a walker can reach if the stack changes strictly
-        // last-in, first-out: this must restore the current location's successor, or push a location already linked
-        // to it (RuntimeConfigStackHelper), or leave it as it is.  A location destroyed while another one still
-        // links to it would be reachable by a walk without any pop having waited for that walk.
-        const QoreStackLocation* cur = td->current_stack_location.load(std::memory_order_relaxed);
-        assert(!cur || stack_loc == cur || stack_loc == cur->getNext() || (stack_loc && stack_loc->getNext() == cur));
-    }
-#endif
     if (stack_walk_heavy_barrier) {
         td->current_stack_location.store(stack_loc, std::memory_order_release);
         // the walker's heavy barrier orders the store and the load in hardware; this keeps the compiler from
@@ -2546,6 +2539,21 @@ static __attribute__((always_inline)) void publish_popped_stack_location(ThreadD
     }
     // the walker holds this lock until it has finished reading the stack
     wait_for_stack_walk(td);
+}
+
+static __attribute__((always_inline)) void publish_popped_stack_location(ThreadData* td,
+        const QoreStackLocation* stack_loc) {
+#ifdef DEBUG
+    {
+        // The handshake below only protects the locations a walker can reach if the stack changes strictly
+        // last-in, first-out: this must restore the current location's successor, or push a location already linked
+        // to it (RuntimeConfigStackHelper), or leave it as it is.  A location destroyed while another one still
+        // links to it would be reachable by a walk without any pop having waited for that walk.
+        const QoreStackLocation* cur = td->current_stack_location.load(std::memory_order_relaxed);
+        assert(!cur || stack_loc == cur || stack_loc == cur->getNext() || (stack_loc && stack_loc->getNext() == cur));
+    }
+#endif
+    finish_stack_location_pop(td, stack_loc);
 }
 
 RuntimeConfig& RuntimeConfigNativeAccess::getCurrent() {
@@ -2819,6 +2827,80 @@ __attribute__((always_inline)) RuntimeConfigNativeLeafCallHelper::RuntimeConfigN
     // Scalar operations and bounded explicit-context member probes cannot
     // reenter; generic cold work starts only after this borrowed frame is gone.
     // As for callback-v3, publish before the guard so overflow materializes it.
+}
+
+// Inactive until the pair owner has initialized both locations and saved views.
+// The base destructor is inert; the pair owner alone performs restoration.
+__attribute__((always_inline)) RuntimeConfigNativeLeafCallHelper::RuntimeConfigNativeLeafCallHelper(
+        ThreadData* thread, RuntimeConfigNativeMethodContext& context)
+        : td(thread), method_context(&context), previous(nullptr), old_stack(nullptr),
+          state(ContextState::DeferredMarkers), target_kind(TargetKind::Method) {
+}
+
+__attribute__((always_inline)) RuntimeConfigNativeMethodFramePairHelper::RuntimeConfigNativeMethodFramePairHelper(
+        RuntimeConfig& rc, QoreStackLocation* outer_frame, const QoreProgramLocation*& outer_loc,
+        RuntimeConfigNativeMethodContext& outer_context,
+        QoreStackLocation* inner_frame, const QoreProgramLocation*& inner_loc,
+        RuntimeConfigNativeMethodContext& inner_context, const QoreProgramLocation* caller_loc)
+        : outer(RuntimeConfigNativeAccess::getThreadData(rc), outer_context), inner(outer.td, inner_context) {
+    ThreadData* td = outer.td;
+    const auto& outer_cache = outer_context.cache;
+    const auto& inner_cache = inner_context.cache;
+    assert(outer_frame && inner_frame && caller_loc);
+    assert(outer_cache.native_scalar_uvb && inner_cache.native_scalar_uvb);
+    assert(td->current_pgm == outer_cache.native_scalar_program
+        && td->current_pgm == inner_cache.native_scalar_program);
+    const QoreProgramLocation* outer_parse = outer_cache.native_scalar_uvb->getUserSignature()->getParseLocation();
+    const QoreProgramLocation* outer_body = outer_cache.native_scalar_uvb->getAOTBodyLocation();
+    const QoreProgramLocation* inner_body = inner_cache.native_scalar_uvb->getAOTBodyLocation();
+    if (!inner_body) {
+        inner_body = inner_cache.native_scalar_uvb->getUserSignature()->getParseLocation();
+    }
+    outer_loc = td->runtime_loc ? td->runtime_loc : outer_parse;
+    inner_loc = caller_loc;
+    outer.previous = td->native_leaf_context;
+    outer.old_stmt = td->runtime_statement;
+    outer.old_loc = td->runtime_loc;
+    outer.old_stack = td->current_stack_location.load(std::memory_order_relaxed);
+    inner.previous = &outer;
+    inner.old_stmt = nullptr;
+    inner.old_loc = outer_body ? outer_body : outer_parse;
+    inner.old_stack = outer_frame;
+    outer_frame->setNext(outer.old_stack);
+    inner_frame->setNext(outer_frame);
+#ifdef DEBUG
+    published_inner = inner_frame;
+#endif
+    // No fallible work follows. Readers see either the preceding stack or both
+    // fully linked immutable frames, never a partly initialized inner frame.
+    td->native_leaf_context = &inner;
+    td->runtime_statement = nullptr;
+    td->runtime_loc = inner_body;
+    td->current_stack_location.store(inner_frame, std::memory_order_release);
+}
+
+__attribute__((always_inline)) RuntimeConfigNativeMethodFramePairHelper::~RuntimeConfigNativeMethodFramePairHelper() {
+    using State = RuntimeConfigNativeLeafCallHelper::ContextState;
+    if (inner.state != State::DeferredMarkers || outer.state != State::DeferredMarkers) {
+        // Also handles an outer-only materialization if the inner marker push
+        // failed. Each existing restoration owns exactly its own saved state.
+        inner.restoreDeferred();
+        outer.restoreDeferred();
+        return;
+    }
+    ThreadData* td = outer.td;
+    assert(td == inner.td && td->native_leaf_context == &inner && inner.previous == &outer);
+#ifdef DEBUG
+    const QoreStackLocation* current = td->current_stack_location.load(std::memory_order_relaxed);
+    assert(current == published_inner && current->getNext() == inner.old_stack
+        && inner.old_stack && inner.old_stack->getNext() == outer.old_stack);
+#endif
+    td->runtime_statement = outer.old_stmt;
+    td->runtime_loc = outer.old_loc;
+    td->native_leaf_context = outer.previous;
+    // Unpublish the complete pair and wait before either frame or its vtable
+    // can be destroyed. The ordinary single-frame assertion remains unchanged.
+    finish_stack_location_pop(td, outer.old_stack);
 }
 
 __attribute__((always_inline)) RuntimeConfigNativeLeafCallHelper::RuntimeConfigNativeLeafCallHelper(

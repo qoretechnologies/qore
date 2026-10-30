@@ -796,6 +796,207 @@ static void ut_native_callback_policy(UnitTestCounters& c) {
     }
 }
 
+// Exercise partial materialization without adding a production accessor or
+// changing the live deferred chain to manufacture the intermediate state.
+class RuntimeConfigNativeMethodFramePairTestAccess {
+public:
+    static void materialize(RuntimeConfigNativeMethodFramePairHelper& pair, bool outer_only) {
+        if (outer_only) {
+            pair.outer.materialize();
+        } else {
+            pair.inner.materialize();
+        }
+    }
+};
+
+static void ut_native_method_frame_pair(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    QoreProgramHelper program(PO_MODERN, xsink);
+    UT_ASSERT(c, !xsink, "frame pair fixture program is created");
+    if (xsink) {
+        return;
+    }
+    {
+        ProgramRuntimeExternalParseContextHelper parse(*program);
+        UT_ASSERT(c, parse, "frame pair fixture has a parse context");
+        if (!parse) {
+            return;
+        }
+        program->parse("%modern\n"
+            "class PairCaller { int step(int value) { return value; } }\n"
+            "class PairTarget {\n"
+            " int step(int value) { return value + 1; }\n"
+            " int forward(int value) { return self.step(value); }\n"
+            "}\n"
+            "list<auto> sub owners() { PairCaller p(); PairTarget t(); return (p, t); }\n",
+            "native-method-frame-pair-unit", &xsink);
+    }
+    UT_ASSERT(c, !xsink, "frame pair fixture parses");
+    if (xsink) {
+        return;
+    }
+    QoreExternalProgramContextHelper program_context(&xsink, *program);
+    UT_ASSERT(c, !xsink, "frame pair fixture enters its runtime context");
+    if (xsink) {
+        return;
+    }
+    ValueHolder owners(program->callFunction("owners", nullptr, &xsink), &xsink);
+    UT_ASSERT(c, !xsink && owners->getType() == NT_LIST && owners->get<QoreListNode>()->size() == 2,
+        "frame pair receivers are retained");
+    if (xsink || owners->getType() != NT_LIST || owners->get<QoreListNode>()->size() != 2) {
+        return;
+    }
+    QoreValue caller_value = owners->get<QoreListNode>()->retrieveEntry(0);
+    QoreValue target_value = owners->get<QoreListNode>()->retrieveEntry(1);
+    UT_ASSERT(c, caller_value.getType() == NT_OBJECT && target_value.getType() == NT_OBJECT,
+        "frame pair receivers are objects");
+    if (caller_value.getType() != NT_OBJECT || target_value.getType() != NT_OBJECT) {
+        return;
+    }
+    QoreObject* caller = caller_value.get<QoreObject>();
+    QoreObject* target = target_value.get<QoreObject>();
+    QoreAOTMethodDispatchCacheEntry parent_cache, outer_cache, inner_cache;
+    auto initialize = [&](QoreAOTMethodDispatchCacheEntry& cache, QoreObject* object, const char* name) {
+        const QoreMethod* method = object->getClass()->findMethod(name);
+        UT_ASSERT(c, method, "frame pair method resolves");
+        if (!method) {
+            return false;
+        }
+        cache.native_scalar_uvb = qore_method_private::get(*method)->getFunction()->first()->getUserVariantBase();
+        UT_ASSERT(c, cache.native_scalar_uvb, "frame pair method has a user body");
+        if (!cache.native_scalar_uvb) {
+            return false;
+        }
+        cache.native_scalar_program = *program;
+        cache.native_scalar_class_ctx = qore_class_private::get(*object->getClass());
+        cache.call_name = std::string(object->getClassName()) + "::" + name;
+        return true;
+    };
+    if (!initialize(parent_cache, caller, "step") || !initialize(outer_cache, target, "forward")
+            || !initialize(inner_cache, target, "step")) {
+        return;
+    }
+    struct Frame : QoreStackLocation {
+        const QoreAOTMethodDispatchCacheEntry& cache;
+        const QoreProgramLocation* loc = nullptr;
+        explicit Frame(const QoreAOTMethodDispatchCacheEntry& cache) : cache(cache) {}
+        QoreProgram* getProgram() const override { return cache.native_scalar_program; }
+        const AbstractStatement* getStatement() const override { return cache.native_scalar_uvb->getStatementBlock(); }
+        const std::string& getCallName() const override { return cache.call_name; }
+        qore_call_t getCallType() const override { return CT_USER; }
+        const QoreProgramLocation& getLocation() const override { return loc ? *loc : loc_builtin; }
+    };
+    struct ParentFrame : Frame {
+        RuntimeConfigNativeMethodContext context;
+        RuntimeConfigNativeLeafCallHelperFor<true> helper;
+        ParentFrame(RuntimeConfig& rc, QoreObject* object, const QoreAOTMethodDispatchCacheEntry& cache,
+                ExceptionSink* xsink)
+                : Frame(cache), context(rc, object, cache), helper(rc, this, loc, context, xsink) {}
+    };
+    RuntimeConfig& rc = RuntimeConfigNativeAccess::getCurrent();
+    const auto* original_stack = get_runtime_stack_location();
+    const auto* original_loc = get_runtime_location();
+    const auto* original_stmt = get_runtime_statement();
+    QoreObject* original_object;
+    const qore_class_private* original_class;
+    runtime_get_object_and_class(original_object, original_class);
+    QoreObject* original_rc_object = rc.getObject();
+    const auto* original_rc_class = rc.getClass();
+    QoreProgramLocation inner_call("native-method-frame-pair-unit", 41, 41);
+#ifdef QORE_MANAGE_STACK
+    constexpr int materialization_modes = 4;
+#else
+    constexpr int materialization_modes = 3;
+#endif
+    for (bool with_parent : {false, true}) {
+        for (int materialize = 0; materialize < materialization_modes; ++materialize) {
+            for (bool unwind : {false, true}) {
+                std::unique_ptr<ParentFrame> parent;
+                if (with_parent) {
+                    parent = std::make_unique<ParentFrame>(rc, caller, parent_cache, &xsink);
+                }
+                const auto* previous = get_runtime_stack_location();
+                const auto* previous_loc = get_runtime_location();
+                const auto* previous_stmt = get_runtime_statement();
+                try {
+                    Frame outer(outer_cache), inner(inner_cache);
+                    RuntimeConfigNativeMethodContext outer_context(rc, target, outer_cache);
+                    RuntimeConfigNativeMethodContext inner_context(rc, target, inner_cache);
+                    RuntimeConfigNativeMethodFramePairHelper pair(rc, &outer, outer.loc, outer_context,
+                        &inner, inner.loc, inner_context, &inner_call);
+                    UT_ASSERT(c, get_runtime_stack_location() == &inner && inner.getNext() == &outer
+                        && outer.getNext() == previous, "both frames are linked above the previous stack");
+                    UT_ASSERT(c, inner.loc == &inner_call && outer.loc == (previous_loc ? previous_loc
+                        : outer_cache.native_scalar_uvb->getUserSignature()->getParseLocation()),
+                        "pair preserves the explicit inner call site and original outer site");
+                    UT_ASSERT(c, runtime_get_stack_object() == original_object && runtime_get_class() == original_class,
+                        "unmaterialized pair leaves live object/class unchanged");
+#ifdef QORE_MANAGE_STACK
+                    if (materialize == 3) {
+                        {
+                            QoreElidedStackHelper limit(SIZE_MAX);
+                            UT_ASSERT(c, RuntimeConfigNativeAccess::checkStack(rc, &xsink) && xsink,
+                                "native stack guard rejects exhaustion with the pair active");
+                        }
+                        UT_ASSERT(c, QoreStringDataHelper(xsink.getExceptionErr()) == "STACK-LIMIT-EXCEEDED",
+                            "pair retains the stack-limit exception");
+                        ReferenceHolder<QoreHashNode> info(xsink.getExceptionInfo(), &xsink);
+                        QoreValue stack = info ? info->getKeyValue("callstack") : QoreValue();
+                        UT_ASSERT(c, stack.getType() == NT_LIST && stack.get<QoreListNode>()->size() >= 2,
+                            "stack-limit exception records both pair frames");
+                        if (stack.getType() == NT_LIST && stack.get<QoreListNode>()->size() >= 2) {
+                            QoreValue leaf = stack.get<QoreListNode>()->retrieveEntry(0);
+                            QoreValue forward = stack.get<QoreListNode>()->retrieveEntry(1);
+                            UT_ASSERT(c, leaf.getType() == NT_HASH && forward.getType() == NT_HASH,
+                                "both exception frame records are hashes");
+                            if (leaf.getType() == NT_HASH && forward.getType() == NT_HASH) {
+                                UT_ASSERT(c, QoreStringDataHelper(leaf.get<QoreHashNode>()->getKeyValue("function"))
+                                        == "PairTarget::step"
+                                    && QoreStringDataHelper(forward.get<QoreHashNode>()->getKeyValue("function"))
+                                        == "PairTarget::forward"
+                                    && leaf.get<QoreHashNode>()->getKeyValue("line").getAsBigInt() == 41,
+                                    "stack exception preserves inner/outer order and the explicit call site");
+                            }
+                        }
+                        xsink.clear();
+                    }
+#endif
+                    if (materialize) {
+                        RuntimeConfigNativeMethodFramePairTestAccess::materialize(pair, materialize == 1);
+                        RuntimeConfigNativeMethodFramePairTestAccess::materialize(pair, materialize == 1);
+                        UT_ASSERT(c, runtime_get_stack_object() == target
+                            && runtime_get_class() == inner_cache.native_scalar_class_ctx,
+                            "materialization installs the target object/class");
+                        UT_ASSERT(c, rc.getObject() == target && rc.getClass() == inner_cache.native_scalar_class_ctx,
+                            "materialization installs the target snapshot view");
+                    }
+                    if (unwind) {
+                        throw 7;
+                    }
+                } catch (int value) {
+                    UT_ASSERT(c, unwind && value == 7, "pair restores during C++ unwinding");
+                }
+                UT_ASSERT(c, get_runtime_stack_location() == previous && get_runtime_location() == previous_loc
+                    && get_runtime_statement() == previous_stmt, "pair restores the previous stack and location");
+                bool parent_materialized = with_parent && materialize;
+                UT_ASSERT(c, runtime_get_stack_object() == (parent_materialized ? caller : original_object)
+                    && runtime_get_class() == (parent_materialized ? parent_cache.native_scalar_class_ctx : original_class),
+                    "pair restores the enclosing live object/class view");
+                UT_ASSERT(c, rc.getObject() == (parent_materialized ? caller : original_rc_object)
+                    && rc.getClass() == (parent_materialized ? parent_cache.native_scalar_class_ctx : original_rc_class),
+                    "pair restores the enclosing snapshot view");
+                parent.reset();
+                UT_ASSERT(c, get_runtime_stack_location() == original_stack && get_runtime_location() == original_loc
+                    && get_runtime_statement() == original_stmt, "parent restores the original stack and location");
+                UT_ASSERT(c, runtime_get_stack_object() == original_object && runtime_get_class() == original_class
+                    && rc.getObject() == original_rc_object && rc.getClass() == original_rc_class,
+                    "parent restores both original object/class views");
+            }
+        }
+    }
+    UT_ASSERT(c, !xsink, "frame pair lifecycle leaves no exception");
+}
+
 //! Test hidden closure-self TLS without exposing additional runtime APIs to an external fixture.
 static void ut_native_closure_context(UnitTestCounters& c) {
     // Exercise saved closure policy with IDs that cannot fit in the legacy unsigned fields.
@@ -15330,6 +15531,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_ir_scalar_snapshot(c);
     ut_aot_string_split(c);
     ut_native_closure_context(c);
+    ut_native_method_frame_pair(c);
     ut_program_context_snapshot(c);
     ut_native_call_options(c);
     ut_native_callback_policy(c);
@@ -15368,6 +15570,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_ir_scalar_snapshot(c);
     ut_aot_string_split(c);
     ut_native_closure_context(c);
+    ut_native_method_frame_pair(c);
     ut_program_context_snapshot(c);
     ut_native_call_options(c);
     ut_native_callback_policy(c);

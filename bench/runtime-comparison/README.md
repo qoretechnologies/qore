@@ -1597,3 +1597,6 @@ probe has no qualified Java equivalent and does not establish an overall applica
 
 
 Immutable dot-call type-metadata caching was [measured and rejected](RESULTS.md#rejected-immutable-dot-call-metadata-cache-2026-10-30). Small forwarding gains did not justify repeated field and side-effecting call costs. Runtime source is restored; module identity guards remain enabled. Next: investigate reader-safe publication/removal of paired forwarding frames.
+
+
+Reader-safe paired forwarding frames are [measured and retained](RESULTS.md#paired-forwarding-frames-2026-10-30): roughly 3% integer and 3.6% floating forwarding reductions, with all slower controls reported. Both logical frames and native frame sizes are preserved. See the [full 62-item audit](audit-paired-frames.md). A fresh cumulative optimized develop/Java comparison is the next checkpoint.

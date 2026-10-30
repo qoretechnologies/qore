@@ -30169,3 +30169,82 @@ Assembly removes the AST lookup, leaves inspected native/dispatcher frame sizes 
 The [complete evidence](results-rejected-dot-metadata-macos-arm64.json) preserves raw timing receipts/output, layout medians/ranges, compiler settings, source patch, references, profiles and the identity rejection. The [62-item audit](audit-rejected-dot-metadata.md) covers this evidence-only commit. No new Java/develop ratio, weighted application effect or performance ceiling is claimed.
 
 Next: investigate combining forwarding-frame publication and removal while preserving both logical frames, source locations, deferred object/class contexts and exception restoration. A dedicated protocol must wait for concurrent stack readers before either frame is destroyed; the single-frame LIFO assertion cannot simply be weakened. This is an unimplemented hypothesis.
+
+
+## Paired forwarding frames (2026-10-30)
+
+The retained revision publishes both logical frames of an admitted scalar forwarding call with one release store and removes the fully deferred pair with one existing reader handshake. Both frames, names and source locations remain visible. Materialized or partially materialized calls retain the existing individual restoration path. Live program, receiver, policy, debugger, signature and stack checks are unchanged. No public or generated ABI changes, existing helper layout changes, per-call allocation, or experimental switch remain.
+
+This is a bounded forwarding improvement with measured tradeoffs. Final confirmation reduces floating forwarding kernel time by **3.58%** and integer forwarding by **2.90%**. With identical standalone callers, the reductions are **3.60%** and **3.34%**, respectively, faster in every layout. Confirmation also measures integer field +2.39%, indirect +1.90% and list building +1.03%. The identical-caller check finds floating virtual +3.43% and effectful calls +1.14%; its integer-field control is nearly unchanged. These costs remain part of the retention decision. There is no weighted application gain claim.
+
+Measurements use matched Release -O3 -DNDEBUG builds with allocation tracking off, Apple clang 2100.4.1.1 / SDK 27.2 / LLVM 22.1.8 on the M4 Pro. AOT artifacts use -O3 --strip-source. Each campaign uses three layouts, three process forks per layout/variant, three warmup and three measured windows of at least 100 ms, with 4096 items per kernel call. Values below are whole-kernel ns/item, not isolated call latency; negative time changes are faster. Baseline is e45abf747c, whose runtime code matches the preceding accepted floating-forwarding optimization.
+
+|!Fresh-build confirmation workload|!Baseline ns/item|!Paired frames ns/item|!Change
+|matched:forward_float|34.7883|33.5417|-3.58%
+|matched:forward_int|29.7842|28.9202|-2.90%
+|matched:context_int|201.3981|200.4476|-0.47%
+|matched:context_float|217.2153|215.4260|-0.82%
+|local:direct_call|1.5318|1.5314|-0.03%
+|local:method_call|1.6081|1.6071|-0.06%
+|local:polymorphic_call|22.2684|22.1292|-0.62%
+|local:polymorphic_float_call|22.2484|22.4011|+0.69%
+|local:boxed_int_method_fallback|32.2084|32.9789|+2.39%
+|local:boxed_float_method_fallback|35.0972|35.0134|-0.24%
+|local:boxed_int_method_effect|91.4578|91.4015|-0.06%
+|local:list_mutate|121.9822|121.0886|-0.73%
+|local:temporary_list|1.6405|1.6324|-0.49%
+|local:polymorphic_expression_call|11.1105|11.0549|-0.50%
+|local:polymorphic_float_expression_call|11.0174|11.0628|+0.41%
+|micro:polymorphic_call|82.2387|79.9642|-2.77%
+|micro:polymorphic_float_call|83.4405|83.7940|+0.42%
+|micro:boxed_int_method_call|106.6389|104.8892|-1.64%
+|micro:boxed_float_method_call|111.0386|110.9830|-0.05%
+|micro:boxed_int_method_fallback|119.6773|120.6424|+0.81%
+|micro:boxed_float_method_fallback|125.5659|125.3172|-0.20%
+|micro:boxed_int_method_effect|179.4523|179.3460|-0.06%
+|micro:indirect_call|8.7321|8.8979|+1.90%
+|micro:closure_call|18.6595|18.3777|-1.51%
+|micro:closure_capture|24.1948|24.1619|-0.14%
+|micro:list_read|2.8992|2.9062|+0.24%
+|micro:list_build|23.3781|23.6181|+1.03%
+|micro:list_mutate|121.6400|121.7504|+0.09%
+|micro:temporary_hash|1.6458|1.6448|-0.06%
+|micro:polymorphic_expression_call|69.1348|69.0197|-0.17%
+|micro:polymorphic_float_expression_call|72.6262|70.6639|-2.70%
+|float:callback_local_float_return|0.8470|0.8528|+0.68%
+|float:typed_local_int_unary|1.2003|1.1958|-0.37%
+|float:callback_loop_float_return|4.9589|4.9590|+0.00%
+|mixed:csv_report|942.6687|936.7271|-0.63%
+|mixed:object_orders|3339.6606|3366.3635|+0.80%
+|mixed:callback_pipeline|95.0565|95.5336|+0.50%
+|mixed:text_index|1370.2131|1354.8712|-1.12%
+|probe:object_short|1677.9243|1671.4138|-0.39%
+|probe:effect_short|1752.0136|1731.6189|-1.16%
+|probe:string_result_loop|558.6066|554.8694|-0.67%
+
+The separate runtime-only check uses exactly the same six standalone executable paths under both libraries, with module identity checks left enabled. These absolute times belong to a separate campaign and must not be pooled with the fresh-build table.
+
+|!Identical-standalone workload|!Baseline ns/item|!Paired frames ns/item|!Change
+|matched:forward_float|34.7401|33.4885|-3.60%
+|matched:forward_int|29.8488|28.8521|-3.34%
+|matched:context_int|201.5069|200.1526|-0.67%
+|matched:context_float|214.6628|213.1261|-0.72%
+|local:direct_call|1.5368|1.5380|+0.07%
+|local:method_call|1.6001|1.6143|+0.89%
+|local:polymorphic_call|22.3940|22.0731|-1.43%
+|local:polymorphic_float_call|21.9357|22.6884|+3.43%
+|local:boxed_int_method_fallback|32.7249|32.7092|-0.05%
+|local:boxed_float_method_fallback|35.4881|35.2380|-0.70%
+|local:boxed_int_method_effect|91.1919|92.2270|+1.14%
+
+Four prototypes were evaluated. Revision1 kept an experimental alternate path and increased forwarding native stack frames by 128 bytes. Revision2 outlined that path; revision3 combined its flag lookup with the existing setting. Revision4 removes the unused experimental switch and alternate code, restoring the original 544-byte floating and 528-byte integer native frames. Executable sections grow 992 bytes. Reviewed ordinary call helpers retain their frame sizes and instruction counts; this does not prove why control timings changed. Instruction totals include cold paths and are not latency estimates.
+
+All eight campaigns preserve **3474 paired processes /10422 measured windows**. The retained revision4 accounts for **1296 /3888**, across a 20-workload pilot, 41-workload confirmation and 11-workload identical-caller check. A separate 36-process /108-window baseline preceded production edits. A revision2 harness mistake selected the 20-workload pilot plan for a run named confirmation-v2. That run is preserved as a repeat pilot; its incorrect hardcoded 41-workload completion message is not accepted as evidence. Corrected confirmation-v3 ran all 41 workloads with explicit count gates. Raw timings from earlier prototypes are kept separately, not pooled with the retained revision.
+
+Final preparation validates 4698 reference outputs per variant, 144 child exits and 36 LLVM verifications. Release and full Debug each pass 8 fixtures /15 cases /4553 assertions. Full Debug native runners initially pass 3997/5662 assertions; the audit then tightened only Debug test setup validation, and new native runs pass 4003/5668. The eight earlier Debug fixtures use identical production sources; they were not rerun after that Debug-only test fix. All 391 shared qlib aliases and their hashes were restored to Release. The strengthened concurrent reader fixture also passed 10 baseline typed/generic mode combinations before production edits.
+
+Native tests cover normal return and C++ unwinding, an optional enclosing deferred frame, no/outer-only/full materialization, and the actual stack guard with a forced logical limit. They verify both frame names, order, inner call site, and live/snapshot context restoration. This does not claim allocator fault injection or physical OS stack exhaustion. Two untimed profiles per prototype verify loaded runtime and artifact UUIDs. No owned builds, tests, profiles or heavy scans overlapped timing; shared-host thermal/frequency conditions remain uncontrolled, and observed ranges are not confidence intervals.
+
+The [complete evidence](results-paired-frames-macos-arm64.json) contains all raw timing receipts, plans, prototype patches, source hashes and qualification records. The [62-item audit](audit-paired-frames.md) records every check and the revalidated test fix. This checkpoint does not establish current Java parity, a fresh develop comparison, a global performance ceiling, or sanitizer/full-project/other-platform coverage.
+
+Next: install the audited optimized commit after refreshing develop, then run a fresh cumulative optimized branch/develop/Java comparison. Add matched Java forwarding controls where needed, distinguishing unrestricted C2 optimization from leaf-only no-inline controls, before choosing the next dynamic-call/compiler optimization from measured profiles.

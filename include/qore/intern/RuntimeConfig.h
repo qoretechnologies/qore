@@ -284,6 +284,7 @@ public:
 
 private:
     friend class RuntimeConfigNativeLeafCallHelper;
+    friend class RuntimeConfigNativeMethodFramePairHelper;
     RuntimeConfig& rc;
     QoreObject* object;
     const QoreAOTMethodDispatchCacheEntry& cache;
@@ -445,6 +446,9 @@ protected:
     DLLLOCAL void restoreDeferred();
 
 private:
+    friend class RuntimeConfigNativeMethodFramePairHelper;
+    // Pair construction initializes both logical frames before publishing either one.
+    DLLLOCAL RuntimeConfigNativeLeafCallHelper(ThreadData* td, RuntimeConfigNativeMethodContext& context);
     //! Exception-only restoration after both variable markers and context exist.
     DLLLOCAL void restoreMaterialized();
     ThreadData* td;
@@ -477,6 +481,44 @@ protected:
     //! Reusable-frame diagnostics share the existing tag padding, preserving its fixed AOT storage.
     bool reusable_active = false;
 #endif
+};
+
+//! Owns exactly two preflighted forwarding frames and their deferred method contexts.
+/** Both diagnostic frames must be fully initialized before construction, and this
+    helper must be destroyed before either frame or context. The admitted body
+    cannot reenter Qore or observe deferred state. Its guarded entry materializes
+    the existing outer-to-inner context chain before exception work.
+*/
+class RuntimeConfigNativeMethodFramePairHelper final {
+public:
+    /** Publish both frames with one release operation, without allocating.
+        @param rc current thread's live invocation context
+        @param outer_frame initialized forwarding method diagnostic frame
+        @param outer_loc caller-location slot set before publication
+        @param outer_context borrowed receiver and admitted outer method cache
+        @param inner_frame initialized pure leaf diagnostic frame
+        @param inner_loc inner caller-location slot set before publication
+        @param inner_context borrowed receiver and admitted inner method cache
+        @param caller_loc non-null source location of the inner call
+        @note All ordinary live admission and stack guards remain the caller's responsibility.
+    */
+    DLLLOCAL RuntimeConfigNativeMethodFramePairHelper(RuntimeConfig& rc,
+        QoreStackLocation* outer_frame, const QoreProgramLocation*& outer_loc,
+        RuntimeConfigNativeMethodContext& outer_context,
+        QoreStackLocation* inner_frame, const QoreProgramLocation*& inner_loc,
+        RuntimeConfigNativeMethodContext& inner_context, const QoreProgramLocation* caller_loc);
+    //! Restore both contexts and wait for stack readers before either frame can be destroyed.
+    DLLLOCAL ~RuntimeConfigNativeMethodFramePairHelper();
+    RuntimeConfigNativeMethodFramePairHelper(const RuntimeConfigNativeMethodFramePairHelper&) = delete;
+    RuntimeConfigNativeMethodFramePairHelper& operator=(const RuntimeConfigNativeMethodFramePairHelper&) = delete;
+
+private:
+#ifdef DEBUG
+    friend class RuntimeConfigNativeMethodFramePairTestAccess;
+    const QoreStackLocation* published_inner;
+#endif
+    RuntimeConfigNativeLeafCallHelper outer;
+    RuntimeConfigNativeLeafCallHelper inner;
 };
 
 //! Deferred scalar-closure context, owned entirely by the current invocation.
