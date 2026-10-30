@@ -89,7 +89,10 @@ printf(\"cross-program-method-source: ok\\n\");
             foreach string level in (("-O0", "-O3")) {
                 run((qcc, level, "--strip-source", "-m", "-o",
                     dir.path + "/modules/CrossProgramMethodEntry.qmod", source),
-                    dir.path + "/source", compile_prefix);
+                    dir.path + "/source", compile_prefix
+                        # This probe instruments native entries and their lazy callee caches.
+                        # Keep the method call present; AOTPolymorphicScalar covers inlining.
+                        + "QORE_DISABLE_AOT_POLYMORPHIC_SCALAR_IMPORT=1 ");
                 foreach string prefix in (("", "QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION=1 ",
                         "QORE_DISABLE_AOT_CROSS_PROGRAM_DEFERRED_CONTEXT=1 ",
                         "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 ",
