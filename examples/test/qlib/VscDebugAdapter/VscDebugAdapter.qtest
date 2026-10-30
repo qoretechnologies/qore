@@ -252,6 +252,7 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         addTestCase("hit conditions of breakpoints", \hitConditionTest());
         addTestCase("logpoints", \logpointTest());
         addTestCase("a breakpoint whose condition is false does not hide a step", \conditionalStepTest());
+        addTestCase("the adapter communicates over sockets, as Visual Studio Code starts it", \socketTest());
         addTestCase("the adapter ends when the IDE closes its input", \endOfInputTest());
         set_return_value(main());
     }
@@ -344,6 +345,10 @@ public class VscDebugAdapterTest inherits QUnit::Test {
     }
 
     conditionalStepTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
+    socketTest() {
         testSkip("no process module 2.2 or later");
     }
 %else
@@ -1182,6 +1187,86 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         assertEq("step", stopped.body.reason);
         # running on, the breakpoint does not stop the thread
         assertEq((), runToEnd(dap, proc, tid));
+    }
+
+    #! A client that starts the adapter with sockets for its standard input and output, as Visual Studio Code does,
+    #! runs a program with a logpoint and prints the messages that it gets; Qore cannot give a socket to a process
+    const SocketClient = "import json, socket, subprocess, sys, os
+qore, adapter, prog = sys.argv[1:4]
+a_in, c_in = socket.socketpair()
+a_out, c_out = socket.socketpair()
+p = subprocess.Popen([qore, adapter], stdin=a_in.fileno(), stdout=a_out.fileno())
+a_in.close(); a_out.close()
+buf = b''
+seq = 0
+def send(cmd, args):
+    global seq
+    seq += 1
+    m = json.dumps({'seq': seq, 'type': 'request', 'command': cmd, 'arguments': args}).encode()
+    c_in.sendall(b'Content-Length: %d\\r\\n\\r\\n' % len(m) + m)
+def read():
+    global buf
+    while True:
+        i = buf.find(b'\\r\\n\\r\\n')
+        if i >= 0:
+            if not buf.startswith(b'Content-Length:'):
+                print('CORRUPTED %r' % buf[:80])
+                sys.exit(1)
+            n = int(buf[:i].split(b':')[1])
+            if len(buf) >= i + 4 + n:
+                m = json.loads(buf[i + 4:i + 4 + n])
+                buf = buf[i + 4 + n:]
+                return m
+        d = c_out.recv(65536)
+        if not d:
+            print('EOF')
+            sys.exit(1)
+        buf += d
+send('initialize', {'adapterID': 'qore', 'linesStartAt1': True, 'pathFormat': 'path'})
+send('launch', {'program': prog, 'stopOnEntry': False})
+send('setBreakpoints', {'source': {'path': prog}, 'breakpoints': [{'line': 13, 'logMessage': 'i={i}'}]})
+send('configurationDone', {})
+while True:
+    m = read()
+    if m.get('event') == 'output':
+        print('%s: %s' % (m['body']['category'], m['body']['output'].rstrip()))
+    elif m.get('event') == 'terminated':
+        print('terminated')
+        break
+send('disconnect', {})
+c_in.close()
+print('exit code: %d' % p.wait(30))
+";
+
+    socketTest() {
+        *string python = (backquote("command -v python3 2>/dev/null") =~ x/^(\S+)/)[0];
+        if (!python) {
+            testSkip("python3 is not available to start the adapter with sockets");
+        }
+        TmpDir tmp("qore-vda-test-");
+        string path = writeProgram(tmp, DataProgram);
+        string client = tmp.path + "/client.py";
+        {
+            File f();
+            f.open2(client, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(SocketClient);
+        }
+        *string module_dir = ENV.QORE_MODULE_DIR;
+        Process proc(python, ("-I", client, qore_exe, adapter, path), {
+            "env": Process::getEnvironment() + {
+                "QORE_MODULE_DIR": qlib_dir + (module_dir ? ":" + module_dir : ""),
+            },
+        });
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        proc.wait();
+        list<string> lines = proc.readStdout(1048576).split("\n");
+        # the output of the program is captured, so that it does not corrupt the protocol, and it is sent before the
+        # end of the session
+        assertEq(("console: i=0", "console: i=1", "console: i=2", "console: i=3", "console: i=4", "stdout: r: 10",
+            "terminated", "exit code: 0"), (select lines, $1 =~ /^(console: i=|stdout: |terminated|exit code)/),
+            lines.join("\n"));
     }
 
     endOfInputTest() {

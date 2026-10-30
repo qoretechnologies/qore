@@ -322,11 +322,13 @@ vda.run();
         if (PlatformOS == "Windows" || m_outputForwarders) {
             return False;
         }
-        File saved_out();
-        File saved_err();
+        # stdout and stderr are kept with duplicates of their descriptors: the end of a pipe takes the descriptor of
+        # each; "/dev/stdout" cannot be opened when stdout is a socket, as Visual Studio Code gives it
+        File saved_out;
+        File saved_err;
         try {
-            saved_out.open2("/dev/stdout", O_WRONLY | O_APPEND);
-            saved_err.open2("/dev/stderr", O_WRONLY | O_APPEND);
+            saved_out = VscDebugAdapter::duplicate(stdout);
+            saved_err = VscDebugAdapter::duplicate(stderr);
         } catch (hash<ExceptionInfo> ex) {
             debug("the output of programs is not captured: %s", get_exception_string(ex));
             return False;
@@ -346,6 +348,15 @@ vda.run();
         background forwardOutput(out_pipe.read, "stdout", m_outputForwarders);
         background forwardOutput(err_pipe.read, "stderr", m_outputForwarders);
         return True;
+    }
+
+    #! Returns a new File with a duplicate of the descriptor of the given File
+    private static File duplicate(File f) {
+        hash<PipeInfo> pipe = File::getPipe();
+        pipe.read.close();
+        # the descriptor of the write end of the pipe becomes a duplicate of the given File's descriptor (dup2())
+        pipe.write.redirect(f);
+        return pipe.write;
     }
 
     #! Restores stdout and stderr after captureProgramOutput()
