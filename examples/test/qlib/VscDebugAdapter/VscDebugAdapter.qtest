@@ -316,6 +316,7 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         addTestCase("marks in the output of programs", \outputMarkTest());
         addTestCase("names of threads", \threadNameTest());
         addTestCase("all threads stop and continue together", \stopAllThreadsTest());
+        addTestCase("sources are parsed in the mode that the interpreter gives their files", \sourceModeTest());
         addTestCase("stopAllThreads false: only the thread that stops is stopped", \stopOneThreadTest());
         addTestCase("attaching to a program of a debug server", \attachTest());
         addTestCase("the adapter ends when the IDE closes its input", \endOfInputTest());
@@ -434,6 +435,10 @@ public class VscDebugAdapterTest inherits QUnit::Test {
     }
 
     stopOneThreadTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
+    sourceModeTest() {
         testSkip("no process module 2.2 or later");
     }
 %endif
@@ -561,8 +566,8 @@ public class VscDebugAdapterTest inherits QUnit::Test {
     }
 
     #! Writes the given test program to the given directory and returns its path
-    private string writeProgram(TmpDir tmp, string program = Program) {
-        string path = tmp.path + "/target.q";
+    private string writeProgram(TmpDir tmp, string program = Program, string name = "target.q") {
+        string path = tmp.path + "/" + name;
         File f();
         f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
         f.write(program);
@@ -1655,6 +1660,36 @@ print('exit code: %d' % p.wait(30))
         assertTrue(proc.wait(30s), "the adapter ends");
         assertEq(0, proc.exitCode());
         assertEq((), dap.stray);
+    }
+
+    # a file whose name does not end in .q is parsed in %modern mode without the directive, and a .q file in the
+    # old-style mode, as the interpreter parses them
+    sourceModeTest() {
+        TmpDir tmp("qore-vda-test-");
+        map runToOutput(writeProgram(tmp, $1.program, $1.name), $1.output), (
+            {"name": "modern.qr", "program": "int x = 2;\nprintf(\"modern: %d\\n\", x);\n", "output": "modern: 2\n"},
+            {"name": "modern", "program": "int x = 3;\nprintf(\"modern: %d\\n\", x);\n", "output": "modern: 3\n"},
+            {"name": "old.q", "program": "my $x = 4;\nprintf(\"old: %d\\n\", $x);\n", "output": "old: 4\n"},
+        );
+    }
+
+    #! Launches the program without breakpoints and checks its output
+    private runToOutput(string path, string output) {
+        Process proc = startAdapter();
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        launch(dap, {"program": path});
+        hash<auto> r = dap.request("configurationDone");
+        assertTrue(r.success, r.message);
+        dap.waitForEvent("terminated");
+        assertEq((output,), dap.getOutput("stdout"), path);
+        r = dap.request("disconnect");
+        assertTrue(r.success, r.message);
+        proc.closeStdin();
+        assertTrue(proc.wait(30s), "the adapter ends");
+        assertEq(0, proc.exitCode());
     }
 
     #! Returns the output of the debug server up to the end of the given text

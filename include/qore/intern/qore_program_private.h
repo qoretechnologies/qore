@@ -2390,6 +2390,22 @@ public:
         return 0;
     }
 
+    //! Applies the parse options that the interpreter gives a source file by its name
+    /** @return 1 if %modern was enabled, 0 if the file keeps the parse options, -1 if an exception was raised
+
+        @see should_auto_enable_modern()
+    */
+    DLLLOCAL int applySourceDefaults(const char* filename, ExceptionSink* xsink) {
+        if (!should_auto_enable_modern(filename)) {
+            return 0;
+        }
+        if (setParseOptions(PO_MODERN, xsink)) {
+            return -1;
+        }
+        pgm->setWarningMask(QP_WARN_ALL);
+        return 1;
+    }
+
     DLLLOCAL int disableParseOptions(const QoreParseOptions& po, ExceptionSink* xsink) {
         assert(xsink);
         // only raise the exception if parse options are locked and the option is not a "free option"

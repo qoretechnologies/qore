@@ -1729,7 +1729,10 @@ val = "string";      # OK
       the automatic @ref new-style "%new-style" bits selectively
 
     <b>Note:</b> This change only affects scripts loaded via the command-line binary and
-    the C++ \c QoreProgram::parseFile() API. Module loading via @ref Qore::load_module
+    the C++ \c QoreProgram::parseFile() API, and code parsed with @ref Qore::Program::parse() "Program::parse()" after
+    @ref Qore::Program::applySourceDefaults() "Program::applySourceDefaults()", which the debuggers (\c qdbg,
+    \c qdbg-server and the Visual Studio Code debug adapter) call, so that a debugged script is parsed as the
+    interpreter parses it. Module loading via @ref Qore::load_module
     "load_module()" or @ref requires "%requires" is unaffected — modules continue to control their own parse options
     through directives inside the <tt>.qm</tt> file.
     @endparblock

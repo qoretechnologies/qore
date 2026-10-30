@@ -59,6 +59,9 @@ module DebugProgramControl {
       evaluates expressions with the variables of a frame (see
       @ref DebugProgramControl::DebugProgramControl::evaluateExpression() "evaluateExpression()")
     - interrupt events give the name of the thread in \c threadname, which only the thread itself can get
+    - @ref DebugProgramControl::DebugProgramControl::createProgram() "createProgram()" parses a script in the mode
+      that the interpreter gives its file: in @ref modern "%modern" mode unless its name ends in \c .q (see
+      @ref Qore::Program::applySourceDefaults() "Program::applySourceDefaults()")
 
     @subsection dc_v0_1_2 v0.1.2
     - return breakpointId and statementId when creating breakpoint
@@ -256,6 +259,8 @@ public namespace DebugProgramControl {
                 }
             }
             pgm.setScriptPath(fileName);
+            # the source is parsed as the interpreter would parse the file, in %modern mode unless it is a .q file
+            pgm.applySourceDefaults(fileName);
             debug("parse code");
             *hash<auto> wh = pgm.parse(script, fileName, WARN_DEFAULT, NOTHING, NOTHING, False);
             if (wh) {

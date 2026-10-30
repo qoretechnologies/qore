@@ -2241,6 +2241,39 @@ nothing Program::setParseOptions(ParseOptions[QoreParseOptionsData] parse_option
     p->setParseOptions(parse_options->get(), xsink);
 }
 
+//! Applies the parse options that the interpreter gives a source file by its name
+/** The interpreter parses a source file in @ref modern "%modern" mode with all warnings enabled unless the name of the
+    file ends in \c .q or the \c QORE_OLD_STYLE_DEFAULT environment variable disables it (see
+    @ref parse_directives).  Code parsed with Program::parse() gets no such default, so a program that reads the
+    source of a file itself, such as a debugger, calls this method before parsing it, so that the source is parsed as
+    the interpreter would parse the file.
+
+    @param path the path or name of the source file
+
+    @return @ref True if @ref modern "%modern" was enabled, @ref False if the file keeps the parse options of the
+    Program
+
+    @par Example:
+    @code{.py}
+Program pgm();
+pgm.applySourceDefaults(path);
+pgm.parse(ReadOnlyFile::readTextFile(path), path);
+    @endcode
+
+    @note @ref modern "%modern" only restricts the code that can be parsed, so it is also applied when parse options
+    have been locked with Program::lockOptions()
+
+    @since %Qore 3.0
+*/
+bool Program::applySourceDefaults(string path) [flags=NAMED_ARGS] {
+    TempEncodingHelper tpath(path, QCS_DEFAULT, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    int rc = qore_program_private::get(*p)->applySourceDefaults(tpath->c_str(), xsink);
+    return rc < 0 ? QoreValue() : QoreValue(rc > 0);
+}
+
 //! Removes the given parse options to the current parse option mask
 /** An \c OPTIONS-LOCKED exception is thrown if parse options have been locked (for example with Program::lockOptions())
 
