@@ -3918,7 +3918,7 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         // In a function that can be debugged, the debugger's step event for the statement comes first, as with
         // the AST interpreter (StatementBlock::execImpl()); an exception that the debugger raises is raised by the
         // statement.
-        if (builder.getFunction()->source_dpgm_addr) {
+        if (builder.getFunction()->source_dpgm_addr || builder.getFunction()->emit_debug_statements) {
             builder.createDebugStatement(*it)->exception_target = getCurrentExceptionTarget();
         }
         bool statement_needs_cleanup = statementMayCreateNodeTemp(*it);
@@ -4501,6 +4501,7 @@ QoreIRFunction* QoreIRLowering::compileHandlerToIR(
     // the statements of the handler are debugged as those of the function that it belongs to
     handler_func->source_statement_block = builder.getFunction()->source_statement_block;
     handler_func->source_dpgm_addr = builder.getFunction()->source_dpgm_addr;
+    handler_func->emit_debug_statements = builder.getFunction()->emit_debug_statements;
 
     // Populate pre_instantiated_locals with handler body locals
     // so the IR interpreter knows which variables need instantiation
@@ -4720,6 +4721,7 @@ int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& han
         // the statements of the handler are debugged as those of the function that it belongs to
         handler_func->source_statement_block = parent_func->source_statement_block;
         handler_func->source_dpgm_addr = parent_func->source_dpgm_addr;
+        handler_func->emit_debug_statements = parent_func->emit_debug_statements;
 
         // Phase B1: Pre-seed handler's local_var_slots with parent's entries
         uint32_t parent_slot_count = parent_func->local_var_slots.size();
@@ -4839,6 +4841,7 @@ int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
         // the statements of the handler are debugged as those of the function that it belongs to
         handler_func->source_statement_block = parent_func->source_statement_block;
         handler_func->source_dpgm_addr = parent_func->source_dpgm_addr;
+        handler_func->emit_debug_statements = parent_func->emit_debug_statements;
 
         // Phase B1: Pre-seed handler's local_var_slots with parent's entries
         // This allows handler code to reference parent-scope variables by their parent slot IDs

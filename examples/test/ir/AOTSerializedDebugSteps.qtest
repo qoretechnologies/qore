@@ -43,7 +43,7 @@ int sub warm() {
     for (int i = 0; i < 5; ++i) { result += fn(i) + scoped(i); }
     return result;
 }
-# qcc evaluates this initializer and caches the closure IR with explicit statement events.
+# Warm both closures before serialization; fresh debug IR must still preserve every statement.
 const Warmup = warm();
 
 class Recorder inherits DebugProgram {
@@ -110,9 +110,8 @@ printf("serialized-debug-steps: ok");
         assertEq(3, watched.size());
         string code = replace(replace(replace(Source, "__FIRST__", string(watched[0])),
             "__LAST__", string(watched[2])), "__EXPECTED__", "(" + (map string($1), watched).join(",") + ")");
-        # Native AOT debug IR still uses the older cleanup-line boundaries. The scalar declaration has
-        # no such boundary; the string assignment and return do. Preserve that existing behavior while
-        # requiring all three explicit statement events from the warmed serialized closure IR.
+        # Keep the old cleanup-line expectation available for compatibility probes of already compiled
+        # artifacts. Fresh serialization must emit all three events with native closures enabled or disabled.
         code = replace(code, "__LEGACY__", sprintf("(%d,%d)", watched[1], watched[2]));
         TmpDir dir("qore-serialized-debug-steps-");
         string source = dir.path + "/fixture.qr";
@@ -135,7 +134,7 @@ printf("serialized-debug-steps: ok");
                 run(args + ("-o", executable, source));
                 foreach bool native in ((False, True)) {
                     foreach bool attached in ((False, True)) {
-                        assertEq(expected, run((executable,), attached, native, native),
+                        assertEq(expected, run((executable,), attached, native),
                             sprintf("%s stripped=%y native=%y attached=%y", level, stripped, native, attached));
                     }
                 }

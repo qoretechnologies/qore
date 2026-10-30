@@ -30647,3 +30647,69 @@ Release and focused Debug each pass seven fixtures and 3,212 QUnit assertions; n
 Preparation verifies 36 artifacts, 144 child exits and 4,698 reference outputs per variant. CFG review checks 24 target bodies: immutable target helpers are outside cycles, live receiver classification remains inside, and ordinary fallback remains. Runtime executable sections grow 2,368 bytes; default caller and module each grow 408 bytes. Untimed samples and static instruction counts guide investigation but are not timing attribution.
 
 See the [complete evidence](results-scalar-override-guard-macos-arm64.json) and [62-item audit](audit-scalar-override-guard.md). The preceding [optimized Java/develop checkpoint](results-post-polymorphic-checkpoint-macos-arm64.json) remains separate. Next investigate classification of already-retained parameter receivers and selected receiver expressions, preserving live validity and reflective replacement. No fresh matched Java ratio or global performance ceiling is claimed here.
+
+
+## Develop debugger merge and native admission (2026-10-31)
+
+The merge of develop89476658b4 fixes statement stepping in AOT debug IR (#5558). An initial integration passed correctness checks but slowed temporary-list/hash kernels from about 1.6ns/item to 127/313ns by preventing native scalar replacement. That candidate was rejected. Native AOT now lowers without debugger callbacks; a separate unoptimized IR preserves every statement and debugger-visible local mutation. The compiler validates common local identities and keeps both IR owners alive through serialization. Old compiled artifacts retain their legacy stepping behavior.
+
+The final optimized comparison uses the qualified guard-hoisting baseline and the corrected merged candidate, both built with -O3 -DNDEBUG and allocation tracking off and freshly AOT-compiled at -O3 --strip-source under matched Apple clang2100.4.1.1/SDK27.2/LLVM22.1.8. Three layouts and three forks per variant/layout collect three warmup and three measured windows. Confirmation covers 43 workloads/774 processes/2322 measured windows; a separate 6-workload pilot adds 72 processes/216 windows. These are whole-kernel ns/item; negative changes are faster. This validates the merge, not a new Java/develop checkpoint.
+
+|!Workload|!Before merge ns/item|!After merge ns/item|!Change
+|matched:forward_float|32.5278|32.5006|-0.08%
+|matched:forward_int|27.7363|28.0212|+1.03%
+|matched:context_int|164.8331|168.5415|+2.25%
+|matched:context_float|176.4135|174.2967|-1.20%
+|local:direct_call|1.4846|1.4955|+0.73%
+|local:method_call|1.5596|1.5620|+0.15%
+|local:polymorphic_call|17.2018|17.7845|+3.39%
+|local:polymorphic_float_call|17.4941|17.6272|+0.76%
+|local:boxed_int_method_fallback|32.1675|31.9849|-0.57%
+|local:boxed_float_method_fallback|34.8687|34.5105|-1.03%
+|local:boxed_int_method_effect|86.3087|88.4814|+2.52%
+|local:list_mutate|116.5595|117.1705|+0.52%
+|local:temporary_list|1.5814|1.5970|+0.99%
+|local:polymorphic_expression_call|6.7734|6.7002|-1.08%
+|local:polymorphic_float_expression_call|6.6125|6.7389|+1.91%
+|local:monomorphic_call|4.0840|4.0912|+0.17%
+|local:monomorphic_float_call|3.7869|3.8262|+1.04%
+|micro:polymorphic_call|18.0938|17.6529|-2.44%
+|micro:polymorphic_float_call|17.6175|17.4195|-1.12%
+|micro:boxed_int_method_call|103.5076|101.1510|-2.28%
+|micro:boxed_float_method_call|108.5118|106.5900|-1.77%
+|micro:boxed_int_method_fallback|117.0027|115.1706|-1.57%
+|micro:boxed_float_method_fallback|120.4859|119.6700|-0.68%
+|micro:boxed_int_method_effect|171.9326|171.1319|-0.47%
+|micro:indirect_call|8.4120|8.6903|+3.31%
+|micro:closure_call|17.9099|18.0298|+0.67%
+|micro:closure_capture|23.4681|23.6424|+0.74%
+|micro:list_read|2.7997|2.8116|+0.43%
+|micro:list_build|22.0623|22.6383|+2.61%
+|micro:list_mutate|116.0455|117.5503|+1.30%
+|micro:temporary_hash|1.5878|1.5984|+0.66%
+|micro:polymorphic_expression_call|6.7229|6.8233|+1.49%
+|micro:polymorphic_float_expression_call|6.6889|6.7954|+1.59%
+|float:callback_local_float_return|0.8328|0.8350|+0.26%
+|float:typed_local_int_unary|1.1534|1.1557|+0.20%
+|float:callback_loop_float_return|4.9669|5.0009|+0.68%
+|mixed:csv_report|913.8997|910.0208|-0.42%
+|mixed:object_orders|2953.7851|2992.9199|+1.32%
+|mixed:callback_pipeline|92.6475|92.4020|-0.26%
+|mixed:text_index|1309.1977|1301.6250|-0.58%
+|probe:object_short|1601.2624|1605.1476|+0.24%
+|probe:effect_short|1644.9117|1671.5115|+1.62%
+|probe:string_result_loop|522.6815|529.4712|+1.30%
+
+Native/debug separation v5 passes 32 Release fixtures/10520 assertions plus 11 extended fixtures/1866 assertions. Final RAII-only v6 passes 10 Release fixtures/3350 assertions and 14 Debug fixtures/5483 assertions, with native 4003/5668. All 18 prepared modules have identical native IR from v5 to v6 except build identity/metadata-length arguments. Tests cover debugger local inspection/mutation, aggregate allocation selection/lifetimes, methods/closures, outlining, handlers/background/generics/imported slots, O0/O3/stripping/EH/split and disabled controls. Four old-artifact modes retain legacy stepping. Final preparation verifies 36 artifacts/144 processes/4698 references per variant; all 391 shipped qmods build with unchanged qualified core. No sanitizer/other-platform claim. All 18 suite/layout pairs preserve native binding counts; 36 inspected call bodies and 6 temporary-container bodies are identical to the premerge native LLVM. All 43 final workloads and adverse movements remain visible in the evidence.
+
+Compilation cost is measured separately with one warmup and three measured qcc invocations per variant/workload. It includes parsing, IR/LLVM compilation and linking on the shared host:
+
+|!Compile workload|!Before seconds|!After seconds|!Change
+|local|0.74|0.75|+1.35%
+|mixed|0.40|0.40|+0.00%
+
+Complete default-layout artifact sizes are unchanged for local, micro, float, probe and matched-call suites. The mixed suite grows from 180984 to 197496 bytes (+9.12%), including serialized debug metadata.
+
+Earlier failed integration/harness stages and the rejected v4 measurements are retained separately from final qualification. The full optimized postcommit build and authorized system installation are recorded subsequently. Shared-host noise and layout sensitivity limit attribution of small timing differences. See the [complete evidence](results-guard-develop-merge-macos-arm64.json) and [62-item audit](audit-guard-develop-merge.md).
+
+The next optimization remains receiver classification for already-retained parameter objects and selected expressions, preserving current-value identity, live validity, reflection and ordinary fallback. No global performance ceiling has been established.

@@ -11779,6 +11779,9 @@ QoreIRFunction* lowerClosureForSerialization(const UserClosureVariant* variant, 
     builder.setBlock(entry);
 
     QoreProgram* pgm = const_cast<UserClosureVariant*>(variant)->pgm;
+    // This fresh IR is executed under a debugger even when the closure has a
+    // native AOT body. Preserve every statement, just as tryLowerFunction does.
+    ir->emit_debug_statements = pgm && qore_program_private::get(*pgm)->checkAllowDebugging(nullptr);
     QoreParseContext parse_context(pgm);
     QoreIRLowering lowering(builder, &parse_context);
     std::string error;

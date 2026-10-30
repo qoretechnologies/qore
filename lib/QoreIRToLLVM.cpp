@@ -15465,6 +15465,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     case QoreIROpcode::Decref:
                     case QoreIROpcode::DecrefNoThrow:
                     case QoreIROpcode::DebugBlock:
+                    case QoreIROpcode::DebugStatement:
                         return true;
                     default:
                         return false;
@@ -16308,7 +16309,11 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             // Resume only at proven statement boundaries. The skipped prefix has
             // no SSA users outside its discarded update, and no callbacks occur
             // on its native path. Branch before location updates or debug hooks.
-            if (effect_member_resume && effect_resume_instruction < effect_member_updates * 3
+            // Serialized statement annotations are native no-ops and do not
+            // change the three-instruction update boundaries proved at admission.
+            bool effect_debug_annotation = inst->opcode == QoreIROpcode::DebugStatement;
+            if (effect_member_resume && !effect_debug_annotation
+                    && effect_resume_instruction < effect_member_updates * 3
                     && effect_resume_instruction % 3 == 0) {
                 assert(inst->opcode == QoreIROpcode::PushTempMark);
                 auto* update = llvm::BasicBlock::Create(ctx, "effect_remaining_update", llvm_func);
@@ -16488,7 +16493,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 return false;
             }
 
-            if (effect_member_resume && effect_resume_instruction < effect_member_updates * 3
+            if (effect_member_resume && !effect_debug_annotation
+                    && effect_resume_instruction < effect_member_updates * 3
                     && effect_resume_instruction % 3 == 2) {
                 assert(inst->opcode == QoreIROpcode::DiscardTemps && effect_resume_join);
                 if (!qoreGetTerminator(builder->GetInsertBlock())) {
@@ -16499,7 +16505,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 // The skipped path did not install the previous statement's location.
                 last_runtime_line = -1;
             }
-            ++effect_resume_instruction;
+            if (!effect_debug_annotation) {
+                ++effect_resume_instruction;
+            }
             if (fused_string_call
                     && aot_hash_string_extraction_instruction != inst) {
                 aot_hash_string_extraction_cache.clear();

@@ -1621,3 +1621,6 @@ The [post-polymorphic optimized checkpoint](RESULTS.md#optimized-checkpoint-afte
 
 
 [Scalar override guard hoisting](RESULTS.md#scalar-override-guard-hoisting-2026-10-30) moves immutable target admission out of AOT loops and shares live receiver classification. Both optimized campaigns and slower controls are retained in the [evidence](results-scalar-override-guard-macos-arm64.json) and [audit](audit-scalar-override-guard.md).
+
+
+[Develop debugger integration](RESULTS.md#develop-debugger-merge-and-native-admission-2026-10-31) preserves native call admission while recording every AOT debug statement. Optimized before/after results and qualification are in the [evidence](results-guard-develop-merge-macos-arm64.json) and [audit](audit-guard-develop-merge.md).
