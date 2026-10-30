@@ -668,6 +668,10 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_object_has_exact_aot_target_class_only) },
     { "qore_rt_object_has_exact_aot_override_v1",
         reinterpret_cast<void*>(&qore_rt_object_has_exact_aot_override_v1) },
+    { "qore_rt_get_aot_override_class_v1",
+        reinterpret_cast<void*>(&qore_rt_get_aot_override_class_v1) },
+    { "qore_rt_get_live_aot_override_receiver_class_v1",
+        reinterpret_cast<void*>(&qore_rt_get_live_aot_override_receiver_class_v1) },
     { "qore_rt_load_object_getter_aot",
         reinterpret_cast<void*>(&qore_rt_load_object_getter_aot) },
     { "qore_rt_load_object_getter_checked_aot",
@@ -17876,6 +17880,32 @@ extern "C" DLLEXPORT int qore_rt_object_has_exact_aot_override_v1(QoreAOTContext
     // method bodies can retain a distinct source Program.
     const UserVariantBase* uvb = target.variant->getUserVariantBase();
     return uvb && qore_rt_method_execution_program(target.method, uvb) == ctx->pgm;
+}
+
+extern "C" DLLEXPORT const QoreClass* qore_rt_get_aot_override_class_v1(QoreAOTContext* ctx,
+        int32_t base_slot, int32_t target_slot) {
+    if (!ctx || !ctx->pgm || !ctx->call_targets || base_slot < 0 || base_slot >= ctx->num_exprs
+            || target_slot < 0 || target_slot >= ctx->num_exprs) {
+        return nullptr;
+    }
+    const auto& base = ctx->call_targets[base_slot];
+    const auto& target = ctx->call_targets[target_slot];
+    if (!base.qc || !base.variant || !target.qc || !target.method || !target.variant
+            || base.qc->getID() == target.qc->getID()) {
+        return nullptr;
+    }
+    const UserVariantBase* uvb = target.variant->getUserVariantBase();
+    return uvb && qore_rt_method_execution_program(target.method, uvb) == ctx->pgm ? target.qc : nullptr;
+}
+
+extern "C" DLLEXPORT const QoreClass* qore_rt_get_live_aot_override_receiver_class_v1(
+        QoreAOTContext* ctx, uint64_t value) {
+    if (!ctx || !ctx->pgm) {
+        return nullptr;
+    }
+    const QoreObject* object = qore_rt_get_strong_object(fromBits(value));
+    return object && object->isValid() && object->getProgram() == ctx->pgm
+        && !qore_object_private::get(*object)->sandbox_provenance ? object->getClass() : nullptr;
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_call_direct_aot(QoreAOTContext* ctx,

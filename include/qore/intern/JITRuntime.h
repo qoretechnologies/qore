@@ -2573,6 +2573,27 @@ int qore_rt_object_has_exact_aot_target_class_only(QoreAOTContext* ctx, int32_t 
 int qore_rt_object_has_exact_aot_override_v1(QoreAOTContext* ctx, int32_t base_slot,
         int32_t target_slot, uint64_t value);
 
+//! Get immutable class admission for a load-bound scalar override.
+/** @param ctx active AOT context owning both target slots and their metadata
+    @param base_slot original resolved call target
+    @param target_slot compile-proven scalar override target
+    @return the borrowed target class, or nullptr for missing metadata, matching
+    class IDs or a method owned by a different Program
+    @note Target metadata and Program ownership remain fixed while ctx is live.
+    This does not validate a receiver and can be hoisted within an invocation.
+*/
+const QoreClass* qore_rt_get_aot_override_class_v1(QoreAOTContext* ctx,
+        int32_t base_slot, int32_t target_slot);
+
+//! Classify the current receiver for a scalar override chain.
+/** @param ctx active AOT context whose Program must own the receiver
+    @param value borrowed boxed receiver, checked afresh at each call
+    @return the class of a live strong receiver without provenance, or nullptr
+    @note No receiver, liveness result or ownership is retained. Compare only
+    against a nonnull class admitted by qore_rt_get_aot_override_class_v1().
+*/
+const QoreClass* qore_rt_get_live_aot_override_receiver_class_v1(QoreAOTContext* ctx, uint64_t value);
+
 //! AOT fast direct call with consumed caller temp cleanup slots.
 uint64_t qore_rt_call_direct_aot_consume_args(QoreAOTContext* ctx, int32_t slot,
     uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);

@@ -30585,3 +30585,65 @@ Host load, thermals, frequency and affinity are uncontrolled. Data representatio
 Next freeze the installed baseline, then test whether immutable override-target admission can move to logical function entry for loop calls and whether the current receiver can be classified once per override chain. Retain live validity, provenance, receiver identity, ownership/Program checks, logical frames, argument cleanup and ordinary fallbacks. Measure all eight polymorphic targets plus forwarding, boxed/effectful, collection and mixed controls before retention.
 
 [Complete evidence](results-post-polymorphic-checkpoint-macos-arm64.json); [all62audit checks](audit-post-polymorphic-checkpoint.md).
+
+
+## Scalar override guard hoisting (2026-10-30)
+
+AOT loops now admit immutable known-override targets once per invocation and classify the live receiver once per override chain. The current receiver still has to be a valid strong object owned by the AOT context Program, without provenance; each comparison requires a nonnull admitted target class. The existing pure scalar body admission, base-class path, logical frames, cleanup and native/boxed fallback remain. Non-loop calls retain the combined guard. QORE_DISABLE_AOT_SCALAR_OVERRIDE_GUARD_HOIST disables this change at compilation.
+
+Frozen installed runtime79c48b5aa1 and the candidate use optimized -O3 -DNDEBUG builds with allocation tracking off, Apple clang2100.4.1.1/SDK27.2/LLVM22.1.8 on M4 Pro. The candidate adds the recorded patch to d3a7e527bb; that committed revision differs from the frozen runtime only by prior benchmark evidence. Both AOT variants are freshly compiled with -O3 --strip-source. Three layouts and three forks per variant/layout collect three warmup and three measured windows of at least100ms,4096items,seed7. These are whole-kernel ns/item; negative changes are faster.
+
+|!Confirmation workload|!Before ns/item|!Candidate ns/item|!Change
+|matched:forward_float|33.9074|34.1549|+0.73%
+|matched:forward_int|29.2625|28.9725|-0.99%
+|matched:context_int|177.4669|175.8985|-0.88%
+|matched:context_float|186.5608|185.8064|-0.40%
+|local:direct_call|1.5546|1.5587|+0.26%
+|local:method_call|1.6354|1.6399|+0.28%
+|local:polymorphic_call|21.6149|18.4639|-14.58%
+|local:polymorphic_float_call|21.8149|18.7224|-14.18%
+|local:boxed_int_method_fallback|33.3469|33.7602|+1.24%
+|local:boxed_float_method_fallback|36.7233|36.4005|-0.88%
+|local:boxed_int_method_effect|90.8898|91.3993|+0.56%
+|local:list_mutate|124.5891|123.3314|-1.01%
+|local:temporary_list|1.6606|1.6574|-0.19%
+|local:polymorphic_expression_call|9.4309|7.0350|-25.40%
+|local:polymorphic_float_expression_call|9.3741|6.9927|-25.40%
+|local:monomorphic_call|4.1128|4.2677|+3.77%
+|local:monomorphic_float_call|4.0130|3.9749|-0.95%
+|micro:polymorphic_call|21.6734|18.9203|-12.70%
+|micro:polymorphic_float_call|22.0368|18.5943|-15.62%
+|micro:boxed_int_method_call|107.6512|109.5309|+1.75%
+|micro:boxed_float_method_call|114.1266|115.0579|+0.82%
+|micro:boxed_int_method_fallback|122.7323|123.9162|+0.96%
+|micro:boxed_float_method_fallback|127.5224|128.9097|+1.09%
+|micro:boxed_int_method_effect|181.8143|184.3455|+1.39%
+|micro:indirect_call|8.8042|8.9101|+1.20%
+|micro:closure_call|18.7246|18.5772|-0.79%
+|micro:closure_capture|24.4480|24.3970|-0.21%
+|micro:list_read|2.9493|2.9493|+0.00%
+|micro:list_build|23.8838|23.3187|-2.37%
+|micro:list_mutate|124.8373|124.0335|-0.64%
+|micro:temporary_hash|1.6656|1.6808|+0.92%
+|micro:polymorphic_expression_call|9.4022|7.0400|-25.12%
+|micro:polymorphic_float_expression_call|9.3817|7.1068|-24.25%
+|float:callback_local_float_return|0.8586|0.8675|+1.05%
+|float:typed_local_int_unary|1.2159|1.2212|+0.44%
+|float:callback_loop_float_return|5.0799|5.0747|-0.10%
+|mixed:csv_report|969.2219|959.2097|-1.03%
+|mixed:object_orders|3317.4744|3323.8729|+0.19%
+|mixed:callback_pipeline|96.7746|97.6960|+0.95%
+|mixed:text_index|1361.4564|1387.2658|+1.90%
+|probe:object_short|1719.4336|1713.2161|-0.36%
+|probe:effect_short|1783.4182|1778.7148|-0.26%
+|probe:string_result_loop|571.4858|562.6831|-1.54%
+
+Retention decision: All eight polymorphic targets improve in every layout in both campaigns. Confirmation reduces standalone/module scalar call kernels by13-16% and expression kernels by24-25%. Monomorphic integer is slower in every layout in both campaigns: pilot+5.77%(0.2356ns/item), confirmation+3.77%(0.1549ns/item). All other control rows, including text+1.90%, module boxed integer+1.75%, module effectful+1.39% and indirect+1.20%, remain in the evidence. The broader workload tradeoff is authorized; no weighted application gain, universal Java parity or global ceiling is inferred.
+
+The 22-workload pilot and 43-workload confirmation preserve 1,170 processes and 3,510 measured windows. Every target improves in every layout in each campaign. Absolute campaign times are not pooled, and small shared-host control differences do not establish causation. Direct/final LLVM controls remain identical; this is a targeted dispatch benefit, not evidence of a broad mixed-workload gain.
+
+Release and focused Debug each pass seven fixtures and 3,212 QUnit assertions; native Debug runners pass 4,003/5,668. Full Release restores 391 qmods without changing the measured core. Debug restores all 391 Release alias targets and hashes. Coverage includes alternating and reflectively replaced receivers, zero/short loops, integer overflow, special floats, deleted/throwing/unknown receivers, imported classes and C++ exact-class foreign-Program objects; AOT O0/O3, source stripping, split compilation, EH and disable controls are qualified.
+
+Preparation verifies 36 artifacts, 144 child exits and 4,698 reference outputs per variant. CFG review checks 24 target bodies: immutable target helpers are outside cycles, live receiver classification remains inside, and ordinary fallback remains. Runtime executable sections grow 2,368 bytes; default caller and module each grow 408 bytes. Untimed samples and static instruction counts guide investigation but are not timing attribution.
+
+See the [complete evidence](results-scalar-override-guard-macos-arm64.json) and [62-item audit](audit-scalar-override-guard.md). The preceding [optimized Java/develop checkpoint](results-post-polymorphic-checkpoint-macos-arm64.json) remains separate. Next investigate classification of already-retained parameter receivers and selected receiver expressions, preserving live validity and reflective replacement. No fresh matched Java ratio or global performance ceiling is claimed here.

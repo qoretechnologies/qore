@@ -376,6 +376,10 @@ private:
     // expression slot. The context mapping is immutable during an invocation.
     std::unordered_map<int32_t, llvm::Value*> aot_call_target_contexts;
 
+    // Immutable override target admission, loaded in the logical function entry.
+    // Keyed by base/override slot pair; no receiver or validity is cached.
+    std::unordered_map<uint64_t, llvm::Value*> aot_override_target_classes;
+
     // Borrowed live execution context, acquired once only in functions using
     // the explicit-context callback ABI; never shared between invocations.
     llvm::Value* fast_runtime_config = nullptr;

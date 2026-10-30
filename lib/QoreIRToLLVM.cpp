@@ -11411,6 +11411,11 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
         llvm::Value* native;
     };
     std::vector<ScalarOverrideResult> scalar_overrides;
+    llvm::Value* override_receiver_class = nullptr;
+    const bool hoist_override_targets = current_lowering_block_
+        && (current_lowering_block_->is_loop_header || current_lowering_block_->enclosing_loop_exit)
+        && current_ir_func && !current_ir_func->blocks.empty()
+        && !q_env_is_set("QORE_DISABLE_AOT_SCALAR_OVERRIDE_GUARD_HOIST");
     if (object_base && require_exact_object_class && nargs == 1 && aot_slots && batch_callees
             && callee_info.scalar_overrides.size() <= 3
             && !q_env_is_set("QORE_DISABLE_AOT_POLYMORPHIC_SCALAR_IMPORT")) {
@@ -11433,12 +11438,44 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
             const auto* method_variant = static_cast<const MethodVariantBase*>(variant);
             int32_t override_slot = const_cast<AOTSlotMap*>(aot_slots)->getAdditionalMethodSlot(
                 {variant->getClass(), method_variant->method(), variant, nullptr, false});
-            auto guard = module.getOrInsertFunction("qore_rt_object_has_exact_aot_override_v1",
-                llvm::FunctionType::get(i32_type, {ptr_type, i32_type, i32_type, i64_type}, false));
-            llvm::Value* matches = builder->CreateCall(guard,
-                {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot),
-                 llvm::ConstantInt::get(i32_type, override_slot), object_base});
-            matches = builder->CreateICmpNE(matches, llvm::ConstantInt::get(i32_type, 0));
+            llvm::Value* matches = nullptr;
+            auto entry_it = hoist_override_targets
+                ? block_map.find(current_ir_func->blocks.front().get()) : block_map.end();
+            if (entry_it != block_map.end()) {
+                uint64_t key = (static_cast<uint64_t>(slot) << 32) | static_cast<uint32_t>(override_slot);
+                auto cached = aot_override_target_classes.find(key);
+                llvm::Value* target_class;
+                if (cached == aot_override_target_classes.end()) {
+                    // The logical IR entry is dominated by the existing native stack guard.
+                    // Only bound target metadata is hoisted; receiver state remains live.
+                    llvm::IRBuilder<> entry_builder(entry_it->second, entry_it->second->getFirstInsertionPt());
+                    auto target_helper = module.getOrInsertFunction("qore_rt_get_aot_override_class_v1",
+                        llvm::FunctionType::get(ptr_type, {ptr_type, i32_type, i32_type}, false));
+                    target_class = entry_builder.CreateCall(target_helper,
+                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot),
+                         llvm::ConstantInt::get(i32_type, override_slot)}, "override_target_class");
+                    aot_override_target_classes.emplace(key, target_class);
+                } else {
+                    target_class = cached->second;
+                }
+                if (!override_receiver_class) {
+                    auto receiver_helper = module.getOrInsertFunction(
+                        "qore_rt_get_live_aot_override_receiver_class_v1",
+                        llvm::FunctionType::get(ptr_type, {ptr_type, i64_type}, false));
+                    override_receiver_class = builder->CreateCall(receiver_helper,
+                        {aot_ctx_arg, object_base}, "override_receiver_class");
+                }
+                matches = builder->CreateAnd(builder->CreateICmpEQ(override_receiver_class, target_class),
+                    builder->CreateICmpNE(target_class,
+                        llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type))));
+            } else {
+                auto guard = module.getOrInsertFunction("qore_rt_object_has_exact_aot_override_v1",
+                    llvm::FunctionType::get(i32_type, {ptr_type, i32_type, i32_type, i64_type}, false));
+                matches = builder->CreateCall(guard,
+                    {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot),
+                     llvm::ConstantInt::get(i32_type, override_slot), object_base});
+                matches = builder->CreateICmpNE(matches, llvm::ConstantInt::get(i32_type, 0));
+            }
             if (fastEntryParamRejectsNothing(info, 0) && !boxed_args.empty() && boxed_args[0]
                     && (raw_arg_ids.empty()
                         || ((nanboxed_values.count(raw_arg_ids[0])
@@ -14064,6 +14101,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     assigned_hash_guard_elisions = 0;
     local_allocas.clear();
     aot_call_target_contexts.clear();
+    aot_override_target_classes.clear();
     fast_runtime_config = receiver_runtime_config;
     native_call_runtime_config = nullptr;
     native_call_entry_state = nullptr;

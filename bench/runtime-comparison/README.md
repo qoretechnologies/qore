@@ -1618,3 +1618,6 @@ The [matched forwarding comparison](RESULTS.md#matched-forwarding-comparison-wit
 
 
 The [post-polymorphic optimized checkpoint](RESULTS.md#optimized-checkpoint-after-polymorphic-scalar-inlining-2026-10-30) compares39workloads with develop and32Java rows, including29fresh ordinary-C2 counterparts alongside original boundary controls. All885processes/2655windows are retained.
+
+
+[Scalar override guard hoisting](RESULTS.md#scalar-override-guard-hoisting-2026-10-30) moves immutable target admission out of AOT loops and shares live receiver classification. Both optimized campaigns and slower controls are retained in the [evidence](results-scalar-override-guard-macos-arm64.json) and [audit](audit-scalar-override-guard.md).

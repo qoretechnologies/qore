@@ -108,6 +108,14 @@ static void checkAdditionalMethodTargets(QoreValue receiver, QoreValue base) {
     ctx.call_targets[1].variant = variant;
     assert(qc->getID() != base_qc->getID());
     assert(qore_rt_object_has_exact_aot_override_v1(&ctx, 0, 1, receiver.rawBits()));
+    assert(qore_rt_get_aot_override_class_v1(&ctx, 0, 1) == qc);
+    assert(qore_rt_get_live_aot_override_receiver_class_v1(&ctx, receiver.rawBits()) == qc);
+    assert(qore_rt_get_live_aot_override_receiver_class_v1(&ctx, base.rawBits()) == base_qc);
+    assert(!qore_rt_get_aot_override_class_v1(nullptr, 0, 1));
+    assert(!qore_rt_get_aot_override_class_v1(&ctx, -1, 1));
+    assert(!qore_rt_get_aot_override_class_v1(&ctx, 0, 2));
+    assert(!qore_rt_get_live_aot_override_receiver_class_v1(nullptr, receiver.rawBits()));
+    assert(!qore_rt_get_live_aot_override_receiver_class_v1(&ctx, QoreValue().rawBits()));
     assert(!qore_rt_object_has_exact_aot_override_v1(&ctx, 0, 1, base.rawBits()));
     assert(!qore_rt_object_has_exact_aot_override_v1(&ctx, 0, 1, QoreValue().rawBits()));
     assert(!qore_rt_object_has_exact_aot_override_v1(nullptr, 0, 1, receiver.rawBits()));
@@ -119,15 +127,23 @@ static void checkAdditionalMethodTargets(QoreValue receiver, QoreValue base) {
     // The public C++ constructor permits the exact class with a different owning Program.
     ReferenceHolder<QoreObject> foreign_object(new QoreObject(qc, *foreign), &xsink);
     assert(!qore_rt_object_has_exact_aot_override_v1(&ctx, 0, 1, QoreValue(*foreign_object).rawBits()));
+    assert(!qore_rt_get_live_aot_override_receiver_class_v1(&ctx, QoreValue(*foreign_object).rawBits()));
     QoreProgram* saved_program = ctx.pgm;
     ctx.pgm = *foreign;
     assert(!qore_rt_object_has_exact_aot_override_v1(&ctx, 0, 1, receiver.rawBits()));
+    assert(!qore_rt_get_aot_override_class_v1(&ctx, 0, 1));
+    assert(!qore_rt_get_live_aot_override_receiver_class_v1(&ctx, receiver.rawBits()));
+    ctx.pgm = nullptr;
+    assert(!qore_rt_get_aot_override_class_v1(&ctx, 0, 1));
+    assert(!qore_rt_get_live_aot_override_receiver_class_v1(&ctx, receiver.rawBits()));
     ctx.pgm = saved_program;
     ctx.call_targets[0].qc = qc;
     assert(!qore_rt_object_has_exact_aot_override_v1(&ctx, 0, 1, receiver.rawBits()));
+    assert(!qore_rt_get_aot_override_class_v1(&ctx, 0, 1));
     ctx.call_targets[0].qc = base_qc;
     ctx.call_targets[1].variant = nullptr;
     assert(!qore_rt_object_has_exact_aot_override_v1(&ctx, 0, 1, receiver.rawBits()));
+    assert(!qore_rt_get_aot_override_class_v1(&ctx, 0, 1));
 }
 
 static uint64_t mismatchedNormalBody(QoreAOTContext*, ExceptionSink*) { return 0; }
