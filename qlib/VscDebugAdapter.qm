@@ -169,7 +169,10 @@ class VscLoggerAppender inherits LoggerAppenderFile {
         LoggerAppenderFile::processEventImpl(type, params);
         if (logger.debugAdapter) {
             if (type == EVENT_LOG) {
-                logger.debugAdapter.printfImpl("%s\n", params);
+                # the message has the line ending of the log file, which is replaced with a newline
+                string line = params;
+                line =~ s/\r?\n$//;
+                logger.debugAdapter.printfImpl("%s\n", line);
             }
         }
     }

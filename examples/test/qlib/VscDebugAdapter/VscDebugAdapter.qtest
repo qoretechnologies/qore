@@ -253,6 +253,7 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         addTestCase("logpoints", \logpointTest());
         addTestCase("a breakpoint whose condition is false does not hide a step", \conditionalStepTest());
         addTestCase("the adapter communicates over sockets, as Visual Studio Code starts it", \socketTest());
+        addTestCase("the adapter logs to its file and to the debug console", \logTest());
         addTestCase("the adapter ends when the IDE closes its input", \endOfInputTest());
         set_return_value(main());
     }
@@ -351,11 +352,15 @@ public class VscDebugAdapterTest inherits QUnit::Test {
     socketTest() {
         testSkip("no process module 2.2 or later");
     }
+
+    logTest() {
+        testSkip("no process module 2.2 or later");
+    }
 %else
     #! Starts the adapter with the modules of this source tree
-    private Process startAdapter() {
+    private Process startAdapter(*list<string> args) {
         *string module_dir = ENV.QORE_MODULE_DIR;
-        return new Process(qore_exe, (adapter,), {
+        return new Process(qore_exe, (adapter,) + (args ?? ()), {
             "env": Process::getEnvironment() + {
                 "QORE_MODULE_DIR": qlib_dir + (module_dir ? ":" + module_dir : ""),
             },
@@ -1267,6 +1272,33 @@ print('exit code: %d' % p.wait(30))
         assertEq(("console: i=0", "console: i=1", "console: i=2", "console: i=3", "console: i=4", "stdout: r: 10",
             "terminated", "exit code: 0"), (select lines, $1 =~ /^(console: i=|stdout: |terminated|exit code)/),
             lines.join("\n"));
+    }
+
+    logTest() {
+        TmpDir tmp("qore-vda-test-");
+        string path = writeProgram(tmp);
+        string log = tmp.path + "/adapter.log";
+        Process proc = startAdapter(("-v", "-l", log));
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        launch(dap, {"program": path, "stopOnEntry": False});
+        hash<auto> r = dap.request("configurationDone");
+        assertTrue(r.success, r.message);
+        dap.waitForEvent("terminated");
+        r = dap.request("disconnect");
+        assertTrue(r.success, r.message);
+        proc.closeStdin();
+        assertTrue(proc.wait(30s), "the adapter ends");
+
+        # the log file is written
+        string text = ReadOnlyFile::readTextFile(log);
+        assertRegex("receiveVsc: .*\"launch\"", text);
+        # each message of the log is shown in the debug console as one line
+        list<string> console = dap.getOutput("console");
+        assertTrue((select console, $1 =~ /receiveVsc: .*"launch"/).size() > 0, sprintf("%y", console));
+        assertEq((), select console, $1 =~ /\r/ || $1 =~ /\n\n$/ || $1 !~ /\n$/);
     }
 
     endOfInputTest() {
