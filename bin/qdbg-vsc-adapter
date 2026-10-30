@@ -243,6 +243,8 @@ class DebugWrapper {
         if (opt.help) {
             help();
         }
+        # the log is also shown in the debug console of the IDE unless it is written to a given file
+        bool log_to_console = opt.verbose && !exists opt.logfile;
         if (!opt.verbose) {
             remove opt.logfile;
         } else if (!exists opt.logfile) {
@@ -297,7 +299,9 @@ class DebugWrapper {
             vda.showFullException = exists opt.full_exception;
             vda.setLogger(logger);
             vda.defaultProgram = opt.program;
-            logger.debugAdapter = vda;
+            if (log_to_console) {
+                logger.debugAdapter = vda;
+            }
 
             if (vda instanceof VscDebugAdapterRemote) {
                 logger.debug("Connect remote adapter");
@@ -362,7 +366,8 @@ class DebugWrapper {
             "  -v,--verbose                 increase verbosity\n"
             "  -f,--full-exception          show full exception info\n"
             "\n"
-            "  -l,--logger-filename=<name>  logger filename, default: %s\n"
+            "  -l,--logger-filename=<name>  logger filename, default: %s; without it, the log of -v is also\n"
+            "                               shown in the debug console of the IDE\n"
             "  -A,--append-to-log           append to logfile\n"
             "  -g,--program=<pgm>           use program name unless specified in protocol\n"
             "\n"

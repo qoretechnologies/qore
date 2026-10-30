@@ -30,6 +30,7 @@
 %requires json
 %requires FsUtil
 %requires Util
+%requires VscDebugAdapter
 
 %try-module process >= 2.2
 %define NoProcess
@@ -42,6 +43,9 @@ class DapClient {
     public {
         #! bytes on stdout that are not part of a protocol message
         list<string> stray = ();
+
+        #! the maximum time to wait for a message before the test fails
+        const MessageTimeout = 30s;
     }
 
     private {
@@ -49,9 +53,6 @@ class DapClient {
         binary buf = binary();
         list<hash<auto>> backlog = ();
         int seq = 0;
-
-        #! the maximum time to wait for a message before the test fails
-        const MessageTimeout = 30s;
     }
 
     constructor(Process proc) {
@@ -185,9 +186,65 @@ public class VscDebugAdapterTest inherits QUnit::Test {
             "    int t = add(10, 20);\n"                                     # 7
             "}\n"                                                            # 8
             "Counter c(1);\n"                                                # 9
-            "background sub () { on_exit c.dec(); work(); }();\n"            # 10
+            "background sub () { on_exit c.dec(); set_thread_name(\"worker\"); work(); }();\n" # 10
             "c.waitForZero();\n"                                             # 11
             "printf(\"done\\n\");\n";                                         # 12
+
+        #! a program of a debug server that starts a thread for each line of input; the comments are the line numbers
+        const AttachProgram = "%modern\n"                                  # 1
+            "sub work() {\n"                                                 # 2
+            "    int t = 1;\n"                                               # 3
+            "}\n"                                                            # 4
+            "while (stdin.readLine(False) == \"thread\") {\n"                # 5
+            "    Counter c(1);\n"                                            # 6
+            "    background sub () { on_exit c.dec(); work(); }();\n"        # 7
+            "    c.waitForZero();\n"                                         # 8
+            "    printf(\"done\\n\");\n"                                     # 9
+            "}\n";                                                           # 10
+
+        #! a program with a thread that runs and one that waits when the main thread stops at line 33; the comments
+        #! are the line numbers
+        const StopAllProgram = "%modern\n"                                 # 1
+            "our Counter stop(1);\n"                                         # 2
+            "our Counter busy_running(1);\n"                                 # 3
+            "our Mutex m();\n"                                               # 4
+            "our Condition cond();\n"                                        # 5
+            "our bool waiting = False;\n"                                    # 6
+            "our bool release = False;\n"                                    # 7
+            "sub busy() {\n"                                                 # 8
+            "    busy_running.dec();\n"                                      # 9
+            "    int i = 0;\n"                                               # 10
+            "    while (stop.getCount()) {\n"                                # 11
+            "        ++i;\n"                                                 # 12
+            "    }\n"                                                        # 13
+            "}\n"                                                            # 14
+            "sub blocked() {\n"                                              # 15
+            "    m.lock();\n"                                                # 16
+            "    on_exit m.unlock();\n"                                      # 17
+            "    waiting = True;\n"                                          # 18
+            "    cond.broadcast();\n"                                        # 19
+            "    while (!release) {\n"                                       # 20
+            "        cond.wait(m);\n"                                        # 21
+            "    }\n"                                                        # 22
+            "}\n"                                                            # 23
+            "Counter ended(2);\n"                                            # 24
+            "background sub () { on_exit ended.dec(); busy(); }();\n"        # 25
+            "background sub () { on_exit ended.dec(); blocked(); }();\n"     # 26
+            "busy_running.waitForZero();\n"                                  # 27
+            # the waiting thread releases the mutex only in Condition::wait()
+            "m.lock();\n"                                                    # 28
+            "while (!waiting) {\n"                                           # 29
+            "    cond.wait(m);\n"                                            # 30
+            "}\n"                                                            # 31
+            "m.unlock();\n"                                                  # 32
+            "int k = 1;\n"                                                   # 33
+            "stop.dec();\n"                                                  # 34
+            "m.lock();\n"                                                    # 35
+            "release = True;\n"                                              # 36
+            "cond.broadcast();\n"                                            # 37
+            "m.unlock();\n"                                                  # 38
+            "ended.waitForZero();\n"                                         # 39
+            "printf(\"done\\n\");\n";                                         # 40
 
         #! a program that raises an exception and catches it; the comments are the line numbers
         const ExceptionProgram = "%modern\n"                                # 1
@@ -232,6 +289,7 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         string qore_exe = executablePath(ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore");
         string adapter = normalize_dir(get_script_dir() + "/../../../../bin/qdbg-vsc-adapter");
         string qlib_dir = normalize_dir(get_script_dir() + "/../../../../qlib");
+        string server_script = normalize_dir(get_script_dir() + "/../../../../bin/qdbg-server");
     }
 
     constructor() : Test("VscDebugAdapter", "1.0", \ARGV) {
@@ -254,6 +312,11 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         addTestCase("a breakpoint whose condition is false does not hide a step", \conditionalStepTest());
         addTestCase("the adapter communicates over sockets, as Visual Studio Code starts it", \socketTest());
         addTestCase("the adapter logs to its file and to the debug console", \logTest());
+        addTestCase("the end of a program that started a process is reported", \childProcessTest());
+        addTestCase("marks in the output of programs", \outputMarkTest());
+        addTestCase("names of threads", \threadNameTest());
+        addTestCase("all threads stop and continue together", \stopAllThreadsTest());
+        addTestCase("attaching to a program of a debug server", \attachTest());
         addTestCase("the adapter ends when the IDE closes its input", \endOfInputTest());
         set_return_value(main());
     }
@@ -356,14 +419,55 @@ public class VscDebugAdapterTest inherits QUnit::Test {
     logTest() {
         testSkip("no process module 2.2 or later");
     }
-%else
+
+    childProcessTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
+    attachTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
+    stopAllThreadsTest() {
+        testSkip("no process module 2.2 or later");
+    }
+%endif
+
+    # the output before a mark, or before an end of the output that can be the beginning of a mark, is queued
+    outputMarkTest() {
+        binary mark = binary("\0mark-123");
+        assertEq(5, VscDebugAdapter::getOutputSize(binary("abcde\0mark-123Frest"), mark));
+        assertEq(0, VscDebugAdapter::getOutputSize(binary("\0mark-123S"), mark));
+        # an end that can be the beginning of a mark
+        assertEq(3, VscDebugAdapter::getOutputSize(binary("abc\0mar"), mark));
+        assertEq(3, VscDebugAdapter::getOutputSize(binary("abc\0"), mark));
+        # no mark
+        assertEq(5, VscDebugAdapter::getOutputSize(binary("abcde"), mark));
+        assertEq(4, VscDebugAdapter::getOutputSize(binary("ab\0x"), mark));
+        assertEq(0, VscDebugAdapter::getOutputSize(binary(), mark));
+    }
+
+    # the default names that Qore gives threads are not shown
+    threadNameTest() {
+        assertEq("worker (3)", VscDebugAdapter::getThreadDisplayName(3, "worker", False));
+        assertEq("worker (3)", VscDebugAdapter::getThreadDisplayName(3, "worker", True));
+        assertEq("Thread 3", VscDebugAdapter::getThreadDisplayName(3, "qore/3", False));
+        assertEq("Thread 3", VscDebugAdapter::getThreadDisplayName(3, NOTHING, False));
+        assertEq("Main Thread (1)", VscDebugAdapter::getThreadDisplayName(1, "qore", True));
+        assertEq("Main Thread (5)", VscDebugAdapter::getThreadDisplayName(5, "qore/5", True));
+        # names that only look like the default names
+        assertEq("qore-x (4)", VscDebugAdapter::getThreadDisplayName(4, "qore-x", False));
+        assertEq("qore/a (4)", VscDebugAdapter::getThreadDisplayName(4, "qore/a", False));
+    }
+
+%ifndef NoProcess
     #! Starts the adapter with the modules of this source tree
-    private Process startAdapter(*list<string> args) {
+    private Process startAdapter(*list<string> args, *hash<auto> env) {
         *string module_dir = ENV.QORE_MODULE_DIR;
         return new Process(qore_exe, (adapter,) + (args ?? ()), {
             "env": Process::getEnvironment() + {
                 "QORE_MODULE_DIR": qlib_dir + (module_dir ? ":" + module_dir : ""),
-            },
+            } + env,
         });
     }
 
@@ -751,6 +855,16 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         assertEq((bkpt_id,), stopped.body.hitBreakpointIds);
         int tid = stopped.body.threadId;
 
+        # the threads are shown with their names
+        r = dap.request("threads", NOTHING, False);
+        assertTrue(r.success, r.message);
+        hash<string, string> names = map {$1.id: $1.name}, r.body.threads;
+        assertEq(2, names.size(), sprintf("%y", r.body.threads));
+        assertEq(HAVE_THREAD_NAME ? sprintf("worker (%d)", tid) : sprintf("Thread %d", tid), names{tid});
+        # the thread that started the program has a default name
+        int main_tid = (select keys names, $1.toInt() != tid)[0].toInt();
+        assertEq(sprintf("Main Thread (%d)", main_tid), names{main_tid});
+
         # the call stack of the thread ends with the call of its code by the background operator at line 10; the
         # top-level code that started the thread is not in it
         r = dap.request("stackTrace", {"threadId": tid});
@@ -1029,7 +1143,10 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         # negative: a syntax error, an unknown variable, and code that the expressions may not run
         r = evaluate(dap, tid, "n +");
         assertFalse(r.success);
-        assertRegex("DEBUG-EVALUATE-ERROR", r.message);
+        # the error is given without the errors of the commands that it was sent with
+        assertRegex("^DEBUG-EVALUATE-ERROR: ", r.message);
+        r = evaluate(dap, tid, "no_such_name");
+        assertEq("DEBUG-EVALUATE-ERROR: cannot resolve bareword 'no_such_name' to any reachable object", r.message);
         r = evaluate(dap, tid, "no_such_variable + 1");
         assertFalse(r.success);
         r = evaluate(dap, tid, "system(\"true\")");
@@ -1102,8 +1219,9 @@ public class VscDebugAdapterTest inherits QUnit::Test {
     hitConditionTest() {
         TmpDir tmp("qore-vda-test-");
         string path = writeProgram(tmp, DataProgram);
+        # blanks are allowed also between the characters of an operator
         foreach hash<auto> i in ({"cond": ">= 4", "values": ("3", "4")}, {"cond": "%2", "values": ("1", "3")},
-                {"cond": "2", "values": ("1",)}) {
+                {"cond": "2", "values": ("1",)}, {"cond": "> = 4", "values": ("3", "4")}) {
             Process proc = startAdapter();
             on_exit if (proc.running()) {
                 proc.terminate();
@@ -1274,11 +1392,9 @@ print('exit code: %d' % p.wait(30))
             lines.join("\n"));
     }
 
-    logTest() {
-        TmpDir tmp("qore-vda-test-");
-        string path = writeProgram(tmp);
-        string log = tmp.path + "/adapter.log";
-        Process proc = startAdapter(("-v", "-l", log));
+    #! Runs a program in the adapter started with the given arguments and environment, and returns the client
+    private DapClient runLogged(string path, list<string> args, *hash<auto> env) {
+        Process proc = startAdapter(args, env);
         on_exit if (proc.running()) {
             proc.terminate();
         }
@@ -1291,14 +1407,227 @@ print('exit code: %d' % p.wait(30))
         assertTrue(r.success, r.message);
         proc.closeStdin();
         assertTrue(proc.wait(30s), "the adapter ends");
+        return dap;
+    }
 
-        # the log file is written
-        string text = ReadOnlyFile::readTextFile(log);
-        assertRegex("receiveVsc: .*\"launch\"", text);
-        # each message of the log is shown in the debug console as one line
+    logTest() {
+        TmpDir tmp("qore-vda-test-");
+        string path = writeProgram(tmp);
+
+        # with a log file, the log is written to the file only
+        string log = tmp.path + "/adapter.log";
+        DapClient dap = runLogged(path, ("-v", "-l", log));
+        assertRegex("receiveVsc: .*\"launch\"", ReadOnlyFile::readTextFile(log));
+        assertEq((), select dap.getOutput("console"), $1 =~ /receiveVsc:/);
+
+        # without a log file, the log is written to the default file and shown in the debug console, each message
+        # as one line
+        dap = runLogged(path, ("-v",), {"HOME": tmp.path});
+        assertRegex("receiveVsc: .*\"launch\"", ReadOnlyFile::readTextFile(tmp.path + "/.qoredebugadapter.log"));
         list<string> console = dap.getOutput("console");
         assertTrue((select console, $1 =~ /receiveVsc: .*"launch"/).size() > 0, sprintf("%y", console));
         assertEq((), select console, $1 =~ /\r/ || $1 =~ /\n\n$/ || $1 !~ /\n$/);
+    }
+
+    childProcessTest() {
+        TmpDir tmp("qore-vda-test-");
+        string pid_file = tmp.path + "/child.pid";
+        # the child process keeps the adapter's stdout open after the program has ended
+        string path = writeProgram(tmp, sprintf("%%modern\n"
+            "system(\"sleep 1000 & echo $! > %s\");\n"
+            "printf(\"parent done\\n\");\n", pid_file));
+        Process proc = startAdapter();
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        on_exit {
+            *string pid = is_file(pid_file) ? trim(ReadOnlyFile::readTextFile(pid_file)) : NOTHING;
+            if (pid =~ /^[0-9]+$/) {
+                system("kill " + pid);
+            }
+        }
+        DapClient dap(proc);
+        launch(dap, {"program": path, "stopOnEntry": False});
+        hash<auto> r = dap.request("configurationDone");
+        assertTrue(r.success, r.message);
+        # the end of the program is reported after its output, while the child process still runs
+        dap.waitForEvent("terminated");
+        assertEq(("parent done\n",), dap.getOutput("stdout"));
+        r = dap.request("disconnect");
+        assertTrue(r.success, r.message);
+        proc.closeStdin();
+        assertTrue(proc.wait(30s), "the adapter ends");
+        assertEq(0, proc.exitCode());
+    }
+
+    attachTest() {
+        TmpDir tmp("qore-vda-test-");
+        string path = writeProgram(tmp, AttachProgram);
+        Process server(qore_exe, (server_script, path), {
+            "env": Process::getEnvironment() + {
+                "QORE_MODULE_DIR": qlib_dir + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : ""),
+            },
+        });
+        on_exit if (server.running()) {
+            server.terminate();
+        }
+        # the server writes its port when it listens
+        string line = readServerOutput(server, "\n");
+        int port = (line =~ x/listening on port ([0-9]+)/)[0].toInt();
+
+        # the server holds the program at its start until a client attaches; the program runs when the client has set
+        # its breakpoints
+        attachSession(server, port, path, False);
+        # the program runs when a client attaches; the runtime stops its thread at its next statement, and the thread
+        # is held there until the client has set its breakpoints
+        attachSession(server, port, path, True);
+
+        # the server ends with the program
+        server.write("end\n");
+        assertTrue(server.wait(30s), "the debug server ends");
+        assertEq(0, server.exitCode());
+    }
+
+    #! Attaches to the program of the debug server, and stops at a breakpoint in a thread that the program starts
+    /** @param running if the program is running when it is attached; its thread then gets the line of input that
+        starts a thread in the configuration phase
+    */
+    private attachSession(Process server, int port, string path, bool running) {
+        Process proc = startAdapter(("-a", sprintf("ws://localhost:%d", port)));
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        hash<auto> r = dap.request("initialize", {"adapterID": "qore", "linesStartAt1": True,
+            "columnsStartAt1": True, "pathFormat": "path"});
+        assertTrue(r.success, r.message);
+        # the program is given by its script name
+        r = dap.request("attach", {"program": "target.q"});
+        assertTrue(r.success, r.message);
+        # the client can set its breakpoints as soon as the program is debugged
+        dap.waitForEvent("initialized");
+        assertEq({"name": "target.q", "isLocalProcess": False, "startMethod": "attach"},
+            dap.waitForEvent("process").body);
+
+        int main_tid;
+        if (running) {
+            # the thread of the program stops at its next statement, and it is held until the configuration phase
+            # has ended
+            server.write("thread\n");
+            main_tid = dap.waitForEvent("thread").body.threadId;
+        } else {
+            # the thread of the program that the server holds
+            main_tid = dap.waitForEvent("thread").body.threadId;
+        }
+        r = dap.request("setBreakpoints", {"source": {"path": path}, "breakpoints": ({"line": 3},)});
+        assertTrue(r.success, r.message);
+        assertTrue(r.body.breakpoints[0].verified, sprintf("%y", r.body));
+        r = dap.request("configurationDone");
+        assertTrue(r.success, r.message);
+        if (!running) {
+            server.write("thread\n");
+        }
+
+        # the thread that the program starts stops at the breakpoint
+        hash<auto> stopped = dap.waitForEvent("stopped");
+        assertEq("breakpoint", stopped.body.reason);
+        int tid = stopped.body.threadId;
+        assertNeq(main_tid, tid);
+        hash<auto> frame = topFrame(dap, tid);
+        assertEq("work", frame.name);
+        assertEq(3, frame.line);
+        r = dap.request("threads", NOTHING, False);
+        assertTrue(r.success, r.message);
+        assertEq(sprintf("Thread %d", tid), (select r.body.threads, $1.id == tid)[0].name);
+
+        # the thread runs to its end
+        r = dap.request("continue", {"threadId": tid});
+        assertTrue(r.success, r.message);
+        dap.waitFor(bool sub (hash<auto> m) {
+            return m.type == "event" && m.event == "thread" && m.body.threadId == tid && m.body.reason == "exited";
+        }, "thread exited event");
+        assertEq("done\n", readServerOutput(server, "done\n"));
+        # no other thread was reported as stopped
+        assertEq((), dap.getEvents("stopped"));
+
+        r = dap.request("disconnect");
+        assertTrue(r.success, r.message);
+        proc.closeStdin();
+        assertTrue(proc.wait(30s), "the adapter ends");
+        assertEq(0, proc.exitCode());
+        assertEq((), dap.stray);
+    }
+
+    stopAllThreadsTest() {
+        TmpDir tmp("qore-vda-test-");
+        string path = writeProgram(tmp, StopAllProgram);
+
+        Process proc = startAdapter();
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        launch(dap, {"program": path, "stopOnEntry": False, "stopAllThreads": True});
+        hash<auto> r = dap.request("setBreakpoints", {"source": {"path": path}, "breakpoints": ({"line": 33},)});
+        assertTrue(r.success, r.message);
+        r = dap.request("configurationDone");
+        assertTrue(r.success, r.message);
+
+        hash<auto> stopped = dap.waitForEvent("stopped");
+        assertEq("breakpoint", stopped.body.reason);
+        int main_tid = stopped.body.threadId;
+        assertEq(33, topFrame(dap, main_tid).line);
+
+        # the thread that runs stops at its next statement; it is reported without taking the focus
+        stopped = dap.waitForEvent("stopped");
+        assertEq("pause", stopped.body.reason);
+        assertTrue(stopped.body.preserveFocusHint);
+        int busy_tid = stopped.body.threadId;
+        assertNeq(main_tid, busy_tid);
+        hash<auto> frame = topFrame(dap, busy_tid);
+        assertEq("busy", frame.name);
+        assertTrue(inlist(frame.line, (11, 12)), sprintf("%y", frame));
+
+        # a step of the main thread stops it at its next statement, while the other threads stay stopped
+        r = dap.request("next", {"threadId": main_tid});
+        assertTrue(r.success, r.message);
+        stopped = dap.waitForEvent("stopped");
+        assertEq("step", stopped.body.reason);
+        assertEq(main_tid, stopped.body.threadId);
+        assertEq(34, topFrame(dap, main_tid).line);
+        assertEq(frame.line, topFrame(dap, busy_tid).line);
+
+        # all threads continue; the waiting thread, whose stop was requested, runs on when the main thread releases it
+        r = dap.request("continue", {"threadId": main_tid});
+        assertTrue(r.success, r.message);
+        assertTrue(r.body.allThreadsContinued);
+        dap.waitForEvent("terminated");
+        assertEq(("done\n",), dap.getOutput("stdout"));
+        assertEq((), dap.getEvents("stopped"));
+        # both threads continued
+        list<int> continued = map $1.body.threadId, dap.getEvents("continued");
+        assertTrue(inlist(main_tid, continued), sprintf("%y", continued));
+        assertTrue(inlist(busy_tid, continued), sprintf("%y", continued));
+
+        r = dap.request("disconnect");
+        assertTrue(r.success, r.message);
+        proc.closeStdin();
+        assertTrue(proc.wait(30s), "the adapter ends");
+        assertEq(0, proc.exitCode());
+        assertEq((), dap.stray);
+    }
+
+    #! Returns the output of the debug server up to the end of the given text
+    private string readServerOutput(Process server, string end) {
+        string out = "";
+        while (out.find(end) < 0) {
+            *string s = server.readStdout(1024, DapClient::MessageTimeout);
+            if (!exists s) {
+                throw "TEST-ERROR", sprintf("the debug server did not write %y: %y", end, out);
+            }
+            out += s;
+        }
+        return out;
     }
 
     endOfInputTest() {

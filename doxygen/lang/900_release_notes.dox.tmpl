@@ -3428,6 +3428,7 @@ while (*binary chunk = input.read(65536)) {
     - @ref debugprogramcontrolintro "DebugProgramControl" module
       - stopped threads read and set the values of variables and of their elements, keys and members, also private
         ones, by their paths, and evaluate expressions with the variables of a frame
+      - interrupt events give the name of the thread
     - @ref debugutilintro "DebugUtil" module
       - added functions that describe values, list their elements, keys and members, also private ones, and read and
         set values by their paths
@@ -3916,6 +3917,12 @@ while (*binary chunk = input.read(65536)) {
       - fixed the output of a program that is debugged in the adapter process being sent after the \c terminated
         event at the end of the program
       - fixed \c qdbg-vsc-adapter writing nothing to its log file
+      - threads are shown with their names
+      - added the \c stopAllThreads argument of \c launch and \c attach requests: when a thread stops, the other
+        threads of the program stop, and \c continue continues them all
+      - fixed attaching to a program of a remote debug server: breakpoints could be set only after an event of the
+        program, and threads that were stopped when the program was attached, or that the runtime stopped when it
+        was attached, were neither resumed nor reported as stopped
     - @ref websocketclientintro "WebSocketClient" module
       - \c WebSocketPingPollOperation uses non-blocking @ref httpclientiointro "HttpClientIo" I/O, with an extended
         CONNECT handshake for HTTP/2 and HTTP/3

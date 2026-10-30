@@ -55,7 +55,9 @@ module VscDebugAdapter {
     Supported:
     - launch, and attach to a program of a remote debug server
     - source, function and exception breakpoints, with conditions, hit conditions and log messages (logpoints)
-    - step over, into and out, continue and pause of a thread
+    - step over, into and out, continue and pause of a thread; with the \c stopAllThreads argument of a \c launch
+      or \c attach request, all threads of the program stop when one of them stops, and continue together
+    - threads with their names; the default names that %Qore gives threads are not shown
     - call stacks, and the local and global variables of their frames as trees: the elements of lists, the keys of
       hashes and the members of objects, also private ones, are read when they are shown, and the elements of long
       lists are paged; variables, elements, keys and members can be set to the values of expressions
@@ -72,7 +74,9 @@ module VscDebugAdapter {
     Limitations:
     - data breakpoints, stepping back, jumping to a line, restarting a frame, stepping into a chosen call, and column
       breakpoints are not supported
-    - a breakpoint or a pause stops only the thread that reaches it
+    - a breakpoint or a pause stops only the thread that reaches it, unless the \c stopAllThreads argument is
+      \c true; then the other threads stop at their next statement, so a thread that waits, as for input, stops when it
+      runs again
     - the client is not notified when another debugger client changes a breakpoint
 
     @subsection vda_v0_3
@@ -110,6 +114,14 @@ module VscDebugAdapter {
     - expressions are evaluated for watches, hovers and the debug console with the variables of a frame, and
       variables are set to the values of expressions
     - conditional breakpoints, hit conditions and logpoints
+    - threads are shown with their names
+    - the \c stopAllThreads argument of \c launch and \c attach requests: when a thread stops, the other threads of
+      the program stop at their next statement and are reported as paused without taking the focus, and a
+      \c continue request continues all stopped threads
+    - attaching to a program of a remote debug server: the IDE can set its breakpoints as soon as the program is
+      attached; threads that were stopped when it was attached, threads that the runtime stops at their next
+      statement when it is attached, and threads that start during the configuration phase run on after the
+      \c configurationDone request; they were not resumed and not reported as stopped
 
     @subsection vda_v0_2
     - updated to use a Logger
@@ -193,6 +205,12 @@ public class VscDebugAdapter inherits DebugCommandLine {
         const TopLevelFrameName = "<top level>";
         #! the first variable reference of a structured value; the references below it are those of stack frames
         const VarRefBase = 0x40000000;
+        #! the beginning of the mark in the output of programs; see writeOutputMarks()
+        const OutputMarkPrefix = "\0qdbg-vsc-adapter-output-mark-";
+        #! the command of a mark that sends the events that wait for the output before it
+        const MarkFlush = "F";
+        #! the command of a mark that ends the thread that forwards the output
+        const MarkStop = "S";
 
         #! process loop flag
         bool m_running = True;
@@ -230,6 +248,12 @@ public class VscDebugAdapter inherits DebugCommandLine {
 
         #! counts the threads that forward the output of programs while it is captured
         *Counter m_outputForwarders;
+
+        #! the mark that is written to the pipes of the output of programs; see writeOutputMarks()
+        binary m_outputMark;
+
+        #! events sent after the output of programs, with the number of marks of the pipes to wait for
+        list<hash<auto>> m_eventsAfterOutput = ();
 
         #! the structured values of stopped threads, by their variable reference; see getVarRef()
         hash<string, hash<auto>> m_varRefs = {};
@@ -341,15 +365,15 @@ vda.run();
         m_out = saved_out;
         m_savedStdout = saved_out;
         m_savedStderr = saved_err;
+        # the mark that the adapter writes to the pipes after the output; see writeOutputMarks()
+        m_outputMark = binary(OutputMarkPrefix) + binary(get_random_bytes(16).toHex());
         stdout.redirect(out_pipe.write);
         stderr.redirect(err_pipe.write);
-        # stdout and stderr are now the only writers of the pipes, so the readers get the end of the input when
-        # they are restored
         out_pipe.write.close();
         err_pipe.write.close();
         m_outputForwarders = new Counter(2);
-        background forwardOutput(out_pipe.read, "stdout", m_outputForwarders);
-        background forwardOutput(err_pipe.read, "stderr", m_outputForwarders);
+        background forwardOutput(out_pipe.read, "stdout", m_outputForwarders, m_outputMark);
+        background forwardOutput(err_pipe.read, "stderr", m_outputForwarders, m_outputMark);
         return True;
     }
 
@@ -363,31 +387,42 @@ vda.run();
     }
 
     #! Restores stdout and stderr after captureProgramOutput()
-    /** Waits until the output that was captured has been queued for the IDE.
+    /** Waits until the output that was written before has been queued for the IDE: a stop mark is written to the
+        pipes, and the threads that forward the output end when they reach it, also if a process that a program
+        started still has the pipes open.
     */
     public stopProgramOutputCapture() {
         if (!m_outputForwarders) {
             return;
         }
+        writeOutputMarks(MarkStop);
+        m_outputForwarders.waitForZero();
         stdout.redirect(m_savedStdout);
         stderr.redirect(m_savedStderr);
-        m_outputForwarders.waitForZero();
         m_out = stdout;
         remove m_outputForwarders;
         remove m_savedStdout;
         remove m_savedStderr;
     }
 
+    #! Writes a mark with the given command to the pipes of the output of programs
+    /** The mark is the random mark of the capture, which the output of a program does not contain, followed by the
+        command; the threads that forward the output queue the output that was written before the mark, then act on
+        the command.  A mark is written with one write, which is atomic for a pipe.
+    */
+    private:internal writeOutputMarks(string cmd) {
+        binary mark = m_outputMark + binary(cmd);
+        stdout.write(mark);
+        stderr.write(mark);
+    }
+
     #! Sends an event to the IDE after all output that programs have written
     /** The output of programs is read from pipes in other threads, so it can be queued after an event that a program
-        sends when it has written it.  When the output is captured, stdout and stderr are restored: this ends the
-        input of the threads that forward the output, which queue all output that was written before they end; the
-        event is queued after it, and the output is captured again.
+        sends when it has written it.  A flush mark is written to the pipes; each thread that forwards the output
+        queues the output before the mark and then a \c "vsc_output_mark" message, and the event is sent when the
+        messages of both pipes have been handled (see processEvents()).
 
-        To be called in the thread that handles the events when no program runs: the output of a program that runs
-        while stdout and stderr are restored would be written to the channel of the protocol.  The threads that
-        forward the output end only when no process has the pipes open, so a process that a program started with the
-        adapter's stdout or stderr and that still runs delays the event until it ends.
+        To be called in the thread that handles the events
 
         @param event the name of the event
         @param body the body of the event, if any
@@ -397,9 +432,8 @@ vda.run();
             sendVscEvent(event, body);
             return;
         }
-        stopProgramOutputCapture();
-        m_queue.push({"type": "vsc_event", "event": event, "body": body});
-        captureProgramOutput();
+        push m_eventsAfterOutput, {"event": event, "body": body, "marks": 2};
+        writeOutputMarks(MarkFlush);
     }
 
     #! Returns the size of the leading part of the data that ends with a complete UTF-8 character
@@ -420,8 +454,30 @@ vda.run();
         return size;
     }
 
-    #! Queues the output read from a pipe as output events until the end of the input
-    private:internal forwardOutput(ReadOnlyFile reader, string category, Counter done) {
+    #! Returns the number of leading bytes of the output that are not a part of a mark
+    /** The output before a mark, or before the end of the output that can be the beginning of a mark, is not a part
+        of a mark
+    */
+    static int getOutputSize(binary data, binary mark) {
+        int i = data.find(mark);
+        if (i >= 0) {
+            return i;
+        }
+        # the longest end of the data that is the beginning of the mark
+        int size = data.size();
+        for (int k = min(mark.size() - 1, size); k > 0; --k) {
+            if (data.substr(size - k) == mark.substr(0, k)) {
+                return size - k;
+            }
+        }
+        return size;
+    }
+
+    #! Queues the output read from a pipe as output events until a stop mark or the end of the input
+    /** The output before a mark is queued, then a flush mark is queued as a \c "vsc_output_mark" message; the
+        thread ends at a stop mark.  The output is queued in complete UTF-8 characters.
+    */
+    private:internal forwardOutput(ReadOnlyFile reader, string category, Counter done, binary mark) {
         on_exit done.dec();
         binary pending;
         while (True) {
@@ -438,21 +494,38 @@ vda.run();
                 }
                 pending += more;
             }
-            int size = VscDebugAdapter::getCompleteUtf8Size(pending);
-            if (size) {
-                pushEvent({
-                    "type": "vsc_output",
-                    "category": category,
-                    "output": pending.substr(0, size).toString("UTF-8"),
-                });
-                splice pending, 0, size;
+            while (True) {
+                int size = VscDebugAdapter::getOutputSize(pending, mark);
+                # the output before a mark is queued with the end of an incomplete character
+                if (size + mark.size() < pending.size()) {
+                    queueOutput(category, pending.substr(0, size));
+                    string cmd = pending.substr(size + mark.size(), 1).toString();
+                    splice pending, 0, size + mark.size() + 1;
+                    if (cmd == MarkStop) {
+                        queueOutput(category, pending);
+                        return;
+                    }
+                    pushEvent({"type": "vsc_output_mark"});
+                    continue;
+                }
+                size = VscDebugAdapter::getCompleteUtf8Size(pending.substr(0, size));
+                if (size) {
+                    queueOutput(category, pending.substr(0, size));
+                    splice pending, 0, size;
+                }
+                break;
             }
         }
-        if (pending) {
+        queueOutput(category, pending);
+    }
+
+    #! Queues output as an output event, if there is any
+    private:internal queueOutput(string category, *binary output) {
+        if (output) {
             pushEvent({
                 "type": "vsc_output",
                 "category": category,
-                "output": pending.toString("UTF-8"),
+                "output": output.toString("UTF-8"),
             });
         }
     }
@@ -479,9 +552,12 @@ vda.run();
                     processDebugEvent(msg);
                 } else if (msg.type == "vsc_output") {
                     sendVscEvent("output", {"category": msg.category, "output": msg.output});
-                } else if (msg.type == "vsc_event") {
-                    # an event queued after output; see sendVscEventAfterOutput()
-                    sendVscEvent(msg.event, msg.body);
+                } else if (msg.type == "vsc_output_mark") {
+                    # a pipe's output before a flush mark has been sent; see sendVscEventAfterOutput()
+                    if (m_eventsAfterOutput && !--m_eventsAfterOutput[0].marks) {
+                        hash<auto> e = shift m_eventsAfterOutput;
+                        sendVscEvent(e.event, e.body);
+                    }
                 }
             } catch (hash<ExceptionInfo> ex) {
                 info("ex: %y", ex);
@@ -557,7 +633,8 @@ vda.run();
             }
         } catch (hash<ExceptionInfo> ex) {
             resp.success = False;
-            resp.message = ex.err + ": " + ex.desc;
+            # the error of a command of the debugger is given without the error of the command that it was sent with
+            resp.message = VscDebugAdapter::getErrorText(ex);
             debug("%s", get_exception_string(ex));
         }
         resp.request_seq = request.seq;
@@ -613,8 +690,6 @@ vda.run();
                     case START_ATTACH:
                         e.startMethod = "attach";
                         e.isLocalProcess = False;
-                        # we are ready receive breakpoints
-                        sendVscEvent("initialized");
                         break;
                     case START_ATTACH_SUSPENDED:
                     }
@@ -622,15 +697,24 @@ vda.run();
                     m_programState{event.pgmid}.vcsNotified = True;
                     m_programState{event.pgmid}.mainThreadId = gettid();
                 }
+                # the name of the thread, which it may have changed since its last event
+                m_programState{event.pgmid}.threadNames{event.tid} = event.threadname;
                 if (!m_programState{event.pgmid}.vcsThreadNotified{event.tid}) {
                     sendVscEvent("thread", ("threadId": event.tid, "reason": "started"));
                     m_programState{event.pgmid}.vcsThreadNotified{event.tid} = True;
                 }
-                # another thread of a launched program, such as one started with the background operator, attaches
-                # when it starts; it runs until it reaches a breakpoint, as the program would without the debugger
-                if (event.func == "attach" && m_programState{event.pgmid}.startMethod == START_LAUNCH
+                # another thread of a launched or attached program, such as one started with the background operator,
+                # attaches when it starts; it runs until it reaches a breakpoint, as the program would without the
+                # debugger.  A thread of an attached program that starts before the configuration phase has ended is
+                # held until the client has set its breakpoints; vsc_configurationDone() resumes it.
+                if (event.func == "attach" && m_programState{event.pgmid}.startMethod != START_ATTACH_SUSPENDED
                     && m_programState{event.pgmid}.startThreadId != event.tid) {
-                    vsc_continue(("threadId": event.tid));
+                    if (m_programState{event.pgmid}.startMethod == START_ATTACH
+                        && !m_programState{event.pgmid}.bootstrap.configurationDone) {
+                        m_programState{event.pgmid}.heldThreads += (event.tid,);
+                        return;
+                    }
+                    resumeThread(event.tid);
                     return;
                 }
                 # True if the thread stopped at the first statement of a launched program
@@ -675,6 +759,39 @@ vda.run();
                         return;
                     }
                 }
+                # a step of the client; it ends when the thread is reported as stopped or runs without a step
+                bool stepping = boolean(m_programState{event.pgmid}.steppingThreads{event.tid});
+                # a thread that stops at a statement without a breakpoint, and that the client did not step or pause:
+                # - when all threads stop together, a thread that another thread's stop has stopped, which is reported
+                #   as paused
+                # - when a client attaches to a running program, the runtime stops each thread of the program at its
+                #   next statement; the thread is handled as a thread that attaches: it runs on, after the configuration
+                #   phase
+                # - when all threads stop together, a thread whose stop was requested before the client continued all
+                #   threads, as the thread was waiting; it runs on
+                if (event.func == "step" && !exists event.bkptid && !stepping
+                    && !m_programState{event.pgmid}.pauseRequests{event.tid}) {
+                    if (remove m_programState{event.pgmid}.allStopRequests{event.tid}) {
+                        setStoppedThread(event);
+                        sendVscEvent("stopped", {
+                            "reason": "pause",
+                            "description": "Paused as another thread stopped",
+                            "threadId": event.tid,
+                            "preserveFocusHint": True,
+                        });
+                        return;
+                    }
+                    if (m_programState{event.pgmid}.startMethod == START_ATTACH
+                        && !m_programState{event.pgmid}.bootstrap.configurationDone) {
+                        m_programState{event.pgmid}.heldThreads += (event.tid,);
+                        return;
+                    }
+                    if (m_programState{event.pgmid}.startMethod == START_ATTACH
+                        || m_programState{event.pgmid}.stopAllThreads) {
+                        resumeThread(event.tid);
+                        return;
+                    }
+                }
                 if (event.func == "exception" && !inlist(event.exception.type, m_programState{event.pgmid}.exceptionBreakpoints.filters)) {
                     refuseInterrupt(event);
                     break;
@@ -694,21 +811,24 @@ vda.run();
                 list<int> hits = getHitBreakpoints(event, entry);
                 list<int> ids = getStoppingBreakpoints(event, hits);
                 if (!ids && (hits || entry) && !hasOtherStopReason(event, entry)) {
-                    vsc_continue(("threadId": event.tid));
+                    resumeThread(event.tid);
                     return;
                 }
                 hash<auto> e = getStopInfo(event, entry, ids);
                 e.threadId = event.tid;
-                # e.allThreadsStopped =    is not used in vscode
-                m_programState{event.pgmid}.thread{event.tid}.frameId = event.frame;
-                m_programState{event.pgmid}.thread{event.tid}.debugVar = event.debugvar;
-                m_programState{event.pgmid}.thread{event.tid}.exception = event.exception;
-
+                setStoppedThread(event);
                 sendVscEvent("stopped", e);
+                if (m_programState{event.pgmid}.stopAllThreads) {
+                    stopOtherThreads(event.pgmid, event.tid);
+                }
             }
             break;
         case "run":
             remove m_programState{event.pgmid}.thread{event.tid};
+            # a thread that runs without a step, or that has ended, is not stepped by the client
+            if (event.runstate == DebugRunStateName::Run || event.runstate == DebugRunStateName::Detach) {
+                remove m_programState{event.pgmid}.steppingThreads{event.tid};
+            }
             # the variable references of a thread are valid while it is stopped
             removeVarRefs(event.tid);
             if (event.runstate == "attach") {
@@ -830,6 +950,14 @@ vda.run();
         return event.runstate != DebugRunStateName::Run;
     }
 
+    #! Keeps the state of a thread that is reported as stopped; a step of the client ends with the stop
+    private:internal setStoppedThread(hash<auto> event) {
+        remove m_programState{event.pgmid}.steppingThreads{event.tid};
+        m_programState{event.pgmid}.thread{event.tid}.frameId = event.frame;
+        m_programState{event.pgmid}.thread{event.tid}.debugVar = event.debugvar;
+        m_programState{event.pgmid}.thread{event.tid}.exception = event.exception;
+    }
+
     #! Returns the client's source or function breakpoint with the given ID, or @ref nothing
     private:internal *hash<auto> getClientBreakpoint(softstring pgmId, int id) {
         foreach hash<auto> source_bkpts in (m_programState{pgmId}.sourceBreakpoints.iterator()) {
@@ -847,19 +975,23 @@ vda.run();
 
     #! Returns True if the given number of hits meets the hit condition of a breakpoint
     /** @param cond the hit condition: a number, which the number of hits must equal, or a number after \c "==",
-        \c ">", \c ">=", \c "<", \c "<=" or \c "%", the last for every given number of hits
+        \c ">", \c ">=", \c "<", \c "<=" or \c "%", the last for every given number of hits; blanks are allowed
+        before and after the number and the operator and between the characters of the operator
         @param count the number of hits, with the current one
 
         @throw BREAKPOINT-HIT-CONDITION-ERROR the hit condition is invalid
     */
     static bool checkHitCondition(string cond, int count) {
-        *list<*string> m = (cond =~ x/^\s*(==|>=|<=|>|<|%)?\s*([0-9]+)\s*$/);
+        # blanks are allowed also between the characters of an operator, as in "> = 4"
+        *list<*string> m = (cond =~ x/^\s*(=\s*=|>\s*=|<\s*=|>|<|%)?\s*([0-9]+)\s*$/);
         if (!m) {
             throw "BREAKPOINT-HIT-CONDITION-ERROR", sprintf("invalid hit condition %y; give a number, optionally "
                 "after ==, >, >=, <, <= or %%", cond);
         }
         int n = int(m[1]);
-        switch (m[0] ?? "") {
+        string op = m[0] ?? "";
+        op =~ s/\s+//g;
+        switch (op) {
             case ">": return count > n;
             case ">=": return count >= n;
             case "<": return count < n;
@@ -1138,6 +1270,21 @@ vda.run();
         return src;
     }
 
+    #! Returns the name of a thread that is shown in the IDE
+    /** @param tid the ID of the thread
+        @param name the name of the thread, if known; the default names that %Qore gives threads, \c "qore/"
+        <i>tid</i>, and \c "qore" for the initial thread of the process, are not shown
+        @param start if the thread started the program
+
+        @return the name of the thread with its ID
+    */
+    static string getThreadDisplayName(int tid, *string name, bool start) {
+        if (name && name !~ /^qore(\/[0-9]+)?$/) {
+            return sprintf("%s (%d)", name, tid);
+        }
+        return start ? sprintf("Main Thread (%d)", tid) : sprintf("Thread %d", tid);
+    }
+
     # get threads provided to vsc
     private:internal list getThreads() {
         return select m_programState{m_currentPgmId}.info.threads, !exists m_programState{m_currentPgmId}.detachedThreads{$1};
@@ -1172,6 +1319,8 @@ vda.run();
         m_programState{pgmId} += (
             "startMethod": START_LAUNCH,
             "launchArgs": args,
+            # all threads stop together; see stopOtherThreads()
+            "stopAllThreads": boolean(args.stopAllThreads),
             "startThreadId": p.result{pgmId}.threads[0],
         );
         # we are ready receive breakpoints
@@ -1202,24 +1351,26 @@ vda.run();
         m_currentPgmId = int(pgmId);
         m_programState{pgmId} += (
             "startMethod": START_ATTACH,
+            # all threads stop together; see stopOtherThreads()
+            "stopAllThreads": boolean(args.stopAllThreads),
         );
+        # the program is debugged: the client can set its breakpoints now, before a thread of the program reaches
+        # them; a thread that starts before the configuration phase has ended is held until then
+        sendVscEvent("initialized");
+        sendVscEvent("process", {
+            "name": m_programState{pgmId}.info.scriptName,
+            "isLocalProcess": False,
+            "startMethod": "attach",
+        });
+        m_programState{pgmId}.vcsNotified = True;
         if (m_programState{pgmId}.info.debugged) {
-            if (m_programState{pgmId}.info.interrupted) {
-                # we are ready receive breakpoints
-                sendVscEvent("initialized");
-
-                hash e;
-                e.name = m_programState{pgmId}.info.scriptName;
-                e.isLocalProcess = False;
-                e.startMethod = "attach";
-                sendVscEvent("process", e);
-                m_programState{pgmId}.vcsNotified = True;
-                # we cannot get what is main thread when attaching
-                # m_programState{pgmId}.mainThreadId = m_programState{pgmId}.threads[0];
-                foreach int tid in (m_programState{pgmId}.info.interrupted) {
-                    sendVscEvent("thread", ("threadId": tid, "reason": "started"));
-                    m_programState{pgmId}.vcsThreadNotified{tid} = True;
-                }
+            # threads that are stopped, such as the thread of a program that a debug server holds until a client
+            # attaches; their events are handled when the configuration phase has ended (see vsc_configurationDone())
+            # we cannot get what is main thread when attaching
+            foreach int tid in (m_programState{pgmId}.info.interrupted) {
+                sendVscEvent("thread", ("threadId": tid, "reason": "started"));
+                m_programState{pgmId}.vcsThreadNotified{tid} = True;
+                m_programState{pgmId}.heldEvents += (tid,);
             }
         }
     }
@@ -1238,6 +1389,16 @@ vda.run();
                 # honoured
                 vsc_stepIn(("threadId": held.tid));
             }
+            # the threads of an attached program that started during the configuration phase
+            foreach int tid in (remove m_programState{m_currentPgmId}.heldThreads) {
+                resumeThread(tid);
+            }
+            # the threads of an attached program that were stopped when it was attached: their stops are handled as
+            # if they had just happened, so a thread that is held when it starts runs, and another one is reported as
+            # stopped
+            foreach int tid in (remove m_programState{m_currentPgmId}.heldEvents) {
+                processDebugEvent(doCommand(("cmd": "thread/debug/event/get", "tid": tid)).result);
+            }
         }
     }
 
@@ -1248,10 +1409,13 @@ vda.run();
             updateProgramCache(doCommand(("cmd": "program/="+m_currentPgmId+"/list")));
 
             foreach int threadId in (getThreads()) {
-                push res.threads, ("id": threadId, "name": sprintf("Thread ID: %d", threadId));
+                push res.threads, {
+                    "id": threadId,
+                    "name": VscDebugAdapter::getThreadDisplayName(threadId,
+                        m_programState{m_currentPgmId}.threadNames{threadId},
+                        threadId == m_programState{m_currentPgmId}.startThreadId),
+                };
             }
-
-            #push res.threads, ("id": 99, "name": "Thread ID: 99 -- IDE TEST"); # when only one thread then is not displayed in Call Stack
         }
         return res;
     }
@@ -1263,20 +1427,69 @@ vda.run();
     }
 
     public hash vsc_continue(hash args) {
-        doCommand(("cmd": "thread/go/run", "tid": args.threadId));
-        return ("allThreadsContinued": False);
+        if (!m_programState{m_currentPgmId}.stopAllThreads) {
+            resumeThread(args.threadId);
+            return {"allThreadsContinued": False};
+        }
+        # all stopped threads continue; a thread that stops later for a stop that was requested when another
+        # thread stopped is resumed (see processDebugEvent())
+        remove m_programState{m_currentPgmId}.allStopRequests;
+        resumeThread(args.threadId);
+        foreach softint tid in (keys m_programState{m_currentPgmId}.thread) {
+            if (tid == args.threadId) {
+                continue;
+            }
+            try {
+                resumeThread(tid);
+            } catch (hash<ExceptionInfo> ex) {
+                # a thread that a step resumed in the meantime is not stopped
+                debug("thread %d not resumed: %s", tid, VscDebugAdapter::getErrorText(ex));
+            }
+        }
+        return {"allThreadsContinued": True};
+    }
+
+    #! Resumes a stopped thread
+    private:internal resumeThread(softint tid) {
+        doCommand(("cmd": "thread/go/run", "tid": tid));
+    }
+
+    #! Requests the other running threads of the program to stop, when a thread stops and all threads stop together
+    /** Each thread stops at its next statement and is then reported as stopped; a thread that waits, as for input,
+        is reported when it runs again.
+    */
+    private:internal stopOtherThreads(softstring pgmId, int tid) {
+        # the threads that the client knows; the program's threads that are cached are those when it was listed
+        foreach softint other in (keys m_programState{pgmId}.vcsThreadNotified) {
+            if (other == tid || exists m_programState{pgmId}.thread{other}
+                || m_programState{pgmId}.pauseRequests{other} || m_programState{pgmId}.allStopRequests{other}) {
+                continue;
+            }
+            *string res = doCommand(("cmd": "program/" + pgmId + "/thread/" + other + "/stop")).result;
+            # a thread that has ended in the meantime does not stop
+            if (res == "ok") {
+                m_programState{pgmId}.allStopRequests{other} = True;
+            }
+        }
     }
 
     public vsc_next(hash args) {
-        doCommand(("cmd": "thread/go/stepover", "tid": args.threadId));
+        step(args.threadId, "stepover");
     }
 
     public vsc_stepIn(hash args) {
-        doCommand(("cmd": "thread/go/step", "tid": args.threadId));
+        step(args.threadId, "step");
     }
 
     public vsc_stepOut(hash args) {
-        doCommand(("cmd": "thread/go/untilreturn", "tid": args.threadId));
+        step(args.threadId, "untilreturn");
+    }
+
+    #! Resumes a thread with a step; the next stop of the thread ends the step (see processDebugEvent())
+    private:internal step(int tid, string run_state) {
+        m_programState{m_currentPgmId}.steppingThreads{tid} = True;
+        on_error remove m_programState{m_currentPgmId}.steppingThreads{tid};
+        doCommand(("cmd": "thread/go/" + run_state, "tid": tid));
     }
 
     public hash vsc_stackTrace(hash args) {

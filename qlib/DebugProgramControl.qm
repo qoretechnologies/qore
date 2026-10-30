@@ -58,6 +58,7 @@ module DebugProgramControl {
       variables and their elements, keys and members, also private ones, by their paths, and \c thread/evaluate
       evaluates expressions with the variables of a frame (see
       @ref DebugProgramControl::DebugProgramControl::evaluateExpression() "evaluateExpression()")
+    - interrupt events give the name of the thread in \c threadname, which only the thread itself can get
 
     @subsection dc_v0_1_2 v0.1.2
     - return breakpointId and statementId when creating breakpoint
@@ -1154,7 +1155,7 @@ public namespace DebugProgramControl {
             try {
                 epgm.parse(code, "<expression>", WARN_NONE);
             } catch (hash<ExceptionInfo> ex) {
-                throw "DEBUG-EVALUATE-ERROR", sprintf("%s: %s", ex.err, ex.desc);
+                throw "DEBUG-EVALUATE-ERROR", ex.desc;
             }
             return epgm.callFunction(EvalFunction, vars);
         }
@@ -1171,6 +1172,8 @@ public namespace DebugProgramControl {
                     'cmd': DebugEventCmd::Interrupt,
                     'pgmid': pgm.getProgramId(),
                     'tid': tid,
+                    # the name of the thread, which only the thread itself can get
+                    'threadname': get_thread_name(),
                     'stamp': now_us(),
                     'func': func,
                     'runstate': encodeValue('runState', runState, runStateStrings),
