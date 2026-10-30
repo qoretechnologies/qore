@@ -1,0 +1,166 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%allow-debugger
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class ProgramControlLifetimeTest
+
+#! ProgramControl and Breakpoint objects hold references to what they control, and nothing without references is found
+/** ProgramControl and Breakpoint objects were cached: the cached object was returned again until its destructor ran,
+    also after its last reference had been released, so a debugger callback could receive a deleted ProgramControl
+    object while another thread released the last reference to it.  A Program and a breakpoint stayed registered after
+    their last reference had been released, until they were destroyed, so they could be resolved by their ID then.
+*/
+class ProgramControlLifetimeTest inherits QUnit::Test {
+    private {
+        #! a class whose objects keep the memory of their Program after its last reference has been released
+        const ClassSource = "class Keeper { public { int x = 1; } }";
+    }
+
+    constructor() : QUnit::Test("ProgramControlLifetimeTest", "1.0") {
+        addTestCase("a ProgramControl object is created for each call", \newObjectsTest());
+        addTestCase("a ProgramControl object keeps its Program referenced", \referenceTest());
+        addTestCase("a Program without references is not resolved", \noReferencesTest());
+        addTestCase("a Breakpoint object is created for each call", \breakpointObjectsTest());
+        addTestCase("a breakpoint without references is not resolved", \breakpointNoReferencesTest());
+        addTestCase("the breakpoints of a Program without references are unassigned", \breakpointProgramTest());
+        addTestCase("a copied breakpoint is a new breakpoint", \breakpointCopyTest());
+        set_return_value(main());
+    }
+
+    newObjectsTest() {
+        Program pgm(PO_NEW_STYLE);
+        ProgramControl a = pgm.getProgram();
+        ProgramControl b = pgm.getProgram();
+        ProgramControl c = ProgramControl::resolveProgramId(pgm.getProgramId());
+        # the objects are different and control the same Program
+        assertFalse(a == b);
+        assertFalse(a == c);
+        assertEq(pgm.getProgramId(), a.getProgramId());
+        assertEq(pgm.getProgramId(), b.getProgramId());
+        assertEq(pgm.getProgramId(), c.getProgramId());
+        # deleting one object does not affect the others
+        delete a;
+        assertEq(pgm.getProgramId(), b.getProgramId());
+        assertEq(pgm.getProgramId(), ProgramControl::resolveProgramId(pgm.getProgramId()).getProgramId());
+        # the Program is listed once
+        assertEq(1, (select ProgramControl::getAllPrograms(), $1.getProgramId() == pgm.getProgramId()).size());
+        # the current Program
+        assertEq(ProgramControl::getProgram().getProgramId(), ProgramControl::getProgram().getProgramId());
+        assertFalse(ProgramControl::getProgram() == ProgramControl::getProgram());
+    }
+
+    referenceTest() {
+        Program pgm(PO_NEW_STYLE);
+        int id = pgm.getProgramId();
+        ProgramControl pc = pgm.getProgram();
+        # the Program object is deleted; the ProgramControl object still references the Program
+        delete pgm;
+        assertEq(id, pc.getProgramId());
+        assertEq(id, ProgramControl::resolveProgramId(id).getProgramId());
+        # with its last reference, the Program is no longer found
+        delete pc;
+        assertThrows("PROGRAM-ERROR", \ProgramControl::resolveProgramId(), (id,));
+        assertEq(0, (select ProgramControl::getAllPrograms(), $1.getProgramId() == id).size());
+    }
+
+    noReferencesTest() {
+        Program pgm(PO_NEW_STYLE);
+        pgm.parse(ClassSource, "keeper");
+        int id = pgm.getProgramId();
+        # the object keeps the memory of the Program, but not a reference to it
+        object keeper = pgm.callFunction("create_object", "Keeper");
+        assertEq(1, keeper.x);
+        delete pgm;
+        # the Program has no references: it is not resolved and not listed, although it has not been destroyed
+        assertThrows("PROGRAM-ERROR", \ProgramControl::resolveProgramId(), (id,));
+        assertEq(0, (select ProgramControl::getAllPrograms(), $1.getProgramId() == id).size());
+        delete keeper;
+        assertThrows("PROGRAM-ERROR", \ProgramControl::resolveProgramId(), (id,));
+    }
+
+    breakpointObjectsTest() {
+        Program pgm(PO_NEW_STYLE);
+        ProgramControl pc = pgm.getProgram();
+        Breakpoint b();
+        b.assignProgram(pc);
+        int id = b.getBreakpointId();
+        list<Breakpoint> l1 = pc.getBreakpoints();
+        list<Breakpoint> l2 = pc.getBreakpoints();
+        assertEq((id,), (map $1.getBreakpointId(), l1));
+        assertEq((id,), (map $1.getBreakpointId(), l2));
+        # the objects are different and refer to the same breakpoint
+        assertFalse(l1[0] == l2[0]);
+        assertFalse(b == l1[0]);
+        Breakpoint r = Breakpoint::resolveBreakpointId(id);
+        assertFalse(b == r);
+        assertEq(id, r.getBreakpointId());
+        # a change made with one object is seen with the others
+        b.setEnabled(True);
+        assertTrue(r.getEnabled());
+        assertTrue(l1[0].getEnabled());
+        # each object returns a new ProgramControl object for the Program
+        assertEq(pgm.getProgramId(), b.getProgram().getProgramId());
+        assertFalse(b.getProgram() == r.getProgram());
+        # the breakpoint is kept while the Program references it
+        delete b;
+        delete r;
+        delete l1;
+        delete l2;
+        assertEq(id, Breakpoint::resolveBreakpointId(id).getBreakpointId());
+        assertEq((id,), (map $1.getBreakpointId(), pc.getBreakpoints()));
+    }
+
+    breakpointNoReferencesTest() {
+        Breakpoint b();
+        int id = b.getBreakpointId();
+        assertEq(id, Breakpoint::resolveBreakpointId(id).getBreakpointId());
+        # with its last reference, the breakpoint is no longer found
+        delete b;
+        assertThrows("BREAKPOINT-ERROR", \Breakpoint::resolveBreakpointId(), (id,));
+
+        # an unassigned breakpoint
+        Breakpoint b2();
+        assertThrows("BREAKPOINT-ERROR", "not assigned", \b2.getProgram());
+    }
+
+    breakpointProgramTest() {
+        Program pgm(PO_NEW_STYLE);
+        pgm.parse(ClassSource, "keeper");
+        Breakpoint b();
+        b.assignProgram(pgm.getProgram());
+        assertEq(pgm.getProgramId(), b.getProgram().getProgramId());
+        # the object keeps the memory of the Program, but not a reference to it
+        object keeper = pgm.callFunction("create_object", "Keeper");
+        delete pgm;
+        # the breakpoint no longer refers to the Program, which has no references
+        assertThrows("BREAKPOINT-ERROR", "not assigned", \b.getProgram());
+        delete keeper;
+        assertThrows("BREAKPOINT-ERROR", "not assigned", \b.getProgram());
+    }
+
+    breakpointCopyTest() {
+        Program pgm(PO_NEW_STYLE);
+        Breakpoint b();
+        b.setEnabled(True);
+        b.setPolicy(BreakpointPolicyAccept);
+        b.addThreadId(1);
+        b.assignProgram(pgm.getProgram());
+        Breakpoint c = b.copy();
+        # a new breakpoint with its own ID and the settings of the original, which is not assigned
+        assertTrue(c.getBreakpointId() != b.getBreakpointId());
+        assertEq(c.getBreakpointId(), Breakpoint::resolveBreakpointId(c.getBreakpointId()).getBreakpointId());
+        assertTrue(c.getEnabled());
+        assertEq(BreakpointPolicyAccept, c.getPolicy());
+        assertEq((1,), c.getThreadIds());
+        assertThrows("BREAKPOINT-ERROR", "not assigned", \c.getProgram());
+        # the original is unchanged
+        assertEq(pgm.getProgramId(), b.getProgram().getProgramId());
+        assertEq((b.getBreakpointId(),), (map $1.getBreakpointId(), pgm.getProgram().getBreakpoints()));
+    }
+}

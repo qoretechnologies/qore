@@ -29977,3 +29977,14 @@ All five campaigns are retained separately: three 288-process pilots, a 702-proc
 The [complete evidence](results-rejected-matched-call-context-macos-arm64.json) includes raw timing receipts/output, independent replays, layout medians/ranges, source and driver provenance, candidate patches, reference checks, profile samples, frame/code costs, rejected preparation history and restored-runtime verification. The [62-item audit](audit-rejected-matched-call-context.md) covers this evidence-only commit. Shared-host process ranges are not confidence intervals; no weighted application benefit, fresh Java/develop ratio or global performance maximum is claimed.
 
 Next: investigate native execution of multiple nested scalar self calls. The existing forwarding proof accepts exactly `return self.method(value)`. Extending it requires a compiler proof and versioned descriptor that preflights every callee, preserves call order and logical exception frames, and falls back before observable work when any proof fails. This is a proposed next implementation, not a completed optimization.
+
+
+## Integration of uncached debugger control objects (2026-10-30)
+
+Merged develop `a3ee195ea2` after experiment report `771205653b`. Upstream replaces cached ProgramControl/Breakpoint wrappers with independently referenced objects and removes Programs/breakpoints from lookup registries as their final reference is released. Five conflict hunks across three files were resolved to that lifetime model; the obsolete branch cached-wrapper helper was removed. Existing explicit-context Program-entry overloads remain. The branch's deterministic final-release test now checks distinct wrappers and independent survival after deletion.
+
+The full optimized build, including all 391 AOT modules and the changed VscDebugAdapter, passes. Seventeen successful Release fixture/mode runs cover 108 QUnit cases / 2985 assertions and two exact-output scripts. Debug validation covers 11 fixture/mode runs, 62 QUnit cases / 2368 assertions and 1 exact-output script; native suites pass 3810 and 5475 checks (potentially overlapping). All 391 Release module aliases and hashes restore after the full Debug build.
+
+One pre-existing failure is retained explicitly: AOTSerializedDebugSteps returns correct values but reports two watched lines where the test expects three. The same failure reproduces with the frozen pre-merge runtime and identical installed baseline modules, including when lazy closure IR is disabled. It is not counted among passes; no root cause or fix is claimed. Other AOT stepping, debugger, Program lifetime, cross-Program call and prepared-frame checks pass.
+
+See the [merge evidence](results-matched-context-develop-merge-macos-arm64.json) and [62-item audit](audit-matched-context-develop-merge.md). This integration makes no new performance or Java/develop comparison claim. The multiple-call native execution investigation remains the next performance step.

@@ -5,8 +5,8 @@
 %no-child-restrictions
 %allow-debugger
 
-# The cached ProgramControl is borrowed. Its final release can be in progress while another thread asks
-# for a wrapper. Hold that release before its destructor unregisters the old cache entry.
+# Hold a ProgramControl's final release while another thread asks for a new wrapper.
+# Each lookup must return its own live object, independent of the retiring wrapper.
 if (!Option::HAVE_LIBRARY_DEBUGGING) {
     printf("SKIP: deterministic reference-release hooks require a Debug build\n");
     return;
@@ -48,10 +48,14 @@ foreach bool enumerate in ((False, True)) {
     if (!replacement || replacement.getProgramId() != id) {
         throw "TEST-ERROR", "the replacement ProgramControl was deleted with the old wrapper";
     }
-    # The old destructor must not clear the replacement's cache entry.
+    # Lookups return distinct objects that keep the same Program alive independently.
     ProgramControl again = pgm.getProgram();
-    if (again !== replacement) {
-        throw "TEST-ERROR", "the old destructor unregistered the replacement wrapper";
+    if (again === replacement || again.getProgramId() != id) {
+        throw "TEST-ERROR", "the new lookup did not return an independent ProgramControl";
+    }
+    delete again;
+    if (replacement.getProgramId() != id) {
+        throw "TEST-ERROR", "deleting another wrapper invalidated the retained ProgramControl";
     }
 }
 printf("OK\n");
