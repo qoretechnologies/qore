@@ -47,10 +47,24 @@ public const QORE_EXTENSIONS = {
     "qmc":      "Qorus mapper code",
 };
 
+#! The maximum size of the interpreter line (\c "#!...") of a script that is checked, as Linux reads it
+const MaxInterpreterLineSize = 256;
+
+#! Returns True if the given file is a %Qore source file
+/** @param path the path of the file; a symbolic link is followed
+
+    @return True if the file is a regular file with an extension in @ref QORE_EXTENSIONS, or a script whose first
+    line, in its first 256 bytes, runs \c qore, as in \c "#!/usr/bin/env qore"; False for other files, AOT build
+    artifacts, files that are not regular files, such as named pipes, and files that cannot be read
+*/
 public bool sub is_valid_qore_file(string path) {
     *hash<StatInfo> info = hstat(path);
     if (!info) {
         # return False if we can't stat() the file
+        return False;
+    }
+    # only regular files are source files; opening a named pipe, for example, would wait for a writer
+    if (info.type != "REGULAR") {
         return False;
     }
 
@@ -70,7 +84,20 @@ public bool sub is_valid_qore_file(string path) {
     # For Qore we just assume that "#!/usr/bin/env qore" is used
     try {
         ReadOnlyFile f(path);
-        *string line = f.readLine(False);
+        # the interpreter line is searched for in the first bytes of the file only; reading a line would read a
+        # file without a line break, such as generated JSON, completely, one byte at a time
+        *binary prefix = f.readBinary(MaxInterpreterLineSize);
+        if (!prefix) {
+            return False;
+        }
+        int eol = prefix.find(<0a>);
+        if (eol >= 0) {
+            prefix = prefix.substr(0, eol);
+        }
+        string line = prefix.toString("UTF-8");
+        if (line.size() && line[line.size() - 1] == "\r") {
+            line = line.substr(0, line.size() - 1);
+        }
         return (line =~ /^#!\/usr\/bin\/env qore/)
             || (line =~ /^#![^ ]+\/qore($| )/);
     } catch (hash<ExceptionInfo> ex) {
@@ -256,6 +283,48 @@ list<string> sub find_qore_files_intern(string path, hash<FileScanOptions> opts,
     return ret;
 }
 
+#! Returns the directories that are searched for the source files of the standard Qore modules, in order
+/** @param module_file the file of the module that the standard modules are found with, as it was loaded
+    @param user_module_dir the directory of the installed source modules of this version of Qore, if any
+    @param module_dir_env the value of the \c QORE_MODULE_DIR environment variable, if any
+
+    @return the directories, without duplicates; the first one with source files holds the standard modules
+
+    The directory of the module comes first.  A module can be loaded from a compiled qmod in a directory without its
+    source: in an in-tree build, \c build/qlib-qmod is mapped to \c qlib; an installed Qore installs its source
+    modules in the user module directory.  The directories of the module path in \c QORE_MODULE_DIR come last.
+*/
+public list<string> sub get_std_module_dirs(string module_file, *string user_module_dir, *string module_dir_env) {
+    string module_path = dirname(module_file);
+    list<string> ret = (module_path,);
+    hash<string, bool> seen = {module_path: True};
+
+    string source_module_path = regex_subst(module_path, "/build/qlib-qmod($|/.*$)", "/qlib");
+    if (source_module_path != module_path && is_dir(source_module_path)) {
+        seen{source_module_path} = True;
+        push ret, source_module_path;
+    }
+
+    if (user_module_dir) {
+        # without a trailing directory separator, so that it is recognized as a duplicate
+        user_module_dir = regex_subst(user_module_dir, "(.)/+$", "$1");
+        if (!seen{user_module_dir}) {
+            seen{user_module_dir} = True;
+            push ret, user_module_dir;
+        }
+    }
+
+    if (module_dir_env) {
+        foreach string path in (module_dir_env.split(":")) {
+            if (path && !seen{path}) {
+                seen{path} = True;
+                push ret, path;
+            }
+        }
+    }
+    return ret;
+}
+
 #! Find standard Qore module files.
 /**
     @param opts the scan options
@@ -272,34 +341,8 @@ public list<string> sub find_std_modules(hash<FileScanOptions> opts = <FileScanO
     if (!filename) {
         return ();
     }
-    string modulePath = dirname(filename);
-
-    list<string> candidatePaths = ();
-    hash<auto> seen = {};
-
-    seen{modulePath} = True;
-    push candidatePaths, modulePath;
-
-    # When modules are loaded from generated qmods, QLS still needs parseable
-    # source files.  In in-tree builds, build/qlib-qmod maps back to qlib.
-    string sourceModulePath = regex_subst(modulePath, "/build/qlib-qmod($|/.*$)", "/qlib");
-    if (sourceModulePath != modulePath && is_dir(sourceModulePath)) {
-        seen{sourceModulePath} = True;
-        push candidatePaths, sourceModulePath;
-    }
-
-    # Also honor the runtime module path.  In qmod-first setups the source qlib
-    # path normally follows the qmod directory.
-    if (ENV.QORE_MODULE_DIR) {
-        foreach string path in (ENV.QORE_MODULE_DIR.split(":")) {
-            if (path && !seen{path}) {
-                seen{path} = True;
-                push candidatePaths, path;
-            }
-        }
-    }
-
-    foreach string path in (candidatePaths) {
+    foreach string path in (get_std_module_dirs(filename, get_qore_library_info().UserModuleVerDir,
+            ENV.QORE_MODULE_DIR)) {
         if (!is_dir(path)) {
             continue;
         }

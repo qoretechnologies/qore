@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
 %requires QLS
+%requires FsUtil
 
 %exec-class FilesTest
 
@@ -40,6 +41,9 @@ class FilesTest inherits QUnit::Test {
         addTestCase("is_valid_qore_file ignores AOT artifacts", \testIsValidAotArtifacts());
         addTestCase("is_valid_qore_file no ext no magic", \testIsValidNoExtNoMagic());
         addTestCase("is_valid_qore_file nonexistent", \testIsValidNonexistent());
+        addTestCase("is_valid_qore_file only reads regular files", \testIsValidNotRegular());
+        addTestCase("is_valid_qore_file reads the interpreter line only", \testIsValidInterpreterLine());
+        addTestCase("get_std_module_dirs", \testGetStdModuleDirs());
         addTestCase("find_std_modules", \testFindStdModules());
         addTestCase("find_qore_files", \testFindQoreFiles());
         addTestCase("find_qore_files bad path", \testFindQoreFilesBadPath());
@@ -104,6 +108,97 @@ class FilesTest inherits QUnit::Test {
     testIsValidNonexistent() {
         assertEq(False, QLS::Files::is_valid_qore_file(testDataDir() + "does_not_exist"),
             "nonexistent file returns False");
+    }
+
+    #! Writes a file with the given content to the given directory and returns its path
+    private string writeFile(TmpDir tmp, string name, data content) {
+        string path = tmp.path + DirSep + name;
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(content);
+        return path;
+    }
+
+    testIsValidNotRegular() {
+        TmpDir tmp("qls-files-test-");
+        # a named pipe without a writer: opening it would wait for one
+        string fifo = tmp.path + "/pipe";
+        assertEq(0, mkfifo(fifo), "the named pipe is created");
+        assertEq(False, QLS::Files::is_valid_qore_file(fifo));
+        # a named pipe with a Qore extension is not a source file either
+        string fifo_q = tmp.path + "/pipe.q";
+        assertEq(0, mkfifo(fifo_q), "the named pipe is created");
+        assertEq(False, QLS::Files::is_valid_qore_file(fifo_q));
+        # a directory with a Qore extension
+        string dir_q = tmp.path + "/dir.qm";
+        assertEq(0, mkdir(dir_q), "the directory is created");
+        assertEq(False, QLS::Files::is_valid_qore_file(dir_q));
+        # a symbolic link to a script is the script
+        string script = writeFile(tmp, "script", "#!/usr/bin/env qore
+printf(\"x\\n\");\n");
+        string link = tmp.path + "/link";
+        symlink(script, link);
+        assertEq("SYMBOLIC-LINK", hlstat(link).type, "the link is created");
+        assertEq(True, QLS::Files::is_valid_qore_file(link));
+    }
+
+    testIsValidInterpreterLine() {
+        TmpDir tmp("qls-files-test-");
+        # a file without a line break, as generated JSON files are, is not read beyond its first bytes
+        string json = writeFile(tmp, "data.meta", "{\"a\": \"" + strmul("x", 1024 * 1024) + "\"}");
+        assertEq(False, QLS::Files::is_valid_qore_file(json));
+        # an interpreter line without a line break after it
+        assertEq(True, QLS::Files::is_valid_qore_file(writeFile(tmp, "noeol", "#!/usr/bin/env qore")));
+        # an interpreter line followed by a long line without a line break
+        assertEq(True, QLS::Files::is_valid_qore_file(writeFile(tmp, "longline",
+            "#!/usr/bin/env qore -n " + strmul("x", 4096))));
+        assertEq(True, QLS::Files::is_valid_qore_file(writeFile(tmp, "longpath",
+            "#!/opt/qore/bin/qore " + strmul("x", 4096))));
+        # a line break of Windows text files
+        assertEq(True, QLS::Files::is_valid_qore_file(writeFile(tmp, "crlf", "#!/usr/local/bin/qore\r\nx;\r\n")));
+        # the interpreter is checked in the first line only
+        assertEq(False, QLS::Files::is_valid_qore_file(writeFile(tmp, "second", "\n#!/usr/bin/env qore\n")));
+        # an interpreter path that does not end within the first 256 bytes, which Linux reads, is not checked
+        assertEq(False, QLS::Files::is_valid_qore_file(writeFile(tmp, "longinterp",
+            "#!/" + strmul("d/", 200) + "qore\n")));
+        # another interpreter
+        assertEq(False, QLS::Files::is_valid_qore_file(writeFile(tmp, "python",
+            "#!/usr/bin/env python3\n")));
+        assertEq(False, QLS::Files::is_valid_qore_file(writeFile(tmp, "qorex", "#!/usr/bin/qorex\n")));
+        # binary data that is not valid UTF-8
+        assertEq(False, QLS::Files::is_valid_qore_file(writeFile(tmp, "binary", <80ff00fe0a01>)));
+        # an empty file
+        assertEq(False, QLS::Files::is_valid_qore_file(writeFile(tmp, "empty", "")));
+    }
+
+    testGetStdModuleDirs() {
+        # an installed Qore loading a compiled qmod from the binary module directory: the source modules are in the
+        # user module directory, given with a trailing directory separator; then the module path
+        assertEq(("/usr/lib64/qore-modules/3.0.0", "/usr/share/qore-modules/3.0.0", "/opt/a", "/opt/b"),
+            QLS::Files::get_std_module_dirs("/usr/lib64/qore-modules/3.0.0/Util.qmod", "/usr/share/qore-modules/3.0.0/",
+                "/opt/a::/usr/share/qore-modules/3.0.0:/opt/b:/opt/a"));
+        # a source module in the user module directory is not listed twice
+        assertEq(("/usr/share/qore-modules/3.0.0",),
+            QLS::Files::get_std_module_dirs("/usr/share/qore-modules/3.0.0/Util.qm", "/usr/share/qore-modules/3.0.0",
+                NOTHING));
+        # without a user module directory or a module path
+        assertEq(("/opt/qlib",), QLS::Files::get_std_module_dirs("/opt/qlib/Util.qm", NOTHING, NOTHING));
+        assertEq(("/opt/qlib",), QLS::Files::get_std_module_dirs("/opt/qlib/Util.qm", "", ""));
+
+        # an in-tree build: the qmods in build/qlib-qmod are compiled from the sources in qlib
+        TmpDir tmp("qls-files-test-");
+        assertEq(0, mkdir(tmp.path + "/build"));
+        assertEq(0, mkdir(tmp.path + "/build/qlib-qmod"));
+        assertEq(0, mkdir(tmp.path + "/qlib"));
+        assertEq((tmp.path + "/build/qlib-qmod", tmp.path + "/qlib", "/usr/share/qore-modules/3.0.0"),
+            QLS::Files::get_std_module_dirs(tmp.path + "/build/qlib-qmod/Util.qmod", "/usr/share/qore-modules/3.0.0",
+                NOTHING));
+        # without a qlib directory in the source tree
+        TmpDir tmp2("qls-files-test-");
+        assertEq(0, mkdir(tmp2.path + "/build"));
+        assertEq(0, mkdir(tmp2.path + "/build/qlib-qmod"));
+        assertEq((tmp2.path + "/build/qlib-qmod",),
+            QLS::Files::get_std_module_dirs(tmp2.path + "/build/qlib-qmod/Util.qmod", NOTHING, NOTHING));
     }
 
     testFindStdModules() {
