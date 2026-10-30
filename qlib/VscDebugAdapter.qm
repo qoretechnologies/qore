@@ -79,9 +79,23 @@ module VscDebugAdapter {
     - requests without arguments, such as \c configurationDone, are also accepted with empty arguments
       (<a href="https://github.com/qoretechnologies/qore/issues/5560">issue 5560</a>)
     - the \c stopOnEntry argument of a \c launch request is supported: with \c false, a launched program does not
-      stop at its first statement, but only at a breakpoint, an exception or its end; it stops there when the
-      argument is \c true or not given, as before; in either case the launched program runs only after the \c
+      stop at its first statement, but only at a breakpoint or an exception; it stops there when the argument is
+      \c true or not given, as before; in either case the launched program runs only after the \c
       configurationDone request, so breakpoints set during the configuration phase are always honored
+    - \c stopped events give the reasons of the Debug Adapter Protocol: \c "breakpoint" and
+      \c "function breakpoint" with the IDs of the breakpoints that are hit in \c hitBreakpointIds, \c "entry",
+      \c "pause", \c "step", and \c "exception" with the name of the exception in \c text; the reason was the
+      name of the debugger event, such as \c "step" for a breakpoint, and \c text was the whole event
+    - each stack frame is named after the function that its line is in, and the frame of the top-level code of the
+      program is named \c "\<top level\>"; the top frame was named after the debugger event, and each other frame
+      after the function called at its line
+    - threads started by a launched program run until they reach a breakpoint; they stopped when they started,
+      and a thread that ended was reported as stopped
+    - a function breakpoint given by the name of the function only, as Visual Studio Code gives it, is set on the
+      function's only variant; such breakpoints could not be set; a breakpoint that cannot be set gives the reason
+      in its \c message
+    - an error handling an event of the debugger is shown in the debug console of the IDE; the thread of the event
+      stayed stopped without any message
 
     @subsection vda_v0_2
     - updated to use a Logger
@@ -156,6 +170,8 @@ public class VscDebugAdapter inherits DebugCommandLine {
         const START_ATTACH = 2;
         const START_ATTACH_SUSPENDED = 3;
         const DEBUGVAR_PREFIX = "$";
+        #! the name of the stack frame of the top-level code of a program
+        const TopLevelFrameName = "<top level>";
 
         #! process loop flag
         bool m_running = True;
@@ -401,6 +417,17 @@ vda.run();
                 }
             } catch (hash<ExceptionInfo> ex) {
                 info("ex: %y", ex);
+                # the error is shown in the debug console of the IDE; otherwise a thread whose event could not be
+                # handled would stay stopped without the IDE showing why
+                try {
+                    sendVscEvent("output", {
+                        "category": "console",
+                        "output": sprintf("error handling a debugger event: %s\n", get_exception_string(ex)),
+                    });
+                } catch (hash<ExceptionInfo> ex1) {
+                    # the IDE cannot be reached; the error is logged above
+                    info("ex: %y", ex1);
+                }
             }
         }
     }
@@ -531,6 +558,15 @@ vda.run();
                     sendVscEvent("thread", ("threadId": event.tid, "reason": "started"));
                     m_programState{event.pgmid}.vcsThreadNotified{event.tid} = True;
                 }
+                # another thread of a launched program, such as one started with the background operator, attaches
+                # when it starts; it runs until it reaches a breakpoint, as the program would without the debugger
+                if (event.func == "attach" && m_programState{event.pgmid}.startMethod == START_LAUNCH
+                    && m_programState{event.pgmid}.startThreadId != event.tid) {
+                    vsc_continue(("threadId": event.tid));
+                    return;
+                }
+                # True if the thread stopped at the first statement of a launched program
+                bool entry = False;
                 if (m_programState{event.pgmid}.startMethod == START_LAUNCH && m_programState{event.pgmid}.startThreadId == event.tid) {
                     # skip debugging of bootstrap
                     if (event.func == "attach") {
@@ -556,10 +592,11 @@ vda.run();
                         # held at the attach stop until "configurationDone", so the client's breakpoints are
                         # already created and the decision here is final.
                         if (m_programState{event.pgmid}.launchArgs.stopOnEntry === False && !exists event.bkptid
-                            && !hasBreakpointOnStatement(event.pgmid, event.statementid)) {
+                            && !getBreakpointsOnStatement(event.pgmid, event.statementid)) {
                             vsc_continue(("threadId": event.tid));
                             return;
                         }
+                        entry = True;
                     } else if (m_programState{event.pgmid}.bootstrap.processFlag == 2 && event.file == m_programState{event.pgmid}.bootstrap.file) {
                         # we want exit event, so we cannot detach
                         m_programState{event.pgmid}.bootstrap.processFlag = 3;
@@ -579,42 +616,24 @@ vda.run();
                     refuseInterrupt(event);
                     break;
                 }
-                hash e;
-                e.reason = event.func;
-                e.description = sprintf("Stopped on %s event", event.func);
-                if (exists event.bkptid) {
-                    bool fl = False;
-                    foreach string s in (keys m_programState{event.pgmid}.sourceBreakpoints) {
-                        if (m_programState{event.pgmid}.sourceBreakpoints{s}{event.bkptid}) {
-                            e.description += "+src";
-                            fl = True;
-                            break;
-                        }
-                    }
-                    if (!fl) {
-                        if (m_programState{event.pgmid}.functionBreakpoints{event.bkptid}) {
-                            e.description += "+func";
-                        } else {
-                            e.description += "+bkpt";
-                        }
-                    }
-                }
-                e.threadId = event.tid;
-                e.text = sprintf("%Y", event);
-                # e.allThreadsStopped =    is not used in vscode
-                m_programState{event.pgmid}.thread{event.tid}.frameId = event.frame;
-                m_programState{event.pgmid}.thread{event.tid}.debugVar = event.debugvar;
-                m_programState{event.pgmid}.thread{event.tid}.exception = event.exception;
-
-                sendVscEvent("stopped", e);
                 if (event.func == "exit" || event.func == "detach") {
+                    # a thread that ends is not reported as stopped; the IDE is told that it ended
                     if (m_programState{event.pgmid}.startThreadId == event.tid) {
                         sendVscEvent("exited", ("exitCode": int(event.result)));
                     } else {
                         sendVscEvent("thread", ("threadId": event.tid, "reason": "exited"));
                     }
                     detach(event);
+                    break;
                 }
+                hash<auto> e = getStopInfo(event, entry);
+                e.threadId = event.tid;
+                # e.allThreadsStopped =    is not used in vscode
+                m_programState{event.pgmid}.thread{event.tid}.frameId = event.frame;
+                m_programState{event.pgmid}.thread{event.tid}.debugVar = event.debugvar;
+                m_programState{event.pgmid}.thread{event.tid}.exception = event.exception;
+
+                sendVscEvent("stopped", e);
             }
             break;
         case "run":
@@ -624,6 +643,7 @@ vda.run();
             }
             if (event.runstate == "detach") {
                 remove m_programState{event.pgmid}.vcsThreadNotified{event.tid};
+                remove m_programState{event.pgmid}.pauseRequests{event.tid};
                 m_programState{m_currentPgmId}.detachedThreads{event.tid} = True;
                 if (!getThreads()) {
                     doCommand(("cmd": "shutdown"));
@@ -640,20 +660,79 @@ vda.run();
         }
     }
 
-    #! Returns True if a source or function breakpoint of the given program is on the given statement
-    private:internal bool hasBreakpointOnStatement(softstring pgmId, *softint statementId) {
+    #! Returns the IDs of the source and function breakpoints of the given program on the given statement
+    private:internal list<int> getBreakpointsOnStatement(softstring pgmId, *softint statementId) {
         if (!exists statementId) {
-            return False;
+            return ();
         }
+        list<int> ids = ();
         foreach hash<auto> source_bkpts in (m_programState{pgmId}.sourceBreakpoints.iterator()) {
-            foreach hash<auto> b in (source_bkpts.iterator()) {
-                if (b.statementId == statementId) {
-                    return True;
+            foreach hash<auto> i in (source_bkpts.pairIterator()) {
+                if (i.value.statementId == statementId) {
+                    push ids, int(i.key);
                 }
             }
         }
-        foreach hash<auto> b in (m_programState{pgmId}.functionBreakpoints.iterator()) {
-            if (b.statementId == statementId) {
+        foreach hash<auto> i in (m_programState{pgmId}.functionBreakpoints.pairIterator()) {
+            if (i.value.statementId == statementId) {
+                push ids, int(i.key);
+            }
+        }
+        return ids;
+    }
+
+    #! Returns the reason of a stop as the Debug Adapter Protocol gives it
+    /** @param event the interrupt event of the stopped thread
+        @param entry True if the thread stopped at the first statement of a launched program
+
+        @return the \c reason and \c description of the \c stopped event; with \c hitBreakpointIds when the thread
+        stopped at breakpoints of the client, and with \c text, the name of the exception, when it stopped at an
+        exception
+    */
+    private:internal hash<auto> getStopInfo(hash<auto> event, bool entry) {
+        # a pause request of the client is answered by the next stop of the thread
+        bool pause = boolean(remove m_programState{event.pgmid}.pauseRequests{event.tid});
+        switch (event.func) {
+            case "exception":
+                return hash<auto>{
+                    "reason": "exception",
+                    "description": "Paused on exception",
+                    "text": event.exception.err,
+                };
+            case "attach":
+                return hash<auto>{"reason": "entry", "description": "Paused on entry"};
+        }
+        # a thread that arrives at the first statement of a launched program by a step does not report the
+        # breakpoints on the statement
+        list<int> ids = exists event.bkptid
+            ? (int(event.bkptid),)
+            : (entry ? getBreakpointsOnStatement(event.pgmid, event.statementid) : ());
+        if (ids) {
+            # only the breakpoints of the client are reported; a breakpoint can also be created by another client
+            # of the debugged program
+            list<int> source_ids = select ids, isSourceBreakpoint(event.pgmid, $1);
+            list<int> function_ids = select ids, exists m_programState{event.pgmid}.functionBreakpoints{$1};
+            hash<auto> rv = source_ids || !function_ids
+                ? hash<auto>{"reason": "breakpoint", "description": "Paused on breakpoint"}
+                : hash<auto>{"reason": "function breakpoint", "description": "Paused on function breakpoint"};
+            if (source_ids || function_ids) {
+                rv.hitBreakpointIds = source_ids + function_ids;
+            }
+            return rv;
+        }
+        if (entry) {
+            return hash<auto>{"reason": "entry", "description": "Paused on entry"};
+        }
+        if (pause) {
+            return hash<auto>{"reason": "pause", "description": "Paused"};
+        }
+        return hash<auto>{"reason": "step", "description": "Paused on step"};
+    }
+
+    #! Returns True if the given breakpoint is a source breakpoint of the client in the given program
+    private:internal bool isSourceBreakpoint(softstring pgmId, int id) {
+        foreach hash<auto> source_bkpts in (m_programState{pgmId}.sourceBreakpoints.iterator()) {
+            if (exists source_bkpts{id}) {
                 return True;
             }
         }
@@ -838,6 +917,8 @@ vda.run();
                 b.statementId = bs.stmtid;  # internal
             } catch (hash<ExceptionInfo> ex) {
                 b.verified = False;
+                # the IDE shows why the breakpoint could not be set
+                b.message = ex.desc;
             }
             push res, b;
         }
@@ -995,6 +1076,8 @@ vda.run();
     }
 
     public vsc_pause(hash args) {
+        m_programState{m_currentPgmId}.pauseRequests{args.threadId} = True;
+        on_error remove m_programState{m_currentPgmId}.pauseRequests{args.threadId};
         doCommand(("cmd": "program/"+m_currentPgmId+"/thread/"+args.threadId+"/stop"));
     }
 
@@ -1026,8 +1109,14 @@ vda.run();
         }
         hash res.stackFrames = ();
         res.totalFrames = l.size();
-        if (args.threadId == m_programState{m_currentPgmId}.startThreadId) {
+        *int startThreadId = m_programState{m_currentPgmId}.startThreadId;
+        if (args.threadId == startThreadId) {
             res.totalFrames -= (m_programState{m_currentPgmId}.bootstrap.frameCnt ?? 0);
+        } else if (l && l.last().type == "new-thread") {
+            # the last frame of another thread is the call of the code of the thread by the operator that started
+            # the thread, such as the background operator; its location is where the thread was started, in another
+            # thread, and it is the location of the frame above it
+            --res.totalFrames;
         }
         int n = args.levels ?? 0;
         if (n == 0) {
@@ -1037,7 +1126,11 @@ vda.run();
             # args.format not supported now
             hash sf;
             sf.id = (args.threadId << 16) + i; # an identifier for the stack frame. It must be unique across all threads.
-            sf.name = sprintf("%s: %s", l[i].function, l[i].type);
+            # each frame of the call stack gives a function and the location of its call, which is in the function of
+            # the next frame; the location of the first frame is the statement the thread stopped at
+            sf.name = (i + 1 < l.size() && (i + 1 < res.totalFrames || args.threadId != startThreadId))
+                ? l[i + 1].function
+                : TopLevelFrameName;
             *hash ls = m_programState{m_currentPgmId}.loadedSourceByName{getLoadedSourceName(l[i].file, l[i].source)};
             if (exists ls) {
                 sf.source = getSource(ls);
@@ -1323,7 +1416,8 @@ vda.run();
                     }
                     push bkpts, ("function": l[0], "args": la); #+b.("condition", "hitCondition");
                 } else {
-                    push bkpts, ("function": b.name, "args": ()); #+b.("condition", "hitCondition");
+                    # a function given by its name only: the breakpoint is on the function's only variant
+                    push bkpts, ("function": b.name); #+b.("condition", "hitCondition");
                 }
             }
             res.breakpoints = setBreakpoints(bkpts);

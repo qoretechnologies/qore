@@ -3875,7 +3875,17 @@ while (*binary chunk = input.read(65536)) {
         requests without arguments, such as \c configurationDone, failing with empty arguments
         (<a href="https://github.com/qoretechnologies/qore/issues/5560">issue 5560</a>)
       - the \c stopOnEntry argument of a \c launch request is supported: with \c false, a launched program stops
-        only at a breakpoint, an exception or its end, not at its first statement; it was always stopped there
+        only at a breakpoint or an exception, not at its first statement; it was always stopped there
+      - fixed the reasons of stops: a breakpoint stop was reported as a step, without the breakpoints that are hit,
+        and the whole debugger event was shown as the text of the stop
+      - fixed the names of stack frames: the top frame was named after the debugger event, and each other frame
+        after the function called at its line instead of the function its line is in
+      - fixed threads started by a launched program stopping when they start, and threads that end being reported as
+        stopped
+      - fixed function breakpoints given by the name of the function only, as Visual Studio Code gives them, not
+        being set; a breakpoint that cannot be set gives the reason in its message
+      - fixed an error handling an event of the debugger leaving the thread stopped without a message; the error is
+        shown in the debug console
     - @ref websocketclientintro "WebSocketClient" module
       - \c WebSocketPingPollOperation uses non-blocking @ref httpclientiointro "HttpClientIo" I/O, with an extended
         CONNECT handshake for HTTP/2 and HTTP/3
