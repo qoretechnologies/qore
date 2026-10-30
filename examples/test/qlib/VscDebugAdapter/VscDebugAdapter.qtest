@@ -212,14 +212,14 @@ public class VscDebugAdapterTest inherits QUnit::Test {
             "our bool waiting = False;\n"                                    # 6
             "our bool release = False;\n"                                    # 7
             "sub busy() {\n"                                                 # 8
-            "    busy_running.dec();\n"                                      # 9
+            "    set_thread_name(\"busy\"); busy_running.dec();\n"           # 9
             "    int i = 0;\n"                                               # 10
             "    while (stop.getCount()) {\n"                                # 11
             "        ++i;\n"                                                 # 12
             "    }\n"                                                        # 13
             "}\n"                                                            # 14
             "sub blocked() {\n"                                              # 15
-            "    m.lock();\n"                                                # 16
+            "    set_thread_name(\"waiter\"); m.lock();\n"                   # 16
             "    on_exit m.unlock();\n"                                      # 17
             "    waiting = True;\n"                                          # 18
             "    cond.broadcast();\n"                                        # 19
@@ -1597,6 +1597,18 @@ print('exit code: %d' % p.wait(30))
         hash<auto> frame = topFrame(dap, busy_tid);
         assertEq("busy", frame.name);
         assertTrue(inlist(frame.line, (11, 12)), sprintf("%y", frame));
+
+        # the threads have their current names, also the waiting thread, which has not stopped since it set its name
+        r = dap.request("threads", NOTHING, False);
+        assertTrue(r.success, r.message);
+        hash<string, string> names = map {$1.id: $1.name}, r.body.threads;
+        assertEq(3, names.size(), sprintf("%y", names));
+        assertEq(sprintf("Main Thread (%d)", main_tid), names{main_tid});
+        if (HAVE_THREAD_NAME) {
+            assertEq(sprintf("busy (%d)", busy_tid), names{busy_tid});
+            int waiter_tid = (select keys names, !inlist($1.toInt(), (main_tid, busy_tid)))[0].toInt();
+            assertEq(sprintf("waiter (%d)", waiter_tid), names{waiter_tid});
+        }
 
         # a step of the main thread stops it at its next statement, while the other threads stay stopped
         r = dap.request("next", {"threadId": main_tid});

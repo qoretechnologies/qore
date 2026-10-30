@@ -2475,6 +2475,9 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
       @ref Qore::channel_select() "channel_select()" to wait on several channels at once; and
       @ref Qore::parallel_map() "parallel_map()" / @ref Qore::parallel_foreach() "parallel_foreach()" for
       parallel collection processing.  All of them honor cooperative cancellation
+    - new @ref Qore::Program::applySourceDefaults() "Program::applySourceDefaults()" method: applies the parse
+      options that the interpreter gives a source file by its name, so that code parsed with
+      @ref Qore::Program::parse() "Program::parse()" is parsed as the interpreter parses the file
     - new @ref Qore::ParseOptions "ParseOptions" class: an opaque parse-option container supporting more
       than the 64 bits available to the legacy @ref parse_options "PO_*" integer constants, accepting
       options by name, by constant, or by combining other @ref Qore::ParseOptions "ParseOptions" objects, with corresponding
@@ -2661,6 +2664,7 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
         the global async I/O controller and c-ares
       - @ref Qore::getnameinfo_async() "getnameinfo_async()": Future-returning async reverse DNS lookup for
         peer-style address information backed by the global async I/O controller and c-ares
+      - @ref Qore::get_thread_name(softint) "get_thread_name(tid)": returns the current name of another thread
       - @ref Qore::get_value_byte_size() "get_value_byte_size()": returns the approximate memory size in bytes of any Qore value;
         recursively calculates sizes for hashes and lists, returns exact sizes for strings and binary data
       - @ref Qore::inflate_raw_to_binary() "inflate_raw_to_binary()": raw DEFLATE decompression to binary
@@ -3921,7 +3925,7 @@ while (*binary chunk = input.read(65536)) {
       - fixed the output of a program that is debugged in the adapter process being sent after the \c terminated
         event at the end of the program
       - fixed \c qdbg-vsc-adapter writing nothing to its log file
-      - threads are shown with their names
+      - threads are shown with their current names
       - when a thread stops, the other threads of the program stop, and \c continue continues them all, as in other
         debuggers of Visual Studio Code; only the thread that stops was stopped; the \c stopAllThreads argument of
         \c launch and \c attach requests set to \c false keeps that

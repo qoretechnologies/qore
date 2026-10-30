@@ -5441,23 +5441,38 @@ void q_set_thread_name(const char* name) {
 #else
 #error no pthread_setname_np()
 #endif
+//! Gets the name of the given thread; the thread must not end while its name is read
+static void q_get_pthread_name(pthread_t ptid, QoreString& str) {
+    str.clear();
+    str.reserve(MAX_THREAD_NAME_SIZE);
 #if defined(QORE_HAVE_PTHREAD_SET_NAME_NP)
-void q_get_thread_name(QoreString& str) {
-    str.clear();
-    str.reserve(MAX_THREAD_NAME_SIZE);
-    if (!pthread_get_name_np(pthread_self(), (char*)str.c_str(), MAX_THREAD_NAME_SIZE + 1)) {
-        str.terminate(strlen(str.c_str()));
-    }
-}
+    if (!pthread_get_name_np(ptid, (char*)str.c_str(), MAX_THREAD_NAME_SIZE + 1)) {
 #else
-void q_get_thread_name(QoreString& str) {
-    str.clear();
-    str.reserve(MAX_THREAD_NAME_SIZE);
-    if (!pthread_getname_np(pthread_self(), (char*)str.c_str(), MAX_THREAD_NAME_SIZE + 1)) {
+    if (!pthread_getname_np(ptid, (char*)str.c_str(), MAX_THREAD_NAME_SIZE + 1)) {
+#endif
         str.terminate(strlen(str.c_str()));
+    } else {
+        str.terminate(0);
     }
 }
-#endif
+
+void q_get_thread_name(QoreString& str) {
+    q_get_pthread_name(pthread_self(), str);
+}
+
+int QoreThreadList::getThreadName(int tid, QoreString& str) {
+    // the lock keeps the thread registered, so it does not end while its name is read
+    AutoLocker al(lck);
+    if (tid <= 0 || tid >= MAX_QORE_THREADS || !entry[tid].active()) {
+        return -1;
+    }
+    q_get_pthread_name(entry[tid].ptid, str);
+    return 0;
+}
+
+int q_get_thread_name(int tid, QoreString& str) {
+    return thread_list.getThreadName(tid, str);
+}
 #endif
 
 bool q_active_exception() {

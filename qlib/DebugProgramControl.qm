@@ -58,7 +58,8 @@ module DebugProgramControl {
       variables and their elements, keys and members, also private ones, by their paths, and \c thread/evaluate
       evaluates expressions with the variables of a frame (see
       @ref DebugProgramControl::DebugProgramControl::evaluateExpression() "evaluateExpression()")
-    - interrupt events give the name of the thread in \c threadname, which only the thread itself can get
+    - interrupt events give the name of the thread in \c threadname, and program lists give the current names of the
+      threads of programs in \c threadNames
     - @ref DebugProgramControl::DebugProgramControl::createProgram() "createProgram()" parses a script in the mode
       that the interpreter gives its file: in @ref modern "%modern" mode unless its name ends in \c .q (see
       @ref Qore::Program::applySourceDefaults() "Program::applySourceDefaults()")
@@ -885,6 +886,8 @@ public namespace DebugProgramControl {
             result.scriptName = p.getScriptName();
             result.scriptPath = p.getScriptPath();
             result.threads = threads ?? p.getThreadList();
+            # the current names of the threads
+            result.threadNames = map {$1: get_thread_name($1)}, result.threads;
             result.debugging = (p.getParseOptions() & PO_NO_DEBUGGING) == 0;
             if (result.debugging && listFiles) {
                 hash<auto> h;

@@ -1939,6 +1939,8 @@ DLLLOCAL extern thread_local int qore_tp_thread_counter_share;
 #ifdef QORE_HAVE_THREAD_NAME
 DLLLOCAL void q_set_thread_name(const char* name);
 DLLLOCAL void q_get_thread_name(QoreString& str);
+//! Gets the name of the active thread with the given ID; returns -1 if there is no such thread
+DLLLOCAL int q_get_thread_name(int tid, QoreString& str);
 #endif
 
 //! checkpoints stack usage for debugging purposes

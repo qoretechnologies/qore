@@ -115,7 +115,8 @@ module VscDebugAdapter {
     - expressions are evaluated for watches, hovers and the debug console with the variables of a frame, and
       variables are set to the values of expressions
     - conditional breakpoints, hit conditions and logpoints
-    - threads are shown with their names
+    - threads are shown with their current names, when the debug server gives them (see
+      @ref Qore::get_thread_name(softint) "get_thread_name(tid)"), otherwise with the names in their last events
     - when a thread stops, the other threads of the program stop at their next statement and are reported as
       paused without taking the focus, and a \c continue request continues all stopped threads, as in other
       debuggers of Visual Studio Code; the \c stopAllThreads argument of \c launch and \c attach requests set to
@@ -1413,8 +1414,11 @@ vda.run();
             foreach int threadId in (getThreads()) {
                 push res.threads, {
                     "id": threadId,
+                    # the current name of the thread, or the name in its last event when the debug server does not give
+                    # the names of threads
                     "name": VscDebugAdapter::getThreadDisplayName(threadId,
-                        m_programState{m_currentPgmId}.threadNames{threadId},
+                        m_programState{m_currentPgmId}.info.threadNames{threadId}
+                            ?? m_programState{m_currentPgmId}.threadNames{threadId},
                         threadId == m_programState{m_currentPgmId}.startThreadId),
                 };
             }
