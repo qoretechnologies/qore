@@ -30303,3 +30303,26 @@ Local standalone kernels execute in one QoreProgram. Imported function callbacks
 Next qualify a matched Java forwarding benchmark, distinguishing unrestricted C2 from a leaf-only no-inline control. Then test whether immutable explicit type-argument checks can move from each forwarding call to descriptor binding. Establish initialization and lifetime proofs first; retain all live program, object, options, debugger, epoch, ownership and stack checks, and measure broader controls before retention.
 
 [Complete evidence](results-post-paired-frame-checkpoint-macos-arm64.json); [all 62 audit checks](audit-post-paired-frame-checkpoint.md).
+
+
+## Matched forwarding comparison with Java (2026-10-30)
+
+The four scalar forwarding probes now have matched Java arithmetic and receiver sequences. Qore executes in one QoreProgram. A single forwarding method returns self.step(value); the two-call method combines self.step(value) and self.step(value+1). Three receiver classes alternate, with integer and floating variants. Java normal C2 has no user-imposed leaf/forward non-inlining constraint. A separate control constrains only the six leaf step methods; forwarding methods and loop helpers remain eligible for inlining. Standard JMH harness controls apply to both.
+
+Qore branch runtime 9cd852e16e and unmodified develop a3ee195ea2 use matched Release -O3 -DNDEBUG builds, allocation tracking off, Apple clang 2100.4.1.1 / SDK 27.2 / LLVM 22.1.8, and -O3 stripped-source AOT artifacts. Source checkpoint 98abb1c43c adds only evidence to that installed runtime. Java uses freshly compiled Temurin 25.0.2+10 C2/JMH1.37. Values are whole-kernel ns/item, not isolated call latency; lower is faster.
+
+|!Kernel|!Develop|!Branch|!Develop/branch|!Java normal C2|!Java leaf-only boundary|!Branch/Java normal
+|forward_int|455.6837|29.2985|15.553x|1.8045|1.7753|16.237x
+|forward_float|461.6040|33.4049|13.818x|3.3819|3.3592|9.878x
+|context_int|608.7813|199.9769|3.044x|2.6093|2.6498|76.640x
+|context_float|619.0066|217.1261|2.851x|3.6595|3.6613|59.332x
+
+Forwarding is 15.55 times faster than develop for integers and 13.82 times for floats, but still takes 16.24 and 9.88 times normal Java time. The two-call methods take 76.64 and 59.33 times Java time, despite improving 3.04 and 2.85 times over develop. The Java boundary controls are close to normal C2 in these kernels. These ratios are specific to the shown bodies and receiver sequence, and must not be pooled with different direct/polymorphic-call kernels.
+
+All 96 processes /288 measured windows independently replay. Qore uses three layouts and three forks per layout/runtime, three warmups and three measured 150 ms windows. Java uses three forks per policy, five warmups and three measured 300 ms windows. Count 4096, seed 7; randomized interleaving seed 2026103015. All 640 Qore and 160 Java reference results pass, including zero counts, counts through 4096 and seeds through 65535. Six LLVM modules verify; eight untimed Java diagnostics establish C2 benchmark/loop compilation, hot helper inlining and recorded leaf-call decisions. No assembly identity is claimed.
+
+An initial preparation check incorrectly counted five standard JMH non-inlining harness directives alongside the six intended leaf directives. Preparation stopped before measurement; all preceding child checks succeeded. The failed archive is preserved, and corrected v2 checks harness and leaf directives separately. No benchmark behavior was changed by this correction.
+
+All raw timings, source, compiler settings, optimizer controls and observed per-layout/process ranges are preserved in the [complete evidence](results-forwarding-java-macos-arm64.json); see the [62-check audit](audit-forwarding-java.md). No owned build/test/profile/heavy scan overlapped timing. Shared-host load, frequency, thermals and affinity are uncontrolled. Observed ranges are not confidence intervals; no sample was discarded or historical epoch pooled. Qore and Java lifetime, dynamic-type, stack-diagnostic and runtime obligations differ. No universal parity, weighted application gain or global maximum is claimed.
+
+The two-call outer bodies remain outside the five-instruction scalar self-forwarding proof and cost about 200–217ns/item here. Profile their ordinary receiver/context path and inspect whether a bounded receiver-aware native companion can admit pure nested calls while retaining per-call guards, logical frames and exceptional restoration. In parallel, establish whether immutable explicit generic-call checks can move to forwarding-descriptor binding. Freeze the installed optimized baseline and measure before editing; choose retention from the target gain and broader controls.

@@ -1603,3 +1603,6 @@ Reader-safe paired forwarding frames are [measured and retained](RESULTS.md#pair
 
 
 The [post-paired-frame optimized checkpoint](RESULTS.md#optimized-checkpoint-after-paired-forwarding-frames-2026-10-30) refreshes all 32 workloads against current develop and 25 fresh Java rows. All 651 processes /1953 measured windows are preserved; see the full table and optimizer/Program-context qualifications.
+
+
+The [matched forwarding comparison](RESULTS.md#matched-forwarding-comparison-with-java-2026-10-30) adds four same-program kernels against develop and both normal Java C2 and leaf-only boundary controls. It identifies the two-call outer body as a substantial remaining gap.
