@@ -2579,6 +2579,10 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
     }
 
     ir_func = new QoreIRFunction(name);
+    // The IR is also serialized as the function's source-stripped debug IR, which runs in the IR interpreter once a
+    // debugger is attached, so in a Program that can be debugged it has the step event of every statement, as the
+    // AST interpreter has (#5558); the native code ignores the instructions
+    ir_func->emit_debug_statements = qore_program_private::get(*pgm)->checkAllowDebugging(nullptr);
     // Set source identity before QoreIRBuilder lowers statements; direct-call
     // self-recursion detection requires exact variant identity because
     // overloads share the same QoreFunction family.

@@ -3312,6 +3312,15 @@ public:
     //! (qore_program_private::getAttachedDebugProgramAddr()), used as the inline
     //! gate for the JIT debug-step hook.  Null in AOT mode / when unavailable.
     void* source_dpgm_addr = nullptr;
+    //! True if the lowering emits a QoreIROpcode::DebugStatement before every statement although no
+    //! debugger gate address is available (#5558)
+    /** Set for AOT lowering of a Program that can be debugged: AOT native code has no step hooks (see
+        QoreIRToLLVM::emitDebugStepHook()), but the IR is also serialized as the function's source-stripped debug IR,
+        which the IR interpreter runs once a debugger is attached (UserVariantBase::materializeAOTDebugIR()).  The
+        serialized instructions carry no statement pointer and are resolved from their source locations against the
+        Program's statement index at runtime.
+    */
+    bool emit_debug_statements = false;
     //! Owning program of this lowered IR function. Used by the per-Program background
     //! JIT-compile drain (QoreJIT::waitForBgCompileQueue(QoreProgram*)) to cancel/await
     //! only the compiles referencing a Program being torn down. Set unconditionally at

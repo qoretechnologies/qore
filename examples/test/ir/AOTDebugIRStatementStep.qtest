@@ -1,0 +1,126 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.  SPDX-License-Identifier: MIT
+
+# Regression test: a debugger attached to an AOT program gets the step event of every statement of an AOT
+# function, with the statement's own source location, as with the AST interpreter (#5558).
+#
+# Once a debugger is attached, an AOT function runs its serialized source-stripped debug IR in the IR interpreter
+# (UserVariantBase::materializeAOTDebugIR()).  Since 346c9c7efd the IR interpreter fires step events only at
+# QoreIROpcode::DebugStatement instructions, but AOT lowering emitted none, so AOT code produced only the
+# function-entry event of its synthetic entry block, whose location is the binary's label (for a qcc script
+# aggregate, the aggregate's symbol).  A line-coverage recorder attached to such a program (Qorus test runtime
+# coverage) saw no statement of the AOT sources.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+
+%exec-class AOTDebugIRStatementStepTest
+
+class AOTDebugIRStatementStepTest inherits QUnit::Test {
+    private {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir;
+        string tmp_dir;
+
+        # probe() is called through call_function() so that the call is dispatched through the tiered entry of
+        # the variant, as calls between separately compiled AOT objects are; lines 30-36 are its statements
+        const ProbeSource = "%modern
+%allow-debugger
+
+class StepRecorder inherits DebugProgram {
+    public { list<string> seen = (); }
+    onAttach(ProgramControl pgm, reference rs, reference rts) { rs = DebugStep; }
+    onDetach(ProgramControl pgm, reference rs, reference rts) {}
+    onStep(ProgramControl pgm, int blockStatementId, *int statementId, *int breakpointId, reference flow,
+            reference rs, reference rts) {
+        if (statementId) {
+            hash<auto> i = pgm.getStatementIdInfo(statementId);
+            seen += sprintf(\"step %s:%d\", basename(i.file), i.start_line + i.offset);
+        }
+        rs = DebugStep;
+    }
+    onFunctionEnter(ProgramControl pgm, int statementId, reference rs, reference rts) { rs = DebugStep; }
+    onFunctionExit(ProgramControl pgm, int statementId, reference result, reference rs, reference rts) {
+        rs = DebugStep;
+    }
+    onException(ProgramControl pgm, int statementId, hash<auto> ex, reference dismiss, reference rs,
+            reference rts) {
+        rs = DebugStep;
+    }
+    onExit(ProgramControl pgm, int statementId, reference result, reference rs, reference rts) {
+        rs = DebugStep;
+    }
+}
+
+int sub probe(int a) {
+    list<int> l = (a, 2);
+    int sum = 0;
+    foreach int v in (l) {
+        sum += v;
+    }
+    string s = sprintf(\"%d\", sum);
+    return s.toInt();
+}
+
+StepRecorder r();
+ProgramControl pc = ProgramControl::getProgram();
+int rv;
+Counter cnt(1);
+background sub () {
+    on_exit cnt.dec();
+    r.addProgram(pc);
+    on_exit r.removeProgram(pc);
+    rv = call_function(\"probe\", 1);
+}();
+cnt.waitForZero();
+printf(\"rv=%d\\n\", rv);
+# only the statements of probe(): AOT top-level code is native code without step events
+foreach string e in (r.seen) {
+    int line = (e =~ x/:([0-9]+)$/)[0].toInt();
+    if (line >= 29 && line <= 37) {
+        printf(\"%s\\n\", e);
+    }
+}
+";
+    }
+
+    constructor() : QUnit::Test("AOTDebugIRStatementStep", "1.0") {
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        tmp_dir = sprintf("%s/qore-aot-debug-ir-step-%d", (ENV.TMPDIR ?? "/tmp"), getpid());
+        mkdir(tmp_dir);
+        addTestCase("AOT function steps every statement under a debugger", \testAotStatementSteps());
+        set_return_value(main());
+    }
+
+    destructor() {
+        system(sprintf("rm -rf %s", tmp_dir));
+    }
+
+    testAotStatementSteps() {
+        string src = tmp_dir + "/probe.q";
+        string exe = tmp_dir + "/probe.aot";
+        {
+            File f();
+            f.open2(src, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(ProbeSource);
+        }
+
+        # the AST interpreter is the benchmark
+        string ast_out = backquote(sprintf("%s -b --exec-mode=ast %s 2>&1", qore_bin, src));
+        assertEq("rv=3\nstep probe.q:30\nstep probe.q:31\nstep probe.q:32\nstep probe.q:33\nstep probe.q:33\n"
+            "step probe.q:35\nstep probe.q:36\n", ast_out, "AST step events of probe()");
+
+        foreach bool strip in ((False, True)) {
+            string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile%s --output %s %s 2>&1",
+                libqore_dir, qore_bin, strip ? " --strip-source" : "", exe, src));
+            assertTrue(is_file(exe), "AOT compile succeeds: " + compile_out);
+            string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
+            assertEq(ast_out, aot_out, sprintf("AOT step events of probe() match the AST interpreter "
+                "(strip-source: %y)", strip));
+            unlink(exe);
+        }
+    }
+}
