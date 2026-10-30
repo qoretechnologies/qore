@@ -673,6 +673,7 @@ private:
     QoreParseOptions old_po;
     QoreParseOptions old_mask;
     QoreParseOptions old_value;
+    QoreParseOptions old_replace;
     QoreParseOptions old_caller_restrictions;
     const QoreProgram* old_module_pgm;
     qore_program_id_t old_app_pgm_id;
@@ -709,6 +710,12 @@ struct QoreCallParseOptionsOverride {
     QoreParseOptions mask;
     //! the value of the options that the override covers
     QoreParseOptions value;
+    //! the options of \a mask whose value is that of the override only
+    /** The override adds its restrictions to those of the code that makes the call; the options given here take the
+        override's value instead, also when the code that made the call has them: module code takes its network
+        and filesystem options from its own Program (see get_module_own_access_parse_options())
+    */
+    QoreParseOptions replace;
     //! the restrictions that module code inherits from its caller (see runtime_get_own_program_state_parse_options())
     QoreParseOptions caller_restrictions;
     //! the Program of the module whose code inherits \a caller_restrictions, or nullptr
@@ -734,6 +741,7 @@ public:
 private:
     QoreParseOptions old_mask;
     QoreParseOptions old_value;
+    QoreParseOptions old_replace;
     QoreParseOptions old_po;
     QoreParseOptions old_caller_restrictions;
     const QoreProgram* old_module_pgm;

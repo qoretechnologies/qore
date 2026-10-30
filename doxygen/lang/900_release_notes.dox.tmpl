@@ -768,6 +768,15 @@
     @ref Qore::Program::run() "Program::run()", for example) keeps that %Program's restrictions.  This applies in every
     @ref execution_modes "execution mode".
 
+    Network and filesystem access are the exception: module code does not inherit
+    @ref Qore::PO_NO_NETWORK "PO_NO_NETWORK" or @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM" from its caller, and
+    has its own %Program's options for them.  The network and filesystem access of module code is governed by the
+    @ref Qore::SandboxManager "SandboxManager" of the %Program that it runs for, which every network and filesystem
+    operation checks, also on I/O threads; a module that a host gave a %Program is a capability that the host granted
+    it (see @ref sandbox_po_limitations).  The caller's options had applied only to the calls of module code whose
+    variant is selected at run time: module code could create a \c Socket with \c new but not with
+    @ref Qore::create_object() "create_object()", so whether module I/O was refused depended on overload resolution.
+
     The functions that use a %Program's @ref thread_local_data_family "thread-local data"
     (@ref Qore::save_thread_data() "save_thread_data()", @ref Qore::get_thread_data() "get_thread_data()",
     @ref Qore::get_all_thread_data() "get_all_thread_data()", @ref Qore::remove_thread_data() "remove_thread_data()",

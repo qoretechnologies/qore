@@ -404,6 +404,10 @@ public:
     QoreParseOptions runtime_po;
     QoreParseOptions runtime_po_override_mask;
     QoreParseOptions runtime_po_override_value;
+    //! the options of runtime_po_override_mask whose value is that of the override, not also that of the code
+    /** see QoreCallParseOptionsOverride::replace
+    */
+    QoreParseOptions runtime_po_override_replace;
     //! the restrictions that the code of runtime_po_module_pgm inherits from its caller
     /** see runtime_get_own_program_state_parse_options()
     */
@@ -2403,7 +2407,10 @@ static QoreParseOptions apply_runtime_po_override(ThreadData* td, const QorePars
     const QoreParseOptions& value = td->runtime_po_override_value;
     QoreParseOptions positive_mask = mask & QoreParseOptions::POSITIVE_OPTIONS;
     QoreParseOptions restricting_mask = mask & ~QoreParseOptions::POSITIVE_OPTIONS;
-    return (po | (value & restricting_mask)) & ~(positive_mask & ~value);
+    QoreParseOptions rv = (po | (value & restricting_mask)) & ~(positive_mask & ~value);
+    // these options are those of the override only, so a restriction of the code that made the call does not stay
+    const QoreParseOptions& replace = td->runtime_po_override_replace;
+    return (rv & ~replace) | (value & replace);
 }
 
 // Whether a thread that pops a call stack location can leave all the ordering to the walker's heavy barrier
@@ -4220,12 +4227,14 @@ void RuntimeParseOptionsOverrideHelper::set(const QoreCallParseOptionsOverride& 
     ThreadData* td = thread_data.get();
     old_mask = td->runtime_po_override_mask;
     old_value = td->runtime_po_override_value;
+    old_replace = td->runtime_po_override_replace;
     old_po = td->runtime_po;
     old_caller_restrictions = td->runtime_po_caller_restrictions;
     old_module_pgm = td->runtime_po_module_pgm;
     old_app_pgm_id = td->runtime_po_app_pgm_id;
     td->runtime_po_override_mask = o.mask;
     td->runtime_po_override_value = o.value;
+    td->runtime_po_override_replace = o.replace & o.mask;
     td->runtime_po_caller_restrictions = o.caller_restrictions;
     td->runtime_po_module_pgm = o.module_pgm;
     td->runtime_po_app_pgm_id = o.app_pgm_id;
@@ -4236,6 +4245,7 @@ RuntimeParseOptionsOverrideHelper::~RuntimeParseOptionsOverrideHelper() {
     ThreadData* td = thread_data.get();
     td->runtime_po_override_mask = old_mask;
     td->runtime_po_override_value = old_value;
+    td->runtime_po_override_replace = old_replace;
     td->runtime_po_caller_restrictions = old_caller_restrictions;
     td->runtime_po_module_pgm = old_module_pgm;
     td->runtime_po_app_pgm_id = old_app_pgm_id;
@@ -4247,11 +4257,13 @@ LoadTimeParseOptionsHelper::LoadTimeParseOptionsHelper(const QoreParseOptions& p
     old_po = td->runtime_po;
     old_mask = td->runtime_po_override_mask;
     old_value = td->runtime_po_override_value;
+    old_replace = td->runtime_po_override_replace;
     old_caller_restrictions = td->runtime_po_caller_restrictions;
     old_module_pgm = td->runtime_po_module_pgm;
     old_app_pgm_id = td->runtime_po_app_pgm_id;
     td->runtime_po_override_mask = QoreParseOptions();
     td->runtime_po_override_value = QoreParseOptions();
+    td->runtime_po_override_replace = QoreParseOptions();
     td->runtime_po_caller_restrictions = QoreParseOptions();
     td->runtime_po_module_pgm = nullptr;
     td->runtime_po_app_pgm_id = 0;
@@ -4262,6 +4274,7 @@ LoadTimeParseOptionsHelper::~LoadTimeParseOptionsHelper() {
     ThreadData* td = thread_data.get();
     td->runtime_po_override_mask = old_mask;
     td->runtime_po_override_value = old_value;
+    td->runtime_po_override_replace = old_replace;
     td->runtime_po_caller_restrictions = old_caller_restrictions;
     td->runtime_po_module_pgm = old_module_pgm;
     td->runtime_po_app_pgm_id = old_app_pgm_id;

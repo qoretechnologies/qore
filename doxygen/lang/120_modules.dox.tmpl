@@ -1599,6 +1599,12 @@ public class Lookup {
 }
     @endcode
 
+    The restrictions of the network and of the filesystem (@ref Qore::PO_NO_NETWORK "PO_NO_NETWORK" and
+    @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM") are not inherited: module code has its own
+    @ref Qore::Program "Program's" options for them, and its network and filesystem access is governed by the
+    @ref Qore::SandboxManager "SandboxManager" of the @ref Qore::Program "Program" that it runs for (see
+    @ref sandbox_po_limitations).
+
     @subsection user_module_children Child Modules
 
     A user module can declare optional <b>child modules</b> that extend it with the

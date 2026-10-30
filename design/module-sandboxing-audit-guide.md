@@ -145,6 +145,15 @@ check: parse options are all-or-nothing per domain, while the manager expresses 
 host-level policy. Module code that touches the filesystem on the caller's behalf should do
 both, in that order.
 
+Network and filesystem access are governed by the `SandboxManager` alone for module code: user
+module code does not inherit `PO_NO_NETWORK` or `PO_NO_FILESYSTEM` from its caller
+(`get_module_own_access_parse_options()` in `lib/Function.cpp`; a module that a host gave a
+Program is a capability it granted, and Qorus enforces the restrictions of sandboxed users with
+`SandboxManager` configuration).  A user module function runs in its caller's Program, so a C++
+builtin that reads `getProgram()->getParseOptions()` there sees the caller's static options and
+refuses what the `SandboxManager` governs; for network and filesystem access, rely on the
+`SandboxManager` check.
+
 #### The policy barrier: a sanctioned exception to inheritance
 
 Inheritance is correct by default, but it is wrong for trusted infrastructure that must use

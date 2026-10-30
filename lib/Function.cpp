@@ -4874,6 +4874,17 @@ QoreParseOptions qore_compose_module_call_parse_options(const QoreParseOptions& 
     return ((own_po | caller_po) & ~positive) | ((own_po & caller_po) & positive);
 }
 
+QoreParseOptions get_module_own_access_parse_options() {
+    return QoreParseOptions(PO_NO_NETWORK | PO_NO_FILESYSTEM);
+}
+
+//! returns \a po with the options of get_module_own_access_parse_options() taken from the module's Program
+static QoreParseOptions keep_module_own_access_parse_options(const QoreParseOptions& po,
+        const QoreProgram* module_pgm) {
+    const QoreParseOptions own_access = get_module_own_access_parse_options();
+    return (po & ~own_access) | (module_pgm->getParseOptions() & own_access);
+}
+
 bool qore_program_is_module(const QoreProgram* pgm) {
     return pgm && pgm->getParseOptions().hasAny(QoreParseOptions(PO_IN_MODULE));
 }
@@ -4884,7 +4895,9 @@ QoreCallParseOptionsOverride qore_get_module_call_runtime_po_override(const Qore
     QoreCallParseOptionsOverride o;
     o.mask = get_user_variant_runtime_po_override_mask();
     const QoreParseOptions& own_po = module_pgm->getParseOptions();
-    o.value = qore_compose_module_call_parse_options(own_po, caller_po);
+    o.value = keep_module_own_access_parse_options(qore_compose_module_call_parse_options(own_po, caller_po),
+        module_pgm);
+    o.replace = get_module_own_access_parse_options();
     // the restricting options that the module has only because its caller has them
     o.caller_restrictions = o.value & o.mask & ~own_po & ~QoreParseOptions::POSITIVE_OPTIONS;
     if (o.caller_restrictions) {
@@ -4903,8 +4916,12 @@ void qore_get_user_call_runtime_po_override(const QoreProgram* exec_pgm, const U
         o = QoreCallParseOptionsOverride();
         o.mask = get_user_variant_runtime_po_override_mask();
         o.value = module_code
-            ? qore_compose_module_call_parse_options(exec_pgm->getParseOptions(), caller_po)
+            ? keep_module_own_access_parse_options(
+                qore_compose_module_call_parse_options(exec_pgm->getParseOptions(), caller_po), uvb->pgm)
             : exec_pgm->getParseOptions();
+        if (module_code) {
+            o.replace = get_module_own_access_parse_options();
+        }
         return;
     }
     if (module_code) {

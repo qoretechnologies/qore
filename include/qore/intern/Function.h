@@ -881,6 +881,15 @@ DLLLOCAL QoreParseOptions get_user_variant_runtime_po_override_mask();
 DLLLOCAL QoreParseOptions qore_compose_module_call_parse_options(const QoreParseOptions& own_po,
         const QoreParseOptions& caller_po);
 
+//! returns the parse options that module code takes from its own Program, never from the code that calls it
+/** Network and filesystem access (\c PO_NO_NETWORK, \c PO_NO_FILESYSTEM) of module code are governed by the
+    SandboxManager of the Program that the code runs for, which every network and filesystem operation checks, also
+    on I/O threads: a module that a host loaded into a Program is a capability that it granted the Program.  The
+    caller's options were applied only to calls whose variant is selected at run time, so whether module I/O was
+    refused depended on overload resolution.
+*/
+DLLLOCAL QoreParseOptions get_module_own_access_parse_options();
+
 //! returns true if the Program holds the code of a user module
 DLLLOCAL bool qore_program_is_module(const QoreProgram* pgm);
 
@@ -889,7 +898,8 @@ DLLLOCAL bool qore_program_is_module(const QoreProgram* pgm);
       Program, for example) runs with the executing Program's options forced into its runtime parse options;
     - the code of a user module (a module function, or a method of a module class, which runs in the module's
       Program) also runs with the restrictions of its caller, \a caller_po being the effective options of the code
-      that calls it (see qore_compose_module_call_parse_options());
+      that calls it (see qore_compose_module_call_parse_options()), except for the options of
+      get_module_own_access_parse_options(), which are those of the module's Program;
     - otherwise any override of the caller is cleared for the call.
 
     For module code that runs in the module's own Program, \a o also records the restrictions inherited from the

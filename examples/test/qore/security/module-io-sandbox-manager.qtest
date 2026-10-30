@@ -1,0 +1,177 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class ModuleIoSandboxManagerTest
+
+#! The network and filesystem access of module code is governed by the SandboxManager, not by the caller's options
+/** Module code runs with the restrictions of the code that calls it as well as its own, except for
+    \c PO_NO_NETWORK and \c PO_NO_FILESYSTEM: a module that a host loaded into a Program is a capability that the host
+    granted it, and its network and filesystem access is governed by the Program's SandboxManager, which every network
+    and filesystem operation checks, also on I/O threads.
+
+    The caller's network and filesystem options were applied only to the calls of module code whose variant is
+    selected at run time: a module that created a \c Socket or \c File with \c new could do so, and one that created
+    it with \c create_object() was refused, so whether module I/O was refused depended on overload resolution.  The
+    other restrictions of the caller are still inherited.
+*/
+class ModuleIoSandboxManagerTest inherits QUnit::Test {
+    public {
+        #! the source of the module loaded into the caller's Program
+        const ModuleSource = "%modern
+module CallerIoProbe {
+    version = \"1.0\";
+    desc = \"module I/O for a restricted caller\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+
+public namespace CallerIoProbe {
+public string sub socketBound() { Socket s(); return s.className(); }
+public string sub socketByName() { object s = create_object(\"Socket\"); return s.className(); }
+public string sub fileBound() { File f(); return f.className(); }
+public string sub fileByName() { object f = create_object(\"File\"); return f.className(); }
+public string sub mutexByName() { object m = create_object(\"Mutex\"); return m.className(); }
+public string sub connect(int port) {
+    Socket s();
+    s.connect(\"127.0.0.1:\" + port, 10s);
+    s.close();
+    return \"connected\";
+}
+public string sub readFile(string path) { return ReadOnlyFile::readTextFile(path); }
+}
+";
+
+        #! the caller's code; it calls the module and returns the error code of an exception
+        const CallerSource = "%modern
+auto sub call(string name, *list<auto> args) {
+    try {
+        return call_function_args(\"CallerIoProbe::\" + name, args);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+";
+
+        #! the text of the file that the module reads
+        const FileText = "module file data";
+    }
+
+    private {
+        TmpDir tmp("qore-module-io-sandbox-");
+        string module_path;
+        string file_path;
+    }
+
+    constructor() : QUnit::Test("ModuleIoSandboxManagerTest", "1.0") {
+        module_path = tmp.path + DirSep + "CallerIoProbe.qm";
+        File mf();
+        mf.open2(module_path, O_CREAT | O_WRONLY | O_TRUNC);
+        mf.write(ModuleSource);
+        file_path = tmp.path + DirSep + "data.txt";
+        File df();
+        df.open2(file_path, O_CREAT | O_WRONLY | O_TRUNC);
+        df.write(FileText);
+
+        addTestCase("a caller's PO_NO_NETWORK and PO_NO_FILESYSTEM do not restrict module code",
+            \ownAccessTest());
+        addTestCase("the SandboxManager governs module network and filesystem access", \sandboxManagerTest());
+        addTestCase("negative: the caller's other restrictions are inherited", \otherRestrictionsTest());
+        addTestCase("negative: the caller's own code is restricted", \callerCodeTest());
+        set_return_value(main());
+    }
+
+    ownAccessTest() {
+        Program p = caller(PO_NO_NETWORK | PO_NO_FILESYSTEM);
+        # objects created with new and by name alike
+        assertEq("Socket", p.callFunction("call", "socketBound"));
+        assertEq("Socket", p.callFunction("call", "socketByName"));
+        assertEq("File", p.callFunction("call", "fileBound"));
+        assertEq("File", p.callFunction("call", "fileByName"));
+        # and the module's I/O
+        assertEq("connected", connect(p));
+        assertEq(FileText, p.callFunction("call", "readFile", (file_path,)));
+    }
+
+    sandboxManagerTest() {
+        Program p = caller(PO_NO_NETWORK | PO_NO_FILESYSTEM);
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(False);
+        sm.setFilesystemDefaultPolicy(False);
+        p.setSandboxManager(sm);
+        # creating the objects is not I/O
+        assertEq("Socket", p.callFunction("call", "socketByName"));
+        assertEq("File", p.callFunction("call", "fileByName"));
+        # the module's I/O is refused by the Program's SandboxManager
+        assertEq("NETWORK-ACCESS-DENIED", connect(p, False));
+        assertEq("FILESYSTEM-ACCESS-DENIED", p.callFunction("call", "readFile", (file_path,)));
+
+        # and the same without any parse option
+        p = caller(0);
+        p.setSandboxManager(sm);
+        assertEq("NETWORK-ACCESS-DENIED", connect(p, False));
+        assertEq("FILESYSTEM-ACCESS-DENIED", p.callFunction("call", "readFile", (file_path,)));
+    }
+
+    otherRestrictionsTest() {
+        # a thread class created by name in module code is refused for a caller that may not use thread classes
+        Program p = caller(PO_NO_THREAD_CLASSES);
+        assertEq("CREATE-OBJECT-ERROR", p.callFunction("call", "mutexByName"));
+        # and allowed for a caller that may
+        p = caller(PO_NO_NETWORK | PO_NO_FILESYSTEM);
+        assertEq("Mutex", p.callFunction("call", "mutexByName"));
+    }
+
+    callerCodeTest() {
+        # the caller's own code may not use network or filesystem classes
+        foreach string src in ("auto sub s() { return new Socket(); }", "auto sub f() { return new File(); }") {
+            Program p = caller(PO_NO_NETWORK | PO_NO_FILESYSTEM, False);
+            assertThrows("ILLEGAL-CLASS-INSTANTIATION", \p.parse(), (src, "caller"), src);
+        }
+        # nor create them by name, which is refused when the code runs
+        Program p = caller(PO_NO_NETWORK | PO_NO_FILESYSTEM, False);
+        p.parse("auto sub s() { try { return create_object('Socket'); } catch (hash<ExceptionInfo> ex) { "
+            "return ex.err; } }", "caller");
+        assertEq("CREATE-OBJECT-ERROR", p.callFunction("s"));
+    }
+
+    #! returns a Program with the module loaded and then the given restrictions set, as a host that grants modules
+    /** @param parse_caller parse the code that calls the module (a Program is parsed once)
+    */
+    private Program caller(int restrictions, bool parse_caller = True) {
+        Program p(PO_NEW_STYLE);
+        p.loadModule(module_path);
+        if (restrictions) {
+            p.setParseOptions(restrictions);
+        }
+        if (parse_caller) {
+            p.parse(CallerSource, "caller");
+        }
+        return p;
+    }
+
+    #! has the module connect to a listener of the test; returns the result of the call
+    private auto connect(Program p, bool expect_connection = True) {
+        Socket listener();
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        on_exit listener.close();
+        int port = listener.getSocketInfo().port;
+        auto rv = p.callFunction("call", "connect", (port,));
+        # a connection that was made is already queued on the listener when the call returns; a refused one never
+        # reached it
+        bool pending = listener.isDataAvailable(0);
+        assertEq(expect_connection, pending, "a connection reached the listener");
+        if (pending) {
+            listener.accept(10s);
+        }
+        return rv;
+    }
+}

@@ -3454,8 +3454,20 @@ int QoreClass::runtimeCheckDomain(const QoreProgram& pgm, ExceptionSink* xsink) 
 int qore_class_private::runtimeCheckInstantiateClassByName(const QoreClass& qc, const QoreProgram* pgm,
         ExceptionSink* xsink) {
     assert(xsink);
-    if (pgm && qc.runtimeCheckDomain(*pgm, xsink)) {
-        return -1;
+    if (pgm) {
+        if (pgm == ::getProgram()) {
+            // the code runs in the Program: its network and filesystem options are those of the code itself, which
+            // the effective runtime parse options hold and are checked below - those of a module whose function runs
+            // in its caller's Program are the module's own (see get_module_own_access_parse_options())
+            if (!qore_parse_options_allow_domain(pgm->getParseOptions() & ~get_module_own_access_parse_options(),
+                    qc.priv->domain)) {
+                xsink->raiseException("CREATE-OBJECT-ERROR", "current Program sandboxing restrictions do not allow "
+                    "access to the '%s' class", qc.getName());
+                return -1;
+            }
+        } else if (qc.runtimeCheckDomain(*pgm, xsink)) {
+            return -1;
+        }
     }
     // code running in its own Program can also be restricted with the restrictions of its caller (module code
     // called from a restricted Program; see qore_get_user_call_runtime_po_override()), which only the effective
