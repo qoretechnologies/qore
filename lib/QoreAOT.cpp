@@ -968,8 +968,8 @@ static bool isAOTImplicitSelfFastEntryEligible(const QoreIRFunction* ir_func,
 //! Admit a simple scalar forwarding body without changing implicit-self fast-entry contracts.
 //! Signature slots remain observable in the runtime wrapper. Both local reads precede the only call;
 //! no private LLVM copy is reused after a nested call could inspect or modify the runtime slots.
-static bool isAOTReceiverIntForwarder(const QoreIRFunction& ir, const UserVariantBase* uvb,
-        const QoreMethod* method, const AbstractQoreFunctionVariant* variant) {
+static bool isAOTReceiverScalarForwarder(const QoreIRFunction& ir, const UserVariantBase* uvb,
+        const QoreMethod* method, const AbstractQoreFunctionVariant* variant, bool floating = false) {
     if (q_env_is_set("QORE_DISABLE_AOT_RECEIVER_METHOD_ENTRY") || !method || method->isStatic()
             || !isAOTFastMethodCallEligible(variant) || !isAOTFastEntryEligible(&ir, uvb)
             || ir.has_opaque_ast_local_access || !ir.has_explicit_self_local_access
@@ -979,8 +979,10 @@ static bool isAOTReceiverIntForwarder(const QoreIRFunction& ir, const UserVarian
         return false;
     }
     const UserSignature* sig = uvb->getUserSignature();
-    if (!sig->selfid || sig->numParams() != 1 || sig->getParamTypeInfo(0) != bigIntTypeInfo
-            || sig->getReturnTypeInfo() != bigIntTypeInfo || sig->needsTypeParameterSubstitution()) {
+    const QoreTypeInfo* type = floating ? floatTypeInfo : bigIntTypeInfo;
+    if (!sig->selfid || sig->numParams() != 1 || sig->getParamTypeInfo(0) != type
+            || sig->getReturnTypeInfo() != type || sig->needsTypeParameterSubstitution()
+            || (floating && q_env_is_set("QORE_DISABLE_AOT_RECEIVER_FLOAT_FORWARD"))) {
         return false;
     }
     const auto& instructions = ir.blocks[0]->instructions;
@@ -22389,7 +22391,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     std::string receiver_entry_name;
                     llvm::Function* receiver_entry = nullptr;
                     if (!metadata_only && !fn_outliner.active()
-                            && isAOTReceiverIntForwarder(*ir_func, uvb, meth, variant)) {
+                            && isAOTReceiverScalarForwarder(*ir_func, uvb, meth, variant)) {
                         receiver_entry_name = ir_func->name + "_receiver_int_v1";
                         auto* i64_ty = llvm::Type::getInt64Ty(ctx);
                         auto* ptr_ty = llvm::PointerType::get(ctx, 0);
@@ -22462,6 +22464,12 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         lowerer.setReceiverMethodBinding(receiver_entry_name, receiver_entry
                             ? static_cast<const QoreIRDotEvalMethodDirectInstruction*>(
                                 ir_func->blocks[0]->instructions[3].get()) : nullptr);
+                        if (!fn_outliner.active()
+                                && isAOTReceiverScalarForwarder(*ir_func, uvb, meth, variant, true)) {
+                            lowerer.setReceiverFloatForwardBinding(
+                                static_cast<const QoreIRDotEvalMethodDirectInstruction*>(
+                                    ir_func->blocks[0]->instructions[3].get()));
+                        }
                         method_ok = lowerer.lowerFunction(*ir_func, module, llvm_error);
 
                         if (!method_ok && fn_outliner.active()) {

@@ -1104,6 +1104,14 @@ void qore_rt_bind_receiver_int_method_v2(QoreAOTContext* ctx,
 void qore_rt_bind_receiver_int_method_v3(QoreAOTContext* ctx,
     uint64_t (*normal)(QoreAOTContext*, ExceptionSink*), const QoreAOTReceiverIntForwardEntryV3* descriptor);
 
+//! Publish an immutable proof for an exact float(float) self-forwarding body.
+//! @param ctx runtime-owned context identifying this exact normal body
+//! @param normal immutable normal-body identity
+//! @param descriptor legacy-layout image-owned slot/location, with a required null integer companion
+//! @note Atomic and idempotent; every invocation must still admit the live inner pure float body.
+void qore_rt_bind_receiver_float_forward_v2(QoreAOTContext* ctx,
+    uint64_t (*normal)(QoreAOTContext*, ExceptionSink*), const QoreAOTReceiverIntForwardEntryV3* descriptor);
+
 //! Publish an optional exact-body scalar method companion with an explicit live RuntimeConfig.
 //! @param ctx runtime-owned context whose normal body must match
 //! @param normal immutable body identity, rechecked on every call

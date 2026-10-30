@@ -1,0 +1,190 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+%allow-debugger
+
+sub expect(auto expected, auto actual) {
+    if (type(expected) == "float" && type(actual) == "float"
+            ? (expected.nanp() ? !actual.nanp() : expected != actual
+                || (expected == 0.0 && sprintf("%g", expected) != sprintf("%g", actual)))
+            : expected !== actual) {
+        throw "FLOAT-RECEIVER-ENTRY-TEST", sprintf("expected %y, got %y", expected, actual);
+    }
+}
+
+class FloatReceiverEntry {
+    private:internal {
+        float offset = 7;
+    }
+    float next(float value) { return value + offset; }
+    float forward(float value) {
+        return self.next(value);  # Keep line 21: asserted below after warming the companion.
+    }
+    float twice(float value) { return self.forward(value) + self.forward(value); }
+}
+class FloatReceiverDerived inherits FloatReceiverEntry {
+    private:internal {
+        float offset = 11;
+    }
+    float next(float value) { return value + offset; }
+}
+class FloatReceiverInspect inherits FloatReceiverEntry {
+    float next(float value) {
+        hash<auto> vars = get_local_vars(1);
+        expect(value, vars.value.value);
+        expect(self, vars.self.value);
+        set_local_var_value(1, "value", value + 100.0);
+        expect(value + 100.0, get_local_vars(1).value.value);
+        return value + 3.0;
+    }
+}
+class FloatReceiverRecursive inherits FloatReceiverEntry {
+    float next(float value) {
+        return value ? self.forward(value - 1.0) + 1 : 0;
+    }
+}
+class FloatReceiverFailure inherits FloatReceiverEntry {
+    float next(float value) {
+        if (value < 0) { throw "EXPECTED-RECEIVER-FAILURE", "negative"; }
+        return value;
+    }
+}
+class FloatReceiverConcurrent {
+    float next(float value) { return value + 7.0; }
+    float forward(float value) { return self.next(value); }
+}
+class FloatReceiverPure {
+    float next(float value) { return value + 17.0; }
+    float forward(float value) { return self.next(value); }
+}
+class FloatReceiverPureDerived inherits FloatReceiverPure {
+    float next(float value) { return value + 23.0; }
+}
+class FloatReceiverPureInspect inherits FloatReceiverPure {
+    float next(float value) {
+        expect(value, get_local_vars(1).value.value);
+        expect(self, get_local_vars(1).self.value);
+        return value + 29.0;
+    }
+}
+class FloatReceiverPurePrivate {
+    private:internal float next(float value) { return value + 31.0; }
+    float forward(float value) { return self.next(value); }
+}
+class FloatReceiverPurePrivateDerived inherits FloatReceiverPurePrivate {
+    private:internal float next(float value) { return value + 37.0; }
+}
+class FloatReceiverPureOverload {
+    float next(float value) { return value + 41.0; }
+    float next(auto value) { return int(value) + 43; }
+    float forward(float value) { return self.next(value); }
+}
+
+float sub callFloatReceiver(auto receiver, float value) { return receiver.forward(value); }
+float sub callFloatReceiverArgument(auto receiver, auto value) { return receiver.forward(value); }
+sub deleteFloatReceiver(FloatReceiverEntry receiver) { delete receiver; }
+float sub callFloatPure(auto receiver, float value) { return receiver.forward(value); }
+float sub callFloatSpecial(auto receiver, float value) { return receiver.forward(value); }
+auto sub callFloatSpecialBoxed(auto receiver, auto value) { return receiver.forward(value); }
+float sub callFloatConcurrent(auto receiver, float value) { return receiver.forward(value); }
+
+
+sub receiverWorker(Counter done, Queue results) {
+    on_exit done.dec();
+    # This class's companion is first published by concurrent workers, not the serial warmup.
+    FloatReceiverConcurrent receiver();
+    for (int i = 0; i < 100; ++i) {
+        expect(float(i) + 7.0, callFloatConcurrent(receiver, float(i)));
+    }
+    results.push(100);
+}
+
+FloatReceiverEntry base();
+FloatReceiverDerived derived();
+FloatReceiverInspect inspecting();
+FloatReceiverRecursive recursive();
+FloatReceiverFailure failing();
+FloatReceiverPure pure();
+FloatReceiverPureDerived pure_derived();
+FloatReceiverPureInspect pure_inspecting();
+FloatReceiverPurePrivate private_pure();
+FloatReceiverPurePrivateDerived private_derived();
+FloatReceiverPureOverload overloaded();
+Program foreign(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES | PO_ALLOW_DEBUGGER);
+foreign.parse("float sub run(object receiver, float value) { return receiver.forward(value); }", "receiver-foreign");
+for (int round = 0; round < 12; ++round) {
+    foreach float value in ((0, -1, 140737488355327, 140737488355328,
+            -140737488355329, 1125899906842624)) {
+        expect(value + 7.0, callFloatReceiver(base, value));
+        expect(value + 11.0, callFloatReceiver(derived, value));
+        expect(value + 3.0, callFloatReceiver(inspecting, value));
+        expect(value + 7.0, callFloatReceiverArgument(base, \value));
+        expect((value + 7.0) * 2, base.twice(value));
+        expect(value + 7.0, foreign.callFunction("run", base, value));
+        expect(value + 17.0, callFloatPure(pure, value));
+        expect(value + 23.0, callFloatPure(pure_derived, value));
+        expect(value + 29.0, callFloatReceiver(pure_inspecting, value));
+        expect(value + 31.0, callFloatReceiver(private_pure, value));
+        expect(value + 31.0, callFloatReceiver(private_derived, value));
+        expect(value + 41.0, callFloatReceiver(overloaded, value));
+        expect(value + 17.0, callFloatReceiverArgument(pure, \value));
+        expect(value + 17.0, foreign.callFunction("run", pure, value));
+    }
+    expect(8.0, callFloatReceiver(recursive, 8));
+    expect(5.0, callFloatReceiver(failing, 5));
+    try {
+        callFloatReceiver(failing, -1);
+        throw "FLOAT-RECEIVER-ENTRY-TEST", "missing exception";
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err != "EXPECTED-RECEIVER-FAILURE") { rethrow; }
+        bool found = False;
+        foreach hash<CallStackInfo> frame in (ex.callstack) {
+            if (frame.function == "FloatReceiverFailure::next") {
+                expect(21, frame.line);
+                found = True;
+            }
+        }
+        expect(True, found);
+    }
+    expect(6.0, callFloatReceiver(failing, 6));
+}
+try {
+    callFloatReceiverArgument(derived, "not an integer");
+    throw "FLOAT-RECEIVER-ENTRY-TEST", "invalid argument accepted";
+} catch (hash<ExceptionInfo> ex) {
+    if (ex.err != "RUNTIME-TYPE-ERROR" && ex.err != "RUNTIME-OVERLOAD-ERROR") { rethrow; }
+}
+Counter done(4);
+Queue results();
+for (int i = 0; i < 4; ++i) {
+    background receiverWorker(done, results);
+}
+done.waitForZero();
+for (int i = 0; i < 4; ++i) {
+    expect(100, results.get(1000));
+}
+deleteFloatReceiver(base);
+try {
+    callFloatReceiver(base, 1);
+    throw "FLOAT-RECEIVER-ENTRY-TEST", "deleted receiver accepted";
+} catch (hash<ExceptionInfo> ex) {
+    if (ex.err != "OBJECT-ALREADY-DELETED") { rethrow; }
+}
+class FloatReceiverIdentity {
+    float next(float value) { return value; }
+    float forward(float value) { return self.next(value); }
+}
+class FloatReceiverNegative inherits FloatReceiverIdentity {
+    float next(float value) { return -value; }
+}
+FloatReceiverIdentity identity();
+FloatReceiverNegative negative();
+for (int round = 0; round < 12; ++round) {
+    foreach float value in ((0.0, -0.0, 1.25, -3.0e307, -6.0e307, @inf@, -@inf@, @nan@, -@nan@)) {
+        expect(value, callFloatSpecial(identity, value));
+        expect(-value, callFloatSpecial(negative, value));
+        expect(value, callFloatSpecialBoxed(identity, value));
+        expect(-value, callFloatSpecialBoxed(negative, value));
+    }
+}
+printf("float-receiver-entry: ok\n");

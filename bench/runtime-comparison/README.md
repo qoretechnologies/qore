@@ -1577,3 +1577,20 @@ for imported calls, list mutation, mixed workloads, retained costs and attributi
 
 
 Cross-Program native scalar/member retries share one live `RuntimeConfig&` with their call-option guard after the complete ordinary Program transition. The reference remains invocation/thread-owned; live admission and fallback checks remain. Same-Program typed entries and the generated AOT contract are unchanged. This runtime-only experiment uses identical AOT artifacts across frozen optimized libraries; see the [complete comparison](results-cross-program-shared-context-macos-arm64.json) for gains, frame growth and retained control costs.
+
+
+`QORE_DISABLE_AOT_RECEIVER_FLOAT_FORWARD=1` disables the AOT proof and runtime shortcut
+for an exact `float(float)` method whose entire body returns one `self.method(value)`
+call. The warmed inner target must independently qualify as a pure same-Program native
+floating leaf. Unsupported bodies, references, Programs/options, debugger attachment and
+unready targets retain ordinary execution. Both logical frames and the inner source call
+site remain; integer and floating ABI entries are separately typed. Float member admission
+runs before the forwarding probe, and the existing context/descriptor layout is retained.
+
+The optimized matched-toolchain comparison uses fresh before/after artifacts across three
+layouts. The floating forwarding kernel improves 80.99% in confirmation, with two-call
+floating +2.52%, field +1.03% and closure +1.83% controls retained as part of the tradeoff.
+See the [complete results](RESULTS.md#floating-point-aot-forwarding-2026-10-30),
+[evidence](results-scalar-forwarding-macos-arm64.json), and
+[audit](audit-scalar-forwarding.md). This is a narrow whole-kernel improvement; the new
+probe has no qualified Java equivalent and does not establish an overall application gain.

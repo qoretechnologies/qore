@@ -540,6 +540,23 @@ static bool isFiniteCallRefTarget(const AbstractQoreFunctionVariant* variant, co
 }
 
 void QoreIRToLLVM::emitNativeMethodBinding(llvm::Module& module, llvm::Function* normal) {
+    if (aot_mode && fast_entry_name.empty() && receiver_float_forward_call) {
+        uint64_t bits;
+        memcpy(&bits, &receiver_float_forward_call->expr, sizeof(bits));
+        int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(bits);
+        auto* loc = getAotLocationConstant(receiver_float_forward_call->loc, module);
+        if (loc) {
+            auto* type = llvm::StructType::get(ctx, {ptr_type, i32_type, ptr_type});
+            auto* descriptor = new llvm::GlobalVariable(module, type, true, llvm::GlobalValue::InternalLinkage,
+                llvm::ConstantStruct::get(type, {
+                    llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type)),
+                    llvm::ConstantInt::get(i32_type, slot), loc}),
+                normal->getName() + "_receiver_float_descriptor_v2");
+            auto bind = module.getOrInsertFunction("qore_rt_bind_receiver_float_forward_v2",
+                llvm::FunctionType::get(void_type, {ptr_type, ptr_type, ptr_type}, false));
+            builder->CreateCall(bind, {aot_ctx_arg, normal, descriptor});
+        }
+    }
     if (aot_mode && fast_entry_name.empty() && !receiver_method_binding.empty()) {
         llvm::Function* companion = module.getFunction(receiver_method_binding);
         assert(companion && receiver_forward_call);

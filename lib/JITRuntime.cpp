@@ -500,6 +500,8 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_bind_receiver_int_method_v2) },
     { "qore_rt_bind_receiver_int_method_v3",
         reinterpret_cast<void*>(&qore_rt_bind_receiver_int_method_v3) },
+    { "qore_rt_bind_receiver_float_forward_v2",
+        reinterpret_cast<void*>(&qore_rt_bind_receiver_float_forward_v2) },
     { "qore_rt_bind_method_int_unary_v2",
         reinterpret_cast<void*>(&qore_rt_bind_method_int_unary_v2) },
     { "qore_rt_bind_method_int_unary_v3",
@@ -10873,6 +10875,17 @@ extern "C" DLLEXPORT void qore_rt_bind_receiver_int_method_v3(QoreAOTContext* ct
         std::memory_order_relaxed);
 }
 
+extern "C" DLLEXPORT void qore_rt_bind_receiver_float_forward_v2(QoreAOTContext* ctx,
+        AotFunctionPtr normal, const QoreAOTReceiverIntForwardEntryV3* descriptor) {
+    if (!ctx || !normal || ctx->native_body_fn != normal || !descriptor || descriptor->entry
+            || descriptor->slot < 0 || descriptor->slot >= ctx->num_exprs || !descriptor->loc) {
+        return;
+    }
+    const QoreAOTReceiverIntForwardEntryV3* expected = nullptr;
+    ctx->receiver_int_forward_entry.compare_exchange_strong(expected, descriptor, std::memory_order_release,
+        std::memory_order_relaxed);
+}
+
 extern "C" DLLEXPORT void qore_rt_bind_method_int_unary_v1(QoreAOTContext* ctx,
         uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
         int64_t (*entry)(int64_t, QoreAOTContext*, ExceptionSink*)) {
@@ -19644,7 +19657,8 @@ static __attribute__((noinline)) bool qore_rt_try_admitted_zero_arg_getter(
 }
 
 // Dispatch a method call on a QoreObject with pre-evaluated args.
-static bool try_dispatch_forwarded_int_leaf(QoreObject* object,
+template <typename Scalar>
+static bool try_dispatch_forwarded_scalar_leaf(QoreObject* object,
     const QoreAOTMethodDispatchCacheEntry& outer, QoreAOTContext* outer_ctx,
     uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink, uint64_t& result);
 
@@ -19712,10 +19726,15 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
     }
     if (native_cache && native_cache->native_scalar_uvb == uvb) {
         QoreAOTContext* outer_ctx = uvb->getCachedAOTContext();
-        if (outer_ctx && outer_ctx->receiver_int_forward_entry.load(std::memory_order_acquire)
-                && try_dispatch_forwarded_int_leaf(o, *native_cache, outer_ctx,
-                    args, arg_cleanups, nargs, xsink, result)) {
-            return true;
+        if (outer_ctx && outer_ctx->receiver_int_forward_entry.load(std::memory_order_acquire)) {
+            bool handled = native_cache->arg_types[0] == floatTypeInfo
+                ? try_dispatch_forwarded_scalar_leaf<double>(o, *native_cache, outer_ctx,
+                    args, arg_cleanups, nargs, xsink, result)
+                : try_dispatch_forwarded_scalar_leaf<int64_t>(o, *native_cache, outer_ctx,
+                    args, arg_cleanups, nargs, xsink, result);
+            if (handled) {
+                return true;
+            }
         }
     }
     const QoreTypeInfo* receiver_type_info = qore_get_object_receiver_type_info(o);
@@ -20531,16 +20550,21 @@ qore_rt_find_aot_method_dispatch_cache_entry(
 // The compiler proves the outer body is exactly return self.method(value).
 // Preflight the already-resolved inner call without installing outer TLS state
 // or running user code. A miss must leave arguments, ownership and sink intact.
-static bool try_dispatch_forwarded_int_leaf_native(QoreObject* object,
+template <typename Scalar>
+static bool try_dispatch_forwarded_scalar_leaf_native(QoreObject* object,
         const QoreAOTMethodDispatchCacheEntry& outer, QoreAOTContext* outer_ctx,
-        int64_t arg, ExceptionSink* xsink, int64_t& result, RuntimeConfig* supplied_rc) {
+        Scalar arg, ExceptionSink* xsink, Scalar& result, RuntimeConfig* supplied_rc) {
+    constexpr bool floating = std::is_same_v<Scalar, double>;
     static constinit QoreLazyValue<bool> enabled_setting([]() -> bool {
         return !q_env_is_set("QORE_DISABLE_AOT_FORWARD_LEAF_PREFLIGHT")
             && !q_env_is_set("QORE_DISABLE_AOT_RECEIVER_METHOD_ENTRY")
             && !q_env_is_set("QORE_DISABLE_IR_CONTEXT_ELISION")
             && !q_env_is_set("QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY")
             && !q_env_is_set("QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION")
-            && !q_env_is_set("QORE_DISABLE_AOT_GENERIC_NATIVE_INT_CONTINUATION")
+            && (floating ? (!q_env_is_set("QORE_DISABLE_AOT_RECEIVER_FLOAT_FORWARD")
+                && !q_env_is_set("QORE_DISABLE_AOT_NATIVE_FLOAT_METHOD_ENTRY")
+                && !q_env_is_set("QORE_DISABLE_AOT_GENERIC_NATIVE_FLOAT_METHOD_ENTRY"))
+                : !q_env_is_set("QORE_DISABLE_AOT_GENERIC_NATIVE_INT_CONTINUATION"))
             && !q_env_is_set("QORE_DISABLE_AOT_NATIVE_METHOD_ADMISSION_CACHE")
             && !q_env_is_set("QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_CACHE")
             && !q_env_is_set("QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_FAST_ENTRY")
@@ -20548,7 +20572,8 @@ static bool try_dispatch_forwarded_int_leaf_native(QoreObject* object,
     });
     const bool enabled = enabled_setting.get();
     const auto* outer_uvb = outer.native_scalar_uvb;
-    if (!enabled || outer.nargs != 1 || outer.arg_types[0] != bigIntTypeInfo || outer.arg_states[0]
+    const QoreTypeInfo* type = floating ? floatTypeInfo : bigIntTypeInfo;
+    if (!enabled || outer.nargs != 1 || outer.arg_types[0] != type || outer.arg_states[0]
             || !outer_uvb->hasCachedAOT() || outer_ctx->native_body_fn != outer_uvb->getCachedAOTFunction() || outer_ctx->uses_argv) {
         return false;
     }
@@ -20616,7 +20641,7 @@ static bool try_dispatch_forwarded_int_leaf_native(QoreObject* object,
         const auto* candidate = cache_slot.load(std::memory_order_acquire);
         if (candidate && candidate->receiver_class == receiver_class
                 && candidate->receiver_type_info == receiver_type && candidate->class_ctx == class_ctx
-                && qore_rt_match_aot_native_scalar_key(*candidate, pgm, false) && candidate->parse_options == po
+                && qore_rt_match_aot_native_scalar_key(*candidate, pgm, floating) && candidate->parse_options == po
                 && candidate->dispatch_epoch == epoch
                 && (!resolved || (candidate->method == target.method && candidate->variant == target.variant))) {
             inner = candidate;
@@ -20633,8 +20658,20 @@ static bool try_dispatch_forwarded_int_leaf_native(QoreObject* object,
             || ctx->uses_self || ctx->uses_argv || ctx->pgm != pgm) {
         return false;
     }
-    auto inline_entry = ctx->native_int_unary_method_entry_v3.load(std::memory_order_acquire);
-    auto entry = inline_entry ? nullptr : ctx->native_int_unary_method_entry_v2.load(std::memory_order_acquire);
+    auto inline_entry = [&]() {
+        if constexpr (floating) {
+            return ctx->native_float_unary_method_entry_v3.load(std::memory_order_acquire);
+        } else {
+            return ctx->native_int_unary_method_entry_v3.load(std::memory_order_acquire);
+        }
+    }();
+    auto entry = [&]() {
+        if constexpr (floating) {
+            return inline_entry ? nullptr : ctx->native_float_unary_method_entry_v2.load(std::memory_order_acquire);
+        } else {
+            return inline_entry ? nullptr : ctx->native_int_unary_method_entry_v2.load(std::memory_order_acquire);
+        }
+    }();
     if (!inline_entry && !entry) {
         return false;
     }
@@ -20657,17 +20694,25 @@ static bool try_dispatch_forwarded_int_leaf_native(QoreObject* object,
     return true;
 }
 
-static bool try_dispatch_forwarded_int_leaf(QoreObject* object,
+template <typename Scalar>
+static bool try_dispatch_forwarded_scalar_leaf(QoreObject* object,
         const QoreAOTMethodDispatchCacheEntry& outer, QoreAOTContext* outer_ctx,
         uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink, uint64_t& result) {
-    // The boxed path still rejects owned/wide/reference inputs before doing
-    // anything observable; only the native ABI can pass all int64_t values.
-    if (nargs != 1 || !fromBits(args[0]).isInt()) {
+    // Keep scalar families separate, including tagged floating-point values.
+    // The full-key admission still rejects reference/coercion/owned inputs.
+    constexpr bool floating = std::is_same_v<Scalar, double>;
+    if (nargs != 1 || (floating ? !fromBits(args[0]).isFloat() : !fromBits(args[0]).isInt())) {
         return false;
     }
-    int64_t native_result;
-    if (!try_dispatch_forwarded_int_leaf_native(object, outer, outer_ctx,
-            fromBits(args[0]).getAsBigInt(), xsink, native_result, nullptr)) {
+    Scalar arg;
+    if constexpr (floating) {
+        arg = fromBits(args[0]).getAsFloat();
+    } else {
+        arg = fromBits(args[0]).getAsBigInt();
+    }
+    Scalar native_result;
+    if (!try_dispatch_forwarded_scalar_leaf_native(object, outer, outer_ctx,
+            arg, xsink, native_result, nullptr)) {
         return false;
     }
     result = toBits(QoreValue());
@@ -21044,16 +21089,21 @@ __attribute__((always_inline)) static int qore_rt_try_method_unary(QoreAOTContex
         // A context-using body is never a context-independent scalar leaf. The whole-
         // body forwarding proof may admit its exact inner leaf instead, while
         // preserving both logical frames and an effect-free ordinary fallback.
+        auto try_forward = [&]() __attribute__((always_inline)) {
+            if (ctx->receiver_int_forward_entry.load(std::memory_order_acquire)) {
+                static constinit QoreEnvFlag forward_enabled_env("QORE_DISABLE_AOT_NATIVE_FORWARD_LEAF");
+                return !forward_enabled_env.get()
+                    && try_dispatch_forwarded_scalar_leaf_native(object, *cached, ctx, arg, xsink, *result, rc);
+            }
+            return false;
+        };
         if constexpr (!floating) {
-            static constinit QoreEnvFlag forward_enabled_env("QORE_DISABLE_AOT_NATIVE_FORWARD_LEAF");
-            const bool forward_enabled = !forward_enabled_env.get();
-            if (forward_enabled && ctx->receiver_int_forward_entry.load(std::memory_order_acquire)
-                    && try_dispatch_forwarded_int_leaf_native(object, *cached, ctx, arg, xsink, *result, rc)) {
+            if (try_forward()) {
                 return 1;
             }
         }
-        // Do not enter another helper for ordinary context-using bodies. The
-        // existing forwarding hit also stays ahead of this independent proof.
+        // Keep the existing integer order. Floating member hits precede the
+        // new forwarding probe so they do not pay for an absent descriptor.
         auto member_entry = [&]() {
             if constexpr (floating) {
                 return ctx->scalar_member_float_entry.load(std::memory_order_acquire);
@@ -21071,6 +21121,11 @@ __attribute__((always_inline)) static int qore_rt_try_method_unary(QoreAOTContex
                         xsink, *rc, member_entry)
                     : qore_rt_try_scalar_member_method<false>(object, *cached, ctx, arg, *result,
                         xsink, *rc, member_entry)) {
+                return 1;
+            }
+        }
+        if constexpr (floating) {
+            if (try_forward()) {
                 return 1;
             }
         }

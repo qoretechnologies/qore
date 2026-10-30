@@ -1,0 +1,73 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%allow-debugger
+
+class ForwardFloatDebugBase {
+    float next(float value) { return value + 17.0; }
+    float forward(float value) { return self.next(value); }
+}
+class ForwardFloatDebugDerived inherits ForwardFloatDebugBase {
+    float next(float value) {
+        return value + 19.0; # METHOD_ENTRY
+    }
+}
+class ForwardFloatDebugLateDerived inherits ForwardFloatDebugBase {
+    float next(float value) { return value + 23.0; }
+}
+float sub forwardFloatDebugCall(ForwardFloatDebugBase input, float value) {
+    ForwardFloatDebugBase receiver = input;
+    return receiver.forward(value);
+}
+auto sub forwardFloatGenericDebugCall(auto receiver, float value) {
+    return receiver.forward(value);
+}
+class ForwardFloatMethodRecorder inherits DebugProgram {
+    public { int method_entries = 0; int method_exits = 0; }
+    onAttach(ProgramControl pgm, reference rs, reference rts) { rs = DebugStep; }
+    onDetach(ProgramControl pgm, reference rs, reference rts) { rs = DebugDetach; }
+    onStep(ProgramControl pgm, int blk, *int sid, *int bid, reference flow, reference rs, reference rts) {
+        rs = DebugStep;
+    }
+    onFunctionEnter(ProgramControl pgm, int sid, reference rs, reference rts) {
+        *hash<auto> loc = pgm.getStatementIdInfo(sid);
+        # Keep this equal to the METHOD_ENTRY source line above. Pure scalar
+        # debug IR has function events but need not retain a statement temp mark.
+        if (loc.start_line == 13) { ++method_entries; }
+        rs = DebugStep;
+    }
+    onFunctionExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {
+        *hash<auto> loc = pgm.getStatementIdInfo(sid);
+        if (loc.start_line == 13) { ++method_exits; }
+    }
+    onException(ProgramControl pgm, int sid, hash<auto> ex, reference dismiss, reference rs, reference rts) {}
+    onExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {}
+}
+ForwardFloatDebugDerived object();
+ForwardFloatDebugLateDerived late();
+for (int i = 0; i < 32; ++i) {
+    if (forwardFloatDebugCall(object, i) != i + 19) { throw "NATIVE-DEBUG-TEST", "warmup"; }
+    if (forwardFloatGenericDebugCall(object, i) != i + 19) { throw "NATIVE-DEBUG-TEST", "generic warmup"; }
+}
+ForwardFloatMethodRecorder recorder();
+ProgramControl pc = ProgramControl::getProgram();
+recorder.addProgram(pc);
+for (int i = 0; i < 16; ++i) {
+    if (forwardFloatDebugCall(object, i) != i + 19) { throw "NATIVE-DEBUG-TEST", "debug call"; }
+    if (forwardFloatDebugCall(late, i) != i + 23) { throw "NATIVE-DEBUG-TEST", "first call under debugger"; }
+    if (forwardFloatGenericDebugCall(object, i) != i + 19) { throw "NATIVE-DEBUG-TEST", "generic debug call"; }
+    if (forwardFloatGenericDebugCall(late, i) != i + 23) { throw "NATIVE-DEBUG-TEST", "generic first debug call"; }
+}
+recorder.removeProgram(pc);
+if (recorder.method_entries != 32 || recorder.method_exits != 32) {
+    throw "NATIVE-DEBUG-TEST", sprintf("method entry/exit events: %d/%d",
+        recorder.method_entries, recorder.method_exits);
+}
+for (int i = 0; i < 16; ++i) {
+    if (forwardFloatDebugCall(object, i) != i + 19) { throw "NATIVE-DEBUG-TEST", "restored call"; }
+    if (forwardFloatDebugCall(late, i) != i + 23) { throw "NATIVE-DEBUG-TEST", "late native publication"; }
+    if (forwardFloatGenericDebugCall(object, i) != i + 19) { throw "NATIVE-DEBUG-TEST", "generic restored call"; }
+    if (forwardFloatGenericDebugCall(late, i) != i + 23) { throw "NATIVE-DEBUG-TEST", "generic late publication"; }
+}
+printf("float-forward-debugger: ok\n");

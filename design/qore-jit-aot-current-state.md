@@ -6162,3 +6162,47 @@ Against optimized `266db2c39f`, three campaigns independently replay 1404 proces
 Release and Debug each pass nine focused fixtures / 14 cases / 2751 assertions, plus separate 3810- and 5475-check native suites. Baseline/candidate reference outputs, identical-artifact execution, LLVM verification, loaded-image UUIDs and restored Release module aliases are verified. All 62 audit checks are resolved. No new Java/develop comparison, weighted application gain or global performance ceiling is claimed. The next experiment should inspect forwarding an already-live caller context into ordinary dispatch and the generic-frame storage cost, retaining complete Program-entry semantics.
 
 See [full results and controls](../bench/runtime-comparison/RESULTS.md), [raw evidence](../bench/runtime-comparison/results-cross-program-shared-context-macos-arm64.json), and [audit](../bench/runtime-comparison/audit-cross-program-shared-context.md).
+
+
+## Floating-point forwarding proof (2026-10-30)
+
+AOT now admits exact homogeneous `float(float)` self-forwarding bodies alongside the
+existing integer proof. The entire body must be one block containing a temporary mark,
+non-reference loads of `self` and the sole parameter, one `DotEvalMethodDirect` call,
+and return of that call result. Static methods, body locals, opaque local access,
+signature substitution, and outlined bodies are excluded. Multiple-call bodies remain
+ordinary. No general receiver-aware floating companion is introduced.
+
+The normal body publishes an immutable image-owned slot/location descriptor through
+`qore_rt_bind_receiver_float_forward_v2`. It uses the existing
+`QoreAOTReceiverIntForwardEntryV3` layout and `receiver_int_forward_entry` atomic field,
+with a required null integer companion. The binder checks exact normal-body identity,
+slot bounds and location before release publication. Integer and floating inner entries
+retain separate C++ function types; the shared descriptor never supplies an integer
+function to a floating call. The context layout does not grow. Experimental float-v1
+artifacts used a different layout and were never installed or committed; the v2 symbol
+distinguishes the final contract.
+
+Every invocation still requires strict outer scalar admission and the ready, exact-body,
+pure inner float-v2/v3 entry under matching receiver/class/type, Program, parse options
+and dispatch epoch. Debugger attachment and explicit type instantiation retain ordinary
+execution. A miss leaves ownership and the sink unchanged. The typed route borrows the
+caller's live `RuntimeConfig`; the boxed route first requires the matching immediate
+representation and retains cleanup/boxing. Unsupported or heap-backed inputs can still
+use the ordinary path. Both logical compact frames and the explicit inner source call
+site remain published. The existing deferred contexts materialize in caller order on
+the leaf guard's failure, and RAII waits for diagnostic readers before releasing frames.
+
+Floating member admission precedes the new forwarding probe; integer order is unchanged.
+`QORE_DISABLE_AOT_RECEIVER_FLOAT_FORWARD=1` disables proof emission and runtime use.
+Existing receiver, native, cache, context and forwarding controls remain effective.
+The diagnostic flag is read only when the descriptor is present.
+
+The accepted optimized comparison against `df0e7bce35` reduces the three-receiver floating
+forwarding kernel from 184.3060 to 35.0420 ns/item, while retaining reported control costs
+including two-call floating +2.52%, floating fields +1.03% and closures +1.83%. The context
+is 776 bytes on this ARM64 host; existing dispatcher frames are unchanged and executable
+code grows 5080 bytes. Release and Debug each pass eight fixtures / 15 cases / 4553 assertions,
+with native suites and 391 restored Release aliases separately verified. See the
+[full measurement and audit](../bench/runtime-comparison/results-scalar-forwarding-macos-arm64.json).
+These are whole-loop costs; no new Java/develop comparison or performance ceiling is claimed.

@@ -4,6 +4,11 @@
 
     @section qore_3_0_0 Qore 3.0.0
 
+    AOT-compiled floating-point methods that only forward their scalar argument to another
+    pure method in the same %Program can use the native floating call path. The compiler
+    proves the forwarding body, while runtime admission preserves dispatch, context,
+    debugger, exception and logical call-stack behavior. Unsupported calls retain ordinary execution.
+
     Native AOT scalar and member method retries share their live runtime context with call-option setup
     after ordinary cross-%Program entry, reducing redundant thread-local lookups while preserving
     Program accounting, live admission, context restoration and fallback behavior.

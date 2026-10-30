@@ -234,6 +234,12 @@ public:
         receiver_forward_call = call;
     }
 
+    //! Publish a float forwarding proof; unsupported inner calls retain ordinary execution.
+    //! @param call sole call from the independently verified float(float) whole-body proof, or null
+    void setReceiverFloatForwardBinding(const QoreIRDotEvalMethodDirectInstruction* call) {
+        receiver_float_forward_call = call;
+    }
+
     //! Pass an invocation-owned live RuntimeConfig to a receiver-aware fast entry.
     //! @param runtime_config borrowed same-thread view, valid until this invocation returns
     void setReceiverRuntimeConfig(llvm::Value* runtime_config) {
@@ -450,6 +456,7 @@ private:
     std::string fast_entry_name;
     std::string receiver_method_binding;
     const QoreIRDotEvalMethodDirectInstruction* receiver_forward_call = nullptr;
+    const QoreIRDotEvalMethodDirectInstruction* receiver_float_forward_call = nullptr;
     llvm::Value* receiver_runtime_config = nullptr;
     llvm::Value* dynamic_closure_arg = nullptr;
     llvm::Value* dynamic_closure_runtime_config = nullptr;

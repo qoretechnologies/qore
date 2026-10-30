@@ -1,0 +1,99 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class FloatReceiverEntryTest
+
+class FloatReceiverEntryTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+    constructor() : Test("AOT floating receiver forwarding entry", "1.0", \ARGV) {
+        addTestCase("receiver, scalar, reflection and nested-call contracts", \check());
+        addTestCase("forwarding debugger and concurrent frame readers", \checkFrames());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private check() {
+        string source = get_script_dir() + "/AOTFloatReceiverEntry.qr";
+        string expected = "float-receiver-entry: ok\n";
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source)), mode);
+        }
+        TmpDir dir("qore-float-receiver-entry-");
+        foreach string prefix in (("", "QORE_DISABLE_AOT_RECEIVER_FLOAT_FORWARD=1 ",
+                "QORE_AOT_EH=1 ", "QORE_AOT_NO_DEBUG_INFO=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                string generated = run((qcc, level, "--strip-source", "-o", executable, source),
+                    prefix + "QORE_DUMP_LLVM_IR=1 ");
+                bool enabled = !prefix.startsWith("QORE_DISABLE_AOT_RECEIVER_FLOAT_FORWARD");
+                assertEq(enabled, generated.find("qore_rt_bind_receiver_float_forward_v2") >= 0,
+                    "separate floating forwarding proof");
+                if (enabled) {
+                    assertRegex("_receiver_float_descriptor_v2 = internal constant", generated,
+                        "immutable target slot and image-owned location");
+                    assertFalse(regex(generated,
+                        "call void @qore_rt_bind_receiver_float_forward_v2[^\\n]*FloatReceiverEntry__twice"),
+                        "multiple nested calls remain ordinary");
+                }
+                foreach string runtime in (("", "QORE_DISABLE_AOT_RECEIVER_FLOAT_FORWARD=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_FLOAT_METHOD_ENTRY=1 ",
+                        "QORE_DISABLE_AOT_GENERIC_NATIVE_FLOAT_METHOD_ENTRY=1 ", "QORE_DISABLE_AOT_RECEIVER_METHOD_ENTRY=1 ",
+                        "QORE_DISABLE_AOT_FORWARD_LEAF_PREFLIGHT=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_FORWARD_LEAF=1 ",
+                        "QORE_DISABLE_AOT_FORWARD_CLASS_CONTEXT_CACHE=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 "
+                            + "QORE_DISABLE_AOT_NATIVE_FORWARD_LEAF=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 "
+                            + "QORE_DISABLE_AOT_NATIVE_FORWARD_LEAF=1 "
+                            + "QORE_DISABLE_AOT_MATCHED_SCALAR_FALLBACK=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_ADMISSION_CACHE=1 ",
+                        "QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_CACHE=1 ",
+                        "QORE_DISABLE_IR_CONTEXT_ELISION=1 ")) {
+                    assertEq(expected, run((executable,), runtime), prefix + level + runtime);
+                }
+            }
+        }
+    }
+    private checkFrames() {
+        foreach string fixture in (("Debugger", "FrameReaders")) {
+            string source = get_script_dir() + "/AOTFloatReceiver" + fixture + ".qr";
+            string expected = fixture == "Debugger" ? "float-forward-debugger: ok\n"
+                : "float-forward-frame-readers: ok\n";
+            foreach string mode in (("ast", "ir", "jit", "tiered")) {
+                assertEq(expected, run((qore, "--exec-mode=" + mode, source)), fixture + mode);
+            }
+            TmpDir dir("qore-float-forward-frames-");
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                string generated = run((qcc, level, "--strip-source", "-o", executable, source),
+                    "QORE_DUMP_LLVM_IR=1 ");
+                assertRegex("qore_rt_bind_receiver_float_forward_v2", generated);
+                foreach string runtime in (("", "QORE_DISABLE_AOT_RECEIVER_FLOAT_FORWARD=1 ")) {
+                    assertEq(expected, run((executable,), runtime), fixture + level + runtime);
+                    if (fixture == "FrameReaders") {
+                        assertEq(expected, run((executable, "generic"), runtime), "boxed " + level + runtime);
+                    }
+                }
+            }
+        }
+    }
+
+}

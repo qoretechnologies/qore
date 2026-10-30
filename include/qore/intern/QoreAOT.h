@@ -410,8 +410,9 @@ struct QoreAOTContext {
         QoreAOTContext*, ExceptionSink*);
     std::atomic<ReceiverIntMethodEntryV1> receiver_int_method_entry_v1{nullptr};
 
-    //! Immutable image-owned forwarding proof, published atomically by the exact normal body.
-    //! A live matching inner pure-leaf entry is still required before eliding outer signature slots.
+    //! Immutable image-owned scalar forwarding proof, published by the exact normal body.
+    //! The legacy field/layout also holds float-v2 descriptors with a null integer companion.
+    //! A live matching typed inner pure-leaf entry is required before eliding outer signature slots.
     std::atomic<const QoreAOTReceiverIntForwardEntryV3*> receiver_int_forward_entry{nullptr};
 
     //! Whole-body-proven scalar companions. Receiver and defining class are borrowed;
@@ -480,7 +481,8 @@ struct QoreAOTContext {
     }
 };
 
-//! Immutable forwarding descriptor emitted in native image storage; its location has image lifetime.
+//! Immutable forwarding descriptor; retain the legacy integer name and layout for generated images.
+//! Float-v2 descriptors have a null integer companion; their separately typed inner entry is checked live.
 struct QoreAOTReceiverIntForwardEntryV3 {
     QoreAOTContext::ReceiverIntMethodEntryV1 entry;
     int32_t slot;

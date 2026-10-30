@@ -29988,3 +29988,109 @@ The full optimized build, including all 391 AOT modules and the changed VscDebug
 One pre-existing failure is retained explicitly: AOTSerializedDebugSteps returns correct values but reports two watched lines where the test expects three. The same failure reproduces with the frozen pre-merge runtime and identical installed baseline modules, including when lazy closure IR is disabled. It is not counted among passes; no root cause or fix is claimed. Other AOT stepping, debugger, Program lifetime, cross-Program call and prepared-frame checks pass.
 
 See the [merge evidence](results-matched-context-develop-merge-macos-arm64.json) and [62-item audit](audit-matched-context-develop-merge.md). This integration makes no new performance or Java/develop comparison claim. The multiple-call native execution investigation remains the next performance step.
+
+
+## Floating-point AOT forwarding (2026-10-30)
+
+The compiler now proves exact `float forward(float value) { return self.method(value); }`
+bodies and lets a warmed, eligible same-Program call enter the already-proven pure
+floating inner method through its native ABI. The matched forwarding workload falls
+from **184.3060 to 35.0420 ns/item (80.99% less time; 5.26x faster)** in the broader
+confirmation. The independent pilot measured 184.5741 to 34.9397 ns/item (81.07% less).
+These are complete loop costs with three receiver classes, conversions and accumulation,
+not isolated call latencies. This new probe has no qualified Java equivalent.
+
+The baseline is performance-branch commit `df0e7bce35`, after merging develop
+`a3ee195ea2`. Both runtimes were freshly rebuilt with the same Apple clang
+`2100.4.1.1`, SDK 27.2, LLVM 22.1.8, Release `-O3 -DNDEBUG`, and allocation tracking
+disabled. Each compiler produced its own `qcc -O3 --strip-source` artifacts in
+three code layouts. The 20-workload pilot and 41-workload confirmation total
+1098 processes and 3294 measured windows; all raw receipts and aggregate calculations
+were independently replayed. Each process used three warmup and three measurement
+windows of at least 100 ms, with 4096 items per kernel invocation. Each variant/layout
+has three process forks. No owned build, test, profiler or heavy scan overlapped timing.
+
+The table reports the median of layout medians of process means. The last column
+shows the individual default/reverse/shuffled layout deltas, because a ratio of
+aggregate medians can differ from a median of paired layout ratios. Shared-host
+variation and observed process ranges are retained in the evidence; ranges are not
+confidence intervals.
+
+|!Whole-kernel workload|!Before ns/item|!After ns/item|!Time change|!Three layout changes
+|matched:forward_float|184.3060|35.0420|-80.99%|-81.21% / -81.18% / -80.78%
+|matched:forward_int|30.3138|30.0389|-0.91%|-1.69% / -0.91% / -2.18%
+|matched:context_int|201.3059|200.6857|-0.31%|-0.97% / -1.32% / +2.51%
+|matched:context_float|212.5444|217.8975|+2.52%|+5.01% / +0.10% / +2.56%
+|local:direct_call|1.5438|1.5508|+0.45%|+0.71% / -0.13% / +0.68%
+|local:method_call|1.6132|1.6261|+0.80%|+0.95% / +0.26% / +0.88%
+|local:polymorphic_call|23.3504|22.3583|-4.25%|-3.91% / -4.25% / -5.04%
+|local:polymorphic_float_call|23.4084|22.4435|-4.12%|-4.60% / -3.87% / -1.68%
+|local:boxed_int_method_fallback|33.9591|32.4236|-4.52%|-4.34% / -4.52% / -5.78%
+|local:boxed_float_method_fallback|35.0435|35.4057|+1.03%|-0.60% / +1.49% / +3.23%
+|local:boxed_int_method_effect|91.6402|91.7823|+0.16%|+0.62% / +0.16% / -2.17%
+|local:list_mutate|120.9680|123.1336|+1.79%|+1.29% / +1.36% / +2.61%
+|local:temporary_list|1.6430|1.6593|+1.00%|+3.02% / -0.14% / +0.27%
+|local:polymorphic_expression_call|11.1634|11.1447|-0.17%|+1.15% / -1.85% / -4.10%
+|local:polymorphic_float_expression_call|11.0940|11.2078|+1.03%|+1.43% / +0.93% / +1.01%
+|micro:polymorphic_call|82.8249|80.1707|-3.20%|-3.40% / -2.64% / -1.18%
+|micro:polymorphic_float_call|82.8319|82.6582|-0.21%|-2.08% / +4.47% / -0.21%
+|micro:boxed_int_method_call|110.1203|107.0510|-2.79%|+0.87% / -3.54% / -2.23%
+|micro:boxed_float_method_call|112.0742|112.1405|+0.06%|+0.99% / +0.76% / -1.56%
+|micro:boxed_int_method_fallback|121.7738|121.2062|-0.47%|+1.36% / -0.67% / -2.41%
+|micro:boxed_float_method_fallback|127.2504|126.9011|-0.27%|-0.71% / +2.18% / +1.33%
+|micro:boxed_int_method_effect|180.4633|182.9605|+1.38%|+1.39% / +3.75% / -0.59%
+|micro:indirect_call|8.8353|9.0091|+1.97%|+3.85% / -5.35% / -3.29%
+|micro:closure_call|18.6124|18.9524|+1.83%|+2.12% / +2.73% / +1.83%
+|micro:closure_capture|24.6424|24.3613|-1.14%|-0.42% / +0.94% / -3.15%
+|micro:list_read|2.9345|2.9099|-0.84%|-0.46% / -1.58% / +0.06%
+|micro:list_build|23.2407|23.5065|+1.14%|+0.09% / +1.84% / +1.05%
+|micro:list_mutate|123.5950|122.2338|-1.10%|-1.10% / -2.20% / -0.40%
+|micro:temporary_hash|1.6469|1.6714|+1.49%|+1.82% / -1.37% / +1.49%
+|micro:polymorphic_expression_call|69.7537|70.2766|+0.75%|-0.97% / +0.39% / +1.14%
+|micro:polymorphic_float_expression_call|72.1177|72.6532|+0.74%|-0.20% / +0.25% / +3.07%
+|float:callback_local_float_return|0.8732|0.8635|-1.11%|+0.33% / -0.51% / -1.13%
+|float:typed_local_int_unary|1.2094|1.2071|-0.19%|+0.80% / -0.48% / +0.74%
+|float:callback_loop_float_return|5.0580|4.9587|-1.96%|+0.85% / -2.43% / -1.61%
+|mixed:csv_report|933.1224|941.1452|+0.86%|+0.86% / -0.50% / +1.81%
+|mixed:object_orders|3482.2562|3418.8741|-1.82%|-5.02% / +0.18% / -3.14%
+|mixed:callback_pipeline|95.6545|96.1600|+0.53%|-0.33% / +0.26% / +0.53%
+|mixed:text_index|1360.7485|1368.0663|+0.54%|+0.54% / -0.08% / +1.48%
+|probe:object_short|1716.7046|1714.0082|-0.16%|+1.10% / -0.16% / -1.73%
+|probe:effect_short|1753.7121|1759.0867|+0.31%|-0.80% / +0.17% / +1.01%
+|probe:string_result_loop|559.9237|558.3153|-0.29%|+0.49% / -2.44% / +1.72%
+
+Keep the complete tradeoff: the two-call floating control is 2.52% slower, local
+floating field access 1.03% slower, and ordinary closure calls 1.83% slower in the
+confirmation. Local list mutation is 1.79% slower while the module-hosted mutation
+control is 1.10% faster. Mixed workloads range from 1.82% less time to 0.86% more.
+Some control deltas change sign across layouts or campaigns. No weighted application
+speedup, universal improvement, or specific cache/layout cause is inferred. The target's
+large repeated gain justifies this bounded addition under the broader workload tradeoff.
+
+The final revision retains the original 776-byte `QoreAOTContext` and 24-byte descriptor
+layout on this host. Existing public native helpers, generic dispatch and matched-wrapper
+stack allocations remain unchanged. The new float preflight uses 544 bytes, versus
+528 for the retained integer preflight; executable sections grow by 5080 bytes.
+Two untimed profiles identify the ordinary matched path before and typed float forwarding
+after, with loaded artifact/library UUIDs verified. Profile durations are excluded from ratios.
+
+Release and Debug each pass eight focused fixtures, 15 QUnit cases and 4553 assertions,
+with no skips. Debug native suite totals are recorded separately because they may overlap.
+Fresh paired preparation validates 4698 reference outputs per variant, 144 child receipts
+and 36 LLVM modules. All 391 Release module aliases restore with matching hashes after
+Debug work. All 62 audit items are resolved before commit. This is targeted macOS ARM64
+qualification, not full-suite, sanitizer or other-platform coverage.
+
+Superseded v1/v2 pilots also showed about an 81% target gain, with larger field/indirect
+control costs. Their extra context pointer was removed and float member admission was
+placed before the forwarding probe in v3. During that revision, an Xcode update removed
+the cached SDK27.0 path and caused the first build to fail. The complete baseline/candidate
+rebuild under the updated toolchain prevents mixing those earlier runtime measurements
+with the accepted v3 comparison. Earlier failures and all superseded measurements remain
+in the evidence; no specific cause for their control deltas is asserted.
+
+See the [complete evidence and drivers](results-scalar-forwarding-macos-arm64.json)
+and [62-item audit](audit-scalar-forwarding.md). This is an incremental branch comparison,
+not a fresh develop/Java result or a global performance ceiling. Further candidates should
+investigate immutable inner-target validation and repeated frame-publication work while
+preserving live admission, both logical frames, ownership and exception behavior.
