@@ -821,6 +821,27 @@ std::string qore_aot_encode_class_ref(const QoreClass* qc, bool pseudo) {
     return rv;
 }
 
+//! Returns true for an instruction of the step events of a debugger, which native AOT code ignores
+/** The IR of a Program that can be debugged has them (QoreIRFunction::emit_debug_statements), as it is also
+    serialized as the debug IR of the function; the analyses of the native code skip them (#5558)
+*/
+static bool qore_aot_is_debug_instruction(const QoreIRInstruction& inst) {
+    return inst.opcode == QoreIROpcode::DebugStatement || inst.opcode == QoreIROpcode::DebugBlock;
+}
+
+//! Returns true if a block has more than the given number of instructions that are not the instructions of a debugger
+/** The debugger instructions of a statement precede its code, so the scan ends after a small multiple of the limit
+*/
+static bool qore_aot_code_size_exceeds(const QoreIRBasicBlock& block, size_t limit) {
+    size_t size = 0;
+    for (const auto& inst : block.instructions) {
+        if ((!inst || !qore_aot_is_debug_instruction(*inst)) && ++size > limit) {
+            return true;
+        }
+    }
+    return false;
+}
+
 //! AOT compile-time optimization Phase 1: emit_debug_info flag.
 //! Returns true if DWARF debug info should be emitted (default: true).
 //! Opt-out via QORE_AOT_NO_DEBUG_INFO=1 (qcc --strip-debug-info flag sets this).
@@ -6459,7 +6480,7 @@ static void resolveAOTBatchContextIndependentFastEntries(
 static bool qore_aot_get_fixed_hash_remap(const QoreIRFunction& func,
         const UserSignature& sig, AOTFixedHashRemapInfo& result) {
     if (sig.numParams() != 1 || func.blocks.size() != 1 || !func.blocks.front()
-            || func.blocks.front()->instructions.size() > 16) {
+            || qore_aot_code_size_exceeds(*func.blocks.front(), 16)) {
         return false;
     }
     auto param_it = func.param_local_vars.find(0);
@@ -6544,7 +6565,7 @@ static bool qore_aot_get_string_op(const QoreIRFunction& func,
     if (q_env_is_set("QORE_DISABLE_AOT_STRING_OP_IMPORT")
             || !sig.numParams() || sig.numParams() > INT8_MAX
             || func.blocks.size() != 1 || !func.blocks.front()
-            || func.blocks.front()->instructions.size() > 8) {
+            || qore_aot_code_size_exceeds(*func.blocks.front(), 8)) {
         return false;
     }
 
@@ -6567,6 +6588,9 @@ static bool qore_aot_get_string_op(const QoreIRFunction& func,
     const QoreIRInstruction* operation = nullptr;
     const QoreIRReturnInstruction* ret = nullptr;
     for (const auto& inst_ptr : func.blocks.front()->instructions) {
+        if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+            continue;
+        }
         if (!inst_ptr || inst_ptr->exception_target || ret) {
             return false;
         }
@@ -7132,6 +7156,9 @@ static bool qore_aot_get_string_expression(const QoreIRFunction& func,
         return index;
     };
     for (const auto& inst_ptr : func.blocks.front()->instructions) {
+        if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+            continue;
+        }
         if (!inst_ptr || inst_ptr->exception_target || ret) {
             return false;
         }
@@ -7448,7 +7475,7 @@ static bool qore_aot_get_collection_op(const QoreIRFunction& func,
     if (q_env_is_set("QORE_DISABLE_AOT_COLLECTION_OP_IMPORT")
             || !sig.numParams() || sig.numParams() > INT8_MAX
             || func.blocks.size() != 1 || !func.blocks.front()
-            || func.blocks.front()->instructions.size() > 6) {
+            || qore_aot_code_size_exceeds(*func.blocks.front(), 6)) {
         return false;
     }
 
@@ -7471,6 +7498,9 @@ static bool qore_aot_get_collection_op(const QoreIRFunction& func,
     const QoreIRInstruction* operation = nullptr;
     const QoreIRReturnInstruction* ret = nullptr;
     for (const auto& inst_ptr : func.blocks.front()->instructions) {
+        if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+            continue;
+        }
         if (!inst_ptr || inst_ptr->exception_target || ret) {
             return false;
         }
@@ -7854,6 +7884,9 @@ static bool qore_aot_get_conditional_aggregate_shape(
                 return false;
             }
             const auto& inst_ptr = block->instructions[offset];
+            if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+                continue;
+            }
             if (!inst_ptr || inst_ptr->exception_target || terminated) {
                 return false;
             }
@@ -8328,6 +8361,9 @@ static bool qore_aot_get_aggregate_return(const QoreIRFunction& func,
                 && qore_check_cancel(nullptr,
                     "AOT aggregate-return instruction analysis")) {
             return false;
+        }
+        if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+            continue;
         }
         if (!inst_ptr || inst_ptr->exception_target || ret) {
             return false;
@@ -8893,6 +8929,9 @@ static bool qore_aot_collect_composed_aggregate_return_summaries(
                 cancelled = true;
                 return fail();
             }
+            if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+                continue;
+            }
             if (!inst_ptr || inst_ptr->exception_target || ret) {
                 return fail();
             }
@@ -9346,7 +9385,7 @@ static int8_t qore_aot_get_boxed_return_param(const QoreIRFunction& func,
             || !sig.numParams() || sig.numParams() > INT8_MAX
             || func.blocks.size() != 1
             || !func.blocks.front()
-            || func.blocks.front()->instructions.size() > 4) {
+            || qore_aot_code_size_exceeds(*func.blocks.front(), 4)) {
         return -1;
     }
     std::unordered_map<const LocalVar*, int8_t> params;
@@ -9367,6 +9406,9 @@ static int8_t qore_aot_get_boxed_return_param(const QoreIRFunction& func,
     int8_t returned_param = -1;
     const QoreIRReturnInstruction* ret = nullptr;
     for (const auto& inst_ptr : func.blocks.front()->instructions) {
+        if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+            continue;
+        }
         if (!inst_ptr || inst_ptr->exception_target || ret) {
             return -1;
         }
@@ -9422,7 +9464,7 @@ static int8_t qore_aot_get_forwarded_return_param(const QoreIRFunction& func,
     if (q_env_is_set("QORE_DISABLE_AOT_GENERIC_RETURN_PARAM_FOLD")
             || !sig.numParams() || sig.numParams() > INT8_MAX
             || func.blocks.size() != 1 || !func.blocks.front()
-            || func.blocks.front()->instructions.size() > 16) {
+            || qore_aot_code_size_exceeds(*func.blocks.front(), 16)) {
         return -1;
     }
 
@@ -9446,6 +9488,9 @@ static int8_t qore_aot_get_forwarded_return_param(const QoreIRFunction& func,
     int8_t returned_param = -1;
     bool returned = false;
     for (const auto& inst_ptr : func.blocks.front()->instructions) {
+        if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+            continue;
+        }
         if (!inst_ptr || inst_ptr->exception_target || returned) {
             return -1;
         }
@@ -9689,6 +9734,9 @@ static int8_t qore_aot_get_composed_boxed_return_param(
         for (const auto& block : func.blocks) {
             for (const auto& inst_ptr : block->instructions) {
                 const QoreIRInstruction* inst = inst_ptr.get();
+                if (inst && qore_aot_is_debug_instruction(*inst)) {
+                    continue;
+                }
                 if (!inst || inst->exception_target) {
                     return -1;
                 }
@@ -9942,7 +9990,7 @@ static bool qore_aot_get_composed_int(const QoreIRFunction& func,
     if (q_env_is_set("QORE_DISABLE_AOT_COMPOSED_INT_IMPORT")
             || !sig.numParams() || sig.numParams() > 2
             || func.blocks.size() != 1 || !func.blocks.front()
-            || func.blocks.front()->instructions.size() > 12) {
+            || qore_aot_code_size_exceeds(*func.blocks.front(), 12)) {
         return false;
     }
 
@@ -10006,6 +10054,9 @@ static bool qore_aot_get_composed_int(const QoreIRFunction& func,
     AOTComposedIntSourceKind source_kind = AOTComposedIntSourceKind::None;
     const QoreIRReturnInstruction* ret = nullptr;
     for (const auto& inst_ptr : func.blocks.front()->instructions) {
+        if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+            continue;
+        }
         if (!inst_ptr || inst_ptr->exception_target || ret) {
             return false;
         }
@@ -10140,7 +10191,7 @@ static bool qore_aot_get_context_int(const QoreIRFunction& func,
     if (q_env_is_set("QORE_DISABLE_AOT_CONTEXT_INT_IMPORT")
             || sig.numParams() != 1 || func.blocks.size() != 1
             || !func.blocks.front()
-            || func.blocks.front()->instructions.size() > 12) {
+            || qore_aot_code_size_exceeds(*func.blocks.front(), 12)) {
         return false;
     }
     auto param = func.param_local_vars.find(0);
@@ -10174,6 +10225,9 @@ static bool qore_aot_get_context_int(const QoreIRFunction& func,
     std::unordered_map<uint32_t, AffineValue> values;
     const QoreIRReturnInstruction* ret = nullptr;
     for (const auto& inst_ptr : func.blocks.front()->instructions) {
+        if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+            continue;
+        }
         if (!inst_ptr || inst_ptr->exception_target || ret) {
             return false;
         }
@@ -10275,7 +10329,7 @@ static bool qore_aot_get_global_int(const QoreIRFunction& func,
     if (q_env_is_set("QORE_DISABLE_AOT_GLOBAL_INT_IMPORT")
             || sig.numParams() != 1 || func.blocks.size() != 1
             || !func.blocks.front()
-            || func.blocks.front()->instructions.size() > 12) {
+            || qore_aot_code_size_exceeds(*func.blocks.front(), 12)) {
         return false;
     }
     auto param = func.param_local_vars.find(0);
@@ -10309,6 +10363,9 @@ static bool qore_aot_get_global_int(const QoreIRFunction& func,
     std::unordered_map<uint32_t, AffineValue> values;
     const QoreIRReturnInstruction* ret = nullptr;
     for (const auto& inst_ptr : func.blocks.front()->instructions) {
+        if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+            continue;
+        }
         if (!inst_ptr || inst_ptr->exception_target || ret) {
             return false;
         }
@@ -11326,6 +11383,9 @@ static bool qore_aot_collect_int_expression_summaries(
         if (func->blocks.size() >= 3) {
             const QoreIRBranchIfInstruction* branch = nullptr;
             for (const auto& inst_ptr : func->blocks.front()->instructions) {
+                if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+                    continue;
+                }
                 if (!inst_ptr || inst_ptr->exception_target || branch) {
                     state = VisitState::Failed;
                     return false;
@@ -11385,6 +11445,9 @@ static bool qore_aot_collect_int_expression_summaries(
                 std::unordered_map<const LocalVar*, int> nested_locals = local_values;
                 const QoreIRBranchIfInstruction* nested_branch = nullptr;
                 for (const auto& inst_ptr : nested_block->instructions) {
+                    if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+                        continue;
+                    }
                     if (!inst_ptr || inst_ptr->exception_target || nested_branch) {
                         state = VisitState::Failed;
                         return false;
@@ -11435,6 +11498,9 @@ static bool qore_aot_collect_int_expression_summaries(
                     std::unordered_map<const LocalVar*, int> block_locals = initial_locals;
                     const QoreIRReturnInstruction* ret = nullptr;
                     for (const auto& inst_ptr : block->instructions) {
+                        if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+                            continue;
+                        }
                         if (!inst_ptr || inst_ptr->exception_target || ret) {
                             return -1;
                         }
@@ -11497,6 +11563,9 @@ static bool qore_aot_collect_int_expression_summaries(
                     block_values = values;
                     block_locals = local_values;
                     for (const auto& inst_ptr : block->instructions) {
+                        if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+                            continue;
+                        }
                         if (!inst_ptr || inst_ptr->exception_target || target) {
                             return false;
                         }
@@ -11572,6 +11641,9 @@ static bool qore_aot_collect_int_expression_summaries(
                 std::unordered_map<uint32_t, int> merge_values = values;
                 const QoreIRReturnInstruction* ret = nullptr;
                 for (const auto& inst_ptr : true_merge->instructions) {
+                    if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+                        continue;
+                    }
                     if (!inst_ptr || inst_ptr->exception_target || ret) {
                         state = VisitState::Failed;
                         return false;
@@ -11638,6 +11710,9 @@ static bool qore_aot_collect_int_expression_summaries(
                 std::unordered_map<const LocalVar*, int> block_locals = local_values;
                 const QoreIRReturnInstruction* ret = nullptr;
                 for (const auto& inst_ptr : block->instructions) {
+                    if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+                        continue;
+                    }
                     if (!inst_ptr || inst_ptr->exception_target || ret) {
                         return -1;
                     }
@@ -11677,6 +11752,9 @@ static bool qore_aot_collect_int_expression_summaries(
 
         const QoreIRReturnInstruction* ret = nullptr;
         for (const auto& inst_ptr : func->blocks.front()->instructions) {
+            if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+                continue;
+            }
             if (!inst_ptr || inst_ptr->exception_target || ret) {
                 state = VisitState::Failed;
                 return false;
@@ -13291,6 +13369,9 @@ bool qore_ir_resolve_batch_function_summaries(
         const QoreIRInstruction* comparison = nullptr;
         const QoreIRBranchIfInstruction* branch = nullptr;
         for (const auto& inst_ptr : entry->instructions) {
+            if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+                continue;
+            }
             if (!inst_ptr || inst_ptr->exception_target || branch) {
                 return false;
             }
@@ -13345,6 +13426,9 @@ bool qore_ir_resolve_batch_function_summaries(
             std::unordered_map<uint32_t, ScalarIntOperand> values = entry_values;
             const QoreIRReturnInstruction* ret = nullptr;
             for (const auto& inst_ptr : block->instructions) {
+                if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+                    continue;
+                }
                 if (!inst_ptr || inst_ptr->exception_target || ret) {
                     return false;
                 }
@@ -13414,6 +13498,9 @@ bool qore_ir_resolve_batch_function_summaries(
                 }
                 const QoreIRReturnInstruction* ret = nullptr;
                 for (const auto& inst_ptr : block->instructions) {
+                    if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+                        continue;
+                    }
                     if (!inst_ptr || inst_ptr->exception_target || ret) {
                         return false;
                     }
@@ -13509,12 +13596,15 @@ bool qore_ir_resolve_batch_function_summaries(
             std::string& member_name) -> bool {
         if (q_env_is_set("QORE_DISABLE_AOT_OBJECT_GETTER_IMPORT") || !func
                 || num_params || func->blocks.size() != 1
-                || func->blocks.front()->instructions.size() > 4) {
+                || qore_aot_code_size_exceeds(*func->blocks.front(), 4)) {
             return false;
         }
         const QoreIRSelfMemberInstruction* load = nullptr;
         const QoreIRReturnInstruction* ret = nullptr;
         for (const auto& inst_ptr : func->blocks.front()->instructions) {
+            if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+                continue;
+            }
             if (!inst_ptr || inst_ptr->exception_target || ret) {
                 return false;
             }
@@ -13548,7 +13638,7 @@ bool qore_ir_resolve_batch_function_summaries(
             std::vector<int8_t>& params) -> bool {
         if (!func || !sig || !sig->selfid || !sig->numParams()
                 || sig->numParams() > INT8_MAX || func->blocks.size() != 1
-                || func->blocks.front()->instructions.size() > 64) {
+                || qore_aot_code_size_exceeds(*func->blocks.front(), 64)) {
             return false;
         }
 
@@ -13574,6 +13664,9 @@ bool qore_ir_resolve_batch_function_summaries(
         std::vector<std::pair<std::string, int8_t>> assignments;
         bool returned = false;
         for (const auto& inst_ptr : func->blocks.front()->instructions) {
+            if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+                continue;
+            }
             if (!inst_ptr || inst_ptr->exception_target || returned) {
                 return false;
             }
@@ -13677,7 +13770,7 @@ bool qore_ir_resolve_batch_function_summaries(
             int8_t& compound_value_param, uint8_t& compound_op) -> bool {
         if (!func || !sig || !sig->selfid || !sig->numParams()
                 || sig->numParams() > INT8_MAX || func->blocks.size() != 1
-                || func->blocks.front()->instructions.size() > 20) {
+                || qore_aot_code_size_exceeds(*func->blocks.front(), 20)) {
             return false;
         }
 
@@ -13705,6 +13798,9 @@ bool qore_ir_resolve_batch_function_summaries(
         bool assigned = false;
         bool returned = false;
         for (const auto& inst_ptr : func->blocks.front()->instructions) {
+            if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+                continue;
+            }
             if (!inst_ptr || inst_ptr->exception_target || returned) {
                 return false;
             }
@@ -14414,7 +14510,7 @@ bool qore_ir_resolve_batch_function_summaries(
             const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
             if (!func || !sig || sig->numParams() != 1 || func->blocks.size() != 1
                     || !func->blocks.front()
-                    || func->blocks.front()->instructions.size() > 24) {
+                    || qore_aot_code_size_exceeds(*func->blocks.front(), 24)) {
                 return false;
             }
             auto param_it = func->param_local_vars.find(0);
