@@ -30326,3 +30326,67 @@ An initial preparation check incorrectly counted five standard JMH non-inlining 
 All raw timings, source, compiler settings, optimizer controls and observed per-layout/process ranges are preserved in the [complete evidence](results-forwarding-java-macos-arm64.json); see the [62-check audit](audit-forwarding-java.md). No owned build/test/profile/heavy scan overlapped timing. Shared-host load, frequency, thermals and affinity are uncontrolled. Observed ranges are not confidence intervals; no sample was discarded or historical epoch pooled. Qore and Java lifetime, dynamic-type, stack-diagnostic and runtime obligations differ. No universal parity, weighted application gain or global maximum is claimed.
 
 The two-call outer bodies remain outside the five-instruction scalar self-forwarding proof and cost about 200–217ns/item here. Profile their ordinary receiver/context path and inspect whether a bounded receiver-aware native companion can admit pure nested calls while retaining per-call guards, logical frames and exceptional restoration. In parallel, establish whether immutable explicit generic-call checks can move to forwarding-descriptor binding. Freeze the installed optimized baseline and measure before editing; choose retention from the target gain and broader controls.
+
+
+## Resolved native method calls (2026-10-30)
+
+Parse-resolved unary instance calls can use typed integer/floating PIC entries after stronger object summaries and batch entries have been considered. The compiler excludes static, pseudo and explicitly generic sites. Separate additive v1/v2 runtime helpers preserve ordinary class-ID dispatch: an exact-class hit must match the parser's selected method and variant; subclasses retain the ordinary name-resolved full-key entry. Existing live object, Program, access, options, epoch, body, debugger and stack guards remain, as do generic fallback, ownership, local invalidation and exception routing. Existing name-dispatched helper instantiations gain no extra runtime checks.
+
+This targets nested calls that previously boxed arguments and used the general argument-array dispatcher. Some arithmetic consumers still rebox native results; extending their native result continuations remains separate work. QORE_DISABLE_AOT_RESOLVED_METHOD_NATIVE_CONTINUATION disables the new compiler lowering. Existing native-entry/continuation controls still apply, and QORE_DISABLE_AOT_RESOLVED_METHOD_CACHE retains its ordinary same-class runtime policy.
+
+The table reports fresh optimized paired confirmation, whole-kernel ns/item. Baseline runtime is9cd852e16e, with unchanged production sources through evidence commit a86ada8fd9. Both use -O3 -DNDEBUG, allocation tracking off, Apple clang2100.4.1.1/SDK27.2/LLVM22.1.8 on M4 Pro; AOT uses -O3 --strip-source. Three layouts and three process forks per layout/variant each collect three warmup and three measured windows of at least100ms,4096items and seed7. Negative changes are faster.
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change
+|matched:forward_float|34.2069|33.8688|-0.99%
+|matched:forward_int|29.7204|29.6643|-0.19%
+|matched:context_int|204.0425|173.9558|-14.75%
+|matched:context_float|218.1838|186.4060|-14.56%
+|local:direct_call|1.5774|1.5668|-0.67%
+|local:method_call|1.6188|1.6421|+1.44%
+|local:polymorphic_call|22.5065|22.7877|+1.25%
+|local:polymorphic_float_call|23.0750|22.5480|-2.28%
+|local:boxed_int_method_fallback|33.6656|33.7322|+0.20%
+|local:boxed_float_method_fallback|35.8274|36.4980|+1.87%
+|local:boxed_int_method_effect|94.4840|92.0601|-2.57%
+|local:list_mutate|122.9945|122.8545|-0.11%
+|local:temporary_list|1.6772|1.6724|-0.28%
+|local:polymorphic_expression_call|11.2786|11.2442|-0.30%
+|local:polymorphic_float_expression_call|11.1243|11.1582|+0.30%
+|micro:polymorphic_call|80.8651|82.7517|+2.33%
+|micro:polymorphic_float_call|84.4239|82.0872|-2.77%
+|micro:boxed_int_method_call|108.5904|106.8268|-1.62%
+|micro:boxed_float_method_call|113.9701|112.1241|-1.62%
+|micro:boxed_int_method_fallback|122.1879|122.4763|+0.24%
+|micro:boxed_float_method_fallback|132.1283|128.6259|-2.65%
+|micro:boxed_int_method_effect|182.3656|182.4627|+0.05%
+|micro:indirect_call|8.7311|8.6551|-0.87%
+|micro:closure_call|19.0244|18.8541|-0.90%
+|micro:closure_capture|24.7213|24.6932|-0.11%
+|micro:list_read|2.9860|2.9793|-0.23%
+|micro:list_build|24.3180|24.1757|-0.59%
+|micro:list_mutate|123.5523|122.6036|-0.77%
+|micro:temporary_hash|1.6954|1.6890|-0.37%
+|micro:polymorphic_expression_call|69.9147|70.8270|+1.30%
+|micro:polymorphic_float_expression_call|72.0981|71.1973|-1.25%
+|float:callback_local_float_return|0.8756|0.8700|-0.63%
+|float:typed_local_int_unary|1.2292|1.2347|+0.44%
+|float:callback_loop_float_return|5.0780|5.0928|+0.29%
+|mixed:csv_report|959.3756|960.2583|+0.09%
+|mixed:object_orders|3375.2747|3443.0847|+2.01%
+|mixed:callback_pipeline|95.8248|97.4724|+1.72%
+|mixed:text_index|1377.6539|1376.5960|-0.08%
+|probe:object_short|1703.7869|1717.2770|+0.79%
+|probe:effect_short|1776.5648|1776.0300|-0.03%
+|probe:string_result_loop|569.4261|565.3844|-0.71%
+
+Retention decision: Both nested two-call targets improve in every layout and repeat from pilot to broad confirmation: integer14.75% and floating14.56%. Accept bounded observed control costs under the user-authorized broader tradeoff: object orders+2.01%, callback pipeline+1.72%, imported integer virtual+2.33%, local floating field+1.87% and final method+1.44%. Same-runtime enabled/disabled attribution finds orders+1.36% and pipeline+0.45%, with layout variation; it does not precisely isolate instruction cost. No weighted application gain, fresh Java ratio or global ceiling is claimed.
+
+A separate same-runtime enabled/disabled attribution (72processes/216windows, three layouts/forks) measures the effect of the new compiler lowering with a fixed candidate runtime. Disabled-to-enabled ns/item: orders3468.7602 to3515.9767 (+1.36%), pipeline96.3584 to96.7930 (+0.45%), CSV950.4019 to957.2942 (+0.73%), text1363.2917 to1372.4879 (+0.67%). Only the orderReport function contains a new typed attempt; pipeline LLVM bodies are identical. These observations include layout/shared-host effects and do not precisely assign instruction cost.
+
+The20-workload pilot and41-workload confirmation preserve1098processes/3294measured windows, independently replayed from raw output. Every slower control remains in the report; no weighted application gain follows from this collection. Existing runtime helper instruction counts and native stack sizes remain unchanged; four new helper instantiations add13384 executable bytes. Direct/final-method control LLVM bodies are identical. These facts do not establish the cause of small control changes.
+
+Release and fullDebug each pass9fixtures/16cases/4697assertions; Debug native runners pass4003/5668. Final preparation verifies4698reference outputs per variant,36LLVM modules and144child exits. Both typed attempts and ordinary fallbacks remain in the nested integer/floating bodies. All391shared qlib aliases and hashes were restored to Release after Debug. No owned build/test/profile/heavy scan overlapped timing.
+
+Qualification exposed a pre-existing scalar-parameter reflection mismatch: AST observes a changed native parameter, while baseline and candidate AOT O0/O3 reuse its previous value. The IR interpreter also lacks that native parameter in the reflective frame. Reproducers and failed qualification receipts are preserved; this optimization does not claim to fix them. The final regression uses boxed caller locals to check reflective fallback invalidation in AST/IR/JIT/tiered and AOT, without skipping modes. A separate visibility/reload investigation is required before broadening explicit-context companions.
+
+See the [complete evidence](results-resolved-native-method-macos-arm64.json) and [62-item audit](audit-resolved-native-method.md). No new Java/develop ratio, universal parity, global ceiling, sanitizer or full-project claim is made. Next work investigates the preserved reflection issue, native arithmetic result continuations, and bounded exact-receiver summary specialization.

@@ -11585,9 +11585,10 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
 
 bool QoreIRToLLVM::tryEmitAotNameMethodNativeContinuation(const QoreIRInstruction* inst,
         llvm::Value* base, llvm::Module& module, llvm::Function* llvm_func,
-        std::string& error) {
+        std::string& error, bool resolved_site) {
     if (!aot_mode || !current_ir_func || inst->operands.size() != 2
-            || q_env_is_set("QORE_DISABLE_AOT_NAME_METHOD_NATIVE_CONTINUATION")
+            || q_env_is_set(resolved_site ? "QORE_DISABLE_AOT_RESOLVED_METHOD_NATIVE_CONTINUATION"
+                : "QORE_DISABLE_AOT_NAME_METHOD_NATIVE_CONTINUATION")
             || q_env_is_set("QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY")
             || q_env_is_set("QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION")) {
         return false;
@@ -11597,16 +11598,18 @@ bool QoreIRToLLVM::tryEmitAotNameMethodNativeContinuation(const QoreIRInstructio
     const QoreIRInvokeDotEvalMethodDirectInstruction* invoke = nullptr;
     if (inst->opcode == QoreIROpcode::DotEvalMethodDirect) {
         const auto* call = static_cast<const QoreIRDotEvalMethodDirectInstruction*>(inst);
-        if (call->method || call->qc || call->variant || call->pseudo
-                || !call->fallback_method_name || call->explicit_type_param_inst) {
+        if (call->pseudo || call->explicit_type_param_inst
+                || (resolved_site ? (!call->method || !call->variant || call->method->isStatic())
+                    : (call->method || call->qc || call->variant || !call->fallback_method_name))) {
             return false;
         }
         expr = &call->expr;
         has_ref_args = call->has_ref_args;
     } else if (inst->opcode == QoreIROpcode::InvokeDotEvalMethodDirect) {
         invoke = static_cast<const QoreIRInvokeDotEvalMethodDirectInstruction*>(inst);
-        if (invoke->method || invoke->qc || invoke->variant || invoke->pseudo
-                || !invoke->fallback_method_name || invoke->explicit_type_param_inst) {
+        if (invoke->pseudo || invoke->explicit_type_param_inst
+                || (resolved_site ? (!invoke->method || !invoke->variant || invoke->method->isStatic())
+                    : (invoke->method || invoke->qc || invoke->variant || !invoke->fallback_method_name))) {
             return false;
         }
         expr = &invoke->expr;
@@ -11673,7 +11676,8 @@ bool QoreIRToLLVM::tryEmitAotNameMethodNativeContinuation(const QoreIRInstructio
         }
         types.insert(types.end(), {ptr_type, ptr_type});
         args.insert(args.end(), {xsink_arg, fast_runtime_config});
-        std::string helper_name = is_float ? "qore_rt_try_method_float_unary_" : "qore_rt_try_method_int_unary_";
+        std::string helper_name = resolved_site ? "qore_rt_try_resolved_method_" : "qore_rt_try_method_";
+        helper_name += is_float ? "float_unary_" : "int_unary_";
         helper_name += boxed_argument ? "v2" : "v1";
         auto helper = module.getOrInsertFunction(helper_name, llvm::FunctionType::get(i32_type, types, false));
         auto* handled = builder->CreateCall(helper, args);
@@ -26236,6 +26240,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     }
                 }
             }
+            // Retain the stronger summary/batch shortcuts. Only an otherwise
+            // ordinary resolved call needs the guarded native PIC continuation.
+            if (!aot_object_getter && !aot_object_set_get && !aot_object_compound_get
+                    && !aot_object_summary_callee && !aot_object_batch_callee
+                    && tryEmitAotNameMethodNativeContinuation(inst, base_boxed, module,
+                        llvm_func, error, true)) {
+                return true;
+            }
+            if (!error.empty()) { return false; }
             int string_predicate_id = (direct_inst->pseudo
                     && direct_inst->pseudo_base_known_assigned_string
                     && direct_inst->pseudo_arg0_known_assigned_string
@@ -27185,6 +27198,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     }
                 }
             }
+            if (!aot_object_getter && !aot_object_set_get && !aot_object_compound_get
+                    && !aot_object_batch_callee
+                    && tryEmitAotNameMethodNativeContinuation(inst, base_boxed, module,
+                        llvm_func, error, true)) {
+                return true;
+            }
+            if (!error.empty()) { return false; }
             int string_predicate_id = (invoke_inst->pseudo
                     && invoke_inst->pseudo_base_known_assigned_string
                     && invoke_inst->pseudo_arg0_known_assigned_string

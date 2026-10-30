@@ -1206,6 +1206,61 @@ int qore_rt_try_method_int_unary_v2(QoreAOTContext* ctx, int32_t slot, uint64_t 
 int qore_rt_try_method_float_unary_v2(QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
     double arg, double* result, uint64_t* boxed_result, ExceptionSink* xsink, RuntimeConfig* rc);
 
+//! Try a parse-resolved integer method while preserving its selected overload.
+//! @param ctx caller context owning the call-target slot
+//! @param slot resolved non-static instance target, proven to have no explicit type instantiation
+//! @param base_bits borrowed strong receiver; ownership is unchanged
+//! @param arg assigned full-width integer without coercion
+//! @param result initialized native result for return code one; check xsink before use
+//! @param xsink exception sink, including stack exhaustion
+//! @param rc live same-thread invocation view
+//! @return zero for effect-free fallback, one for a handled native result
+//! @note Same-class identity follows ordinary class-ID dispatch and retains the parse-selected variant;
+//! subclasses use the full live name-dispatch key. Existing argument cleanups remain caller-owned.
+int qore_rt_try_resolved_method_int_unary_v1(QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
+    int64_t arg, int64_t* result, ExceptionSink* xsink, RuntimeConfig* rc);
+
+//! Floating counterpart of qore_rt_try_resolved_method_int_unary_v1.
+//! @param ctx caller context owning the call-target slot
+//! @param slot resolved non-static instance target, proven to have no explicit type instantiation
+//! @param base_bits borrowed strong receiver; ownership is unchanged
+//! @param arg assigned double, including escaped representations, without coercion
+//! @param result initialized native result for return code one; check xsink before use
+//! @param xsink exception sink, including stack exhaustion
+//! @param rc live same-thread invocation view
+//! @return zero for effect-free fallback, one for a handled native result
+//! @note Retains the same class-ID, selected-variant and ownership contract as the integer entry.
+int qore_rt_try_resolved_method_float_unary_v1(QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
+    double arg, double* result, ExceptionSink* xsink, RuntimeConfig* rc);
+
+//! Try a resolved integer method, retaining a full-key match for ordinary dispatch on a native body miss.
+//! @param ctx caller context owning the call-target slot
+//! @param slot resolved non-static instance target, proven to have no explicit type instantiation
+//! @param base_bits borrowed strong receiver; ownership is unchanged
+//! @param arg assigned full-width integer without coercion
+//! @param result native result initialized only for return code one; check xsink before use
+//! @param boxed_result owned boxed result initialized only for return code two
+//! @param xsink exception sink for either handled path
+//! @param rc live same-thread invocation view
+//! @return zero for effect-free fallback, one for a native result, two for an ordinary boxed result
+//! @note Preserves v1's selected-variant contract; a boxed result is never a native type proof.
+int qore_rt_try_resolved_method_int_unary_v2(QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
+    int64_t arg, int64_t* result, uint64_t* boxed_result, ExceptionSink* xsink, RuntimeConfig* rc);
+
+//! Floating counterpart of qore_rt_try_resolved_method_int_unary_v2.
+//! @param ctx caller context owning the call-target slot
+//! @param slot resolved non-static instance target, proven to have no explicit type instantiation
+//! @param base_bits borrowed strong receiver; ownership is unchanged
+//! @param arg assigned double, including escaped representations, without coercion
+//! @param result native result initialized only for return code one; check xsink before use
+//! @param boxed_result owned boxed result initialized only for return code two
+//! @param xsink exception sink for either handled path
+//! @param rc live same-thread invocation view
+//! @return zero for effect-free fallback, one for a native result, two for an ordinary boxed result
+//! @note Preserves the integer entry's class-ID, selected-variant and ownership contract.
+int qore_rt_try_resolved_method_float_unary_v2(QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
+    double arg, double* result, uint64_t* boxed_result, ExceptionSink* xsink, RuntimeConfig* rc);
+
 //! Publish a single-member scalar companion only for the supplied normal body identity.
 //! @param ctx runtime-owned method context
 //! @param normal body identity rechecked at dispatch

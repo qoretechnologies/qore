@@ -1606,3 +1606,6 @@ The [post-paired-frame optimized checkpoint](RESULTS.md#optimized-checkpoint-aft
 
 
 The [matched forwarding comparison](RESULTS.md#matched-forwarding-comparison-with-java-2026-10-30) adds four same-program kernels against develop and both normal Java C2 and leaf-only boundary controls. It identifies the two-call outer body as a substantial remaining gap.
+
+
+[Resolved native method calls](RESULTS.md#resolved-native-method-calls-2026-10-30) extend typed scalar dispatch to eligible parse-resolved sites while retaining selected overloads and ordinary fallback. The full41-workload table reports all gains and costs; see the [audit](audit-resolved-native-method.md).

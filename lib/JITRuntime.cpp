@@ -516,6 +516,14 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_bind_method_float_unary_v3) },
     { "qore_rt_try_method_float_unary_v1",
         reinterpret_cast<void*>(&qore_rt_try_method_float_unary_v1) },
+    { "qore_rt_try_resolved_method_int_unary_v1",
+        reinterpret_cast<void*>(&qore_rt_try_resolved_method_int_unary_v1) },
+    { "qore_rt_try_resolved_method_float_unary_v1",
+        reinterpret_cast<void*>(&qore_rt_try_resolved_method_float_unary_v1) },
+    { "qore_rt_try_resolved_method_int_unary_v2",
+        reinterpret_cast<void*>(&qore_rt_try_resolved_method_int_unary_v2) },
+    { "qore_rt_try_resolved_method_float_unary_v2",
+        reinterpret_cast<void*>(&qore_rt_try_resolved_method_float_unary_v2) },
     { "qore_rt_bind_closure_int_unary_v1",
         reinterpret_cast<void*>(&qore_rt_bind_closure_int_unary_v1) },
     { "qore_rt_bind_closure_int_unary_v2",
@@ -21015,7 +21023,10 @@ __attribute__((noinline)) static void qore_rt_invoke_eager_scalar_method(QoreObj
     }
 }
 
-template <typename Scalar, bool MatchedFallback = false>
+static bool qore_rt_aot_object_method_needs_runtime_dispatch(
+    const QoreAOTCallTarget& target, const QoreObject* object);
+
+template <typename Scalar, bool MatchedFallback = false, bool ResolvedSite = false>
 __attribute__((always_inline)) static int qore_rt_try_method_unary(QoreAOTContext* caller_ctx,
         int32_t slot, uint64_t base_bits, Scalar arg, Scalar* result,
         ExceptionSink* xsink, RuntimeConfig* rc, uint64_t* boxed_result = nullptr) {
@@ -21058,6 +21069,17 @@ __attribute__((always_inline)) static int qore_rt_try_method_unary(QoreAOTContex
     if (!object->isValid() || qore_object_private::get(*object)->sandbox_provenance) {
         return 0;
     }
+    bool resolved = false;
+    if constexpr (ResolvedSite) {
+        if (!target.method || !target.variant || target.method->isStatic()) {
+            return 0;
+        }
+        resolved = !qore_rt_aot_object_method_needs_runtime_dispatch(target, object);
+        static constinit QoreEnvFlag disabled_env("QORE_DISABLE_AOT_RESOLVED_METHOD_CACHE");
+        if (resolved && disabled_env.get()) {
+            return 0;
+        }
+    }
     const qore_class_private* class_ctx = RuntimeConfigNativeAccess::getClass(*rc);
     // Match the ordinary dispatch path: runtime calls use the committed hierarchy.
     if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*object->getClass(), class_ctx)) {
@@ -21084,6 +21106,13 @@ __attribute__((always_inline)) static int qore_rt_try_method_unary(QoreAOTContex
                 && candidate->receiver_type_info == receiver_type && candidate->class_ctx == class_ctx
                 && qore_rt_match_aot_native_scalar_key(*candidate, pgm, floating)
                 && candidate->parse_options == parse_options && candidate->dispatch_epoch == epoch) {
+            if constexpr (ResolvedSite) {
+                // Same-class calls keep the parser's overload. Subclasses use
+                // the ordinary name-resolved entry under the complete live key.
+                if (resolved && (candidate->method != target.method || candidate->variant != target.variant)) {
+                    continue;
+                }
+            }
             cached = candidate;
             break;
         }
@@ -21236,6 +21265,32 @@ extern "C" DLLEXPORT int qore_rt_try_method_float_unary_v2(QoreAOTContext* calle
         int32_t slot, uint64_t base_bits, double arg, double* result, uint64_t* boxed_result,
         ExceptionSink* xsink, RuntimeConfig* rc) {
     return qore_rt_try_method_unary<double, true>(caller_ctx, slot, base_bits,
+        arg, result, xsink, rc, boxed_result);
+}
+
+extern "C" DLLEXPORT int qore_rt_try_resolved_method_int_unary_v1(QoreAOTContext* caller_ctx,
+        int32_t slot, uint64_t base_bits, int64_t arg, int64_t* result,
+        ExceptionSink* xsink, RuntimeConfig* rc) {
+    return qore_rt_try_method_unary<int64_t, false, true>(caller_ctx, slot, base_bits, arg, result, xsink, rc);
+}
+
+extern "C" DLLEXPORT int qore_rt_try_resolved_method_float_unary_v1(QoreAOTContext* caller_ctx,
+        int32_t slot, uint64_t base_bits, double arg, double* result,
+        ExceptionSink* xsink, RuntimeConfig* rc) {
+    return qore_rt_try_method_unary<double, false, true>(caller_ctx, slot, base_bits, arg, result, xsink, rc);
+}
+
+extern "C" DLLEXPORT int qore_rt_try_resolved_method_int_unary_v2(QoreAOTContext* caller_ctx,
+        int32_t slot, uint64_t base_bits, int64_t arg, int64_t* result, uint64_t* boxed_result,
+        ExceptionSink* xsink, RuntimeConfig* rc) {
+    return qore_rt_try_method_unary<int64_t, true, true>(caller_ctx, slot, base_bits,
+        arg, result, xsink, rc, boxed_result);
+}
+
+extern "C" DLLEXPORT int qore_rt_try_resolved_method_float_unary_v2(QoreAOTContext* caller_ctx,
+        int32_t slot, uint64_t base_bits, double arg, double* result, uint64_t* boxed_result,
+        ExceptionSink* xsink, RuntimeConfig* rc) {
+    return qore_rt_try_method_unary<double, true, true>(caller_ctx, slot, base_bits,
         arg, result, xsink, rc, boxed_result);
 }
 

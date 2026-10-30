@@ -1110,9 +1110,11 @@ private:
     // narrowing its return contract. A proven scalar store or conversion consumes
     // the native result; other consumers own a boxed result. A miss retains the
     // original boxed name-dispatch path and arbitrary override return type.
+    // Resolved sites are attempted only after object summaries and batch entries;
+    // their separate runtime ABI also preserves the parse-selected variant.
     bool tryEmitAotNameMethodNativeContinuation(const QoreIRInstruction* inst,
             llvm::Value* base, llvm::Module& module, llvm::Function* llvm_func,
-            std::string& error);
+            std::string& error, bool resolved_site = false);
 
     // Consume the single-use native result on a hit, retaining ordinary boxed
     // conversion and ownership on a miss. Returns nullptr without a continuation.
