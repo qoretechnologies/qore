@@ -3746,12 +3746,64 @@ public:
         return rv;
     }
 
+    //! returns the registered Program with the given ID without a reference, or nullptr
+    /** The Program can be used only while the caller holds a reference to it; see getReferencedProgram()
+    */
     DLLLOCAL static QoreProgram* resolveProgramId(qore_program_id_t programId) {
         printd(5, "qore_program_private::resolveProgramId(" QLLD ")\n", (int64)programId);
         QoreAutoRWReadLocker al(&lck_programMap);
         programid_to_program_map_t::iterator i = programid_to_program_map.find(programId);
         return i == programid_to_program_map.end() ? nullptr : i->second;
     }
+
+    //! returns the registered Program with the given ID with a reference for the caller, or nullptr
+    /** A registered Program has references: it leaves the registry when its last reference is released, under the
+        registry lock, where the reference is taken here (see unregisterLastReference())
+    */
+    DLLLOCAL static QoreProgram* getReferencedProgram(qore_program_id_t programId) {
+        QoreAutoRWReadLocker al(&lck_programMap);
+        programid_to_program_map_t::iterator i = programid_to_program_map.find(programId);
+        if (i == programid_to_program_map.end()) {
+            return nullptr;
+        }
+        i->second->ref();
+        return i->second;
+    }
+
+    //! returns a new ProgramControl object for the given Program, or nullptr if the Program has no references
+    /** The object holds its own reference to the Program.  ProgramControl objects are not cached: a cached object
+        could be found after its last reference had been released and while it is being destroyed.
+
+        @param p a Program whose memory is valid: one that is running the calling thread's code or that the caller
+        holds a reference to, or one read from a breakpoint while the registry lock is held (see
+        QoreBreakpoint::getReferencedProgram())
+    */
+    DLLLOCAL static QoreObject* getProgramControl(QoreProgram* p) {
+        {
+            QoreAutoRWReadLocker al(&lck_programMap);
+            if (!isRegisteredIntern(p)) {
+                return nullptr;
+            }
+            p->ref();
+        }
+        return new QoreObject(QC_PROGRAMCONTROL, getProgram(), p);
+    }
+
+    //! returns True if the given Program is registered, i.e. it has references; the registry lock must be held
+    DLLLOCAL static bool isRegisteredIntern(const QoreProgram* p) {
+        programid_to_program_map_t::const_iterator i = programid_to_program_map.find(p->priv->programId);
+        return i != programid_to_program_map.end() && i->second == p;
+    }
+
+    //! releases the last reference of the Program if the given one is the last one
+    /** The Program leaves the registry as its reference count reaches zero, with the registry lock held, so that a
+        registered Program always has references and a lookup, which takes its reference with the lock held, never
+        finds a Program whose last reference has been released.  References that are not the last one are released
+        without the lock.
+
+        @return true if the last reference was released
+    */
+    DLLLOCAL bool derefUnregister();
 
     DLLLOCAL bool checkAllowDebugging(ExceptionSink *xsink) {
         if (pwo.parse_options & PO_NO_DEBUGGING) {
@@ -3881,37 +3933,6 @@ public:
         return st;
     }
 
-    DLLLOCAL void registerQoreObject(QoreObject *o, ExceptionSink* xsink) {
-        printd(5, "qore_program_private::registerQoreObject() pgm: %p, pgmid: " QLLD "\n", pgm, (int64)getProgramId());
-        QoreAutoRWWriteLocker al(&qore_program_private::lck_programMap);
-        qore_program_to_object_map_t::iterator i = qore_program_private::qore_program_to_object_map.find(pgm);
-        assert(i != qore_program_private::qore_program_to_object_map.end());
-        if (i->second && i->second != o) {
-            xsink->raiseException("PROGRAM-ERROR", "The Program has already assigned QoreObject");
-        } else {
-            i->second = o;
-        }
-    }
-
-    DLLLOCAL void unregisterQoreObject(QoreObject *o, ExceptionSink* xsink) {
-        printd(5, "qore_program_private::unregisterQoreObject() pgm: %p, pgmid: " QLLD "\n", pgm, (int64)getProgramId());
-        QoreAutoRWWriteLocker al(&qore_program_private::lck_programMap);
-        qore_program_to_object_map_t::iterator i = qore_program_private::qore_program_to_object_map.find(pgm);
-        assert(i != qore_program_private::qore_program_to_object_map.end());
-        assert(i->second == o);
-        i->second = nullptr;
-    }
-
-    DLLLOCAL QoreObject* findQoreObject() {
-        QoreAutoRWReadLocker al(&lck_programMap);
-        qore_program_to_object_map_t::iterator i = qore_program_to_object_map.find(pgm);
-        if (i == qore_program_to_object_map.end()) {
-            return nullptr;
-        } else {
-            return i->second;
-        }
-    }
-
     DLLLOCAL int serialize(ExceptionSink* xsink, StreamWriter& sw);
     DLLLOCAL int deserialize(ExceptionSink* xsink, StreamReader& sr);
 
@@ -3928,37 +3949,21 @@ public:
 
     DLLLOCAL int initDeferredCode();
 
-    DLLLOCAL static QoreObject* getQoreObject(QoreProgram* pgm) {
-        QoreAutoRWWriteLocker al(&lck_programMap);
-        qore_program_to_object_map_t::iterator i = qore_program_to_object_map.find(pgm);
-        assert(i != qore_program_to_object_map.end());
-        if (i->second) {
-            printd(5, "qore_program_private::getQoreObject() pgm: %p, pgmid: " QLLD ", second: %p\n", i->first, (int64)i->first->getProgramId(), i->second);
-            i->second->ref();
-        } else {
-            i->second = new QoreObject(QC_PROGRAMCONTROL, getProgram(), pgm);
-            printd(5, "qore_program_private::getQoreObject() pgm: %p, pgmid: " QLLD ", new second: %p\n", pgm, (int64)pgm->getProgramId(), i->second);
-            pgm->ref();
-        }
-        return i->second;
-    }
-
+    //! returns new ProgramControl objects for all Programs that have references
     DLLLOCAL static QoreListNode* getAllQoreObjects(ExceptionSink *xsink) {
-        QoreAutoRWWriteLocker al(&lck_programMap);
-        ReferenceHolder<QoreListNode>l(new QoreListNode(QC_PROGRAMCONTROL->getTypeInfo()), xsink);
-
-        qore_program_to_object_map_t::iterator i = qore_program_to_object_map.begin();
-        while (i != qore_program_to_object_map.end()) {
-            if (i->second) {
-                printd(5, "qore_program_private::getAllQoreObjects() pgm: %p, pgmid: " QLLD ", second: %p\n", i->first, (int64)i->first->getProgramId(), i->second);
-                i->second->ref();
-            } else {
-                i->second = new QoreObject(QC_PROGRAMCONTROL, getProgram(), i->first);
-                printd(5, "qore_program_private::getAllQoreObjects() pgm: %p, pgmid: " QLLD ", new second: %p\n", i->first, (int64)i->first->getProgramId(), i->second);
-                i->first->ref();
+        std::vector<QoreProgram*> programs;
+        {
+            QoreAutoRWReadLocker al(&lck_programMap);
+            programs.reserve(programid_to_program_map.size());
+            for (auto& i : programid_to_program_map) {
+                i.second->ref();
+                programs.push_back(i.second);
             }
-            (*l)->push(i->second, nullptr);
-            ++i;
+        }
+        // each object takes over the reference taken above
+        ReferenceHolder<QoreListNode> l(new QoreListNode(QC_PROGRAMCONTROL->getTypeInfo()), xsink);
+        for (QoreProgram* p : programs) {
+            (*l)->push(new QoreObject(QC_PROGRAMCONTROL, getProgram(), p), nullptr);
         }
         return l.release();
     }
@@ -4029,11 +4034,12 @@ private:
     }
     friend class QoreBreakpoint;
 
-    typedef std::map<QoreProgram*, QoreObject*> qore_program_to_object_map_t;
-    static qore_program_to_object_map_t qore_program_to_object_map;
-    // Parallel programId -> QoreProgram* map maintained alongside
-    // qore_program_to_object_map under lck_programMap.  Provides O(1)
-    // resolveProgramId() lookup instead of an O(N) linear scan.
+    //! all Program instances, from their construction to their destruction, for fixupAllAfterFork() only
+    /** No reference is taken from this set: a Program without references stays in it until it is destroyed
+    */
+    typedef std::set<QoreProgram*> qore_program_set_t;
+    static qore_program_set_t qore_program_set;
+    //! the registered Programs: those with references, by ID; see derefUnregister()
     typedef std::unordered_map<qore_program_id_t, QoreProgram*> programid_to_program_map_t;
     static programid_to_program_map_t programid_to_program_map;
     static QoreRWLock lck_programMap; // to protect program list manipulation

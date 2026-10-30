@@ -95,9 +95,8 @@ ProgramControl::copy() {
 /**
  */
 ProgramControl::destructor() {
-   printd(5, "ProgramControl::constructor() pgm: %p, pgmid: " QLLD ", self: %p\n", p, (int64)p->getProgramId(), self);
-   p->unregisterQoreObject(self, xsink);
-   // the underlying object is created from C++ then it has reference and cannot be terminated
+   printd(5, "ProgramControl::destructor() pgm: %p, pgmid: " QLLD ", self: %p\n", p, (int64)p->getProgramId(), self);
+   // the object holds its own reference to the Program
    p->deref(xsink);
 }
 
@@ -195,21 +194,25 @@ int ProgramControl::getProgramId() [flags=RET_VALUE_ONLY;] {
 
  */
 static ProgramControl ProgramControl::resolveProgramId(int program_id) [flags=NAMED_ARGS;dom=DEBUGGER] {
-   // a Program ID is positive
-   QoreProgram* pgm = program_id > 0 ? QoreProgram::resolveProgramId(static_cast<qore_program_id_t>(program_id))
+   // a Program ID is positive; the Program is returned with a reference, which the new object takes over
+   QoreProgram* pgm = program_id > 0
+      ? qore_program_private::getReferencedProgram(static_cast<qore_program_id_t>(program_id))
       : nullptr;
    if (!pgm) {
       return xsink->raiseException("PROGRAM-ERROR", "cannot find program for programId (" QLLD ")", (int64)program_id);
    }
-   return QoreProgram::getQoreObject(pgm);
+   return new QoreObject(QC_PROGRAMCONTROL, getProgram(), pgm);
 }
 
 //! Get control for instance of current program
 /**
  */
 static ProgramControl ProgramControl::getProgram() [flags=RET_VALUE_ONLY; dom=DEBUGGER] {
-   QoreProgram* pgm = getProgram();
-   return QoreProgram::getQoreObject(pgm);
+   QoreObject* o = qore_program_private::getProgramControl(getProgram());
+   if (!o) {
+      return xsink->raiseException("PROGRAM-ERROR", "the current Program is being deleted");
+   }
+   return o;
 }
 
 //! Get instance of all programs.
@@ -340,6 +343,7 @@ list<Breakpoint> ProgramControl::getBreakpoints() {
     p->getBreakpoints(bl);
     QoreListNode *l = new QoreListNode(QC_BREAKPOINT->getTypeInfo());
     for (QoreBreakpointList_t::iterator it = bl.begin(); it != bl.end(); ++it) {
+        // each object takes its own reference; the list releases the ones that getBreakpoints() took
         l->push((*it)->getQoreObject(), nullptr);
     }
     return l;
@@ -375,6 +379,7 @@ hash<StatementInfo> ProgramControl::getStatementIdInfo(int statement_id, bool li
       p->getStatementBreakpoints(s, bl);
       QoreListNode *l = new QoreListNode(QC_BREAKPOINT->getTypeInfo());
       for (QoreBreakpointList_t::iterator it = bl.begin(); it != bl.end(); ++it) {
+         // each object takes its own reference; the list releases the ones that getStatementBreakpoints() took
          l->push((*it)->getQoreObject(), xsink);
       }
       ph->setKeyValueIntern("breakpoints", l);

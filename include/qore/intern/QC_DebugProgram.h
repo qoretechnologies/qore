@@ -47,8 +47,13 @@ private:
    QoreObject* qo;
 
    DLLLOCAL void callMethod(const char* name, QoreProgram *pgm, int paramCount, QoreValue* params, DebugRunStateEnum &rs, const AbstractStatement* &rts, ExceptionSink* xsink, ExceptionSink &xsink2) {
+      // a Program whose last reference has been released is being removed from the debugger; nothing is called
+      QoreObject* pgm_obj = qore_program_private::getProgramControl(pgm);
+      if (!pgm_obj) {
+         return;
+      }
       ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), &xsink2);
-      args->push(QoreProgram::getQoreObject(pgm), nullptr);
+      args->push(pgm_obj, nullptr);
       for (int i=0; i<paramCount; i++) {
          //printd(5, "QoreDebugProgramWithCoreObject::callMethod(%s) this: %p, param: %d/%d, type: %s\n", name, this, i, paramCount, params[i]?params[i]->getTypeName():"n/a");
          args->push(params[i], nullptr);

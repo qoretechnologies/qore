@@ -82,18 +82,14 @@ qclass Breakpoint [dom=DEBUGGER; arg=QoreBreakpoint* bkpt;];
  *
  */
 Breakpoint::constructor() {
-   QoreBreakpoint *qb = new QoreBreakpoint;
-   qb->setQoreObject(self);
-   self->setPrivate(CID_BREAKPOINT, qb);
+   self->setPrivate(CID_BREAKPOINT, new QoreBreakpoint);
 }
 
 //! Creates copy of breakpoint object
 /**
  */
 Breakpoint::copy() {
-   QoreBreakpoint *qb = new QoreBreakpoint(*bkpt);
-   qb->setQoreObject(self);
-   self->setPrivate(CID_BREAKPOINT, qb);
+   self->setPrivate(CID_BREAKPOINT, new QoreBreakpoint(*bkpt));
 }
 
 //! Unlinks from @ref Breakpoint "Breakpoint" object and dereferences it
@@ -101,8 +97,7 @@ Breakpoint::copy() {
  *
  */
 Breakpoint::destructor() {
-   bkpt->setQoreObject(0);
-   bkpt->deref();
+   bkpt->deref(xsink);
 }
 
 //! Set enabled state to breakpoint.
@@ -169,11 +164,12 @@ nothing Breakpoint::unassignProgram() {
 
  */
 ProgramControl Breakpoint::getProgram() [flags=RET_VALUE_ONLY; dom=DEBUGGER] {
-   QoreProgram* pgm = bkpt->getProgram();
+   // the Program is returned with a reference, which the new object takes over
+   QoreProgram* pgm = bkpt->getReferencedProgram();
    if (!pgm) {
       return xsink->raiseException("BREAKPOINT-ERROR", "Program is not assigned");
    }
-   return QoreProgram::getQoreObject(pgm);
+   return new QoreObject(QC_PROGRAMCONTROL, getProgram(), pgm);
 }
 
 //! Assign breakpoint to a statement.
@@ -285,8 +281,10 @@ int Breakpoint::getBreakpointId() [flags=RET_VALUE_ONLY;] {
 
  */
 static Breakpoint Breakpoint::resolveBreakpointId(int breakpoint_id) [flags=NAMED_ARGS] {
-   QoreBreakpoint* b = QoreBreakpoint::resolveBreakpointId(breakpoint_id);
-   if (!b)
+   // the breakpoint is returned with a reference, which the new object takes over
+   QoreBreakpoint* b = QoreBreakpoint::getReferencedBreakpoint(breakpoint_id);
+   if (!b) {
       return xsink->raiseException("BREAKPOINT-ERROR", "wrong breakpointId (" QLLD ")", (int64)breakpoint_id);
-   return b->getQoreObject();
+   }
+   return new QoreObject(QC_BREAKPOINT, getProgram(), b);
 }

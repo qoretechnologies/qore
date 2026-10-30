@@ -414,7 +414,7 @@ QoreListNode* domain_bitfield_to_string_list(int64 i, ExceptionSink* xsink) {
 //public symbols
 const char** qore_warnings = qore_warnings_l;
 unsigned qore_num_warnings = NUM_WARNINGS;
-qore_program_private::qore_program_to_object_map_t qore_program_private::qore_program_to_object_map;
+qore_program_private::qore_program_set_t qore_program_private::qore_program_set;
 qore_program_private::programid_to_program_map_t qore_program_private::programid_to_program_map;
 QoreRWLock qore_program_private::lck_programMap;
 qore_program_id_t qore_program_private::programIdCounter = 1;
@@ -462,8 +462,9 @@ void qore_program_private::fixupAfterFork(int tid, ThreadProgramData* tpd) {
 }
 
 void qore_program_private::fixupAllAfterFork(int tid, ThreadProgramData* tpd) {
-    for (auto& i : programid_to_program_map) {
-        qore_program_private::get(*i.second)->fixupAfterFork(tid, tpd);
+    // all instances, also those whose last reference has been released and that are being destroyed
+    for (QoreProgram* p : qore_program_set) {
+        qore_program_private::get(*p)->fixupAfterFork(tid, tpd);
     }
 }
 
@@ -508,13 +509,11 @@ qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOp
 
 void qore_program_private::registerProgram() {
     QoreAutoRWWriteLocker al(&qore_program_private::lck_programMap);
-#ifdef DEBUG
-    qore_program_to_object_map_t::iterator i = qore_program_private::qore_program_to_object_map.find(pgm);
-    assert(i == qore_program_private::qore_program_to_object_map.end());
-#endif
+    assert(qore_program_set.find(pgm) == qore_program_set.end());
     programId = programIdCounter++;
-    qore_program_private::qore_program_to_object_map.insert(qore_program_to_object_map_t::value_type(pgm, nullptr));
-    qore_program_private::programid_to_program_map.insert(programid_to_program_map_t::value_type(programId, pgm));
+    qore_program_set.insert(pgm);
+    // a new Program has its first reference
+    programid_to_program_map.insert(programid_to_program_map_t::value_type(programId, pgm));
     printd(5, "qore_program_private::registerProgram() this: %p pgm: %p, pgmid: " QLLD "\n", this, pgm, (int64)programId);
 }
 
@@ -533,14 +532,16 @@ qore_program_private::~qore_program_private() {
     debug_program_counter.waitForZero();
     deleteAllBreakpoints();
     QoreAutoRWWriteLocker al(&qore_program_private::lck_programMap);
-    qore_program_to_object_map_t::iterator i = qore_program_to_object_map.find(pgm);
-    assert(i != qore_program_to_object_map.end());
-    assert(i->second == 0);
-    qore_program_to_object_map.erase(i);
+    qore_program_set_t::iterator i = qore_program_set.find(pgm);
+    assert(i != qore_program_set.end());
+    qore_program_set.erase(i);
+    // a Program left the registry when its last reference was released (see derefUnregister()), unless it is
+    // destroyed with references, as a Program that was never handed out can be
     programid_to_program_map_t::iterator pi = programid_to_program_map.find(programId);
-    assert(pi != programid_to_program_map.end());
-    assert(pi->second == pgm);
-    programid_to_program_map.erase(pi);
+    if (pi != programid_to_program_map.end()) {
+        assert(pi->second == pgm);
+        programid_to_program_map.erase(pi);
+    }
     printd(5, "qore_program_private::~qore_program_private() this: %p pgm: %p, pgmid: " QLLD " removed\n", this, pgm, (int64)programId);
 
     statementByFileIndex.clear();
@@ -3036,8 +3037,40 @@ QoreThreadLock* QoreProgram::getParseLock() {
 
 void QoreProgram::deref(ExceptionSink* xsink) {
     printd(QPP_DBG_LVL, "QoreProgram::deref() this: %p priv: %p %d->%d\n", this, priv, reference_count(), reference_count() - 1);
-    if (ROdereference())
+    if (priv->derefUnregister()) {
+        // breakpoints refer to Programs with references only
+        priv->deleteAllBreakpoints();
         priv->clear(xsink);
+    }
+}
+
+void QoreProgram::deref() {
+    printd(QPP_DBG_LVL, "QoreProgram::deref() this: %p priv: %p %d->%d\n", this, priv, reference_count(),
+        reference_count() - 1);
+    if (priv->derefUnregister()) {
+        delete this;
+    }
+}
+
+bool qore_program_private::derefUnregister() {
+    // a reference that is not the last one is released without the registry lock
+    int r = pgm->references.load(std::memory_order_relaxed);
+    while (r > 1) {
+        if (pgm->references.compare_exchange_weak(r, r - 1, std::memory_order_acq_rel, std::memory_order_relaxed)) {
+            return false;
+        }
+    }
+    // the last reference: the count reaches zero with the registry lock held, where lookups take their references,
+    // so the Program leaves the registry before any lookup can find it without references; another reference may
+    // have been taken since the count was read, in which case this one is not the last one
+    QoreAutoRWWriteLocker al(&lck_programMap);
+    if (!pgm->ROdereference()) {
+        return false;
+    }
+    programid_to_program_map_t::iterator i = programid_to_program_map.find(programId);
+    assert(i != programid_to_program_map.end() && i->second == pgm);
+    programid_to_program_map.erase(i);
+    return true;
 }
 
 ExceptionSink* QoreProgram::getParseExceptionSink() {
@@ -3993,19 +4026,17 @@ QoreProgram* QoreProgram::resolveProgramId(qore_program_id_t programId) {
 }
 
 void QoreProgram::registerQoreObject(QoreObject *o, ExceptionSink* xsink) const {
-   priv->registerQoreObject(o, xsink);
 }
 
 void QoreProgram::unregisterQoreObject(QoreObject *o, ExceptionSink* xsink) const {
-   priv->unregisterQoreObject(o, xsink);
 }
 
 QoreObject* QoreProgram::findQoreObject() const {
-   return priv->findQoreObject();
+   return nullptr;
 }
 
 QoreObject* QoreProgram::getQoreObject(QoreProgram* pgm) {
-    return qore_program_private::getQoreObject(pgm);
+    return qore_program_private::getProgramControl(pgm);
 }
 
 void qore_program_private::cleanupAllPrograms(ExceptionSink* xsink) {
@@ -4013,35 +4044,23 @@ void qore_program_private::cleanupAllPrograms(ExceptionSink* xsink) {
         return;
     }
 
-    std::vector<std::pair<QoreProgram*, QoreObject*>> programs;
+    std::vector<QoreProgram*> programs;
     {
-        QoreAutoRWWriteLocker al(&lck_programMap);
-        programs.reserve(qore_program_to_object_map.size());
-        for (auto& i : qore_program_to_object_map) {
-            // Add a reference to each program/object while holding the lock to prevent
-            // deletion during iteration. Items in the map must have positive ref counts.
-            if (i.first) {
-                i.first->ref();
-            }
-            if (i.second) {
-                i.second->ref();
-            }
-            programs.push_back(std::make_pair(i.first, i.second));
+        QoreAutoRWReadLocker al(&lck_programMap);
+        programs.reserve(programid_to_program_map.size());
+        for (auto& i : programid_to_program_map) {
+            // a registered Program has references; a reference is taken with the registry lock held, so that the
+            // Program cannot be destroyed during the iteration
+            i.second->ref();
+            programs.push_back(i.second);
         }
     }
 
-    for (auto& entry : programs) {
-        if (entry.second) {
-            // Deref twice: once for cleanup, once for the extra reference we added
-            entry.second->deref(xsink);
-            entry.second->deref(xsink);
-        }
-        if (entry.first) {
-            // waitForTerminationAndDeref does cleanup and one deref
-            entry.first->waitForTerminationAndDeref(xsink);
-            // Deref for the extra reference we added
-            entry.first->deref(xsink);
-        }
+    for (QoreProgram* p : programs) {
+        // waitForTerminationAndDeref does cleanup and one deref
+        p->waitForTerminationAndDeref(xsink);
+        // Deref for the extra reference we added
+        p->deref(xsink);
     }
 }
 
@@ -4193,7 +4212,7 @@ QoreRWLock& qore_program_private::getBreakpointLockForFork() {
 
 static QoreForkRWLock breakpoint_fork_handler(qore_program_private::getBreakpointLockForFork(), QFLR_LEAF,
     "breakpoints");
-QoreBreakpointList_t QoreBreakpoint::breakpointList;
+bkp_list_t QoreBreakpoint::breakpointList;
 unsigned QoreBreakpoint::breakpointIdCounter = 1;
 
 void QoreBreakpoint::unassignAllStatements() {
@@ -4204,33 +4223,65 @@ void QoreBreakpoint::unassignAllStatements() {
 }
 
 QoreBreakpoint& QoreBreakpoint::operator=(const QoreBreakpoint& other) {
-    qo = 0;
-    QoreAutoRWReadLocker al(&pgm->lck_breakpoint);
+    qore_program_private* other_pgm = other.getPgm();
+    QoreAutoRWReadLocker al(other_pgm ? &other_pgm->lck_breakpoint : nullptr);
     enabled = other.enabled;
     policy = other.policy;
-    pgm = other.pgm;
+    pgm = other_pgm;
     statementList = other.statementList;
     tidMap = other.tidMap;
 
     return *this;
 }
 
-QoreBreakpoint::QoreBreakpoint(): pgm(nullptr), qo(0), enabled(false), policy(BKP_PO_NONE) {
+QoreBreakpoint::QoreBreakpoint(): pgm(nullptr), enabled(false), policy(BKP_PO_NONE) {
     QoreAutoRWWriteLocker al(&QoreBreakpoint::lck_breakpoint);
     QoreBreakpoint::breakpointList.push_back(this);
     breakpointId = breakpointIdCounter++;
 }
 
+QoreBreakpoint::QoreBreakpoint(const QoreBreakpoint& other) : QoreBreakpoint() {
+    // a new breakpoint with its own ID, which is not assigned to a Program or to statements
+    qore_program_private* other_pgm = other.getPgm();
+    QoreAutoRWReadLocker al(other_pgm ? &other_pgm->lck_breakpoint : nullptr);
+    enabled = other.enabled;
+    policy = other.policy;
+    tidMap = other.tidMap;
+}
+
+void QoreBreakpoint::deref(ExceptionSink* xsink) {
+    deref();
+}
+
+void QoreBreakpoint::deref() {
+    // a reference that is not the last one is released without the lock of the list of all breakpoints
+    int r = references.load(std::memory_order_relaxed);
+    while (r > 1) {
+        if (references.compare_exchange_weak(r, r - 1, std::memory_order_acq_rel, std::memory_order_relaxed)) {
+            return;
+        }
+    }
+    // the last reference: the breakpoint leaves the list as its count reaches zero, with the lock held, where
+    // getReferencedBreakpoint() takes its references, so the list never holds a breakpoint without references
+    {
+        QoreAutoRWWriteLocker al(&lck_breakpoint);
+        if (!ROdereference()) {
+            return;
+        }
+        breakpointList.remove(this);
+    }
+    delete this;
+}
+
 QoreBreakpoint::~QoreBreakpoint() {
-    if (pgm) {
-        QoreAutoRWWriteLocker al(&pgm->lck_breakpoint);
-        pgm->breakpointList.remove(this);
+    // the breakpoint left the list of all breakpoints with its last reference (see deref())
+    if (qore_program_private* p = getPgm()) {
+        QoreAutoRWWriteLocker al(&p->lck_breakpoint);
+        p->breakpointList.remove(this);
         unassignAllStatements();
     } else {
         unassignAllStatements();
     }
-    QoreAutoRWWriteLocker al(&QoreBreakpoint::lck_breakpoint);
-    QoreBreakpoint::breakpointList.remove(this);
 }
 
 // lck_breakpoint lock should be acquired
@@ -4254,7 +4305,7 @@ bool QoreBreakpoint::checkBreak() const {
 }
 
 bool QoreBreakpoint::checkPgm(ExceptionSink* xsink) const {
-    if (pgm) {
+    if (getPgm()) {
         return true;
     } else {
         if (xsink) {
@@ -4268,9 +4319,9 @@ void QoreBreakpoint::assignProgram(QoreProgram *new_pgm, ExceptionSink* xsink) {
     if (new_pgm) {
         new_pgm->assignBreakpoint(this, xsink);
     } else {
-        if (pgm) {
-            QoreAutoRWWriteLocker al(&pgm->lck_breakpoint);
-            pgm->breakpointList.remove(this);
+        if (qore_program_private* p = getPgm()) {
+            QoreAutoRWWriteLocker al(&p->lck_breakpoint);
+            p->breakpointList.remove(this);
             unassignAllStatements();
             pgm = nullptr;
             deref();
@@ -4279,13 +4330,28 @@ void QoreBreakpoint::assignProgram(QoreProgram *new_pgm, ExceptionSink* xsink) {
 }
 
 QoreProgram* QoreBreakpoint::getProgram() const {
-    return pgm->pgm;
+    qore_program_private* p = getPgm();
+    return p ? p->pgm : nullptr;
+}
+
+QoreProgram* QoreBreakpoint::getReferencedProgram() const {
+    // the Program of the breakpoint is read with the registry lock held: a Program unassigns its breakpoints when its
+    // last reference is released and when it is destroyed, before it takes the registry lock to leave the set of
+    // instances, so a Program read here exists until the lock is released, and it has references if it is still
+    // registered
+    QoreAutoRWReadLocker al(&qore_program_private::lck_programMap);
+    qore_program_private* p = getPgm();
+    if (!p || !qore_program_private::isRegisteredIntern(p->pgm)) {
+        return nullptr;
+    }
+    p->pgm->ref();
+    return p->pgm;
 }
 
 void QoreBreakpoint::assignStatement(AbstractStatement* statement, ExceptionSink* xsink) {
     if (checkPgm(xsink)) {
-        QoreAutoRWWriteLocker al(&pgm->lck_breakpoint);
-        if (pgm->isBreakpointRegistered(this)) {
+        QoreAutoRWWriteLocker al(&getPgm()->lck_breakpoint);
+        if (getPgm()->isBreakpointRegistered(this)) {
             if (statement && !isStatementAssigned(statement)) {
                 statementList.push_back(statement);
                 statement->assignBreakpoint(this);
@@ -4296,8 +4362,8 @@ void QoreBreakpoint::assignStatement(AbstractStatement* statement, ExceptionSink
 
 void QoreBreakpoint::unassignStatement(AbstractStatement* statement, ExceptionSink* xsink) {
     if (checkPgm(xsink)) {
-        QoreAutoRWWriteLocker al(&pgm->lck_breakpoint);
-        if (pgm->isBreakpointRegistered(this)) {
+        QoreAutoRWWriteLocker al(&getPgm()->lck_breakpoint);
+        if (getPgm()->isBreakpointRegistered(this)) {
             if (statement && isStatementAssigned(statement)) {
                 statementList.remove(statement);
                 statement->unassignBreakpoint(this);
@@ -4308,17 +4374,17 @@ void QoreBreakpoint::unassignStatement(AbstractStatement* statement, ExceptionSi
 
 void QoreBreakpoint::getStatements(AbstractStatementList_t &statList, ExceptionSink* xsink) {
     statList.clear();
-    QoreAutoRWReadLocker al(pgm ? &pgm->lck_breakpoint : nullptr);
+    QoreAutoRWReadLocker al(getPgm() ? &getPgm()->lck_breakpoint : nullptr);
     for (AbstractStatementList_t::iterator it = statementList.begin(); it != statementList.end(); ++it) {
         statList.push_back(*it);
     }
 }
 
 QoreListNode* QoreBreakpoint::getStatementIds(ExceptionSink* xsink) {
-    QoreAutoRWReadLocker al(pgm ? &pgm->lck_breakpoint : nullptr);
+    QoreAutoRWReadLocker al(getPgm() ? &getPgm()->lck_breakpoint : nullptr);
     ReferenceHolder<QoreListNode> l(new QoreListNode(bigIntTypeInfo), xsink);
     for (AbstractStatementList_t::iterator it = statementList.begin(); it != statementList.end(); ++it) {
-        (*l)->push(pgm->getStatementId(*it), nullptr);
+        (*l)->push(getPgm()->getStatementId(*it), nullptr);
     }
     return l.release();
 }
@@ -4326,7 +4392,7 @@ QoreListNode* QoreBreakpoint::getStatementIds(ExceptionSink* xsink) {
 AbstractStatement* QoreBreakpoint::resolveStatementId(unsigned long statementId, ExceptionSink* xsink) const {
     AbstractStatement *s = nullptr;
     if (checkPgm(xsink)) {
-        s = pgm->resolveStatementId(statementId);
+        s = getPgm()->resolveStatementId(statementId);
         if (!s) {
             if (xsink) {
                 xsink->raiseException("BREAKPOINT-ERROR", "Cannot resolve statement (%lu)", statementId);
@@ -4338,7 +4404,7 @@ AbstractStatement* QoreBreakpoint::resolveStatementId(unsigned long statementId,
 
 void QoreBreakpoint::getThreadIds(TidList_t &tidList, ExceptionSink* xsink) {
     tidList.clear();
-    QoreAutoRWReadLocker al(pgm ? &pgm->lck_breakpoint : nullptr);
+    QoreAutoRWReadLocker al(getPgm() ? &getPgm()->lck_breakpoint : nullptr);
     for (TidMap_t::iterator it = tidMap.begin(); it != tidMap.end(); ++it) {
         for (int j = 0; j < it->second; j++) {
             tidList.push_back(it->first+j);
@@ -4347,7 +4413,7 @@ void QoreBreakpoint::getThreadIds(TidList_t &tidList, ExceptionSink* xsink) {
 }
 
 void QoreBreakpoint::setThreadIds(TidList_t tidList, ExceptionSink* xsink) {
-    QoreAutoRWWriteLocker al(pgm ? &pgm->lck_breakpoint : nullptr);
+    QoreAutoRWWriteLocker al(getPgm() ? &getPgm()->lck_breakpoint : nullptr);
     tidMap.clear();
     tidList.sort();  // or create copy not to sort argument list ?
     TidList_t::iterator it = tidList.begin();
@@ -4366,7 +4432,7 @@ void QoreBreakpoint::setThreadIds(TidList_t tidList, ExceptionSink* xsink) {
 }
 
 void QoreBreakpoint::addThreadId(int tid, ExceptionSink* xsink) {
-    QoreAutoRWWriteLocker al(pgm ? &pgm->lck_breakpoint : nullptr);
+    QoreAutoRWWriteLocker al(getPgm() ? &getPgm()->lck_breakpoint : nullptr);
     if (!tidMap.empty()) {
         TidMap_t::iterator it2 = tidMap.upper_bound(tid);
         if (it2 != tidMap.begin()) {
@@ -4398,7 +4464,7 @@ void QoreBreakpoint::addThreadId(int tid, ExceptionSink* xsink) {
 }
 
 void QoreBreakpoint::removeThreadId(int tid, ExceptionSink* xsink) {
-    QoreAutoRWWriteLocker al(pgm ? &pgm->lck_breakpoint : nullptr);
+    QoreAutoRWWriteLocker al(getPgm() ? &getPgm()->lck_breakpoint : nullptr);
     if (!tidMap.empty()) {
         TidMap_t::iterator it = tidMap.upper_bound(tid);
         if (it != tidMap.begin()) {
@@ -4419,7 +4485,7 @@ void QoreBreakpoint::removeThreadId(int tid, ExceptionSink* xsink) {
 }
 
 bool QoreBreakpoint::isThreadId(int tid, ExceptionSink* xsink) {
-    QoreAutoRWReadLocker al(pgm ? &pgm->lck_breakpoint : nullptr);
+    QoreAutoRWReadLocker al(getPgm() ? &getPgm()->lck_breakpoint : nullptr);
     //printd(5, "QoreBreakpoint::isThreadId(%d), tidMap.empty()==%d\n", tid, tidMap.empty());
     if (!tidMap.empty()) {
         TidMap_t::iterator it = tidMap.upper_bound(tid);
@@ -4434,7 +4500,7 @@ bool QoreBreakpoint::isThreadId(int tid, ExceptionSink* xsink) {
 }
 
 void QoreBreakpoint::clearThreadIds(ExceptionSink* xsink) {
-    QoreAutoRWWriteLocker al(pgm ? &pgm->lck_breakpoint : nullptr);
+    QoreAutoRWWriteLocker al(getPgm() ? &getPgm()->lck_breakpoint : nullptr);
     tidMap.clear();
 }
 
@@ -4442,9 +4508,21 @@ unsigned QoreBreakpoint::getBreakpointId() const {
     return breakpointId;
 }
 
+QoreBreakpoint* QoreBreakpoint::getReferencedBreakpoint(unsigned breakpointId) {
+    QoreAutoRWReadLocker al(&QoreBreakpoint::lck_breakpoint);
+    for (QoreBreakpoint* b : QoreBreakpoint::breakpointList) {
+        if (b->breakpointId == breakpointId) {
+            b->ref();
+            return b;
+        }
+    }
+    return nullptr;
+}
+
 QoreBreakpoint* QoreBreakpoint::resolveBreakpointId(unsigned breakpointId) {
     QoreAutoRWReadLocker al(&QoreBreakpoint::lck_breakpoint);
-    for (QoreBreakpointList_t::const_iterator i = QoreBreakpoint::breakpointList.begin(); i != QoreBreakpoint::breakpointList.end(); i++) {
+    for (bkp_list_t::const_iterator i = QoreBreakpoint::breakpointList.begin();
+            i != QoreBreakpoint::breakpointList.end(); i++) {
         if ((*i)->breakpointId == breakpointId)
             return *i;
     }
@@ -4452,18 +4530,13 @@ QoreBreakpoint* QoreBreakpoint::resolveBreakpointId(unsigned breakpointId) {
 }
 
 QoreObject* QoreBreakpoint::getQoreObject() {
-    QoreAutoRWWriteLocker al(&QoreBreakpoint::lck_breakpoint);   // reuse global lock, local would be enough
-    if (qo) {
-        qo->ref();
-    } else {
-        qo = new QoreObject(QC_BREAKPOINT, ::getProgram(), this);
-        this->ref();
-    }
-    return qo;
+    // the object holds its own reference; objects are not cached, as a cached object could be found after its last
+    // reference had been released and while it was being destroyed
+    ref();
+    return new QoreObject(QC_BREAKPOINT, ::getProgram(), this);
 }
 
 void QoreBreakpoint::setQoreObject(QoreObject *n_qo) {
-    qo = n_qo;
 }
 
 QoreExternalProgramContextHelper::QoreExternalProgramContextHelper(ExceptionSink* xsink, QoreProgram* pgm) : priv(new ProgramThreadCountContextHelper(xsink, pgm, true)) {

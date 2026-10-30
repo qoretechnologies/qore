@@ -3300,7 +3300,10 @@ int Program::getThreadCount() [flags=CONSTANT] {
 /**
  */
 ProgramControl Program::getProgram() [flags=RET_VALUE_ONLY; dom=DEBUGGER] {
-   return QoreProgram::getQoreObject(p);
+   // the Program object holds a reference to the Program
+   QoreObject* o = qore_program_private::getProgramControl(p);
+   assert(o);
+   return o;
 }
 
 //! issues a module command for the given module

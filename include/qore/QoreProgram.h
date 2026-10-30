@@ -463,7 +463,13 @@ public:
     //! returns true if the given function exists as a user function, false if not
     DLLEXPORT bool existsFunction(const char* name);
 
-    using AbstractPrivateData::deref;
+    //! dereferences the object and deletes it if the reference count reaches zero, without clearing it first
+    /** the Program leaves the registry of Programs (see resolveProgramId()) as its reference count reaches zero
+
+        @since %Qore 3.0 the Program leaves the registry with its last reference
+    */
+    DLLEXPORT virtual void deref();
+
     //! dereferences the object and deletes it if the reference count reaches zero
     /** do not use this function if the program may be running, use QoreProgram::waitForTerminationAndDeref() instead
         @param xsink if an error occurs, the Qore-language exception information will be added here
@@ -1035,25 +1041,41 @@ public:
     /**
         @param programId provided by @ref QoreProgram::getProgramId
 
-        @return the original program or null if program cannot be resolved
+        @return the original program or null if program cannot be resolved; no reference is taken: the Program can
+        be used only while the caller holds a reference to it
 
-        @since %Qore 3.0 the id has the type qore_program_id_t (64 bits); it was \c unsigned
+        @since %Qore 3.0 the id has the type qore_program_id_t (64 bits); it was \c unsigned; a Program whose last
+        reference has been released is not resolved
     */
     DLLEXPORT static QoreProgram* resolveProgramId(qore_program_id_t programId);
 
-    //! register link to Qore script object
+    //! does nothing; ProgramControl objects are not registered
+    /** @deprecated since %Qore 3.0: ProgramControl objects are not cached; see getQoreObject()
+    */
     DLLEXPORT void registerQoreObject(QoreObject *o, ExceptionSink* xsink) const;
 
-    //! unregister link to Qore script object
+    //! does nothing; ProgramControl objects are not registered
+    /** @deprecated since %Qore 3.0: ProgramControl objects are not cached; see getQoreObject()
+    */
     DLLEXPORT void unregisterQoreObject(QoreObject *o, ExceptionSink* xsink) const;
 
-    //! find Qore script object related to QoreProgram instance
+    //! returns nullptr; ProgramControl objects are not registered
+    /** @deprecated since %Qore 3.0: ProgramControl objects are not cached; see getQoreObject()
+    */
     DLLEXPORT QoreObject* findQoreObject() const;
 
-    //! get QoreObject of QoreProgram
+    //! returns a new ProgramControl object for the given Program, or nullptr if the Program has no references
+    /** @param pgm a Program that is running the calling thread's code or that the caller holds a reference to
+
+        @return a new ProgramControl object, which holds its own reference to the Program, or nullptr if the last
+        reference of the Program has been released
+
+        @since %Qore 3.0 a new object is returned for each call; a cached object could be returned while it was being
+        destroyed
+    */
     DLLEXPORT static QoreObject* getQoreObject(QoreProgram* pgm);
 
-    //! list all programs as QoreObject list
+    //! returns new ProgramControl objects for all Programs that have references
     DLLEXPORT static QoreListNode* getAllQoreObjects(ExceptionSink* xsink);
 
     //! check if program can provide debugging stuff
@@ -1233,18 +1255,25 @@ typedef std::list<int> TidList_t;
  */
 class QoreBreakpoint : public AbstractPrivateData {
 private:
-    qore_program_private* pgm;
+    //! the Program of the breakpoint, which references the breakpoint; written with the Program's breakpoint lock
+    std::atomic<qore_program_private*> pgm;
     AbstractStatementList_t statementList;
     typedef std::map<int/*tid*/, int/*count*/> TidMap_t;
     TidMap_t tidMap;
-    QoreObject* qo; // reference to Qore script object, it's private object but we cannot
+    //! protects the list of all breakpoints; a breakpoint leaves it as its reference count reaches zero
     static QoreRWLock lck_breakpoint; // to protect breakpoint manipulation
-    static QoreBreakpointList_t breakpointList;
+    //! all breakpoints, for resolveBreakpointId(); the list holds no references
+    static bkp_list_t breakpointList;
     static unsigned breakpointIdCounter;   // to generate breakpointId
     unsigned breakpointId;
 
     DLLLOCAL void unassignAllStatements();
     DLLLOCAL bool isStatementAssigned(const AbstractStatement *statement) const;
+
+    //! returns the Program of the breakpoint
+    DLLLOCAL qore_program_private* getPgm() const {
+        return pgm.load(std::memory_order_acquire);
+    }
     DLLLOCAL bool checkPgm(ExceptionSink* xsink) const;
 
     friend class qore_program_private;
@@ -1256,6 +1285,12 @@ protected:
     DLLLOCAL virtual bool checkBreak() const;
 
 public:
+    //! dereferences the breakpoint; it leaves the list of all breakpoints and is deleted with its last reference
+    DLLEXPORT virtual void deref(ExceptionSink* xsink);
+
+    //! dereferences the breakpoint; it leaves the list of all breakpoints and is deleted with its last reference
+    DLLEXPORT virtual void deref();
+
     bool enabled;
     /** Defines policy how thread list is evaluated. In the case of ACCEPT policy are considered all TIDs in list.
         In case of REJECT policy are considered all TIDs not in the list.
@@ -1263,6 +1298,15 @@ public:
     BreakpointPolicy policy;
 
     DLLEXPORT QoreBreakpoint();
+
+    //! creates a new breakpoint with the enabled state, policy and thread IDs of the given one
+    /** The new breakpoint has its own ID and is not assigned to a Program or to statements
+
+        @since %Qore 3.0 the copy has its own ID and is not assigned; it had the ID and the Program of the original,
+        but was not assigned to the Program
+    */
+    DLLEXPORT QoreBreakpoint(const QoreBreakpoint& other);
+
     /** Copy all props but object reference
     */
     DLLEXPORT QoreBreakpoint& operator=(const QoreBreakpoint& other);
@@ -1272,9 +1316,14 @@ public:
         @param xsink if an error occurs, the Qore-language exception information will be added here
     */
     DLLEXPORT void assignProgram(QoreProgram *new_pgm, ExceptionSink* xsink);
-    /* Get assigned program to breakpoint
-    */
+    //! returns the Program of the breakpoint, or nullptr if it is not assigned, without a reference
     DLLEXPORT QoreProgram* getProgram() const;
+
+    //! returns the Program of the breakpoint with a reference for the caller, or nullptr
+    /** nullptr is returned if the breakpoint is not assigned to a Program or if the last reference of its Program has
+        been released
+    */
+    DLLLOCAL QoreProgram* getReferencedProgram() const;
     /** Assign breakpoint to a statement.
     */
     DLLEXPORT void assignStatement(AbstractStatement* statement, ExceptionSink* xsink);
@@ -1319,12 +1368,25 @@ public:
     /**
         @param breakpointId provided by @ref getBreakpointId
 
-        @return the original breakpoint or null if object cannot be resolved
+        @return the original breakpoint or null if object cannot be resolved; no reference is taken: the breakpoint
+        can be used only while the caller holds a reference to it
     */
     DLLEXPORT static QoreBreakpoint* resolveBreakpointId(unsigned breakpointId);
 
+    //! returns the breakpoint with the given ID with a reference for the caller, or nullptr
+    DLLLOCAL static QoreBreakpoint* getReferencedBreakpoint(unsigned breakpointId);
+
+    //! does nothing; Breakpoint objects are not cached
+    /** @deprecated since %Qore 3.0: see getQoreObject()
+    */
     DLLEXPORT void setQoreObject(QoreObject* n_qo);
 
+    //! returns a new Breakpoint object for this breakpoint, which holds its own reference to it
+    /** The caller must hold a reference to the breakpoint.
+
+        @since %Qore 3.0 a new object is returned for each call; a cached object could be returned while it was being
+        destroyed
+    */
     DLLEXPORT QoreObject* getQoreObject();
 };
 

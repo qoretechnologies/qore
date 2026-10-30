@@ -1801,6 +1801,19 @@ val = "string";      # OK
     a call is undefined behavior: an argument passed for a <tt>%%s</tt> conversion that is not a string, or a
     <tt>%%s</tt> in text used as the format, crashes the process when the call formats it
 
+    @par ProgramControl and Breakpoint Objects Are Created for Each Call
+    @ref Qore::Program::getProgram() "Program::getProgram()",
+    @ref Qore::ProgramControl::getProgram() "ProgramControl::getProgram()",
+    @ref Qore::ProgramControl::resolveProgramId() "ProgramControl::resolveProgramId()",
+    @ref Qore::ProgramControl::getAllPrograms() "ProgramControl::getAllPrograms()",
+    @ref Qore::Breakpoint::getProgram() "Breakpoint::getProgram()",
+    @ref Qore::Breakpoint::resolveBreakpointId() "Breakpoint::resolveBreakpointId()" and
+    @ref Qore::ProgramControl::getBreakpoints() "ProgramControl::getBreakpoints()" return a new object for each call,
+    so two objects for the same Program or breakpoint are not the same object; compare them by their IDs.  In the C++
+    API, \c QoreProgram::registerQoreObject(), \c QoreProgram::unregisterQoreObject() and
+    \c QoreBreakpoint::setQoreObject() do nothing, \c QoreProgram::findQoreObject() returns \c nullptr, and
+    \c QoreProgram::getQoreObject() returns \c nullptr for a Program whose last reference has been released
+
     @par C++ API: Program IDs Have 64 Bits
     \c QoreProgram::getProgramId() returns, and \c QoreProgram::resolveProgramId() takes, the new type
     \c qore_program_id_t (64 bits) instead of \c unsigned.  The ID was a 32-bit counter: after 2^32 Programs it wrapped
@@ -3886,6 +3899,9 @@ while (*binary chunk = input.read(65536)) {
         being set; a breakpoint that cannot be set gives the reason in its message
       - fixed an error handling an event of the debugger leaving the thread stopped without a message; the error is
         shown in the debug console
+      - fixed the output of a program that is debugged in the adapter process being sent after the \c terminated
+        event at the end of the program
+      - fixed \c qdbg-vsc-adapter writing nothing to its log file
     - @ref websocketclientintro "WebSocketClient" module
       - \c WebSocketPingPollOperation uses non-blocking @ref httpclientiointro "HttpClientIo" I/O, with an extended
         CONNECT handshake for HTTP/2 and HTTP/3
@@ -5235,6 +5251,18 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a debugged program could get a deleted @ref Qore::ProgramControl "ProgramControl" object in a debugger callback,
+      such as \c onAttach() or \c onStep(), when another thread released the last reference to the object at the
+      same time: the object was cached and returned again until its destructor ran.  The callback failed, so the
+      program ran without stopping, for example at its first statement or after a pause request, and its Program
+      could be deleted while a debugger still sent commands for it, which could crash the process.
+      @ref Qore::ProgramControl "ProgramControl" and @ref Qore::Breakpoint "Breakpoint" objects are no longer cached,
+      and a Program or a breakpoint whose last reference has been released can no longer be found by its ID, listed
+      with @ref Qore::ProgramControl::getAllPrograms() "ProgramControl::getAllPrograms()" or returned by
+      @ref Qore::Breakpoint::getProgram() "Breakpoint::getProgram()"; the breakpoints of a Program are unassigned with
+      its last reference
+    - a copy of a @ref Qore::Breakpoint "Breakpoint" had the ID and the Program of the original breakpoint but was
+      not assigned to the Program; it is now a new breakpoint with its own ID that is not assigned
     - a breakpoint set with a file name that is not the name that the file was parsed with, such as an absolute path
       for a program started with a relative path, as an IDE gives it, found no statement; the file name is also
       matched as an absolute path, made absolute with the working directory that the file was parsed in, and a

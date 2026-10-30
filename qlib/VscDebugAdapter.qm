@@ -96,6 +96,9 @@ module VscDebugAdapter {
       in its \c message
     - an error handling an event of the debugger is shown in the debug console of the IDE; the thread of the event
       stayed stopped without any message
+    - at the end of a program that is debugged in the adapter process, the \c terminated event is sent after all
+      output of the program; the output could be sent after it
+    - the log file given with \c -l is written; nothing was written to it
 
     @subsection vda_v0_2
     - updated to use a Logger
@@ -129,6 +132,8 @@ public class VscDebugLogger inherits Logger {
                     File f();
                     f.open2(filename, O_CREAT | O_TRUNC | O_WRONLY);
                 }
+                # the appender writes nothing until it is opened
+                appender.open();
             } catch (hash<ExceptionInfo> ex) {
                 stderr.printf("%s\n", get_exception_string(ex));
                 m_logging = False;
@@ -337,6 +342,30 @@ vda.run();
         remove m_savedStderr;
     }
 
+    #! Sends an event to the IDE after all output that programs have written
+    /** The output of programs is read from pipes in other threads, so it can be queued after an event that a program
+        sends when it has written it.  When the output is captured, stdout and stderr are restored: this ends the
+        input of the threads that forward the output, which queue all output that was written before they end; the
+        event is queued after it, and the output is captured again.
+
+        To be called in the thread that handles the events when no program runs: the output of a program that runs
+        while stdout and stderr are restored would be written to the channel of the protocol.  The threads that
+        forward the output end only when no process has the pipes open, so a process that a program started with the
+        adapter's stdout or stderr and that still runs delays the event until it ends.
+
+        @param event the name of the event
+        @param body the body of the event, if any
+    */
+    private:internal sendVscEventAfterOutput(string event, *hash<auto> body) {
+        if (!m_outputForwarders) {
+            sendVscEvent(event, body);
+            return;
+        }
+        stopProgramOutputCapture();
+        m_queue.push({"type": "vsc_event", "event": event, "body": body});
+        captureProgramOutput();
+    }
+
     #! Returns the size of the leading part of the data that ends with a complete UTF-8 character
     /** @param data UTF-8 data, which can end with a part of a character
 
@@ -414,6 +443,9 @@ vda.run();
                     processDebugEvent(msg);
                 } else if (msg.type == "vsc_output") {
                     sendVscEvent("output", {"category": msg.category, "output": msg.output});
+                } else if (msg.type == "vsc_event") {
+                    # an event queued after output; see sendVscEventAfterOutput()
+                    sendVscEvent(msg.event, msg.body);
                 }
             } catch (hash<ExceptionInfo> ex) {
                 info("ex: %y", ex);
@@ -647,7 +679,8 @@ vda.run();
                 m_programState{m_currentPgmId}.detachedThreads{event.tid} = True;
                 if (!getThreads()) {
                     doCommand(("cmd": "shutdown"));
-                    sendVscEvent("terminated");
+                    # the program has ended: the IDE gets all of its output before the end of the session
+                    sendVscEventAfterOutput("terminated");
                 }
 
             } else {
