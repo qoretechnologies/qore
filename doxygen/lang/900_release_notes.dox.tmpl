@@ -385,6 +385,9 @@
     bounds, type, reflection and exception checks with the ordinary compound operation as fallback.
     Native cross-Program scalar callbacks reuse pre-entry reference decoding while preserving live binding
     checks and complete validation after Program entry.
+    Deferred native callback and closure contexts preserve module option replacement during exception
+    materialization and restore the caller's complete option state. Reusable callbacks retain their fixed
+    generated frame layout, allocating additional saved state only on cold materialization.
     Program context entry reuses its existing thread-data lookup result, reducing repeated searches
     while preserving locking, initialization, thread accounting and context restoration.
     Native scalar function-reference calls reuse their explicit runtime context for Program and parse-option

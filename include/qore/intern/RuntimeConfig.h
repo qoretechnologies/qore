@@ -248,11 +248,18 @@ public:
 private:
     friend class RuntimeConfigNativeLeafCallHelper;
     const QorePreparedFunctionRefV3& cache;
-    QoreParseOptions old_mask;
-    QoreParseOptions old_value;
-    QoreParseOptions old_caller_restrictions;
-    const QoreProgram* old_module_pgm;
-    qore_program_id_t old_app_pgm_id;
+    struct SavedOptions {
+        QoreParseOptions mask;
+        QoreParseOptions value;
+        QoreParseOptions replace;
+        QoreParseOptions caller_restrictions;
+        const QoreProgram* module_pgm;
+        qore_program_id_t app_pgm_id;
+    };
+    // Keep the generated callback frame's fixed storage contract. Allocate only
+    // before cold materialization pushes markers, and reuse until frame destruction.
+    std::unique_ptr<SavedOptions> old_options;
+    DLLLOCAL void prepareMaterialization();
     DLLLOCAL void materialize(ThreadData* td);
     DLLLOCAL void restoreOptions(ThreadData* td);
 };
@@ -356,14 +363,15 @@ private:
     const QoreObject* old_self;
     bool restore_self;
     struct SavedOptions {
-        SavedOptions(const QoreParseOptions& mask, const QoreParseOptions& value,
+        SavedOptions(const QoreParseOptions& mask, const QoreParseOptions& value, const QoreParseOptions& replace,
                 const QoreParseOptions& caller_restrictions, const QoreProgram* module_pgm,
                 qore_program_id_t app_pgm_id) noexcept
-            : mask(mask), value(value), caller_restrictions(caller_restrictions), module_pgm(module_pgm),
+            : mask(mask), value(value), replace(replace), caller_restrictions(caller_restrictions), module_pgm(module_pgm),
               app_pgm_id(app_pgm_id) {
         }
         QoreParseOptions mask;
         QoreParseOptions value;
+        QoreParseOptions replace;
         QoreParseOptions caller_restrictions;
         const QoreProgram* module_pgm;
         qore_program_id_t app_pgm_id;
@@ -400,7 +408,8 @@ private:
 class RuntimeConfigNativeLeafCallHelper {
 public:
     //! Install variable markers and original context before stack-overflow exception work; idempotent.
-    /** @throws std::bad_alloc if a deferred variable-marker block cannot be allocated.
+    /** @throws std::bad_alloc if deferred option storage or a variable-marker block cannot be allocated.
+        Option storage is allocated before either marker is pushed.
         A failed closure-marker allocation rolls back the local marker before unwinding.
     */
     DLLLOCAL void materialize();

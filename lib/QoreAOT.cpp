@@ -2784,8 +2784,7 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
         const QoreFunction* source_qf = nullptr,
         const QoreTypeInfo* specialization_receiver_type_info = nullptr,
         const QoreTypeParamInstantiation* specialization_type_param_instantiation = nullptr,
-        const AOTConstantReverseMap* constant_reverse_map = nullptr,
-        const QoreIRFunction* local_slot_source = nullptr) {
+        const AOTConstantReverseMap* constant_reverse_map = nullptr) {
     StatementBlock* statements = uvb->getStatementBlock();
     if (!statements) {
         error = "no statement block";
@@ -2793,24 +2792,6 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
     }
 
     ir_func = new QoreIRFunction(name);
-    // A warmed closure's serialized IR already has stable local slots. Seed them before lowering so
-    // native code and nested handlers use the same identities as the closure reconstructed at load time.
-    // The ordinary tier seeds signature locals before body locals; fresh AOT lowering can discover them
-    // in a different order. Reassigning slots after handler lowering would leave inherited slots stale.
-    if (local_slot_source) {
-        std::unique_ptr<QoreIRFunction> seeded_ir(ir_func);
-        size_t count = 0;
-        for (const auto& [local, slot] : local_slot_source->local_var_slots) {
-            if (count++ && !(count % 100) && qore_check_cancel(nullptr, "AOT closure local slot seeding")) {
-                error = "cancelled while seeding closure local slots";
-                ir_func = nullptr;
-                return -1;
-            }
-            ir_func->local_var_slots.emplace(local, slot);
-        }
-        ir_func->max_local_slot_id = local_slot_source->max_local_slot_id;
-        seeded_ir.release();
-    }
     // Set source identity before QoreIRBuilder lowers statements; direct-call
     // self-recursion detection requires exact variant identity because
     // overloads share the same QoreFunction family.
@@ -18677,15 +18658,10 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
 
         QoreIRFunction* ir_func = nullptr;
         std::string lower_error;
-        auto* cached_ir = const_cast<QoreIRFunction*>(variant->getCachedIR());
-        if (cached_ir && !qoreAOTPrepareClosureIRLocalSlots(cached_ir, sig,
-                const_cast<UserClosureFunction*>(ucf)->getVList())) {
-            setAOTCompileFatal(fatal_error, "closure", native_key, "cached closure local slot preparation",
-                "cancelled");
-            return false;
-        }
+        // Serialization also lowers the closure afresh. Do not seed this body from runtime-warmed IR:
+        // its parameter-first slot order differs from the serializer's fresh lowering order.
         if (tryLowerFunction(variant, native_key.c_str(), pgm, ir_func, lower_error,
-                nullptr, nullptr, nullptr, const_reverse_map, cached_ir) != 0
+                nullptr, nullptr, nullptr, const_reverse_map) != 0
                 || !ir_func) {
             if (q_env_is_set("QORE_AOT_DEBUG")) {
                 fprintf(stderr, "AOT: native closure '%s' IR lowering skipped: %s\n",

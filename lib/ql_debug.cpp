@@ -656,7 +656,7 @@ static void ut_native_callback_policy(UnitTestCounters& c) {
     for (bool module : {false, true}) {
         ExceptionSink xsink;
         QoreProgramHelper program(PO_MODERN | PO_NO_NETWORK | (module ? PO_IN_MODULE : 0), xsink);
-        QoreProgramHelper other(PO_MODERN, xsink);
+        QoreProgramHelper other(PO_MODERN | PO_NO_FILESYSTEM, xsink);
         {
             ProgramRuntimeExternalParseContextHelper parse(*program);
             UT_ASSERT(c, parse, "callback policy fixture has parse context");
@@ -720,12 +720,14 @@ static void ut_native_callback_policy(UnitTestCounters& c) {
                     QoreCallParseOptionsOverride enclosing;
                     enclosing.mask = get_user_variant_runtime_po_override_mask();
                     enclosing.value = PO_NO_THREAD_CONTROL;
+                    enclosing.replace = PO_NO_NETWORK;
                     enclosing.caller_restrictions = PO_NO_THREAD_CONTROL;
                     enclosing.module_pgm = *other;
                     enclosing.app_pgm_id = other->getProgramId();
                     RuntimeParseOptionsOverrideHelper caller_policy(rc, enclosing);
                     const auto old_po = runtime_get_parse_options();
                     const auto old_effective = runtime_get_effective_program_parse_options();
+                    const auto old_foreign = RuntimeConfigNativeAccess::getEffectiveParseOptionsFor(rc, *other);
                     const auto old_own = runtime_get_own_program_state_parse_options(old_effective);
                     qore_program_id_t old_app = 0;
                     const bool old_has_app = runtime_get_module_caller_app(old_app);
@@ -741,8 +743,11 @@ static void ut_native_callback_policy(UnitTestCounters& c) {
                             frame.helper.materialize();
                             const auto body = runtime_get_parse_options();
                             const auto own = runtime_get_own_program_state_parse_options(body);
-                            UT_ASSERT(c, body & PO_NO_NETWORK,
-                                "materialized callback retains its body restrictions");
+                            UT_ASSERT(c, bool(body & PO_NO_NETWORK) == (module || imported),
+                                "materialized callback replaces or preserves the enclosing option replacement");
+                            const auto foreign = RuntimeConfigNativeAccess::getEffectiveParseOptionsFor(rc, *other);
+                            UT_ASSERT(c, bool(foreign & PO_NO_FILESYSTEM) == !module,
+                                "materialized module callback replaces the foreign Program's I/O options");
                             // A non-module body executing in another Program uses
                             // that Program's options. Module bodies additionally
                             // inherit the caller's active restrictions.
@@ -777,6 +782,7 @@ static void ut_native_callback_policy(UnitTestCounters& c) {
                     }
                     UT_ASSERT(c, runtime_get_parse_options() == old_po
                         && runtime_get_effective_program_parse_options() == old_effective
+                        && RuntimeConfigNativeAccess::getEffectiveParseOptionsFor(rc, *other) == old_foreign
                         && runtime_get_own_program_state_parse_options(old_effective) == old_own,
                         "callback reuse restores all caller policy fields");
                     qore_program_id_t app = 0;
@@ -928,6 +934,80 @@ static void ut_native_closure_context(UnitTestCounters& c) {
         }
     }
     UT_ASSERT(c, !xsink, "closure context tests leave no exception");
+}
+
+//! Deferred closure policy carries option replacement through materialization and context moves.
+static void ut_native_closure_option_replacement(UnitTestCounters& c) {
+    for (bool module : {false, true}) {
+        ExceptionSink xsink;
+        QoreProgramHelper program(PO_MODERN | PO_NO_NETWORK | (module ? PO_IN_MODULE : 0), xsink);
+        QoreProgramHelper caller(PO_MODERN | PO_NO_FILESYSTEM, xsink);
+        {
+            ProgramRuntimeExternalParseContextHelper parse(*program);
+            UT_ASSERT(c, parse, "closure option fixture has parse context");
+            program->parse("%modern\ncode<int(int)> sub make() { return int sub(int x) { return x; }; }\n",
+                "native-closure-option-replacement-unit", &xsink);
+        }
+        UT_ASSERT(c, !xsink, "closure option fixture parses");
+        if (xsink) {
+            return;
+        }
+        QoreExternalProgramContextHelper active(&xsink, *program);
+        ValueHolder value(program->callFunction("make", nullptr, &xsink), &xsink);
+        UT_ASSERT(c, !xsink && value->getType() == NT_RUNTIME_CLOSURE, "fixture returns a closure");
+        if (xsink || value->getType() != NT_RUNTIME_CLOSURE) {
+            return;
+        }
+        const auto* closure = static_cast<const QoreClosureBase*>(value->getInternalNode());
+        const auto* uvb = closure->getFunction()->first()->getUserVariantBase();
+        for (bool materialize : {false, true}) {
+            RuntimeConfig& rc = RuntimeConfigNativeAccess::getCurrent();
+            QoreCallParseOptionsOverride enclosing;
+            enclosing.mask = get_user_variant_runtime_po_override_mask();
+            enclosing.value = PO_NO_THREAD_CONTROL;
+            enclosing.replace = PO_NO_NETWORK;
+            RuntimeParseOptionsOverrideHelper outer(rc, enclosing);
+            const auto old_own = RuntimeConfigNativeAccess::getEffectiveParseOptionsFor(rc, *program);
+            const auto old_foreign = RuntimeConfigNativeAccess::getEffectiveParseOptionsFor(rc, *caller);
+            UT_ASSERT(c, !(old_own & PO_NO_NETWORK) && (old_foreign & PO_NO_FILESYSTEM),
+                "enclosing replacement clears only the selected restriction");
+            {
+                struct Frame : QoreStackLocation {
+                    const UserVariantBase* uvb;
+                    const std::string name = "native closure option replacement unit";
+                    const QoreProgramLocation* loc = nullptr;
+                    RuntimeConfigNativeClosureContext context;
+                    RuntimeConfigNativeClosureCallHelperV2 helper;
+                    Frame(RuntimeConfig& rc, const UserVariantBase* uvb, const QoreClosureBase* closure,
+                            QoreProgram* caller)
+                        : uvb(uvb), context(rc, closure, uvb, caller), helper(rc, this, loc, context) {}
+                    QoreProgram* getProgram() const override { return uvb->pgm; }
+                    const AbstractStatement* getStatement() const override { return uvb->getStatementBlock(); }
+                    const std::string& getCallName() const override { return name; }
+                    qore_call_t getCallType() const override { return CT_USER; }
+                    const QoreProgramLocation& getLocation() const override { return loc ? *loc : loc_builtin; }
+                } frame(rc, uvb, closure, *caller);
+                UT_ASSERT(c, RuntimeConfigNativeAccess::getEffectiveParseOptionsFor(rc, *program) == old_own
+                    && RuntimeConfigNativeAccess::getEffectiveParseOptionsFor(rc, *caller) == old_foreign,
+                    "successful deferred closure leaves option replacement untouched");
+                if (materialize) {
+                    frame.helper.materialize();
+                    frame.helper.materialize();
+                    const auto own = RuntimeConfigNativeAccess::getEffectiveParseOptionsFor(rc, *program);
+                    const auto foreign = RuntimeConfigNativeAccess::getEffectiveParseOptionsFor(rc, *caller);
+                    UT_ASSERT(c, own & PO_NO_NETWORK, "closure materialization replaces the enclosing override");
+                    UT_ASSERT(c, bool(foreign & PO_NO_FILESYSTEM) == !module,
+                        "module closure materialization uses its own I/O options");
+                }
+                RuntimeConfig replacement(rc);
+                rc = std::move(replacement);
+            }
+            UT_ASSERT(c, RuntimeConfigNativeAccess::getEffectiveParseOptionsFor(rc, *program) == old_own
+                && RuntimeConfigNativeAccess::getEffectiveParseOptionsFor(rc, *caller) == old_foreign,
+                "closure exit restores option replacement after a RuntimeConfig move");
+        }
+        UT_ASSERT(c, !xsink, "closure option fixture leaves no exception");
+    }
 }
 
 //! Object-count bookkeeping preserves order, flags and borrowed ownership across moves and clears.
@@ -15253,6 +15333,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_program_context_snapshot(c);
     ut_native_call_options(c);
     ut_native_callback_policy(c);
+    ut_native_closure_option_replacement(c);
     ut_lvalue_object_count_records(c);
     ut_runtime_value_cleanup(c);
     ut_local_discard(c);
@@ -15290,6 +15371,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_program_context_snapshot(c);
     ut_native_call_options(c);
     ut_native_callback_policy(c);
+    ut_native_closure_option_replacement(c);
     ut_lvalue_object_count_records(c);
     ut_runtime_value_cleanup(c);
     ut_local_discard(c);

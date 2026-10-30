@@ -2888,6 +2888,12 @@ __attribute__((noinline)) void RuntimeConfigNativeLeafCallHelper::materialize() 
     if (previous) {
         previous->materialize();
     }
+    // The fixed generated callback frame cannot grow with option state. Its
+    // cold save area must be allocated before either marker is pushed, so an
+    // allocation failure leaves this deferred frame unchanged and unwinds safely.
+    if (target_kind == TargetKind::CallbackV2) {
+        callback_context->prepareMaterialization();
+    }
     const UserVariantBase* uvb;
     QoreProgram* pgm;
     const QoreProgramLocation* parse_loc;
@@ -3044,12 +3050,20 @@ __attribute__((noinline, cold)) void RuntimeConfigNativeUncachedMethodContext::r
     rc.setClass(old_rc_class);
 }
 
+__attribute__((noinline, cold)) void RuntimeConfigNativeCallbackContext::prepareMaterialization() {
+    if (!old_options) {
+        old_options = std::make_unique<SavedOptions>();
+    }
+}
+
 __attribute__((noinline, cold)) void RuntimeConfigNativeCallbackContext::materialize(ThreadData* td) {
-    old_mask = td->runtime_po_override_mask;
-    old_value = td->runtime_po_override_value;
-    old_caller_restrictions = td->runtime_po_caller_restrictions;
-    old_module_pgm = td->runtime_po_module_pgm;
-    old_app_pgm_id = td->runtime_po_app_pgm_id;
+    assert(old_options);
+    old_options->mask = td->runtime_po_override_mask;
+    old_options->value = td->runtime_po_override_value;
+    old_options->replace = td->runtime_po_override_replace;
+    old_options->caller_restrictions = td->runtime_po_caller_restrictions;
+    old_options->module_pgm = td->runtime_po_module_pgm;
+    old_options->app_pgm_id = td->runtime_po_app_pgm_id;
     // Match FunctionRefParseOptionsOverride, including its unchanged enclosing
     // scope for a same-owner non-module callback. No context is consulted by a
     // successful compiler-proven scalar body; this runs only before error work.
@@ -3059,6 +3073,7 @@ __attribute__((noinline, cold)) void RuntimeConfigNativeCallbackContext::materia
             apply_runtime_po_override(td, cache.pgm->getParseOptions()), td->current_pgm, o);
         td->runtime_po_override_mask = o.mask;
         td->runtime_po_override_value = o.value;
+        td->runtime_po_override_replace = o.replace & o.mask;
         td->runtime_po_caller_restrictions = o.caller_restrictions;
         td->runtime_po_module_pgm = o.module_pgm;
         td->runtime_po_app_pgm_id = o.app_pgm_id;
@@ -3066,11 +3081,13 @@ __attribute__((noinline, cold)) void RuntimeConfigNativeCallbackContext::materia
 }
 
 __attribute__((noinline, cold)) void RuntimeConfigNativeCallbackContext::restoreOptions(ThreadData* td) {
-    td->runtime_po_override_mask = old_mask;
-    td->runtime_po_override_value = old_value;
-    td->runtime_po_caller_restrictions = old_caller_restrictions;
-    td->runtime_po_module_pgm = old_module_pgm;
-    td->runtime_po_app_pgm_id = old_app_pgm_id;
+    assert(old_options);
+    td->runtime_po_override_mask = old_options->mask;
+    td->runtime_po_override_value = old_options->value;
+    td->runtime_po_override_replace = old_options->replace;
+    td->runtime_po_caller_restrictions = old_options->caller_restrictions;
+    td->runtime_po_module_pgm = old_options->module_pgm;
+    td->runtime_po_app_pgm_id = old_options->app_pgm_id;
 }
 
 __attribute__((noinline, cold)) void RuntimeConfigNativeClosureContext::materialize(ThreadData* td) {
@@ -3079,10 +3096,11 @@ __attribute__((noinline, cold)) void RuntimeConfigNativeClosureContext::material
     QoreCallParseOptionsOverride o;
     qore_get_user_call_runtime_po_override(pgm, uvb,
         RuntimeConfigNativeAccess::getEffectiveParseOptionsFor(rc, caller), caller, o);
-    old_options.emplace(td->runtime_po_override_mask, td->runtime_po_override_value,
+    old_options.emplace(td->runtime_po_override_mask, td->runtime_po_override_value, td->runtime_po_override_replace,
         td->runtime_po_caller_restrictions, td->runtime_po_module_pgm, td->runtime_po_app_pgm_id);
     td->runtime_po_override_mask = o.mask;
     td->runtime_po_override_value = o.value;
+    td->runtime_po_override_replace = o.replace & o.mask;
     td->runtime_po_caller_restrictions = o.caller_restrictions;
     td->runtime_po_module_pgm = o.module_pgm;
     td->runtime_po_app_pgm_id = o.app_pgm_id;
@@ -3106,6 +3124,7 @@ __attribute__((noinline, cold)) void RuntimeConfigNativeClosureContext::restoreO
     if (old_options) {
         td->runtime_po_override_mask = old_options->mask;
         td->runtime_po_override_value = old_options->value;
+        td->runtime_po_override_replace = old_options->replace;
         td->runtime_po_caller_restrictions = old_options->caller_restrictions;
         td->runtime_po_module_pgm = old_options->module_pgm;
         td->runtime_po_app_pgm_id = old_options->app_pgm_id;

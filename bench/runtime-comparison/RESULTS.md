@@ -29823,3 +29823,18 @@ The extended Release run exposed an existing stale compiler assertion in `AOTNat
 `origin/develop` was fetched again and remains e1abc01cb4, already contained in this branch. This checkpoint does not provide a new Java/develop ratio or prove maximum performance. Shared-host frequency, affinity and thermal state remain uncontrolled; no owned build, test, profiler or heavy scan overlapped timing. Observed ranges are not confidence intervals. Qualification is targeted macOS Release/Debug coverage, not a full-project, sanitizer or other-platform claim.
 
 Next profile the retained runtime and evaluate sharing one live RuntimeConfig reference through call-option setup and the internal native retry chain. The current retry still uses the TLS option-helper overload and separately acquires RuntimeConfig in scalar admission. Existing explicit-context helpers may remove redundant lookups, but lifetime, Program identity, overrides, fallback and frame size need their own source review and optimized measurements. See the [complete evidence](results-cross-program-deferred-context-macos-arm64.json) and [62-check audit](audit-cross-program-deferred-context.md).
+
+
+## Deferred call context integration with develop (2026-10-30)
+
+After the measured `e6839c5` optimization, `origin/develop` advanced to `9a071ec8d0` and was merged as `a557ceeab1`. The new module option replacement field must travel through the branch's deferred callback and closure contexts. They now save, install and restore it together with the other option fields. Callback save storage is owned by the invocation, allocated only before cold materialization pushes either marker, and reused until reader-safe frame destruction. The generated callback frame remains exactly 208 bytes, aligned to 16 with its original 192-byte storage region.
+
+The first inline-storage attempt failed the generated-frame capacity assertion. The cold-owned storage version passes it. The first merged Release regression run then exposed a separate interaction: this branch seeded native closure slots from runtime-warmed IR, but develop now serializes a fresh lowering. Both O0 and O3 warmed binaries failed with an uninstantiated local while cold binaries passed. Removing the obsolete cached-slot seeding makes native and serialized closure lowering use the same fresh slot order; it also avoids modifying cached IR during compilation. Both the new warmed-slot and earlier debuggable-closure regressions remain selected.
+
+This checkpoint is integration qualification. The preceding 2.41–5.47% cross-Program improvement belongs to the premerge runtime, not a newly measured merged build. No additional Java/develop ratio, application-wide gain or performance ceiling is claimed here.
+
+Release and Debug each pass all 22 selected fixtures without skips: 34 QUnit cases/3842 assertions and five exact-output successes per build. The exact failed minimal source also passes all four cold/warm and O0/O3 combinations. Separate Debug native suites pass 3810 and 5475 checks (these suites may overlap). All 391 Release module aliases are restored with matching hashes. Release uses `-O3 -DNDEBUG` with allocation tracking disabled. The full 62-check audit covers the incoming merge and these integration fixes; failed attempts remain in the evidence.
+
+The next optimization experiment shares one live RuntimeConfig through option setup and the pure/member native retry after complete Program entry. Freeze the installed merged baseline before applying that separate patch, then compare optimized runtimes with identical artifacts and broad controls.
+
+See the [integration evidence](results-deferred-context-merge-macos-arm64.json) and [62-check audit](audit-deferred-context-merge.md).
