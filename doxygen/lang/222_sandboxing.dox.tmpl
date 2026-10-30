@@ -117,6 +117,14 @@ Program p(opts);
     - <b>No resource limits</b>: Cannot limit memory, CPU time, or thread count
     - <b>No interruption</b>: Cannot stop runaway code (infinite loops)
     - <b>No SSRF prevention</b>: Cannot block specific IP ranges
+    - <b>The Program's own code</b>: @ref Qore::PO_NO_NETWORK "PO_NO_NETWORK" and
+      @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM" restrict the code parsed in the %Program.  Module code that the
+      %Program calls does not inherit them: a module that the host gave the %Program is a capability that the host
+      granted it, and the network and filesystem access of module code, also on the I/O threads that run it, is
+      governed by the %Program's @ref Qore::SandboxManager "SandboxManager".  To keep a %Program and the modules it
+      was given off the network or the filesystem, give it a @ref Qore::SandboxManager "SandboxManager" with a
+      default deny policy (see @ref sandbox_net_rules and @ref sandbox_fs_policy); the other restrictions of the
+      %Program apply to the module code that it calls (see @ref user_module_runtime_context)
 
     For these advanced use cases, use the @ref Qore::SandboxManager "SandboxManager" class.
 
@@ -206,7 +214,8 @@ authenticate();
     @subsection sandbox_fs_comparison Parse Options vs SandboxManager
 
     |!Feature|!PO_NO_FILESYSTEM|!SandboxManager
-    |Block all filesystem access|Yes|Yes (default deny policy)
+    |Block all filesystem access|Yes, for the %Program's own code|Yes (default deny policy)
+    |Applies to the code of modules loaded into the %Program|No|Yes
     |Allow specific directories|No|Yes
     |Deny specific directories|No|Yes
     |Different read/write permissions|No|Yes
@@ -366,7 +375,8 @@ sm.setFilesystemDefaultPolicy(True);
     @subsection sandbox_net_comparison Parse Options vs SandboxManager
 
     |!Feature|!PO_NO_NETWORK|!SandboxManager
-    |Block all network access|Yes|Yes (default deny policy)
+    |Block all network access|Yes, for the %Program's own code|Yes (default deny policy)
+    |Applies to the code of modules loaded into the %Program, also on I/O threads|No|Yes
     |Allow specific hosts|No|Yes
     |Allow specific IP ranges|No|Yes
     |Block private networks (SSRF)|No|Yes

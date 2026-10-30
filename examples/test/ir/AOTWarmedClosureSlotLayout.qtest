@@ -1,0 +1,108 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.  SPDX-License-Identifier: MIT
+
+# Regression test: the AOT binary of a closure that was warmed at compile time binds its native body's locals to
+# the right variables.
+#
+# qcc compiles a closure's native body from a fresh IR lowering of the closure, and at run time binds that body's
+# local slots by index to the variables of the closure IR serialized into the binary.  The serializer used to
+# prefer the IR cached on the closure variant when the closure had already run at compile time (here: a const
+# initializer warms it and QORE_IR_THRESHOLD=1 promotes it to the IR tier on its first call).  The runtime
+# lowering reserves the parameter slots first (l=0, r=1, argv=2, a=3, b=4) while the fresh lowering numbers locals
+# in order of appearance (l=0, a=1, r=2, b=3, argv=4), so the native body read parameter "r" from the slot bound
+# to argv: a null hash, and the AOT executable crashed in the hash member access.  A cold compile (no warm IR)
+# was not affected.  The AOT result must match all four interpreter tiers whether or not the closure is warm.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires ../ExecModeHarness.qm
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+# the closure's locals a and b are declared between and after its hash parameters, so a lowering that numbers
+# locals in order of appearance and one that reserves the parameters first give them different slot ids
+string code = "%modern
+
+int sub warmComparator() {
+    code cmp = int sub (hash<auto> l, hash<auto> r) {
+        int a = l.weight ?? 0;
+        int b = r.weight ?? 0;
+        if (a == b) {
+            return l.name <=> r.name;
+        }
+        return a <=> b;
+    };
+    int sink = 0;
+    int i = 0;
+    while (i < 8) {
+        sink += cmp({\"weight\": i, \"name\": \"a\"}, {\"weight\": i - 1, \"name\": \"b\"});
+        i += 1;
+    }
+    return sink;
+}
+
+# evaluated at parse-commit: warms the comparator closure before AOT serialization
+const WARMUP = warmComparator();
+
+int sub getWarmup() {
+    return WARMUP;
+}
+
+printf(\"warmup=%d\\n\", getWarmup());
+";
+
+string script_path = sprintf("/tmp/qore-aot-warmed-closure-slots-%d.qr", getpid());
+{
+    File script();
+    script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+    script.write(code);
+}
+on_exit {
+    unlink(script_path);
+}
+
+# l.weight (i) is always greater than r.weight (i - 1), so each of the 8 calls returns 1
+string expected = "warmup=8\n";
+
+# 1. all four interpreter tiers must agree, with the closure promoted to the IR tier on its first call
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = ExecModeHarness::run(sprintf(
+        "QORE_IR_THRESHOLD=1 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s",
+        libqore_dir, libqore_dir, qore_bin, mode, script_path));
+    if (actual != expected) {
+        printf("mismatch in %s mode\nexpected:\n%sactual:\n%s", mode, expected, actual);
+        exit(2);
+    }
+}
+
+# 2. the AOT executable must produce the same result when the closure was warmed during the compile (the
+#    regression) and when it was not
+foreach string warm in (("QORE_IR_THRESHOLD=1 ", "")) {
+    string label = warm ? "warmed" : "cold";
+    string exe_path = sprintf("/tmp/qore-aot-warmed-closure-slots-%s-%d", label, getpid());
+    on_exit {
+        unlink(exe_path);
+    }
+    string compile_out = backquote(sprintf("%sLD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+        warm, libqore_dir, libqore_dir, qcc_bin, exe_path, script_path));
+    if (!is_file(exe_path)) {
+        printf("AOT compile (%s closure) failed:\n%s", label, compile_out);
+        exit(2);
+    }
+    string aot_actual = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1",
+        libqore_dir, libqore_dir, exe_path));
+    if (aot_actual != expected) {
+        printf("AOT result mismatch (%s closure)\nexpected:\n%sactual:\n%s", label, expected, aot_actual);
+        exit(2);
+    }
+}
+
+printf("OK\n");
