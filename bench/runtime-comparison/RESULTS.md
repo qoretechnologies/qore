@@ -29929,3 +29929,9 @@ This is targeted macOS ARM64 coverage, not a full-project, sanitizer or other-pl
 Next inspect whether an existing live caller RuntimeConfig can reach the ordinary dispatcher through the native fallback route, and whether option storage can leave the generic frame without shifting more cost onto other calls. Both require lifetime/reentry proof and separate optimized before/after measurements.
 
 See the [complete evidence](results-cross-program-shared-context-macos-arm64.json) and [62-check audit](audit-cross-program-shared-context.md).
+
+## Shared-context integration with QLS/debugger updates (2026-10-30)
+
+Merged develop `8c57c4afe6` after `27daae3f04`. The incoming changes update QLS bounded interpreter-line reads and installed source discovery, and debugger stop reasons, stack frame names and background-thread behavior. No C++ runtime source changes. Two new exception-output tests initially failed because captured output arrived after the termination event; explicit output waits now join fragments and preserve the assertions without relying on event ordering.
+
+The optimized full build preserves all 391 Release module aliases. Eight focused fixtures pass 30 QUnit cases / 2118 assertions plus three exact/silent scripts; three additional debug-adapter processes each pass all 11 cases / 176 assertions. The first diagnostic accidentally excluded every case and is retained but rejected as execution evidence. No new timing or global performance claim accompanies this integration. See the [full evidence](results-shared-context-develop-merge-macos-arm64.json) and [62-check audit](audit-shared-context-develop-merge.md).

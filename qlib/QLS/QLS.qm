@@ -171,7 +171,9 @@ server.main();
       initialization; folders added to or removed from the workspace
       (@c workspace/didChangeWorkspaceFolders) are indexed or removed
     - <b>Standard module index</b> (@c stdModuleIndex): %Qore standard library modules, indexed from
-      the module path when a request first needs them
+      the module path when a request first needs them; when the modules are loaded from compiled qmods, their
+      sources are found in the source tree of an in-tree build or in the user module directory of an installed
+      %Qore (see @ref QLS::Files::get_std_module_dirs() "get_std_module_dirs()")
 
     Cross-document features (find references, rename, call hierarchy) search across all three
     stores to provide workspace-wide results.
