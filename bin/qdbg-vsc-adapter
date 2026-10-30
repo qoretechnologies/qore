@@ -180,7 +180,7 @@ class VscDebugAdapterRemote inherits VscDebugAdapter {
             pushEvent(d);
             printData(d);
         } catch (hash<ExceptionInfo> ex) {
-            wscErr(sprintf("wscEvent: %y", ex));
+            wscErr(sprintf("wscEvent: %Y", ex));
         }
     }
 

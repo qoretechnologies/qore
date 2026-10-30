@@ -105,8 +105,9 @@ public class QdbgScriptTest inherits QUnit::Test {
         assertEq(0, res.rc);
         assertInOrder(res.out, (
             "interrupt/attach",
-            "bkptid : 1",
-            "bkptid : 2",
+            # the results of commands are printed in YAML style
+            "bkptid: 1",
+            "bkptid: 2",
             # the commands after "go run" are processed at the stop in add()
             "interrupt/step", "bkptid: 1", "(target.q:3",
             "TID 2 call stack:", " - 0*: interrupt: step()", " - 1 : add()",
