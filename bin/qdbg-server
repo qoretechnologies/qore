@@ -22,6 +22,30 @@ class WebSocketDebugProgramControlHost inherits WebSocketDebugProgramControl {
     }
 }
 
+#! writes the log of the server to the original stdout or stderr, so that it is not sent to clients as the output of
+#! the program
+class ServerLogAppender inherits LoggerAppenderWithLayout {
+    private:internal {
+        DebugWrapper dw;
+        bool err;
+    }
+
+    constructor(string name, DebugWrapper dw, bool err)
+            : LoggerAppenderWithLayout(name, new LoggerLayoutPattern("%d{YYYY-MM-DD HH:mm:SS.xx} T%t [%p]: %m%n")) {
+        self.dw = dw;
+        self.err = err;
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        switch (type) {
+            case EVENT_LOG:
+                dw.getLogFile(err).print(params);
+                break;
+        }
+    }
+}
+
 class DebugWrapper {
     private {
         hash<auto> opts = (
@@ -34,7 +58,7 @@ class DebugWrapper {
         Logger logger;
         WebSocketDebugHandler wsHandler;
         HttpServer mServer;
-        WebSocketDebugProgramControlHost dpc;
+        *WebSocketDebugProgramControlHost dpc;
     }
 
     constructor() {
@@ -64,7 +88,7 @@ class DebugWrapper {
         }
 
         logger = new Logger();
-        logger.addAppender(new LoggerAppenderStdErr("stderr", new LoggerLayoutPattern("%d{YYYY-MM-DD HH:mm:SS.xx} T%t [%p]: %m%n")));
+        logger.addAppender(new ServerLogAppender("stderr", self, True));
         if (opt.verbose > 1) {
             logger.setLevel("DEBUG");
         } else if (opt.verbose) {
@@ -82,7 +106,7 @@ class DebugWrapper {
 
             Logger http_logger("my-logger", LoggerLevel::getLevelInfo());
             if (opt.verbose > 1) {
-                http_logger.addAppender(new StdoutAppender());
+                http_logger.addAppender(new ServerLogAppender("stdout", self, False));
             }
             hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
                 "logger": http_logger,
@@ -101,13 +125,20 @@ class DebugWrapper {
                 stdout.printf("debug server listening on port %d\n", port);
             }
 
+            # the output of the debugged programs is sent to the clients and written to the terminal
+            dpc.captureOutput();
             if (exists fileName) {
                 Program pgm = dpc.createProgram(fileName, opt, ARGV);
                 logger.info("run program");
-                background pgm.run();
+                background sub () {
+                    # all output of the program is sent before the server ends with it
+                    on_exit dpc.stopOutputCapture();
+                    pgm.run();
+                }();
             }
             # signal handler for graceful shutdown
             code sig_handler = sub (int sig) {
+                dpc.stopOutputCapture();
                 dpc.shutdown();
                 dpc.waitForTerminationAndClear();
                 mServer.stop();
@@ -131,6 +162,15 @@ class DebugWrapper {
 
     public httperr(string fmt, ...) {
         stderr.vprintf(fmt, argv);
+    }
+
+    #! Returns the file that the log of the server is written to: the original stdout or stderr
+    File getLogFile(bool err) {
+        *DebugOutputCapture capture = dpc ? dpc.getOutputCapture() : NOTHING;
+        if (err) {
+            return capture ? capture.getStderr() : stderr;
+        }
+        return capture ? capture.getStdout() : stdout;
     }
 
     private help(int exCode=1) {

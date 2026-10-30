@@ -3435,10 +3435,13 @@ while (*binary chunk = input.read(65536)) {
     - @ref debugprogramcontrolintro "DebugProgramControl" module
       - stopped threads read and set the values of variables and of their elements, keys and members, also private
         ones, by their paths, and evaluate expressions with the variables of a frame
+      - added \c captureOutput(), which sends the output of the process to the clients as \c "output" events, as
+        \c qdbg-server does for its programs
       - interrupt events give the name of the thread
     - @ref debugutilintro "DebugUtil" module
       - added functions that describe values, list their elements, keys and members, also private ones, and read and
         set values by their paths
+      - added the \c DebugOutputCapture class, which captures the output of the process for debugger clients
     - @ref discorddataproviderintro "DiscordDataProvider" module
       - API calls are made with an asynchronous
         @ref DiscordRestClient::DiscordRestClientIo "DiscordRestClientIo"; a synchronous
@@ -3929,6 +3932,9 @@ while (*binary chunk = input.read(65536)) {
       - when a thread stops, the other threads of the program stop, and \c continue continues them all, as in other
         debuggers of Visual Studio Code; only the thread that stops was stopped; the \c stopAllThreads argument of
         \c launch and \c attach requests set to \c false keeps that
+      - the output of a program of a remote debug server (\c qdbg-server) is shown in the IDE; the server also writes
+        it to its terminal, and its own log is not sent as output; the output that a thread writes before it stops
+        is shown before the stop, also for programs launched by the adapter
       - fixed \c qdbg-vsc-adapter writing every event of a remote debug server to the debug console of the IDE
       - fixed \c qdbg-vsc-adapter ending without an answer when the remote debug server cannot be reached, so the
         IDE did not show why; the IDE's requests are answered with the error; when the connection to the debug

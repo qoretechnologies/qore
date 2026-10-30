@@ -335,7 +335,10 @@ class DebugWrapper {
             } else {
                 # programs debugged in this process write to stdout, which is the channel of the protocol
                 if (vda instanceof VscDebugAdapterLocal) {
-                    vda.captureProgramOutput();
+                    if (vda.captureProgramOutput()) {
+                        # the output that a thread writes before an interrupt reaches the IDE before the interrupt
+                        cast<VscDebugAdapterLocal>(vda).dpc.setOutputCapture(vda.getOutputCapture());
+                    }
                 }
                 logger.debug("Run vda adapter");
                 vda.run();

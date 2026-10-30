@@ -192,7 +192,7 @@ public class VscDebugAdapterTest inherits QUnit::Test {
 
         #! a program of a debug server that starts a thread for each line of input; the comments are the line numbers
         const AttachProgram = "%modern\n"                                  # 1
-            "sub work() {\n"                                                 # 2
+            "sub work() { printf(\"work\\n\");\n"                           # 2
             "    int t = 1;\n"                                               # 3
             "}\n"                                                            # 4
             "while (stdin.readLine(False) == \"thread\") {\n"                # 5
@@ -313,9 +313,9 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         addTestCase("the adapter communicates over sockets, as Visual Studio Code starts it", \socketTest());
         addTestCase("the adapter logs to its file and to the debug console", \logTest());
         addTestCase("the end of a program that started a process is reported", \childProcessTest());
-        addTestCase("marks in the output of programs", \outputMarkTest());
         addTestCase("names of threads", \threadNameTest());
         addTestCase("all threads stop and continue together", \stopAllThreadsTest());
+        addTestCase("output written before a stop is sent before it", \outputOrderTest());
         addTestCase("sources are parsed in the mode that the interpreter gives their files", \sourceModeTest());
         addTestCase("stopAllThreads false: only the thread that stops is stopped", \stopOneThreadTest());
         addTestCase("attaching to a program of a debug server", \attachTest());
@@ -448,24 +448,14 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         testSkip("no process module 2.2 or later");
     }
 
+    outputOrderTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
     sourceModeTest() {
         testSkip("no process module 2.2 or later");
     }
 %endif
-
-    # the output before a mark, or before an end of the output that can be the beginning of a mark, is queued
-    outputMarkTest() {
-        binary mark = binary("\0mark-123");
-        assertEq(5, VscDebugAdapter::getOutputSize(binary("abcde\0mark-123Frest"), mark));
-        assertEq(0, VscDebugAdapter::getOutputSize(binary("\0mark-123S"), mark));
-        # an end that can be the beginning of a mark
-        assertEq(3, VscDebugAdapter::getOutputSize(binary("abc\0mar"), mark));
-        assertEq(3, VscDebugAdapter::getOutputSize(binary("abc\0"), mark));
-        # no mark
-        assertEq(5, VscDebugAdapter::getOutputSize(binary("abcde"), mark));
-        assertEq(4, VscDebugAdapter::getOutputSize(binary("ab\0x"), mark));
-        assertEq(0, VscDebugAdapter::getOutputSize(binary(), mark));
-    }
 
     # the default names that Qore gives threads are not shown
     threadNameTest() {
@@ -1482,7 +1472,8 @@ print('exit code: %d' % p.wait(30))
     attachTest() {
         TmpDir tmp("qore-vda-test-");
         string path = writeProgram(tmp, AttachProgram);
-        Process server(qore_exe, (server_script, path), {
+        # the server logs to stderr
+        Process server(qore_exe, (server_script, "-v", path), {
             "env": Process::getEnvironment() + {
                 "QORE_MODULE_DIR": qlib_dir + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : ""),
             },
@@ -1535,7 +1526,8 @@ print('exit code: %d' % p.wait(30))
     serverClosedTest() {
         TmpDir tmp("qore-vda-test-");
         string path = writeProgram(tmp, AttachProgram);
-        Process server(qore_exe, (server_script, path), {
+        # the server logs to stderr
+        Process server(qore_exe, (server_script, "-v", path), {
             "env": Process::getEnvironment() + {
                 "QORE_MODULE_DIR": qlib_dir + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : ""),
             },
@@ -1616,6 +1608,8 @@ print('exit code: %d' % p.wait(30))
         hash<auto> frame = topFrame(dap, tid);
         assertEq("work", frame.name);
         assertEq(3, frame.line);
+        # the output that the thread wrote before it stopped has been sent before the stop
+        assertEq(("work\n",), dap.getOutput("stdout"));
         r = dap.request("threads", NOTHING, False);
         assertTrue(r.success, r.message);
         assertEq(sprintf("Thread %d", tid), (select r.body.threads, $1.id == tid)[0].name);
@@ -1626,7 +1620,14 @@ print('exit code: %d' % p.wait(30))
         dap.waitFor(bool sub (hash<auto> m) {
             return m.type == "event" && m.event == "thread" && m.body.threadId == tid && m.body.reason == "exited";
         }, "thread exited event");
-        assertEq("done\n", readServerOutput(server, "done\n"));
+        # the output of the program is also written by the server
+        assertEq("work\ndone\n", readServerOutput(server, "done\n"));
+        # the output of the program is sent to the IDE
+        dap.waitFor(bool sub (hash<auto> m) {
+            return m.type == "event" && m.event == "output" && m.body.category == "stdout" && m.body.output == "done\n";
+        }, "program output");
+        # the log of the server is not sent as the output of the program
+        assertEq((), (select dap.getOutput("stderr"), $1 =~ /\[INFO\]/));
         # no other thread was reported as stopped
         assertEq((), dap.getEvents("stopped"));
         # the events of the debug server are not written to the debug console
@@ -1745,6 +1746,32 @@ print('exit code: %d' % p.wait(30))
         assertTrue(proc.wait(30s), "the adapter ends");
         assertEq(0, proc.exitCode());
         assertEq((), dap.stray);
+    }
+
+    outputOrderTest() {
+        TmpDir tmp("qore-vda-test-");
+        string path = writeProgram(tmp, "%modern\n"                    # 1
+            "printf(\"before\\n\");\n"                                   # 2
+            "stderr.print(\"err\\n\");\n"                                # 3
+            "int x = 1;\n"                                                # 4
+            "printf(\"after %d\\n\", x);\n");                            # 5
+        Process proc = startAdapter();
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        launch(dap, {"program": path});
+        hash<auto> r = dap.request("setBreakpoints", {"source": {"path": path}, "breakpoints": ({"line": 4},)});
+        assertTrue(r.success, r.message);
+        r = dap.request("configurationDone");
+        assertTrue(r.success, r.message);
+        hash<auto> stopped = dap.waitForEvent("stopped");
+        assertEq("breakpoint", stopped.body.reason);
+        # the output of both streams before the stop has been sent before the stop
+        assertEq(("before\n",), dap.getOutput("stdout"));
+        assertEq(("err\n",), dap.getOutput("stderr"));
+        finish(dap, proc, stopped.body.threadId);
+        assertEq(("before\n", "after 1\n"), dap.getOutput("stdout"));
     }
 
     # a file whose name does not end in .q is parsed in %modern mode without the directive, and a .q file in the

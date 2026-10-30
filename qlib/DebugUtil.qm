@@ -57,6 +57,9 @@ module DebugUtil {
       @ref DebugUtil::AbstractDebugControl::getPath() "AbstractDebugControl::getPath()" and
       @ref DebugUtil::AbstractDebugControl::setPath() "AbstractDebugControl::setPath()" to show lists, hashes and
       objects as trees whose elements and members, also private ones, are read and changed on demand
+    - added @ref DebugUtil::DebugOutputCapture "DebugOutputCapture", which captures the standard output and standard
+      error of the process, so that the output of debugged programs can be sent to debugger clients, and the
+      @ref DebugUtil::DebugEventCmd::Output "output" event
 
     @subsection du_v0_1_1 v0.1.1
     - fixed issues with debug logging
@@ -319,6 +322,8 @@ public namespace DebugUtil {
         Breakpoint = "breakpoint",
         #! Welcome message on connection
         Welcome = "welcome",
+        #! Output of the program; see DebugOutputCapture
+        Output = "output",
     }
 
     #! base class for controlling debugging
@@ -635,6 +640,269 @@ public namespace DebugUtil {
             }
         }
 
+    }
+
+
+    #! Captures the standard output and standard error of the process, for sending the output of debugged programs
+    /** stdout and stderr are redirected to pipes; a thread for each pipe passes the output that it reads to a
+        callback, in complete UTF-8 characters, and can also write it to the original stdout or stderr.
+
+        Marks are written to the pipes to find the end of the output that was written before a point in time, also
+        when processes that a program started keep the pipes open: the mark is a random value, which the output does
+        not contain, followed by a command, and it is written with one write, which is atomic for a pipe:
+        - flush(): the flush callback is called for each pipe after the output before the mark
+        - flushAndWait(): returns when the output before the mark has been passed to the output callback
+        - stop(): the threads end after the output before the mark
+
+        Not supported on Windows, where start() returns @ref False
+
+        @par Example:
+        @code{.py}
+DebugOutputCapture capture(sub (string category, string output) {
+    send_to_client(category, output);
+});
+capture.start();
+on_exit capture.stop();
+        @endcode
+
+        @since DebugUtil 0.2
+    */
+    public class DebugOutputCapture {
+        public {
+            #! the beginning of the marks in the output
+            const MarkPrefix = "\0qore-debug-output-mark-";
+            #! the command of a mark after which the flush callback is called
+            const MarkFlush = "F";
+            #! the command of a mark that flushAndWait() waits for
+            const MarkWait = "W";
+            #! the command of a mark that ends the threads
+            const MarkStop = "S";
+        }
+
+        private:internal {
+            code m_output;
+            *code m_flushed;
+            bool m_tee;
+            *File m_savedStdout;
+            *File m_savedStderr;
+            *Counter m_forwarders;
+            binary m_mark;
+            #! serializes flushAndWait()
+            Mutex m_waitLock();
+            #! counts the pipes whose output before the mark of flushAndWait() has not yet been passed
+            *Counter m_waiting;
+        }
+
+        #! Creates the object; call start() to capture the output
+        /** @param output called with the category, \c "stdout" or \c "stderr", and the output, in the thread of the
+            pipe
+            @param flushed called with the category when the output before a mark of flush() has been passed, in the
+            thread of the pipe
+            @param tee if @ref True, the output is also written to the original stdout or stderr
+        */
+        constructor(code<nothing(string, string)> output, *code<nothing(string)> flushed, bool tee = False) {
+            m_output = output;
+            m_flushed = flushed;
+            m_tee = tee;
+        }
+
+        #! Redirects stdout and stderr to the pipes and starts the threads that read them
+        /** @return @ref True if the output is captured, @ref False if it is already captured or if stdout and
+            stderr cannot be duplicated on this platform
+        */
+        bool start() {
+            if (PlatformOS == "Windows" || m_forwarders) {
+                return False;
+            }
+            # stdout and stderr are kept with duplicates of their descriptors: the end of a pipe takes the descriptor
+            # of each; "/dev/stdout" cannot be opened when stdout is a socket
+            File saved_out = DebugOutputCapture::duplicate(stdout);
+            File saved_err = DebugOutputCapture::duplicate(stderr);
+            hash<PipeInfo> out_pipe = File::getPipe();
+            hash<PipeInfo> err_pipe = File::getPipe();
+            m_savedStdout = saved_out;
+            m_savedStderr = saved_err;
+            m_mark = binary(MarkPrefix) + binary(get_random_bytes(16).toHex());
+            stdout.redirect(out_pipe.write);
+            stderr.redirect(err_pipe.write);
+            # stdout and stderr are now the only writers of the pipes
+            out_pipe.write.close();
+            err_pipe.write.close();
+            m_forwarders = new Counter(2);
+            background forward(out_pipe.read, "stdout", saved_out);
+            background forward(err_pipe.read, "stderr", saved_err);
+            return True;
+        }
+
+        #! Returns True if the output is captured
+        bool isCapturing() {
+            return exists m_forwarders;
+        }
+
+        #! Returns the original stdout while the output is captured, otherwise stdout
+        File getStdout() {
+            return m_savedStdout ?? stdout;
+        }
+
+        #! Returns the original stderr while the output is captured, otherwise stderr
+        File getStderr() {
+            return m_savedStderr ?? stderr;
+        }
+
+        #! Restores stdout and stderr, after the output written before has been passed to the callback
+        stop() {
+            if (!m_forwarders) {
+                return;
+            }
+            writeMarks(MarkStop);
+            m_forwarders.waitForZero();
+            stdout.redirect(m_savedStdout);
+            stderr.redirect(m_savedStderr);
+            remove m_forwarders;
+            remove m_savedStdout;
+            remove m_savedStderr;
+        }
+
+        #! Calls the flush callback for each pipe after the output written before has been passed to the callback
+        /** @return @ref True if the marks were written, @ref False if the output is not captured
+        */
+        bool flush() {
+            if (!m_forwarders) {
+                return False;
+            }
+            writeMarks(MarkFlush);
+            return True;
+        }
+
+        #! Returns when the output written before has been passed to the output callback
+        flushAndWait() {
+            if (!m_forwarders) {
+                return;
+            }
+            m_waitLock.lock();
+            on_exit m_waitLock.unlock();
+            Counter waiting(2);
+            m_waiting = waiting;
+            on_exit remove m_waiting;
+            writeMarks(MarkWait);
+            waiting.waitForZero();
+        }
+
+        #! Returns the number of leading bytes of the output that are not a part of a mark
+        /** The output before a mark, or before the end of the output that can be the beginning of a mark, is not a
+            part of a mark
+        */
+        static int getOutputSize(binary data, binary mark) {
+            int i = data.find(mark);
+            if (i >= 0) {
+                return i;
+            }
+            # the longest end of the data that is the beginning of the mark
+            int size = data.size();
+            for (int k = min(mark.size() - 1, size); k > 0; --k) {
+                if (data.substr(size - k) == mark.substr(0, k)) {
+                    return size - k;
+                }
+            }
+            return size;
+        }
+
+        #! Returns the size of the leading part of the data that ends with a complete UTF-8 character
+        /** @param data UTF-8 data, which can end with a part of a character
+
+            @return the size of the data without a trailing incomplete character
+        */
+        static int getCompleteUtf8Size(binary data) {
+            int size = data.size();
+            # a character has at most 4 bytes; find the first byte of the last character
+            for (int i = size - 1; i >= 0 && i >= size - 4; --i) {
+                int c = data[i];
+                if ((c & 0xc0) != 0x80) {
+                    int len = c < 0xc0 ? 1 : (c < 0xe0 ? 2 : (c < 0xf0 ? 3 : 4));
+                    return i + len <= size ? size : i;
+                }
+            }
+            return size;
+        }
+
+        #! Returns a new File with a duplicate of the descriptor of the given File
+        private static File duplicate(File f) {
+            hash<PipeInfo> pipe = File::getPipe();
+            pipe.read.close();
+            # the descriptor of the write end of the pipe becomes a duplicate of the given File's descriptor (dup2())
+            pipe.write.redirect(f);
+            return pipe.write;
+        }
+
+        #! Writes a mark with the given command to the pipes
+        private:internal writeMarks(string cmd) {
+            binary mark = m_mark + binary(cmd);
+            stdout.write(mark);
+            stderr.write(mark);
+        }
+
+        #! Passes the output read from a pipe to the callback until a stop mark or the end of the input
+        private:internal forward(ReadOnlyFile reader, string category, File saved) {
+            on_exit m_forwarders.dec();
+            binary mark = m_mark;
+            binary pending;
+            while (True) {
+                # waits for the next output; the rest of what is available is read with it
+                *binary b = reader.readBinary(1);
+                if (!exists b) {
+                    break;
+                }
+                pending += b;
+                while (pending.size() < 65536 && reader.isDataAvailable(0)) {
+                    *binary more = reader.readBinary(1);
+                    if (!exists more) {
+                        break;
+                    }
+                    pending += more;
+                }
+                while (True) {
+                    int size = DebugOutputCapture::getOutputSize(pending, mark);
+                    # the output before a mark is passed with the end of an incomplete character
+                    if (size + mark.size() < pending.size()) {
+                        pass(category, saved, pending.substr(0, size));
+                        string cmd = pending.substr(size + mark.size(), 1).toString();
+                        splice pending, 0, size + mark.size() + 1;
+                        switch (cmd) {
+                            case MarkStop:
+                                pass(category, saved, pending);
+                                return;
+                            case MarkWait:
+                                m_waiting.dec();
+                                break;
+                            default:
+                                if (m_flushed) {
+                                    call_function(m_flushed, category);
+                                }
+                                break;
+                        }
+                        continue;
+                    }
+                    size = DebugOutputCapture::getCompleteUtf8Size(pending.substr(0, size));
+                    if (size) {
+                        pass(category, saved, pending.substr(0, size));
+                        splice pending, 0, size;
+                    }
+                    break;
+                }
+            }
+            pass(category, saved, pending);
+        }
+
+        #! Passes output to the callback and writes it to the original file, if any
+        private:internal pass(string category, File saved, *binary output) {
+            if (!output) {
+                return;
+            }
+            if (m_tee) {
+                saved.write(output);
+            }
+            call_function(m_output, category, output.toString("UTF-8"));
+        }
     }
 
 }

@@ -210,12 +210,6 @@ public class VscDebugAdapter inherits DebugCommandLine {
         const TopLevelFrameName = "<top level>";
         #! the first variable reference of a structured value; the references below it are those of stack frames
         const VarRefBase = 0x40000000;
-        #! the beginning of the mark in the output of programs; see writeOutputMarks()
-        const OutputMarkPrefix = "\0qdbg-vsc-adapter-output-mark-";
-        #! the command of a mark that sends the events that wait for the output before it
-        const MarkFlush = "F";
-        #! the command of a mark that ends the thread that forwards the output
-        const MarkStop = "S";
 
         #! process loop flag
         bool m_running = True;
@@ -247,15 +241,8 @@ public class VscDebugAdapter inherits DebugCommandLine {
         #! the file that messages to the IDE are written to
         File m_out = stdout;
 
-        #! the original stdout and stderr while the output of programs is captured
-        *File m_savedStdout;
-        *File m_savedStderr;
-
-        #! counts the threads that forward the output of programs while it is captured
-        *Counter m_outputForwarders;
-
-        #! the mark that is written to the pipes of the output of programs; see writeOutputMarks()
-        binary m_outputMark;
+        #! captures the output of programs; see captureProgramOutput()
+        *DebugOutputCapture m_outputCapture;
 
         #! events sent after the output of programs, with the number of marks of the pipes to wait for
         list<hash<auto>> m_eventsAfterOutput = ();
@@ -360,74 +347,47 @@ vda.run();
         @see stopProgramOutputCapture()
     */
     public bool captureProgramOutput() {
-        if (PlatformOS == "Windows" || m_outputForwarders) {
+        if (m_outputCapture) {
             return False;
         }
-        # stdout and stderr are kept with duplicates of their descriptors: the end of a pipe takes the descriptor of
-        # each; "/dev/stdout" cannot be opened when stdout is a socket, as Visual Studio Code gives it
-        File saved_out;
-        File saved_err;
+        DebugOutputCapture capture(
+            sub (string category, string output) {
+                pushEvent({"type": "vsc_output", "category": category, "output": output});
+            },
+            # a pipe's output before a flush mark has been queued; see sendVscEventAfterOutput()
+            sub (string category) {
+                pushEvent({"type": "vsc_output_mark"});
+            });
         try {
-            saved_out = VscDebugAdapter::duplicate(stdout);
-            saved_err = VscDebugAdapter::duplicate(stderr);
+            if (!capture.start()) {
+                return False;
+            }
         } catch (hash<ExceptionInfo> ex) {
             debug("the output of programs is not captured: %s", get_exception_string(ex));
             return False;
         }
-        hash<PipeInfo> out_pipe = File::getPipe();
-        hash<PipeInfo> err_pipe = File::getPipe();
-        m_out = saved_out;
-        m_savedStdout = saved_out;
-        m_savedStderr = saved_err;
-        # the mark that the adapter writes to the pipes after the output; see writeOutputMarks()
-        m_outputMark = binary(OutputMarkPrefix) + binary(get_random_bytes(16).toHex());
-        stdout.redirect(out_pipe.write);
-        stderr.redirect(err_pipe.write);
-        out_pipe.write.close();
-        err_pipe.write.close();
-        m_outputForwarders = new Counter(2);
-        background forwardOutput(out_pipe.read, "stdout", m_outputForwarders, m_outputMark);
-        background forwardOutput(err_pipe.read, "stderr", m_outputForwarders, m_outputMark);
+        m_outputCapture = capture;
+        # the protocol is written to the original stdout
+        m_out = capture.getStdout();
         return True;
     }
 
-    #! Returns a new File with a duplicate of the descriptor of the given File
-    private static File duplicate(File f) {
-        hash<PipeInfo> pipe = File::getPipe();
-        pipe.read.close();
-        # the descriptor of the write end of the pipe becomes a duplicate of the given File's descriptor (dup2())
-        pipe.write.redirect(f);
-        return pipe.write;
+    #! Returns the capture of the output of programs, if it is captured
+    *DebugOutputCapture getOutputCapture() {
+        return m_outputCapture;
     }
 
     #! Restores stdout and stderr after captureProgramOutput()
-    /** Waits until the output that was written before has been queued for the IDE: a stop mark is written to the
-        pipes, and the threads that forward the output end when they reach it, also if a process that a program
+    /** Waits until the output that was written before has been queued for the IDE, also if a process that a program
         started still has the pipes open.
     */
     public stopProgramOutputCapture() {
-        if (!m_outputForwarders) {
+        if (!m_outputCapture) {
             return;
         }
-        writeOutputMarks(MarkStop);
-        m_outputForwarders.waitForZero();
-        stdout.redirect(m_savedStdout);
-        stderr.redirect(m_savedStderr);
+        m_outputCapture.stop();
         m_out = stdout;
-        remove m_outputForwarders;
-        remove m_savedStdout;
-        remove m_savedStderr;
-    }
-
-    #! Writes a mark with the given command to the pipes of the output of programs
-    /** The mark is the random mark of the capture, which the output of a program does not contain, followed by the
-        command; the threads that forward the output queue the output that was written before the mark, then act on
-        the command.  A mark is written with one write, which is atomic for a pipe.
-    */
-    private:internal writeOutputMarks(string cmd) {
-        binary mark = m_outputMark + binary(cmd);
-        stdout.write(mark);
-        stderr.write(mark);
+        remove m_outputCapture;
     }
 
     #! Sends an event to the IDE after all output that programs have written
@@ -442,106 +402,12 @@ vda.run();
         @param body the body of the event, if any
     */
     private:internal sendVscEventAfterOutput(string event, *hash<auto> body) {
-        if (!m_outputForwarders) {
+        if (!m_outputCapture) {
             sendVscEvent(event, body);
             return;
         }
         push m_eventsAfterOutput, {"event": event, "body": body, "marks": 2};
-        writeOutputMarks(MarkFlush);
-    }
-
-    #! Returns the size of the leading part of the data that ends with a complete UTF-8 character
-    /** @param data UTF-8 data, which can end with a part of a character
-
-        @return the size of the data without a trailing incomplete character
-    */
-    static int getCompleteUtf8Size(binary data) {
-        int size = data.size();
-        # a character has at most 4 bytes; find the first byte of the last character
-        for (int i = size - 1; i >= 0 && i >= size - 4; --i) {
-            int c = data[i];
-            if ((c & 0xc0) != 0x80) {
-                int len = c < 0xc0 ? 1 : (c < 0xe0 ? 2 : (c < 0xf0 ? 3 : 4));
-                return i + len <= size ? size : i;
-            }
-        }
-        return size;
-    }
-
-    #! Returns the number of leading bytes of the output that are not a part of a mark
-    /** The output before a mark, or before the end of the output that can be the beginning of a mark, is not a part
-        of a mark
-    */
-    static int getOutputSize(binary data, binary mark) {
-        int i = data.find(mark);
-        if (i >= 0) {
-            return i;
-        }
-        # the longest end of the data that is the beginning of the mark
-        int size = data.size();
-        for (int k = min(mark.size() - 1, size); k > 0; --k) {
-            if (data.substr(size - k) == mark.substr(0, k)) {
-                return size - k;
-            }
-        }
-        return size;
-    }
-
-    #! Queues the output read from a pipe as output events until a stop mark or the end of the input
-    /** The output before a mark is queued, then a flush mark is queued as a \c "vsc_output_mark" message; the
-        thread ends at a stop mark.  The output is queued in complete UTF-8 characters.
-    */
-    private:internal forwardOutput(ReadOnlyFile reader, string category, Counter done, binary mark) {
-        on_exit done.dec();
-        binary pending;
-        while (True) {
-            # waits for the next output; the rest of what is available is read with it
-            *binary b = reader.readBinary(1);
-            if (!exists b) {
-                break;
-            }
-            pending += b;
-            while (pending.size() < 65536 && reader.isDataAvailable(0)) {
-                *binary more = reader.readBinary(1);
-                if (!exists more) {
-                    break;
-                }
-                pending += more;
-            }
-            while (True) {
-                int size = VscDebugAdapter::getOutputSize(pending, mark);
-                # the output before a mark is queued with the end of an incomplete character
-                if (size + mark.size() < pending.size()) {
-                    queueOutput(category, pending.substr(0, size));
-                    string cmd = pending.substr(size + mark.size(), 1).toString();
-                    splice pending, 0, size + mark.size() + 1;
-                    if (cmd == MarkStop) {
-                        queueOutput(category, pending);
-                        return;
-                    }
-                    pushEvent({"type": "vsc_output_mark"});
-                    continue;
-                }
-                size = VscDebugAdapter::getCompleteUtf8Size(pending.substr(0, size));
-                if (size) {
-                    queueOutput(category, pending.substr(0, size));
-                    splice pending, 0, size;
-                }
-                break;
-            }
-        }
-        queueOutput(category, pending);
-    }
-
-    #! Queues output as an output event, if there is any
-    private:internal queueOutput(string category, *binary output) {
-        if (output) {
-            pushEvent({
-                "type": "vsc_output",
-                "category": category,
-                "output": output.toString("UTF-8"),
-            });
-        }
+        m_outputCapture.flush();
     }
 
     #! Stops the thread of processEvents() after the events that are queued
@@ -868,6 +734,10 @@ vda.run();
             break;
         case "welcome":
             info("Connected: %y", event.result);
+            break;
+        case "output":
+            # the output of the programs of a remote debug server
+            sendVscEvent("output", {"category": event.category, "output": event.output});
             break;
         }
     }

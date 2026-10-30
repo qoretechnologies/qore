@@ -19,6 +19,9 @@ public class DebugUtilTest inherits QUnit::Test {
         addTestCase("constants tests", \constantsTests());
         addTestCase("ResponseSync tests", \responseSyncTests());
         addTestCase("value descriptions and paths", \describeTests());
+        addTestCase("marks in the output of programs", \outputMarkTest());
+        addTestCase("UTF-8 characters in the output of programs", \utf8SizeTest());
+        addTestCase("capture of the output of the process", \outputCaptureTest());
         set_return_value(main());
     }
 
@@ -498,6 +501,93 @@ public class DebugUtilTest inherits QUnit::Test {
             assertFalse(sync.isPending());
             assertFalse(sync.deliver({"uid": "6"}));
         }
+    }
+
+    # the output before a mark, or before an end of the output that can be the beginning of a mark, is queued
+    outputMarkTest() {
+        binary mark = binary("\0mark-123");
+        assertEq(5, DebugOutputCapture::getOutputSize(binary("abcde\0mark-123Frest"), mark));
+        assertEq(0, DebugOutputCapture::getOutputSize(binary("\0mark-123S"), mark));
+        # an end that can be the beginning of a mark
+        assertEq(3, DebugOutputCapture::getOutputSize(binary("abc\0mar"), mark));
+        assertEq(3, DebugOutputCapture::getOutputSize(binary("abc\0"), mark));
+        # no mark
+        assertEq(5, DebugOutputCapture::getOutputSize(binary("abcde"), mark));
+        assertEq(4, DebugOutputCapture::getOutputSize(binary("ab\0x"), mark));
+        assertEq(0, DebugOutputCapture::getOutputSize(binary(), mark));
+    }
+
+    # output that ends inside a UTF-8 character is passed without the incomplete character
+    utf8SizeTest() {
+        assertEq(3, DebugOutputCapture::getCompleteUtf8Size(binary("abc")));
+        # "é" is 2 bytes; "€" is 3 bytes
+        binary e = binary("é");
+        binary euro = binary("€");
+        assertEq(3, DebugOutputCapture::getCompleteUtf8Size(binary("a") + e));
+        assertEq(1, DebugOutputCapture::getCompleteUtf8Size(binary("a") + e.substr(0, 1)));
+        assertEq(1, DebugOutputCapture::getCompleteUtf8Size(binary("a") + euro.substr(0, 2)));
+        assertEq(4, DebugOutputCapture::getCompleteUtf8Size(binary("a") + euro));
+        assertEq(0, DebugOutputCapture::getCompleteUtf8Size(binary()));
+    }
+
+    # the output of the process is passed to the callbacks; flushAndWait() returns after the output before it
+    outputCaptureTest() {
+        if (PlatformOS == "Windows") {
+            testSkip("the output is not captured on Windows");
+        }
+        list<string> out = ();
+        list<string> err = ();
+        Counter flushed(2);
+        list<string> flushed_categories = ();
+        Mutex m();
+        DebugOutputCapture capture(
+            sub (string category, string output) {
+                m.lock();
+                on_exit m.unlock();
+                if (category == "stdout") {
+                    out += output;
+                } else {
+                    err += output;
+                }
+            },
+            sub (string category) {
+                m.lock();
+                flushed_categories += category;
+                m.unlock();
+                flushed.dec();
+            });
+        assertFalse(capture.isCapturing());
+        assertTrue(capture.start());
+        # a second start does nothing
+        assertFalse(capture.start());
+        bool stopped;
+        on_exit if (!stopped) {
+            capture.stop();
+        }
+        assertTrue(capture.isCapturing());
+
+        stdout.print("out-1\n");
+        stderr.print("err-1\n");
+        capture.flushAndWait();
+        list<string> out1 = out;
+        list<string> err1 = err;
+
+        stdout.print("out-2 é\n");
+        capture.flush();
+        flushed.waitForZero();
+
+        stdout.print("out-3\n");
+        capture.stop();
+        stopped = True;
+        assertFalse(capture.isCapturing());
+        # without a capture, flush and flushAndWait do nothing
+        assertFalse(capture.flush());
+        capture.flushAndWait();
+
+        assertEq("out-1\n", out1.join(""));
+        assertEq("err-1\n", err1.join(""));
+        assertEq("out-1\nout-2 é\nout-3\n", out.join(""));
+        assertEq(("stderr", "stdout"), sort(flushed_categories));
     }
 
     describeTests() {

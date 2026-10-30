@@ -58,6 +58,10 @@ module DebugProgramControl {
       variables and their elements, keys and members, also private ones, by their paths, and \c thread/evaluate
       evaluates expressions with the variables of a frame (see
       @ref DebugProgramControl::DebugProgramControl::evaluateExpression() "evaluateExpression()")
+    - added @ref DebugProgramControl::DebugProgramControl::captureOutput() "captureOutput()", which sends the output of
+      the process to the clients as \c "output" events, and
+      @ref DebugProgramControl::DebugProgramControl::setOutputCapture() "setOutputCapture()"; the output that a thread
+      writes before an interrupt is sent before the interrupt
     - interrupt events give the name of the thread in \c threadname, and program lists give the current names of the
       threads of programs in \c threadNames
     - @ref DebugProgramControl::DebugProgramControl::createProgram() "createProgram()" parses a script in the mode
@@ -97,6 +101,12 @@ public namespace DebugProgramControl {
             #! source file search path
             string sourceSearchPath = "";
 
+            #! the capture of the output of the process, which is flushed before an interrupt is sent; see
+            #! captureOutput() and setOutputCapture()
+            *DebugOutputCapture outputCapture;
+            #! True if this object created outputCapture and sends the output to the clients
+            bool ownOutputCapture;
+
             #! number of frames related to DebugProgramControl library when handleInterrupt() is invoked
             const frameOffset = 2;
 
@@ -115,6 +125,72 @@ public namespace DebugProgramControl {
         #! creates the object
         constructor(string serverName, *LoggerInterface logger) : AbstractDebugControl(logger) {
             self.serverName = serverName;
+        }
+
+        #! Captures the output of the process and sends it to all clients as output events
+        /** The standard output and standard error of the process, which debugged programs write to, are sent to the
+            clients as \c "output" events (@ref DebugUtil::DebugEventCmd::Output) with the \c category (\c "stdout"
+            or \c "stderr") and the \c output; the output written before an interrupt is sent before it.
+
+            @param tee if @ref True, the output is also written to the original stdout and stderr
+
+            @return @ref True if the output is captured, @ref False if it is already captured or cannot be captured
+            on this platform
+
+            @see stopOutputCapture()
+        */
+        public bool captureOutput(bool tee = True) {
+            if (outputCapture) {
+                return False;
+            }
+            DebugOutputCapture capture(\broadcastOutput(), NOTHING, tee);
+            if (!capture.start()) {
+                return False;
+            }
+            outputCapture = capture;
+            ownOutputCapture = True;
+            return True;
+        }
+
+        #! Returns the capture of the output, if the output is captured
+        public *DebugOutputCapture getOutputCapture() {
+            return outputCapture;
+        }
+
+        #! Sets the capture of the output of the process, which is flushed before an interrupt is sent
+        /** For a client in this process, such as a debug adapter, that captures the output itself; the output written
+            by a thread before it is interrupted reaches the client before the interrupt
+        */
+        public setOutputCapture(*DebugOutputCapture capture) {
+            if (ownOutputCapture) {
+                throw "DEBUG-ERROR", "the output is already captured by captureOutput()";
+            }
+            outputCapture = capture;
+        }
+
+        #! Restores stdout and stderr after captureOutput(), after the output written before has been sent
+        public stopOutputCapture() {
+            if (!ownOutputCapture) {
+                return;
+            }
+            outputCapture.stop();
+            remove outputCapture;
+            ownOutputCapture = False;
+        }
+
+        #! Sends output of the process to all clients
+        private broadcastOutput(string category, string output) {
+            try {
+                broadcastDataImpl({
+                    "type": DebugResponseType::Event,
+                    "cmd": DebugEventCmd::Output,
+                    "stamp": now_us(),
+                    "category": category,
+                    "output": output,
+                });
+            } catch (hash<ExceptionInfo> ex) {
+                # the output is not sent to a client that cannot be reached
+            }
         }
 
         #! resumes any blocked threads and destroys the object
@@ -1275,6 +1351,10 @@ public namespace DebugProgramControl {
             }
 %endif
 
+            # the output that the thread wrote before the interrupt reaches the clients before it
+            if (outputCapture) {
+                outputCapture.flushAndWait();
+            }
             try {
                 broadcastDataImpl(ctx.intrInfo);
             } catch (hash<ExceptionInfo> ex) {
