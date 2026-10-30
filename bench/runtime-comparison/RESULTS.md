@@ -30094,3 +30094,78 @@ and [62-item audit](audit-scalar-forwarding.md). This is an incremental branch c
 not a fresh develop/Java result or a global performance ceiling. Further candidates should
 investigate immutable inner-target validation and repeated frame-publication work while
 preserving live admission, both logical frames, ownership and exception behavior.
+
+
+## Rejected immutable dot-call metadata cache (2026-10-30)
+
+An experiment cached parsed explicit generic type arguments in the existing QoreAOTCallTarget field during source-IR and serialized-expression context construction. It removed repeated expression decoding and AST casts from ordinary and forwarding AOT calls. No context field, ABI, mutable admission guard, logical frame or ownership rule changed. The candidate is **rejected**; all four production files are restored to 2d14e89216. The installed runtime was never changed by this experiment.
+
+Forwarding improved in both fresh-build campaigns: pilot integer -2.41% and floating -0.98%; confirmation integer -1.23% and floating -2.58%. Common field and side-effecting method controls repeatedly cost more. Confirmation finds side-effecting +2.23%, floating field +1.45%, and closure controls about +1%; mixed workloads are close to neutral. The small forwarding gains do not justify those repeated common-call costs. This is a broader workload judgment, not a rule rejecting every regression or a claim of weighted application loss.
+
+Both runtimes use Release -O3 -DNDEBUG, allocation tracking off, Apple clang 2100.4.1.1 / SDK 27.2 and LLVM 22.1.8 on the M4 Pro. Fresh AOT artifacts use -O3 --strip-source. Each campaign has three layouts, three process forks per layout and variant, and three warmup plus three measured windows of at least 100 ms, with 4096 items per kernel call. Values are whole-kernel ns/item. The complete fresh-build confirmation follows; negative elapsed-time changes are faster.
+
+|!Workload|!Committed baseline ns/item|!Rejected candidate ns/item|!Change
+|matched:forward_float|35.1096|34.2041|-2.58%
+|matched:forward_int|29.8492|29.4823|-1.23%
+|matched:context_int|202.2540|200.9899|-0.63%
+|matched:context_float|217.0293|217.0637|+0.02%
+|local:direct_call|1.5566|1.5490|-0.49%
+|local:method_call|1.6266|1.6356|+0.56%
+|local:polymorphic_call|22.0450|22.4762|+1.96%
+|local:polymorphic_float_call|22.6780|22.2358|-1.95%
+|local:boxed_int_method_fallback|32.9449|33.0480|+0.31%
+|local:boxed_float_method_fallback|35.5267|36.0429|+1.45%
+|local:boxed_int_method_effect|91.8091|93.8551|+2.23%
+|local:list_mutate|122.3740|120.3348|-1.67%
+|local:temporary_list|1.6649|1.6562|-0.52%
+|local:polymorphic_expression_call|11.1546|11.0174|-1.23%
+|local:polymorphic_float_expression_call|11.1445|11.0977|-0.42%
+|micro:polymorphic_call|81.0871|81.1519|+0.08%
+|micro:polymorphic_float_call|83.0123|82.9131|-0.12%
+|micro:boxed_int_method_call|107.0800|106.1293|-0.89%
+|micro:boxed_float_method_call|112.4248|111.9212|-0.45%
+|micro:boxed_int_method_fallback|121.0076|121.3156|+0.25%
+|micro:boxed_float_method_fallback|126.4311|125.1617|-1.00%
+|micro:boxed_int_method_effect|179.9960|181.3311|+0.74%
+|micro:indirect_call|8.5875|8.6889|+1.18%
+|micro:closure_call|18.7221|18.9455|+1.19%
+|micro:closure_capture|24.5763|24.8349|+1.05%
+|micro:list_read|2.9431|2.9433|+0.01%
+|micro:list_build|23.7412|23.4657|-1.16%
+|micro:list_mutate|122.4584|121.6261|-0.68%
+|micro:temporary_hash|1.6799|1.6550|-1.48%
+|micro:polymorphic_expression_call|70.5347|70.7197|+0.26%
+|micro:polymorphic_float_expression_call|71.5582|72.5439|+1.38%
+|float:callback_local_float_return|0.8482|0.8646|+1.93%
+|float:typed_local_int_unary|1.2145|1.2137|-0.07%
+|float:callback_loop_float_return|4.9951|4.9857|-0.19%
+|mixed:csv_report|957.2410|950.2755|-0.73%
+|mixed:object_orders|3384.4706|3374.4507|-0.30%
+|mixed:callback_pipeline|96.4722|96.1201|-0.36%
+|mixed:text_index|1363.5278|1365.1121|+0.12%
+|probe:object_short|1693.8260|1673.7956|-1.18%
+|probe:effect_short|1769.9901|1754.5631|-0.87%
+|probe:string_result_loop|554.5594|559.5961|+0.91%
+
+Fresh artifact bytes differ, so a separate runtime-only check uses the same six standalone executable paths under both libraries. An initial attempt to include qmods failed the AOT runtime-identity guard at the first old-module/new-runtime combination. That failure and its preceding successful checks are preserved; the guard was not bypassed. The revised comparison covers only standalone local and forwarding suites. Its absolute times belong to a separate campaign and must not be pooled with the table above.
+
+|!Identical-standalone workload|!Baseline ns/item|!Rejected candidate ns/item|!Change
+|matched:forward_float|33.9396|33.0203|-2.71%
+|matched:forward_int|29.2304|28.6043|-2.14%
+|matched:context_int|195.9205|192.1770|-1.91%
+|matched:context_float|207.0535|204.6606|-1.16%
+|local:direct_call|1.4908|1.4960|+0.35%
+|local:method_call|1.5701|1.5725|+0.16%
+|local:polymorphic_call|21.6616|21.5237|-0.64%
+|local:polymorphic_float_call|21.6063|21.5354|-0.33%
+|local:boxed_int_method_fallback|31.7154|32.1387|+1.33%
+|local:boxed_float_method_fallback|34.3666|35.0805|+2.08%
+|local:boxed_int_method_effect|87.4044|88.8487|+1.65%
+
+The three paired campaigns total **1296 processes / 3888 measured windows**, all independently replayed. A separate 36-process / 108-window baseline was measured before editing. Fresh preparation validated 4698 reference outputs per variant, 144 child exits and 36 LLVM verifications. The identical-standalone preparation checked all six pairs under both runtimes. Candidate Release validation passed 11 fixtures: nine QUnit fixtures totaling 16 cases / 4557 assertions, plus two silent generic-call fixtures, with no skips. Debug qualification was not run for this rejected candidate.
+
+Assembly removes the AST lookup, leaves inspected native/dispatcher frame sizes unchanged and adds 32 executable bytes overall. Two untimed profiles verify loaded UUIDs and observe the lookup before the change. These structural results do not establish the cause of each control regression. Shared-host frequency and thermal conditions are uncontrolled; observed ranges are not confidence intervals.
+
+The [complete evidence](results-rejected-dot-metadata-macos-arm64.json) preserves raw timing receipts/output, layout medians/ranges, compiler settings, source patch, references, profiles and the identity rejection. The [62-item audit](audit-rejected-dot-metadata.md) covers this evidence-only commit. No new Java/develop ratio, weighted application effect or performance ceiling is claimed.
+
+Next: investigate combining forwarding-frame publication and removal while preserving both logical frames, source locations, deferred object/class contexts and exception restoration. A dedicated protocol must wait for concurrent stack readers before either frame is destroyed; the single-frame LIFO assertion cannot simply be weakened. This is an unimplemented hypothesis.

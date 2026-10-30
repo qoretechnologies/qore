@@ -1594,3 +1594,6 @@ See the [complete results](RESULTS.md#floating-point-aot-forwarding-2026-10-30),
 [evidence](results-scalar-forwarding-macos-arm64.json), and
 [audit](audit-scalar-forwarding.md). This is a narrow whole-kernel improvement; the new
 probe has no qualified Java equivalent and does not establish an overall application gain.
+
+
+Immutable dot-call type-metadata caching was [measured and rejected](RESULTS.md#rejected-immutable-dot-call-metadata-cache-2026-10-30). Small forwarding gains did not justify repeated field and side-effecting call costs. Runtime source is restored; module identity guards remain enabled. Next: investigate reader-safe publication/removal of paired forwarding frames.

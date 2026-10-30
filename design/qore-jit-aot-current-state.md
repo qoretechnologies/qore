@@ -6206,3 +6206,8 @@ code grows 5080 bytes. Release and Debug each pass eight fixtures / 15 cases / 4
 with native suites and 391 restored Release aliases separately verified. See the
 [full measurement and audit](../bench/runtime-comparison/results-scalar-forwarding-macos-arm64.json).
 These are whole-loop costs; no new Java/develop comparison or performance ceiling is claimed.
+
+
+### Rejected dot-call metadata cache (2026-10-30)
+
+Moving parsed explicit dot-call type metadata into the existing target field removed per-call AST decoding, but the [optimized measurements](../bench/runtime-comparison/results-rejected-dot-metadata-macos-arm64.json) did not justify repeated field and side-effecting call costs. All four production files are restored; the existing getter and context construction remain. Next: investigate a dedicated reader-safe pair protocol for forwarding frames, preserving both logical frames and deferred contexts through materialization, exceptions and concurrent reads. No pair protocol is implemented yet.
