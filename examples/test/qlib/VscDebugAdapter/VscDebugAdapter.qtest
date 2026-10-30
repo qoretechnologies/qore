@@ -397,7 +397,8 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         assertTrue(r.success, r.message);
         list<hash<auto>> frames = r.body.stackFrames;
         assertTrue(frames.size() > 0);
-        assertEq(path, frames[0].source.path);
+        # the source of the frame is the file itself, where the IDE shows values in hovers
+        assertEq({"name": "target.q", "path": path, "sourceReference": 0}, frames[0].source);
         assertEq(6, frames[0].line);
 
         # the variables of the frame

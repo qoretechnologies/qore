@@ -1100,7 +1100,16 @@ vda.run();
         return m;
     }
 
+    #! Returns a source of the protocol for a loaded source
+    /** A source that is a file that exists is given by its path, so that the IDE shows the file itself, where it
+        shows the values of variables in hovers; other sources, such as labels and code loaded at run time, and the
+        files of remote programs that do not exist here, are given by a reference, whose text is read with the
+        \c source request
+    */
     private:internal hash getSource(hash ls) {
+        if (!ls.source.val() && ls.file =~ /^\// && is_file(ls.file)) {
+            return {"name": basename(ls.file), "path": ls.file, "sourceReference": 0};
+        }
         hash src;
 
         src.name = exists ls.source ? sprintf("Label: %s", ls.source) : sprintf("File: %s", ls.file);
