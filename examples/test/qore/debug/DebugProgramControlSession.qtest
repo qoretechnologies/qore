@@ -244,6 +244,8 @@ public class DebugProgramControlTest inherits QUnit::Test {
         addTestCase("breakpoint on overloaded function", \overloadedFunctionBreakpointTest());
         addTestCase("statement identification of the command line", \commandLineStatementTest());
         addTestCase("breakpoint errors", \breakpointErrorTest());
+        addTestCase("structured variables of a stopped thread", \variableCommandTest());
+        addTestCase("expressions evaluated with the variables of a stopped thread", \evaluateCommandTest());
         set_return_value(main());
     }
 
@@ -408,6 +410,91 @@ public class DebugProgramControlTest inherits QUnit::Test {
         assertEq(42, AbstractDebugControl::unserialize(sum.value));
 
         # the program prints the value returned by add()
+        assertEq({"rc": NOTHING}, p.finish());
+    }
+
+    # the values of variables are described, and their elements, keys and members are read and set by their paths
+    variableCommandTest() {
+        DebuggedProgram p(dpc);
+        on_exit p.cleanup();
+        p.breakAt(8);
+        p.runToStop();
+
+        hash<auto> d = dpc.threadCommand(p.tid, "thread/variable/get", {"root": {"local": "h"}});
+        assertEq({"type": "hash<auto>", "value": "hash<auto> (2)", "named": 2}, d);
+        d = dpc.threadCommand(p.tid, "thread/variable/get", {"root": {"local": "h"}, "children": True});
+        assertEq(("name", "lines"), map $1.name, d.children);
+        assertEq(3, d.children[1].indexed);
+        d = dpc.threadCommand(p.tid, "thread/variable/get", {"root": {"local": "h"}, "path": ("lines", 2)});
+        assertEq("3", d.value);
+        # the elements of a list are paged
+        d = dpc.threadCommand(p.tid, "thread/variable/get", {"root": {"local": "h"}, "path": ("lines",),
+            "children": True, "start": 1, "count": 1});
+        assertEq(("1",), map $1.name, d.children);
+
+        # an element of a list in a local variable, given as a serialized value
+        d = dpc.threadCommand(p.tid, "thread/variable/set", {"root": {"local": "h"}, "path": ("lines", 0),
+            "value": AbstractDebugControl::serialize(10)});
+        assertEq("10", d.value);
+        hash<auto> h = dpc.threadCommand(p.tid, "thread/local/h/get");
+        assertEq((10, 2, 3), AbstractDebugControl::unserialize(h.value).lines);
+        # a local variable, given as an expression with the variables of the frame
+        d = dpc.threadCommand(p.tid, "thread/variable/set", {"root": {"local": "total"},
+            "expression": "total * 2 + h.lines[0]"});
+        assertEq("20", d.value);
+
+        # negative: a path and a variable that do not exist, and an invalid root
+        assertThrows("DEBUG-ERROR", "no key \"nope\"", \dpc.threadCommand(), (p.tid, "thread/variable/get",
+            {"root": {"local": "h"}, "path": ("nope",)}));
+        assertThrows("DEBUG-ERROR", "no local variable", \dpc.threadCommand(), (p.tid, "thread/variable/get",
+            {"root": {"local": "nope"}}));
+        assertThrows("DEBUG-ERROR", "invalid variable root", \dpc.threadCommand(), (p.tid, "thread/variable/get",
+            {"root": {"other": 1}}));
+        assertThrows("DEBUG-ERROR", "has no elements", \dpc.threadCommand(), (p.tid, "thread/variable/get",
+            {"root": {"local": "total"}, "children": True}));
+
+        assertEq({"rc": NOTHING}, p.finish());
+    }
+
+    # expressions are evaluated with the local variables of a frame, and their values are kept while the thread is
+    # stopped
+    evaluateCommandTest() {
+        DebuggedProgram p(dpc);
+        on_exit p.cleanup();
+        p.breakAt(4);
+        p.runToStop();
+
+        # the frame of add()
+        hash<auto> r = dpc.threadCommand(p.tid, "thread/evaluate", {"expression": "a + b * 10"});
+        assertEq({"type": "integer", "value": "32", "id": 0, "bool": True, "text": "32"}, r);
+        # the frame of the top-level code that called add()
+        r = dpc.threadCommand(p.tid, "thread/evaluate", {"expression": "h.name", "frameid": 1});
+        assertEq("invoice", r.text);
+        assertEq("\"invoice\"", r.value);
+        assertEq(1, r.id);
+        r = dpc.threadCommand(p.tid, "thread/evaluate", {"expression": "h.lines.size() > 5", "frameid": 1});
+        assertFalse(r.bool);
+
+        # a structured value is read by the ID of its expression
+        r = dpc.threadCommand(p.tid, "thread/evaluate", {"expression": "h.lines", "frameid": 1});
+        assertEq(3, r.indexed);
+        hash<auto> d = dpc.threadCommand(p.tid, "thread/variable/get", {"root": {"eval": r.id}, "children": True});
+        assertEq(("1", "2", "3"), map $1.value, d.children);
+
+        # an assignment in an expression does not change the variable
+        dpc.threadCommand(p.tid, "thread/evaluate", {"expression": "a = 100"});
+        assertEq(2, AbstractDebugControl::unserialize(dpc.threadCommand(p.tid, "thread/local/a/get").value));
+
+        # negative: a syntax error, an unknown variable, code that expressions may not run, and an unknown ID
+        assertThrows("DEBUG-EVALUATE-ERROR", \dpc.threadCommand(), (p.tid, "thread/evaluate",
+            {"expression": "a +"}));
+        assertThrows("DEBUG-EVALUATE-ERROR", \dpc.threadCommand(), (p.tid, "thread/evaluate",
+            {"expression": "total"}));
+        assertThrows("DEBUG-EVALUATE-ERROR", "system", \dpc.threadCommand(), (p.tid, "thread/evaluate",
+            {"expression": "system(\"true\")"}));
+        assertThrows("DEBUG-ERROR", "ID 99", \dpc.threadCommand(), (p.tid, "thread/variable/get",
+            {"root": {"eval": 99}}));
+
         assertEq({"rc": NOTHING}, p.finish());
     }
 

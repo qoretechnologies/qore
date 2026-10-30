@@ -26,6 +26,7 @@
 %requires qore >= 2.0
 
 %requires(reexport) Logger
+%requires reflection
 
 %modern
 %no-debugging
@@ -51,6 +52,11 @@ module DebugUtil {
       @ref DebugUtil::DebugPolicyName, @ref DebugUtil::DebugEventCmd for type-safe debug protocol constants
     - added @ref DebugUtil::ResponseSync class for thread-safe single-response synchronization, matching responses by
       the unique ID of the command and waiting without a timeout
+    - added @ref DebugUtil::AbstractDebugControl::describe() "AbstractDebugControl::describe()",
+      @ref DebugUtil::AbstractDebugControl::describeChildren() "AbstractDebugControl::describeChildren()",
+      @ref DebugUtil::AbstractDebugControl::getPath() "AbstractDebugControl::getPath()" and
+      @ref DebugUtil::AbstractDebugControl::setPath() "AbstractDebugControl::setPath()" to show lists, hashes and
+      objects as trees whose elements and members, also private ones, are read and changed on demand
 
     @subsection du_v0_1_1 v0.1.1
     - fixed issues with debug logging
@@ -318,6 +324,11 @@ public namespace DebugUtil {
     #! base class for controlling debugging
     public class AbstractDebugControl inherits Logger::LoggerWrapper {
         public {
+            #! the maximum number of characters of the text of a value in describe()
+            const MaxValueTextSize = 256;
+        }
+
+        public {
             #! for debugging of debug library to see where exception is raised
             bool showFullException = False;
 
@@ -417,6 +428,176 @@ public namespace DebugUtil {
                 sv.value = v;
             }
             return sv;
+        }
+
+        #! Returns a description of a value for a debugger client
+        /** @param val the value
+
+            @return a hash with the following keys:
+            - \c type: the type of the value: the full type of a list or hash, as \c "hash<string, int>" or the name of
+              a typed hash, and the class of an object
+            - \c value: the value as text, at most @ref MaxValueTextSize characters; a summary for lists, hashes and
+              objects
+            - \c indexed: the number of elements of a list
+            - \c named: the number of keys of a hash or of members of an object
+
+            @see describeChildren()
+        */
+        static public hash<auto> describe(auto val) {
+            switch (val.typeCode()) {
+                case NT_LIST:
+                    return {"type": val.fullType(), "value": sprintf("list (%d)", val.size()), "indexed": val.size()};
+                case NT_HASH: {
+                    string t = val.fullType();
+                    return {"type": t, "value": sprintf("%s (%d)", t, val.size()), "named": val.size()};
+                }
+                case NT_OBJECT: {
+                    string cls = val.className();
+                    return {"type": cls, "value": cls, "named": AbstractDebugControl::getMemberNames(val).size()};
+                }
+            }
+            string text = sprintf("%y", val);
+            if (text.size() > MaxValueTextSize) {
+                text = text.substr(0, MaxValueTextSize) + "...";
+            }
+            return {"type": val.type(), "value": text};
+        }
+
+        #! Returns descriptions of the elements of a list, the keys of a hash or the members of an object
+        /** @param val the list, hash or object
+            @param start the index of the first element, key or member that is returned
+            @param count the maximum number of elements, keys or members that are returned; all are returned if not
+            given
+
+            @return a list of descriptions as returned by describe(), each with a \c name key, the text that the
+            element, key or member is shown with, and a \c key key, the key of the element, key or member in a path
+            (see getPath()); members of objects are given also if they are private
+
+            @throw DEBUG-ERROR the value is not a list, hash or object
+        */
+        static public list<hash<auto>> describeChildren(auto val, int start = 0, *int count) {
+            list<auto> child_keys;
+            switch (val.typeCode()) {
+                case NT_LIST:
+                    int end = exists count ? min(val.size(), start + count) : val.size();
+                    child_keys = start < end ? range(start, end) : ();
+                    break;
+                case NT_HASH:
+                    child_keys = keys val;
+                    break;
+                case NT_OBJECT:
+                    child_keys = AbstractDebugControl::getMemberNames(val);
+                    break;
+                default:
+                    throw "DEBUG-ERROR", sprintf("a value of type %y has no elements", val.type());
+            }
+            if (val.typeCode() != NT_LIST) {
+                child_keys = exists count ? child_keys[start..(start + count - 1)] : child_keys[start..];
+            }
+            return map AbstractDebugControl::describe(AbstractDebugControl::getChild(val, $1))
+                + {"name": string($1), "key": $1}, child_keys;
+        }
+
+        #! Returns the value at the given path in a value
+        /** @param val the value
+            @param path the keys of the elements, hash keys or object members that lead to the value, as given by
+            describeChildren()
+
+            @return the value at the path
+
+            @throw DEBUG-ERROR the path does not lead to a value
+        */
+        static public auto getPath(auto val, *list<auto> path) {
+            foreach auto key in (path) {
+                val = AbstractDebugControl::getChild(val, key);
+            }
+            return val;
+        }
+
+        #! Returns the given value with the value at the given path changed
+        /** Lists and hashes are copied with the change; the members of objects are changed in the objects
+
+            @param val the value
+            @param path the keys of the elements, hash keys or object members that lead to the value to change, as
+            given by describeChildren(); with an empty path, the new value is returned
+            @param new_val the new value
+
+            @return the value with the change
+
+            @throw DEBUG-ERROR the path does not lead to a value
+        */
+        static public auto setPath(auto val, *list<auto> path, auto new_val) {
+            if (!path) {
+                return new_val;
+            }
+            auto key = shift path;
+            auto child = AbstractDebugControl::setPath(AbstractDebugControl::getChild(val, key), path, new_val);
+            switch (val.typeCode()) {
+                case NT_LIST:
+                    val[int(key)] = child;
+                    break;
+                case NT_HASH:
+                    val{key} = child;
+                    break;
+                case NT_OBJECT: {
+                    NormalMember member = AbstractDebugControl::getMember(val, key);
+                    member.setValue(val, child);
+                    break;
+                }
+            }
+            return val;
+        }
+
+        #! Returns the names of the members of an object, also of private members and of members of parent classes
+        static public list<string> getMemberNames(object obj) {
+            hash<string, bool> seen = {};
+            list<string> rv = ();
+            foreach Class cls in (Class::getClass(obj).getClassHierarchy()) {
+                foreach AbstractClassMember member in (cls.getMembers()) {
+                    if (member instanceof NormalMember && !seen{member.getName()}) {
+                        seen{member.getName()} = True;
+                        push rv, member.getName();
+                    }
+                }
+            }
+            return rv;
+        }
+
+        #! Returns the element of a list, the value of a hash key or the value of a member of an object
+        /** @throw DEBUG-ERROR the value has no such element, key or member
+        */
+        static auto getChild(auto val, auto key) {
+            switch (val.typeCode()) {
+                case NT_LIST: {
+                    int i = int(key);
+                    if (i < 0 || i >= val.size()) {
+                        throw "DEBUG-ERROR", sprintf("the list has no element %d", i);
+                    }
+                    return val[i];
+                }
+                case NT_HASH:
+                    if (!val.hasKey(key)) {
+                        throw "DEBUG-ERROR", sprintf("the hash has no key %y", key);
+                    }
+                    return val{key};
+                case NT_OBJECT:
+                    return AbstractDebugControl::getMember(val, key).getValue(val);
+            }
+            throw "DEBUG-ERROR", sprintf("a value of type %y has no elements", val.type());
+        }
+
+        #! Returns the member of the class of an object or of its parent classes with the given name
+        /** @throw DEBUG-ERROR the object has no member with the name
+        */
+        private static NormalMember getMember(object obj, string name) {
+            foreach Class cls in (Class::getClass(obj).getClassHierarchy()) {
+                foreach AbstractClassMember member in (cls.getMembers()) {
+                    if (member instanceof NormalMember && member.getName() == name) {
+                        return cast<NormalMember>(member);
+                    }
+                }
+            }
+            throw "DEBUG-ERROR", sprintf("an object of class %y has no member %y", obj.className(), name);
         }
 
         static public auto unserialize(auto sv) {

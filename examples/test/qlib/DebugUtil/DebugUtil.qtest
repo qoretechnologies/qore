@@ -18,6 +18,7 @@ public class DebugUtilTest inherits QUnit::Test {
         addTestCase("WrapperGetOpt.split tests", \wrapperGetOptTests());
         addTestCase("constants tests", \constantsTests());
         addTestCase("ResponseSync tests", \responseSyncTests());
+        addTestCase("value descriptions and paths", \describeTests());
         set_return_value(main());
     }
 
@@ -497,5 +498,70 @@ public class DebugUtilTest inherits QUnit::Test {
             assertFalse(sync.isPending());
             assertFalse(sync.deliver({"uid": "6"}));
         }
+    }
+
+    describeTests() {
+        DescribeTestAccount acct();
+        hash<auto> v = {"acct": acct, "l": (1, "two", {"k": 3}), "s": "str", "n": NOTHING};
+
+        # descriptions
+        assertEq({"type": "hash<auto>", "value": "hash<auto> (4)", "named": 4}, AbstractDebugControl::describe(v));
+        assertEq({"type": "list<auto>", "value": "list (3)", "indexed": 3}, AbstractDebugControl::describe(v.l));
+        assertEq({"type": "DescribeTestAccount", "value": "DescribeTestAccount", "named": 3},
+            AbstractDebugControl::describe(acct));
+        assertEq({"type": "string", "value": "\"str\""}, AbstractDebugControl::describe("str"));
+        assertEq({"type": "nothing", "value": "null"}, AbstractDebugControl::describe(NOTHING));
+        # long text is shortened
+        hash<auto> d = AbstractDebugControl::describe(strmul("x", 1000));
+        assertEq(AbstractDebugControl::MaxValueTextSize + 3, d.value.length());
+
+        # the members of an object, also private ones and those of parent classes
+        assertEq(("id", "balance", "name"), map $1.name, AbstractDebugControl::describeChildren(acct));
+        assertEq(("id", "balance", "name"), AbstractDebugControl::getMemberNames(acct));
+        # the keys of a hash and the elements of a list, also a part of them
+        assertEq(("acct", "l", "s", "n"), map $1.key, AbstractDebugControl::describeChildren(v));
+        assertEq((1, 2), map $1.key, AbstractDebugControl::describeChildren(v.l, 1));
+        assertEq(("\"two\"",), map $1.value, AbstractDebugControl::describeChildren(v.l, 1, 1));
+        assertEq((), AbstractDebugControl::describeChildren(v.l, 5));
+
+        # paths
+        assertEq(3, AbstractDebugControl::getPath(v, ("l", 2, "k")));
+        assertEq(100, AbstractDebugControl::getPath(v, ("acct", "balance")));
+        assertEq(v, AbstractDebugControl::getPath(v, ()));
+        v = AbstractDebugControl::setPath(v, ("l", 2, "k"), 4);
+        assertEq(4, v.l[2].k);
+        # the member of an object is set in the object
+        AbstractDebugControl::setPath(v, ("acct", "balance"), 7);
+        assertEq(7, acct.getBalance());
+        assertEq("new", AbstractDebugControl::setPath(v, (), "new"));
+
+        # negative
+        assertThrows("DEBUG-ERROR", "no element 9", \AbstractDebugControl::getPath(), (v, ("l", 9)));
+        assertThrows("DEBUG-ERROR", "no key \"x\"", \AbstractDebugControl::getPath(), (v, ("x",)));
+        assertThrows("DEBUG-ERROR", "no member \"x\"", \AbstractDebugControl::getPath(), (v, ("acct", "x")));
+        assertThrows("DEBUG-ERROR", "has no elements", \AbstractDebugControl::getPath(), (v, ("s", 0)));
+        assertThrows("DEBUG-ERROR", "has no elements", \AbstractDebugControl::describeChildren(), (1,));
+        assertThrows("DEBUG-ERROR", "no element 9", \AbstractDebugControl::setPath(), (v, ("l", 9), 1));
+    }
+}
+
+#! a class with private members and a parent class, for describeTests()
+class DescribeTestBase {
+    private {
+        int id = 7;
+    }
+}
+
+class DescribeTestAccount inherits DescribeTestBase {
+    private {
+        int balance = 100;
+    }
+
+    public {
+        string name = "acct";
+    }
+
+    int getBalance() {
+        return balance;
     }
 }

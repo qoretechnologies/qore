@@ -206,6 +206,29 @@ public class VscDebugAdapterTest inherits QUnit::Test {
             "}\n"                                                            # 6
             "printf(\"done\\n\");\n";                                         # 7
 
+        #! a program with structured values and a loop; the comments are the line numbers
+        const DataProgram = "%modern\n"                                     # 1
+            "class Base {\n"                                                 # 2
+            "    private { int id = 7; }\n"                                  # 3
+            "}\n"                                                            # 4
+            "class Account inherits Base {\n"                                # 5
+            "    private { int balance = 100; hash<auto> meta = {\"owner\": \"ann\", \"tags\": (\"a\", \"b\")}; }\n" # 6
+            "    public { string name = \"acct\"; }\n"                       # 7
+            "    int getBalance() { return balance; }\n"                     # 8
+            "}\n"                                                            # 9
+            "int sub work(int n) {\n"                                        # 10
+            "    int total = 0;\n"                                           # 11
+            "    for (int i = 0; i < n; ++i) {\n"                            # 12
+            "        total += i;\n"                                          # 13
+            "    }\n"                                                        # 14
+            "    return total;\n"                                            # 15
+            "}\n"                                                            # 16
+            "our Account acct = new Account();\n"                            # 17
+            "our hash<auto> h = {\"name\": \"invoice\", \"lines\": (1, 2, 3), \"nested\": {\"k\": \"v\"}};\n" # 18
+            "list<int> big = range(0, 250);\n"                               # 19
+            "int r = work(5);\n"                                             # 20
+            "printf(\"r: %d\\n\", r);\n";                                     # 21
+
         string qore_exe = executablePath(ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore");
         string adapter = normalize_dir(get_script_dir() + "/../../../../bin/qdbg-vsc-adapter");
         string qlib_dir = normalize_dir(get_script_dir() + "/../../../../qlib");
@@ -222,6 +245,13 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         addTestCase("exceptions without an exception breakpoint", \exceptionNoFilterTest());
         addTestCase("threads started by the program", \threadTest());
         addTestCase("pausing a running program", \pauseTest());
+        addTestCase("structured variables are shown as trees", \variablesTest());
+        addTestCase("values of variables, elements and members are set", \setVariableTest());
+        addTestCase("expressions are evaluated for watches, hovers and the debug console", \evaluateTest());
+        addTestCase("conditional breakpoints", \conditionalBreakpointTest());
+        addTestCase("hit conditions of breakpoints", \hitConditionTest());
+        addTestCase("logpoints", \logpointTest());
+        addTestCase("a breakpoint whose condition is false does not hide a step", \conditionalStepTest());
         addTestCase("the adapter ends when the IDE closes its input", \endOfInputTest());
         set_return_value(main());
     }
@@ -286,6 +316,34 @@ public class VscDebugAdapterTest inherits QUnit::Test {
     }
 
     pauseTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
+    variablesTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
+    setVariableTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
+    evaluateTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
+    conditionalBreakpointTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
+    hitConditionTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
+    logpointTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
+    conditionalStepTest() {
         testSkip("no process module 2.2 or later");
     }
 %else
@@ -361,7 +419,7 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         assertEq("step", stopped.body.reason);
         r = dap.request("stackTrace", {"threadId": tid});
         frames = r.body.stackFrames;
-        r = dap.request("evaluate", {"expression": "h", "context": "watch", "frameId": frames[0].id});
+        r = dap.request("evaluate", {"expression": "h.name", "context": "watch", "frameId": frames[0].id});
         assertTrue(r.success, r.message);
         assertRegex("invoice", r.body.result);
 
@@ -755,6 +813,374 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         finish(dap, proc, tid);
         # the output before the pause was taken above
         assertEq(("done\n",), dap.getOutput("stdout"));
+    }
+
+    #! Launches the given program with breakpoints and returns the first stopped event
+    /** @param breakpoints the source breakpoints of the program, as given in a \c setBreakpoints request
+    */
+    private hash<auto> launchToStop(DapClient dap, string path, list<auto> breakpoints) {
+        launch(dap, {"program": path, "stopOnEntry": False});
+        hash<auto> r = dap.request("setBreakpoints", {"source": {"path": path}, "breakpoints": breakpoints});
+        assertTrue(r.success, r.message);
+        foreach hash<auto> b in (r.body.breakpoints) {
+            assertTrue(b.verified, sprintf("%y", r.body.breakpoints));
+        }
+        r = dap.request("configurationDone");
+        assertTrue(r.success, r.message);
+        return dap.waitForEvent("stopped");
+    }
+
+    #! Returns the variables of a variable reference as a hash by name
+    private hash<auto> getVariables(DapClient dap, int ref, *hash<auto> args) {
+        hash<auto> r = dap.request("variables", {"variablesReference": ref} + args);
+        assertTrue(r.success, r.message);
+        return (map {$1.name: $1}, r.body.variables) ?? {};
+    }
+
+    #! Returns the variable reference of the given scope of the top frame of a thread
+    private int getScope(DapClient dap, int tid, string scope) {
+        hash<auto> frame = topFrame(dap, tid);
+        hash<auto> r = dap.request("scopes", {"frameId": frame.id});
+        assertTrue(r.success, r.message);
+        return (select r.body.scopes, $1.name == scope)[0].variablesReference;
+    }
+
+    #! Evaluates an expression with the top frame of a thread and returns the response
+    private hash<auto> evaluate(DapClient dap, int tid, string expr, string eval_context = "watch") {
+        return dap.request("evaluate", {"expression": expr, "frameId": topFrame(dap, tid).id,
+            "context": eval_context});
+    }
+
+    variablesTest() {
+        TmpDir tmp("qore-vda-test-");
+        string path = writeProgram(tmp, DataProgram);
+        Process proc = startAdapter();
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        hash<auto> stopped = launchToStop(dap, path, ({"line": 20},));
+        int tid = stopped.body.threadId;
+
+        # the global variables of the program
+        hash<auto> vars = getVariables(dap, getScope(dap, tid, "Globals"));
+        assertEq("Account", vars.acct.type);
+        # the object has the members of its class and of its parent class, also private ones
+        assertEq(4, vars.acct.namedVariables);
+        assertEq("hash<auto> (3)", vars.h.value);
+        assertEq(3, vars.h.namedVariables);
+        assertEq("h", vars.h.evaluateName);
+        # the local variables of the top-level code
+        hash<auto> locals = getVariables(dap, getScope(dap, tid, "Locals"));
+        assertEq(250, locals.big.indexedVariables);
+        assertEq("list (250)", locals.big.value);
+        assertEq(0, locals.r.variablesReference);
+
+        # the keys of a hash, and the elements of a list in it
+        hash<auto> h = getVariables(dap, vars.h.variablesReference);
+        assertEq(("name", "lines", "nested"), keys h);
+        assertEq("\"invoice\"", h.name.value);
+        assertEq("h{\"lines\"}", h.lines.evaluateName);
+        hash<auto> lines = getVariables(dap, h.lines.variablesReference);
+        assertEq(("0", "1", "2"), keys lines);
+        assertEq("3", lines."2".value);
+        assertEq("h{\"lines\"}[2]", lines."2".evaluateName);
+        assertEq("\"v\"", getVariables(dap, h.nested.variablesReference).k.value);
+
+        # the members of an object, also private ones and those of parent classes
+        hash<auto> acct = getVariables(dap, vars.acct.variablesReference);
+        assertEq(("id", "balance", "meta", "name"), keys acct);
+        assertEq("100", acct.balance.value);
+        assertEq("7", acct.id.value);
+        assertEq("acct.balance", acct.balance.evaluateName);
+        hash<auto> meta = getVariables(dap, acct.meta.variablesReference);
+        assertEq(("\"a\"", "\"b\""), map $1.value, getVariables(dap, meta.tags.variablesReference).iterator());
+
+        # the elements of a long list are paged
+        hash<auto> part = getVariables(dap, locals.big.variablesReference,
+            {"filter": "indexed", "start": 100, "count": 3});
+        assertEq(("100", "101", "102"), keys part);
+        assertEq("101", part."101".value);
+        assertEq({}, getVariables(dap, locals.big.variablesReference, {"filter": "named"}));
+
+        # the local variables of a function and their values
+        hash<auto> r = dap.request("stepIn", {"threadId": tid});
+        assertTrue(r.success, r.message);
+        dap.waitForEvent("stopped");
+        locals = getVariables(dap, getScope(dap, tid, "Locals"));
+        assertEq("5", locals.n.value);
+        assertEq("n", locals.n.evaluateName);
+
+        # the references of a thread are not valid once it has resumed
+        int old_ref = vars.h.variablesReference;
+        r = dap.request("continue", {"threadId": tid});
+        assertTrue(r.success, r.message);
+        dap.waitForEvent("terminated");
+        r = dap.request("variables", {"variablesReference": old_ref});
+        assertFalse(r.success);
+        assertRegex("thread has resumed", r.message);
+        r = dap.request("disconnect");
+        assertTrue(r.success, r.message);
+        proc.closeStdin();
+        assertTrue(proc.wait(30s), "the adapter ends");
+        assertEq(("r: 10\n",), dap.getOutput("stdout"));
+    }
+
+    setVariableTest() {
+        TmpDir tmp("qore-vda-test-");
+        string path = writeProgram(tmp, DataProgram);
+        Process proc = startAdapter();
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        hash<auto> stopped = launchToStop(dap, path, ({"line": 20},));
+        int tid = stopped.body.threadId;
+        hash<auto> vars = getVariables(dap, getScope(dap, tid, "Globals"));
+
+        # a key of a nested hash
+        hash<auto> h = getVariables(dap, vars.h.variablesReference);
+        hash<auto> r = dap.request("setVariable", {"variablesReference": h.nested.variablesReference, "name": "k",
+            "value": "\"w\""});
+        assertTrue(r.success, r.message);
+        assertEq("\"w\"", r.body.value);
+        assertEq("\"w\"", evaluate(dap, tid, "h.nested.k").body.result);
+
+        # an element of a list
+        r = dap.request("setVariable", {"variablesReference": h.lines.variablesReference, "name": "1",
+            "value": "20"});
+        assertTrue(r.success, r.message);
+        assertEq("20", evaluate(dap, tid, "h.lines[1]").body.result);
+
+        # a private member of an object, which the object's method returns
+        hash<auto> acct = getVariables(dap, vars.acct.variablesReference);
+        r = dap.request("setVariable", {"variablesReference": vars.acct.variablesReference, "name": "balance",
+            "value": "7"});
+        assertTrue(r.success, r.message);
+        assertEq("7", evaluate(dap, tid, "acct.getBalance()").body.result);
+
+        # negative: a value of the wrong type for a typed list, and an element that does not exist
+        hash<auto> locals = getVariables(dap, getScope(dap, tid, "Locals"));
+        r = dap.request("setVariable", {"variablesReference": locals.big.variablesReference, "name": "0",
+            "value": "\"x\""});
+        assertFalse(r.success);
+        r = dap.request("setVariable", {"variablesReference": h.lines.variablesReference, "name": "9",
+            "value": "1"});
+        assertFalse(r.success);
+        assertRegex("no element 9", r.message);
+
+        # a global variable, which the program uses; the value is an expression
+        r = dap.request("setVariable", {"variablesReference": getScope(dap, tid, "Globals"), "name": "h",
+            "value": "{\"name\": \"other-\" + acct.name}"});
+        assertTrue(r.success, r.message);
+        assertEq(1, r.body.namedVariables);
+        assertEq("\"other-acct\"", evaluate(dap, tid, "h.name").body.result);
+
+        finish(dap, proc, tid);
+    }
+
+    evaluateTest() {
+        TmpDir tmp("qore-vda-test-");
+        string path = writeProgram(tmp, DataProgram);
+        Process proc = startAdapter();
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        hash<auto> stopped = launchToStop(dap, path, ({"line": 13},));
+        int tid = stopped.body.threadId;
+
+        # watches with the local variables of the frame and the global variables of the program
+        hash<auto> r = evaluate(dap, tid, "i + 10");
+        assertTrue(r.success, r.message);
+        assertEq("10", r.body.result);
+        assertEq("integer", r.body.type);
+        assertEq("\"invoice-5\"", evaluate(dap, tid, "sprintf(\"%s-%d\", h.name, n)").body.result);
+        assertEq("100", evaluate(dap, tid, "acct.getBalance()").body.result);
+        # a hover
+        assertEq("hash<auto> (3)", evaluate(dap, tid, "h", "hover").body.result);
+
+        # a structured value is shown as a tree
+        r = evaluate(dap, tid, "h.lines");
+        assertTrue(r.success, r.message);
+        assertEq(3, r.body.indexedVariables);
+        assertEq(("1", "2", "3"), map $1.value, getVariables(dap, r.body.variablesReference).iterator());
+
+        # the debug console: an expression, an expression with "$", and a debugger command
+        r = evaluate(dap, tid, "n * 2", "repl");
+        assertEq("10", r.body.result);
+        r = evaluate(dap, tid, "$n", "repl");
+        assertEq("5", r.body.result);
+        r = evaluate(dap, tid, "help", "repl");
+        assertTrue(r.success, r.message);
+        assertEq("", r.body.result);
+
+        # negative: a syntax error, an unknown variable, and code that the expressions may not run
+        r = evaluate(dap, tid, "n +");
+        assertFalse(r.success);
+        assertRegex("DEBUG-EVALUATE-ERROR", r.message);
+        r = evaluate(dap, tid, "no_such_variable + 1");
+        assertFalse(r.success);
+        r = evaluate(dap, tid, "system(\"true\")");
+        assertFalse(r.success);
+        # an expression without a frame
+        r = dap.request("evaluate", {"expression": "1 + 1", "context": "watch"});
+        assertFalse(r.success);
+
+        # an assignment in an expression does not change the program's variable
+        evaluate(dap, tid, "total = 1000");
+        assertEq("0", evaluate(dap, tid, "total").body.result);
+
+        # the breakpoint in the loop stops the thread in the other iterations
+        assertEq((13, 13, 13, 13), runToEnd(dap, proc, tid));
+    }
+
+    #! Continues the thread until the program ends and returns the lines of the stops on the way
+    private list<int> runToEnd(DapClient dap, Process proc, int tid) {
+        list<int> lines = ();
+        while (True) {
+            hash<auto> r = dap.request("continue", {"threadId": tid});
+            assertTrue(r.success, r.message);
+            hash<auto> m = dap.waitFor(bool sub (hash<auto> m) {
+                return m.type == "event" && (m.event == "stopped" || m.event == "terminated");
+            }, "stopped or terminated event");
+            if (m.event == "terminated") {
+                break;
+            }
+            push lines, topFrame(dap, tid).line;
+        }
+        hash<auto> r = dap.request("disconnect");
+        assertTrue(r.success, r.message);
+        proc.closeStdin();
+        assertTrue(proc.wait(30s), "the adapter ends");
+        assertEq(0, proc.exitCode());
+        return lines;
+    }
+
+    conditionalBreakpointTest() {
+        TmpDir tmp("qore-vda-test-");
+        string path = writeProgram(tmp, DataProgram);
+        Process proc = startAdapter();
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        # the breakpoint stops the thread only when its condition is true
+        hash<auto> stopped = launchToStop(dap, path, ({"line": 13, "condition": "i == 3"},));
+        assertEq("breakpoint", stopped.body.reason);
+        int tid = stopped.body.threadId;
+        assertEq("3", evaluate(dap, tid, "i").body.result);
+        assertEq((), runToEnd(dap, proc, tid));
+        assertEq(("r: 10\n",), dap.getOutput("stdout"));
+
+        # negative: a condition that cannot be evaluated stops the thread, and the error is shown
+        Process proc2 = startAdapter();
+        on_exit if (proc2.running()) {
+            proc2.terminate();
+        }
+        DapClient dap2(proc2);
+        stopped = launchToStop(dap2, path, ({"line": 13, "condition": "i =="},));
+        assertEq("breakpoint", stopped.body.reason);
+        assertRegex("DEBUG-EVALUATE-ERROR", dap2.getOutput("console").join(""));
+        tid = stopped.body.threadId;
+        assertEq("0", evaluate(dap2, tid, "i").body.result);
+        # every hit stops the thread
+        assertEq((13, 13, 13, 13), runToEnd(dap2, proc2, tid));
+    }
+
+    hitConditionTest() {
+        TmpDir tmp("qore-vda-test-");
+        string path = writeProgram(tmp, DataProgram);
+        foreach hash<auto> i in ({"cond": ">= 4", "values": ("3", "4")}, {"cond": "%2", "values": ("1", "3")},
+                {"cond": "2", "values": ("1",)}) {
+            Process proc = startAdapter();
+            on_exit if (proc.running()) {
+                proc.terminate();
+            }
+            DapClient dap(proc);
+            hash<auto> stopped = launchToStop(dap, path, ({"line": 13, "hitCondition": i.cond},));
+            int tid = stopped.body.threadId;
+            list<string> values = (evaluate(dap, tid, "i").body.result,);
+            while (True) {
+                hash<auto> r = dap.request("continue", {"threadId": tid});
+                assertTrue(r.success, r.message);
+                hash<auto> m = dap.waitFor(bool sub (hash<auto> m) {
+                    return m.type == "event" && (m.event == "stopped" || m.event == "terminated");
+                }, "stopped or terminated event");
+                if (m.event == "terminated") {
+                    break;
+                }
+                push values, evaluate(dap, tid, "i").body.result;
+            }
+            assertEq(i.values, values, i.cond);
+            dap.request("disconnect");
+            proc.closeStdin();
+            assertTrue(proc.wait(30s), "the adapter ends");
+        }
+
+        # negative: an invalid hit condition stops the thread, and the error is shown
+        Process proc = startAdapter();
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        hash<auto> stopped = launchToStop(dap, path, ({"line": 13, "hitCondition": "often"},));
+        assertRegex("BREAKPOINT-HIT-CONDITION-ERROR", dap.getOutput("console").join(""));
+        assertEq((13, 13, 13, 13), runToEnd(dap, proc, stopped.body.threadId));
+    }
+
+    logpointTest() {
+        TmpDir tmp("qore-vda-test-");
+        string path = writeProgram(tmp, DataProgram);
+        Process proc = startAdapter();
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        launch(dap, {"program": path, "stopOnEntry": False});
+        hash<auto> r = dap.request("setBreakpoints", {"source": {"path": path}, "breakpoints": (
+            {"line": 13, "logMessage": "i={i} total={total} name={h.name} bad={i +}"},
+        )});
+        assertTrue(r.success, r.message);
+        r = dap.request("configurationDone");
+        assertTrue(r.success, r.message);
+        # the logpoint writes its message and does not stop the thread
+        dap.waitForEvent("terminated");
+        assertEq((), dap.getEvents("stopped"));
+        list<string> log = select dap.getOutput("console"), $1 =~ /^i=/;
+        assertEq(5, log.size(), sprintf("%y", log));
+        assertRegex("^i=0 total=0 name=invoice bad=<DEBUG-EVALUATE-ERROR: ", log[0]);
+        assertRegex("^i=4 total=6 ", log[4]);
+        assertEq(("r: 10\n",), dap.getOutput("stdout"));
+        r = dap.request("disconnect");
+        assertTrue(r.success, r.message);
+        proc.closeStdin();
+        assertTrue(proc.wait(30s), "the adapter ends");
+    }
+
+    conditionalStepTest() {
+        TmpDir tmp("qore-vda-test-");
+        string path = writeProgram(tmp, DataProgram);
+        Process proc = startAdapter();
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        # a breakpoint before the loop, and one in the loop whose condition is never true
+        hash<auto> stopped = launchToStop(dap, path, ({"line": 11}, {"line": 13, "condition": "i < 0"}));
+        int tid = stopped.body.threadId;
+        assertEq(11, topFrame(dap, tid).line);
+        # stepping onto the statement of the breakpoint stops there as a step
+        int line;
+        while (line != 13) {
+            hash<auto> r = dap.request("next", {"threadId": tid});
+            assertTrue(r.success, r.message);
+            stopped = dap.waitForEvent("stopped");
+            line = topFrame(dap, tid).line;
+        }
+        assertEq("step", stopped.body.reason);
+        # running on, the breakpoint does not stop the thread
+        assertEq((), runToEnd(dap, proc, tid));
     }
 
     endOfInputTest() {

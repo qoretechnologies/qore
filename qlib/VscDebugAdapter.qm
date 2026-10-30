@@ -52,22 +52,28 @@ module VscDebugAdapter {
 
     Only subset of features is supported in Visual Studio Code IDE and in this module.
 
-    Module limitations:
-    - breakpoint server side hitcount not supported
-    - breakpoint logpoints
-    - VSC event is not raised when breakpoint is changed, e.g. via another debugger client
-    - conditional breakpoints, e.g. for particular thread
-    - structured variables, e.g. classes/objects
-    - for functional breakpoint the function must be provided with arguments types even a user variant does not exist
-    - values for top-level local variables are not provided as thread vars for each thread
-    - cannot provide program exit value
+    Supported:
+    - launch, and attach to a program of a remote debug server
+    - source, function and exception breakpoints, with conditions, hit conditions and log messages (logpoints)
+    - step over, into and out, continue and pause of a thread
+    - call stacks, and the local and global variables of their frames as trees: the elements of lists, the keys of
+      hashes and the members of objects, also private ones, are read when they are shown, and the elements of long
+      lists are paged; variables, elements, keys and members can be set to the values of expressions
+    - expressions for watches, hovers and the debug console, evaluated with the variables of a frame; in the debug
+      console, a line whose first word is a debugger command is processed as the command
+    - loaded sources and modules, and the output of the program
 
-    Visual Studio Code known issues:
-    - evaluate "watch" request is not executed every step so watch value might be out of date
-    - no module support in IDE
-    - display own data type and custom data editor
-    - exception info is asked but the value is not displayed
-    - some capabilities are not implemented
+    Expressions are evaluated in a separate Program with @ref Qore::PO_LOCKDOWN "PO_LOCKDOWN", which cannot access
+    the file system, the network or processes; the local variables of the frame and the global variables of the
+    program are copied into variables of the expression, so an assignment in an expression does not change a variable
+    of the program, while the members of objects are changed in the objects.  Methods of objects can be called, but
+    the functions, classes and constants of the program cannot be referred to by name.
+
+    Limitations:
+    - data breakpoints, stepping back, jumping to a line, restarting a frame, stepping into a chosen call, and column
+      breakpoints are not supported
+    - a breakpoint or a pause stops only the thread that reaches it
+    - the client is not notified when another debugger client changes a breakpoint
 
     @subsection vda_v0_3
     - the output of programs that are debugged in the adapter process is sent to the IDE as \c output events instead
@@ -99,6 +105,11 @@ module VscDebugAdapter {
     - at the end of a program that is debugged in the adapter process, the \c terminated event is sent after all
       output of the program; the output could be sent after it
     - the log file given with \c -l is written; nothing was written to it
+    - lists, hashes and objects are shown as trees whose elements, keys and members, also private ones, are read when
+      they are shown; the elements of long lists are paged, and elements, keys and members can be set
+    - expressions are evaluated for watches, hovers and the debug console with the variables of a frame, and
+      variables are set to the values of expressions
+    - conditional breakpoints, hit conditions and logpoints
 
     @subsection vda_v0_2
     - updated to use a Logger
@@ -177,6 +188,8 @@ public class VscDebugAdapter inherits DebugCommandLine {
         const DEBUGVAR_PREFIX = "$";
         #! the name of the stack frame of the top-level code of a program
         const TopLevelFrameName = "<top level>";
+        #! the first variable reference of a structured value; the references below it are those of stack frames
+        const VarRefBase = 0x40000000;
 
         #! process loop flag
         bool m_running = True;
@@ -214,6 +227,15 @@ public class VscDebugAdapter inherits DebugCommandLine {
 
         #! counts the threads that forward the output of programs while it is captured
         *Counter m_outputForwarders;
+
+        #! the structured values of stopped threads, by their variable reference; see getVarRef()
+        hash<string, hash<auto>> m_varRefs = {};
+
+        #! the next variable reference of a structured value
+        int m_nextVarRef = VarRefBase;
+
+        #! the number of hits of the client's breakpoints with their conditions true, by breakpoint ID
+        hash<string, int> m_breakpointHits = {};
     }
 
     public {
@@ -619,15 +641,10 @@ vda.run();
                         m_programState{event.pgmid}.bootstrap.processFlag = 2;
                         m_programState{event.pgmid}.bootstrap.frameCnt = event.framecnt-1;
                         # the first statement of the program: it stops there only with "stopOnEntry", which is
-                        # true when it is not given; a breakpoint on the statement stops it in any case, and as the
-                        # thread arrives there by a step, the event does not give the breakpoint.  The program was
-                        # held at the attach stop until "configurationDone", so the client's breakpoints are
-                        # already created and the decision here is final.
-                        if (m_programState{event.pgmid}.launchArgs.stopOnEntry === False && !exists event.bkptid
-                            && !getBreakpointsOnStatement(event.pgmid, event.statementid)) {
-                            vsc_continue(("threadId": event.tid));
-                            return;
-                        }
+                        # true when it is not given, or at a breakpoint on the statement; as the thread arrives there
+                        # by a step, the event does not give the breakpoint.  The program was held at the attach stop
+                        # until "configurationDone", so the client's breakpoints are already created and the decision
+                        # below is final.
                         entry = True;
                     } else if (m_programState{event.pgmid}.bootstrap.processFlag == 2 && event.file == m_programState{event.pgmid}.bootstrap.file) {
                         # we want exit event, so we cannot detach
@@ -658,7 +675,15 @@ vda.run();
                     detach(event);
                     break;
                 }
-                hash<auto> e = getStopInfo(event, entry);
+                # the breakpoints that stop the thread: a breakpoint with a condition or a hit condition stops it
+                # only when they are met, and a logpoint writes its message and does not stop it
+                list<int> hits = getHitBreakpoints(event, entry);
+                list<int> ids = getStoppingBreakpoints(event, hits);
+                if (!ids && (hits || entry) && !hasOtherStopReason(event, entry)) {
+                    vsc_continue(("threadId": event.tid));
+                    return;
+                }
+                hash<auto> e = getStopInfo(event, entry, ids);
                 e.threadId = event.tid;
                 # e.allThreadsStopped =    is not used in vscode
                 m_programState{event.pgmid}.thread{event.tid}.frameId = event.frame;
@@ -670,6 +695,8 @@ vda.run();
             break;
         case "run":
             remove m_programState{event.pgmid}.thread{event.tid};
+            # the variable references of a thread are valid while it is stopped
+            removeVarRefs(event.tid);
             if (event.runstate == "attach") {
                 remove m_programState{m_currentPgmId}.detachedThreads{event.tid};
             }
@@ -722,7 +749,151 @@ vda.run();
         stopped at breakpoints of the client, and with \c text, the name of the exception, when it stopped at an
         exception
     */
-    private:internal hash<auto> getStopInfo(hash<auto> event, bool entry) {
+    #! Returns the IDs of the breakpoints that the given stop of a thread is at
+    /** A thread that arrives at the first statement of a launched program by a step does not report the breakpoints
+        on the statement
+    */
+    private:internal list<int> getHitBreakpoints(hash<auto> event, bool entry) {
+        return exists event.bkptid
+            ? (int(event.bkptid),)
+            : (entry ? getBreakpointsOnStatement(event.pgmid, event.statementid) : ());
+    }
+
+    #! Returns the IDs of the breakpoints that stop the thread among the given ones
+    /** A breakpoint of the client with a condition stops the thread only if the condition is true, and one with a hit
+        condition only if the number of times that it was hit with its condition true meets the hit condition; a
+        logpoint writes its message to the debug console and does not stop the thread.  A breakpoint whose condition
+        or hit condition cannot be evaluated stops the thread, and the error is written to the debug console.
+        Breakpoints of other clients stop the thread.
+    */
+    private:internal list<int> getStoppingBreakpoints(hash<auto> event, list<int> hits) {
+        list<int> rv = ();
+        foreach int id in (hits) {
+            *hash<auto> b = getClientBreakpoint(event.pgmid, id);
+            if (!b) {
+                push rv, id;
+                continue;
+            }
+            try {
+                if (b.condition.val() && !evaluateInThread(event.tid, b.condition).bool) {
+                    continue;
+                }
+                int count = ++m_breakpointHits{id};
+                if (b.hitCondition.val() && !VscDebugAdapter::checkHitCondition(b.hitCondition, count)) {
+                    continue;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                sendVscEvent("output", {
+                    "category": "console",
+                    "output": sprintf("breakpoint %d: %s\n", id, VscDebugAdapter::getErrorText(ex)),
+                });
+                push rv, id;
+                continue;
+            }
+            if (b.logMessage.val()) {
+                sendVscEvent("output", {
+                    "category": "console",
+                    "output": formatLogMessage(event.tid, b.logMessage) + "\n",
+                });
+                continue;
+            }
+            push rv, id;
+        }
+        return rv;
+    }
+
+    #! Returns True if a thread stops for another reason than breakpoints
+    /** The thread stops for a pause request, at the first statement of a launched program with \c stopOnEntry, and
+        when it was stepping
+    */
+    private:internal bool hasOtherStopReason(hash<auto> event, bool entry) {
+        if (m_programState{event.pgmid}.pauseRequests{event.tid}) {
+            return True;
+        }
+        if (entry) {
+            return m_programState{event.pgmid}.launchArgs.stopOnEntry !== False;
+        }
+        return event.runstate != DebugRunStateName::Run;
+    }
+
+    #! Returns the client's source or function breakpoint with the given ID, or @ref nothing
+    private:internal *hash<auto> getClientBreakpoint(softstring pgmId, int id) {
+        foreach hash<auto> source_bkpts in (m_programState{pgmId}.sourceBreakpoints.iterator()) {
+            if (exists source_bkpts{id}) {
+                return source_bkpts{id};
+            }
+        }
+        return m_programState{pgmId}.functionBreakpoints{id};
+    }
+
+    #! Returns the text of an error; the error of a command sent to a thread is given without the command's error
+    static string getErrorText(hash<ExceptionInfo> ex) {
+        return ex.err == "DEBUG-COMMAND" ? ex.desc : sprintf("%s: %s", ex.err, ex.desc);
+    }
+
+    #! Returns True if the given number of hits meets the hit condition of a breakpoint
+    /** @param cond the hit condition: a number, which the number of hits must equal, or a number after \c "==",
+        \c ">", \c ">=", \c "<", \c "<=" or \c "%", the last for every given number of hits
+        @param count the number of hits, with the current one
+
+        @throw BREAKPOINT-HIT-CONDITION-ERROR the hit condition is invalid
+    */
+    static bool checkHitCondition(string cond, int count) {
+        *list<*string> m = (cond =~ x/^\s*(==|>=|<=|>|<|%)?\s*([0-9]+)\s*$/);
+        if (!m) {
+            throw "BREAKPOINT-HIT-CONDITION-ERROR", sprintf("invalid hit condition %y; give a number, optionally "
+                "after ==, >, >=, <, <= or %%", cond);
+        }
+        int n = int(m[1]);
+        switch (m[0] ?? "") {
+            case ">": return count > n;
+            case ">=": return count >= n;
+            case "<": return count < n;
+            case "<=": return count <= n;
+            case "%": return n > 0 && !(count % n);
+        }
+        return count == n;
+    }
+
+    #! Returns the message of a logpoint with the values of the expressions in braces
+    /** An expression that cannot be evaluated is replaced with its error
+    */
+    private:internal string formatLogMessage(int tid, string msg) {
+        string rv = "";
+        int pos = 0;
+        while (True) {
+            int open = index(msg, "{", pos);
+            int close = open >= 0 ? index(msg, "}", open) : -1;
+            if (close < 0) {
+                rv += msg.substr(pos);
+                break;
+            }
+            rv += msg.substr(pos, open - pos);
+            string expr = msg.substr(open + 1, close - open - 1);
+            try {
+                rv += evaluateInThread(tid, expr).text;
+            } catch (hash<ExceptionInfo> ex) {
+                rv += sprintf("<%s>", VscDebugAdapter::getErrorText(ex));
+            }
+            pos = close + 1;
+        }
+        return rv;
+    }
+
+    #! Evaluates an expression with the top frame of a stopped thread
+    /** @return the result of the \c thread/evaluate command: a description of the value with the \c id, \c bool
+        and \c text keys
+    */
+    private:internal hash<auto> evaluateInThread(int tid, string expr, int frameId = 0) {
+        return doCommand((
+            "cmd": "thread/evaluate",
+            "tid": tid,
+            "frameid": frameId,
+            "expression": expr,
+        )).result;
+    }
+
+    private:internal hash<auto> getStopInfo(hash<auto> event, bool entry, list<int> ids) {
         # a pause request of the client is answered by the next stop of the thread
         bool pause = boolean(remove m_programState{event.pgmid}.pauseRequests{event.tid});
         switch (event.func) {
@@ -735,11 +906,6 @@ vda.run();
             case "attach":
                 return hash<auto>{"reason": "entry", "description": "Paused on entry"};
         }
-        # a thread that arrives at the first statement of a launched program by a step does not report the
-        # breakpoints on the statement
-        list<int> ids = exists event.bkptid
-            ? (int(event.bkptid),)
-            : (entry ? getBreakpointsOnStatement(event.pgmid, event.statementid) : ());
         if (ids) {
             # only the breakpoints of the client are reported; a breakpoint can also be created by another client
             # of the debugged program
@@ -893,39 +1059,6 @@ vda.run();
         }
     }
 
-    private:internal auto getVariable(int threadId, int frameId, string name) {
-        auto val;
-        if (threadId == 0) {
-            val = doCommand((
-                "cmd": "program/"+m_currentPgmId+"/global/"+name+"/get",
-            )).result;
-        } else {
-            if (name[0] == DEBUGVAR_PREFIX) {
-                val = doCommand((
-                    "cmd": "thread/debug/"+name[DEBUGVAR_PREFIX.size()..]+"/get",
-                    "tid": threadId,
-                    "frameid": frameId,
-                )).result;
-                if (exists val.value) {
-                    val = val.value;  # for $result
-                }
-            } else {
-                val = doCommand((
-                    "cmd": "thread/local/"+name+"/get",
-                    "tid": threadId,
-                    "frameid": frameId,
-                )).result.value;
-            }
-        }
-        auto v;
-        try {
-            v = AbstractDebugControl::unserialize(val);
-        } catch (hash<ExceptionInfo> ex) {
-            v = "N/A";
-        }
-        return v;
-    }
-
     private:internal deleteBreakpoints(*hash bkpts) {
         foreach string bkptId in (keys bkpts) {
             doCommand((
@@ -956,14 +1089,6 @@ vda.run();
             push res, b;
         }
         return res;
-    }
-
-    private:internal string printValue(auto value, *hash format) {
-        return sprintf("%Y", value);
-    }
-
-    private:internal auto vscParseValue(string val) {
-        return AbstractDebugControl::serialize(parse_to_qore_value(val));
     }
 
     private:internal hash getModule(softint pgmId) {
@@ -1203,24 +1328,19 @@ vda.run();
         int threadId = args.frameId >> 16;
         int frameId = args.frameId & 0xFFFF;
         hash res.scopes = ();
-        list l = getFrameLocals(threadId, frameId);
-        hash sc;
-        sc.name = "Locals";
-        sc.variablesReference = args.frameId;  # only one scope in frame ... local
-        sc.expensive = False;
-        sc.namedVariables = l.size();
-        sc.indexedVariabes = 0;
-        push res.scopes, sc;
-
-        remove sc;
-        sc.name = "Globals";
-        l = getGlobals();
-        sc.variablesReference = 1; # non zero value
-        sc.expensive = False;
-        sc.namedVariables = l.size();
-        sc.indexedVariabes = 0;
-        push res.scopes, sc;
-
+        push res.scopes, {
+            "name": "Locals",
+            "variablesReference": args.frameId,
+            "expensive": False,
+            "namedVariables": getFrameLocals(threadId, frameId).size(),
+        };
+        push res.scopes, {
+            "name": "Globals",
+            # the global variables are read with the stopped thread
+            "variablesReference": getVarRef(threadId, frameId, {"scope": "globals"}, ()),
+            "expensive": False,
+            "namedVariables": getGlobals().size(),
+        };
         return res;
     }
 
@@ -1264,104 +1384,219 @@ vda.run();
         return l ?? ();
     }
 
+    #! Returns the variables of a scope or the elements, keys or members of a structured value
+    /** Lists, hashes and objects are shown as trees: each has a variable reference whose children are read from the
+        stopped thread when they are shown; the elements of lists are paged with \c start and \c count
+    */
     public hash vsc_variables(hash args) {
         hash res.variables = ();
-        int threadId = args.variablesReference >> 16;
-        int frameId = args.variablesReference & 0xFFFF;
-        if (args.filter != "indexed") {
-            *list l;
-            if (threadId == 0) {
-                l = m_programState{m_currentPgmId}.thread{threadId}.globals;
-            } else {
-                l = m_programState{m_currentPgmId}.thread{threadId}.locals{frameId};
+        int ref = args.variablesReference;
+        if (ref < VarRefBase) {
+            # the local variables of a frame
+            if (args.filter == "indexed") {
+                return res;
             }
-            int n = args.count ?? 0;
-            if (n == 0) {
-                n = l.size();
+            int threadId = ref >> 16;
+            int frameId = ref & 0xFFFF;
+            foreach string name in (VscDebugAdapter::page(getFrameLocals(threadId, frameId), args)) {
+                hash<auto> root = VscDebugAdapter::getRootForName(name);
+                push res.variables, makeVariable(threadId, frameId, root, (), name,
+                    describeVariable(threadId, frameId, root, ()), root.local);
             }
-            for (int i = args.start ?? 0; i < l.size() && n > 0; i++, n--) {
-                hash v;
-                v.name = l[i];
-                auto val = getVariable(threadId, frameId, l[i]);
-                v.value = printValue(val, args.format);
-                v.type = val.type();
-                # properties, private etc.
-                # v.presentationHint =
-                push res.variables, v;
+            return res;
+        }
+        hash<auto> vr = getVarRefInfo(ref);
+        if (vr.root.scope == "globals") {
+            if (args.filter == "indexed") {
+                return res;
             }
+            foreach string name in (VscDebugAdapter::page(getGlobals(), args)) {
+                hash<auto> root = {"global": name};
+                push res.variables, makeVariable(vr.tid, vr.frameId, root, (), name,
+                    describeVariable(vr.tid, vr.frameId, root, ()), name);
+            }
+            return res;
+        }
+        hash<auto> d = doCommand((
+            "cmd": "thread/variable/get",
+            "tid": vr.tid,
+            "frameid": vr.frameId,
+            "root": vr.root,
+            "path": vr.path,
+            "children": True,
+            "start": args.start ?? 0,
+            "count": args.count ?: NOTHING,
+        )).result;
+        # a list has only indexed children, hashes and objects only named ones
+        if ((args.filter == "named" && d.indexed) || (args.filter == "indexed" && !d.indexed)) {
+            return res;
+        }
+        foreach hash<auto> child in (d.children) {
+            push res.variables, makeVariable(vr.tid, vr.frameId, vr.root, vr.path + (child.key,), child.name, child,
+                VscDebugAdapter::getChildEvaluateName(vr.evaluateName, d, child.key));
         }
         return res;
     }
 
+    #! Sets the value of a variable or of an element, key or member of a structured value
     public hash vsc_setVariable(hash args) {
-        int threadId = args.variablesReference >> 16;
-        int frameId = args.variablesReference & 0xFFFF;
-        auto val = call_function_args(\self.vscParseValue(), args.value);
-        if (threadId != 0) {
-            if (args.name[0] == DEBUGVAR_PREFIX) {
-                doCommand((
-                    "cmd": "thread/debug/"+args.name[DEBUGVAR_PREFIX.size()..]+"/set",
-                    "tid": threadId,
-                    "value": val,
-                ));
-            } else {
-                doCommand((
-                    "cmd": "thread/local/"+args.name+"/set",
-                    "tid": threadId,
-                    "frameid": frameId,
-                    "value": val,
-                ));
-            }
+        int ref = args.variablesReference;
+        int threadId;
+        int frameId;
+        hash<auto> root;
+        list<auto> path = ();
+        *string evaluate_name;
+        if (ref < VarRefBase) {
+            threadId = ref >> 16;
+            frameId = ref & 0xFFFF;
+            root = VscDebugAdapter::getRootForName(args.name);
+            evaluate_name = root.local;
         } else {
-            doCommand((
-                "cmd": "program/"+m_currentPgmId+"/global/"+args.name+"/set",
-                "value": val,
-            ));
+            hash<auto> vr = getVarRefInfo(ref);
+            threadId = vr.tid;
+            frameId = vr.frameId;
+            if (vr.root.scope == "globals") {
+                root = {"global": args.name};
+                evaluate_name = args.name;
+            } else {
+                root = vr.root;
+                path = vr.path + (args.name,);
+            }
         }
-        val = getVariable(threadId, frameId, args.name);
-        hash res.value = printValue(val, args.format);
-        res.type = val.type();
-        return res;
+        hash<auto> d = doCommand((
+            "cmd": "thread/variable/set",
+            "tid": threadId,
+            "frameid": frameId,
+            "root": root,
+            "path": path,
+            # the value is a Qore expression, evaluated with the variables of the frame
+            "expression": args.value,
+        )).result;
+        hash<auto> v = makeVariable(threadId, frameId, root, path, args.name, d, evaluate_name);
+        remove v.name;
+        remove v.evaluateName;
+        return v;
     }
 
+    #! Evaluates an expression with the variables of a frame of a stopped thread
+    /** In the debug console, a line whose first word is a debugger command is processed as the command; a line that
+        starts with \c "$" is evaluated without the \c "$"
+    */
     public hash vsc_evaluate(hash args) {
-        hash res.result = NOTHING;
-        switch (args.context) {
-        case "repl":
-            # command from console
-            if (args.expression[0] == "$") {
-                splice args.expression, 0, 1;
-            } else {
-                processCmdLine(args.expression);
-                break;
-            }
-            # no break
-        case "watch":
-        case "hover":
-            # "hover"  ... word or selection text
-            # event from watch, just return local or global value
-            int threadId = (args.frameId ?? 0) >> 16;
-            int frameId = (args.frameId ?? 0) & 0xFFFF;
-            # the variables of the frame are loaded if they have not been listed in the IDE since the thread stopped
-            list l;
-            if (threadId == 0) {
-                l = getGlobals();
-            } else {
-                l = getFrameLocals(threadId, frameId);
-                if (!inlist(args.expression, l)) {
-                    threadId = 0;
-                    l = getGlobals();
-                }
-            }
-            if (inlist(args.expression, l)) {
-                auto val = getVariable(threadId, frameId, args.expression);
-                res.result = printValue(val, args.format);
-                res.type = val.type();
-                # properties, private etc.
-                # v.presentationHint =
+        string expr = args.expression;
+        if (args.context == "repl") {
+            if (expr =~ /^\$/) {
+                splice expr, 0, 1;
+            } else if (isDebuggerCommand(expr)) {
+                processCmdLine(expr);
+                return {"result": "", "variablesReference": 0};
             }
         }
-        return res;
+        if (!exists args.frameId) {
+            throw "VSC-EVALUATE-ERROR", "an expression is evaluated with a frame of a stopped thread; select a frame";
+        }
+        int threadId = args.frameId >> 16;
+        int frameId = args.frameId & 0xFFFF;
+        hash<auto> d = evaluateInThread(threadId, expr, frameId);
+        hash<auto> v = makeVariable(threadId, frameId, {"eval": d.id}, (), expr, d);
+        return {"result": v.value, "type": v.type, "variablesReference": v.variablesReference}
+            + v{"indexedVariables", "namedVariables"};
+    }
+
+    #! Returns True if the first word of the given line is a debugger command
+    private:internal bool isDebuggerCommand(string line) {
+        *string word = (line =~ x/^\s*(\S+)/)[0];
+        hash<auto> commands = getCommands();
+        return exists word && exists commands{">"}{word};
+    }
+
+    #! Returns a description of a variable or of an element, key or member of a structured value
+    private:internal hash<auto> describeVariable(int threadId, int frameId, hash<auto> root, list<auto> path) {
+        return doCommand((
+            "cmd": "thread/variable/get",
+            "tid": threadId,
+            "frameid": frameId,
+            "root": root,
+            "path": path,
+        )).result;
+    }
+
+    #! Returns a variable of the protocol for a description of a value
+    /** A list, hash or object gets a variable reference whose children are read when they are shown
+    */
+    private:internal hash<auto> makeVariable(int threadId, int frameId, hash<auto> root, list<auto> path,
+            string name, hash<auto> d, *string evaluate_name) {
+        hash<auto> v = {"name": name, "value": d.value, "type": d.type, "variablesReference": 0};
+        if (d.indexed || d.named) {
+            v.variablesReference = getVarRef(threadId, frameId, root, path, evaluate_name);
+            if (d.indexed) {
+                v.indexedVariables = d.indexed;
+            }
+            if (d.named) {
+                v.namedVariables = d.named;
+            }
+        }
+        if (evaluate_name) {
+            v.evaluateName = evaluate_name;
+        }
+        return v;
+    }
+
+    #! Returns a new variable reference for a structured value of a stopped thread
+    /** The references of a thread are valid while it is stopped; see removeVarRefs()
+    */
+    private:internal int getVarRef(int threadId, int frameId, hash<auto> root, list<auto> path,
+            *string evaluate_name) {
+        int ref = m_nextVarRef++;
+        m_varRefs{ref} = {
+            "tid": threadId,
+            "frameId": frameId,
+            "root": root,
+            "path": path,
+            "evaluateName": evaluate_name,
+        };
+        return ref;
+    }
+
+    #! Returns the structured value of a variable reference
+    /** @throw VSC-VARIABLE-ERROR the reference is not valid, as its thread has resumed
+    */
+    private:internal hash<auto> getVarRefInfo(int ref) {
+        *hash<auto> vr = m_varRefs{ref};
+        if (!vr) {
+            throw "VSC-VARIABLE-ERROR", sprintf("invalid variable reference %d; the thread has resumed", ref);
+        }
+        return vr;
+    }
+
+    #! Removes the variable references of a thread that resumes
+    private:internal removeVarRefs(int threadId) {
+        m_varRefs -= (map $1.key, m_varRefs.pairIterator(), $1.value.tid == threadId);
+    }
+
+    #! Returns the root of a variable path for the name of a variable of a frame
+    static hash<auto> getRootForName(string name) {
+        return name =~ /^\$/ ? {"debug": name.substr(1)} : {"local": name};
+    }
+
+    #! Returns the expression of an element, key or member of a structured value, if the value has one
+    static *string getChildEvaluateName(*string parent, hash<auto> d, auto key) {
+        if (!parent) {
+            return;
+        }
+        if (d.indexed) {
+            return sprintf("%s[%d]", parent, key);
+        }
+        if (d.type =~ /^hash/) {
+            return sprintf("%s{%y}", parent, key);
+        }
+        return key =~ /^[A-Za-z_][A-Za-z0-9_]*$/ ? sprintf("%s.%s", parent, key) : NOTHING;
+    }
+
+    #! Returns the part of a list given by the \c start and \c count arguments of a request
+    static list<auto> page(list<auto> l, hash args) {
+        int start = args.start ?? 0;
+        return args.count ? l[start..(start + args.count - 1)] : l[start..];
     }
 
     public hash vsc_completions(hash args) {
@@ -1531,11 +1766,11 @@ vda.run();
             "supportsFunctionBreakpoints": True,
 
             /* The debug adapter supports conditional breakpoints. */
-            #"supportsConditionalBreakpoints": False,   # cannot disable in IDE
+            "supportsConditionalBreakpoints": True,
 
             /* The debug adapter supports breakpoints that break execution
                 after a specified number of hits. */
-            #"supportsHitConditionalBreakpoints": True,  # cannot disable in IDE ?
+            "supportsHitConditionalBreakpoints": True,
 
             /* The debug adapter supports a (side effect free) evaluate
                 request for data hovers. */
@@ -1610,7 +1845,7 @@ vda.run();
             "supportsLoadedSourcesRequest": True,
 
             /* The debug adapter supports logpoints by interpreting the 'logMessage' attribute of the SourceBreakpoint. */
-            "supportsLogPoints": False,   # not supported in IDE ?
+            "supportsLogPoints": True,
 
         );
         return cap;

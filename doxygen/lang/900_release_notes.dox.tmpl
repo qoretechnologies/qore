@@ -3422,6 +3422,12 @@ while (*binary chunk = input.read(65536)) {
       - added per-database-driver SVG logo registry with logos for PostgreSQL, MySQL, Oracle, SQL Server
         (FreeTDS), SQLite, and ODBC; unknown drivers fall back to the generic database logo
 
+    - @ref debugprogramcontrolintro "DebugProgramControl" module
+      - stopped threads read and set the values of variables and of their elements, keys and members, also private
+        ones, by their paths, and evaluate expressions with the variables of a frame
+    - @ref debugutilintro "DebugUtil" module
+      - added functions that describe values, list their elements, keys and members, also private ones, and read and
+        set values by their paths
     - @ref discorddataproviderintro "DiscordDataProvider" module
       - API calls are made with an asynchronous
         @ref DiscordRestClient::DiscordRestClientIo "DiscordRestClientIo"; a synchronous
@@ -3880,6 +3886,11 @@ while (*binary chunk = input.read(65536)) {
         it: \c "/../etc" was returned as the relative path \c "etc"
 
     - @ref vscdebugadapterintro "VscDebugAdapter" module
+      - lists, hashes and objects are shown as trees in Visual Studio Code, and their elements, keys and members can
+        be set; they were shown as text that could not be expanded
+      - expressions are evaluated for watches, hovers and the debug console, and variables are set to the values of
+        expressions; only the names of variables were evaluated
+      - conditional breakpoints, hit conditions and logpoints are supported
       - the output of programs that are debugged in the adapter process is sent to the IDE as \c output events;
         it was written to the channel of the protocol and lost
       - fixed the adapter using all the time of a CPU while waiting for requests, and not ending when the IDE

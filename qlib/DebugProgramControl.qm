@@ -54,6 +54,10 @@ module DebugProgramControl {
       without a timeout
     - a statement can be given as a function name without the types of its parameters when the function has one
       variant (<a href="https://github.com/qoretechnologies/qore/issues/5558">issue 5558</a>)
+    - new commands of stopped threads: \c thread/variable/get and \c thread/variable/set read and set the values of
+      variables and their elements, keys and members, also private ones, by their paths, and \c thread/evaluate
+      evaluates expressions with the variables of a frame (see
+      @ref DebugProgramControl::DebugProgramControl::evaluateExpression() "evaluateExpression()")
 
     @subsection dc_v0_1_2 v0.1.2
     - return breakpointId and statementId when creating breakpoint
@@ -90,6 +94,11 @@ public namespace DebugProgramControl {
 
             #! number of frames related to DebugProgramControl library when handleInterrupt() is invoked
             const frameOffset = 2;
+
+            #! the name of the function that an expression is evaluated in; see evaluateExpression()
+            const EvalFunction = "qore_debug_evaluate";
+            #! the name of the parameter of the function that an expression is evaluated in
+            const EvalVars = "qore_debug_vars";
         }
         public {
             #! default number of lines listed before current code position
@@ -1045,6 +1054,111 @@ public namespace DebugProgramControl {
             return stack;
         }
 
+        #! Returns the value of the root of a variable path of a stopped thread
+        /** @param pgm the Program of the thread
+            @param root a hash with one of the following keys: \c local: the name of a local variable, \c global: the
+            name of a global variable, \c debug: the name of the debug variable of the interrupt (as \c result), or
+            \c eval: the ID of the value of an expression that was evaluated since the thread stopped
+            @param lv the local variables of the frame, for a \c local root
+            @param ctxCT the data of the interrupt
+            @param refName the name of the debug variable of the interrupt, if any
+
+            @throw DEBUG-ERROR the root does not exist
+        */
+        private auto getDebugRootValue(ProgramControl pgm, *hash<auto> root, *hash<auto> lv, hash<auto> ctxCT,
+                *string refName) {
+            if (exists root.local) {
+                if (!lv.hasKey(root.local)) {
+                    throw "DEBUG-ERROR", sprintf("the frame has no local variable %y", root.local);
+                }
+                return lv{root.local}.value;
+            }
+            if (exists root.global) {
+                bool found;
+                auto v = pgm.getGlobalVariable(root.global, \found);
+                if (!found) {
+                    throw "DEBUG-ERROR", sprintf("the program has no global variable %y", root.global);
+                }
+                return v;
+            }
+            if (exists root.debug) {
+                if (root.debug != refName) {
+                    throw "DEBUG-ERROR", sprintf("the interrupt has no debug variable %y", root.debug);
+                }
+                return ctxCT{refName};
+            }
+            if (exists root.eval) {
+                int id = root.eval;
+                if (id < 0 || id >= ctxCT.evals.size()) {
+                    throw "DEBUG-ERROR", sprintf("no expression with ID %d was evaluated since the thread stopped", id);
+                }
+                return ctxCT.evals[id];
+            }
+            throw "DEBUG-ERROR", sprintf("invalid variable root: %y", root);
+        }
+
+        #! Sets the value of the root of a variable path of a stopped thread that is not a local variable
+        /** @see getDebugRootValue()
+        */
+        private setDebugRootValue(ProgramControl pgm, hash<auto> root, reference<hash<auto>> ctxCT, *string refName,
+                auto val) {
+            if (exists root.global) {
+                pgm.setGlobalVarValue(root.global, val);
+            } else if (exists root.debug) {
+                if (root.debug != refName) {
+                    throw "DEBUG-ERROR", sprintf("the interrupt has no debug variable %y", root.debug);
+                }
+                ctxCT{refName} = val;
+            } else if (exists root.eval) {
+                ctxCT.evals[root.eval] = val;
+            } else {
+                throw "DEBUG-ERROR", sprintf("invalid variable root: %y", root);
+            }
+        }
+
+        #! Evaluates an expression with the given local variables and the global variables of a Program
+        /** The expression is evaluated in a new Program with @ref Qore::PO_LOCKDOWN "PO_LOCKDOWN", which cannot access
+            the file system, the network or processes, as a function whose local variables are the global variables
+            of the Program and the given local variables, which hide global variables with the same names.  Values are
+            copied into the variables, so assigning a variable in the expression does not change the program's
+            variable; the members of objects are changed in the objects.  Methods of objects can be called; the
+            functions, classes and constants of the program cannot be referred to by name, as they are not in the
+            Program of the expression.
+
+            @param pgm the Program whose global variables can be used in the expression
+            @param expr the expression
+            @param lv the local variables, as returned by @ref Qore::get_local_vars() "get_local_vars()"
+
+            @return the value of the expression
+
+            @throw DEBUG-EVALUATE-ERROR the expression cannot be parsed
+        */
+        private auto evaluateExpression(ProgramControl pgm, string expr, *hash<auto> lv) {
+            hash<auto> vars = {};
+            foreach hash<auto> i in (pgm.getGlobalVars().pairIterator()) {
+                if (i.key =~ /^[A-Za-z_][A-Za-z0-9_]*$/) {
+                    vars{i.key} = i.value;
+                }
+            }
+            foreach hash<auto> i in (lv.pairIterator()) {
+                if (i.key =~ /^[A-Za-z_][A-Za-z0-9_]*$/) {
+                    vars{i.key} = i.value.value;
+                }
+            }
+            string code = sprintf("auto sub %s(hash<auto> %s) {\n", EvalFunction, EvalVars);
+            foreach string name in (keys vars) {
+                code += sprintf("auto %s = %s{%y};\n", name, EvalVars, name);
+            }
+            code += sprintf("return (\n%s\n);\n}\n", expr);
+            Program epgm(PO_NEW_STYLE | PO_LOCKDOWN);
+            try {
+                epgm.parse(code, "<expression>", WARN_NONE);
+            } catch (hash<ExceptionInfo> ex) {
+                throw "DEBUG-EVALUATE-ERROR", sprintf("%s: %s", ex.err, ex.desc);
+            }
+            return epgm.callFunction(EvalFunction, vars);
+        }
+
         private *hash<auto> handleInterrupt(string func, ProgramControl pgm, reference runState, reference runToStatementId, *int statementId, *string refName, *reference refValue, *int breakpointId, *hash<auto> except) {
             # serialize data, send to all websockets, break/suspend thread
             int tid = gettid();
@@ -1274,6 +1388,56 @@ public namespace DebugProgramControl {
                                         break;
                                 }
                                 break;
+
+                            case 'variable': {
+                                # the local variables are read here, as the frame numbers count from this frame
+                                int frameId2 = (rd.frameid ?? ctxCT.frameId) + frameOffset;
+                                *hash<auto> lv = exists rd.root.local || exists rd.expression
+                                    ? get_local_vars(frameId2)
+                                    : NOTHING;
+                                auto val = getDebugRootValue(pgm, rd.root, lv, ctxCT, refName);
+                                switch (shift cmd) {
+                                    case 'get': {
+                                        auto v = AbstractDebugControl::getPath(val, rd.path);
+                                        result = AbstractDebugControl::describe(v);
+                                        if (rd.children) {
+                                            result.children = AbstractDebugControl::describeChildren(v, rd.start ?? 0,
+                                                rd.count);
+                                        }
+                                        break;
+                                    }
+                                    case 'set': {
+                                        # the new value is given as a serialized value or as an expression, which is
+                                        # evaluated with the variables of the frame
+                                        auto new_val = AbstractDebugControl::setPath(val, rd.path, exists rd.expression
+                                            ? evaluateExpression(pgm, rd.expression, lv)
+                                            : AbstractDebugControl::unserialize(rd.value));
+                                        if (exists rd.root.local) {
+                                            set_local_var_value(frameId2, rd.root.local, new_val);
+                                        } else {
+                                            setDebugRootValue(pgm, rd.root, \ctxCT, refName, new_val);
+                                        }
+                                        result = AbstractDebugControl::describe(AbstractDebugControl::getPath(new_val,
+                                            rd.path));
+                                        break;
+                                    }
+                                }
+                                break;
+                            }
+
+                            case 'evaluate': {
+                                # the local variables are read here, as the frame numbers count from this frame
+                                int frameId2 = (rd.frameid ?? ctxCT.frameId) + frameOffset;
+                                auto v = evaluateExpression(pgm, rd.expression, get_local_vars(frameId2));
+                                # the value is kept while the thread is stopped, so that its elements can be read
+                                push ctxCT.evals, v;
+                                result = AbstractDebugControl::describe(v) + {
+                                    "id": ctxCT.evals.size() - 1,
+                                    "bool": boolean(v),
+                                    "text": v.typeCode() == NT_STRING ? v : AbstractDebugControl::describe(v).value,
+                                };
+                                break;
+                            }
 
                             case 'stack':
                                 list<auto> stack = adjustStack(get_thread_call_stack(), ctx);
