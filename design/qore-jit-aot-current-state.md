@@ -5990,3 +5990,61 @@ Exact-class monomorphic calls take 3.8218/3.9943 ns/item locally and 3.7335/4.04
 The next experiment targets repeated class acceptance at pinned local initialization. A narrow positive proof may be prepared once for an already-owned entry receiver, with identity checked at every use; private/access-dependent and parameterized constraints must keep live acceptance. Runtime slot ownership, custom reference handlers, real-reference marks, reflection, exceptions and ordered cleanup must remain. Do not revive the rejected native-only local scheme. Pure method invocation already outlines member/eager paths; its remaining frame contains live diagnostic/context state, so no stack-frame reduction is inferred from outlining again.
 
 The shared M4 Pro/macOS host has no affinity/frequency/thermal control. No owned build, test, profiler or heavy scan overlapped timing; observed process ranges are not confidence intervals. There is no new Java/develop comparison, implementation speedup or maximum-performance conclusion. The installed optimized 0800e5e231 runtime is unchanged. See [complete raw evidence](../bench/runtime-comparison/results-receiver-source-forms-macos-arm64.json) and the [62-check audit](../bench/runtime-comparison/audit-receiver-source-forms.md).
+
+
+## Pinned class acceptance rejected after broad evaluation (2026-10-30)
+
+The candidate prepared positive exact-class/first-public-base acceptance for independently retained entry receivers. An identity guard selected a versioned initializer; private, structural and parameterized cases retained live acceptance. Raw-generic metadata, slot ownership, real-reference marks, custom handlers and ordered cleanup remained live. This experiment moved a narrow class-relation check out of the loop; it did not eliminate ownership traffic.
+
+The first measured version selected a per-object proof on each initialization and enlarged local polymorphic caller frames from 576 to 592 bytes. Refinement conjoined all possible source proofs at entry, restoring 576-byte frames and retaining live v4 fallback whenever any proof was unavailable. The initializer shrank from 137 instructions/64 frame bytes to 111/48. These static counts alone did not establish a performance benefit. The first build failed because a unity-only inline macro was unavailable in the separate runtime source. The second exposed invalid LLVM dominance after promoted closure captures moved the logical entry; the candidate was restricted to same-block definition order and a regression fixture added. Both failures and final patches are archived.
+
+Two pilots (234 and 351 processes) showed modest polymorphic improvements and adverse indirect/list-building controls. A 162-process comparison rebuilt the refined artifacts from the baseline's exact source paths and used its host-script paths. That did not eliminate the costs. Normalized control LLVM bodies and inspected helper sizes matched, but this does not establish complete machine-code equivalence or explain the timing differences. All earlier variants and measurements remain in the evidence.
+
+The final 35-workload screen uses those common-source artifacts: 630 processes/1890 windows, three layouts and three fresh processes per cell, three warmup and three measured 150 ms windows, 4096 items. Both runtimes use Release `-O3 -DNDEBUG`, allocation tracking off; artifacts are identity-matched stripped O3 builds. Baseline is merged performance-branch 0800e5e231, not pure develop. Values below are whole-kernel ns/item, computed as the median of layout medians of process means.
+
+|!Workload|!Baseline ns/item|!Rejected candidate ns/item|!Time change
+|local:direct_call|1.4744|1.4667|-0.52%
+|local:method_call|1.5456|1.5525|+0.45%
+|local:polymorphic_call|21.3921|20.8212|-2.67%
+|local:polymorphic_float_call|21.9423|20.9771|-4.40%
+|local:boxed_int_method_fallback|32.9367|31.8660|-3.25%
+|local:boxed_float_method_fallback|34.4264|35.0415|+1.79%
+|local:boxed_int_method_effect|88.1292|88.6285|+0.57%
+|local:list_mutate|117.3033|119.7197|+2.06%
+|local:temporary_list|1.5756|1.5736|-0.13%
+|local:polymorphic_expression_call|10.3758|10.4333|+0.55%
+|local:polymorphic_float_expression_call|10.5139|10.4797|-0.32%
+|micro:polymorphic_call|81.9024|79.1801|-3.32%
+|micro:polymorphic_float_call|82.2722|80.5191|-2.13%
+|micro:boxed_int_method_call|107.3504|105.3829|-1.83%
+|micro:boxed_float_method_call|113.3045|112.8659|-0.39%
+|micro:boxed_int_method_fallback|117.9146|118.9746|+0.90%
+|micro:boxed_float_method_fallback|122.8310|123.8013|+0.79%
+|micro:boxed_int_method_effect|172.1677|172.6081|+0.26%
+|micro:indirect_call|8.2509|8.6867|+5.28%
+|micro:closure_call|17.8548|18.0345|+1.01%
+|micro:closure_capture|23.4900|23.3839|-0.45%
+|micro:list_read|2.7843|2.7691|-0.54%
+|micro:list_build|22.1756|22.6544|+2.16%
+|micro:list_mutate|116.8224|119.2051|+2.04%
+|micro:temporary_hash|1.5804|1.5889|+0.54%
+|float:callback_local_float_return|0.8221|0.8172|-0.60%
+|float:typed_local_int_unary|1.1513|1.1550|+0.32%
+|float:callback_loop_float_return|4.8071|4.8230|+0.33%
+|mixed:csv_report|891.2790|889.1367|-0.24%
+|mixed:object_orders|3042.4737|3111.8096|+2.28%
+|mixed:callback_pipeline|91.5424|92.9246|+1.51%
+|mixed:text_index|1294.7479|1289.1158|-0.43%
+|probe:object_short|1587.4497|1569.2749|-1.14%
+|probe:effect_short|1633.5449|1640.3915|+0.42%
+|probe:string_result_loop|529.0078|521.6929|-1.38%
+
+Reject this implementation under the authorized broader-tradeoff evaluation. Same-Program integer/float polymorphic calls improve 2.67%/4.40% and imported counterparts 3.32%/2.13%, but indirect calls cost 5.28%, list building 2.16%, list mutation about 2%, and the mixed callback pipeline 1.51%. List-building and callback-pipeline observed process ranges are separated adversely in all three layouts; indirect ranges separate adversely in two. Object-orders rises 2.28% with mixed layout directions. These narrow gains do not justify the broader costs and added mechanism. This is a judgment about this implementation, not a zero-regression rule, application-weighted conclusion or proof that compile-time acceptance cannot help.
+
+All four campaigns replay independently: 1377 processes/4131 windows. Each of three candidate artifact preparations passes 6072 reference outputs (1518 IR, 4554 AOT). Both measured versions pass 26 Release fixtures with 50 cases/10632 assertions, 3 silent fixtures and 1 explicit Debug-only skip. Candidate native Debug qualification and a separate final confirmation were not run after rejection. The common-source preparation driver terminal response was not retained across compaction; its exit code is explicitly unknown, while all child process receipts, reference outputs and the completed marker were independently checked.
+
+All seven candidate source/test files are restored exactly. Rebuilt Release qore/qcc are byte-identical to the validated baseline. The initial whole-library identity assertion failed: all library section addresses/sizes and bytes match except one 40-byte git revision string for the newer documentation commit. The AOT runtime identity matches, and all 391 Release qmod aliases are rebuilt. No whole-library byte equivalence is claimed. The installed optimized 0800e5e231 runtime is unchanged at this checkpoint. build-debug remains stale output from the preceding rejected explicit-release-context experiment and must be rebuilt before reuse. See the [complete evidence](../bench/runtime-comparison/results-pinned-class-acceptance-rejected-macos-arm64.json) and [62-check audit](../bench/runtime-comparison/audit-pinned-class-acceptance-rejected.md).
+
+Next profile imported pure native-method setup after the ordinary Program transition. Current retry revalidates the live body and uses eager object/class and logical-frame setup. A deferred alternative must borrow stable Program-owned metadata rather than retain the caller PIC across reentrant Program entry, preserve caller identity, restrictions, application identity, diagnostics and cleanup, and avoid adding storage or traffic to the same-Program path. This is a new hypothesis, with no implemented or measured gain yet.
+
+Shared-host frequency, affinity and thermal state remain uncontrolled; no owned build/test/profile or heavy scan overlapped timing. Observed ranges are not confidence intervals. No fresh Java/develop ratio or global performance ceiling is established.
