@@ -115,6 +115,8 @@ module VscDebugAdapter {
     - expressions are evaluated for watches, hovers and the debug console with the variables of a frame, and
       variables are set to the values of expressions
     - conditional breakpoints, hit conditions and logpoints
+    - an IDE attaching to a remote debug server that cannot be reached is told why, and a session ends with a
+      message when the connection to the debug server is closed
     - threads are shown with their current names, when the debug server gives them (see
       @ref Qore::get_thread_name(softint) "get_thread_name(tid)"), otherwise with the names in their last events
     - when a thread stops, the other threads of the program stop at their next statement and are reported as
@@ -288,6 +290,15 @@ public class VscDebugAdapter inherits DebugCommandLine {
             debug("Event: %y", event);
         }
         m_queue.push(event);
+    }
+
+    #! Ends the debug session when the connection to a remote debug server has been closed
+    /** The client is told why in its debug console, and the session ends; may be called in any thread
+
+        @param reason the reason that is shown to the user
+    */
+    public serverClosed(string reason) {
+        pushEvent({"type": "vsc_server_closed", "reason": reason});
     }
 
     #! implement printing to console
@@ -555,6 +566,10 @@ vda.run();
                     processDebugEvent(msg);
                 } else if (msg.type == "vsc_output") {
                     sendVscEvent("output", {"category": msg.category, "output": msg.output});
+                } else if (msg.type == "vsc_server_closed") {
+                    # the debug server cannot be reached any more; see serverClosed()
+                    sendVscEvent("output", {"category": "important", "output": msg.reason + "\n"});
+                    sendVscEvent("terminated");
                 } else if (msg.type == "vsc_output_mark") {
                     # a pipe's output before a flush mark has been sent; see sendVscEventAfterOutput()
                     if (m_eventsAfterOutput && !--m_eventsAfterOutput[0].marks) {

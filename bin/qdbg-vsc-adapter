@@ -107,6 +107,10 @@ class VscDebugAdapterRemote inherits VscDebugAdapter {
         string serverName;
         string url;
         *hash<auto> headers;
+        #! the error connecting to the debug server, which the requests of the IDE are answered with
+        *hash<ExceptionInfo> connectError;
+        #! True when the adapter closes the connection itself
+        bool closing;
     }
 
     constructor(hash<auto> opts, *Logger::LoggerInterface logger) : VscDebugAdapter(logger) {
@@ -128,6 +132,10 @@ class VscDebugAdapterRemote inherits VscDebugAdapter {
     }
 
     public *hash<auto> doCommandImpl(hash<auto> data) {
+        if (connectError) {
+            throw "DEBUG-CONNECT-ERROR", sprintf("cannot connect to the debug server at %s: %s: %s", url,
+                connectError.err, connectError.desc);
+        }
         pendingUid = clock_getmicros();
         data.uid = pendingUid;
         string d = make_yaml(data);
@@ -161,6 +169,10 @@ class VscDebugAdapterRemote inherits VscDebugAdapter {
     public wscEvent(*data msg) {
         logger.debug("received: %y", msg);
         if (!exists msg) {
+            # the debug server closed the connection: the session ends
+            if (!connecting && !closing) {
+                serverClosed(sprintf("the connection to the debug server at %s was closed", url));
+            }
             return;
         }
         try {
@@ -305,7 +317,17 @@ class DebugWrapper {
 
             if (vda instanceof VscDebugAdapterRemote) {
                 logger.debug("Connect remote adapter");
-                cast<VscDebugAdapterRemote>(vda).connect();
+                try {
+                    cast<VscDebugAdapterRemote>(vda).connect();
+                } catch (hash<ExceptionInfo> ex) {
+                    # a command is executed only with a connection; the IDE is answered with the error, so that it
+                    # can show it, instead of the adapter ending without an answer
+                    if (opt.execute) {
+                        rethrow;
+                    }
+                    logger.info("cannot connect: %s: %s", ex.err, ex.desc);
+                    cast<VscDebugAdapterRemote>(vda).connectError = ex;
+                }
             }
             if (opt.execute) {
                 logger.debug("Execute command: %y", opt.execute);
@@ -331,6 +353,7 @@ class DebugWrapper {
                 delete vda;
             } else {
                 logger.debug("Disconnect remote adapter");
+                cast<VscDebugAdapterRemote>(vda).closing = True;
                 cast<VscDebugAdapterRemote>(vda).wsc.disconnect();
             }
         } catch (hash<ExceptionInfo> e) {

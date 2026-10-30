@@ -319,6 +319,8 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         addTestCase("sources are parsed in the mode that the interpreter gives their files", \sourceModeTest());
         addTestCase("stopAllThreads false: only the thread that stops is stopped", \stopOneThreadTest());
         addTestCase("attaching to a program of a debug server", \attachTest());
+        addTestCase("a debug server that cannot be reached", \noServerTest());
+        addTestCase("a debug server that ends during the session", \serverClosedTest());
         addTestCase("the adapter ends when the IDE closes its input", \endOfInputTest());
         set_return_value(main());
     }
@@ -427,6 +429,14 @@ public class VscDebugAdapterTest inherits QUnit::Test {
     }
 
     attachTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
+    noServerTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
+    serverClosedTest() {
         testSkip("no process module 2.2 or later");
     }
 
@@ -1495,6 +1505,67 @@ print('exit code: %d' % p.wait(30))
         server.write("end\n");
         assertTrue(server.wait(30s), "the debug server ends");
         assertEq(0, server.exitCode());
+    }
+
+    # the IDE is told why the debug server cannot be reached
+    noServerTest() {
+        # a port that is bound but does not accept connections
+        Socket sock();
+        sock.bind("localhost:0");
+        int port = sock.getSocketInfo().port;
+
+        Process proc = startAdapter(("-a", sprintf("ws://localhost:%d", port)));
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        hash<auto> r = dap.request("initialize", {"adapterID": "qore", "linesStartAt1": True,
+            "columnsStartAt1": True, "pathFormat": "path"});
+        assertFalse(r.success);
+        assertRegex(sprintf("^DEBUG-CONNECT-ERROR: cannot connect to the debug server at ws://localhost:%d: ", port),
+            r.message);
+        assertRegex("refused", r.message);
+        proc.closeStdin();
+        assertTrue(proc.wait(30s), "the adapter ends");
+        assertEq(0, proc.exitCode());
+        assertEq((), dap.stray);
+    }
+
+    # the session ends with a message when the debug server ends
+    serverClosedTest() {
+        TmpDir tmp("qore-vda-test-");
+        string path = writeProgram(tmp, AttachProgram);
+        Process server(qore_exe, (server_script, path), {
+            "env": Process::getEnvironment() + {
+                "QORE_MODULE_DIR": qlib_dir + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : ""),
+            },
+        });
+        on_exit if (server.running()) {
+            server.terminate();
+        }
+        string line = readServerOutput(server, "\n");
+        int port = (line =~ x/listening on port ([0-9]+)/)[0].toInt();
+
+        Process proc = startAdapter(("-a", sprintf("ws://localhost:%d", port)));
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        hash<auto> r = dap.request("initialize", {"adapterID": "qore", "linesStartAt1": True,
+            "columnsStartAt1": True, "pathFormat": "path"});
+        assertTrue(r.success, r.message);
+        r = dap.request("attach", {"program": "target.q"});
+        assertTrue(r.success, r.message);
+        dap.waitForEvent("initialized");
+
+        server.terminate();
+        server.wait();
+        dap.waitForEvent("terminated");
+        assertEq((sprintf("the connection to the debug server at ws://localhost:%d was closed\n", port),),
+            dap.getOutput("important"));
+        proc.closeStdin();
+        assertTrue(proc.wait(30s), "the adapter ends");
+        assertEq(0, proc.exitCode());
     }
 
     #! Attaches to the program of the debug server, and stops at a breakpoint in a thread that the program starts

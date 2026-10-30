@@ -3930,6 +3930,9 @@ while (*binary chunk = input.read(65536)) {
         debuggers of Visual Studio Code; only the thread that stops was stopped; the \c stopAllThreads argument of
         \c launch and \c attach requests set to \c false keeps that
       - fixed \c qdbg-vsc-adapter writing every event of a remote debug server to the debug console of the IDE
+      - fixed \c qdbg-vsc-adapter ending without an answer when the remote debug server cannot be reached, so the
+        IDE did not show why; the IDE's requests are answered with the error; when the connection to the debug
+        server is closed during a session, the session ends with a message in the debug console
       - fixed attaching to a program of a remote debug server: breakpoints could be set only after an event of the
         program, and threads that were stopped when the program was attached, or that the runtime stopped when it
         was attached, were neither resumed nor reported as stopped
