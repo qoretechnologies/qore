@@ -1149,9 +1149,7 @@ ws.connect();
         option hash
     */
     hash<auto> connect(*hash<auto> opts, *reference<hash<auto>> info) {
-        if (!opts.hdr.Accept) {
-            opts.hdr.Accept = getAcceptHeader();
-        }
+        opts = getConnectOptions(opts);
         return connectIntern(opts, \info);
     }
 
@@ -1166,9 +1164,7 @@ ws.connect();
         @since WebSocketClient 2.4
     */
     WebSocketConnectPollOperation startPollConnect(*hash<auto> opts) {
-        if (!opts.hdr.Accept) {
-            opts.hdr.Accept = getAcceptHeader();
-        }
+        opts = getConnectOptions(opts);
 
         m.lock();
         on_exit m.unlock();
@@ -1199,9 +1195,7 @@ ws.connect();
         @since WebSocketClient 2.4
     */
     connectAsync(*hash<auto> opts, *Queue ready_queue) {
-        if (!opts.hdr.Accept) {
-            opts.hdr.Accept = getAcceptHeader();
-        }
+        opts = getConnectOptions(opts);
 
         m.lock();
         on_exit m.unlock();
@@ -1565,6 +1559,18 @@ ws.connect();
     }
 
     #! Returns the Accept header value
+    #! Returns the connection options with an \c Accept header
+    /** A new hash is returned, so that the header is added whatever the type of the given hash is; for example, the
+        value type of a hash literal whose only value is @ref nothing is \c nothing, so no hash can be assigned to its
+        \c hdr key
+    */
+    private:internal hash<auto> getConnectOptions(*hash<auto> opts) {
+        if (opts.hdr.Accept) {
+            return opts;
+        }
+        return opts - "hdr" + {"hdr": (opts.hdr ?? {}) + {"Accept": getAcceptHeader()}};
+    }
+
     private string getAcceptHeader() {
         return MimeTypeText + "," + MimeTypeOctetStream;
     }
