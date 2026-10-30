@@ -1609,3 +1609,6 @@ The [matched forwarding comparison](RESULTS.md#matched-forwarding-comparison-wit
 
 
 [Resolved native method calls](RESULTS.md#resolved-native-method-calls-2026-10-30) extend typed scalar dispatch to eligible parse-resolved sites while retaining selected overloads and ordinary fallback. The full41-workload table reports all gains and costs; see the [audit](audit-resolved-native-method.md).
+
+
+[Native binary call arithmetic](RESULTS.md#native-binary-call-arithmetic-2026-10-30) removes reboxing between eligible single-use scalar method calls and typed arithmetic. Common-case, allocation-stress and all broader control results are reported separately, including integer stack-frame growth. See the [audit](audit-native-binary-call.md).

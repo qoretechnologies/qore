@@ -30390,3 +30390,69 @@ Release and fullDebug each pass9fixtures/16cases/4697assertions; Debug native ru
 Qualification exposed a pre-existing scalar-parameter reflection mismatch: AST observes a changed native parameter, while baseline and candidate AOT O0/O3 reuse its previous value. The IR interpreter also lacks that native parameter in the reflective frame. Reproducers and failed qualification receipts are preserved; this optimization does not claim to fix them. The final regression uses boxed caller locals to check reflective fallback invalidation in AST/IR/JIT/tiered and AOT, without skipping modes. A separate visibility/reload investigation is required before broadening explicit-context companions.
 
 See the [complete evidence](results-resolved-native-method-macos-arm64.json) and [62-item audit](audit-resolved-native-method.md). No new Java/develop ratio, universal parity, global ceiling, sanitizer or full-project claim is made. Next work investigates the preserved reflection issue, native arithmetic result continuations, and bounded exact-receiver summary specialization.
+
+
+## Native binary call arithmetic (2026-10-30)
+
+AOT can pass a native call result directly to typed integer or floating add/subtract/multiply when the producer precedes its sole use in the same IR block. Existing native-result continuations carry the value; ordinary boxed conversion and cleanup remain on fallback. No runtime ABI, dispatch guard, exception policy, fast-math flag or integer overflow flag changes. Generic callback arithmetic, division/remainder, cross-block joins and multiple consumers remain outside this extension. QORE_DISABLE_AOT_NATIVE_BINARY_CALL_ARITHMETIC disables only the new discovery; the existing native arithmetic, floating arithmetic and method/callback continuation controls also apply.
+
+Fresh optimized baseline7adf959abc and candidate artifacts use -O3 -DNDEBUG, allocation tracking off, Apple clang2100.4.1.1/SDK27.2/LLVM22.1.8 on M4 Pro. AOT is -O3 --strip-source. Three layouts and three process forks per variant/layout each collect three warmup and three measured windows of at least100ms,4096items,seed7. These are whole-kernel ns/item, not isolated call latency. Negative changes are faster.
+
+|!Confirmation workload|!Before ns/item|!Candidate ns/item|!Change
+|matched:forward_float|33.8123|33.8427|+0.09%
+|matched:forward_int|32.5586|31.3656|-3.66%
+|matched:context_int|172.8829|174.3988|+0.88%
+|matched:context_float|186.0347|183.0608|-1.60%
+|local:direct_call|1.5581|1.5600|+0.12%
+|local:method_call|1.5755|1.5612|-0.91%
+|local:polymorphic_call|21.7712|21.5192|-1.16%
+|local:polymorphic_float_call|22.5681|22.6763|+0.48%
+|local:boxed_int_method_fallback|33.1681|33.5130|+1.04%
+|local:boxed_float_method_fallback|39.4069|39.8509|+1.13%
+|local:boxed_int_method_effect|93.8907|92.6305|-1.34%
+|local:list_mutate|124.1336|124.0723|-0.05%
+|local:temporary_list|1.6671|1.6582|-0.54%
+|local:polymorphic_expression_call|10.6883|10.5775|-1.04%
+|local:polymorphic_float_expression_call|12.7462|12.2498|-3.89%
+|micro:polymorphic_call|82.1489|82.0873|-0.08%
+|micro:polymorphic_float_call|82.9711|84.9442|+2.38%
+|micro:boxed_int_method_call|107.5017|106.8438|-0.61%
+|micro:boxed_float_method_call|108.2431|108.7164|+0.44%
+|micro:boxed_int_method_fallback|123.4473|124.8323|+1.12%
+|micro:boxed_float_method_fallback|126.6192|126.0769|-0.43%
+|micro:boxed_int_method_effect|186.4645|184.0301|-1.31%
+|micro:indirect_call|8.6097|9.0000|+4.53%
+|micro:closure_call|18.1363|18.0032|-0.73%
+|micro:closure_capture|25.1577|25.1190|-0.15%
+|micro:list_read|2.8226|2.8055|-0.61%
+|micro:list_build|23.7956|23.0796|-3.01%
+|micro:list_mutate|132.0452|135.7984|+2.84%
+|micro:temporary_hash|1.6709|1.6647|-0.37%
+|micro:polymorphic_expression_call|70.4004|71.1879|+1.12%
+|micro:polymorphic_float_expression_call|71.6019|72.3497|+1.04%
+|float:callback_local_float_return|0.8635|0.8612|-0.27%
+|float:typed_local_int_unary|1.2098|1.2147|+0.40%
+|float:callback_loop_float_return|5.6218|5.1136|-9.04%
+|mixed:csv_report|958.2958|959.2531|+0.10%
+|mixed:object_orders|3487.9717|3421.8953|-1.89%
+|mixed:callback_pipeline|99.0914|99.0739|-0.02%
+|mixed:text_index|1375.7776|1368.8648|-0.50%
+|probe:object_short|1724.9589|1728.5447|+0.21%
+|probe:effect_short|1793.6372|1819.3824|+1.44%
+|probe:string_result_loop|564.4223|566.4449|+0.36%
+
+Retention decision: Retain the bounded native-result optimization for reproducible allocation savings: frozen-baseline wide integer-15.37% and escaped float-14.91%, all layouts faster. Common float improves1.60%; small integer costs0.88%. Preserve measured costs including indirect calls+0.3903ns/item(+4.53%), module list mutation+2.84%, module floating polymorphic calls+2.38% and effect-short+1.44%. Mixed workloads range+0.10%to-1.89%; no weighted application improvement is inferred. Indirect/list-mutation/floating-polymorphic LLVM bodies are identical across variants; root causes of those runtime/layout-sensitive costs are not established. The integer target frame grows16bytes. The user-authorized broader tradeoff supports this scope-specific result; common-case Java parity is not claimed.
+
+The common-case pilot was weak: integer two-call174.5400to177.8251 (+1.88%),float186.8941to182.6799 (-2.25%) with mixed layout signs. Same-runtime compiler-switch attribution gave integer176.4126to175.7094 (-0.40%) and float187.9530to183.4359 (-2.40%,all layouts faster). The allocation-stress follow-up was planned afterward, then confirmed independently using the frozen baseline. These are separate campaigns; their absolute times are not pooled.
+
+|!Allocation-stress confirmation|!Before ns/item|!Candidate ns/item|!Change
+|matched:context_int|228.3433|193.2409|-15.37%
+|matched:context_float|236.9180|201.5892|-14.91%
+
+The stress kernels make both inner call results exceed inline NaN-box representations, then normalize their sum for checking/accumulation. They demonstrate allocation savings without estimating application frequency. All weak and slower common-case controls remain in the evidence. Primary pilot/confirmation total1098processes/3294windows; attribution and both stress campaigns add144processes/432windows, totaling1242/3726. Shared-host layout/frequency variation limits small differences; no weighted application gain is inferred.
+
+Default-layout optimized target instruction counts fall181to171 for integer and200to184 for float. The integer frame grows160to176 bytes; the float frame stays176. Direct/final control LLVM bodies are identical. These static facts do not explain every timing difference or establish a total binary-size effect.
+
+Release and fullDebug each pass7fixtures/12cases/4212assertions; Debug native4003/all5668 pass.36fresh primary artifacts verify4698reference outputs per variant and LLVM; additional stress artifacts pass independent arithmetic references. All391Release qlib aliases/hashes were restored after Debug. A separate24process boxed-fallback comparison preserves16identical outputs and six owned destructions per execution. Fixture corrections and abandoned diagnostic receipts are retained separately from successful qualification and timing.
+
+See the [complete evidence](results-native-binary-call-macos-arm64.json) and [62-item audit](audit-native-binary-call.md). No fresh Java/develop ratio, universal parity or global ceiling is claimed. Next investigate outer-method context costs, bounded exact-receiver summary specialization, and native-result SSA lifetimes; broader companions must address the separately preserved native-parameter reflection limitation.

@@ -1,0 +1,152 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+
+sub expect(auto expected, auto actual) {
+    if (expected !== actual) {
+        throw "NATIVE-BINARY-TEST", sprintf("expected %y, got %y", expected, actual);
+    }
+}
+sub expectFloat(float expected, float actual) {
+    if (expected.nanp() ? !actual.nanp() : expected != actual
+            || (expected == 0.0 && sprintf("%g", expected) != sprintf("%g", actual))) {
+        throw "NATIVE-BINARY-FLOAT", sprintf("expected %y, got %y", expected, actual);
+    }
+}
+thread_local list<int> calls = ();
+int sub identityInt(int value) { return value; }
+float sub identityFloat(float value) { return value; }
+int sub effectInt(int value) { push calls, value; return value; }
+float sub effectFloat(float value) { push calls, int(value); return value; }
+int sub throwInt(int value) { push calls, value; throw "BINARY-ERROR", "integer callback"; }
+float sub throwFloat(float value) { push calls, int(value); throw "BINARY-ERROR", "float callback"; }
+class BinaryInt { int next(int value) { return value; } }
+class BinaryIntChild inherits BinaryInt { int next(int value) { return value; } }
+class BinaryIntEffect inherits BinaryInt { int next(int value) { push calls, value; return value; } }
+class BinaryFloat { float next(float value) { return value; } }
+class BinaryFloatChild inherits BinaryFloat { float next(float value) { return value; } }
+class BinaryFloatEffect inherits BinaryFloat { float next(float value) { push calls, int(value); return value; } }
+int sub referenceIntAdd(int a, int z) { return a + z; }
+int sub callbackIntAdd(code<int(int)> fn, int a, int z) { return fn(a) + fn(z); }
+int sub methodIntAdd(BinaryInt receiver, int a, int z) { return receiver.next(a) + receiver.next(z); }
+int sub referenceIntSub(int a, int z) { return a - z; }
+int sub callbackIntSub(code<int(int)> fn, int a, int z) { return fn(a) - fn(z); }
+int sub methodIntSub(BinaryInt receiver, int a, int z) { return receiver.next(a) - receiver.next(z); }
+int sub referenceIntMul(int a, int z) { return a * z; }
+int sub callbackIntMul(code<int(int)> fn, int a, int z) { return fn(a) * fn(z); }
+int sub methodIntMul(BinaryInt receiver, int a, int z) { return receiver.next(a) * receiver.next(z); }
+float sub referenceFloatAdd(float a, float z) { return a + z; }
+float sub callbackFloatAdd(code<float(float)> fn, float a, float z) { return fn(a) + fn(z); }
+float sub methodFloatAdd(BinaryFloat receiver, float a, float z) { return receiver.next(a) + receiver.next(z); }
+float sub referenceFloatSub(float a, float z) { return a - z; }
+float sub callbackFloatSub(code<float(float)> fn, float a, float z) { return fn(a) - fn(z); }
+float sub methodFloatSub(BinaryFloat receiver, float a, float z) { return receiver.next(a) - receiver.next(z); }
+float sub referenceFloatMul(float a, float z) { return a * z; }
+float sub callbackFloatMul(code<float(float)> fn, float a, float z) { return fn(a) * fn(z); }
+float sub methodFloatMul(BinaryFloat receiver, float a, float z) { return receiver.next(a) * receiver.next(z); }
+float sub mixedCall(code<int(int)> fn, int value, float other) { return fn(value) + other; }
+int sub literalLeft(code<int(int)> fn, int value) { return 7 - fn(value); }
+list<int> sub multipleConsumers(code<int(int)> fn, int value) {
+    int result = fn(value);
+    return (result + 1, result - 1, result * 2);
+}
+int sub phiConsumer(code<int(int)> fn, int value, bool first) {
+    int result = first ? fn(value) : fn(value + 1);
+    return result + 7;
+}
+auto sub invokeConsumer(code<int(int)> fn, int value) {
+    try { return fn(value) + fn(value + 1); }
+    catch (hash<ExceptionInfo> ex) { return ex.err; }
+}
+BinaryInt integer(); BinaryIntChild child(); BinaryIntEffect effect();
+BinaryFloat floating(); BinaryFloatChild float_child(); BinaryFloatEffect float_effect();
+for (int round = 0; round < 8; ++round) {
+    foreach int value in ((0, 1, -1, 140737488355327, 140737488355328,
+            -140737488355328, -140737488355329, 1125899906842624,
+            9223372036854775807, -9223372036854775807 - 1)) {
+        foreach int other in ((0, 1, -1, 3, 1125899906842624)) {
+            expect(referenceIntAdd(value, other), callbackIntAdd(\identityInt(), value, other));
+            expect(referenceIntAdd(value, other), methodIntAdd(integer, value, other));
+            expect(referenceIntAdd(value, other), methodIntAdd(child, value, other));
+            expect(referenceIntSub(value, other), callbackIntSub(\identityInt(), value, other));
+            expect(referenceIntSub(value, other), methodIntSub(integer, value, other));
+            expect(referenceIntSub(value, other), methodIntSub(child, value, other));
+            expect(referenceIntMul(value, other), callbackIntMul(\identityInt(), value, other));
+            expect(referenceIntMul(value, other), methodIntMul(integer, value, other));
+            expect(referenceIntMul(value, other), methodIntMul(child, value, other));
+        }
+        expectFloat(float(value) + 0.25, mixedCall(\identityInt(), value, 0.25));
+        expect(7 - value, literalLeft(\identityInt(), value));
+        expect((value + 1, value - 1, value * 2), multipleConsumers(\identityInt(), value));
+        expect(value + 7, phiConsumer(\identityInt(), value, True));
+        expect(value + 8, phiConsumer(\identityInt(), value, False));
+    }
+    foreach float value in ((0.0, -0.0, 1.25, -1.25, 1.0e308, -3.0e307, -6.0e307,
+            9223372036854775808.0, -9223372036854775808.0, @inf@, -@inf@, @nan@, -@nan@)) {
+        foreach float other in ((0.0, -0.0, 1.0, -1.0, 3.0, -3.0e307)) {
+            expectFloat(referenceFloatAdd(value, other), callbackFloatAdd(\identityFloat(), value, other));
+            expectFloat(referenceFloatAdd(value, other), methodFloatAdd(floating, value, other));
+            expectFloat(referenceFloatAdd(value, other), methodFloatAdd(float_child, value, other));
+            expectFloat(referenceFloatSub(value, other), callbackFloatSub(\identityFloat(), value, other));
+            expectFloat(referenceFloatSub(value, other), methodFloatSub(floating, value, other));
+            expectFloat(referenceFloatSub(value, other), methodFloatSub(float_child, value, other));
+            expectFloat(referenceFloatMul(value, other), callbackFloatMul(\identityFloat(), value, other));
+            expectFloat(referenceFloatMul(value, other), methodFloatMul(floating, value, other));
+            expectFloat(referenceFloatMul(value, other), methodFloatMul(float_child, value, other));
+        }
+    }
+    calls = ();
+    expect(referenceIntAdd(7, 3), callbackIntAdd(\effectInt(), 7, 3));
+    expect((7, 3), calls);
+    calls = ();
+    expect(referenceIntAdd(7, 3), methodIntAdd(effect, 7, 3));
+    expect((7, 3), calls);
+    calls = ();
+    expect(referenceIntSub(7, 3), callbackIntSub(\effectInt(), 7, 3));
+    expect((7, 3), calls);
+    calls = ();
+    expect(referenceIntSub(7, 3), methodIntSub(effect, 7, 3));
+    expect((7, 3), calls);
+    calls = ();
+    expect(referenceIntMul(7, 3), callbackIntMul(\effectInt(), 7, 3));
+    expect((7, 3), calls);
+    calls = ();
+    expect(referenceIntMul(7, 3), methodIntMul(effect, 7, 3));
+    expect((7, 3), calls);
+    calls = ();
+    try {
+        callbackIntAdd(\throwInt(), 7, 3);
+        throw "NATIVE-BINARY-TEST", "missing exception";
+    } catch (hash<ExceptionInfo> ex) { expect("BINARY-ERROR", ex.err); }
+    expect((7,), calls);
+    calls = ();
+    expectFloat(referenceFloatAdd(7.0, 3.0), callbackFloatAdd(\effectFloat(), 7.0, 3.0));
+    expect((7, 3), calls);
+    calls = ();
+    expectFloat(referenceFloatAdd(7.0, 3.0), methodFloatAdd(float_effect, 7.0, 3.0));
+    expect((7, 3), calls);
+    calls = ();
+    expectFloat(referenceFloatSub(7.0, 3.0), callbackFloatSub(\effectFloat(), 7.0, 3.0));
+    expect((7, 3), calls);
+    calls = ();
+    expectFloat(referenceFloatSub(7.0, 3.0), methodFloatSub(float_effect, 7.0, 3.0));
+    expect((7, 3), calls);
+    calls = ();
+    expectFloat(referenceFloatMul(7.0, 3.0), callbackFloatMul(\effectFloat(), 7.0, 3.0));
+    expect((7, 3), calls);
+    calls = ();
+    expectFloat(referenceFloatMul(7.0, 3.0), methodFloatMul(float_effect, 7.0, 3.0));
+    expect((7, 3), calls);
+    calls = ();
+    try {
+        callbackFloatAdd(\throwFloat(), 7.0, 3.0);
+        throw "NATIVE-BINARY-TEST", "missing exception";
+    } catch (hash<ExceptionInfo> ex) { expect("BINARY-ERROR", ex.err); }
+    expect((7,), calls);
+    calls = ();
+    expect("BINARY-ERROR", invokeConsumer(\throwInt(), 7));
+    expect((7,), calls);
+    expect(15, invokeConsumer(\identityInt(), 7));
+}
+printf("native-binary-call: ok\n");

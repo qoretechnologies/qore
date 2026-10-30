@@ -14769,6 +14769,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     bool native_call_arithmetic = aot_mode && !q_env_is_set("QORE_DISABLE_AOT_NATIVE_CALL_ARITHMETIC");
     bool native_float_call_arithmetic = native_call_arithmetic
         && !q_env_is_set("QORE_DISABLE_AOT_NATIVE_FLOAT_CALL_ARITHMETIC");
+    bool native_binary_call_arithmetic = native_call_arithmetic
+        && !q_env_is_set("QORE_DISABLE_AOT_NATIVE_BINARY_CALL_ARITHMETIC");
     if (native_call_conversions || native_call_arithmetic) {
         // Count every use, including Return/Phi's non-operand uses above. Also
         // require producer-before-consumer lowering order so its native SSA
@@ -14783,6 +14785,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             // alone does not prove the actual return type; the boxed fallback still performs conversion.
             std::unordered_set<uint32_t> local_int_callbacks;
             std::unordered_set<uint32_t> local_float_callbacks;
+            std::unordered_set<uint32_t> local_scalar_calls;
             if (conversion_count++ && !(conversion_count % 100)
                     && qore_check_cancel(nullptr, "LLVM native call conversion analysis")) {
                 error = "cancelled during LLVM native call conversion analysis";
@@ -14802,6 +14805,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                             || (methods && (inst->opcode == QoreIROpcode::DotEvalMethodDirect
                                 || inst->opcode == QoreIROpcode::InvokeDotEvalMethodDirect)))) {
                     available_calls.insert(inst->result.id);
+                    if (native_binary_call_arithmetic) {
+                        local_scalar_calls.insert(inst->result.id);
+                    }
                     if (native_call_arithmetic && callbacks
                             && inst->opcode == QoreIROpcode::CallClosureDirect && !inst->operands.empty()) {
                         const QoreIRValueFacts* facts = func.getValueFacts(inst->operands[0]);
@@ -14821,6 +14827,24 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     auto uses = operand_remaining_uses.find(id);
                     if (available_calls.count(id) && uses != operand_remaining_uses.end() && uses->second == 1) {
                         native_call_conversion_results.insert(id);
+                    }
+                } else if (native_binary_call_arithmetic && inst->operands.size() == 2
+                        && (inst->opcode == QoreIROpcode::AddInt
+                            || inst->opcode == QoreIROpcode::SubInt
+                            || inst->opcode == QoreIROpcode::MulInt
+                            || (native_float_call_arithmetic
+                                && (inst->opcode == QoreIROpcode::AddFloat
+                                    || inst->opcode == QoreIROpcode::SubFloat
+                                    || inst->opcode == QoreIROpcode::MulFloat)))) {
+                    // A single arithmetic use in this IR block is dominated by
+                    // the call's native/boxed merge. Keep ordinary conversion on
+                    // the miss edge; a declared signature is not a result proof.
+                    for (const auto& operand : inst->operands) {
+                        auto uses = operand_remaining_uses.find(operand.id);
+                        if (local_scalar_calls.count(operand.id)
+                                && uses != operand_remaining_uses.end() && uses->second == 1) {
+                            native_call_conversion_results.insert(operand.id);
+                        }
                     }
                 } else if (native_call_arithmetic && inst->operands.size() == 2
                         && (inst->opcode == QoreIROpcode::AddAssignInt
@@ -17308,31 +17332,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
 
         // === Typed integer arithmetic (native i64) ===
-        case QoreIROpcode::AddInt: {
-            auto* lhs = getVal(inst->operands[0].id, error);
-            auto* rhs = getVal(inst->operands[1].id, error);
-            if (!lhs || !rhs) { return false; }
-            values[inst->result.id] = builder->CreateAdd(
-                ensureIntTypeInline(lhs, inst->operands[0].id),
-                ensureIntTypeInline(rhs, inst->operands[1].id));
-            return true;
-        }
-        case QoreIROpcode::SubInt: {
-            auto* lhs = getVal(inst->operands[0].id, error);
-            auto* rhs = getVal(inst->operands[1].id, error);
-            if (!lhs || !rhs) { return false; }
-            values[inst->result.id] = builder->CreateSub(
-                ensureIntTypeInline(lhs, inst->operands[0].id),
-                ensureIntTypeInline(rhs, inst->operands[1].id));
-            return true;
-        }
+        case QoreIROpcode::AddInt:
+        case QoreIROpcode::SubInt:
         case QoreIROpcode::MulInt: {
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
-            values[inst->result.id] = builder->CreateMul(
-                ensureIntTypeInline(lhs, inst->operands[0].id),
-                ensureIntTypeInline(rhs, inst->operands[1].id));
+            auto* left = tryEmitNativeCallConversion(inst->operands[0].id, false, lhs, module, llvm_func);
+            if (!left) { left = ensureIntTypeInline(lhs, inst->operands[0].id); }
+            auto* right = tryEmitNativeCallConversion(inst->operands[1].id, false, rhs, module, llvm_func);
+            if (!right) { right = ensureIntTypeInline(rhs, inst->operands[1].id); }
+            values[inst->result.id] = inst->opcode == QoreIROpcode::AddInt ? builder->CreateAdd(left, right)
+                : inst->opcode == QoreIROpcode::SubInt ? builder->CreateSub(left, right)
+                : builder->CreateMul(left, right);
             return true;
         }
         case QoreIROpcode::DivInt: {
@@ -17423,31 +17435,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         // === Typed float arithmetic (native double) ===
         // Note: Operands may be NaN-boxed floats, native doubles, or NaN-boxed integers
         // (when using mixed int/float types). Convert to native double as needed.
-        case QoreIROpcode::AddFloat: {
-            auto* lhs = getVal(inst->operands[0].id, error);
-            auto* rhs = getVal(inst->operands[1].id, error);
-            if (!lhs || !rhs) { return false; }
-            llvm::Value* l_float = ensureFloatType(lhs, inst->operands[0].id, module);
-            llvm::Value* r_float = ensureFloatType(rhs, inst->operands[1].id, module);
-            values[inst->result.id] = builder->CreateFAdd(l_float, r_float);
-            return true;
-        }
-        case QoreIROpcode::SubFloat: {
-            auto* lhs = getVal(inst->operands[0].id, error);
-            auto* rhs = getVal(inst->operands[1].id, error);
-            if (!lhs || !rhs) { return false; }
-            llvm::Value* l_float = ensureFloatType(lhs, inst->operands[0].id, module);
-            llvm::Value* r_float = ensureFloatType(rhs, inst->operands[1].id, module);
-            values[inst->result.id] = builder->CreateFSub(l_float, r_float);
-            return true;
-        }
+        case QoreIROpcode::AddFloat:
+        case QoreIROpcode::SubFloat:
         case QoreIROpcode::MulFloat: {
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
-            llvm::Value* l_float = ensureFloatType(lhs, inst->operands[0].id, module);
-            llvm::Value* r_float = ensureFloatType(rhs, inst->operands[1].id, module);
-            values[inst->result.id] = builder->CreateFMul(l_float, r_float);
+            auto* left = tryEmitNativeCallConversion(inst->operands[0].id, true, lhs, module, llvm_func);
+            if (!left) { left = ensureFloatType(lhs, inst->operands[0].id, module); }
+            auto* right = tryEmitNativeCallConversion(inst->operands[1].id, true, rhs, module, llvm_func);
+            if (!right) { right = ensureFloatType(rhs, inst->operands[1].id, module); }
+            values[inst->result.id] = inst->opcode == QoreIROpcode::AddFloat ? builder->CreateFAdd(left, right)
+                : inst->opcode == QoreIROpcode::SubFloat ? builder->CreateFSub(left, right)
+                : builder->CreateFMul(left, right);
             return true;
         }
         case QoreIROpcode::DivFloat: {
