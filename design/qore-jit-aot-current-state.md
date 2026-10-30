@@ -6263,3 +6263,10 @@ AOTSlotMap assigns additional method targets from the same checked index space a
 The [optimized evidence](../bench/runtime-comparison/results-polymorphic-scalar-macos-arm64.json) records1170processes/3510windows, with module scalar calls about73% faster and expression calls about87% faster in confirmation. Local expression calls improve about16-17%; all slower controls are retained. Focused Release/Debug tests, native Debug suites, six extra metadata fixtures and391restored Release aliases qualify the change. QORE_DISABLE_AOT_POLYMORPHIC_SCALAR_IMPORT restores prior lowering. No RuntimeConfig/TLS ABI or serialized wire kind changes.
 
 Remaining work: refresh the cumulative optimized Java/develop checkpoint; inspect whether one receiver classification and hoisted immutable target checks can replace repeated guard work in loops. Preserve live validity, exact object identity, cross-Program behavior, logical frames and fallback. Broader receiver/native-local lifetime proofs must address the separately reproduced native-parameter reflection visibility/reload issue. No Java parity or maximum-performance claim is made.
+
+
+### Optimized post-polymorphic checkpoint (2026-10-30)
+
+The [39-workload comparison](../bench/runtime-comparison/RESULTS.md#optimized-checkpoint-after-polymorphic-scalar-inlining-2026-10-30) compares installed branch79c48b5aa1 with optimized developa3ee195ea2. Fresh ordinary Java C2 and original boundary controls are reported separately. All885processes/2655windows,39Qore rows and32Java comparison rows remain. Whole-kernel costs and runtime obligations differ; universal parity and a global ceiling are not established.
+
+Next freeze the installed baseline, then test whether immutable override-target admission can move to logical function entry for loop calls and whether the current receiver can be classified once per override chain. Retain live validity, provenance, receiver identity, ownership/Program checks, logical frames, argument cleanup and ordinary fallbacks. Measure all eight polymorphic targets plus forwarding, boxed/effectful, collection and mixed controls before retention.

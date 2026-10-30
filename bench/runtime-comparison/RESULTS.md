@@ -30523,3 +30523,65 @@ See the [complete evidence](results-polymorphic-scalar-macos-arm64.json) and [62
 The installed-runtime follow-up exposed a native-probe assumption: AOTCrossProgramMethodEntry expected a lazy callee context after warmup, but the new pure override inlining eliminated that call. Its compilation now disables only polymorphic scalar import so all original native-entry/cache/Program/stack assertions execute. Enabled inlining remains covered by AOTPolymorphicScalar. The corrected probe passes528assertions in installed optimized Release and Debug core; remaining installed frame-reader, closure and C++ stack checks pass. No runtime code or timing changed. See the [failure and retest evidence](results-polymorphic-scalar-native-probe.json) and [62-item audit](audit-polymorphic-scalar-native-probe.md).
 
 The override guard compares object/method ownership with the loaded AOT context. A pure context-independent body may be imported into a module call without creating its own native callee context; these results do not imply that every imported call still performs a Program transition. Unknown or mismatched receiver/target ownership retains ordinary dispatch.
+
+
+## Optimized checkpoint after polymorphic scalar inlining (2026-10-30)
+
+Branch 79c48b5aa1 versus unmodified develop a3ee195ea2, with develop already merged. Both use matched optimized Release -O3 -DNDEBUG builds, allocation tracking off, Apple clang2100.4.1.1/SDK27.2/LLVM22.1.8 and fresh qcc -O3 --strip-source artifacts on M4 Pro/macOS ARM64. Develop's unchanged isolated optimized build is reverified; the branch is installed and audited. Java is freshly compiled Temurin25.0.2+10 HotSpot C2/JMH1.37. These are cumulative branch differences.
+
+This39-workload checkpoint adds seven polymorphic/monomorphic controls to the preceding32. Qore uses three layouts, three forks per layout/variant, three warmups and three measured150ms windows. Java uses three forks per policy, five warmups and three measured300ms windows. All use4096items,seed7 and interleaving seed2026103022. Values are whole-kernel ns/item: median of layout medians of process means for Qore and median process means for Java. Lower is faster.
+
+Java ordinary C2 allows normal optimization in every row. RuntimeInlineBench removes only the original DONT_INLINE annotations and renames the class; arithmetic, data and control flow are identical and independently checked. The original-policy column retains those explicit target boundaries where present; direct/final methods and the float-body callbacks already permit normal inlining. It is a separate control, not the main Java efficiency target.
+
+|!Workload|!Develop ns/item|!Branch ns/item|!Develop/branch|!Java ordinary ns/item|!Java original controls ns/item|!Branch/ordinary Java
+|local:direct_call|11.5200|1.5813|7.285x|1.0434|1.0321|1.515x
+|local:method_call|11.6131|1.6757|6.930x|1.0317|1.0367|1.624x
+|local:polymorphic_call|327.3111|21.5799|15.167x|2.6748|2.7001|8.068x
+|local:boxed_int_method_fallback|272.8593|33.5774|8.126x|2.6991|2.7002|12.440x
+|local:boxed_float_method_fallback|319.7683|37.4744|8.533x|2.6546|2.7789|14.117x
+|local:boxed_int_method_effect|379.7935|89.8501|4.227x|2.0167|1.9258|44.553x
+|local:list_mutate|252.7042|127.7658|1.978x|4.6126|4.5456|27.699x
+|local:temporary_list|152.3588|1.6740|91.013x|1.2822|1.2825|1.306x
+|local:polymorphic_float_call|345.4502|21.9235|15.757x|2.7252|2.7209|8.045x
+|local:polymorphic_expression_call|140.5719|9.4995|14.798x|2.8949|2.8434|3.281x
+|local:polymorphic_float_expression_call|149.4932|9.6216|15.537x|2.6982|2.7826|3.566x
+|local:monomorphic_call|17.5855|4.0708|4.320x|1.0396|1.7434|3.916x
+|local:monomorphic_float_call|17.5884|4.0003|4.397x|0.5726|1.7325|6.986x
+|micro:polymorphic_call|376.6445|21.9629|17.149x|2.6572|2.6864|8.266x
+|micro:polymorphic_float_call|383.3009|21.4448|17.874x|2.6658|2.6655|8.044x
+|micro:boxed_int_method_call|276.0187|110.7078|2.493x|2.6585|2.6625|41.643x
+|micro:boxed_float_method_call|290.6194|114.6792|2.534x|2.7234|2.6611|42.108x
+|micro:boxed_int_method_fallback|318.7039|123.2238|2.586x|2.6819|2.6927|45.946x
+|micro:boxed_float_method_fallback|375.9303|127.7416|2.943x|2.6765|2.7024|47.726x
+|micro:boxed_int_method_effect|439.4320|185.2870|2.372x|2.1370|2.0232|86.703x
+|micro:indirect_call|263.4939|8.9089|29.576x|1.0231|1.7369|8.708x
+|micro:closure_call|161.6389|18.7166|8.636x|1.0462|1.7471|17.889x
+|micro:closure_capture|185.0993|25.0554|7.388x|1.0380|1.8670|24.139x
+|micro:list_read|13.2906|2.9669|4.480x|0.3033|0.2995|9.783x
+|micro:list_build|124.4136|24.0361|5.176x|2.6959|2.6704|8.916x
+|micro:list_mutate|252.2498|125.5627|2.009x|4.6100|4.5717|27.237x
+|micro:temporary_hash|349.6173|1.7037|205.207x|15.4873|16.3950|0.110x
+|micro:polymorphic_expression_call|171.9498|9.3867|18.318x|2.7158|2.6759|3.456x
+|micro:polymorphic_float_expression_call|181.2175|9.5966|18.883x|2.7010|2.7144|3.553x
+|float:callback_local_float_return|340.0091|0.8723|389.792x|0.5514|N/A|1.582x
+|float:typed_local_int_unary|262.1843|1.2349|212.310x|1.0370|N/A|1.191x
+|float:callback_loop_float_return|557.6445|5.0578|110.255x|1.6523|N/A|3.061x
+|mixed:csv_report|1156.4185|963.1076|1.201x|N/A|N/A|N/A
+|mixed:object_orders|3750.7487|3345.9590|1.121x|N/A|N/A|N/A
+|mixed:callback_pipeline|340.9290|97.4586|3.498x|N/A|N/A|N/A
+|mixed:text_index|1837.9069|1373.1072|1.339x|N/A|N/A|N/A
+|probe:object_short|2012.8923|1716.6725|1.173x|N/A|N/A|N/A
+|probe:effect_short|2143.0528|1808.9706|1.185x|N/A|N/A|N/A
+|probe:string_result_loop|797.2917|562.2156|1.418x|N/A|N/A|N/A
+
+Observed range relationships across117Qore workload/layout cells: branch-faster=117. These are observations, not confidence intervals; all cells and raw samples remain.
+
+All885processes/2655windows independently replay. Each Qore variant passes1518IR and4554AOT reference outputs; Java passes2340 across the two policies. All30LLVM modules, actual loaded runtimes/modules,61C2 diagnostics and original noninline controls are verified before timing. No owned build, test, profile or heavy scan overlapped measurement.
+
+An imported source declaration alone does not establish a Program transition. Local kernels and these imported function callbacks can run within one Program. Pure override import can now eliminate the native callee context entirely; other object-method fallback paths retain Program transitions. The full report documents the installed probe correction and the scope of the ownership checks. Mixed workloads compare Qore builds only.
+
+Host load, thermals, frequency and affinity are uncontrolled. Data representations, lifetime/locking semantics and optimizer opportunities differ; whole-kernel results are not isolated invocation latency. No weighted application gain, universal Java parity, global ceiling, startup/memory or IR/JIT throughput claim follows.
+
+Next freeze the installed baseline, then test whether immutable override-target admission can move to logical function entry for loop calls and whether the current receiver can be classified once per override chain. Retain live validity, provenance, receiver identity, ownership/Program checks, logical frames, argument cleanup and ordinary fallbacks. Measure all eight polymorphic targets plus forwarding, boxed/effectful, collection and mixed controls before retention.
+
+[Complete evidence](results-post-polymorphic-checkpoint-macos-arm64.json); [all62audit checks](audit-post-polymorphic-checkpoint.md).

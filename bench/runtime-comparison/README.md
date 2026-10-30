@@ -1615,3 +1615,6 @@ The [matched forwarding comparison](RESULTS.md#matched-forwarding-comparison-wit
 
 
 [Bounded polymorphic scalar calls](RESULTS.md#bounded-polymorphic-scalar-calls-2026-10-30) imports known pure override bodies behind load-bound receiver/Program checks. Both optimized campaigns and all control costs are recorded with the [audit](audit-polymorphic-scalar.md).
+
+
+The [post-polymorphic optimized checkpoint](RESULTS.md#optimized-checkpoint-after-polymorphic-scalar-inlining-2026-10-30) compares39workloads with develop and32Java rows, including29fresh ordinary-C2 counterparts alongside original boundary controls. All885processes/2655windows are retained.
