@@ -165,9 +165,10 @@ auto sub call(string name, *list<auto> args) {
         on_exit listener.close();
         int port = listener.getSocketInfo().port;
         auto rv = p.callFunction("call", "connect", (port,));
-        # a connection that was made is already queued on the listener when the call returns; a refused one never
-        # reached it
-        bool pending = listener.isDataAvailable(0);
+        # the client's connect() returns when the handshake's SYN-ACK arrives, but the connection is queued on the
+        # listener only once the listener's side has processed the final ACK, so a connection that was made is waited
+        # for; a refused call fails before it sends anything, so no connection can arrive after it returns
+        bool pending = listener.isDataAvailable(expect_connection ? 10s : 0);
         assertEq(expect_connection, pending, "a connection reached the listener");
         if (pending) {
             listener.accept(10s);
