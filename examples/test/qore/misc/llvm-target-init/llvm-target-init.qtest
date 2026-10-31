@@ -44,7 +44,16 @@ class LlvmTargetInitTest inherits QUnit::Test {
 %ifndef QoreDebug
         addTestCase("the once-only initialization unit tests", \testRequiresDebugBuild());
 %endif
+        addTestCase("the library reports the LLVM version it was built with", \testLlvmVersion());
         set_return_value(main());
+    }
+
+    testLlvmVersion() {
+        assertRegex("^[0-9]+\\.[0-9]+\\.[0-9]+", Qore::LLVMVersion, "Qore::LLVMVersion is an LLVM version");
+        assertEq(Qore::LLVMVersion, get_qore_library_info().LLVMVersion,
+            "get_qore_library_info() reports the same LLVM version");
+        # the JIT and AOT compilers need LLVM 16 or later
+        assertGe(16, Qore::LLVMVersion.split(".")[0].toInt(), "the LLVM major version is supported");
     }
 
     testSingleInitPoint() {

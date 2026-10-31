@@ -31,6 +31,8 @@ class CMakeBuildHelpersTest inherits QUnit::Test {
         string qore_bin;
         string qore_build_dir;
         *string qore_dir;
+        #! the cmake in the PATH, or nothing
+        *string cmake;
     }
 
     constructor() : QUnit::Test("CMakeBuildHelpersTest", "1.0", \ARGV) {
@@ -44,6 +46,10 @@ class CMakeBuildHelpersTest inherits QUnit::Test {
         }
         if (!is_file(qore_dir + "/QoreConfig.cmake")) {
             qore_dir = NOTHING;
+        }
+        string cmake_path = trim(backquote("command -v cmake 2>/dev/null || true"));
+        if (cmake_path) {
+            cmake = cmake_path;
         }
 
         addTestCase("exported Qore CMake build helpers", \testExportedHelpers());
@@ -96,6 +102,17 @@ class CMakeBuildHelpersTest inherits QUnit::Test {
             \testPartialAggregateBodyContracts());
 
         set_return_value(main());
+    }
+
+    #! The cases build CMake projects with the cmake in the PATH: without one, each is skipped with the reason
+    /** run_tests.sh runs the tests with the PATH it is given; the CI scripts put the cmake that builds %Qore in it
+        (examples/test/docker_test/test-macos.sh adds MacPorts' /opt/local/bin, for example)
+    */
+    setUp() {
+        if (!cmake) {
+            testSkip("cmake is not in the PATH; these tests build CMake projects with it: run them with the PATH "
+                "that has the cmake this qore was built with");
+        }
     }
 
     private string run(string cmd) {

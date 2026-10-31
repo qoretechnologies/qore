@@ -33,6 +33,8 @@
 #include <qore/QoreHttpClientObject.h>
 #include "qore/intern/QC_File.h"
 
+#include <llvm/Config/llvm-config.h>
+
 extern QoreClass* QC_FILEINPUTSTREAM;
 extern QoreClass* QC_FILEOUTPUTSTREAM;
 
@@ -240,6 +242,14 @@ const BuildHost =     qore(new QoreStringNode(qore_build_host));
 
 //! A string giving the C++ compiler used to build %Qore
 const Compiler =      qore(new QoreStringNode(qore_cplusplus_compiler));
+
+//! A string giving the version of LLVM that the %Qore library was built with for its JIT and AOT compilers
+/** A program that is compiled against the library's internal headers, or that links LLVM in the same process as
+    the library, must use this LLVM version as well (ex: \c "21.1.8")
+
+    @since %Qore 3.0
+*/
+const LLVMVersion =   qore(new QoreStringNode(LLVM_VERSION_STRING));
 
 //! A string giving the C++ compiler flags used to build %Qore
 /** On macOS this includes the deployment target the library was built for (\c -mmacosx-version-min), so that a
