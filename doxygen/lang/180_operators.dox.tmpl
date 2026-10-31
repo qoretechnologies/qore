@@ -2384,7 +2384,7 @@ if (x || y)
     |\a lvalue (@ref date_type "date")|the \a expression will be evaluated and converted to a date if necessary and subtracted from the \a lvalue
     |\a lvalue (@ref hash_type "hash" or (@ref object_type "object"), \a expression (@ref string_type "string")|the hash key represented by \a expression will be removed from the \a lvalue
     |\a lvalue (@ref hash_type "hash" or (@ref object_type "object"), \a expression (@ref list_type "list")|each element in the list will be converted to a string (if necessary) and the key represented by each string will be removed from the hash or object
-    |\a lvalue (@ref nothing), \a expression (any type)|if the \a lvalue's type, or for an or-nothing lvalue (ex: \c *int) its plain type, has a default value, the \a lvalue first takes that value and is processed as above; otherwise the negated \a expression will be assigned to \a lvalue; an \a expression with no value leaves the \a lvalue unchanged
+    |\a lvalue (@ref nothing), \a expression (any type)|a hash lvalue is left with no value; otherwise, if the \a lvalue's type, or for an or-nothing lvalue (ex: \c *int) its plain type, has a default value, the \a lvalue first takes that value and is processed as above (ex: <tt>int i; i -= 0;</tt> gives 0); otherwise the negated \a expression will be assigned to \a lvalue; an \a expression with no value leaves the \a lvalue unchanged
     |\a lvalue (all other types)|the \a lvalue's type will be converted to an integer (if necessary), and the \a expression will be evaluated and converted to an integer (if necessary), and then the result will be subtracted from the \a lvalue
 
     <hr>

@@ -8950,10 +8950,10 @@ load_local_done:
                     const QoreHashNode* h = base.get<const QoreHashNode>();
                     bool exists = false;
                     QoreValue v = h->getKeyValueExistence(hka_inst->key_name.c_str(), exists);
-                    if (exists) {
+                    // a key with no value gives no value, as a missing key does and as the AST interpreter reads it
+                    if (exists && !v.isNothing()) {
                         out = v.getAsBigInt();
                     }
-                    // else: key missing → NOTHING
                 }
                 setValueSlot(values, hka_inst->result.id, out, xsink);
                 ++ip;
@@ -18042,14 +18042,10 @@ QoreValue doPlusEqualsOnLValue(LValueHelper& v, ValueHolder& right_holder, Excep
 
     if (vtype == NT_NOTHING || vtype == NT_NULL) {
         const QoreTypeInfo* typeInfo = v.getTypeInfo();
-        // the type whose default value the lvalue takes; an or-nothing lvalue (*T) takes the default value of T
-        const QoreTypeInfo* default_ti = get_compound_default_type(typeInfo);
-        if (right.isNothing() && get_or_nothing_base_type(typeInfo) != typeInfo) {
-            // an or-nothing lvalue keeps no value for an operand with no value
-            return QoreValue();
-        }
-        if (QoreTypeInfo::hasDefaultValue(default_ti)) {
-            if (v.assign(QoreTypeInfo::getDefaultQoreValue(default_ti), "<lvalue for += operator>")) {
+        // an or-nothing lvalue (*T) with no value takes the default value of T for an operand with a value
+        const QoreTypeInfo* plain_default_ti = get_compound_default_type(typeInfo);
+        if (QoreTypeInfo::hasDefaultValue(typeInfo)) {
+            if (v.assign(QoreTypeInfo::getDefaultQoreValue(typeInfo), "<lvalue for += operator>")) {
                 return QoreValue();
             }
             vtype = v.getType();
@@ -18061,6 +18057,11 @@ QoreValue doPlusEqualsOnLValue(LValueHelper& v, ValueHolder& right_holder, Excep
             vtype = v.getType();
         } else if (right.isNothing()) {
             return QoreValue();
+        } else if (plain_default_ti != typeInfo) {
+            if (v.assign(QoreTypeInfo::getDefaultQoreValue(plain_default_ti), "<lvalue for += operator>")) {
+                return QoreValue();
+            }
+            vtype = v.getType();
         } else if (QoreTypeInfo::isHashType(typeInfo)) {
             if (v.assign(new QoreHashNode(QoreTypeInfo::getReturnComplexHashOrNothing(typeInfo)),
                     "<lvalue for += operator>")) {
@@ -18257,8 +18258,11 @@ QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, Excepti
                 int64 ms = right.get<const DateTimeNode>()->getRelativeMilliseconds();
                 return v.minusEqualsBigInt(ms);
             }
-            // an int lvalue (int, *int, softint) converts the date to an int, as the int-specialized operator does
-            if (QoreTypeInfo::isType(get_or_nothing_base_type(v.getTypeInfo()), NT_INT)) {
+            // an or-nothing int lvalue (*int) converts the date to an int, as the int-specialized operator does for
+            // an int lvalue
+            const QoreTypeInfo* lti = v.getTypeInfo();
+            const QoreTypeInfo* plain_lti = get_or_nothing_base_type(lti);
+            if (plain_lti != lti && QoreTypeInfo::isType(plain_lti, NT_INT)) {
                 return v.minusEqualsBigInt(right.getAsBigInt());
             }
             // any other lvalue subtracts the date's relative seconds

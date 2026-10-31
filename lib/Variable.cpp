@@ -2356,8 +2356,20 @@ int LValueHelper::assign(QoreValue n, const char* desc, bool check_types, Assign
     return 0;
 }
 
+//! returns true if an operation's result is stored converted to the lvalue's type
+/** a soft type always holds its declared type, and an or-nothing type (*T) holds the value that T would hold (ex:
+    a float for *float, which takes an int with a conversion)
+*/
+static bool is_soft_lvalue_type(const QoreTypeInfo* ti) {
+    const QoreTypeInfo* b = get_or_nothing_base_type(ti);
+    return b != ti || b == softBigIntTypeInfo || b == softFloatTypeInfo || b == softNumberTypeInfo
+        || b == softBoolTypeInfo || b == softStringTypeInfo || b == softDateTypeInfo || b == softBinaryTypeInfo
+        || b == softCharTypeInfo || QoreTypeInfo::isSoftListType(b);
+}
+
 bool LValueHelper::intResultNeedsConversion() const {
-    return typeInfo && QoreTypeInfo::parseReturns(typeInfo, NT_INT) == QTI_NOT_EQUAL
+    return typeInfo && is_soft_lvalue_type(typeInfo)
+        && QoreTypeInfo::parseReturns(typeInfo, NT_INT) == QTI_NOT_EQUAL
         && QoreTypeInfo::parseAccepts(typeInfo, bigIntTypeInfo);
 }
 
@@ -2368,7 +2380,8 @@ int64 LValueHelper::storeIntResult(int64 newVal, const char* desc) {
 }
 
 bool LValueHelper::floatResultNeedsConversion() const {
-    return typeInfo && QoreTypeInfo::parseReturns(typeInfo, NT_FLOAT) == QTI_NOT_EQUAL
+    return typeInfo && is_soft_lvalue_type(typeInfo)
+        && QoreTypeInfo::parseReturns(typeInfo, NT_FLOAT) == QTI_NOT_EQUAL
         && QoreTypeInfo::parseAccepts(typeInfo, floatTypeInfo);
 }
 
@@ -2379,7 +2392,8 @@ double LValueHelper::storeFloatResult(double newVal, const char* desc) {
 }
 
 bool LValueHelper::numberResultNeedsConversion() const {
-    return typeInfo && QoreTypeInfo::parseReturns(typeInfo, NT_NUMBER) == QTI_NOT_EQUAL
+    return typeInfo && is_soft_lvalue_type(typeInfo)
+        && QoreTypeInfo::parseReturns(typeInfo, NT_NUMBER) == QTI_NOT_EQUAL
         && QoreTypeInfo::parseAccepts(typeInfo, numberTypeInfo);
 }
 
@@ -2391,12 +2405,10 @@ void LValueHelper::storeNumberResult(QoreNumberNode* n, const char* desc) {
 int LValueHelper::makeIntVal(const char* desc) {
     member_lvalue_modified = true;
     assert(val);
-    if (val->getType() == NT_INT) {
-        return 0;
-    }
-
-    // the type is checked first: isInt() gives an lvalue with no value the int 0
-    if (typeInfo && !QoreTypeInfo::parseAccepts(typeInfo, bigIntTypeInfo)) {
+    // the type of an or-nothing lvalue (*T) is checked first: isInt() gives an lvalue with no value the int 0, which
+    // T may not accept
+    if (val->getType() != NT_INT && typeInfo && get_or_nothing_base_type(typeInfo) != typeInfo
+        && !QoreTypeInfo::parseAccepts(typeInfo, bigIntTypeInfo)) {
         // the 4th arg to doTypeException() is needed only for the type
         typeInfo->doTypeException("lvalue", 0, desc, QoreValue(1), vl.xsink);
         write_rejected = true;
@@ -2405,6 +2417,13 @@ int LValueHelper::makeIntVal(const char* desc) {
 
     if (val->isInt()) {
         return 0;
+    }
+
+    if (typeInfo && !QoreTypeInfo::parseAccepts(typeInfo, bigIntTypeInfo)) {
+        // the 4th arg to doTypeException() is needed only for the type
+        typeInfo->doTypeException("lvalue", 0, desc, QoreValue(1), vl.xsink);
+        write_rejected = true;
+        return -1;
     }
 
     saveTemp(val->makeInt());
@@ -2433,13 +2452,10 @@ int LValueHelper::makeFloat(const char* desc) {
     member_lvalue_modified = true;
     assert(val || qv);
     if (val) {
-        if (val->getType() == NT_FLOAT) {
-            return 0;
-        }
-
-        // the type is checked first: isFloat() gives an lvalue with no value the float 0.0, which a type such as
-        // *int does not accept
-        if (typeInfo && !QoreTypeInfo::parseAccepts(typeInfo, floatTypeInfo)) {
+        // the type of an or-nothing lvalue (*T) is checked first: isFloat() gives an lvalue with no value the float
+        // 0.0, which T may not accept (ex: *int)
+        if (val->getType() != NT_FLOAT && typeInfo && get_or_nothing_base_type(typeInfo) != typeInfo
+            && !QoreTypeInfo::parseAccepts(typeInfo, floatTypeInfo)) {
             // the 4th arg to doTypeException() is needed only for the type
             typeInfo->doTypeException("lvalue", 0, desc, QoreValue(1.0), vl.xsink);
             write_rejected = true;
@@ -2448,6 +2464,13 @@ int LValueHelper::makeFloat(const char* desc) {
 
         if (val->isFloat()) {
             return 0;
+        }
+
+        if (typeInfo && !QoreTypeInfo::parseAccepts(typeInfo, floatTypeInfo)) {
+            // the 4th arg to doTypeException() is needed only for the type
+            typeInfo->doTypeException("lvalue", 0, desc, QoreValue(1.0), vl.xsink);
+            write_rejected = true;
+            return -1;
         }
 
         saveTemp(val->makeFloat());

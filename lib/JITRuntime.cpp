@@ -5665,7 +5665,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_access_int(uint64_t hash_val, con
         const QoreHashNode* h = v.get<const QoreHashNode>();
         bool exists = false;
         QoreValue val = h->getKeyValueExistence(key, exists);
-        if (exists) {
+        // a key with no value gives no value, as a missing key does and as the AST interpreter reads it
+        if (exists && !val.isNothing()) {
             return toBits(val.getAsBigInt());
         }
     }
@@ -5686,7 +5687,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_access_int_prehashed(uint64_t has
         bool exists = false;
         QoreValue val = qore_hash_private::get(*h)->getKeyValueExistencePrehashedIntern(key,
             qore_rt_select_precomputed_hash(hash64, hash32), exists);
-        if (exists) {
+        // a key with no value gives no value, as a missing key does and as the AST interpreter reads it
+        if (exists && !val.isNothing()) {
             return toBits(val.getAsBigInt());
         }
     }

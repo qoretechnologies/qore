@@ -8,8 +8,8 @@
     \c softlist and their or-nothing types) always holds its declared type after a compound assignment, \c ++ or
     \c --: the result is converted to the declared type as an assignment converts it (ex:
     <tt>softint v = 10; v *= x</tt> with \c x holding 1.5 leaves the int 15 in \c v, where it left the float 15.0).
-    The same applies to an or-nothing lvalue or a hash member or list element whose type converts the result (ex:
-    \c ++ on a member of a <tt>hash<string, float></tt> with no value gives the float 1.0, where it gave the int 1).  An or-nothing lvalue with no value no longer takes a float from
+    The same applies to a hash member or list element of a soft type, and an or-nothing lvalue (\c *T) holds the
+    value that \c T holds (ex: <tt>*float f; f /= x</tt> gives the float 0.0, as for a \c float).  An or-nothing lvalue with no value no longer takes a float from
     \c *= or \c /= when its type does not accept one (ex: \c *int), as the plain type does not.
 
     An or-nothing lvalue (\c *T) with no value now gives the result of the plain type \c T with no value in a

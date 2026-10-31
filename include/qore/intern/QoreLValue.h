@@ -473,8 +473,9 @@ public:
         assert(!fixed_type);
         if (!assigned) {
             assigned = true;
-            if (!type)
-                type = QV_Node;
+            // a number is held as a node whatever type the lvalue held before, so that it is not read as another
+            // type (ex: a float that was removed)
+            type = QV_Node;
             v.n = new QoreNumberNode;
             return nullptr;
         }

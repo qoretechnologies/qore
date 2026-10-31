@@ -119,6 +119,10 @@ class CompoundAssignmentAstParityTest inherits QUnit::Test {
             compare(mode, expected, runMode(mode, file));
         }
 
+        # the default execution mode
+        compare("default", expected, ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s %s",
+            libqore_dir, libqore_dir, qore_bin, file)).split("\n"));
+
         string exe = tmp.path + DirSep + "parity";
         string out = backquote(sprintf("QORE_LIBDIR=%s %s -o %s %s 2>&1", libqore_dir, qcc_bin, exe, file));
         assertTrue(is_file(exe), "compiled the executable: " + out);
