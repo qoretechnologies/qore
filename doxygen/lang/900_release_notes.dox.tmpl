@@ -4,6 +4,18 @@
 
     @section qore_3_0_0 Qore 3.0.0
 
+    Compound assignments (\c +=, \c -=, \c *=, \c /=, \c %=, \c |=, \c &=, \c ^=, \c <<= and \c >>=)
+    now give the result of the AST interpreter in every execution mode and in compiled code.  The operation follows
+    the type of the lvalue's current value: an int value converts the operand to an int (ex: \c 10 \c += \c 1.5
+    gives 11), a string value appends the operand, a hash value merges a hash or removes keys, a list value appends
+    the operand, and the integer operators convert both sides to ints.  The IR, JIT and tiered execution modes and
+    compiled code computed some of these as the binary operator would, giving other values or types (ex: 11.5 for
+    an untyped variable, \c "103" for \c 10 \c += \c "3", a list for \c 10 \c += \c (1, 2)) or raising
+    \c RUNTIME-TYPE-ERROR for an or-nothing variable such as \c *int; \c %= and the bitwise operators left a float
+    or number lvalue unchanged when changed through an lvalue path.  \c *= and \c /= with a number operand on a
+    class member holding a value of another type now multiply and divide the value, as for a local
+    variable; they used the number 1 in place of the value.
+
     A compound assignment to an lvalue declared with an or-nothing type (ex: \c *string, \c *bool, \c *date,
     \c *list<auto>) is now refused at parse time wherever the same statement is refused for the plain type, with the
     same \c PARSE-TYPE-ERROR naming the declared type of the lvalue (ex: <tt>*string s; s -= 1;</tt> or

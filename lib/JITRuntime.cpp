@@ -13298,11 +13298,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_self_member_assign(
     return toBits(lvh.getReferencedValue());
 }
 
-//! Applies a compound assignment to an lvalue
-/** The value holds a reference in \a rhs_holder, which += takes when it stores the value (see
-    doPlusEqualsOnLValue()); the holder must be declared before the LValueHelper.
-*/
-static QoreValue qore_rt_apply_lvalue_compound(LValueHelper& lvh,
+// documented in QoreIRInterpreter.h
+QoreValue qore_rt_apply_lvalue_compound(LValueHelper& lvh,
         LVCompoundOp compound_op, ValueHolder& rhs_holder,
         ExceptionSink* xsink) {
     const QoreValue rhs = *rhs_holder;
@@ -13316,7 +13313,10 @@ static QoreValue qore_rt_apply_lvalue_compound(LValueHelper& lvh,
             break;
         default: {
             qore_type_t vtype = lvh.getType();
-            if (vtype == NT_NUMBER || rhs.getType() == NT_NUMBER) {
+            // only *= and /= follow a number or float lvalue or operand; the other operators are integer
+            // operations, as in the AST interpreter
+            bool arithmetic = compound_op == LVCompoundOp::MulAssign || compound_op == LVCompoundOp::DivAssign;
+            if (arithmetic && (vtype == NT_NUMBER || rhs.getType() == NT_NUMBER)) {
                 switch (compound_op) {
                     case LVCompoundOp::MulAssign:
                         lvh.multiplyEqualsNumber(rhs);
@@ -13337,7 +13337,7 @@ static QoreValue qore_rt_apply_lvalue_compound(LValueHelper& lvh,
                         break;
                     default: res = QoreValue(); break;
                 }
-            } else if (vtype == NT_FLOAT || rhs.getType() == NT_FLOAT) {
+            } else if (arithmetic && (vtype == NT_FLOAT || rhs.getType() == NT_FLOAT)) {
                 double rv = rhs.getAsFloat();
                 switch (compound_op) {
                     case LVCompoundOp::MulAssign: res = lvh.multiplyEqualsFloat(rv); break;
@@ -13354,7 +13354,16 @@ static QoreValue qore_rt_apply_lvalue_compound(LValueHelper& lvh,
             } else {
                 int64 rv = rhs.getAsBigInt();
                 switch (compound_op) {
-                    case LVCompoundOp::MulAssign: res = lvh.multiplyEqualsBigInt(rv); break;
+                    case LVCompoundOp::MulAssign:
+                        // a zero factor assigns 0, which the lvalue converts as an assignment does (ex: 0.0 for a
+                        // *float lvalue with no value), as in the AST interpreter
+                        if (!lvh.getAsBigInt() || !rv) {
+                            lvh.assign(0ll, "<*= operator>");
+                            res = 0ll;
+                        } else {
+                            res = lvh.multiplyEqualsBigInt(rv);
+                        }
+                        break;
                     case LVCompoundOp::DivAssign:
                         if (!rv) {
                             xsink->raiseException("DIVISION-BY-ZERO",
@@ -13383,6 +13392,24 @@ static QoreValue qore_rt_apply_lvalue_compound(LValueHelper& lvh,
         }
     }
     return res;
+}
+
+QoreValue qore_compound_assign_value(LVCompoundOp op, const QoreValue& left, const QoreValue& right,
+        ExceptionSink* xsink) {
+    // += takes the operand's reference when it stores the value; the holder must be declared before the
+    // LValueHelper (see qore_rt_apply_lvalue_compound())
+    ValueHolder rhs_holder(right.refSelf(), xsink);
+    // the untyped lvalue that the operation changes
+    ValueHolder value(left.refSelf(), xsink);
+    {
+        LValueHelper lvh(xsink);
+        lvh.setValue(*value);
+        ValueHolder res(qore_rt_apply_lvalue_compound(lvh, op, rhs_holder, xsink), xsink);
+    }
+    if (*xsink) {
+        return QoreValue();
+    }
+    return value.release();
 }
 
 //! Applies a compound assignment to an lvalue path; the value's reference is held by \a rhs_holder

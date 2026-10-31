@@ -13516,81 +13516,7 @@ load_local_done:
                     LValueHelper lvh(xsink);
                     navigation_failed = lvh.navigatePath(path_copy.data(), path_copy.size(), false);
                     if (!navigation_failed) {
-                        switch (path_inst->compound_op) {
-                            case LVCompoundOp::AddAssign:
-                                res = doPlusEqualsOnLValue(lvh, rhs_holder, xsink);
-                                break;
-                            case LVCompoundOp::SubAssign:
-                                res = doMinusEqualsOnLValue(lvh, rhs, xsink);
-                                break;
-                            default: {
-                                qore_type_t vtype = lvh.getType();
-                                if (vtype == NT_NUMBER || rhs.getType() == NT_NUMBER) {
-                                    switch (path_inst->compound_op) {
-                                        case LVCompoundOp::MulAssign:
-                                            lvh.multiplyEqualsNumber(rhs);
-                                            if (!*xsink) {
-                                                res = lvh.getReferencedValue();
-                                            }
-                                            break;
-                                        case LVCompoundOp::DivAssign:
-                                            if (rhs.getAsFloat() == 0.0) {
-                                                xsink->raiseException("DIVISION-BY-ZERO",
-                                                    "division by zero in arbitrary-precision numeric expression");
-                                            } else {
-                                                lvh.divideEqualsNumber(rhs);
-                                                if (!*xsink) {
-                                                    res = lvh.getReferencedValue();
-                                                }
-                                            }
-                                            break;
-                                        default: res = QoreValue(); break;
-                                    }
-                                } else if (vtype == NT_FLOAT || rhs.getType() == NT_FLOAT) {
-                                    double rv = rhs.getAsFloat();
-                                    switch (path_inst->compound_op) {
-                                        case LVCompoundOp::MulAssign: res = lvh.multiplyEqualsFloat(rv); break;
-                                        case LVCompoundOp::DivAssign:
-                                            if (rv == 0.0) {
-                                                xsink->raiseException("DIVISION-BY-ZERO",
-                                                    "division by zero in floating-point expression");
-                                            } else {
-                                                res = lvh.divideEqualsFloat(rv);
-                                            }
-                                            break;
-                                        default: res = QoreValue(); break;
-                                    }
-                                } else {
-                                    int64 rv = rhs.getAsBigInt();
-                                    switch (path_inst->compound_op) {
-                                        case LVCompoundOp::MulAssign: res = lvh.multiplyEqualsBigInt(rv); break;
-                                        case LVCompoundOp::DivAssign:
-                                            if (!rv) {
-                                                xsink->raiseException("DIVISION-BY-ZERO",
-                                                    "division by zero in integer expression");
-                                            } else {
-                                                res = lvh.divideEqualsBigInt(rv);
-                                            }
-                                            break;
-                                        case LVCompoundOp::ModAssign:
-                                            if (!rv) {
-                                                lvh.assign(0ll, "<%= operator>");
-                                                res = 0ll;
-                                            } else {
-                                                res = lvh.modulaEqualsBigInt(rv);
-                                            }
-                                            break;
-                                        case LVCompoundOp::AndAssign: res = lvh.andEqualsBigInt(rv); break;
-                                        case LVCompoundOp::OrAssign: res = lvh.orEqualsBigInt(rv); break;
-                                        case LVCompoundOp::XorAssign: res = lvh.xorEqualsBigInt(rv); break;
-                                        case LVCompoundOp::ShlAssign: res = lvh.shiftLeftEqualsBigInt(rv); break;
-                                        case LVCompoundOp::ShrAssign: res = lvh.shiftRightEqualsBigInt(rv); break;
-                                        default: break;
-                                    }
-                                }
-                                break;
-                            }
-                        }
+                        res = qore_rt_apply_lvalue_compound(lvh, path_inst->compound_op, rhs_holder, xsink);
                     }
                 }
                 // lvh is now destructed — object lock released
@@ -14620,7 +14546,9 @@ load_local_done:
                 bool fast_path_done = false;
                 {
                     LValueHelper v(lval_inst->lvalue, xsink);
-                    if (v && v.getType() == NT_INT) {
+                    // only an int operand gives an int lvalue an integer addition in every case; a date operand of a
+                    // timeout lvalue is added as milliseconds (see doPlusEqualsOnLValue())
+                    if (v && v.getType() == NT_INT && right.getType() == NT_INT) {
                         v.plusEqualsBigInt(right.getAsBigInt());
                         if (!*xsink) {
                             res = v.getReferencedValue();
@@ -14673,7 +14601,12 @@ load_local_done:
                 bool fast_path_done = false;
                 {
                     LValueHelper v(lval_inst->lvalue, xsink);
-                    if (v && v.getType() == NT_INT) {
+                    // the AST interpreter gives an int lvalue and an int operand an integer operation; a zero
+                    // divisor is left to evalLValueBinary(), which handles it as the AST interpreter does
+                    if (v && v.getType() == NT_INT && right.getType() == NT_INT
+                            && (right.getAsBigInt()
+                                || (inst->opcode != QoreIROpcode::DivAssignLValue
+                                    && inst->opcode != QoreIROpcode::ModAssignLValue))) {
                         int64 rhs = right.getAsBigInt();
                         switch (inst->opcode) {
                             case QoreIROpcode::SubAssignLValue:
@@ -16740,45 +16673,21 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             return QoreValue(left.getAsBigInt() + right.getAsBigInt());
         case QoreIROpcode::AddAssignFloat:
             return QoreValue(left.getAsFloat() + right.getAsFloat());
-        case QoreIROpcode::AddAssignAny: {
-            // If the left operand is NOTHING, return the right operand directly
-            // to avoid NOTHING being treated as a list element in concatenation
-            if (left.isNothing()) {
-                return right.refSelf();
-            }
-            // issue #3157: timeout (int ms) += date → integer ms arithmetic
-            if (left.getType() == NT_INT && right.getType() == NT_DATE) {
-                int64_t ms = right.get<const DateTimeNode>()->getRelativeMilliseconds();
-                return QoreValue(left.getAsBigInt() + ms);
-            }
-            bool needs_deref = true;
-            QorePlusOperatorNode node(nullptr, left.refSelf(), right.refSelf());
-            return evalAndRef(&node, xsink);
-        }
+        case QoreIROpcode::AddAssignAny:
+            // the value the AST interpreter gives the lvalue (see qore_compound_assign_value())
+            return qore_compound_assign_value(LVCompoundOp::AddAssign, left, right, xsink);
         case QoreIROpcode::SubAssignInt:
             return QoreValue(left.getAsBigInt() - right.getAsBigInt());
         case QoreIROpcode::SubAssignFloat:
             return QoreValue(left.getAsFloat() - right.getAsFloat());
-        case QoreIROpcode::SubAssignAny: {
-            // Special handling for timeout type: stored as int (milliseconds), RHS may be date
-            if (left.getType() == NT_INT && right.getType() == NT_DATE) {
-                // Treat as timeout arithmetic: int (ms) - date
-                int64_t ms = right.get<const DateTimeNode>()->getRelativeMilliseconds();
-                return QoreValue(left.getAsBigInt() - ms);
-            }
-            bool needs_deref = true;
-            QoreMinusOperatorNode node(nullptr, left.refSelf(), right.refSelf());
-            return evalAndRef(&node, xsink);
-        }
+        case QoreIROpcode::SubAssignAny:
+            return qore_compound_assign_value(LVCompoundOp::SubAssign, left, right, xsink);
         case QoreIROpcode::MulAssignInt:
             return QoreValue(left.getAsBigInt() * right.getAsBigInt());
         case QoreIROpcode::MulAssignFloat:
             return QoreValue(left.getAsFloat() * right.getAsFloat());
-        case QoreIROpcode::MulAssignAny: {
-            bool needs_deref = true;
-            QoreMultiplicationOperatorNode node(nullptr, left.refSelf(), right.refSelf());
-            return evalAndRef(&node, xsink);
-        }
+        case QoreIROpcode::MulAssignAny:
+            return qore_compound_assign_value(LVCompoundOp::MulAssign, left, right, xsink);
         case QoreIROpcode::DivAssignInt: {
             int64_t divisor = right.getAsBigInt();
             if (!divisor) {
@@ -16800,9 +16709,10 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             return QoreValue(left.getAsFloat() / divisor);
         }
         case QoreIROpcode::DivAssignAny:
-            return QoreDivisionOperatorNode::doDivision(left, right, xsink);
-        case QoreIROpcode::ModAssignInt:
-        case QoreIROpcode::ModAssignAny: {
+            return qore_compound_assign_value(LVCompoundOp::DivAssign, left, right, xsink);
+        case QoreIROpcode::ModAssignAny:
+            return qore_compound_assign_value(LVCompoundOp::ModAssign, left, right, xsink);
+        case QoreIROpcode::ModAssignInt: {
             // the modulo-equals operator assigns 0 for a divisor of 0, as AST execution does
             // (QoreModuloEqualsOperatorNode); only the modulo operator raises an exception
             int64_t divisor = right.getAsBigInt();
@@ -16810,25 +16720,16 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         }
         case QoreIROpcode::AndAssignInt:
             return QoreValue(left.getAsBigInt() & right.getAsBigInt());
-        case QoreIROpcode::AndAssignAny: {
-            bool needs_deref = true;
-            ValueHolder node(QoreValue(new QoreBinaryAndOperatorNode(get_runtime_location(), left.refSelf(), right.refSelf())), xsink);
-            return evalAndRef(*node, xsink);
-        }
+        case QoreIROpcode::AndAssignAny:
+            return qore_compound_assign_value(LVCompoundOp::AndAssign, left, right, xsink);
         case QoreIROpcode::OrAssignInt:
             return QoreValue(left.getAsBigInt() | right.getAsBigInt());
-        case QoreIROpcode::OrAssignAny: {
-            bool needs_deref = true;
-            ValueHolder node(QoreValue(new QoreBinaryOrOperatorNode(get_runtime_location(), left.refSelf(), right.refSelf())), xsink);
-            return evalAndRef(*node, xsink);
-        }
+        case QoreIROpcode::OrAssignAny:
+            return qore_compound_assign_value(LVCompoundOp::OrAssign, left, right, xsink);
         case QoreIROpcode::XorAssignInt:
             return QoreValue(left.getAsBigInt() ^ right.getAsBigInt());
-        case QoreIROpcode::XorAssignAny: {
-            bool needs_deref = true;
-            ValueHolder node(QoreValue(new QoreBinaryXorOperatorNode(get_runtime_location(), left.refSelf(), right.refSelf())), xsink);
-            return evalAndRef(*node, xsink);
-        }
+        case QoreIROpcode::XorAssignAny:
+            return qore_compound_assign_value(LVCompoundOp::XorAssign, left, right, xsink);
         case QoreIROpcode::ShlInt:
             return QoreValue(left.getAsBigInt() << right.getAsBigInt());
         case QoreIROpcode::ShlAny: {
@@ -16845,18 +16746,12 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         }
         case QoreIROpcode::ShlAssignInt:
             return QoreValue(left.getAsBigInt() << right.getAsBigInt());
-        case QoreIROpcode::ShlAssignAny: {
-            bool needs_deref = true;
-            ValueHolder node(QoreValue(new QoreShiftLeftEqualsOperatorNode(get_runtime_location(), left.refSelf(), right.refSelf())), xsink);
-            return evalAndRef(*node, xsink);
-        }
+        case QoreIROpcode::ShlAssignAny:
+            return qore_compound_assign_value(LVCompoundOp::ShlAssign, left, right, xsink);
         case QoreIROpcode::ShrAssignInt:
             return QoreValue(left.getAsBigInt() >> right.getAsBigInt());
-        case QoreIROpcode::ShrAssignAny: {
-            bool needs_deref = true;
-            ValueHolder node(QoreValue(new QoreShiftRightEqualsOperatorNode(get_runtime_location(), left.refSelf(), right.refSelf())), xsink);
-            return evalAndRef(*node, xsink);
-        }
+        case QoreIROpcode::ShrAssignAny:
+            return qore_compound_assign_value(LVCompoundOp::ShrAssign, left, right, xsink);
         case QoreIROpcode::FoldlAny:
         case QoreIROpcode::FoldlInt:
         case QoreIROpcode::FoldlFloat: {
@@ -18299,16 +18194,11 @@ QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, Excepti
     } else if (vtype == NT_NUMBER) {
         v.minusEqualsNumber(right, "<-= operator>");
     } else if (vtype == NT_DATE) {
-        // Check if this is a timeout type, which uses integer arithmetic
-        if (QoreTypeInfo::equal(v.getTypeInfo(), timeoutTypeInfo)) {
-            // if the right side is also a date/timeout, convert to milliseconds
-            if (right.getType() == NT_DATE) {
-                int64 ms = right.get<const DateTimeNode>()->getRelativeMilliseconds();
-                return v.minusEqualsBigInt(ms);
-            } else {
-                // Regular integer minus for timeout
-                return v.minusEqualsBigInt(right.getAsBigInt());
-            }
+        // the operation follows QoreMinusEqualsOperatorNode::evalImpl()
+        // issue #3157: if the lvalue is a timeout, then convert any date/time value as if it were a timeout too
+        if (right.getType() == NT_DATE && QoreTypeInfo::equal(v.getTypeInfo(), timeoutTypeInfo)) {
+            int64 ms = right.get<const DateTimeNode>()->getRelativeMilliseconds();
+            return v.minusEqualsBigInt(ms);
         }
         // Regular date arithmetic
         if (right.getType() == NT_DATE) {
@@ -18361,10 +18251,14 @@ QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, Excepti
             }
         }
     } else {
-        // if the lvalue is a timeout, convert date/time value as timeout
-        if (right.getType() == NT_DATE && QoreTypeInfo::equal(v.getTypeInfo(), timeoutTypeInfo)) {
-            int64 ms = right.get<const DateTimeNode>()->getRelativeMilliseconds();
-            return v.minusEqualsBigInt(ms);
+        if (right.getType() == NT_DATE) {
+            // if the lvalue is a timeout, convert date/time value as timeout
+            if (QoreTypeInfo::equal(v.getTypeInfo(), timeoutTypeInfo)) {
+                int64 ms = right.get<const DateTimeNode>()->getRelativeMilliseconds();
+                return v.minusEqualsBigInt(ms);
+            }
+            // any other lvalue subtracts the date's relative seconds, as the AST interpreter does
+            return v.minusEqualsBigInt(right.get<const DateTimeNode>()->getRelativeSeconds());
         }
         // do integer minus-equals
         return v.minusEqualsBigInt(right.getAsBigInt());

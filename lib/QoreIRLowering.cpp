@@ -7929,7 +7929,9 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
                 || QoreTypeInfo::getBaseType(ti) == NT_FLOAT
                 || QoreTypeInfo::getBaseType(ti) == NT_NUMBER
                 || QoreTypeInfo::getBaseType(ti) == NT_DATE
-                || QoreTypeInfo::isReference(ti)) {
+                || QoreTypeInfo::isReference(ti)
+                // a timeout lvalue adds a date as milliseconds, which the value alone does not show
+                || QoreTypeInfo::equal(get_or_nothing_base_type(ti), timeoutTypeInfo)) {
             left_var = nullptr;  // Force lvalue path
         }
     }
@@ -8139,7 +8141,9 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
                 || QoreTypeInfo::getBaseType(ti) == NT_DATE
                 || QoreTypeInfo::isReference(ti)
                 || QoreTypeInfo::isHashType(ti)
-                || QoreTypeInfo::getBaseType(ti) == NT_OBJECT) {
+                || QoreTypeInfo::getBaseType(ti) == NT_OBJECT
+                // a timeout lvalue subtracts a date as milliseconds, which the value alone does not show
+                || QoreTypeInfo::equal(get_or_nothing_base_type(ti), timeoutTypeInfo)) {
             left_var = nullptr;
         }
     }
@@ -8171,6 +8175,12 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
         left_var = nullptr;
     }
     if (!left_var) {
+        // the int-specialized operator converts the operand to an int (QoreIntMinusEqualsOperatorNode), so that a
+        // date gives its int value, where the generic operator subtracts its relative seconds; a timeout lvalue,
+        // which converts a date to milliseconds, is never int-specialized
+        if (force_int) {
+            right = builder.createUnaryOp(QoreIROpcode::ToInt, right, op->loc)->result;
+        }
         // Prefer true lvalue semantics for member/subscript compound assignments.
         {
             QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathCompound,

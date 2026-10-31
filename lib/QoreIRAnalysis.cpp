@@ -13600,10 +13600,23 @@ size_t qore_ir_specialize_proven_native_operations(QoreIRFunction& func,
                         || inst->opcode == QoreIROpcode::SubAny
                         || inst->opcode == QoreIROpcode::MulAny
                         || inst->opcode == QoreIROpcode::DivAny;
-            if (proven_numeric
+            // a compound assignment operates by the type of the lvalue's value, as the AST interpreter does: an
+            // int lvalue converts a float operand to an int, so only a float lvalue gives a float operation
+            bool compound_float_safe = true;
+            switch (inst->opcode) {
+                case QoreIROpcode::AddAssignAny:
+                case QoreIROpcode::SubAssignAny:
+                case QoreIROpcode::MulAssignAny:
+                case QoreIROpcode::DivAssignAny:
+                    compound_float_safe = lhs_exact_float;
+                    break;
+                default:
+                    break;
+            }
+            if (compound_float_safe && (proven_numeric
                     || (lhs_numeric && rhs_numeric
                         && (lhs_exact_float || rhs_exact_float)
-                        && optional_float_safe)) {
+                        && optional_float_safe))) {
                 replacement = float_opcode(inst->opcode);
                 representation = QoreIRValueRepresentation::NativeFloat;
                 type_info = floatTypeInfo;

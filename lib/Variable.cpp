@@ -2437,7 +2437,7 @@ int LValueHelper::makeNumber(const char* desc) {
     if (val) {
         saveTemp(val->makeNumber());
     } else {
-        saveTemp(qv->assign(new QoreNumberNode(qv)));
+        saveTemp(qv->assign(new QoreNumberNode(*qv)));
     }
     return 0;
 }

@@ -1,0 +1,290 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class CompoundAssignmentAstParityTest
+
+#! Tests that every compound assignment gives the AST interpreter's result in every execution mode
+/** The AST interpreter is the reference: a compound assignment operates on the lvalue's current value by its type,
+    so an int lvalue converts the operand to an int (<tt>i += 1.5</tt> gives 11 for 10), a string lvalue appends the
+    operand as a string, a hash lvalue merges a hash or removes keys, and so on.  The other execution modes and
+    compiled code must give the same value or raise the same exception.
+
+    The test generates a program that applies each compound operator to lvalues of many declared types and values:
+    - with operands of many types whose type is not known at parse time, looping over the values at runtime, in
+      locals, globals, class members, hash members and list elements
+    - with literal operands, whose types the parser and the compilers use
+    Statements that the parser refuses are left out.  The program runs with the AST interpreter, whose output is the
+    expected result, then with every other execution mode and as a qcc-compiled executable, whose output must be
+    identical.
+*/
+class CompoundAssignmentAstParityTest inherits QUnit::Test {
+    public {
+        #! the compound assignment operators
+        const Operators = ("+=", "-=", "*=", "/=", "%=", "|=", "&=", "^=", "<<=", ">>=");
+
+        #! the lvalue types and the initial values (as Qore source) of their lvalues
+        /** Types that convert the values assigned to them (\c softint, \c softstring, \c softbool and their
+            or-nothing types) are left out: the AST interpreter stores the unconverted result of a compound
+            assignment in such an lvalue (ex: <tt>softint v = 10; v *= 1.5</tt> leaves the float 15.0 in \c v),
+            which the other execution modes do not do
+        */
+        const Types = (
+            ("auto", ("10", "2.5", "2.5n", "\"s\"", "True", "2024-01-02T03:04:05Z", "1h", "(1, 2)",
+                "{\"a\": 1, \"b\": 2}", "<0102>", "NOTHING", "NULL", "new C()")),
+            ("int", ("10",)),
+            ("*int", ("10", "NOTHING")),
+            ("float", ("2.5",)),
+            ("*float", ("2.5", "NOTHING")),
+            ("number", ("2.5n",)),
+            ("*number", ("NOTHING",)),
+            ("string", ("\"s\"",)),
+            ("*string", ("\"s\"", "NOTHING")),
+            ("bool", ("True",)),
+            ("date", ("2024-01-02T03:04:05Z", "1h")),
+            ("*date", ("NOTHING",)),
+            ("list<auto>", ("(1, 2)",)),
+            ("*list<auto>", ("NOTHING",)),
+            ("hash<auto>", ("{\"a\": 1, \"b\": 2}",)),
+            ("*hash<auto>", ("NOTHING",)),
+            ("binary", ("<0102>",)),
+            ("*binary", ("NOTHING",)),
+            ("timeout", ("1000",)),
+            ("*timeout", ("NOTHING",)),
+            ("C", ("new C()",)),
+        );
+
+        #! the operands (as Qore source) given at runtime
+        const Operands = (
+            "1", "-2", "0", "0.0", "0n", "1.5", "2n", "\"3\"", "\"a\"", "True", "1h", "2024-01-01T00:00:00Z",
+            "(\"a\",)", "(1, 2)", "{\"a\": 5}", "<03>", "NOTHING", "NULL", "new C()",
+        );
+
+        #! the operands given as literals
+        const LiteralOperands = ("1", "0", "0.0", "1.5", "2n", "\"3\"", "1h", "2024-01-01T00:00:00Z", "NOTHING");
+
+        #! the declarations of the generated program
+        const Prelude = "%modern\n%disable-all-warnings\n"
+            "class C { public { int a = 1; } }\n"
+            "sub show(reference<string> out, string label, auto v) { out += sprintf(\"%s: %y %s\\n\", label, v, "
+                "v.type()); }\n"
+            "sub fail(reference<string> out, string label, hash<ExceptionInfo> ex) { out += sprintf(\"%s: %s\\n\", "
+                "label, ex.err); }\n";
+
+        #! the number of literal-operand statements in each generated function
+        const StatementsPerFunction = 40;
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("CompoundAssignmentAstParity", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("every execution mode gives the AST result", \testParity());
+
+        set_return_value(main());
+    }
+
+    testParity() {
+        TmpDir tmp("qore-compound-ast-parity-");
+        string file = tmp.path + DirSep + "parity.q";
+        int combinations = writeProgram(file);
+
+        list<string> expected = runMode("ast", file);
+        # the runtime matrix gives a result for every combination
+        assertTrue(combinations > 5000, sprintf("runtime combinations: %d", combinations));
+        assertEq(combinations, (select expected, $1 =~ /^rt /).size(), "runtime combinations");
+        assertTrue((select expected, $1 =~ /^lit /).size() > 500, "literal statements");
+
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            if (mode == "ast") {
+                continue;
+            }
+            compare(mode, expected, runMode(mode, file));
+        }
+
+        string exe = tmp.path + DirSep + "parity";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -o %s %s 2>&1", libqore_dir, qcc_bin, exe, file));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        compare("executable", expected, ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s "
+            "DYLD_LIBRARY_PATH=%s %s", libqore_dir, libqore_dir, exe)).split("\n"));
+    }
+
+    #! compares the lines of a mode with the AST lines, reporting the first differences
+    private compare(string mode, list<string> expected, list<string> actual) {
+        list<string> diffs = ();
+        int count = 0;
+        int n = max(expected.size(), actual.size());
+        for (int i = 0; i < n; ++i) {
+            if (expected[i] !== actual[i]) {
+                ++count;
+                if (diffs.size() < 20) {
+                    diffs += sprintf("ast: %y\n%s: %y", expected[i], mode, actual[i]);
+                }
+            }
+        }
+        assertEq((), diffs, sprintf("%s: %d differences:\n%s", mode, count, diffs.join("\n")));
+    }
+
+    private list<string> runMode(string mode, string file) {
+        return ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, file)).split("\n");
+    }
+
+    #! returns the Qore source of a list of the strings given
+    private static string sourceList(list<string> l) {
+        return "(" + (map sprintf("%y", $1), l).join(", ") + ",)";
+    }
+
+    #! returns the function that gives a fresh value of each initial value or operand, by index
+    private static string valueFunction(string name, list<string> values) {
+        string body;
+        foreach string v in (values) {
+            body += sprintf("        case %d: return %s;\n", $#, v);
+        }
+        return sprintf("auto sub %s(int i) {\n    switch (i) {\n%s    }\n}\n", name, body);
+    }
+
+    #! returns the statements that apply every operator to an lvalue in a loop over the values and operands
+    /** @param label the label of the lvalue kind
+        @param type the declared type
+        @param values the name of the function giving the initial values
+        @param count the number of initial values
+        @param init the statement assigning the initial value \c "x" to the lvalue
+        @param lvalue the lvalue
+        @param decl the declarations that the lvalue needs
+        @param combinations incremented by the number of combinations the statements apply
+
+        An operator that the parser refuses for the lvalue with an operand of a type not known at parse time is
+        left out.
+    */
+    private string runtimeLoop(string label, string type, string values, int count, string init, string lvalue,
+            string decl, reference<int> combinations) {
+        string body = "";
+        foreach string op in (Operators) {
+            if (!parses(sprintf("auto x = 1; %s %s %s operand(1);", init, lvalue, op), decl)) {
+                continue;
+            }
+            combinations += count * Operands.size();
+            body += sprintf("    for (int i = 0; i < %d; ++i) {\n"
+                "        for (int j = 0; j < %d; ++j) {\n"
+                "            string label = sprintf(\"rt %s %s %s: %%s %s %%s\", %s_src[i], operand_src[j]);\n"
+                "            try {\n"
+                "                auto x = %s(i);\n"
+                "                %s\n"
+                "                %s %s operand(j);\n"
+                "                show(\\out, label, %s);\n"
+                "            } catch (hash<ExceptionInfo> ex) {\n"
+                "                fail(\\out, label, ex);\n"
+                "            }\n"
+                "        }\n"
+                "    }\n", count, Operands.size(), label, type, op, op, values, values, init, lvalue, op,
+                lvalue);
+        }
+        return body;
+    }
+
+    #! writes the program and returns the number of runtime combinations
+    private int writeProgram(string file) {
+        int combinations = 0;
+        list<string> decls = ();
+        list<string> funcs = ();
+
+        decls += valueFunction("operand", Operands);
+        decls += sprintf("const operand_src = %s;", sourceList(Operands));
+
+        # the runtime matrix: one function for each type and lvalue kind
+        foreach list<auto> t in (Types) {
+            string type = t[0];
+            string values = sprintf("init%d", $#);
+            decls += valueFunction(values, t[1]);
+            decls += sprintf("const %s_src = %s;", values, sourceList(t[1]));
+            int n = t[1].size();
+
+            string gdecl = sprintf("our %s g%d;", type, $#);
+            string mdecl = sprintf("class M%d { public { %s v; } }", $#, type);
+            decls += gdecl;
+            decls += mdecl;
+
+            list<list<string>> kinds = (
+                ("local", sprintf("%s v = x;", type), "v", ""),
+                ("global", sprintf("g%d = x;", $#), sprintf("g%d", $#), gdecl),
+                ("member", sprintf("M%d m(); m.v = x;", $#), "m.v", mdecl),
+            );
+            if (type == "auto") {
+                kinds += (("hash member", "hash<auto> h = {\"v\": x};", "h.v", ""),);
+                kinds += (("list element", "list<auto> l = (x,);", "l[0]", ""),);
+            }
+            foreach list<string> k in (kinds) {
+                string loop = runtimeLoop(k[0], type, values, n, k[1], k[2], k[3], \combinations);
+                if (loop) {
+                    funcs += sprintf("string sub f%d() {\n    string out;\n%s    return out;\n}\n",
+                        funcs.size(), loop);
+                }
+            }
+        }
+
+        # the literal matrix: statements that the parser accepts
+        list<string> body = ();
+        foreach list<auto> t in (Types) {
+            string type = t[0];
+            foreach string op in (Operators) {
+                foreach string init in (t[1]) {
+                    foreach string operand in (LiteralOperands) {
+                        string stmt = sprintf("%s v = %s; v %s %s;", type, init, op, operand);
+                        if (!parses(stmt)) {
+                            continue;
+                        }
+                        string label = sprintf("lit %s %s: %s %s %s", type, op, init, op, operand);
+                        body += sprintf("    try { %s show(\\out, %y, v); } catch (hash<ExceptionInfo> ex) "
+                            "{ fail(\\out, %y, ex); }", stmt, label, label);
+                    }
+                }
+            }
+        }
+        # small functions keep the native compilation of each one short
+        for (int i = 0; i < body.size(); i += StatementsPerFunction) {
+            funcs += sprintf("string sub f%d() {\n    string out;\n%s\n    return out;\n}\n", funcs.size(),
+                body[i..(i + StatementsPerFunction - 1)].join("\n"));
+        }
+
+        # the functions are called by name, so that the top-level code stays small; they run three times, so that
+        # tiered execution compiles them, and the last run's results are printed
+        string main = sprintf("string sub run_all() {\n    string out;\n    for (int i = 0; i < %d; ++i) {\n"
+            "        out += call_function(\"f\" + i);\n    }\n    return out;\n}\n"
+            "string out;\nfor (int run = 0; run < 3; ++run) {\n    out = run_all();\n}\nprint(out);\n",
+            funcs.size());
+
+        File f();
+        f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(Prelude + decls.join("\n") + "\n" + funcs.join("\n") + main);
+        f.close();
+        return combinations;
+    }
+
+    #! returns True if the statement parses in a function
+    private bool parses(string stmt, *string decl) {
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+        try {
+            p.parse(Prelude + "auto sub operand(int i) { return i; }\n" + (decl ?? "") + "\nsub t() { " + stmt
+                + " }", "parity");
+        } catch (hash<ExceptionInfo> ex) {
+            return False;
+        }
+        return True;
+    }
+}
