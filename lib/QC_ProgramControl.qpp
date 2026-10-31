@@ -568,6 +568,7 @@ list<int> ProgramControl::findStatementIds(string file, int line) [flags=NAMED_A
    \c function of the call and the number of earlier calls with it in the list; when an operand of a conditional
    operator, such as <tt>?:</tt>, <tt>&&</tt> or <tt>||</tt>, is not evaluated, a later call with the same
    \c function can be stepped into instead
+   (<a href="https://github.com/qoretechnologies/qore/issues/5564">issue 5564</a>)
 
    @par Example:
    @code{.py}

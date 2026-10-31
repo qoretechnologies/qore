@@ -86,6 +86,7 @@ module VscDebugAdapter {
     - stepping into a call matches the functions that the statement calls with the name of the call and the number
       of its calls before it; when an operand of a conditional operator, such as <tt>?:</tt>, <tt>&&</tt> or
       <tt>||</tt>, is not evaluated, a later call with the same name can be stepped into instead
+      (<a href="https://github.com/qoretechnologies/qore/issues/5564">issue 5564</a>)
     - a breakpoint is on a statement, so an expression with more than one call, such as <tt>f(g(x))</tt>, has one
       breakpoint location
     - when a thread stops, the other threads stop at their next statement, so a thread that waits, as for input,
