@@ -11,6 +11,10 @@ class IdentityDerived inherits IdentityBase {
     int next(int value) { return value + 10; }
 }
 
+class IdentityThird inherits IdentityBase {
+    int next(int value) { return value + 100; }
+}
+
 thread_local int identityDestructorResult = 0;
 class IdentityDestroying {
     int next(int value) { return value + 1; }
@@ -84,6 +88,19 @@ int sub identitySelectedLoop(IdentityBase left, IdentityBase right,
     return result;
 }
 
+# Nested receiver PHIs must follow the same incoming edges as their metadata.
+# Reflection deliberately substitutes another retained owner, then restores it.
+int sub identityNestedSelectedLoop(IdentityBase left, IdentityBase right, IdentityBase third,
+        IdentityBase original, IdentityBase replacement) {
+    int result = 0;
+    for (int i = 0; i < 9; ++i) {
+        if (i == 2) { replaceIdentityLeft(replacement); }
+        else if (i == 6) { replaceIdentityLeft(original); }
+        result += (i % 3 == 0 ? left : i % 3 == 1 ? right : third).next(0);
+    }
+    return result;
+}
+
 int sub identityInvoke(IdentityBase receiver, IdentityBase replacement) {
     int first = receiver.next(0);
     try {
@@ -113,6 +130,12 @@ IdentityBase base();
 IdentityDerived derived();
 if (identitySelectedLoop(base, base, base, derived) != 15) {
     throw "IDENTITY-TEST", "selected receiver reflection was not observed";
+}
+if (identitySelectedLoop(base, derived, base, derived) != 42) {
+    throw "IDENTITY-TEST", "replacement by another retained owner was not observed";
+}
+if (identityNestedSelectedLoop(base, derived, new IdentityThird(), base, derived) != 342) {
+    throw "IDENTITY-TEST", "nested receiver metadata did not follow the selected source";
 }
 printf("%d:%d:%d:%d:%d:%d\n",
     identityOnce(base, derived), identityOnce(derived, base),

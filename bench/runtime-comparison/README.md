@@ -1636,3 +1636,6 @@ The [post-polymorphic optimized checkpoint](RESULTS.md#optimized-checkpoint-afte
 
 
 The [post-pinned-base optimized checkpoint](RESULTS.md#optimized-checkpoint-after-retained-receiver-classification-2026-10-31) compares 39 workloads with develop and 32 Java rows, including 29 fresh ordinary-C2 counterparts alongside original boundary controls. All 885 processes / 2,655 windows are retained.
+
+
+[Retained receiver metadata PHIs](RESULTS.md#retained-receiver-metadata-phis-2026-10-31): selected-snapshot identity with live validity; optimized [evidence](results-pinned-phi-macos-arm64.json) and [audit](audit-pinned-phi.md).

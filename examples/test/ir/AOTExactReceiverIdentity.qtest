@@ -42,6 +42,7 @@ class ExactReceiverIdentityTest inherits QUnit::Test {
                 "QORE_DISABLE_AOT_INLINE_RECEIVER_VALIDITY=1 ",
                 "QORE_DISABLE_AOT_PINNED_OVERRIDE_RECEIVER=1 ",
                 "QORE_DISABLE_AOT_PINNED_BASE_CLASS=1 ",
+                "QORE_DISABLE_AOT_PINNED_RECEIVER_PHI=1 ",
                 "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
             foreach string level in (("-O0", "-O3")) {
                 string executable = dir.path + "/fixture";
@@ -65,21 +66,23 @@ class ExactReceiverIdentityTest inherits QUnit::Test {
                         regex(body[0] ?? "", "receiver_live_status[^\\n]*load atomic i32,[^\\n]*seq_cst"),
                         name + " live sequentially consistent validity " + prefix + level);
                 }
-                *list<*string> selected = regex_extract(ir,
-                    "(?s)define [^\\n]*@identitySelectedLoop_[^\\n]*\\{(.*?)\\n\\}");
-                assertTrue(!!selected, "selected receiver LLVM definition");
-                bool pinned = prefix != "QORE_DISABLE_AOT_INLINE_RECEIVER_VALIDITY=1 "
-                    && prefix != "QORE_DISABLE_AOT_PINNED_OVERRIDE_RECEIVER=1 ";
-                assertEq(pinned, regex(selected[0] ?? "", "pinned_override_same_receiver"),
-                    "selected receiver identity guard " + prefix + level);
-                assertEq(pinned, regex(selected[0] ?? "", "pinned_override_live_status"),
-                    "selected receiver live validity " + prefix + level);
-                bool pinned_base = prefix != "QORE_DISABLE_AOT_INLINE_RECEIVER_VALIDITY=1 "
-                    && prefix != "QORE_DISABLE_AOT_PINNED_BASE_CLASS=1 ";
-                assertEq(pinned_base, regex(selected[0] ?? "", "pinned_base_receiver_known"),
-                    "selected base receiver identity " + prefix + level);
-                assertEq(pinned_base, regex(selected[0] ?? "", "pinned_base_live_status"),
-                    "selected base live validity " + prefix + level);
+                foreach string selected_name in (("identitySelectedLoop", "identityNestedSelectedLoop")) {
+                    *list<*string> selected = regex_extract(ir,
+                        "(?s)define [^\\n]*@" + selected_name + "_[^\\n]*\\{(.*?)\\n\\}");
+                    assertTrue(!!selected, "selected receiver LLVM definition");
+                    bool pinned = prefix != "QORE_DISABLE_AOT_INLINE_RECEIVER_VALIDITY=1 "
+                        && prefix != "QORE_DISABLE_AOT_PINNED_OVERRIDE_RECEIVER=1 ";
+                    assertEq(pinned, regex(selected[0] ?? "", "pinned_override_same_receiver|pinned_override_phi_same_receiver"),
+                        "selected receiver identity guard " + prefix + level);
+                    assertEq(pinned, regex(selected[0] ?? "", "pinned_override_live_status"),
+                        "selected receiver live validity " + prefix + level);
+                    bool pinned_base = prefix != "QORE_DISABLE_AOT_INLINE_RECEIVER_VALIDITY=1 "
+                        && prefix != "QORE_DISABLE_AOT_PINNED_BASE_CLASS=1 ";
+                    assertEq(pinned_base, regex(selected[0] ?? "", "pinned_base_receiver_known|pinned_base_phi_same_receiver"),
+                        "selected base receiver identity " + prefix + level);
+                    assertEq(pinned_base, regex(selected[0] ?? "", "pinned_base_live_status"),
+                        "selected base live validity " + prefix + level);
+                }
                 assertEq(expected, run((executable,)), prefix + level);
                 assertEq(expected, run((executable,), "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 "),
                     "generic method fallback " + prefix + level);

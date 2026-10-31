@@ -37,7 +37,8 @@ class PinnedBaseValidityTest inherits QUnit::Test {
         }
         TmpDir dir("qore-pinned-base-validity-");
         foreach string prefix in (("", "QORE_DISABLE_AOT_PINNED_BASE_CLASS=1 ",
-                "QORE_DISABLE_AOT_INLINE_RECEIVER_VALIDITY=1 ")) {
+                "QORE_DISABLE_AOT_INLINE_RECEIVER_VALIDITY=1 ",
+                "QORE_DISABLE_AOT_PINNED_RECEIVER_PHI=1 ")) {
             foreach string level in (("-O0", "-O3")) {
                 string executable = dir.path + "/fixture";
                 string ir = run((qcc, level, "--strip-source", "-o", executable, source),
@@ -46,8 +47,13 @@ class PinnedBaseValidityTest inherits QUnit::Test {
                     "(?s)define [^\n]*@selectedDeleteLoop_[^\n]*\\(ptr %ctx, ptr %xsink\\)[^\n]*\n(.*?)\n\\}");
                 assertTrue(!!found, "normal deletion loop entry");
                 string body = found[0] ?? "";
-                assertEq(prefix == "", regex(body, "pinned_base_receiver_known"), "base identity");
-                assertEq(prefix == "", regex(body,
+                bool pinned = prefix == "" || prefix == "QORE_DISABLE_AOT_PINNED_RECEIVER_PHI=1 ";
+                assertEq(pinned, regex(body,
+                    "pinned_base_receiver_known|pinned_base_phi_same_receiver"), "base identity");
+                bool phi_metadata = prefix != "QORE_DISABLE_AOT_INLINE_RECEIVER_VALIDITY=1 "
+                    && prefix != "QORE_DISABLE_AOT_PINNED_RECEIVER_PHI=1 ";
+                assertEq(phi_metadata, regex(body, "pinned_receiver_metadata"), "selected metadata PHIs");
+                assertEq(pinned, regex(body,
                     "pinned_base_live_status[^\n]*load atomic i32,[^\n]*seq_cst"), "base live deletion check");
                 foreach string runtime in (("", "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 ",
                         "QORE_DISABLE_AOT_INLINE_RECEIVER_VALIDITY=1 ")) {

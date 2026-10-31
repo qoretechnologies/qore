@@ -7109,6 +7109,135 @@ QoreIRToLLVM::AotPinnedReceiver& QoreIRToLLVM::getPinnedReceiverInfo(const Local
     return info;
 }
 
+bool QoreIRToLLVM::canUsePinnedReceiverPhi(uint32_t value_id) const {
+    if (q_env_is_set("QORE_DISABLE_AOT_PINNED_RECEIVER_PHI")) {
+        return false;
+    }
+    auto root = value_definitions.find(value_id);
+    if (root == value_definitions.end() || root->second->opcode != QoreIROpcode::Phi) {
+        return false;
+    }
+    // Called only after the existing 16-node/four-owner proof. Check the
+    // complete metadata graph before emitting anything; cycles retain the
+    // existing identity-selection path rather than guessing an initial owner.
+    std::unordered_map<uint32_t, bool> complete;
+    size_t remaining = 16;
+    std::function<bool(uint32_t)> visit = [&](uint32_t id) {
+        auto seen = complete.find(id);
+        if (seen != complete.end()) {
+            return seen->second;
+        }
+        if (!remaining--) {
+            return false;
+        }
+        complete.emplace(id, false);
+        auto definition = value_definitions.find(id);
+        if (definition == value_definitions.end()) {
+            return false;
+        }
+        if (definition->second->opcode == QoreIROpcode::Phi) {
+            const auto* phi = static_cast<const QoreIRPhiInstruction*>(definition->second);
+            auto block = aot_pinned_phi_blocks.find(id);
+            if (phi->value_kind != QoreIRPhiValueKind::QoreValue || phi->incoming.empty()
+                    || phi->incoming.size() > 16 || block == aot_pinned_phi_blocks.end()
+                    || !block_map.count(block->second)) {
+                return false;
+            }
+            for (const auto& incoming : phi->incoming) {
+                if (!visit(incoming.value.id)) {
+                    return false;
+                }
+            }
+        } else {
+            auto owner = stable_exact_receiver_loads.find(id);
+            if (definition->second->opcode != QoreIROpcode::LoadLocal
+                    || owner == stable_exact_receiver_loads.end()
+                    || !preinstantiated_entry_cleanup_by_local.count(owner->second)) {
+                return false;
+            }
+        }
+        complete.at(id) = true;
+        return true;
+    };
+    return visit(value_id);
+}
+
+llvm::Value* QoreIRToLLVM::getPinnedBaseClassMatch(const LocalVar* owner, int32_t slot,
+        llvm::Module& module) {
+    auto& guards = aot_pinned_base_class_guards[slot];
+    auto guard = guards.find(owner);
+    if (guard == guards.end()) {
+        auto* snapshot = llvm::cast<llvm::Instruction>(getPinnedClassEntryValue(owner));
+        llvm::IRBuilder<> eb(snapshot->getParent(), std::next(snapshot->getIterator()));
+        // Base admission deliberately accepts an object owned by another Program
+        // when its QoreClass is the exact target class, unlike override admission.
+        auto helper = module.getOrInsertFunction("qore_rt_object_has_exact_aot_target_class_only",
+            llvm::FunctionType::get(i32_type, {ptr_type, i32_type, i64_type}, false));
+        auto* exact = eb.CreateCall(helper,
+            {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), snapshot}, "pinned_base_exact_class");
+        auto* accepted = eb.CreateICmpNE(exact, llvm::ConstantInt::get(i32_type, 0));
+        guard = guards.emplace(owner, accepted).first;
+    }
+    return guard->second;
+}
+
+llvm::Value* QoreIRToLLVM::getPinnedOverrideClass(const LocalVar* owner, llvm::Module& module) {
+    auto& info = getPinnedReceiverInfo(owner, module);
+    if (!info.receiver_class) {
+        auto* snapshot = llvm::cast<llvm::Instruction>(getPinnedClassEntryValue(owner));
+        llvm::IRBuilder<> eb(snapshot->getParent(), std::next(snapshot->getIterator()));
+        auto helper = module.getOrInsertFunction("qore_rt_get_live_aot_override_receiver_class_v1",
+            llvm::FunctionType::get(ptr_type, {ptr_type, i64_type}, false));
+        info.receiver_class = eb.CreateCall(helper, {aot_ctx_arg, snapshot}, "pinned_override_class");
+    }
+    return info.receiver_class;
+}
+
+llvm::Value* QoreIRToLLVM::getPinnedReceiverMetadata(uint32_t value_id, AotPinnedReceiverField field,
+        int32_t slot, llvm::Module& module) {
+    const auto* definition = value_definitions.at(value_id);
+    if (definition->opcode == QoreIROpcode::LoadLocal) {
+        const auto* owner = stable_exact_receiver_loads.at(value_id);
+        switch (field) {
+            case AotPinnedReceiverField::Snapshot:
+                return getPinnedClassEntryValue(owner);
+            case AotPinnedReceiverField::StatusView:
+                return getPinnedReceiverInfo(owner, module).status_view;
+            case AotPinnedReceiverField::OverrideClass:
+                return getPinnedOverrideClass(owner, module);
+            case AotPinnedReceiverField::BaseMatch:
+                return getPinnedBaseClassMatch(owner, slot, module);
+        }
+    }
+    assert(definition->opcode == QoreIROpcode::Phi);
+    const auto* source = static_cast<const QoreIRPhiInstruction*>(definition);
+    // Only the base-class result depends on the call target slot. All calls
+    // selecting the same receiver share the other immutable metadata PHIs.
+    auto key = std::make_pair(field, field == AotPinnedReceiverField::BaseMatch ? slot : 0);
+    auto& fields = aot_pinned_phi_fields[value_id];
+    auto found = fields.find(key);
+    if (found != fields.end()) {
+        return found->second.node;
+    }
+    auto* block = block_map.at(aot_pinned_phi_blocks.at(value_id));
+    llvm::IRBuilder<> pb(block, block->begin());
+    llvm::Type* type = field == AotPinnedReceiverField::Snapshot ? i64_type
+        : field == AotPinnedReceiverField::BaseMatch ? i1_type : ptr_type;
+    auto* node = pb.CreatePHI(type, source->incoming.size(), "pinned_receiver_metadata");
+    fields.emplace(key, AotPinnedPhiField{node, {}});
+    std::vector<llvm::Value*> incoming;
+    incoming.reserve(source->incoming.size());
+    // The entire graph was validated first: recursion is acyclic and bounded
+    // to 16 source nodes. Do not retain unordered-map references over recursion.
+    for (const auto& edge : source->incoming) {
+        incoming.push_back(getPinnedReceiverMetadata(edge.value.id, field, slot, module));
+    }
+    aot_pinned_phi_fields.at(value_id).at(key).incoming = std::move(incoming);
+    // Actual predecessor blocks are resolved together with the original PHI,
+    // after all block splitting and native conversions have finished lowering.
+    return node;
+}
+
 llvm::Value* QoreIRToLLVM::emitPinnedExactClassGuard(uint32_t value_id, llvm::Value* value, int32_t slot,
         llvm::Module& module, llvm::Function* llvm_func) {
     std::vector<const LocalVar*> owners;
@@ -7120,29 +7249,24 @@ llvm::Value* QoreIRToLLVM::emitPinnedExactClassGuard(uint32_t value_id, llvm::Va
         return nullptr;
     }
     auto* null_ptr = llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type));
-    auto exact_helper = module.getOrInsertFunction("qore_rt_object_has_exact_aot_target_class_only",
-        llvm::FunctionType::get(i32_type, {ptr_type, i32_type, i64_type}, false));
     llvm::Value* known = llvm::ConstantInt::getFalse(ctx);
     llvm::Value* matches = llvm::ConstantInt::getFalse(ctx);
     llvm::Value* status_view = null_ptr;
-    auto& guards = aot_pinned_base_class_guards[slot];
-    for (const LocalVar* owner : owners) {
-        auto* snapshot = llvm::cast<llvm::Instruction>(getPinnedClassEntryValue(owner));
-        auto guard = guards.find(owner);
-        if (guard == guards.end()) {
-            llvm::IRBuilder<> eb(snapshot->getParent(), std::next(snapshot->getIterator()));
-            // Preserve base admission: unlike override admission, this helper does
-            // not require the object's owning Program to be the context Program.
-            auto* exact = eb.CreateCall(exact_helper,
-                {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), snapshot}, "pinned_base_exact_class");
-            auto* accepted = eb.CreateICmpNE(exact, llvm::ConstantInt::get(i32_type, 0));
-            guard = guards.emplace(owner, accepted).first;
+    if (canUsePinnedReceiverPhi(value_id)) {
+        auto* snapshot = getPinnedReceiverMetadata(value_id, AotPinnedReceiverField::Snapshot, slot, module);
+        known = builder->CreateICmpEQ(value, snapshot, "pinned_base_phi_same_receiver");
+        matches = getPinnedReceiverMetadata(value_id, AotPinnedReceiverField::BaseMatch, slot, module);
+        status_view = getPinnedReceiverMetadata(value_id, AotPinnedReceiverField::StatusView, slot, module);
+    } else {
+        for (const LocalVar* owner : owners) {
+            auto* snapshot = getPinnedClassEntryValue(owner);
+            auto* accepted = getPinnedBaseClassMatch(owner, slot, module);
+            auto& info = getPinnedReceiverInfo(owner, module);
+            auto* same = builder->CreateICmpEQ(value, snapshot, "pinned_base_same_receiver");
+            known = builder->CreateOr(known, same, "pinned_base_receiver_known");
+            matches = builder->CreateSelect(same, accepted, matches);
+            status_view = builder->CreateSelect(same, info.status_view, status_view);
         }
-        auto& info = getPinnedReceiverInfo(owner, module);
-        auto* same = builder->CreateICmpEQ(value, snapshot, "pinned_base_same_receiver");
-        known = builder->CreateOr(known, same, "pinned_base_receiver_known");
-        matches = builder->CreateSelect(same, guard->second, matches);
-        status_view = builder->CreateSelect(same, info.status_view, status_view);
     }
     auto* probe_bb = llvm::BasicBlock::Create(ctx, "pinned_base_probe", llvm_func);
     auto* live_bb = llvm::BasicBlock::Create(ctx, "pinned_base_live", llvm_func);
@@ -7190,21 +7314,22 @@ llvm::Value* QoreIRToLLVM::emitPinnedOverrideReceiverClass(uint32_t value_id, ll
         llvm::FunctionType::get(ptr_type, {ptr_type, i64_type}, false));
     llvm::Value* receiver_class = null_ptr;
     llvm::Value* status_view = null_ptr;
-    for (const LocalVar* owner : owners) {
-        llvm::Value* snapshot = getPinnedClassEntryValue(owner);
-        auto& info = getPinnedReceiverInfo(owner, module);
-        if (!info.receiver_class) {
-            // Insert after the snapshot even when an earlier borrow guard created it.
-            // The logical entry remains dominated by the native stack guard.
-            auto* load = llvm::cast<llvm::Instruction>(snapshot);
-            llvm::IRBuilder<> eb(load->getParent(), std::next(load->getIterator()));
-            info.receiver_class = eb.CreateCall(receiver_helper, {aot_ctx_arg, snapshot},
-                "pinned_override_class");
+    if (owners.size() > 1 && canUsePinnedReceiverPhi(value_id)) {
+        auto* snapshot = getPinnedReceiverMetadata(value_id, AotPinnedReceiverField::Snapshot, 0, module);
+        auto* same = builder->CreateICmpEQ(value, snapshot, "pinned_override_phi_same_receiver");
+        auto* selected = getPinnedReceiverMetadata(value_id, AotPinnedReceiverField::OverrideClass, 0, module);
+        receiver_class = builder->CreateSelect(same, selected, null_ptr);
+        status_view = getPinnedReceiverMetadata(value_id, AotPinnedReceiverField::StatusView, 0, module);
+    } else {
+        for (const LocalVar* owner : owners) {
+            auto* snapshot = getPinnedClassEntryValue(owner);
+            auto* selected = getPinnedOverrideClass(owner, module);
+            auto& info = getPinnedReceiverInfo(owner, module);
+            // Identity protects reflected replacements and address reuse without a new owner.
+            auto* same = builder->CreateICmpEQ(value, snapshot, "pinned_override_same_receiver");
+            receiver_class = builder->CreateSelect(same, selected, receiver_class);
+            status_view = builder->CreateSelect(same, info.status_view, status_view);
         }
-        // Identity protects reflected replacements and address reuse without a new owner.
-        auto* same = builder->CreateICmpEQ(value, snapshot, "pinned_override_same_receiver");
-        receiver_class = builder->CreateSelect(same, info.receiver_class, receiver_class);
-        status_view = builder->CreateSelect(same, info.status_view, status_view);
     }
     auto* live_bb = llvm::BasicBlock::Create(ctx, "pinned_override_live", llvm_func);
     auto* helper_bb = llvm::BasicBlock::Create(ctx, "pinned_override_helper", llvm_func);
@@ -14268,6 +14393,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     aot_pinned_entry_values.clear();
     aot_pinned_receivers.clear();
     aot_pinned_base_class_guards.clear();
+    aot_pinned_phi_blocks.clear();
+    aot_pinned_phi_fields.clear();
     aot_body_local_slots.clear();
     aot_reload_local_slots.clear();
     aot_class_local_constraints.clear();
@@ -14345,6 +14472,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             const auto* phi = static_cast<const QoreIRPhiInstruction*>(
                 inst_ptr.get());
             if (phi->value_kind == QoreIRPhiValueKind::QoreValue) {
+                if (aot_mode) {
+                    aot_pinned_phi_blocks.emplace(phi->result.id, block.get());
+                }
                 continue;
             }
             llvm::Type* phi_type = phi->value_kind
@@ -16756,7 +16886,18 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     }
 
     // PHI fixup pass: add incoming values now that all blocks are lowered
+    size_t phi_fixup_steps = 0;
+    auto cancelled_phi_fixup = [&]() {
+        if (++phi_fixup_steps % 100 == 0 && qore_check_cancel(nullptr, "LLVM PHI fixup")) {
+            error = "cancelled during LLVM PHI fixup";
+            return true;
+        }
+        return false;
+    };
     for (auto& [phi_node, phi_inst, phi_ir_block, phi_value_kind] : pending_phis) {
+        if (cancelled_phi_fixup()) {
+            return false;
+        }
         llvm::BasicBlock* phi_bb = phi_node->getParent();
         if (q_env_is_set("QORE_LLVM_DEBUG")) {
             fprintf(stderr, "PHI-FIXUP-START: PHI in block=%s predecessors=[",
@@ -16770,6 +16911,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             fflush(stderr);
         }
         for (const auto& inc : phi_inst->incoming) {
+            if (cancelled_phi_fixup()) {
+                return false;
+            }
             llvm::Value* val = getVal(inc.value.id, error);
             if (!val) {
                 return false;
@@ -16803,6 +16947,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             bool is_predecessor = false;
             for (auto it = llvm::pred_begin(phi_bb), et = llvm::pred_end(phi_bb);
                     it != et; ++it) {
+                if (cancelled_phi_fixup()) {
+                    return false;
+                }
                 if (*it == bb) {
                     is_predecessor = true;
                     break;
@@ -16882,6 +17029,17 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     break;
             }
             phi_node->addIncoming(val, bb);
+            auto metadata = aot_pinned_phi_fields.find(phi_inst->result.id);
+            if (metadata != aot_pinned_phi_fields.end()) {
+                size_t index = &inc - phi_inst->incoming.data();
+                for (auto& [key, field] : metadata->second) {
+                    if (cancelled_phi_fixup()) {
+                        return false;
+                    }
+                    assert(field.incoming.size() == phi_inst->incoming.size());
+                    field.node->addIncoming(field.incoming.at(index), bb);
+                }
+            }
             auto choice = finite_call_ref_targets.find(phi_inst->result.id);
             if (choice != finite_call_ref_targets.end()) {
                 assert(choice->second.selector);

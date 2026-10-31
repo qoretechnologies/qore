@@ -46,6 +46,7 @@ class PolymorphicScalarTest inherits QUnit::Test {
                 "QORE_DISABLE_AOT_SCALAR_OVERRIDE_GUARD_HOIST=1 ",
                 "QORE_DISABLE_AOT_PINNED_OVERRIDE_RECEIVER=1 ",
                 "QORE_DISABLE_AOT_PINNED_BASE_CLASS=1 ",
+                "QORE_DISABLE_AOT_PINNED_RECEIVER_PHI=1 ",
                 "QORE_AOT_EH=1 ", "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
             foreach string level in (("-O0", "-O3")) {
                 foreach string source_flag in (("--strip-source", "--include-source")) {
@@ -68,13 +69,13 @@ class PolymorphicScalarTest inherits QUnit::Test {
                         bool pinned = hoisted && prefix != "QORE_DISABLE_AOT_PINNED_OVERRIDE_RECEIVER=1 ";
                         int owners = name == "scalarIntLoop" || name == "scalarFloatLoop" ? 2 : 1;
                         bool pinned_base = owners == 2 && prefix != "QORE_DISABLE_AOT_PINNED_BASE_CLASS=1 ";
-                        assertEq(pinned_base, regex(loop, "pinned_base_receiver_known"), name + " base identity");
+                        assertEq(pinned_base, regex(loop, "pinned_base_receiver_known|pinned_base_phi_same_receiver"), name + " base identity");
                         assertEq(pinned_base, regex(loop, "pinned_base_live_status"), name + " base validity");
                         int live_helpers = (select loop.split("\n"),
                             $1 =~ /call ptr @qore_rt_get_live_aot_override_receiver_class_v1/).size();
                         assertEq(hoisted ? (pinned ? owners + 1 : 1) : 0, live_helpers,
                             name + " entry classifications and single cold fallback");
-                        assertEq(pinned, regex(loop, "pinned_override_same_receiver"), name + " receiver identity");
+                        assertEq(pinned, regex(loop, "pinned_override_same_receiver|pinned_override_phi_same_receiver"), name + " receiver identity");
                         assertEq(pinned, regex(loop, "pinned_override_live_status[^\n]*load atomic i32,[^\n]*seq_cst"),
                             name + " live deletion check");
                     }

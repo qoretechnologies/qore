@@ -30938,3 +30938,92 @@ Host load, thermals, frequency and affinity are uncontrolled. Data representatio
 Next test carrying retained receiver metadata through existing IR PHIs, replacing repeated per-call identity selections with one comparison against the selected original snapshot. Preserve bounded owner proofs, live sequentially consistent validity checks, distinct base/override Program admission, ownership, logical frames and fallback behavior. Qualify nested and forward PHIs, reflection, deletion and foreign Program cases in Release and Debug, then compare target, short-loop and mixed workloads before retaining the change.
 
 [Complete evidence](results-post-pinned-base-checkpoint-macos-arm64.json); [all 62 audit checks](audit-post-pinned-base-checkpoint.md).
+
+
+## Retained receiver metadata PHIs (2026-10-31)
+
+Conditional receiver calls now carry the retained snapshot, status pointer, override class and target-specific base match through the same PHIs as the receiver. This replaces repeated comparisons against every possible source owner with one comparison against the selected snapshot. Live atomic validity checks and ordinary helper fallbacks remain. No new reference, runtime ABI or lifetime change is introduced. QORE_DISABLE_AOT_PINNED_RECEIVER_PHI restores the preceding lowering.
+
+The baseline is the installed 93e28a54e7 runtime, documented by checkpoint 169b4ae8b7. The candidate binary reports 169b4ae8b7 plus the recorded working-tree patch. Both use Release -O3 -DNDEBUG with allocation tracking off and freshly compiled AOT -O3 --strip-source artifacts. The pilot uses 156 processes / 468 windows; confirmation covers 43 workloads with 774 processes / 2,322 windows. Whole-kernel ns/item follows; negative changes are faster.
+
+|!Workload|!Before ns/item|!After ns/item|!Change
+|matched:forward_float|32.6459|32.4774|-0.52%
+|matched:forward_int|27.6800|27.5592|-0.44%
+|matched:context_int|167.0764|165.5669|-0.90%
+|matched:context_float|173.0405|173.5849|+0.31%
+|local:direct_call|1.4774|1.4823|+0.33%
+|local:method_call|1.5620|1.5604|-0.10%
+|local:polymorphic_call|17.9171|17.6879|-1.28%
+|local:polymorphic_float_call|17.7609|17.7446|-0.09%
+|local:boxed_int_method_fallback|31.8813|31.6254|-0.80%
+|local:boxed_float_method_fallback|34.2079|34.0367|-0.50%
+|local:boxed_int_method_effect|87.3007|86.9590|-0.39%
+|local:list_mutate|117.9611|116.5606|-1.19%
+|local:temporary_list|1.5887|1.5750|-0.87%
+|local:polymorphic_expression_call|5.3807|4.8937|-9.05%
+|local:polymorphic_float_expression_call|5.3937|4.5263|-16.08%
+|local:monomorphic_call|3.7557|3.7335|-0.59%
+|local:monomorphic_float_call|3.8102|3.7781|-0.84%
+|micro:polymorphic_call|17.8802|18.1642|+1.59%
+|micro:polymorphic_float_call|17.7899|17.8905|+0.57%
+|micro:boxed_int_method_call|102.3859|103.5782|+1.16%
+|micro:boxed_float_method_call|109.0015|108.3565|-0.59%
+|micro:boxed_int_method_fallback|117.0729|117.6968|+0.53%
+|micro:boxed_float_method_fallback|121.7310|119.9450|-1.47%
+|micro:boxed_int_method_effect|172.8202|171.9903|-0.48%
+|micro:indirect_call|7.9230|8.6234|+8.84%
+|micro:closure_call|18.5310|18.0898|-2.38%
+|micro:closure_capture|23.6933|23.3780|-1.33%
+|micro:list_read|2.8802|2.8532|-0.94%
+|micro:list_build|22.2600|22.0679|-0.86%
+|micro:list_mutate|116.6559|116.1754|-0.41%
+|micro:temporary_hash|1.5948|1.5846|-0.64%
+|micro:polymorphic_expression_call|5.4886|4.7175|-14.05%
+|micro:polymorphic_float_expression_call|5.4516|4.6203|-15.25%
+|float:callback_local_float_return|0.8374|0.8338|-0.43%
+|float:typed_local_int_unary|1.1516|1.1520|+0.04%
+|float:callback_loop_float_return|4.7921|4.8300|+0.79%
+|mixed:csv_report|901.3042|897.1163|-0.46%
+|mixed:object_orders|2974.6455|3019.1424|+1.50%
+|mixed:callback_pipeline|92.8201|91.6861|-1.22%
+|mixed:text_index|1328.3734|1300.7127|-2.08%
+|probe:object_short|1585.8307|1584.8846|-0.06%
+|probe:effect_short|1655.3168|1654.6766|-0.04%
+|probe:string_result_loop|533.1879|534.2463|+0.20%
+
+Retain under the authorized broader workload tradeoff. The four conditional-receiver targets improve 9.05–16.08% in the 43-workload confirmation and every layout is faster; the two repeated targets improve 12.04%/16.15% in the independent five-fork follow-up, again in every layout. At count 64 all four targets improve 2.15–2.87% with every layout faster; smaller counts are mixed and fixed harness cost dominates. Preserve the indirect-call regression: confirmation 7.9230 to 8.6234 ns/item (+8.84%), follow-up 8.1655 to 8.7062 ns/item (+6.62%). Its reverse layout repeats +9.72%/+11.33%; this is a real observed cost of the candidate, with cause not established. The assigned-receiver control is +2.78% in pilot and +1.59% in confirmation, but -1.03% in follow-up; the float-loop callback is +0.79% in confirmation and -0.35% in follow-up. Object orders is +1.50% in confirmation and +0.19% in follow-up. The other mixed confirmation workloads improve 0.46–2.08%; no weighted application gain or harmlessness of control regressions is inferred. The directly exercised lowering has repeatable gains large enough to retain with these disclosed costs; indirect calls and receiver-local bookkeeping remain optimization targets. No new Java parity or global ceiling claim.
+
+A separate short-loop campaign uses 1/4/16/64 iterations, three layouts and three forks (288 processes / 864 windows). Fixed harness cost dominates the smallest counts; it cannot isolate added entry cost.
+
+|!Workload and count|!Before ns/item|!After ns/item|!Change
+|local:polymorphic_expression_call:1|2562.8916|2584.1686|+0.83%
+|local:polymorphic_expression_call:4|642.2783|637.9167|-0.68%
+|local:polymorphic_expression_call:16|164.5079|166.0667|+0.95%
+|local:polymorphic_expression_call:64|44.6254|43.6673|-2.15%
+|local:polymorphic_float_expression_call:1|2642.6358|2614.0087|-1.08%
+|local:polymorphic_float_expression_call:4|665.6673|660.0321|-0.85%
+|local:polymorphic_float_expression_call:16|167.7517|165.5180|-1.33%
+|local:polymorphic_float_expression_call:64|46.0027|44.6801|-2.87%
+|micro:polymorphic_expression_call:1|2555.6079|2575.3867|+0.77%
+|micro:polymorphic_expression_call:4|645.5140|646.6317|+0.17%
+|micro:polymorphic_expression_call:16|165.3948|164.5327|-0.52%
+|micro:polymorphic_expression_call:64|45.3201|44.2457|-2.37%
+|micro:polymorphic_float_expression_call:1|2626.1069|2627.0018|+0.03%
+|micro:polymorphic_float_expression_call:4|666.4987|660.0145|-0.97%
+|micro:polymorphic_float_expression_call:16|169.4473|168.0322|-0.84%
+|micro:polymorphic_float_expression_call:64|46.0009|45.0115|-2.15%
+
+A prospectively specified control follow-up uses five forks and 150 ms windows (210 processes / 630 windows) with unchanged artifacts. It was triggered by the indirect-call regression in confirmation; both campaigns remain in full.
+
+|!Follow-up workload|!Before ns/item|!After ns/item|!Change
+|micro:indirect_call|8.1655|8.7062|+6.62%
+|micro:polymorphic_call|17.8713|17.6873|-1.03%
+|micro:polymorphic_expression_call|5.3820|4.7338|-12.04%
+|micro:polymorphic_float_expression_call|5.4070|4.5340|-16.15%
+|local:direct_call|1.4794|1.4735|-0.40%
+|float:callback_loop_float_return|4.8171|4.8001|-0.35%
+|mixed:object_orders|2978.5845|2984.3625|+0.19%
+
+Release: six focused fixtures/3954 assertions plus 15 extended fixtures/6718 assertions. Debug: eleven fixtures/5565 assertions and native 4003/5668 checks. Focused suites include conditional-deletion checks and codegen assertions for base/override/aliased receivers. Reflection checks cover nested PHIs and replacement by a different retained owner. Tests cover reflected replacement, deletion during an admitted loop, destructor/lifetime behavior, integer overflow/float edge cases, zero/short loops, foreign/imported Programs, disabled controls, O0/O3, stripped/included source, EH and split compilation. All 36 fresh artifacts/144 preparation processes/4698 reference outputs per variant pass; all 391 shipped qmods build with the same measured core. No sanitizer/other-platform claim.
+
+See the [complete evidence](results-pinned-phi-macos-arm64.json) and [62-item audit](audit-pinned-phi.md). This is a paired optimization experiment, not a fresh Java/develop checkpoint. The installed runtime remains 93e28a54e7. Receiver-local assignment and other call categories remain candidates for further work; no global performance ceiling is established.

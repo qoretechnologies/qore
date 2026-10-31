@@ -430,6 +430,16 @@ private:
     // Base admission deliberately does not require receiver Program identity.
     std::unordered_map<int32_t, std::unordered_map<const LocalVar*, llvm::Value*>>
         aot_pinned_base_class_guards;
+    // Immutable metadata follows the same source PHI as a retained receiver.
+    // These are borrowed views backed by the existing entry owners.
+    enum class AotPinnedReceiverField { Snapshot, StatusView, OverrideClass, BaseMatch };
+    struct AotPinnedPhiField {
+        llvm::PHINode* node;
+        std::vector<llvm::Value*> incoming;
+    };
+    std::unordered_map<uint32_t, const QoreIRBasicBlock*> aot_pinned_phi_blocks;
+    std::unordered_map<uint32_t,
+        std::map<std::pair<AotPinnedReceiverField, int32_t>, AotPinnedPhiField>> aot_pinned_phi_fields;
     // Borrowed storage, not a value/owner: ordinary body slots survive until function exit.
     std::unordered_map<const LocalVar*, llvm::Value*> aot_body_local_slots;
     // Independent preparation/control from stores, even for the same local.
@@ -1881,6 +1891,12 @@ private:
         std::vector<const LocalVar*>& owners) const;
     llvm::Value* getPinnedClassEntryValue(const LocalVar* owner);
     AotPinnedReceiver& getPinnedReceiverInfo(const LocalVar* owner, llvm::Module& module);
+    // Requires the existing bounded retained-owner proof before metadata graph validation.
+    bool canUsePinnedReceiverPhi(uint32_t value_id) const;
+    llvm::Value* getPinnedBaseClassMatch(const LocalVar* owner, int32_t slot, llvm::Module& module);
+    llvm::Value* getPinnedOverrideClass(const LocalVar* owner, llvm::Module& module);
+    llvm::Value* getPinnedReceiverMetadata(uint32_t value_id, AotPinnedReceiverField field,
+        int32_t slot, llvm::Module& module);
     llvm::Value* emitPinnedExactClassGuard(uint32_t value_id, llvm::Value* value, int32_t slot,
         llvm::Module& module, llvm::Function* llvm_func);
     // Reuse override receiver admission only for the actual retained entry object.
