@@ -1093,6 +1093,9 @@ void qore_relative_time::set(const QoreValue v) {
                 addSecondsTo(f);
                 break;
         }
+    } else {
+        // no value or a value held without a node, such as NULL, gives a zero relative date/time
+        zero();
     }
 }
 
