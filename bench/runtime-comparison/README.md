@@ -1627,3 +1627,6 @@ The [post-polymorphic optimized checkpoint](RESULTS.md#optimized-checkpoint-afte
 
 
 [Develop annotation followup](RESULTS.md#develop-annotation-followup-2026-10-31): optimized merge checkpoint, shared JIT/AOT summary validation and [62-item audit](audit-guard-develop-followup.md).
+
+
+[Retained receiver classification](RESULTS.md#retained-receiver-classification-2026-10-31): bounded entry admission with live identity/deletion checks; optimized [evidence](results-pinned-override-macos-arm64.json) and [audit](audit-pinned-override.md).

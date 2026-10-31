@@ -69,6 +69,21 @@ int sub identityLoop(IdentityBase receiver, IdentityBase replacement, IdentityBa
     return sum;
 }
 
+sub replaceIdentityLeft(IdentityBase replacement) {
+    set_local_var_value(1, "left", replacement);
+}
+
+int sub identitySelectedLoop(IdentityBase left, IdentityBase right,
+        IdentityBase original, IdentityBase replacement) {
+    int result = 0;
+    for (int i = 0; i < 6; ++i) {
+        if (i == 2) { replaceIdentityLeft(replacement); }
+        else if (i == 4) { replaceIdentityLeft(original); }
+        result += (i % 2 == 0 ? left : right).next(0);
+    }
+    return result;
+}
+
 int sub identityInvoke(IdentityBase receiver, IdentityBase replacement) {
     int first = receiver.next(0);
     try {
@@ -96,6 +111,9 @@ sub identityWorker(Counter done, Queue results) {
 
 IdentityBase base();
 IdentityDerived derived();
+if (identitySelectedLoop(base, base, base, derived) != 15) {
+    throw "IDENTITY-TEST", "selected receiver reflection was not observed";
+}
 printf("%d:%d:%d:%d:%d:%d\n",
     identityOnce(base, derived), identityOnce(derived, base),
     identityOnce(base, new IdentityBase()), identityOnce(base, base),

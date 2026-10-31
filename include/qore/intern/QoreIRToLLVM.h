@@ -421,6 +421,12 @@ private:
     std::unordered_map<uint32_t, const LocalVar*> stable_exact_receiver_loads;
     // Snapshots backed by existing unmodified entry owners, never new references.
     std::unordered_map<const LocalVar*, llvm::Value*> aot_pinned_entry_values;
+    struct AotPinnedOverrideReceiver {
+        llvm::Value* receiver_class;
+        llvm::Value* status_view;
+    };
+    // Immutable admission for the same pinned snapshots. Status is read at each call.
+    std::unordered_map<const LocalVar*, AotPinnedOverrideReceiver> aot_pinned_override_receivers;
     // Borrowed storage, not a value/owner: ordinary body slots survive until function exit.
     std::unordered_map<const LocalVar*, llvm::Value*> aot_body_local_slots;
     // Independent preparation/control from stores, even for the same local.
@@ -1868,6 +1874,12 @@ private:
     // entry owners. Unknown/large source graphs retain ordinary owned caching.
     llvm::Value* emitPinnedClassLocalBorrowGuard(uint32_t value_id, llvm::Value* value,
         llvm::Function* llvm_func);
+    bool collectPinnedClassLocalOwners(uint32_t value_id, llvm::Function* llvm_func,
+        std::vector<const LocalVar*>& owners) const;
+    llvm::Value* getPinnedClassEntryValue(const LocalVar* owner);
+    // Reuse override receiver admission only for the actual retained entry object.
+    llvm::Value* emitPinnedOverrideReceiverClass(uint32_t value_id, llvm::Value* value,
+        llvm::Module& module, llvm::Function* llvm_func);
     // Resolve eligible pre-instantiated body-local storage once after the native entry guard.
     llvm::Value* getAOTClassLocalSlot(const LocalVar* local, llvm::Module& module,
         llvm::Function* llvm_func);

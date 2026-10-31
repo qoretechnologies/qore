@@ -88,6 +88,18 @@ bool sub scalarDeleted(PolyInt receiver, int value) {
     return False;
 }
 
+# Entry classification must never cache liveness across an ordinary call.
+string sub scalarDeleteInLoop(PolyInt receiver) {
+    try {
+        int value = 0;
+        for (int i = 0; i < 3; ++i) {
+            if (i == 1) { deleteScalar(receiver); }
+            value = receiver.scalarInt(value);
+        }
+        return "not deleted";
+    } catch (hash<ExceptionInfo> ex) { return ex.err; }
+}
+
 PolyInt a(); PolyIntB b(); PolyIntC c(); PolyIntThrow bad();
 PolyFloat fa(); PolyFloatB fb(); PolyFloatC fc(); PolyFloatThrow fbad();
 PolyOverload oa(); PolyOverloadB ob();
@@ -130,6 +142,7 @@ for (int round = 0; round < 8; ++round) {
     expect("EXPECTED-POLY-INT", scalarIntLoopInvoke(bad, 1));
     expect("EXPECTED-POLY-FLOAT", scalarFloatLoopInvoke(fbad, 1.0));
     expect(True, scalarDeleted(new PolyIntB(), 1));
+    expect("OBJECT-ALREADY-DELETED", scalarDeleteInLoop(new PolyIntB()));
     PolyIntB deleted();
     deleteScalar(deleted);
     expect(1, scalarIntLoop(deleted, b, 1, 0));

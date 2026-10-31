@@ -7014,11 +7014,10 @@ void QoreIRToLLVM::clearLocalReloadTracker(const void* key, llvm::Module& module
     }
 }
 
-llvm::Value* QoreIRToLLVM::emitPinnedClassLocalBorrowGuard(uint32_t value_id, llvm::Value* value,
-        llvm::Function* llvm_func) {
-    if (!aot_mode || !current_ir_func || current_ir_func->blocks.empty()
-            || q_env_is_set("QORE_DISABLE_AOT_PINNED_CLASS_LOCAL")) {
-        return nullptr;
+bool QoreIRToLLVM::collectPinnedClassLocalOwners(uint32_t value_id, llvm::Function* llvm_func,
+        std::vector<const LocalVar*>& owners) const {
+    if (!aot_mode || !current_ir_func || current_ir_func->blocks.empty()) {
+        return false;
     }
     // Bounded source analysis, not a general escape proof. Every admitted load
     // already has an entry owner that source/lvalue writes cannot clear. A PHI
@@ -7026,11 +7025,10 @@ llvm::Value* QoreIRToLLVM::emitPinnedClassLocalBorrowGuard(uint32_t value_id, ll
     // reflection replacing any source. No additional reference is acquired.
     std::vector<uint32_t> pending{value_id};
     std::unordered_set<uint32_t> visited;
-    std::vector<const LocalVar*> owners;
     size_t remaining = 16;
     while (!pending.empty()) {
         if (!remaining--) {
-            return nullptr;
+            return false;
         }
         uint32_t id = pending.back();
         pending.pop_back();
@@ -7039,12 +7037,12 @@ llvm::Value* QoreIRToLLVM::emitPinnedClassLocalBorrowGuard(uint32_t value_id, ll
         }
         auto definition = value_definitions.find(id);
         if (definition == value_definitions.end()) {
-            return nullptr;
+            return false;
         }
         if (definition->second->opcode == QoreIROpcode::Phi) {
             const auto* phi = static_cast<const QoreIRPhiInstruction*>(definition->second);
             if (phi->incoming.size() + pending.size() > remaining) {
-                return nullptr;
+                return false;
             }
             for (const auto& incoming : phi->incoming) {
                 pending.push_back(incoming.value.id);
@@ -7055,32 +7053,105 @@ llvm::Value* QoreIRToLLVM::emitPinnedClassLocalBorrowGuard(uint32_t value_id, ll
         if (definition->second->opcode != QoreIROpcode::LoadLocal
                 || stable == stable_exact_receiver_loads.end()
                 || !preinstantiated_entry_cleanup_by_local.count(stable->second)) {
-            return nullptr;
+            return false;
         }
         if (std::find(owners.begin(), owners.end(), stable->second) == owners.end()) {
             if (owners.size() == 4) {
-                return nullptr;
+                return false;
             }
             owners.push_back(stable->second);
         }
     }
     auto entry = block_map.find(current_ir_func->blocks.front().get());
     if (owners.empty() || entry == block_map.end() || entry->second->getParent() != llvm_func) {
+        return false;
+    }
+    return true;
+}
+
+llvm::Value* QoreIRToLLVM::getPinnedClassEntryValue(const LocalVar* owner) {
+    auto snapshot = aot_pinned_entry_values.find(owner);
+    if (snapshot == aot_pinned_entry_values.end()) {
+        auto* entry = block_map.at(current_ir_func->blocks.front().get());
+        llvm::IRBuilder<> eb(entry, entry->getFirstInsertionPt());
+        llvm::Value* original = eb.CreateLoad(i64_type,
+            preinstantiated_entry_cleanup_by_local.at(owner), "pinned_class_source");
+        snapshot = aot_pinned_entry_values.emplace(owner, original).first;
+    }
+    return snapshot->second;
+}
+
+llvm::Value* QoreIRToLLVM::emitPinnedClassLocalBorrowGuard(uint32_t value_id, llvm::Value* value,
+        llvm::Function* llvm_func) {
+    std::vector<const LocalVar*> owners;
+    if (q_env_is_set("QORE_DISABLE_AOT_PINNED_CLASS_LOCAL")
+            || !collectPinnedClassLocalOwners(value_id, llvm_func, owners)) {
         return nullptr;
     }
     llvm::Value* pinned = llvm::ConstantInt::getFalse(ctx);
     for (const LocalVar* owner : owners) {
-        auto snapshot = aot_pinned_entry_values.find(owner);
-        if (snapshot == aot_pinned_entry_values.end()) {
-            llvm::IRBuilder<> eb(entry->second, entry->second->getFirstInsertionPt());
-            llvm::Value* original = eb.CreateLoad(i64_type,
-                preinstantiated_entry_cleanup_by_local.at(owner), "pinned_class_source");
-            snapshot = aot_pinned_entry_values.emplace(owner, original).first;
-        }
         pinned = builder->CreateOr(pinned,
-            builder->CreateICmpEQ(value, snapshot->second), "class_source_is_pinned");
+            builder->CreateICmpEQ(value, getPinnedClassEntryValue(owner)), "class_source_is_pinned");
     }
     return pinned;
+}
+
+llvm::Value* QoreIRToLLVM::emitPinnedOverrideReceiverClass(uint32_t value_id, llvm::Value* value,
+        llvm::Module& module, llvm::Function* llvm_func) {
+    std::vector<const LocalVar*> owners;
+    if (q_env_is_set("QORE_DISABLE_AOT_PINNED_OVERRIDE_RECEIVER")
+            || q_env_is_set("QORE_DISABLE_AOT_INLINE_RECEIVER_VALIDITY")
+            || !collectPinnedClassLocalOwners(value_id, llvm_func, owners)) {
+        return nullptr;
+    }
+    auto* null_ptr = llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type));
+    auto receiver_helper = module.getOrInsertFunction("qore_rt_get_live_aot_override_receiver_class_v1",
+        llvm::FunctionType::get(ptr_type, {ptr_type, i64_type}, false));
+    auto status_helper = module.getOrInsertFunction("qore_rt_get_object_status_view_v1",
+        llvm::FunctionType::get(ptr_type, {i64_type}, false));
+    llvm::Value* receiver_class = null_ptr;
+    llvm::Value* status_view = null_ptr;
+    for (const LocalVar* owner : owners) {
+        llvm::Value* snapshot = getPinnedClassEntryValue(owner);
+        auto cached = aot_pinned_override_receivers.find(owner);
+        if (cached == aot_pinned_override_receivers.end()) {
+            // Insert after the snapshot even when an earlier borrow guard created it.
+            // The logical entry remains dominated by the native stack guard.
+            auto* load = llvm::cast<llvm::Instruction>(snapshot);
+            llvm::IRBuilder<> eb(load->getParent(), std::next(load->getIterator()));
+            auto* entry_class = eb.CreateCall(receiver_helper, {aot_ctx_arg, snapshot},
+                "pinned_override_class");
+            auto* entry_status = eb.CreateCall(status_helper, {snapshot}, "pinned_override_status_view");
+            cached = aot_pinned_override_receivers.emplace(owner,
+                AotPinnedOverrideReceiver{entry_class, entry_status}).first;
+        }
+        // Identity protects reflected replacements and address reuse without a new owner.
+        auto* same = builder->CreateICmpEQ(value, snapshot, "pinned_override_same_receiver");
+        receiver_class = builder->CreateSelect(same, cached->second.receiver_class, receiver_class);
+        status_view = builder->CreateSelect(same, cached->second.status_view, status_view);
+    }
+    auto* live_bb = llvm::BasicBlock::Create(ctx, "pinned_override_live", llvm_func);
+    auto* helper_bb = llvm::BasicBlock::Create(ctx, "pinned_override_helper", llvm_func);
+    auto* merge_bb = llvm::BasicBlock::Create(ctx, "pinned_override_merge", llvm_func);
+    auto* admitted = builder->CreateAnd(builder->CreateICmpNE(receiver_class, null_ptr),
+        builder->CreateICmpNE(status_view, null_ptr));
+    builder->CreateCondBr(admitted, live_bb, helper_bb);
+    builder->SetInsertPoint(live_bb);
+    auto* status = builder->CreateLoad(i32_type, status_view, "pinned_override_live_status");
+    status->setAlignment(llvm::Align(4));
+    status->setAtomic(llvm::AtomicOrdering::SequentiallyConsistent);
+    auto* live = builder->CreateICmpNE(status, llvm::ConstantInt::getSigned(i32_type, -1));
+    auto* live_class = builder->CreateSelect(live, receiver_class, null_ptr);
+    builder->CreateBr(merge_bb);
+    builder->SetInsertPoint(helper_bb);
+    // Unsupported views, changed receivers and failed entry admission retain the live helper.
+    auto* helper_class = builder->CreateCall(receiver_helper, {aot_ctx_arg, value}, "override_receiver_class");
+    builder->CreateBr(merge_bb);
+    builder->SetInsertPoint(merge_bb);
+    auto* result = builder->CreatePHI(ptr_type, 2, "pinned_override_receiver_class");
+    result->addIncoming(live_class, live_bb);
+    result->addIncoming(helper_class, helper_bb);
+    return result;
 }
 
 llvm::Value* QoreIRToLLVM::getAOTClassLocalSlot(const LocalVar* local, llvm::Module& module,
@@ -11459,6 +11530,10 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
                     target_class = cached->second;
                 }
                 if (!override_receiver_class) {
+                    override_receiver_class = emitPinnedOverrideReceiverClass(
+                        object_base_id, object_base, module, llvm_func);
+                }
+                if (!override_receiver_class) {
                     auto receiver_helper = module.getOrInsertFunction(
                         "qore_rt_get_live_aot_override_receiver_class_v1",
                         llvm::FunctionType::get(ptr_type, {ptr_type, i64_type}, false));
@@ -14114,6 +14189,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     aot_exact_class_guards.clear();
     stable_exact_receiver_loads.clear();
     aot_pinned_entry_values.clear();
+    aot_pinned_override_receivers.clear();
     aot_body_local_slots.clear();
     aot_reload_local_slots.clear();
     aot_class_local_constraints.clear();

@@ -30740,3 +30740,61 @@ Retain the upstream fixes under the authorized broader workload tradeoff. Direct
 All 23 followup fixtures pass: 17 QUnit cases/1362 assertions, 2 raw-OK and 12 silent-success fixtures. Includes real JIT aggregate/transitive compilation, composed-expression debugger coverage, AOT statement/mutation/closure/effect/return/constructor/string/collection paths and the upstream connection test. All 36 fresh O3 artifacts / 144 processes / 4698 reference outputs per variant pass; all 391 qmods build. No fresh Debug-build/sanitizer/other-platform claim.
 
 The complete [evidence](results-guard-develop-followup-macos-arm64.json) retains all results and raw process ranges; the [audit](audit-guard-develop-followup.md) records every checklist item. This is a merge checkpoint, not a new Java or develop-versus-branch comparison. The next performance experiment reuses receiver classification for existing retained entry objects while preserving receiver identity and live deletion checks.
+
+
+## Retained receiver classification (2026-10-31)
+
+Scalar override calls can reuse immutable receiver classification when bounded LoadLocal/Phi analysis identifies an object already retained by the function entry. The compiler classifies at most four such owners once, selects class/status by actual boxed receiver identity, and reads live deletion status on each admitted call. Identity misses, null views and failed admission retain the existing helper. No reference or lifetime is added; the exact base-class path retains its distinct Program rules. QORE_DISABLE_AOT_PINNED_OVERRIDE_RECEIVER disables the new lowering.
+
+Optimized Release baseline is the exact installed 6c4d9cae71 runtime. Candidate source hashes/patch identify the new compiler code. Both variants freshly compile AOT artifacts at -O3 --strip-source with matched Apple toolchain. The 13-workload pilot collects 156 processes / 468 windows; 43-workload confirmation collects 774 processes / 2322 windows across three layouts and three forks. Whole-kernel ns/item follows; negative changes are faster.
+
+|!Workload|!Before ns/item|!After ns/item|!Change
+|matched:forward_float|33.1247|32.4745|-1.96%
+|matched:forward_int|28.4589|27.9428|-1.81%
+|matched:context_int|167.2820|167.2279|-0.03%
+|matched:context_float|176.1732|175.7360|-0.25%
+|local:direct_call|1.4867|1.4964|+0.65%
+|local:method_call|1.5647|1.5632|-0.09%
+|local:polymorphic_call|17.9565|17.8937|-0.35%
+|local:polymorphic_float_call|17.8131|17.8759|+0.35%
+|local:boxed_int_method_fallback|32.3470|31.9215|-1.32%
+|local:boxed_float_method_fallback|34.5080|34.7244|+0.63%
+|local:boxed_int_method_effect|89.6341|87.6968|-2.16%
+|local:list_mutate|115.6537|115.8455|+0.17%
+|local:temporary_list|1.5848|1.5944|+0.61%
+|local:polymorphic_expression_call|6.7313|6.0907|-9.52%
+|local:polymorphic_float_expression_call|6.8051|5.9810|-12.11%
+|local:monomorphic_call|4.0848|3.7063|-9.27%
+|local:monomorphic_float_call|3.8405|3.6326|-5.42%
+|micro:polymorphic_call|17.9116|17.8614|-0.28%
+|micro:polymorphic_float_call|17.7844|17.6650|-0.67%
+|micro:boxed_int_method_call|100.5778|102.6770|+2.09%
+|micro:boxed_float_method_call|106.3604|106.4958|+0.13%
+|micro:boxed_int_method_fallback|116.6160|114.9468|-1.43%
+|micro:boxed_float_method_fallback|120.3582|119.2580|-0.91%
+|micro:boxed_int_method_effect|176.3184|170.4027|-3.36%
+|micro:indirect_call|8.8143|8.5072|-3.48%
+|micro:closure_call|17.9057|18.0187|+0.63%
+|micro:closure_capture|23.3829|23.5787|+0.84%
+|micro:list_read|2.8071|2.8150|+0.28%
+|micro:list_build|22.4520|22.7493|+1.32%
+|micro:list_mutate|116.1524|117.8427|+1.46%
+|micro:temporary_hash|1.5928|1.6003|+0.47%
+|micro:polymorphic_expression_call|6.7675|6.0701|-10.30%
+|micro:polymorphic_float_expression_call|6.7373|6.0399|-10.35%
+|float:callback_local_float_return|0.8242|0.8333|+1.11%
+|float:typed_local_int_unary|1.1645|1.1656|+0.09%
+|float:callback_loop_float_return|4.8511|4.8305|-0.42%
+|mixed:csv_report|915.4098|913.0656|-0.26%
+|mixed:object_orders|3046.3460|3014.1319|-1.06%
+|mixed:callback_pipeline|91.5219|91.3054|-0.24%
+|mixed:text_index|1317.0659|1302.6316|-1.10%
+|probe:object_short|1612.3810|1606.0689|-0.39%
+|probe:effect_short|1669.5692|1653.5373|-0.96%
+|probe:string_result_loop|525.2123|522.4134|-0.53%
+
+Retain: all four expression-dispatch targets improve in every layout in both pilot and confirmation. Confirmation reductions are9.52%/12.11% for local integer/float and10.30%/10.35% for module integer/float. Local monomorphic integer improves9.27% in all layouts; the float control improves5.42% overall with mixed layout directions. Receiver-local polymorphic kernels remain approximately flat, as their loads are outside this bounded source proof. Adverse all-layout controls include module boxed-integer calls+2.09%, list building+1.32%, module list mutation+1.46%, direct calls+0.65%, temporary lists+0.61% and module list reads+0.28%. These are retained and disclosed under the authorized broader workload tradeoff. Changes in other controls do not establish a causal effect of the new receiver path, since native/library layout and shared-host conditions can also differ. No fresh Java ratio, weighted application gain or global ceiling is inferred.
+
+Release: four focused fixtures/2334 assertions plus 15 extended fixtures/6718 assertions. Debug: ten fixtures/4597 assertions and native 4003/5668 checks. Tests cover reflected replacement, deletion during an admitted loop, destructor/lifetime behavior, integer overflow/float edge cases, zero/short loops, foreign/imported Programs, disabled controls, O0/O3, stripped/included source, EH and split compilation. All 36 fresh artifacts/144 preparation processes/4698 reference outputs per variant pass; all 391 shipped qmods build with the same measured core. No sanitizer/other-platform claim.
+
+See the [complete evidence](results-pinned-override-macos-arm64.json) and [62-item audit](audit-pinned-override.md). Sampling durations are excluded. This is a paired optimization experiment, not a new Java or develop checkpoint. The installed system runtime remains 6c4d9cae71. The next investigation is the still-repeated base-class check for conditional receivers, preserving its different Program admission semantics.

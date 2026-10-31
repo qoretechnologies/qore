@@ -6299,3 +6299,12 @@ AOTDebugScalarReplacement checks native list/hash allocation elimination togethe
 ### Native-summary annotation followup (2026-10-31)
 
 The develop4544bec merge adds DebugStatement/DebugBlock skipping before exception and terminator checks in native body summaries, including summaries shared with JIT. The branch retains its bounded, cancellable native-instruction collector and separate unoptimized debugger IR. Effect-member resume counts only executable instructions of the proved update triples, skipping both annotation kinds. This changes neither debug callback execution nor receiver/Program admission. The [optimized followup evidence](../bench/runtime-comparison/results-guard-develop-followup-macos-arm64.json) checks native code equivalence, shared JIT summaries, AOT debugging and runtime workloads.
+
+
+### Retained receiver override classification (2026-10-31)
+
+The AOT scalar override path reuses immutable classification of parameter/PHI receivers already retained by ordinary entry cleanup. A common collector with the pinned class-local borrow guard accepts at most 16 IR nodes/four owners. No new reference is acquired. Snapshots come from original cleanup storage; classifier/status-view emission follows the snapshot load in the logical entry dominated by the stack check. Per-function caches reset before lowering another function.
+
+Each call compares the actual boxed receiver against those original objects. A matching admitted class/status view selects a sequentially consistent live status load; explicit deletion remains observable. Identity/view/admission misses use qore_rt_get_live_aot_override_receiver_class_v1. Class, Program and provenance admission are immutable for the retained object; liveness is not. Base exact-class guards retain their existing different Program rules. QORE_DISABLE_AOT_PINNED_OVERRIDE_RECEIVER disables this lowering; the existing inline-validity control also retains the helper.
+
+The new tests cover deletion during an admitted loop and reflected replacement of a selected receiver, alongside ownership/destructor, cross-Program, numeric, disabled-control, EH and split cases. The optimized [results](../bench/runtime-comparison/results-pinned-override-macos-arm64.json) retain all target/control workloads and ranges. Source IR/JIT execution and the runtime ABI are unchanged. Further work should examine base-class classification and receiver-local assignment cost; no global ceiling is established.

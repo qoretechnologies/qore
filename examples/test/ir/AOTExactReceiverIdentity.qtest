@@ -40,6 +40,7 @@ class ExactReceiverIdentityTest inherits QUnit::Test {
         foreach string prefix in (("", "QORE_AOT_EH=1 ",
                 "QORE_DISABLE_AOT_STABLE_EXACT_RECEIVER_HOIST=1 ",
                 "QORE_DISABLE_AOT_INLINE_RECEIVER_VALIDITY=1 ",
+                "QORE_DISABLE_AOT_PINNED_OVERRIDE_RECEIVER=1 ",
                 "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
             foreach string level in (("-O0", "-O3")) {
                 string executable = dir.path + "/fixture";
@@ -57,12 +58,21 @@ class ExactReceiverIdentityTest inherits QUnit::Test {
                     bool inline_validity = stable
                         && !prefix.startsWith("QORE_DISABLE_AOT_INLINE_RECEIVER_VALIDITY");
                     assertEq(inline_validity,
-                        regex(body[0] ?? "", "call ptr @qore_rt_get_object_status_view_v1"),
+                        regex(body[0] ?? "", "stable_receiver_status_view[^\n]*call ptr @qore_rt_get_object_status_view_v1"),
                         name + " borrowed status view " + prefix + level);
                     assertEq(inline_validity,
-                        regex(body[0] ?? "", "load atomic i32,[^\\n]*seq_cst"),
+                        regex(body[0] ?? "", "receiver_live_status[^\\n]*load atomic i32,[^\\n]*seq_cst"),
                         name + " live sequentially consistent validity " + prefix + level);
                 }
+                *list<*string> selected = regex_extract(ir,
+                    "(?s)define [^\\n]*@identitySelectedLoop_[^\\n]*\\{(.*?)\\n\\}");
+                assertTrue(!!selected, "selected receiver LLVM definition");
+                bool pinned = prefix != "QORE_DISABLE_AOT_INLINE_RECEIVER_VALIDITY=1 "
+                    && prefix != "QORE_DISABLE_AOT_PINNED_OVERRIDE_RECEIVER=1 ";
+                assertEq(pinned, regex(selected[0] ?? "", "pinned_override_same_receiver"),
+                    "selected receiver identity guard " + prefix + level);
+                assertEq(pinned, regex(selected[0] ?? "", "pinned_override_live_status"),
+                    "selected receiver live validity " + prefix + level);
                 assertEq(expected, run((executable,)), prefix + level);
                 assertEq(expected, run((executable,), "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 "),
                     "generic method fallback " + prefix + level);
