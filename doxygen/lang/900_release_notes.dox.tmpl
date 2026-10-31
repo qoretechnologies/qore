@@ -3465,10 +3465,19 @@ while (*binary chunk = input.read(65536)) {
         an error; \c qdbg-remote \c -h shows the help without a URL
       - \c go without arguments runs the current thread until its next breakpoint or exception; it resumed the thread
         in the mode of its last command; \c frame \c set checks the number of the frame
+      - \c help lists the commands with what they do and a quick start, and the descriptions of the commands and the
+        usage of \c qdbg, \c qdbg-remote, \c qdbg-server and \c qdbg-vsc-adapter are written in plain language;
+        errors are shown as <tt>Error: description (CODE)</tt>, and an error at the start of \c qdbg or
+        \c qdbg-server is shown on one line, with its call stack with \c -v; \c history \c load and
+        \c history \c save without a file name show an error; the unused \c -r option of \c qdbg-server is removed
+      - fixed \c help \c thread \c set showing no description, and the usage of \c qdbg-remote and
+        \c qdbg-vsc-adapter showing 1 as the default of \c -w; it is 1500 milliseconds
+      - fixed \c qdbg \c -z, \c qdbg-vsc-adapter \c -z and the \c timeZone of a Visual Studio Code launch
+        configuration failing with a UTC offset, such as \c +01:00
       - \c qdbg-server listens on \c 127.0.0.1 unless a listener is given with \c -l, as its clients can evaluate
         expressions and change the program; it listened on all interfaces; with \c -k (or the \c QDBG_SERVER_TOKEN
         environment variable), it requires a token from its clients, which they send as a bearer token
-        (\c qdbg-remote and \c qdbg-vsc-adapter: <tt>-H Authorization=Bearer <token></tt>)
+        (\c qdbg-remote and \c qdbg-vsc-adapter: <tt>-H Authorization=Bearer &lt;token&gt;</tt>)
     - @ref debugprogramcontrolintro "DebugProgramControl" module
       - stopped threads read and set the values of variables and of their elements, keys and members, also private
         ones, by their paths, and evaluate expressions with the variables of a frame
@@ -3947,6 +3956,8 @@ while (*binary chunk = input.read(65536)) {
         it: \c "/../etc" was returned as the relative path \c "etc"
 
     - @ref vscdebugadapterintro "VscDebugAdapter" module
+      - the exception filters of Visual Studio Code are described, and a breakpoint that cannot be set is explained
+        in plain words, such as <tt>there is no statement on line 1 of "target.q" where the program can pause</tt>
       - lists, hashes and objects are shown as trees in Visual Studio Code, and their elements, keys and members can
         be set; they were shown as text that could not be expanded
       - expressions are evaluated for watches, hovers and the debug console, and variables are set to the values of

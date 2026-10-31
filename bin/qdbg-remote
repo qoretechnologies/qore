@@ -166,7 +166,7 @@ class DebugWrapper {
                 throw "GETOPT-ERROR", "Only one URL can be specified";
             }
             if (!exists opt.url) {
-                throw "GETOPT-ERROR", "Missing URL";
+                throw "GETOPT-ERROR", "the URL of the debug server is missing";
             }
             *string path_suffix;
             string orig_url = opt.url;
@@ -211,7 +211,7 @@ class DebugWrapper {
             case /^wss?:\/\//:
                 break;
             case /^[a-zA-Z0-9_]+:\/\//:
-                throw "GETOPT-ERROR", "Url protocol is not ws://";
+                throw "GETOPT-ERROR", sprintf("the URL %y must start with ws:// or wss://", opt.url);
             default:
                 opt.url = "ws://"+opt.url;
             }
@@ -283,40 +283,50 @@ class DebugWrapper {
     private help(int exCode=1) {
         printf(
             "usage: %s [options] <url>\n"
-            "       %s [options] <conn-id>[/<path>]\n"
+            "       %s [options] <connection>[/<path>]\n"
+            "Debugs the programs of a debug server, such as qdbg-server, in the terminal.  Type \"help\" at the prompt\n"
+            "for all commands.\n"
             "\n"
-            "  <url> is the URL of debug server in 'ws://socket=<url_encoded_path>/path' format, ws:// is optional.\n"
-            "  ConnectionProvider <conn-id> name is considered and when is resolved then http(s) protocol is changed to ws(s).\n"
-            "  The '/debug' path is appended unless a path already exists in the URL and the <path> follows\n"
+            "  <url>                        the URL of the debug server, such as localhost:8001 or\n"
+            "                               wss://myhost:8001/debug; ws:// is added when it has no scheme; for a UNIX\n"
+            "                               socket: ws://socket=<URL-encoded path of the socket>/<path>\n"
+            "  <connection>                 the name of a connection (QORE_CONNECTION_PROVIDERS) to the debug server;\n"
+            "                               http and https in its URL are changed to ws and wss, the path /debug is\n"
+            "                               added when the URL has no path, and <path> is added to the URL\n"
             "\n"
-            "  -v                      verbose (use -v -v for debug output)\n"
-            "  -h                      help\n"
-            "  -H,--header=<hdr>=<val> headers for connection request\n"
-            "  -m,--max-redir=<num>    the maximum number of redirects before throwing an exception (the default is 5)\n"
-            "  -P,--proxy=<url>        the proxy URL for connecting through a proxy\n"
-            "  -t,--timeout=<ms>       the timeout\n"
-            "  -c,--conn-timeout=<ms>  the timeout for establishing a new socket connection\n"
-            "  -w,--resp-timeout=<ms>  the timeout to wait for websocket response, default: %d\n"
-            "  -y,--history=file       load command line history from file, default: %s in home directory\n"
-            "                          When \".\" name is provided then history is not loaded/saved\n"
-            "  -s,--session=file       load session from file\n"
-            "  --color                 force color output\n"
-            "  --no-color              disable color output\n"
+            "  -h                           show this help\n"
+            "  -v                           show more details of what the debugger does; repeat for more (-v -v)\n"
+            "  -H, --header=<name>=<value>  add an HTTP header to the connection, such as\n"
+            "                               -H \"Authorization=Bearer <token>\" for a server that requires a token\n"
+            "  -m, --max-redir=<number>     the maximum number of HTTP redirects; the default is 5\n"
+            "  -P, --proxy=<url>            connect through an HTTP proxy\n"
+            "  -t, --timeout=<ms>           how long reading from or writing to the connection may take, in\n"
+            "                               milliseconds\n"
+            "  -c, --conn-timeout=<ms>      how long opening the connection may take, in milliseconds\n"
+            "  -w, --resp-timeout=<ms>      how long to wait for the answer of the debug server to a command, in\n"
+            "                               milliseconds; the default is %d\n"
+            "  -y, --history=file           the file of the commands that the up and down arrow keys recall; the\n"
+            "                               default is %s in the home folder; \".\" keeps no history\n"
+            "  -s, --session=file           load the breakpoints and settings that \"session save\" saved to a file\n"
+            "  --color, --no-color          always or never show colors; by default, colors are shown in a terminal\n"
             "\n"
-            "Keyboard shortcuts:\n"
-            "  Ctrl+D                  quit debugger\n"
-            "  Ctrl+G                  show current program/thread context\n"
-            "  TAB                     command completion (cycles through matches)\n"
+            "When the input is not a terminal, it is a script of commands: each command that resumes a thread waits\n"
+            "until the thread pauses again or ends.\n"
             "\n"
-            "Example:\n"
-            "  %s -v localhost:8000/debug\n"
-            "  %s -v qorus\n"
-            "  %s -v qorus/qjob-test_v1.0-1\n"
+            "Keys:\n"
+            "  Ctrl+D                       end the debugger\n"
+            "  Ctrl+G                       show the current program and thread\n"
+            "  Tab                          complete a command (press again for the next match)\n"
+            "\n"
+            "Examples:\n"
+            "  %s localhost:8001\n"
+            "  %s -H \"Authorization=Bearer s3cret\" myhost:8001\n"
+            "  %s qorus/qjob-test_v1.0-1\n"
             "\n"
             ,
             get_script_name(),
             get_script_name(),
-            DebugCommandLineRemote::WSC_TIMEOUT,
+            DebugCommandLineRemote::WSC_TIMEOUT.durationMilliseconds(),
             DebugLinenoiseCommandLine::defaultHistoryFileName,
             get_script_name(),
             get_script_name(),

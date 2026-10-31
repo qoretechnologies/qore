@@ -378,6 +378,28 @@ public namespace DebugProgramControl {
             broadcastDataImpl(sd);
         }
 
+        #! Sets the time zone of a program from a region name or a UTC offset
+        /** @param pgm the program
+            @param zone a region name, such as \c "Europe/Prague", or a UTC offset in the format
+            <tt>S[HH[:MM[:SS]]]</tt>, where \c S is \c + or \c -, such as \c "+01:00", as for the \c -z option of
+            \c qore
+
+            @throw TIME-ZONE-ERROR the UTC offset is not valid
+        */
+        static setTimeZone(Program pgm, string zone) {
+            if (zone !~ /^[-+]/) {
+                pgm.setTimeZoneRegion(zone);
+                return;
+            }
+            *list<*string> m = (zone =~ x/^([-+])([0-9]{2})?(?::([0-9]{2}))?(?::([0-9]{2}))?$/);
+            if (!m || (!exists m[1] && (exists m[2] || exists m[3])) || (!exists m[2] && exists m[3])) {
+                throw "TIME-ZONE-ERROR", sprintf("%y is not a valid UTC offset; expecting +HH, +HH:MM or +HH:MM:SS "
+                    "with + or -, such as \"+01:00\"", zone);
+            }
+            int seconds = int(m[1] ?? 0) * 3600 + int(m[2] ?? 0) * 60 + int(m[3] ?? 0);
+            pgm.setTimeZoneUTCOffset(m[0] == "-" ? -seconds : seconds);
+        }
+
         #! Create new program
         public Program createProgram(string fileName, *hash<auto> opts, list<auto> args, *string script) {
             debug("create program: %y", fileName);
@@ -408,8 +430,7 @@ public namespace DebugProgramControl {
                 }
             }
             if (exists opts.time_zone) {
-                # TODO: parse exact shifts
-                pgm.setTimeZoneRegion(opts.time_zone);
+                setTimeZone(pgm, opts.time_zone);
             }
             # update arguments without debug options
             pgm.setGlobalVarValue('ARGV', args);
@@ -1146,7 +1167,9 @@ public namespace DebugProgramControl {
         private static int findColumnStatement(ProgramControl pgm, string file, int line, int column) {
             list<int> ids = pgm.findStatementIds(file, line);
             if (!ids) {
-                throw "PROGRAM-STATEMENT-ERROR", sprintf("cannot find statement for \"%s:%d\"", file, line);
+                throw "PROGRAM-STATEMENT-ERROR", file.val()
+                    ? sprintf("there is no statement on line %d of %y where the program can pause", line, file)
+                    : sprintf("there is no statement on line %d where the program can pause", line);
             }
             int rv = ids[0];
             foreach int id in (ids) {

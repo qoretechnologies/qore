@@ -509,7 +509,13 @@ int ProgramControl::findStatementId(string file, int line) [flags=NAMED_ARGS] {
         return 0;
     AbstractStatement* s = p->findStatement(file->c_str(), line);
     if (!s) {
-        return xsink->raiseException("PROGRAM-STATEMENT-ERROR", "cannot find statement for \"%s:" QLLD "\"", file->c_str(), (int64)line);
+        // without a file, the line is searched in all files
+        if (file->empty()) {
+            return xsink->raiseException("PROGRAM-STATEMENT-ERROR", "there is no statement on line " QLLD
+                " where the program can pause", (int64)line);
+        }
+        return xsink->raiseException("PROGRAM-STATEMENT-ERROR", "there is no statement on line " QLLD " of \"%s\" "
+            "where the program can pause", (int64)line, file->c_str());
     }
     return p->getStatementId(s);
 }
@@ -611,7 +617,7 @@ int ProgramControl::findFunctionStatementId(string function_name, *list params) 
     AbstractStatement* s = p->findFunctionStatement(function_name->c_str(), params, xsink);
     if (!s) {
         if (!*xsink) {
-            xsink->raiseException("PROGRAM-STATEMENT-ERROR", "cannot find statement for \"%s()\"",
+            xsink->raiseException("PROGRAM-STATEMENT-ERROR", "\"%s()\" has no statement where the program can pause",
                 function_name->c_str());
         }
         return QoreValue();

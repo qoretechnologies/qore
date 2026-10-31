@@ -139,7 +139,7 @@
     |\c stopOnEntry|launch|stop at the first statement of the program; default \c false
     |\c stopAllThreads|both|all threads stop when one of them stops, and continue together; default \c true
     |\c define, \c parseOptions, \c timeZone|launch|parse defines, parse options and the time zone of the program
-    |\c connection, \c headers, \c proxy, \c timeout, \c connTimeout, \c respTimeout, \c maxRedir|attach|the connection to the debug server; a token of the server is given in \c headers as <tt>[{"name": "Authorization", "value": "Bearer <token>"}]</tt>
+    |\c connection, \c headers, \c proxy, \c timeout, \c connTimeout, \c respTimeout, \c maxRedir|attach|the connection to the debug server; a token of the server is given in \c headers as <tt>[{"name": "Authorization", "value": "Bearer &lt;token&gt;"}]</tt>
     |\c logFilename, \c appendToLog, \c verbosity, \c fullException|both|the log of the adapter and the exception information that it gives
 
     The exception breakpoints of the adapter stop at user, system or uncaught exceptions, and with the
@@ -159,7 +159,10 @@
 qdbg myfile.q -my -program params
     @endcode
 
-    \c qdbg reads commands from its input; \c TAB completes commands and \c help lists them.  With input that is not
+    \c qdbg reads commands from its input; \c TAB completes commands, \c help lists them with what they do and a quick
+    start, and <tt>help command</tt> shows the details of a command.  Commands can be shortened while they stay unique,
+    as <tt>br cr 10</tt> for <tt>break create 10</tt>.  The time zone of the program is given with \c -z as a region
+    name, such as \c Europe/Prague, or as a UTC offset, such as \c +01:00.  With input that is not
     a terminal, each command that resumes a thread returns when the thread stops again, so a file of commands is
     processed at the stops that it is written for:
     @code{.sh}

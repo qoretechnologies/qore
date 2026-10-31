@@ -111,6 +111,20 @@ public namespace DebugCmdLine {
             TerminalColor tc;
         }
 
+        public {
+            #! The quick start that \c help shows after the list of commands
+            const QuickStart = "Quick start:
+  break create <line>    pause the program when it reaches a line of the current file
+  go                     continue until a breakpoint, an exception or the end
+  go step, go stepover   run to the next line, into called functions or over them
+  go untilreturn         run until the current function returns
+  bt, thread local       show the call stack and the local variables
+  eval <expression>      show the value of an expression
+  quit                   end the debugger
+Commands can be shortened while they stay unique, such as \"br cr 10\" for \"break create 10\".
+";
+        }
+
         private {
             const fcHelp = 0x01;
             const fcExpandUniqueCmd = 0x02;
@@ -173,7 +187,7 @@ public namespace DebugCmdLine {
                 '>': (
                     'help': (
                         '**': (
-                            'desc': 'help/*',
+                            'desc': 'Show the help of a command. Usage: help <command> [subcommand ...]',
                             'enum': list sub(DebugCommandLine dcl, softlist path, softlist args) {
                                 shift path;
                                 if (path[0] == 'help') return ();
@@ -202,26 +216,33 @@ public namespace DebugCmdLine {
                                     printfImpl("fl: %y lp: %y full_cmd: %Y\n", fl, last_param, full_cmd);
                                 }
                                 if (cmd.cmd) {
-                                    printfImpl("%s: %s\n", full_cmd, cmd.cmd.desc);
+                                    *string desc = DebugCommandLine::getCmdDesc(cmd.cmd);
+                                    # the usage on its own line
+                                    if (desc) {
+                                        desc =~ s/ Usage: /\nUsage: /;
+                                    }
+                                    printfImpl("%s: %s\n", full_cmd, desc ?? "");
                                 }
                                 if (cmd.cmd.aliases) {
                                     printfImpl("Aliases of %s: %s\n", cmd.cmd.name, sort(cmd.cmd.aliases).join(', '));
                                 }
                                 cmd = dcl.findCmd(fl + '', fcHelp);
                                 if (cmd.variants.typeCode() == NT_HASH) {
-                                    printfImpl("\nSubcommand list: %s\n", dcl.listVariantCmds(cmd.variants));
+                                    printfImpl("\nSubcommands; \"help %s <subcommand>\" shows the details of one:\n%s",
+                                        full_cmd, dcl.getVariantHelp(cmd.variants));
                                 }
                             },
                         ),
-                        'desc': 'get help about command',
+                        'desc': 'Show all commands, or the help of a command. Usage: help [command ...]',
                         'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                             shift path; # remove help arg
                             *hash<auto> cmd = dcl.findCmd(list('') , fcHelp);
-                            printfImpl("Command root list: %s\n", dcl.listVariantCmds(cmd.variants));
+                            printfImpl("Commands; \"help <command>\" shows the details of one:\n%s\n%s",
+                                dcl.getVariantHelp(cmd.variants), QuickStart);
                         },
                     ),
                     'version': (
-                        'desc': 'get version info. Check "host" key to see if server side is responding',
+                        'desc': 'Show the versions of the debugger and of the debug server.',
                         'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                             hash<auto> mods = get_module_hash();
                             hash<auto> res.client = {
@@ -239,8 +260,8 @@ public namespace DebugCmdLine {
                         },
                     ),
                     'eval': (
-                        'desc': 'evaluate an expression with the variables of the current frame of the current thread, '
-                            'args: expression',
+                        'desc': 'Show the value of an expression, with the variables of the current stack frame. '
+                            'Usage: eval <expression>',
                         'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                             string expr = args.join(" ");
                             if (!expr.val()) {
@@ -257,7 +278,8 @@ public namespace DebugCmdLine {
                         },
                     ),
                     'cmd': (
-                        'desc': 'send a command to the server and show the output',
+                        'desc': 'Advanced: send a command of the debug server protocol and show the result. Usage: '
+                            'cmd <command> [<hash>]',
                         'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                             @debug {
                                 printfImpl("path: %y args: %y\n", path, args);
@@ -292,7 +314,8 @@ public namespace DebugCmdLine {
                             'verbose': (
                                 '>': {
                                     'set': (
-                                        'desc': 'set logger verbosity level, args: level',
+                                        'desc': 'Change how much the debugger logs. Usage: options verbose set '
+                                            '<level>',
                                         '*': (
                                             'validate': \DebugCommandLine::validateInt(),
                                             'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
@@ -301,20 +324,21 @@ public namespace DebugCmdLine {
                                         ),
                                     ),
                                     'get': (
-                                        'desc': 'get current logger verbosity level',
+                                        'desc': 'Show how much the debugger logs.',
                                         'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                                             printfImpl("Logging level: %s\n", logger.getLevel().getStr());
                                         },
                                     ),
                                 },
                                 'fallback': fallbackGetSetInt,
-                                'desc': 'logger verbosity commands',
+                                'desc': 'Show or change how much the debugger logs.',
                             ),
 
                             'rverbose': (
                                 '>': {
                                     'set': (
-                                        'desc': 'set remote logger verbosity level, args: level',
+                                        'desc': 'Change how much the debug server logs. Usage: options rverbose set '
+                                            '<level>',
                                         '*': (
                                             'validate': \DebugCommandLine::validateInt(),
                                             'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
@@ -326,7 +350,7 @@ public namespace DebugCmdLine {
                                         ),
                                     ),
                                     'get': (
-                                        'desc': 'get current remote logger verbosity level',
+                                        'desc': 'Show how much the debug server logs.',
                                         'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                                             *hash<auto> vh = doCommand((
                                                 'cmd': 'options/verbose/get',
@@ -336,14 +360,15 @@ public namespace DebugCmdLine {
                                     ),
                                 },
                                 'fallback': fallbackGetSetInt,
-                                'desc': 'remote logger verbosity commands',
+                                'desc': 'Show or change how much the debug server logs.',
                             ),
 
                             'stopall': (
                                 '>': {
                                     'set': (
-                                        'desc': 'set if all threads of a program stop when one of them stops, and '
-                                            'continue together, args: 0|1',
+                                        'desc': 'Choose whether all threads of a program pause when one of them '
+                                            'pauses, and continue together (1: yes, 0: no). Usage: options stopall set '
+                                            '0|1',
                                         '*': (
                                             'validate': \DebugCommandLine::validateInt(),
                                             'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
@@ -352,20 +377,23 @@ public namespace DebugCmdLine {
                                         ),
                                     ),
                                     'get': (
-                                        'desc': 'get if all threads of a program stop together',
+                                        'desc': 'Show whether all threads of a program pause together.',
                                         'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                                             printfImpl("stop all threads: %d\n", dcl.stopAllThreads ? 1 : 0);
                                         },
                                     ),
                                 },
                                 'fallback': fallbackGetSetInt,
-                                'desc': 'commands of stopping all threads together',
+                                'desc': 'Show or change whether all threads of a program pause when one of them '
+                                    'pauses.',
                             ),
 
                             'fullexceptioninfo': (
                                 '>': {
                                     'set': (
-                                        'desc': 'set full exception info, args: 0|1',
+                                        'desc': 'Choose whether exceptions are shown with all their details, such as '
+                                            'their call stacks (1: yes, 0: no). Usage: options fullexceptioninfo set '
+                                            '0|1',
                                         '*': (
                                             'validate': \DebugCommandLine::validateInt(),
                                             'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
@@ -377,7 +405,7 @@ public namespace DebugCmdLine {
                                         ),
                                     ),
                                     'get': (
-                                        'desc': 'get full exception info',
+                                        'desc': 'Show whether exceptions are shown with all their details.',
                                         'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                                             doCommand((
                                                 'cmd': 'options/fullexceptioninfo/get',
@@ -386,12 +414,13 @@ public namespace DebugCmdLine {
                                     ),
                                 },
                                 'fallback': fallbackGetSetInt,
-                                'desc': 'full exception info commands',
+                                'desc': 'Show or change whether exceptions are shown with all their details.',
                             ),
                             'sourcepath': (
                                 '>': {
                                     'set': (
-                                        'desc': 'set source file search path, args: colon-delimited-paths',
+                                        'desc': 'Change the folders where the debug server looks for source files, '
+                                            'separated by ":". Usage: options sourcepath set <folders>',
                                         '*': (
                                             'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                                                 doCommand((
@@ -402,7 +431,7 @@ public namespace DebugCmdLine {
                                         ),
                                     ),
                                     'get': (
-                                        'desc': 'get source file search path',
+                                        'desc': 'Show the folders where the debug server looks for source files.',
                                         'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                                             doCommand((
                                                 'cmd': 'options/sourcepath/get',
@@ -411,15 +440,16 @@ public namespace DebugCmdLine {
                                     ),
                                 },
                                 'fallback': fallbackGetSetString,
-                                'desc': 'search path commands',
+                                'desc': 'Show or change the folders where the debug server looks for source files.',
                             ),
                         ),
-                        'desc': 'options related commands',
+                        'desc': 'Show or change the settings of the debugger.',
                     ),
                     'frame': (
                         '>': {
                             'set': (
-                                'desc': 'set current stack frame, args: frameId',
+                                'desc': 'Select the current stack frame, by its number in the call stack ("bt"). '
+                                    'Usage: frame set <number>',
                                 '*': (
                                     'enum': list sub(DebugCommandLine dcl, softlist path, softlist args) {
                                         hash<auto> data.cmd = 'thread/stack';
@@ -440,7 +470,7 @@ public namespace DebugCmdLine {
                                 ),
                             ),
                             'get': (
-                                'desc': 'get current stack frame',
+                                'desc': 'Show the number of the current stack frame.',
                                 'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                                     hash<auto> data = (
                                         "cmd": "thread/debug/frame/get",
@@ -451,10 +481,11 @@ public namespace DebugCmdLine {
                             ),
                         },
                         'fallback': fallbackGetSetInt,
-                        'desc': 'Stack frame related commands',
+                        'desc': 'Show or select the current stack frame, whose variables are shown and used in '
+                            'expressions.',
                     ),
                     'session': (
-                        'desc': 'get list of debugged programs, stopped threads and breakpoint stats',
+                        'desc': 'Show the programs that are debugged, their paused threads and their breakpoints.',
                         'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                             hash<auto> data.cmd = 'session/get';
                             *hash<auto> sh = dcl.doCommand(data, False).result;
@@ -477,13 +508,15 @@ public namespace DebugCmdLine {
                         },
                         '>': (
                             'load': (
-                                'desc': 'load session from file, args: filename',
+                                'desc': 'Load the breakpoints and settings of a debugging session from a file. Usage: '
+                                    'session load <file>',
                                 'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                                     dcl.loadSession(shift args);
                                 },
                             ),
                             'save': (
-                                'desc': 'save session to file, args: filename',
+                                'desc': 'Save the breakpoints and settings of the debugging session to a file. Usage: '
+                                    'session save <file>',
                                 'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                                     *string fn = shift args;
                                     if (exists fn) {
@@ -505,7 +538,8 @@ public namespace DebugCmdLine {
                     'pgm': (
                         '>': (
                             'load': (
-                                'desc': 'load and run script, args: filename [args..]',
+                                'desc': 'Load a script and run it in the debugger. Usage: pgm load <file> [arguments '
+                                    '...]',
                                 'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                                     hash<auto> data.cmd = 'program//create';
                                     data.filename = shift args;
@@ -517,7 +551,8 @@ public namespace DebugCmdLine {
                                 },
                             ),
                             'search': (
-                                'desc': 'regex search for a program, args: regex',
+                                'desc': 'Find the programs whose names match a regular expression. Usage: pgm search '
+                                    '<regex>',
                                 'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                                     if (!args[0].val()) {
                                         printfImpl("usage: pgm search <regex>\n");
@@ -540,7 +575,7 @@ public namespace DebugCmdLine {
                             'list': (
                                 '>': (
                                     'full': (
-                                        'desc': 'verbose program listing',
+                                        'desc': 'List the programs with more details.',
                                         'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                                             hash<auto> data.cmd = 'program//list';
                                             data.listFiles = True;
@@ -548,7 +583,7 @@ public namespace DebugCmdLine {
                                         },
                                     ),
                                 ),
-                                'desc': 'list programs, [full] for a verbose listing',
+                                'desc': 'List the programs; "full" shows more details. Usage: pgm list [full]',
                                 'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                                     hash<auto> data.cmd = 'program//list';
                                     *hash<auto> pgm_info = dcl.doCommand(data, False);
@@ -560,7 +595,8 @@ public namespace DebugCmdLine {
                                 },
                             ),
                             'set': (
-                                'desc': 'set current program, arg: programId | scriptName',
+                                'desc': 'Select the current program, by its number or the name of its script. Usage: '
+                                    'pgm set <number|name>',
                                 '*': (
                                     'enum': list sub(DebugCommandLine dcl, softlist path, softlist args) {
                                         string name = pop path;
@@ -605,7 +641,7 @@ public namespace DebugCmdLine {
                                 ),
                             ),
                             'get': (
-                                'desc': 'get current program',
+                                'desc': 'Show the current program.',
                                 'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                                     auto v = dcl.getContextValue('programId');
                                     if (!exists v) {
@@ -616,21 +652,22 @@ public namespace DebugCmdLine {
                                 },
                             ),
                             'add': (
-                                'desc': 'add current program for debugging',
+                                'desc': 'Start debugging the current program.',
                                 'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                                     hash<auto> data.cmd = 'program/'+dcl.checkProgramId()+'/add';
                                     dcl.doCommand(data, True);
                                 },
                             ),
                             'remove': (
-                                'desc': 'remove current program from debugging',
+                                'desc': 'Stop debugging the current program; its threads continue without stopping.',
                                 'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                                     hash<auto> data.cmd = 'program/'+dcl.checkProgramId()+'/remove';
                                     dcl.doCommand(data, True);
                                 },
                             ),
                             'stop': (
-                                'desc': 'stop current program, args: [threadId] to stop particular thread',
+                                'desc': 'Pause the threads of the current program, or only one of them. Usage: pgm '
+                                    'stop [thread]',
                                 'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                                     hash<auto> data.cmd = 'program/'+dcl.checkProgramId();
                                     if (exists args[0]) {
@@ -673,7 +710,8 @@ public namespace DebugCmdLine {
                                     *list<auto> tl = dcl.doCommand(data, False).result;
                                     printfImpl("global vars: %s\n", (foldl $1 + ", " + $2, tl));
                                 },
-                                'desc': 'get/set global variable, args: varName [value]',
+                                'desc': 'List the global variables, or show or change one. Usage: pgm global [<name> '
+                                    '[<value>]]',
                             ),
                             'define': (
                                 '*': (
@@ -691,10 +729,11 @@ public namespace DebugCmdLine {
                                     hash<auto> data.cmd = 'program/'+dcl.checkProgramId()+'/define//list';
                                     dcl.doCommand(data, True);
                                 },
-                                'desc': 'get defines, args: [defineName]',
+                                'desc': 'Show the parse defines of the current program, or one of them. Usage: pgm '
+                                    'define [name]',
                             ),
                             'options': (
-                                'desc': 'list parse options',
+                                'desc': 'Show the parse options of the current program.',
                                 'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                                     hash<auto> data.cmd = 'program/'+dcl.checkProgramId()+'/options';
                                     dcl.doCommand(data, True);
@@ -702,7 +741,8 @@ public namespace DebugCmdLine {
                             ),
                             'label': (
                                 '*': (
-                                    'desc': 'get source code from label, args: [line_from [line_count]]',
+                                    'desc': 'Show the code of a label. Usage: pgm label <label> [<first line> '
+                                        '[<number of lines>]]',
                                     'enum': list sub(DebugCommandLine dcl, softlist path, softlist args) {
                                         hash<auto> data.cmd = 'program/'+dcl.checkProgramId()+'/label/list';
                                         return DebugCommandLine::enumFilter(keys dcl.doCommand(data, False).result, pop path);
@@ -721,7 +761,8 @@ public namespace DebugCmdLine {
                                         dcl.processGetSource('label', path, args);
                                     },
                                 ),
-                                'desc': 'list source labels',
+                                'desc': 'List the labels of the code of the current program that was not read from '
+                                    'files.',
                                 'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                                     hash<auto> data.cmd = 'program/'+dcl.checkProgramId()+'/label/list';
                                     showFileNames(dcl.doCommand(data, False).result);
@@ -729,7 +770,8 @@ public namespace DebugCmdLine {
                             ),
                             'file': (
                                 '*': (
-                                    'desc': 'get source code from file, args: [line_from [line_count]]',
+                                    'desc': 'Show the code of a source file. Usage: pgm file <file> [<first line> '
+                                        '[<number of lines>]]',
                                     'enum': list sub(DebugCommandLine dcl, softlist path, softlist args) {
                                         hash<auto> data.cmd = 'program/'+dcl.checkProgramId()+'/file/list';
                                         return DebugCommandLine::enumFilter(keys dcl.doCommand(data, False).result, pop path);
@@ -738,21 +780,21 @@ public namespace DebugCmdLine {
                                         dcl.processGetSource('file', path, args);
                                     },
                                 ),
-                                'desc': 'list source filenames',
+                                'desc': 'List the source files of the current program.',
                                 'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                                     hash<auto> data.cmd = 'program/'+dcl.checkProgramId()+'/file/list';
                                     showFileNames(dcl.doCommand(data, False).result);
                                 },
                             ),
                             'info': (
-                                'desc': 'get info about current program and list threads',
+                                'desc': 'Show the details of the current program and its threads.',
                                 'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                                     hash<auto> data.cmd = 'program/='+dcl.checkProgramId()+'/list';
                                     dcl.doCommand(data, True);
                                 },
                             ),
                         ),
-                        'desc': 'program related commands',
+                        'desc': 'Commands for the programs that are debugged.',
                         /* TODO: what is intended enumeration ?
                         'enum': list sub(DebugCommandLine dcl, softlist path, softlist args) {
                             hash<auto> data.cmd = 'program//list';
@@ -789,7 +831,8 @@ public namespace DebugCmdLine {
                     'break': (
                         '>': (
                             'list': (
-                                'desc': 'list breakpoints for current program',
+                                'desc': 'List the breakpoints of the current program with their conditions; "all" '
+                                    'lists those of all programs.',
                                 'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                                     hash<auto> data.cmd = 'program/'+dcl.checkProgramId()+'/breakpoint//list';
                                     *hash<auto> sd = dcl.doCommand(data, False);
@@ -799,7 +842,7 @@ public namespace DebugCmdLine {
                                 },
                                 '>': (
                                     'all': (
-                                        'desc': 'list breakpoints for all programs',
+                                        'desc': 'List the breakpoints of all programs.',
                                         'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                                             hash<auto> data.cmd = 'program//breakpoint//list';
                                             *hash<auto> sd = dcl.doCommand(data, False);
@@ -811,9 +854,9 @@ public namespace DebugCmdLine {
                                 ),
                             ),
                             'create': (
-                                'desc': 'create breakpoint and get breakpointId. Optionally assign to a particular "
-                                    "statement, i.e. code line, or do it later using "statement assign". "
-                                    "args: function[([param types, ...])] | [file] lineno | #statementId',
+                                'desc': 'Add a breakpoint and show its number. Usage: break create [<file>] '
+                                    '<line>[:<column>] | <function>[(<parameter types>)] | #<statement>. Without a '
+                                    'location, add one later with "stmt assign".',
                                 'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                                     hash<auto> data.cmd = 'program/'+dcl.checkProgramId()+'/breakpoint//create';
                                     if (args) {
@@ -832,7 +875,7 @@ public namespace DebugCmdLine {
                                         dcl.doCommand(data, True);
                                     },
                                 ),
-                                'desc': 'delete breakpoint, args: breakpointId',
+                                'desc': 'Delete a breakpoint. Usage: break delete <number>',
                             ),
                             'enable': (
                                 '*': (
@@ -844,7 +887,7 @@ public namespace DebugCmdLine {
                                         dcl.doCommand(data, True);
                                     },
                                 ),
-                                'desc': 'enable breakpoint, args: breakpointId',
+                                'desc': 'Turn a breakpoint on again. Usage: break enable <number>',
                             ),
                             'disable': (
                                 '*': (
@@ -856,7 +899,7 @@ public namespace DebugCmdLine {
                                         dcl.doCommand(data, True);
                                     },
                                 ),
-                                'desc': 'disable breakpoint, args: breakpointId',
+                                'desc': 'Turn a breakpoint off without deleting it. Usage: break disable <number>',
                             ),
                             'condition': (
                                 '*': (
@@ -867,9 +910,8 @@ public namespace DebugCmdLine {
                                         dcl.setBreakpointOption(pop path, "condition", args);
                                     },
                                 ),
-                                'desc': 'set the condition of a breakpoint, which stops a thread only if the condition '
-                                    'is true; without an expression, the condition is removed; args: breakpointId '
-                                    '[expression]',
+                                'desc': 'Pause only when an expression is true; without an expression, the condition '
+                                    'is removed. Usage: break condition <number> [<expression>]',
                             ),
                             'hitcondition': (
                                 '*': (
@@ -880,9 +922,9 @@ public namespace DebugCmdLine {
                                         dcl.setBreakpointOption(pop path, "hitcondition", args);
                                     },
                                 ),
-                                'desc': 'set the hit condition of a breakpoint, which stops a thread only if the '
-                                    'number of hits meets it: N (the Nth hit), ==N, >N, >=N, <N, <=N or %N (every Nth '
-                                    'hit); without a hit condition, it is removed; args: breakpointId [hitCondition]',
+                                'desc': 'Pause only at some hits of a breakpoint: N (the Nth hit), ==N, >N, >=N, <N, '
+                                    '<=N or %N (every Nth hit); without one, it is removed. Usage: break hitcondition '
+                                    '<number> [<hit condition>]',
                             ),
                             'log': (
                                 '*': (
@@ -893,9 +935,9 @@ public namespace DebugCmdLine {
                                         dcl.setBreakpointOption(pop path, "log", args);
                                     },
                                 ),
-                                'desc': 'make a breakpoint a logpoint, which writes its message and does not stop a '
-                                    'thread; expressions in braces are replaced with their values; without a message, '
-                                    'the breakpoint stops again; args: breakpointId [message]',
+                                'desc': 'Write a message instead of pausing; {expression} is replaced with its value. '
+                                    'Without a message, the breakpoint pauses again. Usage: break log <number> '
+                                    '[<message>]',
                             ),
                             'policy': (
                                 '*': (
@@ -917,7 +959,9 @@ public namespace DebugCmdLine {
                                         dcl.doCommand(data, True);
                                     },
                                 ),
-                                'desc': sprintf('get/set breakpoint policy, args: breakpointId [%s]', (keys AbstractDebugControl::policyStrings).join('|')),
+                                'desc': 'Choose the threads that a breakpoint pauses: none (all threads), accept '
+                                    '(only its threads), reject (all but its threads); see "break thread". Usage: '
+                                    'break policy <number> [none|accept|reject]',
                             ),
                             'thread': (
                                 '*': (
@@ -948,7 +992,8 @@ public namespace DebugCmdLine {
                                         dcl.doCommand(data, True);
                                     },
                                 ),
-                                'desc': 'get/set threads assigned to breakpoint, args: breakpointId ["+"/"-" threadId | threadId ..]',
+                                'desc': 'Show or change the threads of a breakpoint, for its policy. Usage: break '
+                                    'thread <number> [+<thread> | -<thread> | <thread> ...]',
                                 'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                                         hash<auto> data.cmd = 'program//breakpoint/'+pop path+'/thread/get';
                                         dcl.doCommand(data, True);
@@ -964,10 +1009,12 @@ public namespace DebugCmdLine {
                                         dcl.doCommand(data, True);
                                     },
                                 ),
-                                'desc': 'get statement list assigned to breakpoint, args: breakpointId',
+                                'desc': 'List the places in the code where a breakpoint is. Usage: break statement '
+                                    '<number>',
                             ),
                         ),
-                        'desc': 'breakpoint related commands',
+                        'desc': 'Commands for breakpoints, which pause the program when it reaches them. Start with: '
+                            'break create <line>',
                     ),
                     'statement': (
                         'alias': 'stmt',
@@ -984,7 +1031,8 @@ public namespace DebugCmdLine {
                                         dcl.doCommand(data, True);
                                     },
                                 ),
-                                'desc': 'list statements, args: breakpointId', # duplicate to breakpoint/statement
+                                'desc': 'List the places in the code where a breakpoint is (as "break statement"). '
+                                    'Usage: stmt list <breakpoint>', # duplicate to breakpoint/statement
                             ),
                             'assign': (
                                 '*': (
@@ -997,7 +1045,8 @@ public namespace DebugCmdLine {
                                         dcl.doCommand(data, True);
                                     },
                                 ),
-                                'desc': 'assign statement to breakpoint, args: breakpointId function[([param types, ...])] | [file] lineno | #statementId',
+                                'desc': 'Add a place in the code to a breakpoint. Usage: stmt assign <breakpoint> '
+                                    '[<file>] <line>[:<column>] | <function> | #<statement>',
                             ),
                             'unassign': (
                                 '*': (
@@ -1010,7 +1059,8 @@ public namespace DebugCmdLine {
                                         dcl.doCommand(data, True);
                                     },
                                 ),
-                                'desc': 'unassign statement from breakpoint, args: breakpointId function[([param types, ...])] | [file] lineno | #statementId',
+                                'desc': 'Remove a place in the code from a breakpoint. Usage: stmt unassign '
+                                    '<breakpoint> [<file>] <line>[:<column>] | <function> | #<statement>',
                             ),
                             'get': (
                                 'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
@@ -1027,7 +1077,8 @@ public namespace DebugCmdLine {
                                         }
                                     }
                                 },
-                                'desc': 'get statement info and list related breakpoints, args: function[([param types, ...])] | [file] lineno | #statementId',
+                                'desc': 'Show a statement and its breakpoints. Usage: stmt get [<file>] '
+                                    '<line>[:<column>] | <function> | #<statement>',
                             ),
                             'line': (
                                 'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
@@ -1050,10 +1101,11 @@ public namespace DebugCmdLine {
                                         printfImpl(dcl.formatStatement(stmt));
                                     }
                                 },
-                                'desc': 'list the statements of a line with their columns, args: [file] lineno',
+                                'desc': 'List the statements of a line with their columns, for a breakpoint on one of '
+                                    'them. Usage: stmt line [<file>] <line>',
                             ),
                         ),
-                        'desc': 'statement related commands',
+                        'desc': 'Commands for statements, the places in the code where breakpoints can be.',
                     ),
 
                     'display': (
@@ -1064,8 +1116,8 @@ public namespace DebugCmdLine {
                                 dcl.listDisplays();
                             }
                         },
-                        'desc': 'add an expression that is shown with the variables of the stopped thread at each stop, '
-                            'or list them; args: [expression]',
+                        'desc': 'Show the value of an expression at every pause; without an expression, list them. '
+                            'Usage: display [<expression>]',
                     ),
                     'undisplay': (
                         'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
@@ -1074,7 +1126,8 @@ public namespace DebugCmdLine {
                             }
                             dcl.removeDisplay(args ? int(args[0]) : NOTHING);
                         },
-                        'desc': 'remove a display expression, or all of them; args: [number]',
+                        'desc': 'Stop showing an expression at every pause, or all of them. Usage: undisplay '
+                            '[<number>]',
                     ),
 
                     'exception': (
@@ -1095,20 +1148,19 @@ public namespace DebugCmdLine {
                                             : args);
                                     dcl.doCommand({"cmd": "exception/filter/set", "value": filters}, True);
                                 },
-                                'desc': 'get or set the exceptions that stop threads: user (all user exceptions), '
-                                    'system (all system exceptions), uncaught (exceptions that no try statement of '
-                                    'debuggable code catches), exception codes such as FILE-OPEN-ERROR, all or none; '
-                                    'args: [filter ...]',
+                                'desc': 'Choose the exceptions that pause the program: user, system, uncaught (not '
+                                    'caught by a try statement), exception codes such as FILE-OPEN-ERROR, all or none; '
+                                    'without arguments, show them. Usage: exception filter [<filter> ...]',
                             ),
                         ),
-                        'desc': 'exception related commands',
+                        'desc': 'Commands for exceptions.',
                     ),
 
                     'thread': (
                         '>': (
                             'set': (
                                 '*': (
-                                    'desc': 'set current thread, args: threadId',
+                                    'desc': 'Select the current thread. Usage: thread set <thread>',
                                     'enum': list sub(DebugCommandLine dcl, softlist path, softlist args) {
                                         hash<auto> data.cmd = 'program/='+dcl.checkProgramId()+'/list';
                                         *hash<auto> sd = dcl.doCommand(data, False);
@@ -1127,7 +1179,7 @@ public namespace DebugCmdLine {
                                 ),
                             ),
                             'get': (
-                                'desc': 'get current thread',
+                                'desc': 'Show the current thread.',
                                 'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                                     *softint threadId = dcl.getContextValue('threadId');
                                     if (!exists threadId) {
@@ -1179,14 +1231,16 @@ public namespace DebugCmdLine {
                                         printfImpl("no local vars in frame\n");
                                     }
                                 },
-                                'desc': 'get/set local variable, args: varName [value]',
+                                'desc': 'List the local variables of the current stack frame, or show or change one. '
+                                    'Usage: thread local [<name> [<value>]]',
                             ),
                             'targets': (
                                 'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                                     list<auto> stack = dcl.doCommand({"cmd": "thread/stack",
                                         "tid": dcl.checkThreadId()}, False).result ?? ();
                                     if (!stack[0].statementid) {
-                                        throw "DEBUG-COMMAND", "the thread is not stopped at a statement";
+                                        throw "DEBUG-COMMAND", "the thread is not paused at a statement; \"go step\" "
+                                            "runs it to the next one";
                                     }
                                     list<auto> targets = dcl.doCommand({
                                         "cmd": sprintf("program/%d/statement/stepintargets", dcl.checkProgramId()),
@@ -1200,17 +1254,16 @@ public namespace DebugCmdLine {
                                             t.start_line, t.start_column));
                                     }
                                 },
-                                'desc': 'list the calls of the statement of the current thread that can be stepped into '
-                                    'with "go stepinto <n>"',
+                                'desc': 'List the calls of the current statement that "go stepinto <n>" can step '
+                                    'into.',
                             ),
                             'var': (
                                 'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                                     dcl.variableCommand(args);
                                 },
-                                'desc': 'show a variable, or an element, key or member of it, with its elements, keys '
-                                    'and members, also private ones, from the given index, or set it to the value of an '
-                                    'expression; the variable is a local variable of the current frame or a global '
-                                    'variable, args: name[.member|[index]|{key}...] [from index | = expression]',
+                                'desc': 'Show a variable, or an element, key or member of it, with its contents, also '
+                                    'private members, or change it. Usage: thread var <name>[.member|[index]|{key}] '
+                                    '[from <index> | = <expression>]',
                             ),
                             'debug': (
                                 '*': (
@@ -1242,10 +1295,12 @@ public namespace DebugCmdLine {
                                         dcl.doCommand(data, True);
                                     },
                                 ),
-                                'desc': 'get/set special debug variable, args: varName [value], use "thread debug list" command result to see value list of varNames',
+                                'desc': 'Show or change a variable of the pause, such as the result of a function at '
+                                    'its return ("thread debug" lists them). Usage: thread debug [<name> [<value>]]',
                             ),
                             'pgmlist': (
-                                'desc': 'show threads and related programs, interrupted programs are marked with \"S\"',
+                                'desc': 'List the threads and their programs; "S" marks a program where a thread is '
+                                    'paused.',
                                 'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                                     hash<auto> data.cmd = 'program//list';
                                     *hash<auto> pgm_info = dcl.doCommand(data, False).result;
@@ -1273,7 +1328,7 @@ public namespace DebugCmdLine {
                                 },
                             ),
                             'list': (
-                                'desc': 'show list of threads and top level stack position',
+                                'desc': 'List the threads and where each one is.',
                                 'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                                     hash<auto> data.cmd = 'thread/stack';
                                     *hash<auto> threads = dcl.doCommand(data, False).result;
@@ -1289,7 +1344,7 @@ public namespace DebugCmdLine {
                                 },
                             )
                         ),
-                        'desc': 'thread related commands',
+                        'desc': 'Commands for threads.',
                         'fallback': fallbackGetSetInt,
                     ),
                     'stack': (
@@ -1299,7 +1354,7 @@ public namespace DebugCmdLine {
                         'alias': 'bt',
                     ),
                     'bt': (
-                        'desc': 'get stack for current thread',
+                        'desc': 'Show the call stack of the current thread.',
                         'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                             hash<auto> data.cmd = 'thread/stack';
                             data.tid = dcl.checkThreadId();
@@ -1312,7 +1367,7 @@ public namespace DebugCmdLine {
                         },
                         '>': (
                             'all': (
-                                'desc': 'show call stack for all threads',
+                                'desc': 'Show the call stacks of all threads.',
                                 'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                                     hash<auto> data.cmd = 'thread/stack';
                                     *hash<auto> threads = dcl.doCommand(data, False).result;
@@ -1330,7 +1385,8 @@ public namespace DebugCmdLine {
                         ),
                     ),
                     'source': (
-                        'desc': 'get source around current program position, args: [lines-before [lines-after]]',
+                        'desc': 'Show the code around the current line. Usage: source [<lines before> [<lines '
+                            'after>]]',
                         'validate': sub(DebugCommandLine dcl, softlist path, softlist args) {
                             if (args.size() > 0) {
                                 DebugCommandLine::validateInt(dcl, path, args);
@@ -1379,7 +1435,15 @@ public namespace DebugCmdLine {
                                 dcl.goThread(data, runState);
                             },
                         ),
-                        'desc': sprintf('go thread with specified runstate and optionally to specified statement, arg: %s [ function[([param types, ...])] | [file] lineno[:column] | #statementId ]; "go stepinto <n>" steps into the call <n> that "thread targets" lists', ((keys AbstractDebugControl::runStateStrings) + ("stepinto",)).join('|')),
+                        'desc': "Resume the current thread.\n"
+                            "  go, go run         continue until a breakpoint, an exception or the end\n"
+                            "  go step            run to the next line, also into the functions that it calls\n"
+                            "  go stepover        run to the next line of the current function\n"
+                            "  go untilreturn     run until the current function returns\n"
+                            "  go stepinto [<n>]  run into a call of the current line (\"thread targets\" lists them)\n"
+                            "  go detach          stop debugging the thread; it continues without pausing\n"
+                            "A place to run to can follow the mode: [<file>] <line>[:<column>] | <function> | "
+                            "#<statement>",
                         'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                             # without a mode, the thread continues to its next breakpoint, as "go run"
                             hash<auto> data.cmd = 'thread/go/run';
@@ -1405,7 +1469,8 @@ public namespace DebugCmdLine {
             if (ret) {
                 debug("Response: %y", ret);
                 if (ret.type == DebugResponseType::Error) {
-                    throw "DEBUG-COMMAND", sprintf("%s: %s", ret.result.err, ret.result.desc);
+                    # the error of the debug server, with its code
+                    throw ret.result.err, ret.result.desc;
                 }
                 if (print) {
                     printData(ret);
@@ -1710,7 +1775,7 @@ public namespace DebugCmdLine {
         public string getOnlyStepInTarget() {
             list<auto> stack = doCommand({"cmd": "thread/stack", "tid": checkThreadId()}, False).result ?? ();
             if (!stack[0].statementid) {
-                throw "DEBUG-COMMAND", "the thread is not stopped at a statement";
+                throw "DEBUG-COMMAND", "the thread is not paused at a statement; \"go step\" runs it to the next one";
             }
             list<auto> targets = doCommand({
                 "cmd": sprintf("program/%d/statement/stepintargets", checkProgramId()),
@@ -2211,6 +2276,40 @@ public namespace DebugCmdLine {
             return rv;
         }
 
+        #! Returns the text of an error for the user: its description, and its code unless it is an error of a command
+        static string getErrorText(hash<ExceptionInfo> ex) {
+            return (ex.err == "DEBUG-COMMAND" || ex.err == "CMD-ARG-ERROR")
+                ? ex.desc
+                : sprintf("%s (%s)", ex.desc, ex.err);
+        }
+
+        #! Returns the description of a command, or of its argument if the command has none
+        static *string getCmdDesc(hash<auto> cmd) {
+            return cmd.desc ?? cmd."*".desc ?? cmd."**".desc;
+        }
+
+        #! Returns a line for each command of the given commands, with its aliases and the first sentence of its
+        #! description
+        public string getVariantHelp(hash<auto> v) {
+            hash<string, string> names;
+            foreach string k in (sort(keys(v))) {
+                if (!exists v{k}.aliasOf) {
+                    names{k} = v{k}.aliases ? sprintf("%s (%s)", k, sort(v{k}.aliases).join(', ')) : k;
+                }
+            }
+            int width = max(map $1.length(), names.iterator()) ?? 0;
+            string rv;
+            foreach hash<auto> i in (names.pairIterator()) {
+                *string desc = DebugCommandLine::getCmdDesc(v{i.key});
+                # the description without its usage, which "help <command>" shows
+                if (desc) {
+                    desc =~ s/(\.)[ \n].*/$1/s;
+                }
+                rv += sprintf("  %s%s  %s\n", i.value, strmul(" ", width - i.value.length()), desc ?? "");
+            }
+            return rv;
+        }
+
         public string listVariantCmds(hash<auto> v) {
             list<auto> r;
             foreach string k in (sort(keys(v))) {
@@ -2413,7 +2512,7 @@ public namespace DebugCmdLine {
                         }
                     } catch (hash<ExceptionInfo> ex) {
                         showFullException ? printfImpl("%Y\n", ex)
-                            : printfImpl("%s: %s\n", tc.error(ex.err), ex.desc);
+                            : printfImpl("%s %s\n", tc.error("Error:"), DebugCommandLine::getErrorText(ex));
                     }
                 } else {
                     if (cmd.variants.size() > 1) {

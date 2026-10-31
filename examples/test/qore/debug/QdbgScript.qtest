@@ -70,6 +70,7 @@ public class QdbgScriptTest inherits QUnit::Test {
         string qdbg = normalize_dir(get_script_dir() + "/../../../../bin/qdbg");
         string qdbg_remote = normalize_dir(get_script_dir() + "/../../../../bin/qdbg-remote");
         string qdbg_server = normalize_dir(get_script_dir() + "/../../../../bin/qdbg-server");
+        string qdbg_vsc_adapter = normalize_dir(get_script_dir() + "/../../../../bin/qdbg-vsc-adapter");
         string qlib_dir = normalize_dir(get_script_dir() + "/../../../../qlib");
     }
 
@@ -94,11 +95,15 @@ public class QdbgScriptTest inherits QUnit::Test {
         addTestCase("qdbg-remote with a debug server that requires a token", \remoteTest());
         addTestCase("commands of threads, frames and steps", \threadCommandTest());
         addTestCase("quitting while a thread is stopped", \quitTest());
+        addTestCase("help and errors", \helpTest());
+        addTestCase("time zones", \timeZoneTest());
+        addTestCase("the usage of the debugger tools", \usageTest());
+        addTestCase("errors at the start of qdbg and qdbg-server", \startupErrorTest());
         set_return_value(main());
     }
 
     #! runs qdbg for the program with the commands on its input and returns its output and exit code
-    private hash<auto> runQdbg(string program, list<string> commands) {
+    private hash<auto> runQdbg(string program, list<string> commands, *list<string> args) {
         TmpDir tmp("qore-qdbg-test-");
         File f();
         f.open2(tmp.path + "/target.q", O_CREAT | O_WRONLY | O_TRUNC);
@@ -109,8 +114,9 @@ public class QdbgScriptTest inherits QUnit::Test {
         f.close();
         *string module_dir = ENV.QORE_MODULE_DIR;
         # -y . disables the command history file
-        string cmd = sprintf("cd '%s' && QORE_MODULE_DIR='%s' '%s' '%s' -y . --no-color target.q < commands 2>&1",
-            tmp.path, qlib_dir + (module_dir ? ":" + module_dir : ""), qore_exe, qdbg);
+        string cmd = sprintf("cd '%s' && QORE_MODULE_DIR='%s' '%s' '%s' -y . --no-color %s target.q < commands 2>&1",
+            tmp.path, qlib_dir + (module_dir ? ":" + module_dir : ""), qore_exe, qdbg,
+            (map sprintf("'%s'", $1), args ?? ()).join(" "));
         int rc;
         string out = backquote(cmd, \rc);
         # loader warnings of AOT modules that are out of date are about the environment, not output of qdbg
@@ -478,7 +484,8 @@ public class QdbgScriptTest inherits QUnit::Test {
         ));
         assertEq(0, res.rc);
         assertInOrder(res.out, (
-            "Subcommand list:",
+            "Subcommands; \"help thread <subcommand>\" shows the details of one:",
+            "  set      Select the current thread.",
             "thread context set to TID 2",
             "interrupt/step", "bkptid: 1", "(target.q:7",
             "call stack:", "interrupt: step() (target.q:7",
@@ -489,6 +496,108 @@ public class QdbgScriptTest inherits QUnit::Test {
             "total: 5",
         ));
         assertFalse(res.out =~ /RUNTIME-TYPE-ERROR|INVALID-MEMBER/, "no error of the debugger");
+    }
+
+    helpTest() {
+        hash<auto> res = runQdbg(Program, (
+            "help",
+            "help thread set",
+            "help go",
+            # negative: an unknown command, a missing file name and lines without statements
+            "help nosuch",
+            "history load",
+            "break create target.q 1",
+            "break create 1",
+            "quit",
+        ));
+        assertEq(0, res.rc);
+        assertInOrder(res.out, (
+            "Commands; \"help <command>\" shows the details of one:",
+            "  break ", "Commands for breakpoints, which pause the program when it reaches them.",
+            "  go ", "Resume the current thread.",
+            "Quick start:", "break create <line>",
+            "thread set: Select the current thread.", "Usage: thread set <thread>",
+            "go: Resume the current thread.", "  go step ", "run to the next line",
+            "nosuch: unknown command; try \"help\"",
+            "Error: the name of the file is missing: history load <file>",
+            "Error: there is no statement on line 1 of \"target.q\" where the program can pause "
+                "(PROGRAM-STATEMENT-ERROR)",
+            "Error: there is no statement on line 1 where the program can pause (PROGRAM-STATEMENT-ERROR)",
+        ));
+        # each command of the list has a description
+        *list<*string> m = (res.out =~ x/shows the details of one:\r?\n(.*?)\r?\n\r?\nQuick start:/s);
+        assertEq(1, m.size());
+        list<string> lines = m[0].split("\n");
+        assertGt(15, lines.size());
+        foreach string line in (lines) {
+            assertRegex("^  [a-z]+( \\([a-z, ]+\\))? +[A-Z][^\\r]+\\.\\r?$", line);
+        }
+        # without the full information of exceptions, the codes of commands are not shown
+        assertFalse(res.out =~ /DEBUG-COMMAND/);
+    }
+
+    timeZoneTest() {
+        string program = "%modern\nprintf(\"offset: %d\\n\", TimeZone::get().UTCOffset());\n";
+        hash<auto> res = runQdbg(program, ("go", "quit"), ("-z", "+01:30"));
+        assertEq(0, res.rc);
+        assertRegex("offset: 5400\\b", res.out);
+        res = runQdbg(program, ("go", "quit"), ("-z", "-05:00"));
+        assertRegex("offset: -18000\\b", res.out);
+        res = runQdbg(program, ("go", "quit"), ("-z", "Etc/GMT-2"));
+        assertRegex("offset: 7200\\b", res.out);
+        # negative: an offset that is not valid
+        res = runQdbg(program, ("go", "quit"), ("-z", "+1"));
+        assertRegex("\"\\+1\" is not a valid UTC offset", res.out);
+        assertFalse(res.out =~ /offset: /);
+    }
+
+    #! runs a debugger tool with arguments and returns its output and exit code
+    private hash<auto> runTool(string tool, list<string> args) {
+        *string module_dir = ENV.QORE_MODULE_DIR;
+        string cmd = sprintf("QORE_MODULE_DIR='%s' '%s' '%s' %s < /dev/null 2>&1",
+            qlib_dir + (module_dir ? ":" + module_dir : ""), qore_exe, tool,
+            (map sprintf("'%s'", $1), args).join(" "));
+        int rc;
+        string out = backquote(cmd, \rc);
+        out = (select out.split("\n"), $1 !~ /^warning: (AOT|binary) module/).join("\n");
+        return {"out": out, "rc": rc};
+    }
+
+    usageTest() {
+        hash<auto> res = runTool(qdbg, ("-h",));
+        assertRegex("usage: qdbg \\[options\\]", res.out);
+        assertRegex("-z, --time-zone=zone +the time zone of the script", res.out);
+        assertRegex("Type \"help\" at the prompt", res.out);
+        res = runTool(qdbg_remote, ("-h",));
+        assertRegex("usage: qdbg-remote \\[options\\] <url>", res.out);
+        # the default response timeout in milliseconds
+        assertRegex("milliseconds; the default is 1500", res.out);
+        res = runTool(qdbg_server, ("-h",));
+        assertRegex("-k, --token-file=<file>", res.out);
+        assertRegex("should require a token", res.out);
+        res = runTool(qdbg_vsc_adapter, ("-h",));
+        assertRegex("-X, --execute=pgmlist", res.out);
+        assertRegex("milliseconds; the default is 1500", res.out);
+        assertRegex("UTC offset, such as \\+01:00", res.out);
+        # negative: qdbg-remote without a URL
+        res = runTool(qdbg_remote, ());
+        assertNeq(0, res.rc);
+        assertRegex("the URL of the debug server is missing", res.out);
+    }
+
+    startupErrorTest() {
+        string file = tmp_location() + "/no-such-dir-qdbg/target.q";
+        hash<auto> res = runTool(qdbg, (file,));
+        assertNeq(0, res.rc);
+        assertRegex("^qdbg: error: cannot open .*no-such-dir-qdbg/target.q.* \\(FILE-OPEN2-ERROR\\)", res.out);
+        # the error is shown although the output of the server is captured for its clients
+        res = runTool(qdbg_server, (file,));
+        assertNeq(0, res.rc);
+        assertRegex("qdbg-server: error: cannot open .*no-such-dir-qdbg/target.q.* \\(FILE-OPEN2-ERROR\\)", res.out);
+        # with -v, the call stack of the error is shown
+        res = runTool(qdbg, ("-v", file));
+        assertNeq(0, res.rc);
+        assertRegex("called at", res.out);
     }
 
     # a thread that continues when qdbg quits does not stop again, as at the end of the program

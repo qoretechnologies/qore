@@ -841,6 +841,12 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         assertTrue(r.success, r.message);
         assertFalse(r.body.breakpoints[0].verified);
         assertTrue(exists r.body.breakpoints[0].message, sprintf("%y", r.body.breakpoints));
+        # a line without a statement, in plain words
+        r = dap.request("setBreakpoints", {"source": {"path": path}, "breakpoints": ({"line": 1},)});
+        assertTrue(r.success, r.message);
+        assertFalse(r.body.breakpoints[0].verified);
+        assertRegex("^there is no statement on line 1 of \".*target\\.q\" where the program can pause$",
+            r.body.breakpoints[0].message);
         r = dap.request("configurationDone");
         assertTrue(r.success, r.message);
 
@@ -908,6 +914,10 @@ public class VscDebugAdapterTest inherits QUnit::Test {
             "columnsStartAt1": True, "pathFormat": "path"});
         assertTrue(r.success, r.message);
         assertEq(("User", "System", "uncaught", "code"), map $1.filter, r.body.exceptionBreakpointFilters);
+        assertEq(("User exceptions", "System exceptions", "Uncaught exceptions", "Exceptions by code"),
+            map $1.label, r.body.exceptionBreakpointFilters);
+        # each filter is described for the IDE
+        assertEq(4, (select r.body.exceptionBreakpointFilters, $1.description =~ /^[A-Z].+[a-z]$/).size());
         r = dap.request("launch", {"program": path});
         assertTrue(r.success, r.message);
         dap.waitForEvent("initialized");
@@ -1539,7 +1549,9 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         )});
         assertTrue(r.success, r.message);
         assertFalse(r.body.breakpoints[0].verified);
-        assertRegex("BREAKPOINT-HIT-CONDITION-ERROR", r.body.breakpoints[0].message);
+        # the IDE shows the reason in plain words, without the code of the error
+        assertEq("invalid hit condition \"often\"; give a number, optionally after ==, >, >=, <, <= or %",
+            r.body.breakpoints[0].message);
         r = dap.request("configurationDone");
         assertTrue(r.success, r.message);
         # no breakpoint was left set: the program runs to its end

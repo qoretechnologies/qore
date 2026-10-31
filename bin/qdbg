@@ -207,7 +207,12 @@ class DebugWrapper {
             # in destructors when module programs are destroyed first
             dpcl.endDebugging();
         } catch (hash<ExceptionInfo> ex) {
-            stderr.print(get_exception_string(ex) + "\n");
+            # the call stack of the error with -v
+            if (opt.verbose) {
+                stderr.printf("%s\n", get_exception_string(ex));
+            } else {
+                stderr.printf("%s: error: %s (%s)\n", get_script_name(), ex.desc, ex.err);
+            }
             exit(-1);
         }
         # remove signal handlers before exit so their closures release
@@ -218,32 +223,35 @@ class DebugWrapper {
     }
 
     private help(int exCode=1) {
-        printf("usage: %s [options] <program> [<program params> ...]\n"
-            "  where <program> is the program to debug, use \"--\" to get code from stdin\n"
-            "  -v                           verbose (use -v -v for debug output)\n"
-            "  -h                           help\n"
-            "  -D, --define=arg             sets the value of a parse define\n"
-            "  -p, --set-parse-option=arg   set parse option (ex: -pno-database)\n"
-            "  -z, --time-zone=arg          sets the time zone from the argument; can be\n"
-            "                               a region name (ex: 'Europe/Prague') or a\n"
-            "                               UTC offset (ex: '+01:00')\n"
-            "  -y, --history=file           load command line history from file, default: %s in home directory\n"
-            "                               When \".\" name is provided then history is not loaded/saved\n"
-            "  -s, --session=file           load session from file\n"
-            "  --color                      force color output\n"
-            "  --no-color                   disable color output\n"
+        printf("usage: %s [options] [<script> [<script arguments> ...]]\n"
+            "Debugs a Qore script in the terminal.  The script pauses when it starts; then commands such as\n"
+            "\"break create <line>\" (pause at a line) and \"go\" (continue) control it.  Type \"help\" at the prompt for\n"
+            "all commands.\n"
             "\n"
-            "When the input is not a terminal, the commands are a script: the first command is processed when the\n"
-            "program has attached to the debugger, and a command that resumes a thread returns when the thread stops\n"
-            "again or stops being debugged.\n"
+            "  <script>                     the script to debug; \"--\" reads it from the standard input\n"
             "\n"
-            "Keyboard shortcuts:\n"
-            "  Ctrl+D                       quit debugger\n"
-            "  Ctrl+G                       show current program/thread context\n"
-            "  TAB                          command completion (cycles through matches)\n"
+            "  -h                           show this help\n"
+            "  -v                           show more details of what the debugger does; -v -v shows all of them\n"
+            "  -D, --define=name[=value]    set a parse define of the script\n"
+            "  -p, --set-parse-option=opt   set a parse option of the script, such as -pno-database\n"
+            "  -z, --time-zone=zone         the time zone of the script: a region name, such as Europe/Prague, or a\n"
+            "                               UTC offset, such as +01:00\n"
+            "  -y, --history=file           the file of the commands that the up and down arrow keys recall; the\n"
+            "                               default is %s in the home folder; \".\" keeps no history\n"
+            "  -s, --session=file           load the breakpoints and settings that \"session save\" saved to a file\n"
+            "  --color, --no-color          always or never show colors; by default, colors are shown in a terminal\n"
+            "\n"
+            "When the input is not a terminal, it is a script of commands: the first command runs when the script\n"
+            "pauses at its start, and a command that resumes a thread waits until the thread pauses\n"
+            "again or ends.\n"
+            "\n"
+            "Keys:\n"
+            "  Ctrl+D                       end the debugger\n"
+            "  Ctrl+G                       show the current program and thread\n"
+            "  Tab                          complete a command (press again for the next match)\n"
             "\n"
             "Example:\n"
-            "  %s -v myfile.q -my -program params\n"
+            "  %s myscript.q arg1 arg2\n"
             "\n"
             ,
             get_script_name(),

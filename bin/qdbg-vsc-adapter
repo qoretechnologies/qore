@@ -295,7 +295,7 @@ class DebugWrapper {
                 case /^wss?:\/\//:
                     break;
                 case /^[a-zA-Z0-9_]+:\/\//:
-                    throw "GETOPT-ERROR", "Url protocol is not ws://";
+                    throw "GETOPT-ERROR", sprintf("the URL %y must start with ws:// or wss://", opt.url);
                 default:
                     opt.url = "ws://"+opt.url;
                 }
@@ -369,46 +369,46 @@ class DebugWrapper {
 
     private help(int exCode=1) {
         printf("usage: %s [options]\n"
-            "  -h     help\n"
-            "Launch program:\n"
-            "  -D,--define=arg              sets the value of a parse define\n"
-            "  -p,--set-parse-option=arg    set parse option (ex: -pno-database)\n"
-            #"  -x,--exec-class[=arg]        instantiate class with same name as file name\n"
-            #"                               (override with arg, also sets --no-top-level)\n"
-            "  -z,--time-zone=arg           sets the time zone from the argument; can be\n"
-            "                               either a region name (ex: 'Europe/Prague') or a\n"
-            "                               UTC offset with format S[DD[:DD[:DD]]], S=+ or - is not supported\n"
-            #"  -c,--charset=arg             sets default character set encoding\n"
+            "The debug adapter of Visual Studio Code and other IDEs that use the Debug Adapter Protocol: the IDE\n"
+            "starts it and talks to it through the standard input and output.  It debugs scripts in its own process,\n"
+            "or the programs of a debug server, such as qdbg-server, with -a.\n"
             "\n"
-            "Attach to debug server:\n"
-            "  -a,--attach=url              connect to remote debug server, e.g. wss://localhost:8001/debug\n"
-            "  -H,--header=<hdr>=<val>      headers for connection request\n"
-            "  -m,--max-redir=<num>         the maximum number of redirects before throwing an exception (the default is 5)\n"
-            "  -P,--proxy=<url>             the proxy URL for connecting through a proxy\n"
-            "  -t,--timeout=<ms>            the timeout\n"
-            "  -c,--conn-timeout=<ms>       the timeout for establishing a new socket connection\n"
-            "  -w,--resp-timeout=<ms>       the timeout to wait for websocket response, default: %d\n"
+            "  -h                           show this help\n"
+            "  -v, --verbose                write a log of what the adapter does\n"
+            "  -f, --full-exception         show exceptions with all their details, such as their call stacks\n"
+            "  -l, --logger-filename=<file> the file of the log of -v; the default is %s;\n"
+            "                               without this option, the log is also shown in the debug console of the IDE\n"
+            "  -A, --append-to-log          add to the log file instead of replacing it\n"
+            "  -g, --program=<program>      the program of the debug server to debug, when the IDE does not give it\n"
             "\n"
-            "  -v,--verbose                 increase verbosity\n"
-            "  -f,--full-exception          show full exception info\n"
+            "Scripts debugged in the adapter process:\n"
+            "  -D, --define=name[=value]    set a parse define of the scripts\n"
+            "  -p, --set-parse-option=opt   set a parse option of the scripts, such as -pno-database\n"
+            "  -z, --time-zone=zone         the time zone of the scripts: a region name, such as Europe/Prague, or a\n"
+            "                               UTC offset, such as +01:00\n"
             "\n"
-            "  -l,--logger-filename=<name>  logger filename, default: %s; without it, the log of -v is also\n"
-            "                               shown in the debug console of the IDE\n"
-            "  -A,--append-to-log           append to logfile\n"
-            "  -g,--program=<pgm>           use program name unless specified in protocol\n"
-            "\n"
-            "  -X,-execute=<command>        execute command, print result as JSON and exit\n"
-            "Commands:\n"
-            "  pgmlist                      list all programs\n"
+            "Programs of a debug server:\n"
+            "  -a, --attach=<url>           the URL of the debug server, such as ws://localhost:8001/debug, or the\n"
+            "                               name of a connection to it (QORE_CONNECTION_PROVIDERS)\n"
+            "  -H, --header=<name>=<value>  add an HTTP header to the connection, such as\n"
+            "                               -H \"Authorization=Bearer <token>\" for a server that requires a token\n"
+            "  -m, --max-redir=<number>     the maximum number of HTTP redirects; the default is 5\n"
+            "  -P, --proxy=<url>            connect through an HTTP proxy\n"
+            "  -t, --timeout=<ms>           how long reading from or writing to the connection may take, in\n"
+            "                               milliseconds\n"
+            "  -c, --conn-timeout=<ms>      how long opening the connection may take, in milliseconds\n"
+            "  -w, --resp-timeout=<ms>      how long to wait for the answer of the debug server to a command, in\n"
+            "                               milliseconds; the default is %d\n"
+            "  -X, --execute=pgmlist        list the programs of the debug server as JSON and end\n"
             "\n"
             "Examples:\n"
             "  %s -v -l vscda.log\n"
-            "  %s -v -l vscda.log -a ws://localhost:8001/debug\n"
+            "  %s -a ws://localhost:8001/debug -X pgmlist\n"
             "\n"
             ,
             get_script_name(),
-            VscDebugAdapterRemote::WSC_TIMEOUT,
             get_full_log_file_path(".log"),
+            VscDebugAdapterRemote::WSC_TIMEOUT.durationMilliseconds(),
             get_script_name(),
             get_script_name(),
 

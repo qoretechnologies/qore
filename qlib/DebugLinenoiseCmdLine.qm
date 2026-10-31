@@ -129,30 +129,34 @@ public namespace DebugLinenoiseCmdLine {
                 'history': (
                     '>': (
                         'load': (
-                            'desc': 'load command line history from file, args: filename',
+                            'desc': 'Load the commands that the up and down arrow keys recall from a file. Usage: '
+                                'history load <file>',
                             'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                                 *string fn = shift args;
-                                if (exists fn) {
-                                    Linenoise::history_load(fn);
+                                if (!exists fn) {
+                                    throw "DEBUG-COMMAND", "the name of the file is missing: history load <file>";
                                 }
+                                Linenoise::history_load(fn);
                             },
                         ),
                         'save': (
-                            'desc': 'save command line history to file, args: filename',
+                            'desc': 'Save the commands that the up and down arrow keys recall to a file. Usage: '
+                                'history save <file>',
                             'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                                 *string fn = shift args;
-                                if (exists fn) {
-                                    Linenoise::history_save(fn);
+                                if (!exists fn) {
+                                    throw "DEBUG-COMMAND", "the name of the file is missing: history save <file>";
                                 }
+                                Linenoise::history_save(fn);
                             },
                         ),
 
                     ),
-                    'desc': 'load or save history to file. The history is implicitly loaded when program starting "
-                        "and saved when exiting. See command line parameters.',
+                    'desc': 'Load or save the commands that the up and down arrow keys recall. They are loaded when '
+                        'the debugger starts and saved when it ends, in the file of the -y (--history) option.',
                 ),
                 'quit': (
-                    'desc': 'quit debugger',
+                    'desc': 'End the debugger.',
                     'action': bool sub(DebugCommandLine dcl, softlist path, softlist args) {
                         return True;
                     },
@@ -280,7 +284,7 @@ public namespace DebugLinenoiseCmdLine {
                         break;
                     }
                 } catch (hash<ExceptionInfo> ex) {
-                    printfImpl("%s: %s", ex.err, ex.desc);
+                    printfImpl("%s %s", tc.error("Error:"), DebugCommandLine::getErrorText(ex));
                 }
                 updateRightPrompt();
             }

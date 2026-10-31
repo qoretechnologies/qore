@@ -2170,11 +2170,15 @@ vda.run();
             "exceptionBreakpointFilters": (
                 (
                     "filter": "User",
-                    "label": "User exception",
+                    "label": "User exceptions",
+                    "description": "Exceptions of throw statements, in the debugged code or in modules written in "
+                        "Qore",
                 ),
                 (
                     "filter": "System",
-                    "label": "System exception",
+                    "label": "System exceptions",
+                    "description": "Exceptions of Qore itself and its binary modules, such as for a file that cannot "
+                        "be opened",
                 ),
                 (
                     "filter": "uncaught",
@@ -2184,7 +2188,7 @@ vda.run();
                 (
                     "filter": "code",
                     "label": "Exceptions by code",
-                    "description": "Exceptions with the codes of the condition",
+                    "description": "Exceptions with the codes that are given as the condition of the filter",
                     "supportsCondition": True,
                     "conditionDescription": "Comma-separated exception codes, such as FILE-OPEN-ERROR, "
                         "SOCKET-CONNECT-ERROR",
