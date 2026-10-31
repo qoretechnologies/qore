@@ -87,12 +87,22 @@ DLLLOCAL QoreValue yaml_parse_core_schema_scalar(const char* val, size_t len, ya
 */
 DLLLOCAL bool yaml_check_absolute_date(size_t len, const char* val, bool quoted = false);
 
-//! Check if a value is an ISO 8601 duration (P[n]Y[n]M[n]DT[n]H[n]M[n]S) with at least one component
+//! Check if a plain scalar has only the text of an ISO 8601 duration: a "P" followed by digits, signs, decimal signs,
+//! the separators of the alternative format and the upper-case designators (and the Qore designator "u")
 /** @param val the value string
     @param xsink exception sink for cancellation
-    @return true if the value appears to be a duration
+    @return true if the value can be a duration; yaml_resolve_duration() reads it
 */
 DLLLOCAL bool yaml_check_duration(const char* val, ExceptionSink* xsink);
+
+//! Returns the duration of a plain scalar if it is an ISO 8601 duration as Qore's date() reads one, otherwise nullptr
+/** The rule is date()'s: the format with designators (PnYnMnWnDTnHnMnS, in order, with a fraction only on the last
+    component) and the alternative format (PYYYY-MM-DDThh:mm:ss, PYYYYMMDDThhmmss)
+
+    @param val the value string
+    @param xsink exception sink for cancellation
+*/
+DLLLOCAL DateTimeNode* yaml_resolve_duration(const char* val, ExceptionSink* xsink);
 
 //! Parse an ISO 8601 absolute date/time value
 /** @param val the date/time string

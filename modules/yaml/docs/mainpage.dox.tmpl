@@ -100,7 +100,8 @@ hash<auto> data = parse_yaml("description: .\nlimit: .inf\nratio: .5\n");
     @section yaml_core_schema Documents Written by Other Tools
 
     By default, plain scalars are also resolved to Qore's extended types: ISO 8601 timestamps become absolute
-    dates, ISO 8601 durations with at least one component become relative dates, and \c sqlnull and numeric
+    dates, ISO 8601 durations (written with upper-case designators, as @ref Qore::date(string) "date(string)" reads
+    them: \c P1DT2H, \c P1W, \c P0001-02-03T04:05:06) become relative dates, and \c sqlnull and numeric
     suffixes have their Qore meanings.  A JSON-compatible document written by another tool, such as an OpenAPI
     description, has no such types: parse it with the @ref yaml_parse_option_constants "YAML::ParseCoreSchema"
     option, which resolves plain scalars with the YAML 1.2 core schema only, so every other value keeps its text.

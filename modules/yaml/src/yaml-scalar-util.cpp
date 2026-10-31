@@ -44,22 +44,6 @@ static DateTimeNode* dt_err(ExceptionSink* xsink, const char* val, const char* m
     return nullptr;
 }
 
-static bool is_number(const char* &tv, ExceptionSink* xsink) {
-    unsigned iteration = 0;
-    if (*tv == '-')
-        ++tv;
-    if (!isdigit(static_cast<unsigned char>(*tv)))
-        return false;
-    ++tv;
-    while (isdigit(static_cast<unsigned char>(*tv))) {
-        if (++iteration % 100 == 0 && qore_check_cancel(xsink, "YAML scalar parsing")) {
-            return false;
-        }
-        ++tv;
-    }
-    return true;
-}
-
 static unsigned is_prec(const char* str, size_t len, ExceptionSink* xsink) {
     unsigned iteration = 0;
     if (*str != '{')
@@ -312,46 +296,39 @@ bool yaml_check_absolute_date(size_t len, const char* val, bool quoted) {
 }
 
 bool yaml_check_duration(const char* val, ExceptionSink* xsink) {
-    unsigned iteration = 0;
+    // the duration itself is read by Qore's date() parser, which follows ISO 8601 (see yaml_resolve_duration());
+    // here a plain scalar is only checked for the text that a duration in ISO 8601 notation can contain: the "P",
+    // the upper-case designators of ISO 8601, the Qore microsecond designator "u", digits, signs, decimal signs and
+    // the separators of the alternative format; lower-case designators and white space, which date() also accepts in
+    // strings, leave a plain scalar a string
     if (*val != 'P') {
         return false;
     }
-
-    // an ISO 8601 duration has at least one component, and a "T" is followed by at least one time component, so
-    // plain scalars such as "PT" (Portugal's country code), "P", and "P1DT" are strings
-    const char* tv = val + 1;
-    bool time = false;
-    bool component = false;
-    bool time_component = false;
-    while (*tv) {
+    unsigned iteration = 0;
+    for (const char* p = val + 1; *p; ++p) {
         if (++iteration % 100 == 0 && qore_check_cancel(xsink, "YAML scalar parsing")) {
             return false;
         }
-        if (*tv == 'T') {
-            if (time) {
-                return false;
-            }
-            time = true;
-            ++tv;
-            continue;
-        }
-        // find first non-number after time component code
-        if (!is_number(tv, xsink)) {
+        if (!strchr("0123456789YMWDTHSu-.,:", *p)) {
             return false;
         }
-        if (time) {
-            if (*tv != 'H' && *tv != 'M' && *tv != 'S' && *tv != 'u') {
-                return false;
-            }
-            time_component = true;
-        } else if (*tv != 'Y' && *tv != 'M' && *tv != 'D') {
-            return false;
-        }
-        component = true;
-        ++tv;
     }
+    return true;
+}
 
-    return component && (!time || time_component);
+DateTimeNode* yaml_resolve_duration(const char* val, ExceptionSink* xsink) {
+    if (!yaml_check_duration(val, xsink)) {
+        return nullptr;
+    }
+    // a scalar that ISO 8601 does not read as a duration (ex: "PT", the country code of Portugal, or "P1D1D", with a
+    // repeated component) is a string
+    ExceptionSink dsink;
+    DateTimeNode* rv = yaml_parse_duration(val, &dsink);
+    if (dsink) {
+        dsink.clear();
+        return nullptr;
+    }
+    return rv;
 }
 
 // always return the date/time value in the current timezone
@@ -792,16 +769,8 @@ QoreValue yaml_parse_implicit_scalar(const char* val, size_t len, yaml_scalar_st
     }
 
     // check for relative date/time values (durations)
-    if (yaml_check_duration(val, xsink)) {
-        // a plain scalar that ISO 8601 does not read as a duration (ex: "P1D1D", with a repeated component) is a
-        // string
-        ExceptionSink dsink;
-        DateTimeNode* rv = yaml_parse_duration(val, &dsink);
-        if (!dsink) {
-            return rv;
-        }
-        dsink.clear();
-        return new QoreStringNode(val, len, QCS_UTF8);
+    if (DateTimeNode* d = yaml_resolve_duration(val, xsink)) {
+        return d;
     }
 
     if (*xsink) return QoreValue();

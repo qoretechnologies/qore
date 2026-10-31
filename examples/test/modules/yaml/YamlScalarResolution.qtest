@@ -241,9 +241,37 @@ class YamlScalarResolutionTest inherits QUnit::Test {
             assertScalar(scalar, scalar);
         }
 
-        # a scalar with components that ISO 8601 does not read as a duration, repeated or out of order, is a string
-        foreach string scalar in (("P1D1D", "P1D1Y", "PT1M1H", "P1Y1Y")) {
+        # a scalar that ISO 8601 does not read as a duration is a string: components repeated or out of order, a
+        # fraction that is not on the last component, a time without its date in the alternative format, values over
+        # its carry-over points; and lower-case designators, which date() reads only as a Qore extension
+        foreach string scalar in (("P1D1D", "P1D1Y", "PT1M1H", "P1Y1Y", "P1.5DT1H", "P00:01:00", "PT01:00:00",
+                "P0000-13-00", "P0000-00-00T25:00:00", "P0001-02-03T040506", "p1d", "pt1h", "P1Wx", "P1W-")) {
             assertScalar(scalar, scalar);
+        }
+
+        # every ISO 8601 form that date() reads is a duration, with the value date() gives it, and it survives a
+        # round trip
+        foreach string scalar in (("P1W", "P2W", "P1W2D", "P1Y2M3W4DT5H6M7S", "P-1W", "P1.5D", "P0.5W", "PT1.5H",
+                "PT1,5S", "PT0.000001S", "P1DT0.5S", "P-1.5D", "PT1H-30M", "PT4M551u", "P0001-02-03",
+                "P0001-02-03T04:05:06", "P0001-02-03T04:05", "P0000-00-00T00:00:01.5", "P0000-00-00T00:00:01,5",
+                "P00010203", "P00010203T040506", "P00000000T000001.5", "P0000-12-30T24:60:60", "P1Y2M3DT4H5M6S",
+                "PT0S", "P0D")) {
+            date expected = date(scalar);
+            assertScalar(scalar, expected);
+            date d = parse_yaml("v: " + scalar).v;
+            assertEq(expected, d, scalar);
+            assertEq(d, parse_yaml(make_yaml(d)), "round trip " + scalar);
+            assertEq({"v": d}, parse_yaml(make_yaml({"v": d})), "round trip in a hash " + scalar);
+            assertEq(Type::Date, parse_yaml(make_yaml(d)).type(), "round trip type " + scalar);
+        }
+        assertEq(7D, parse_yaml("v: P1W").v);
+        assertEq(1Y + 2M + 3D + 4h + 5m + 6s, parse_yaml("v: P0001-02-03T04:05:06").v);
+
+        # durations made in Qore survive a round trip, also negative and mixed-sign ones
+        foreach date d in ((7D, 9D, 1D + 12h, 1s + 500ms, microseconds(1), -1D - 12h, 1h - 30m, 1Y + 2M + 3D + 4h + 5m
+                + 6s + microseconds(7), -1Y, 25h, 0s)) {
+            assertEq(d, parse_yaml(make_yaml(d)), sprintf("round trip %y", d));
+            assertEq(d, parse_yaml(make_yaml({"v": d})).v, sprintf("round trip in a hash %y", d));
         }
 
         # a scalar tagged as a duration must be one

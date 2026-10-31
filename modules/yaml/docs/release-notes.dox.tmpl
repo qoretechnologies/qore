@@ -6,9 +6,13 @@
 
     @section yaml_bundled_3_0 Qore 3.0
 
-    - a plain scalar that looks like an ISO 8601 duration but that ISO 8601 does not read as one, such as \c P1D1D
-      with a repeated component, is a string (it was a partial duration), and a \c !duration scalar that is not an
-      ISO 8601 duration raises \c YAML-PARSER-ERROR (it was a zero or partial duration)
+    - plain scalars are resolved as durations by the rule of @ref Qore::date(string) "date(string)", which follows
+      ISO 8601: weeks (\c P1W, \c P1W2D), a decimal fraction on the last component (\c P1.5D, \c PT1,5S) and the
+      alternative format (\c P0001-02-03T04:05:06, \c P00010203T040506) are durations (they were strings), and a
+      scalar that ISO 8601 does not read as a duration, such as \c P1D1D with a repeated component, is a string (it
+      was a partial duration); a duration needs the upper-case designators of ISO 8601, so \c p1d stays a string
+    - a \c !duration scalar that is not an ISO 8601 duration raises \c YAML-PARSER-ERROR (it was a zero or partial
+      duration)
     - a mapping key with a NUL character, which a hash key cannot hold, raises \c YAML-PARSER-ERROR, which gives the
       key and the byte offset of the NUL character: the key was cut at the NUL character and could replace the value
       of another key
