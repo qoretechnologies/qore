@@ -8,6 +8,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
 %requires FileLocationHandler
+%requires HttpClientIo
 
 %exec-class FileLocationHandlerNarrowedCallerHashTest
 
@@ -21,6 +22,7 @@ class FileLocationHandlerNarrowedCallerHashTest inherits QUnit::Test {
         addTestCase("checkOptions adds default values", \checkOptionsDefaults());
         addTestCase("checkOptions converts option values", \checkOptionsConversion());
         addTestCase("REST handler adds the Accept header", \restAcceptHeader());
+        addTestCase("HTTP handler bound to a connection manager with narrowed headers", \boundHttpHeaders());
         set_return_value(main());
     }
 
@@ -63,6 +65,26 @@ class FileLocationHandlerNarrowedCallerHashTest inherits QUnit::Test {
         assertEq("hello", FileLocationHandler::getHandler("rest").getTextFile("rest", location,
             {"encoding": "utf-8"}));
         hash<auto> hdr = headers_queue.get(30s);
+        assertEq("*/*", hdr.accept);
+    }
+
+    boundHttpHeaders() {
+        Socket listener();
+        listener.bindINET("127.0.0.1", "0");
+        listener.listen();
+        on_exit listener.close();
+        int port = listener.getSocketInfo().port;
+        Queue headers_queue();
+        background FileLocationHandlerNarrowedCallerHashTest::serveOne(listener, headers_queue);
+
+        # the default request headers are a hash<string, int>, which cannot take the string Accept headers
+        assertEq("hash<string, int>", FileLocationHandlerNarrowedCallerHashTest::mk({"X-Count": 1}).fullType());
+        AbstractFileLocationHandler handler = FileLocationHandler::getHttpHandlerForClient(
+            new HttpClientIo::HttpClientConnectionManager(), sprintf("http://127.0.0.1:%d", port),
+            {"headers": {"X-Count": 1}});
+        assertEq("hello", handler.getTextFile("http", "/test"));
+        hash<auto> hdr = headers_queue.get(30s);
+        assertEq("1", hdr."x-count");
         assertEq("*/*", hdr.accept);
     }
 
