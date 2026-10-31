@@ -22,6 +22,9 @@
     run in each execution mode in an environment with only fake CDS values; no connection is made
 */
 public class CdsRestDataProviderEnvClientOptionsTest inherits QUnit::Test {
+    #! the environment variables passed on to the worker
+    const PassedEnv = ("PATH", "HOME", "QORE_MODULE_DIR", "QORE_MODULE_DIR_ONLY", "QORE_INCLUDE_DIR");
+
     public {
         #! the result of every check the worker makes; the sources are given in the order: url, oauth2_client_id,
         #! oauth2_client_secret, tenant, scope
@@ -63,12 +66,13 @@ public class CdsRestDataProviderEnvClientOptionsTest inherits QUnit::Test {
     }
 
     testExecModes() {
-        # only the variables needed to run qore are passed on: the search path and home directory, and the QORE_*
-        # variables that tell qore where its modules and include files are (e.g. QORE_MODULE_DIR, which the CI jobs
-        # need to find binary modules); none of them holds credentials, and their values are not printed
+        # only the variables needed to run qore are passed on: the search path, the home directory, and the
+        # variables that tell qore where its modules and include files are (QORE_MODULE_DIR is how the CI jobs find
+        # binary modules); no other QORE_* variable is passed on: they can hold credentials (QORE_DB_CONNSTR*) or
+        # options that change how the worker runs (QORE_TEST_OPTS)
         list<string> pass = ();
-        foreach string var in (keys ENV) {
-            if (var == "PATH" || var == "HOME" || var =~ /^QORE_[A-Z0-9_]+$/) {
+        foreach string var in (PassedEnv) {
+            if (exists ENV{var}) {
                 pass += sprintf("%s=%s", var, quote(ENV{var}));
             }
         }
