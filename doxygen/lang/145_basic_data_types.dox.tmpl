@@ -494,6 +494,16 @@ auto val = q.pop(20000);
     - Fractional years are converted to days assuming 365 days in a year
     - Fractional months are converted to days assuming an average 30 days in a month
 
+    @ref Qore::date(string) "date(string)" reads durations in this format from strings (ex: <tt>date("PT15M")</tt>),
+    also with lower-case designators and trailing white space, and with weeks (\c nW, before the \c "T"; ex:
+    <tt>"P2W"</tt> is 14 days) and a comma as the decimal sign (<tt>"PT1,5S"</tt>), as in ISO 8601.  It raises
+    \c INVALID-DATE for a string it cannot read: a number without a designator (<tt>"P1"</tt>), no element
+    (<tt>"P"</tt>, <tt>"PT"</tt>), a \c "T" without a time element (<tt>"P1DT"</tt>), \c H, \c S or \c u before the
+    \c "T" or \c Y, \c W or \c D after it, a decimal sign without digits, a value that does not fit in a 32-bit
+    signed integer, or any other text.  Conversions that do not raise exceptions, such as assigning a string to a
+    \c softdate, keep the elements read before the text they cannot read.  The
+    @ref long_reldates "long relative time format" is read only in literals.
+
     Here are some examples (using qore's -X command-line option to evaluate and expression and print out the result):
     @code{.py}
 prompt% qore -X 'P1Y3MT4S'

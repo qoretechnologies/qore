@@ -889,6 +889,23 @@
     Code that passes strings with other text after the date, such as a comment, must remove it first.  The
     conversions that do not raise exceptions (a string assigned to a \c softdate, for example) still ignore the text.
 
+    @par date() Raises an Exception for an ISO 8601 Duration It Cannot Read
+    @ref Qore::date(string) "date(string)" now raises \c INVALID-DATE for an ISO 8601 duration string
+    (@ref short_reldates "PnYnMnWnDTnHnMnS") that it cannot read, naming the string and where it cannot be read: a
+    number without a designator (<tt>"P1"</tt>, <tt>"PT1"</tt>, <tt>"P1D2"</tt>), no component (<tt>"P"</tt>,
+    <tt>"PT"</tt>), a time designator without a time component (<tt>"P1DT"</tt>), an hour, second or microsecond
+    before the time designator or a year, week or day after it (<tt>"P1H"</tt>, <tt>"PT1D"</tt>), a decimal sign
+    without digits (<tt>"P1.D"</tt>), a value that does not fit, or other text (<tt>"P1Dx"</tt>).  Before, such a
+    string gave a zero or partial duration, and a string ending in a number, such as <tt>"P1"</tt>, was read past its
+    end, so that whatever memory followed it could turn it into a duration such as 5 days.  These are now read as
+    they are meant:
+    - weeks: <tt>"P1W"</tt> is 7 days (before, zero)
+    - a comma as the decimal sign: <tt>"PT1,5S"</tt> is 1.5 seconds (before, 5 seconds)
+    - the fraction of a negative value: <tt>"P-1.5D"</tt> is -36 hours, also as a literal (before, -12 hours)
+
+    The conversions that do not raise exceptions (a string assigned to a \c softdate, for example) keep the
+    components read before the text they cannot read.
+
     @par The Ends of File::getPipe() Are Closed
     The ends of a pipe made by @ref Qore::File::getPipe() "File::getPipe()" now own their descriptors:
     @ref Qore::ReadOnlyFile::close() "close()" closes the descriptor and returns 0 (it returned -1 and closed
