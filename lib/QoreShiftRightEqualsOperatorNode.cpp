@@ -48,5 +48,5 @@ QoreValue QoreShiftRightEqualsOperatorNode::evalImpl(bool& needs_deref, Exceptio
     LValueHelper v(left, xsink);
     if (!v)
         return QoreValue();
-    return v.shiftRightEqualsBigInt(val, ">>= operator>");
+    return v.shiftRightEqualsBigInt(val, "<>>= operator>");
 }

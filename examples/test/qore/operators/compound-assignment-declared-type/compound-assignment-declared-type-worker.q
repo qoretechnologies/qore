@@ -53,6 +53,26 @@ sub run_cases() {
     check("float member ++", auto sub () { FloatMember m(); m.v++; return m.v; });
     check("hash<string, float> ++", auto sub () { hash<string, float> h = {}; h.v++; return h.v; });
     check("hash<string, float> /= int", auto sub () { hash<string, float> h = {}; h.v /= id(2); return h.v; });
+    check("narrowed float hash member >>= int", auto sub () {
+        hash<auto> h = id({"v": 8.5});
+        h.v >>= id(1);
+        return h.v;
+    });
+    check("narrowed float hash member <<= int", auto sub () {
+        hash<auto> h = id({"v": 2.5});
+        h.v <<= id(1);
+        return h.v;
+    });
+    check("narrowed float hash member %= int", auto sub () {
+        hash<auto> h = id({"v": 7.5});
+        h.v %= id(4);
+        return h.v;
+    });
+    check("narrowed float hash member |= int", auto sub () {
+        hash<auto> h = id({"v": 4.5});
+        h.v |= id(1);
+        return h.v;
+    });
     check("timeout *= float", auto sub () { timeout t; t *= id(1.5); return t; });
     check("timeout 1000 *= float", auto sub () { timeout t = 1000; t *= id(1.5); return t; });
     check("timeout = float", auto sub () { timeout t = id(1.5); return t; });

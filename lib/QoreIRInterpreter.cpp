@@ -18458,7 +18458,7 @@ QoreValue QoreIRInterpreter::evalLValueBinary(QoreIROpcode op, const QoreValue& 
             if (!v) {
                 return QoreValue();
             }
-            return v.shiftRightEqualsBigInt(val, ">>= operator>");
+            return v.shiftRightEqualsBigInt(val, "<>>= operator>");
         }
         case QoreIROpcode::UnshiftLValue:
             return evalUnshift(lvalue, right, xsink);

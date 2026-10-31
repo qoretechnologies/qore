@@ -16,6 +16,7 @@
 /** - a typed lvalue holds only its declared type, or no value: a result of another type is stored as an assignment
       of the result would store it, converted (ex: a float result in a \c number lvalue gives a number) or refused
       with \c RUNTIME-TYPE-ERROR (ex: a float result in a \c timeout lvalue, as <tt>timeout t = 1.5</tt>)
+    - an int result of \c >>=, \c <<=, \c %= or \c |= on a hash member holding a float is stored as a float
     - \c -= with a date operand on an lvalue of an int type gives the result of <tt>x = x - d</tt>, whether the
       int-specialized operator or the generic operator applies it (ex: a narrowed hash member): the binary operator
       gives a date, which an \c int lvalue refuses and a \c softint lvalue converts
@@ -34,6 +35,10 @@ class CompoundAssignmentDeclaredTypeTest inherits QUnit::Test {
             "float member ++: 1.0 float",
             "hash<string, float> ++: 1.0 float",
             "hash<string, float> /= int: 0.0 float",
+            "narrowed float hash member >>= int: 4.0 float",
+            "narrowed float hash member <<= int: 4.0 float",
+            "narrowed float hash member %= int: 3.0 float",
+            "narrowed float hash member |= int: 5.0 float",
             "timeout *= float: RUNTIME-TYPE-ERROR",
             "timeout 1000 *= float: RUNTIME-TYPE-ERROR",
             "timeout = float: RUNTIME-TYPE-ERROR",
