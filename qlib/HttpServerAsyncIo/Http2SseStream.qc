@@ -273,7 +273,9 @@ public class Http2SseStream inherits AbstractSseConnection {
         if (headers_sent) {
             throw "SSE-HEADERS-SENT", "SSE headers already sent";
         }
-        hash<auto> headers = extra_headers ?? {};
+        # the headers are set in an "auto!" local: a caller's literal may be narrowed (e.g. hash<string, int> for
+        # {"X-Count": 1}), and adding the content-type header would throw
+        hash<auto!> headers = extra_headers ?? {};
         headers."content-type" = "text/event-stream";
         headers."cache-control" = "no-cache";
         sock.submitHttp2StreamingResponseHeaders(stream_id, 200, headers);

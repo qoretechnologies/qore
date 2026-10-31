@@ -213,6 +213,10 @@ log("started listener on %s", lh.desc);
     @section http_relnotes HttpServer Module Release Notes
 
     @subsection http1_7 HttpServer 1.7
+    - fixed the \c hdr option of @ref HttpServer::HttpServerOptionInfo "HttpServerOptionInfo" with values that all
+      have the same type, such as a literal <tt>{"X-Instance": 1}</tt>: responses failed with status 500
+      (\c RUNTIME-TYPE-ERROR); @ref HttpServer::HttpServer::sendHttpError() "sendHttpError()" also accepts extra
+      headers whose values all have the same type
     - a request whose path contains an escaped NUL character (\c %00), which names no resource, is answered with
       status 400 (Bad Request) before a handler is selected, over HTTP/1.1, HTTP/2 and HTTP/3; before, the handler
       was selected by the path cut at the NUL character, so that \c "/a%00b" was handled by the handler of \c "/a",
@@ -2624,8 +2628,10 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             return;
         }
 
-        # the names of the fields managed by the server are canonical from here on
-        extra_hdrs = http_canonicalize_reply_header_names(extra_hdrs);
+        # the names of the fields managed by the server are canonical from here on; the headers are set in an
+        # "auto!" local, as a caller's literal may be narrowed (e.g. hash<string, int> for {"X-Count": 1}), and
+        # adding the Transfer-Encoding header would throw
+        *hash<auto!> err_hdrs = http_canonicalize_reply_header_names(extra_hdrs);
 
         bool is_http2 = cx."header-info".http2 ?? False;
         bool is_multiplexed = is_http2 || (cx."header-info".http3 ?? False);
@@ -2642,7 +2648,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         if (msg || !chunked_msg) {
             if (body_allowed) {
                 if (msg.typeCode() == NT_STRING) {
-                    response_msg = !extra_hdrs."Content-Type" && acceptsHtml(cx)
+                    response_msg = !err_hdrs."Content-Type" && acceptsHtml(cx)
                         ? getHtmlErrorMessage(status_code, msg)
                         : msg;
                 } else {
@@ -2659,7 +2665,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             if (is_multiplexed) {
                 # Keep the InputStream for HTTP/2 and HTTP/3 streaming - don't buffer
             } else if (HttpServer::requestAllowsChunked(cx.hdr ?? {})) {
-                extra_hdrs."Transfer-Encoding" = "chunked";
+                err_hdrs."Transfer-Encoding" = "chunked";
             } else {
                 # a response to an HTTP/1.0 request must not have Transfer-Encoding (RFC 9112 section 6.1); an error
                 # message is small, so it is sent with a Content-Length instead of closing the connection after it
@@ -2669,7 +2675,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         }
         if (!chunked_msg) {
             # a message body in memory is sent with a Content-Length
-            remove extra_hdrs."Transfer-Encoding";
+            remove err_hdrs."Transfer-Encoding";
         }
 
         # restore encoding on exit
@@ -2688,17 +2694,17 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         # an error message is text unless it is binary data; binary data has no character encoding
         bool binary_msg = response_msg.typeCode() == NT_BINARY
             || (chunked_msg && !(chunked_msg instanceof StringInputStream));
-        if (!extra_hdrs."Content-Type") {
+        if (!err_hdrs."Content-Type") {
             hdr."Content-Type" = binary_msg ? MimeTypeOctetStream : MimeTypeHtml + ";charset=" + http_get_charset_label(encoding);
-        } else if (!binary_msg && extra_hdrs."Content-Type" !~ /charset=/i) {
-            extra_hdrs."Content-Type" += ";charset=" + http_get_charset_label(encoding);
+        } else if (!binary_msg && err_hdrs."Content-Type" !~ /charset=/i) {
+            err_hdrs."Content-Type" += ";charset=" + http_get_charset_label(encoding);
         }
 
         if (!is_multiplexed) {
             hdr.Connection = cx.close ? "close" : "Keep-Alive";
         }
 
-        hdr = mergeResponseHeaders(hdr, extra_hdrs);
+        hdr = mergeResponseHeaders(hdr, err_hdrs);
 
         # Merge any response headers stashed by a handler's preprocessRequest() —
         # e.g. CORS headers — so that framework-level errors still return headers
@@ -3112,7 +3118,9 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         @return the base response headers with Alt-Svc for this listener's QUIC counterpart
     */
     private hash<auto> getResponseHeaders(int listener_id) {
-        hash<auto> rv = self.hdr;
+        # the headers are copied to an "auto!" local: the hdr option may be narrowed (e.g. hash<string, int> for
+        # {"X-Instance": 1}), and every response adds string headers to them
+        hash<auto!> rv = self.hdr;
         if (*string alt_svc = listener_alt_svc{listener_id}) {
             rv."Alt-Svc" = alt_svc;
         }

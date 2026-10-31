@@ -1,0 +1,71 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpServerAsyncIo
+
+%exec-class HttpSseStreamNarrowedCallerHashTest
+
+#! A socket that records the response headers of an SSE stream instead of sending them
+class RecordingSocket inherits Socket {
+    public {
+        *hash<auto> headers;
+        *int status_code;
+    }
+
+    nothing submitHttp2StreamingResponseHeaders(int stream_id, int status_code, *hash<auto> headers) {
+        self.status_code = status_code;
+        self.headers = headers;
+    }
+
+    nothing submitQuicResponseStreaming(int session_id, int stream_id, int status_code, *hash<auto> headers) {
+        self.status_code = status_code;
+        self.headers = headers;
+    }
+}
+
+#! SSE response header hashes whose values all have the same type
+/** A hash literal whose values all have the same type has a narrowed type, such as \c hash<string, int> for
+    <tt>{"X-Count": 1}</tt>; adding the \c content-type header to such a hash raised RUNTIME-TYPE-ERROR
+*/
+class HttpSseStreamNarrowedCallerHashTest inherits QUnit::Test {
+    constructor() : Test("HttpSseStreamNarrowedCallerHashTest", "1.0", \ARGV) {
+        addTestCase("Http2SseStream::sendHeaders() with narrowed headers", \http2SendHeaders());
+        addTestCase("Http3SseStream::sendHeaders() with narrowed headers", \http3SendHeaders());
+        set_return_value(main());
+    }
+
+    #! Returns its argument with the type it was given
+    static auto mk(auto h) {
+        return h;
+    }
+
+    http2SendHeaders() {
+        assertEq("hash<string, int>", mk({"X-Count": 1}).fullType());
+        RecordingSocket sock();
+        Http2SseStream stream(sock, 1);
+        stream.sendHeaders({"X-Count": 1});
+        assertEq(200, sock.status_code);
+        assertEq({"X-Count": 1, "content-type": "text/event-stream", "cache-control": "no-cache"}, sock.headers);
+
+        sock = new RecordingSocket();
+        stream = new Http2SseStream(sock, 3);
+        stream.sendHeaders();
+        assertEq({"content-type": "text/event-stream", "cache-control": "no-cache"}, sock.headers);
+    }
+
+    http3SendHeaders() {
+        assertEq("hash<string, bool>", mk({"X-Debug": True}).fullType());
+        RecordingSocket sock();
+        Http3SseStream stream(sock, 1, 0);
+        stream.sendHeaders({"X-Debug": True});
+        assertEq(200, sock.status_code);
+        assertEq({"X-Debug": True, "content-type": "text/event-stream", "cache-control": "no-cache"},
+            sock.headers);
+    }
+}
