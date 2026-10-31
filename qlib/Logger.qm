@@ -830,7 +830,8 @@ public class LoggerSearchUtil {
     }
 
     private static hash<auto> normalizeCapabilitySearchSource(hash<auto> source, int source_index) {
-        hash<auto> out = source;
+        # an appender's literal may be narrowed (e.g. hash<string, string>), and adding source_index would throw
+        hash<auto!> out = source;
         out.source_index = source_index;
         if (!out.id) {
             out.id = out.appender ?? out.name ?? source_index.toString();

@@ -54,6 +54,9 @@ module DebugProgramControl {
       without a timeout
     - a statement can be given as a function name without the types of its parameters when the function has one
       variant (<a href="https://github.com/qoretechnologies/qore/issues/5558">issue 5558</a>)
+    - fixed the \c file/source and \c label/source commands for command hashes whose values all have the same type,
+      such as a literal <tt>{"cmd": "program/1/file/source", "file": "..."}</tt>; setting the start line raised
+      \c RUNTIME-TYPE-ERROR
 
     @subsection dc_v0_1_2 v0.1.2
     - return breakpointId and statementId when creating breakpoint
@@ -938,7 +941,10 @@ public namespace DebugProgramControl {
             return getSourceCode(pgm, type, h).('code', 'startline', 'origin') + ('currentline': stackInfo.line + offset);
         }
 
-        private *hash<auto> getSourceCode(ProgramControl pgmb, string type, hash<auto> rd) {
+        private *hash<auto> getSourceCode(ProgramControl pgmb, string type, hash<auto> rd0) {
+            # a caller's command literal may be narrowed (e.g. hash<string, string>), and setting the start line
+            # would throw
+            hash<auto!> rd = rd0;
             hash<auto> res;
             if (!exists (type=='file' ? pgmb.getSourceFileNames() : pgmb.getSourceLabels() ){rd{type}}) {
                 throw "DEBUG-HANDLER-ERROR", sprintf("Cannot get source for %y", rd{type});

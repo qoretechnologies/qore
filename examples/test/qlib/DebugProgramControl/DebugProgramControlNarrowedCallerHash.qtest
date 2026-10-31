@@ -1,0 +1,79 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%allow-debugger
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires DebugUtil
+%requires DebugProgramControl
+
+%exec-class DebugProgramControlNarrowedCallerHashTest
+
+class NarrowedHashDebugProgramControl inherits DebugProgramControl {
+    constructor() : DebugProgramControl("test-server") {
+    }
+
+    public sendDataImpl(hash<auto> cx, auto data) {
+    }
+
+    public broadcastDataImpl(auto data) {
+    }
+}
+
+#! Commands passed by callers with hashes whose values all have the same type
+/** A hash literal whose values all have the same type, such as <tt>{"cmd": "...", "file": "..."}</tt>, has a
+    narrowed type (here <tt>hash<string, string></tt>); the source command adds the integer \c line member to the
+    command hash that it was given
+*/
+class DebugProgramControlNarrowedCallerHashTest inherits QUnit::Test {
+    private {
+        const CX = {"id": 1};
+        const Source = "int sub test_func() {\n    return 1;\n}\n";
+    }
+
+    constructor() : Test("DebugProgramControlNarrowedCallerHashTest", "1.0", \ARGV) {
+        addTestCase("file source command", \fileSource());
+        set_return_value(main());
+    }
+
+    fileSource() {
+        TmpDir tmp("debug-narrowed-");
+        string path = tmp.path + DirSep + "test-source.q";
+        {
+            File f();
+            f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+            f.write(Source);
+        }
+
+        NarrowedHashDebugProgramControl dpc();
+        dpc.registerConnection(CX);
+        on_exit dpc.unregisterConnection(CX);
+
+        Program pgm(PO_NO_CHILD_PO_RESTRICTIONS);
+        pgm.parse(Source, path);
+        ProgramControl pc = pgm.getProgram();
+        dpc.addProgram(pc);
+        on_exit dpc.removeProgram(pc);
+
+        string cmd = "program/" + pc.getProgramId() + "/file/source";
+        assertEq("hash<string, string>", DebugProgramControlNarrowedCallerHashTest::mk({"cmd": cmd, "file": path})
+            .fullType());
+        *hash<auto> ret = dpc.processCommand(CX, {"cmd": cmd, "file": path});
+        assertEq(DebugResponseType::Response, ret.type);
+        assertEq(Source, ret.result.code);
+        assertEq(1, ret.result.startline);
+        assertEq(path, ret.result.origin);
+        assertEq("sha1", ret.result.checksum.algorithm);
+        assertEq(Source.toSHA1(), ret.result.checksum.cs);
+    }
+
+    #! Returns the hash as it is, with its runtime type
+    static hash<auto> mk(hash<auto> h) {
+        return h;
+    }
+}

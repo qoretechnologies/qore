@@ -384,6 +384,8 @@ hash<FileResourceResult> import = FileLocationHandler::getResourceFromLocation(i
       "FileLocationHandler::getRestHandlerForClient()", which returns a handler bound to a
       \c RestClientIo::RestClientIo client, or to one created from a synchronous \c RestClient::RestClient
       (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
+    - fixed reading text from \c rest:// and \c rests:// locations with options whose values all have the same type,
+      such as a literal <tt>{"encoding": "utf-8"}</tt>; adding the \c Accept header raised \c RUNTIME-TYPE-ERROR
 
     @subsection filelocationhandler_v2_3 FileLocationHandler v2.3
     - implemented support for non-blocking I/O from file handlers

@@ -1,0 +1,42 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires Hl7v2Util
+
+%exec-class Hl7v2UtilNarrowedCallerHashTest
+
+#! Constructor options passed by callers whose values all have the same type
+/** A hash literal whose values all have the same type, such as <tt>{"path": "..."}</tt>, has a narrowed type (here
+    <tt>hash<string, string></tt>); the schema summary provider adds the boolean \c summary_only option to the
+    options that it was given
+*/
+class Hl7v2UtilNarrowedCallerHashTest inherits QUnit::Test {
+    constructor() : Test("Hl7v2UtilNarrowedCallerHashTest", "1.0", \ARGV) {
+        addTestCase("schema summary provider with string options", \schemaSummaryProvider());
+        set_return_value(main());
+    }
+
+    schemaSummaryProvider() {
+        string path = get_script_dir() + "fixtures" + DirSep + "v251-schema.qv";
+        assertEq("hash<string, string>", Hl7v2UtilNarrowedCallerHashTest::mk({"path": path}).fullType());
+        Hl7v2SchemaSummaryDataProvider provider({"path": path});
+        AbstractDataProviderRecordIterator i = provider.searchRecords();
+        assertTrue(i.next());
+        hash<auto> summary = i.getValue();
+        assertEq(True, summary.summary_only);
+        assertEq("2.5.1", summary.version);
+        assertNothing(summary.schema);
+    }
+
+    #! Returns the hash as it is, with its runtime type
+    static hash<auto> mk(hash<auto> h) {
+        return h;
+    }
+}

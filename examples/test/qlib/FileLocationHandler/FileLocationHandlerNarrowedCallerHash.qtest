@@ -1,0 +1,89 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FileLocationHandler
+
+%exec-class FileLocationHandlerNarrowedCallerHashTest
+
+#! Option hashes passed by callers whose values all have the same type
+/** A hash literal whose values all have the same type, such as <tt>{"encoding": "utf-8"}</tt>, has a narrowed type
+    (here <tt>hash<string, string></tt>); the APIs tested here add or convert values of other types in the hash that
+    they were given
+*/
+class FileLocationHandlerNarrowedCallerHashTest inherits QUnit::Test {
+    constructor() : Test("FileLocationHandlerNarrowedCallerHashTest", "1.0", \ARGV) {
+        addTestCase("checkOptions adds default values", \checkOptionsDefaults());
+        addTestCase("checkOptions converts option values", \checkOptionsConversion());
+        addTestCase("REST handler adds the Accept header", \restAcceptHeader());
+        set_return_value(main());
+    }
+
+    checkOptionsDefaults() {
+        assertEq("hash<string, string>", FileLocationHandlerNarrowedCallerHashTest::mk({"encoding": "utf-8"})
+            .fullType());
+        *hash<auto> opts = FileLocationHandler::checkOptions("file:///tmp/x", FileLocationHandler::getHandler("file"),
+            {"encoding": "utf-8"}, True);
+        assertEq({
+            "encoding": "utf-8",
+            "max_file_len": -1,
+            "stream_read_io_timeout": 60000,
+            "stream_nonblock_open": False,
+        }, opts);
+    }
+
+    checkOptionsConversion() {
+        assertEq("hash<string, string>", FileLocationHandlerNarrowedCallerHashTest::mk({"max_file_len": "100",
+            "stream_nonblock_open": "true"}).fullType());
+        *hash<auto> opts = FileLocationHandler::checkOptions("file:///tmp/x", FileLocationHandler::getHandler("file"),
+            {"max_file_len": "100", "stream_nonblock_open": "true"}, True);
+        assertEq(100, opts.max_file_len);
+        assertEq(True, opts.stream_nonblock_open);
+        assertEq(60000, opts.stream_read_io_timeout);
+    }
+
+    restAcceptHeader() {
+        # a local server that answers one request and records its headers
+        Socket listener();
+        listener.bindINET("127.0.0.1", "0");
+        listener.listen();
+        on_exit listener.close();
+        int port = listener.getSocketInfo().port;
+        Queue headers_queue();
+        background FileLocationHandlerNarrowedCallerHashTest::serveOne(listener, headers_queue);
+
+        assertEq("hash<string, string>", FileLocationHandlerNarrowedCallerHashTest::mk({"encoding": "utf-8"})
+            .fullType());
+        string location = sprintf("127.0.0.1:%d/test", port);
+        assertEq("hello", FileLocationHandler::getHandler("rest").getTextFile("rest", location,
+            {"encoding": "utf-8"}));
+        hash<auto> hdr = headers_queue.get(30s);
+        assertEq("*/*", hdr.accept);
+    }
+
+    #! Accepts one connection, answers its request with a fixed text body, and queues the request headers
+    static serveOne(Socket listener, Queue headers_queue) {
+        try {
+            Socket s = listener.accept(30s);
+            on_exit s.close();
+            hash<auto> hdr = s.readHTTPHeader(30s);
+            s.sendHTTPResponse(200, "OK", "1.1", {
+                "Content-Type": "text/plain",
+                "Connection": "close",
+            }, "hello", 30s);
+            headers_queue.push(hdr);
+        } catch (hash<ExceptionInfo> ex) {
+            headers_queue.push({"error": ex.err + ": " + ex.desc});
+        }
+    }
+
+    #! Returns the hash as it is, with its runtime type
+    static hash<auto> mk(hash<auto> h) {
+        return h;
+    }
+}

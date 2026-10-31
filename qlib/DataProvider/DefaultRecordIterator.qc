@@ -44,16 +44,19 @@ public class DefaultRecordIterator<RecT> [legacy_raw] inherits AbstractDataProvi
     #! Returns an iterator for zero or more records matching the search options
     /** @param i the iterator; must return a record hash in the getValue() method
         @param where_cond the search criteria
-        @param search_options the search options after processing by validateSearchOptions()
+        @param search_options0 the search options after processing by validateSearchOptions()
         @param record_type the record type
         @param subrecord the optional name of a key of the record hash storing record data
         @param template_context optional context hash for template reference resolution
     */
-    constructor(AbstractIterator i, *hash<auto> where_cond, *hash<auto> search_options,
+    constructor(AbstractIterator i, *hash<auto> where_cond, *hash<auto> search_options0,
             *hash<string, AbstractDataField> record_type, *string subrecord,
             *hash<auto> template_context)
-            : AbstractDataProviderRecordIterator(search_options.requires_result,
-                search_options.max_records) {
+            : AbstractDataProviderRecordIterator(search_options0.requires_result,
+                search_options0.max_records) {
+        # a caller's literal may be narrowed (e.g. hash<string, string>), and converting the columns option to a
+        # list would throw
+        *hash<auto!> search_options = search_options0;
         self.i = i;
         self.where_cond = where_cond instanceof hash<DataProviderExpression>
             ? AbstractDataProvider::prepareExpression(cast<hash<DataProviderExpression>>(where_cond))
