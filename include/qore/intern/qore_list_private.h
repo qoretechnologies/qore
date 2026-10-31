@@ -210,9 +210,15 @@ struct qore_list_private {
     }
 
     DLLLOCAL int checkVal(ValueHolder& holder, ExceptionSink* xsink) const {
+        return checkVal(holder, nullptr, xsink);
+    }
+
+    //! checks and converts a value for the list as checkVal() above; \a vtype is the type of the value, if known
+    DLLLOCAL int checkVal(ValueHolder& holder, const QoreTypeInfo* vtype, ExceptionSink* xsink) const {
         if (complexTypeInfo) {
             const QoreTypeInfo* vti = QoreTypeInfo::getUniqueReturnComplexList(complexTypeInfo);
-            if (QoreTypeInfo::hasType(vti) && !QoreTypeInfo::superSetOf(vti, holder->getTypeInfo())) {
+            if (QoreTypeInfo::hasType(vti)
+                    && !QoreTypeInfo::superSetOf(vti, vtype ? vtype : holder->getTypeInfo())) {
                 QoreValue v(holder.release());
                 // the outcome must reflect only this conversion; see ScopedTypeCheckSink.  Without this, a caller
                 // with a long-lived sink silently drops elements after an unrelated error
@@ -270,8 +276,13 @@ struct qore_list_private {
     }
 
     DLLLOCAL int push(QoreValue val, ExceptionSink* xsink) {
+        return push(val, nullptr, xsink);
+    }
+
+    //! pushes a value as push() above; \a vtype is the type of the value, if known
+    DLLLOCAL int push(QoreValue val, const QoreTypeInfo* vtype, ExceptionSink* xsink) {
         ValueHolder holder(val, xsink);
-        if (checkVal(holder, xsink)) {
+        if (checkVal(holder, vtype, xsink)) {
             return -1;
         }
         pushIntern(holder.release());

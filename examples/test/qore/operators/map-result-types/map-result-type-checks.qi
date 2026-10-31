@@ -302,6 +302,20 @@ public namespace MapResultTypeChecks {
             auto n = select (map $1, mixed), False;
             rv."select-of-map-none-selected" = type_of(n);
         }
+        # soft scalar types: the values have the exact type, which the list of the operator accepts
+        {
+            softlist<softint> si = (1, "2", 3.0);
+            auto m = map $1, si;
+            rv."softint-map" = type_of(m) + " " + m.size() + " " + type_of(m[1]);
+            auto s = map $1, si, True;
+            rv."softint-map-select" = type_of(s) + " " + s.size();
+            auto f = select (map $1, si), True;
+            rv."softint-select-of-map" = type_of(f) + " " + f.size();
+            auto g = map $1, (select si, True);
+            rv."softint-map-of-select" = type_of(g) + " " + g.size();
+            hash<auto> h = map {"k" + $1: $1}, si;
+            rv."softint-hmap" = type_of(h) + " " + h.size();
+        }
         # writes to the results
         {
             hash<auto> h = map {$1: ()}, keys rec;

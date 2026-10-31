@@ -844,7 +844,7 @@ enum class QoreIROpcode : uint16_t {
 
     //! Set the type of the result list of a map or map/select operator as the AST interpreter does.
     //!
-    //! operands[0] = the result list; operands[1] = the state of CommonTypeFold after the last value; no result.
+    //! operands[0] = the result list; operands[1] = the state of ListAppendElement after the last value; no result.
     //! `element_type` = the element type of the list that the AST interpreter creates for the operator
     //! (QoreMapOperatorNode::evalImpl(), QoreMapSelectOperatorNode::evalImpl()).  When the values had a common type,
     //! the list gets list<common type>; otherwise it gets the type of a list created with the element type.  The
@@ -853,24 +853,23 @@ enum class QoreIROpcode : uint16_t {
     //! the element type itself (see qore_ir_map_value_type_is_exact()).
     ListSetCommonType = 413,
 
-    //! Fold the type of the next value of the result of a map, map/select or hash map operator into the common
-    //! value type.
+    //! Set a key of the result hash of a hash map operator and fold the type of the value into the common value type.
     //!
-    //! operands[0] = the state from the previous value (0 before the first value); operands[1] = the value;
-    //! operands[2] = the index of the source element, or -1 (native int); result = the new state (native int).  The
-    //! state encodes what the AST interpreter tracks: no value yet, no common type, or the common type so far
-    //! (QoreTypeInfo::matchCommonType() over the value types in order).  With an index, as for a hash map operator
-    //! (QoreHashMapOperatorNode::evalImpl(), QoreHashMapSelectOperatorNode::evalImpl()), the value of the first
-    //! source element starts the common type, so with a select expression that rejects the first element the values
-    //! have no common type; values that replace the value of a key that is already set are folded as well.  With -1,
-    //! as for a list (QoreMapOperatorNode::evalImpl(), QoreMapSelectOperatorNode::evalImpl()), the first value
-    //! folded starts it.
-    CommonTypeFold = 414,
+    //! operands[0] = the result hash; operands[1] = the key; operands[2] = the value; operands[3] = the state from
+    //! the previous value (0 before the first value); operands[4] = the index of the source element (native int);
+    //! result = the new state (native int).  The key and value are set as HashSetKeyValue sets them.  The state
+    //! encodes what the AST interpreter tracks in QoreHashMapOperatorNode::evalImpl() and
+    //! QoreHashMapSelectOperatorNode::evalImpl(): no value yet, no common type, or the common type so far
+    //! (QoreTypeInfo::matchCommonType() over the value types in order).  The value of the first source element starts
+    //! the common type, so with a select expression that rejects the first element the values have no common type;
+    //! values that replace the value of a key that is already set are folded as well.  The value type is taken once
+    //! for the fold and the store.
+    HashSetKeyValueFold = 414,
 
-    //! Set the type of the result hash of a hash map operator from the state of CommonTypeFold.
+    //! Set the type of the result hash of a hash map operator from the state of HashSetKeyValueFold.
     //!
-    //! operands[0] = the result hash; operands[1] = the state after the last value; no result.  When the values
-    //! had a common type, the hash gets hash<string, common type>; otherwise its type is not changed.
+    //! operands[0] = the result hash; operands[1] = the state of HashSetKeyValueFold after the last value; no result.
+    //! When the values had a common type, the hash gets hash<string, common type>; otherwise its type is not changed.
     HashSetCommonType = 415,
 
     //! Set the type of the result list of a select operator from the values stored in it, as the AST interpreter
@@ -884,13 +883,17 @@ enum class QoreIROpcode : uint16_t {
     //! the AST interpreter folds.
     ListSetScannedType = 416,
 
-    //! Append a value to the result list of a map or map/select operator as the AST interpreter pushes it.
+    //! Append a value to the result list of a map or map/select operator as the AST interpreter pushes it, and fold
+    //! the type of the value into the common value type.
     //!
-    //! operands[0] = the result list; operands[1] = the value; no result.  The value is converted to the element
-    //! type of the list as QoreListNode::push() converts it (qore_list_private::checkVal()), which can raise
+    //! operands[0] = the result list; operands[1] = the value; operands[2] = the state from the previous value (0
+    //! before the first value); result = the new state (native int).  The value is converted to the element type of
+    //! the list as QoreListNode::push() converts it (qore_list_private::checkVal()), which can raise
     //! RUNTIME-TYPE-ERROR, and the type of the list is not changed: the AST interpreter creates the list with the
     //! element type of the operator and keeps that type while it fills the list, and ListSetCommonType sets the
-    //! final type after the loop.
+    //! final type after the loop.  The type of the value before it is converted is folded as the AST interpreter
+    //! folds it (QoreMapOperatorNode::evalImpl(), QoreMapSelectOperatorNode::evalImpl()): the first value starts the
+    //! common type.  The value type is taken once for the fold and the store.
     ListAppendElement = 417,
 
     // NOTE: When adding new opcodes, assign the next sequential ID (418, 419, ...)

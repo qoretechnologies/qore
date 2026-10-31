@@ -1311,11 +1311,16 @@ uint64_t* qore_rt_list_get_mutable_data_unchecked(uint64_t list_val);
 //! Finalize the logical length of a fresh list after direct scalar stores.
 void qore_rt_list_set_length_unchecked(uint64_t list_val, int64_t length);
 
-//! Fold the type of a map or hash map value into the common value type state; returns the new state.
-/** The state is 0 before the first value; \a index is the index of the source element of a hash map operator, or
-    -1 for a list.  See QoreIROpcode::CommonTypeFold.
+//! Set a key of the result hash of a hash map operator and fold the type of the value into the common value type
+/** Sets the key as qore_rt_hash_set_key_value() sets it; the state is 0 before the first value; \a index is the
+    index of the source element; returns the new state.  See QoreIROpcode::HashSetKeyValueFold.
 */
-int64_t qore_rt_common_type_fold(int64_t state, uint64_t value, int64_t index);
+int64_t qore_rt_hash_set_key_value_fold(uint64_t hash_bits, uint64_t key_bits, uint64_t value_bits, int64_t state,
+        int64_t index, ExceptionSink* xsink);
+
+//! Throwing form of qore_rt_hash_set_key_value_fold() for native code that unwinds with QoreJITException
+int64_t qore_rt_hash_set_key_value_fold_throwing(uint64_t hash_bits, uint64_t key_bits, uint64_t value_bits,
+        int64_t state, int64_t index, ExceptionSink* xsink);
 
 //! Set the type of the result list of a map or map/select operator from the common value type state.
 /** When the values had a common type, the list gets list<common type>; otherwise it gets the type of a list
@@ -1338,14 +1343,16 @@ void qore_rt_list_set_scanned_type(uint64_t list_val, const QoreTypeInfo* elemen
 void qore_rt_list_set_scanned_type_by_type_path(uint64_t list_val, const char* element_type_path,
         int32_t has_element_type, ExceptionSink* xsink);
 
-//! Append a value to the result list of a map or map/select operator as QoreListNode::push() appends it.
+//! Append a value to the result list of a map or map/select operator as QoreListNode::push() appends it, and fold
+//! its type into the common value type state
 /** The value is converted to the element type of the list, which can raise an exception; \a value_val is not
-    consumed.  See QoreIROpcode::ListAppendElement.
+    consumed; the state is 0 before the first value; returns the new state.  See QoreIROpcode::ListAppendElement.
 */
-void qore_rt_list_append_element(uint64_t list_val, uint64_t value_val, ExceptionSink* xsink);
+int64_t qore_rt_list_append_element(uint64_t list_val, uint64_t value_val, int64_t state, ExceptionSink* xsink);
 
 //! Throwing form of qore_rt_list_append_element() for native code that unwinds with QoreJITException
-void qore_rt_list_append_element_throwing(uint64_t list_val, uint64_t value_val, ExceptionSink* xsink);
+int64_t qore_rt_list_append_element_throwing(uint64_t list_val, uint64_t value_val, int64_t state,
+        ExceptionSink* xsink);
 
 //! Set the type of the result list of a select operator from its values or else the value type of its source.
 void qore_rt_list_set_scanned_type_from_source(uint64_t list_val, uint64_t source_val);

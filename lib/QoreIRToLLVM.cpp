@@ -24853,20 +24853,30 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             builder->CreateCall(helper, {list_boxed, state_int, getTypeInfoPointerArg(inst->element_type)});
             return true;
         }
-        case QoreIROpcode::CommonTypeFold: {
-            auto* state = getVal(inst->operands[0].id, error);
-            if (!state) { return false; }
-            auto* value = getVal(inst->operands[1].id, error);
+        case QoreIROpcode::HashSetKeyValueFold: {
+            auto* hash = getVal(inst->operands[0].id, error);
+            if (!hash) { return false; }
+            auto* key = getVal(inst->operands[1].id, error);
+            if (!key) { return false; }
+            auto* value = getVal(inst->operands[2].id, error);
             if (!value) { return false; }
-            auto* index = getVal(inst->operands[2].id, error);
+            auto* state = getVal(inst->operands[3].id, error);
+            if (!state) { return false; }
+            auto* index = getVal(inst->operands[4].id, error);
             if (!index) { return false; }
-            llvm::Value* state_int = ensureIntTypeInline(state, inst->operands[0].id);
-            llvm::Value* value_boxed = boxValue(value, inst->operands[1].id);
-            llvm::Value* index_int = ensureIntTypeInline(index, inst->operands[2].id);
-            auto helper = module.getOrInsertFunction("qore_rt_common_type_fold",
-                    llvm::FunctionType::get(i64_type, {i64_type, i64_type, i64_type}, false));
+            llvm::Value* hash_boxed = boxValue(hash, inst->operands[0].id);
+            llvm::Value* key_boxed = boxValue(key, inst->operands[1].id);
+            llvm::Value* value_boxed = boxValue(value, inst->operands[2].id);
+            llvm::Value* state_int = ensureIntTypeInline(state, inst->operands[3].id);
+            llvm::Value* index_int = ensureIntTypeInline(index, inst->operands[4].id);
+            auto fold_ft = llvm::FunctionType::get(i64_type,
+                {i64_type, i64_type, i64_type, i64_type, i64_type, ptr_type}, false);
+            auto helper = module.getOrInsertFunction("qore_rt_hash_set_key_value_fold", fold_ft);
+            auto helper_throwing = module.getOrInsertFunction("qore_rt_hash_set_key_value_fold_throwing", fold_ft);
             // the result is the native int state
-            values[inst->result.id] = builder->CreateCall(helper, {state_int, value_boxed, index_int});
+            values[inst->result.id] = emitMaybeInvoke(helper, helper_throwing,
+                {hash_boxed, key_boxed, value_boxed, state_int, index_int, xsink_arg}, module, llvm_func, inst);
+            emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
         case QoreIROpcode::HashSetCommonType: {
@@ -24886,12 +24896,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (!list) { return false; }
             auto* value = getVal(inst->operands[1].id, error);
             if (!value) { return false; }
+            auto* state = getVal(inst->operands[2].id, error);
+            if (!state) { return false; }
             llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
             llvm::Value* value_boxed = boxValue(value, inst->operands[1].id);
-            auto append_ft = llvm::FunctionType::get(void_type, {i64_type, i64_type, ptr_type}, false);
+            llvm::Value* state_int = ensureIntTypeInline(state, inst->operands[2].id);
+            auto append_ft = llvm::FunctionType::get(i64_type, {i64_type, i64_type, i64_type, ptr_type}, false);
             auto helper = module.getOrInsertFunction("qore_rt_list_append_element", append_ft);
             auto helper_throwing = module.getOrInsertFunction("qore_rt_list_append_element_throwing", append_ft);
-            emitMaybeInvoke(helper, helper_throwing, {list_boxed, value_boxed, xsink_arg}, module, llvm_func, inst);
+            // the result is the native int state
+            values[inst->result.id] = emitMaybeInvoke(helper, helper_throwing,
+                {list_boxed, value_boxed, state_int, xsink_arg}, module, llvm_func, inst);
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }

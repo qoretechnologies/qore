@@ -7847,12 +7847,24 @@ next_instruction:
                 ++ip;
                 break;
             }
-            case QoreIROpcode::CommonTypeFold: {
-                int64_t state = getIRValue(values, inst->operands[0]).getAsBigInt();
-                int64_t new_state = qore_rt_common_type_fold(state,
-                    toBits(getIRValue(values, inst->operands[1])),
-                    getIRValue(values, inst->operands[2]).getAsBigInt());
+            case QoreIROpcode::HashSetKeyValueFold: {
+                int64_t new_state = qore_rt_hash_set_key_value_fold(toBits(getIRValue(values, inst->operands[0])),
+                    toBits(getIRValue(values, inst->operands[1])), toBits(getIRValue(values, inst->operands[2])),
+                    getIRValue(values, inst->operands[3]).getAsBigInt(),
+                    getIRValue(values, inst->operands[4]).getAsBigInt(), xsink);
                 setValueSlotDirect(values, inst->result.id, QoreValue(new_state));
+                if (xsink && *xsink) {
+                    if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
                 ++ip;
                 break;
             }
@@ -7863,8 +7875,10 @@ next_instruction:
                 break;
             }
             case QoreIROpcode::ListAppendElement: {
-                qore_rt_list_append_element(toBits(getIRValue(values, inst->operands[0])),
-                    toBits(getIRValue(values, inst->operands[1])), xsink);
+                int64_t new_state = qore_rt_list_append_element(toBits(getIRValue(values, inst->operands[0])),
+                    toBits(getIRValue(values, inst->operands[1])),
+                    getIRValue(values, inst->operands[2]).getAsBigInt(), xsink);
+                setValueSlotDirect(values, inst->result.id, QoreValue(new_state));
                 if (xsink && *xsink) {
                     if (inst->exception_target) {
                         cleanupToTempScope(inst->temp_scope_id, true, false, true);

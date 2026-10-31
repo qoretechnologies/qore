@@ -119,6 +119,12 @@ class MapResultTypesTest inherits QUnit::Test {
             "hashdecl-select-of-map-parent": "list<hash<MapParent>>",
             "select-of-map-mixed-rejected": "list<string>",
             "select-of-map-none-selected": "list<auto>",
+            # soft scalar values have the exact type, as with the AST interpreter
+            "softint-map": "list<int> 3 integer",
+            "softint-map-select": "list<int> 3",
+            "softint-select-of-map": "list<int> 3",
+            "softint-map-of-select": "list<int> 3",
+            "softint-hmap": "hash<string, int> 3",
             "write-hash-auto-push-int": "hash<string, list<auto>>",
             "write-hash-auto-push-string": "hash<string, list<auto>>",
             "write-hash-auto-value-type": "list<auto>",

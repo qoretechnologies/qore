@@ -472,10 +472,10 @@ constexpr OpcodeInfo OPCODE_REGISTRY[418] = {
     { "ReleaseOwnedTemp"               , false, false, false,  1, "Release the temporary of an enclosing statement that a return leaves", true , true , "ParseNode", false, false, false, false, false }, // 411
     { "DebugStatement"                , false, false, false,  0, "Debugger step event for the statement that follows", true , true , "AbstractStatement", false, false, false, false, false }, // 412
     { "ListSetCommonType"              , false, false, false,  2, "Set the type of a map result list from the common value type", false, true , "QoreMapOperatorNode", false, false, false, false, false }, // 413
-    { "CommonTypeFold"                 , false, true , false,  3, "Fold a map value type into the common value type", false, false, "QoreMapOperatorNode", true , false, false, false, false }, // 414
+    { "HashSetKeyValueFold"            , false, true , false,  5, "Set a hash map key and fold the value type into the common value type", false, true , "QoreHashMapOperatorNode", true , false, false, false, false }, // 414
     { "HashSetCommonType"              , false, false, false,  2, "Set the type of a hash map result from the common value type", false, false, "QoreHashMapOperatorNode", false, false, false, false, false }, // 415
     { "ListSetScannedType"             , false, false, false, -1, "Set the type of a select result list from its values", false, true , "QoreSelectOperatorNode", false, false, false, false, false }, // 416
-    { "ListAppendElement"              , false, false, false,  2, "Append a value to a map result list as the AST interpreter pushes it", false, true , "QoreMapOperatorNode", false, false, false, false, false }, // 417
+    { "ListAppendElement"              , false, true , false,  3, "Append a value to a map result list as the AST interpreter pushes it and fold its type", false, true , "QoreMapOperatorNode", true , false, false, false, false }, // 417
 };
 
 //! Static assertion to verify registry completeness

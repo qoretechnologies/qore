@@ -6481,12 +6481,13 @@ static bool qore_ir_is_borrowed_list_element_consumer(const QoreIRInstruction& i
         case QoreIROpcode::HashSetKeyValue:
             return inst.operands.size() == 3
                 && (inst.operands[1].id == value_id || inst.operands[2].id == value_id);
-        case QoreIROpcode::CommonTypeFold:
-            // reads only the type of the value
-            return inst.operands.size() == 3 && inst.operands[1].id == value_id;
+        case QoreIROpcode::HashSetKeyValueFold:
+            // takes its own reference, like HashSetKeyValue
+            return inst.operands.size() == 5
+                && (inst.operands[1].id == value_id || inst.operands[2].id == value_id);
         case QoreIROpcode::ListAppendElement:
             // takes its own reference, like ListAppend
-            return inst.operands.size() == 2 && inst.operands[1].id == value_id;
+            return inst.operands.size() == 3 && inst.operands[1].id == value_id;
         default:
             return false;
     }

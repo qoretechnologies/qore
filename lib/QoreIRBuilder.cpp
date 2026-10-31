@@ -591,19 +591,17 @@ QoreIRInstruction* QoreIRBuilder::createListSetCommonType(QoreIRValue list, Qore
     return inst;
 }
 
-QoreIRInstruction* QoreIRBuilder::createCommonTypeFold(QoreIRValue state, QoreIRValue value,
-        QoreIRValue index, const QoreProgramLocation* loc) {
-    if (!index.isValid()) {
-        // -1: the first value folded starts the common type
-        index = createConstInt(-1, loc)->result;
-    }
-    auto inst = append<QoreIRInstruction>(QoreIROpcode::CommonTypeFold);
+QoreIRInstruction* QoreIRBuilder::createHashSetKeyValueFold(QoreIRValue hash, QoreIRValue key, QoreIRValue value,
+        QoreIRValue state, QoreIRValue index, const QoreProgramLocation* loc) {
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::HashSetKeyValueFold);
     inst->loc = loc;
     inst->result = func->createValue();
-    // the state is a native int (see qore_rt_common_type_fold())
+    // the state is a native int (see qore_rt_hash_set_key_value_fold())
     qore_ir_set_native_value_facts(func, inst->result, QoreIRValueRepresentation::NativeInt, bigIntTypeInfo);
-    inst->operands.push_back(state);
+    inst->operands.push_back(hash);
+    inst->operands.push_back(key);
     inst->operands.push_back(value);
+    inst->operands.push_back(state);
     inst->operands.push_back(index);
     return inst;
 }
@@ -617,12 +615,16 @@ QoreIRInstruction* QoreIRBuilder::createHashSetCommonType(QoreIRValue hash, Qore
     return inst;
 }
 
-QoreIRInstruction* QoreIRBuilder::createListAppendElement(QoreIRValue list, QoreIRValue value,
+QoreIRInstruction* QoreIRBuilder::createListAppendElement(QoreIRValue list, QoreIRValue value, QoreIRValue state,
         const QoreProgramLocation* loc) {
     auto inst = append<QoreIRInstruction>(QoreIROpcode::ListAppendElement);
     inst->loc = loc;
+    inst->result = func->createValue();
+    // the state is a native int (see qore_rt_list_append_element())
+    qore_ir_set_native_value_facts(func, inst->result, QoreIRValueRepresentation::NativeInt, bigIntTypeInfo);
     inst->operands.push_back(list);
     inst->operands.push_back(value);
+    inst->operands.push_back(state);
     return inst;
 }
 

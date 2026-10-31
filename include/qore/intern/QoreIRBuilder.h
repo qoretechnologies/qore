@@ -90,16 +90,16 @@ public:
     //! QoreIROpcode::ListSetCommonType
     QoreIRInstruction* createListSetCommonType(QoreIRValue list, QoreIRValue state, const QoreTypeInfo* element_type,
         const QoreProgramLocation* loc = nullptr);
-    //! Folds the type of a map or hash map value into the common value type; see QoreIROpcode::CommonTypeFold
-    /** @param index the index of the source element for a hash map, or an invalid value for a list
-    */
-    QoreIRInstruction* createCommonTypeFold(QoreIRValue state, QoreIRValue value, QoreIRValue index,
-        const QoreProgramLocation* loc = nullptr);
+    //! Sets a key of a hash map result and folds the value type into the common value type; see
+    //! QoreIROpcode::HashSetKeyValueFold
+    QoreIRInstruction* createHashSetKeyValueFold(QoreIRValue hash, QoreIRValue key, QoreIRValue value,
+        QoreIRValue state, QoreIRValue index, const QoreProgramLocation* loc = nullptr);
     //! Sets the type of a hash map result from the common value type; see QoreIROpcode::HashSetCommonType
     QoreIRInstruction* createHashSetCommonType(QoreIRValue hash, QoreIRValue state,
         const QoreProgramLocation* loc = nullptr);
-    //! Appends a value to a map result list as the AST interpreter pushes it; see QoreIROpcode::ListAppendElement
-    QoreIRInstruction* createListAppendElement(QoreIRValue list, QoreIRValue value,
+    //! Appends a value to a map result list as the AST interpreter pushes it and folds its type into the common
+    //! value type; see QoreIROpcode::ListAppendElement
+    QoreIRInstruction* createListAppendElement(QoreIRValue list, QoreIRValue value, QoreIRValue state,
         const QoreProgramLocation* loc = nullptr);
     //! Sets the type of a select result list from its values; see QoreIROpcode::ListSetScannedType
     /** @param list the result list

@@ -362,7 +362,9 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_pseudo_list_value_noguard",
         reinterpret_cast<void*>(&qore_rt_pseudo_list_value_noguard) },
     { "qore_rt_list_size", reinterpret_cast<void*>(&qore_rt_list_size) },
-    { "qore_rt_common_type_fold", reinterpret_cast<void*>(&qore_rt_common_type_fold) },
+    { "qore_rt_hash_set_key_value_fold", reinterpret_cast<void*>(&qore_rt_hash_set_key_value_fold) },
+    { "qore_rt_hash_set_key_value_fold_throwing",
+        reinterpret_cast<void*>(&qore_rt_hash_set_key_value_fold_throwing) },
     { "qore_rt_list_set_common_type", reinterpret_cast<void*>(&qore_rt_list_set_common_type) },
     { "qore_rt_list_set_common_type_by_type_path",
         reinterpret_cast<void*>(&qore_rt_list_set_common_type_by_type_path) },
@@ -6669,9 +6671,9 @@ extern "C" DLLEXPORT void qore_rt_list_set_length_unchecked(uint64_t list_val, i
 // container in a loop; see QoreMapOperatorNode::evalImpl(), QoreMapSelectOperatorNode::evalImpl(),
 // QoreSelectOperatorNode::evalImpl() and QoreHashMapOperatorNode::evalImpl().
 
-// the state of CommonTypeFold: 0 = no value yet, 1 = no common type, otherwise the common type so far, encoded by
-// qore_common_type_encode(); type information objects are 8-byte aligned, so the encoded pointer always fits in the
-// 48 bits of an inline QoreValue int, which the IR interpreter holds it in
+// the state of ListAppendElement and HashSetKeyValueFold: 0 = no value yet, 1 = no common type, otherwise the
+// common type so far, encoded by qore_common_type_encode(); type information objects are 8-byte aligned, so the
+// encoded pointer always fits in the 48 bits of an inline QoreValue int, which the IR interpreter holds it in
 static constexpr int64_t QORE_COMMON_TYPE_NO_VALUE = 0;
 static constexpr int64_t QORE_COMMON_TYPE_NONE = 1;
 static_assert(alignof(QoreTypeInfo) >= 8, "the common type state encoding needs 8-byte aligned type information");
@@ -6707,8 +6709,9 @@ static void qore_list_set_result_type(QoreListNode* list, const QoreTypeInfo* co
     }
 }
 
-extern "C" DLLEXPORT int64_t qore_rt_common_type_fold(int64_t state, uint64_t value, int64_t index) {
-    const QoreTypeInfo* vtype = fromBits(value).getTypeInfo();
+// folds the type of a value into the state: index = the index of the source element of a hash map operator, or -1
+// for a list
+static int64_t qore_common_type_fold(int64_t state, const QoreTypeInfo* vtype, int64_t index) {
     // the first value starts the common type: the value of the first source element of a hash map operator, so
     // when a select expression rejected the first element no value starts it and the values have no common type,
     // or the first value folded for a list (index -1)
@@ -6772,22 +6775,51 @@ static const QoreTypeInfo* qore_list_get_common_value_type(const QoreListNode* l
     return vtype;
 }
 
-extern "C" DLLEXPORT void qore_rt_list_append_element(uint64_t list_val, uint64_t value_val,
+extern "C" DLLEXPORT int64_t qore_rt_list_append_element(uint64_t list_val, uint64_t value_val, int64_t state,
         ExceptionSink* xsink) {
     QoreValue v = fromBits(list_val);
     if (v.getType() != NT_LIST) {
-        return;
+        return state;
     }
-    // QoreListNode::push() takes the reference and releases the value if it is rejected
-    v.get<QoreListNode>()->push(fromBits(value_val).refSelf(), xsink);
+    QoreValue val = fromBits(value_val);
+    // the type is taken once for the fold and for the conversion of the value
+    const QoreTypeInfo* vtype = val.getTypeInfo();
+    state = qore_common_type_fold(state, vtype, -1);
+    // as QoreListNode::push(): the list takes the reference and releases the value if it is rejected
+    qore_list_private* priv = qore_list_private::get(*v.get<QoreListNode>());
+    val.refSelf();
+    if (priv->checkValid(xsink)) {
+        val.discard(xsink);
+        return state;
+    }
+    priv->push(val, vtype, xsink);
+    return state;
 }
 
-extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_list_append_element_throwing(uint64_t list_val,
-        uint64_t value_val, ExceptionSink* xsink) {
-    qore_rt_list_append_element(list_val, value_val, xsink);
+extern "C" DLLEXPORT __attribute__((noinline)) int64_t qore_rt_list_append_element_throwing(uint64_t list_val,
+        uint64_t value_val, int64_t state, ExceptionSink* xsink) {
+    int64_t rv = qore_rt_list_append_element(list_val, value_val, state, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }
+    return rv;
+}
+
+extern "C" DLLEXPORT int64_t qore_rt_hash_set_key_value_fold(uint64_t hash_bits, uint64_t key_bits,
+        uint64_t value_bits, int64_t state, int64_t index, ExceptionSink* xsink) {
+    QoreValue value_val = fromBits(value_bits);
+    state = qore_common_type_fold(state, value_val.getTypeInfo(), index);
+    qore_rt_hash_set_key_value(hash_bits, key_bits, value_bits, xsink);
+    return state;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) int64_t qore_rt_hash_set_key_value_fold_throwing(uint64_t hash_bits,
+        uint64_t key_bits, uint64_t value_bits, int64_t state, int64_t index, ExceptionSink* xsink) {
+    int64_t rv = qore_rt_hash_set_key_value_fold(hash_bits, key_bits, value_bits, state, index, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return rv;
 }
 
 extern "C" DLLEXPORT void qore_rt_list_set_scanned_type(uint64_t list_val, const QoreTypeInfo* element_type) {
