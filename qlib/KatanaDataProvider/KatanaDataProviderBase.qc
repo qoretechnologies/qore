@@ -171,7 +171,8 @@ public class KatanaDataProviderBase inherits DataProvider::AbstractDataProvider 
         int per_page = (limit && limit < MaxPageSize) ? limit : MaxPageSize;
 
         while (True) {
-            hash<auto> qparams = params ?? {};
+            # hash<auto!>: the given hash may be narrowed (ex: hash<string, string>); adding paging keys would throw
+            hash<auto!> qparams = params ?? {};
             qparams.page = page;
             qparams.limit = per_page;
 

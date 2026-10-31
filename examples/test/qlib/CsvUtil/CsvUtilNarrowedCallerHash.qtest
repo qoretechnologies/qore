@@ -1,0 +1,46 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires CsvUtil
+
+%exec-class CsvUtilNarrowedCallerHashTest
+
+#! CSV writers accept an option hash whose values all have the same type
+/** A hash literal whose values all have the same type is narrowed, e.g. {"fields": {"a": "string"}} is
+    hash<string, hash<string, string>>; setting the default headers in such an option hash raised RUNTIME-TYPE-ERROR
+*/
+class CsvUtilNarrowedCallerHashTest inherits QUnit::Test {
+    constructor() : Test("CsvUtilNarrowedCallerHashTest", "1.0", \ARGV) {
+        addTestCase("CsvFileWriter sets the headers from the fields", \fileWriterHeaders());
+        set_return_value(main());
+    }
+
+    #! returns the hash passed, keeping its runtime type
+    private static hash<auto> mk(hash<auto> h) {
+        return h;
+    }
+
+    fileWriterHeaders() {
+        assertEq("hash<string, hash<string, string>>", mk({"fields": {"a": "string", "b": "int"}}).fullType());
+
+        string path = tmp_location() + DirSep + "csv-narrowed-" + get_random_string() + ".csv";
+        on_exit {
+            try {
+                unlink(path);
+            } catch (hash<ExceptionInfo> ex) {
+                # the file may not have been created
+            }
+        }
+        {
+            CsvFileWriter w(path, {"fields": {"a": "string", "b": "int"}});
+            w.writeLine({"a": "x", "b": 1});
+        }
+        assertEq("a,b\nx,1\n", ReadOnlyFile::readTextFile(path));
+    }
+}

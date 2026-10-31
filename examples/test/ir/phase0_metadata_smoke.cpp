@@ -63,6 +63,20 @@ static bool checkAOTOpcodeCompatibility() {
         uint16_t max_opcode;
         uint16_t wire_opcode; // zero keeps the current encoding
     } cases[] = {
+        {QoreIROpcode::CheckReturnValue, 21, 416, 409},
+        {QoreIROpcode::IteratorRelease, 21, 416, 410},
+        {QoreIROpcode::ReleaseOwnedTemp, 21, 416, 411},
+        {QoreIROpcode::DebugStatement, 21, 412, 412},
+        {QoreIROpcode::DebugStatement, 21, 416, 412},
+        {QoreIROpcode::ListSetCommonType, 21, 416, 413},
+        {QoreIROpcode::CommonTypeFold, 21, 416, 414},
+        {QoreIROpcode::HashSetCommonType, 21, 416, 415},
+        {QoreIROpcode::ListSetScannedType, 21, 416, 416},
+        {QoreIROpcode::DebugStatement, 22, 418, 0},
+        {QoreIROpcode::ListSetCommonType, 22, 418, 0},
+        {QoreIROpcode::CommonTypeFold, 22, 418, 0},
+        {QoreIROpcode::HashSetCommonType, 22, 418, 0},
+        {QoreIROpcode::ListSetScannedType, 22, 418, 0},
         {QoreIROpcode::CheckReturnValue, 21, 409, 409},
         {QoreIROpcode::CheckReturnValue, 21, 411, 409},
         {QoreIROpcode::IteratorRelease, 21, 411, 410},
@@ -92,6 +106,16 @@ static bool checkAOTOpcodeCompatibility() {
             builder.createIteratorRelease(result);
         } else if (test.opcode == QoreIROpcode::ReleaseOwnedTemp) {
             builder.createReleaseOwnedTemp(result);
+        } else if (test.opcode == QoreIROpcode::DebugStatement) {
+            builder.append<QoreIRDebugStatementInstruction>(nullptr);
+        } else if (test.opcode == QoreIROpcode::ListSetCommonType) {
+            builder.createListSetCommonType(result, result, bigIntTypeInfo, nullptr);
+        } else if (test.opcode == QoreIROpcode::CommonTypeFold) {
+            result = builder.createCommonTypeFold(result, result, result, nullptr)->result;
+        } else if (test.opcode == QoreIROpcode::HashSetCommonType) {
+            builder.createHashSetCommonType(result, result, nullptr);
+        } else if (test.opcode == QoreIROpcode::ListSetScannedType) {
+            builder.createListSetScannedType(result, bigIntTypeInfo, QoreIRValue(), nullptr);
         } else {
             result = builder.createUnaryOp(test.opcode, result)->result;
         }

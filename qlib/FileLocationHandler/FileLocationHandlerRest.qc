@@ -186,7 +186,7 @@ class FileLocationHandlerRest inherits AbstractFileLocationHandler {
     #! Retrieves a text file from the given location
     /** @param scheme the scheme being used
         @param location the location string without the scheme
-        @param opts read options
+        @param opts0 read options
 
         @return the string of the file's contents, if it can be retrieved
 
@@ -194,10 +194,15 @@ class FileLocationHandlerRest inherits AbstractFileLocationHandler {
 
         @note This method can throw any exception related to making a REST call as well
     */
-    private string getTextFileImpl(string scheme, string location, *hash<auto> opts) {
+    private string getTextFileImpl(string scheme, string location, *hash<auto> opts0) {
+        # a caller's literal may be narrowed (e.g. hash<string, string>), and adding the headers would throw
+        *hash<auto!> opts = opts0;
         # make sure we can accept any Content-Type
         if (!opts.headers.Accept) {
-            opts.headers.Accept = "*/*";
+            # the caller's headers may be narrowed too
+            hash<auto!> headers = opts.headers ?? {};
+            headers.Accept = "*/*";
+            opts.headers = headers;
         }
         auto val = request(scheme, location, opts, "GET").body;
         if (!exists val) {

@@ -276,7 +276,10 @@ public class MistralRestConnection inherits RestClient::RestConnection {
     }
 
     #! Resolves the fixed API endpoint even when auto-URL supplies a localhost placeholder
-    private static hash<auto> getConfig(hash<auto> config) {
+    private static hash<auto> getConfig(hash<auto> config0) {
+        # a caller's configuration hash may be narrowed (ex: hash<string, string>), and setting the URL or the
+        # options would throw
+        hash<auto!> config = config0;
         config.url = DefaultUrl;
         return config;
     }

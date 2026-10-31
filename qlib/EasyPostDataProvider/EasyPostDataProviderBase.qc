@@ -267,7 +267,9 @@ public class EasyPostDataProviderBase inherits DataProvider::AbstractDataProvide
     */
     list<hash<auto>> paginate(string path, string result_key, *hash<auto> params, *int limit) {
         list<hash<auto>> results = ();
-        hash<auto> qparams = params ?? {};
+        # "auto!": a caller's literal params may be narrowed, e.g. to hash<string, int> for {"limit": 10},
+        # and adding the string "after_id" key would then raise RUNTIME-TYPE-ERROR
+        hash<auto!> qparams = params ?? {};
         while (True) {
             auto response = doGet(path, qparams);
             *list<auto> page = response{result_key};

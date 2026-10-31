@@ -241,7 +241,10 @@ public class DeepgramRestConnection inherits RestClient::RestConnection {
         \c "deepgram://localhost" when no source option exists to build a URL
         from.  See data-provider-development-guide.md pitfall #17.
     */
-    private static hash<auto> getConfig(hash<auto> config) {
+    private static hash<auto> getConfig(hash<auto> config0) {
+        # a caller's configuration hash may be narrowed (ex: hash<string, string>), and setting the URL or the
+        # options would throw
+        hash<auto!> config = config0;
         config.url = DefaultUrl;
         return config;
     }

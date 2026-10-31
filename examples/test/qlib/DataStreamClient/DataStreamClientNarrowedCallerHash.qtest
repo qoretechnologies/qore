@@ -1,0 +1,161 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpServer
+%requires Logger
+%requires Mime
+%requires yaml
+%requires DataStreamUtil
+%requires DataStreamClient
+%requires DataStreamClientIo
+
+%exec-class DataStreamClientNarrowedCallerHashTest
+
+#! Answers every request with the request headers that the tests check, as YAML
+class HeaderEchoHandler inherits AbstractHttpRequestHandler {
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, make_yaml({
+            "x-count": hdr."x-count",
+            "accept": hdr.accept,
+            "content-type": hdr."content-type",
+            "x-signature": hdr."x-signature",
+            "body": body.typeCode() == NT_BINARY ? body.toString("utf-8") : body,
+        }), {"Content-Type": DataStreamMimeTypeYaml});
+    }
+}
+
+#! Request header hashes whose values all have the same type
+/** A hash literal whose values all have the same type has a narrowed type, such as \c hash<string, int> for
+    <tt>{"X-Count": 1}</tt>; adding a string header to such a hash raised RUNTIME-TYPE-ERROR
+*/
+class DataStreamClientNarrowedCallerHashTest inherits QUnit::Test {
+    private {
+        HttpServer m_http;
+        int port;
+    }
+
+    constructor() : Test("DataStreamClientNarrowedCallerHashTest", "1.0", \ARGV) {
+        addTestCase("DataStreamClient::sendRawStream() with narrowed headers", \syncSendRawStream());
+        addTestCase("DataStreamClient::getRawStream() with narrowed headers", \syncGetRawStream());
+        addTestCase("DataStreamClient::sendAndDecodeResponse() signs narrowed headers",
+            \syncSendAndDecodeResponseSigner());
+        addTestCase("DataStreamClient::addDefaultHeaders() with narrowed headers", \syncAddDefaultHeaders());
+        addTestCase("DataStreamClientIo::sendRawStream() with narrowed headers", \ioSendRawStream());
+        addTestCase("DataStreamClientIo::getRawStream() with narrowed headers", \ioGetRawStream());
+
+        m_http = new HttpServer(<HttpServerOptionInfo>{
+            "logger": new Logger("test", LoggerLevel::getLevelInfo()),
+            "debug": True,
+        });
+        m_http.setHandler("echo", "", NOTHING, new HeaderEchoHandler());
+        m_http.setDefaultHandler("echo", new HeaderEchoHandler());
+        port = m_http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+
+        set_return_value(main());
+
+        m_http.stop();
+    }
+
+    #! Returns its argument with the type it was given
+    static auto mk(auto h) {
+        return h;
+    }
+
+    #! Returns a send callback that sends the given string once
+    static code getSender(string data) {
+        bool sent;
+        return auto sub () {
+            if (sent) {
+                return;
+            }
+            sent = True;
+            return data;
+        };
+    }
+
+    #! Returns a receive callback that collects the message body
+    static code getReceiver(reference<string> body) {
+        return sub (hash<auto> h) {
+            if (exists h.data) {
+                body += h.data.typeCode() == NT_BINARY ? h.data.toString("utf-8") : h.data;
+            }
+        };
+    }
+
+    syncSendRawStream() {
+        assertEq("hash<string, int>", mk({"X-Count": 1}).fullType());
+        DataStreamClient client({"url": "http://localhost:" + port}, True);
+        hash<auto> info;
+        hash<auto> rv = client.sendRawStream(DataStreamClientNarrowedCallerHashTest::getSender("raw"), "POST",
+            "/echo", 30s, \info, {"X-Count": 1});
+        assertEq(200, rv.status_code);
+        assertEq("1", rv.body."x-count");
+        assertEq(DataStreamMimeTypeYaml, rv.body.accept);
+        assertEq("raw", rv.body.body);
+    }
+
+    syncGetRawStream() {
+        DataStreamClient client({"url": "http://localhost:" + port}, True);
+        hash<auto> info;
+        string body;
+        hash<auto> rv = client.getRawStream(DataStreamClientNarrowedCallerHashTest::getReceiver(\body), "POST",
+            "/echo", {"a": 1}, 30s, \info, {"X-Count": 1});
+        assertEq(200, rv.status_code);
+        hash<auto> echo = parse_yaml(body);
+        assertEq("1", echo."x-count");
+        assertEq(DataStreamMimeTypeYaml, echo."content-type");
+        assertEq({"a": 1}, parse_yaml(echo.body));
+    }
+
+    syncSendAndDecodeResponseSigner() {
+        DataStreamClient client({"url": "http://localhost:" + port}, True);
+        hash<auto> info;
+        hash<auto> rv = client.sendAndDecodeResponse(NOTHING, "GET", "/echo", {"X-Count": 1}, \info, NOTHING,
+            NOTHING, "X-Signature", string sub (hash<auto> req) {
+                return sprintf("signed:%s:%d", req.path, req.hdr."X-Count");
+            });
+        assertEq(200, rv.status_code);
+        assertEq("1", rv.body."x-count");
+        assertEq("signed:/echo:1", rv.body."x-signature");
+    }
+
+    syncAddDefaultHeaders() {
+        # the default headers of the client have only string values
+        DataStreamClient client({"url": "http://localhost:" + port}, True);
+        client.addDefaultHeaders({"X-Count": 1});
+        assertEq(1, client.getDefaultHeaders()."X-Count");
+        # the default headers are sent with requests
+        hash<auto> rv = client.get("/echo");
+        assertEq("1", rv.body."x-count");
+    }
+
+    ioSendRawStream() {
+        DataStreamClientIo client({"url": "http://localhost:" + port});
+        hash<auto> info;
+        hash<auto> rv = client.sendRawStream(DataStreamClientNarrowedCallerHashTest::getSender("raw"), "POST",
+            "/echo", 30s, \info, {"X-Count": 1});
+        assertEq(200, rv.status_code);
+        assertEq("1", rv.body."x-count");
+        assertEq(MimeTypeYaml, rv.body.accept);
+        assertEq("raw", rv.body.body);
+    }
+
+    ioGetRawStream() {
+        DataStreamClientIo client({"url": "http://localhost:" + port});
+        hash<auto> info;
+        string body;
+        hash<auto> rv = client.getRawStream(DataStreamClientNarrowedCallerHashTest::getReceiver(\body), "POST",
+            "/echo", {"a": 1}, 30s, \info, {"X-Count": 1});
+        assertEq(200, rv.status_code);
+        hash<auto> echo = parse_yaml(body);
+        assertEq("1", echo."x-count");
+        assertEq(MimeTypeYaml, echo."content-type");
+        assertEq({"a": 1}, parse_yaml(echo.body));
+    }
+}

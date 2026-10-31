@@ -214,9 +214,10 @@ constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //!      a bound-variant flag and exact constructor signature for VT_NEW_OBJECT defaults. This uses a
 //!      fresh version because development versions 20 and 21 had different payloads on the performance branch.
 //!      Opcodes 409/410 retain SnapshotInt/SnapshotFloat. CheckReturnValue is 411;
-//!      IteratorRelease/ReleaseOwnedTemp are appended as 412/413. The reader maps upstream v21
-//!      opcode 409 (header maximum 409 or 411) to CheckReturnValue, and its 410/411 cleanup
-//!      opcodes (maximum 411) to 412/413. Older performance files with maximum 410 retain snapshots.
+//!      IteratorRelease/ReleaseOwnedTemp are appended as 412/413, DebugStatement as 414, and
+//!      result-type instructions as 415..418. The reader maps upstream v21 opcodes 409..416
+//!      (header maximum 409 or 411..416) forward by two. Older performance files with maximum
+//!      410 retain snapshots.
 constexpr uint16_t QORE_AOT_BINARY_VERSION = 22;
 constexpr uint16_t QORE_AOT_OBJECT_DEFAULT_VARIANT_VERSION = 22;
 constexpr uint16_t QORE_AOT_CLOSURE_ENTRY_VERSION = 22;

@@ -342,7 +342,11 @@ public class ServerSentEventConnection inherits ConnectionProvider::AbstractConn
 
         # Handle authorization token
         if ((*string token = remove http_opts.token) && !http_opts.headers.Authorization) {
-            http_opts.headers.Authorization = sprintf("%s %s", http_opts.token_type ?? "Bearer", token);
+            # the header is set in an "auto!" local: a caller's headers option may be narrowed (e.g.
+            # hash<string, int> for {"X-Count": 1}), and adding the Authorization header would throw
+            hash<auto!> hdr = http_opts.headers ?? {};
+            hdr.Authorization = sprintf("%s %s", http_opts.token_type ?? "Bearer", token);
+            http_opts.headers = hdr;
         }
         remove http_opts.token_type;
 

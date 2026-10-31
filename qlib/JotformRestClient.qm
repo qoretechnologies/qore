@@ -140,6 +140,9 @@ public class JotformRestClientBase {
         # the options have values of different types, so the hash must not take the narrow type of the
         # defaults, which would prevent adding values of other types
         hash<auto!> rv = DefaultOptions + opts;
+        # the headers are set in an "auto!" local: a caller's headers option may be narrowed (e.g. hash<string, int>
+        # for {"X-Count": 1}), and adding a string header would throw
+        *hash<auto!> hdr = rv.headers;
         # Validate the api_domain option even if an explicit URL is given
         string domain = opts.api_domain ?? DefaultApiDomain;
         if (!ApiDomains.hasKey(domain)) {
@@ -155,7 +158,10 @@ public class JotformRestClientBase {
         }
         # Set API key header authentication; the header is set (not added), so processing the options again does
         # not change them, and the apikey option is kept so that the options can be processed again
-        rv.headers.APIKEY = opts.apikey;
+        hdr.APIKEY = opts.apikey;
+        if (exists hdr) {
+            rv.headers = hdr;
+        }
         return rv;
     }
 }

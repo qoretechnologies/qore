@@ -134,7 +134,9 @@ public class GorgiasDataProviderBase inherits DataProvider::AbstractDataProvider
         *string cursor;
 
         while (True) {
-            hash<auto> qparams = params ?? {};
+            # "auto!": a caller's literal params may be narrowed, e.g. to hash<string, string> for {"q": "x"},
+            # and adding the int "limit" key would then raise RUNTIME-TYPE-ERROR
+            hash<auto!> qparams = params ?? {};
             qparams.limit = page_size;
             if (cursor) {
                 qparams.cursor = cursor;

@@ -376,6 +376,9 @@ QoreHashNode* qore_object_private::getSlice(const QoreListNode* l, ExceptionSink
     ReferenceHolder<QoreListNode> nl(new QoreListNode(autoTypeInfo), xsink);
     SliceKeyMap int_km;
     ReferenceHolder<QoreListNode> mgl(theclass->hasMemberGate() ? new QoreListNode(autoTypeInfo) : nullptr, xsink);
+    // declared members held in external storage, which are read with their getters once the lock is released
+    const qore_class_private* cls = qore_class_private::get(*theclass);
+    ReferenceHolder<QoreListNode> acl(xsink);
 
     ConstListIterator li(l);
     while (li.next()) {
@@ -389,7 +392,12 @@ QoreHashNode* qore_object_private::getSlice(const QoreListNode* l, ExceptionSink
 
         const qore_class_private* member_class_ctx = nullptr;
         int rc = checkMemberAccessIntern(key->c_str(), has_public_members, class_ctx, member_class_ctx);
-        if (!rc) {
+        if (!rc && cls->findAccessorMember(key->c_str())) {
+            if (!acl) {
+                acl = new QoreListNode(autoTypeInfo);
+            }
+            acl->push(new QoreStringNode(*key), nullptr);
+        } else if (!rc) {
             if (member_class_ctx) {
                 const QoreHashNode* odata = getInternalData(member_class_ctx);
                 bool exists = false;
@@ -454,10 +462,34 @@ QoreHashNode* qore_object_private::getSlice(const QoreListNode* l, ExceptionSink
         }
     }
 
-    if (mgl && !mgl->empty()) {
-        // unlock lock and execute memberGate() method for each method in the member gate list (mgl)
+    if ((mgl && !mgl->empty()) || acl) {
+        // unlock the lock before running the getters of members held in external storage and the memberGate()
+        // method for each member in the member gate list (mgl)
         sl.unlock();
+    }
 
+    if (acl) {
+        ConstListIterator acli(*acl);
+        size_t count = 0;
+        while (acli.next()) {
+            if (++count % 10 == 0 && qore_check_cancel(xsink, "external member reads")) {
+                return nullptr;
+            }
+            QoreStringValueHelper k(acli.getValue());
+            const QoreMemberInfo* ami = cls->findAccessorMember(k->c_str());
+            assert(ami);
+            ValueHolder n(cls->evalMemberAccessorGet(obj, k->c_str(), *ami, xsink), xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            rv->setKeyValue(k->c_str(), n.release(), xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+        }
+    }
+
+    if (mgl && !mgl->empty()) {
         ConstListIterator mgli(*mgl);
         while (mgli.next()) {
             QoreStringValueHelper k(mgli.getValue());
@@ -687,7 +719,16 @@ void qore_object_private::merge(qore_object_private& o, AutoVLock& vl, SafeDeref
 
     bool check_recursive = false;
 
-    if (new_data || new_internal_data) {
+    // the values for members held in external storage are written with their setters, without the object lock
+    ReferenceHolder<QoreHashNode> ext(xsink);
+    if (new_data) {
+        takeAccessorMembersForMerge(*new_data, ext, xsink);
+        if (*xsink) {
+            return;
+        }
+    }
+
+    if ((new_data && !new_data->empty()) || new_internal_data) {
         QoreAutoVarRWWriteLocker al(rml);
 
         if (status == OS_DELETED) {
@@ -703,10 +744,26 @@ void qore_object_private::merge(qore_object_private& o, AutoVLock& vl, SafeDeref
         edgesAdded();
         RSetHelper orsh(*this, xsink);
     }
+
+    if (ext && !*xsink) {
+        mergeAccessorMembers(*ext, class_ctx, vl, xsink);
+    }
 }
 
 void qore_object_private::merge(const QoreHashNode* h, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink) {
     bool check_recursive = false;
+
+    // the values for members held in external storage are written with their setters, without the object lock
+    ReferenceHolder<QoreHashNode> rest(xsink);
+    ReferenceHolder<QoreHashNode> ext(xsink);
+    if (qore_class_private::get(*theclass)->has_member_accessors && !h->empty()) {
+        rest = h->copy();
+        takeAccessorMembersForMerge(*rest, ext, xsink);
+        if (*xsink) {
+            return;
+        }
+        h = *rest;
+    }
 
     if (!h->empty()) {
         // get the current class context for possible internal data
@@ -730,6 +787,78 @@ void qore_object_private::merge(const QoreHashNode* h, AutoVLock& vl, SafeDerefH
         edgesAdded();
         RSetHelper orsh(*this, xsink);
     }
+
+    if (ext && !*xsink) {
+        // get the current class context for the access check of the members held in external storage
+        const qore_class_private* class_ctx = runtime_get_class();
+        if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, class_ctx)) {
+            class_ctx = nullptr;
+        }
+        mergeAccessorMembers(*ext, class_ctx, vl, xsink);
+    }
+}
+
+void qore_object_private::takeAccessorMembersForMerge(QoreHashNode* h, ReferenceHolder<QoreHashNode>& ext,
+        ExceptionSink* xsink) const {
+    const qore_class_private* cls = qore_class_private::get(*theclass);
+    if (!cls->has_member_accessors) {
+        return;
+    }
+    // collect the keys first, as the hash is modified
+    std::vector<std::string> keys;
+    size_t count = 0;
+    {
+        ConstHashIterator hi(h);
+        while (hi.next()) {
+            if (++count % 100 == 0 && qore_check_cancel(xsink, "external member merge preparation")) {
+                return;
+            }
+            if (cls->findAccessorMember(hi.getKey())) {
+                keys.push_back(hi.getKey());
+            }
+        }
+    }
+    if (keys.empty()) {
+        return;
+    }
+    ext = new QoreHashNode(autoTypeInfo);
+    for (const std::string& key : keys) {
+        if (++count % 100 == 0 && qore_check_cancel(xsink, "external member merge preparation")) {
+            return;
+        }
+        // moving the value between the hashes cannot raise an exception
+        qore_hash_private::get(**ext)->setKeyValueIntern(key.c_str(), h->takeKeyValue(key.c_str()));
+    }
+}
+
+int qore_object_private::mergeAccessorMembers(const QoreHashNode* ext, const qore_class_private* class_ctx,
+        AutoVLock& vl, ExceptionSink* xsink) {
+    // keep the object while no lvalue lock holds it
+    ReferenceHolder<QoreObject> holder(static_cast<QoreObject*>(obj->refSelf()), xsink);
+    vl.del();
+    const qore_class_private* cls = qore_class_private::get(*theclass);
+    ConstHashIterator hi(ext);
+    size_t count = 0;
+    while (hi.next()) {
+        if (++count % 10 == 0 && qore_check_cancel(xsink, "external member merge")) {
+            return -1;
+        }
+        const char* key = hi.getKey();
+        const QoreTypeInfo* mti = nullptr;
+        const qore_class_private* member_class_ctx = nullptr;
+        if (checkMemberAccessGetTypeInfo(xsink, key, class_ctx, member_class_ctx, mti)) {
+            return -1;
+        }
+        const QoreMemberInfo* ami = cls->findAccessorMember(key);
+        assert(ami);
+        ValueHolder v(hi.getReferenced(), xsink);
+        // the declared type is checked as for an assignment
+        QoreTypeInfo::acceptInputMember(mti, key, *v, xsink);
+        if (*xsink || cls->evalMemberAccessorSet(obj, key, *ami, *v, xsink)) {
+            return -1;
+        }
+    }
+    return 0;
 }
 
 void qore_object_private::mergeIntern(ExceptionSink* xsink, const QoreHashNode* h, bool& check_recursive,
@@ -859,6 +988,12 @@ QoreValue qore_object_private::takeMember(ExceptionSink* xsink, const char* key,
         return QoreValue();
     }
 
+    // a declared member held in external storage is read and cleared with its accessors, without the object lock
+    if (cls->findAccessorMember(key)) {
+        return cls->evalExternalMemberWrite(obj, key, QoreValue(),
+            for_delete ? QoreMemberWriteOp::Delete : QoreMemberWriteOp::Remove, xsink);
+    }
+
     QoreAutoVarRWWriteLocker al(rml);
 
     if (status == OS_DELETED) {
@@ -901,6 +1036,20 @@ QoreValue qore_object_private::takeMember(LValueHelper& lvh, const char* key, bo
         return QoreValue();
     }
 
+    // a declared member held in external storage is read and cleared with its accessors, which can run any code, so
+    // the lvalue's locks are released first
+    if (cls->findAccessorMember(key)) {
+        ReferenceHolder<QoreObject> holder(static_cast<QoreObject*>(obj->refSelf()), lvh.vl.xsink);
+        lvh.vl.del();
+        QoreValue value = cls->evalExternalMemberWrite(obj, key, QoreValue(),
+            for_delete ? QoreMemberWriteOp::Delete : QoreMemberWriteOp::Remove, lvh.vl.xsink);
+        if (exists) {
+            // a declared member always exists
+            *exists = !*lvh.vl.xsink;
+        }
+        return value;
+    }
+
     QoreAutoVarRWWriteLocker al(rml);
 
     if (status == OS_DELETED) {
@@ -929,7 +1078,8 @@ QoreValue qore_object_private::takeMember(LValueHelper& lvh, const char* key, bo
 void qore_object_private::takeMembers(QoreLValueGeneric& rv, LValueHelper& lvh, const QoreListNode* l,
         bool for_delete) {
     lvh.disableMemberWriteBack();
-    if (theclass->hasMemberWriteGate()) {
+    // members held in external storage are taken one at a time, as their accessors and gates run without locks
+    if (theclass->hasMemberWriteGate() || qore_class_private::get(*theclass)->has_member_accessors) {
         ReferenceHolder<QoreObject> holder(static_cast<QoreObject*>(obj->refSelf()), lvh.vl.xsink);
         lvh.vl.del();
         ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), lvh.vl.xsink);
@@ -1082,6 +1232,11 @@ int qore_object_private::getLValue(const char* key, LValueHelper& lvh, const qor
         return -1;
     }
 
+    // a declared member held in external storage is bound to a temporary that is written with its setter
+    if (const QoreMemberInfo* ami = cls->findAccessorMember(key)) {
+        return lvh.setMemberWriteGateLValue(obj, key, ami);
+    }
+
     // do lock handoff
     qore_object_lock_handoff_helper qolhh(const_cast<qore_object_private*>(this), lvh.vl);
 
@@ -1122,6 +1277,10 @@ int qore_object_private::getLValueResolvedPrehashed(const char* key,
         const qore_class_private* class_ctx, LValueHelper& lvh,
         bool for_remove, ExceptionSink* xsink) {
     lvh.disableMemberWriteBack();
+    // a declared member held in external storage is bound to a temporary that is written with its setter
+    if (info.getAccessors()) {
+        return lvh.setMemberWriteGateLValue(obj, key, &info);
+    }
     const qore_class_private* member_class_ctx =
         info.getClassContext(class_ctx);
     const QoreTypeInfo* mti = qore_substitute_type_params_if_needed(
@@ -1161,7 +1320,8 @@ int qore_object_private::tryAssignScalarMemberResolvedPrehashed(
         const char* key, size_t hash, const QoreMemberInfo& info,
         const qore_class_private* member_class_ctx, QoreValue value,
         qore_type_t expected_type, ExceptionSink* xsink) {
-    if (value.getType() != expected_type) {
+    // a member held in external storage has no value in the object to assign; the caller uses the lvalue path
+    if (value.getType() != expected_type || info.getAccessors()) {
         return 0;
     }
     const QoreTypeInfo* member_type = qore_substitute_type_params_if_needed(
@@ -1208,6 +1368,10 @@ int qore_object_private::getLValueOrUpdateIntMember(const char* key,
     if (checkMemberAccessGetTypeInfo(xsink, key, class_ctx, member_class_ctx, member_type)) {
         return -1;
     }
+    // Declared external members use their getter/setter temporary, never object storage.
+    if (const QoreMemberInfo* ami = cls->findAccessorMember(key)) {
+        return lvh.setMemberWriteGateLValue(obj, key, ami);
+    }
     // Use the same lock/existence-pin handoff as getLValue(), including on fallback.
     qore_object_lock_handoff_helper qolhh(this, lvh.vl);
     if (status == OS_DELETED) {
@@ -1250,7 +1414,7 @@ bool qore_object_private::tryUpdateInlineIntMemberImpl(const char* key, size_t h
         const qore_class_private* class_ctx, int64_t delta) {
     assert(delta == 1 || delta == -1);
     const qore_class_private* cls = qore_class_private::get(*theclass);
-    if (cls->member_write_gate && !cls->members.find(key)) {
+    if (cls->isExternalMemberForWrite(key)) {
         return false;
     }
     const qore_class_private* member_class_ctx = nullptr;
@@ -1299,8 +1463,11 @@ template <bool Prehashed, bool Internal>
 bool qore_object_private::tryReadScalarMemberImpl(const char* mem, size_t hash,
         const qore_class_private* class_ctx, int64_t* integer, double* floating) const {
     assert(mem && (bool(integer) != bool(floating)));
+    const qore_class_private* cls = qore_class_private::get(*theclass);
+    if (cls->findAccessorMember(mem)) {
+        return false;
+    }
     if constexpr (!Internal) {
-        const qore_class_private* cls = qore_class_private::get(*theclass);
         if (cls->memberGate && (cls->member_write_gate || cls->memberGate->isBuiltin())
                 && !cls->members.find(mem)) {
             return false;
@@ -1367,6 +1534,10 @@ QoreValue qore_object_private::getReferencedMemberForSelf(const char* mem, Excep
 }
 
 QoreValue qore_object_private::getReferencedMemberNoMethod(const char* mem, ExceptionSink* xsink) const {
+    const qore_class_private* cls = qore_class_private::get(*theclass);
+    if (const QoreMemberInfo* ami = cls->findAccessorMember(mem)) {
+        return cls->evalMemberAccessorGet(obj, mem, *ami, xsink);
+    }
     const qore_class_private* class_ctx = runtime_get_class();
     const qore_class_private* member_class_ctx = qore_class_private::get(*theclass)->runtimeGetMemberContext(mem,
         class_ctx);
@@ -1377,6 +1548,10 @@ QoreValue qore_object_private::getReferencedMemberNoMethod(const char* mem, Exce
 QoreValue qore_object_private::getReferencedMemberNoMethodResolved(
         const char* mem, const qore_class_private* member_class_ctx,
         ExceptionSink* xsink) const {
+    const qore_class_private* cls = qore_class_private::get(*theclass);
+    if (const QoreMemberInfo* ami = cls->findAccessorMember(mem)) {
+        return cls->evalMemberAccessorGet(obj, mem, *ami, xsink);
+    }
 
     QoreSafeVarRWReadLocker sl(rml);
 
@@ -1398,6 +1573,10 @@ QoreValue qore_object_private::getReferencedMemberNoMethodResolvedPrehashed(
         const char* mem, size_t hash,
         const qore_class_private* member_class_ctx,
         ExceptionSink* xsink) const {
+    const qore_class_private* cls = qore_class_private::get(*theclass);
+    if (const QoreMemberInfo* ami = cls->findAccessorMember(mem)) {
+        return cls->evalMemberAccessorGet(obj, mem, *ami, xsink);
+    }
     QoreSafeVarRWReadLocker sl(rml);
 
     if (status == OS_DELETED) {
@@ -1428,6 +1607,15 @@ void qore_object_private::setValue(const char* key, QoreValue val, ExceptionSink
 // runtime class context
 void qore_object_private::setValueIntern(const qore_class_private* class_ctx, const char* key, QoreValue val,
         ExceptionSink* xsink) {
+    // a declared member held in external storage is written with its setter; the value is consumed in any case
+    {
+        const qore_class_private* cls = qore_class_private::get(*theclass);
+        if (const QoreMemberInfo* ami = cls->findAccessorMember(key)) {
+            ValueHolder holder(val, xsink);
+            cls->evalMemberAccessorSet(obj, key, *ami, *holder, xsink);
+            return;
+        }
+    }
     QoreValue old_value{};
 
     // initial count (true = possible recursive cycle, false = no cycle possible)
@@ -2236,6 +2424,11 @@ QoreValue QoreObject::evalMember(const char* mem, ExceptionSink* xsink) {
         return QoreValue();
     }
 
+    // a declared member held in external storage is read with its getter
+    if (const QoreMemberInfo* ami = cls->findAccessorMember(mem)) {
+        return cls->evalMemberAccessorGet(this, mem, *ami, xsink);
+    }
+
     QoreValue rv{};
     bool exists;
     {
@@ -2476,7 +2669,15 @@ void QoreObject::deleteMemberValue(const char* key, ExceptionSink* xsink) {
     }
 
     QoreValue v{};
-    {
+    const qore_class_private* cls = qore_class_private::get(*priv->theclass);
+    if (cls->findAccessorMember(key)) {
+        // a declared member held in external storage is read and cleared with its accessors
+        v = cls->evalExternalMemberWrite(this, key, QoreValue(), QoreMemberWriteOp::Delete, xsink);
+        if (*xsink) {
+            v.discard(xsink);
+            return;
+        }
+    } else {
         QoreSafeVarRWWriteLocker sl(priv->rml);
 
         if (priv->status == OS_DELETED) {
@@ -2549,6 +2750,12 @@ int QoreObject::size(ExceptionSink* xsink) const {
 }
 
 int64 QoreObject::getMemberAsBigInt(const char* mem, bool& found, ExceptionSink* xsink) const {
+    const qore_class_private* cls = qore_class_private::get(*priv->theclass);
+    if (const QoreMemberInfo* ami = cls->findAccessorMember(mem)) {
+        ValueHolder v(cls->evalMemberAccessorGet(const_cast<QoreObject*>(this), mem, *ami, xsink), xsink);
+        found = !*xsink;
+        return *xsink ? 0 : v->getAsBigInt();
+    }
     QoreSafeVarRWReadLocker sl(priv->rml);
 
     if (priv->status == OS_DELETED) {
@@ -2587,6 +2794,11 @@ bool QoreObject::hasMember(const char* mem, ExceptionSink* xsink) const {
     if (priv->status == OS_DELETED) {
         makeAccessDeletedObjectException(xsink, mem, priv->theclass->getName());
         return false;
+    }
+
+    // a declared member held in external storage is always present in a valid object
+    if (qore_class_private::get(*priv->theclass)->findAccessorMember(mem)) {
+        return true;
     }
 
     const QoreHashNode* odata = member_class_ctx ? priv->getInternalData(member_class_ctx) : priv->data;

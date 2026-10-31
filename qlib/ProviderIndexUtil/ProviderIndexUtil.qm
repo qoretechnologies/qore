@@ -131,6 +131,8 @@ if (*hash<ProviderIndexFailureInfo> failure = ProviderIndexUtil::tryGetActionFai
     @section providerindexutil_relnotes Release Notes
 
     @subsection providerindexutil_v1_2 ProviderIndexUtil v1.2
+    - @ref ProviderIndexUtil::ProviderIndexUtil::writeDataProviderIndexByApp() "writeDataProviderIndexByApp()"
+      accepts index maps whose values all have the same type, such as an index of factories only
     - added a versioned, app-sharded MessagePack metadata cache with per-shard integrity validation and canonical
       YAML fallback
     - added @ref ProviderIndexUtil::ProviderIndexUtil::reloadIndex() "ProviderIndexUtil::reloadIndex()", which

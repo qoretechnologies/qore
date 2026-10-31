@@ -176,7 +176,11 @@ public class GoHighLevelRestClientBase {
             # client_id by taking the portion before the first hyphen
             *string version_id = (opts.oauth2_client_id =~ x/^([0-9a-f]{24})-/)[0];
             if (version_id) {
-                rv.oauth2_auth_args += {"version_id": version_id};
+                # the argument is set in an "auto!" local: a caller's oauth2_auth_args option may be narrowed (e.g.
+                # hash<string, int> for {"max_age": 3600}), and adding the string version_id would throw
+                hash<auto!> auth_args = rv.oauth2_auth_args ?? {};
+                auth_args.version_id = version_id;
+                rv.oauth2_auth_args = auth_args;
             }
         }
 
@@ -282,7 +286,11 @@ GoHighLevelRestClient ghl({
                 # Count path segments — top-level = 1-2 segments (e.g., "contacts/search")
                 list<string> segments = clean_path.split("/");
                 if (segments.size() <= 2) {
-                    body.locationId = location_id;
+                    # "auto!": a caller's literal body may be narrowed, e.g. to hash<string, int> for
+                    # {"pageLimit": 20}, and adding the string locationId would then raise RUNTIME-TYPE-ERROR
+                    hash<auto!> b = body;
+                    b.locationId = location_id;
+                    body = b;
                 }
             }
         }
@@ -509,7 +517,11 @@ public class GoHighLevelRestConnection inherits RestClient::RestConnection {
         if (opts.oauth2_client_id && !opts.oauth2_auth_args.version_id) {
             *string version_id = (opts.oauth2_client_id =~ x/^([0-9a-f]{24})-/)[0];
             if (version_id) {
-                opts.oauth2_auth_args.version_id = version_id;
+                # the argument is set in an "auto!" local: the oauth2_auth_args option may be narrowed (e.g.
+                # hash<string, int> for {"max_age": 3600}), and adding the string version_id would throw
+                hash<auto!> auth_args = opts.oauth2_auth_args ?? {};
+                auth_args.version_id = version_id;
+                opts.oauth2_auth_args = auth_args;
             }
         }
         return RestConnection::getAuthorizationCodeRequest(info);
@@ -612,7 +624,11 @@ public class GoHighLevelRestClientIo inherits RestClientIo::RestClientIo, GoHigh
             string clean_path = (path =~ x/^([^?]+)/)[0] ?? path;
             clean_path =~ s/^\///;
             if (clean_path.split("/").size() <= 2) {
-                body.locationId = loc_id;
+                # "auto!": a caller's literal body may be narrowed, e.g. to hash<string, int> for
+                # {"pageLimit": 20}, and adding the string locationId would then raise RUNTIME-TYPE-ERROR
+                hash<auto!> b = body;
+                b.locationId = loc_id;
+                body = b;
             }
         }
         return RestClientIo::prepareRequest(method, \path, body, \hdr, request_context);

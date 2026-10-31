@@ -1,0 +1,60 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ConnectionProvider
+%requires RestClient
+%requires GoogleRestClient
+
+%exec-class GoogleRestClientNarrowedCallerHashTest
+
+#! Returns its argument with its runtime type, so a literal reaches the call as a caller's literal does
+hash<auto> sub mk(hash<auto> h) {
+    return h;
+}
+
+#! GoogleDriveRestConnection::getDriveOptions() adds the Drive API profile to the caller's option hash
+/** A caller's option literal whose values all have the same type, such as
+    \c {"oauth2_scopes": ("https://www.googleapis.com/auth/drive",)}, is narrowed to that type, so adding the string
+    \c api_profile option raised RUNTIME-TYPE-ERROR, also instead of the real configuration error of a connection.
+    The connections are created without connecting.
+*/
+class GoogleRestClientNarrowedCallerHashTest inherits QUnit::Test {
+    private {
+        const Scopes = ("https://www.googleapis.com/auth/drive",);
+    }
+
+    constructor() : Test("GoogleRestClientNarrowedCallerHashTest", "1.0", \ARGV) {
+        addTestCase("getDriveOptions adds the profile to list-valued options", \driveOptionsTest());
+        addTestCase("Drive connection reports the missing credentials for list-valued options", \connectionTest());
+        set_return_value(main());
+    }
+
+    driveOptionsTest() {
+        assertEq("hash<string, list<string>>", mk({"oauth2_scopes": Scopes}).fullType());
+        assertEq({"oauth2_scopes": Scopes, "api_profile": "drive"},
+            GoogleDriveRestConnection::getDriveOptions({"oauth2_scopes": Scopes}));
+        # a profile chosen by the caller is kept
+        assertEq({"api_profile": "sheets"}, GoogleDriveRestConnection::getDriveOptions({"api_profile": "sheets"}));
+        assertEq({"api_profile": "drive"}, GoogleDriveRestConnection::getDriveOptions());
+    }
+
+    connectionTest() {
+        assertThrows("CONNECTION-OPTION-ERROR", "missing required options", sub () {
+            new GoogleDriveRestConnection({
+                "name": "gd",
+                "url": "https://www.googleapis.com",
+                "opts": {"oauth2_scopes": Scopes},
+            });
+        });
+        assertThrows("CONNECTION-OPTION-ERROR", "missing required options", sub () {
+            new GoogleDriveRestConnection("gd", "Google Drive", "https://www.googleapis.com", {},
+                {"oauth2_scopes": Scopes});
+        });
+    }
+}

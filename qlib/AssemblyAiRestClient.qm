@@ -168,7 +168,9 @@ public class AssemblyAiRestClientBase {
             }
             remove rv.region;
         }
-        hash<auto> headers = rv.headers ?? {};
+        # the headers are set in an "auto!" local: a caller's headers option may be narrowed (e.g.
+        # hash<string, int> for {"X-Count": 1}), and adding the Authorization header would throw
+        hash<auto!> headers = rv.headers ?? {};
         if (exists rv.apikey) {
             if (rv.apikey.typeCode() != NT_STRING || rv.apikey !~ /\S/
                     || rv.apikey =~ /[\r\n]/) {
@@ -627,13 +629,18 @@ public class AssemblyAiRestConnection inherits RestClient::RestConnection {
     /** The region option selects the canonical US or EU transcript endpoint. An existing EU URL
         supplies the region when no option was stored. Canonicalization also supports URL-free connection editors.
     */
-    private static hash<auto> getConfig(hash<auto> config) {
-        string region = config.opts.region
+    private static hash<auto> getConfig(hash<auto> config0) {
+        # a caller's configuration and option hashes may be narrowed (ex: hash<string, string>), and setting the URL
+        # or the region would throw
+        hash<auto!> config = config0;
+        *hash<auto!> opts = config.opts;
+        string region = opts.region
             ?? (parse_url(config.url ?? DefaultUrl).host == "api.eu.assemblyai.com" ? "eu" : "us");
         if (region != "us" && region != "eu") {
             throw "ASSEMBLYAI-CONFIG-ERROR", "region must be 'us' or 'eu'";
         }
-        config.opts.region = region;
+        opts.region = region;
+        config.opts = opts;
         config.url = region == "eu" ? "assemblyai://api.eu.assemblyai.com" : DefaultUrl;
         return config;
     }

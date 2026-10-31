@@ -1,0 +1,71 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+%requires Sqlite3SqlUtil
+%requires TableMapper
+
+%try-module sqlite3
+%define NO_SQLITE3
+%endtry
+
+%exec-class TableMapperNarrowedCallerHashTest
+
+#! An SQLite table that reports array bind support while data is queued, so that the mapper buffers record sets
+/** The flag is cleared before the buffer is flushed, so that the rows are inserted one by one
+*/
+class NarrowedHashBulkSqliteTable inherits Sqlite3SqlUtil::Sqlite3Table {
+    public {
+        bool array_bind = True;
+    }
+
+    constructor(AbstractDatasource ds, string name) : Sqlite3Table(ds, name) {
+    }
+
+    bool hasArrayBind() {
+        return array_bind;
+    }
+}
+
+#! InboundTableMapper::queueData() accepts a record set whose values all have the same type
+/** A hash literal whose values all have the same type is narrowed, e.g. {"a": ("1", "2")} is
+    hash<string, list<string>>; adding a constant value from the \a crec argument raised RUNTIME-TYPE-ERROR
+*/
+class TableMapperNarrowedCallerHashTest inherits QUnit::Test {
+    constructor() : Test("TableMapperNarrowedCallerHashTest", "1.0", \ARGV) {
+        addTestCase("queueData() adds a constant to a narrowed record set", \queueDataConstant());
+        set_return_value(main());
+    }
+
+    #! returns the hash passed, keeping its runtime type
+    private static hash<auto> mk(hash<auto> h) {
+        return h;
+    }
+
+    queueDataConstant() {
+%ifdef NO_SQLITE3
+        testSkip("sqlite3 module unavailable");
+%endif
+        Datasource ds("sqlite3:x@:memory:");
+        on_exit ds.rollback();
+        ds.exec("create table nh_map (id integer, name varchar(20), code varchar(20))");
+        NarrowedHashBulkSqliteTable t(ds, "nh_map");
+        InboundTableMapper m(t, {"id": "a", "name": "b", "code": "c"}, {"insert_block": 10});
+
+        assertEq("hash<string, list<string>>", mk({"a": ("1", "2"), "b": ("x", "y")}).fullType());
+        {
+            on_error m.discard();
+            assertEq(NOTHING, m.queueData({"a": ("1", "2"), "b": ("x", "y")}, {"c": "k"}));
+            t.array_bind = False;
+            m.flush();
+        }
+        assertEq(({"id": 1, "name": "x", "code": "k"}, {"id": 2, "name": "y", "code": "k"}),
+            ds.selectRows("select * from nh_map order by id"));
+    }
+}

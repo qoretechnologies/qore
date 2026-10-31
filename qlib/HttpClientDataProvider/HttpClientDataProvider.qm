@@ -118,6 +118,9 @@ module HttpClientDataProvider {
     @section httpclientdataprovider_relnotes Release Notes
 
     @subsection httpclientdataprovider_v1_2 HttpClientDataProvider v1.2
+    - fixed the \c headers option with values that all have the same type, such as a literal
+      <tt>{"X-Count": 1}</tt>: basic authentication, a request body and request headers of another type raised
+      \c RUNTIME-TYPE-ERROR
     - requests are made with a
       @ref HttpClientIo::HttpClientConnectionManager "HttpClientIo::HttpClientConnectionManager" instead of a
       synchronous @ref Qore::HTTPClient "HTTPClient"; a synchronous client passed to a data provider is

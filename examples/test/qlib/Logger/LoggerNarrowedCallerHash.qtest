@@ -1,0 +1,59 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+
+%exec-class LoggerNarrowedCallerHashTest
+
+#! A searchable appender whose search capabilities give its source with a literal whose values are all strings
+class NarrowedSourceAppender inherits LoggerAppenderWithLayout, LoggerSearchableAppender {
+    constructor() : LoggerAppenderWithLayout("narrowed", new LoggerLayoutPattern()) {
+    }
+
+    processEventImpl(int type, auto params) {
+    }
+
+    hash<auto> getSearchCapabilities() {
+        return {
+            "source": {"name": "memory-buffer", "kind": "memory"},
+        };
+    }
+
+    hash<auto> searchRenderedEvents(hash<auto> request) {
+        return {};
+    }
+}
+
+#! Search sources given by appenders with hashes whose values all have the same type
+/** A hash literal whose values all have the same type, such as <tt>{"name": "memory-buffer"}</tt>, has a narrowed
+    type (here <tt>hash<string, string></tt>); normalizing a search source adds the integer \c source_index member
+    to the source hash that the appender gave
+*/
+class LoggerNarrowedCallerHashTest inherits QUnit::Test {
+    constructor() : Test("LoggerNarrowedCallerHashTest", "1.0", \ARGV) {
+        addTestCase("search sources of a searchable appender", \searchableAppenderSources());
+        set_return_value(main());
+    }
+
+    searchableAppenderSources() {
+        NarrowedSourceAppender appender();
+        assertEq("hash<string, string>", appender.getSearchCapabilities().source.fullType());
+        list<hash<auto>> sources = LoggerSearchUtil::getAppenderSearchSources(appender);
+        assertEq(1, sources.size());
+        hash<auto> source = sources[0];
+        assertEq("memory-buffer", source.name);
+        # the appender's kind is kept
+        assertEq("memory", source.kind);
+        assertEq(0, source.source_index);
+        # the id is taken from the name
+        assertEq("memory-buffer", source.id);
+        assertEq(Type::String, source.source_fingerprint.type());
+        assertTrue(source.source_fingerprint.val());
+    }
+}

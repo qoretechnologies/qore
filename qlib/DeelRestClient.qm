@@ -123,6 +123,9 @@ public class DeelRestClientBase {
         # the options have values of different types, so the hash must not take the narrow type of the
         # defaults, which would prevent adding values of other types
         hash<auto!> rv = DefaultOptions + opts;
+        # the headers are set in an "auto!" local: a caller's headers option may be narrowed (e.g. hash<string, int>
+        # for {"X-Count": 1}), and adding a string header would throw
+        *hash<auto!> hdr = rv.headers;
 
         # Set API URL (use default unless caller provided an override)
         if (!rv.url) {
@@ -137,9 +140,12 @@ public class DeelRestClientBase {
 
         # Set Bearer token Authorization header and remove apikey from opts
         # so that RestClient does not attempt to handle it specially
-        rv.headers.Authorization = "Bearer " + opts.apikey;
+        hdr.Authorization = "Bearer " + opts.apikey;
         remove rv.apikey;
 
+        if (exists hdr) {
+            rv.headers = hdr;
+        }
         return rv;
     }
 }

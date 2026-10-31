@@ -77,8 +77,12 @@ public class BcCompaniesDataProvider inherits CdsRestDataProviderBase {
     constructor(*hash<auto> options) {
         bool auto_config = DataProvider::getAutoConfig();
         if (auto_config) {
-            map options{$1.key} = ENV{$1.value}, EnvOptions.pairIterator(),
-                exists ENV{$1.value} && !exists options{$1.key};
+            # "auto!": a caller's literal option hash may be narrowed, e.g. to hash<string, hash<string, string>>
+            # for {"cdsrestclient_options": {...}}, and adding a string option would then raise RUNTIME-TYPE-ERROR
+            *hash<auto!> opts = options;
+            map opts{$1.key} = ENV{$1.value}, EnvOptions.pairIterator(),
+                exists ENV{$1.value} && !exists opts{$1.key};
+            options = opts;
         }
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", BaseConstructorOptions, options);
         if (copts.cdsrestclient) {

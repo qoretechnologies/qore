@@ -227,7 +227,8 @@ public class AzureOpenAiRestClientBase {
     */
     static hash<auto> getOptions(hash<auto> options) {
         AzureOpenAiRestClientBase::validateOptions(options);
-        hash<auto> rv = options - AzureOptions;
+        # a caller's option hash may be narrowed (ex: hash<string, string>), and adding the headers would throw
+        hash<auto!> rv = options - AzureOptions;
         if (!rv.data || rv.data == "auto") {
             rv.data = "json";
         }
@@ -288,7 +289,11 @@ public class AzureOpenAiRestClient inherits RestClient::RestClient, AzureOpenAiR
     }
 
     private signRequest(string method, *string path, *data body, reference<hash<auto>> hdr) {
-        hdr += getAzureAuthHeader();
+        # the header is added in an "auto!" local: a caller's literal may be narrowed (e.g. hash<string, int> for
+        # {"X-Count": 1}), and adding the authentication header would throw
+        *hash<auto!> h = hdr;
+        h += getAzureAuthHeader();
+        hdr = h;
     }
 
     private AbstractRestClient copySelf(hash<auto> options) {

@@ -1,0 +1,126 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+
+%exec-class HttpServerNarrowedCallerHashTest
+
+#! Answers with response headers whose values all have the same type
+class NarrowedHeaderHandler inherits AbstractHttpRequestHandler {
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        switch (hdr.path) {
+            case "int":
+                return {"code": 200, "body": "fine", "hdr": {"X-Count": 1}};
+            case "none":
+                return {"code": 200, "body": "fine"};
+            case "error":
+                return {"code": 404, "body": "not here", "hdr": {"X-Count": 1}};
+            case "stream":
+                return {"code": 200, "body": new StringInputStream("streamed"), "hdr": {"X-Count": 1}};
+        }
+        return {"code": 400, "body": "unknown path"};
+    }
+}
+
+#! Gives access to the listeners of the server
+class TestHttpServer inherits HttpServer {
+    constructor(hash<HttpServerOptionInfo> opts) : HttpServer(opts) {
+    }
+
+    HttpListener getListener(softstring id) {
+        return listeners{id};
+    }
+}
+
+#! Response header hashes whose values all have the same type
+/** A hash literal whose values all have the same type has a narrowed type, such as \c hash<string, int> for
+    <tt>{"X-Instance": 1}</tt>; adding the server's string headers to such a hash raised RUNTIME-TYPE-ERROR
+*/
+class HttpServerNarrowedCallerHashTest inherits QUnit::Test {
+    constructor() : Test("HttpServerNarrowedCallerHashTest", "1.0", \ARGV) {
+        addTestCase("the hdr option with narrowed headers", \hdrOption());
+        addTestCase("sendHttpError() with narrowed extra headers", \sendHttpErrorTest());
+        set_return_value(main());
+    }
+
+    #! Returns its argument with the type it was given
+    static auto mk(auto h) {
+        return h;
+    }
+
+    hdrOption() {
+        assertEq("hash<string, int>", mk({"X-Instance": 1}).fullType());
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("test", LoggerLevel::getLevelInfo()),
+            "debug": True,
+            "hdr": {"X-Instance": 1},
+        });
+        on_exit server.stop();
+        server.setHandler("h", "", NOTHING, new NarrowedHeaderHandler());
+        server.setDefaultHandler("h", new NarrowedHeaderHandler());
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+
+        foreach string http_version in ("1.1", "1.0") {
+            HTTPClient hc({"url": "http://localhost:" + port, "http_version": http_version});
+            foreach string path in ("int", "none", "stream") {
+                hash<auto> resp = hc.send(NOTHING, "GET", "/" + path);
+                string msg = sprintf("HTTP/%s %s", http_version, path);
+                assertEq(200, resp.status_code, msg);
+                assertEq("1", resp."x-instance", msg);
+                assertEq(path == "none" ? NOTHING : "1", resp."x-count", msg);
+                assertEq(path == "stream" ? "streamed" : "fine", resp.body, msg);
+            }
+            try {
+                hc.send(NOTHING, "GET", "/error");
+                assertTrue(False, "the error response raises an exception");
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("HTTP-CLIENT-RECEIVE-ERROR", ex.err);
+                assertEq(404, ex.arg.status_code);
+                assertEq("1", ex.arg."x-instance");
+                assertEq("1", ex.arg."x-count");
+                assertEq("not here", ex.arg.body);
+            }
+        }
+    }
+
+    sendHttpErrorTest() {
+        TestHttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("test", LoggerLevel::getLevelInfo()),
+            "debug": True,
+        });
+        on_exit server.stop();
+        hash<auto> linfo = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0});
+        HttpListener listener = server.getListener(linfo.id);
+
+        # a connected socket pair
+        Socket ls();
+        ls.bind("127.0.0.1:0", True);
+        ls.listen();
+        Socket client();
+        client.connect(sprintf("127.0.0.1:%d", ls.getSocketInfo().port));
+        Socket s = ls.accept(10s);
+
+        hash<auto> cx = {
+            "id": 1,
+            "listener-id": linfo.id,
+            "hdr": {"http_version": "1.1", "method": "GET", "path": "/"},
+            "header-info": {},
+        };
+        assertEq("hash<string, int>", mk({"X-Count": 1}).fullType());
+        server.sendHttpError(listener, cx, s, 404, NOTHING, new StringInputStream("not here"), {"X-Count": 1},
+            "utf-8", False);
+        hash<auto> resp = client.readHTTPHeader(10s);
+        assertEq(404, resp.status_code);
+        assertEq("1", resp."x-count");
+        assertEq("chunked", resp."transfer-encoding");
+        assertEq("not here", client.readHTTPChunkedBody(10s).body);
+    }
+}

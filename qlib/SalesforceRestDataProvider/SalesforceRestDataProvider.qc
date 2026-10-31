@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore SalesforceRestDataProvider module definition
 
-/** SalesforceRestDataProvider.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** SalesforceRestDataProvider.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -58,8 +58,12 @@ public class SalesforceRestDataProvider inherits SalesforceRestDataProviderBase 
     constructor(*hash<auto> options) {
         bool auto_config = DataProvider::getAutoConfig();
         if (auto_config) {
-            map options{$1.key} = ENV{$1.value}, EnvOptions.pairIterator(),
-                exists ENV{$1.value} && !exists options{$1.key};
+            # the options may be narrowed (ex: hash<string, hash<string, string>>), and adding a string from the
+            # environment would throw, so the options are added in a hash<auto!> local
+            *hash<auto!> opts = options;
+            map opts{$1.key} = ENV{$1.value}, EnvOptions.pairIterator(),
+                exists ENV{$1.value} && !exists opts{$1.key};
+            options = opts;
         }
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
         if (copts.salesforcerestclient) {

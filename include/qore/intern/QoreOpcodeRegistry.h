@@ -57,7 +57,7 @@ struct OpcodeInfo {
 #define OPCODE_MIN_OPERANDS(n) (-(static_cast<int>(n) + 2))
 
 //! Registry of all IR opcodes (in enum ID order)
-constexpr OpcodeInfo OPCODE_REGISTRY[415] = {
+constexpr OpcodeInfo OPCODE_REGISTRY[419] = {
     { "ConstInt"                      , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 0
     { "ConstFloat"                    , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 1
     { "ConstBool"                     , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 2
@@ -473,12 +473,16 @@ constexpr OpcodeInfo OPCODE_REGISTRY[415] = {
     { "IteratorRelease"                , false, false, false,  1, "Release the iterator of a foreach statement that a return or break leaves", true , true , "ForEachStatement", false, false, false, false, false }, // 412
     { "ReleaseOwnedTemp"               , false, false, false,  1, "Release the temporary of an enclosing statement that a return leaves", true , true , "ParseNode", false, false, false, false, false }, // 413
     { "DebugStatement"                  , false, false, false,  0, "Debugger step event for the statement that follows", true , true , "AbstractStatement", false, false, false, false, false }, // 414
+    { "ListSetCommonType"              , false, false, false,  2, "Set the type of a map result list from the common value type", false, true , "QoreMapOperatorNode", false, false, false, false, false }, // 415
+    { "CommonTypeFold"                 , false, true , false,  3, "Fold a map value type into the common value type", false, false, "QoreMapOperatorNode", true , false, false, false, false }, // 416
+    { "HashSetCommonType"              , false, false, false,  2, "Set the type of a hash map result from the common value type", false, false, "QoreHashMapOperatorNode", false, false, false, false, false }, // 417
+    { "ListSetScannedType"             , false, false, false, -1, "Set the type of a select result list from its values", false, true , "QoreSelectOperatorNode", false, false, false, false, false }, // 418
 };
 
 //! Static assertion to verify registry completeness
 static_assert(
-    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 415,
-    "OPCODE_REGISTRY has incorrect entry count - should be exactly 415"
+    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 419,
+    "OPCODE_REGISTRY has incorrect entry count - should be exactly 419"
 );
 
 //! ============================================================================

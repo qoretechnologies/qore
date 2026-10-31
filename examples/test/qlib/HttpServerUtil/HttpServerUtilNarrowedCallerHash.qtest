@@ -1,0 +1,78 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpServerUtil
+
+%exec-class HttpServerUtilNarrowedCallerHashTest
+
+#! Response hashes whose values all have the same type
+/** A hash literal whose values all have the same type has a narrowed type, such as \c hash<string, int> for
+    <tt>{"code": 204}</tt>; setting the response headers in such a hash raised RUNTIME-TYPE-ERROR
+*/
+class HttpServerUtilNarrowedCallerHashTest inherits QUnit::Test {
+    constructor() : Test("HttpServerUtilNarrowedCallerHashTest", "1.0", \ARGV) {
+        addTestCase("http_set_reply_headers() with a narrowed response", \setReplyHeadersNarrowedResponse());
+        addTestCase("http_set_reply_headers() with narrowed headers", \setReplyHeadersNarrowedHeaders());
+        addTestCase("http_set_reply_headers() with a hashdecl response", \setReplyHeadersHashDecl());
+        addTestCase("CookieHelper::set() with narrowed headers", \cookieHelperNarrowedHeaders());
+        set_return_value(main());
+    }
+
+    #! Returns its argument with the type it was given
+    static auto mk(auto h) {
+        return h;
+    }
+
+    setReplyHeadersNarrowedResponse() {
+        assertEq("hash<string, int>", mk({"code": 204}).fullType());
+        Socket s();
+        auto rv = mk({"code": 204});
+        http_set_reply_headers(s, {}, \rv, "test-server");
+        assertEq(204, rv."code");
+        assertEq("Keep-Alive", rv.hdr.Connection);
+        assertEq("test-server", rv.hdr.Server);
+        assertEq(Type::String, rv.hdr.Date.type());
+
+        # a request that requires the connection to be closed
+        rv = mk({"code": 204});
+        http_set_reply_headers(s, {"close": True}, \rv);
+        assertEq("close", rv.hdr.Connection);
+        assertEq(HttpServerString, rv.hdr.Server);
+    }
+
+    setReplyHeadersNarrowedHeaders() {
+        assertEq("hash<string, int>", mk({"code": 200, "hdr": {"X-Api-Version": 2}}).hdr.fullType());
+        Socket s();
+        auto rv = mk({"code": 200, "hdr": {"X-Api-Version": 2}});
+        http_set_reply_headers(s, {}, \rv, "test-server");
+        assertEq(2, rv.hdr."X-Api-Version");
+        assertEq("Keep-Alive", rv.hdr.Connection);
+        assertEq("test-server", rv.hdr.Server);
+    }
+
+    setReplyHeadersHashDecl() {
+        Socket s();
+        hash<HttpHandlerResponseInfo> rv = <HttpHandlerResponseInfo>{"code": 204};
+        http_set_reply_headers(s, {}, \rv, "test-server");
+        # the response keeps its type
+        assertEq("hash<HttpHandlerResponseInfo>", rv.fullType());
+        assertEq("Keep-Alive", rv.hdr.Connection);
+        assertEq("test-server", rv.hdr.Server);
+    }
+
+    cookieHelperNarrowedHeaders() {
+        assertEq("hash<string, string>", mk({"Content-Type": "text/html"}).fullType());
+        hash<auto> hdr = mk({"Content-Type": "text/html"});
+        CookieHelper::set(\hdr, <HttpUtil::CookieInfo>{"name": "a", "value": "1"});
+        CookieHelper::set(\hdr, <HttpUtil::CookieInfo>{"name": "b", "value": "2"}, False);
+        assertEq("text/html", hdr."Content-Type");
+        assertEq(("a=1; Path=/", "b=2; Path=/"), hdr."Set-Cookie");
+        assertEq("no-cache=\"Set-Cookie\"", hdr."Cache-Control");
+    }
+}

@@ -1,0 +1,98 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires AsyncApi
+%requires ServerSentEventHandler
+
+%exec-class SseAsyncApiValidationTest
+
+#! Outgoing SSE events validated against an AsyncAPI schema
+/** An event with only a \c data field raised RUNTIME-TYPE-ERROR, and an event whose data has values of one type,
+    such as the \c hash<string, date> in <tt>{"data": {"when": now()}}</tt>, raised RUNTIME-TYPE-ERROR when the
+    validator serialized the date to a string
+*/
+class SseAsyncApiValidationTest inherits QUnit::Test {
+    private {
+        AsyncApi3Schema schema;
+    }
+
+    constructor() : Test("SseAsyncApiValidationTest", "1.0", \ARGV) {
+        addTestCase("ServerSentEventConnection: an event with only data", \connectionDataOnly());
+        addTestCase("ServerSentEventConnection: an event with narrowed data", \connectionNarrowedData());
+        addTestCase("SseObservableBridge: an event with only data", \bridgeDataOnly());
+
+        schema = new AsyncApi3Schema("", {
+            "asyncapi": "3.0.0",
+            "info": {"title": "SSE validation test", "version": "1.0.0"},
+            "channels": {
+                "events": {
+                    "address": "/sse",
+                    "messages": {
+                        "event": {
+                            "payload": {
+                                "type": "object",
+                                "properties": {
+                                    "count": {"type": "integer"},
+                                    "when": {"type": "string", "format": "date-time"},
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+            "operations": {
+                "sendEvent": {
+                    "action": "send",
+                    "channel": {"$ref": "#/channels/events"},
+                    "messages": ({"$ref": "#/channels/events/messages/event"},),
+                },
+            },
+        });
+        set_return_value(main());
+    }
+
+    #! Returns its argument with the type it was given
+    static auto mk(auto h) {
+        return h;
+    }
+
+    private ServerSentEventConnection getConnection() {
+        ServerSentEventConnection conn(new ServerSentEventHandler(), new Socket(), {}, {}, "test");
+        conn.setAsyncApiValidator(schema, "events");
+        return conn;
+    }
+
+    connectionDataOnly() {
+        ServerSentEventConnection conn = getConnection();
+        assertEq(<SseMessageInfo>{"data": {"count": 5}}, conn.validateOutgoingEvent({"data": {"count": 5}}));
+        # an invalid event is still rejected
+        assertThrows("SCHEMA-VALIDATION-ERROR", \conn.validateOutgoingEvent(), {"data": {"count": "5"}});
+    }
+
+    connectionNarrowedData() {
+        assertEq("hash<string, hash<string, date>>", mk({"data": {"when": 2026-10-31T12:00:00Z}}).fullType());
+        ServerSentEventConnection conn = getConnection();
+        assertEq(<SseMessageInfo>{"data": {"when": "2026-10-31T12:00:00+00:00"}},
+            conn.validateOutgoingEvent({"data": {"when": 2026-10-31T12:00:00Z}}));
+        # with other event fields
+        assertEq(<SseMessageInfo>{"event": "e", "data": {"when": "2026-10-31T12:00:00+00:00"}},
+            conn.validateOutgoingEvent({"event": "e", "data": {"when": 2026-10-31T12:00:00Z}}));
+    }
+
+    bridgeDataOnly() {
+        SseObservableBridge bridge(new Observable(), {
+            "validator": schema,
+            "asyncapi_channel": "events",
+            "initial_event": {"data": {"count": 5}},
+        });
+        on_exit bridge.close();
+        assertEq("data: {\"count\":5}\n\n", bridge.nextChunk());
+    }
+}

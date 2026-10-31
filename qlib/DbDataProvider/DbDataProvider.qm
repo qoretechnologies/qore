@@ -344,6 +344,9 @@ module DbDataProvider {
     @section dbdataprovider_relnotes Release Notes
 
     @subsection dbdataprovider_v2_5 DbDataProvider v2.5
+    - fixed @ref DbDataProvider::DatasourceConnection "DatasourceConnection" to accept connection options whose
+      values all have the same type, such as a literal <tt>{"min": "1", "max": "4"}</tt>; converting the pool sizes
+      or adding the options of the URL raised \c RUNTIME-TYPE-ERROR
     - the field of a field reference in a search, update or delete condition is a field path: a path of one key is the
       column of that name, quoted if it is a reserved word; a path of more than one key, or a key with a dot, which
       SqlUtil reads as an alias and a column, is read client-side in a search (with the \c allow_client_side_filter

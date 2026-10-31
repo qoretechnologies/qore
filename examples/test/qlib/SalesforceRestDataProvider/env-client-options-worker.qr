@@ -1,0 +1,102 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+# creates Salesforce data providers that add the OAuth2 client options from the environment; run by
+# SalesforceRestDataProviderEnvClientOptions.qtest with fake values in the environment variables
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires DataProvider
+%requires SalesforceRestDataProvider
+
+/** Data providers read the environment variables that the process started with, so the test runs this script with
+    them set.  The options that the constructor accepts are returned in an exception, so that no client is created
+    and no connection is made.  The result of each check is printed as a "name=result" line; option values are only
+    compared, never printed
+*/
+
+#! Returns the options that the constructor accepts
+class TestSalesforceRestDataProvider inherits SalesforceRestDataProvider::SalesforceRestDataProvider {
+    constructor(*hash<auto> options) : SalesforceRestDataProvider(options) {
+    }
+
+    private *hash<auto> checkOptions(string err, *hash<string, hash<DataProviderOptionInfo>> option_desc,
+            *hash<auto> options) {
+        throw "CHECKED-OPTIONS", NOTHING, AbstractDataProvider::checkOptions(err, option_desc, options);
+    }
+}
+
+#! Returns the options that the constructor accepts
+class TestSalesforceRestTablesDataProvider inherits SalesforceRestDataProvider::SalesforceRestTablesDataProvider {
+    constructor(*hash<auto> options) : SalesforceRestTablesDataProvider(options) {
+    }
+
+    private *hash<auto> checkOptions(string err, *hash<string, hash<DataProviderOptionInfo>> option_desc,
+            *hash<auto> options) {
+        throw "CHECKED-OPTIONS", NOTHING, AbstractDataProvider::checkOptions(err, option_desc, options);
+    }
+}
+
+#! the fake values that the test sets in the environment
+const FakeEnv = {
+    "oauth2_client_id": "fake-consumer-key",
+    "oauth2_client_secret": "fake-consumer-secret",
+    "username": "fake-user",
+    "password": "fake-pass",
+};
+
+#! names the source of each option: "env" for the fake environment value, the value of \a explicit for an option
+#! given by the caller, "none" for a missing option, and "other" for any other value
+string sub sources(hash<auto> opts, *hash<auto> explicit) {
+    list<string> rv = ();
+    foreach string key in (FakeEnv.keyIterator()) {
+        if (!exists opts{key}) {
+            rv += "none";
+        } else if (explicit{key} && opts{key} == explicit{key}) {
+            rv += "explicit";
+        } else if (opts{key} == FakeEnv{key}) {
+            rv += "env";
+        } else {
+            rv += "other";
+        }
+    }
+    return rv.join("/");
+}
+
+#! prints the result of a check
+sub out(string name, string value) {
+    printf("%s=%s\n", name, value);
+}
+
+#! runs a constructor and prints the sources of the options that it accepts, or the error if it fails
+sub check(string name, code c, *hash<auto> explicit) {
+    try {
+        c();
+        out(name, "not-checked");
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err == "CHECKED-OPTIONS") {
+            out(name, sources(ex.arg, explicit));
+        } else {
+            out(name, ex.err);
+        }
+    }
+}
+
+# without automatic configuration, no option is taken from the environment
+check("salesforce-no-auto-config", sub () { new TestSalesforceRestDataProvider(); });
+
+DataProvider::setAutoConfig();
+
+check("salesforce", sub () { new TestSalesforceRestDataProvider(); });
+check("salesforce-tables", sub () { new TestSalesforceRestTablesDataProvider(); });
+
+# options given by the caller are not replaced by the environment
+const Explicit = {
+    "oauth2_client_id": "explicit-id",
+    "oauth2_client_secret": "explicit-secret",
+};
+check("salesforce-explicit", sub () { new TestSalesforceRestDataProvider(Explicit); }, Explicit);
+check("salesforce-tables-explicit", sub () { new TestSalesforceRestTablesDataProvider(Explicit); }, Explicit);
+
+# an option that the constructor does not support is still an error
+check("salesforce-invalid", sub () { new TestSalesforceRestDataProvider({"client_id": "x"}); });
+check("salesforce-tables-invalid", sub () { new TestSalesforceRestTablesDataProvider({"client_id": "x"}); });

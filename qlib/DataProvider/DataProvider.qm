@@ -2464,6 +2464,9 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       - @ref DataProvider::AbstractDataProvider::deleteRecordsAsync() "deleteRecordsAsync()"
       - @ref DataProvider::AbstractDataProvider::upsertRecordAsync() "upsertRecordAsync()"
       - @ref DataProvider::AbstractDataProvider::doRequestAsync() "doRequestAsync()"
+    - fixed @ref DataProvider::DefaultRecordIterator "DefaultRecordIterator" to accept search options whose
+      values all have the same type, such as a literal <tt>{"columns": "id"}</tt>; converting the \c columns
+      option to a list raised \c RUNTIME-TYPE-ERROR
 
     @subsection dataprovider_v3_2_2 DataProvider v3.2.2
     - fixed setting the mandatory flag for hashes with dynamic fields

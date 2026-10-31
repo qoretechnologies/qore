@@ -169,14 +169,20 @@ public class WaveRestClientBase {
         # the options have values of different types, so the hash must not take the narrow type of the
         # defaults, which would prevent adding values of other types
         hash<auto!> rv = DefaultOptions + opts;
+        # the headers are set in an "auto!" local: a caller's headers option may be narrowed (e.g. hash<string, int>
+        # for {"X-Count": 1}), and adding a string header would throw
+        *hash<auto!> hdr = rv.headers;
         # Only add OAuth2 options if OAuth2 credentials are provided
         if (opts.oauth2_client_id) {
             rv += OAuth2Options;
         } else if (opts.token) {
             # Bearer token mode: Wave requires "Bearer" prefix
-            rv.headers.Authorization = "Bearer " + opts.token;
+            hdr.Authorization = "Bearer " + opts.token;
             # Remove token from opts so RestClient doesn't add another "Bearer" prefix
             remove rv.token;
+        }
+        if (exists hdr) {
+            rv.headers = hdr;
         }
         return rv;
     }

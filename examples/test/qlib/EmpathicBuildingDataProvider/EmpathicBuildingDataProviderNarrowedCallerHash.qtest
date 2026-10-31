@@ -1,0 +1,64 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires EmpathicBuildingDataProvider
+
+%exec-class EmpathicBuildingDataProviderNarrowedCallerHashTest
+
+#! Returns its argument with its runtime type, so a literal reaches the call as a caller's literal does
+hash<auto> sub mk(hash<auto> h) {
+    return h;
+}
+
+#! EmpathicBuildingSensorDataProvider::getSensorData() replaces epoch-millisecond values with dates in place
+/** A sensor record literal whose values are all integers, or whose measurement hash has only integer values, is
+    narrowed to \c hash<string, int>, so writing a date into it raised RUNTIME-TYPE-ERROR.
+*/
+class EmpathicBuildingDataProviderNarrowedCallerHashTest inherits QUnit::Test {
+    private {
+        # 2023-11-14T22:13:20.123Z
+        const T1 = 1700000000123;
+        # one minute later
+        const T2 = 1700000060000;
+    }
+
+    constructor() : Test("EmpathicBuildingDataProviderNarrowedCallerHashTest", "1.0", \ARGV) {
+        addTestCase("top-level epoch values in an int record", \topLevelTest());
+        addTestCase("epoch values in an int measurement hash", \nestedTest());
+        set_return_value(main());
+    }
+
+    topLevelTest() {
+        assertEq("hash<string, int>", mk({"id": 7, "last_communication_time": T1}).fullType());
+        hash<auto> rv = EmpathicBuildingSensorDataProvider::getSensorData({"id": 7, "last_communication_time": T1});
+        assertEq(7, rv.id);
+        assertEq(2023-11-14T22:13:20.123Z, rv.last_communication_time);
+    }
+
+    nestedTest() {
+        hash<auto> sensor = mk({
+            "id": "s1",
+            "last_measurement": {"time": T1, "valid_to": T2, "value": 21},
+            "previous_measurement": {"time": T1, "value": 20},
+        });
+        assertEq("hash<string, int>", sensor.last_measurement.fullType());
+        hash<auto> rv = EmpathicBuildingSensorDataProvider::getSensorData({
+            "id": "s1",
+            "last_measurement": {"time": T1, "valid_to": T2, "value": 21},
+            "previous_measurement": {"time": T1, "value": 20},
+        });
+        assertEq({
+            "time": 2023-11-14T22:13:20.123Z,
+            "valid_to": 2023-11-14T22:14:20Z,
+            "value": 21,
+        }, rv.last_measurement);
+        assertEq({"time": 2023-11-14T22:13:20.123Z, "value": 20}, rv.previous_measurement);
+        assertEq("s1", rv.id);
+    }
+}

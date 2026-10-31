@@ -260,7 +260,10 @@ public class FirecrawlRestConnection inherits RestClient::RestConnection {
     #! Returns the config hash with the correct URL
     /** Firecrawl has a single fixed API endpoint, so the URL is always overridden
     */
-    private static hash<auto> getConfig(hash<auto> config) {
+    private static hash<auto> getConfig(hash<auto> config0) {
+        # a caller's configuration hash may be narrowed (ex: hash<string, string>), and setting the URL or the
+        # options would throw
+        hash<auto!> config = config0;
         # Firecrawl has a single fixed API endpoint — always override
         config.url = DefaultUrl;
         return config;

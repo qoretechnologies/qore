@@ -80,7 +80,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 414,
+static_assert(QORE_IR_MAX_OPCODE == 418,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -7942,6 +7942,51 @@ next_instruction:
                     }
                 }
                 if (xsink && *xsink) {
+                    if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::ListSetCommonType: {
+                qore_rt_list_set_common_type(toBits(getIRValue(values, inst->operands[0])),
+                    getIRValue(values, inst->operands[1]).getAsBigInt(),
+                    substituteRuntimeTypeParams(inst->element_type));
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::CommonTypeFold: {
+                int64_t state = getIRValue(values, inst->operands[0]).getAsBigInt();
+                int64_t new_state = qore_rt_common_type_fold(state,
+                    toBits(getIRValue(values, inst->operands[1])),
+                    getIRValue(values, inst->operands[2]).getAsBigInt());
+                setValueSlotDirect(values, inst->result.id, QoreValue(new_state));
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::HashSetCommonType: {
+                qore_rt_hash_set_common_type(toBits(getIRValue(values, inst->operands[0])),
+                    getIRValue(values, inst->operands[1]).getAsBigInt());
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::ListSetScannedType: {
+                uint64_t list_bits = toBits(getIRValue(values, inst->operands[0]));
+                if (inst->operands.size() > 1) {
+                    qore_rt_list_set_scanned_type_from_source(list_bits,
+                        toBits(getIRValue(values, inst->operands[1])), xsink);
+                } else {
+                    qore_rt_list_set_scanned_type(list_bits, substituteRuntimeTypeParams(inst->element_type), xsink);
+                }
+                if (*xsink) {
                     if (inst->exception_target) {
                         cleanupToTempScope(inst->temp_scope_id, true, false, true);
                         prev_block = block;

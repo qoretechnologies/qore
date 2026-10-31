@@ -1,0 +1,57 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ProviderIndexUtil
+
+%exec-class ProviderIndexUtilNarrowedCallerHashTest
+
+#! Index maps passed by callers whose values all have the same type
+/** A hash literal whose values all have the same type, such as <tt>{"factorymap": {"dp": "DpMod"}}</tt>, has a
+    narrowed type (here <tt>hash<string, hash<string, string>></tt>); publishing an index adds the \c altmap member,
+    which has another type, to the maps that it was given
+*/
+class ProviderIndexUtilNarrowedCallerHashTest inherits QUnit::Test {
+    constructor() : Test("ProviderIndexUtilNarrowedCallerHashTest", "1.0", \ARGV) {
+        addTestCase("publish an index of factories only", \factoryOnlyIndex());
+        set_return_value(main());
+    }
+
+    factoryOnlyIndex() {
+        assertEq("hash<string, hash<string, string>>",
+            ProviderIndexUtilNarrowedCallerHashTest::mk({"factorymap": {"dp": "DpMod"}}).fullType());
+
+        TmpDir tmp("provider-index-narrowed-");
+        bool had_env = exists ENV{ProviderIndexEnvVar};
+        string old_env = had_env ? ENV{ProviderIndexEnvVar} : "";
+        ProviderIndexUtil::setEnvironmentVariable(tmp.path);
+        on_exit {
+            if (had_env) {
+                ProviderIndexUtil::setEnvironmentVariable(old_env);
+            } else {
+                unsetenv(ProviderIndexEnvVar);
+                remove ENV{ProviderIndexEnvVar};
+            }
+        }
+
+        hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp({"factorymap": {"dp": "DpMod"}},
+            NOTHING, *hash<auto> sub (string app) {}, 0s, {});
+        assertEq(tmp.path + DirSep + "qore-routing-index.yaml", info.path);
+
+        *hash<SerializedDataProviderIndexInfo> idx = ProviderIndexUtil::readSerializedDataProviderIndex(tmp.path);
+        assertEq({"dp": "DpMod"}, idx.index.factorymap);
+        assertEq({}, idx.index.altmap ?? {});
+        assertEq(0, idx.index.appinfomap.size());
+    }
+
+    #! Returns the hash as it is, with its runtime type
+    static hash<auto> mk(hash<auto> h) {
+        return h;
+    }
+}

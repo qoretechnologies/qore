@@ -54,7 +54,8 @@ class RecursiveClosureLocalsTest inherits QUnit::Test {
         \c /usr/lib/llvm<major>, MacPorts \c /opt/local/libexec/llvm-<major> and Homebrew
         \c /opt/homebrew/opt/llvm@<major>.  These are the same families
         examples/test/docker_test/test-alpine.sh and test-macos.sh search when they configure
-        the build, so looking here finds the LLVM that qore was actually built against.
+        the build.  Several versions can be installed: llvmConfigPath() takes the one whose version is
+        Qore::LLVMVersion.
     */
     private static list<string> llvmPrefixes() {
         list<string> prefixes = ();
@@ -80,30 +81,68 @@ class RecursiveClosureLocalsTest inherits QUnit::Test {
         return match[0].toInt();
     }
 
-    #! Returns the path to llvm-config
-    /** \c llvm-config is only in the \c PATH where the distribution ships a single LLVM;
+    #! Returns the "<major>.<minor>" part of an LLVM version, which names the LLVM library's ABI
+    private static string llvmVersionKey(string version) {
+        *list<*string> m = (version =~ x/^([0-9]+\.[0-9]+)/);
+        return m ? m[0] : version;
+    }
+
+    #! Returns the LLVM version that the given llvm-config reports, or nothing if it cannot be run
+    private static *string llvmConfigVersion(string path) {
+        int rc;
+        string out = backquote(quote(path) + " --version 2>/dev/null", \rc);
+        if (rc) {
+            return;
+        }
+        return trim(out);
+    }
+
+    #! Returns the path to the llvm-config of the LLVM this qore was built with (Qore::LLVMVersion)
+    /** The driver includes the library's JIT header, which includes LLVM's headers, and links LLVM: built with
+        another LLVM than libqore's, it has two LLVMs in one process and crashes (SIGSEGV in LLVM, exit 139).
+
+        \c llvm-config is only in the \c PATH where the distribution ships a single LLVM;
         everywhere else it lives in the versioned prefix, so a PATH-only lookup fails on
         exactly the platforms where the JIT is fully functional (alpine in CI, MacPorts and
-        Homebrew locally).  \c LLVM_CONFIG overrides the search.
+        Homebrew locally).  Of the llvm-config found in the \c PATH and in the prefixes, the first whose version
+        matches is taken; \c LLVM_CONFIG overrides the search and must name a matching one.
     */
     private static string llvmConfigPath() {
+        string want = llvmVersionKey(Qore::LLVMVersion);
         if (ENV.LLVM_CONFIG) {
-            return executablePath(ENV.LLVM_CONFIG);
+            string path = executablePath(ENV.LLVM_CONFIG);
+            *string version = llvmConfigVersion(path);
+            if (!version || llvmVersionKey(version) != want) {
+                throw "TEST-SETUP-ERROR", sprintf("LLVM_CONFIG names %s, which reports LLVM %s, but this qore was "
+                    "built with LLVM %s; set LLVM_CONFIG to the llvm-config of LLVM %s", path,
+                    version ?? "<no version>", Qore::LLVMVersion, Qore::LLVMVersion);
+            }
+            return path;
         }
+        list<string> candidates = ();
         foreach string directory in (split(":", ENV.PATH ?? "")) {
             string path = (directory ? directory : ".") + "/llvm-config";
             if (is_executable(path)) {
-                return realpath(path);
+                candidates += realpath(path);
             }
         }
         foreach string prefix in (llvmPrefixes()) {
             string path = prefix + "/bin/llvm-config";
             if (is_executable(path)) {
-                return realpath(path);
+                candidates += realpath(path);
             }
         }
-        throw "TEST-SETUP-ERROR", "cannot locate executable llvm-config; set LLVM_CONFIG to the "
-            "llvm-config matching the LLVM this qore was built against";
+        list<string> found = ();
+        foreach string path in (candidates) {
+            *string version = llvmConfigVersion(path);
+            if (version && llvmVersionKey(version) == want) {
+                return path;
+            }
+            found += sprintf("%s (%s)", path, version ?? "cannot be run");
+        }
+        throw "TEST-SETUP-ERROR", sprintf("this qore was built with LLVM %s, but no llvm-config of that version was "
+            "found (%s); set LLVM_CONFIG to the llvm-config of LLVM %s", Qore::LLVMVersion,
+            found ? "found: " + found.join(", ") : "none found", Qore::LLVMVersion);
     }
 
     #! runs a command; one that runs qore with an execution mode runs through ExecModeHarness

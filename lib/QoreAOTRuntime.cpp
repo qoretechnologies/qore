@@ -6719,18 +6719,14 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
         return nullptr;
     }
     uint16_t opcode_raw = QoreAOTBinaryReader::readU16(ptr);
-    // Upstream v21 used 409 for CheckReturnValue, then added both cleanup
-    // opcodes as 410/411. Performance v20/v21 used 409/410 for snapshots and
-    // recorded maximum 410. Preserve both histories before instruction dispatch.
+    // Upstream v21 uses 409..416 for the return check, cleanup, debugger and
+    // result-type instructions. This branch inserts two snapshots before them.
+    // Performance v20/v21 files with maximum 410 retain their snapshot encoding.
     uint16_t max_opcode = reader.getHeader().max_opcode_id;
-    if (reader.getHeader().version == 21 && (max_opcode == 409 || max_opcode == 411)) {
-        if (opcode_raw == 409) {
-            opcode_raw = static_cast<uint16_t>(QoreIROpcode::CheckReturnValue);
-        } else if (max_opcode == 411 && opcode_raw == 410) {
-            opcode_raw = static_cast<uint16_t>(QoreIROpcode::IteratorRelease);
-        } else if (max_opcode == 411 && opcode_raw == 411) {
-            opcode_raw = static_cast<uint16_t>(QoreIROpcode::ReleaseOwnedTemp);
-        }
+    if (reader.getHeader().version == 21
+            && (max_opcode == 409 || (max_opcode >= 411 && max_opcode <= 416))
+            && opcode_raw >= 409 && opcode_raw <= max_opcode) {
+        opcode_raw += 2;
     }
     auto opcode = static_cast<QoreIROpcode>(opcode_raw);
     if (!need(1, "instruction group")) {

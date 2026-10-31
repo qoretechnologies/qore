@@ -299,12 +299,15 @@ static bool is_ascii_digit(char c) {
     @param p the position of the number; on success, the position after it
     @param val the integer part, with the sign
     @param frac the fraction, with the same sign as the number, or 0
+    @param has_fraction true if a decimal sign was present, including an all-zero fraction
     @param err set to a description of the error if the number cannot be read
     @param xsink receives a cancellation exception, if provided
 
     @return 0 if the number was read, -1 if not, or -2 if parsing was cancelled
 */
-static int get_duration_number(const char*& p, int& val, double& frac, const char*& err, ExceptionSink* xsink) {
+static int get_duration_number(const char*& p, int& val, double& frac, bool& has_fraction, const char*& err,
+        ExceptionSink* xsink) {
+    has_fraction = false;
     bool negative = *p == '-';
     if (negative) {
         ++p;
@@ -335,6 +338,7 @@ static int get_duration_number(const char*& p, int& val, double& frac, const cha
 
     frac = 0.0;
     if (*p == '.' || *p == ',') {
+        has_fraction = true;
         ++p;
         if (!is_ascii_digit(*p)) {
             err = "a decimal sign is not followed by digits";
@@ -376,11 +380,11 @@ static int add_duration_value(int& field, int64 val) {
 static int duration_error(ExceptionSink* xsink, const char* str, const char* p, const char* what) {
     if (xsink) {
         if (*p) {
-            xsink->raiseException("INVALID-DATE", "cannot parse ISO 8601 duration string '%s'; %s at offset %d "
-                "(char '%c')", str, what, static_cast<int>(p - str), *p);
+            xsink->raiseException("INVALID-DATE", "cannot parse ISO 8601 duration string '%s' at offset %d (char "
+                "'%c'): %s", str, static_cast<int>(p - str), *p, what);
         } else {
-            xsink->raiseException("INVALID-DATE", "cannot parse ISO 8601 duration string '%s'; %s at the end of the "
-                "string", str, what);
+            xsink->raiseException("INVALID-DATE", "cannot parse ISO 8601 duration string '%s' at the end of the "
+                "string: %s", str, what);
         }
     }
     return -1;
@@ -1439,6 +1443,23 @@ void qore_date_private::format(QoreString &str, const char *fmt) const {
     }
 }
 
+//! Returns true for the white space that can follow a duration string
+static bool is_duration_trailing_ws(char c) {
+    return c == ' ' || c == '\t' || c == '\r' || c == '\n';
+}
+
+//! The components of the format with designators in the order that ISO 8601 gives them
+enum qore_duration_component_e {
+    QDC_YEAR = 0,
+    QDC_MONTH,
+    QDC_WEEK,
+    QDC_DAY,
+    QDC_HOUR,
+    QDC_MINUTE,
+    QDC_SECOND,
+    QDC_MICROSECOND,
+};
+
 int qore_relative_time::setIso8601(const char* str, ExceptionSink* xsink) {
     zero();
 
@@ -1446,12 +1467,44 @@ int qore_relative_time::setIso8601(const char* str, ExceptionSink* xsink) {
     assert(*p == 'P' || *p == 'p');
     ++p;
 
+    // the alternative format (ISO 8601:2004 4.4.3.3): "PYYYY-MM-DDThh:mm:ss" (extended) or "PYYYYMMDDThhmmss"
+    // (basic), recognized by its date: four digits and a '-', or eight digits
+    {
+        const char* q = p;
+        bool after_t = *q == 'T' || *q == 't';
+        if (after_t) {
+            ++q;
+        }
+        const char* e = q;
+        unsigned cancel_count = 0;
+        while (is_ascii_digit(*e)) {
+            ++e;
+            if (++cancel_count % 100 == 0 && qore_check_cancel(xsink, "ISO 8601 duration parsing")) {
+                return -1;
+            }
+        }
+        size_t digits = e - q;
+        if (!after_t && ((digits == 4 && *e == '-')
+            || (digits == 8 && (*e == 'T' || *e == 't' || !*e || is_duration_trailing_ws(*e))))) {
+            return setIso8601Alternative(str, p, xsink);
+        }
+        if (digits && *e == ':') {
+            return duration_error(xsink, str, e, "a time in the alternative format must follow its date "
+                "(ex: 'P0000-00-00T01:00:00'), as in ISO 8601; with designators, write the time as 'PT1H'");
+        }
+    }
+
+    // the format with designators (ISO 8601:2004 4.4.3.2)
     // true after the time designator "T"
     bool time = false;
     // true once a component has been read, and once a component has been read after the time designator
     bool have_component = false;
     bool have_time_component = false;
     unsigned component_count = 0;
+    // the last component read, to keep the order of ISO 8601
+    int last = -1;
+    // true if the last component read has a decimal fraction, which only the last component may have
+    bool have_fraction = false;
     while (true) {
         if (++component_count == 10) {
             component_count = 0;
@@ -1468,9 +1521,9 @@ int qore_relative_time::setIso8601(const char* str, ExceptionSink* xsink) {
         }
 
         // the end of the string, which can have trailing white space
-        if (!*p || *p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') {
+        if (!*p || is_duration_trailing_ws(*p)) {
             unsigned cancel_count = 0;
-            while (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') {
+            while (is_duration_trailing_ws(*p)) {
                 ++p;
                 if (++cancel_count == 100) {
                     cancel_count = 0;
@@ -1485,10 +1538,16 @@ int qore_relative_time::setIso8601(const char* str, ExceptionSink* xsink) {
             break;
         }
 
+        if (have_fraction) {
+            return duration_error(xsink, str, p, "a component follows one with a decimal fraction; only the last "
+                "(smallest) component can have a decimal fraction, as in ISO 8601");
+        }
+
+        const char* num = p;
         double d = 0.0;
         int val = 0;
         const char* err = nullptr;
-        int number_rc = get_duration_number(p, val, d, err, xsink);
+        int number_rc = get_duration_number(p, val, d, have_fraction, err, xsink);
         if (number_rc == -2) {
             return -1;
         }
@@ -1503,114 +1562,106 @@ int qore_relative_time::setIso8601(const char* str, ExceptionSink* xsink) {
             return duration_error(xsink, str, p, "a number has no designator");
         }
 
-        bool date_designator = false;
-        bool time_designator = false;
-        int rc = 0;
+        int comp;
         switch (c) {
-            case 'Y':
-            case 'y':
-                date_designator = true;
-                if (time) {
-                    break;
-                }
+            case 'Y': case 'y': comp = QDC_YEAR; break;
+            case 'M': case 'm': comp = time ? QDC_MINUTE : QDC_MONTH; break;
+            case 'W': case 'w': comp = QDC_WEEK; break;
+            case 'D': case 'd': comp = QDC_DAY; break;
+            case 'H': case 'h': comp = QDC_HOUR; break;
+            case 'S': case 's': comp = QDC_SECOND; break;
+            // %Qore extension: <int>u for microseconds
+            case 'u': comp = QDC_MICROSECOND; break;
+            default:
+                return duration_error(xsink, str, p, "unknown designator");
+        }
+
+        if (comp >= QDC_HOUR && !time) {
+            // the string with the time designator where it is missing, as a hint
+            QoreStringMaker what("the time component '%c' must follow the time designator 'T', as in ISO 8601 "
+                "(ex: '", c);
+            what.concat(str, num - str);
+            what.concat('T');
+            what.concat(num);
+            what.concat("')");
+            return duration_error(xsink, str, p, what.c_str());
+        }
+        if (comp < QDC_HOUR && time) {
+            return duration_error(xsink, str, p, "a date component (Y, W or D) follows the time designator 'T'");
+        }
+        if (comp <= last) {
+            return duration_error(xsink, str, p, "a component is repeated or out of order; ISO 8601 orders them "
+                "as Y, M, W, D, then after the time designator 'T': H, M, S");
+        }
+
+        int rc = 0;
+        switch (comp) {
+            case QDC_YEAR:
                 rc = add_duration_value(year, val);
                 if (!rc && d) {
                     addFractionalYear(d);
                 }
                 break;
 
-            case 'M':
-            case 'm':
-                if (time) {
-                    rc = add_duration_value(minute, val);
-                    if (!rc && d) {
-                        addFractionalMinute(d);
-                    }
-                } else {
-                    rc = add_duration_value(month, val);
-                    if (!rc && d) {
-                        addFractionalMonth(d);
-                    }
+            case QDC_MONTH:
+                rc = add_duration_value(month, val);
+                if (!rc && d) {
+                    addFractionalMonth(d);
                 }
                 break;
 
-            case 'W':
-            case 'w':
-                date_designator = true;
-                if (time) {
-                    break;
-                }
-                {
-                    // a fraction of a week is a number of days and a fraction of a day
-                    double fd = d * 7.0;
-                    int wd = static_cast<int>(fd);
-                    rc = add_duration_value(day, static_cast<int64>(val) * 7 + wd);
-                    if (!rc && fd != wd) {
-                        addFractionalDay(fd - wd);
-                    }
+            case QDC_WEEK: {
+                // a fraction of a week is a number of days and a fraction of a day
+                double fd = d * 7.0;
+                int wd = static_cast<int>(fd);
+                rc = add_duration_value(day, static_cast<int64>(val) * 7 + wd);
+                if (!rc && fd != wd) {
+                    addFractionalDay(fd - wd);
                 }
                 break;
+            }
 
-            case 'D':
-            case 'd':
-                date_designator = true;
-                if (time) {
-                    break;
-                }
+            case QDC_DAY:
                 rc = add_duration_value(day, val);
                 if (!rc && d) {
                     addFractionalDay(d);
                 }
                 break;
 
-            case 'H':
-            case 'h':
-                time_designator = true;
-                if (!time) {
-                    break;
-                }
+            case QDC_HOUR:
                 rc = add_duration_value(hour, val);
                 if (!rc && d) {
                     addFractionalHour(d);
                 }
                 break;
 
-            case 'S':
-            case 's':
-                time_designator = true;
-                if (!time) {
-                    break;
+            case QDC_MINUTE:
+                rc = add_duration_value(minute, val);
+                if (!rc && d) {
+                    addFractionalMinute(d);
                 }
+                break;
+
+            case QDC_SECOND:
                 rc = add_duration_value(second, val);
                 if (!rc && d) {
                     addFractionalSecond(d);
                 }
                 break;
 
-            // non-ISO-8601 extension: <int>u for microseconds; a fraction of a microsecond is ignored
-            case 'u':
-                time_designator = true;
-                if (!time) {
-                    break;
-                }
+            case QDC_MICROSECOND:
+                // a fraction of a microsecond is ignored
                 rc = add_duration_value(us, val);
                 break;
 
             default:
-                return duration_error(xsink, str, p, "unknown designator");
-        }
-
-        if (date_designator && time) {
-            return duration_error(xsink, str, p, "a date component (Y, W or D) follows the time designator 'T'");
-        }
-        if (time_designator && !time) {
-            return duration_error(xsink, str, p, "a time component (H, S or u) does not follow the time "
-                "designator 'T'");
+                assert(false);
         }
         if (rc) {
             return duration_error(xsink, str, p, "a component value is out of range");
         }
 
+        last = comp;
         have_component = true;
         if (time) {
             have_time_component = true;
@@ -1626,6 +1677,111 @@ int qore_relative_time::setIso8601(const char* str, ExceptionSink* xsink) {
     if (!have_component) {
         return duration_error(xsink, str, p, "the duration has no component");
     }
+    return 0;
+}
+
+//! Reads a two-digit field of a duration in the alternative format and checks its carry-over point
+static int get_duration_alt_field(const char* str, const char*& p, int max, const char* name, int& val,
+        ExceptionSink* xsink) {
+    const char* start = p;
+    val = get_uint(p, 2);
+    if (val < 0) {
+        QoreStringMaker what("expecting the two digits of the %s", name);
+        return duration_error(xsink, str, start, what.c_str());
+    }
+    if (val > max) {
+        QoreStringMaker what("the %s value %d exceeds its carry-over point %d, which ISO 8601 sets for the "
+            "alternative format", name, val, max);
+        return duration_error(xsink, str, start, what.c_str());
+    }
+    return 0;
+}
+
+int qore_relative_time::setIso8601Alternative(const char* str, const char* p, ExceptionSink* xsink) {
+    // the extended format has separators: "PYYYY-MM-DDThh:mm:ss"; the basic format has none: "PYYYYMMDDThhmmss"
+    bool extended = p[4] == '-';
+    int n_year = get_uint(p, 4);
+    assert(n_year >= 0);
+    if (extended) {
+        ++p;
+    }
+
+    // the carry-over points of ISO 8601:2004 4.4.3.3: 12 months, 30 days, 24 hours, 60 minutes and 60 seconds
+    int n_month = 0, n_day = 0, n_hour = 0, n_minute = 0, n_second = 0, n_us = 0;
+    if (get_duration_alt_field(str, p, 12, "months", n_month, xsink)) {
+        return -1;
+    }
+    if (extended) {
+        if (*p != '-') {
+            return duration_error(xsink, str, p, "expecting '-' after the months");
+        }
+        ++p;
+    }
+    if (get_duration_alt_field(str, p, 30, "days", n_day, xsink)) {
+        return -1;
+    }
+
+    if (*p == 'T' || *p == 't') {
+        ++p;
+        if (get_duration_alt_field(str, p, 24, "hours", n_hour, xsink)) {
+            return -1;
+        }
+        if (extended) {
+            if (*p != ':') {
+                return duration_error(xsink, str, p, "expecting ':' after the hours");
+            }
+            ++p;
+        }
+        if (get_duration_alt_field(str, p, 60, "minutes", n_minute, xsink)) {
+            return -1;
+        }
+        // the seconds, which can be left out as in a time of reduced accuracy
+        if (extended ? *p == ':' : is_ascii_digit(*p)) {
+            if (extended) {
+                ++p;
+            }
+            if (get_duration_alt_field(str, p, 60, "seconds", n_second, xsink)) {
+                return -1;
+            }
+            // a decimal fraction of the seconds, the lowest order component
+            if (*p == '.' || *p == ',') {
+                ++p;
+                if (!is_ascii_digit(*p)) {
+                    return duration_error(xsink, str, p, "a decimal sign is not followed by digits");
+                }
+                int dlen = 0;
+                unsigned cancel_count = 0;
+                while (is_ascii_digit(*p)) {
+                    // excess digits beyond microsecond resolution are ignored
+                    if (dlen < 6) {
+                        n_us = n_us * 10 + (*p - '0');
+                        ++dlen;
+                    }
+                    ++p;
+                    if (++cancel_count % 100 == 0 && qore_check_cancel(xsink, "ISO 8601 duration parsing")) {
+                        return -1;
+                    }
+                }
+                while (dlen < 6) {
+                    n_us *= 10;
+                    ++dlen;
+                }
+            }
+        }
+    }
+
+    unsigned cancel_count = 0;
+    while (is_duration_trailing_ws(*p)) {
+        ++p;
+        if (++cancel_count % 100 == 0 && qore_check_cancel(xsink, "ISO 8601 duration parsing")) {
+            return -1;
+        }
+    }
+    if (*p) {
+        return duration_error(xsink, str, p, "unexpected text in a duration in the alternative format");
+    }
+
+    set(n_year, n_month, n_day, n_hour, n_minute, n_second, n_us);
     return 0;
 }
 

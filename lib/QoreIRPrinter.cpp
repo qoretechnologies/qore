@@ -73,6 +73,10 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::ListSetFloat: return "list.set.float";
         case QoreIROpcode::ListSetValue: return "list.set.value";
         case QoreIROpcode::ListSetLength: return "list.set.length";
+        case QoreIROpcode::ListSetCommonType: return "list.set.common.type";
+        case QoreIROpcode::CommonTypeFold: return "common.type.fold";
+        case QoreIROpcode::ListSetScannedType: return "list.set.scanned.type";
+        case QoreIROpcode::HashSetCommonType: return "hash.set.common.type";
         case QoreIROpcode::AddInt: return "add.int";
         case QoreIROpcode::AddFloat: return "add.float";
         case QoreIROpcode::AddAny: return "add.any";

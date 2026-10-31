@@ -126,7 +126,9 @@ public class ElevenLabsRestClientBase {
         rv += opts;
         # Map apikey to xi-api-key header
         if (rv.apikey) {
-            hash<auto> hdr = rv.headers ?? {};
+            # the header is set in an "auto!" local: a caller's headers option may be narrowed (e.g.
+            # hash<string, int> for {"X-Count": 1}), and adding the API key header would throw
+            hash<auto!> hdr = rv.headers ?? {};
             hdr."xi-api-key" = rv.apikey;
             rv += {"headers": hdr};
             delete rv.apikey;

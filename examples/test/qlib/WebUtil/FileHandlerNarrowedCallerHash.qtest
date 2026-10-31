@@ -1,0 +1,149 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires WebUtil
+%requires HttpServer
+%requires Logger
+%requires FsUtil
+
+%exec-class FileHandlerNarrowedCallerHashTest
+
+#! A file handler whose response headers all have the same type
+class NarrowedHeaderFileHandler inherits FileHandler {
+    constructor(string root) : FileHandler(root, "files") {
+    }
+
+    #! Returns response headers without a Content-Type header, so the handler adds it
+    private hash<auto> getResponseHeadersForFile(string path, hash<auto> cx, hash<auto> request_hdr) {
+        return {"X-Debug": True};
+    }
+
+    hash<HttpResponseInfo> test304(*hash<auto> hdr) {
+        return make304Response("\"etag\"", now_us(), hdr);
+    }
+
+    hash<HttpResponseInfo> testRange(string path, *hash<auto> hdr) {
+        return serveRangeRequest(path, hstat(path), {"start": 1, "end": 2, "length": 2}, hdr);
+    }
+
+    hash<auto> testVary(hash<auto> hdr) {
+        addAcceptEncodingVary(\hdr);
+        return hdr;
+    }
+}
+
+#! File response headers whose values all have the same type
+/** A hash literal whose values all have the same type has a narrowed type, such as \c hash<string, bool> for
+    <tt>{"X-Debug": True}</tt>; adding the file's string headers to such a hash raised RUNTIME-TYPE-ERROR
+*/
+class FileHandlerNarrowedCallerHashTest inherits QUnit::Test {
+    private {
+        string root;
+        NarrowedHeaderFileHandler handler;
+        HttpServer server;
+        HTTPClient client;
+    }
+
+    constructor() : Test("FileHandlerNarrowedCallerHashTest", "1.0", \ARGV) {
+        addTestCase("files served with narrowed response headers", \serveFile());
+        addTestCase("conditional and range requests with narrowed response headers", \conditionalAndRange());
+        addTestCase("make304Response() with narrowed headers", \make304());
+        addTestCase("serveRangeRequest() with narrowed headers", \serveRange());
+        addTestCase("addAcceptEncodingVary() with narrowed headers", \addVary());
+        set_return_value(main());
+    }
+
+    #! Returns its argument with the type it was given
+    static auto mk(auto h) {
+        return h;
+    }
+
+    globalSetUp() {
+        root = tmp_location() + DirSep + "webutil-narrowed-" + getpid();
+        mkdir(root);
+        File f();
+        f.open2(root + DirSep + "file.txt", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("hello");
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": new Logger("test", LoggerLevel::getLevelInfo()),
+            "debug": True,
+        });
+        handler = new NarrowedHeaderFileHandler(root);
+        server.setHandler("files", "files", NOTHING, handler);
+        server.setDefaultHandler("files", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        client = new HTTPClient({"url": "http://127.0.0.1:" + port, "error_passthru": True, "timeout": 10s});
+    }
+
+    globalTearDown() {
+        if (client) {
+            client.disconnect();
+        }
+        if (server) {
+            server.stop();
+        }
+        if (root) {
+            FsUtil::remove_tree(root);
+        }
+    }
+
+    private hash<auto> request(string path, *hash<auto> headers) {
+        hash<auto> info;
+        hash<auto> rv = client.send(NOTHING, "GET", path, {"Accept-Encoding": "identity"} + headers, NOTHING,
+            \info);
+        return {"body": rv.body, "hdr": info."response-headers", "code": info."response-headers".status_code};
+    }
+
+    serveFile() {
+        assertEq("hash<string, bool>", mk({"X-Debug": True}).fullType());
+        hash<auto> resp = request("/files/file.txt");
+        assertEq(200, resp.code);
+        assertEq("hello", resp.body);
+        assertEq("1", resp.hdr."x-debug");
+        assertRegex("^text/plain", resp.hdr."content-type");
+        assertEq("Accept-Encoding", resp.hdr.vary);
+        assertTrue(resp.hdr.etag.val());
+    }
+
+    conditionalAndRange() {
+        string etag = request("/files/file.txt").hdr.etag;
+        hash<auto> resp = request("/files/file.txt", {"If-None-Match": etag});
+        assertEq(304, resp.code);
+        assertEq("1", resp.hdr."x-debug");
+        assertEq(etag, resp.hdr.etag);
+
+        resp = request("/files/file.txt", {"Range": "bytes=1-2"});
+        assertEq(206, resp.code);
+        assertEq("el", resp.body);
+        assertEq("1", resp.hdr."x-debug");
+        assertEq("bytes 1-2/5", resp.hdr."content-range");
+    }
+
+    make304() {
+        assertEq("hash<string, int>", mk({"X-Count": 1}).fullType());
+        hash<HttpResponseInfo> rv = handler.test304({"X-Count": 1});
+        assertEq(304, rv.code);
+        assertEq(1, rv.hdr."X-Count");
+        assertEq("\"etag\"", rv.hdr.ETag);
+    }
+
+    serveRange() {
+        hash<HttpResponseInfo> rv = handler.testRange(root + DirSep + "file.txt", {"X-Count": 1});
+        assertEq(206, rv.code);
+        assertEq(binary("el"), rv.body);
+        assertEq({"X-Count": 1, "Content-Range": "bytes 1-2/5", "Content-Length": "2", "Accept-Ranges": "bytes"},
+            rv.hdr);
+    }
+
+    addVary() {
+        assertEq({"X-Count": 1, "Vary": "Origin, Accept-Encoding"},
+            handler.testVary({"X-Count": 1, "vary": "Origin"}));
+        assertEq({"X-Count": 1, "Vary": "Accept-Encoding"}, handler.testVary({"X-Count": 1}));
+    }
+}

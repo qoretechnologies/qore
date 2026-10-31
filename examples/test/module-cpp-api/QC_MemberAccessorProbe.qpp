@@ -1,0 +1,293 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/** @file QC_MemberAccessorProbe.qpp a builtin class for testing declared members held in external storage */
+/*
+    Qore Programming Language
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "cppapiuser-module.h"
+#include "QC_MemberAccessorProbe.h"
+
+#include <cstring>
+#include <memory>
+#include <mutex>
+
+// the external storage of a MemberAccessorProbe object; members are not scannable values in this test class
+class MemberAccessorProbeData : public AbstractPrivateData {
+public:
+    std::mutex mutex;
+    QoreHashNode* values = new QoreHashNode(autoTypeInfo);
+    int64 gets = 0;
+    int64 sets = 0;
+
+    DLLLOCAL MemberAccessorProbeData() {
+        // the initial values: an object made by the constructor or from C++ has the same storage
+        values->setKeyValue("count", 0ll, nullptr);
+        values->setKeyValue("secret", 5ll, nullptr);
+        values->setKeyValue("h", new QoreHashNode(autoTypeInfo), nullptr);
+    }
+
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
+        if (ROdereference()) {
+            if (values) {
+                values->deref(xsink);
+            }
+            delete this;
+        }
+    }
+
+    DLLLOCAL void deref() override {
+        deref(nullptr);
+    }
+
+    // returns a new reference to a stored value
+    DLLLOCAL QoreValue get(const char* key) {
+        std::lock_guard<std::mutex> lock(mutex);
+        ++gets;
+        return values ? values->getKeyValue(key).refSelf() : QoreValue();
+    }
+
+    // stores a value; the value is borrowed
+    DLLLOCAL void set(const char* key, QoreValue value, ExceptionSink* xsink) {
+        ValueHolder old(xsink);
+        std::lock_guard<std::mutex> lock(mutex);
+        ++sets;
+        if (!values) {
+            xsink->raiseException("OBJECT-ALREADY-DELETED", "external storage has been deleted");
+            return;
+        }
+        old = values->takeKeyValue(key);
+        values->setKeyValue(key, value.refSelf(), xsink);
+    }
+
+    // stores a value without counting an accessor call; the value is borrowed
+    DLLLOCAL void setRaw(const char* key, QoreValue value, ExceptionSink* xsink) {
+        ValueHolder old(xsink);
+        std::lock_guard<std::mutex> lock(mutex);
+        if (values) {
+            old = values->takeKeyValue(key);
+            values->setKeyValue(key, value.refSelf(), xsink);
+        }
+    }
+
+    // returns a new reference to a stored value without counting an accessor call
+    DLLLOCAL QoreValue getRaw(const char* key) {
+        std::lock_guard<std::mutex> lock(mutex);
+        return values ? values->getKeyValue(key).refSelf() : QoreValue();
+    }
+
+    DLLLOCAL void clear(ExceptionSink* xsink) {
+        QoreHashNode* old;
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            old = values;
+            values = nullptr;
+        }
+        if (old) {
+            old->deref(xsink);
+        }
+    }
+};
+
+// the module data registered with each member: the storage key and how the accessors behave
+struct MemberAccessorProbeMember {
+    enum Mode {
+        Normal,
+        // the getter returns a value that the member's type does not accept
+        BadRead,
+        // the setter raises an exception
+        FailWrite,
+    };
+
+    std::string key;
+    Mode mode;
+
+    DLLLOCAL MemberAccessorProbeMember(const char* key, Mode mode) : key(key), mode(mode) {
+    }
+};
+
+static QoreValue member_accessor_probe_get(QoreObject* self, AbstractPrivateData* data, const char* member,
+        const void* ptr, ExceptionSink* xsink) {
+    const MemberAccessorProbeMember* m = static_cast<const MemberAccessorProbeMember*>(ptr);
+    assert(m->key == member);
+    auto* probe = static_cast<MemberAccessorProbeData*>(data);
+    if (m->mode == MemberAccessorProbeMember::BadRead) {
+        probe->get(member);
+        return new QoreStringNode("not an int");
+    }
+    // the getter runs without Qore locks: reading a normal member of the object here would deadlock otherwise
+    ValueHolder declared(self->evalMember("declared", xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return probe->get(member);
+}
+
+static void member_accessor_probe_set(QoreObject* self, AbstractPrivateData* data, const char* member,
+        const void* ptr, QoreValue value, ExceptionSink* xsink) {
+    const MemberAccessorProbeMember* m = static_cast<const MemberAccessorProbeMember*>(ptr);
+    assert(m->key == member);
+    if (m->mode == MemberAccessorProbeMember::FailWrite) {
+        xsink->raiseException("ACCESSOR-SET-ERROR", "member '%s' rejected the value", member);
+        return;
+    }
+    // the setter runs without Qore locks: reading a normal member of the object here would deadlock otherwise
+    ValueHolder declared(self->evalMember("declared", xsink), xsink);
+    if (*xsink) {
+        return;
+    }
+    static_cast<MemberAccessorProbeData*>(data)->set(member, value, xsink);
+}
+
+static void member_accessor_probe_del(const void* ptr) {
+    delete static_cast<const MemberAccessorProbeMember*>(ptr);
+}
+
+static void add_probe_member(QoreClass& qc, const char* name, ClassAccess access, const QoreTypeInfo* type,
+        MemberAccessorProbeMember::Mode mode = MemberAccessorProbeMember::Normal) {
+    std::unique_ptr<MemberAccessorProbeMember> m(new MemberAccessorProbeMember(name, mode));
+    // the class takes ownership of the module data
+    qc.addBuiltinMemberWithAccessors(name, access, type, member_accessor_probe_get, member_accessor_probe_set,
+        m.release(), member_accessor_probe_del);
+}
+
+void init_member_accessor_probe_members(QoreClass& qc) {
+    // a normal member read before and after the accessors to check that they are called without the object lock
+    qc.addMember("declared", Public, bigIntTypeInfo, QoreValue(7ll));
+    add_probe_member(qc, "count", Public, bigIntTypeInfo);
+    add_probe_member(qc, "h", Public, autoHashOrNothingTypeInfo);
+    add_probe_member(qc, "any", Public, autoTypeInfo);
+    add_probe_member(qc, "secret", Private, bigIntTypeInfo);
+    add_probe_member(qc, "bad", Public, bigIntTypeInfo, MemberAccessorProbeMember::BadRead);
+    add_probe_member(qc, "fail", Public, autoTypeInfo, MemberAccessorProbeMember::FailWrite);
+}
+
+//! builtin test class with declared members held in its private data
+/** The members \c count (int), \c h (*hash), \c any (auto), \c bad (int, whose getter returns a string),
+    \c fail (auto, whose setter raises an exception) and the private member \c secret (int) are read and written
+    through accessors; \c declared is an ordinary member.
+*/
+qclass MemberAccessorProbe [arg=MemberAccessorProbeData* probe; ns=Qore::CppApiTest];
+
+//! creates the external storage
+/** @throw none */
+MemberAccessorProbe::constructor() {
+    self->setPrivate(CID_MEMBERACCESSORPROBE, new MemberAccessorProbeData);
+}
+
+//! releases the external storage
+/** @throw none */
+MemberAccessorProbe::destructor() {
+    probe->clear(xsink);
+    probe->deref(xsink);
+}
+
+//! returns accessor call counts in get, set order
+/** @return the number of getter and setter calls for the object
+    @throw none */
+list<int> MemberAccessorProbe::counts() [flags=CONSTANT] {
+    ReferenceHolder<QoreListNode> result(new QoreListNode(bigIntTypeInfo), xsink);
+    std::lock_guard<std::mutex> lock(probe->mutex);
+    result->push(probe->gets, xsink);
+    result->push(probe->sets, xsink);
+    return result.release();
+}
+
+//! returns the stored value for a member without calling the accessors
+/** @param key the member name
+    @return the stored value
+    @throw none */
+auto MemberAccessorProbe::raw(string key) [flags=CONSTANT] {
+    return probe->getRaw(key->c_str());
+}
+
+//! stores a value for a member without calling the accessors, as a change made by the module's own code
+/** @param key the member name
+    @param value the value to store
+    @throw none */
+nothing MemberAccessorProbe::setRaw(string key, auto value) {
+    probe->setRaw(key->c_str(), value, xsink);
+}
+
+//! creates an object from C++ without running the Qore constructor
+/** @return a new object of this class whose storage is initialized
+    @throw none */
+static MemberAccessorProbe MemberAccessorProbe::create() {
+    ReferenceHolder<QoreObject> obj(new QoreObject(QC_MEMBERACCESSORPROBE, getProgram()), xsink);
+    obj->setPrivate(CID_MEMBERACCESSORPROBE, new MemberAccessorProbeData);
+    return obj.release();
+}
+
+//! reads a member with the C++ API
+/** @param obj the object
+    @param member the member name
+    @param api the C++ API to use: \c "evalMember", \c "getReferencedMemberNoMethod", \c "getMemberAsBigInt" or
+    \c "hasMember"
+    @return the value read
+    @throw CPPAPI-ERROR unknown API */
+static auto MemberAccessorProbe::cppRead(object obj, string member, string api) {
+    const char* m = member->c_str();
+    if (!strcmp(api->c_str(), "evalMember")) {
+        return obj->evalMember(m, xsink);
+    }
+    if (!strcmp(api->c_str(), "getReferencedMemberNoMethod")) {
+        return obj->getReferencedMemberNoMethod(m, xsink);
+    }
+    if (!strcmp(api->c_str(), "getMemberAsBigInt")) {
+        bool found = false;
+        int64 rv = obj->getMemberAsBigInt(m, found, xsink);
+        return found ? QoreValue(rv) : QoreValue();
+    }
+    if (!strcmp(api->c_str(), "hasMember")) {
+        return obj->hasMember(m, xsink);
+    }
+    xsink->raiseException("CPPAPI-ERROR", "unknown API '%s'", api->c_str());
+    return QoreValue();
+}
+
+//! writes a member with the C++ API
+/** @param obj the object
+    @param member the member name
+    @param value the value to write
+    @param api the C++ API to use: \c "setValue", \c "setMemberValue", \c "deleteMemberValue" or \c "takeMember"
+    @return the value returned by \c takeMember, otherwise no value
+    @throw CPPAPI-ERROR unknown API */
+static auto MemberAccessorProbe::cppWrite(object obj, string member, auto value, string api) {
+    const char* m = member->c_str();
+    if (!strcmp(api->c_str(), "setValue")) {
+        obj->setValue(m, value.refSelf(), xsink);
+        return QoreValue();
+    }
+    if (!strcmp(api->c_str(), "setMemberValue")) {
+        obj->setMemberValue(m, obj->getClass(), value.refSelf(), xsink);
+        return QoreValue();
+    }
+    if (!strcmp(api->c_str(), "deleteMemberValue")) {
+        obj->deleteMemberValue(m, xsink);
+        return QoreValue();
+    }
+    if (!strcmp(api->c_str(), "takeMember")) {
+        return obj->takeMember(m, xsink);
+    }
+    xsink->raiseException("CPPAPI-ERROR", "unknown API '%s'", api->c_str());
+    return QoreValue();
+}

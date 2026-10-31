@@ -47,15 +47,32 @@ class AOTModuleContextPathTest inherits QUnit::Test {
         set_return_value(main());
     }
 
+    #! A command prefix that kills what follows after \a seconds, or an empty string when there is none
+    /** GNU coreutils \c timeout is not part of macOS; MacPorts and Homebrew install it as \c gtimeout.  Perl's
+        \c alarm is the last resort.  \c QORE_TIMEOUT_EXECUTABLE overrides the search.  Without any of them the
+        command runs without a limit of its own, and run_tests.sh's limit for the whole test still ends a hang.
+    */
+    private static string timeoutPrefix(int seconds) {
+        string cmd = ENV.QORE_TIMEOUT_EXECUTABLE ?? trim(backquote(
+            "command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null || true"));
+        if (cmd) {
+            return sprintf("%s %d ", shellQuote(cmd), seconds);
+        }
+        string perl = trim(backquote("command -v perl 2>/dev/null || true"));
+        if (perl) {
+            return sprintf("%s -e 'alarm shift; exec @ARGV' %d ", shellQuote(perl), seconds);
+        }
+        return "";
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
     private string runQoreScriptWithTimeout(string module_dir, string script_path) {
         return backquote(sprintf(
-            "{ if command -v timeout >/dev/null 2>&1; then "
-            "timeout 20s env QORE_LIBDIR=%s LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s; rc=$?; "
-            "elif command -v gtimeout >/dev/null 2>&1; then "
-            "gtimeout 20s env QORE_LIBDIR=%s LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s; rc=$?; "
-            "else echo 'GNU timeout command not found'; rc=127; fi; echo EXIT=$rc; } 2>&1",
-            libqore_dir, libqore_dir, module_dir, qore_bin, script_path,
-            libqore_dir, libqore_dir, module_dir, qore_bin, script_path));
+            "{ %senv QORE_LIBDIR=%s LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s; echo EXIT=$?; } 2>&1",
+            timeoutPrefix(20), libqore_dir, libqore_dir, module_dir, qore_bin, script_path));
     }
 
     moduleRejectsIncompatibleNativeAbi() {

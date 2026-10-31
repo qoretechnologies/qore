@@ -96,8 +96,8 @@ public class SalesforceRestDataProviderBase inherits DataProvider::AbstractDataP
 
         #! Environment options
         const EnvOptions = {
-            "client_id": "SALESFORCE_CONSUMER_KEY",
-            "client_secret": "SALESFORCE_CONSUMER_SECRET",
+            "oauth2_client_id": "SALESFORCE_CONSUMER_KEY",
+            "oauth2_client_secret": "SALESFORCE_CONSUMER_SECRET",
             "username": "SALESFORCE_USER",
             "password": "SALESFORCE_PASS",
         };

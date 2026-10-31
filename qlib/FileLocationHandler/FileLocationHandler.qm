@@ -330,6 +330,10 @@ hash<FileResourceResult> import = FileLocationHandler::getResourceFromLocation(i
     @section filelocationhandler_relnotes Release Notes
 
     @subsection filelocationhandler_v3_0 FileLocationHandler v3.0
+    - fixed HTTP request headers whose values all have the same type, such as a literal <tt>{"X-Count": 1}</tt>:
+      the \c headers option of
+      @ref FileLocationHandler::FileLocationHandler::getHttpHandlerForClient() "getHttpHandlerForClient()" raised
+      \c RUNTIME-TYPE-ERROR when the default \c Accept headers were added
     - location errors give the location without its password
     - an error in the transfer of a binary stream or stream reader of an \c ftp(s):// or \c sftp:// location is
       raised by the stream instead of ending it as if the file were complete
@@ -384,6 +388,8 @@ hash<FileResourceResult> import = FileLocationHandler::getResourceFromLocation(i
       "FileLocationHandler::getRestHandlerForClient()", which returns a handler bound to a
       \c RestClientIo::RestClientIo client, or to one created from a synchronous \c RestClient::RestClient
       (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
+    - fixed reading text from \c rest:// and \c rests:// locations with options whose values all have the same type,
+      such as a literal <tt>{"encoding": "utf-8"}</tt>; adding the \c Accept header raised \c RUNTIME-TYPE-ERROR
 
     @subsection filelocationhandler_v2_3 FileLocationHandler v2.3
     - implemented support for non-blocking I/O from file handlers

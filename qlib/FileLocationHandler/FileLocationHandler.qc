@@ -1066,7 +1066,7 @@ getHandlerNames
 
         @param location the location string with any option string already removed; used in error messages only
         @param handler the handler whose option declarations will be used
-        @param opts the options parsed from the location string, if any
+        @param opts0 the options parsed from the location string, if any
         @param read @ref True for read options, @ref False for write options
         @param validate_unknown if @ref True then unknown options cause an exception to be thrown
 
@@ -1076,8 +1076,11 @@ getHandlerNames
 
         @since FileLocationHandler 3.0
     */
-    static *hash<auto> checkOptions(string location, AbstractFileLocationHandler handler, *hash<auto> opts,
+    static *hash<auto> checkOptions(string location, AbstractFileLocationHandler handler, *hash<auto> opts0,
             bool read, bool validate_unknown = True) {
+        # a caller's literal may be narrowed (e.g. hash<string, string>), and adding a default value or converting
+        # an option value to its declared type would throw
+        *hash<auto!> opts = opts0;
         *hash<string, hash<FileHandlerOptionInfo>> handler_opts = read
             ? handler.getReadOptions()
             : handler.getWriteOptions();

@@ -91,6 +91,8 @@ DLLLOCAL const QoreTypeInfo* getTypeInfoForValue(const AbstractQoreNode* n);
 DLLLOCAL const QoreTypeInfo* get_or_nothing_type(const QoreTypeInfo* typeInfo);
 // returns a value (i.e. not "or nothing") type for the given type
 DLLLOCAL const QoreTypeInfo* get_value_type(const QoreTypeInfo* typeInfo);
+// returns T for an or-nothing type *T, otherwise the type given
+DLLLOCAL const QoreTypeInfo* get_or_nothing_base_type(const QoreTypeInfo* typeInfo);
 
 class QoreTypeSpec {
 public:

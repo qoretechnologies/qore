@@ -1,0 +1,111 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires AsyncApi
+%requires ServerSentEventClient
+
+%exec-class SseClientNarrowedCallerHashTest
+
+#! Gives access to the HTTP client and the incoming event validation of the client
+class TestSseClient inherits ServerSentEventClient {
+    constructor(hash<auto> opts) : ServerSentEventClient(opts) {
+    }
+
+    *hash<auto> getRequestHeaders() {
+        return hc.getHttpConfig().headers;
+    }
+
+    validate(hash<auto> event) {
+        validateIncomingEvent(event);
+    }
+}
+
+#! Gives access to the incoming event validation of the client
+class TestSseClientIo inherits ServerSentEventClientIo {
+    constructor(hash<auto> opts) : ServerSentEventClientIo(opts) {
+    }
+
+    validate(hash<auto> event) {
+        validateIncomingEvent(event);
+    }
+}
+
+#! SSE client options and events
+/** A hash literal whose values all have the same type has a narrowed type, such as \c hash<string, int> for
+    <tt>{"X-Count": 1}</tt>; adding the \c Authorization header for the \c token option to such a \c headers option
+    raised RUNTIME-TYPE-ERROR, and so did validating an incoming event with only a \c data field against an AsyncAPI
+    schema
+*/
+class SseClientNarrowedCallerHashTest inherits QUnit::Test {
+    private {
+        AsyncApi3Schema schema;
+    }
+
+    constructor() : Test("SseClientNarrowedCallerHashTest", "1.0", \ARGV) {
+        addTestCase("ServerSentEventClient: token with narrowed headers", \clientToken());
+        addTestCase("ServerSentEventConnection: token with narrowed headers", \connectionToken());
+        addTestCase("ServerSentEventClient: a validated event with only data", \clientDataOnly());
+        addTestCase("ServerSentEventClientIo: a validated event with only data", \clientIoDataOnly());
+
+        schema = new AsyncApi3Schema("", {
+            "asyncapi": "3.0.0",
+            "info": {"title": "SSE client test", "version": "1.0.0"},
+            "channels": {
+                "events": {
+                    "address": "/sse",
+                    "messages": {
+                        "event": {
+                            "payload": {
+                                "type": "object",
+                                "properties": {"count": {"type": "integer"}},
+                            },
+                        },
+                    },
+                },
+            },
+            "operations": {
+                "receiveEvent": {
+                    "action": "receive",
+                    "channel": {"$ref": "#/channels/events"},
+                    "messages": ({"$ref": "#/channels/events/messages/event"},),
+                },
+            },
+        });
+        set_return_value(main());
+    }
+
+    clientToken() {
+        hash<auto> opts = {"url": "sse://localhost:1", "token": "t", "headers": {"X-Count": 1}};
+        assertEq("hash<string, int>", opts.headers.fullType());
+        TestSseClient client(opts);
+        on_exit client.disconnect();
+        *hash<auto> hdr = client.getRequestHeaders();
+        assertEq("1", hdr."X-Count");
+        assertEq("Bearer t", hdr.Authorization);
+    }
+
+    connectionToken() {
+        ServerSentEventConnection conn("test", "test", "sse://localhost:1", {}, {"token": "t",
+            "headers": {"X-Count": 1}});
+        assertEq("SseConnectPollOperation", conn.startPollConnect().className());
+    }
+
+    clientDataOnly() {
+        TestSseClient client({"url": "sse://localhost:1", "validator": schema, "asyncapi_channel": "events"});
+        on_exit client.disconnect();
+        client.validate({"data": {"count": 5}});
+        assertThrows("SCHEMA-VALIDATION-ERROR", \client.validate(), {"data": {"count": "x"}});
+    }
+
+    clientIoDataOnly() {
+        TestSseClientIo client({"url": "sse://localhost:1", "validator": schema, "asyncapi_channel": "events"});
+        client.validate({"data": {"count": 5}});
+        assertThrows("SCHEMA-VALIDATION-ERROR", \client.validate(), {"data": {"count": "x"}});
+    }
+}

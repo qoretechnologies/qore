@@ -18,6 +18,15 @@
     constructing its exception; diagnostics and normal %Program entry semantics are preserved. This reduces
     setup for existing guarded native companions, including calls from IR/JIT hosts.
 
+    A compound assignment to an lvalue declared with an or-nothing type (ex: \c *string, \c *bool, \c *date,
+    \c *list<auto>) is now refused at parse time wherever the same statement is refused for the plain type, with the
+    same \c PARSE-TYPE-ERROR naming the declared type of the lvalue (ex: <tt>*string s; s -= 1;</tt> or
+    <tt>*string s; s *= 2;</tt>).  These statements parsed before and then always failed at runtime, since the
+    operation either assigns a value that the lvalue does not accept or operates on a value of the plain type.  This
+    applies to locals, globals, class and hashdecl members, hash members and list elements.  Statements that the
+    plain type accepts are unchanged and run as before; \c *= and \c /= with a float operand on a \c *number
+    lvalue, which the parser refused although a \c number lvalue accepts them, are now accepted.
+
     Objects and runtime call references retain the sandbox under which they were created. Their methods and
     callbacks remain restricted when trusted code invokes them later, including inherited module methods and
     asynchronous callbacks. Access must satisfy both the caller's policy and the retained policies; interruption
@@ -35,6 +44,15 @@
     \c RUNTIME-TYPE-ERROR is no longer selected: another variant is called, or \c RUNTIME-OVERLOAD-ERROR is raised
     when none matches.  A call that binds selects the same variant as before.
 
+    The list or hash built by the @ref map "map", @ref select "select" and hash map operators now has the same
+    runtime type in every execution mode: when all values have a common type, the container gets that type, as with
+    the AST interpreter (ex: <tt>map {$1: ()}, keys rec</tt> gives a \c hash<string, list<auto>>, and a \c map over
+    a \c list<auto> holding only ints gives a \c list<int>); otherwise it keeps the type of the expression.  The IR,
+    JIT and tiered execution modes and compiled (AOT) code kept the type of the expression (ex:
+    \c hash<string, list>), so \c fullType() and the writes that the container accepts could differ between modes.
+    Compiled code also no longer removes the element type of an empty list stored in such a container or in a hash
+    literal such as <tt>{"a": (), "b": ()}</tt>.
+
     @ref Qore::HTTPClient::sendHttp2Connect() "HTTPClient::sendHttp2Connect()" and
     @ref Qore::HTTPClient::sendHttp3Connect() "HTTPClient::sendHttp3Connect()" now send their headers as every other
     request does: a value that is not a string is sent as a string, the elements of a list as repeated headers, and an
@@ -43,6 +61,23 @@
     An untyped hash, such as the empty hash literal \c {}, can now be assigned to a \c hash<auto!> class member, as to
     a \c hash<auto!> local or global variable; the parser refused it, taking the type, which is named
     \c hash<string, auto>, for a hash with a typed value type.
+
+    The compound assignment operators now enforce the value type of the hash or list holding their target as an
+    assignment with \c = does: the float result of \c *= or \c /= is no longer stored in a hash member or list
+    element of an integer value type, such as a key of a \c hash<string, int>, but raises \c RUNTIME-TYPE-ERROR, as
+    for an \c int variable.  A compound assignment that fails, for example with \c RUNTIME-TYPE-ERROR or
+    \c DIVISION-BY-ZERO, no longer leaves behind the hash key or list elements it created to reach its target,
+    holding no value or the default value of the value type; neither does an assignment that fails while reaching its
+    target, such as <tt>h.new.x = 1</tt> where \c h is a \c hash<string, string>.
+
+    A global variable declared as \c hash<auto!> or \c list<auto!> now drops the narrowed type of a hash or list
+    assigned to it, as a local variable, a class member or a parameter does, so that values of any type can then be
+    written to it; it kept the type of the value assigned, so writing a value of another type raised
+    \c RUNTIME-TYPE-ERROR.
+
+    The @ref unshift "unshift" operator no longer reads freed memory when the list's element type converts the
+    value, as for a string unshifted onto a \c list<softint>; the read could leave the list's recursive-reference
+    accounting wrong or crash the process.
 
     \c HTTPClient now recognizes a WebSocket upgrade request from its \c Connection and \c Upgrade headers as RFC 9110
     defines them: as comma-separated token lists compared case-insensitively, given as a string or as a list of values;
@@ -116,6 +151,14 @@
     gate are inherited by Qore subclasses, including accesses through <tt>self</tt>. Declared members retain
     their normal access rules and storage. See @ref member_write_gate
     (<a href="https://github.com/qoretechnologies/qore/issues/5511">issue 5511</a>).
+
+    C++ API: builtin classes can declare a member whose value is read from and written to the module's own storage
+    with QoreClass::addBuiltinMemberWithAccessors(), the counterpart for normal members of
+    QoreClass::addBuiltinStaticVarWithAccessors(). The member is declared and typed, so parse-time checks and
+    reflection see it, but the object holds no value for it and it is never initialized: every read calls the
+    module's getter and every assignment, including compound and nested assignments, removal and deletion, calls its
+    setter once the assignment is complete, in every execution mode. The jni module uses this for Java instance
+    fields, so that reading or assigning one reads or writes the field of the Java object.
 
     Assigning an object member through a variable of type <tt>object</tt> now calls <tt>memberNotification()</tt>
     in IR, JIT and AOT execution, matching AST execution and assignments through class-typed variables.
@@ -392,6 +435,11 @@
     lists and unchanged reference, weak-reference, exception and cleanup behavior.
     AOT indexed integer addition uses prepared local storage when eligible, preserving live ownership,
     bounds, type, reflection and exception checks with the ordinary compound operation as fallback.
+    Native scalar member fast paths also honor declared members backed by external getter/setter storage.
+    AOT metadata reading translates upstream v21 debugger and result-type opcodes alongside return and cleanup
+    instructions, preserving the performance branch's snapshot opcode encoding.
+    Result-type scans, embedded-module discovery and external-member merge traversal check cancellation;
+    long ISO 8601 duration scans preserve cancellation in both designator and alternative formats.
     Native cross-Program scalar callbacks reuse pre-entry reference decoding while preserving live binding
     checks and complete validation after Program entry.
     Deferred native callback and closure contexts preserve module option replacement during exception
@@ -1065,6 +1113,30 @@
 
     The conversions that do not raise exceptions (a string assigned to a \c softdate, for example) keep the
     components read before the text they cannot read.
+
+    @par Duration Literals and Strings Follow ISO 8601
+    Duration literals and the duration strings read by @ref Qore::date(string) "date(string)" now follow the two
+    duration formats of ISO 8601 (@ref short_reldates "PnYnMnWnDTnHnMnS" and the
+    @ref long_reldates "alternative format" \c PYYYY-MM-DDThh:mm:ss); a literal that does not is a parse error that
+    says what is wrong, and a string raises \c INVALID-DATE:
+    - an hour, minute or second must follow the time designator \c "T": \c P1H, \c P1S and \c P1u are errors (use
+      \c PT1H; before, they were zero)
+    - the components must be in the order Y, M, W, D, T, H, M, S, each at most once: \c P1D1D and \c PT1M1H are
+      errors (before, the values were added)
+    - only the last component can have a decimal fraction: \c P1.5DT1H is an error
+    - in the alternative format, a time must follow its date: \c P00:01:00 and \c PT01:00:00 are errors (use
+      \c P0000-00-00T00:01:00 or \c PT1M), and the values cannot exceed 12 months, 30 days, 24 hours, 60 minutes or
+      60 seconds
+    .
+    These are now read as well:
+    - weeks in literals (\c P1W, \c P1W2D), as in strings
+    - the alternative format in strings (<tt>date("P0001-02-03T04:05:06")</tt>; before, a zero duration), and its
+      basic form in literals and strings (\c P00010203T040506)
+    .
+    The %Qore extensions to ISO 8601 remain: negative components (\c P-1D), microseconds after the seconds
+    (\c PT1S5u), and in strings lower-case designators and trailing white space.  A YAML plain
+    scalar that ISO 8601 does not read as a duration (ex: \c P1D1D) is a string, and a \c !duration scalar that it
+    does not read raises \c YAML-PARSER-ERROR.
 
     @par The Ends of File::getPipe() Are Closed
     The ends of a pipe made by @ref Qore::File::getPipe() "File::getPipe()" now own their descriptors:
@@ -2267,6 +2339,8 @@ val = "string";      # OK
 
     LLVM 16 or later is required for JIT and AOT.  See @ref execution_modes "Execution Modes" for details,
     and @ref environment_variables "environment variables" for related runtime settings.
+    @ref Qore::LLVMVersion "LLVMVersion" and the \c LLVMVersion key of
+    @ref Qore::get_qore_library_info() "get_qore_library_info()" give the LLVM version the library was built with.
     @endparblock
 
     @par New Required Libraries and Async Networking Stack
@@ -5430,6 +5504,9 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - \c qcc could hang forever at full CPU while compiling a module, when the JIT compiler started on a background
+      thread at the same time: both registered LLVM's targets, which is not thread-safe, and the registry was left
+      corrupted.  LLVM's targets are now registered once for the process, before any thread uses LLVM
     - a debugged program could get a deleted @ref Qore::ProgramControl "ProgramControl" object in a debugger callback,
       such as \c onAttach() or \c onStep(), when another thread released the last reference to the object at the
       same time: the object was cached and returned again until its destructor ran.  The callback failed, so the

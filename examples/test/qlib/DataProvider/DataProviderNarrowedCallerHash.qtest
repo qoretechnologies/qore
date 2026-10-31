@@ -1,0 +1,40 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+
+%exec-class DataProviderNarrowedCallerHashTest
+
+#! Hashes passed by callers whose values all have the same type
+/** A hash literal whose values all have the same type, such as <tt>{"columns": "id"}</tt>, has a narrowed type
+    (here <tt>hash<string, string></tt>); the API tested here converts a value in the hash that it was given to a
+    value of another type
+*/
+class DataProviderNarrowedCallerHashTest inherits QUnit::Test {
+    constructor() : Test("DataProviderNarrowedCallerHashTest", "1.0", \ARGV) {
+        addTestCase("DefaultRecordIterator converts a single column", \recordIteratorColumns());
+        set_return_value(main());
+    }
+
+    recordIteratorColumns() {
+        assertEq("hash<string, string>", DataProviderNarrowedCallerHashTest::mk({"columns": "id"}).fullType());
+        DefaultRecordIterator i(new ListIterator(({"id": 1, "name": "a"}, {"id": 2, "name": "b"})), NOTHING,
+            {"columns": "id"});
+        list<auto> rows;
+        while (i.next()) {
+            push rows, i.getValue();
+        }
+        assertEq(({"id": 1}, {"id": 2}), rows);
+    }
+
+    #! Returns the hash as it is, with its runtime type
+    static hash<auto> mk(hash<auto> h) {
+        return h;
+    }
+}

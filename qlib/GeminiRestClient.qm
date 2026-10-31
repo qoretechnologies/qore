@@ -153,7 +153,9 @@ public class GeminiRestClientBase {
         rv += opts;
         # Map apikey to x-goog-api-key header
         if (rv.apikey) {
-            hash<auto> hdr = rv.headers ?? {};
+            # the header is set in an "auto!" local: a caller's headers option may be narrowed (e.g.
+            # hash<string, int> for {"X-Count": 1}), and adding the API key header would throw
+            hash<auto!> hdr = rv.headers ?? {};
             hdr."x-goog-api-key" = rv.apikey;
             rv += {"headers": hdr};
             delete rv.apikey;
@@ -299,7 +301,9 @@ public class GeminiResponseSseStreamIo {
         if (to) {
             timeout_ms = to;
         }
-        hash<auto> headers = hdr ?? {};
+        # the headers are set in an "auto!" local: a caller's literal may be narrowed (e.g. hash<string, int> for
+        # {"X-Count": 1}), and adding the Content-Type header would throw
+        hash<auto!> headers = hdr ?? {};
         *data payload;
         if (exists body) {
             payload = body.typeCode() == NT_STRING ? body : make_json(body);

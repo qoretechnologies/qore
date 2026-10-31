@@ -141,6 +141,9 @@ public class Cin7CoreRestClientBase {
         # the options have values of different types, so the hash must not take the narrow type of the
         # defaults, which would prevent adding values of other types
         hash<auto!> rv = DefaultOptions + opts;
+        # the headers are set in an "auto!" local: a caller's headers option may be narrowed (e.g. hash<string, int>
+        # for {"X-Count": 1}), and adding a string header would throw
+        *hash<auto!> hdr = rv.headers;
 
         # Validate required credentials
         if (!opts.account_id) {
@@ -151,13 +154,16 @@ public class Cin7CoreRestClientBase {
         }
 
         # Add authentication headers
-        rv.headers{AccountIdHeader} = opts.account_id;
-        rv.headers{ApplicationKeyHeader} = opts.apikey;
+        hdr{AccountIdHeader} = opts.account_id;
+        hdr{ApplicationKeyHeader} = opts.apikey;
 
         # Remove credentials from options (they're in headers now)
         remove rv.account_id;
         remove rv.apikey;
 
+        if (exists hdr) {
+            rv.headers = hdr;
+        }
         return rv;
     }
 }

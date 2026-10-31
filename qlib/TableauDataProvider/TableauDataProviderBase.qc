@@ -164,7 +164,8 @@ public class TableauDataProviderBase inherits DataProvider::AbstractDataProvider
         list<hash<auto>> results = ();
         int page = 1;
         while (True) {
-            hash<auto> qparams = params ?? {};
+            # hash<auto!>: the given hash may be narrowed (ex: hash<string, string>); adding paging keys would throw
+            hash<auto!> qparams = params ?? {};
             qparams.pageSize = DefaultPageSize;
             qparams.pageNumber = page;
             hash<auto> response = doGet(path, qparams);

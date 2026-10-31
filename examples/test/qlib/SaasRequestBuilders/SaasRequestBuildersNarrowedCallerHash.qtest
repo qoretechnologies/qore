@@ -1,0 +1,208 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires UnleashedDataProvider
+%requires WooCommerceDataProvider
+%requires InstantlyDataProvider
+%requires KeapDataProvider
+%requires PdfCoDataProvider
+
+%exec-class SaasRequestBuildersNarrowedCallerHashTest
+
+#! Records the POST requests of an Unleashed data provider
+class TestUnleashedCreateProduct inherits UnleashedDataProvider::UnleashedCreateProductDataProvider {
+    public {
+        list<hash<auto>> calls = ();
+    }
+
+    constructor(UnleashedRestClient::UnleashedRestClientIo rest) : UnleashedCreateProductDataProvider(rest) {
+    }
+
+    hash<auto> doPost(string path, *hash<auto> body) {
+        push calls, {"path": path, "body": body};
+        return body + {"Guid": "g1"};
+    }
+}
+
+#! Records the POST requests of an Unleashed data provider
+class TestUnleashedUpdateCustomer inherits UnleashedDataProvider::UnleashedUpdateCustomerDataProvider {
+    public {
+        list<hash<auto>> calls = ();
+    }
+
+    constructor(UnleashedRestClient::UnleashedRestClientIo rest) : UnleashedUpdateCustomerDataProvider(rest) {
+    }
+
+    hash<auto> doPost(string path, *hash<auto> body) {
+        push calls, {"path": path, "body": body};
+        return body + {"Guid": "g1"};
+    }
+}
+
+#! Records the DELETE requests of a WooCommerce data provider
+class TestWooCommerceDeleteCustomer inherits WooCommerceDataProvider::WooCommerceDeleteCustomerDataProvider {
+    public {
+        list<hash<auto>> calls = ();
+    }
+
+    constructor(WooCommerceRestClient::WooCommerceRestClientIo rest) : WooCommerceDeleteCustomerDataProvider(rest) {
+    }
+
+    hash<auto> doDelete(string path, *hash<auto> params) {
+        push calls, {"path": path, "params": params};
+        return {"id": 5, "email": "a@example.com"};
+    }
+}
+
+#! Records the events that an Instantly webhook event data provider raises
+class TestInstantlyCampaignCompleted
+        inherits InstantlyDataProvider::InstantlyCampaignCompletedEventDataProvider {
+    public {
+        list<hash<auto>> events = ();
+    }
+
+    constructor(InstantlyRestClient::InstantlyRestClientIo rest) : InstantlyCampaignCompletedEventDataProvider(rest) {
+    }
+
+    notifyObservers(string event_id, hash<auto> data_) {
+        push events, {"event_id": event_id, "data": data_};
+    }
+
+    handle(hash<auto> payload) {
+        handleWebhookEvent(payload);
+    }
+}
+
+#! Answers the file upload of a PDF.co data provider from memory
+class TestPdfCoReadBarcode inherits PdfCoDataProvider::PdfCoReadBarcodeDataProvider {
+    public {
+        list<hash<auto>> calls = ();
+    }
+
+    constructor(PdfCoRestClient::PdfCoRestClientIo rest) : PdfCoReadBarcodeDataProvider(rest) {
+    }
+
+    hash<auto> doPost(string path, *hash<auto> body) {
+        push calls, {"path": path, "body": body};
+        return {"url": "https://localhost:1/tmp/file.pdf"};
+    }
+}
+
+#! SaaS request builders and transformations add values of other types to hashes that can have a narrow type
+/** The hashes start as literals whose values all have the same type, or are given by the caller; adding a value of
+    another type raised RUNTIME-TYPE-ERROR
+*/
+public class SaasRequestBuildersNarrowedCallerHashTest inherits QUnit::Test {
+    private {
+        const ClientOpts = {
+            "url": "https://localhost:1/",
+            "apikey": "k",
+            "api_id": "id",
+            "store_url": "https://localhost:1",
+            "consumer_key": "ck",
+            "consumer_secret": "cs",
+        };
+    }
+
+    constructor() : Test("SaasRequestBuildersNarrowedCallerHash", "1.0", \ARGV) {
+        addTestCase("Unleashed create product", \unleashedCreateProductTest());
+        addTestCase("Unleashed update customer", \unleashedUpdateCustomerTest());
+        addTestCase("WooCommerce delete customer", \wooCommerceDeleteCustomerTest());
+        addTestCase("Instantly campaign completed event", \instantlyEventTest());
+        addTestCase("Keap transformContactResponse", \keapTransformTest());
+        addTestCase("PDF.co uploadFileIfNeeded", \pdfCoUploadTest());
+        set_return_value(main());
+    }
+
+    #! returns its argument; passing a literal through a hash<auto> parameter keeps the literal's narrow type
+    static hash<auto> mk(hash<auto> h) {
+        return h;
+    }
+
+    unleashedCreateProductTest() {
+        # the body literal that the provider builds
+        assertEq("hash<string, string>", mk({"ProductCode": "P1", "ProductDescription": "Product"}).fullType());
+        TestUnleashedCreateProduct prov(new UnleashedRestClient::UnleashedRestClientIo(ClientOpts));
+        prov.doRequest({
+            "ProductCode": "P1",
+            "ProductDescription": "Product",
+            "DefaultSellPrice": 9.5,
+            "IsSellable": True,
+        });
+        hash<auto> body = prov.calls[0].body;
+        assertEq("P1", body.ProductCode);
+        assertEq(9.5, body.DefaultSellPrice);
+        assertEq(True, body.IsSellable);
+    }
+
+    unleashedUpdateCustomerTest() {
+        assertEq("hash<string, string>", mk({"CustomerCode": "C1"}).fullType());
+        TestUnleashedUpdateCustomer prov(new UnleashedRestClient::UnleashedRestClientIo(ClientOpts));
+        prov.doRequest({"guid": "g1", "CustomerCode": "C1", "CreditLimit": 1000.0, "Taxable": False});
+        hash<auto> body = prov.calls[0].body;
+        assertEq("/Customers/g1", prov.calls[0].path);
+        assertEq("C1", body.CustomerCode);
+        assertEq(1000.0, body.CreditLimit);
+        assertEq(False, body.Taxable);
+    }
+
+    wooCommerceDeleteCustomerTest() {
+        assertEq("hash<string, string>", mk({"force": "true"}).fullType());
+        TestWooCommerceDeleteCustomer prov(new WooCommerceRestClient::WooCommerceRestClientIo(ClientOpts));
+        prov.doRequest({"id": 5, "reassign": 7});
+        assertEq("customers/5", prov.calls[0].path);
+        assertEq({"force": "true", "reassign": 7}, prov.calls[0].params);
+    }
+
+    instantlyEventTest() {
+        TestInstantlyCampaignCompleted prov(new InstantlyRestClient::InstantlyRestClientIo(ClientOpts));
+        # the standard fields of the event; all strings in this payload
+        assertEq("hash<string, string>", mk({
+            "event_type": prov.getWebhookEventType(),
+            "timestamp": "2026-11-01T10:00:00.000Z",
+            "campaign_id": "c1",
+            "campaign_name": "Campaign",
+        }).fullType());
+        prov.handle({
+            "event_type": prov.getWebhookEventType(),
+            "timestamp": "2026-11-01T10:00:00.000Z",
+            "campaign_id": "c1",
+            "campaign_name": "Campaign",
+            "total_leads": 42,
+        });
+        assertEq(1, prov.events.size());
+        assertEq("c1", prov.events[0].data.campaign_id);
+        assertEq(42, prov.events[0].data.total_leads);
+    }
+
+    keapTransformTest() {
+        assertEq("hash<string, list<hash<string, string>>>", mk({
+            "email_addresses": ({"email": "a@example.com", "field": "EMAIL1"},),
+            "phone_numbers": ({"number": "555-0100", "field": "PHONE1"},),
+        }).fullType());
+        hash<auto> contact = KeapDataProviderBase::transformContactResponse({
+            "email_addresses": ({"email": "a@example.com", "field": "EMAIL1"},),
+            "phone_numbers": ({"number": "555-0100", "field": "PHONE1"},),
+        });
+        assertEq({"email": "a@example.com", "phone1": "555-0100"}, contact);
+    }
+
+    pdfCoUploadTest() {
+        assertEq("hash<string, hash<string, string>>", mk({
+            "file": {"name": "a.pdf", "content": "UERG", "mime_type": "application/pdf"},
+        }).fullType());
+        TestPdfCoReadBarcode prov(new PdfCoRestClient::PdfCoRestClientIo(ClientOpts));
+        hash<auto> req = prov.uploadFileIfNeeded({
+            "file": {"name": "a.pdf", "content": "UERG", "mime_type": "application/pdf"},
+        });
+        assertEq({"url": "https://localhost:1/tmp/file.pdf"}, req);
+        assertEq("file/upload/base64", prov.calls[0].path);
+        assertEq({"file": "UERG", "name": "a.pdf"}, prov.calls[0].body);
+    }
+}

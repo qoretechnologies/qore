@@ -420,6 +420,29 @@ const char* Var::getClassName() const {
     return parseTypeInfo->cscope->getIdentifier();
 }
 
+//! Returns the lvalue type of a variable declared with auto!, which LValueHelper::assign() needs to see
+/** A variable declared as \c hash<auto!> or \c list<auto!> stores the plain auto container type; its lvalue must
+    have the no-narrow version of the type so that an assignment drops the narrowed type of the value assigned.
+*/
+static const QoreTypeInfo* get_no_narrow_lvalue_type(const QoreTypeInfo* ti) {
+    if (ti == autoHashTypeInfo) {
+        return autoNoNarrowHashTypeInfo;
+    }
+    if (ti == autoHashOrNothingTypeInfo) {
+        return autoNoNarrowHashOrNothingTypeInfo;
+    }
+    if (ti == autoListTypeInfo) {
+        return autoNoNarrowListTypeInfo;
+    }
+    if (ti == autoListOrNothingTypeInfo) {
+        return autoNoNarrowListOrNothingTypeInfo;
+    }
+    if (ti == autoTypeInfo) {
+        return autoNoNarrowTypeInfo;
+    }
+    return ti;
+}
+
 int Var::getLValue(LValueHelper& lvh, bool for_remove) const {
     QoreLValue<qore_gvar_ref_u>& val = getVal();
 
@@ -436,7 +459,8 @@ int Var::getLValue(LValueHelper& lvh, bool for_remove) const {
     if (checkFinalized(lvh.vl.xsink))
         return -1;
 
-    lvh.setValue((QoreLValueGeneric&)val, typeInfo);
+    // a global declared with auto! drops the narrowed type of the values assigned to it, as a local does
+    lvh.setValue((QoreLValueGeneric&)val, no_narrowing ? get_no_narrow_lvalue_type(typeInfo) : typeInfo);
     return 0;
 }
 
@@ -620,11 +644,13 @@ LValueHelper::LValueHelper(ExceptionSink* xsink, bool for_assignment) : vl(xsink
 LValueHelper::LValueHelper(LValueHelper&& o) : vl(std::move(o.vl)),
         first_temp(std::exchange(o.first_temp, nullptr)), tvec(std::move(o.tvec)), lvid_set(o.lvid_set),
         ocvec(std::move(o.ocvec)), before(o.before), removal_objects(std::move(o.removal_objects)), rdt(o.rdt),
-        member_lvalue(std::move(o.member_lvalue)), assignment_only(o.assignment_only),
-        member_lvalue_modified(o.member_lvalue_modified), robj(o.robj),
+        vivified(std::move(o.vivified)), member_lvalue(std::move(o.member_lvalue)),
+        assignment_only(o.assignment_only), member_lvalue_modified(o.member_lvalue_modified), robj(o.robj),
         buffer_lvalue(o.buffer_lvalue), buffer_lvalue_index(o.buffer_lvalue_index),
         buffer_lvalue_value(o.buffer_lvalue_value), val(o.val), qv(o.qv), typeInfo(o.typeInfo) {
     o.qv = nullptr;
+    // the entries created to reach the target belong to the new helper, which removes them if its operation fails
+    o.vivified.clear();
     o.buffer_lvalue = nullptr;
     o.buffer_lvalue_index = 0;
     o.buffer_lvalue_value = QoreValue();
@@ -640,6 +666,14 @@ int64 q_get_lvalue_scan_count() {
 #endif
 
 LValueHelper::~LValueHelper() {
+    // an operation that failed must not leave behind the entries created to reach its target, as a rejected
+    // assignment does not (see assign()); a compound assignment can fail after storing a default value in a new
+    // entry, or when it converts the value, and navigation can fail after creating the entries leading to the
+    // target; the entries are removed while the lvalue locks are still held
+    if (*vl.xsink && !vivified.empty()) {
+        rollbackVivification();
+    }
+
     if (buffer_lvalue) {
         if (!*vl.xsink) {
             buffer_lvalue->setEntry(buffer_lvalue_index, buffer_lvalue_value, vl.xsink);
@@ -712,9 +746,14 @@ LValueHelper::~LValueHelper() {
     vl.del();
 
     if (member_lvalue && member_lvalue->write_back && member_lvalue_modified && !*vl.xsink) {
-        qore_class_private::get(*member_lvalue->object->getClass())->evalMemberWriteGate(*member_lvalue->object,
-            member_lvalue->member.c_str(), *member_lvalue->value, QoreMemberWriteOp::Assign,
-            vl.xsink).discard(vl.xsink);
+        const qore_class_private* cls = qore_class_private::get(*member_lvalue->object->getClass());
+        if (member_lvalue->accessor_info) {
+            cls->evalMemberAccessorSet(*member_lvalue->object, member_lvalue->member.c_str(),
+                *member_lvalue->accessor_info, *member_lvalue->value, vl.xsink);
+        } else {
+            cls->evalMemberWriteGate(*member_lvalue->object, member_lvalue->member.c_str(), *member_lvalue->value,
+                QoreMemberWriteOp::Assign, vl.xsink).discard(vl.xsink);
+        }
     }
 
     if (static_var_lvalue) {
@@ -1226,8 +1265,9 @@ int LValueHelper::setBufferElementLValue(QoreBufferNode* b, size_t index) {
     return 0;
 }
 
-int LValueHelper::setMemberWriteGateLValue(QoreObject* object, const char* member) {
-    auto entry = std::make_unique<MemberLValue>(object, member, vl.xsink);
+int LValueHelper::setMemberWriteGateLValue(QoreObject* object, const char* member,
+        const QoreMemberInfo* accessor_info) {
+    auto entry = std::make_unique<MemberLValue>(object, member, accessor_info, vl.xsink);
     // Keep the receiver before unlocking the parent lvalue; a gate can call external or Qore code.
     vl.del();
     clearPtr();
@@ -1237,13 +1277,17 @@ int LValueHelper::setMemberWriteGateLValue(QoreObject* object, const char* membe
     if (*vl.xsink) {
         return -1;
     }
+    const qore_class_private* cls = qore_class_private::get(*object->getClass());
     if (!assignment_only) {
-        entry->value = qore_class_private::get(*object->getClass())->evalMemberGate(object, member, vl.xsink);
+        entry->value = accessor_info
+            ? cls->evalMemberAccessorGet(object, member, *accessor_info, vl.xsink)
+            : cls->evalMemberGate(object, member, vl.xsink);
         if (*vl.xsink) {
             return -1;
         }
     }
-    setValue(*entry->value, autoTypeInfo);
+    // a declared member keeps its type: a value that it does not accept is rejected before the setter is called
+    setValue(*entry->value, accessor_info ? accessor_info->getTypeInfo() : autoTypeInfo);
     // Crossing an object boundary mutates that object, not the external member holding its reference.
     // Keep only the final object's temporary; any containing hash/list copies are unchanged by that mutation.
     member_lvalue = std::move(entry);
@@ -2371,7 +2415,8 @@ int LValueHelper::makeFloat(const char* desc) {
            return 0;
         }
 
-        if (typeInfo && qv->getType() != NT_FLOAT && !QoreTypeInfo::parseAccepts(typeInfo, bigIntTypeInfo)) {
+        // the lvalue must accept the float result, as for the value case above
+        if (typeInfo && !QoreTypeInfo::parseAccepts(typeInfo, floatTypeInfo)) {
             // the 4th arg to doTypeException() is needed only for the type
             typeInfo->doTypeException("lvalue", 0, desc, QoreValue(1.0), vl.xsink);
             return -1;
@@ -3986,27 +4031,8 @@ bool LocalVar::isNoNarrowMarkerType(const QoreTypeInfo* ti, const QoreTypeInfo*&
 }
 
 const QoreTypeInfo* LocalVar::getTypeInfoForLValue() const {
-    const QoreTypeInfo* ti;
-    if (!no_narrowing) {
-        ti = typeInfo;
-    } else {
-        // Return the NoNarrow version of the type so LValueHelper::assign() can properly strip types
-        if (typeInfo == autoHashTypeInfo) {
-            ti = autoNoNarrowHashTypeInfo;
-        } else if (typeInfo == autoHashOrNothingTypeInfo) {
-            ti = autoNoNarrowHashOrNothingTypeInfo;
-        } else if (typeInfo == autoListTypeInfo) {
-            ti = autoNoNarrowListTypeInfo;
-        } else if (typeInfo == autoListOrNothingTypeInfo) {
-            ti = autoNoNarrowListOrNothingTypeInfo;
-        } else if (typeInfo == autoTypeInfo) {
-            ti = autoNoNarrowTypeInfo;
-        } else {
-            ti = typeInfo;
-        }
-    }
-
-    return ti;
+    // Return the NoNarrow version of the type so LValueHelper::assign() can properly strip types
+    return no_narrowing ? get_no_narrow_lvalue_type(typeInfo) : typeInfo;
 }
 
 void LocalVar::parseSetNarrowedType(const QoreTypeInfo* ti, const QoreProgramLocation* loc) {

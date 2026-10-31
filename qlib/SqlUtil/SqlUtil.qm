@@ -151,6 +151,12 @@ module SqlUtil {
     @section sqlutil_relnotes Release Notes for the SqlUtil Module
 
     @subsection sqlutilv3_11_0 SqlUtil v3.11.0
+    - fixed @ref SqlUtil::AbstractTable::setupTable() "AbstractTable::setupTable()" to accept a partition strategy or
+      partition descriptions given only as driver-specific overrides, such as a literal
+      <tt>{"driver": {"pgsql": {"method": "range", "columns": "dt"}}}</tt>, and
+      @ref SqlUtil::AbstractDatabase::createTempTable() "AbstractDatabase::createTempTable()" to accept a primary key
+      with columns whose descriptions all have the same value type, such as <tt>{"id": {"qore_type": "integer"}}</tt>;
+      applying the description raised \c RUNTIME-TYPE-ERROR
     - a database module can give the SQL of the comparison of a column with a value in a where clause from the
       column's type with @ref SqlUtil::AbstractTable::getWhereColumnComparisonIntern()
       "AbstractTable::getWhereColumnComparisonIntern()" and

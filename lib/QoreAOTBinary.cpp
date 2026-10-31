@@ -2875,6 +2875,13 @@ static std::string getAOTSerializableTypePath(const QoreTypeInfo* ti, bool no_na
     if (ti == autoNoNarrowTypeInfo) {
         return "auto!";
     }
+    // the type of an empty list literal is named "list" like the plain list type, but it accepts a list without
+    // stripping its element type, so a container with values of this type keeps the types of the lists stored in
+    // it, as the AST interpreter does (for example the result hash of `map {$1: ()}, l`); it needs a name of its own
+    // to survive the round trip
+    if (ti == emptyListTypeInfo) {
+        return "empty list";
+    }
     if (ti == autoNoNarrowHashTypeInfo) {
         return "hash<auto!>";
     }
@@ -5159,6 +5166,7 @@ static const BuiltinTypeEntry builtin_types[] = {
     {"int|float|number", &bigIntFloatOrNumberTypeInfo},
     {"float|number",    &floatOrNumberTypeInfo},
     {"auto list",       &autoListTypeInfo},
+    {"empty list",      &emptyListTypeInfo},
     {"auto hash",       &autoHashTypeInfo},
     {"*auto list",      &autoListOrNothingTypeInfo},
     {"*auto hash",      &autoHashOrNothingTypeInfo},

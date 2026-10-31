@@ -134,6 +134,9 @@ public class FreshsalesRestClientBase {
         # the options have values of different types, so the hash must not take the narrow type of the
         # defaults, which would prevent adding values of other types
         hash<auto!> rv = DefaultOptions + opts;
+        # the headers are set in an "auto!" local: a caller's headers option may be narrowed (e.g. hash<string, int>
+        # for {"X-Count": 1}), and adding a string header would throw
+        *hash<auto!> hdr = rv.headers;
 
         # Always build URL from domain when provided (auto_url may set url to anything)
         if (opts.domain) {
@@ -144,13 +147,16 @@ public class FreshsalesRestClientBase {
 
         # Set Freshsales token authentication
         if (opts.apikey) {
-            rv.headers.Authorization = "Token token=" + opts.apikey;
+            hdr.Authorization = "Token token=" + opts.apikey;
         }
 
         # Remove raw options to prevent RestClient misinterpretation
         remove rv.apikey;
         remove rv.domain;
 
+        if (exists hdr) {
+            rv.headers = hdr;
+        }
         return rv;
     }
 }
