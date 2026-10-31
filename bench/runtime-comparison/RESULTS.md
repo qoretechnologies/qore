@@ -31027,3 +31027,131 @@ A prospectively specified control follow-up uses five forks and 150 ms windows (
 Release: six focused fixtures/3954 assertions plus 15 extended fixtures/6718 assertions. Debug: eleven fixtures/5565 assertions and native 4003/5668 checks. Focused suites include conditional-deletion checks and codegen assertions for base/override/aliased receivers. Reflection checks cover nested PHIs and replacement by a different retained owner. Tests cover reflected replacement, deletion during an admitted loop, destructor/lifetime behavior, integer overflow/float edge cases, zero/short loops, foreign/imported Programs, disabled controls, O0/O3, stripped/included source, EH and split compilation. All 36 fresh artifacts/144 preparation processes/4698 reference outputs per variant pass; all 391 shipped qmods build with the same measured core. No sanitizer/other-platform claim.
 
 See the [complete evidence](results-pinned-phi-macos-arm64.json) and [62-item audit](audit-pinned-phi.md). This is a paired optimization experiment, not a fresh Java/develop checkpoint. The installed runtime remains 93e28a54e7. Receiver-local assignment and other call categories remain candidates for further work; no global performance ceiling is established.
+
+
+## Rejected class-local receiver snapshot PHIs (2026-10-31)
+
+The rejected candidate extended the bounded retained-owner proof to carry the original snapshot through the source PHI for class-local borrowing admission. Twelve target bodies replaced three identity comparisons with one. The runtime assignment helper, owning runtime slot, real-reference marking and fallback remain. Reflection replacing a source with another retained owner can conservatively use the ordinary initializer. This AOT compiler candidate is not retained.
+
+Rejected after evaluating the broader workload tradeoff. Broad receiver-assignment gains were 0.95–2.70%. In the five-fork follow-up, the two repeated targets improved 1.51% and 0.60%. Local boxed-integer fallback was 3.07% and 2.15% slower across every layout in the broad and follow-up campaigns (about 0.96 and 0.67 ns/item). The short-object control was 0.79% and 0.88% slower. Short-loop aggregate changes ranged from 1.02% faster to 0.93% slower. The modest, partly layout-sensitive target gains do not justify these repeated broader costs. The decision uses the authorized broader workload tradeoff. The committed receiver-call PHI optimization remains the baseline.
+
+All builds are optimized. This experiment uses three layouts, three warmups and three samples per process. Pilot: three forks/100 ms; focused confirmation: five forks/150 ms; broad confirmation: three forks/150 ms. Values include the complete kernel and harness, not isolated call latency. No owned build/test/profile work overlapped timing.
+
+Broad 43-workload confirmation:
+
+|!Workload|!Before ns/item|!After ns/item|!Change|!Layout changes (default, reverse, shuffle)
+|matched:forward_float|32.1811|32.4857|+0.95%|+0.95%, +0.07%, -0.28%
+|matched:forward_int|27.6744|27.6166|-0.21%|-0.14%, -0.31%, -0.41%
+|matched:context_int|164.0831|165.0713|+0.60%|-0.24%, +0.96%, +0.97%
+|matched:context_float|171.8928|171.3925|-0.29%|-0.40%, +1.26%, -0.49%
+|local:direct_call|1.4782|1.4836|+0.37%|+0.38%, +0.47%, -1.00%
+|local:method_call|1.5579|1.5521|-0.38%|-0.43%, +0.23%, -0.21%
+|local:polymorphic_call|17.5001|17.0278|-2.70%|-0.48%, -4.53%, -0.70%
+|local:polymorphic_float_call|17.5816|17.2052|-2.14%|+0.24%, -5.18%, -2.14%
+|local:boxed_int_method_fallback|31.1756|32.1314|+3.07%|+3.38%, +3.06%, +3.07%
+|local:boxed_float_method_fallback|34.1612|33.8468|-0.92%|-0.92%, +0.39%, +0.45%
+|local:boxed_int_method_effect|87.1171|87.5326|+0.48%|+0.94%, -0.75%, +0.50%
+|local:list_mutate|116.4011|117.0238|+0.54%|+0.54%, +1.74%, +0.54%
+|local:temporary_list|1.5822|1.5825|+0.02%|+0.74%, +0.02%, -0.06%
+|local:polymorphic_expression_call|4.7677|4.7855|+0.38%|+0.13%, -3.05%, +0.38%
+|local:polymorphic_float_expression_call|4.4172|4.4646|+1.07%|+0.77%, +1.07%, -0.03%
+|local:monomorphic_call|3.5860|3.6624|+2.13%|-1.91%, -0.72%, +3.50%
+|local:monomorphic_float_call|3.6126|3.6497|+1.03%|+1.03%, +0.22%, -0.43%
+|micro:polymorphic_call|17.5591|17.2442|-1.79%|-1.98%, -2.71%, +2.02%
+|micro:polymorphic_float_call|17.4596|17.2943|-0.95%|-1.68%, -1.99%, -0.95%
+|micro:boxed_int_method_call|103.2866|102.3995|-0.86%|-1.84%, +0.89%, -0.44%
+|micro:boxed_float_method_call|106.5092|106.6022|+0.09%|-0.56%, +0.78%, -0.09%
+|micro:boxed_int_method_fallback|116.0211|116.5725|+0.48%|+0.48%, -1.21%, +1.21%
+|micro:boxed_float_method_fallback|118.9851|119.7424|+0.64%|-0.24%, +0.62%, +1.27%
+|micro:boxed_int_method_effect|168.5764|170.0139|+0.85%|+0.49%, +0.85%, -0.33%
+|micro:indirect_call|8.5761|8.2093|-4.28%|-0.77%, -4.28%, -0.15%
+|micro:closure_call|18.0441|18.0091|-0.19%|+0.28%, +0.69%, -1.46%
+|micro:closure_capture|23.3019|23.4231|+0.52%|-0.10%, +0.07%, +2.55%
+|micro:list_read|2.7853|2.7925|+0.26%|+0.29%, +1.19%, -0.22%
+|micro:list_build|22.0621|21.7561|-1.39%|-1.39%, -1.90%, +0.09%
+|micro:list_mutate|116.0569|116.3355|+0.24%|+1.06%, +0.27%, -0.29%
+|micro:temporary_hash|1.5962|1.5927|-0.22%|+0.08%, +1.77%, -0.22%
+|micro:polymorphic_expression_call|4.6175|4.6100|-0.16%|-1.40%, -0.16%, +1.32%
+|micro:polymorphic_float_expression_call|4.5766|4.4558|-2.64%|-3.48%, -2.19%, -1.07%
+|float:callback_local_float_return|0.8370|0.8231|-1.66%|-0.79%, +0.93%, -2.61%
+|float:typed_local_int_unary|1.1498|1.1495|-0.02%|+0.45%, -0.02%, -0.77%
+|float:callback_loop_float_return|4.8347|4.8287|-0.12%|+1.20%, -0.29%, -1.66%
+|mixed:csv_report|898.3324|897.4460|-0.10%|-1.76%, +0.97%, -0.17%
+|mixed:object_orders|2998.7668|2992.8949|-0.20%|-1.46%, +2.55%, -0.27%
+|mixed:callback_pipeline|91.4932|91.2852|-0.23%|-0.62%, -0.45%, +0.62%
+|mixed:text_index|1299.4707|1300.1235|+0.05%|-1.44%, +0.27%, +0.61%
+|probe:object_short|1577.0569|1589.5411|+0.79%|+0.82%, +0.74%, +0.44%
+|probe:effect_short|1654.9482|1641.1876|-0.83%|-1.74%, +1.68%, +0.33%
+|probe:string_result_loop|521.6431|524.9681|+0.64%|+1.15%, +2.18%, -5.26%
+
+Earlier focused five-fork confirmation (retained in full):
+
+|!Workload|!Before ns/item|!After ns/item|!Change|!Layout changes (default, reverse, shuffle)
+|local:polymorphic_call|17.7976|17.2537|-3.06%|-4.10%, -3.18%, -0.53%
+|local:polymorphic_float_call|17.4609|17.2446|-1.24%|-1.88%, -3.17%, -0.18%
+|local:direct_call|1.4764|1.4766|+0.02%|+0.11%, +0.04%, -0.40%
+|micro:polymorphic_call|17.9907|17.3335|-3.65%|-3.36%, -4.17%, -2.55%
+|micro:polymorphic_float_call|17.5087|17.2008|-1.76%|-1.05%, -4.17%, -1.76%
+|micro:indirect_call|8.3933|8.2624|-1.56%|-1.26%, -4.02%, -0.19%
+|micro:closure_call|17.8108|17.8618|+0.29%|-2.22%, +0.86%, +0.69%
+|micro:polymorphic_expression_call|4.6768|4.5648|-2.40%|-1.40%, -1.14%, -4.42%
+|micro:polymorphic_float_expression_call|4.6171|4.4947|-2.65%|-1.53%, +0.76%, -2.65%
+|float:callback_loop_float_return|4.8271|4.8229|-0.09%|-0.21%, -0.77%, +0.71%
+|mixed:object_orders|2948.1232|2976.5333|+0.96%|+0.06%, +1.36%, +1.25%
+
+Prospective seven-workload control follow-up, five forks/150 ms:
+
+|!Workload|!Before ns/item|!After ns/item|!Change|!Layout changes (default, reverse, shuffle)
+|local:boxed_int_method_fallback|31.1834|31.8540|+2.15%|+2.15%, +1.88%, +2.80%
+|local:polymorphic_call|17.5153|17.2508|-1.51%|-0.82%, -2.03%, -1.11%
+|local:list_mutate|115.5050|115.0261|-0.41%|-0.41%, +0.78%, +0.05%
+|micro:polymorphic_float_call|17.3063|17.2022|-0.60%|-1.68%, -2.08%, +1.59%
+|micro:indirect_call|8.7182|8.3502|-4.22%|+0.50%, -4.22%, -2.47%
+|mixed:object_orders|2975.4675|2996.2555|+0.70%|+0.70%, +1.09%, -0.62%
+|probe:object_short|1571.8757|1585.6642|+0.88%|+1.24%, +0.02%, +1.08%
+
+Initial pilot (retained in full):
+
+|!Workload|!Before ns/item|!After ns/item|!Change|!Layout changes (default, reverse, shuffle)
+|local:polymorphic_call|17.4738|17.4424|-0.18%|+2.23%, -0.18%, -1.23%
+|local:polymorphic_float_call|17.8002|17.2297|-3.21%|-4.52%, -2.75%, -0.28%
+|local:direct_call|1.4512|1.4632|+0.83%|-0.24%, +0.88%, +0.91%
+|micro:polymorphic_call|17.8941|17.7135|-1.01%|-0.48%, -4.30%, -1.01%
+|micro:polymorphic_float_call|17.4485|17.2805|-0.96%|-1.42%, -0.68%, +0.77%
+|micro:indirect_call|8.5341|8.0447|-5.74%|-0.66%, -7.40%, +2.62%
+|micro:closure_call|18.0341|17.8620|-0.95%|-2.47%, +3.30%, -0.95%
+|micro:polymorphic_expression_call|4.7616|4.6433|-2.48%|-2.99%, -4.59%, -2.11%
+|micro:polymorphic_float_expression_call|4.5660|4.5081|-1.27%|+0.22%, -0.84%, -1.27%
+|float:callback_loop_float_return|4.8397|4.8649|+0.52%|+0.82%, -0.02%, +0.23%
+|mixed:object_orders|2927.3817|3020.2094|+3.17%|+3.17%, -0.00%, +4.47%
+
+Short counts 1/4/16/64, three forks/100 ms; fixed harness cost dominates the smallest counts:
+
+|!Workload|!Before ns/item|!After ns/item|!Change|!Layout changes (default, reverse, shuffle)
+|local:polymorphic_call:1|2563.0221|2568.2482|+0.20%|-0.20%, +2.66%, -0.41%
+|local:polymorphic_call:4|659.8857|654.7242|-0.78%|-1.34%, -0.87%, -0.31%
+|local:polymorphic_call:16|176.6899|177.4680|+0.44%|-0.71%, +0.94%, +0.62%
+|local:polymorphic_call:64|57.1672|57.7002|+0.93%|+0.41%, +3.15%, -0.15%
+|local:polymorphic_float_call:1|2639.2607|2624.2930|-0.57%|-1.24%, -0.54%, -1.83%
+|local:polymorphic_float_call:4|670.8934|670.3687|-0.08%|-0.72%, -1.28%, +0.74%
+|local:polymorphic_float_call:16|180.4589|178.6199|-1.02%|-2.41%, +1.29%, -1.02%
+|local:polymorphic_float_call:64|57.8782|57.4181|-0.79%|-1.57%, -0.89%, +0.33%
+|micro:polymorphic_call:1|2593.1687|2579.2741|-0.54%|-2.04%, +0.23%, -0.27%
+|micro:polymorphic_call:4|664.6923|662.2363|-0.37%|+0.45%, +0.66%, -0.40%
+|micro:polymorphic_call:16|177.3440|177.1082|-0.13%|+0.85%, -0.99%, +0.02%
+|micro:polymorphic_call:64|57.6857|57.6399|-0.08%|-0.91%, +0.06%, -1.84%
+|micro:polymorphic_float_call:1|2639.3455|2641.1170|+0.07%|+2.58%, -0.30%, +0.07%
+|micro:polymorphic_float_call:4|670.0209|672.0883|+0.31%|+0.10%, +0.70%, +1.35%
+|micro:polymorphic_float_call:16|180.9475|181.8294|+0.49%|+1.79%, -1.31%, -0.28%
+|micro:polymorphic_float_call:64|58.2709|57.8003|-0.81%|-1.53%, -0.81%, -0.76%
+
+The separate diagnostic crossover of the previous receiver-call PHI candidate uses 180 processes/540 windows. With both runtime libraries, the after artifact retains the receiver-expression gain and the reverse-layout indirect-call cost. This narrows the latter to generated artifact/placement effects without proving a cache or branch-predictor cause. Diagnostic copies are isolated, not installed; see the identity-override qualification and excluded setup attempts in the report.
+
+|!Prior-candidate diagnostic|!Before artifact / before runtime|!Before artifact / after runtime|!After artifact / before runtime|!After artifact / after runtime
+|indirect_call|7.9869|8.1511|8.6222|8.7211
+|closure_call|18.7373|17.9916|17.9518|17.9483
+|polymorphic_expression_call|5.4423|5.4431|4.7727|4.6973
+
+Rejected candidate qualification passed Release 10944 assertions, Debug 5837 assertions and native 4003/5668 checks; all 391 qmods and 36 fresh artifacts/144 preparation processes/4698 references per variant passed. All 1800 timing processes/5400 windows replay. The prior-candidate crossover passed 6660 references and exact-code checks for six diagnostic metadata copies. Before commit, production and fixture sources are restored to the audited baseline and the optimized core is verified byte-identical.
+
+See the [complete evidence](results-pinned-borrow-phi-macos-arm64.json) and [62-item audit](audit-pinned-borrow-phi.md). The candidate measurements total 1800 processes/5400 windows; the prior-candidate diagnostic is counted separately. This is an incremental optimized before/after experiment, not a fresh Java/develop checkpoint. Performance is not yet maximized.

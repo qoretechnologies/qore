@@ -1639,3 +1639,6 @@ The [post-pinned-base optimized checkpoint](RESULTS.md#optimized-checkpoint-afte
 
 
 [Retained receiver metadata PHIs](RESULTS.md#retained-receiver-metadata-phis-2026-10-31): selected-snapshot identity with live validity; optimized [evidence](results-pinned-phi-macos-arm64.json) and [audit](audit-pinned-phi.md).
+
+
+[Rejected class-local receiver snapshot PHIs](RESULTS.md#rejected-class-local-receiver-snapshot-phis-2026-10-31): reduced comparison count did not justify repeated broader costs; optimized [evidence](results-pinned-borrow-phi-macos-arm64.json) and [audit](audit-pinned-borrow-phi.md).
