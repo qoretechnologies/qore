@@ -483,7 +483,6 @@ public:
     */
     DLLLOCAL int setStaticVarAccessorLValue(QoreVarInfo& vi);
     //! Binds an external member to a temporary; writes are committed after releasing lvalue locks
-    //! Binds an external member to a temporary; writes are committed after releasing lvalue locks
     /** @param object the object
         @param member the member name
         @param accessor_info the declaration of a member held in external storage with accessors, or nullptr for an
