@@ -1633,3 +1633,6 @@ The [post-polymorphic optimized checkpoint](RESULTS.md#optimized-checkpoint-afte
 
 
 [Retained receiver base-class checks](RESULTS.md#retained-receiver-base-class-checks-2026-10-31): shared status views and cached base admission; optimized [evidence](results-pinned-base-macos-arm64.json) and [audit](audit-pinned-base.md).
+
+
+The [post-pinned-base optimized checkpoint](RESULTS.md#optimized-checkpoint-after-retained-receiver-classification-2026-10-31) compares 39 workloads with develop and 32 Java rows, including 29 fresh ordinary-C2 counterparts alongside original boundary controls. All 885 processes / 2,655 windows are retained.

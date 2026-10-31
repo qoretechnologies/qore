@@ -30876,3 +30876,65 @@ A separate short-loop campaign uses 1/4/16/64 iterations, three layouts and thre
 Release: five focused fixtures/3490 assertions plus 15 extended fixtures/6718 assertions. Debug: ten fixtures/5101 assertions and native 4003/5668 checks. The additional conditional-deletion fixture passes 68 assertions in each runtime, with codegen assertions confirming the new base guard is exercised for base/override/aliased receivers. Tests cover reflected replacement, deletion during an admitted loop, destructor/lifetime behavior, integer overflow/float edge cases, zero/short loops, foreign/imported Programs, disabled controls, O0/O3, stripped/included source, EH and split compilation. All 36 fresh artifacts/144 preparation processes/4698 reference outputs per variant pass; all 391 shipped qmods build with the same measured core. No sanitizer/other-platform claim.
 
 See the [complete evidence](results-pinned-base-macos-arm64.json) and [62-item audit](audit-pinned-base.md). This is a paired optimization experiment, not a fresh Java/develop checkpoint. The installed runtime remains 6c4d9cae71. Receiver selection and receiver-local assignment remain candidates for further work; no global performance ceiling is established.
+
+
+## Optimized checkpoint after retained receiver classification (2026-10-31)
+
+Branch 93e28a54e7 versus unmodified develop 3955cf3ac3, with develop already merged. Both use matched optimized Release -O3 -DNDEBUG builds, allocation tracking off, Apple clang 2100.4.1.1/SDK 27.2/LLVM 22.1.8 and fresh qcc -O3 --strip-source artifacts on M4 Pro/macOS ARM64. Develop uses a fresh isolated optimized build; the branch is installed and audited. Java is freshly compiled Temurin 25.0.2+10 HotSpot C2/JMH 1.37. These are cumulative branch differences.
+
+This 39-workload checkpoint repeats the preceding cumulative comparison after guard hoisting, the native/debug IR integration correction, and retained receiver classification for base and override targets. Qore uses three layouts, three forks per layout/variant, three warmups and three measured 150 ms windows. Java uses three forks per policy, five warmups and three measured 300 ms windows. All use 4,096 items, seed 7 and interleaving seed 2026103110. Values are whole-kernel ns/item: median of layout medians of process means for Qore and median process means for Java. Lower is faster.
+
+Java ordinary C2 allows normal optimization in every row. RuntimeInlineBench removes only the original DONT_INLINE annotations and renames the class; arithmetic, data and control flow are identical and independently checked. The original-policy column retains those explicit target boundaries where present; direct/final methods and the float-body callbacks already permit normal inlining. It is a separate control, not the main Java efficiency target.
+
+|!Workload|!Develop ns/item|!Branch ns/item|!Develop/branch|!Java ordinary ns/item|!Java original controls ns/item|!Branch/ordinary Java
+|local:direct_call|10.8481|1.4736|7.361x|0.8912|0.8946|1.654x
+|local:method_call|11.2651|1.5538|7.250x|0.8901|0.8907|1.746x
+|local:polymorphic_call|306.6864|17.6236|17.402x|2.5294|2.5254|6.968x
+|local:boxed_int_method_fallback|257.3250|31.5968|8.144x|2.5452|2.5354|12.414x
+|local:boxed_float_method_fallback|290.7999|33.9139|8.575x|2.5295|2.5382|13.408x
+|local:boxed_int_method_effect|359.4053|86.9254|4.135x|1.9603|1.8817|44.343x
+|local:list_mutate|238.2765|117.5806|2.026x|4.0226|4.5641|29.230x
+|local:temporary_list|145.1308|1.5790|91.913x|1.1682|1.1719|1.352x
+|local:polymorphic_float_call|316.0271|17.3599|18.204x|2.5522|2.5685|6.802x
+|local:polymorphic_expression_call|130.4822|5.4513|23.936x|2.5352|2.5329|2.150x
+|local:polymorphic_float_expression_call|141.3970|5.3390|26.484x|2.5513|2.5653|2.093x
+|local:monomorphic_call|16.7216|3.6597|4.569x|0.9006|1.6608|4.064x
+|local:monomorphic_float_call|16.5821|3.7684|4.400x|0.4950|1.6638|7.613x
+|micro:polymorphic_call|343.8704|17.7298|19.395x|2.5204|2.5271|7.035x
+|micro:polymorphic_float_call|357.4104|17.8557|20.017x|2.5579|2.5665|6.981x
+|micro:boxed_int_method_call|256.5175|102.0195|2.514x|2.5190|2.5320|40.500x
+|micro:boxed_float_method_call|269.1542|107.7583|2.498x|2.5728|2.5585|41.883x
+|micro:boxed_int_method_fallback|296.3965|115.2604|2.572x|2.5457|2.5476|45.276x
+|micro:boxed_float_method_fallback|339.4879|119.4013|2.843x|2.5270|2.5456|47.250x
+|micro:boxed_int_method_effect|390.9325|171.0709|2.285x|1.9639|1.8838|87.108x
+|micro:indirect_call|240.9352|7.9897|30.156x|0.8958|1.6736|8.919x
+|micro:closure_call|151.9734|18.4997|8.215x|0.9021|1.6548|20.507x
+|micro:closure_capture|172.2426|23.7665|7.247x|0.8960|1.7392|26.526x
+|micro:list_read|12.6173|2.7944|4.515x|0.2832|0.2840|9.868x
+|micro:list_build|117.1631|22.1105|5.299x|2.5499|2.5435|8.671x
+|micro:list_mutate|234.7774|116.8255|2.010x|4.2756|4.0263|27.324x
+|micro:temporary_hash|325.1590|1.5870|204.893x|14.2325|14.3774|0.112x
+|micro:polymorphic_expression_call|157.6278|5.4357|28.999x|2.5308|2.5334|2.148x
+|micro:polymorphic_float_expression_call|167.6427|5.3906|31.099x|2.5610|2.5489|2.105x
+|float:callback_local_float_return|319.7714|0.8302|385.153x|0.4809|N/A|1.726x
+|float:typed_local_int_unary|240.9541|1.1492|209.675x|0.8941|N/A|1.285x
+|float:callback_loop_float_return|520.9612|4.8026|108.476x|1.4230|N/A|3.375x
+|mixed:csv_report|1102.4650|905.7825|1.217x|N/A|N/A|N/A
+|mixed:object_orders|3398.6169|2994.5538|1.135x|N/A|N/A|N/A
+|mixed:callback_pipeline|318.9000|92.6606|3.442x|N/A|N/A|N/A
+|mixed:text_index|1703.3137|1303.1616|1.307x|N/A|N/A|N/A
+|probe:object_short|1851.3517|1583.5493|1.169x|N/A|N/A|N/A
+|probe:effect_short|1992.3117|1643.8484|1.212x|N/A|N/A|N/A
+|probe:string_result_loop|746.7594|518.6224|1.440x|N/A|N/A|N/A
+
+Observed range relationships across 117 Qore workload/layout cells: branch-faster=117. These are observations, not confidence intervals; all cells and raw samples remain.
+
+All 885 processes / 2,655 windows independently replay. Each Qore variant passes 1,518 IR and 4,554 AOT reference outputs; Java passes 2,340 across the two policies. All 30 LLVM modules, actual loaded runtimes/modules, 61 C2 diagnostics and original noninline controls are verified before timing. No owned build, test, profile or heavy scan overlapped measurement.
+
+An imported source declaration alone does not establish a Program transition. Local kernels and these imported function callbacks can run within one Program. Pure override import can now eliminate the native callee context entirely; other object-method fallback paths retain Program transitions. The full report links the audited receiver optimizations and latest develop merge qualification. Mixed workloads compare Qore builds only.
+
+Host load, thermals, frequency and affinity are uncontrolled. Data representations, lifetime/locking semantics and optimizer opportunities differ; whole-kernel results are not isolated invocation latency. No weighted application gain, universal Java parity, global ceiling, startup/memory or IR/JIT throughput claim follows.
+
+Next test carrying retained receiver metadata through existing IR PHIs, replacing repeated per-call identity selections with one comparison against the selected original snapshot. Preserve bounded owner proofs, live sequentially consistent validity checks, distinct base/override Program admission, ownership, logical frames and fallback behavior. Qualify nested and forward PHIs, reflection, deletion and foreign Program cases in Release and Debug, then compare target, short-loop and mixed workloads before retaining the change.
+
+[Complete evidence](results-post-pinned-base-checkpoint-macos-arm64.json); [all 62 audit checks](audit-post-pinned-base-checkpoint.md).
