@@ -11974,7 +11974,8 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
             handled->addIncoming(llvm::ConstantInt::getTrue(ctx), alternative.block);
             payload->addIncoming(alternative.native, alternative.block);
         }
-        native_funcref_results.emplace(inst->result.id, NativeFunctionRefResult{handled, payload});
+        native_funcref_results.emplace(inst->result.id,
+            NativeFunctionRefResult{handled, payload, NativeCallSource::Method});
     }
     (void)inst;
     return result;
@@ -12175,7 +12176,8 @@ bool QoreIRToLLVM::tryEmitAotNameMethodNativeContinuation(const QoreIRInstructio
         auto* value = builder->CreatePHI(native_type, 2, "name_method_native_value");
         value->addIncoming(payload, fast);
         value->addIncoming(llvm::Constant::getNullValue(native_type), fallback);
-        native_funcref_results.emplace(inst->result.id, NativeFunctionRefResult{used_native, value});
+        native_funcref_results.emplace(inst->result.id,
+            NativeFunctionRefResult{used_native, value, NativeCallSource::Method});
     }
     // The unknown fallback may mutate caller locals or return any value. Keep
     // its full invalidation, ownership and assignment-check behavior on merge.
@@ -12228,7 +12230,14 @@ llvm::Value* QoreIRToLLVM::tryEmitNativeCallConversion(uint32_t id, bool floatin
         // the signed integer range; do not introduce LLVM fptosi poison here.
         auto helper = module.getOrInsertFunction("qore_rt_float_to_int",
             llvm::FunctionType::get(i64_type, {double_type}, false));
-        native = builder->CreateCall(helper, {native});
+        auto* converted = builder->CreateCall(helper, {native});
+        if (!fast_entry_name.empty() && continuation->second.source == NativeCallSource::Method) {
+            // The target is resolved later by AOT object emission. Preserve the
+            // fast-entry method origin so that it can specialize this conversion
+            // without changing callback or ordinary-entry result lowering.
+            converted->setMetadata("qore.native.method.conversion", llvm::MDNode::get(ctx, {}));
+        }
+        native = converted;
     } else if (native->getType() == i1_type) {
         native = builder->CreateZExt(native, i64_type);
     } else {

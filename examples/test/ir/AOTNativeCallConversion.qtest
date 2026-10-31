@@ -15,6 +15,7 @@ class NativeCallConversionTest inherits QUnit::Test {
     }
     constructor() : Test("native call scalar conversions", "1.0", \ARGV) {
         addTestCase("native conversions and arbitrary boxed fallbacks", \check());
+        addTestCase("target-aware floating conversion", \checkNativeFloatToInt());
         set_return_value(main());
     }
     private static string quote(string value) {
@@ -34,6 +35,43 @@ class NativeCallConversionTest inherits QUnit::Test {
             "(?s)define [^\n]*@" + name + "_[^\n]*\\(ptr %ctx, ptr %xsink\\)[^\n]*\n(.*?)\n\\}");
         assertTrue(!!found, name + " normal LLVM entry");
         return found[0] ?? "";
+    }
+    private string fastBody(string ir, string name) {
+        *list<*string> found = regex_extract(ir,
+            "(?s)define [^\n]*@" + name + "_[^\n]*_fast_[^\n]*\\([^\n]*\\)[^\n]*\n(.*?)\n\\}");
+        assertTrue(!!found, name + " fast LLVM entry");
+        return found[0] ?? "";
+    }
+    private checkNativeFloatToInt() {
+        string source = get_script_dir() + "/AOTNativeCallConversion.qr";
+        TmpDir dir("qore-native-float-to-int-");
+        foreach string prefix in (("", "QORE_DISABLE_AOT_NATIVE_METHOD_FLOAT_TO_INT=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                string ir = run((qcc, level, "--strip-source", "-o", executable, source),
+                    prefix + "QORE_DUMP_IR_AFTER_OPT=1 ");
+                bool arm64 = regex(ir, "target triple = \"(arm64|aarch64)-");
+                bool native = arm64 && !prefix;
+                assertEq(native, ir.find("call i64 @llvm.fptosi.sat.i64.f64(") >= 0,
+                    "defined native conversion " + prefix + level);
+                assertTrue(ir.find("call i64 @qore_rt_float_to_int(") >= 0,
+                    "callback conversions retain runtime fallback " + prefix + level);
+                assertRegex("call i64 @qore_rt_float_to_int", body(ir, "callbackFloatInt"),
+                    "callback lowering remains unchanged " + prefix + level);
+                # O3 can inline and remove these small private entries. Check
+                # their individual lowering before that transformation, while
+                # checking optimized code generation and behavior at both levels.
+                if (level == "-O0") {
+                    assertRegex("call i64 @qore_rt_float_to_int", fastBody(ir, "callbackFloatInt"),
+                        "callback fast entry retains runtime conversion " + prefix + level);
+                    assertRegex("call i64 @qore_rt_float_to_int", body(ir, "methodFloatInt"),
+                        "ordinary method consumer retains runtime conversion " + prefix + level);
+                    assertEq(native, fastBody(ir, "methodFloatInt").find("call i64 @llvm.fptosi.sat.i64.f64(") >= 0,
+                        "fast method consumer uses destination semantics " + prefix + level);
+                }
+                assertEq("native-call-conversion: ok\n", run((executable,)), prefix + level);
+            }
+        }
     }
     private check() {
         string source = get_script_dir() + "/AOTNativeCallConversion.qr";

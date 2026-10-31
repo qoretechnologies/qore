@@ -31468,3 +31468,65 @@ Across the investigation, six epochs retain 2268 processes/6804 windows. Final q
 No new Java/develop ratio, other-platform result, sanitizer run or global performance ceiling is claimed. The latest full optimized comparison remains the [post-local-receiver checkpoint](results-post-local-receiver-checkpoint-macos-arm64.json). Next investigate native floating-to-integer conversion calls with a target-specific semantic proof for NaN, infinity and range boundaries before considering an inline replacement.
 
 [Full evidence](results-deferred-float-unary-macos-arm64.json); [all 62 audit checks](audit-deferred-float-unary.md).
+
+## Native floating conversion in fast AOT method entries (2026-10-31)
+
+On AArch64, explicitly marked native method-result conversions inside fast AOT entry bodies now use LLVM fptosi.sat instead of calling qore_rt_float_to_int. Ordinary entries, callbacks, other targets and boxed fallback retain existing lowering. The pass runs after destination resolution, so cross-compilation uses destination semantics. NaN becomes zero; infinities and finite overflow saturate; other values truncate toward zero, matching the actual ARM64 runtime helper. Existing Program, debugger, context, stack and ownership checks remain.
+
+Set QORE_DISABLE_AOT_NATIVE_METHOD_FLOAT_TO_INT=1 when compiling to restore the old lowering. This is a compile-time presence flag and requires rebuilding AOT artifacts; it does not alter existing artifacts or JIT/IR execution. No runtime ABI is added.
+
+Both variants use the same frozen candidate compiler/runtime because AOT identity includes compiler source. The before artifacts disable the pass. All 18 control LLVM modules match pre-change code after compatibility metadata/size and method-marker normalization; 12 artifacts in unchanged suites are byte-identical. Builds use Release -O3 -DNDEBUG, allocation tracking OFF, qcc -O3 --strip-source, LLVM 22.1.8 and Apple Clang 21 on M4 Pro/macOS ARM64. Three layouts (default, reverse, shuffle-487), three forks, seed 7, three warmups and three 100 ms samples are used. Long loops have 4096 items; short loops have 1 or 32. No owned build/test/profile/heavy scan overlaps timing.
+
+The paired confirmation uses symmetric ABBA/BAAB blocks, two processes per variant per block. Its primary effect is the median of within-block ratios per layout, then the median across layouts; ordinary before/after medians can give a different percentage. These are whole-kernel ns/item, not isolated call latency.
+
+|!Paired workload|!Before ns/item|!After ns/item|!Ordinary change|!Paired change|!Paired changes by layout
+|local:dynamic_float_result_call|11.4440|10.7352|-6.19%|-6.37%|-7.68%, -6.37%, -5.84%
+|local:direct_call|1.5642|1.5692|+0.32%|-0.43%|-0.68%, -0.43%, +1.02%
+|micro:indirect_call|8.2510|8.2234|-0.33%|+0.98%|+0.98%, +1.29%, -0.41%
+|micro:indirect_wide|8.5167|8.5096|-0.08%|-0.08%|-0.08%, -0.44%, +0.18%
+|micro:indirect_int_result|8.7705|8.8148|+0.50%|-2.60%|-2.60%, +1.07%, -5.18%
+|micro:indirect_float_result|9.3282|9.5930|+2.84%|+1.67%|+1.67%, +0.14%, +1.77%
+|micro:indirect_tagged_float|9.6631|9.9200|+2.66%|-0.55%|+3.41%, -1.38%, -0.55%
+
+The target improves 6.90% in the pilot and 6.37% in paired confirmation, with every layout improving. The 32-item target improves 1.38%; its one-item version costs 0.66% as setup dominates. Retained costs include 1.67% paired for a floating callback control (2.84% ordinary medians) and 1.12% for one-item wide integers. The long wide-integer control is essentially unchanged (-0.08% paired), and the earlier repeated 4–8% integer penalties do not recur. This supports retaining the narrow change under the authorized broader tradeoff, without claiming zero regressions or an overall application gain.
+
+The final candidate pilot and short-loop controls are all shown below. Improvements in unchanged callbacks are not attributed to conversion removal; generated-code placement and host variability can affect them.
+
+|!Campaign/workload|!Before ns/item|!After ns/item|!Change|!Layout changes
+|fast_pilot/local:direct_call|1.5526|1.5590|+0.41%|+1.40%, -0.08%, +0.41%
+|fast_pilot/local:polymorphic_call|15.8209|15.8385|+0.11%|+0.11%, +0.90%, -1.23%
+|fast_pilot/local:list_mutate|125.5367|125.3990|-0.11%|-0.59%, +0.04%, +0.42%
+|fast_pilot/local:dynamic_float_result_call|11.5258|10.7302|-6.90%|-6.77%, -8.58%, -6.90%
+|fast_pilot/micro:indirect_call|8.2054|8.1420|-0.77%|+1.55%, -1.28%, +1.50%
+|fast_pilot/micro:indirect_wide|8.5937|8.4195|-2.03%|-2.03%, +0.33%, -2.60%
+|fast_pilot/micro:indirect_float|9.0328|9.0811|+0.53%|+0.96%, +1.24%, +0.50%
+|fast_pilot/micro:indirect_int_result|8.7571|8.6835|-0.84%|+3.40%, -0.84%, -1.69%
+|fast_pilot/micro:indirect_float_result|9.6872|9.6286|-0.60%|-1.12%, +0.45%, +5.96%
+|fast_pilot/micro:indirect_tagged_float|10.3090|9.7418|-5.50%|-9.93%, -1.78%, -2.21%
+|fast_pilot/micro:closure_call|18.7613|18.6635|-0.52%|-0.34%, -1.02%, -0.52%
+|fast_pilot/micro:closure_capture|24.4740|24.5996|+0.51%|-0.67%, +0.51%, +1.40%
+|fast_pilot/micro:list_build|23.1974|23.2623|+0.28%|-1.53%, +0.08%, +0.63%
+|fast_pilot/micro:dynamic_float_result_call|106.3782|106.3615|-0.02%|+1.23%, -0.47%, -1.25%
+|fast_pilot/float:callback_loop_float_return|4.9964|5.0050|+0.17%|-0.88%, +0.40%, +1.62%
+|fast_pilot/mixed:csv_report|967.9730|968.4131|+0.05%|-1.45%, +0.80%, -0.77%
+|fast_pilot/mixed:object_orders|3305.4403|3318.3594|+0.39%|-0.47%, +0.81%, +0.33%
+|fast_pilot/mixed:callback_pipeline|98.0301|98.7348|+0.72%|-0.16%, +1.62%, -0.18%
+|fast_pilot/mixed:text_index|1394.2166|1397.7096|+0.25%|+1.29%, -0.52%, +0.73%
+|fast_short/local:dynamic_float_result_call:1|2445.2839|2461.4961|+0.66%|+1.23%, +0.25%, +0.66%
+|fast_short/local:dynamic_float_result_call:32|87.6830|86.4757|-1.38%|-1.36%, -1.52%, -2.32%
+|fast_short/local:direct_call:1|2109.4634|2107.9704|-0.07%|+0.11%, -0.06%, -0.07%
+|fast_short/local:direct_call:32|67.3045|66.7806|-0.78%|-0.08%, -2.04%, +1.97%
+|fast_short/micro:indirect_wide:1|2202.6352|2227.3000|+1.12%|+1.99%, +0.35%, +0.67%
+|fast_short/micro:indirect_wide:32|77.1864|76.1073|-1.40%|-1.49%, -1.12%, -1.01%
+|fast_short/micro:indirect_int_result:1|2281.4623|2261.0236|-0.90%|-2.27%, -1.08%, -0.50%
+|fast_short/micro:indirect_int_result:32|78.0842|77.3414|-0.95%|-0.67%, -1.55%, +1.52%
+|fast_short/micro:dynamic_float_result_call:1|2599.0320|2594.4288|-0.18%|-0.22%, +0.77%, -1.60%
+|fast_short/micro:dynamic_float_result_call:32|184.6818|185.5907|+0.49%|+0.20%, -0.01%, +1.49%
+
+Rejected scopes remain in the evidence. Replacing every native conversion improved local floating method-result work but repeatedly slowed wide integer callbacks (+7.44% pilot, +3.71% paired). Restricting to all method consumers still cost 4.74% for wide integers and 8.01% for integer-result callbacks in its pilot. Identical-binary A/A path-placement controls did not reproduce that consistent penalty, but do show shared-host and layout variability. Only fast-entry method consumers are retained.
+
+Across all seven epochs, 2070 processes/6210 windows are retained: 1854/5562 optimization comparisons plus 216/648 A/A controls. The final scope accounts for 774/2322. Final Release qualification passes 2025 assertions across six fixtures; Debug adds 1182 conversion assertions. Tests cover AST/IR/JIT/tiered and AOT O0/O3, exceptions, boxed values, destruction and foreign Programs. ARM/x86 cross-target objects verify at O0/O3; this is not foreign-target execution. The independent edge proof tests 100037 double bit patterns against actual Release/Debug runtime helpers and a saturating reference. All 36 prepared artifacts pass 4698 reference outputs per variant. Short count 32 is timing-only, not an additional reference check. Setup failures and test-only source overlay are preserved.
+
+No fresh Java/develop ratio or global performance ceiling is claimed. The latest full optimized comparison remains the [post-local-receiver checkpoint](results-post-local-receiver-checkpoint-macos-arm64.json). Next inspect the remaining invariant callback helper/callee boundary and result-store costs, preserving live admission, diagnostic publication and stack semantics.
+
+[Full evidence](results-fast-method-float-to-int-macos-arm64.json); [all 62 audit checks](audit-fast-method-float-to-int.md).

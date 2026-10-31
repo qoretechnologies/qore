@@ -574,9 +574,11 @@ private:
     // edge); only the proven StoreLocal/ToInt/ToFloat/AddAssignInt consumer reads this side channel.
     std::unordered_map<uint32_t, const QoreTypeInfo*> native_funcref_store_types;
     std::unordered_set<uint32_t> native_call_conversion_results;
+    enum class NativeCallSource { FunctionRef, Method };
     struct NativeFunctionRefResult {
         llvm::Value* handled;
         llvm::Value* value;
+        NativeCallSource source = NativeCallSource::FunctionRef;
     };
     std::unordered_map<uint32_t, NativeFunctionRefResult> native_funcref_results;
     std::unordered_set<uint32_t> direct_typed_list_read_sources;

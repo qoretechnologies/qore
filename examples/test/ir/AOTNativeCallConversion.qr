@@ -17,6 +17,7 @@ sub expectFloat(float expected, float actual) {
     }
 }
 int sub referenceInt(auto value) { return int(value); }
+int sub nativeFloatInt(float value) { return int(value); }
 float sub referenceFloat(auto value) { return float(value); }
 auto sub observe(code<auto()> operation) {
     try { return operation(); }
@@ -114,7 +115,10 @@ for (int round = 0; round < 12; ++round) {
         expect(value, boxedArgument(child, value));
     }
     foreach float value in ((0.0, -0.0, 1.25, -1.25, 1.0e308, -3.0e307, -6.0e307,
-            9223372036854775808.0, -9223372036854775808.0, @inf@, -@inf@, @nan@, -@nan@)) {
+            9223372036854774784.0, 9223372036854775808.0, 9223372036854777856.0,
+            -9223372036854774784.0, -9223372036854775808.0, -9223372036854777856.0,
+            4.9406564584124654e-324, -4.9406564584124654e-324, @inf@, -@inf@, @nan@, -@nan@)) {
+        expect(referenceInt(value), nativeFloatInt(value));
         expectFloat(value, callbackFloat(\floatIdentity(), value));
         expect(referenceInt(value), callbackFloatInt(\floatIdentity(), value));
         expectFloat(value, methodFloat(floating, value));

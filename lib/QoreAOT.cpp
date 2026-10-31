@@ -1295,6 +1295,7 @@ static void collectEmbeddedUserModules(std::unordered_set<std::string>& local_mo
 #include <fcntl.h>
 #include <unistd.h>
 #include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/Intrinsics.h>
 #include <llvm/IR/Dominators.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/PassInstrumentation.h>
@@ -24554,6 +24555,52 @@ static bool codegenModuleSplit(llvm::Module& module, int jobs, const std::string
     return all;
 }
 
+// AArch64 FCVTZS implements the runtime double-to-int conversion, including
+// NaN -> 0 and saturation for infinities and out-of-range finite values. Expose
+// that operation to LLVM without the poison semantics of ordinary fptosi.
+// Resolve the destination first: a host-architecture check would miscompile
+// cross-target objects (in particular x86 has different exceptional results).
+// Restrict this to explicitly marked fast-entry method results. Callbacks and
+// ordinary entry bodies retain their runtime conversions.
+static bool lowerAOTMethodFloatToInt(llvm::Module& module, const llvm::Triple& target,
+        std::string& error) {
+    if (target.getArch() != llvm::Triple::aarch64
+            || q_env_is_set("QORE_DISABLE_AOT_NATIVE_METHOD_FLOAT_TO_INT")) {
+        return true;
+    }
+    llvm::Function* helper = module.getFunction("qore_rt_float_to_int");
+    if (!helper || !helper->isDeclaration() || helper->isVarArg()
+            || helper->arg_size() != 1 || !helper->getReturnType()->isIntegerTy(64)
+            || !helper->getFunctionType()->getParamType(0)->isDoubleTy()) {
+        return true;
+    }
+    size_t checked = 0;
+    auto use = helper->user_begin();
+    while (use != helper->user_end()) {
+        if (++checked % 100 == 0 && qore_check_cancel(nullptr, "AOT native floating conversion")) {
+            error = "cancelled during AOT native floating conversion";
+            return false;
+        }
+        auto* call = llvm::dyn_cast<llvm::CallInst>(*use++);
+        if (!call || call->getCalledFunction() != helper || call->isMustTailCall()
+                || call->hasOperandBundles() || !call->getMetadata("qore.native.method.conversion")) {
+            continue;
+        }
+        llvm::IRBuilder<> builder(call);
+        builder.SetCurrentDebugLocation(call->getDebugLoc());
+#if LLVM_VERSION_MAJOR >= 21
+        auto* convert = llvm::Intrinsic::getOrInsertDeclaration(&module, llvm::Intrinsic::fptosi_sat,
+#else
+        auto* convert = llvm::Intrinsic::getDeclaration(&module, llvm::Intrinsic::fptosi_sat,
+#endif
+            {helper->getReturnType(), helper->getFunctionType()->getParamType(0)});
+        auto* result = builder.CreateCall(convert, {call->getArgOperand(0)});
+        call->replaceAllUsesWith(result);
+        call->eraseFromParent();
+    }
+    return true;
+}
+
 //! Optimizes the module and emits it as an object file
 /** @param allow_split true if a large module may be split for parallel code generation (a module with compiled
     functions)
@@ -24611,6 +24658,10 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
         return false;
     }
     module.setDataLayout(tm->createDataLayout());
+    if (!lowerAOTMethodFloatToInt(module, t, error)) {
+        delete tm;
+        return false;
+    }
     // the code holds its source locations as constant data in the layout of this library's locations, which is
     // the layout of a target with pointers of the same size
     if (module.getDataLayout().getPointerSize() == sizeof(void*)
