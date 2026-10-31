@@ -1919,7 +1919,104 @@ static void ut_aot_string_split(UnitTestCounters& c) {
 #endif
 }
 
+#ifdef DEBUG
+static void ut_aot_same_list_publication(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    const QoreTypeInfo* ti = qore_get_complex_list_type(bigIntTypeInfo);
+    struct LocalScope {
+        LocalVar var;
+        ExceptionSink& xsink;
+        LocalScope(const char* name, const QoreTypeInfo* type, QoreValue value, ExceptionSink& sink)
+            : var(name, type), xsink(sink) {
+            var.instantiate(value);
+        }
+        ~LocalScope() { var.uninstantiate(&xsink); }
+    };
+    struct BorrowedLocalContext : QoreAOTContext {
+        ~BorrowedLocalContext() { locals = nullptr; }
+    } context;
+    ReferenceHolder<QoreListNode> first(new QoreListNode(bigIntTypeInfo), &xsink);
+    ReferenceHolder<QoreListNode> second(new QoreListNode(bigIntTypeInfo), &xsink);
+    first->push(QoreValue(int64_t{7}), &xsink);
+    second->push(QoreValue(INT64_MAX), &xsink);
+    LocalScope local("same_list", ti, QoreValue(first->refSelf()), xsink);
+    LocalVar* locals[] = {&local.var};
+    context.locals = locals;
+    context.num_locals = 1;
+    LocalVarValue* slot = thread_try_find_lvar(&local.var);
+    UT_ASSERT(c, slot && local.var.isAOTIntListStoreDeclaration(), "integer-list body declaration is admitted");
+    if (!slot) {
+        return;
+    }
+    auto publish = [&](QoreListNode* list, void* prepared) {
+        qore_rt_assign_same_list_local_aot_v1(&context, 0, QoreValue(list).rawBits(), prepared, &xsink);
+        UT_ASSERT(c, !xsink, "publication leaves no exception");
+        UT_ASSERT(c, slot->val.assigned && slot->val.type == QV_Node && slot->val.v.n == list,
+            "publication preserves the actual runtime owner");
+    };
+    publish(*first, slot);
+    UT_ASSERT_EQ(c, 2, first->reference_count(), "same-root publication leaves the reference count unchanged");
+    UT_ASSERT(c, qore_list_private::get(**first)->complexTypeInfo == ti, "same-root publication preserves type");
+    xsink.raiseException("SAME-LIST-TEST", "pending publication sink");
+    qore_rt_assign_same_list_local_aot_v1(&context, 0, QoreValue(*second).rawBits(), slot, &xsink);
+    UT_ASSERT(c, xsink && slot->val.v.n == *first, "pending exception prevents replacement");
+    bool threw = false;
+    try {
+        qore_rt_assign_same_list_local_aot_throwing_v1(&context, 0,
+            QoreValue(*second).rawBits(), slot, &xsink);
+    } catch (const QoreJITException&) {
+        threw = true;
+    }
+    UT_ASSERT(c, threw && xsink && slot->val.v.n == *first, "native EH preserves sink and local value");
+    UT_ASSERT_EQ(c, 1, second->reference_count(), "pending publication does not retain its borrowed input");
+    xsink.clear();
+    publish(*second, slot);
+    UT_ASSERT_EQ(c, 1, first->reference_count(), "replacement releases the old runtime owner once");
+    UT_ASSERT_EQ(c, 2, second->reference_count(), "replacement retains its own runtime owner");
+    publish(*first, nullptr);
+    UT_ASSERT_EQ(c, 1, second->reference_count(), "null prepared storage uses ordinary replacement");
+    {
+        LocalScope other("other_list", ti, QoreValue(second->refSelf()), xsink);
+        LocalVarValue* other_slot = thread_try_find_lvar(&other.var);
+        publish(*second, other_slot);
+        UT_ASSERT(c, other_slot && other_slot->val.v.n == *second,
+            "a different local's prepared slot is left untouched");
+        UT_ASSERT_EQ(c, 3, second->reference_count(), "identity mismatch retains only the target's owner");
+    }
+    slot->val.removeValue(true).discard(&xsink);
+    publish(*first, slot);
+    UT_ASSERT_EQ(c, 2, first->reference_count(), "unassigned storage is initialized by ordinary fallback");
+    for (const QoreTypeInfo* excluded : {autoTypeInfo, autoNoNarrowListTypeInfo,
+            qore_get_complex_list_type(floatTypeInfo)}) {
+        LocalVar var("excluded_list", excluded);
+        UT_ASSERT(c, !var.isAOTIntListStoreDeclaration(), "non-integer and no-narrow declarations are excluded");
+    }
+    {
+        LocalScope plain("plain_list", autoNoNarrowListTypeInfo, QoreValue(), xsink);
+        locals[0] = &plain.var;
+        LocalVarValue* plain_slot = thread_try_find_lvar(&plain.var);
+        qore_rt_assign_same_list_local_aot_v1(&context, 0, QoreValue(*first).rawBits(), plain_slot, &xsink);
+        UT_ASSERT(c, !xsink && plain_slot && plain_slot->val.v.n != *first,
+            "no-narrow fallback retains ordinary copying");
+        if (plain_slot && plain_slot->val.v.n && plain_slot->val.v.n->getType() == NT_LIST) {
+            auto* list = static_cast<QoreListNode*>(plain_slot->val.v.n);
+            UT_ASSERT(c, qore_list_private::get(*list)->complexTypeInfo == autoListTypeInfo,
+                "no-narrow fallback strips the destination type");
+        }
+        UT_ASSERT(c, qore_list_private::get(**first)->complexTypeInfo == ti,
+            "no-narrow copying preserves the source type");
+        locals[0] = &local.var;
+    }
+    local.var.setReadOnly();
+    UT_ASSERT(c, !local.var.isAOTIntListStoreDeclaration(), "read-only declarations are excluded");
+    UT_ASSERT(c, !xsink, "same-list publication unit checks leave no exception");
+}
+#endif
+
 static void ut_aot_scalar_local_store(UnitTestCounters& c) {
+#ifdef DEBUG
+    ut_aot_same_list_publication(c);
+#endif
     ut_aot_exact_scalar_local_store(c);
     // Exercise direct/generic storage and prepared/looked-up slots against the
     // same live-slot admission, bit-preservation and ownership assertions.

@@ -1674,3 +1674,6 @@ Cleared AOT reload trackers: [results](results-cleared-reload-trackers-rejection
 
 
 Fused indexed update/reload: [results](results-fused-indexed-reload-rejection-macos-arm64.json), [audit](audit-fused-indexed-reload-rejection.md). Two variants rejected after 1116 optimized processes/3348 windows. The broader pair run gives local mutation -1.16%, imported +0.30%, indirect +4.85%, wide +4.97%; production runtime code restored exactly.
+
+
+Guarded integer-list publication: [results](results-same-list-publication-macos-arm64.json), [audit](audit-same-list-publication.md). Retained after 1044 optimized processes/3132 measured windows: broad local/imported mutation improves 19.3%/19.8%, mixed callback pipeline 15.5%; short workloads also improve.

@@ -31868,3 +31868,67 @@ The first pair build never selected its helper because lowering precedes target 
 [Complete evidence](results-fused-indexed-reload-rejection-macos-arm64.json) and [all 62 audit checks](audit-fused-indexed-reload-rejection.md). No Debug/short retention campaign follows rejection. A strict byte-for-byte library comparison initially failed because recompilation refreshed the embedded Git revision. The final review compares all library bytes after masking that 40 byte field, LC_UUID and LC_CODE_SIGNATURE, and verifies every other file-backed section exactly. No new Java/develop comparison, application-weighted speedup or maximum-performance claim.
 
 Next outline the cold generic fallback from the existing prepared indexed-add helper while preserving the current ABI and caller LLVM. Confirm a smaller hot frame before fresh Release correctness and symmetric measurements; preserve all guards, RHS/index destruction order, exceptions, owned reload and cancellation.
+
+
+## Guarded integer-list publication (2026-10-31)
+
+Copyright 2026 Qore Technologies, s.r.o.
+
+Retain a guarded AOT publication helper for ordinary integer-list body locals after an eligible load/push/store sequence. Coercion still runs first. If the invocation-local prepared slot owns the identical strong list, its declaration excludes captures, references, substitution and no-narrow behavior, and live storage/container/type guards pass, the final assignment has nothing to change. The helper skips generic lvalue setup and redundant acquisition/release of the same node. A different copy-on-write result, weak/opaque value, unsupported declaration or live-state miss uses the original assignment helper. Pending exceptions prevent publication; the native-EH wrapper preserves unwinding.
+
+The caller keeps every coercion, cleanup, cache/epoch publication, exception check and owned reload. Only one assignment call changes in each of 12 optimized function bodies across the three layouts: local/imported listMutate, the mixed callback pipeline and its inlined dispatch copy. Nine other optimized modules are identical after serialized metadata/runtime identity normalization. The local mutation caller keeps its entry address, 814 instructions and 352-byte frame in each layout. The new helper has a 64-byte frame and still contains out-of-line value/declaration queries; those are a follow-up opportunity, not evidence of a performance ceiling.
+
+Fresh untimed before/after profiles support the assignment-site hypothesis. Instrumented durations are excluded from timing. The optimized baseline is merged commit 68038bcf03; the candidate uses that commit plus the recorded patch. Apple M4 Pro ARM64, Apple clang 21, SDK 27.2 and LLVM 22.1.8; Release -O3 -DNDEBUG with allocation tracking off; separately compiled stripped qcc -O3 artifacts and private runtimes with normal identity checks. Across 36 artifacts, each variant passes 4698 independent reference outputs. Default, reverse and shuffle-487 caller layouts use three symmetric ABBA/BAAB blocks each; every process has three warmup and three measured 100 ms windows. Primary effects are median within-block ratios, then the median across layouts; marginal median times need not have the same ratio. All values below are whole-kernel ns/item, including loop and per-invocation work.
+
+The broad campaign sustains mutation gains in every layout: local -19.29%, imported -19.75%. The mixed callback pipeline improves 15.46%, also in every layout. Direct calls are effectively unchanged (+0.13% paired); ordinary indirect calls increase 1.12%, roughly 0.07 ns/item in the marginal medians. Other call controls and mixed processing are stable or improve. This broader tradeoff supports retention. The eight-item short pass also improves mutation 5.39–6.08% and the callback pipeline 7.51%; no per-invocation setup regression is hidden by long loops.
+
+### Pilot: count 4096
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Marginal change|!Paired change
+|local:list_mutate|125.3009|99.8697|-20.30%|-20.23%
+|local:direct_call|1.5581|1.5485|-0.62%|-0.25%
+|micro:list_mutate|124.2480|99.6623|-19.79%|-20.10%
+|micro:indirect_call|8.0093|8.1555|+1.82%|-0.17%
+|micro:indirect_wide|8.4851|8.2095|-3.25%|-1.96%
+|micro:list_build|24.7134|24.4095|-1.23%|-1.31%
+
+### Broader workloads: count 4096
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Marginal change|!Paired change
+|local:direct_call|1.5372|1.5568|+1.28%|+0.13%
+|local:polymorphic_call|15.6232|15.4726|-0.96%|-0.59%
+|local:list_mutate|124.6048|99.0677|-20.49%|-19.29%
+|local:dynamic_float_result_call|10.4820|10.5526|+0.67%|+0.04%
+|micro:indirect_call|7.9770|8.0490|+0.90%|+1.12%
+|micro:indirect_wide|8.4753|8.2503|-2.66%|-2.16%
+|micro:indirect_int_result|9.0354|8.6671|-4.08%|-3.02%
+|micro:indirect_float|9.2149|8.8812|-3.62%|-3.67%
+|micro:indirect_float_result|9.2606|9.1522|-1.17%|-0.58%
+|micro:indirect_tagged_float|9.9302|9.6564|-2.76%|-3.49%
+|micro:closure_call|18.6476|18.5123|-0.73%|-1.06%
+|micro:closure_capture|24.3615|24.0814|-1.15%|+0.11%
+|micro:list_build|24.5764|24.4111|-0.67%|-0.40%
+|micro:list_mutate|123.2970|98.7432|-19.91%|-19.75%
+|float:callback_loop_float_return|4.9593|4.9630|+0.08%|+0.58%
+|mixed:csv_report|948.5063|963.3353|+1.56%|-0.51%
+|mixed:object_orders|3325.4496|3327.3824|+0.06%|-0.29%
+|mixed:callback_pipeline|96.2456|80.3423|-16.52%|-15.46%
+|mixed:text_index|1356.7746|1345.9251|-0.80%|-0.05%
+
+### Short workloads: count 8
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Marginal change|!Paired change
+|local:list_mutate|491.9511|463.7542|-5.73%|-6.08%
+|local:direct_call|260.1349|258.0132|-0.82%|-0.91%
+|micro:list_mutate|493.6961|467.0836|-5.39%|-5.39%
+|mixed:callback_pipeline|262.2270|240.8331|-8.16%|-7.51%
+
+All 1044 timed processes and 3132 measured windows replay from raw output and actual waited receipts. The short pass additionally matches all 864 warmup/measured checksums against independent mathematical references over the full seed period. Recorded owned builds, tests and profiles do not overlap timing. Campaigns are not pooled across epochs; shared-host scheduling, frequency and thermal conditions remain uncontrolled.
+
+Release qualification passes 7073 assertions; Debug AOT regressions pass 5731. Focused and broader native Debug suites pass 4033 and 5718 checks respectively (overlapping suites), including unchanged same-root reference counts, replacement/null-slot/mismatched-slot fallback, unassigned storage, no-narrow copying, pending sinks and native EH. AST, IR, JIT, tiered, AOT O0/O3, split compilation, stripped debug information, compile/runtime disable controls, imported slots, wide integers, aliases, recursion, reflection and cancellation are covered. The final full optimized build restores all 391 Release qmod aliases and produces runtime binaries byte-identical to the measured candidate. Debug-only tests added after timing therefore do not alter the measured Release implementation.
+
+Two initial fixture failures are preserved with frozen-baseline controls. Reflection strips a container's type: AST keeps the reflected plain list during push, while IR reapplies the declared integer-list type and may reject float elements. This existing semantic difference is not changed here. The final fixture uses a type-compatible replacement and compares values; it retains wrong-value-type and absent-value cases. A first codegen reviewer failed to normalize serialized metadata sizes; the corrected reviewer proves the publication-only body changes before timing. These failures are not counted as passing qualification.
+
+[Complete evidence](results-same-list-publication-macos-arm64.json) and [all 62 audit checks](audit-same-list-publication.md). No fresh Java/develop ratio, application-weighted aggregate or maximum-performance claim. The installed system checkpoint at the start of this experiment is merged 68038bcf03; this report does not claim a subsequent installation.
+
+Next measure inline pointer extraction after a strong-pointer tag check and direct private-list access in the new helper, preserving all declaration, representation, liveness and type guards. Then revisit cold indexed-helper fallback outlining. Refresh optimized Java/develop comparisons after the next retained checkpoint.

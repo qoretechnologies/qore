@@ -4,6 +4,10 @@
 
     @section qore_3_0_0 Qore 3.0.0
 
+    AOT integer-list appends can avoid redundant local-variable reassignment after coercion when the
+    current invocation's local still owns the identical strong list. Copy-on-write replacements and
+    unsupported storage use ordinary assignment; type checks, cache ownership and exceptions are preserved.
+
     AOT-compiled floating-point methods that only forward their scalar argument to another
     pure method in the same %Program can use the native floating call path. The compiler
     proves the forwarding body, while runtime admission preserves dispatch, context,

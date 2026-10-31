@@ -2359,6 +2359,21 @@ void qore_rt_assign_local_no_coerce_aot(QoreAOTContext* ctx, int32_t idx, uint64
 */
 void qore_rt_assign_exact_scalar_local_aot_v1(QoreAOTContext* ctx, int32_t idx, uint64_t val,
     ExceptionSink* xsink);
+
+//! Publish a pre-coerced list, avoiding reassignment only when its ordinary local already owns the same node.
+/** @param ctx current AOT context
+    @param idx compiler-selected exact integer-list body local
+    @param val borrowed, already coerced assignment input
+    @param prepared_slot same-invocation storage from qore_rt_get_reload_local_slot_aot_v1, or nullptr
+    @param xsink receives assignment errors; a populated sink prevents publication
+    @note Strong identity, declaration, live slot and container guards precede elision. All misses retain
+    ordinary weak normalization and assignment. Caller cache ownership and exception checks are unchanged.
+*/
+void qore_rt_assign_same_list_local_aot_v1(QoreAOTContext* ctx, int32_t idx, uint64_t val,
+    void* prepared_slot, ExceptionSink* xsink);
+//! Native-EH counterpart; throws QoreJITException when the sink is populated.
+void qore_rt_assign_same_list_local_aot_throwing_v1(QoreAOTContext* ctx, int32_t idx, uint64_t val,
+    void* prepared_slot, ExceptionSink* xsink);
 //! Native-EH counterpart; throws QoreJITException when the sink is populated.
 void qore_rt_assign_exact_scalar_local_aot_throwing_v1(QoreAOTContext* ctx, int32_t idx, uint64_t val,
     ExceptionSink* xsink);

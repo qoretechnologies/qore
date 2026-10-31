@@ -1127,6 +1127,16 @@ public:
             && (typeInfo == bigIntTypeInfo || typeInfo == floatTypeInfo || typeInfo == boolTypeInfo);
     }
 
+    //! Admission for a pre-coerced integer-list publication to ordinary body storage.
+    /** @return true for an uncaptured, writable integer-list declaration without substitution or references
+        @note This does not prove value identity or slot lifetime; the publication helper checks live storage.
+    */
+    DLLLOCAL bool isAOTIntListStoreDeclaration() const {
+        return !closure_use && !is_self && !is_top_level && !read_only && !no_narrowing && !refTypeInfo
+            && !type_info_needs_substitution && !ref_type_info_needs_substitution
+            && QoreTypeInfo::getComplexListValueType(typeInfo) == bigIntTypeInfo;
+    }
+
     //! Replace an exact scalar without generic lvalue preparation, retaining runtime visibility.
     /** Live declaration and storage checks exclude references, captures, filters,
         substituted types, weak values and owning storage. The current thread's

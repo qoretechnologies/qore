@@ -1,0 +1,92 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%allow-debugger
+
+int sub sameListLoop(int count, int seed) {
+    list<int> values = ();
+    for (int i = 0; i < count; ++i) {
+        seed = (seed * 33 + 17) & 65535;
+        push values, seed;
+    }
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        values[i] += 1;
+        sum += values[i];
+    }
+    return sum;
+}
+
+string sub sameListCow(int seed) {
+    list<int> values = (seed,);
+    list<int> alias = values;
+    push values, seed + 1;
+    values[0] += 2;
+    return sprintf("%y:%y", values, alias);
+}
+
+list<int> sub sameListParameter(list<int> values, int seed) {
+    push values, seed;
+    return values;
+}
+
+string sub sameListCaptured(int seed) {
+    list<int> values = (seed,);
+    code<list<int>()> append = list<int> sub () { push values, seed + 1; return values; };
+    list<int> result = append();
+    push values, seed + 2;
+    return sprintf("%y:%y", values, result);
+}
+
+string sub sameListNoNarrow(int seed) {
+    list<auto!> values = (seed,);
+    push values, "text";
+    return sprintf("%y", values);
+}
+
+sub replaceSameList(int kind) {
+    if (kind == 0) {
+        set_local_var_value(1, "values", NOTHING);
+    } else if (kind == 1) {
+        list<int> other = (45,);
+        set_local_var_value(1, "values", other);
+    } else {
+        set_local_var_value(1, "values", "invalid");
+    }
+}
+
+string sub sameListReflected(int kind) {
+    list<int> values = (7,);
+    call_function("replaceSameList", kind);
+    try {
+        push values, 3;
+        return sprintf("%y", values);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+int sub sameListRecursive(int depth) {
+    list<int> values = (depth,);
+    int child = depth ? sameListRecursive(depth - 1) : 0;
+    push values, child;
+    values[0] += values[1];
+    return values[0];
+}
+
+foreach int count in ((0, 1, 16, 1024)) {
+    printf("loop:%d:%d\n", count, sameListLoop(count, 7));
+}
+foreach int seed in ((0, -3, 140737488355327, 140737488355328, -140737488355329)) {
+    printf("cow:%d:%s\n", seed, sameListCow(seed));
+    list<int> input = (seed,);
+    printf("parameter:%y:%y\n", sameListParameter(input, seed + 1), input);
+    printf("captured:%s\n", sameListCaptured(seed));
+    printf("no-narrow:%s\n", sameListNoNarrow(seed));
+}
+foreach int kind in ((0, 1, 2)) {
+    printf("reflected:%d:%s\n", kind, call_function("sameListReflected", kind));
+}
+printf("recursive:%d\n", sameListRecursive(10));
+printf("same-list-publication: ok\n");

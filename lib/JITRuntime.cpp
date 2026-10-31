@@ -397,6 +397,9 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_reload_prepared_local_if_stale_aot_v1", reinterpret_cast<void*>(&qore_rt_reload_prepared_local_if_stale_aot_v1) },
     { "qore_rt_reload_prepared_local_if_stale_aot_v2", reinterpret_cast<void*>(&qore_rt_reload_prepared_local_if_stale_aot_v2) },
     { "qore_rt_assign_local_aot", reinterpret_cast<void*>(&qore_rt_assign_local_aot) },
+    { "qore_rt_assign_same_list_local_aot_v1", reinterpret_cast<void*>(&qore_rt_assign_same_list_local_aot_v1) },
+    { "qore_rt_assign_same_list_local_aot_throwing_v1",
+        reinterpret_cast<void*>(&qore_rt_assign_same_list_local_aot_throwing_v1) },
     { "qore_rt_assign_class_local_result_aot_v1",
         reinterpret_cast<void*>(&qore_rt_assign_class_local_result_aot_v1) },
     { "qore_rt_assign_class_local_result_aot_throwing_v1",
@@ -14485,6 +14488,42 @@ extern "C" DLLEXPORT void qore_rt_assign_local_no_coerce_eval_weak_aot(QoreAOTCo
         int32_t idx, uint64_t val, ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_locals);
     qore_rt_assign_local_no_coerce_eval_weak(ctx->locals[idx], val, xsink);
+}
+
+extern "C" DLLEXPORT void qore_rt_assign_same_list_local_aot_v1(QoreAOTContext* ctx,
+        int32_t idx, uint64_t val, void* prepared_slot, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    if (*xsink) {
+        return;
+    }
+    LocalVar* var = ctx->locals[idx];
+    auto* slot = static_cast<LocalVarValue*>(prepared_slot);
+    QoreValue value = fromBits(val);
+    if (slot && slot->local_var == var && !slot->finalized && !slot->frame_boundary
+            && !slot->block_cleared && slot->val.assigned && !slot->val.static_assignment
+            && !slot->val.is_closure && !slot->val.fixed_type && slot->val.type == QV_Node
+            && value.hasNode() && !value.isOpaque() && value.getType() == NT_LIST
+            && slot->val.v.n == value.getInternalNode() && var->isAOTIntListStoreDeclaration()) {
+        auto* priv = qore_list_private::get(*value.get<QoreListNode>());
+        if (priv->valid && !priv->finalized && !priv->obj_count
+                && priv->complexTypeInfo == var->getTypeInfo()) {
+            // Coercion has already succeeded. Ordinary assignment would acquire
+            // and then release the same strong list reference, with no changed
+            // value, ownership flags, type metadata or recursive scan accounting.
+            // A different COW result, reference, weak value or cleared slot must
+            // still publish through the ordinary lvalue path below.
+            return;
+        }
+    }
+    qore_rt_assign_local_no_coerce_eval_weak(var, val, xsink);
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_assign_same_list_local_aot_throwing_v1(
+        QoreAOTContext* ctx, int32_t idx, uint64_t val, void* prepared_slot, ExceptionSink* xsink) {
+    qore_rt_assign_same_list_local_aot_v1(ctx, idx, val, prepared_slot, xsink);
+    if (*xsink) {
+        throw QoreJITException();
+    }
 }
 
 extern "C" DLLEXPORT void qore_rt_sync_local_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val) {

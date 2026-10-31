@@ -19989,6 +19989,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     }
                     llvm::Value* auto_slot = !return_class_store_result && !use_no_coerce
                         ? getAOTAutoLocalSlot(linst->local, module, llvm_func) : nullptr;
+                    llvm::Value* list_slot = nullptr;
+                    if (use_no_coerce && !element_store && is_aot_body_local
+                            && linst->mode == AssignmentMode::Normal && inst->list_push_local_cow
+                            && inst->redundant_store && !linst->is_ref && !linst->is_closure
+                            && local_ti == qore_get_complex_list_type(bigIntTypeInfo)
+                            && linst->local->isAOTIntListStoreDeclaration()
+                            && !q_env_is_set("QORE_DISABLE_AOT_SAME_LIST_PUBLICATION")) {
+                        list_slot = getAOTReloadLocalSlot(linst->local, module, llvm_func);
+                    }
                     llvm::SmallVector<llvm::Type*, 5> assign_types{ptr_type, i32_type, i64_type};
                     llvm::SmallVector<llvm::Value*, 5> assign_args{aot_ctx_arg,
                         llvm::ConstantInt::get(i32_type, slot), boxed};
@@ -20008,6 +20017,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         }
                         assign_types.push_back(ptr_type);
                         assign_args.push_back(auto_slot);
+                    }
+                    if (list_slot) {
+                        aot_helper_name = "qore_rt_assign_same_list_local_aot_v1";
+                        aot_helper_throwing_name = "qore_rt_assign_same_list_local_aot_throwing_v1";
+                        assign_types.push_back(ptr_type);
+                        assign_args.push_back(list_slot);
                     }
                     assign_types.push_back(ptr_type);
                     assign_args.push_back(xsink_arg);
