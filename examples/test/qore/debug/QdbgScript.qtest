@@ -29,6 +29,14 @@ public class QdbgScriptTest inherits QUnit::Test {
             "int total = add(2, 3);\n"                                       # 7
             "printf(\"total: %d %y\\n\", total, h);\n";                      # 8
 
+        #! a program whose line 4 runs five times, with i from 0 to 4; the comments are the line numbers
+        const LoopProgram = "%modern\n"                                     # 1
+            "int total = 0;\n"                                              # 2
+            "for (int i = 0; i < 5; ++i) {\n"                               # 3
+            "    total += i;\n"                                             # 4
+            "}\n"                                                           # 5
+            "printf(\"total: %d\\n\", total);\n";                          # 6
+
         string qore_exe = QdbgScriptTest::getQoreExecutable();
         string qdbg = normalize_dir(get_script_dir() + "/../../../../bin/qdbg");
         string qlib_dir = normalize_dir(get_script_dir() + "/../../../../qlib");
@@ -47,6 +55,7 @@ public class QdbgScriptTest inherits QUnit::Test {
     constructor() : Test("QdbgScript", "1.0", \ARGV) {
         addTestCase("a script of commands", \scriptTest());
         addTestCase("a program without statements", \emptyProgramTest());
+        addTestCase("conditions, hit conditions and log messages of breakpoints", \breakpointConditionTest());
         set_return_value(main());
     }
 
@@ -128,6 +137,47 @@ public class QdbgScriptTest inherits QUnit::Test {
         # no command was processed when the thread was not stopped
         assertFalse(res.out =~ /is not stopped/, "no command is processed when the thread is not stopped");
         assertFalse(res.out =~ /Program is not set/, "no command is processed before the program attaches");
+    }
+
+    breakpointConditionTest() {
+        hash<auto> res = runQdbg(LoopProgram, (
+            "break create target.q 4",
+            "break condition 1 i == 3",
+            "break create target.q 4",
+            "break log 2 i={i} total={total}",
+            # negative: an invalid hit condition
+            "break hitcondition 2 often",
+            "break list",
+            "go run",
+            "thread local i",
+            # without its condition the breakpoint has no options and its hits are no longer counted; with a hit
+            # condition, they are counted again from its next hit
+            "break condition 1",
+            "break hitcondition 1 1",
+            "break list",
+            "go run",
+            "thread local i",
+            "go run",
+            "quit",
+        ));
+        assertEq(0, res.rc);
+        assertInOrder(res.out, (
+            "interrupt/attach",
+            "bkptid: 1",
+            "bkptid: 2",
+            "BREAKPOINT-HIT-CONDITION-ERROR",
+            # the options of the breakpoints
+            "condition: i == 3", "log: i={i} total={total}",
+            # the logpoint writes its message at each hit, and the thread stops when the condition is true
+            "i=0 total=0", "i=1 total=0", "i=2 total=1", "i=3 total=3",
+            "interrupt/step", "bkptid: 1", "integer i = 3",
+            # the logpoint was hit four times
+            "hitcondition: 1", "log: i={i} total={total} hits: 4",
+            "i=4 total=6",
+            "interrupt/step", "bkptid: 1", "integer i = 4",
+            "total: 10",
+            "interrupt/detach",
+        ));
     }
 
     # a program that never attaches to the debugger, as it has no statements, does not keep qdbg waiting

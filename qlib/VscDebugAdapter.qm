@@ -93,6 +93,10 @@ module VscDebugAdapter {
     - the client is not notified when another debugger client changes a breakpoint
 
     @subsection vda_v0_3
+    - the conditions, hit conditions and log messages of breakpoints are checked by the debugger in the thread that hits
+      a breakpoint, so that a thread does not stop and wait for the adapter at each hit, and they are shared with the
+      other clients of a debug server, such as \c qdbg; a breakpoint with an invalid hit condition is not set, and
+      the error is shown for the breakpoint
     - step-in targets: the \c stepInTargets request gives the calls of the current statement, and \c stepIn with a
       \c targetId steps into the chosen call
     - breakpoints can be set on any statement of a line with more than one statement: the
@@ -275,8 +279,6 @@ public class VscDebugAdapter inherits DebugCommandLine {
         #! the next variable reference of a structured value
         int m_nextVarRef = VarRefBase;
 
-        #! the number of hits of the client's breakpoints with their conditions true, by breakpoint ID
-        hash<string, int> m_breakpointHits = {};
     }
 
     public {
@@ -801,52 +803,30 @@ vda.run();
         on the statement
     */
     private:internal list<int> getHitBreakpoints(hash<auto> event, bool entry) {
+        # a debugger that checks the breakpoints of the statement gives all those that stop the thread
+        if (event.bkptids) {
+            return map int($1), event.bkptids;
+        }
         return exists event.bkptid
             ? (int(event.bkptid),)
             : (entry ? getBreakpointsOnStatement(event.pgmid, event.statementid) : ());
     }
 
     #! Returns the IDs of the breakpoints that stop the thread among the given ones
-    /** A breakpoint of the client with a condition stops the thread only if the condition is true, and one with a hit
-        condition only if the number of times that it was hit with its condition true meets the hit condition; a
-        logpoint writes its message to the debug console and does not stop the thread.  A breakpoint whose condition
-        or hit condition cannot be evaluated stops the thread, and the error is written to the debug console.
-        Breakpoints of other clients stop the thread.
+    /** The debugger checks the conditions, hit conditions and log messages of breakpoints (see
+        @ref DebugProgramControl::DebugProgramControl::checkBreakpoint() "DebugProgramControl::checkBreakpoint()"): a
+        breakpoint that is the only reason of a stop has stopped the thread, and the breakpoints on the statement that
+        a thread arrived at by a step at the start of a launched program are checked by the thread
     */
     private:internal list<int> getStoppingBreakpoints(hash<auto> event, list<int> hits) {
-        list<int> rv = ();
-        foreach int id in (hits) {
-            *hash<auto> b = getClientBreakpoint(event.pgmid, id);
-            if (!b) {
-                push rv, id;
-                continue;
-            }
-            try {
-                if (b.condition.val() && !evaluateInThread(event.tid, b.condition).bool) {
-                    continue;
-                }
-                int count = ++m_breakpointHits{id};
-                if (b.hitCondition.val() && !VscDebugAdapter::checkHitCondition(b.hitCondition, count)) {
-                    continue;
-                }
-            } catch (hash<ExceptionInfo> ex) {
-                sendVscEvent("output", {
-                    "category": "console",
-                    "output": sprintf("breakpoint %d: %s\n", id, VscDebugAdapter::getErrorText(ex)),
-                });
-                push rv, id;
-                continue;
-            }
-            if (b.logMessage.val()) {
-                sendVscEvent("output", {
-                    "category": "console",
-                    "output": formatLogMessage(event.tid, b.logMessage) + "\n",
-                });
-                continue;
-            }
-            push rv, id;
+        if (exists event.bkptid || !hits) {
+            return hits;
         }
-        return rv;
+        return doCommand((
+            "cmd": "thread/breakpoint/check",
+            "tid": event.tid,
+            "value": {"ids": hits},
+        )).result.stop ?? ();
     }
 
     #! Returns True if a thread stops for another reason than breakpoints
@@ -880,72 +860,9 @@ vda.run();
         m_programState{event.pgmid}.thread{event.tid}.exception = event.exception;
     }
 
-    #! Returns the client's source or function breakpoint with the given ID, or @ref nothing
-    private:internal *hash<auto> getClientBreakpoint(softstring pgmId, int id) {
-        foreach hash<auto> source_bkpts in (m_programState{pgmId}.sourceBreakpoints.iterator()) {
-            if (exists source_bkpts{id}) {
-                return source_bkpts{id};
-            }
-        }
-        return m_programState{pgmId}.functionBreakpoints{id};
-    }
-
     #! Returns the text of an error; the error of a command sent to a thread is given without the command's error
     static string getErrorText(hash<ExceptionInfo> ex) {
         return ex.err == "DEBUG-COMMAND" ? ex.desc : sprintf("%s: %s", ex.err, ex.desc);
-    }
-
-    #! Returns True if the given number of hits meets the hit condition of a breakpoint
-    /** @param cond the hit condition: a number, which the number of hits must equal, or a number after \c "==",
-        \c ">", \c ">=", \c "<", \c "<=" or \c "%", the last for every given number of hits; blanks are allowed
-        before and after the number and the operator and between the characters of the operator
-        @param count the number of hits, with the current one
-
-        @throw BREAKPOINT-HIT-CONDITION-ERROR the hit condition is invalid
-    */
-    static bool checkHitCondition(string cond, int count) {
-        # blanks are allowed also between the characters of an operator, as in "> = 4"
-        *list<*string> m = (cond =~ x/^\s*(=\s*=|>\s*=|<\s*=|>|<|%)?\s*([0-9]+)\s*$/);
-        if (!m) {
-            throw "BREAKPOINT-HIT-CONDITION-ERROR", sprintf("invalid hit condition %y; give a number, optionally "
-                "after ==, >, >=, <, <= or %%", cond);
-        }
-        int n = int(m[1]);
-        string op = m[0] ?? "";
-        op =~ s/\s+//g;
-        switch (op) {
-            case ">": return count > n;
-            case ">=": return count >= n;
-            case "<": return count < n;
-            case "<=": return count <= n;
-            case "%": return n > 0 && !(count % n);
-        }
-        return count == n;
-    }
-
-    #! Returns the message of a logpoint with the values of the expressions in braces
-    /** An expression that cannot be evaluated is replaced with its error
-    */
-    private:internal string formatLogMessage(int tid, string msg) {
-        string rv = "";
-        int pos = 0;
-        while (True) {
-            int open = index(msg, "{", pos);
-            int close = open >= 0 ? index(msg, "}", open) : -1;
-            if (close < 0) {
-                rv += msg.substr(pos);
-                break;
-            }
-            rv += msg.substr(pos, open - pos);
-            string expr = msg.substr(open + 1, close - open - 1);
-            try {
-                rv += evaluateInThread(tid, expr).text;
-            } catch (hash<ExceptionInfo> ex) {
-                rv += sprintf("<%s>", VscDebugAdapter::getErrorText(ex));
-            }
-            pos = close + 1;
-        }
-        return rv;
     }
 
     #! Evaluates an expression with the top frame of a stopped thread
@@ -1143,8 +1060,6 @@ vda.run();
                 hash bs = doCommand((
                     "cmd": "program/"+m_currentPgmId+"/breakpoint//create",
                     "value": bkpt,
-                    # protocol and vscode supports also condition, hitCondition, logMessage
-                    # we could implement when Qore supports runtime evaluator
                 )).result;
                 b.id = bs.bkptid;
                 b.verified = True;
@@ -1989,7 +1904,8 @@ vda.run();
         if (args.breakpoints) {
             list bkpts;
             foreach hash b in (args.breakpoints) {
-                hash<auto> bkpt = {"file": file, "lineno": b.line};
+                # the debugger checks the condition, hit condition and log message of the breakpoint
+                hash<auto> bkpt = {"file": file, "lineno": b.line} + b{"condition", "hitCondition", "logMessage"};
                 # a breakpoint on a statement of a line with more than one statement
                 if (exists b.column) {
                     bkpt.column = getByteColumn(getFileLine(file, b.line), b.column, columnsStartAt1());
@@ -2070,10 +1986,10 @@ vda.run();
                             push la, s2;
                         }
                     }
-                    push bkpts, ("function": l[0], "args": la); #+b.("condition", "hitCondition");
+                    push bkpts, ("function": l[0], "args": la) + b{"condition", "hitCondition"};
                 } else {
                     # a function given by its name only: the breakpoint is on the function's only variant
-                    push bkpts, ("function": b.name); #+b.("condition", "hitCondition");
+                    push bkpts, ("function": b.name) + b{"condition", "hitCondition"};
                 }
             }
             res.breakpoints = setBreakpoints(bkpts);

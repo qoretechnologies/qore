@@ -30,6 +30,15 @@ printf(\"%d %y\\n\", total, h);
 
 const TargetLabel = "dpc-target.q";
 
+#! a program whose line 4 runs five times, with i from 0 to 4
+const LoopScript = "%modern
+int total = 0;
+for (int i = 0; i < 5; ++i) {
+    total += i;
+}
+printf(\"%d\\n\", total);
+";
+
 #! a program whose line 4 calls g() twice: in h(), which is called first, and with the value of h()
 const StepInScript = "%modern
 int sub g(int x) { return x + 1; }
@@ -105,6 +114,9 @@ class TestDebugProgramControl inherits DebugProgramControl {
         #! events broadcast to all clients
         Queue events();
 
+        #! the console output of the debugger broadcast to all clients, such as the messages of logpoints
+        Queue console();
+
         #! gives the commands sent to stopped threads their unique IDs
         Sequence uids();
     }
@@ -118,7 +130,25 @@ class TestDebugProgramControl inherits DebugProgramControl {
     }
 
     public nothing broadcastDataImpl(auto data) {
+        if (data.cmd == DebugEventCmd::Output && data.category == "console") {
+            console.push(data.output);
+            return;
+        }
         events.push(data);
+    }
+
+    #! returns True if a breakpoint has a condition, hit condition or log message
+    bool hasBreakpointOptions(int id) {
+        return exists getBreakpointOptions(id);
+    }
+
+    #! returns the console output that was broadcast so far
+    list<string> getConsoleOutput() {
+        list<string> rv = ();
+        while (console.size()) {
+            push rv, console.get();
+        }
+        return rv;
     }
 
     #! sends a command that is processed in the server thread and returns its result
@@ -287,6 +317,8 @@ public class DebugProgramControlTest inherits QUnit::Test {
         addTestCase("exceptions that no try statement catches", \uncaughtTest());
         addTestCase("statements of a line with more than one statement", \columnTest());
         addTestCase("stepping into a chosen call", \stepInTargetTest());
+        addTestCase("conditions, hit conditions and log messages of breakpoints", \breakpointConditionTest());
+        addTestCase("the commands of the options of breakpoints", \breakpointOptionCommandTest());
         set_return_value(main());
     }
 
@@ -802,6 +834,163 @@ public class DebugProgramControlTest inherits QUnit::Test {
         assertThrows("PROGRAM-STATEMENT-ERROR", \dpc.command(), (cmd + "statement/stepintargets",
             {"value": {"id": 999999}}));
 
+        assertEq({"rc": NOTHING}, p.finish());
+    }
+
+    #! creates a breakpoint on line 4 of LoopScript with the given options and returns the result
+    private hash<auto> breakAtLoop(DebuggedProgram p, hash<auto> opts) {
+        return dpc.command(sprintf("program/%d/breakpoint//create", p.pgmId), {
+            "value": {"file": TargetLabel, "lineno": 4} + opts,
+        });
+    }
+
+    #! returns the value of the local variable i of a stopped thread
+    private int getI(DebuggedProgram p) {
+        return AbstractDebugControl::unserialize(dpc.threadCommand(p.tid, "thread/local/i/get").value);
+    }
+
+    breakpointConditionTest() {
+        # a condition: the thread stops only when it is true
+        {
+            DebuggedProgram p(dpc, LoopScript);
+            on_exit p.cleanup();
+            hash<auto> bp = breakAtLoop(p, {"condition": "i == 3"});
+            hash<auto> e = p.runToStop();
+            assertEq(bp.bkptid, e.bkptid);
+            assertEq(3, getI(p));
+            assertEq({"rc": NOTHING}, p.finish());
+        }
+        # a hit condition: every second hit
+        {
+            DebuggedProgram p(dpc, LoopScript);
+            on_exit p.cleanup();
+            breakAtLoop(p, {"hitCondition": "% 2"});
+            p.runToStop();
+            assertEq(1, getI(p));
+            p.runToStop();
+            assertEq(3, getI(p));
+            assertEq({"rc": NOTHING}, p.finish());
+        }
+        # a condition and a hit condition: the hits are counted when the condition is true
+        {
+            DebuggedProgram p(dpc, LoopScript);
+            on_exit p.cleanup();
+            breakAtLoop(p, {"condition": "i > 1", "hitCondition": "2"});
+            p.runToStop();
+            assertEq(3, getI(p));
+            assertEq({"rc": NOTHING}, p.finish());
+        }
+        # a logpoint writes its message and does not stop the thread; an expression that cannot be evaluated is
+        # replaced with its error
+        {
+            DebuggedProgram p(dpc, LoopScript);
+            on_exit p.cleanup();
+            dpc.getConsoleOutput();
+            breakAtLoop(p, {"logMessage": "i={i} total={total} bad={i +}"});
+            assertEq({"rc": NOTHING}, p.finish());
+            list<string> log = dpc.getConsoleOutput();
+            assertEq(5, log.size(), sprintf("%y", log));
+            assertRegex("^i=0 total=0 bad=<DEBUG-EVALUATE-ERROR: ", log[0]);
+            assertRegex("^i=4 total=6 ", log[4]);
+        }
+        # all breakpoints of a statement are checked: a logpoint writes its message also when the condition of
+        # another breakpoint on the statement is false, and at the stop of the other breakpoint
+        {
+            DebuggedProgram p(dpc, LoopScript);
+            on_exit p.cleanup();
+            dpc.getConsoleOutput();
+            hash<auto> cond = breakAtLoop(p, {"condition": "i == 3"});
+            breakAtLoop(p, {"logMessage": "i={i}"});
+            hash<auto> e = p.runToStop();
+            assertEq(cond.bkptid, e.bkptid);
+            assertEq((cond.bkptid,), e.bkptids);
+            assertEq(3, getI(p));
+            assertEq({"rc": NOTHING}, p.finish());
+            assertEq(("i=0\n", "i=1\n", "i=2\n", "i=3\n", "i=4\n"), dpc.getConsoleOutput());
+        }
+        # negative: a condition that cannot be evaluated stops the thread with the error
+        {
+            DebuggedProgram p(dpc, LoopScript);
+            on_exit p.cleanup();
+            dpc.getConsoleOutput();
+            hash<auto> bp = breakAtLoop(p, {"condition": "i +"});
+            hash<auto> e = p.runToStop();
+            assertEq(bp.bkptid, e.bkptid);
+            assertRegex("^DEBUG-EVALUATE-ERROR: ", e.bkpterror);
+            assertRegex(sprintf("^breakpoint %d: DEBUG-EVALUATE-ERROR: ", bp.bkptid),
+                dpc.getConsoleOutput().join(""));
+            assertEq(0, getI(p));
+            dpc.command(sprintf("program//breakpoint/%d/delete", bp.bkptid));
+            assertEq({"rc": NOTHING}, p.finish());
+        }
+        # a thread that stopped at the statement of breakpoints for another reason checks them
+        {
+            DebuggedProgram p(dpc, LoopScript);
+            on_exit p.cleanup();
+            # the thread stops at line 2, where the breakpoints of line 4 are checked
+            hash<auto> start = p.breakAt(2);
+            hash<auto> e = p.runToStop();
+            assertEq(start.bkptid, e.bkptid);
+            hash<auto> stops = breakAtLoop(p, {"condition": "1 == 1"});
+            hash<auto> skips = breakAtLoop(p, {"condition": "1 == 2"});
+            hash<auto> plain = breakAtLoop(p, {});
+            hash<auto> fails = breakAtLoop(p, {"condition": "1 +"});
+            hash<auto> r = dpc.threadCommand(p.tid, "thread/breakpoint/check", {"value": {"ids": (stops.bkptid,
+                skips.bkptid, plain.bkptid, fails.bkptid)}});
+            assertEq((stops.bkptid, plain.bkptid, fails.bkptid), r.stop);
+            assertEq((fails.bkptid,), (map int($1), keys r.errors));
+            map dpc.command(sprintf("program//breakpoint/%d/delete", $1)), (stops.bkptid, skips.bkptid,
+                plain.bkptid, fails.bkptid);
+            # the logpoint of a checked breakpoint writes its message
+            hash<auto> logs = breakAtLoop(p, {"logMessage": "checked"});
+            dpc.getConsoleOutput();
+            r = dpc.threadCommand(p.tid, "thread/breakpoint/check", {"value": {"ids": (logs.bkptid,)}});
+            assertEq((), r.stop);
+            assertEq(("checked\n",), dpc.getConsoleOutput());
+            dpc.command(sprintf("program//breakpoint/%d/delete", logs.bkptid));
+            assertEq({"rc": NOTHING}, p.finish());
+        }
+    }
+
+    breakpointOptionCommandTest() {
+        DebuggedProgram p(dpc, LoopScript);
+        on_exit p.cleanup();
+        hash<auto> bp = breakAtLoop(p, {});
+        string cmd = sprintf("program//breakpoint/%d/", bp.bkptid);
+        # set, get and list
+        assertEq("ok", dpc.command(cmd + "condition/set", {"value": "i == 2"}));
+        assertEq("ok", dpc.command(cmd + "hitcondition/set", {"value": ">= 1"}));
+        assertEq("ok", dpc.command(cmd + "log/set", {"value": "i={i}"}));
+        assertEq("i == 2", dpc.command(cmd + "condition/get"));
+        assertEq(">= 1", dpc.command(cmd + "hitcondition/get"));
+        assertEq("i={i}", dpc.command(cmd + "log/get"));
+        hash<auto> info = dpc.command(sprintf("program/%d/breakpoint//list", p.pgmId))[0];
+        assertEq({"condition": "i == 2", "hitCondition": ">= 1", "logMessage": "i={i}"},
+            info{"condition", "hitCondition", "logMessage"});
+        # an empty value removes an option, and a breakpoint without options has none
+        dpc.command(cmd + "log/set", {"value": ""});
+        dpc.command(cmd + "hitcondition/set");
+        # an option that is not set is empty
+        assertEq("", dpc.command(cmd + "log/get"));
+        dpc.command(cmd + "condition/set");
+        assertFalse(dpc.hasBreakpointOptions(bp.bkptid));
+        # a deleted breakpoint has no options
+        dpc.command(cmd + "condition/set", {"value": "i == 2"});
+        assertTrue(dpc.hasBreakpointOptions(bp.bkptid));
+        dpc.command(cmd + "delete");
+        assertFalse(dpc.hasBreakpointOptions(bp.bkptid));
+
+        # negative: an invalid hit condition and a value that is not a string are refused, and no breakpoint is created
+        # with them
+        assertThrows("BREAKPOINT-HIT-CONDITION-ERROR", \breakAtLoop(), (p, {"hitCondition": "often"}));
+        assertThrows("DEBUG-HANDLER-ERROR", "string", \breakAtLoop(), (p, {"condition": 1}));
+        assertEq((), dpc.command(sprintf("program/%d/breakpoint//list", p.pgmId)));
+        bp = breakAtLoop(p, {});
+        assertThrows("BREAKPOINT-HIT-CONDITION-ERROR", \dpc.command(), (sprintf("program//breakpoint/%d/hitcondition/set",
+            bp.bkptid), {"value": "x"}));
+        assertThrows("DEBUG-HANDLER-ERROR", "get or set", \dpc.command(), (sprintf("program//breakpoint/%d/condition/x",
+            bp.bkptid)));
+        dpc.command(sprintf("program//breakpoint/%d/delete", bp.bkptid));
         assertEq({"rc": NOTHING}, p.finish());
     }
 

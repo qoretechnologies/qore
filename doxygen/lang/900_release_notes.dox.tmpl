@@ -3447,6 +3447,8 @@ while (*binary chunk = input.read(65536)) {
       - added the \c eval command (\c qdbg and \c qdbg-remote), which evaluates an expression with the variables of the
         current frame; \c thread \c list shows the names of threads; the output of programs of a debug server is
         printed as the programs wrote it
+      - added the \c break \c condition, \c break \c hitcondition and \c break \c log commands, which set the
+        condition, the hit condition and the log message of a breakpoint (conditional breakpoints and logpoints)
     - @ref debugprogramcontrolintro "DebugProgramControl" module
       - stopped threads read and set the values of variables and of their elements, keys and members, also private
         ones, by their paths, and evaluate expressions with the variables of a frame
@@ -3454,6 +3456,8 @@ while (*binary chunk = input.read(65536)) {
       - added \c captureOutput(), which sends the output of the process to the clients as \c "output" events, as
         \c qdbg-server does for its programs
       - interrupt events give the name of the thread
+      - breakpoints have conditions, hit conditions and log messages, which all clients share; the thread that hits a
+        breakpoint checks them before it stops, so it does not stop and wait for a client at each hit
     - @ref debugutilintro "DebugUtil" module
       - added functions that describe values, list their elements, keys and members, also private ones, and read and
         set values by their paths
@@ -3952,6 +3956,9 @@ while (*binary chunk = input.read(65536)) {
         the \c breakpointLocations request); stack frames give the columns of their statements; fixed the end line
         of stack frames not being shown
       - step into a chosen call of the current statement (step-in targets)
+      - conditions, hit conditions and log messages of breakpoints are checked by the debugger, so that a thread does
+        not stop and wait for the adapter at each hit, and they are shared with \c qdbg; a breakpoint with an invalid
+        hit condition is not set and shows why
       - when a thread stops, the other threads of the program stop, and \c continue continues them all, as in other
         debuggers of Visual Studio Code; only the thread that stops was stopped; the \c stopAllThreads argument of
         \c launch and \c attach requests set to \c false keeps that

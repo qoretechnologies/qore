@@ -66,6 +66,15 @@ module DebugProgramControl {
       writes before an interrupt is sent before the interrupt
     - interrupt events of exceptions give \c uncaught: @ref True if no try statement of debuggable code in the call
       stack catches the exception
+    - breakpoints have conditions, hit conditions and log messages, which all clients share and the thread that hits
+      a breakpoint checks before it stops: the \c condition, \c hitcondition and \c log commands of
+      \c program//breakpoint/<id> set and get them, \c breakpoint//create takes them in its value (\c condition,
+      \c hitCondition and \c logMessage), and breakpoint lists give them with the number of \c hits; a logpoint and
+      an error evaluating a condition are sent to the clients as \c "console" output events, and an interrupt of a
+      breakpoint whose condition could not be evaluated gives the error in \c bkpterror; all breakpoints of the
+      statement that apply to the thread are checked, and the interrupt gives those that stop it in \c bkptids; the
+      \c thread/breakpoint/check command checks breakpoints for a thread that stopped at their statement for another
+      reason (see @ref DebugProgramControl::DebugProgramControl::checkBreakpoint() "checkBreakpoint()")
     - the \c program/<id>/statement/stepintargets command gives the calls of a statement that can be stepped into
       (see @ref Qore::ProgramControl::getStepInTargets() "ProgramControl::getStepInTargets()"); stepping over with the
       statement of a target as the statement to run to steps into the call
@@ -136,6 +145,23 @@ public namespace DebugProgramControl {
             Mutex evalLock();
             #! the name of the parameter of the function that an expression is evaluated in
             const EvalVars = "qore_debug_vars";
+
+            #! the conditions, hit conditions and log messages of breakpoints, which all clients share, by breakpoint ID
+            /** each with the optional \c condition, \c hitCondition and \c logMessage, and the number of \c hits of
+                the breakpoint with its condition true; see checkBreakpoint()
+            */
+            hash<string, hash<auto>> bkptOptions = {};
+            #! serializes the access to bkptOptions
+            Mutex bkptLock();
+
+            #! the options of breakpoints that are kept in bkptOptions
+            const BreakpointOptions = ("condition", "hitCondition", "logMessage");
+            #! the options of breakpoints by the names of their commands
+            const BreakpointCommandOptions = {
+                "condition": "condition",
+                "hitcondition": "hitCondition",
+                "log": "logMessage",
+            };
         }
         public {
             #! default number of lines listed before current code position
@@ -734,6 +760,9 @@ public namespace DebugProgramControl {
                                         int stmt;
                                         if (receiveData.value) {
                                             stmt = resolveStatement(pgmb, receiveData.value);
+                                            # the options are checked before the breakpoint is created
+                                            map DebugProgramControl::validateBreakpointOption($1,
+                                                receiveData.value{$1}), BreakpointOptions;
                                         }
                                         b = new Breakpoint();
                                         b.setEnabled(True);
@@ -743,6 +772,15 @@ public namespace DebugProgramControl {
                                             b.assignStatement(stmt);
                                             result.stmtid = stmt;
                                         }
+                                        # the condition, hit condition and log message of the breakpoint
+                                        if (receiveData.value) {
+                                            foreach string opt in (BreakpointOptions) {
+                                                if (receiveData.value{opt}.val()) {
+                                                    setBreakpointOption(b.getBreakpointId(), opt,
+                                                        receiveData.value{opt});
+                                                }
+                                            }
+                                        }
                                         break;
                                     default:
                                         b = Breakpoint::resolveBreakpointId(int(bkptName));
@@ -751,7 +789,8 @@ public namespace DebugProgramControl {
                                         }
                                         break;
                                 }
-                                switch (shift cmd) {
+                                string bkptCmd = shift cmd ?? "";
+                                switch (bkptCmd) {
                                     case 'list':
                                         if (pgmb) {
                                             list<auto> bkpts =pgmb.getBreakpoints();
@@ -789,6 +828,10 @@ public namespace DebugProgramControl {
                                             b.unassignStatement(s);
                                         }
                                         # delete b;   ??
+                                        {
+                                            AutoLock al(bkptLock);
+                                            remove bkptOptions{b.getBreakpointId()};
+                                        }
                                         result = 'ok';
                                         break;
 
@@ -857,6 +900,27 @@ public namespace DebugProgramControl {
                                             broadcastBreakpoint(cx, b, "thread");
                                         }
                                         break;
+
+                                    case 'condition':
+                                    case 'hitcondition':
+                                    case 'log': {
+                                        string opt = BreakpointCommandOptions{bkptCmd};
+                                        switch (shift cmd) {
+                                            case 'get':
+                                                # an option that is not set is empty, as for set
+                                                result = getBreakpointOptions(b.getBreakpointId()){opt} ?? "";
+                                                break;
+                                            case 'set':
+                                                setBreakpointOption(b.getBreakpointId(), opt, receiveData.value);
+                                                broadcastBreakpoint(cx, b, bkptCmd);
+                                                result = 'ok';
+                                                break;
+                                            default:
+                                                throw "DEBUG-HANDLER-ERROR", sprintf("expecting get or set after %y",
+                                                    bkptCmd);
+                                        }
+                                        break;
+                                    }
 
                                     case 'policy':
                                         switch (shift cmd) {
@@ -1053,6 +1117,191 @@ public namespace DebugProgramControl {
             return result;
         }
 
+        #! Returns True if any breakpoint has a condition, hit condition or log message
+        private bool hasBreakpointOptions() {
+            AutoLock al(bkptLock);
+            return boolean(bkptOptions);
+        }
+
+        #! Returns the IDs of the breakpoints of a statement that apply to the current thread, in their order
+        /** A breakpoint applies if it is enabled and its policy accepts the thread, as the debugger checks it
+        */
+        private static list<int> getApplicableBreakpoints(ProgramControl pgm, int statementId) {
+            int tid = gettid();
+            list<int> rv = ();
+            foreach Breakpoint b in (pgm.getStatementIdInfo(statementId, True).breakpoints ?? ()) {
+                if (!b.getEnabled()) {
+                    continue;
+                }
+                int policy = b.getPolicy();
+                # a thread that is assigned to the breakpoint is accepted or rejected by the policy
+                if (policy != BreakpointPolicyNone
+                    && (policy == BreakpointPolicyAccept) != inlist(tid, b.getThreadIds())) {
+                    continue;
+                }
+                push rv, b.getBreakpointId();
+            }
+            return rv;
+        }
+
+        #! Returns the condition, hit condition, log message and number of hits of a breakpoint, if any is set
+        private *hash<auto> getBreakpointOptions(int id) {
+            AutoLock al(bkptLock);
+            return bkptOptions{id};
+        }
+
+        #! Sets or removes the condition, hit condition or log message of a breakpoint
+        /** @param id the ID of the breakpoint
+            @param opt \c condition, \c hitCondition or \c logMessage
+            @param value the value; an empty value removes the option
+
+            @throw BREAKPOINT-HIT-CONDITION-ERROR the hit condition is invalid
+            @throw DEBUG-HANDLER-ERROR the value is not a string
+        */
+        private setBreakpointOption(int id, string opt, auto value) {
+            *string v = DebugProgramControl::validateBreakpointOption(opt, value);
+            AutoLock al(bkptLock);
+            if (v) {
+                bkptOptions{id}{opt} = v;
+            } else {
+                remove bkptOptions{id}{opt};
+            }
+            # a breakpoint without options is not kept; its number of hits is kept as long as it has options
+            if (!(bkptOptions{id} - "hits")) {
+                remove bkptOptions{id};
+            }
+        }
+
+        #! Returns the value of a condition, hit condition or log message of a breakpoint, or @ref nothing for none
+        /** @param opt \c condition, \c hitCondition or \c logMessage
+            @param value the value; an empty value removes the option
+
+            @throw BREAKPOINT-HIT-CONDITION-ERROR the hit condition is invalid
+            @throw DEBUG-HANDLER-ERROR the value is not a string
+        */
+        static *string validateBreakpointOption(string opt, auto value) {
+            if (exists value && value.typeCode() != NT_STRING) {
+                throw "DEBUG-HANDLER-ERROR", sprintf("the %s of a breakpoint must be a string; got type %y", opt,
+                    value.type());
+            }
+            if (!value.val()) {
+                return;
+            }
+            # an invalid hit condition is refused when it is set
+            if (opt == "hitCondition") {
+                DebugProgramControl::checkHitCondition(value, 0);
+            }
+            return value;
+        }
+
+        #! Returns True if the given number of hits meets the hit condition of a breakpoint
+        /** @param cond the hit condition: a number, which the number of hits must equal, or a number after \c "==",
+            \c ">", \c ">=", \c "<", \c "<=" or \c "%", the last for every given number of hits; blanks are allowed
+            before and after the number and the operator and between the characters of the operator
+            @param count the number of hits, with the current one
+
+            @throw BREAKPOINT-HIT-CONDITION-ERROR the hit condition is invalid
+        */
+        static bool checkHitCondition(string cond, int count) {
+            # blanks are allowed also between the characters of an operator, as in "> = 4"
+            *list<*string> m = (cond =~ x/^\s*(=\s*=|>\s*=|<\s*=|>|<|%)?\s*([0-9]+)\s*$/);
+            if (!m) {
+                throw "BREAKPOINT-HIT-CONDITION-ERROR", sprintf("invalid hit condition %y; give a number, optionally "
+                    "after ==, >, >=, <, <= or %%", cond);
+            }
+            int n = int(m[1]);
+            string op = m[0] ?? "";
+            op =~ s/\s+//g;
+            switch (op) {
+                case ">": return count > n;
+                case ">=": return count >= n;
+                case "<": return count < n;
+                case "<=": return count <= n;
+                case "%": return n > 0 && !(count % n);
+            }
+            return count == n;
+        }
+
+        #! Checks the condition, hit condition and log message of a breakpoint that a thread has hit
+        /** Runs in the thread that hit the breakpoint.  A breakpoint with a condition stops the thread only if the
+            condition is true, and one with a hit condition only if the number of times that it was hit with its
+            condition true meets the hit condition; a logpoint sends its message to all clients as a \c "console"
+            output event and does not stop the thread.  A breakpoint whose condition or hit condition cannot be
+            evaluated stops the thread, and the error is sent to all clients as a \c "console" output event.
+
+            @param id the ID of the breakpoint
+            @param pgm the Program of the thread
+            @param lv the local variables of the frame that hit the breakpoint
+
+            @return a hash with \c stop: @ref True if the breakpoint stops the thread, and \c error: the error of the
+            evaluation, if any
+        */
+        private hash<auto> checkBreakpoint(int id, ProgramControl pgm, *hash<auto> lv) {
+            *hash<auto> opts = getBreakpointOptions(id);
+            if (!opts) {
+                return {"stop": True};
+            }
+            try {
+                if (opts.condition && !evaluateExpression(pgm, opts.condition, lv)) {
+                    return {"stop": False};
+                }
+                int count;
+                {
+                    AutoLock al(bkptLock);
+                    # the options may have been removed meanwhile
+                    if (bkptOptions{id}) {
+                        count = ++bkptOptions{id}.hits;
+                    }
+                }
+                if (opts.hitCondition && !DebugProgramControl::checkHitCondition(opts.hitCondition, count)) {
+                    return {"stop": False};
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                string error = sprintf("%s: %s", ex.err, ex.desc);
+                sendConsoleOutput(sprintf("breakpoint %d: %s\n", id, error));
+                return {"stop": True, "error": error};
+            }
+            if (opts.logMessage) {
+                sendConsoleOutput(formatLogMessage(pgm, opts.logMessage, lv) + "\n");
+                return {"stop": False};
+            }
+            return {"stop": True};
+        }
+
+        #! Sends output of the debugger to all clients, after the output that the program wrote before it
+        private sendConsoleOutput(string output) {
+            if (outputCapture) {
+                outputCapture.flushAndWait();
+            }
+            broadcastOutput("console", output);
+        }
+
+        #! Returns the message of a logpoint with the values of the expressions in braces
+        /** An expression that cannot be evaluated is replaced with its error in angle brackets
+        */
+        private string formatLogMessage(ProgramControl pgm, string msg, *hash<auto> lv) {
+            string rv = "";
+            int pos = 0;
+            while (True) {
+                int open = index(msg, "{", pos);
+                int close = open >= 0 ? index(msg, "}", open) : -1;
+                if (close < 0) {
+                    rv += msg.substr(pos);
+                    break;
+                }
+                rv += msg.substr(pos, open - pos);
+                string expr = msg.substr(open + 1, close - open - 1);
+                try {
+                    auto v = evaluateExpression(pgm, expr, lv);
+                    rv += v.typeCode() == NT_STRING ? v : AbstractDebugControl::describe(v).value;
+                } catch (hash<ExceptionInfo> ex) {
+                    rv += sprintf("<%s: %s>", ex.err, ex.desc);
+                }
+                pos = close + 1;
+            }
+            return rv;
+        }
+
         private hash<auto> getBreakpointInfo(Breakpoint b, bool listStatements = True) {
             hash<auto> binfo.id = b.getBreakpointId();
             binfo.programId = b.getProgram().getProgramId();
@@ -1071,6 +1320,8 @@ public namespace DebugProgramControl {
             if (!binfo.threads) {
                 remove binfo.threads;
             }
+            # the condition, hit condition, log message and number of hits
+            binfo += getBreakpointOptions(binfo.id);
             return binfo;
         }
 
@@ -1447,6 +1698,31 @@ public namespace DebugProgramControl {
                     'frame': 0,
                 },
             };
+            # breakpoints that are the only reason of the stop (a step or a run to a statement gives no breakpoint) are
+            # checked with their options: all breakpoints of the statement that apply to the thread, as the debugger
+            # gives the first one only; if none stops the thread, it continues as it ran before
+            if (breakpointId && hasBreakpointOptions()) {
+                list<int> ids = statementId ? getApplicableBreakpoints(pgm, statementId) : ();
+                if (!inlist(breakpointId, ids)) {
+                    unshift ids, breakpointId;
+                }
+                *hash<auto> lv = get_local_vars(frameOffset);
+                list<int> stopping = ();
+                foreach int id in (ids) {
+                    hash<auto> check = checkBreakpoint(id, pgm, lv);
+                    if (check.stop) {
+                        push stopping, id;
+                    }
+                    if (check.error && !ctx.intrInfo.bkpterror) {
+                        ctx.intrInfo.bkpterror = check.error;
+                    }
+                }
+                if (!stopping) {
+                    return;
+                }
+                breakpointId = stopping[0];
+                ctx.intrInfo.bkptids = stopping;
+            }
             runToStatementId = 0; # reset RunToStatement
             ctx.intrInfo.framecnt = ctx.stackSize - frameOffset;
             if (exists statementId) {
@@ -1706,6 +1982,26 @@ public namespace DebugProgramControl {
                                 break;
                             }
 
+                            case 'breakpoint': {
+                                # the breakpoints of the given IDs that stop the thread with their options, as when it
+                                # hits them; for a thread that stopped at their statement for another reason
+                                if (shift cmd != "check") {
+                                    throw "DEBUG-HANDLER-ERROR", "expecting thread/breakpoint/check";
+                                }
+                                *hash<auto> lv = get_local_vars(frameOffset);
+                                result = {"stop": (), "errors": {}};
+                                foreach softint id in (rd.value.ids) {
+                                    hash<auto> check = checkBreakpoint(id, pgm, lv);
+                                    if (check.stop) {
+                                        push result.stop, id;
+                                    }
+                                    if (check.error) {
+                                        result.errors{id} = check.error;
+                                    }
+                                }
+                                break;
+                            }
+
                             case 'evaluate': {
                                 # the local variables are read here, as the frame numbers count from this frame
                                 int frameId2 = (rd.frameid ?? ctxCT.frameId) + frameOffset;
@@ -1730,9 +2026,6 @@ public namespace DebugProgramControl {
                                     stack[rd.frameid ?? ctxCT.frameId].current = True;
                                 }
                                 result = stack;
-                                break;
-
-                            case 'breakpoint':
                                 break;
 
                             case 'source':

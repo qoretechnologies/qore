@@ -55,6 +55,9 @@ module DebugCmdLine {
     - added the \c eval command, which evaluates an expression with the variables of the current frame
     - \c thread \c list shows the names of threads
     - the output of programs of a debug server is printed as the programs wrote it
+    - added the \c break \c condition, \c break \c hitcondition and \c break \c log commands, which set the
+      condition, the hit condition and the log message of a breakpoint; \c break \c list shows them with the number
+      of hits
 
     @subsection dcl_v0_1_2 v0.1.2
     - removed Linenoise stuff to new module
@@ -783,6 +786,45 @@ public namespace DebugCmdLine {
                                 ),
                                 'desc': 'disable breakpoint, args: breakpointId',
                             ),
+                            'condition': (
+                                '*': (
+                                    'enum': list sub(DebugCommandLine dcl, softlist path, softlist args) {
+                                        return DebugCommandLine::enumBreakpointId(dcl, path, args);
+                                    },
+                                    'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
+                                        dcl.setBreakpointOption(pop path, "condition", args);
+                                    },
+                                ),
+                                'desc': 'set the condition of a breakpoint, which stops a thread only if the condition '
+                                    'is true; without an expression, the condition is removed; args: breakpointId '
+                                    '[expression]',
+                            ),
+                            'hitcondition': (
+                                '*': (
+                                    'enum': list sub(DebugCommandLine dcl, softlist path, softlist args) {
+                                        return DebugCommandLine::enumBreakpointId(dcl, path, args);
+                                    },
+                                    'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
+                                        dcl.setBreakpointOption(pop path, "hitcondition", args);
+                                    },
+                                ),
+                                'desc': 'set the hit condition of a breakpoint, which stops a thread only if the '
+                                    'number of hits meets it: N (the Nth hit), ==N, >N, >=N, <N, <=N or %N (every Nth '
+                                    'hit); without a hit condition, it is removed; args: breakpointId [hitCondition]',
+                            ),
+                            'log': (
+                                '*': (
+                                    'enum': list sub(DebugCommandLine dcl, softlist path, softlist args) {
+                                        return DebugCommandLine::enumBreakpointId(dcl, path, args);
+                                    },
+                                    'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
+                                        dcl.setBreakpointOption(pop path, "log", args);
+                                    },
+                                ),
+                                'desc': 'make a breakpoint a logpoint, which writes its message and does not stop a '
+                                    'thread; expressions in braces are replaced with their values; without a message, '
+                                    'the breakpoint stops again; args: breakpointId [message]',
+                            ),
                             'policy': (
                                 '*': (
                                     'enum': list sub(DebugCommandLine dcl, softlist path, softlist args) {
@@ -1228,10 +1270,36 @@ public namespace DebugCmdLine {
 
         public string formatBreakpoint(hash<auto> b) {
             string enabledStr = b.enabled == "true" ? tc.success("true") : tc.warning(b.enabled ?? "");
-            return sprintf(" id: %s  pgmId: %s enabled: %-5s policy: %-6s threads: %y\n",
+            string rv = sprintf(" id: %s  pgmId: %s enabled: %-5s policy: %-6s threads: %y",
                 tc.number(sprintf("%-4d", b.id)),
                 tc.number(sprintf("%-4d", b.programId)),
                 enabledStr, b.policy, b.threads);
+            # the condition, hit condition, log message and number of hits of the breakpoint
+            if (b.condition) {
+                rv += sprintf(" condition: %s", tc.value(b.condition));
+            }
+            if (b.hitCondition) {
+                rv += sprintf(" hitcondition: %s", tc.value(b.hitCondition));
+            }
+            if (b.logMessage) {
+                rv += sprintf(" log: %s", tc.value(b.logMessage));
+            }
+            if (exists b.hits) {
+                rv += sprintf(" hits: %s", tc.number(string(b.hits)));
+            }
+            return rv + "\n";
+        }
+
+        #! Sets or removes the condition, hit condition or log message of a breakpoint
+        /** @param id the ID of the breakpoint
+            @param cmd the command of the option: \c condition, \c hitcondition or \c log
+            @param args the words of the value; without words, the option is removed
+        */
+        public setBreakpointOption(softint id, string cmd, softlist args) {
+            doCommand({
+                "cmd": sprintf("program//breakpoint/%d/%s/set", id, cmd),
+                "value": args ? args.join(" ") : NOTHING,
+            }, True);
         }
 
         public string formatStatement(hash<auto> stmt) {

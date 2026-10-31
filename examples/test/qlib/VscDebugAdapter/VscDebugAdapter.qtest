@@ -1508,15 +1508,27 @@ public class VscDebugAdapterTest inherits QUnit::Test {
             assertTrue(proc.wait(30s), "the adapter ends");
         }
 
-        # negative: an invalid hit condition stops the thread, and the error is shown
+        # negative: a breakpoint with an invalid hit condition is not set, and the IDE shows why
         Process proc = startAdapter();
         on_exit if (proc.running()) {
             proc.terminate();
         }
         DapClient dap(proc);
-        hash<auto> stopped = launchToStop(dap, path, ({"line": 13, "hitCondition": "often"},));
-        assertRegex("BREAKPOINT-HIT-CONDITION-ERROR", dap.getOutput("console").join(""));
-        assertEq((13, 13, 13, 13), runToEnd(dap, proc, stopped.body.threadId));
+        launch(dap, {"program": path, "stopOnEntry": False});
+        hash<auto> r = dap.request("setBreakpoints", {"source": {"path": path}, "breakpoints": (
+            {"line": 13, "hitCondition": "often"},
+        )});
+        assertTrue(r.success, r.message);
+        assertFalse(r.body.breakpoints[0].verified);
+        assertRegex("BREAKPOINT-HIT-CONDITION-ERROR", r.body.breakpoints[0].message);
+        r = dap.request("configurationDone");
+        assertTrue(r.success, r.message);
+        # no breakpoint was left set: the program runs to its end
+        dap.waitForEvent("terminated");
+        assertEq((), dap.getEvents("stopped"));
+        dap.request("disconnect");
+        proc.closeStdin();
+        assertTrue(proc.wait(30s), "the adapter ends");
     }
 
     logpointTest() {
