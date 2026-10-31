@@ -34,6 +34,16 @@ class RecordingWebSocketClient inherits WebSocketClient {
     }
 }
 
+#! A client that gives access to the HTTP options it was created with
+class OptionWebSocketClient inherits WebSocketClient {
+    constructor(hash<auto> opts) : WebSocketClient(sub () {}, opts) {
+    }
+
+    *hash<auto> getHttpHeaders() {
+        return http_opts.headers;
+    }
+}
+
 #! Connection option hashes whose values all have the same type
 /** A hash literal whose values all have the same type has a narrowed type, such as \c hash<string, int> for
     <tt>{"X-Api-Version": 2}</tt>; adding the default \c Accept header to such a hash raised RUNTIME-TYPE-ERROR
@@ -50,6 +60,7 @@ class WebSocketClientNarrowedCallerHashTest inherits QUnit::Test {
         addTestCase("startPollConnect() with narrowed headers", \startPollConnectNarrowedHeaders());
         addTestCase("connect() keeps a caller's Accept header", \connectKeepsAccept());
         addTestCase("WebSocketConnectPollOperation with a narrowed result", \pollOperationNarrowedResult());
+        addTestCase("constructor token and cookie with narrowed headers", \constructorNarrowedHeaders());
         set_return_value(main());
     }
 
@@ -107,5 +118,13 @@ class WebSocketClientNarrowedCallerHashTest inherits QUnit::Test {
         assertEq({"upgrade": "websocket", "status_code": 101}, op.getOutput());
         op = new WebSocketConnectPollOperation({"upgrade": "websocket", "status_code": 200});
         assertEq(200, op.getOutput().status_code);
+    }
+
+    constructorNarrowedHeaders() {
+        # the headers are a hash<string, int>, which cannot take the string Authorization and Cookie headers
+        hash<auto> opts = {"url": "ws://localhost:1", "token": "t", "cookie": "a=b", "headers": {"X-Count": 1}};
+        assertEq("hash<string, int>", opts.headers.fullType());
+        OptionWebSocketClient c(opts);
+        assertEq({"X-Count": 1, "Authorization": "Bearer t", "Cookie": "a=b"}, c.getHttpHeaders());
     }
 }
