@@ -419,6 +419,9 @@ private:
     std::unordered_map<int32_t, std::unordered_map<const LocalVar*, AotExactClassGuard>>
         aot_exact_class_guards;
     std::unordered_map<uint32_t, const LocalVar*> stable_exact_receiver_loads;
+    // Same-block assignment provenance hints, never value-equivalence proofs.
+    // Receiver guards still compare the actual load with its retained snapshot.
+    std::unordered_map<uint32_t, uint32_t> aot_pinned_local_receiver_sources;
     // Snapshots backed by existing unmodified entry owners, never new references.
     std::unordered_map<const LocalVar*, llvm::Value*> aot_pinned_entry_values;
     struct AotPinnedReceiver {

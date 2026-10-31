@@ -10,6 +10,7 @@ class PinnedValue {
     public { int id; }
     constructor(int id) { self.id = id; }
     int touch() { return self.id; }
+    int next(int value) { return value + 1; }
     destructor() { push pinnedDrops, self.id; }
 }
 class PinnedHook inherits PinnedValue {
@@ -25,6 +26,15 @@ class PinnedCycle inherits PinnedValue {
     constructor(int id) : PinnedValue(id) { }
 }
 
+class PinnedNextB inherits PinnedValue {
+    constructor(int id) : PinnedValue(id) { }
+    int next(int value) { return value + 20; }
+}
+class PinnedNextC inherits PinnedValue {
+    constructor(int id) : PinnedValue(id) { }
+    int next(int value) { return value + 300; }
+}
+
 sub replacePinnedSource(PinnedValue replacement) {
     set_local_var_value(1, "source", replacement);
 }
@@ -34,6 +44,79 @@ int sub pinnedPhi(int count, PinnedValue a, PinnedValue b, PinnedValue c) {
     for (int i = 0; i < count; ++i) {
         PinnedValue receiver = i % 3 == 0 ? a : i % 3 == 1 ? b : c;
         result += receiver.touch();
+    }
+    return result;
+}
+
+sub replacePinnedReceiver(PinnedValue replacement) {
+    set_local_var_value(1, "receiver", replacement);
+}
+
+sub replacePinnedPhiSource(PinnedValue replacement) {
+    set_local_var_value(1, "a", replacement);
+}
+
+sub deletePinnedReceiver(PinnedValue receiver) {
+    delete receiver;
+}
+
+int sub pinnedPhiReceiverChanged(int count, PinnedValue a, PinnedValue b, PinnedValue c) {
+    int result = 0;
+    for (int i = 0; i < count; ++i) {
+        PinnedValue replacement = i % 2 ? a : new PinnedNextC(10);
+        PinnedValue receiver = i % 3 == 0 ? a : i % 3 == 1 ? b : c;
+        # Both a different retained owner and a new object must invalidate the
+        # selected source hint; the actual loaded receiver decides dispatch.
+        replacePinnedReceiver(replacement);
+        result += receiver.next(0);
+    }
+    return result;
+}
+
+int sub pinnedPhiSourceChanged(int count, PinnedValue a, PinnedValue b, PinnedValue c) {
+    int result = 0;
+    for (int i = 0; i < count; ++i) {
+        if (i == 2) {
+            replacePinnedPhiSource(c);
+        }
+        PinnedValue receiver = i % 3 == 0 ? a : i % 3 == 1 ? b : c;
+        result += receiver.next(0);
+    }
+    return result;
+}
+
+# Keep the receiver load in the same block as its assignment. The caller
+# catches the exception so the normal loop body exercises the live status guard.
+int sub pinnedDeleteLocalLoop(int count, PinnedValue a, PinnedValue b, PinnedValue c) {
+    int result = 0;
+    for (int i = 0; i < count; ++i) {
+        PinnedValue receiver = i % 3 == 0 ? a : i % 3 == 1 ? b : c;
+        deletePinnedReceiver(receiver);
+        result += receiver.next(0);
+    }
+    return result;
+}
+
+int sub pinnedPhiDeleted(int count, PinnedValue a, PinnedValue b, PinnedValue c) {
+    int result = 0;
+    for (int i = 0; i < count; ++i) {
+        try {
+            result += pinnedDeleteLocalLoop(1, i % 3 == 0 ? a : i % 3 == 1 ? b : c, b, c);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "OBJECT-ALREADY-DELETED") {
+                rethrow;
+            }
+            result += 100;
+        }
+    }
+    return result;
+}
+
+int sub pinnedLocalStep(int count, PinnedValue a, PinnedValue b, PinnedValue c) {
+    int result = 0;
+    for (int i = 0; i < count; ++i) {
+        PinnedValue receiver = i % 3 == 0 ? a : i % 3 == 1 ? b : c;
+        result += receiver.next(i);
     }
     return result;
 }
@@ -115,6 +198,11 @@ int sub pinnedRecursive(PinnedValue source, int depth) {
 
 printf("%d:%d:%d:%d\n", pinnedPhi(6, new PinnedValue(1), new PinnedValue(2), new PinnedValue(3)),
     pinnedReflect(new PinnedHook(11)), pinnedReflectReplaced(new PinnedValue(10)), notPinned());
+printf("%d:%d:%d:%d\n",
+    pinnedPhiReceiverChanged(6, new PinnedValue(1), new PinnedNextB(2), new PinnedNextC(3)),
+    pinnedPhiSourceChanged(6, new PinnedValue(1), new PinnedNextB(2), new PinnedNextC(3)),
+    pinnedPhiDeleted(3, new PinnedValue(1), new PinnedNextB(2), new PinnedNextC(3)),
+    pinnedLocalStep(6, new PinnedValue(1), new PinnedNextB(2), new PinnedNextC(3)));
 PinnedValue returned = pinnedReturn(new PinnedValue(40));
 printf("%d:%d\n", returned.id, pinnedExitValue);
 foreach bool unwind in ((False, True)) {

@@ -1644,3 +1644,6 @@ The [post-pinned-base optimized checkpoint](RESULTS.md#optimized-checkpoint-afte
 [Rejected class-local receiver snapshot PHIs](RESULTS.md#rejected-class-local-receiver-snapshot-phis-2026-10-31): reduced comparison count did not justify repeated broader costs; optimized [evidence](results-pinned-borrow-phi-macos-arm64.json) and [audit](audit-pinned-borrow-phi.md).
 
 [Rejected uniform AOT function alignment](RESULTS.md#rejected-uniform-aot-function-alignment-2026-10-31): all four policies and fixed-policy confirmation, with [evidence](results-aot-function-alignment-macos-arm64.json) and [audit](audit-aot-function-alignment.md).
+
+
+[Receiver-local provenance](RESULTS.md#receiver-local-provenance-2026-10-31): same-block assignment hints reuse retained receiver metadata with actual-value and live deletion guards. Optimized [evidence](results-pinned-local-receiver-macos-arm64.json) and [audit](audit-pinned-local-receiver.md).

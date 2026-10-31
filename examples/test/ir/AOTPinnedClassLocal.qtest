@@ -30,12 +30,13 @@ class PinnedClassLocalTest inherits QUnit::Test {
     }
     private check() {
         string source = get_script_dir() + "/AOTPinnedClassLocal.qr";
-        string expected = "12:1190:1290:7\n40:40\n32,31,30\n32,31,30\n72:50:1\npinned-class-local: ok\n";
+        string expected = "12:1190:1290:7\n903:941:300:657\n40:40\n32,31,30\n32,31,30\n72:50:1\npinned-class-local: ok\n";
         assertEq(expected, run((qore, "--exec-mode=ast", source)), "AST reference");
         # Reflective access to these uncaptured locals is supported by AOT, not
         # the baseline IR/JIT frame lookup. Keep an explicit AST reference.
         TmpDir dir("qore-pinned-class-local-");
         foreach string prefix in (("", "QORE_AOT_EH=1 ",
+                "QORE_DISABLE_AOT_PINNED_LOCAL_RECEIVER=1 ",
                 "QORE_DISABLE_AOT_PINNED_CLASS_LOCAL=1 ",
                 "QORE_DISABLE_AOT_CLASS_LOCAL_SLOT=1 ",
                 "QORE_DISABLE_AOT_CLASS_LOCAL_PREPARE=1 ",
@@ -48,6 +49,31 @@ class PinnedClassLocalTest inherits QUnit::Test {
                 bool pinned = !prefix.startsWith("QORE_DISABLE_AOT_PINNED_CLASS_LOCAL");
                 bool prepared = !prefix.startsWith("QORE_DISABLE_AOT_CLASS_LOCAL_SLOT");
                 bool constraint = prepared && !prefix.startsWith("QORE_DISABLE_AOT_CLASS_LOCAL_PREPARE");
+                if (!prefix || prefix == "QORE_DISABLE_AOT_PINNED_LOCAL_RECEIVER=1 ") {
+                    bool receiver_hint = !prefix;
+                    foreach string name in (("pinnedLocalStep", "pinnedPhiReceiverChanged",
+                            "pinnedPhiSourceChanged", "pinnedDeleteLocalLoop")) {
+                        *list<*string> receiver_body = regex_extract(ir,
+                            "(?s)define [^\n]*@" + name + "_[^\n]*\n(.*?)\n\\}");
+                        assertTrue(!!receiver_body, name + " receiver-local definition");
+                        string code = receiver_body[0] ?? "";
+                        assertEq(receiver_hint, regex(code, "pinned_receiver_metadata[^\n]* = phi "),
+                            name + " selected source metadata " + prefix + level);
+                        assertEq(receiver_hint, regex(code, "pinned_base_phi_same_receiver"),
+                            name + " actual receiver identity " + prefix + level);
+                        assertEq(receiver_hint, regex(code, "pinned_override_phi_same_receiver"),
+                            name + " actual override receiver identity " + prefix + level);
+                        foreach string kind in (("base", "override")) {
+                            assertEq(receiver_hint, regex(code,
+                                "pinned_" + kind + "_live_status[^\n]*load atomic i32,[^\n]*seq_cst"),
+                                name + " live " + kind + " deletion status " + prefix + level);
+                        }
+                        assertTrue(regex(code, "call i32 @qore_rt_object_has_exact_aot_target_class\\("),
+                            name + " ordinary base fallback " + prefix + level);
+                        assertTrue(regex(code, "call ptr @qore_rt_get_live_aot_override_receiver_class_v1"),
+                            name + " ordinary override fallback " + prefix + level);
+                    }
+                }
                 foreach string name in (("pinnedPhi", "pinnedReflect", "pinnedReflectReplaced",
                         "pinnedChanging", "pinnedCycle", "pinnedRecursive")) {
                     *list<*string> body = regex_extract(ir,

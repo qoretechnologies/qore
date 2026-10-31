@@ -7240,6 +7240,10 @@ llvm::Value* QoreIRToLLVM::getPinnedReceiverMetadata(uint32_t value_id, AotPinne
 
 llvm::Value* QoreIRToLLVM::emitPinnedExactClassGuard(uint32_t value_id, llvm::Value* value, int32_t slot,
         llvm::Module& module, llvm::Function* llvm_func) {
+    if (auto source = aot_pinned_local_receiver_sources.find(value_id);
+            source != aot_pinned_local_receiver_sources.end()) {
+        value_id = source->second;
+    }
     std::vector<const LocalVar*> owners;
     if (!current_lowering_block_
             || (!current_lowering_block_->is_loop_header && !current_lowering_block_->enclosing_loop_exit)
@@ -7303,6 +7307,10 @@ llvm::Value* QoreIRToLLVM::emitPinnedExactClassGuard(uint32_t value_id, llvm::Va
 
 llvm::Value* QoreIRToLLVM::emitPinnedOverrideReceiverClass(uint32_t value_id, llvm::Value* value,
         llvm::Module& module, llvm::Function* llvm_func) {
+    if (auto source = aot_pinned_local_receiver_sources.find(value_id);
+            source != aot_pinned_local_receiver_sources.end()) {
+        value_id = source->second;
+    }
     std::vector<const LocalVar*> owners;
     if (q_env_is_set("QORE_DISABLE_AOT_PINNED_OVERRIDE_RECEIVER")
             || q_env_is_set("QORE_DISABLE_AOT_INLINE_RECEIVER_VALIDITY")
@@ -14390,6 +14398,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     loop_program_interrupts = nullptr;
     aot_exact_class_guards.clear();
     stable_exact_receiver_loads.clear();
+    aot_pinned_local_receiver_sources.clear();
     aot_pinned_entry_values.clear();
     aot_pinned_receivers.clear();
     aot_pinned_base_class_guards.clear();
@@ -15974,6 +15983,62 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             }
             if (cache_untyped_param && !q_env_is_set("QORE_DISABLE_AOT_STABLE_UNTYPED_LOAD")) {
                 aot_stable_untyped_params.insert(key);
+            }
+        }
+    }
+    if (aot_mode && !q_env_is_set("QORE_DISABLE_AOT_PINNED_LOCAL_RECEIVER")) {
+        // A store and later load in the same IR block have a dominating source
+        // SSA value. This only identifies a candidate retained snapshot: calls,
+        // reflection or assignment conversion can still change the runtime local.
+        // Exact/override receiver guards compare its actual value and read live
+        // deletion status, preserving ordinary helper fallback on any mismatch.
+        // Do not extend assignment borrowing or add owners for this analysis.
+        size_t local_source_count = 0;
+        for (const auto& block : func.blocks) {
+            if (!(local_source_count++ % 100)
+                    && qore_check_cancel(nullptr, "LLVM local receiver source analysis")) {
+                error = "cancelled during LLVM local receiver source analysis";
+                return false;
+            }
+            if (!block->is_loop_header && !block->enclosing_loop_exit) {
+                continue;
+            }
+            std::unordered_map<const LocalVar*, uint32_t> latest_store;
+            for (const auto& instruction : block->instructions) {
+                if (!(local_source_count++ % 100)
+                        && qore_check_cancel(nullptr, "LLVM local receiver source analysis")) {
+                    error = "cancelled during LLVM local receiver source analysis";
+                    return false;
+                }
+                if (instruction->opcode != QoreIROpcode::StoreLocal
+                        && instruction->opcode != QoreIROpcode::LoadLocal) {
+                    continue;
+                }
+                const auto* local_inst = static_cast<const QoreIRLocalInstruction*>(instruction.get());
+                const LocalVar* local = local_inst->local;
+                if (instruction->opcode == QoreIROpcode::StoreLocal) {
+                    latest_store.erase(local);
+                }
+                if (!local || !aot_body_locals.count(local) || local->closureUse()
+                        || local->isSelf() || local->isTopLevel() || local_inst->is_closure
+                        || local_inst->is_ref || QoreTypeInfo::isComplex(local->getTypeInfo())
+                        || QoreTypeInfo::isReference(local->getTypeInfo())
+                        || !QoreTypeInfo::getUniqueReturnClass(local->getTypeInfo())) {
+                    continue;
+                }
+                if (instruction->opcode == QoreIROpcode::StoreLocal) {
+                    if (local_inst->mode == AssignmentMode::Normal && instruction->operands.size() == 1
+                            && instruction->operands[0].isValid()) {
+                        latest_store.emplace(local, instruction->operands[0].id);
+                    }
+                } else if (local_inst->result.isValid()) {
+                    auto store = latest_store.find(local);
+                    if (store != latest_store.end()) {
+                        // Only a root hint is followed. Nested source graphs must
+                        // still satisfy the existing 16-node/four-owner proof.
+                        aot_pinned_local_receiver_sources.emplace(local_inst->result.id, store->second);
+                    }
+                }
             }
         }
     }

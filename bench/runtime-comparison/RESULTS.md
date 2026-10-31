@@ -31205,3 +31205,128 @@ Native text size in the default link layout:
 Four Release fixtures passed 2662 assertions. All 36 artifacts passed 9396 reference outputs. Unset and explicit-zero controls produce identical binaries, and four invalid settings are rejected. The independent checks verify all 144 preparation processes, alignment-only LLVM changes and native entry addresses. Standalone LLVM reconstruction attempts did not reproduce all sections and were excluded from timing; their setup results are preserved. No compile-throughput, Debug or sanitizer result is claimed.
 
 All 726 processes/2178 timing windows are included in the [evidence](results-aot-function-alignment-macos-arm64.json), together with the [62-item audit](audit-aot-function-alignment.md). Before commit, the optimized core must match the installed 337ad71fef baseline byte for byte and all 391 qmods must rebuild. This is an incremental optimized comparison, not a fresh Java/develop checkpoint. Repeated class-assignment type admission and ownership remain investigation candidates; performance is not yet maximized.
+
+
+## Receiver-local provenance (2026-10-31)
+
+AOT calls through ordinary class locals can now reuse the retained metadata of a preceding assignment source in the same loop block. The source is a hint: the actual loaded receiver must still match the selected retained snapshot, and deletion status is read live. Reflection, unsupported sources and admission misses preserve ordinary dispatch. Assignment ownership and its runtime helper are unchanged. QORE_DISABLE_AOT_PINNED_LOCAL_RECEIVER independently restores the preceding lowering.
+
+Both baseline 5aea0fc918 and the recorded working-tree candidate use Release -O3 -DNDEBUG with allocation tracking disabled. Every artifact is freshly AOT-compiled with -O3 --strip-source. The pilot and longer confirmation use three code layouts and randomized before/after ordering; the broader campaign covers 43 workloads. Negative changes below mean lower whole-kernel time, not isolated call latency.
+
+Pilot (198 processes / 594 measured windows).
+
+|!Workload|!Before ns/item|!After ns/item|!Change
+|local:polymorphic_call|17.8695|14.8540|-16.87%
+|local:polymorphic_float_call|17.7317|14.9021|-15.96%
+|local:direct_call|1.4793|1.4896|+0.70%
+|micro:polymorphic_call|17.6442|15.3512|-13.00%
+|micro:polymorphic_float_call|17.6391|14.8165|-16.00%
+|micro:indirect_call|8.6076|7.8263|-9.08%
+|micro:closure_call|18.0197|18.1070|+0.48%
+|micro:polymorphic_expression_call|4.7756|4.6889|-1.81%
+|micro:polymorphic_float_expression_call|4.5154|4.5441|+0.63%
+|float:callback_loop_float_return|4.8438|4.8447|+0.02%
+|mixed:object_orders|3038.4386|2967.8277|-2.32%
+
+Five-fork confirmation (330 processes / 990 measured windows).
+
+|!Workload|!Before ns/item|!After ns/item|!Change
+|local:polymorphic_call|17.5815|14.8611|-15.47%
+|local:polymorphic_float_call|17.7019|14.8927|-15.87%
+|local:direct_call|1.4743|1.4882|+0.94%
+|micro:polymorphic_call|17.6979|14.8456|-16.12%
+|micro:polymorphic_float_call|17.4551|14.7422|-15.54%
+|micro:indirect_call|8.6077|7.8198|-9.15%
+|micro:closure_call|17.7813|18.0362|+1.43%
+|micro:polymorphic_expression_call|4.6421|4.6167|-0.55%
+|micro:polymorphic_float_expression_call|4.5825|4.5958|+0.29%
+|float:callback_loop_float_return|4.7996|4.8363|+0.76%
+|mixed:object_orders|2973.9583|2966.5715|-0.25%
+
+Broader workload tradeoff (774 processes / 2322 measured windows).
+
+|!Workload|!Before ns/item|!After ns/item|!Change
+|matched:forward_float|32.4082|32.3242|-0.26%
+|matched:forward_int|27.7354|27.8338|+0.35%
+|matched:context_int|165.2517|167.4570|+1.33%
+|matched:context_float|171.2935|173.1611|+1.09%
+|local:direct_call|1.4842|1.4938|+0.65%
+|local:method_call|1.5474|1.5666|+1.24%
+|local:polymorphic_call|17.8033|14.8330|-16.68%
+|local:polymorphic_float_call|17.6366|14.9180|-15.41%
+|local:boxed_int_method_fallback|30.8793|31.5228|+2.08%
+|local:boxed_float_method_fallback|33.5314|34.3473|+2.43%
+|local:boxed_int_method_effect|87.1620|86.9729|-0.22%
+|local:list_mutate|116.2654|117.8548|+1.37%
+|local:temporary_list|1.5858|1.6004|+0.92%
+|local:polymorphic_expression_call|4.7549|4.7147|-0.85%
+|local:polymorphic_float_expression_call|4.5012|4.4832|-0.40%
+|local:monomorphic_call|3.6307|3.6659|+0.97%
+|local:monomorphic_float_call|3.6201|3.6547|+0.96%
+|micro:polymorphic_call|17.8835|15.0379|-15.91%
+|micro:polymorphic_float_call|17.5385|14.9573|-14.72%
+|micro:boxed_int_method_call|101.2832|101.0516|-0.23%
+|micro:boxed_float_method_call|106.4846|106.3001|-0.17%
+|micro:boxed_int_method_fallback|114.7377|114.9937|+0.22%
+|micro:boxed_float_method_fallback|120.0726|119.1678|-0.75%
+|micro:boxed_int_method_effect|169.7846|171.8571|+1.22%
+|micro:indirect_call|8.5716|7.9320|-7.46%
+|micro:closure_call|17.9047|18.0170|+0.63%
+|micro:closure_capture|23.4679|23.0745|-1.68%
+|micro:list_read|2.8015|2.8069|+0.20%
+|micro:list_build|22.0183|22.1323|+0.52%
+|micro:list_mutate|116.4170|118.6217|+1.89%
+|micro:temporary_hash|1.5840|1.5914|+0.47%
+|micro:polymorphic_expression_call|4.6793|4.7804|+2.16%
+|micro:polymorphic_float_expression_call|4.5566|4.4997|-1.25%
+|float:callback_local_float_return|0.8350|0.8309|-0.49%
+|float:typed_local_int_unary|1.1535|1.1581|+0.41%
+|float:callback_loop_float_return|4.8064|4.9755|+3.52%
+|mixed:csv_report|905.6962|915.2066|+1.05%
+|mixed:object_orders|3012.2201|2994.1594|-0.60%
+|mixed:callback_pipeline|92.0195|92.8606|+0.91%
+|mixed:text_index|1299.0720|1305.3132|+0.48%
+|probe:object_short|1599.3015|1569.5174|-1.86%
+|probe:effect_short|1637.1292|1666.3908|+1.79%
+|probe:string_result_loop|525.4586|527.0468|+0.30%
+
+Short loops: workload and iteration count (288 processes / 864 measured windows).
+
+|!Workload|!Before ns/item|!After ns/item|!Change
+|local:polymorphic_call:1|2572.4944|2649.8247|+3.01%
+|local:polymorphic_call:4|656.4689|676.7092|+3.08%
+|local:polymorphic_call:16|178.9320|182.3197|+1.89%
+|local:polymorphic_call:64|57.8923|56.2549|-2.83%
+|local:polymorphic_float_call:1|2656.8970|2666.6528|+0.37%
+|local:polymorphic_float_call:4|686.3907|698.9821|+1.83%
+|local:polymorphic_float_call:16|184.0804|184.6895|+0.33%
+|local:polymorphic_float_call:64|58.7717|57.0806|-2.88%
+|micro:polymorphic_call:1|2585.9190|2614.9074|+1.12%
+|micro:polymorphic_call:4|667.0578|685.9356|+2.83%
+|micro:polymorphic_call:16|178.9337|181.9516|+1.69%
+|micro:polymorphic_call:64|58.0321|56.4440|-2.74%
+|micro:polymorphic_float_call:1|2685.1469|2732.0258|+1.75%
+|micro:polymorphic_float_call:4|675.9887|691.7351|+2.33%
+|micro:polymorphic_float_call:16|183.7527|182.7533|-0.54%
+|micro:polymorphic_float_call:64|58.4682|56.8357|-2.79%
+
+Fixed-artifact adverse-control follow-up (330 processes / 990 measured windows).
+
+|!Workload|!Before ns/item|!After ns/item|!Change
+|local:polymorphic_call|17.7993|14.7450|-17.16%
+|local:direct_call|1.4808|1.4893|+0.57%
+|local:boxed_int_method_fallback|31.2603|31.3028|+0.14%
+|local:list_mutate|115.5512|117.3361|+1.54%
+|micro:polymorphic_float_call|17.6447|14.7871|-16.20%
+|micro:polymorphic_expression_call|4.7192|4.6661|-1.12%
+|micro:closure_call|17.9273|17.8177|-0.61%
+|micro:list_mutate|116.2531|117.0718|+0.70%
+|float:callback_loop_float_return|4.8200|4.8519|+0.66%
+|mixed:csv_report|902.4807|913.7747|+1.25%
+|probe:effect_short|1662.7283|1649.7846|-0.78%
+
+Retain under the authorized broader workload tradeoff. The four receiver-local targets improve by 15.47–16.12% in five-fork confirmation and 14.72–16.68% in the 43-workload campaign; every target/layout improves. Two follow-up anchors improve by 17.16% and 16.20%, again in every layout. Code inspection establishes entry classification with actual receiver identity, live deletion checks and unchanged assignment ownership. This does not establish the cause of gains in unchanged controls. Costs remain: CSV is 1.05% slower in the broad campaign and 1.25% slower in follow-up, across all layouts; local list mutation is 1.37% then 1.54% slower, also across all layouts. Micro list mutation is 1.89% then 0.70% slower. Direct calls are roughly 0.6–0.9% slower (about 0.01 ns/item). The broad local boxed integer fallback slowdown of 2.08% reduces to 0.14% in follow-up; floating callbacks reduce from 3.52% to 0.66% in aggregate, but the default-layout callback cost remains 3.21%. The reverse-layout integer expression-call cost also repeats at 4.71%, despite a faster aggregate in follow-up. Short 1/4/16-iteration cases range from 0.54% faster to 3.08% slower; all four 64-iteration cases improve by 2.74–2.88%, in every layout. These setup and workload costs are accepted explicitly for the larger reproducible hot-loop gain, not dismissed as noise. There is no weighted application-wide speedup or fresh Java parity claim.
+
+Release: six focused fixtures/4204 assertions and 15 extended fixtures/6718. Debug: 11 fixtures/5815 assertions plus 4003/5668 native checks. New codegen checks prove actual receiver identity, metadata PHIs, seq_cst deletion loads and both cold helper fallbacks for replacement, source changes and deletion. Semantics pass AST reference and O0/O3/EH/split and disable controls. Existing tests cover lifetime, recursion, overflow/float edge cases, cross-Program calls and debugger behavior. All 36 fresh artifacts/144 preparation processes/4698 reference outputs per variant pass; all 391 qmods build with the measured core unchanged. No sanitizer/other-platform claim.
+
+The short cases include fixed harness costs. Results for unchanged controls can reflect code placement and host variation; they are retained without attributing them to receiver lookup. See the [complete evidence](results-pinned-local-receiver-macos-arm64.json) and [62-item audit](audit-pinned-local-receiver.md). This is a paired Qore optimization experiment, not a fresh Java/develop checkpoint. System installation during measurement remained 337ad71fef; external modules were untouched. Assignment ownership/type admission and indirect-call wrapper work remain investigation candidates. No global performance ceiling is established.
