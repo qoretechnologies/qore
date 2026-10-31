@@ -89,6 +89,13 @@ hash<HttpHandlerResponseInfo> getEvents(hash<auto> cx, *hash<auto> ah) {
     @section serversenteventhandler_relnotes ServerSentEventHandler Release History
 
     @subsection serversenteventhandler_v1_2_0 Version 1.2.0
+    - fixed sending events validated against an AsyncAPI schema: an event with none of the \c event, \c id,
+      \c retry and \c comment fields raised \c RUNTIME-TYPE-ERROR in
+      @ref ServerSentEventHandler::ServerSentEventConnection "ServerSentEventConnection" and
+      @ref ServerSentEventHandler::SseObservableBridge "SseObservableBridge", and
+      @ref ServerSentEventHandler::ServerSentEventConnection::validateOutgoingEvent() "validateOutgoingEvent()"
+      raised it for event data whose values all have the same type, such as a literal
+      <tt>{"data": {"when": now()}}</tt>, when the date was serialized
     - an event type or ID with a line break or a NUL character is refused with \c SSE-EVENT-ERROR before anything is
       sent, and so is a negative retry value; before, a line break in an event type or ID started a field or an
       event of its own, and a client ignored an ID with a NUL character.  A line break (CRLF, CR or LF) in a comment

@@ -895,6 +895,17 @@ protected:
     */
     DLLLOCAL int setIso8601(const char* str, ExceptionSink* xsink);
 
+    //! Sets the duration from the alternative format of ISO 8601: \c "PYYYY-MM-DDThh:mm:ss" or
+    //! \c "PYYYYMMDDThhmmss"
+    /** @param str the whole string, for error messages
+        @param p the position after the \c "P"
+        @param xsink for an \c INVALID-DATE exception if the string cannot be read; can be nullptr, in which case the
+        duration stays zero
+
+        @return 0 if the string was read, -1 if not
+    */
+    DLLLOCAL int setIso8601Alternative(const char* str, const char* p, ExceptionSink* xsink);
+
 public:
     DLLLOCAL void set(int n_year, int n_month, int n_day, int n_hour, int n_minute, int n_second, int n_us) {
         qore_simple_tm::set(n_year, n_month, n_day, n_hour, n_minute, n_second, n_us);

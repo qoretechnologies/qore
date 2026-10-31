@@ -78,6 +78,10 @@
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/FileStreamIo.h"
 
+#include <llvm/MC/TargetRegistry.h>
+#include <llvm/TargetParser/Host.h>
+#include <llvm/TargetParser/Triple.h>
+
 #include <openssl/evp.h>
 #include <openssl/x509.h>
 #if OPENSSL_VERSION_NUMBER < 0x30000000L
@@ -993,7 +997,7 @@ static void ut_fork_waits_for_lock_holders(UnitTestCounters& c) {
         "encodings", "utc_offset_zones", "module_options", "app_registry", "complex_types", "external_types",
         "aot_deferred_types", "builtin_locations", "class_ids", "scan_waits", "node_watches", "async_io_logger",
         "cipher_cache", "digest_cache", "jit_cache", "jit_bg_queue", "aot_pending_constants",
-        "aot_regex_cache", "environment",
+        "aot_regex_cache", "llvm_target_init", "environment",
         nullptr,
     };
     for (const char** name = names; *name; ++name) {
@@ -1230,6 +1234,164 @@ static void ut_fork_lazy_value_in_first_use(UnitTestCounters& c) {
         UT_ASSERT_EQ(c, 0, ut_wait_child(pid), "the child computes the value itself");
     }
     UT_ASSERT_EQ(c, 1, value.get(), "the parent keeps the value of the first computation");
+}
+
+namespace {
+//! state shared by the initialization, the contended hook and the threads of ut_once_init_concurrent()
+struct OnceInitTest {
+    std::mutex m;
+    std::condition_variable cv;
+    //! true once the initialization has started
+    bool started = false;
+    //! true once a second caller has found the initialization running
+    bool contended = false;
+    //! true to make the initialization throw
+    bool fail = false;
+    //! the number of times the initialization was entered
+    unsigned entered = 0;
+};
+
+OnceInitTest* once_init_test = nullptr;
+
+//! the initialization: waits until another caller has found it running, then completes (or throws)
+void once_init_test_init() {
+    OnceInitTest& t = *once_init_test;
+    std::unique_lock<std::mutex> ul(t.m);
+    ++t.entered;
+    if (t.fail) {
+        t.fail = false;
+        throw std::runtime_error("initialization failure");
+    }
+    t.started = true;
+    t.cv.notify_all();
+    t.cv.wait(ul, [&t] { return t.contended; });
+}
+
+//! called by a caller that found the initialization running, before it waits for it
+void once_init_test_contended(QoreOnceInit&) {
+    OnceInitTest& t = *once_init_test;
+    std::lock_guard<std::mutex> lg(t.m);
+    t.contended = true;
+    t.cv.notify_all();
+}
+
+//! returns true if the LLVM target registry's list ends (Floyd's cycle detection over Target::getNext())
+bool ut_llvm_target_list_ends(unsigned& count) {
+    count = 0;
+    auto r = llvm::TargetRegistry::targets();
+    const llvm::Target* slow = r.begin() == r.end() ? nullptr : &*r.begin();
+    const llvm::Target* fast = slow;
+    while (fast) {
+        ++count;
+        fast = fast->getNext();
+        if (!fast) {
+            break;
+        }
+        ++count;
+        fast = fast->getNext();
+        slow = slow->getNext();
+        if (fast && fast == slow) {
+            return false;
+        }
+    }
+    return true;
+}
+}
+
+//! Callers that arrive while another caller runs a QoreOnceInit wait for it, and it runs exactly once
+/** The initialization does not complete until a second caller has found it running (the contended hook is called
+    after that caller's try_lock() failed and before it waits), so the two calls overlap deterministically.  Before
+    the fix, the library had no shared once-only LLVM target registration: the JIT and each AOT path registered the
+    targets themselves, and two threads registering at once could corrupt LLVM's target registry.
+*/
+static void ut_once_init_concurrent(UnitTestCounters& c) {
+    OnceInitTest t;
+    once_init_test = &t;
+    QoreOnceInit init(once_init_test_init);
+    init.contended_hook = once_init_test_contended;
+
+    // a failed initialization records nothing and lets the next caller run it
+    bool threw = false;
+    t.fail = true;
+    try {
+        init.ensure();
+    } catch (const std::runtime_error&) {
+        threw = true;
+    }
+    UT_ASSERT(c, threw, "an exception thrown by the initialization propagates");
+    UT_ASSERT(c, !init.isDone(), "a failed initialization is not done");
+    UT_ASSERT_EQ(c, 0u, init.getRunCount(), "a failed initialization is not counted");
+
+    std::atomic<bool> first_done_on_return{false};
+    std::atomic<bool> second_done_on_return{false};
+    std::thread first([&]() {
+        init.ensure();
+        first_done_on_return = init.isDone();
+    });
+    {
+        // the second caller starts only once the first one runs the initialization
+        std::unique_lock<std::mutex> ul(t.m);
+        t.cv.wait(ul, [&t] { return t.started; });
+    }
+    std::thread second([&]() {
+        init.ensure();
+        second_done_on_return = init.isDone();
+    });
+    first.join();
+    second.join();
+    init.contended_hook = nullptr;
+    once_init_test = nullptr;
+
+    UT_ASSERT(c, t.contended, "the second caller found the initialization running");
+    UT_ASSERT_EQ(c, 2u, t.entered, "the initialization ran once after the failure, not again for the second caller");
+    UT_ASSERT_EQ(c, 1u, init.getRunCount(), "the initialization completed exactly once");
+    UT_ASSERT(c, first_done_on_return.load(), "the caller running the initialization returns after it completed");
+    UT_ASSERT(c, second_done_on_return.load(), "a waiting caller returns only after the initialization completed");
+    // a later call does not run it again (once_init_test is reset: running it would crash)
+    init.ensure();
+    UT_ASSERT_EQ(c, 2u, t.entered, "a later call does not run the initialization");
+}
+
+//! The library's LLVM targets are registered once for the process, by every thread that needs them at once
+/** The JIT's background compile thread and an AOT compilation call qore_llvm_initialize_targets() before they use
+    LLVM; here several threads call it at once, as both do, and the targets must be registered exactly once, in a
+    registry list that ends (two concurrent registrations of a target linked it to itself, and
+    TargetRegistry::lookupTarget() looped forever).
+*/
+static void ut_llvm_target_init_once(UnitTestCounters& c) {
+    std::vector<std::thread> threads;
+    std::atomic<unsigned> not_done{0};
+    for (unsigned i = 0; i < 8; ++i) {
+        threads.emplace_back([&not_done]() {
+            qore_llvm_initialize_targets();
+            if (!qore_llvm_target_init().isDone()) {
+                ++not_done;
+            }
+        });
+    }
+    for (std::thread& th : threads) {
+        th.join();
+    }
+    UT_ASSERT_EQ(c, 0u, not_done.load(), "every caller returns with the targets registered");
+    UT_ASSERT_EQ(c, 1u, qore_llvm_target_init().getRunCount(), "the LLVM targets were registered exactly once");
+
+    unsigned count = 0;
+    UT_ASSERT(c, ut_llvm_target_list_ends(count), "the LLVM target registry is a list that ends");
+    UT_ASSERT(c, count > 0, "the LLVM target registry has targets");
+
+    std::string triple_str = llvm::sys::getDefaultTargetTriple();
+    std::string error;
+#if LLVM_VERSION_MAJOR >= 21
+    const llvm::Target* native = llvm::TargetRegistry::lookupTarget(llvm::Triple(triple_str), error);
+#else
+    const llvm::Target* native = llvm::TargetRegistry::lookupTarget(triple_str, error);
+#endif
+    UT_ASSERT(c, native != nullptr, "the native target is registered");
+    if (native) {
+        UT_ASSERT(c, native->hasTargetMachine(), "the native target has a target machine");
+        UT_ASSERT(c, native->hasMCAsmBackend(), "the native target has its MC layer");
+        UT_ASSERT(c, native->hasMCAsmParser(), "the native target has an asm parser");
+    }
 }
 #endif
 
@@ -12873,6 +13035,17 @@ static QoreHashNode* make_unit_test_result(UnitTestCounters& c, ExceptionSink* x
     return result;
 }
 
+#ifdef DEBUG
+//! Debug-only: runs the unit tests of the once-only LLVM target initialization
+static QoreValue f_dbg_run_llvm_target_init_tests(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    UnitTestCounters c;
+    ut_once_init_concurrent(c);
+    ut_llvm_target_init_once(c);
+    return make_unit_test_result(c, xsink);
+}
+#endif
+
 static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     UnitTestCounters c;
     ut_qorevalue_operator_bool_null(c);
@@ -12952,6 +13125,8 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_fork_aot_module_state(c);
     ut_fork_aot_lazy_constant_lock(c);
     ut_fork_lazy_value_in_first_use(c);
+    ut_once_init_concurrent(c);
+    ut_llvm_target_init_once(c);
     Http3ClientResponseRegistrationTest::run(c);
     ut_fast_real_deref_releases_last(c);
     ut_superseded_snapshot_lock_free_release(c);
@@ -14957,6 +15132,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("run_debug_unit_tests", f_run_debug_unit_tests, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("run_unit_tests", f_run_unit_tests, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
 #ifdef DEBUG
+    qns.addBuiltinVariant("dbg_run_llvm_target_init_tests", f_dbg_run_llvm_target_init_tests, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_force_fd_swap_next_wait", f_dbg_force_fd_swap_next_wait,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");

@@ -1,0 +1,33 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires QdrantDataProvider
+
+%exec-class QdrantRestConnectionNarrowedCallerHashTest
+
+#! Connection options whose headers all have the same type
+/** A hash literal whose values all have the same type has a narrowed type, such as \c hash<string, int> for
+    <tt>{"X-Count": 1}</tt>; adding the \c api-key header for the \c api_key option to such a \c headers option raised
+    RUNTIME-TYPE-ERROR
+*/
+class QdrantRestConnectionNarrowedCallerHashTest inherits QUnit::Test {
+    constructor() : Test("QdrantRestConnectionNarrowedCallerHashTest", "1.0", \ARGV) {
+        addTestCase("getConnectionOptions() with narrowed headers", \narrowedHeaders());
+        set_return_value(main());
+    }
+
+    narrowedHeaders() {
+        hash<auto> opts = {"api_key": "key", "headers": {"X-Count": 1}};
+        assertEq("hash<string, int>", opts.headers.fullType());
+        QdrantRestConnection conn("test", "test", "http://localhost:6333", {}, opts);
+        hash<auto> copts = conn.getConnectionOptions();
+        assertEq({"X-Count": 1, "api-key": "key"}, copts.headers);
+        assertFalse(copts.hasKey("api_key"));
+    }
+}

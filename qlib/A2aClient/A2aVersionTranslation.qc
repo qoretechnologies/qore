@@ -389,7 +389,8 @@ public hash<auto> sub a2aTranslateArtifactToV03(hash<auto> artifact) {
 /** Converts top-level \c url to \c supportedInterfaces array
 */
 public hash<auto> sub a2aTranslateAgentCardToV10(hash<auto> card) {
-    hash<auto> result = card;
+    # a caller's card whose values share a type (e.g. hash<string, string>) would reject the values added below
+    hash<auto!> result = card;
     # Move url into supportedInterfaces
     if (card.url && !card.supportedInterfaces) {
         result.supportedInterfaces = ({
@@ -416,7 +417,8 @@ public hash<auto> sub a2aTranslateAgentCardToV10(hash<auto> card) {
 /** Extracts \c url from \c supportedInterfaces array
 */
 public hash<auto> sub a2aTranslateAgentCardToV03(hash<auto> card) {
-    hash<auto> result = card;
+    # a caller's card whose values share a type (e.g. hash<string, string>) would reject the values added below
+    hash<auto!> result = card;
     # Extract url from supportedInterfaces
     if (card.supportedInterfaces && !card.url) {
         # Use the first JSON-RPC interface, or the first interface if none match

@@ -954,7 +954,9 @@ class HttpIoSupport {
 
     #! Merges headers case-insensitively; headers in \a hdr replace headers with the same name in \a base
     static hash<auto> mergeHeaders(*hash<auto> base, *hash<auto> hdr) {
-        hash<auto> rv = base ?? {};
+        # the headers are merged in an "auto!" local: either hash may be narrowed (e.g. hash<string, string> for the
+        # default headers and hash<string, int> for {"X-Count": 1}), and adding a header of another type would throw
+        hash<auto!> rv = base ?? {};
         foreach hash<auto> i in (hdr.pairIterator()) {
             rv -= (map $1, keys rv, $1.lwr() == i.key.lwr());
             rv{i.key} = i.value;

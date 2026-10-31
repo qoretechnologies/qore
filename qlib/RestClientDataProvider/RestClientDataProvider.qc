@@ -482,7 +482,14 @@ public class RestClientDataProvider inherits RestClientDataProviderBase {
     }
 
     #! Processes common REST options
-    static hash<auto> processRestOptions(hash<auto> options) {
+    /** @param options0 the REST options to process
+
+        @return the processed options
+    */
+    static hash<auto> processRestOptions(hash<auto> options0) {
+        # a caller's literal may be narrowed (e.g. hash<string, string>), and binary certificate or key data may be
+        # added below
+        hash<auto!> options = options0;
         if (*string loc = remove options.ssl_cert_location) {
             if (loc =~ /^[a-z]+:\/\//) {
                 options.ssl_cert_data = options.ssl_cert_der

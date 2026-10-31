@@ -1,0 +1,64 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ConnectionProvider
+%requires RestClient
+%requires GitLabRestClient
+
+%exec-class GitLabRestClientNarrowedCallerHashTest
+
+#! Returns its argument with its runtime type, so a literal reaches the call as a caller's literal does
+hash<auto> sub mk(hash<auto> h) {
+    return h;
+}
+
+#! GitLabRestConnection derives the hostname option from the URL into the caller's option hash
+/** A caller's option literal whose values all have the same type, such as \c {"connect_timeout": 10}, is narrowed
+    to that type, so adding the string \c hostname option raised RUNTIME-TYPE-ERROR instead of the real
+    configuration error (no token or OAuth2 client).  The connections are created without connecting.
+*/
+class GitLabRestClientNarrowedCallerHashTest inherits QUnit::Test {
+    constructor() : Test("GitLabRestClientNarrowedCallerHashTest", "1.0", \ARGV) {
+        addTestCase("config constructor reports the missing credentials for int options", \configTest());
+        addTestCase("deprecated constructor reports the missing credentials for bool options", \argsTest());
+        addTestCase("hostname is derived for options with a token", \tokenTest());
+        set_return_value(main());
+    }
+
+    configTest() {
+        assertEq("hash<string, int>", mk({"connect_timeout": 10}).fullType());
+        assertThrows("CONNECTION-OPTION-ERROR", "missing required options", sub () {
+            new GitLabRestConnection({
+                "name": "gl",
+                "url": "gitlab://gitlab.example.com",
+                "opts": {"connect_timeout": 10},
+            });
+        });
+    }
+
+    argsTest() {
+        assertEq("hash<string, bool>", mk({"oauth2_auto_refresh": False}).fullType());
+        assertThrows("CONNECTION-OPTION-ERROR", "missing required options", sub () {
+            new GitLabRestConnection("gl", "GitLab", "gitlab://gitlab.example.org", {},
+                {"oauth2_auto_refresh": False});
+        });
+    }
+
+    tokenTest() {
+        GitLabRestConnection conn({
+            "name": "gl",
+            "url": "gitlab://gitlab.example.com",
+            "opts": {"token": "test-token", "connect_timeout": 10},
+        });
+        hash<auto> opts = conn.getRealOptions();
+        assertEq("https://gitlab.example.com", opts.hostname);
+        assertEq(10, opts.connect_timeout);
+        assertEq("https://gitlab.example.com/oauth/token", opts.oauth2_token_url);
+    }
+}

@@ -116,7 +116,8 @@ public class SquareCreatePaidOrderDataProvider inherits SquareDataProviderBase {
         string order_id = result.order.id;
 
         # Step 2: Pay the order
-        hash<auto> pay_body = {
+        # hash<auto!>: the literal is narrowed to its value type; adding the payment IDs would throw
+        hash<auto!> pay_body = {
             "idempotency_key": generateIdempotencyKey(),
         };
         if (payment_ids) {

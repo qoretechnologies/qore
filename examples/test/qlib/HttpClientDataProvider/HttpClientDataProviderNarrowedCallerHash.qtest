@@ -1,0 +1,87 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires DataProvider
+%requires HttpClientDataProvider
+%requires HttpServerUtil
+%requires HttpServer
+
+%exec-class HttpClientDataProviderNarrowedCallerHashTest
+
+#! Answers with the request headers that the tests check
+class HeaderEchoHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse({"Content-Type": "text/plain;charset=utf-8"}, 200,
+            sprintf("%s|%s|%s|%s", hdr."x-count" ?? "", hdr."x-debug" ?? "", hdr.authorization ?? "",
+                hdr."content-type" ?? ""));
+    }
+}
+
+#! Default and request header hashes whose values all have the same type
+/** A hash literal whose values all have the same type has a narrowed type, such as \c hash<string, int> for
+    <tt>{"X-Count": 1}</tt>; adding the basic authentication header, a \c Content-Type header or request headers of
+    another type to such a hash raised RUNTIME-TYPE-ERROR
+*/
+class HttpClientDataProviderNarrowedCallerHashTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        string url;
+    }
+
+    constructor() : Test("HttpClientDataProviderNarrowedCallerHashTest", "1.0", \ARGV) {
+        addTestCase("narrowed default headers with basic authentication", \defaultHeadersAuth());
+        addTestCase("narrowed default headers with a request body", \defaultHeadersBody());
+        addTestCase("narrowed default and request headers of different types", \defaultAndRequestHeaders());
+
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": new Logger("test", LoggerLevel::getLevelInfo()),
+            "debug": True,
+        });
+        server.setHandler("echo", "", NOTHING, new HeaderEchoHandler());
+        server.setDefaultHandler("echo", new HeaderEchoHandler());
+        url = "http://127.0.0.1:" + server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1",
+            "service": 0}).port;
+
+        set_return_value(main());
+
+        server.stop();
+    }
+
+    #! Returns its argument with the type it was given
+    static auto mk(auto h) {
+        return h;
+    }
+
+    defaultHeadersAuth() {
+        assertEq("hash<string, int>", mk({"X-Count": 1}).fullType());
+        # user information in the URL is sent with basic authentication
+        HttpClientDataProvider prov({"url": regex_subst(url, "^http://", "http://user:pass@"),
+            "headers": {"X-Count": 1}});
+        hash<auto> resp = prov.getChildProviderEx("get").doRequest({"path": "/echo"});
+        assertEq("1||Basic " + make_base64_string("user:pass") + "|", resp."response-body");
+    }
+
+    defaultHeadersBody() {
+        HttpClientDataProvider prov({"url": url, "headers": {"X-Count": 1}});
+        hash<auto> resp = prov.getChildProviderEx("post").doRequest({"path": "/echo", "body": "x"});
+        assertRegex("^1\\|\\|\\|text/plain", resp."response-body");
+    }
+
+    defaultAndRequestHeaders() {
+        assertEq("hash<string, bool>", mk({"X-Debug": True}).fullType());
+        HttpClientDataProvider prov({"url": url, "headers": {"X-Count": 1}});
+        hash<auto> resp = prov.getChildProviderEx("get").doRequest({"path": "/echo", "hdr": {"X-Debug": True}});
+        assertEq("1|1||", resp."response-body");
+
+        # the request headers replace default headers in any case
+        resp = prov.getChildProviderEx("get").doRequest({"path": "/echo", "hdr": {"x-count": "2"}});
+        assertEq("2|||", resp."response-body");
+    }
+}

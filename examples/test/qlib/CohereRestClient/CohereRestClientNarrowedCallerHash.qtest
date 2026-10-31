@@ -1,0 +1,87 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires CohereRestClient
+%requires QoreLlmUtils
+
+#! Records the request options that complete() passes to chat(); no request is made
+class TestCohereLlmProvider inherits CohereLlmProvider {
+    public {
+        *hash<auto> body_options;
+    }
+
+    constructor(hash<LlmBackendConfig> config) : CohereLlmProvider(config) {
+    }
+
+    hash<ChatResponse> chat(list<hash<ChatMessage>> messages, *list<hash<ToolDefinition>> tools,
+            *hash<LlmRequestOptions> opts) {
+        body_options = opts.body_options;
+        return <ChatResponse>{"content": "{}", "usage": {}};
+    }
+}
+
+%exec-class CohereRestClientNarrowedCallerHashTest
+
+#! Option and configuration hashes whose values all have the same type
+/** A hash literal whose values all have the same type, such as \c {"apikey": "..."}, has a narrowed type (here
+    \c hash<string, string>); the library must still be able to add values of other types to its own copy and report
+    the real problem with the configuration.  No request is sent: connections and clients are only created
+*/
+class CohereRestClientNarrowedCallerHashTest inherits QUnit::Test {
+    constructor() : Test("CohereRestClientNarrowedCallerHashTest", "1.0", \ARGV) {
+        addTestCase("options without a connection name", \optionsWithoutName());
+        addTestCase("string-only connection configuration", \stringConfig());
+        addTestCase("option hash without string values", \nonStringOptions());
+        addTestCase("completion body options with only integer values", \completionBodyOptions());
+        set_return_value(main());
+    }
+
+    #! Returns the hash with its runtime type, as a caller's literal arrives in a library function
+    static hash<auto> mk(hash<auto> h) {
+        return h;
+    }
+
+    optionsWithoutName() {
+        # the configuration has only a hash value: hash<string, hash<string, string>>, which cannot take the URL
+        assertEq("hash<string, hash<string, string>>", mk({"opts": {"apikey": "test-key"}}).fullType());
+        # the missing name is reported, not a type error from setting the fixed URL
+        assertThrows("OPTION-ARG-ERROR", "\"name\"", sub () { CohereRestConnection c({"opts": {"apikey": "test-key"}}); });
+    }
+    stringConfig() {
+        # every value is a string, so the configuration is a hash<string, string>, which cannot take an options hash
+        assertEq("hash<string, string>", mk({"name": "test", "url": "https://example.invalid"}).fullType());
+        # the missing API key is reported, not a type error from adding the options
+        assertThrows("CONNECTION-OPTION-ERROR", "apikey", sub () {
+            CohereRestConnection c({"name": "test", "url": "https://example.invalid"});
+        });
+    }
+    nonStringOptions() {
+        # the options are a hash<string, int>, which cannot take the string values the connection adds
+        assertEq("hash<string, int>", mk({"timeout": 30}).fullType());
+        # the missing API key is reported, not a type error from adding the options
+        assertThrows("CONNECTION-OPTION-ERROR", "apikey", sub () {
+            CohereRestConnection c("test", "test connection", "https://example.invalid", {}, {"timeout": 30});
+        });
+        assertThrows("CONNECTION-OPTION-ERROR", "apikey", sub () {
+            CohereRestConnection c({"name": "test", "url": "https://example.invalid", "opts": {"timeout": 30}});
+        });
+    }
+    completionBodyOptions() {
+        # the body options are a hash<string, int>, which cannot take the response format hash
+        assertEq("hash<string, int>", mk({"seed": 7}).fullType());
+        TestCohereLlmProvider provider(<LlmBackendConfig>{"mode": "cohere", "api_key": "test-key"});
+        hash<LlmCompletionResult> result = provider.complete("system", "user", {"type": "object"},
+            <LlmRequestOptions>{"body_options": {"seed": 7}});
+        assertEq("{}", result.content);
+        assertEq({
+            "seed": 7,
+            "response_format": {"type": "json_object", "schema": {"type": "object"}},
+        }, provider.body_options);
+    }
+}

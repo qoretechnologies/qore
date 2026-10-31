@@ -82,6 +82,8 @@ printf("Projects: %y\n", result.body.projects);
     @section tableaurestclientrelnotes Release Notes
 
     @subsection tableaurestclientv1_0 TableauRestClient v1.0
+    - \c TableauRestClient::doRequest() accepts request headers whose values all have the same type, such as
+      \c {"X-Page": 1}, when adding the session header
     - initial release
 */
 
@@ -261,7 +263,10 @@ TableauRestClient tableau({
         - Handles 401 re-authentication retry
     */
     hash<auto> doRequest(string method, string path, auto body,
-            *reference<hash<auto>> info, softbool decode_errors = True, *hash<auto> hdr) {
+            *reference<hash<auto>> info, softbool decode_errors = True, *hash<auto> hdr0) {
+        # the caller's headers may be narrowed (ex: hash<string, int>), and adding the session header would throw, so
+        # they are kept in a hash<auto!> local
+        *hash<auto!> hdr = hdr0;
         # Paths that don't need auth or site prefix
         bool is_auth_path = (path =~ /^auth\// || path == "serverinfo");
 

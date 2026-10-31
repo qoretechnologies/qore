@@ -1,0 +1,255 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires AftershipRestClient
+%requires ApolloRestClient
+%requires BaseLinkerRestClient
+%requires BitlyRestClient
+%requires Cin7CoreRestClient
+%requires CircleRestClient
+%requires ClickFunnelsRestClient
+%requires CloseRestClient
+%requires ConstantContactRestClient
+%requires DeelRestClient
+%requires FreshBooksRestClient
+%requires FreshsalesRestClient
+%requires InstantlyRestClient
+%requires JotformRestClient
+%requires KeapRestClient
+%requires KitRestClient
+%requires LinearRestClient
+%requires PdfCoRestClient
+%requires SegmentRestClient
+%requires ShippoRestClient
+%requires SquarespaceRestClient
+%requires SquareRestClient
+%requires SystemeIoRestClient
+%requires TallyRestClient
+%requires UnbounceRestClient
+%requires WaveRestClient
+%requires GoHighLevelRestClient
+
+%exec-class SaasRestClientOptionsNarrowedCallerHashTest
+
+#! Client options whose nested hashes have values that all have the same type
+/** A hash literal whose values all have the same type has a narrowed type, such as \c hash<string, int> for
+    <tt>{"X-Count": 1}</tt>; the \c getOptions() methods of the clients raised RUNTIME-TYPE-ERROR when adding their
+    credential and other string headers to such a \c headers option, and GoHighLevel when adding the \c version_id
+    argument to such an \c oauth2_auth_args option
+*/
+class SaasRestClientOptionsNarrowedCallerHashTest inherits QUnit::Test {
+    constructor() : Test("SaasRestClientOptionsNarrowedCallerHashTest", "1.0", \ARGV) {
+        addTestCase("AftershipRestClientBase::getOptions() with narrowed headers", \aftership());
+        addTestCase("ApolloRestClientBase::getOptions() with narrowed headers", \apollo());
+        addTestCase("BaseLinkerRestClientBase::getOptions() with narrowed headers", \baseLinker());
+        addTestCase("BitlyRestClientBase::getOptions() with narrowed headers", \bitly());
+        addTestCase("Cin7CoreRestClientBase::getOptions() with narrowed headers", \cin7Core());
+        addTestCase("CircleRestClientBase::getOptions() with narrowed headers", \circle());
+        addTestCase("ClickFunnelsRestClientBase::getOptions() with narrowed headers", \clickFunnels());
+        addTestCase("CloseRestClientBase::getOptions() with narrowed headers", \close());
+        addTestCase("ConstantContactRestClientBase::getOptions() with narrowed headers", \constantContact());
+        addTestCase("DeelRestClientBase::getOptions() with narrowed headers", \deel());
+        addTestCase("FreshBooksRestClientBase::getOptions() with narrowed headers", \freshBooks());
+        addTestCase("FreshsalesRestClientBase::getOptions() with narrowed headers", \freshsales());
+        addTestCase("InstantlyRestClientBase::getOptions() with narrowed headers", \instantly());
+        addTestCase("JotformRestClientBase::getOptions() with narrowed headers", \jotform());
+        addTestCase("KeapRestClientBase::getOptions() with narrowed headers", \keap());
+        addTestCase("KitRestClientBase::getOptions() with narrowed headers", \kit());
+        addTestCase("LinearRestClientBase::getOptions() with narrowed headers", \linear());
+        addTestCase("PdfCoRestClientBase::getOptions() with narrowed headers", \pdfCo());
+        addTestCase("SegmentRestClientBase::getOptions() with narrowed headers", \segment());
+        addTestCase("ShippoRestClientBase::getOptions() with narrowed headers", \shippo());
+        addTestCase("SquarespaceRestClientBase::getOptions() with narrowed headers", \squarespace());
+        addTestCase("SquareRestClientBase::getOptions() with narrowed headers", \square());
+        addTestCase("SystemeIoRestClientBase::getOptions() with narrowed headers", \systemeIo());
+        addTestCase("TallyRestClientBase::getOptions() with narrowed headers", \tally());
+        addTestCase("UnbounceRestClientBase::getOptions() with narrowed headers", \unbounce());
+        addTestCase("WaveRestClientBase::getOptions() with narrowed headers", \wave());
+        addTestCase("GoHighLevel options with narrowed OAuth2 arguments", \goHighLevel());
+        set_return_value(main());
+    }
+
+    #! Returns client options with a headers option whose values are all ints
+    static hash<auto> getOpts(hash<auto> opts) {
+        return opts + {"headers": {"X-Count": 1}};
+    }
+
+    aftership() {
+        hash<auto> opts = getOpts({"apikey": "k"});
+        assertEq("hash<string, int>", opts.headers.fullType());
+        assertEq({"X-Count": 1, "Accept": "application/json", "as-api-key": "k"},
+            AftershipRestClientBase::getOptions(opts).headers);
+    }
+
+    apollo() {
+        hash<auto> opts = getOpts({"token": "t"});
+        assertEq("hash<string, int>", opts.headers.fullType());
+        assertEq({"X-Count": 1, "Authorization": "Bearer t"}, ApolloRestClientBase::getOptions(opts).headers);
+    }
+
+    baseLinker() {
+        hash<auto> opts = getOpts({"apikey": "k"});
+        assertEq("hash<string, int>", opts.headers.fullType());
+        assertEq({"X-Count": 1, "X-BLToken": "k"}, BaseLinkerRestClientBase::getOptions(opts).headers);
+    }
+
+    bitly() {
+        hash<auto> opts = getOpts({"apikey": "k"});
+        assertEq("hash<string, int>", opts.headers.fullType());
+        assertEq({"X-Count": 1, "Authorization": "Bearer k"}, BitlyRestClientBase::getOptions(opts).headers);
+    }
+
+    cin7Core() {
+        hash<auto> opts = getOpts({"apikey": "k", "account_id": "a"});
+        assertEq("hash<string, int>", opts.headers.fullType());
+        assertEq({"X-Count": 1, "api-auth-accountid": "a", "api-auth-applicationkey": "k"},
+            Cin7CoreRestClientBase::getOptions(opts).headers);
+    }
+
+    circle() {
+        hash<auto> opts = getOpts({"apikey": "k"});
+        assertEq("hash<string, int>", opts.headers.fullType());
+        assertEq({"X-Count": 1, "Authorization": "Bearer k"}, CircleRestClientBase::getOptions(opts).headers);
+    }
+
+    clickFunnels() {
+        hash<auto> opts = getOpts({"apikey": "k"});
+        assertEq("hash<string, int>", opts.headers.fullType());
+        assertEq({"X-Count": 1, "Authorization": "Bearer k"}, ClickFunnelsRestClientBase::getOptions(opts).headers);
+    }
+
+    close() {
+        hash<auto> opts = getOpts({"token": "t"});
+        assertEq("hash<string, int>", opts.headers.fullType());
+        assertEq({"X-Count": 1, "Authorization": "Bearer t"}, CloseRestClientBase::getOptions(opts).headers);
+    }
+
+    constantContact() {
+        hash<auto> opts = getOpts({"apikey": "k"});
+        assertEq("hash<string, int>", opts.headers.fullType());
+        assertEq({"X-Count": 1, "Authorization": "Bearer k"}, ConstantContactRestClientBase::getOptions(opts).headers);
+    }
+
+    deel() {
+        hash<auto> opts = getOpts({"apikey": "k"});
+        assertEq("hash<string, int>", opts.headers.fullType());
+        assertEq({"X-Count": 1, "Authorization": "Bearer k"}, DeelRestClientBase::getOptions(opts).headers);
+    }
+
+    freshBooks() {
+        hash<auto> opts = getOpts({"token": "t"});
+        assertEq("hash<string, int>", opts.headers.fullType());
+        assertEq({"X-Count": 1, "Authorization": "Bearer t"}, FreshBooksRestClientBase::getOptions(opts).headers);
+    }
+
+    freshsales() {
+        hash<auto> opts = getOpts({"apikey": "k"});
+        assertEq("hash<string, int>", opts.headers.fullType());
+        assertEq({"X-Count": 1, "Authorization": "Token token=k"}, FreshsalesRestClientBase::getOptions(opts).headers);
+    }
+
+    instantly() {
+        hash<auto> opts = getOpts({"apikey": "k"});
+        assertEq("hash<string, int>", opts.headers.fullType());
+        assertEq({"X-Count": 1, "Authorization": "Bearer k"}, InstantlyRestClientBase::getOptions(opts).headers);
+    }
+
+    jotform() {
+        hash<auto> opts = getOpts({"apikey": "k"});
+        assertEq("hash<string, int>", opts.headers.fullType());
+        assertEq({"X-Count": 1, "APIKEY": "k"}, JotformRestClientBase::getOptions(opts).headers);
+    }
+
+    keap() {
+        hash<auto> opts = getOpts({"token": "t"});
+        assertEq("hash<string, int>", opts.headers.fullType());
+        assertEq({"X-Count": 1, "Authorization": "Bearer t"}, KeapRestClientBase::getOptions(opts).headers);
+    }
+
+    kit() {
+        hash<auto> opts = getOpts({"apikey": "k"});
+        assertEq("hash<string, int>", opts.headers.fullType());
+        assertEq({"X-Count": 1, "X-Kit-Api-Key": "k"}, KitRestClientBase::getOptions(opts).headers);
+    }
+
+    linear() {
+        hash<auto> opts = getOpts({"token": "t"});
+        assertEq("hash<string, int>", opts.headers.fullType());
+        assertEq({"X-Count": 1, "Authorization": "t"}, LinearRestClientBase::getOptions(opts).headers);
+    }
+
+    pdfCo() {
+        hash<auto> opts = getOpts({"apikey": "k"});
+        assertEq("hash<string, int>", opts.headers.fullType());
+        assertEq({"X-Count": 1, "x-api-key": "k"}, PdfCoRestClientBase::getOptions(opts).headers);
+    }
+
+    segment() {
+        hash<auto> opts = getOpts({"apikey": "k"});
+        assertEq("hash<string, int>", opts.headers.fullType());
+        assertEq({"X-Count": 1, "Authorization": "Bearer k"}, SegmentRestClientBase::getOptions(opts).headers);
+    }
+
+    shippo() {
+        hash<auto> opts = getOpts({"apikey": "k"});
+        assertEq("hash<string, int>", opts.headers.fullType());
+        assertEq({"X-Count": 1, "Authorization": "ShippoToken k"}, ShippoRestClientBase::getOptions(opts).headers);
+    }
+
+    squarespace() {
+        hash<auto> opts = getOpts({"token": "t"});
+        assertEq("hash<string, int>", opts.headers.fullType());
+        assertEq({"X-Count": 1, "Authorization": "Bearer t"}, SquarespaceRestClientBase::getOptions(opts).headers);
+    }
+
+    square() {
+        hash<auto> opts = getOpts({"token": "t"});
+        assertEq("hash<string, int>", opts.headers.fullType());
+        assertEq({"X-Count": 1, "Authorization": "Bearer t"}, SquareRestClientBase::getOptions(opts).headers);
+    }
+
+    systemeIo() {
+        hash<auto> opts = getOpts({"apikey": "k"});
+        assertEq("hash<string, int>", opts.headers.fullType());
+        assertEq({"X-Count": 1, "X-API-Key": "k"}, SystemeIoRestClientBase::getOptions(opts).headers);
+    }
+
+    tally() {
+        hash<auto> opts = getOpts({"apikey": "k"});
+        assertEq("hash<string, int>", opts.headers.fullType());
+        assertEq({"X-Count": 1, "Accept": "application/json", "tally-version": TallyRestClientBase::DefaultApiVersion,
+            "Authorization": "Bearer k"}, TallyRestClientBase::getOptions(opts).headers);
+    }
+
+    unbounce() {
+        hash<auto> opts = getOpts({"token": "t"});
+        assertEq("hash<string, int>", opts.headers.fullType());
+        assertEq({"X-Count": 1, "Accept": UnbounceRestClientBase::DefaultAcceptHeader, "Authorization": "Bearer t"},
+            UnbounceRestClientBase::getOptions(opts).headers);
+    }
+
+    wave() {
+        hash<auto> opts = getOpts({"token": "t"});
+        assertEq("hash<string, int>", opts.headers.fullType());
+        assertEq({"X-Count": 1, "Authorization": "Bearer t"}, WaveRestClientBase::getOptions(opts).headers);
+    }
+
+    goHighLevel() {
+        hash<auto> opts = {"oauth2_client_id": "0123456789abcdef01234567-abc", "oauth2_auth_args": {"max_age": 3600}};
+        assertEq("hash<string, int>", opts.oauth2_auth_args.fullType());
+        assertEq({"max_age": 3600, "version_id": "0123456789abcdef01234567"},
+            GoHighLevelRestClientBase::getOptions(opts).oauth2_auth_args);
+
+        GoHighLevelRestConnection conn("test", "test", "https://services.leadconnectorhq.com", {}, opts
+            + {"oauth2_client_secret": "secret"});
+        string uri = conn.getAuthorizationCodeRequest();
+        assertRegex("[?&]version_id=0123456789abcdef01234567(&|$)", uri);
+        assertRegex("[?&]max_age=3600(&|$)", uri);
+    }
+}

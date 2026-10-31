@@ -102,7 +102,8 @@ public class SquareGetOrdersDataProvider inherits SquareDataProviderBase {
     }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        hash<auto> body = {
+        # hash<auto!>: the literal is narrowed to its value type; adding the location ID would throw
+        hash<auto!> body = {
             "order_ids": req.order_ids,
         };
         if (req.location_id) {

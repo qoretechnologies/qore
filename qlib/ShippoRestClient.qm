@@ -85,6 +85,8 @@ printf("Addresses: %Y\n", result.body);
 
     @subsection shipporestclientv1_0 ShippoRestClient v1.0
     - initial release
+    - the client options accept a \c headers hash whose values all have the same type, such as a literal
+      <tt>{"X-Count": 1}</tt>, when adding the authentication headers
 */
 
 #! the ShippoRestClient namespace contains all the objects in the ShippoRestClient module
@@ -144,11 +146,14 @@ public class ShippoRestClientBase {
         # the options have values of different types, so the hash must not take the narrow type of the
         # defaults, which would prevent adding values of other types
         hash<auto!> rv = DefaultOptions + opts;
+        # the headers are set in an "auto!" local: a caller's headers option may be narrowed (e.g. hash<string, int>
+        # for {"X-Count": 1}), and adding a string header would throw
+        *hash<auto!> hdr = rv.headers;
 
         # Dual auth: API token takes precedence if provided, otherwise use OAuth2
         if (opts.apikey) {
             # API token mode: Authorization: ShippoToken <api_token>
-            rv.headers.Authorization = "ShippoToken " + opts.apikey;
+            hdr.Authorization = "ShippoToken " + opts.apikey;
             # Remove apikey and OAuth2 options so RestClient doesn't try to use them
             remove rv.apikey;
             remove rv.oauth2_grant_type;
@@ -160,6 +165,9 @@ public class ShippoRestClientBase {
             # RestClient handles Bearer prefix for token option
         }
 
+        if (exists hdr) {
+            rv.headers = hdr;
+        }
         return rv;
     }
 }

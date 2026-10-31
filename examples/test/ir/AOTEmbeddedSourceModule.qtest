@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern
 %no-child-restrictions
@@ -57,6 +58,8 @@ class AOTEmbeddedSourceModuleTest inherits QUnit::Test {
             \testModulePrivateCaller());
         addTestCase("an embedded module's class methods keep one fast-entry symbol",
             \testClassMethods());
+        addTestCase("a module that an embedded module loads by a relative path is embedded too",
+            \testNestedRelativeModule());
 
         set_return_value(main());
     }
@@ -161,6 +164,61 @@ printf(\"%%d\\n\", aesm_entry(4));
 
         assertEq("8\n", compileRunAndCompare(tmp.path, script, "module-private caller"),
             "the module-private caller reaches the exported callee's real body");
+    }
+
+    #! An embedded module that requires another module by a relative path
+    /** The inner module is not loaded by the main program, only by the embedded outer module, and it lies outside
+        every module dir too, so it cannot be loaded by name at run time either.  It was serialized as a run-time
+        dependency by name, and the executable refused to start with \c AOT-ERROR ("requires module 'AesmInner',
+        which could not be loaded"), as \c string-conversion-encoding.qtest did through \c ExecModeHarness.qm and
+        its \c "./LoaderWarnings.qm".
+    */
+    testNestedRelativeModule() {
+        TmpDir tmp("qore-aot-embedded-source-nested-");
+        mkdir(tmp.path + "/lib");
+        writeFile(tmp.path + "/lib/AesmInner.qm", "%modern
+module AesmInner {
+    version = \"1.0\";
+    desc = \"embedded source module regression: a module loaded by an embedded module\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace AesmInner;
+
+public class AesmInnerValue {
+    public static string tag(string s) {
+        return \"inner:\" + s;
+    }
+}
+
+public int sub aesm_inner_mul(int a, int b) {
+    return a * b;
+}
+");
+        string qm = writeFile(tmp.path + "/lib/AesmOuter.qm", "%modern
+%requires ./AesmInner.qm
+module AesmOuter {
+    version = \"1.0\";
+    desc = \"embedded source module regression: an embedded module requiring another by a relative path\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace AesmOuter;
+
+public string sub aesm_outer(int a) {
+    return AesmInnerValue::tag(string(aesm_inner_mul(a, 6)));
+}
+");
+        string script = writeFile(tmp.path + "/run.q", sprintf("%%modern
+%%requires %s
+printf(\"%%s\\n\", aesm_outer(7));
+", qm));
+
+        string out = compileRunAndCompare(tmp.path, script, "nested relative module");
+        assertEq(-1, out.find("AOT-ERROR"), "the executable starts without loading the inner module by name: " + out);
+        assertEq("inner:42\n", out, "the embedded module calls the module it loads by a relative path");
     }
 
     testClassMethods() {

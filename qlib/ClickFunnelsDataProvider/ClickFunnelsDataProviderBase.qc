@@ -234,7 +234,9 @@ public class ClickFunnelsDataProviderBase inherits DataProvider::AbstractDataPro
         list<auto> results = ();
         *string cursor;
         while (True) {
-            hash<auto> qparams = params ?? {};
+            # "auto!": a caller's literal params may be narrowed, e.g. to hash<string, int> for {"limit": 10},
+            # and adding the string "after" key would then raise RUNTIME-TYPE-ERROR
+            hash<auto!> qparams = params ?? {};
             if (cursor) {
                 qparams."after" = cursor;
             }

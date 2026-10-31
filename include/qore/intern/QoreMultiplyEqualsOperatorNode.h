@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -39,6 +39,40 @@ protected:
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
 
+    //! how the operator treats an lvalue type at parse time
+    enum class lvalue_e {
+        //! the lvalue keeps its type
+        KEEP,
+        //! the lvalue is assigned a number value, which its type must accept
+        NUMBER,
+        //! the lvalue is assigned a float value, which its type must accept
+        FLOAT,
+        //! the lvalue is assigned an integer value, which its type must accept
+        INT,
+        //! the type is not known well enough; the operation is decided at runtime
+        GENERIC,
+    };
+
+    //! returns how the operator treats the given lvalue type with an operand of the given type
+    DLLLOCAL static lvalue_e getLValueKind(const QoreTypeInfo* lti, const QoreTypeInfo* rti) {
+        if (QoreTypeInfo::isType(lti, NT_NUMBER)) {
+            return lvalue_e::KEEP;
+        }
+        if (QoreTypeInfo::isType(rti, NT_NUMBER)) {
+            return lvalue_e::NUMBER;
+        }
+        if (QoreTypeInfo::isType(lti, NT_FLOAT)) {
+            return lvalue_e::KEEP;
+        }
+        if (QoreTypeInfo::isType(rti, NT_FLOAT)) {
+            return lvalue_e::FLOAT;
+        }
+        if (QoreTypeInfo::returnsSingle(lti)) {
+            return lvalue_e::INT;
+        }
+        return lvalue_e::GENERIC;
+    }
+
 public:
     DLLLOCAL QoreMultiplyEqualsOperatorNode(const QoreProgramLocation* loc, QoreValue left, QoreValue right)
             : QoreBinaryLValueOperatorNode(loc, left, right) {
@@ -67,27 +101,49 @@ public:
         }
         const QoreTypeInfo* rightTypeInfo = parse_context.typeInfo;
 
-        if (!QoreTypeInfo::isType(ti, NT_NUMBER)) {
-            if (QoreTypeInfo::isType(rightTypeInfo, NT_NUMBER)) {
+        // the parse-time checks are made on the plain type T of an or-nothing lvalue (*T): an operation that T
+        // refuses can never succeed on *T; the error names the declared type, and the result type and the runtime
+        // operation follow the declared type
+        const QoreTypeInfo* plain_ti = get_or_nothing_base_type(ti);
+        lvalue_e kind = getLValueKind(ti, rightTypeInfo);
+        lvalue_e check_kind = plain_ti == ti ? kind : getLValueKind(plain_ti, rightTypeInfo);
+
+        switch (check_kind) {
+            case lvalue_e::NUMBER:
                 if (check_lvalue_number(loc, ti, name) && !err) {
                     err = -1;
                 }
-                ti = numberTypeInfo;
-            } else if (!QoreTypeInfo::isType(ti, NT_FLOAT)) {
-                if (QoreTypeInfo::isType(rightTypeInfo, NT_FLOAT)) {
-                    if (check_lvalue_float(loc, ti, name) && !err) {
-                        err = -1;
-                    }
-                    ti = floatTypeInfo;
-                } else if (QoreTypeInfo::returnsSingle(ti)) {
-                    if (check_lvalue_int(loc, ti, name) && !err) {
-                        err = -1;
-                    }
-                    ti = bigIntTypeInfo;
-                } else {
-                    ti = nullptr;
+                break;
+            case lvalue_e::FLOAT:
+                if (check_lvalue_float(loc, ti, name) && !err) {
+                    err = -1;
                 }
-            }
+                break;
+            case lvalue_e::INT:
+                if (check_lvalue_int(loc, ti, name) && !err) {
+                    err = -1;
+                }
+                break;
+            case lvalue_e::KEEP:
+            case lvalue_e::GENERIC:
+                break;
+        }
+
+        switch (kind) {
+            case lvalue_e::NUMBER:
+                ti = numberTypeInfo;
+                break;
+            case lvalue_e::FLOAT:
+                ti = floatTypeInfo;
+                break;
+            case lvalue_e::INT:
+                ti = bigIntTypeInfo;
+                break;
+            case lvalue_e::GENERIC:
+                ti = nullptr;
+                break;
+            case lvalue_e::KEEP:
+                break;
         }
 
         parse_context.typeInfo = ti;

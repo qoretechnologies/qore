@@ -717,6 +717,7 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
         ns(ns),
         ahm(old.ahm),
         constlist(old.constlist, 0, this),
+        has_member_accessors(old.has_member_accessors),
         serializer(old.serializer),
         deserializer(old.deserializer),
         classID(old.classID),
@@ -827,6 +828,7 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
         constlist(old.constlist, 0, this),    // committed constants
         member_write_gate(old.member_write_gate),
         member_write_gate_classid(old.member_write_gate_classid),
+        has_member_accessors(old.has_member_accessors),
         serializer(old.serializer),
         deserializer(old.deserializer),
         classID(old.classID),
@@ -1838,8 +1840,8 @@ void qore_class_private::parseCommit() {
 
 void qore_class_private::addLocalMembersForInit() {
     for (auto& i : members.member_list) {
-        // skip imported members
-        if (!i.second->local()) {
+        // skip imported members, and members held in external storage, which have no value in the object
+        if (!i.second->local() || i.second->getAccessors()) {
             continue;
         }
 
@@ -3280,6 +3282,79 @@ QoreValue qore_class_private::evalMemberWriteGate(QoreObject* self, const char* 
     return *xsink ? QoreValue() : result.release();
 }
 
+void qore_class_private::addBuiltinMemberWithAccessors(const char* mem, ClassAccess access,
+        const QoreTypeInfo* n_typeinfo, q_member_get_t get, q_member_set_t set, const void* ptr,
+        q_member_del_t del) {
+    assert(!members.inList(mem));
+    assert(get && set);
+    // the accessors own the module data from here on, also if adding the member fails
+    std::shared_ptr<const QoreMemberAccessors> accessors = std::make_shared<const QoreMemberAccessors>(get, set,
+        del, ptr, classID);
+    std::unique_ptr<QoreMemberInfo> mi(new QoreMemberInfo(&loc_builtin, n_typeinfo, nullptr, QoreValue(), access,
+        this));
+    mi->setAccessors(std::move(accessors));
+    if (!has_sig_changes) {
+        has_sig_changes = true;
+    }
+    members.addNoCheck(strdup(mem), mi.release());
+    if (access == Public && !has_public_memdecl) {
+        has_public_memdecl = true;
+    }
+    has_member_accessors = true;
+}
+
+QoreValue qore_class_private::evalMemberAccessorGet(QoreObject* self, const char* mem, const QoreMemberInfo& mi,
+        ExceptionSink* xsink) const {
+    const QoreMemberAccessors* accessors = mi.getAccessors();
+    assert(accessors);
+    ReferenceHolder<AbstractPrivateData> data(self->getReferencedPrivateData(accessors->classid, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ValueHolder rv(accessors->get(self, *data, mem, accessors->ptr, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    // the declared type applies to a value from external storage as it does to one assigned in Qore code
+    const QoreTypeInfo* mti = mi.getTypeInfo();
+    if (QoreTypeInfo::hasType(mti)) {
+        QoreTypeInfo::acceptInputMember(mti, mem, *rv, xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+    }
+    return rv.release();
+}
+
+int qore_class_private::evalMemberAccessorSet(QoreObject* self, const char* mem, const QoreMemberInfo& mi,
+        QoreValue value, ExceptionSink* xsink) const {
+    const QoreMemberAccessors* accessors = mi.getAccessors();
+    assert(accessors);
+    ReferenceHolder<AbstractPrivateData> data(self->getReferencedPrivateData(accessors->classid, xsink), xsink);
+    if (*xsink) {
+        return -1;
+    }
+    accessors->set(self, *data, mem, accessors->ptr, value, xsink);
+    return *xsink ? -1 : 0;
+}
+
+QoreValue qore_class_private::evalExternalMemberWrite(QoreObject* self, const char* member, QoreValue value,
+        QoreMemberWriteOp operation, ExceptionSink* xsink) const {
+    if (const QoreMemberInfo* mi = findAccessorMember(member)) {
+        if (operation == QoreMemberWriteOp::Assign) {
+            evalMemberAccessorSet(self, member, *mi, value, xsink);
+            return QoreValue();
+        }
+        // a removal or deletion returns the previous value and leaves the member without a value
+        ValueHolder old(evalMemberAccessorGet(self, member, *mi, xsink), xsink);
+        if (*xsink || evalMemberAccessorSet(self, member, *mi, QoreValue(), xsink)) {
+            return QoreValue();
+        }
+        return old.release();
+    }
+    return evalMemberWriteGate(self, member, value, operation, xsink);
+}
+
 bool QoreClass::hasMemberGate() const {
     return priv->memberGate != nullptr;
 }
@@ -3784,6 +3859,9 @@ void qore_class_private::parseImportMembers(qore_class_private& qc, ClassAccess 
                 QoreMemberInfo* nmi = new QoreMemberInfo(*i.second, this, access);
                 std::unique_ptr<QoreMemberInfo> old = std::unique_ptr<QoreMemberInfo>(members.replace(i.first, nmi));
                 nmi->addContextAccess(*old->getClass()->members.find(i.first));
+                if (nmi->getAccessors()) {
+                    has_member_accessors = true;
+                }
                 //nmi->addContextAccess(*old.get());
                 continue;
             } else if (mi->isLocalInternal() || i.second->access == Internal || mi->access == Inaccessible) {
@@ -3809,6 +3887,9 @@ void qore_class_private::parseImportMembers(qore_class_private& qc, ClassAccess 
             "access: '%s' old: '%s'\n", this, name.c_str(), qc.name.c_str(), i.first, i.second->exp.getTypeName(),
             privpub(nmi->access), privpub(i.second->access));
         members.addInheritedNoCheck(strdup(i.first), nmi);
+        if (nmi->getAccessors()) {
+            has_member_accessors = true;
+        }
     }
 }
 
@@ -3972,6 +4053,11 @@ void QoreClass::addMember(const char* mname, ClassAccess access, const QoreTypeI
     priv->addMember(mname, access, n_typeInfo, initial_value);
 }
 
+void QoreClass::addBuiltinMemberWithAccessors(const char* name, ClassAccess access, const QoreTypeInfo* typeInfo,
+        q_member_get_t get, q_member_set_t set, const void* ptr, q_member_del_t del) {
+    priv->addBuiltinMemberWithAccessors(name, access, typeInfo, get, set, ptr, del);
+}
+
 BCSMList::BCSMList(const BCSMList& old) {
     reserve(old.size());
     for (auto& i : old) {
@@ -4005,6 +4091,11 @@ void BCSMList::processMemberInitializationList(const QoreMemberMap& members, mem
                 //printd(5, "BCSMList::processMemberInitializationList() %p '%s::%s' NOT FOUND\n", i.first->priv,
                 //    i.first->getName(), mi.first);
                 // in case of dependency injections, the member may not be found in the class
+                continue;
+            }
+
+            // a member held in external storage has no value in the object to initialize
+            if (info->getAccessors()) {
                 continue;
             }
 
@@ -6897,6 +6988,7 @@ const QoreMethod* QoreStaticMethodIterator::getMethod() const {
 // FIXME: eliminate this method; move injected fields to local, always copy classes with priv by reference
 QoreMemberInfo::QoreMemberInfo(const QoreMemberInfo& old, const qore_class_private* cls) :
     QoreMemberInfoBaseAccess(old, old.access),
+    accessors(old.accessors),
     cls_vec(old.cls_vec),
     cls_context_map(old.cls_context_map ? new cls_context_map_t(*old.cls_context_map) : nullptr),
     member_info_list(old.member_info_list ? new member_info_list_t(*old.member_info_list) : nullptr), is_local(old.is_local) {
@@ -6906,6 +6998,7 @@ QoreMemberInfo::QoreMemberInfo(const QoreMemberInfo& old, const qore_class_priva
 
 QoreMemberInfo::QoreMemberInfo(const QoreMemberInfo& old, const qore_class_private* cls, ClassAccess cls_access) :
     QoreMemberInfoBaseAccess(old, (old.access == Internal) ? Inaccessible : QORE_MAX(old.access, cls_access)),
+    accessors(old.accessors),
     cls_vec(old.cls_vec),
     cls_context_map(old.cls_context_map ? new cls_context_map_t(*old.cls_context_map) : nullptr),
     member_info_list(old.member_info_list ? new member_info_list_t(*old.member_info_list) : nullptr), is_local(false) {

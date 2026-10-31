@@ -581,6 +581,55 @@ QoreIRInstruction* QoreIRBuilder::createListSetLength(QoreIRValue list, QoreIRVa
     return inst;
 }
 
+QoreIRInstruction* QoreIRBuilder::createListSetCommonType(QoreIRValue list, QoreIRValue state,
+        const QoreTypeInfo* element_type, const QoreProgramLocation* loc) {
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::ListSetCommonType);
+    inst->loc = loc;
+    inst->operands.push_back(list);
+    inst->operands.push_back(state);
+    inst->element_type = element_type;
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createCommonTypeFold(QoreIRValue state, QoreIRValue value,
+        QoreIRValue index, const QoreProgramLocation* loc) {
+    if (!index.isValid()) {
+        // -1: the first value folded starts the common type
+        index = createConstInt(-1, loc)->result;
+    }
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::CommonTypeFold);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    // the state is a native int (see qore_rt_common_type_fold())
+    qore_ir_set_native_value_facts(func, inst->result, QoreIRValueRepresentation::NativeInt, bigIntTypeInfo);
+    inst->operands.push_back(state);
+    inst->operands.push_back(value);
+    inst->operands.push_back(index);
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createHashSetCommonType(QoreIRValue hash, QoreIRValue state,
+        const QoreProgramLocation* loc) {
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::HashSetCommonType);
+    inst->loc = loc;
+    inst->operands.push_back(hash);
+    inst->operands.push_back(state);
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createListSetScannedType(QoreIRValue list, const QoreTypeInfo* element_type,
+        QoreIRValue source, const QoreProgramLocation* loc) {
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::ListSetScannedType);
+    inst->loc = loc;
+    inst->operands.push_back(list);
+    if (source.isValid()) {
+        inst->operands.push_back(source);
+    } else {
+        inst->element_type = element_type;
+    }
+    return inst;
+}
+
 QoreIRInstruction* QoreIRBuilder::createListSize(QoreIRValue list, const QoreProgramLocation* loc) {
     auto inst = append<QoreIRInstruction>(QoreIROpcode::ListSize);
     inst->loc = loc;

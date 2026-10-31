@@ -1684,6 +1684,8 @@ module SquareDataProvider {
     @section squaredataproviderrelnotes Release Notes
 
     @subsection squaredataproviderv1_0 SquareDataProvider v1.0
+    - searches, watches and order, booking and service requests accept parameters and bodies whose values all
+      have the same type, such as a literal \c {"limit": 100}, when adding cursors, location IDs and other values
     - initial release
 */
 

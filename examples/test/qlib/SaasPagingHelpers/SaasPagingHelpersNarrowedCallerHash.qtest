@@ -1,0 +1,310 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SystemeIoDataProvider
+%requires InstantlyDataProvider
+%requires SmartSheetDataProvider
+%requires KatanaDataProvider
+%requires InsightlyDataProvider
+%requires KitDataProvider
+%requires TableauDataProvider
+%requires SquareDataProvider
+
+%exec-class SaasPagingHelpersNarrowedCallerHashTest
+
+#! Systeme.io provider that answers GET requests from memory
+class TestSystemeIoTags inherits SystemeIoDataProvider::SystemeIoTagsDataProvider {
+    public {
+        list<hash<auto>> calls = ();
+    }
+
+    constructor(RestClientIo::RestClientIo rest) : SystemeIoTagsDataProvider(rest) {
+    }
+
+    auto doGet(string path, *hash<auto> params) {
+        push calls, {"path": path, "params": params};
+        # first page has more items; the second page is the last
+        if (calls.size() == 1) {
+            return {"items": ({"id": 11},), "hasMore": True};
+        }
+        return {"items": ({"id": 12},), "hasMore": False};
+    }
+}
+
+#! Instantly provider that answers GET and POST requests from memory
+class TestInstantlyCampaigns inherits InstantlyDataProvider::InstantlyCampaignsDataProvider {
+    public {
+        list<hash<auto>> calls = ();
+    }
+
+    constructor(InstantlyRestClient::InstantlyRestClientIo rest) : InstantlyCampaignsDataProvider(rest) {
+    }
+
+    auto doGet(string path, *hash<auto> params) {
+        return page(path, params);
+    }
+
+    auto doPost(string path, *hash<auto> body) {
+        return page(path, body);
+    }
+
+    private hash<auto> page(string path, *hash<auto> params) {
+        push calls, {"path": path, "params": params};
+        if (calls.size() == 1) {
+            return {"items": ({"id": "a"},), "next_starting_after": "a"};
+        }
+        return {"items": ({"id": "b"},)};
+    }
+}
+
+#! SmartSheet provider that answers GET requests from memory
+class TestSmartSheetSheets inherits SmartSheetDataProvider::SmartSheetSheetsDataProvider {
+    public {
+        list<hash<auto>> calls = ();
+    }
+
+    constructor(RestClientIo::RestClientIo rest) : SmartSheetSheetsDataProvider(rest) {
+    }
+
+    hash<auto> doGet(string path, *hash<auto> params) {
+        push calls, {"path": path, "params": params};
+        return {"data": ({"id": 1},), "totalPages": 1};
+    }
+}
+
+#! Katana provider that answers GET requests from memory
+class TestKatanaCustomers inherits KatanaDataProvider::KatanaCustomersDataProvider {
+    public {
+        list<hash<auto>> calls = ();
+    }
+
+    constructor(RestClientIo::RestClientIo rest) : KatanaCustomersDataProvider(rest) {
+    }
+
+    list<auto> doGetList(string path, *hash<auto> params) {
+        push calls, {"path": path, "params": params};
+        return ({"id": 1},);
+    }
+}
+
+#! Insightly provider that answers GET requests from memory
+class TestInsightlyContacts inherits InsightlyDataProvider::InsightlyContactsDataProvider {
+    public {
+        list<hash<auto>> calls = ();
+    }
+
+    constructor(RestClientIo::RestClientIo rest) : InsightlyContactsDataProvider(rest) {
+    }
+
+    list<auto> doGetList(string path, *hash<auto> params) {
+        push calls, {"path": path, "params": params};
+        return ({"CONTACT_ID": 1},);
+    }
+}
+
+#! Kit provider that answers requests from memory
+class TestKitTags inherits KitDataProvider::KitTagsDataProvider {
+    public {
+        list<string> urls = ();
+    }
+
+    constructor(KitRestClient::KitRestClientIo rest) : KitTagsDataProvider(rest) {
+    }
+
+    private hash<auto> doRestRequest(string method, string path, auto body = NOTHING) {
+        push urls, path;
+        if (urls.size() == 1) {
+            return {"subscribers": ({"id": 1},), "pagination": {"has_next_page": True, "end_cursor": "c1"}};
+        }
+        return {"subscribers": ({"id": 2},), "pagination": {"has_next_page": False}};
+    }
+}
+
+#! Tableau provider that answers GET requests from memory
+class TestTableauProjects inherits TableauDataProvider::TableauProjectsDataProvider {
+    public {
+        list<hash<auto>> calls = ();
+    }
+
+    constructor(TableauRestClient::TableauRestClientIo rest) : TableauProjectsDataProvider(rest) {
+    }
+
+    hash<auto> doGet(string path, *hash<auto> params) {
+        push calls, {"path": path, "params": params};
+        return {"projects": {"project": ({"id": "p1"},)}};
+    }
+}
+
+#! Square provider that answers GET and POST requests from memory
+class TestSquareCustomers inherits SquareDataProvider::SquareCustomersDataProvider {
+    public {
+        list<hash<auto>> calls = ();
+    }
+
+    constructor(SquareRestClient::SquareRestClientIo rest) : SquareCustomersDataProvider(rest) {
+    }
+
+    hash<auto> doGet(string path, *hash<auto> params) {
+        return page(path, params);
+    }
+
+    hash<auto> doPost(string path, *hash<auto> body) {
+        return page(path, body);
+    }
+
+    private hash<auto> page(string path, *hash<auto> params) {
+        push calls, {"path": path, "params": params};
+        if (calls.size() == 1) {
+            return {"customers": ({"id": "c1"},), "cursor": "next"};
+        }
+        return {"customers": ({"id": "c2"},)};
+    }
+}
+
+#! Paging helpers of SaaS data providers accept parameter hashes whose values all have the same type
+/** The helpers add the page size and the page number or cursor to the caller's parameter hash; a literal whose
+    values all have the same type, such as \c {"order": "desc"} (\c hash<string, string>), keeps that type when it is
+    passed in, so the helpers must copy it to a hash that accepts any value before adding the paging keys
+*/
+public class SaasPagingHelpersNarrowedCallerHashTest inherits QUnit::Test {
+    private {
+        const ClientOpts = {
+            "url": "https://localhost:1/",
+            "apikey": "k",
+            "token": "t",
+            "token_name": "n",
+            "token_secret": "s",
+        };
+    }
+
+    constructor() : Test("SaasPagingHelpersNarrowedCallerHash", "1.0", \ARGV) {
+        addTestCase("SystemeIo doPaginatedGet", \systemeIoTest());
+        addTestCase("Instantly doPaginatedGet/doPaginatedPost", \instantlyTest());
+        addTestCase("SmartSheet fetchAllPages", \smartSheetTest());
+        addTestCase("Katana fetchAllPages", \katanaTest());
+        addTestCase("Insightly fetchAllPages", \insightlyTest());
+        addTestCase("Kit fetchAllPages", \kitTest());
+        addTestCase("Tableau fetchAllPages", \tableauTest());
+        addTestCase("Square fetchAllPages/fetchAllPagesPost", \squareTest());
+        set_return_value(main());
+    }
+
+    #! returns its argument; passing a literal through a hash<auto> parameter keeps the literal's narrow type
+    static hash<auto> mk(hash<auto> h) {
+        return h;
+    }
+
+    systemeIoTest() {
+        assertEq("hash<string, string>", mk({"order": "desc"}).fullType());
+        TestSystemeIoTags prov(new SystemeIoRestClient::SystemeIoRestClientIo(ClientOpts));
+        # the same literal that SystemeIoWatchTagsDataProvider passes
+        list<auto> items = prov.doPaginatedGet("tags", {"order": "desc"});
+        assertEq((11, 12), map $1.id, items);
+        assertEq(2, prov.calls.size());
+        assertEq("desc", prov.calls[0].params.order);
+        assertEq(SystemeIoDataProvider::DefaultPageSize, prov.calls[0].params.limit);
+        assertEq(11, prov.calls[1].params.startingAfter);
+    }
+
+    instantlyTest() {
+        assertEq("hash<string, string>", mk({"search": "x"}).fullType());
+        TestInstantlyCampaigns prov(new InstantlyRestClient::InstantlyRestClientIo(ClientOpts));
+        list<auto> items = prov.doPaginatedGet("/campaigns", {"search": "x"});
+        assertEq(("a", "b"), map $1.id, items);
+        assertEq("x", prov.calls[0].params.search);
+        assertEq(InstantlyDataProvider::DefaultPageSize, prov.calls[0].params.limit);
+        assertEq("a", prov.calls[1].params.starting_after);
+
+        assertEq("hash<string, list<string>>", mk({"ids": ("l1",)}).fullType());
+        prov.calls = ();
+        items = prov.doPaginatedPost("/leads/list", {"ids": ("l1",)});
+        assertEq(("a", "b"), map $1.id, items);
+        assertEq(("l1",), prov.calls[0].params.ids);
+        assertEq(InstantlyDataProvider::DefaultPageSize, prov.calls[0].params.limit);
+        assertEq("a", prov.calls[1].params.starting_after);
+    }
+
+    smartSheetTest() {
+        assertEq("hash<string, string>", mk({"modifiedSince": "2026-01-01T00:00:00Z"}).fullType());
+        TestSmartSheetSheets prov(new SmartSheetRestClient::SmartSheetRestClientIo(ClientOpts));
+        list<hash<auto>> recs = prov.fetchAllPages("sheets", "data", {"modifiedSince": "2026-01-01T00:00:00Z"});
+        assertEq((1,), map $1.id, recs);
+        assertEq("2026-01-01T00:00:00Z", prov.calls[0].params.modifiedSince);
+        assertEq(1, prov.calls[0].params.page);
+        assertEq(SmartSheetDataProvider::DefaultPageSize, prov.calls[0].params.pageSize);
+    }
+
+    katanaTest() {
+        assertEq("hash<string, string>", mk({"name": "Acme"}).fullType());
+        TestKatanaCustomers prov(new KatanaRestClient::KatanaRestClientIo(ClientOpts));
+        list<hash<auto>> recs = prov.fetchAllPages("customers", {"name": "Acme"});
+        assertEq((1,), map $1.id, recs);
+        assertEq("Acme", prov.calls[0].params.name);
+        assertEq(1, prov.calls[0].params.page);
+        assertEq(KatanaDataProvider::MaxPageSize, prov.calls[0].params.limit);
+    }
+
+    insightlyTest() {
+        assertEq("hash<string, string>", mk({"updated_after_utc": "2026-01-01"}).fullType());
+        TestInsightlyContacts prov(new InsightlyRestClient::InsightlyRestClientIo(ClientOpts));
+        list<hash<auto>> recs = prov.fetchAllPages("Contacts", {"updated_after_utc": "2026-01-01"});
+        assertEq((1,), map $1.CONTACT_ID, recs);
+        assertEq("2026-01-01", prov.calls[0].params.updated_after_utc);
+        assertEq(0, prov.calls[0].params.skip);
+        assertEq(InsightlyDataProvider::DefaultPageSize, prov.calls[0].params.top);
+    }
+
+    kitTest() {
+        # the same literal that the Kit watch data providers pass
+        assertEq("hash<string, string>", mk({
+            "created_after": "2026-01-01T00:00:00Z",
+            "sort_field": "created_at",
+            "sort_order": "asc",
+        }).fullType());
+        TestKitTags prov(new KitRestClient::KitRestClientIo(ClientOpts));
+        list<hash<auto>> recs = prov.fetchAllPages("subscribers", "subscribers", {
+            "created_after": "2026-01-01T00:00:00Z",
+            "sort_field": "created_at",
+            "sort_order": "asc",
+        }, 1000);
+        assertEq((1, 2), map $1.id, recs);
+        assertEq(2, prov.urls.size());
+        assertRegex("per_page=" + KitDataProvider::DefaultPageSize, prov.urls[0]);
+        assertRegex("sort_order=asc", prov.urls[0]);
+        assertRegex("after=c1", prov.urls[1]);
+    }
+
+    tableauTest() {
+        assertEq("hash<string, string>", mk({"filter": "name:eq:Default"}).fullType());
+        TestTableauProjects prov(new TableauRestClient::TableauRestClientIo(ClientOpts));
+        list<hash<auto>> recs = prov.fetchAllPages("projects", "projects.project", {"filter": "name:eq:Default"});
+        assertEq(("p1",), map $1.id, recs);
+        assertEq("name:eq:Default", prov.calls[0].params.filter);
+        assertEq(TableauDataProvider::DefaultPageSize, prov.calls[0].params.pageSize);
+        assertEq(1, prov.calls[0].params.pageNumber);
+    }
+
+    squareTest() {
+        assertEq("hash<string, int>", mk({"limit": 100}).fullType());
+        TestSquareCustomers prov(new SquareRestClient::SquareRestClientIo(ClientOpts));
+        list<hash<auto>> recs = prov.fetchAllPages("customers", "customers", {"limit": 100});
+        assertEq(("c1", "c2"), map $1.id, recs);
+        assertEq(100, prov.calls[1].params.limit);
+        assertEq("next", prov.calls[1].params.cursor);
+
+        # a search body with only a nested query hash, as built by the Square watch data providers
+        assertEq("hash<string, hash<string, hash<string, string>>>",
+            mk({"query": {"filter": {"status": "ACTIVE"}}}).fullType());
+        prov.calls = ();
+        recs = prov.fetchAllPagesPost("customers/search", "customers", {"query": {"filter": {"status": "ACTIVE"}}});
+        assertEq(("c1", "c2"), map $1.id, recs);
+        assertEq("ACTIVE", prov.calls[1].params.query.filter.status);
+        assertEq("next", prov.calls[1].params.cursor);
+    }
+}

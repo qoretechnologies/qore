@@ -1425,7 +1425,9 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
         @since HttpClientIo 1.0
     */
     hash<auto> addDefaultHeaders(*hash<auto> headers, bool decoded = True) {
-        hash<auto> rv = headers ?? {};
+        # the headers are set in an "auto!" local: a caller's literal may be narrowed (e.g. hash<string, int> for
+        # {"X-Count": 1}), and adding a string header would throw
+        hash<auto!> rv = headers ?? {};
         if (opts.user_agent.val() && !(select keys rv, $1 =~ /^user-agent$/i)) {
             rv."User-Agent" = opts.user_agent;
         }
@@ -1450,7 +1452,9 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
         @since HttpClientIo 1.0
     */
     hash<auto> addCookieHeaders(string url, string path, *hash<auto> headers, *CookieJar jar) {
-        hash<auto> req_headers = headers ?? {};
+        # the headers are set in an "auto!" local: a caller's literal may be narrowed (e.g. hash<string, int> for
+        # {"X-Count": 1}), and adding the Cookie header would throw
+        hash<auto!> req_headers = headers ?? {};
         jar = jar ?? cookie_jar;
         if (!jar) {
             return req_headers;

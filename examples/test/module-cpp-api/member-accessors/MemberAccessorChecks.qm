@@ -1,0 +1,353 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file MemberAccessorChecks.qm verifies declared members held in external storage with builtin C++ accessors
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%requires cppapiuser
+%requires reflection
+
+module MemberAccessorChecks {
+    version = "1.0";
+    desc = "checks declared builtin members held in external storage in all execution modes";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace MemberAccessorChecks {
+    #! a Qore subclass that uses the members through self and as bare member names
+    class Sub inherits CppApiTest::MemberAccessorProbe {
+        public {
+            int local = 4;
+        }
+
+        int readSecret() {
+            return secret;
+        }
+
+        writeSecret(int v) {
+            secret = v;
+            self.secret += 1;
+        }
+
+        int bump() {
+            ++count;
+            count += 2;
+            self.count *= 3;
+            self.count -= 1;
+            return self.count;
+        }
+
+        int readSelf() {
+            return self.count + count + self.count;
+        }
+    }
+
+    class Tracked {
+        public {
+            static int live = 0;
+        }
+
+        constructor() {
+            ++live;
+        }
+
+        destructor() {
+            --live;
+        }
+    }
+
+    #! typed receiver: reads, assignments, compound and nested assignments, removal and deletion
+    int sub check_typed(CppApiTest::MemberAccessorProbe p) {
+        list<int> c0 = p.counts();
+        # a plain assignment calls only the setter
+        p.count = 3;
+        list<int> c1 = p.counts();
+        if (c1[0] != c0[0] || c1[1] != c0[1] + 1 || p.raw("count") != 3) { return 0; }
+        # reads come from the storage, also after the module's own code changed it
+        p.setRaw("count", 40);
+        if (p.count != 40) { return 0; }
+        # compound assignments read with the getter and write with the setter
+        p.count += 2;
+        ++p.count;
+        p.count--;
+        p.count *= 2;
+        if (p.raw("count") != 84 || p.count != 84) { return 0; }
+        # nested assignments write back the changed container
+        p.h = {"k": 1};
+        p.h.k += 2;
+        p.h{"o"} = 4;
+        if (p.raw("h") != {"k": 3, "o": 4}) { return 0; }
+        if ((remove p.h.k) != 3 || p.raw("h") != {"o": 4}) { return 0; }
+        p.any = (1, 2);
+        p.any[0] = 9;
+        p.any += 3;
+        if (p.raw("any") != (9, 2, 3)) { return 0; }
+        # remove reads the value and leaves the member without a value
+        if ((remove p.any) != (9, 2, 3) || p.raw("any") != NOTHING || p.any != NOTHING) { return 0; }
+        # delete deletes an object held by the member
+        p.any = new Tracked();
+        if (Tracked::live != 1) { return 0; }
+        delete p.any;
+        if (Tracked::live != 0 || p.raw("any") != NOTHING) { return 0; }
+        p.any = p.any ?? 5;
+        p.any = p.any ?? 6;
+        if (p.raw("any") != 5) { return 0; }
+        string key = "count";
+        p{key} = 7;
+        p{key} += 1;
+        if (p{key} != 8 || p.raw("count") != 8) { return 0; }
+        # an ordinary declared member is unaffected
+        p.declared = 12;
+        if (p.declared != 12 || p.raw("declared") != NOTHING) { return 0; }
+        return 1;
+    }
+
+    #! object receiver: reads, assignments, compound and nested assignments, removal and deletion
+    int sub check_object(object p) {
+        list<int> c0 = p.counts();
+        # a plain assignment calls only the setter
+        p.count = 3;
+        list<int> c1 = p.counts();
+        if (c1[0] != c0[0] || c1[1] != c0[1] + 1 || p.raw("count") != 3) { return 0; }
+        # reads come from the storage, also after the module's own code changed it
+        p.setRaw("count", 40);
+        if (p.count != 40) { return 0; }
+        # compound assignments read with the getter and write with the setter
+        p.count += 2;
+        ++p.count;
+        p.count--;
+        p.count *= 2;
+        if (p.raw("count") != 84 || p.count != 84) { return 0; }
+        # nested assignments write back the changed container
+        p.h = {"k": 1};
+        p.h.k += 2;
+        p.h{"o"} = 4;
+        if (p.raw("h") != {"k": 3, "o": 4}) { return 0; }
+        if ((remove p.h.k) != 3 || p.raw("h") != {"o": 4}) { return 0; }
+        p.any = (1, 2);
+        p.any[0] = 9;
+        p.any += 3;
+        if (p.raw("any") != (9, 2, 3)) { return 0; }
+        # remove reads the value and leaves the member without a value
+        if ((remove p.any) != (9, 2, 3) || p.raw("any") != NOTHING || p.any != NOTHING) { return 0; }
+        # delete deletes an object held by the member
+        p.any = new Tracked();
+        if (Tracked::live != 1) { return 0; }
+        delete p.any;
+        if (Tracked::live != 0 || p.raw("any") != NOTHING) { return 0; }
+        p.any = p.any ?? 5;
+        p.any = p.any ?? 6;
+        if (p.raw("any") != 5) { return 0; }
+        string key = "count";
+        p{key} = 7;
+        p{key} += 1;
+        if (p{key} != 8 || p.raw("count") != 8) { return 0; }
+        # an ordinary declared member is unaffected
+        p.declared = 12;
+        if (p.declared != 12 || p.raw("declared") != NOTHING) { return 0; }
+        return 1;
+    }
+
+    #! auto receiver: reads, assignments, compound and nested assignments, removal and deletion
+    int sub check_auto(auto p) {
+        list<int> c0 = p.counts();
+        # a plain assignment calls only the setter
+        p.count = 3;
+        list<int> c1 = p.counts();
+        if (c1[0] != c0[0] || c1[1] != c0[1] + 1 || p.raw("count") != 3) { return 0; }
+        # reads come from the storage, also after the module's own code changed it
+        p.setRaw("count", 40);
+        if (p.count != 40) { return 0; }
+        # compound assignments read with the getter and write with the setter
+        p.count += 2;
+        ++p.count;
+        p.count--;
+        p.count *= 2;
+        if (p.raw("count") != 84 || p.count != 84) { return 0; }
+        # nested assignments write back the changed container
+        p.h = {"k": 1};
+        p.h.k += 2;
+        p.h{"o"} = 4;
+        if (p.raw("h") != {"k": 3, "o": 4}) { return 0; }
+        if ((remove p.h.k) != 3 || p.raw("h") != {"o": 4}) { return 0; }
+        p.any = (1, 2);
+        p.any[0] = 9;
+        p.any += 3;
+        if (p.raw("any") != (9, 2, 3)) { return 0; }
+        # remove reads the value and leaves the member without a value
+        if ((remove p.any) != (9, 2, 3) || p.raw("any") != NOTHING || p.any != NOTHING) { return 0; }
+        # delete deletes an object held by the member
+        p.any = new Tracked();
+        if (Tracked::live != 1) { return 0; }
+        delete p.any;
+        if (Tracked::live != 0 || p.raw("any") != NOTHING) { return 0; }
+        p.any = p.any ?? 5;
+        p.any = p.any ?? 6;
+        if (p.raw("any") != 5) { return 0; }
+        string key = "count";
+        p{key} = 7;
+        p{key} += 1;
+        if (p{key} != 8 || p.raw("count") != 8) { return 0; }
+        # an ordinary declared member is unaffected
+        p.declared = 12;
+        if (p.declared != 12 || p.raw("declared") != NOTHING) { return 0; }
+        return 1;
+    }
+
+    #! returns the error code raised by the code, or "" if it succeeds
+    string sub get_error(code c) {
+        try {
+            c();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+        return "";
+    }
+
+    #! a value that the declared type does not accept is rejected before the setter is called
+    int sub check_type_error() {
+        auto p = new CppApiTest::MemberAccessorProbe();
+        list<int> c0 = p.counts();
+        if (get_error(sub () { p.count = "not an int"; }) != "RUNTIME-TYPE-ERROR") { return 0; }
+        if (get_error(sub () { p.h = (1, 2); }) != "RUNTIME-TYPE-ERROR") { return 0; }
+        if (p.counts()[1] != c0[1] || p.raw("count") != 0 || p.raw("h") != {}) { return 0; }
+        # a value read that the declared type does not accept raises an exception in the reader
+        if (get_error(sub () { auto v = p.bad; }) != "RUNTIME-TYPE-ERROR") { return 0; }
+        # an exception raised by the setter reaches the assignment
+        if (get_error(sub () { p.fail = 1; }) != "ACCESSOR-SET-ERROR") { return 0; }
+        if (get_error(sub () { p.fail += 1; }) != "ACCESSOR-SET-ERROR") { return 0; }
+        return 1;
+    }
+
+    #! a private member is accessible only in the class hierarchy
+    int sub check_private() {
+        auto p = new CppApiTest::MemberAccessorProbe();
+        if (get_error(sub () { auto v = p.secret; }) != "PRIVATE-MEMBER") { return 0; }
+        if (get_error(sub () { p.secret = 1; }) != "PRIVATE-MEMBER") { return 0; }
+        Sub s();
+        if (s.readSecret() != 5) { return 0; }
+        s.writeSecret(8);
+        return s.raw("secret") == 9 && s.readSecret() == 9 ? 1 : 0;
+    }
+
+    #! a Qore subclass reads and writes the members through self and as bare member names
+    int sub check_self() {
+        Sub s();
+        if (s.count != 0 || s.local != 4) { return 0; }
+        if (s.bump() != 8 || s.raw("count") != 8) { return 0; }
+        return s.readSelf() == 24 ? 1 : 0;
+    }
+
+    #! the members are declared with their types, but the object holds no value for them
+    int sub check_declaration() {
+        Class cls = Class::getClass(new CppApiTest::MemberAccessorProbe());
+        hash<string, string> types = map {$1.getName(): $1.getType().getName()}, cls.getMembers();
+        if (types.count != "int" || types.h != "*hash<auto>" || types.any != "auto" || types.declared != "int") {
+            return 0;
+        }
+        auto p = new CppApiTest::MemberAccessorProbe();
+        # the members are not initialized and not part of the object's data
+        if ((keys p) != ("declared",) || p.counts() != (0, 0)) { return 0; }
+        # an object made from C++ without the Qore constructor reads and writes the same storage
+        CppApiTest::MemberAccessorProbe c = CppApiTest::MemberAccessorProbe::create();
+        if (c.count != 0 || c.h != {}) { return 0; }
+        c.count = 4;
+        c.h.x = 1;
+        return c.raw("count") == 4 && c.raw("h") == {"x": 1} && c.counts()[1] == 2 ? 1 : 0;
+    }
+
+    #! the C++ API reads and writes the members with their accessors
+    int sub check_cpp_api() {
+        auto p = new CppApiTest::MemberAccessorProbe();
+        p.setRaw("count", 21);
+        foreach string api in ("evalMember", "getReferencedMemberNoMethod", "getMemberAsBigInt") {
+            if (CppApiTest::MemberAccessorProbe::cppRead(p, "count", api) != 21) { return 0; }
+        }
+        if (!CppApiTest::MemberAccessorProbe::cppRead(p, "count", "hasMember")) { return 0; }
+        CppApiTest::MemberAccessorProbe::cppWrite(p, "count", 22, "setValue");
+        if (p.raw("count") != 22) { return 0; }
+        CppApiTest::MemberAccessorProbe::cppWrite(p, "count", 23, "setMemberValue");
+        if (p.raw("count") != 23) { return 0; }
+        p.any = "x";
+        if (CppApiTest::MemberAccessorProbe::cppWrite(p, "any", NOTHING, "takeMember") != "x"
+            || p.raw("any") != NOTHING) {
+            return 0;
+        }
+        p.any = new Tracked();
+        CppApiTest::MemberAccessorProbe::cppWrite(p, "any", NOTHING, "deleteMemberValue");
+        return Tracked::live == 0 && p.raw("any") == NOTHING ? 1 : 0;
+    }
+
+    #! slices and merges read and write the members with their accessors
+    int sub check_slice_merge() {
+        auto p = new CppApiTest::MemberAccessorProbe();
+        p.count = 2;
+        if (p{"count", "declared"} != {"count": 2, "declared": 7}) { return 0; }
+        p += {"count": 11, "declared": 8};
+        if (p.raw("count") != 11 || p.declared != 8) { return 0; }
+        if (get_error(sub () { p += {"count": "x"}; }) != "RUNTIME-TYPE-ERROR" || p.raw("count") != 11) {
+            return 0;
+        }
+        auto removed = remove p{"count", "declared"};
+        return removed == {"count": 11, "declared": 8} && p.raw("count") == NOTHING ? 1 : 0;
+    }
+
+    #! a reference to a member writes it with its setter
+    int sub check_reference() {
+        auto p = new CppApiTest::MemberAccessorProbe();
+        reference<auto> r = \p.count;
+        r = 12;
+        if (p.raw("count") != 12) { return 0; }
+        r += 1;
+        return p.raw("count") == 13 ? 1 : 0;
+    }
+
+    #! returns the result of each check: 1 for a pass, 0 for a failure (an exception is printed on stderr)
+    public hash<string, int> sub get_results() {
+        hash<string, int> rv = {};
+        hash<string, code> checks = {
+            "typed": int sub () { return check_typed(new CppApiTest::MemberAccessorProbe()); },
+            "object": int sub () { return check_object(new CppApiTest::MemberAccessorProbe()); },
+            "auto": int sub () { return check_auto(new CppApiTest::MemberAccessorProbe()); },
+            "subclass": int sub () { return check_typed(new Sub()); },
+            "cpp-created": int sub () { return check_object(CppApiTest::MemberAccessorProbe::create()); },
+            "type-error": \check_type_error(),
+            "private": \check_private(),
+            "self": \check_self(),
+            "declaration": \check_declaration(),
+            "cpp-api": \check_cpp_api(),
+            "slice-merge": \check_slice_merge(),
+            "reference": \check_reference(),
+        };
+        foreach hash<auto> i in (checks.pairIterator()) {
+            try {
+                rv{i.key} = i.value();
+            } catch (hash<ExceptionInfo> ex) {
+                stderr.printf("%s: %s: %s: %s\n", i.key, ex.err, ex.desc, get_ex_pos(ex));
+                rv{i.key} = 0;
+            }
+        }
+        return rv;
+    }
+}

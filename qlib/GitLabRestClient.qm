@@ -125,6 +125,8 @@ printf("Projects: %Y\n", result.body);
 
     @subsection gitlabrestclientv1_0 GitLabRestClient v1.0
     - initial release
+    - a GitLab connection whose options all have the same type and lack credentials, such as a literal
+      \c {"connect_timeout": 10}, reports the missing credentials rather than a \c RUNTIME-TYPE-ERROR
 */
 
 #! the GitLabRestClient namespace contains all the objects in the GitLabRestClient module
@@ -484,7 +486,10 @@ public class GitLabRestConnection inherits RestClient::RestConnection {
         \c hostname option that agrees with it, so the option is never absent and never stale.
     */
     private static hash<auto> getOpts(hash<auto> options, *string url) {
-        hash<auto> rv = options;
+        # "auto!": a caller's literal option hash may be narrowed, e.g. to hash<string, int> for
+        # {"connect_timeout": 10}, and adding the string hostname option would then raise RUNTIME-TYPE-ERROR
+        # instead of the real configuration error
+        hash<auto!> rv = options;
         if (!rv.hostname.val() && url.val()) {
             rv += {"hostname": GitLabRestClientBase::getHostnameForUrl(url)};
         }

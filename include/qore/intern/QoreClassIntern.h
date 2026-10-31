@@ -1061,6 +1061,40 @@ typedef std::map<const qore_class_private*, const qore_class_private*> cls_conte
 // list of inherited member info data structures for initialization
 typedef std::deque<const QoreMemberInfo*> member_info_list_t;
 
+//! the accessors of a declared member whose value is held in external storage owned by a module
+/** shared by the declaring class's member and every copy inherited by a subclass; the module data is released when
+    the last of them is destroyed
+
+    @see QoreClass::addBuiltinMemberWithAccessors()
+*/
+class QoreMemberAccessors {
+public:
+    //! reads the value
+    const q_member_get_t get;
+    //! writes the value
+    const q_member_set_t set;
+    //! releases the module data
+    const q_member_del_t del;
+    //! the module data
+    const void* const ptr;
+    //! the ID of the class whose private data the accessors are given
+    const qore_classid_t classid;
+
+    DLLLOCAL QoreMemberAccessors(q_member_get_t get, q_member_set_t set, q_member_del_t del, const void* ptr,
+            qore_classid_t classid) : get(get), set(set), del(del), ptr(ptr), classid(classid) {
+        assert(get && set);
+    }
+
+    DLLLOCAL ~QoreMemberAccessors() {
+        if (del) {
+            del(ptr);
+        }
+    }
+
+    QoreMemberAccessors(const QoreMemberAccessors&) = delete;
+    QoreMemberAccessors& operator=(const QoreMemberAccessors&) = delete;
+};
+
 // the access stored here is a composite access for the member; the maximum of the class inheritance access
 // (for accessible members imported from base classes) and the member's access in the class where it's
 // defined
@@ -1169,7 +1203,21 @@ public:
         return is_transient;
     }
 
+    //! returns the accessors of a member whose value is held in external storage, or nullptr for a normal member
+    DLLLOCAL const QoreMemberAccessors* getAccessors() const {
+        return accessors.get();
+    }
+
+    //! sets the accessors of a member whose value is held in external storage
+    DLLLOCAL void setAccessors(std::shared_ptr<const QoreMemberAccessors> a) {
+        assert(!accessors);
+        accessors = std::move(a);
+    }
+
 private:
+    // the accessors of a member whose value is held in external storage owned by a module; shared with the copies of
+    // the member in subclasses
+    std::shared_ptr<const QoreMemberAccessors> accessors;
     // the classes where this member is accessible; the first class is the class where the member was defined
     cls_vec_t cls_vec;
     // maps class contexts to class pointers in object storage for private members
@@ -2155,8 +2203,63 @@ public:
     q_member_write_gate_t member_write_gate = nullptr;
     qore_classid_t member_write_gate_classid = 0;
 
+    //! set when the class declares or inherits a member whose value is held in external storage
+    /** see QoreClass::addBuiltinMemberWithAccessors(); set before the class is published, so that member access
+        only looks for the accessors of such classes
+    */
+    bool has_member_accessors = false;
+
     DLLLOCAL QoreValue evalMemberWriteGate(QoreObject* self, const char* member, QoreValue value,
         QoreMemberWriteOp operation, ExceptionSink* xsink) const;
+
+    //! returns the declaration of a member whose value is held in external storage, or nullptr
+    DLLLOCAL const QoreMemberInfo* findAccessorMember(const char* mem) const {
+        if (!has_member_accessors) {
+            return nullptr;
+        }
+        const QoreMemberInfo* mi = members.find(mem);
+        return mi && mi->getAccessors() ? mi : nullptr;
+    }
+
+    //! returns true if the member is held outside the object: an undeclared member of a class with a write gate, or
+    //! a declared member with accessors
+    DLLLOCAL bool isExternalMemberForWrite(const char* mem) const {
+        if (member_write_gate && !members.find(mem)) {
+            return true;
+        }
+        return findAccessorMember(mem) != nullptr;
+    }
+
+    //! adds a declared member whose value is held in external storage; see QoreClass::addBuiltinMemberWithAccessors()
+    DLLLOCAL void addBuiltinMemberWithAccessors(const char* mem, ClassAccess access, const QoreTypeInfo* n_typeinfo,
+            q_member_get_t get, q_member_set_t set, const void* ptr, q_member_del_t del);
+
+    //! reads a declared member whose value is held in external storage with its accessor
+    /** applies the member's declared type to the value read
+
+        @return a new reference to the value, or no value if an exception was raised
+    */
+    DLLLOCAL QoreValue evalMemberAccessorGet(QoreObject* self, const char* mem, const QoreMemberInfo& mi,
+            ExceptionSink* xsink) const;
+
+    //! writes a declared member whose value is held in external storage with its accessor
+    /** @param value the value, which is borrowed
+
+        @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL int evalMemberAccessorSet(QoreObject* self, const char* mem, const QoreMemberInfo& mi,
+            QoreValue value, ExceptionSink* xsink) const;
+
+    //! performs a write operation on a member held outside the object
+    /** for a declared member with accessors, an assignment calls the setter, and a removal or a deletion reads the
+        value with the getter and then sets the member to no value; otherwise the class's write gate is called
+
+        @param value the value to assign, which is borrowed; NOTHING for a removal or a deletion
+
+        @return no value for an assignment, or the previous value for a removal or a deletion
+    */
+    DLLLOCAL QoreValue evalExternalMemberWrite(QoreObject* self, const char* member, QoreValue value,
+            QoreMemberWriteOp operation, ExceptionSink* xsink) const;
 
     q_serializer_t serializer = nullptr;
     q_deserializer_t deserializer = nullptr;

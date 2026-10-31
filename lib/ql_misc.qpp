@@ -40,6 +40,8 @@
 #include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
+
+#include <llvm/Config/llvm-config.h>
 #include "qore/intern/QoreHttpBodyCharset.h"
 #include "qore/intern/QoreAsciiCompatStringHelper.h"
 #if defined(__linux__) && defined(HAVE_IO_URING)
@@ -3458,6 +3460,8 @@ hash<string, hash<auto>> get_qore_option_hash() [flags=CONSTANT] {
     - \c ModuleDir: The module directory assumed by default in the %Qore library
     - \c CFLAGS: The compiler flags used to compile the %Qore library
     - \c LDFLAGS: The linker flags used to link the %Qore library
+    - \c LLVMVersion: The version of LLVM that the %Qore library was built with (since %Qore 3.0); see
+      @ref Qore::LLVMVersion
 
     @par Example:
     @code{.py}
@@ -3485,6 +3489,7 @@ hash<auto> get_qore_library_info() [flags=CONSTANT] {
    h->setKeyValue("Compiler", new QoreStringNode(qore_cplusplus_compiler), xsink);
    h->setKeyValue("CFLAGS", new QoreStringNode(qore_cflags), xsink);
    h->setKeyValue("LDFLAGS", new QoreStringNode(qore_ldflags), xsink);
+   h->setKeyValue("LLVMVersion", new QoreStringNode(LLVM_VERSION_STRING), xsink);
 
    return h;
 }

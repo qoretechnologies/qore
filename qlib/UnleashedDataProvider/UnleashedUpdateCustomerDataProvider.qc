@@ -74,7 +74,8 @@ public class UnleashedUpdateCustomerDataProvider inherits UnleashedDataProviderB
         string guid = req.guid;
         @assert(guid.val(), "guid is required");
 
-        hash<auto> body = {
+        # hash<auto!>: the literal is narrowed to its value type; adding numbers or flags would throw
+        hash<auto!> body = {
             "CustomerCode": req.CustomerCode,
         };
 

@@ -906,5 +906,7 @@ module KitDataProvider {
     @section kitdataproviderrelnotes Release Notes
 
     @subsection kitdataproviderv1_0 KitDataProvider v1.0
+    - searches and watches accept query parameters whose values all have the same type when adding the page
+      keys; the watch providers use such parameters
     - initial release
 */

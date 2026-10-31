@@ -133,6 +133,9 @@ static void cppapiuser_module_init(QoreModuleInitContext& ctx, ExceptionSink& xs
     write_probe->addMember("declared", Public, bigIntTypeInfo, QoreValue(7ll));
     write_probe->addMember("secret", Private, bigIntTypeInfo, QoreValue(9ll));
     CppApiTestNs.addSystemClass(write_probe);
+    QoreClass* accessor_probe = initMemberAccessorProbeClass(CppApiTestNs);
+    init_member_accessor_probe_members(*accessor_probe);
+    CppApiTestNs.addSystemClass(accessor_probe);
     QoreClass* inherited_probe = new QoreClass("MemberWriteDerivedProbe", "Qore::CppApiTest");
     inherited_probe->addBuiltinBaseClass(write_probe);
     CppApiTestNs.addSystemClass(inherited_probe);

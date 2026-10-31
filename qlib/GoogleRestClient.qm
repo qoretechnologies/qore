@@ -90,6 +90,10 @@ printf("%Y\n", ans.body);
     @section Googlerestclientrelnotes Release Notes
 
     @subsection Googlerestclientv1_0_1 GoogleRestClient v1.0.1
+    - fixed @ref GoogleRestClient::GoogleDriveRestConnection::getDriveOptions() "getDriveOptions()"
+      to accept options whose values all have the same type, such as a literal
+      \c {"oauth2_scopes": ("https://www.googleapis.com/auth/drive",)}; adding the Drive API profile raised
+      \c RUNTIME-TYPE-ERROR, also instead of the configuration error of a Google Drive connection
     - added the @ref GoogleRestClient::GoogleRestClientIo "GoogleRestClientIo" class, which makes the module's
       requests with the async I/O of the @ref restclientiointro "RestClientIo" module;
       @ref ConnectionProvider::AbstractConnection::getAsync() "getAsync()" of a
@@ -707,12 +711,14 @@ public class GoogleDriveRestConnection inherits GoogleRestConnection {
     }
 
     #! Applies the Drive API profile, defaulting it when the caller did not choose one
-    /** @param options the options supplied by the caller
+    /** @param options0 the options supplied by the caller
 
         @return the options with a Drive profile applied
     */
-    static hash<auto> getDriveOptions(*hash<auto> options) {
-        options = options ?? {};
+    static hash<auto> getDriveOptions(*hash<auto> options0) {
+        # "auto!": a caller's literal option hash may be narrowed, e.g. to hash<string, list<string>> for
+        # {"oauth2_scopes": (...)}, and adding the string api_profile option would then raise RUNTIME-TYPE-ERROR
+        hash<auto!> options = options0 ?? {};
         if (!options.api_profile.val()) {
             options.api_profile = "drive";
         }

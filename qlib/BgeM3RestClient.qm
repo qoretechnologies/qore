@@ -123,6 +123,8 @@ printf("%Y\n", ans.body.dense);
 
     @subsection BgeM3RestClientv1_0 BgeM3RestClient v1.0
     - initial release
+    - the client options accept a \c headers hash whose values all have the same type, such as a literal
+      <tt>{"X-Count": 1}</tt>, when adding the credential and \c Accept headers
 */
 
 #! the BgeM3RestClient namespace contains all the objects in the BgeM3RestClient module
@@ -197,15 +199,19 @@ public class BgeM3RestClientBase {
     */
     static hash<auto> getOptions(hash<auto> opts) {
         hash<auto!> rv = DefaultOptions + opts;
+        # the headers are set in an "auto!" local: a caller's headers option may be narrowed (e.g. hash<string, int>
+        # for {"X-Count": 1}), and adding a string header would throw
+        hash<auto!> hdr = rv.headers ?? {};
         # ensure Accept header is JSON (RestClientIo ignores the "data" option)
-        if (!rv.headers."Accept") {
-            rv.headers."Accept" = MimeTypeJson;
+        if (!hdr."Accept") {
+            hdr."Accept" = MimeTypeJson;
         }
         # map apikey (production-auth deployments) to Authorization: Bearer header
         if (rv.apikey) {
-            rv.headers."Authorization" = "Bearer " + rv.apikey;
+            hdr."Authorization" = "Bearer " + rv.apikey;
             remove rv.apikey;
         }
+        rv.headers = hdr;
         # model is a BGE-M3-specific option; strip it from REST client options
         # (captured separately by the subclass constructor into model_name)
         remove rv.model;

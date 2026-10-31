@@ -685,5 +685,7 @@ module TableauDataProvider {
     @section tableaudataproviderrelnotes Release Notes
 
     @subsection tableaudataproviderv1_0 TableauDataProvider v1.0
+    - searches accept query parameters whose values all have the same type, such as a literal
+      \c {"filter": "name:eq:Default"}, when adding the page keys
     - initial release
 */

@@ -82,6 +82,8 @@ printf("%Y\n", ans.body);
 
     @subsection HuggingFaceRestClientv1_0 HuggingFaceRestClient v1.0
     - initial release
+    - the client options accept a \c headers hash whose values all have the same type, such as a literal
+      <tt>{"X-Count": 1}</tt>, when adding the credential and \c Accept headers
 */
 
 #! the HuggingFaceRestClient namespace contains all the objects in the HuggingFaceRestClient module
@@ -122,15 +124,19 @@ public class HuggingFaceRestClientBase {
         if (!rv.default_path) {
             rv.default_path = "/" + (opts.api ?? DefaultApiPath);
         }
+        # the headers are set in an "auto!" local: a caller's headers option may be narrowed (e.g. hash<string, int>
+        # for {"X-Count": 1}), and adding a string header would throw
+        hash<auto!> hdr = rv.headers ?? {};
         # ensure Accept header is JSON
-        if (!rv.headers."Accept") {
-            rv.headers."Accept" = MimeTypeJson;
+        if (!hdr."Accept") {
+            hdr."Accept" = MimeTypeJson;
         }
         # map apikey to Authorization Bearer header
         if (rv.apikey) {
-            rv.headers."Authorization" = "Bearer " + rv.apikey;
+            hdr."Authorization" = "Bearer " + rv.apikey;
             remove rv.apikey;
         }
+        rv.headers = hdr;
         return rv;
     }
 }

@@ -611,4 +611,7 @@ module BitlyDataProvider {
 
     @subsection bitlydataproviderv1_0 BitlyDataProvider v1.0
     - initial release
+    - \c BitlyDataProviderBase::fetchAllPages() accepts query parameters whose values all have the same type, such
+      as a literal \c {"modified_after": "..."}, when adding the page size and cursor; watching for clicks failed
+      with \c RUNTIME-TYPE-ERROR
 */

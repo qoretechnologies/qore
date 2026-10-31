@@ -1,0 +1,130 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+# creates CDS and Business Central data providers that add their options from the environment; run by
+# CdsRestDataProviderEnvClientOptions.qtest with fake values in the CDS_* environment variables
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires DataProvider
+%requires CdsRestDataProvider
+
+/** Data providers read the environment variables that the process started with, so the test runs this script with
+    them set.  The options that a constructor accepts are returned in an exception, so that no client is created
+    and no connection is made.  The result of each check is printed as a "name=result" line; option values are only
+    compared, never printed
+*/
+
+#! Returns the options that the constructor accepts
+class TestCdsRestDataProvider inherits CdsRestDataProvider::CdsRestDataProvider {
+    constructor(*hash<auto> options) : CdsRestDataProvider(options) {
+    }
+
+    private *hash<auto> checkOptions(string err, *hash<string, hash<DataProviderOptionInfo>> option_desc,
+            *hash<auto> options) {
+        throw "CHECKED-OPTIONS", NOTHING, AbstractDataProvider::checkOptions(err, option_desc, options);
+    }
+}
+
+#! Returns the options that the constructor accepts
+class TestCdsRestTablesDataProvider inherits CdsRestDataProvider::CdsRestTablesDataProvider {
+    constructor(*hash<auto> options) : CdsRestTablesDataProvider(options) {
+    }
+
+    private *hash<auto> checkOptions(string err, *hash<string, hash<DataProviderOptionInfo>> option_desc,
+            *hash<auto> options) {
+        throw "CHECKED-OPTIONS", NOTHING, AbstractDataProvider::checkOptions(err, option_desc, options);
+    }
+}
+
+#! Returns the options that the constructor accepts
+class TestBcRestDataProvider inherits CdsRestDataProvider::BcRestDataProvider {
+    constructor(*hash<auto> options) : BcRestDataProvider(options) {
+    }
+
+    private *hash<auto> checkOptions(string err, *hash<string, hash<DataProviderOptionInfo>> option_desc,
+            *hash<auto> options) {
+        throw "CHECKED-OPTIONS", NOTHING, AbstractDataProvider::checkOptions(err, option_desc, options);
+    }
+}
+
+#! Returns the options that the constructor accepts
+class TestBcCompaniesDataProvider inherits CdsRestDataProvider::BcCompaniesDataProvider {
+    constructor(*hash<auto> options) : BcCompaniesDataProvider(options) {
+    }
+
+    private *hash<auto> checkOptions(string err, *hash<string, hash<DataProviderOptionInfo>> option_desc,
+            *hash<auto> options) {
+        throw "CHECKED-OPTIONS", NOTHING, AbstractDataProvider::checkOptions(err, option_desc, options);
+    }
+}
+
+#! the fake values that the test sets in the environment
+const FakeEnv = {
+    "url": "https://cds.invalid/fake",
+    "oauth2_client_id": "fake-client-id",
+    "oauth2_client_secret": "fake-client-secret",
+    "tenant": "fake-tenant",
+    "scope": "fake-scope",
+};
+
+#! the test classes by provider name
+const Classes = {
+    "cds": "TestCdsRestDataProvider",
+    "cds-tables": "TestCdsRestTablesDataProvider",
+    "bc": "TestBcRestDataProvider",
+    "bc-companies": "TestBcCompaniesDataProvider",
+};
+
+#! names the source of each option: "env" for the fake environment value, "explicit" for the value given by the
+#! caller, "none" for a missing option, and "other" for any other value
+string sub sources(hash<auto> opts, *hash<auto> explicit) {
+    list<string> rv = ();
+    foreach string key in (FakeEnv.keyIterator()) {
+        if (!exists opts{key}) {
+            rv += "none";
+        } else if (explicit{key} && opts{key} == explicit{key}) {
+            rv += "explicit";
+        } else if (opts{key} == FakeEnv{key}) {
+            rv += "env";
+        } else {
+            rv += "other";
+        }
+    }
+    return rv.join("/");
+}
+
+#! creates each provider with the given options and prints the sources of the options that it accepts, or the error
+sub check(string suffix, *hash<auto> options, *hash<auto> explicit) {
+    foreach hash<auto> i in (Classes.pairIterator()) {
+        string result;
+        # BcRestDataProvider also requires the instance type, which is not taken from the environment
+        hash<auto!> opts = options ?? {};
+        if (i.key == "bc") {
+            opts.instance_type = "sandbox";
+        }
+        try {
+            create_object(i.value, opts);
+            result = "not-checked";
+        } catch (hash<ExceptionInfo> ex) {
+            result = ex.err == "CHECKED-OPTIONS" ? sources(ex.arg, explicit) : ex.err;
+        }
+        printf("%s%s=%s\n", i.key, suffix, result);
+    }
+}
+
+# without automatic configuration, no option is taken from the environment; the URL is required
+check("-no-auto-config", {"url": "https://explicit.invalid/cds"}, {"url": "https://explicit.invalid/cds"});
+
+DataProvider::setAutoConfig();
+
+check("");
+
+# options given by the caller are not replaced by the environment
+const Explicit = {
+    "oauth2_client_id": "explicit-id",
+    "oauth2_client_secret": "explicit-secret",
+};
+check("-explicit", Explicit, Explicit);
+
+# an option that the constructors do not support is still an error
+check("-invalid", {"client_id": "x"});

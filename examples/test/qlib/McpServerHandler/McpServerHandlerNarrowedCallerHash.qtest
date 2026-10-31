@@ -1,0 +1,48 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpServerUtil
+%requires DataProvider
+%requires McpServerHandler
+
+%exec-class McpServerHandlerNarrowedCallerHashTest
+
+class NarrowedSchemaMcpServerHandler inherits McpServerHandler {
+    constructor() : McpServerHandler(new PermissiveAuthenticator()) {
+    }
+
+    *hash<auto> getInput(string name) {
+        return tmap{name}.input;
+    }
+}
+
+#! Tool input schemas built from literal JSON schema descriptions accept values of other types
+/** The JSON schema of a binary value is the literal \c {"type": "string", "format": "base64"}, whose narrowed
+    runtime type is \c hash<string, string>; adding the binary default value of the type raised RUNTIME-TYPE-ERROR
+    when the tool was registered
+*/
+class McpServerHandlerNarrowedCallerHashTest inherits QUnit::Test {
+    constructor() : Test("McpServerHandlerNarrowedCallerHashTest", "1.0", \ARGV) {
+        addTestCase("registerTool() describes a binary type with a default value", \binaryDefault());
+        set_return_value(main());
+    }
+
+    binaryDefault() {
+        NarrowedSchemaMcpServerHandler handler();
+        HashDataType input();
+        input.addField(new QoreDataField("img", "an image", new QoreDataType(BinaryType, NOTHING, NOTHING,
+            <0102>)));
+        handler.registerTool("upload", "uploads an image", input, auto sub (auto args) { return args; });
+        *hash<auto> img = handler.getInput("upload").properties.img;
+        assertEq("string", img.type);
+        assertEq("base64", img.format);
+        assertEq(<0102>, img."default");
+        assertEq("an image", img.description);
+    }
+}

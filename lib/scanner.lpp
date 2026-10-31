@@ -658,36 +658,20 @@ static inline DateTimeNode *makeTime(char* str) {
     return DateTimeNode::makeAbsolute(zone, 1970, 01, 01, hour, minute, second, us);
 }
 
-static inline DateTimeNode *makeRelativeDateTime(char* str) {
-    const char* p = str;
-
-    // get year
-    int year = get_int_4(p);
-    ++p;
-
-    // get month
-    int month = get_int_2(p);
-    ++p;
-
-    // get day
-    int day = get_int_2(p);
-
-    int hour = 0, minute = 0, second = 0, us = 0;
-    if (*p) {
-        ++p;
-        parse_time(p, hour, minute, second, us);
+//! Makes a duration literal from an ISO 8601 duration; raises a parse exception if the duration cannot be read
+static DateTimeNode* makeIso8601Duration(YYLTYPE* yylloc, const char* str) {
+    ExceptionSink xsink;
+    DateTimeNode* rv = new DateTimeNode(str, &xsink);
+    if (xsink) {
+        // the description belongs to the exception, so it is used before the exception is cleared
+        {
+            QoreValue desc = xsink.getExceptionDesc();
+            QoreStringValueHelper desc_str(desc);
+            parse_error(*get_loc(yylloc), "invalid duration literal: %s", desc_str->c_str());
+        }
+        xsink.clear();
     }
-
-    return DateTimeNode::makeRelative(year, month, day, hour, minute, second, us);
-}
-
-static DateTimeNode* makeRelativeTime(char* str) {
-    const char* p = str;
-
-    int hour = 0, minute = 0, second = 0, us = 0;
-    parse_time(p, hour, minute, second, us);
-
-    return DateTimeNode::makeRelative(0, 0, 0, hour, minute, second, us);
+    return rv;
 }
 
 static bool isRegexModifier(QoreRegex* qr, int c) {
@@ -1160,9 +1144,9 @@ US              [0-9]{1,6}
 D2              [0-9]{2}
 BINARY          <({HEX_DIGIT}{HEX_DIGIT})+>
 TZ              (Z|([+-][01][0-9](:{MSEC}(:{MSEC})?)?))
-RDATE           P(-?[0-9]+(\.[0-9]+)?[YMDHSu])+
-RDATETIME       P(-?[0-9]+(\.[0-9]+)?[YMD])+T(-?[0-9]+(\.[0-9]+)?[HMSu])+
-RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
+RDATE           P(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
+RDATETIME       P(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+T(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
+RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
 
 %%
 %{
@@ -3057,12 +3041,14 @@ module{WS}*\(                           yylval->string = strdup("module"); retur
 {YEAR}-{MONTH}-{DAY}-{HOUR}:{MSEC}:{MSEC}(\.{US})?{TZ}?      yylval->datetime = makeDateTime(yytext, true); return DATETIME;
 {YEAR}-{MONTH}-{DAY}?{TZ}?                                   yylval->datetime = makeDateTime(yytext, false); return DATETIME;
 {HOUR}:{MSEC}(:{MSEC}(\.{US})?)?{TZ}?   yylval->datetime = makeTime(yytext); return DATETIME;
-P{YEAR}-{D2}-{D2}(T{D2}:{D2}(:{D2}(\.{US})?)?)?   yylval->datetime = makeRelativeDateTime(yytext+1); return DATETIME;
-PT{D2}:{D2}(:{D2}(\.{US})?)?            yylval->datetime = makeRelativeTime(yytext+2); return DATETIME;
-P{D2}:{D2}(:{D2}(\.{US})?)?             yylval->datetime = makeRelativeTime(yytext+1); return DATETIME;
-{RDATETIME}                             yylval->datetime = new DateTimeNode(yytext); return DATETIME;
-{RDATE}                                 yylval->datetime = new DateTimeNode(yytext); return DATETIME;
-{RTIME}                                 yylval->datetime = new DateTimeNode(yytext); return DATETIME;
+P{YEAR}-{D2}-{D2}(T{D2}:{D2}(:{D2}(\.{US})?)?)?   yylval->datetime = makeIso8601Duration(yylloc, yytext); return DATETIME;
+P{YEAR}{D2}{D2}(T{D2}{D2}({D2}(\.{US})?)?)?       yylval->datetime = makeIso8601Duration(yylloc, yytext); return DATETIME;
+PT{D2}:{D2}(:{D2}(\.{US})?)?            yylval->datetime = makeIso8601Duration(yylloc, yytext); return DATETIME;
+P{D2}:{D2}(:{D2}(\.{US})?)?             yylval->datetime = makeIso8601Duration(yylloc, yytext); return DATETIME;
+{RDATETIME}                             yylval->datetime = makeIso8601Duration(yylloc, yytext); return DATETIME;
+{RDATE}T                                yylval->datetime = makeIso8601Duration(yylloc, yytext); return DATETIME;
+{RDATE}                                 yylval->datetime = makeIso8601Duration(yylloc, yytext); return DATETIME;
+{RTIME}                                 yylval->datetime = makeIso8601Duration(yylloc, yytext); return DATETIME;
 ({WORD}::)+{WORD}                       yylval->string = strdup(yytext); return SCOPED_REF;
 (::{WORD})+                             yylval->string = strdup(yytext); return SCOPED_REF;
 ({WORD}::)+\${WORD}                     yylval->string = make_scoped_vref(yytext); return SCOPED_VREF;

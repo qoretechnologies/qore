@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -36,6 +36,39 @@
 #include "qore/intern/ParseNode.h"
 
 QoreString QorePlusEqualsOperatorNode::op_str("+= operator expression");
+
+namespace {
+// how the += operator treats an lvalue type that does not hold a list at parse time
+enum class plus_equals_lvalue_e {
+    // the lvalue keeps its type
+    KEEP,
+    // the lvalue is assigned an integer value, which its type must accept
+    INT,
+    // the type is not known well enough; the operation is decided at runtime
+    GENERIC,
+};
+
+// returns how the += operator treats the given lvalue type and its dereferenced type
+plus_equals_lvalue_e get_plus_equals_lvalue_kind(const QoreTypeInfo* ti, const QoreTypeInfo* check_ti) {
+    if (QoreTypeInfo::isType(check_ti, NT_LIST)
+        || QoreTypeInfo::isType(check_ti, NT_HASH)
+        || QoreTypeInfo::isType(check_ti, NT_OBJECT)
+        || QoreTypeInfo::isType(check_ti, NT_STRING)
+        || QoreTypeInfo::isType(check_ti, NT_FLOAT)
+        || QoreTypeInfo::isType(check_ti, NT_NUMBER)
+        || QoreTypeInfo::isType(check_ti, NT_DATE)
+        || QoreTypeInfo::isType(check_ti, NT_BINARY)) {
+        return plus_equals_lvalue_e::KEEP;
+    }
+    // if the lhs type is not one of the above types, there are 2 possibilities: the lvalue has no value, in which
+    // case it takes the value of the right side, or if it's anything else it's converted to an integer, so we just
+    // check if it can be assigned an integer value
+    if (QoreTypeInfo::returnsSingle(ti) && !QoreTypeInfo::equal(ti, timeoutTypeInfo)) {
+        return plus_equals_lvalue_e::INT;
+    }
+    return plus_equals_lvalue_e::GENERIC;
+}
+}
 
 int QorePlusEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
     // turn off "return value ignored" flags
@@ -99,23 +132,31 @@ int QorePlusEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& 
                 }
             }
         }
-    } else if (!QoreTypeInfo::isType(check_ti, NT_LIST)
-        && !QoreTypeInfo::isType(check_ti, NT_HASH)
-        && !QoreTypeInfo::isType(check_ti, NT_OBJECT)
-        && !QoreTypeInfo::isType(check_ti, NT_STRING)
-        && !QoreTypeInfo::isType(check_ti, NT_FLOAT)
-        && !QoreTypeInfo::isType(check_ti, NT_NUMBER)
-        && !QoreTypeInfo::isType(check_ti, NT_DATE)
-        && !QoreTypeInfo::isType(check_ti, NT_BINARY)) {
-        // if the lhs type is not one of the above types,
-        // there are 2 possibilities: the lvalue has no value, in which
-        // case it takes the value of the right side, or if it's anything else it's
-        // converted to an integer, so we just check if it can be assigned an
-        // integer value below, this is enough
-        if (QoreTypeInfo::returnsSingle(ti) && !QoreTypeInfo::equal(ti, timeoutTypeInfo)) {
-            if (check_lvalue_int(loc, ti, "+=") && !err) {
-                err = -1;
-            }
+    } else {
+        // the parse-time checks are made on the plain type T of an or-nothing lvalue (*T): an operation that T
+        // refuses can never succeed on *T; the error names the declared type, and the result type and the runtime
+        // operation follow the declared type
+        const QoreTypeInfo* plain_ti = get_or_nothing_base_type(ti);
+        const QoreTypeInfo* plain_check_ti = get_or_nothing_base_type(check_ti);
+        plus_equals_lvalue_e kind = get_plus_equals_lvalue_kind(ti, check_ti);
+        plus_equals_lvalue_e check_kind = (plain_ti == ti && plain_check_ti == check_ti)
+            ? kind
+            : get_plus_equals_lvalue_kind(plain_ti, plain_check_ti);
+
+        if (check_kind == plus_equals_lvalue_e::INT && check_lvalue_int(loc, ti, "+=") && !err) {
+            err = -1;
+        }
+        // the warning is only given for the plain type: on an or-nothing lvalue, an operand such as NOTHING is
+        // valid and expected
+        if (kind == plus_equals_lvalue_e::KEEP && QoreTypeInfo::isType(ti, NT_STRING)
+            && !QoreTypeInfo::canConvertToScalar(rightTypeInfo)) {
+            QoreStringMaker desc("cannot mix string and %s types with the += operator",
+                QoreTypeInfo::getName(rightTypeInfo));
+            qore_program_private::makeParseWarning(getProgram(), *loc, QP_WARN_INVALID_OPERATION,
+                "INVALID-OPERATION", desc.c_str());
+        }
+
+        if (kind == plus_equals_lvalue_e::INT) {
             parse_context.typeInfo = ti = bigIntTypeInfo;
             // the analysis left by the right operand describes that operand, not the result
             qore_set_result_parse_analysis(parse_context, ti);
@@ -127,14 +168,10 @@ int QorePlusEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& 
                 }
             }
             return err;
-        } else {
+        }
+        if (kind == plus_equals_lvalue_e::GENERIC) {
             ti = nullptr;
         }
-    } else if (QoreTypeInfo::isType(ti, NT_STRING) && !QoreTypeInfo::canConvertToScalar(rightTypeInfo)) {
-        QoreStringMaker desc("cannot mix string and %s types with the += operator",
-            QoreTypeInfo::getName(rightTypeInfo));
-        qore_program_private::makeParseWarning(getProgram(), *loc, QP_WARN_INVALID_OPERATION,
-            "INVALID-OPERATION", desc.c_str());
     }
     parse_context.typeInfo = ti;
     // the analysis left by the right operand describes that operand, not the result

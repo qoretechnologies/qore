@@ -259,6 +259,12 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
     @section websocketclient_relnotes WebSocketClient Module Release History
 
     @subsection wsc_v2_5 v2.5
+    - fixed the @ref WebSocketClient::WebSocketClient "WebSocketClient" constructor to accept a \c headers option
+      whose values all have the same type, such as a literal <tt>{"X-Count": 1}</tt>, with the \c token or
+      \c cookie option; adding the \c Authorization or \c Cookie header raised \c RUNTIME-TYPE-ERROR
+    - fixed the @ref WebSocketClient::WebSocketConnectPollOperation "WebSocketConnectPollOperation" constructor for
+      a completed connection to accept a result whose values all have the same type, such as a literal
+      <tt>{"upgrade": "websocket"}</tt>; adding the status code raised \c RUNTIME-TYPE-ERROR
     - a close started by the client completes when the server's CLOSE frame arrives, as RFC 6455 requires (sections
       7.1.5 and 7.1.6), over HTTP/1.1, HTTP/2 and HTTP/3, so the close code and reason reported after the close are
       those of the server's CLOSE frame; before, the client closed the connection as soon as its own CLOSE frame was
@@ -269,6 +275,11 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
     - a data message sent after the close handshake started raises \c WEBSOCKET-CLOSING-ERROR: no data frame may
       follow a CLOSE frame (RFC 6455 section 5.5.1)
     - the connect and reconnect log messages give the URL without its password
+    - fixed @ref WebSocketClient::WebSocketClient::connect() "connect()",
+      @ref WebSocketClient::WebSocketClient::connectAsync() "connectAsync()", and
+      @ref WebSocketClient::WebSocketClient::startPollConnect() "startPollConnect()" to accept an option or header
+      hash whose values all have the same type, such as a literal <tt>{"hdr": {"X-Api-Version": 2}}</tt>; adding the
+      default \c Accept header raised \c RUNTIME-TYPE-ERROR
     - the module requires the AsyncApi module
     - @ref WebSocketClient::WebSocketClientWithSerialization "WebSocketClientWithSerialization" now validates
       deserialized incoming payloads against the configured AsyncAPI receive schema before raising
@@ -1149,7 +1160,7 @@ ws.connect();
         option hash
     */
     hash<auto> connect(*hash<auto> opts, *reference<hash<auto>> info) {
-        opts = getConnectOptions(opts);
+        opts = addAcceptHeader(opts);
         return connectIntern(opts, \info);
     }
 
@@ -1164,7 +1175,7 @@ ws.connect();
         @since WebSocketClient 2.4
     */
     WebSocketConnectPollOperation startPollConnect(*hash<auto> opts) {
-        opts = getConnectOptions(opts);
+        opts = addAcceptHeader(opts);
 
         m.lock();
         on_exit m.unlock();
@@ -1195,7 +1206,7 @@ ws.connect();
         @since WebSocketClient 2.4
     */
     connectAsync(*hash<auto> opts, *Queue ready_queue) {
-        opts = getConnectOptions(opts);
+        opts = addAcceptHeader(opts);
 
         m.lock();
         on_exit m.unlock();
@@ -1559,20 +1570,24 @@ ws.connect();
     }
 
     #! Returns the Accept header value
-    #! Returns the connection options with an \c Accept header
-    /** A new hash is returned, so that the header is added whatever the type of the given hash is; for example, the
-        value type of a hash literal whose only value is @ref nothing is \c nothing, so no hash can be assigned to its
-        \c hdr key
-    */
-    private:internal hash<auto> getConnectOptions(*hash<auto> opts) {
-        if (opts.hdr.Accept) {
-            return opts;
-        }
-        return opts - "hdr" + {"hdr": (opts.hdr ?? {}) + {"Accept": getAcceptHeader()}};
-    }
-
     private string getAcceptHeader() {
         return MimeTypeText + "," + MimeTypeOctetStream;
+    }
+
+    #! Returns the connection options with an \c Accept header in \c hdr, unless the caller gave one
+    /** @since WebSocketClient 2.5
+    */
+    private *hash<auto> addAcceptHeader(*hash<auto> opts0) {
+        if (opts0.hdr.Accept) {
+            return opts0;
+        }
+        # a caller's literal may be narrowed (e.g. hash<string, int> for {"timeout": 5000} or the headers in
+        # {"hdr": {"X-Api-Version": 2}}), and adding the Accept header would throw
+        *hash<auto!> opts = opts0;
+        *hash<auto!> hdr = opts.hdr;
+        hdr.Accept = getAcceptHeader();
+        opts.hdr = hdr;
+        return opts;
     }
 
     #! Connects to the websocket server
@@ -2063,15 +2078,21 @@ ws.setEventQueue();
             http_opts.http_version = "auto";
         }
         normalizeHttp3ModeOption();
+        # the headers are set in an "auto!" local: a caller's headers option may be narrowed (e.g. hash<string, int>
+        # for {"X-Count": 1}), and adding a string header would throw
+        *hash<auto!> hdr = http_opts.headers;
         # remove the "token" option and use it if the Authorization header is not set
-        if ((*string token = remove http_opts.token) && !http_opts.headers.Authorization) {
-            http_opts.headers.Authorization = sprintf("%s %s", http_opts.token_type ?? "Bearer", token);
+        if ((*string token = remove http_opts.token) && !hdr.Authorization) {
+            hdr.Authorization = sprintf("%s %s", http_opts.token_type ?? "Bearer", token);
         }
         # unconditionally remove any "token_type" option
         remove http_opts.token_type;
         # remove the "cookie" option and set it as a Cookie header
         if (*string cookie = remove http_opts.cookie) {
-            http_opts.headers.Cookie = cookie;
+            hdr.Cookie = cookie;
+        }
+        if (exists hdr) {
+            http_opts.headers = hdr;
         }
         http_opts.encoding = "UTF-8";
 
@@ -6849,8 +6870,11 @@ public class WebSocketConnectPollOperation inherits Qore::AbstractPollOperation<
         @since WebSocketClient 2.5
     */
     constructor(hash<auto> result) {
-        output = result;
-        output.status_code = result.status_code ?? 101;
+        # the status code is set in an "auto!" local: a caller's literal may be narrowed (e.g.
+        # hash<string, string> for {"upgrade": "websocket"}), and adding the int status code would throw
+        hash<auto!> rv = result;
+        rv.status_code = result.status_code ?? 101;
+        output = rv;
         state = "complete";
         goal_reached = True;
     }

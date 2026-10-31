@@ -1301,6 +1301,36 @@ uint64_t* qore_rt_list_get_mutable_data_unchecked(uint64_t list_val);
 //! Finalize the logical length of a fresh list after direct scalar stores.
 void qore_rt_list_set_length_unchecked(uint64_t list_val, int64_t length);
 
+//! Fold the type of a map or hash map value into the common value type state; returns the new state.
+/** The state is 0 before the first value; \a index is the index of the source element of a hash map operator, or
+    -1 for a list.  See QoreIROpcode::CommonTypeFold.
+*/
+int64_t qore_rt_common_type_fold(int64_t state, uint64_t value, int64_t index);
+
+//! Set the type of the result list of a map or map/select operator from the common value type state.
+/** When the values had a common type, the list gets list<common type>; otherwise it gets the type of a list
+    created with \a element_type (QoreListNode::QoreListNode(const QoreTypeInfo*)).  See
+    QoreIROpcode::ListSetCommonType.
+*/
+void qore_rt_list_set_common_type(uint64_t list_val, int64_t state, const QoreTypeInfo* element_type);
+
+//! AOT form of qore_rt_list_set_common_type(); \a has_element_type = 0 for no element type
+void qore_rt_list_set_common_type_by_type_path(uint64_t list_val, int64_t state, const char* element_type_path,
+        int32_t has_element_type, ExceptionSink* xsink);
+
+//! Set the type of the result hash of a hash map operator from the common value type state.
+void qore_rt_hash_set_common_type(uint64_t hash_val, int64_t state);
+
+//! Set the type of the result list of a select operator from its values; see QoreIROpcode::ListSetScannedType.
+void qore_rt_list_set_scanned_type(uint64_t list_val, const QoreTypeInfo* element_type);
+
+//! AOT form of qore_rt_list_set_scanned_type(); \a has_element_type = 0 for no element type
+void qore_rt_list_set_scanned_type_by_type_path(uint64_t list_val, const char* element_type_path,
+        int32_t has_element_type, ExceptionSink* xsink);
+
+//! Set the type of the result list of a select operator from its values or else the value type of its source.
+void qore_rt_list_set_scanned_type_from_source(uint64_t list_val, uint64_t source_val);
+
 //! Get any element at index; returns NaN-boxed QoreValue (with +1 ref).
 //! Returns NOTHING if not a list or index out of bounds.
 uint64_t qore_rt_list_get_value(uint64_t list_val, int64_t index, ExceptionSink* xsink);

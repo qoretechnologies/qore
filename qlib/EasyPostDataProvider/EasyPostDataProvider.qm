@@ -1253,4 +1253,6 @@ module EasyPostDataProvider {
 
     @subsection easypostdataproviderv1_0 EasyPostDataProvider v1.0
     - initial release
+    - \c EasyPostDataProviderBase::paginate() accepts query parameters whose values all have the same type, such as
+      a literal \c {"page_size": 10}, when adding the page cursor
 */

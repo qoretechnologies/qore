@@ -79,6 +79,10 @@ ds.recvDataStream(
 
     @subsection datastreamclientiov1_0 DataStreamClientIo v1.0
     - initial release
+    - @ref DataStreamClient::DataStreamClientIo::sendRawStream() "sendRawStream()" and
+      @ref DataStreamClient::DataStreamClientIo::getRawStream() "getRawStream()" accept request headers whose values
+      all have the same type, such as a literal <tt>{"X-Count": 1}</tt>, when adding the \c Accept and
+      \c Content-Type headers
 */
 
 #! the DataStreamClient namespace contains all the public objects in the DataStreamClientIo module
@@ -568,11 +572,14 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
     */
     hash<auto> sendRawStream(code<auto()> scb, string method, *string path, timeout timeout_ms = 0,
             *reference<hash<auto>> info, *hash<auto> hdr) {
-        if (!hdr.Accept && !hdr.accept) {
-            hdr.Accept = MimeTypeYaml;
+        # the headers are set in an "auto!" local: a caller's literal may be narrowed (e.g. hash<string, int> for
+        # {"X-Count": 1}), and adding the Accept header would throw
+        *hash<auto!> req_hdr = hdr;
+        if (!req_hdr.Accept && !req_hdr.accept) {
+            req_hdr.Accept = MimeTypeYaml;
         }
         # Prepare headers
-        hash<auto> merged_hdr = getDefaultHeaders() + hdr;
+        hash<auto> merged_hdr = getDefaultHeaders() + req_hdr;
 
         HttpClientIo::HttpClientStreamHandle stream = getConnectionManager().acquireStream(
             getUrl());
@@ -673,13 +680,16 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
             timeout timeout_ms = 0, *reference<hash<auto>> info, *hash<auto> hdr) {
         # Serialize body as YAML if provided
         *data serialized_body;
+        # the headers are set in an "auto!" local: a caller's literal may be narrowed (e.g. hash<string, int> for
+        # {"X-Count": 1}), and adding the Content-Type header would throw
+        *hash<auto!> req_hdr = hdr;
         if (exists body) {
             serialized_body = binary(make_yaml(body));
-            hdr."Content-Type" = MimeTypeYaml;
+            req_hdr."Content-Type" = MimeTypeYaml;
         }
 
         # Prepare headers
-        hash<auto> merged_hdr = getDefaultHeaders() + hdr;
+        hash<auto> merged_hdr = getDefaultHeaders() + req_hdr;
 
         HttpClientIo::HttpClientStreamHandle stream = getConnectionManager().acquireStream(
             getUrl());

@@ -303,6 +303,8 @@ printf("%s defines %d segments\n", summary.version, summary.counts.segments);
 
     @par Release Notes
 
+    - the schema summary data provider accepts constructor options whose values all have the same type, such as
+      \c {"path": "..."}
     - added the initial \c Hl7v2Util module with structure-agnostic HL7 v2
       parsing, writing, address helpers, schema loading and validation, and
       read/write/schema data providers

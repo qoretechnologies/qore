@@ -200,7 +200,8 @@ public class InsightlyDataProviderBase inherits DataProvider::AbstractDataProvid
         int top = limit && limit < DefaultPageSize ? limit : DefaultPageSize;
 
         while (True) {
-            hash<auto> qparams = params ?? {};
+            # hash<auto!>: the given hash may be narrowed (ex: hash<string, string>); adding paging keys would throw
+            hash<auto!> qparams = params ?? {};
             qparams.skip = skip;
             qparams.top = top;
 

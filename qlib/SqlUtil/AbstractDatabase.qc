@@ -935,7 +935,9 @@ list<auto> rows = target.selectRows({"join": join_inner(tmp, NOTHING, {"id": "id
         columns = prepareTempTableColumnsImpl(columns, precreated);
 
         # build the table description from the in-memory column description (no catalog introspection)
-        hash<auto> desc = {"columns": columns};
+        # the literal would be narrowed to the type of the column hash (e.g.
+        # hash<string, hash<string, hash<string, string>>>), and adding the primary key or indexes would throw
+        hash<auto!> desc = {"columns": columns};
         if (opts.primary_key) {
             desc.primary_key = opts.primary_key;
         }

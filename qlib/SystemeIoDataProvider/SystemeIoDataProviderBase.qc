@@ -129,7 +129,8 @@ public class SystemeIoDataProviderBase inherits DataProvider::AbstractDataProvid
     */
     list<auto> doPaginatedGet(string path, *hash<auto> params, *int limit) {
         list<auto> all_items = ();
-        hash<auto> req_params = params ?? {};
+        # hash<auto!>: the given hash may be narrowed (ex: hash<string, string>); adding paging keys would throw
+        hash<auto!> req_params = params ?? {};
         if (!req_params.limit) {
             req_params.limit = DefaultPageSize;
         }

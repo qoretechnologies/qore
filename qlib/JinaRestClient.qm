@@ -89,6 +89,9 @@ printf("%Y\n", ans.body);
 
     @subsection JinaRestClientv1_1 JinaRestClient v1.1
     - initial release
+    - fixed @ref JinaRestClient::JinaRestConnection "JinaRestConnection" to report a configuration or option
+      hash whose values all have the same type, such as \c {"timeout": 30}, with the real configuration error; adding
+      the URL, options or ping options raised \c RUNTIME-TYPE-ERROR instead
 */
 
 %requires json
@@ -282,7 +285,9 @@ public class JinaRestConnection inherits RestClient::RestConnection {
     }
 
     #! Loads existing connections with an authenticated ping instead of the old public model listing
-    private static hash<auto> fixPingOptions(hash<auto> options) {
+    private static hash<auto> fixPingOptions(hash<auto> options0) {
+        # a caller's option hash may be narrowed (ex: hash<string, int>), and adding the ping options would throw
+        hash<auto!> options = options0;
         if ((options.ping_method ?? "GET").upr() == "GET"
                 && (!exists options.ping_path || options.ping_path == "models"
                     || options.ping_path == "/models" || options.ping_path == "/v1/models"
@@ -293,7 +298,10 @@ public class JinaRestConnection inherits RestClient::RestConnection {
         return options;
     }
 
-    private static hash<auto> getConfig(hash<auto> config) {
+    private static hash<auto> getConfig(hash<auto> config0) {
+        # a caller's configuration hash may be narrowed (ex: hash<string, string>), and setting the URL or the
+        # options would throw
+        hash<auto!> config = config0;
         config.url = DefaultUrl;
         config.opts = JinaRestConnection::fixPingOptions(config.opts ?? {});
         return config;

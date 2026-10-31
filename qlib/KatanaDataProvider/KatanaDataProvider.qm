@@ -2268,5 +2268,7 @@ module KatanaDataProvider {
     @section katanadataproviderrelnotes Release Notes
 
     @subsection katanadataproviderv1_0 KatanaDataProvider v1.0
+    - searches accept query parameters whose values all have the same type, such as a literal
+      \c {"name": "Acme"}, when adding the page keys
     - initial release
 */

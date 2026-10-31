@@ -1,0 +1,80 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+
+%exec-class CdsRestDataProviderNarrowedCallerHashTest
+
+#! Returns its argument with its runtime type, so a literal reaches the call as a caller's literal does
+hash<auto> sub mk(hash<auto> h) {
+    return h;
+}
+
+#! The CDS data providers add options from CDS_* environment variables to the caller's constructor options
+/** With auto-configuration enabled, a caller's option literal such as \c {"cdsrestclient_options": {...}} is
+    narrowed to \c hash<string, hash<string, string>>, so adding the string \c url from \c CDS_URL raised
+    RUNTIME-TYPE-ERROR (with \c BcRestDataProvider instead of its missing \c instance_type error).  Environment
+    variables are read when a process starts, so the providers are created in a child process
+    (CdsRestDataProviderAutoConfigHelper.q) started with \c CDS_URL set and the interpreter options of this test;
+    nothing connects.
+*/
+class CdsRestDataProviderNarrowedCallerHashTest inherits QUnit::Test {
+    private {
+        const CdsUrl = "https://org.crm.dynamics.com/";
+    }
+
+    constructor() : Test("CdsRestDataProviderNarrowedCallerHashTest", "1.0", \ARGV) {
+        addTestCase("auto-configured URL is added to narrowed constructor options", \autoConfigTest());
+        addTestCase("Business Central reports its missing instance type for narrowed options", \bcTest());
+        set_return_value(main());
+    }
+
+    autoConfigTest() {
+        # the same literal the helper passes
+        assertEq("hash<string, hash<string, string>>", mk({
+            "cdsrestclient_options": {
+                "oauth2_client_id": "test-id",
+                "oauth2_client_secret": "test-secret",
+                "token": "test-token",
+                "instance_type": "sandbox",
+            },
+        }).fullType());
+
+        string out = runHelper(("CdsRestDataProvider", "CdsRestTablesDataProvider", "BcCompaniesDataProvider"));
+        assertEq((
+            "CdsRestDataProvider: " + CdsUrl,
+            "CdsRestTablesDataProvider: " + CdsUrl,
+            "BcCompaniesDataProvider: https://api.businesscentral.dynamics.com/v2.0/sandbox/api/v2.0/",
+        ), out.split("\n"));
+    }
+
+    bcTest() {
+        # the instance type is a required provider option, so options holding only the client options are an error,
+        # which must be reported as such
+        string out = runHelper(("BcRestDataProvider",));
+        assertRegex("^BcRestDataProvider: CONSTRUCTOR-ERROR: .*missing required option \"instance_type\"", out);
+    }
+
+    #! Runs the helper with CDS_URL set and this process's interpreter options; returns its output
+    private string runHelper(list<string> classes) {
+        # interpreter options are the arguments before the script
+        list<string> opts = map $1, QORE_ARGV[1..], $1 =~ /^-/;
+        string helper = get_script_dir() + "CdsRestDataProviderAutoConfigHelper.q";
+        string cmd = sprintf("env CDS_URL=%s %s %s %s %s 2>&1", shellQuote(CdsUrl), shellQuote(QORE_ARGV[0]),
+            (map shellQuote($1), opts).join(" "), shellQuote(helper), (map shellQuote($1), classes).join(" "));
+        int rc;
+        string out = backquote(cmd, \rc);
+        assertEq(0, rc, out);
+        return trim(out);
+    }
+
+    private static string shellQuote(string s) {
+        return "'" + replace(s, "'", "'\\''") + "'";
+    }
+}

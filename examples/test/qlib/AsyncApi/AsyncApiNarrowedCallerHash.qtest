@@ -1,0 +1,82 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires AsyncApi
+
+%exec-class AsyncApiNarrowedCallerHashTest
+
+#! Message payloads and headers whose values all have the same type
+/** A hash literal whose values all have the same type has a narrowed type, such as \c hash<string, date> for
+    <tt>{"when": now()}</tt>; serializing a date to the string of a \c date-time property or header raised
+    RUNTIME-TYPE-ERROR
+*/
+class AsyncApiNarrowedCallerHashTest inherits QUnit::Test {
+    private {
+        AsyncApi3Schema schema;
+    }
+
+    constructor() : Test("AsyncApiNarrowedCallerHashTest", "1.0", \ARGV) {
+        addTestCase("a narrowed message payload", \narrowedPayload());
+        addTestCase("narrowed message headers", \narrowedHeaders());
+
+        schema = new AsyncApi3Schema("", {
+            "asyncapi": "3.0.0",
+            "info": {"title": "narrowed hash test", "version": "1.0.0"},
+            "channels": {
+                "events": {
+                    "address": "/events",
+                    "messages": {
+                        "event": {
+                            "headers": {
+                                "type": "string",
+                                "format": "date-time",
+                            },
+                            "payload": {
+                                "type": "object",
+                                "properties": {
+                                    "when": {"type": "string", "format": "date-time"},
+                                    "until": {"type": "string", "format": "date-time"},
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+            "operations": {
+                "sendEvent": {
+                    "action": "send",
+                    "channel": {"$ref": "#/channels/events"},
+                    "messages": ({"$ref": "#/channels/events/messages/event"},),
+                },
+            },
+        });
+        set_return_value(main());
+    }
+
+    #! Returns its argument with the type it was given
+    static auto mk(auto h) {
+        return h;
+    }
+
+    narrowedPayload() {
+        assertEq("hash<string, date>", mk({"when": 2026-10-31T12:00:00Z}).fullType());
+        auto msg = {"when": 2026-10-31T12:00:00Z, "until": 2026-11-01T12:00:00Z};
+        hash<auto> hdr = {};
+        schema.validateOutgoingMessage("events", \msg, \hdr);
+        assertEq({"when": "2026-10-31T12:00:00+00:00", "until": "2026-11-01T12:00:00+00:00"}, msg);
+    }
+
+    narrowedHeaders() {
+        auto msg = {};
+        hash<auto> hdr = {"sent": 2026-10-31T12:00:00Z};
+        assertEq("hash<string, date>", hdr.fullType());
+        schema.validateOutgoingMessage("events", \msg, \hdr);
+        assertEq({"sent": "2026-10-31T12:00:00+00:00"}, hdr);
+    }
+}

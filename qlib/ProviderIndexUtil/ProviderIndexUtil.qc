@@ -2710,7 +2710,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
         any canonical index file left by an earlier index is removed.  The same YAML can be produced from a
         published index with @ref dumpIndexYaml().
 
-        @param maps the \c factorymap, \c appmap, \c schememap, and \c appinfomap members of the index, and
+        @param maps0 the \c factorymap, \c appmap, \c schememap, and \c appinfomap members of the index, and
         optionally its \c factoryinfomap member; if \c factoryinfomap is not given, the index does not record factory
         info, and readers load the factory modules to get it; the info of a factory that is not in \c factorymap is
         not written, so an index read with @ref readSerializedDataProviderIndex() can be updated and written again;
@@ -2738,8 +2738,11 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
 
         @since ProviderIndexUtil 1.2
     */
-    static hash<ProviderIndexInfo> writeDataProviderIndexByApp(hash<auto> maps, *list<string> action_apps,
+    static hash<ProviderIndexInfo> writeDataProviderIndexByApp(hash<auto> maps0, *list<string> action_apps,
             code get_app_actions, date delta, hash<auto> summary, *bool write_canonical_yaml) {
+        # a caller's literal may be narrowed (e.g. hash<string, hash<string, string>>), and adding the altmap member
+        # would throw
+        hash<auto!> maps = maps0;
         # verify that the target directory can be written to before writing anything
         getWritableIndexDir();
 

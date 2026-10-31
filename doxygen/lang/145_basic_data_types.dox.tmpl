@@ -483,26 +483,46 @@ auto val = q.pop(20000);
     @note In this relative date/time format, only seconds accept a fractional component
 
     @subsubsection short_reldates Short Relative Time Format
-    This and the next duration format for composite relative date/time values are both based on <a href="http://en.wikipedia.org/wiki/ISO_8601">ISO-8601</a>.\n\n
-    This first format has the following syntax:
-    - \c PnYnMnDTnHnMnS
+    This and the next duration format are the two duration formats of
+    <a href="http://en.wikipedia.org/wiki/ISO_8601">ISO 8601</a> (ISO 8601:2004 section 4.4.3, and ISO 8601-1:2019),
+    which %Qore follows in duration literals and in @ref Qore::date(string) "date(string)".\n\n
+    This first format, the format with designators (ISO 8601:2004 section 4.4.3.2), has the following syntax:
+    - \c PnYnMnWnDTnHnMnS
     .
-    Each element above is optional, but at least one element must be present. Note that \c "M" means months when before the \c "T" and minutes when found after the \c "T". The other elements are years, days, hours, and seconds. Fractional values are accepted as well, but these values are always converted to an integer value in the time component with higher precision (i.e. fractional seconds are converted to microseconds, fractional microseconds are ignored), and additionally the values may be negative.
+    Each component is optional, but at least one must be present, and the components that are given must be in this
+    order, each at most once:
+    - before the time designator \c "T": years (\c Y), months (\c M), weeks (\c W) and days (\c D)
+    - after the \c "T": hours (\c H), minutes (\c M) and seconds (\c S); the \c "T" must be followed by at least one
+      of them, and is left out when there is none
+    .
+    So \c "M" means months before the \c "T" and minutes after it, and \c P1H or \c P1S is an error: an hour or a
+    second must follow the \c "T" (\c PT1H, \c P1DT2H).  Weeks can be combined with the other components, as in
+    ISO 8601-1:2019 (\c P1W2D is 9 days); a week is 7 days.
 
-    @note
-    - Standard <a href="http://en.wikipedia.org/wiki/ISO_8601">ISO-8601</a> relative date/time formats only allows for the last component to have a fractional value.
-    - Fractional years are converted to days assuming 365 days in a year
-    - Fractional months are converted to days assuming an average 30 days in a month
+    The last (smallest) component given can have a decimal fraction (ex: \c PT1.5H, \c P1DT0.5S), as in ISO 8601,
+    which allows a fraction only on the lowest order component; \c P1.5DT1H is an error.  A fraction is converted to
+    the smaller components (fractional seconds to microseconds; a fraction of a microsecond is ignored), with years
+    of 365 days and months of 30 days.  In a string, the decimal sign can be a full stop or a comma
+    (<tt>"PT1,5S"</tt>), as in ISO 8601; in a literal, it is a full stop.
 
-    @ref Qore::date(string) "date(string)" reads durations in this format from strings (ex: <tt>date("PT15M")</tt>),
-    also with lower-case designators and trailing white space, and with weeks (\c nW, before the \c "T"; ex:
-    <tt>"P2W"</tt> is 14 days) and a comma as the decimal sign (<tt>"PT1,5S"</tt>), as in ISO 8601.  It raises
-    \c INVALID-DATE for a string it cannot read: a number without a designator (<tt>"P1"</tt>), no element
-    (<tt>"P"</tt>, <tt>"PT"</tt>), a \c "T" without a time element (<tt>"P1DT"</tt>), \c H, \c S or \c u before the
-    \c "T" or \c Y, \c W or \c D after it, a decimal sign without digits, a value that does not fit in a 32-bit
-    signed integer, or any other text.  Conversions that do not raise exceptions, such as assigning a string to a
-    \c softdate, keep the elements read before the text they cannot read.  The
-    @ref long_reldates "long relative time format" is read only in literals.
+    These are %Qore extensions to ISO 8601, which %Qore has always supported:
+    - a component can be negative (ex: \c P-1D, \c PT1H-30M); ISO 8601-1 has no negative durations
+    - \c nu after the \c "T", after the seconds: microseconds (ex: \c PT4M551u); deprecated, use fractional seconds
+      instead (\c PT4M0.000551S)
+    - in strings: lower-case designators (<tt>"p1dt2h"</tt>), as in the duration grammar of RFC 3339 (Appendix A),
+      whose quoted strings are case-insensitive (RFC 5234 section 2.3), and trailing white space
+    .
+    The @ref single_reldates "single relative time format" (ex: \c 250ms) is a separate %Qore format, not an
+    ISO 8601 duration.
+
+    A duration literal that does not follow this format is a parse error that says what is wrong (ex: \c P1H says
+    that the hour must follow the \c "T", as in \c PT1H), and @ref Qore::date(string) "date(string)" raises
+    \c INVALID-DATE for such a string: a number without a designator (<tt>"P1"</tt>), no component (<tt>"P"</tt>,
+    <tt>"PT"</tt>), a \c "T" without a time component (<tt>"P1DT"</tt>), a component out of order or repeated
+    (<tt>"P1D1Y"</tt>, <tt>"P1D1D"</tt>), a fraction on a component that is not the last one, a decimal sign
+    without digits, a value that does not fit in a 32-bit signed integer, or any other text.  Conversions that do not
+    raise exceptions, such as assigning a string to a \c softdate, keep the components read before the text they
+    cannot read.
 
     Here are some examples (using qore's -X command-line option to evaluate and expression and print out the result):
     @code{.py}
@@ -514,22 +534,29 @@ prompt% qore -X 'P3DT21H'
 <time: 3 days 21 hours>
 prompt% qore -X 'PT19.1S'
 <time: 19 seconds 100 milliseconds>
+prompt% qore -X 'P1W2D'
+<time: 9 days>
     @endcode
 
-    @note the \c "u" charater indicating microseconds is a deprecated %Qore-specific extension to <a href="http://en.wikipedia.org/wiki/ISO_8601">ISO-8601</a>; use fractional seconds instead
-
     @subsubsection long_reldates Long Relative Time Format
-    The second <a href="http://en.wikipedia.org/wiki/ISO_8601">ISO-8601</a>-based format for specifing complex durations with multiple time units has the following syntax:
-    - \c PYYYY-MM-DDTHH:mm:SS
+    The second format is the alternative format of ISO 8601 (ISO 8601:2004 section 4.4.3.3), which writes a duration
+    as a date and a time:
+    - extended format: \c PYYYY-MM-DDThh:mm:ss
+    - basic format: \c PYYYYMMDDThhmmss
     .
-    This format is more limited than the first format, in that all values must be non-negative, and furthermore, all values must be present (although they may be zero).\n\n
+    The date is complete (years, months and days, which can be zero); the time is optional, and can leave out the
+    seconds (\c PYYYY-MM-DDThh:mm), as a time of reduced accuracy.  The seconds can have a decimal fraction
+    (\c P0000-00-00T00:04:00.000551; also with a comma in a string).  The values cannot be negative, and they cannot
+    exceed the carry-over points of ISO 8601: 12 months, 30 days, 24 hours, 60 minutes and 60 seconds.  The basic and
+    extended formats cannot be mixed, and a time without a date (<tt>P00:01:00</tt>, <tt>PT01:00:00</tt>) is an
+    error: write it with its date (\c P0000-00-00T00:01:00) or with designators (\c PT1M).\n\n
     Here are some examples of the second format (equivalent to the first examples):
     @code{.py}
 prompt% qore -X 'P0001-03-00T00:00:04'
 <time: 1 year 3 months 4 seconds>
 prompt% qore -X 'P0000-00-00T00:04:00.000551'
 <time: 4 minutes 551 microseconds>
-prompt% qore -X 'P0000-00-03T21:00:00'
+prompt% qore -X 'P00000003T210000'
 <time: 3 days 21 hours>
     @endcode
     @see @ref date_type, @ref softdate_type

@@ -302,6 +302,12 @@ message: "Hello, Hello, World!!"
     @section datastreamutilrelnotes Release Notes
 
     @subsection datastreamutil_v1_4 DataStreamUtil v1.4
+    - fixed @ref DataStreamUtil::ds_set_chunked_headers() "ds_set_chunked_headers()",
+      @ref DataStreamUtil::ds_set_non_chunked_headers() "ds_set_non_chunked_headers()",
+      @ref DataStreamUtil::connect_set_chunked_headers() "connect_set_chunked_headers()" and
+      @ref DataStreamUtil::connect_set_non_chunked_headers() "connect_set_non_chunked_headers()" to accept a header
+      hash whose values all have the same type, such as a literal <tt>{"X-Count": 1}</tt>; adding the string headers
+      raised \c RUNTIME-TYPE-ERROR
     - added @ref DataStreamUtil::DataStreamMimeTypeYaml "DataStreamMimeTypeYaml", the YAML media type that DataStream
       messages are sent with (\c "text/x-yaml", as before), and @ref DataStreamUtil::ds_is_yaml_type()
       "ds_is_yaml_type()", which tells whether a received media type is a YAML media type
@@ -1029,24 +1035,32 @@ ds_set_chunked_headers(\hdr, "bzip");
         @param req set to @ref Qore::True "True" if the headers are required for a request
     */
     public nothing sub ds_set_chunked_headers(reference<hash<auto>> hdr, *string content_encoding, *softbool req) {
-        if (!hdr."Content-Type")
-            hdr."Content-Type" = MimeTypeOctetStream;
+        # the headers are set in an "auto!" local: a caller's literal may be narrowed (e.g. hash<string, int> for
+        # {"X-Count": 1}), and adding a string header would throw
+        *hash<auto!> h = hdr;
+        if (!h."Content-Type") {
+            h."Content-Type" = MimeTypeOctetStream;
+        }
 
-        if (!hdr{DataStreamContentType})
-            hdr{DataStreamContentType} = DataStreamMimeTypeYaml + ";charset=utf-8";
-        else if (hdr{DataStreamContentType} !~ /; ?charset=utf-?8/i)
-            hdr{DataStreamContentType} += ";charset=utf-8";
+        if (!h{DataStreamContentType}) {
+            h{DataStreamContentType} = DataStreamMimeTypeYaml + ";charset=utf-8";
+        } else if (h{DataStreamContentType} !~ /; ?charset=utf-?8/i) {
+            h{DataStreamContentType} += ";charset=utf-8";
+        }
 
-        if (req)
-            ds_do_request_headers(\hdr);
+        if (req) {
+            ds_do_request_headers(\h);
+        }
 
-        if (content_encoding)
-            hdr{DataStreamContentEncoding} = content_encoding;
+        if (content_encoding) {
+            h{DataStreamContentEncoding} = content_encoding;
+        }
 
-        hdr += {
+        h += {
             "Trailer": DataStreamError,
             "Transfer-Encoding": "chunked",
         };
+        hdr = h;
     }
 
     #! sets up HTTP headers for DataStream non-chunked data transfers
@@ -1067,16 +1081,23 @@ ds_set_non_chunked_headers(\hdr, "bzip");
         @param req set to @ref Qore::True "True" if the headers are required for a request
     */
     public nothing sub ds_set_non_chunked_headers(reference<hash<auto>> hdr, *string content_encoding, *softbool req) {
-        if (!hdr."Content-Type")
-            hdr."Content-Type" = DataStreamMimeTypeYaml + ";charset=utf-8";
-        else if (hdr."Content-Type" !~ /; ?charset=utf-?8/i)
-            hdr."Content-Type" += ";charset=utf-8";
+        # the headers are set in an "auto!" local: a caller's literal may be narrowed (e.g. hash<string, int> for
+        # {"X-Count": 1}), and adding a string header would throw
+        *hash<auto!> h = hdr;
+        if (!h."Content-Type") {
+            h."Content-Type" = DataStreamMimeTypeYaml + ";charset=utf-8";
+        } else if (h."Content-Type" !~ /; ?charset=utf-?8/i) {
+            h."Content-Type" += ";charset=utf-8";
+        }
 
-        if (req)
-            ds_do_request_headers(\hdr);
+        if (req) {
+            ds_do_request_headers(\h);
+        }
 
-        if (content_encoding)
-            hdr."Content-Encoding" = content_encoding;
+        if (content_encoding) {
+            h."Content-Encoding" = content_encoding;
+        }
+        hdr = h;
     }
 
     #! returns the \c "DataStream-Accept-Encoding" header value or a default value
@@ -1536,16 +1557,20 @@ string dae = ds_get_ds_accept_enc_header(hdr."Accept-Encoding");
     */
     public nothing sub connect_set_chunked_headers(reference<hash<auto>> hdr,
             *string content_encoding, *softbool req) {
-        if (!hdr."Content-Type") {
-            hdr."Content-Type" = ConnectStreamMimeTypeYaml;
+        # the headers are set in an "auto!" local: a caller's literal may be narrowed (e.g. hash<string, int> for
+        # {"X-Count": 1}), and adding a string header would throw
+        *hash<auto!> h = hdr;
+        if (!h."Content-Type") {
+            h."Content-Type" = ConnectStreamMimeTypeYaml;
         }
-        hdr{ConnectProtocolVersionHdr} = ConnectProtocolVersionVal;
+        h{ConnectProtocolVersionHdr} = ConnectProtocolVersionVal;
         if (content_encoding) {
-            hdr{ConnectContentEncodingHdr} = content_encoding;
+            h{ConnectContentEncodingHdr} = content_encoding;
         }
-        hdr += {
+        h += {
             "Transfer-Encoding": "chunked",
         };
+        hdr = h;
     }
 
     #! Sets up HTTP headers for Connect non-chunked (unary) data transfers
@@ -1557,13 +1582,17 @@ string dae = ds_get_ds_accept_enc_header(hdr."Accept-Encoding");
     */
     public nothing sub connect_set_non_chunked_headers(reference<hash<auto>> hdr,
             *string content_encoding, *softbool req) {
-        if (!hdr."Content-Type") {
-            hdr."Content-Type" = ConnectMimeTypeYaml;
+        # the headers are set in an "auto!" local: a caller's literal may be narrowed (e.g. hash<string, int> for
+        # {"X-Count": 1}), and adding a string header would throw
+        *hash<auto!> h = hdr;
+        if (!h."Content-Type") {
+            h."Content-Type" = ConnectMimeTypeYaml;
         }
-        hdr{ConnectProtocolVersionHdr} = ConnectProtocolVersionVal;
+        h{ConnectProtocolVersionHdr} = ConnectProtocolVersionVal;
         if (content_encoding) {
-            hdr."Content-Encoding" = content_encoding;
+            h."Content-Encoding" = content_encoding;
         }
+        hdr = h;
     }
     #/@}
 }
@@ -1571,23 +1600,27 @@ string dae = ds_get_ds_accept_enc_header(hdr."Accept-Encoding");
 # private namespace for non-exported definitions
 namespace DataStreamUtilPrivate {
     # private function
+    # the headers are set in an "auto!" local: the caller's hash may be narrowed (e.g. hash<string, int> for
+    # {"X-Count": 1}), and adding a string header would throw
     sub ds_do_request_headers(reference<hash<auto>> hdr) {
-        if (!hdr.Accept) {
-            hdr.Accept = DataStreamMimeTypeYaml + "," + MimeTypeOctetStream;
+        *hash<auto!> h = hdr;
+        if (!h.Accept) {
+            h.Accept = DataStreamMimeTypeYaml + "," + MimeTypeOctetStream;
         }
 
-        if (!hdr{DataStreamAccept}) {
-            hdr{DataStreamAccept} = DataStreamMimeTypeYaml;
+        if (!h{DataStreamAccept}) {
+            h{DataStreamAccept} = DataStreamMimeTypeYaml;
         }
 
         # get DataStream-Accept-Encoding headers
-        if (!hdr{DataStreamAcceptEncoding}) {
-            hdr{DataStreamAcceptEncoding} = ds_get_ds_accept_enc_header(hdr."Accept-Encoding");
+        if (!h{DataStreamAcceptEncoding}) {
+            h{DataStreamAcceptEncoding} = ds_get_ds_accept_enc_header(h."Accept-Encoding");
         }
 
-        if (!hdr."Accept-Encoding" && hdr{DataStreamAcceptEncoding}) {
-            hdr."Accept-Encoding" = hdr{DataStreamAcceptEncoding};
+        if (!h."Accept-Encoding" && h{DataStreamAcceptEncoding}) {
+            h."Accept-Encoding" = h{DataStreamAcceptEncoding};
         }
+        hdr = h;
     }
 
 %ifdef NoJson

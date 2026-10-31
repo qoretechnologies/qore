@@ -92,7 +92,11 @@ public class OpenSearchSearchActionUtil {
     */
     static public moveIfExists(reference<hash<auto>> target, reference<hash<auto>> source, string key) {
         if (exists source{key}) {
-            target{key} = remove source{key};
+            # the target hash may be narrowed (ex: hash<string, hash<auto>>), so the value is added in a hash<auto!>
+            # local
+            *hash<auto!> h = target;
+            h{key} = remove source{key};
+            target = h;
         }
     }
 

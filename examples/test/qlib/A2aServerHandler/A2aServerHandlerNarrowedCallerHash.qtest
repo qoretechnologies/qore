@@ -1,0 +1,81 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires A2aClient
+%requires A2aServerHandler
+
+%exec-class A2aServerHandlerNarrowedCallerHashTest
+
+#! Agent cards whose values all have the same type are accepted by the A2A server and the version translation
+/** A hash literal such as \c {"name": "agent", "url": "..."} has the narrowed runtime type
+    \c hash<string, string>; adding a skill list, an extension list or the v1.0 interface list to it raised
+    RUNTIME-TYPE-ERROR.  No test starts a server
+*/
+class A2aServerHandlerNarrowedCallerHashTest inherits QUnit::Test {
+    constructor() : Test("A2aServerHandlerNarrowedCallerHashTest", "1.0", \ARGV) {
+        addTestCase("registerSkill() adds a skill to a string card", \registerSkillStringCard());
+        addTestCase("registerSkill() adds a skill to a narrowed skill list", \registerSkillNarrowedList());
+        addTestCase("registerExtension() adds an extension to boolean capabilities", \registerExtension());
+        addTestCase("a2aTranslateAgentCardToV10() adds supportedInterfaces", \translateToV10());
+        addTestCase("a2aTranslateAgentCardToV03() adds url", \translateToV03());
+        set_return_value(main());
+    }
+
+    #! Returns its argument, so that a literal keeps its narrowed runtime type
+    static hash<auto> mk(hash<auto> h) {
+        return h;
+    }
+
+    registerSkillStringCard() {
+        assertEq("hash<string, string>", A2aServerHandlerNarrowedCallerHashTest::mk({"name": "agent",
+            "url": "http://localhost/a2a"}).fullType());
+        A2aServerHandler handler(new Logger(), {"name": "agent", "url": "http://localhost/a2a"});
+        handler.registerSkill(<A2aAgentSkill>{"id": "s1", "name": "Skill 1"});
+        hash<auto> card = handler.getAgentCard();
+        assertEq("agent", card.name);
+        assertEq(1, card.skills.size());
+        assertEq("s1", card.skills[0].id);
+    }
+
+    registerSkillNarrowedList() {
+        assertEq("hash<string, list<hash<string, string>>>", A2aServerHandlerNarrowedCallerHashTest::mk({
+            "skills": ({"id": "s0", "name": "Skill 0"},)}).fullType());
+        A2aServerHandler handler(new Logger(), {"skills": ({"id": "s0", "name": "Skill 0"},)});
+        handler.registerSkill(<A2aAgentSkill>{"id": "s1", "name": "Skill 1"});
+        assertEq(("s0", "s1"), map $1.id, handler.getAgentCard().skills);
+    }
+
+    registerExtension() {
+        assertEq("hash<string, bool>", A2aServerHandlerNarrowedCallerHashTest::mk({"streaming": True}).fullType());
+        A2aServerHandler handler(new Logger(), {"name": "agent", "capabilities": {"streaming": True}});
+        handler.registerExtension(<A2aAgentExtension>{"uri": "urn:example:ext"});
+        hash<auto> caps = handler.getAgentCard().capabilities;
+        assertTrue(caps.streaming);
+        assertEq(("urn:example:ext",), map $1.uri, caps.extensions);
+    }
+
+    translateToV10() {
+        assertEq("hash<string, string>", A2aServerHandlerNarrowedCallerHashTest::mk({"name": "agent",
+            "url": "http://localhost/a2a"}).fullType());
+        hash<auto> card = a2aTranslateAgentCardToV10({"name": "agent", "url": "http://localhost/a2a"});
+        assertEq("agent", card.name);
+        assertFalse(card.hasKey("url"));
+        assertEq("http://localhost/a2a", card.supportedInterfaces[0].url);
+        assertEq("JSONRPC", card.supportedInterfaces[0].protocolBinding);
+    }
+
+    translateToV03() {
+        assertEq("hash<string, list<hash<string, string>>>", A2aServerHandlerNarrowedCallerHashTest::mk({
+            "supportedInterfaces": ({"url": "http://localhost/a2a", "protocolBinding": "JSONRPC"},)}).fullType());
+        hash<auto> card = a2aTranslateAgentCardToV03({"supportedInterfaces": ({"url": "http://localhost/a2a",
+            "protocolBinding": "JSONRPC"},)});
+        assertEq({"url": "http://localhost/a2a"}, card);
+    }
+}

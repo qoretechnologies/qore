@@ -1976,6 +1976,8 @@ module CloseDataProvider {
 
     @subsection closedataproviderv1_0 CloseDataProvider v1.0
     - initial release
+    - \c CloseDataProviderBase::fetchAllPages() accepts query parameters whose values all have the same type, such
+      as a literal \c {"query": "x"}, when adding the page keys
 */
 
 #! Contains all public definitions in the CloseDataProvider module

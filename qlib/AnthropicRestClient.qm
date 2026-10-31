@@ -108,6 +108,9 @@ stream.close();
 
     @subsection AnthropicRestClientv1_0 AnthropicRestClient v1.0
     - initial release
+    - the client options and @ref AnthropicRestClient::AnthropicSseStreamIo "AnthropicSseStreamIo" accept headers
+      whose values all have the same type, such as a literal <tt>{"X-Count": 1}</tt>, when adding the credential,
+      \c Accept, \c anthropic-version and \c Content-Type headers
 */
 
 %requires json
@@ -157,19 +160,23 @@ public class AnthropicRestClientBase {
         if (!rv.default_path) {
             rv.default_path = "/" + (opts.api ?? DefaultApiVersion);
         }
+        # the headers are set in an "auto!" local: a caller's headers option may be narrowed (e.g. hash<string, int>
+        # for {"X-Count": 1}), and adding a string header would throw
+        hash<auto!> hdr = rv.headers ?? {};
         # ensure Accept header is JSON (RestClientIo ignores the "data" option)
-        if (!rv.headers."Accept") {
-            rv.headers."Accept" = MimeTypeJson;
+        if (!hdr."Accept") {
+            hdr."Accept" = MimeTypeJson;
         }
         # ensure anthropic-version header is set in default headers
-        if (!rv.headers."anthropic-version") {
-            rv.headers."anthropic-version" = opts.anthropic_version ?? DefaultAnthropicVersion;
+        if (!hdr."anthropic-version") {
+            hdr."anthropic-version" = opts.anthropic_version ?? DefaultAnthropicVersion;
         }
         # map apikey to x-api-key header so RestClient does not apply special token handling
         if (rv.apikey) {
-            rv.headers."x-api-key" = rv.apikey;
+            hdr."x-api-key" = rv.apikey;
             remove rv.apikey;
         }
+        rv.headers = hdr;
         # connection-level option for downstream LLM clients; not a REST client option
         remove rv{"chat-model"};
         return rv;
@@ -474,7 +481,9 @@ public class AnthropicSseStreamIo {
         if (to) {
             timeout_ms = to;
         }
-        hash<auto> headers = hdr ?? {};
+        # the headers are set in an "auto!" local: a caller's literal may be narrowed (e.g. hash<string, int> for
+        # {"X-Count": 1}), and adding the Content-Type header would throw
+        hash<auto!> headers = hdr ?? {};
         *data payload;
         if (exists body) {
             payload = body.typeCode() == NT_STRING ? body : make_json(body);

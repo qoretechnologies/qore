@@ -167,7 +167,8 @@ public namespace Hl7v2Util {
 
     #! Returns constructor options forced to schema-summary mode
     hash<auto> sub hl7v2_schema_summary_options(*hash<auto> opts) {
-        hash<auto> effective_opts = opts ?? {};
+        # a caller's literal may be narrowed (e.g. hash<string, string>), and adding summary_only would throw
+        hash<auto!> effective_opts = opts ?? {};
         effective_opts.summary_only = True;
         return effective_opts;
     }

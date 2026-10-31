@@ -74,6 +74,11 @@ module WebUtil {
     @section webutil_relnotes Release Notes
 
     @subsection webutil_v1_8_1 WebUtil v1.8.1
+    - fixed @ref WebUtil::FileHandler "FileHandler" to serve files when the response headers of a subclass's
+      \c getResponseHeadersForFile() have values that all have the same type, such as a literal
+      <tt>{"X-Debug": True}</tt>; adding the file's headers raised \c RUNTIME-TYPE-ERROR, so the file was answered
+      with status 500; \c make304Response(), \c serveRangeRequest() and \c addAcceptEncodingVary() also accept such
+      headers
     - @ref WebUtil::FileHandler "FileHandler" file-serving performance and functionality improvements:
       - added HTTP caching headers: \c ETag (size+mtime based), \c Last-Modified, configurable
         \c Cache-Control (default and per-extension); compressed and identity representations have distinct
@@ -1298,8 +1303,10 @@ public class FileHandler inherits public HttpServer::AbstractUrlHandler, private
     */
     private *hash<HttpResponseInfo> sendFilePath(HttpServer::HttpListenerInterface listener, Qore::Socket s,
             hash<auto> cx, hash<auto> hdr, *data body, string path, hash<StatInfo> stat_hash) {
-        # get response headers from subclass-overridable method; may return NOTHING from subclasses
-        *hash<auto> respHdr = getResponseHeadersForFile(path, cx, hdr);
+        # get response headers from subclass-overridable method; may return NOTHING from subclasses; they are set in
+        # an "auto!" local, as a subclass's literal may be narrowed (e.g. hash<string, bool> for {"X-Debug": True}),
+        # and adding the string headers would throw
+        *hash<auto!> respHdr = getResponseHeadersForFile(path, cx, hdr);
         # add the content type if it's missing for backwards compatibility
         if (!respHdr."Content-Type") {
             respHdr."Content-Type" = get_mime_type_from_ext(path);
@@ -1465,11 +1472,14 @@ public class FileHandler inherits public HttpServer::AbstractUrlHandler, private
         list<string> fields;
         hash<string, bool> seen;
         bool wildcard = False;
-        foreach string key in (keys hdr) {
+        # the header is set in an "auto!" local: the caller's hash may be narrowed (e.g. hash<string, int> for
+        # {"X-Count": 1}), and adding the Vary header would throw
+        *hash<auto!> h = hdr;
+        foreach string key in (keys h) {
             if (key.lwr() != "vary") {
                 continue;
             }
-            foreach string field in (string(remove hdr{key}).split(",")) {
+            foreach string field in (string(remove h{key}).split(",")) {
                 field = trim(field);
                 if (field == "*") {
                     wildcard = True;
@@ -1482,7 +1492,8 @@ public class FileHandler inherits public HttpServer::AbstractUrlHandler, private
         if (!seen{"accept-encoding"}) {
             fields += "Accept-Encoding";
         }
-        hdr.Vary = wildcard ? "*" : fields.join(", ");
+        h.Vary = wildcard ? "*" : fields.join(", ");
+        hdr = h;
     }
 
     #! generates an ETag string from file stat information
@@ -1585,7 +1596,9 @@ public class FileHandler inherits public HttpServer::AbstractUrlHandler, private
         @since WebUtil 1.8
     */
     private hash<HttpResponseInfo> make304Response(*string etag, date mtime, *hash<auto> response_hdr) {
-        hash<auto> hdr = response_hdr ?? {};
+        # the headers are set in an "auto!" local: the caller's hash may be narrowed (e.g. hash<string, int> for
+        # {"X-Count": 1}), and adding the string headers would throw
+        hash<auto!> hdr = response_hdr ?? {};
         foreach string key in (keys hdr) {
             if (key.lwr() =~ /^(content-type|content-length|content-encoding|content-range|transfer-encoding|accept-ranges)$/) {
                 remove hdr{key};
@@ -1754,7 +1767,10 @@ public class FileHandler inherits public HttpServer::AbstractUrlHandler, private
     */
     private hash<HttpResponseInfo> serveRangeRequest(string path, hash<StatInfo> stat_hash,
             hash<auto> range, hash<auto> respHdr) {
-        respHdr += {
+        # the headers are set in an "auto!" local: the caller's hash may be narrowed (e.g. hash<string, int> for
+        # {"X-Count": 1}), and adding the string headers would throw
+        hash<auto!> range_hdr = respHdr;
+        range_hdr += {
             "Content-Range": sprintf("bytes %d-%d/%d", range.start, range.end, stat_hash.size),
             "Content-Length": string(range.length),
             "Accept-Ranges": "bytes",
@@ -1776,7 +1792,7 @@ public class FileHandler inherits public HttpServer::AbstractUrlHandler, private
         return <HttpResponseInfo>{
             "code": 206,
             "body": range_data,
-            "hdr": respHdr,
+            "hdr": range_hdr,
             "no_content_encoding": True,
         };
     }

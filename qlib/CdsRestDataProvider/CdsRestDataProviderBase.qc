@@ -79,8 +79,8 @@ public class CdsRestDataProviderBase inherits DataProvider::AbstractDataProvider
         #! Environment options
         const EnvOptions = {
             "url": "CDS_URL",
-            "client_id": "CDS_CLIENT_ID",
-            "client_secret": "CDS_CLIENT_SECRET",
+            "oauth2_client_id": "CDS_CLIENT_ID",
+            "oauth2_client_secret": "CDS_CLIENT_SECRET",
             "tenant": "CDS_TENANT",
             "scope": "CDS_SCOPE",
         };

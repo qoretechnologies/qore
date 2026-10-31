@@ -77,6 +77,82 @@ struct QoreTypeParamInstantiation;
 */
 constexpr unsigned QORE_LLVM_COMPILE_STACK_SIZE = 8 * 1024 * 1024;
 
+//! Runs a process-wide initialization exactly once, for any number of threads
+/** The first caller runs the initialization with the lock held; every other caller waits for it on the lock, and no
+    caller returns before the initialization has completed.  If the initialization throws, nothing is recorded, the
+    lock is released, and the exception propagates; the next caller runs it again.
+
+    It is a mutex and a flag rather than std::call_once() or a function-local static: a child process created with
+    fork() while another thread ran the initialization would wait forever for the once flag (musl, macOS), whereas
+    the fork handler of the process-wide instance's mutex makes fork() wait for the initialization to finish.
+*/
+class QoreOnceInit {
+public:
+    //! the initialization
+    using init_t = void (*)();
+
+    DLLLOCAL QoreOnceInit(init_t init) : init(init) {
+        assert(init);
+    }
+
+    //! Runs the initialization unless a caller has completed it; returns when it has completed
+    DLLLOCAL void ensure() {
+        if (done.load(std::memory_order_acquire)) {
+            return;
+        }
+        ensureSlow();
+    }
+
+    //! Returns true if the initialization has completed
+    DLLLOCAL bool isDone() const {
+        return done.load(std::memory_order_acquire);
+    }
+
+    //! Returns the number of times the initialization has completed: 0 before, then always 1
+    DLLLOCAL unsigned getRunCount() const {
+        return run_count.load(std::memory_order_acquire);
+    }
+
+    //! Returns the mutex, for the fork handler of a process-wide instance
+    DLLLOCAL std::mutex& getMutex() {
+        return m;
+    }
+
+#ifdef DEBUG
+    //! a test hook: called by a caller that found another caller running the initialization, before it waits for it
+    std::atomic<void (*)(QoreOnceInit&)> contended_hook{nullptr};
+#endif
+
+    QoreOnceInit(const QoreOnceInit&) = delete;
+    QoreOnceInit& operator=(const QoreOnceInit&) = delete;
+
+private:
+    std::mutex m;
+    init_t init;
+    std::atomic<bool> done{false};
+    std::atomic<unsigned> run_count{0};
+
+    DLLLOCAL void ensureSlow();
+};
+
+//! Registers every LLVM target, target MC layer, asm printer and asm parser, once for the process
+/** Every use of LLVM in the library calls this first: the JIT (also on its background compile thread) and every AOT
+    compilation and target listing.  LLVM's registration functions are not thread-safe: "Clients are responsible for
+    ensuring that registration doesn't occur while another thread is attempting to access the registry. Typically
+    this is done by initializing all targets at program startup." (llvm/MC/TargetRegistry.h,
+    TargetRegistry::RegisterTarget()).  RegisterTarget() checks whether the target is registered and then links it
+    at the head of the registry's list without a lock, so two threads registering the same target at once could link
+    it to itself, and every later TargetRegistry::lookupTarget() looped forever (qcc compiling a module while the
+    JIT's background thread initialized itself).
+
+    All targets are registered in this one initialization and never later, so no registration can happen while
+    another thread reads the registry; a cross-compilation target needs no registration of its own.
+*/
+DLLLOCAL void qore_llvm_initialize_targets();
+
+//! Returns the process-wide LLVM target initialization; for tests
+DLLLOCAL QoreOnceInit& qore_llvm_target_init();
+
 //! Starts a thread with a stack large enough for LLVM compilation
 /** @note llvm::thread calls the callable directly rather than with INVOKE semantics, so bind any
     member function in a lambda instead of passing a pointer-to-member.

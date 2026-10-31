@@ -91,6 +91,8 @@ printf("User: %s %s\n", result.body.response.first_name, result.body.response.la
 
     @subsection freshbooksrestclientv1_0 FreshBooksRestClient v1.0
     - initial release
+    - the client options accept a \c headers hash whose values all have the same type, such as a literal
+      <tt>{"X-Count": 1}</tt>, when adding the authentication headers
 */
 
 #! the FreshBooksRestClient namespace contains all the objects in the FreshBooksRestClient module
@@ -161,6 +163,9 @@ public class FreshBooksRestClientBase {
         # the options have values of different types, so the hash must not take the narrow type of the
         # defaults, which would prevent adding values of other types
         hash<auto!> rv = DefaultOptions + opts;
+        # the headers are set in an "auto!" local: a caller's headers option may be narrowed (e.g. hash<string, int>
+        # for {"X-Count": 1}), and adding a string header would throw
+        *hash<auto!> hdr = rv.headers;
 
         # Check if token-only mode (token provided without OAuth2 credentials)
         bool token_only = opts.token && !opts.oauth2_client_id && !opts.oauth2_client_secret
@@ -170,7 +175,7 @@ public class FreshBooksRestClientBase {
             rv += OAuth2Options;
         } else if (opts.token) {
             # Bearer token mode
-            rv.headers.Authorization = "Bearer " + opts.token;
+            hdr.Authorization = "Bearer " + opts.token;
             # Remove token from opts so RestClient doesn't add another "Bearer" prefix
             remove rv.token;
         }
@@ -178,6 +183,9 @@ public class FreshBooksRestClientBase {
         # the account_id and business_id options are kept in the returned hash (they are ignored by the base
         # classes), so that the options saved in the base class can be used to create a copy of the object with
         # copyWithUrl()
+        if (exists hdr) {
+            rv.headers = hdr;
+        }
         return rv;
     }
 }

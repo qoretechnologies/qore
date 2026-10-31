@@ -943,6 +943,27 @@ const QoreTypeInfo* get_value_type(const QoreTypeInfo* typeInfo) {
    return !QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_NOTHING) ? typeInfo : get_value_type_intern(typeInfo);
 }
 
+const QoreTypeInfo* get_or_nothing_base_type(const QoreTypeInfo* typeInfo) {
+    if (!QoreTypeInfo::hasType(typeInfo) || !QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_NOTHING)) {
+        return typeInfo;
+    }
+    // get_value_type_intern() does not resolve enum types
+    {
+        const QoreEnumDecl* ed = QoreTypeInfo::getReturnEnum(typeInfo);
+        if (ed && ed->getTypeInfo(true) == typeInfo) {
+            return ed->getTypeInfo();
+        }
+    }
+    const QoreTypeInfo* vti = get_value_type_intern(typeInfo);
+    // the type is *T only if T is a type without NOTHING whose or-nothing type is the type given; types such as
+    // any, auto and nothing have no such T
+    if (!QoreTypeInfo::hasType(vti) || QoreTypeInfo::parseAcceptsReturns(vti, NT_NOTHING)
+        || get_or_nothing_type(vti) != typeInfo) {
+        return typeInfo;
+    }
+    return vti;
+}
+
 // public API
 const QoreTypeInfo* qore_get_value_type(const QoreTypeInfo* typeInfo) {
     return get_value_type(typeInfo);

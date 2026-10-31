@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -33,6 +33,36 @@
 #include "qore/intern/ParseNode.h"
 
 QoreString QoreMinusEqualsOperatorNode::op_str("-= operator expression");
+
+namespace {
+// how the -= operator treats an lvalue type at parse time
+enum class minus_equals_lvalue_e {
+    // the lvalue keeps its type
+    KEEP,
+    // the lvalue is assigned an integer value, which its type must accept
+    INT,
+    // the type is not known well enough; the operation is decided at runtime
+    GENERIC,
+};
+
+// returns how the -= operator treats the given lvalue type and its dereferenced type
+minus_equals_lvalue_e get_minus_equals_lvalue_kind(const QoreTypeInfo* ti, const QoreTypeInfo* check_ti) {
+    if (QoreTypeInfo::isType(check_ti, NT_HASH)
+        || QoreTypeInfo::isType(check_ti, NT_OBJECT)
+        || QoreTypeInfo::isType(check_ti, NT_FLOAT)
+        || QoreTypeInfo::isType(check_ti, NT_NUMBER)
+        || QoreTypeInfo::isType(check_ti, NT_DATE)) {
+        return minus_equals_lvalue_e::KEEP;
+    }
+    // if the lhs type is not one of the above types, there are 2 possibilities: the lvalue has no value, in which
+    // case it takes the value of the right side, or if it's anything else it's converted to an integer, so we just
+    // check if it can be assigned an integer value
+    if (QoreTypeInfo::returnsSingle(ti) && !QoreTypeInfo::equal(ti, timeoutTypeInfo)) {
+        return minus_equals_lvalue_e::INT;
+    }
+    return minus_equals_lvalue_e::GENERIC;
+}
+}
 
 int QoreMinusEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
     // turn off "return value ignored" flags
@@ -67,34 +97,35 @@ int QoreMinusEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext&
         }
     }
 
-    if (!QoreTypeInfo::isType(check_ti, NT_HASH)
-        && !QoreTypeInfo::isType(check_ti, NT_OBJECT)
-        && !QoreTypeInfo::isType(check_ti, NT_FLOAT)
-        && !QoreTypeInfo::isType(check_ti, NT_NUMBER)
-        && !QoreTypeInfo::isType(check_ti, NT_DATE)) {
-        // if the lhs type is not one of the above types,
-        // there are 2 possibilities: the lvalue has no value, in which
-        // case it takes the value of the right side, or if it's anything else it's
-        // converted to an integer, so we just check if it can be assigned an
-        // integer value below, this is enough
-        if (QoreTypeInfo::returnsSingle(ti) && !QoreTypeInfo::equal(ti, timeoutTypeInfo)) {
-            if (check_lvalue_int(loc, ti, "-=") && !err) {
-                err = -1;
+    // the parse-time checks are made on the plain type T of an or-nothing lvalue (*T): an operation that T refuses
+    // can never succeed on *T; the error names the declared type, and the result type and the runtime operation
+    // follow the declared type
+    const QoreTypeInfo* plain_ti = get_or_nothing_base_type(ti);
+    const QoreTypeInfo* plain_check_ti = get_or_nothing_base_type(check_ti);
+    minus_equals_lvalue_e kind = get_minus_equals_lvalue_kind(ti, check_ti);
+    minus_equals_lvalue_e check_kind = (plain_ti == ti && plain_check_ti == check_ti)
+        ? kind
+        : get_minus_equals_lvalue_kind(plain_ti, plain_check_ti);
+
+    if (check_kind == minus_equals_lvalue_e::INT && check_lvalue_int(loc, ti, "-=") && !err) {
+        err = -1;
+    }
+
+    if (kind == minus_equals_lvalue_e::INT) {
+        parse_context.typeInfo = ti = bigIntTypeInfo;
+        // the analysis left by the right operand describes that operand, not the result
+        qore_set_result_parse_analysis(parse_context, ti);
+        val = makeSpecialization<QoreIntMinusEqualsOperatorNode>();
+        if (val.hasNode()) {
+            auto* parse_node = dynamic_cast<ParseNode*>(val.getInternalNode());
+            if (parse_node) {
+                parse_node->setParseAnalysis(parse_context.analysis);
             }
-            parse_context.typeInfo = ti = bigIntTypeInfo;
-            // the analysis left by the right operand describes that operand, not the result
-            qore_set_result_parse_analysis(parse_context, ti);
-            val = makeSpecialization<QoreIntMinusEqualsOperatorNode>();
-            if (val.hasNode()) {
-                auto* parse_node = dynamic_cast<ParseNode*>(val.getInternalNode());
-                if (parse_node) {
-                    parse_node->setParseAnalysis(parse_context.analysis);
-                }
-            }
-            return err;
-        } else {
-            ti = nullptr;
         }
+        return err;
+    }
+    if (kind == minus_equals_lvalue_e::GENERIC) {
+        ti = nullptr;
     }
     parse_context.typeInfo = ti;
     // the analysis left by the right operand describes that operand, not the result

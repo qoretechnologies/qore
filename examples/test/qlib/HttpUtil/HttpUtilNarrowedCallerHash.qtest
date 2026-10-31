@@ -1,0 +1,62 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpUtil
+
+%exec-class HttpUtilNarrowedCallerHashTest
+
+#! Header hashes whose values all have the same type
+/** A hash literal whose values all have the same type has a narrowed type, such as \c hash<string, string> for
+    <tt>{"Content-Type": "text/html"}</tt>; storing a second cookie as a list in such a hash raised RUNTIME-TYPE-ERROR
+*/
+class HttpUtilNarrowedCallerHashTest inherits QUnit::Test {
+    constructor() : Test("HttpUtilNarrowedCallerHashTest", "1.0", \ARGV) {
+        addTestCase("set_cookie_header() with narrowed headers", \setCookieNarrowedHeaders());
+        addTestCase("set_cookie_header() with a narrowed Set-Cookie header", \setCookieNarrowedSetCookie());
+        addTestCase("set_cookie_header() with an empty header hash", \setCookieEmpty());
+        set_return_value(main());
+    }
+
+    #! Returns its argument with the type it was given
+    static auto mk(auto h) {
+        return h;
+    }
+
+    setCookieNarrowedHeaders() {
+        assertEq("hash<string, string>", mk({"Content-Type": "text/html"}).fullType());
+        hash<auto> hdr = mk({"Content-Type": "text/html"});
+        set_cookie_header(\hdr, <CookieInfo>{"name": "a", "value": "1"});
+        assertEq("a=1; Path=/", hdr."Set-Cookie");
+        set_cookie_header(\hdr, <CookieInfo>{"name": "b", "value": "2", "http_only": True});
+        assertEq(("a=1; Path=/", "b=2; Path=/; HttpOnly"), hdr."Set-Cookie");
+        assertEq("text/html", hdr."Content-Type");
+        assertEq("no-cache=\"Set-Cookie\"", hdr."Cache-Control");
+        # a third cookie is appended to the list
+        set_cookie_header(\hdr, <CookieInfo>{"name": "c", "value": "3"}, False);
+        assertEq(("a=1; Path=/", "b=2; Path=/; HttpOnly", "c=3; Path=/"), hdr."Set-Cookie");
+    }
+
+    setCookieNarrowedSetCookie() {
+        assertEq("hash<string, string>", mk({"Set-Cookie": "a=1"}).fullType());
+        hash<auto> hdr = mk({"Set-Cookie": "a=1"});
+        set_cookie_header(\hdr, <CookieInfo>{"name": "b", "value": "2"}, False);
+        assertEq(("a=1", "b=2; Path=/"), hdr."Set-Cookie");
+        assertFalse(hdr.hasKey("Cache-Control"));
+    }
+
+    setCookieEmpty() {
+        hash<auto> hdr = {};
+        set_cookie_header(\hdr, <CookieInfo>{"name": "a", "value": "1"});
+        set_cookie_header(\hdr, <CookieInfo>{"name": "b", "value": "2"});
+        assertEq({
+            "Set-Cookie": ("a=1; Path=/", "b=2; Path=/"),
+            "Cache-Control": "no-cache=\"Set-Cookie\"",
+        }, hdr);
+    }
+}

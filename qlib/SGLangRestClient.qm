@@ -107,6 +107,8 @@ printf("%Y\n", ans.body);
 
     @subsection SGLangRestClientv1_0 SGLangRestClient v1.0
     - initial release
+    - the client options accept a \c headers hash whose values all have the same type, such as a literal
+      <tt>{"X-Count": 1}</tt>, when adding the credential and \c Accept headers
 */
 
 #! the SGLangRestClient namespace contains all the objects in the SGLangRestClient module
@@ -165,15 +167,19 @@ public class SGLangRestClientBase {
         if (!rv.default_path) {
             rv.default_path = "/" + (opts.api ?? DefaultApiVersion);
         }
+        # the headers are set in an "auto!" local: a caller's headers option may be narrowed (e.g. hash<string, int>
+        # for {"X-Count": 1}), and adding a string header would throw
+        hash<auto!> hdr = rv.headers ?? {};
         # ensure Accept header is JSON (RestClientIo ignores the "data" option)
-        if (!rv.headers."Accept") {
-            rv.headers."Accept" = MimeTypeJson;
+        if (!hdr."Accept") {
+            hdr."Accept" = MimeTypeJson;
         }
         # map apikey (production-auth deployments) to Authorization: Bearer header
         if (rv.apikey) {
-            rv.headers."Authorization" = "Bearer " + rv.apikey;
+            hdr."Authorization" = "Bearer " + rv.apikey;
             remove rv.apikey;
         }
+        rv.headers = hdr;
         # model is an SGLang-specific option; strip it from REST client options
         # (captured separately by the subclass constructor into model_name)
         remove rv.model;

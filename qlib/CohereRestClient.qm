@@ -86,6 +86,12 @@ module CohereRestClient {
 
     @subsection CohereRestClientv1_0 CohereRestClient v1.0
     - initial release
+    - fixed @ref CohereRestClient::CohereLlmProvider "CohereLlmProvider"::complete() with an output
+      schema to accept body options whose values all have the same type, such as \c {"seed": 7}; adding the response
+      format raised \c RUNTIME-TYPE-ERROR
+    - fixed @ref CohereRestClient::CohereRestConnection "CohereRestConnection" to report a configuration or option
+      hash whose values all have the same type, such as \c {"timeout": 30}, with the real configuration error; adding
+      the URL, options or ping options raised \c RUNTIME-TYPE-ERROR instead
 */
 
 %requires json
@@ -266,14 +272,19 @@ public class CohereRestConnection inherits RestClient::RestConnection {
             : RestConnection(CohereRestConnection::getConfig(config), attr) {
     }
 
-    private static hash<auto> getConfig(hash<auto> config) {
+    private static hash<auto> getConfig(hash<auto> config0) {
+        # a caller's configuration hash may be narrowed (ex: hash<string, string>), and setting the URL or the
+        # options would throw
+        hash<auto!> config = config0;
         config.url = DefaultUrl;
         config.opts = fixPingOptions(config.opts ?? {});
         return config;
     }
 
     #! Replaces the previously shipped models ping when loading existing connections
-    private static hash<auto> fixPingOptions(hash<auto> options) {
+    private static hash<auto> fixPingOptions(hash<auto> options0) {
+        # a caller's option hash may be narrowed (ex: hash<string, int>), and adding the ping options would throw
+        hash<auto!> options = options0;
         if ((options.ping_method ?? "GET") == "GET"
                 && (!exists options.ping_path
                     || options.ping_path == "models" || options.ping_path == "/models"
@@ -412,7 +423,8 @@ public class CohereLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             if (!co) {
                 co = <QoreLlmUtils::LlmRequestOptions>{};
             }
-            hash<auto> body_options = co.body_options ?? {};
+            # the caller's body options may be narrowed (ex: hash<string, int>), and adding the format would throw
+            hash<auto!> body_options = co.body_options ?? {};
             body_options.response_format = {
                 "type": "json_object",
                 "schema": output_schema,

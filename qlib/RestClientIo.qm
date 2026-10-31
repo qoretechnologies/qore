@@ -214,6 +214,13 @@ resp = rc.restGet("/api/data");
     @section restclientio_relnotes Release Notes
 
     @subsection restclientio_v1_0 Version 1.0
+    - the constructor accepts an option hash whose values all have the same type, such as a literal
+      \c {"url": "...", "ssl_verify_cert": "false"}
+    - the hash returned by @ref RestClientIo::RestClientIo::getConstructorOptions() "getConstructorOptions()" accepts
+      added values of any type, also for a client created with options whose values all have the same type
+    - @ref RestClientIo::RestClientIo::restSseReader() "restSseReader()" and
+      @ref RestClientIo::RestClientIo::restObserveSse() "restObserveSse()" accept request headers whose values all have
+      the same type, such as a literal \c {"X-Count": 1}
     - initial release
 */
 
@@ -1197,7 +1204,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
         }
 
         #! Creates a new RestClientIo with the given options
-        /** @param opts constructor options; see class documentation for valid keys
+        /** @param opts0 constructor options; see class documentation for valid keys
             @param shared_mgr an optional shared @ref HttpClientIo::HttpClientConnectionManager
                 "HttpClientConnectionManager" to use instead of creating a new one. When provided,
                 the manager is not closed by @ref close() — the caller retains ownership.
@@ -1206,11 +1213,14 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
 
             @throw RESTCLIENTIO-ERROR if the \c url option is missing or invalid
         */
-        constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr) {
+        constructor(hash<auto> opts0, *HttpClientIo::HttpClientConnectionManager shared_mgr) {
             # Capture caller options verbatim for copyWithUrl / getConstructorOptions;
             # validation and normalization below mutate the local 'opts' but saved_opts
             # preserves the caller's original intent for sibling construction
-            saved_opts = opts;
+            saved_opts = opts0;
+            # a caller's literal may be narrowed (e.g. hash<string, string>), and normalizing the options below
+            # adds values of other types, such as the integer ssl_verify_mode
+            hash<auto!> opts = opts0;
 
             # Strip unknown keys (e.g., service-specific options already consumed by subclass getOptions() calls
             # like "api_profile", "tenant", etc.)
@@ -1555,7 +1565,10 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 translated to \c protocol)
         */
         hash<auto> getConstructorOptions() {
-            return saved_opts;
+            # the caller's options may be narrowed (e.g. hash<string, string> for {"url": "..."}); callers add
+            # values of other types to the returned hash, such as a token or flags, to create another client
+            hash<auto!> rv = saved_opts;
+            return rv;
         }
 
         #! Returns a new RestClientIo pointed at a different URL, sharing the connection manager
@@ -2190,9 +2203,14 @@ while (*hash<SseMessageInfo> evt = reader.readEvent(30s)) {
                 *date deadline, *code<nothing(HttpClientIo::HttpClientStreamHandle)> on_stream,
                 *hash<RestClient::RestRequestContext> request_context) {
             ensureToken();
-            hdr = hdr ?? {};
-            if (!hdr.accept && !hdr.Accept) {
-                hdr.accept = "text/event-stream";
+            # the caller's headers may be narrowed to one value type (e.g. hash<string, int> for {"X-Count": 1}),
+            # so the Accept header is added in a hash that accepts values of any type
+            {
+                hash<auto!> sse_hdr = hdr ?? {};
+                if (!sse_hdr.accept && !sse_hdr.Accept) {
+                    sse_hdr.accept = "text/event-stream";
+                }
+                hdr = sse_hdr;
             }
 
             *auto negotiate_context;
@@ -5336,10 +5354,14 @@ obs.observersReady();
                 auto body, *hash<auto> hdr, *hash<auto> opts, *hash<RestClient::RestRequestContext> request_context) {
             request_context = request_context ?? resolveRequestTarget(
                 <RestClient::RestRequestTarget>{"path": path}, method);
-            # Ensure Accept: text/event-stream header
-            hdr = hdr ?? {};
-            if (!hdr."accept" && !hdr."Accept") {
-                hdr."accept" = "text/event-stream";
+            # Ensure Accept: text/event-stream header; the caller's headers may be narrowed to one value type (e.g.
+            # hash<string, int> for {"X-Count": 1}), so it is added in a hash that accepts values of any type
+            {
+                hash<auto!> sse_hdr = hdr ?? {};
+                if (!sse_hdr."accept" && !sse_hdr."Accept") {
+                    sse_hdr."accept" = "text/event-stream";
+                }
+                hdr = sse_hdr;
             }
 
             # Merge serialization from opts or default to "none"

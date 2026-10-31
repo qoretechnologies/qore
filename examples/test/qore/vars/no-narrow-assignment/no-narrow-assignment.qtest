@@ -1,0 +1,94 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class NoNarrowAssignmentTest
+
+#! Tests that a hash<auto!> or list<auto!> lvalue of every kind drops the narrowed type of the value assigned
+/** A hash or list keeps its runtime type when it is assigned to a \c hash<auto> or \c list<auto> lvalue, so a later
+    write of a value of another type raises \c RUNTIME-TYPE-ERROR.  A \c hash<auto!> or \c list<auto!> lvalue drops
+    the narrowed type of the container assigned to it, but not of the containers nested in it, and leaves the
+    original container unchanged.  A global variable declared with \c auto! kept the narrowed type of the value
+    assigned to it, unlike a local variable, a class member or a parameter.
+
+    The worker prints the outcome of each write.  It runs in every execution mode and as a qcc-compiled executable.
+*/
+class NoNarrowAssignmentTest inherits QUnit::Test {
+    public {
+        #! the output expected from the worker
+        const Expected = (
+            "source types: hash<string, string> list<string>",
+            "hash<auto!> local: ok hash<auto>",
+            "hash<auto> local: RUNTIME-TYPE-ERROR",
+            "list<auto!> local: ok list<auto>",
+            "list<auto> local: RUNTIME-TYPE-ERROR",
+            "hash<auto!> global: ok hash<auto>",
+            "hash<auto> global: RUNTIME-TYPE-ERROR",
+            "list<auto!> global: ok list<auto>",
+            "list<auto> global: RUNTIME-TYPE-ERROR",
+            "hash<auto!> global initializer: ok hash<auto>",
+            "hash<auto> global initializer: RUNTIME-TYPE-ERROR",
+            "hash<auto!> member: ok hash<auto>",
+            "hash<auto> member: RUNTIME-TYPE-ERROR",
+            "list<auto!> member: ok list<auto>",
+            "list<auto> member: RUNTIME-TYPE-ERROR",
+            "hash<auto!> parameter: ok hash<auto>",
+            "hash<auto> parameter: RUNTIME-TYPE-ERROR",
+            "list<auto!> parameter: ok list<auto>",
+            "list<auto> parameter: RUNTIME-TYPE-ERROR",
+            "source types after: hash<string, string> list<string> {a: \"b\"} [\"a\", \"b\"]",
+            "hash<auto!> nested top level: ok hash<auto>",
+            "hash<auto!> nested value: RUNTIME-TYPE-ERROR",
+            "hash<auto> option defaults: RUNTIME-TYPE-ERROR",
+            "hash<auto!> option defaults: ok {url: \"x\", timeout: 30}",
+        );
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string worker;
+    }
+
+    constructor() : QUnit::Test("NoNarrowAssignment", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        worker = get_script_dir() + DirSep + "no-narrow-assignment-worker.q";
+
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("compiled executable", \testCompiled());
+
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            checkOutput(mode, ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s "
+                "--exec-mode=%s %s", libqore_dir, libqore_dir, qore_bin, mode, worker)));
+        }
+    }
+
+    testCompiled() {
+        TmpDir tmp("qore-no-narrow-assignment-");
+        string exe = tmp.path + DirSep + "narrowed";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -o %s %s 2>&1", libqore_dir, qcc_bin, exe, worker));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        checkOutput("executable", ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
+            libqore_dir, libqore_dir, exe)));
+    }
+
+    private checkOutput(string label, string out) {
+        list<string> lines = (select out.split("\n"), $1);
+        assertEq(Expected, lines, label + ": " + out);
+    }
+}

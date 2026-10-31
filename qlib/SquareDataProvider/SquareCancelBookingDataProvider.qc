@@ -84,7 +84,8 @@ public class SquareCancelBookingDataProvider inherits SquareDataProviderBase {
     }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        hash<auto> body = {
+        # hash<auto!>: the literal is narrowed to its value type; adding the booking version would throw
+        hash<auto!> body = {
             "idempotency_key": generateIdempotencyKey(),
         };
         if (req.booking_version) {

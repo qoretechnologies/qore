@@ -82,6 +82,8 @@ printf("%Y\n", ans.body);
 
     @subsection ElevenLabsRestClientv1_0 ElevenLabsRestClient v1.0
     - initial release
+    - the client options accept a \c headers hash whose values all have the same type, such as a literal
+      <tt>{"X-Count": 1}</tt>, when adding the credential and \c Accept headers
 */
 
 #! the ElevenLabsRestClient namespace contains all the objects in the ElevenLabsRestClient module
@@ -126,7 +128,9 @@ public class ElevenLabsRestClientBase {
         rv += opts;
         # Map apikey to xi-api-key header
         if (rv.apikey) {
-            hash<auto> hdr = rv.headers ?? {};
+            # the header is set in an "auto!" local: a caller's headers option may be narrowed (e.g.
+            # hash<string, int> for {"X-Count": 1}), and adding the API key header would throw
+            hash<auto!> hdr = rv.headers ?? {};
             hdr."xi-api-key" = rv.apikey;
             rv += {"headers": hdr};
             delete rv.apikey;
