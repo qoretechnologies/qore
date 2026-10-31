@@ -57,6 +57,10 @@ module DebugUtil {
       @ref DebugUtil::AbstractDebugControl::getPath() "AbstractDebugControl::getPath()" and
       @ref DebugUtil::AbstractDebugControl::setPath() "AbstractDebugControl::setPath()" to show lists, hashes and
       objects as trees whose elements and members, also private ones, are read and changed on demand
+    - added @ref DebugUtil::AbstractDebugControl::formatValue() "AbstractDebugControl::formatValue()" and
+      @ref DebugUtil::AbstractDebugControl::formatTree() "AbstractDebugControl::formatTree()", which write values as
+      the \c "%y" and \c "%Y" formats, but with @ref NOTHING and @ref NULL written as in %Qore, as they are shown in
+      debuggers
     - added @ref DebugUtil::DebugOutputCapture "DebugOutputCapture", which captures the standard output and standard
       error of the process, so that the output of debugged programs can be sent to debugger clients, and the
       @ref DebugUtil::DebugEventCmd::Output "output" event
@@ -448,6 +452,82 @@ public namespace DebugUtil {
 
             @see describeChildren()
         */
+        #! Returns the text of a value for a debugger: as the \c "%y" format, but with @ref NOTHING and @ref NULL
+        #! written as in %Qore
+        /** The \c "%y" format writes YAML, where \c null is no value; in %Qore, @ref NOTHING (no value) and @ref NULL
+            (an SQL null) are different values, which are easily confused
+
+            @par Example:
+            @code{.py}
+string text = AbstractDebugControl::formatValue({"a": NOTHING, "b": NULL}); # {a: NOTHING, b: NULL}
+            @endcode
+
+            @since DebugUtil 0.2
+        */
+        static public string formatValue(auto val) {
+            switch (val.typeCode()) {
+                case NT_NOTHING:
+                    return "NOTHING";
+                case NT_NULL:
+                    return "NULL";
+                case NT_LIST:
+                    return "[" + ((map AbstractDebugControl::formatValue($1), val) ?? ()).join(", ") + "]";
+                case NT_HASH:
+                    return "{" + ((map sprintf("%s: %s", $1.key, AbstractDebugControl::formatValue($1.value)),
+                        val.pairIterator()) ?? ()).join(", ") + "}";
+            }
+            return sprintf("%y", val);
+        }
+
+        #! Returns the lines of a value for a debugger: as the \c "%Y" format, but with @ref NOTHING and @ref NULL
+        #! written as in %Qore; see formatValue()
+        /** @since DebugUtil 0.2
+        */
+        static public list<string> formatTree(auto val) {
+            list<string> rv = ();
+            switch (val.typeCode()) {
+                case NT_HASH:
+                    if (!val) {
+                        break;
+                    }
+                    foreach hash<auto> i in (val.pairIterator()) {
+                        if (AbstractDebugControl::isNonEmptyContainer(i.value)) {
+                            push rv, i.key + ":";
+                            rv += map "  " + $1, AbstractDebugControl::formatTree(i.value);
+                        } else {
+                            push rv, sprintf("%s: %s", i.key, AbstractDebugControl::formatValue(i.value));
+                        }
+                    }
+                    return rv;
+                case NT_LIST:
+                    if (!val) {
+                        break;
+                    }
+                    foreach auto e in (val) {
+                        if (AbstractDebugControl::isNonEmptyContainer(e)) {
+                            list<string> lines = AbstractDebugControl::formatTree(e);
+                            # the first line of a hash follows the dash, as with "%Y"; a list starts on the next line
+                            if (e.typeCode() == NT_HASH) {
+                                push rv, "- " + shift lines;
+                                rv += map "  " + $1, lines;
+                            } else {
+                                push rv, "-";
+                                rv += map "  " + $1, lines;
+                            }
+                        } else {
+                            push rv, "- " + AbstractDebugControl::formatValue(e);
+                        }
+                    }
+                    return rv;
+            }
+            return (AbstractDebugControl::formatValue(val),);
+        }
+
+        #! Returns True if the value is a hash or a list with elements
+        private static bool isNonEmptyContainer(auto val) {
+            return (val.typeCode() == NT_HASH || val.typeCode() == NT_LIST) && val.size() > 0;
+        }
+
         static public hash<auto> describe(auto val) {
             switch (val.typeCode()) {
                 case NT_LIST:
@@ -461,7 +541,7 @@ public namespace DebugUtil {
                     return {"type": cls, "value": cls, "named": AbstractDebugControl::getMemberNames(val).size()};
                 }
             }
-            string text = sprintf("%y", val);
+            string text = AbstractDebugControl::formatValue(val);
             if (text.size() > MaxValueTextSize) {
                 text = text.substr(0, MaxValueTextSize) + "...";
             }

@@ -19,6 +19,7 @@ public class DebugUtilTest inherits QUnit::Test {
         addTestCase("constants tests", \constantsTests());
         addTestCase("ResponseSync tests", \responseSyncTests());
         addTestCase("value descriptions and paths", \describeTests());
+        addTestCase("values written for debuggers", \formatTests());
         addTestCase("marks in the output of programs", \outputMarkTest());
         addTestCase("UTF-8 characters in the output of programs", \utf8SizeTest());
         addTestCase("capture of the output of the process", \outputCaptureTest());
@@ -590,6 +591,26 @@ public class DebugUtilTest inherits QUnit::Test {
         assertEq(("stderr", "stdout"), sort(flushed_categories));
     }
 
+    # NOTHING and NULL are written as in Qore at every level; other values as with "%y" and "%Y"
+    formatTests() {
+        assertEq("NOTHING", AbstractDebugControl::formatValue(NOTHING));
+        assertEq("NULL", AbstractDebugControl::formatValue(NULL));
+        assertEq("\"null\"", AbstractDebugControl::formatValue("null"));
+        assertEq(sprintf("%y", 1.5), AbstractDebugControl::formatValue(1.5));
+        hash<auto!> h = {"a": NOTHING, "b": NULL, "c": (NOTHING, NULL, 1), "d": {}, "e": (), "s": "x"};
+        assertEq("{a: NOTHING, b: NULL, c: [NOTHING, NULL, 1], d: {}, e: [], s: \"x\"}",
+            AbstractDebugControl::formatValue(h));
+        assertEq(("a: NOTHING", "b: NULL", "c:", "  - NOTHING", "  - NULL", "  - 1", "d: {}", "e: []", "s: \"x\""),
+            AbstractDebugControl::formatTree(h));
+        # a list of hashes and of lists, as with "%Y"
+        assertEq(("- x: 1", "  y: NOTHING", "-", "  - 2", "- 3"),
+            AbstractDebugControl::formatTree(({"x": 1, "y": NOTHING}, (2,), 3)));
+        # without NOTHING and NULL, the lines are those of "%Y"
+        hash<auto> plain = {"h": {"a": 1, "l": (1, {"x": 2})}, "n": 2};
+        assertEq(sprintf("%Y", plain).split("\n"), AbstractDebugControl::formatTree(plain));
+        assertEq(("[]",), AbstractDebugControl::formatTree(()));
+    }
+
     describeTests() {
         DescribeTestAccount acct();
         hash<auto> v = {"acct": acct, "l": (1, "two", {"k": 3}), "s": "str", "n": NOTHING};
@@ -600,7 +621,9 @@ public class DebugUtilTest inherits QUnit::Test {
         assertEq({"type": "DescribeTestAccount", "value": "DescribeTestAccount", "named": 3},
             AbstractDebugControl::describe(acct));
         assertEq({"type": "string", "value": "\"str\""}, AbstractDebugControl::describe("str"));
-        assertEq({"type": "nothing", "value": "null"}, AbstractDebugControl::describe(NOTHING));
+        # NOTHING and NULL are written as in Qore, not as YAML's null
+        assertEq({"type": "nothing", "value": "NOTHING"}, AbstractDebugControl::describe(NOTHING));
+        assertEq({"type": "NULL", "value": "NULL"}, AbstractDebugControl::describe(NULL));
         # long text is shortened
         hash<auto> d = AbstractDebugControl::describe(strmul("x", 1000));
         assertEq(AbstractDebugControl::MaxValueTextSize + 3, d.value.length());

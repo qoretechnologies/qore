@@ -145,6 +145,9 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
         private {
             #! the error of the last command that processCmdLine() processed, if any; see runCommandFile()
             *string commandError;
+            #! the text of the arguments of the command that processCmdLine() processes, as it is written; see
+            #! getRawArgs()
+            string rawArgs = "";
             #! the number of files of commands that are run, one in another; see runCommandFile()
             int commandFileDepth = 0;
             #! the maximum number of files of commands that are run one in another, as a file that runs itself
@@ -294,7 +297,8 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
                         'desc': 'Show the value of an expression, with the variables of the current stack frame. '
                             'Usage: eval <expression>',
                         'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
-                            string expr = args.join(" ");
+                            # the expression as it is written, with its quotes and spaces
+                            string expr = dcl.getRawArgs();
                             if (!expr.val()) {
                                 printfImpl("syntax: eval <expression>\n");
                                 return;
@@ -1155,7 +1159,7 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
                     'display': (
                         'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                             if (args) {
-                                dcl.addDisplay(args.join(" "));
+                                dcl.addDisplay(dcl.getRawArgs());
                             } else {
                                 dcl.listDisplays();
                             }
@@ -1476,7 +1480,7 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
                         'desc': 'Continue the current thread until a breakpoint, an exception or the end, as "go". '
                             'Usage: continue [<place to run to>]',
                         'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
-                            dcl.runCommand(("go", "run") + args);
+                            dcl.runCommand("go run");
                         },
                     ),
                     'c': ('alias': 'continue', 'shortcut': True),
@@ -1485,7 +1489,7 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
                         'desc': 'Add a breakpoint, as "break create". Usage: b [<file>] <line>[:<column>] | <function> '
                             '| #<statement>',
                         'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
-                            dcl.runCommand(("break", "create") + args);
+                            dcl.runCommand("break create");
                         },
                     ),
                     'up': (
@@ -1517,7 +1521,7 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
                         'desc': 'Run the current thread to the next line, also into the functions that it calls, as '
                             '"go step".',
                         'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
-                            dcl.runCommand(("go", "step") + args);
+                            dcl.runCommand("go step");
                         },
                     ),
                     's': ('alias': 'step', 'shortcut': True),
@@ -1525,7 +1529,7 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
                         'shortcut': True,
                         'desc': 'Run the current thread to the next line of the current function, as "go stepover".',
                         'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
-                            dcl.runCommand(("go", "stepover") + args);
+                            dcl.runCommand("go stepover");
                         },
                     ),
                     'n': ('alias': 'next', 'shortcut': True),
@@ -1533,14 +1537,14 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
                         'shortcut': True,
                         'desc': 'Run the current thread until the current function returns, as "go untilreturn".',
                         'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
-                            dcl.runCommand(("go", "untilreturn") + args);
+                            dcl.runCommand("go untilreturn");
                         },
                     ),
                     'print': (
                         'shortcut': True,
                         'desc': 'Show the value of an expression, as "eval". Usage: print <expression>',
                         'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
-                            dcl.runCommand(("eval",) + args);
+                            dcl.runCommand("eval");
                         },
                     ),
                     'locals': (
@@ -1689,9 +1693,11 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
             @param args the words of the value; without words, the option is removed
         */
         public setBreakpointOption(softint id, string cmd, softlist args) {
+            # the value as it is written, with its quotes and spaces
+            string value = getRawArgs();
             doCommand({
                 "cmd": sprintf("program//breakpoint/%d/%s/set", id, cmd),
-                "value": args ? args.join(" ") : NOTHING,
+                "value": args ? value : NOTHING,
             }, True);
         }
 
@@ -1712,7 +1718,8 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
         /** @param args the words of the command: the path of the value, and optionally \c "=" and an expression
         */
         public variableCommand(softlist args) {
-            string text = args.join(" ");
+            # the expression as it is written, with its quotes and spaces
+            string text = getRawArgs();
             # the index of the first element, key or member that is shown
             int start = 0;
             *list<*string> page = (text =~ x/^\s*([^=\s]+)\s+from\s+([0-9]+)\s*$/);
@@ -2623,9 +2630,18 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
             f.write(make_yaml(sh));
         }
 
-        #! Runs a command given by its words, as the shortcut commands do
-        public runCommand(list<auto> words) {
-            processCmdLine(words.join(" "));
+        #! Runs a command with the arguments of the current command as they are written, as the shortcut commands do
+        /** @param cmd the command, such as \c "go run"
+        */
+        public runCommand(string cmd) {
+            string args = getRawArgs();
+            processCmdLine(args.val() ? cmd + " " + args : cmd);
+        }
+
+        #! Returns the arguments of the command that is processed as they are written, with their quotes and spaces,
+        #! for commands that take an expression or a text
+        public string getRawArgs() {
+            return rawArgs;
         }
 
         #! Shows the local variables of the current frame with their values
@@ -2863,8 +2879,14 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
             # the error of this command; a command that runs other commands, as a shortcut, reports theirs
             commandError = NOTHING;
             int last_param;
-            list<auto> args = splitCmd(line).args;
+            hash<auto> split = splitCmd(line);
+            list<auto> args = split.args;
             *hash<auto> cmd = findCmd(args, fcExpandUniqueCmd | fcValidate | fcFallback, \last_param);
+            # the arguments of the command as they are written, for expressions and text with quotes and spaces
+            int first_arg = args.size() - cmd.args.size();
+            rawArgs = (cmd.args && first_arg >= 0 && first_arg < split.pos.size())
+                ? trim(line.substr(split.pos[first_arg].start))
+                : "";
             if (cmd.cmd) {
                 @debug {
                     printfImpl("line:%y\n", line);
@@ -2932,11 +2954,14 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
         #! Prints the value of a variable; a list or hash is printed in YAML style (the \c "%Y" format)
         public printVar(string name, hash<auto> value) {
             auto v = AbstractDebugControl::unserialize(value);
-            if (v.typeCode() == NT_HASH || v.typeCode() == NT_LIST) {
+            # NOTHING and NULL are written as in Qore; see AbstractDebugControl::formatValue()
+            if ((v.typeCode() == NT_HASH || v.typeCode() == NT_LIST) && v) {
                 printfImpl("%s %s =\n", value.type, name);
-                printHuman(v);
+                foreach string line in (AbstractDebugControl::formatTree(v)) {
+                    printfImpl("%s%s\n", defaultIndent, line);
+                }
             } else {
-                printfImpl("%s %s = %y\n", value.type, name, v);
+                printfImpl("%s %s = %s\n", value.type, name, AbstractDebugControl::formatValue(v));
             }
         }
 

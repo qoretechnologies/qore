@@ -115,6 +115,7 @@ public class QdbgScriptTest inherits QUnit::Test {
         addTestCase("frames, breakpoints and ending the program as in other debuggers", \frameKillTest());
         addTestCase("files of commands: the init file, -x and script", \commandFileTest());
         addTestCase("session files with breakpoints and settings", \sessionFileTest());
+        addTestCase("expressions and texts with quotes and spaces; NOTHING and NULL", \expressionTextTest());
         addTestCase("time zones", \timeZoneTest());
         addTestCase("the usage of the debugger tools", \usageTest());
         addTestCase("errors at the start of qdbg and qdbg-server", \startupErrorTest());
@@ -462,11 +463,9 @@ public class QdbgScriptTest inherits QUnit::Test {
         # the thread of the program that the server holds at its start is the current thread; the breakpoint is set by
         # a file of commands of the start
         string cmd_file = tmp.path + "/start.cmds";
-        {
-            File f();
-            f.open2(cmd_file, O_CREAT | O_WRONLY | O_TRUNC);
-            f.write("# the breakpoint of the loop\nbreak create target.q 4\nbreak condition 1 i == 2\n");
-        }
+        f.open2(cmd_file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("# the breakpoint of the loop\nbreak create target.q 4\nbreak condition 1 i == 2\n");
+        f.close();
         res = runRemote(port, (
             "display total",
             "go run",
@@ -624,6 +623,41 @@ public class QdbgScriptTest inherits QUnit::Test {
         ));
         assertEq(1, (res.out =~ x/(the command failed)/g).size() - 1, "each failure of a file is shown once");
         assertFalse(res.out =~ /integer (4|8|9) = /, "the commands after a failure or quit are not run");
+    }
+
+    # an expression or a text is used as it is written, with its quotes and spaces, and NOTHING and NULL are written
+    # as in Qore
+    expressionTextTest() {
+        hash<auto> res = runQdbg(Program, (
+            "eval sprintf(\"%s-%s\", \"x\", \"y  z\")",
+            "print 'a  b' + \"!\"",
+            "print {\"n\": NOTHING, \"u\": NULL}",
+            # a logpoint, which does not stop the thread, and a breakpoint at the top level
+            "break create target.q 3",
+            "break log 1 a=\"{a}\"  b={b}",
+            "break list",
+            "break create target.q 8",
+            "c",
+            "display \"<\" + total + \">\"",
+            "thread var h.name = \"s  t\"",
+            # a variable with a type converts the value, which is shown as it is stored
+            "thread var total = \"x\"",
+            "quit",
+        ));
+        assertEq(0, res.rc);
+        assertInOrder(res.out, (
+            "= \"x-y  z\"",
+            "= \"a  b!\"",
+            "  n: NOTHING", "  u: NULL",
+            "log: a=\"{a}\"  b={b}",
+            "a=\"2\"  b=3",
+            "1: \"<\" + total + \">\" = \"<5>\"",
+            "h.name = string \"s  t\"",
+            "total = integer 0",
+        ));
+        # the local variable that has no value yet
+        res = runQdbg(Program, ("break create target.q 3", "c", "thread local sum", "quit"));
+        assertRegex("nothing sum = NOTHING", res.out);
     }
 
     sessionFileTest() {

@@ -2434,8 +2434,11 @@ public namespace DebugProgramControl {
                                         } else {
                                             setDebugRootValue(pgm, rd.root, \ctxCT, refName, new_val);
                                         }
-                                        result = AbstractDebugControl::describe(AbstractDebugControl::getPath(new_val,
-                                            rd.path));
+                                        # the value as it is stored, which a variable with a type can convert, as an
+                                        # int local variable converts a string
+                                        *hash<auto> lv2 = exists rd.root.local ? get_local_vars(frameId2) : lv;
+                                        result = AbstractDebugControl::describe(AbstractDebugControl::getPath(
+                                            getDebugRootValue(pgm, rd.root, lv2, ctxCT, refName), rd.path));
                                         break;
                                     }
                                 }
