@@ -86,6 +86,26 @@ public:
         const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createListSetLength(QoreIRValue list, QoreIRValue length,
         const QoreProgramLocation* loc = nullptr);
+    //! Sets the type of a map or map/select result list from the common value type; see
+    //! QoreIROpcode::ListSetCommonType
+    QoreIRInstruction* createListSetCommonType(QoreIRValue list, QoreIRValue state, const QoreTypeInfo* element_type,
+        const QoreProgramLocation* loc = nullptr);
+    //! Folds the type of a map or hash map value into the common value type; see QoreIROpcode::CommonTypeFold
+    /** @param index the index of the source element for a hash map, or an invalid value for a list
+    */
+    QoreIRInstruction* createCommonTypeFold(QoreIRValue state, QoreIRValue value, QoreIRValue index,
+        const QoreProgramLocation* loc = nullptr);
+    //! Sets the type of a hash map result from the common value type; see QoreIROpcode::HashSetCommonType
+    QoreIRInstruction* createHashSetCommonType(QoreIRValue hash, QoreIRValue state,
+        const QoreProgramLocation* loc = nullptr);
+    //! Sets the type of a select result list from its values; see QoreIROpcode::ListSetScannedType
+    /** @param list the result list
+        @param element_type the element type of the list created by the AST interpreter; ignored when \a source is
+        valid
+        @param source the source of the select operator, or an invalid value
+    */
+    QoreIRInstruction* createListSetScannedType(QoreIRValue list, const QoreTypeInfo* element_type,
+        QoreIRValue source, const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createListSize(QoreIRValue list, const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createListGetInt(QoreIRValue list, QoreIRValue index,
         const QoreProgramLocation* loc = nullptr);

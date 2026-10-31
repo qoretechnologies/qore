@@ -362,6 +362,16 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_pseudo_list_value_noguard",
         reinterpret_cast<void*>(&qore_rt_pseudo_list_value_noguard) },
     { "qore_rt_list_size", reinterpret_cast<void*>(&qore_rt_list_size) },
+    { "qore_rt_common_type_fold", reinterpret_cast<void*>(&qore_rt_common_type_fold) },
+    { "qore_rt_list_set_common_type", reinterpret_cast<void*>(&qore_rt_list_set_common_type) },
+    { "qore_rt_list_set_common_type_by_type_path",
+        reinterpret_cast<void*>(&qore_rt_list_set_common_type_by_type_path) },
+    { "qore_rt_list_set_scanned_type", reinterpret_cast<void*>(&qore_rt_list_set_scanned_type) },
+    { "qore_rt_list_set_scanned_type_by_type_path",
+        reinterpret_cast<void*>(&qore_rt_list_set_scanned_type_by_type_path) },
+    { "qore_rt_list_set_scanned_type_from_source",
+        reinterpret_cast<void*>(&qore_rt_list_set_scanned_type_from_source) },
+    { "qore_rt_hash_set_common_type", reinterpret_cast<void*>(&qore_rt_hash_set_common_type) },
     { "qore_rt_list_get_int", reinterpret_cast<void*>(&qore_rt_list_get_int) },
     { "qore_rt_list_get_float", reinterpret_cast<void*>(&qore_rt_list_get_float) },
     { "qore_rt_list_get_int_unchecked", reinterpret_cast<void*>(&qore_rt_list_get_int_unchecked) },
@@ -6645,6 +6655,175 @@ extern "C" DLLEXPORT void qore_rt_list_set_length_unchecked(uint64_t list_val, i
     if (static_cast<size_t>(length) <= priv->allocated) {
         priv->length = static_cast<size_t>(length);
     }
+}
+
+// --- Result types of the map, map/select, select and hash map operators ---
+//
+// The AST interpreter creates the result container of these operators with a type taken from the parse-time type
+// of the value expression (map, map/select, hash map) or from the value type of the source (select), and then, if
+// every value has a common type (QoreTypeInfo::matchCommonType() over the value types in order), gives the
+// container that common type.  The helpers below do the same for the compiled tiers, which fill the result
+// container in a loop; see QoreMapOperatorNode::evalImpl(), QoreMapSelectOperatorNode::evalImpl(),
+// QoreSelectOperatorNode::evalImpl() and QoreHashMapOperatorNode::evalImpl().
+
+// the state of CommonTypeFold: 0 = no value yet, 1 = no common type, otherwise the common type so far, encoded by
+// qore_common_type_encode(); type information objects are 8-byte aligned, so the encoded pointer always fits in the
+// 48 bits of an inline QoreValue int, which the IR interpreter holds it in
+static constexpr int64_t QORE_COMMON_TYPE_NO_VALUE = 0;
+static constexpr int64_t QORE_COMMON_TYPE_NONE = 1;
+static_assert(alignof(QoreTypeInfo) >= 8, "the common type state encoding needs 8-byte aligned type information");
+
+static int64_t qore_common_type_encode(const QoreTypeInfo* ti) {
+    assert(ti);
+    uintptr_t bits = reinterpret_cast<uintptr_t>(ti);
+    assert(!(bits & 7));
+    int64_t state = static_cast<int64_t>(bits >> 3);
+    assert(state > QORE_COMMON_TYPE_NONE);
+    return state;
+}
+
+// returns the common type of a state, or nullptr if the state has none
+static const QoreTypeInfo* qore_common_type_decode(int64_t state) {
+    if (state == QORE_COMMON_TYPE_NO_VALUE || state == QORE_COMMON_TYPE_NONE) {
+        return nullptr;
+    }
+    return reinterpret_cast<const QoreTypeInfo*>(static_cast<uintptr_t>(state) << 3);
+}
+
+// sets the type of a result list to list<common type>, or else to the type of a list created with the element type
+// (QoreListNode::QoreListNode(const QoreTypeInfo*)), as the AST interpreter does
+static void qore_list_set_result_type(QoreListNode* list, const QoreTypeInfo* common_type,
+        const QoreTypeInfo* element_type) {
+    qore_list_private* priv = qore_list_private::get(*list);
+    if (QoreTypeInfo::hasType(common_type)) {
+        priv->complexTypeInfo = qore_get_complex_list_type(common_type);
+    } else if (QoreTypeInfo::hasType(element_type) || element_type == autoTypeInfo) {
+        priv->complexTypeInfo = qore_get_complex_list_type(element_type);
+    } else {
+        priv->complexTypeInfo = nullptr;
+    }
+}
+
+extern "C" DLLEXPORT int64_t qore_rt_common_type_fold(int64_t state, uint64_t value, int64_t index) {
+    const QoreTypeInfo* vtype = fromBits(value).getTypeInfo();
+    // the first value starts the common type: the value of the first source element of a hash map operator, so
+    // when a select expression rejected the first element no value starts it and the values have no common type,
+    // or the first value folded for a list (index -1)
+    if (!index || (index < 0 && state == QORE_COMMON_TYPE_NO_VALUE)) {
+        return vtype && vtype != anyTypeInfo ? qore_common_type_encode(vtype) : QORE_COMMON_TYPE_NONE;
+    }
+    const QoreTypeInfo* ctype = qore_common_type_decode(state);
+    if (!ctype || !QoreTypeInfo::matchCommonType(ctype, vtype)) {
+        return QORE_COMMON_TYPE_NONE;
+    }
+    return qore_common_type_encode(ctype);
+}
+
+extern "C" DLLEXPORT void qore_rt_list_set_common_type(uint64_t list_val, int64_t state,
+        const QoreTypeInfo* element_type) {
+    QoreValue v = fromBits(list_val);
+    if (v.getType() != NT_LIST) {
+        return;
+    }
+    qore_list_set_result_type(v.get<QoreListNode>(), qore_common_type_decode(state),
+        qore_substitute_type_params_if_needed(element_type));
+}
+
+extern "C" DLLEXPORT void qore_rt_list_set_common_type_by_type_path(uint64_t list_val, int64_t state,
+        const char* element_type_path, int32_t has_element_type, ExceptionSink* xsink) {
+    const QoreTypeInfo* element_type = nullptr;
+    if (has_element_type) {
+        element_type = qore_rt_resolve_element_type_path(element_type_path, "ListSetCommonType", xsink);
+        if (!element_type) {
+            return;
+        }
+    }
+    qore_rt_list_set_common_type(list_val, state, element_type);
+}
+
+extern "C" DLLEXPORT void qore_rt_hash_set_common_type(uint64_t hash_val, int64_t state) {
+    const QoreTypeInfo* ctype = qore_common_type_decode(state);
+    if (!ctype) {
+        return;
+    }
+    QoreValue v = fromBits(hash_val);
+    if (v.getType() != NT_HASH) {
+        return;
+    }
+    qore_hash_private::get(*v.get<QoreHashNode>())->complexTypeInfo = qore_get_complex_hash_type(ctype);
+}
+
+// returns the common type of the values of the list as the AST interpreter determines it while it builds the list
+// (the type of the first value folded with each following value), or nullptr if there is none
+static const QoreTypeInfo* qore_list_get_common_value_type(const QoreListNode* list) {
+    size_t size = list->size();
+    if (!size) {
+        return nullptr;
+    }
+    const QoreTypeInfo* vtype = list->retrieveEntry(0).getTypeInfo();
+    for (size_t i = 1; i < size; ++i) {
+        if (!QoreTypeInfo::matchCommonType(vtype, list->retrieveEntry(i).getTypeInfo())) {
+            return nullptr;
+        }
+    }
+    return vtype;
+}
+
+extern "C" DLLEXPORT void qore_rt_list_set_scanned_type(uint64_t list_val, const QoreTypeInfo* element_type) {
+    QoreValue v = fromBits(list_val);
+    if (v.getType() != NT_LIST) {
+        return;
+    }
+    QoreListNode* list = v.get<QoreListNode>();
+    qore_list_set_result_type(list, qore_list_get_common_value_type(list),
+        qore_substitute_type_params_if_needed(element_type));
+}
+
+extern "C" DLLEXPORT void qore_rt_list_set_scanned_type_by_type_path(uint64_t list_val,
+        const char* element_type_path, int32_t has_element_type, ExceptionSink* xsink) {
+    const QoreTypeInfo* element_type = nullptr;
+    if (has_element_type) {
+        element_type = qore_rt_resolve_element_type_path(element_type_path, "ListSetScannedType", xsink);
+        if (!element_type) {
+            return;
+        }
+    }
+    qore_rt_list_set_scanned_type(list_val, element_type);
+}
+
+extern "C" DLLEXPORT void qore_rt_list_set_scanned_type_from_source(uint64_t list_val, uint64_t source_val) {
+    QoreValue v = fromBits(list_val);
+    if (v.getType() != NT_LIST) {
+        return;
+    }
+    // the value type that the functional iterator of the AST interpreter gives for the source
+    // (FunctionalOperatorInterface::getFunctionalIterator()); a single value is not mapped to a list
+    QoreValue source = fromBits(source_val);
+    const QoreTypeInfo* element_type;
+    switch (source.getType()) {
+        case NT_LIST:
+            element_type = source.get<const QoreListNode>()->getValueTypeInfo();
+            break;
+        case NT_BUFFER:
+            element_type = source.get<const QoreBufferNode>()->getElementTypeInfo();
+            break;
+        case NT_OBJECT: {
+            const QoreObject* obj = source.get<const QoreObject>();
+            element_type = QoreTypeInfo::getAbstractIteratorElementType(obj->getInstantiatedTypeInfo());
+            if (!element_type) {
+                element_type = QoreTypeInfo::getAbstractIteratorElementType(obj->getClass()->getTypeInfo());
+            }
+            if (!element_type) {
+                element_type = autoTypeInfo;
+            }
+            break;
+        }
+        default:
+            element_type = source.getTypeInfo();
+            break;
+    }
+    QoreListNode* list = v.get<QoreListNode>();
+    qore_list_set_result_type(list, qore_list_get_common_value_type(list), element_type);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_list_get_value(uint64_t list_val, int64_t index, ExceptionSink* xsink) {

@@ -49,7 +49,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 412,
+static_assert(QORE_IR_MAX_OPCODE == 416,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 
@@ -24830,6 +24830,81 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto helper = module.getOrInsertFunction("qore_rt_list_set_length_unchecked",
                     llvm::FunctionType::get(void_type, {i64_type, i64_type}, false));
             builder->CreateCall(helper, {list_boxed, length_int});
+            return true;
+        }
+        case QoreIROpcode::ListSetCommonType: {
+            auto* list = getVal(inst->operands[0].id, error);
+            if (!list) { return false; }
+            auto* state = getVal(inst->operands[1].id, error);
+            if (!state) { return false; }
+            llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+            llvm::Value* state_int = ensureIntTypeInline(state, inst->operands[1].id);
+            if (aot_mode) {
+                auto helper = module.getOrInsertFunction("qore_rt_list_set_common_type_by_type_path",
+                        llvm::FunctionType::get(void_type, {i64_type, i64_type, ptr_type, i32_type, ptr_type},
+                            false));
+                builder->CreateCall(helper, {list_boxed, state_int, getTypePathArg(inst->element_type),
+                    llvm::ConstantInt::get(i32_type, inst->element_type ? 1 : 0), xsink_arg});
+                emitExceptionCheck(module, llvm_func, inst);
+                return true;
+            }
+            auto helper = module.getOrInsertFunction("qore_rt_list_set_common_type",
+                    llvm::FunctionType::get(void_type, {i64_type, i64_type, ptr_type}, false));
+            builder->CreateCall(helper, {list_boxed, state_int, getTypeInfoPointerArg(inst->element_type)});
+            return true;
+        }
+        case QoreIROpcode::CommonTypeFold: {
+            auto* state = getVal(inst->operands[0].id, error);
+            if (!state) { return false; }
+            auto* value = getVal(inst->operands[1].id, error);
+            if (!value) { return false; }
+            auto* index = getVal(inst->operands[2].id, error);
+            if (!index) { return false; }
+            llvm::Value* state_int = ensureIntTypeInline(state, inst->operands[0].id);
+            llvm::Value* value_boxed = boxValue(value, inst->operands[1].id);
+            llvm::Value* index_int = ensureIntTypeInline(index, inst->operands[2].id);
+            auto helper = module.getOrInsertFunction("qore_rt_common_type_fold",
+                    llvm::FunctionType::get(i64_type, {i64_type, i64_type, i64_type}, false));
+            // the result is the native int state
+            values[inst->result.id] = builder->CreateCall(helper, {state_int, value_boxed, index_int});
+            return true;
+        }
+        case QoreIROpcode::HashSetCommonType: {
+            auto* hash = getVal(inst->operands[0].id, error);
+            if (!hash) { return false; }
+            auto* state = getVal(inst->operands[1].id, error);
+            if (!state) { return false; }
+            llvm::Value* hash_boxed = boxValue(hash, inst->operands[0].id);
+            llvm::Value* state_int = ensureIntTypeInline(state, inst->operands[1].id);
+            auto helper = module.getOrInsertFunction("qore_rt_hash_set_common_type",
+                    llvm::FunctionType::get(void_type, {i64_type, i64_type}, false));
+            builder->CreateCall(helper, {hash_boxed, state_int});
+            return true;
+        }
+        case QoreIROpcode::ListSetScannedType: {
+            auto* list = getVal(inst->operands[0].id, error);
+            if (!list) { return false; }
+            llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+            if (inst->operands.size() > 1) {
+                auto* source = getVal(inst->operands[1].id, error);
+                if (!source) { return false; }
+                llvm::Value* source_boxed = boxValue(source, inst->operands[1].id);
+                auto helper = module.getOrInsertFunction("qore_rt_list_set_scanned_type_from_source",
+                        llvm::FunctionType::get(void_type, {i64_type, i64_type}, false));
+                builder->CreateCall(helper, {list_boxed, source_boxed});
+                return true;
+            }
+            if (aot_mode) {
+                auto helper = module.getOrInsertFunction("qore_rt_list_set_scanned_type_by_type_path",
+                        llvm::FunctionType::get(void_type, {i64_type, ptr_type, i32_type, ptr_type}, false));
+                builder->CreateCall(helper, {list_boxed, getTypePathArg(inst->element_type),
+                    llvm::ConstantInt::get(i32_type, inst->element_type ? 1 : 0), xsink_arg});
+                emitExceptionCheck(module, llvm_func, inst);
+                return true;
+            }
+            auto helper = module.getOrInsertFunction("qore_rt_list_set_scanned_type",
+                    llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+            builder->CreateCall(helper, {list_boxed, getTypeInfoPointerArg(inst->element_type)});
             return true;
         }
         case QoreIROpcode::GetObjectClass: {

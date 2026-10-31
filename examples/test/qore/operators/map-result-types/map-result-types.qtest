@@ -1,0 +1,189 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%include map-result-type-checks.qi
+
+%exec-class MapResultTypesTest
+
+#! Tests that the containers built by the map, select and foldl operators have the types that the AST interpreter gives them
+/** The AST interpreter gives the result list or hash of a map, map/select, select or hash map operator the common type
+    of its values when they have one, and otherwise the type that it creates the container with.  Each check returns
+    the full type of a result, or the outcome of writes to it; every execution mode and a compiled module must give
+    the results that the AST interpreter gives.  The checks are in map-result-type-checks.qi.
+*/
+class MapResultTypesTest inherits QUnit::Test {
+    public {
+        #! check name -> the result that the AST interpreter gives
+        const Expected = {
+            "hmap-empty-list-keys-hash-auto": "hash<string, list<auto>>",
+            "hmap-empty-list-keys-auto": "hash<string, list<auto>>",
+            "hmap-empty-list-keys-hash-auto-bang": "hash<auto>",
+            "hmap-empty-list-typed-list": "hash<string, list<auto>>",
+            "hmap-empty-list-untyped-source": "hash<string, list<auto>>",
+            "hmap-empty-list-iterator": "hash<string, list<auto>>",
+            "hmap-empty-list-single-value": "hash<string, list<auto>>",
+            "hmap-empty-list-no-input": "hash<string, list>",
+            "hmap-empty-list-nothing-input": "NOTHING",
+            "hmap-empty-hash": "hash<string, hash<auto>>",
+            "hmap-string-list": "hash<string, list<string>>",
+            "hmap-nested-hash": "hash<string, hash<string, list>>",
+            "hmap-nested-list": "hash<string, list<list<auto>>>",
+            "hmap-hashdecl": "hash<string, hash<MapPoint>>",
+            "hmap-hash-auto": "hash<string, hash<auto>>",
+            "hmap-mixed": "hash<auto>",
+            "hmap-int-or-nothing": "hash<string, *int>",
+            "hmap-ints-from-auto": "hash<string, int>",
+            "hmap-duplicate-key-mixed": "hash<auto>",
+            "hmap-duplicate-key-same": "hash<string, string>",
+            "hmap-strings-from-auto": "hash<string, string>",
+            "hmap-objects-one-subclass": "hash<string, object<MapSub1>>",
+            "hmap-objects-two-subclasses": "hash<string, object>",
+            "hmap-select-empty-list": "hash<string, list<auto>>",
+            "hmap-select-empty-list-untyped-source": "hash<string, list<auto>>",
+            "hmap-select-ints-from-auto": "hash<string, int>",
+            "hmap-select-none-selected": "hash<string, list>",
+            # the value of the first source element starts the common type of a hash map operator
+            "hmap-select-first-rejected": "hash<string, list>",
+            "hmap-select-iterator-first-rejected": "hash<string, list>",
+            "hmap-select-duplicate-key": "hash<string, string>",
+            "map-empty-list": "list<list<auto>>",
+            "map-empty-list-list-auto": "list<list<auto>>",
+            "map-empty-list-untyped-source": "list<list<auto>>",
+            "map-empty-list-iterator": "list<list<auto>>",
+            "map-empty-list-no-input": "list<list>",
+            "map-nested-list": "list<list<list<auto>>>",
+            "map-hash-of-empty-list": "hash<string, list<auto>>",
+            "map-nested-map": "list<list<list<auto>>>",
+            "map-strings": "list<string>",
+            "map-strings-from-auto": "list<string>",
+            "map-ints-from-auto": "list<int>",
+            "map-mixed": "list<auto>",
+            "map-int-or-nothing": "list<*int>",
+            "map-objects-one-subclass": "list<object<MapSub1>>",
+            "map-objects-two-subclasses": "list<object>",
+            "map-of-select-empty-list": "list<list<auto>>",
+            "map-of-select-strings-from-auto": "list<string>",
+            "hmap-of-select-empty-list": "hash<string, list<auto>>",
+            "map-select-empty-list": "list<list<auto>>",
+            "map-select-ints-from-auto": "list<int>",
+            "map-select-strings-from-auto": "list<string>",
+            # the first value selected starts the common type of a list
+            "map-select-first-rejected": "list<list<auto>>",
+            "map-select-untyped-source": "list<list<auto>>",
+            "map-select-none-selected": "list<list>",
+            "select-strings-from-auto": "list<string>",
+            "select-strings": "list<string>",
+            "select-mixed": "list<auto>",
+            "select-untyped-source": "list<string>",
+            "select-iterator": "list<string>",
+            "select-single-value": "string",
+            "select-of-map-empty-lists": "list<list<auto>>",
+            "select-of-map-mixed": "list<string>",
+            "select-of-select-mixed": "list<string>",
+            "select-objects-one-subclass": "list<object<MapSub1>>",
+            "select-objects-two-subclasses": "list<object>",
+            "map-select-objects-one-subclass": "list<object<MapSub1>>",
+            "hmap-select-objects-one-subclass": "hash<string, object<MapSub1>>",
+            "foldl-empty-lists": "list<auto>",
+            "foldl-nested-lists": "list<list<auto>>",
+            "write-hash-auto-push-int": "hash<string, list<auto>>",
+            "write-hash-auto-push-string": "hash<string, list<auto>>",
+            "write-hash-auto-value-type": "list<auto>",
+            "write-hash-auto-new-int-key": "RUNTIME-TYPE-ERROR",
+            "write-hash-auto-new-list-key": "hash<string, list<auto>>",
+            "write-hash-auto-contents": "{a: [1, \"s\"], b: [], y: [1]}",
+            "write-auto-push-int": "hash<string, list<auto>>",
+            "write-auto-new-int-key": "RUNTIME-TYPE-ERROR",
+            "write-auto-contents": "{a: [1], b: []}",
+            "write-hash-auto-bang-push-int": "hash<auto>",
+            "write-hash-auto-bang-new-int-key": "hash<auto>",
+            "write-hash-auto-bang-contents": "{a: [1], b: [], z: 1}",
+            "write-ints-new-string-key": "RUNTIME-TYPE-ERROR",
+            "write-ints-push-string": "RUNTIME-TYPE-ERROR",
+            "write-select-push-int": "RUNTIME-TYPE-ERROR",
+            "write-ints-push-nothing": "RUNTIME-TYPE-ERROR",
+            "write-direct-hash-auto": "hash<string, list<auto>> {a: [1, \"s\"], b: []}",
+            "write-direct-list": "list<list<auto>> [[1], []]",
+        };
+
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("MapResultTypesTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("checks in this program", \testInProgram());
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("compiled module", \testCompiledModule());
+
+        set_return_value(main());
+    }
+
+    #! the checks in the execution mode that the test is run in
+    testInProgram() {
+        checkResults("in-program", MapResultTypeChecks::get_results());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModes) {
+            checkWorkerOutput(mode, runWorker("map-result-types-worker.q", get_script_dir(), "--exec-mode=" + mode));
+        }
+    }
+
+    testCompiledModule() {
+        TmpDir tmp("qore-map-result-types-");
+        string qmod_path = tmp.path + DirSep + "MapResultTypeChecks.qmod";
+        string src_path = get_script_dir() + DirSep + "MapResultTypeChecks.qm";
+        string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile-module --strip-source --output "
+            "%s %s 2>&1", libqore_dir, qore_bin, qmod_path, src_path));
+        assertTrue(is_file(qmod_path), "compiled checks module: " + compile_out);
+
+        # the directory holds only the compiled module, so the worker cannot load the source instead
+        checkWorkerOutput("aot", runWorker("map-result-types-module-worker.q", tmp.path));
+    }
+
+    #! a run with an execution mode runs through ExecModeHarness, which checks its native compilation
+    private string runWorker(string worker_name, string module_dir, string opts = "") {
+        string worker = get_script_dir() + DirSep + worker_name;
+        return ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s %s",
+            libqore_dir, module_dir, qore_bin, opts, worker));
+    }
+
+    #! parses the "name=value" lines printed by the worker and checks them
+    private checkWorkerOutput(string label, string out) {
+        hash<string, string> results = {};
+        foreach string line in (out.split("\n")) {
+            *list<*string> parts = (line =~ x/^([-a-z]+)=(.*)$/);
+            if (!parts) {
+                if (line.val()) {
+                    fail(sprintf("%s: unexpected worker output: %y", label, out));
+                }
+                continue;
+            }
+            results{parts[0]} = parts[1];
+        }
+        checkResults(label, results);
+    }
+
+    private checkResults(string label, hash<string, string> results) {
+        assertEq(sort(keys Expected), sort(keys results), label + ": checks run");
+        foreach hash<auto> i in (Expected.pairIterator()) {
+            assertEq(i.value, results{i.key}, sprintf("%s: %s", label, i.key));
+        }
+    }
+}

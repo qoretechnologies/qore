@@ -21,6 +21,15 @@
     \c RUNTIME-TYPE-ERROR is no longer selected: another variant is called, or \c RUNTIME-OVERLOAD-ERROR is raised
     when none matches.  A call that binds selects the same variant as before.
 
+    The list or hash built by the @ref map "map", @ref select "select" and hash map operators now has the same
+    runtime type in every execution mode: when all values have a common type, the container gets that type, as with
+    the AST interpreter (ex: <tt>map {$1: ()}, keys rec</tt> gives a \c hash<string, list<auto>>, and a \c map over
+    a \c list<auto> holding only ints gives a \c list<int>); otherwise it keeps the type of the expression.  The IR,
+    JIT and tiered execution modes and compiled (AOT) code kept the type of the expression (ex:
+    \c hash<string, list>), so \c fullType() and the writes that the container accepts could differ between modes.
+    Compiled code also no longer removes the element type of an empty list stored in such a container or in a hash
+    literal such as <tt>{"a": (), "b": ()}</tt>.
+
     @ref Qore::HTTPClient::sendHttp2Connect() "HTTPClient::sendHttp2Connect()" and
     @ref Qore::HTTPClient::sendHttp3Connect() "HTTPClient::sendHttp3Connect()" now send their headers as every other
     request does: a value that is not a string is sent as a string, the elements of a list as repeated headers, and an

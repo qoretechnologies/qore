@@ -330,6 +330,8 @@ private:
         const QoreValue* primary = nullptr;    //!< limit/predicate/map expression
         const QoreValue* secondary = nullptr;  //!< map-select predicate
         const QoreProgramLocation* loc = nullptr;
+        //! Map and MapSelect: the element type of the list that the AST interpreter creates for the operator
+        const QoreTypeInfo* ast_element_type = nullptr;
     };
 
     //! Root consumer descriptor for fused lazy pipelines.
@@ -349,6 +351,9 @@ private:
         const QoreTypeInfo* list_element_type = nullptr;
         const QoreProgramLocation* loc = nullptr;
         bool need_result = true;
+        //! List: the last stage is the map, map/select or select operator whose result list is built, which gets
+        //! the type that the AST interpreter gives it (see QoreIROpcode::ListSetCommonType)
+        bool set_common_type = false;
     };
 
     //! Collects a supported lazy source chain into ordered stages and an innermost source expression.

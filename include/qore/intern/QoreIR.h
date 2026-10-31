@@ -842,7 +842,49 @@ enum class QoreIROpcode : uint16_t {
     //! debugger is attached.  Never emitted in code compiled ahead of time, which has no debug events.
     DebugStatement = 412,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (413, 414, ...)
+    //! Set the type of the result list of a map or map/select operator as the AST interpreter does.
+    //!
+    //! operands[0] = the result list; operands[1] = the state of CommonTypeFold after the last value; no result.
+    //! `element_type` = the element type of the list that the AST interpreter creates for the operator
+    //! (QoreMapOperatorNode::evalImpl(), QoreMapSelectOperatorNode::evalImpl()).  When the values had a common type,
+    //! the list gets list<common type>; otherwise it gets the type of a list created with the element type.  The
+    //! values are folded before they are stored, as the AST interpreter folds them before it pushes them, which can
+    //! convert them to the element type.  Emitted after the loop that fills the list, unless every value must have
+    //! the element type itself (see qore_ir_map_value_type_is_exact()).
+    ListSetCommonType = 413,
+
+    //! Fold the type of the next value of the result of a map, map/select or hash map operator into the common
+    //! value type.
+    //!
+    //! operands[0] = the state from the previous value (0 before the first value); operands[1] = the value;
+    //! operands[2] = the index of the source element, or -1 (native int); result = the new state (native int).  The
+    //! state encodes what the AST interpreter tracks: no value yet, no common type, or the common type so far
+    //! (QoreTypeInfo::matchCommonType() over the value types in order).  With an index, as for a hash map operator
+    //! (QoreHashMapOperatorNode::evalImpl(), QoreHashMapSelectOperatorNode::evalImpl()), the value of the first
+    //! source element starts the common type, so with a select expression that rejects the first element the values
+    //! have no common type; values that replace the value of a key that is already set are folded as well.  With -1,
+    //! as for a list (QoreMapOperatorNode::evalImpl(), QoreMapSelectOperatorNode::evalImpl()), the first value
+    //! folded starts it.
+    CommonTypeFold = 414,
+
+    //! Set the type of the result hash of a hash map operator from the state of CommonTypeFold.
+    //!
+    //! operands[0] = the result hash; operands[1] = the state after the last value; no result.  When the values
+    //! had a common type, the hash gets hash<string, common type>; otherwise its type is not changed.
+    HashSetCommonType = 415,
+
+    //! Set the type of the result list of a select operator from the values stored in it, as the AST interpreter
+    //! does.
+    //!
+    //! operands[0] = the result list; operands[1], if present = the source of the select operator; no result.  When
+    //! the values of the list have a common type, the list gets list<common type>; otherwise it gets the type of a
+    //! list created with the value type of the source, as the AST interpreter creates it
+    //! (QoreSelectOperatorNode::evalImpl()), or, without operands[1], with `element_type`.  A select operator stores
+    //! the values of its source, which have the value type of the source, so the stored values have the types that
+    //! the AST interpreter folds.
+    ListSetScannedType = 416,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (417, 418, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -851,8 +893,8 @@ enum class QoreIROpcode : uint16_t {
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
 constexpr uint16_t QORE_IR_MAX_OPCODE
-    = static_cast<uint16_t>(QoreIROpcode::DebugStatement);
-static_assert(QORE_IR_MAX_OPCODE == 412, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+    = static_cast<uint16_t>(QoreIROpcode::ListSetScannedType);
+static_assert(QORE_IR_MAX_OPCODE == 416, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Include the central opcode registry (must come after QoreIROpcode enum definition)

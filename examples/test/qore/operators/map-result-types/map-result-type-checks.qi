@@ -1,0 +1,281 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+# checks of the runtime type of the containers built by the map, select and foldl operators; included by
+# map-result-types-worker.q, so that the checks run in the execution mode of the worker, and by MapResultTypeChecks.qm
+# for the compiled run
+#
+# each check returns the full type of the result and, for checks that write to the result, the outcome of each write
+# (the new full type or the err of the exception raised); every execution mode must give what the AST interpreter
+# gives
+
+public namespace MapResultTypeChecks {
+    #! a hashdecl for hashdecl values
+    public hashdecl MapPoint {
+        int x = 1;
+    }
+
+    #! a base class for object values
+    public class MapBase {
+    }
+
+    #! a subclass for object values
+    public class MapSub1 inherits MapBase {
+    }
+
+    #! another subclass for object values
+    public class MapSub2 inherits MapBase {
+    }
+
+    #! returns the full type of a value, or "NOTHING"
+    string sub type_of(auto v) {
+        return exists v ? v.fullType() : "NOTHING";
+    }
+
+    #! returns the err of the exception raised by a write, or the full type of the container after it
+    string sub write_result(code write) {
+        try {
+            return type_of(write());
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! returns its argument with no declared type, so the parser cannot know the type of the source
+    auto sub untyped(auto v) {
+        return v;
+    }
+
+    #! returns the results of the checks: name -> result
+    public hash<string, string> sub get_results() {
+        hash<string, string> rv = {};
+        hash<auto> rec = {"a": 1, "b": "x"};
+        list<string> ks = ("a", "b");
+        list<string> no_keys = ();
+        list<auto> mixed = (1, "a");
+        # a list<auto> that holds only strings and a hash<auto> that holds only ints: the parser knows only the
+        # declared types, and the containers keep their runtime types list<auto> and hash<auto>
+        list<auto> strs = ("a", 1);
+        strs[1] = "b";
+        hash<auto> ints = {"a": 1, "b": "x"};
+        ints.b = 2;
+        auto any_keys = untyped(ks);
+
+        list<MapBase> subs = (new MapSub1(), new MapSub1());
+        list<MapBase> objs = (new MapSub1(), new MapSub2());
+
+        # the hash form of the map operator
+        {
+            hash<auto> h = map {$1: ()}, keys rec;
+            rv."hmap-empty-list-keys-hash-auto" = type_of(h);
+            auto a = map {$1: ()}, keys rec;
+            rv."hmap-empty-list-keys-auto" = type_of(a);
+            hash<auto!> b = map {$1: ()}, keys rec;
+            rv."hmap-empty-list-keys-hash-auto-bang" = type_of(b);
+        }
+        {
+            hash<auto> h = map {$1: ()}, ks;
+            rv."hmap-empty-list-typed-list" = type_of(h);
+            hash<auto> u = map {$1: ()}, any_keys;
+            rv."hmap-empty-list-untyped-source" = type_of(u);
+            hash<auto> i = map {$1.key: ()}, rec.pairIterator();
+            rv."hmap-empty-list-iterator" = type_of(i);
+            hash<auto> s = map {$1: ()}, "a";
+            rv."hmap-empty-list-single-value" = type_of(s);
+            hash<auto> e = map {$1: ()}, no_keys;
+            rv."hmap-empty-list-no-input" = type_of(e);
+            *hash<auto> n = map {$1: ()}, untyped(NOTHING);
+            rv."hmap-empty-list-nothing-input" = type_of(n);
+        }
+        {
+            hash<auto> h = map {$1: {}}, ks;
+            rv."hmap-empty-hash" = type_of(h);
+            h = map {$1: ("x", "y")}, ks;
+            rv."hmap-string-list" = type_of(h);
+        }
+        {
+            hash<auto> h = map {$1: {"x": ()}}, ks;
+            rv."hmap-nested-hash" = type_of(h);
+            hash<auto> l = map {$1: ((),)}, ks;
+            rv."hmap-nested-list" = type_of(l);
+            hash<auto> d = map {$1: new hash<MapPoint>()}, ks;
+            rv."hmap-hashdecl" = type_of(d);
+            hash<auto> v = map {$1: rec}, ks;
+            rv."hmap-hash-auto" = type_of(v);
+        }
+        {
+            hash<auto> h = map {$1: $1 == "a" ? 1 : "s"}, ks;
+            rv."hmap-mixed" = type_of(h);
+            hash<auto> o = map {$1: $1 == "a" ? 1 : NOTHING}, ks;
+            rv."hmap-int-or-nothing" = type_of(o);
+            hash<auto> i = map {$1: ints{$1}}, ks;
+            rv."hmap-ints-from-auto" = type_of(i);
+            hash<auto> k = map {"k": $1}, mixed;
+            rv."hmap-duplicate-key-mixed" = type_of(k);
+            hash<auto> d = map {"k": $1}, ks;
+            rv."hmap-duplicate-key-same" = type_of(d);
+            hash<auto> s = map {$1: $1}, strs;
+            rv."hmap-strings-from-auto" = type_of(s);
+        }
+        {
+            hash<auto> s = map {"k" + $#: $1}, subs;
+            rv."hmap-objects-one-subclass" = type_of(s);
+            hash<auto> o = map {"k" + $#: $1}, objs;
+            rv."hmap-objects-two-subclasses" = type_of(o);
+        }
+        # the hash form of the map operator with a select expression
+        {
+            hash<auto> h = map {$1: ()}, ks, $1 == "a";
+            rv."hmap-select-empty-list" = type_of(h);
+            hash<auto> u = map {$1: ()}, any_keys, True;
+            rv."hmap-select-empty-list-untyped-source" = type_of(u);
+            hash<auto> i = map {$1: ints{$1}}, ks, True;
+            rv."hmap-select-ints-from-auto" = type_of(i);
+            hash<auto> n = map {$1: ()}, ks, False;
+            rv."hmap-select-none-selected" = type_of(n);
+            hash<auto> r = map {$1: ()}, ks, $1 != "a";
+            rv."hmap-select-first-rejected" = type_of(r);
+            hash<auto> o = map {$1.key: ()}, rec.pairIterator(), $1.key != "a";
+            rv."hmap-select-iterator-first-rejected" = type_of(o);
+            hash<auto> k = map {"k": $1}, ks, True;
+            rv."hmap-select-duplicate-key" = type_of(k);
+        }
+        # the list form of the map operator
+        {
+            auto l = map (), ks;
+            rv."map-empty-list" = type_of(l);
+            list<auto> la = map (), ks;
+            rv."map-empty-list-list-auto" = type_of(la);
+            list<auto> u = map (), any_keys;
+            rv."map-empty-list-untyped-source" = type_of(u);
+            list<auto> i = map (), rec.keyIterator();
+            rv."map-empty-list-iterator" = type_of(i);
+            list<auto> e = map (), no_keys;
+            rv."map-empty-list-no-input" = type_of(e);
+        }
+        {
+            auto l = map ((),), ks;
+            rv."map-nested-list" = type_of(l);
+            auto h = map {"a": ()}, ks;
+            rv."map-hash-of-empty-list" = type_of(h);
+            auto m = map (map (), ks), ks;
+            rv."map-nested-map" = type_of(m);
+            auto s = map $1, ks;
+            rv."map-strings" = type_of(s);
+            auto a = map $1, strs;
+            rv."map-strings-from-auto" = type_of(a);
+            auto i = map ints{$1}, ks;
+            rv."map-ints-from-auto" = type_of(i);
+            auto x = map $1, mixed;
+            rv."map-mixed" = type_of(x);
+            auto o = map $1 == "a" ? 1 : NOTHING, ks;
+            rv."map-int-or-nothing" = type_of(o);
+        }
+        {
+            auto s = map $1, subs;
+            rv."map-objects-one-subclass" = type_of(s);
+            auto o = map $1, objs;
+            rv."map-objects-two-subclasses" = type_of(o);
+            auto e = map (), (select ks, True);
+            rv."map-of-select-empty-list" = type_of(e);
+            auto a = map $1, (select strs, True);
+            rv."map-of-select-strings-from-auto" = type_of(a);
+            auto h = map {$1: ()}, (select ks, True);
+            rv."hmap-of-select-empty-list" = type_of(h);
+        }
+        # the list form of the map operator with a select expression
+        {
+            auto l = map (), ks, $1 == "a";
+            rv."map-select-empty-list" = type_of(l);
+            auto i = map ints{$1}, ks, True;
+            rv."map-select-ints-from-auto" = type_of(i);
+            auto s = map $1, strs, True;
+            rv."map-select-strings-from-auto" = type_of(s);
+            auto r = map (), ks, $1 != "a";
+            rv."map-select-first-rejected" = type_of(r);
+            auto u = map (), any_keys, True;
+            rv."map-select-untyped-source" = type_of(u);
+            auto n = map (), ks, False;
+            rv."map-select-none-selected" = type_of(n);
+        }
+        # the select operator
+        {
+            auto s = select strs, $1 == "a";
+            rv."select-strings-from-auto" = type_of(s);
+            auto t = select ks, $1 == "a";
+            rv."select-strings" = type_of(t);
+            auto x = select mixed, True;
+            rv."select-mixed" = type_of(x);
+            auto u = select any_keys, True;
+            rv."select-untyped-source" = type_of(u);
+            auto i = select rec.keyIterator(), True;
+            rv."select-iterator" = type_of(i);
+            auto v = select "a", True;
+            rv."select-single-value" = type_of(v);
+            auto m = select (map (), ks), True;
+            rv."select-of-map-empty-lists" = type_of(m);
+            auto sm = select (map $1, mixed), $1 != 1;
+            rv."select-of-map-mixed" = type_of(sm);
+            auto ss = select (select mixed, True), $1 != 1;
+            rv."select-of-select-mixed" = type_of(ss);
+        }
+        {
+            auto s = select subs, True;
+            rv."select-objects-one-subclass" = type_of(s);
+            auto o = select objs, True;
+            rv."select-objects-two-subclasses" = type_of(o);
+            auto m = map $1, subs, True;
+            rv."map-select-objects-one-subclass" = type_of(m);
+            auto h = map {"k" + $#: $1}, subs, True;
+            rv."hmap-select-objects-one-subclass" = type_of(h);
+        }
+        # the foldl operator
+        {
+            auto f = foldl $1 + $2, ((), ());
+            rv."foldl-empty-lists" = type_of(f);
+            auto g = foldl $1 + $2, (((),), ((),));
+            rv."foldl-nested-lists" = type_of(g);
+        }
+        # writes to the results
+        {
+            hash<auto> h = map {$1: ()}, keys rec;
+            rv."write-hash-auto-push-int" = write_result(auto sub () { push h.a, 1; return h; });
+            rv."write-hash-auto-push-string" = write_result(auto sub () { push h.a, "s"; return h; });
+            rv."write-hash-auto-value-type" = type_of(h.a);
+            rv."write-hash-auto-new-int-key" = write_result(auto sub () { h.z = 1; return h; });
+            rv."write-hash-auto-new-list-key" = write_result(auto sub () { h.y = (1,); return h; });
+            rv."write-hash-auto-contents" = sprintf("%y", h);
+        }
+        {
+            auto a = map {$1: ()}, keys rec;
+            rv."write-auto-push-int" = write_result(auto sub () { push a.a, 1; return a; });
+            rv."write-auto-new-int-key" = write_result(auto sub () { a.z = 1; return a; });
+            rv."write-auto-contents" = sprintf("%y", a);
+        }
+        {
+            hash<auto!> b = map {$1: ()}, keys rec;
+            rv."write-hash-auto-bang-push-int" = write_result(auto sub () { push b.a, 1; return b; });
+            rv."write-hash-auto-bang-new-int-key" = write_result(auto sub () { b.z = 1; return b; });
+            rv."write-hash-auto-bang-contents" = sprintf("%y", b);
+        }
+        {
+            hash<auto> h = map {$1: ints{$1}}, ks;
+            rv."write-ints-new-string-key" = write_result(auto sub () { h.z = untyped("s"); return h; });
+            auto l = map ints{$1}, ks;
+            rv."write-ints-push-string" = write_result(auto sub () { push l, untyped("s"); return l; });
+            auto s = select strs, True;
+            rv."write-select-push-int" = write_result(auto sub () { push s, untyped(1); return s; });
+            rv."write-ints-push-nothing" = write_result(auto sub () { push l, untyped(NOTHING); return l; });
+        }
+        {
+            # the same writes without closures, so the containers stay in local slots of this function
+            hash<auto> h = map {$1: ()}, ks;
+            push h.a, 1;
+            push h.a, "s";
+            rv."write-direct-hash-auto" = sprintf("%s %y", type_of(h), h);
+            auto l = map (), ks;
+            push l[0], 1;
+            rv."write-direct-list" = sprintf("%s %y", type_of(l), l);
+        }
+        return rv;
+    }
+}
