@@ -3925,7 +3925,8 @@ while (*binary chunk = input.read(65536)) {
       - expressions are evaluated for watches, hovers and the debug console, and variables are set to the values of
         expressions; they can refer to all code of the program, its functions, classes and constants; only the names
         of variables were evaluated
-      - conditional breakpoints, hit conditions and logpoints are supported
+      - conditional breakpoints, hit conditions and logpoints are supported; the debugger checks them in the thread
+        that hits a breakpoint, and they are shared with \c qdbg
       - the output of programs that are debugged in the adapter process is sent to the IDE as \c output events;
         it was written to the channel of the protocol and lost
       - fixed the adapter using all the time of a CPU while waiting for requests, and not ending when the IDE
@@ -3956,9 +3957,6 @@ while (*binary chunk = input.read(65536)) {
         the \c breakpointLocations request); stack frames give the columns of their statements; fixed the end line
         of stack frames not being shown
       - step into a chosen call of the current statement (step-in targets)
-      - conditions, hit conditions and log messages of breakpoints are checked by the debugger, so that a thread does
-        not stop and wait for the adapter at each hit, and they are shared with \c qdbg; a breakpoint with an invalid
-        hit condition is not set and shows why
       - when a thread stops, the other threads of the program stop, and \c continue continues them all, as in other
         debuggers of Visual Studio Code; only the thread that stops was stopped; the \c stopAllThreads argument of
         \c launch and \c attach requests set to \c false keeps that

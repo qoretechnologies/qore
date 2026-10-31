@@ -93,10 +93,6 @@ module VscDebugAdapter {
     - the client is not notified when another debugger client changes a breakpoint
 
     @subsection vda_v0_3
-    - the conditions, hit conditions and log messages of breakpoints are checked by the debugger in the thread that hits
-      a breakpoint, so that a thread does not stop and wait for the adapter at each hit, and they are shared with the
-      other clients of a debug server, such as \c qdbg; a breakpoint with an invalid hit condition is not set, and
-      the error is shown for the breakpoint
     - step-in targets: the \c stepInTargets request gives the calls of the current statement, and \c stepIn with a
       \c targetId steps into the chosen call
     - breakpoints can be set on any statement of a line with more than one statement: the
@@ -136,7 +132,8 @@ module VscDebugAdapter {
       they are shown; the elements of long lists are paged, and elements, keys and members can be set
     - expressions are evaluated for watches, hovers and the debug console with the variables of a frame, and
       variables are set to the values of expressions
-    - conditional breakpoints, hit conditions and logpoints
+    - conditional breakpoints, hit conditions and logpoints, which the debugger checks in the thread that hits a
+      breakpoint and shares with the other clients of a debug server, such as \c qdbg
     - an IDE attaching to a remote debug server that cannot be reached is told why, and a session ends with a
       message when the connection to the debug server is closed
     - the \c "uncaught" exception filter: exceptions that no try statement of the debugged code catches
