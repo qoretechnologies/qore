@@ -162,7 +162,9 @@ public class GoHighLevelDataProviderBase inherits DataProvider::AbstractDataProv
         list<hash<auto>> results = ();
         *string cursor;
         while (True) {
-            hash<auto> qparams = params ?? {};
+            # "auto!": a caller's literal params may be narrowed, e.g. to hash<string, int> for {"limit": 10},
+            # and adding the string "cursor" key would then raise RUNTIME-TYPE-ERROR
+            hash<auto!> qparams = params ?? {};
             if (cursor) {
                 qparams.cursor = cursor;
             }
@@ -193,7 +195,9 @@ public class GoHighLevelDataProviderBase inherits DataProvider::AbstractDataProv
         list<hash<auto>> results = ();
         *string cursor;
         while (True) {
-            hash<auto> req_body = body;
+            # "auto!": a caller's literal body may be narrowed, e.g. to hash<string, int> for {"limit": 10},
+            # and adding the string "cursor" key would then raise RUNTIME-TYPE-ERROR
+            hash<auto!> req_body = body;
             if (cursor) {
                 req_body.cursor = cursor;
             }
@@ -228,7 +232,9 @@ public class GoHighLevelDataProviderBase inherits DataProvider::AbstractDataProv
         int offset = 0;
         int page_size = limit && limit < DefaultPageSize ? limit : DefaultPageSize;
         while (True) {
-            hash<auto> qparams = params ?? {};
+            # "auto!": a caller's literal params may be narrowed, e.g. to hash<string, string> for {"q": "x"},
+            # and adding the int "offset" key would then raise RUNTIME-TYPE-ERROR
+            hash<auto!> qparams = params ?? {};
             qparams.offset = offset;
             qparams.limit = page_size;
             hash<auto> response = doGet(path, qparams);
@@ -264,7 +270,9 @@ public class GoHighLevelDataProviderBase inherits DataProvider::AbstractDataProv
         list<hash<auto>> results = ();
         int page = 1;
         while (True) {
-            hash<auto> qparams = params ?? {};
+            # "auto!": a caller's literal params may be narrowed, e.g. to hash<string, string> for {"q": "x"},
+            # and adding the int "page" key would then raise RUNTIME-TYPE-ERROR
+            hash<auto!> qparams = params ?? {};
             qparams.page = page;
             hash<auto> response = doGet(path, qparams);
             if (response{result_key}) {

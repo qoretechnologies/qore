@@ -267,6 +267,12 @@ TableauRestClient tableau({
 
         if (!is_auth_path) {
             ensureAuthenticated();
+            # the caller's headers may be narrowed (ex: hash<string, int>); adding the session header would throw,
+            # so copy them to a hash that accepts any value first
+            {
+                *hash<auto!> h = hdr;
+                hdr = h;
+            }
             # Prefix with sites/{site_luid}/
             path = "sites/" + site_luid + "/" + path;
             # Add session token header

@@ -87,6 +87,8 @@ printf("Calendars: %y\n", result.body.calendars);
 
     @subsection gohighlevelrestclientv1_0 GoHighLevelRestClient v1.0
     - initial release
+    - the clients add the location ID to a POST body whose values all have the same type, such as a literal
+      \c {"pageLimit": 20}
 */
 
 #! the GoHighLevelRestClient namespace contains all the objects in the GoHighLevelRestClient module
@@ -282,7 +284,11 @@ GoHighLevelRestClient ghl({
                 # Count path segments — top-level = 1-2 segments (e.g., "contacts/search")
                 list<string> segments = clean_path.split("/");
                 if (segments.size() <= 2) {
-                    body.locationId = location_id;
+                    # "auto!": a caller's literal body may be narrowed, e.g. to hash<string, int> for
+                    # {"pageLimit": 20}, and adding the string locationId would then raise RUNTIME-TYPE-ERROR
+                    hash<auto!> b = body;
+                    b.locationId = location_id;
+                    body = b;
                 }
             }
         }
@@ -612,7 +618,11 @@ public class GoHighLevelRestClientIo inherits RestClientIo::RestClientIo, GoHigh
             string clean_path = (path =~ x/^([^?]+)/)[0] ?? path;
             clean_path =~ s/^\///;
             if (clean_path.split("/").size() <= 2) {
-                body.locationId = loc_id;
+                # "auto!": a caller's literal body may be narrowed, e.g. to hash<string, int> for
+                # {"pageLimit": 20}, and adding the string locationId would then raise RUNTIME-TYPE-ERROR
+                hash<auto!> b = body;
+                b.locationId = loc_id;
+                body = b;
             }
         }
         return RestClientIo::prepareRequest(method, \path, body, \hdr, request_context);

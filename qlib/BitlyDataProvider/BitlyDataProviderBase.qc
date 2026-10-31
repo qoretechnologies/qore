@@ -131,7 +131,9 @@ public class BitlyDataProviderBase inherits DataProvider::AbstractDataProvider {
         *string cursor;
 
         while (True) {
-            hash<auto> qparams = params ?? {};
+            # "auto!": a caller's literal params may be narrowed, e.g. to hash<string, string> for {"q": "x"},
+            # and adding the int "size" key would then raise RUNTIME-TYPE-ERROR
+            hash<auto!> qparams = params ?? {};
             qparams.size = page_size;
             if (cursor) {
                 qparams.search_after = cursor;

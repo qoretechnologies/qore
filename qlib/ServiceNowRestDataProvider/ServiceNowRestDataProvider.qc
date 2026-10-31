@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore ServiceNowRestDataProvider module definition
 
-/** ServiceNowRestDataProvider.qc Copyright 2020 - 2024 Qore Technologies, s.r.o.
+/** ServiceNowRestDataProvider.qc Copyright 2020 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -124,6 +124,10 @@ public class ServiceNowRestDataProvider inherits ServiceNowRestDataProviderBase 
     constructor(*hash<auto> options) {
         bool auto_config = DataProvider::getAutoConfig();
         if (auto_config) {
+            # the options may be narrowed (ex: hash<string, hash<string, string>>); adding a string from the
+            # environment would throw, so copy them to a hash that accepts any value first
+            *hash<auto!> h = options;
+            options = h;
             map options{$1.key} = ENV{$1.value}, EnvOptions.pairIterator(),
                 exists ENV{$1.value} && !exists options{$1.key};
         }

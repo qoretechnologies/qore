@@ -157,6 +157,11 @@ public class PdfCoDataProviderBase inherits DataProvider::AbstractDataProvider {
     */
     hash<auto> uploadFileIfNeeded(hash<auto> req) {
         if (req.file) {
+            # the request may be narrowed (ex: hash<string, hash<string, string>>); adding the URL would throw
+            {
+                hash<auto!> h = req;
+                req = h;
+            }
             hash<auto> upload_resp = doPost("file/upload/base64", {
                 "file": req.file.content,
                 "name": req.file.name,

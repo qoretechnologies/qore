@@ -373,6 +373,10 @@ module CdsRestDataProvider {
     - @ref CdsRestDataProvider::ODataRecordIterator "ODataRecordIterator"
 
     @subsection cdsrestdataprovider_v2_2 CdsRestDataProvider v2.2
+    - fixed the constructors of \c CdsRestDataProvider, \c CdsRestTablesDataProvider, \c BcRestDataProvider and
+      \c BcCompaniesDataProvider to accept constructor options whose values all have the same type, such as a
+      literal \c {"cdsrestclient_options": {...}}, when auto-configuration adds options from \c CDS_* environment
+      variables; adding them raised \c RUNTIME-TYPE-ERROR
     - added polling event providers for Dynamics 365 entities, replacing the triggers of the
       TypeScript application of the same name
       - one generic provider watches any Dataverse table

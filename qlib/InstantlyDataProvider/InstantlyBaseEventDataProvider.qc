@@ -214,8 +214,9 @@ public class InstantlyBaseEventDataProvider inherits InstantlyDataProviderBase, 
             return;
         }
 
-        # Transform to standard format
-        hash<auto> transformed = {
+        # Transform to standard format; hash<auto!>: the literal is narrowed to the type of its values, and adding
+        # event-specific fields of another type would throw
+        hash<auto!> transformed = {
             "event_type": getWebhookEventType(),
             "timestamp": payload.timestamp ?? now_us().format("YYYY-MM-DDTHH:mm:SS.msZ"),
             "campaign_id": payload.campaign_id,

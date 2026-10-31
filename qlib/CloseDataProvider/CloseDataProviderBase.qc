@@ -164,7 +164,9 @@ public class CloseDataProviderBase inherits DataProvider::AbstractDataProvider {
         int skip = 0;
         int page_size = DefaultPageSize;
         while (True) {
-            hash<auto> qparams = params ?? {};
+            # "auto!": a caller's literal params may be narrowed, e.g. to hash<string, string> for {"q": "x"},
+            # and adding the int "_limit" key would then raise RUNTIME-TYPE-ERROR
+            hash<auto!> qparams = params ?? {};
             qparams._limit = page_size;
             qparams._skip = skip;
             hash<auto> response = doGet(path, qparams);

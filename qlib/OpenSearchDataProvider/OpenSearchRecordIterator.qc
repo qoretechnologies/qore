@@ -82,7 +82,8 @@ public class OpenSearchRecordIterator inherits DataProvider::AbstractDataProvide
             # ensure that any error response body is included in the exception; RestClientIo
             # throws REST-RESPONSE-ERROR with a RestResponseInfo hashdecl in ex.arg, so extract
             # the legacy-shaped response-code / response-body keys from it
-            hash<auto> ex_arg = {
+            # hash<auto!>: the literal is narrowed to the query's type; adding the response code would throw
+            hash<auto!> ex_arg = {
                 "query": query_body,
             };
             if (ex.arg.typeCode() == NT_HASH) {

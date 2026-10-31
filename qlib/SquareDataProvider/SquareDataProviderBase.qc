@@ -162,7 +162,8 @@ public class SquareDataProviderBase inherits DataProvider::AbstractDataProvider 
         list<hash<auto>> results = ();
         *string cursor;
         while (True) {
-            hash<auto> qparams = params ?? {};
+            # hash<auto!>: the given hash may be narrowed (ex: hash<string, string>); adding paging keys would throw
+            hash<auto!> qparams = params ?? {};
             if (cursor) {
                 qparams.cursor = cursor;
             }
@@ -193,7 +194,8 @@ public class SquareDataProviderBase inherits DataProvider::AbstractDataProvider 
         list<hash<auto>> results = ();
         *string cursor;
         while (True) {
-            hash<auto> req_body = body;
+            # hash<auto!>: the given hash may be narrowed (ex: hash<string, string>); adding paging keys would throw
+            hash<auto!> req_body = body;
             if (cursor) {
                 req_body.cursor = cursor;
             }

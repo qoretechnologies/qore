@@ -235,7 +235,9 @@ public class ApolloDataProviderBase inherits DataProvider::AbstractDataProvider 
         int page = 1;
         int page_size = (limit && limit < DefaultPageSize) ? limit : DefaultPageSize;
         while (True) {
-            hash<auto> request_body = body ?? {};
+            # "auto!": a caller's literal body may be narrowed, e.g. to hash<string, string> for {"q": "x"},
+            # and adding the int "page" key would then raise RUNTIME-TYPE-ERROR
+            hash<auto!> request_body = body ?? {};
             request_body.page = page;
             request_body.per_page = page_size;
             hash<auto> response = doRestRequest("POST", path, request_body);

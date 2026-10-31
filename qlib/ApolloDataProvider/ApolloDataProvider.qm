@@ -895,6 +895,8 @@ module ApolloDataProvider {
 
     @subsection apollodataproviderv1_0 ApolloDataProvider v1.0
     - initial release
+    - \c ApolloDataProviderBase::fetchAllPagesPost() accepts a search body whose values all have the same type,
+      such as a literal \c {"q_keywords": "sales"}, when adding the page keys
 */
 
 #! Contains all public definitions in the ApolloDataProvider module

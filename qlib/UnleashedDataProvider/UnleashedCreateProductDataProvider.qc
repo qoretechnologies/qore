@@ -74,7 +74,8 @@ public class UnleashedCreateProductDataProvider inherits UnleashedDataProviderBa
         @assert(req.ProductCode.val(), "ProductCode is required");
         @assert(req.ProductDescription.val(), "ProductDescription is required");
 
-        hash<auto> body = {
+        # hash<auto!>: the literal is narrowed to its value type; adding prices or flags would throw
+        hash<auto!> body = {
             "ProductCode": req.ProductCode,
             "ProductDescription": req.ProductDescription,
         };

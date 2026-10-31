@@ -95,7 +95,8 @@ public class SquareWatchNewEventsDataProvider inherits SquareWatchDataProviderBa
         list<hash<auto>> results = ();
         *string cursor;
         while (True) {
-            hash<auto> req_body = body;
+            # hash<auto!>: the body literal above is narrowed to nested hash types; adding the cursor would throw
+            hash<auto!> req_body = body;
             if (cursor) {
                 req_body.cursor = cursor;
             }

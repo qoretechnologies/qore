@@ -180,6 +180,10 @@ module EmpathicBuildingDataProvider {
     @section empathicbuildingdataprovider_relnotes Release Notes
 
     @subsection empathicbuildingdataprovider_v1_2 EmpathicBuildingDataProvider v1.2
+    - fixed \c EmpathicBuildingSensorDataProvider::getSensorData() and sensor requests to accept a sensor record
+      whose values, or whose measurement values, are all integers, such as a literal
+      \c {"last_measurement": {"time": 1700000000123}}; converting the epoch offsets to dates raised
+      \c RUNTIME-TYPE-ERROR
     - the info hash of a request made with
       @ref EmpathicBuildingDataProvider::EmpathicBuildingRestClient "EmpathicBuildingRestClient" describes its login
       request when the login fails; it was left empty

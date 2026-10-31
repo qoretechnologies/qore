@@ -142,7 +142,8 @@ public class KitDataProviderBase inherits DataProvider::AbstractDataProvider {
         *string after_cursor;
 
         while (True) {
-            hash<auto> qparams = params ?? {};
+            # hash<auto!>: the given hash may be narrowed (ex: hash<string, string>); adding paging keys would throw
+            hash<auto!> qparams = params ?? {};
             qparams.per_page = page_size;
             if (after_cursor) {
                 qparams.after = after_cursor;

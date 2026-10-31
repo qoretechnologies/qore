@@ -1,0 +1,141 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires RestClient
+%requires OpenSearchDataProvider
+
+%exec-class OpenSearchDataProviderNarrowedCallerHashTest
+
+#! REST client that records POST requests and answers them from memory, or fails them with an HTTP 500 response
+class FakeRest inherits RestClient::RestClient {
+    public {
+        list<hash<auto>> calls = ();
+        bool fail = False;
+    }
+
+    constructor() : RestClient::RestClient({"url": "http://localhost:1"}, True) {
+    }
+
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
+        push calls, {"path": path, "body": body};
+        if (fail) {
+            throw "REST-RESPONSE-ERROR", "HTTP 500", <RestClient::RestResponseInfo>{
+                "status_code": 500,
+                "headers": {},
+                "body": {"error": "failed"},
+            };
+        }
+        return <RestClient::RestResponseInfo>{
+            "status_code": 200,
+            "headers": {},
+            "body": {"_scroll_id": NOTHING, "hits": {"hits": ()}},
+        };
+    }
+}
+
+#! OpenSearch search requests are built from literals that can have a narrow type
+/** The k-NN, neural and hybrid search providers build the search body from literals such as
+    \c {"vector": (1.0, 2.0)} (\c hash<string, list<float>>) and then add values of other types to them; the record
+    iterators add the HTTP status code to an exception argument built as \c {"query": query} (a hash of hashes)
+*/
+public class OpenSearchDataProviderNarrowedCallerHashTest inherits QUnit::Test {
+    constructor() : Test("OpenSearchDataProviderNarrowedCallerHash", "1.0", \ARGV) {
+        addTestCase("moveIfExists", \moveIfExistsTest());
+        addTestCase("k-NN search", \knnTest());
+        addTestCase("neural search", \neuralTest());
+        addTestCase("hybrid search", \hybridTest());
+        addTestCase("record iterator errors", \iteratorErrorTest());
+        set_return_value(main());
+    }
+
+    #! returns its argument; passing a literal through a hash<auto> parameter keeps the literal's narrow type
+    static hash<auto> mk(hash<auto> h) {
+        return h;
+    }
+
+    moveIfExistsTest() {
+        assertEq("hash<string, hash<string, string>>", mk({"query": {"q": "x"}}).fullType());
+        hash<auto> target = mk({"query": {"q": "x"}});
+        hash<auto> source = mk({"size": 5, "from": 10});
+        OpenSearchSearchActionUtil::addTopLevelSearchOptions(\target, \source);
+        assertEq({"query": {"q": "x"}, "size": 5, "from": 10}, target);
+        assertEq({}, source);
+    }
+
+    knnTest() {
+        assertEq("hash<string, list<float>>", mk({"vector": (1.0, 2.0)}).fullType());
+        FakeRest rest();
+        OpenSearchKnnSearchDataProvider prov(rest);
+        prov.doRequest({"index": "i", "field": "v", "vector": (1.0, 2.0), "size": 5});
+        hash<auto> body = rest.calls[0].body;
+        assertEq((1.0, 2.0), body.query.knn.v.vector);
+        assertEq(10, body.query.knn.v.k);
+        assertEq(5, body.size);
+
+        rest.calls = ();
+        prov.doRequest({"index": "i", "field": "v", "vector": (1.0, 2.0), "k": 3, "min_score": 0.5});
+        body = rest.calls[0].body;
+        assertEq(3, body.query.knn.v.k);
+        assertEq(0.5, body.query.knn.v.min_score);
+    }
+
+    neuralTest() {
+        FakeRest rest();
+        OpenSearchNeuralSearchDataProvider prov(rest);
+        prov.doRequest({"index": "i", "field": "v", "query_text": "x", "model_id": "m", "size": 5});
+        hash<auto> body = rest.calls[0].body;
+        assertEq("x", body.query.neural.v.query_text);
+        assertEq("m", body.query.neural.v.model_id);
+        assertEq(10, body.query.neural.v.k);
+        assertEq(5, body.size);
+    }
+
+    hybridTest() {
+        list<hash<auto>> queries = ({"match": {"a": "b"}},);
+        assertEq("hash<string, list<hash<auto>>>", mk({"queries": queries}).fullType());
+        FakeRest rest();
+        OpenSearchHybridSearchDataProvider prov(rest);
+        prov.doRequest({
+            "index": "i",
+            "queries": queries,
+            "filter": {"term": {"a": "b"}},
+            "size": 5,
+        });
+        hash<auto> body = rest.calls[0].body;
+        assertEq(queries, body.query.hybrid.queries);
+        assertEq({"term": {"a": "b"}}, body.query.hybrid.filter);
+        assertEq(5, body.size);
+    }
+
+    iteratorErrorTest() {
+        assertEq("hash<string, hash<string, hash<auto>>>", mk({"query": {"match_all": {}}}).fullType());
+        FakeRest rest();
+        rest.fail = True;
+        hash<string, DataProvider::AbstractDataField> record_type = {};
+        try {
+            OpenSearchRecordIterator it(rest, "i", {}, record_type, NOTHING, NOTHING);
+            fail("the search must fail");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err);
+            assertEq(500, ex.arg."response-code");
+            assertEq({"error": "failed"}, ex.arg."response-body");
+            assertEq(rest.calls[0].body, ex.arg.query);
+        }
+        rest.calls = ();
+        try {
+            OpenSearchScrollRecordIterator it(rest, "i", {}, record_type, NOTHING, NOTHING);
+            fail("the search must fail");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err);
+            assertEq(500, ex.arg."response-code");
+            assertEq({"error": "failed"}, ex.arg."response-body");
+            assertEq(rest.calls[0].body, ex.arg.query);
+        }
+    }
+}

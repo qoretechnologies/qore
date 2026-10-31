@@ -136,7 +136,9 @@ public class CircleDataProviderBase inherits DataProvider::AbstractDataProvider 
         int page = 1;
 
         while (True) {
-            hash<auto> qparams = params ?? {};
+            # "auto!": a caller's literal params may be narrowed, e.g. to hash<string, string> for {"q": "x"},
+            # and adding the int "page" key would then raise RUNTIME-TYPE-ERROR
+            hash<auto!> qparams = params ?? {};
             qparams.page = page;
             qparams.per_page = page_size;
 

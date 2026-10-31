@@ -1,0 +1,432 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires RestClient
+%requires ApolloDataProvider
+%requires BigCommerceDataProvider
+%requires BitlyDataProvider
+%requires CircleDataProvider
+%requires ClickFunnelsRestClient
+%requires ClickFunnelsDataProvider
+%requires CloseDataProvider
+%requires EasyPostDataProvider
+%requires FreshsalesDataProvider
+%requires GoHighLevelDataProvider
+%requires GorgiasDataProvider
+
+%exec-class SaasDataProviderPagingNarrowedCallerHashTest
+
+#! Returns its argument with its runtime type, so a literal reaches the call as a caller's literal does
+hash<auto> sub mk(hash<auto> h) {
+    return h;
+}
+
+const TestInfo = <DataProviderInfo>{
+    "name": "test",
+    "type": "test",
+};
+
+#! Bitly provider that answers GET requests locally: one page with a cursor, then a last page
+class TestBitly inherits BitlyDataProvider::BitlyDataProviderBase {
+    public {
+        list<auto> calls = ();
+    }
+
+    constructor() {
+    }
+
+    hash<auto> doGet(string path, *hash<auto> params) {
+        push calls, params;
+        return calls.size() == 1
+            ? {"links": ({"id": "a"},), "pagination": {"search_after": "c1"}}
+            : {"links": ({"id": "b"},)};
+    }
+
+    string getName() {
+        return "test";
+    }
+
+    private hash<DataProvider::DataProviderInfo> getStaticInfoImpl() {
+        return TestInfo;
+    }
+}
+
+#! Close provider that answers GET requests locally: one page with more to come, then a last page
+class TestClose inherits CloseDataProvider::CloseDataProviderBase {
+    public {
+        list<auto> calls = ();
+    }
+
+    constructor() {
+    }
+
+    hash<auto> doGet(string path, *hash<auto> params) {
+        push calls, params;
+        return calls.size() == 1
+            ? {"data": ({"id": "a"},), "has_more": True}
+            : {"data": ({"id": "b"},), "has_more": False};
+    }
+
+    string getName() {
+        return "test";
+    }
+
+    private hash<DataProvider::DataProviderInfo> getStaticInfoImpl() {
+        return TestInfo;
+    }
+}
+
+#! Gorgias provider that answers GET requests locally: one page with a cursor, then a last page
+class TestGorgias inherits GorgiasDataProvider::GorgiasDataProviderBase {
+    public {
+        list<auto> calls = ();
+    }
+
+    constructor() {
+    }
+
+    hash<auto> doGet(string path, *hash<auto> params) {
+        push calls, params;
+        return calls.size() == 1
+            ? {"data": ({"id": "a"},), "meta": {"next_cursor": "c1"}}
+            : {"data": ({"id": "b"},)};
+    }
+
+    string getName() {
+        return "test";
+    }
+
+    private hash<DataProvider::DataProviderInfo> getStaticInfoImpl() {
+        return TestInfo;
+    }
+}
+
+#! EasyPost provider that answers GET requests locally: one page with more to come, then a last page
+class TestEasyPost inherits EasyPostDataProvider::EasyPostDataProviderBase {
+    public {
+        list<auto> calls = ();
+    }
+
+    constructor() {
+    }
+
+    auto doGet(string path, *hash<auto> params) {
+        push calls, params;
+        return calls.size() == 1
+            ? {"items": ({"id": "a1"},), "has_more": True}
+            : {"items": ({"id": "b1"},), "has_more": False};
+    }
+
+    string getName() {
+        return "test";
+    }
+
+    private hash<DataProvider::DataProviderInfo> getStaticInfoImpl() {
+        return TestInfo;
+    }
+}
+
+#! Freshsales provider that answers GET requests locally with two pages
+class TestFreshsales inherits FreshsalesDataProvider::FreshsalesDataProviderBase {
+    public {
+        list<auto> calls = ();
+    }
+
+    constructor() {
+    }
+
+    hash<auto> doGet(string path, *hash<auto> params) {
+        push calls, params;
+        return {"tasks": ({"id": calls.size()},), "meta": {"total_pages": 2}};
+    }
+
+    string getName() {
+        return "test";
+    }
+
+    private hash<DataProvider::DataProviderInfo> getStaticInfoImpl() {
+        return TestInfo;
+    }
+}
+
+#! GoHighLevel provider that answers GET and POST requests locally: one page with a cursor, then a last page
+class TestGoHighLevel inherits GoHighLevelDataProvider::GoHighLevelDataProviderBase {
+    public {
+        list<auto> calls = ();
+    }
+
+    constructor() {
+    }
+
+    hash<auto> doGet(string path, *hash<auto> params) {
+        return page(params);
+    }
+
+    hash<auto> doPost(string path, *hash<auto> body) {
+        return page(body);
+    }
+
+    string getName() {
+        return "test";
+    }
+
+    private hash<auto> page(*hash<auto> h) {
+        push calls, h;
+        return calls.size() == 1
+            ? {"items": ({"id": "a"},), "cursor": "c1"}
+            : {"items": ({"id": "b"},)};
+    }
+
+    private hash<DataProvider::DataProviderInfo> getStaticInfoImpl() {
+        return TestInfo;
+    }
+}
+
+#! BigCommerce provider that answers V2 and V3 GET requests locally with a single page
+class TestBigCommerce inherits BigCommerceDataProvider::BigCommerceDataProviderBase {
+    public {
+        list<auto> calls = ();
+    }
+
+    constructor() {
+    }
+
+    hash<auto> doGetV3(string path, *hash<auto> params) {
+        push calls, params;
+        return {"data": ({"id": 1},), "meta": {"pagination": {"total_pages": 1}}};
+    }
+
+    auto doGetV2(string path, *hash<auto> params) {
+        push calls, params;
+        return ({"id": 1},);
+    }
+
+    string getName() {
+        return "test";
+    }
+
+    private hash<DataProvider::DataProviderInfo> getStaticInfoImpl() {
+        return TestInfo;
+    }
+}
+
+#! Circle provider that answers GET requests locally with a single page
+class TestCircle inherits CircleDataProvider::CircleDataProviderBase {
+    public {
+        list<auto> calls = ();
+    }
+
+    constructor() {
+    }
+
+    hash<auto> doGet(string path, *hash<auto> params) {
+        push calls, params;
+        return {"records": ({"id": 1},), "has_next_page": False};
+    }
+
+    string getName() {
+        return "test";
+    }
+
+    private hash<DataProvider::DataProviderInfo> getStaticInfoImpl() {
+        return TestInfo;
+    }
+}
+
+#! Apollo provider that answers POST requests locally with a single page
+class TestApollo inherits ApolloDataProvider::ApolloDataProviderBase {
+    public {
+        list<auto> calls = ();
+    }
+
+    constructor() {
+    }
+
+    string getName() {
+        return "test";
+    }
+
+    private hash<auto> doRestRequest(string method, string path, auto body = NOTHING) {
+        push calls, body;
+        return {"people": ({"id": 1},)};
+    }
+
+    private hash<DataProvider::DataProviderInfo> getStaticInfoImpl() {
+        return TestInfo;
+    }
+}
+
+#! ClickFunnels client that answers GET requests locally: one page with a cursor header, then a last page
+class TestClickFunnelsRestClientIo inherits ClickFunnelsRestClient::ClickFunnelsRestClientIo {
+    public {
+        list<string> paths = ();
+    }
+
+    constructor() : ClickFunnelsRestClientIo({"team": "test", "apikey": "test-key"}) {
+    }
+
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        push paths, path;
+        return <RestResponseInfo>{
+            "status_code": 200,
+            "body": ({"id": paths.size()},),
+            "headers": paths.size() == 1 ? {"pagination-next": "c1"} : {},
+        };
+    }
+}
+
+#! ClickFunnels provider using the local client
+class TestClickFunnels inherits ClickFunnelsDataProvider::ClickFunnelsDataProviderBase {
+    constructor(TestClickFunnelsRestClientIo rest) {
+        self.rest = rest;
+    }
+
+    string getName() {
+        return "test";
+    }
+
+    private hash<DataProvider::DataProviderInfo> getStaticInfoImpl() {
+        return TestInfo;
+    }
+}
+
+#! The paging helpers of the SaaS data providers add page keys to a caller's query hash or request body
+/** Covers ApolloDataProvider, BigCommerceDataProvider, BitlyDataProvider, CircleDataProvider,
+    ClickFunnelsDataProvider, CloseDataProvider, EasyPostDataProvider, FreshsalesDataProvider,
+    GoHighLevelDataProvider and GorgiasDataProvider.  A caller's literal whose values all have the same type
+    is narrowed to that type, so adding a page size, page number, offset or cursor of another type raised
+    RUNTIME-TYPE-ERROR.  Every request is answered locally.
+*/
+class SaasDataProviderPagingNarrowedCallerHashTest inherits QUnit::Test {
+    constructor() : Test("SaasDataProviderPagingNarrowedCallerHashTest", "1.0", \ARGV) {
+        addTestCase("Bitly fetchAllPages adds an int page size to string params", \bitlyTest());
+        addTestCase("Close fetchAllPages adds int paging keys to string params", \closeTest());
+        addTestCase("Gorgias fetchAllPages adds an int limit to string params", \gorgiasTest());
+        addTestCase("EasyPost paginate adds a string cursor to int params", \easyPostTest());
+        addTestCase("Freshsales fetchAllPages adds an int page to string params", \freshsalesTest());
+        addTestCase("GoHighLevel paging helpers add keys of another type", \goHighLevelTest());
+        addTestCase("BigCommerce V2 and V3 paging add int keys to string params", \bigCommerceTest());
+        addTestCase("Circle fetchAllPages adds int paging keys to string params", \circleTest());
+        addTestCase("Apollo fetchAllPagesPost adds int paging keys to a string body", \apolloTest());
+        addTestCase("ClickFunnels fetchAllPages adds a string cursor to int params", \clickFunnelsTest());
+        set_return_value(main());
+    }
+
+    bitlyTest() {
+        assertEq("hash<string, string>", mk({"query": "x"}).fullType());
+        TestBitly dp();
+        list<hash<auto>> rv = dp.fetchAllPages("groups/g/bitlinks", "links", {"query": "x"});
+        assertEq(({"id": "a"}, {"id": "b"}), rv);
+        assertEq(({"query": "x", "size": BitlyDataProvider::DefaultPageSize},
+            {"query": "x", "size": BitlyDataProvider::DefaultPageSize, "search_after": "c1"}), dp.calls);
+    }
+
+    closeTest() {
+        assertEq("hash<string, string>", mk({"query": "x"}).fullType());
+        TestClose dp();
+        list<hash<auto>> rv = dp.fetchAllPages("lead", {"query": "x"});
+        assertEq(({"id": "a"}, {"id": "b"}), rv);
+        int page_size = CloseDataProvider::DefaultPageSize;
+        assertEq(({"query": "x", "_limit": page_size, "_skip": 0},
+            {"query": "x", "_limit": page_size, "_skip": page_size}), dp.calls);
+    }
+
+    gorgiasTest() {
+        assertEq("hash<string, string>", mk({"order_by": "created_datetime:desc"}).fullType());
+        TestGorgias dp();
+        list<hash<auto>> rv = dp.fetchAllPages("tickets", {"order_by": "created_datetime:desc"});
+        assertEq(({"id": "a"}, {"id": "b"}), rv);
+        int page_size = GorgiasDataProvider::DefaultPageSize;
+        assertEq(({"order_by": "created_datetime:desc", "limit": page_size},
+            {"order_by": "created_datetime:desc", "limit": page_size, "cursor": "c1"}), dp.calls);
+    }
+
+    easyPostTest() {
+        assertEq("hash<string, int>", mk({"page_size": 10}).fullType());
+        TestEasyPost dp();
+        list<hash<auto>> rv = dp.paginate("shipments", "items", {"page_size": 10});
+        assertEq(({"id": "a1"}, {"id": "b1"}), rv);
+        assertEq(({"page_size": 10}, {"page_size": 10, "after_id": "a1"}), dp.calls);
+    }
+
+    freshsalesTest() {
+        # the literal the library itself passes for open tasks
+        assertEq("hash<string, string>", mk({"filter": "open"}).fullType());
+        TestFreshsales dp();
+        list<hash<auto>> rv = dp.fetchAllPages("tasks", "tasks", {"filter": "open"});
+        assertEq(({"id": 1}, {"id": 2}), rv);
+        assertEq(({"filter": "open", "page": 1}, {"filter": "open", "page": 2}), dp.calls);
+    }
+
+    goHighLevelTest() {
+        assertEq("hash<string, int>", mk({"limit": 10}).fullType());
+        TestGoHighLevel dp();
+        list<hash<auto>> rv = dp.fetchAllPages("contacts", "items", {"limit": 10});
+        assertEq(({"id": "a"}, {"id": "b"}), rv);
+        assertEq(({"limit": 10}, {"limit": 10, "cursor": "c1"}), dp.calls);
+
+        assertEq("hash<string, int>", mk({"pageLimit": 10}).fullType());
+        dp = new TestGoHighLevel();
+        rv = dp.fetchAllPagesPost("contacts/search", "items", {"pageLimit": 10});
+        assertEq(({"id": "a"}, {"id": "b"}), rv);
+        assertEq(({"pageLimit": 10}, {"pageLimit": 10, "cursor": "c1"}), dp.calls);
+
+        assertEq("hash<string, string>", mk({"locationId": "loc1"}).fullType());
+        dp = new TestGoHighLevel();
+        rv = dp.fetchAllPagesOffset("users", "items", {"locationId": "loc1"}, 1);
+        assertEq(({"id": "a"},), rv);
+        assertEq(({"locationId": "loc1", "offset": 0, "limit": 1},), dp.calls);
+
+        dp = new TestGoHighLevel();
+        rv = dp.fetchAllPagesPage("forms", "items", {"locationId": "loc1"}, 1);
+        assertEq(({"id": "a"},), rv);
+        assertEq(({"locationId": "loc1", "page": 1},), dp.calls);
+    }
+
+    bigCommerceTest() {
+        assertEq("hash<string, string>", mk({"keyword": "shoe"}).fullType());
+        TestBigCommerce dp();
+        list<hash<auto>> rv = dp.fetchAllPagesV3("catalog/products", {"keyword": "shoe"});
+        assertEq(({"id": 1},), rv);
+        int max = BigCommerceDataProvider::MaxPageSize;
+        assertEq(({"keyword": "shoe", "page": 1, "limit": max},), dp.calls);
+
+        dp = new TestBigCommerce();
+        rv = dp.fetchAllPagesV2("orders", {"keyword": "shoe"});
+        assertEq(({"id": 1},), rv);
+        assertEq(({"keyword": "shoe", "page": 1, "limit": max},), dp.calls);
+    }
+
+    circleTest() {
+        assertEq("hash<string, string>", mk({"sort": "latest"}).fullType());
+        TestCircle dp();
+        list<hash<auto>> rv = dp.fetchAllPages("posts", "records", {"sort": "latest"});
+        assertEq(({"id": 1},), rv);
+        assertEq(({"sort": "latest", "page": 1, "per_page": CircleDataProvider::DefaultPageSize},), dp.calls);
+    }
+
+    apolloTest() {
+        assertEq("hash<string, string>", mk({"q_keywords": "sales"}).fullType());
+        TestApollo dp();
+        list<hash<auto>> rv = dp.fetchAllPagesPost("mixed_people/search", "people", {"q_keywords": "sales"});
+        assertEq(({"id": 1},), rv);
+        assertEq(({"q_keywords": "sales", "page": 1, "per_page": ApolloDataProvider::DefaultPageSize},),
+            dp.calls);
+    }
+
+    clickFunnelsTest() {
+        assertEq("hash<string, int>", mk({"limit": 10}).fullType());
+        TestClickFunnelsRestClientIo rest();
+        TestClickFunnels dp(rest);
+        list<auto> rv = dp.fetchAllPages("workspaces/1/contacts", {"limit": 10});
+        assertEq(({"id": 1}, {"id": 2}), rv);
+        assertEq(("workspaces/1/contacts?limit=10", "workspaces/1/contacts?limit=10&after=c1"), rest.paths);
+    }
+}

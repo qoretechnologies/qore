@@ -1,0 +1,135 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SalesforceRestClient
+%requires TableauRestClient
+
+%exec-class SalesforceRestClientNarrowedCallerHashTest
+
+#! Salesforce client that records requests instead of sending them
+class TestSalesforceRestClient inherits SalesforceRestClient::SalesforceRestClient {
+    public {
+        list<hash<auto>> calls = ();
+    }
+
+    constructor() : SalesforceRestClient({
+        "oauth2_client_id": "client",
+        "oauth2_client_secret": "secret",
+        "token": "tok",
+        "instance_url": "https://localhost:1",
+        "url": "https://localhost:1/services/data/v60.0",
+        "api": "60.0",
+    }, True) {
+    }
+
+    # the session is given in the options
+    private checkLogin(*reference<hash<auto>> info) {
+    }
+
+    private hash<auto> doRequestIntern(string m, string path, auto body, *reference<hash<auto>> info,
+            softbool decode_errors = True, *hash<auto> hdr, *string assume_content_type, *string shdr,
+            *code signer, *bool no_auth_retry, *int max_response_bytes) {
+        push calls, {"method": m, "path": path, "hdr": hdr, "url": getURL()};
+        return {"body": "ok"};
+    }
+
+    private hash<auto> sendAndDecodeResponse(*data body, string m, string path, hash<auto> hdr,
+            *reference<hash<auto>> info, *softbool decode_errors, *string assume_content_type, *string shdr,
+            *code signer, *bool no_auth_retry, *int max_response_bytes) {
+        push calls, {"method": m, "path": path, "hdr": hdr, "url": getURL()};
+        return {"body": "ok"};
+    }
+}
+
+#! Tableau client that records requests instead of sending them
+class TestTableauRestClient inherits TableauRestClient::TableauRestClient {
+    public {
+        list<hash<auto>> calls = ();
+    }
+
+    constructor() : TableauRestClient({
+        "url": "https://localhost:1/api/3.27",
+        "token_name": "name",
+        "token_secret": "secret",
+    }, True) {
+    }
+
+    # signing in is replaced by a fixed session
+    private ensureAuthenticated() {
+        session_token = "tok";
+        site_luid = "site1";
+    }
+
+    private checkLogin(*reference<hash<auto>> info) {
+    }
+
+    private hash<auto> doRequestIntern(string m, string path, auto body, *reference<hash<auto>> info,
+            softbool decode_errors = True, *hash<auto> hdr, *string assume_content_type, *string shdr,
+            *code signer, *bool no_auth_retry, *int max_response_bytes) {
+        push calls, {"method": m, "path": path, "hdr": hdr};
+        return {"body": "ok"};
+    }
+}
+
+#! REST clients that add or convert headers accept header hashes whose values all have the same type
+/** A header literal such as \c {"If-Modified-Since": date} (\c hash<string, date>) or \c {"X-Count": 1}
+    (\c hash<string, int>) keeps its narrow type when passed in; converting the date to a string or adding the
+    session header raised RUNTIME-TYPE-ERROR
+*/
+public class SalesforceRestClientNarrowedCallerHashTest inherits QUnit::Test {
+    constructor() : Test("SalesforceRestClientNarrowedCallerHash", "1.0", \ARGV) {
+        addTestCase("Salesforce doRequest", \salesforceDoRequestTest());
+        addTestCase("Salesforce doBulkRequest", \salesforceDoBulkRequestTest());
+        addTestCase("Salesforce bulkJobAddBatch", \salesforceBulkJobAddBatchTest());
+        addTestCase("Tableau doRequest", \tableauDoRequestTest());
+        set_return_value(main());
+    }
+
+    #! returns its argument; passing a literal through a hash<auto> parameter keeps the literal's narrow type
+    static hash<auto> mk(hash<auto> h) {
+        return h;
+    }
+
+    salesforceDoRequestTest() {
+        assertEq("hash<string, date>", mk({"If-Modified-Since": 2026-01-01T00:00:00Z}).fullType());
+        TestSalesforceRestClient rest();
+        hash<auto> rv = rest.doRequest("GET", "sobjects", NOTHING, NOTHING, True,
+            {"If-Modified-Since": 2026-01-01T00:00:00Z});
+        assertEq("ok", rv.body);
+        assertEq("Thu, 01 Jan 2026 00:00:00 GMT", rest.calls[0].hdr."If-Modified-Since");
+    }
+
+    salesforceDoBulkRequestTest() {
+        assertEq("hash<string, int>", mk({"X-Count": 1}).fullType());
+        TestSalesforceRestClient rest();
+        hash<auto> rv = rest.doBulkRequest("GET", "job", NOTHING, NOTHING, True, {"X-Count": 1});
+        assertEq("ok", rv.body);
+        assertEq({"X-Count": 1, "X-SFDC-Session": "tok", "Authorization": ""}, rest.calls[0].hdr);
+        assertEq("https://localhost:1/services/async/60.0", rest.calls[0].url);
+    }
+
+    salesforceBulkJobAddBatchTest() {
+        TestSalesforceRestClient rest();
+        rest.bulkJobAddBatch("j1", "a,b\n1,2\n", "CSV", NOTHING, {"If-Modified-Since": 2026-01-01T00:00:00Z});
+        hash<auto> hdr = rest.calls[0].hdr;
+        assertEq("Thu, 01 Jan 2026 00:00:00 GMT", hdr."If-Modified-Since");
+        assertEq("tok", hdr."X-SFDC-Session");
+        assertEq("text/csv", hdr."Content-Type");
+        assertEq("POST", rest.calls[0].method);
+    }
+
+    tableauDoRequestTest() {
+        assertEq("hash<string, int>", mk({"X-Page": 1}).fullType());
+        TestTableauRestClient rest();
+        hash<auto> rv = rest.doRequest("GET", "projects", NOTHING, NOTHING, True, {"X-Page": 1});
+        assertEq("ok", rv.body);
+        assertEq("sites/site1/projects", rest.calls[0].path);
+        assertEq({"X-Page": 1, "X-Tableau-Auth": "tok"}, rest.calls[0].hdr);
+    }
+}

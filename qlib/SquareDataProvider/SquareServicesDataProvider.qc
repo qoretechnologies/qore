@@ -83,7 +83,8 @@ public class SquareServicesDataProvider inherits SquareDataProviderBase {
     private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         # Search catalog for ITEM objects (services are items with appointment-related product_type)
-        hash<auto> body = {
+        # hash<auto!>: the literal is narrowed to its value type; adding the limit would throw
+        hash<auto!> body = {
             "object_types": ("ITEM",),
         };
         if (search_options.limit) {

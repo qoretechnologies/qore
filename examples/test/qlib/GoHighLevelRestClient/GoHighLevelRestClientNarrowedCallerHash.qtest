@@ -1,0 +1,82 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires json
+%requires RestClient
+%requires RestClientIo
+%requires GoHighLevelRestClient
+
+%exec-class GoHighLevelRestClientNarrowedCallerHashTest
+
+#! Returns its argument with its runtime type, so a literal reaches the call as a caller's literal does
+hash<auto> sub mk(hash<auto> h) {
+    return h;
+}
+
+#! Blocking client that records the serialized request instead of sending it
+class TestGoHighLevelRestClient inherits GoHighLevelRestClient::GoHighLevelRestClient {
+    public {
+        *data sent_body;
+        string sent_path;
+    }
+
+    constructor() : GoHighLevelRestClient({
+        "url": "https://services.leadconnectorhq.com",
+        "location_id": "loc1",
+    }, True) {
+    }
+
+    hash<auto> sendAndDecodeResponse(*data body, string m, string path, hash<auto> hdr, *reference<hash<auto>> info,
+            *softbool decode_errors, *string assume_content_type, *string shdr, *code signer) {
+        sent_body = body;
+        sent_path = path;
+        return {"status_code": 200, "body": {"contacts": ()}};
+    }
+}
+
+#! Non-blocking client exposing its request preparation, which serializes but does not send the request
+class TestGoHighLevelRestClientIo inherits GoHighLevelRestClient::GoHighLevelRestClientIo {
+    constructor() : GoHighLevelRestClientIo({
+        "url": "https://services.leadconnectorhq.com",
+        "location_id": "loc1",
+    }) {
+    }
+
+    hash<auto> prepare(string path, auto body) {
+        *hash<auto> hdr;
+        return prepareRequest("POST", \path, body, \hdr);
+    }
+}
+
+#! The GoHighLevel clients add the location ID to a caller's POST body
+/** A request body literal whose values all have the same type, such as \c {"pageLimit": 20}, is narrowed to that
+    type, so adding the string \c locationId raised RUNTIME-TYPE-ERROR.  Nothing is sent.
+*/
+class GoHighLevelRestClientNarrowedCallerHashTest inherits QUnit::Test {
+    constructor() : Test("GoHighLevelRestClientNarrowedCallerHashTest", "1.0", \ARGV) {
+        addTestCase("blocking client adds locationId to an int body", \blockingTest());
+        addTestCase("non-blocking client adds locationId to an int body", \asyncTest());
+        set_return_value(main());
+    }
+
+    blockingTest() {
+        assertEq("hash<string, int>", mk({"pageLimit": 20}).fullType());
+        TestGoHighLevelRestClient client();
+        hash<auto> rv = client.doRequest("POST", "contacts/search", {"pageLimit": 20});
+        assertEq(200, rv.status_code);
+        assertEq({"pageLimit": 20, "locationId": "loc1"}, parse_json(client.sent_body.toString()));
+    }
+
+    asyncTest() {
+        assertEq("hash<string, int>", mk({"pageLimit": 20}).fullType());
+        TestGoHighLevelRestClientIo client();
+        hash<auto> rv = client.prepare("contacts/search", {"pageLimit": 20});
+        assertEq({"pageLimit": 20, "locationId": "loc1"}, parse_json(rv.serialized_body.toString()));
+    }
+}

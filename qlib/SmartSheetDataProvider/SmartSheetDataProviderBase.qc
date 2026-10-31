@@ -133,7 +133,8 @@ public class SmartSheetDataProviderBase inherits DataProvider::AbstractDataProvi
         int page_size = limit && limit < DefaultPageSize ? limit : DefaultPageSize;
 
         while (True) {
-            hash<auto> qparams = params ?? {};
+            # hash<auto!>: the given hash may be narrowed (ex: hash<string, string>); adding paging keys would throw
+            hash<auto!> qparams = params ?? {};
             qparams.page = page;
             qparams.pageSize = page_size;
 

@@ -80,7 +80,8 @@ public class OpenSearchKnnSearchDataProvider inherits OpenSearchDataProviderBase
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         string index = remove req.index;
         string field = remove req.field;
-        hash<auto> knn = {
+        # hash<auto!>: the literal is narrowed to the vector's type; adding "k" would throw
+        hash<auto!> knn = {
             "vector": remove req.vector,
         };
 

@@ -167,6 +167,11 @@ rc.bulkJobClose(h.id);
       (\c instance_url and \c id) from the OAuth2 token response, as the blocking client does, and follows a
       refresh that moves the org to another instance
       (<a href="https://github.com/qoretechnologies/qore/issues/5365">issue 5365</a>)
+    - fixed @ref SalesforceRestClient::SalesforceRestClient::doRequest() "doRequest()",
+      @ref SalesforceRestClient::SalesforceRestClient::doBulkRequest() "doBulkRequest()" and
+      @ref SalesforceRestClient::SalesforceRestClient::bulkJobAddBatch() "bulkJobAddBatch()" to accept a header
+      hash whose values all have the same type, such as a literal <tt>{"If-Modified-Since": date}</tt> or
+      <tt>{"X-Count": 1}</tt>; converting the date or adding the session headers raised \c RUNTIME-TYPE-ERROR
 
     @subsection salesforcerestclientv2_0_1 SalesforceRestClient v2.0.1
     - fixed OAuth2 refresh token handling
@@ -755,6 +760,12 @@ hash<auto> ans = rest.doRequest("GET", "sobjects");
     */
     hash<auto> doRequest(string m, string path, auto body, *reference<hash<auto>> info, softbool decode_errors = True,
             *hash<auto> hdr) {
+        # the caller's headers may be narrowed (ex: hash<string, date> or hash<string, int>); converting dates or
+        # adding headers would throw, so copy them to a hash that accepts any value first
+        {
+            *hash<auto!> h = hdr;
+            hdr = h;
+        }
         # convert any dates in headers to GMT format
         map hdr.($1.key) = getGmtDate($1.value), hdr.pairIterator(), $1.value.typeCode() == NT_DATE;
 
@@ -810,6 +821,12 @@ hash<auto> ans = rest.doBulkRequest("POST", "job", job);
     */
     hash<auto> doBulkRequest(string m, string path, auto body, *reference<hash<auto>> info,
             softbool decode_errors = True, *hash<auto> hdr) {
+        # the caller's headers may be narrowed (ex: hash<string, date> or hash<string, int>); converting dates or
+        # adding headers would throw, so copy them to a hash that accepts any value first
+        {
+            *hash<auto!> h = hdr;
+            hdr = h;
+        }
         # convert any dates in headers to GMT format
         map hdr.($1.key) = getGmtDate($1.value), hdr.pairIterator(), $1.value.typeCode() == NT_DATE;
 
@@ -1034,6 +1051,12 @@ printf("batch ID: %y batch state: %y\n", h.id, h.state);
             throw "INVALID-OPERATION", sprintf("invalid Salesforce.com Bulk REST API job content type %y; known "
                 "content types: %y", job_content_type, keys BulkJobContentTypes);
 
+        # the caller's headers may be narrowed (ex: hash<string, date> or hash<string, int>); converting dates or
+        # adding headers would throw, so copy them to a hash that accepts any value first
+        {
+            *hash<auto!> h = hdr;
+            hdr = h;
+        }
         # convert any dates in headers to GMT format
         map hdr.($1.key) = getGmtDate($1.value), hdr.pairIterator(), $1.value.typeCode() == NT_DATE;
 

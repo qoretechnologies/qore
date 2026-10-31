@@ -102,7 +102,16 @@ public class EmpathicBuildingSensorDataProvider inherits EmpathicBuildingDataPro
     }
 
     #! Converts ms epoch offsets to date/time values
-    static hash<auto> getSensorData(hash<auto> sensor) {
+    static hash<auto> getSensorData(hash<auto> sensor0) {
+        # "auto!": a caller's literal record and its measurement hashes may be narrowed, e.g. to
+        # hash<string, int> when all values are epoch offsets, and writing a date would then raise RUNTIME-TYPE-ERROR
+        hash<auto!> sensor = sensor0;
+        foreach string key in (("previous_measurement", "last_measurement")) {
+            if (sensor{key}.typeCode() == NT_HASH) {
+                hash<auto!> measurement = sensor{key};
+                sensor{key} = measurement;
+            }
+        }
         if (sensor.previous_measurement.time) {
             sensor.previous_measurement.time =
                 EmpathicBuildingDataProviderBase::getTimestamp(sensor.previous_measurement.time);

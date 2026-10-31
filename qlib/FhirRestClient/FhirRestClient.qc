@@ -527,7 +527,9 @@ hash<auto> oauth2_options = client.getSmartBackendOAuth2ClientOptions({
             throw "FHIR-SMART-CONFIGURATION-ERROR", "SMART configuration token_endpoint is missing or invalid";
         }
 
-        hash<auto> rv = opts ?? {};
+        # "auto!": a caller's literal option hash may be narrowed, e.g. to hash<string, list<string>> for
+        # {"oauth2_scopes": (...)}, and adding the string endpoint URLs would then raise RUNTIME-TYPE-ERROR
+        hash<auto!> rv = opts ?? {};
         rv.oauth2_token_url = smart_configuration.token_endpoint;
         if (smart_configuration.authorization_endpoint.typeCode() == NT_STRING) {
             rv.oauth2_auth_url = smart_configuration.authorization_endpoint;

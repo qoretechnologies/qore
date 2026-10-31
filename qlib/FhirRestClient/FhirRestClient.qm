@@ -272,6 +272,8 @@ try {
     - initial FHIR JSON REST client and \c fhir / \c fhirs connection schemes
     - \c CapabilityStatement and SMART configuration discovery helpers
     - SMART OAuth2 endpoint mapping to \c RestClient OAuth2 options
+      (\c FhirRestClientBase::makeSmartOAuth2ClientOptions() accepts caller options whose values all have the
+      same type, such as a literal \c {"oauth2_scopes": ("system/Observation.write",)})
     - SMART Backend Services JWT client assertion generation and mapping to
       \c RestClientIo OAuth2 options
     - CapabilityStatement resource type discovery and content-type FHIR version helpers

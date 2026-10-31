@@ -1,0 +1,176 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SquareDataProvider
+
+%exec-class SquareDataProviderNarrowedCallerHashTest
+
+#! Records the POST requests of a Square data provider and answers them from memory
+class PostRecorder {
+    public {
+        list<hash<auto>> calls = ();
+    }
+
+    hash<auto> post(string path, *hash<auto> body) {
+        push calls, {"path": path, "body": body};
+        # the first page of a search has a cursor
+        if (path =~ /search$/ && calls.size() == 1) {
+            return {"objects": ({"id": "o1"},), "events": ({"id": "e1"},), "cursor": "next"};
+        }
+        return {
+            "orders": ({"id": "o1"},),
+            "order": {"id": "o1"},
+            "booking": {"id": "b1"},
+            "objects": ({"id": "o2"},),
+            "events": ({"id": "e2"},),
+        };
+    }
+}
+
+class TestGetOrders inherits SquareDataProvider::SquareGetOrdersDataProvider {
+    public {
+        PostRecorder rec();
+    }
+
+    constructor(SquareRestClient::SquareRestClientIo rest) : SquareGetOrdersDataProvider(rest) {
+    }
+
+    hash<auto> doPost(string path, *hash<auto> body) {
+        return rec.post(path, body);
+    }
+}
+
+class TestCancelBooking inherits SquareDataProvider::SquareCancelBookingDataProvider {
+    public {
+        PostRecorder rec();
+    }
+
+    constructor(SquareRestClient::SquareRestClientIo rest) : SquareCancelBookingDataProvider(rest) {
+    }
+
+    hash<auto> doPost(string path, *hash<auto> body) {
+        return rec.post(path, body);
+    }
+}
+
+class TestCreatePaidOrder inherits SquareDataProvider::SquareCreatePaidOrderDataProvider {
+    public {
+        PostRecorder rec();
+    }
+
+    constructor(SquareRestClient::SquareRestClientIo rest) : SquareCreatePaidOrderDataProvider(rest) {
+    }
+
+    hash<auto> doPost(string path, *hash<auto> body) {
+        return rec.post(path, body);
+    }
+}
+
+class TestServices inherits SquareDataProvider::SquareServicesDataProvider {
+    public {
+        PostRecorder rec();
+    }
+
+    constructor(SquareRestClient::SquareRestClientIo rest) : SquareServicesDataProvider(rest) {
+    }
+
+    hash<auto> doPost(string path, *hash<auto> body) {
+        return rec.post(path, body);
+    }
+}
+
+class TestWatchNewEvents inherits SquareDataProvider::SquareWatchNewEventsDataProvider {
+    public {
+        PostRecorder rec();
+    }
+
+    constructor(SquareRestClient::SquareRestClientIo rest) : SquareWatchNewEventsDataProvider(rest) {
+    }
+
+    hash<auto> doPost(string path, *hash<auto> body) {
+        return rec.post(path == "events" ? "events/search" : path, body);
+    }
+
+    list<hash<auto>> fetch(date since) {
+        return fetchRecords(since);
+    }
+}
+
+#! Square request builders add values of other types to the request bodies that they build
+/** Each body starts as a literal whose values all have the same type, such as \c {"idempotency_key": key}
+    (\c hash<string, string>); adding a value of another type, such as an integer booking version, raised
+    RUNTIME-TYPE-ERROR
+*/
+public class SquareDataProviderNarrowedCallerHashTest inherits QUnit::Test {
+    private {
+        SquareRestClient::SquareRestClientIo rest({"url": "https://localhost:1/", "token": "t"});
+    }
+
+    constructor() : Test("SquareDataProviderNarrowedCallerHash", "1.0", \ARGV) {
+        addTestCase("get orders with a location", \getOrdersTest());
+        addTestCase("cancel booking with a version", \cancelBookingTest());
+        addTestCase("create paid order with payments", \createPaidOrderTest());
+        addTestCase("search services with a limit", \servicesTest());
+        addTestCase("watch new events over two pages", \watchNewEventsTest());
+        set_return_value(main());
+    }
+
+    #! returns its argument; passing a literal through a hash<auto> parameter keeps the literal's narrow type
+    static hash<auto> mk(hash<auto> h) {
+        return h;
+    }
+
+    getOrdersTest() {
+        # the body literal the provider builds
+        assertEq("hash<string, list<string>>", mk({"order_ids": ("o1",)}).fullType());
+        TestGetOrders prov(rest);
+        auto rv = prov.doRequest({"order_ids": ("o1",), "location_id": "L1"});
+        assertEq("o1", rv.orders[0].id);
+        assertEq(("o1",), prov.rec.calls[0].body.order_ids);
+        assertEq("L1", prov.rec.calls[0].body.location_id);
+    }
+
+    cancelBookingTest() {
+        assertEq("hash<string, string>", mk({"idempotency_key": "k"}).fullType());
+        TestCancelBooking prov(rest);
+        auto rv = prov.doRequest({"booking_id": "b1", "booking_version": 3});
+        assertEq("b1", rv.id);
+        assertEq("bookings/b1/cancel", prov.rec.calls[0].path);
+        assertEq(3, prov.rec.calls[0].body.booking_version);
+        assertEq(Type::String, prov.rec.calls[0].body.idempotency_key.type());
+    }
+
+    createPaidOrderTest() {
+        assertEq("hash<string, string>", mk({"idempotency_key": "k"}).fullType());
+        TestCreatePaidOrder prov(rest);
+        auto rv = prov.doRequest({"location_id": "L1", "payment_ids": ("p1", "p2")});
+        assertEq("o1", rv.id);
+        assertEq("orders/o1/pay", prov.rec.calls[1].path);
+        assertEq(("p1", "p2"), prov.rec.calls[1].body.payment_ids);
+    }
+
+    servicesTest() {
+        assertEq("hash<string, list<string>>", mk({"object_types": ("ITEM",)}).fullType());
+        TestServices prov(rest);
+        # the provider builds the body; the limit is added to it, and the cursor of the second page as well
+        prov.searchRecords(NOTHING, {"limit": 5});
+        assertEq(2, prov.rec.calls.size());
+        assertEq(5, prov.rec.calls[0].body.limit);
+        assertEq(("ITEM",), prov.rec.calls[0].body.object_types);
+        assertEq("next", prov.rec.calls[1].body.cursor);
+    }
+
+    watchNewEventsTest() {
+        TestWatchNewEvents prov(rest);
+        list<hash<auto>> events = prov.fetch(2026-11-01T00:00:00Z);
+        assertEq(("e1", "e2"), map $1.id, events);
+        assertEq("next", prov.rec.calls[1].body.cursor);
+        assertEq("CREATED_AT", prov.rec.calls[1].body.query.sort.field);
+    }
+}

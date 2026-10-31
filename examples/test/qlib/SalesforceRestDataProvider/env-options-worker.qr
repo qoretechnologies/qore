@@ -1,0 +1,130 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+# creates data providers whose constructors add options from the environment; run by
+# SalesforceRestDataProviderNarrowedCallerHash.qtest with the environment variables set
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires DataProvider
+%requires SalesforceRestDataProvider
+%requires ServiceNowRestDataProvider
+
+/** Data providers read the environment variables that the process started with, so the test runs this script with
+    them set.  Each provider is given an option literal whose values all have the same type, and the result of each
+    check is printed as a "name=result" line
+*/
+
+#! Records the options that the constructor checks
+class TestSalesforceRestDataProvider inherits SalesforceRestDataProvider::SalesforceRestDataProvider {
+    constructor(*hash<auto> options) : SalesforceRestDataProvider(options) {
+    }
+
+    # the options are returned in an exception, so that no client is created, which would log in
+    private *hash<auto> checkOptions(string err, *hash<string, hash<DataProviderOptionInfo>> option_desc,
+            *hash<auto> options) {
+        throw "CHECKED-OPTIONS", NOTHING, options;
+    }
+}
+
+#! Records the options that the constructor checks
+class TestSalesforceRestTablesDataProvider inherits SalesforceRestDataProvider::SalesforceRestTablesDataProvider {
+    constructor(*hash<auto> options) : SalesforceRestTablesDataProvider(options) {
+    }
+
+    # the options are returned in an exception, so that no client is created, which would log in
+    private *hash<auto> checkOptions(string err, *hash<string, hash<DataProviderOptionInfo>> option_desc,
+            *hash<auto> options) {
+        throw "CHECKED-OPTIONS", NOTHING, options;
+    }
+}
+
+#! Records the options that the constructor checks
+class TestServiceNowRestDataProvider inherits ServiceNowRestDataProvider::ServiceNowRestDataProvider {
+    public {
+        *hash<auto> checked;
+    }
+
+    constructor(*hash<auto> options) : ServiceNowRestDataProvider(options) {
+    }
+
+    private *hash<auto> checkOptions(string err, *hash<string, hash<DataProviderOptionInfo>> option_desc,
+            *hash<auto> options) {
+        checked = options;
+        return AbstractDataProvider::checkOptions(err, option_desc, options);
+    }
+}
+
+#! returns its argument; passing a literal through a hash<auto> parameter keeps the literal's narrow type
+hash<auto> sub mk(hash<auto> h) {
+    return h;
+}
+
+#! returns whether a password is the one that the test set, so that no other password is printed
+string sub pw(*string password, string expected) {
+    return password == expected ? "test-password" : "other-password";
+}
+
+#! prints the result of a check
+sub out(string name, auto value) {
+    printf("%s=%s\n", name, value);
+}
+
+#! runs a check, printing the error instead of the result if it fails
+sub check(string name, code c) {
+    try {
+        out(name, c());
+    } catch (hash<ExceptionInfo> ex) {
+        out(name, ex.err);
+    }
+}
+
+#! returns the options that a test Salesforce data provider constructor checks
+hash<auto> sub checked_options(code c) {
+    try {
+        c();
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err == "CHECKED-OPTIONS") {
+            return ex.arg;
+        }
+        rethrow;
+    }
+    throw "TEST-ERROR", "the options were not checked";
+}
+
+DataProvider::setAutoConfig();
+
+out("salesforce-type", mk({
+    "salesforcerestclient_options": {
+        "oauth2_client_id": "client",
+        "oauth2_client_secret": "secret",
+        "url": "https://localhost:1/services/data/v60.0",
+    },
+}).fullType());
+check("salesforce", string sub () {
+    hash<auto> opts = checked_options(sub () { new TestSalesforceRestDataProvider({
+        "salesforcerestclient_options": {
+            "oauth2_client_id": "client",
+            "oauth2_client_secret": "secret",
+            "url": "https://localhost:1/services/data/v60.0",
+        },
+    }); });
+    return sprintf("%s/%s/%s", opts.username, pw(opts.password, "pass1"), opts.salesforcerestclient_options.oauth2_client_id);
+});
+check("salesforce-tables", string sub () {
+    hash<auto> opts = checked_options(sub () { new TestSalesforceRestTablesDataProvider({
+        "salesforcerestclient_options": {
+            "oauth2_client_id": "client",
+            "oauth2_client_secret": "secret",
+            "url": "https://localhost:1/services/data/v60.0",
+        },
+    }); });
+    return sprintf("%s/%s", opts.username, pw(opts.password, "pass1"));
+});
+
+ServiceNowRestClient::ServiceNowRestClientIo client({"url": "https://localhost:1"});
+out("servicenow-type", mk({"snrestclient": client}).fullType());
+check("servicenow", string sub () {
+    TestServiceNowRestDataProvider prov({"snrestclient": client});
+    return sprintf("%s/%s/%s", prov.checked.username, pw(prov.checked.password, "pass2"),
+        prov.getRestClient() == client ? "same-client" : "other-client");
+});

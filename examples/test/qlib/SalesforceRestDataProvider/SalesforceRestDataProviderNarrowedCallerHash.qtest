@@ -1,0 +1,69 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../ExecModeHarness.qm
+
+%exec-class SalesforceRestDataProviderNarrowedCallerHashTest
+
+#! Data provider constructors that add options from the environment accept option hashes of a single value type
+/** With automatic configuration from the environment enabled, the Salesforce and ServiceNow data provider
+    constructors add string options from environment variables to the caller's option hash; a literal such as
+    \c {"salesforcerestclient_options": {...}} (a hash of hashes) or \c {"snrestclient": client} (a hash of objects)
+    keeps its narrow type when passed in, so adding the string raised RUNTIME-TYPE-ERROR.  Data providers read the
+    environment that the process started with, so the checks are in env-options-worker.qr, which is run in each
+    execution mode with the environment variables set
+*/
+public class SalesforceRestDataProviderNarrowedCallerHashTest inherits QUnit::Test {
+    public {
+        #! the result of every check the worker makes
+        const Expected = {
+            "salesforce-type": "hash<string, hash<string, string>>",
+            "salesforce": "user1/test-password/client",
+            "salesforce-tables": "user1/test-password",
+            "servicenow-type": "hash<string, object<ServiceNowRestClientIo>>",
+            "servicenow": "user2/test-password/same-client",
+        };
+
+        #! the environment of the worker; variables that the developer's environment may have are cleared
+        const Env = "env -u SALESFORCE_CONSUMER_KEY -u SALESFORCE_CONSUMER_SECRET -u SERVICENOW_URL "
+            "-u SERVICENOW_CLIENT_ID -u SERVICENOW_CLIENT_SECRET SALESFORCE_USER=user1 SALESFORCE_PASS=pass1 "
+            "SERVICENOW_USERNAME=user2 SERVICENOW_PASSWORD=pass2";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : Test("SalesforceRestDataProviderNarrowedCallerHash", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        addTestCase("options from the environment in each execution mode", \testExecModes());
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string out = ExecModeHarness::run(sprintf("%s LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b "
+                "--enable-debug --exec-mode=%s %s", Env, libqore_dir, libqore_dir, qore_bin, mode,
+                get_script_dir() + DirSep + "env-options-worker.qr"), ExecModeHarness::NativeCheck::None);
+            hash<string, string> results = {};
+            foreach string line in (out.split("\n")) {
+                *list<*string> parts = (line =~ x/^([-a-z]+)=(.*)$/);
+                if (parts) {
+                    results{parts[0]} = parts[1];
+                } else if (line.val()) {
+                    fail(sprintf("%s: unexpected worker output: %y", mode, out));
+                }
+            }
+            assertEq(Expected, results, mode);
+        }
+    }
+}

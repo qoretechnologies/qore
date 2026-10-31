@@ -1,0 +1,59 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FhirRestClient
+
+%exec-class FhirRestClientNarrowedCallerHashTest
+
+#! Returns its argument with its runtime type, so a literal reaches the call as a caller's literal does
+hash<auto> sub mk(hash<auto> h) {
+    return h;
+}
+
+#! SMART on FHIR OAuth2 options add the discovered endpoint URLs to the caller's options
+/** A caller's option literal whose values all have the same type, such as
+    \c {"oauth2_scopes": ("system/Observation.write",)}, is narrowed to that type, so adding the string endpoint
+    URLs raised RUNTIME-TYPE-ERROR.  No server is contacted: the discovery document is given to the static helper.
+*/
+class FhirRestClientNarrowedCallerHashTest inherits QUnit::Test {
+    private {
+        const SmartConfiguration = {
+            "token_endpoint": "https://fhir.example.com/auth/token",
+            "authorization_endpoint": "https://fhir.example.com/auth/authorize",
+        };
+    }
+
+    constructor() : Test("FhirRestClientNarrowedCallerHashTest", "1.0", \ARGV) {
+        addTestCase("SMART OAuth2 options are added to list-valued options", \listOptionsTest());
+        addTestCase("SMART OAuth2 options are added to bool-valued options", \boolOptionsTest());
+        set_return_value(main());
+    }
+
+    listOptionsTest() {
+        assertEq("hash<string, list<string>>", mk({"oauth2_scopes": ("system/Observation.write",)}).fullType());
+        hash<auto> rv = FhirRestClientBase::makeSmartOAuth2ClientOptions(SmartConfiguration,
+            {"oauth2_scopes": ("system/Observation.write",)});
+        assertEq({
+            "oauth2_scopes": ("system/Observation.write",),
+            "oauth2_token_url": "https://fhir.example.com/auth/token",
+            "oauth2_auth_url": "https://fhir.example.com/auth/authorize",
+        }, rv);
+    }
+
+    boolOptionsTest() {
+        assertEq("hash<string, bool>", mk({"oauth2_auto_refresh": True}).fullType());
+        hash<auto> rv = FhirRestClientBase::makeSmartOAuth2ClientOptions(SmartConfiguration,
+            {"oauth2_auto_refresh": True});
+        assertEq({
+            "oauth2_auto_refresh": True,
+            "oauth2_token_url": "https://fhir.example.com/auth/token",
+            "oauth2_auth_url": "https://fhir.example.com/auth/authorize",
+        }, rv);
+    }
+}

@@ -480,7 +480,9 @@ public class KeapDataProviderBase inherits DataProvider::AbstractDataProvider {
         and primary phone from <tt>phone_numbers</tt> array into <tt>phone1</tt> field
     */
     static hash<auto> transformContactResponse(hash<auto> contact) {
-        hash<auto> result = contact;
+        # hash<auto!>: the contact may be narrowed (ex: hash<string, list<hash<string, string>>>); adding the
+        # extracted fields would throw
+        hash<auto!> result = contact;
         # Extract primary email from email_addresses array
         if (contact.email_addresses.size()) {
             result.email = contact.email_addresses[0].email;
