@@ -30798,3 +30798,81 @@ Retain: all four expression-dispatch targets improve in every layout in both pil
 Release: four focused fixtures/2334 assertions plus 15 extended fixtures/6718 assertions. Debug: ten fixtures/4597 assertions and native 4003/5668 checks. Tests cover reflected replacement, deletion during an admitted loop, destructor/lifetime behavior, integer overflow/float edge cases, zero/short loops, foreign/imported Programs, disabled controls, O0/O3, stripped/included source, EH and split compilation. All 36 fresh artifacts/144 preparation processes/4698 reference outputs per variant pass; all 391 shipped qmods build with the same measured core. No sanitizer/other-platform claim.
 
 See the [complete evidence](results-pinned-override-macos-arm64.json) and [62-item audit](audit-pinned-override.md). Sampling durations are excluded. This is a paired optimization experiment, not a new Java or develop checkpoint. The installed system runtime remains 6c4d9cae71. The next investigation is the still-repeated base-class check for conditional receivers, preserving its different Program admission semantics.
+
+
+## Retained receiver base-class checks (2026-10-31)
+
+Conditional-receiver loops now reuse the immutable exact-base class check for objects already retained at entry. This extends the preceding override-class optimization while preserving the base helper's different Program rules. Base and override paths share status views; actual boxed identity and per-call atomic liveness still guard use. Unknown receivers and null views keep the existing helper. No new reference or lifetime is introduced. QORE_DISABLE_AOT_PINNED_BASE_CLASS disables this lowering.
+
+The baseline implements committed be27d81d2a; its frozen qualified binary still reports precommit revision 6c4d9cae71. The candidate binary reports be27d81d2a plus the recorded working-tree patch. Both runtimes use Release -O3 -DNDEBUG with allocation tracking off; all AOT artifacts are freshly compiled with -O3 --strip-source. The pilot uses 156 processes / 468 windows; 43-workload confirmation uses 774 processes / 2322 windows. Whole-kernel ns/item follows, with negative changes faster.
+
+|!Workload|!Before ns/item|!After ns/item|!Change
+|matched:forward_float|32.2528|32.1402|-0.35%
+|matched:forward_int|28.0967|27.6439|-1.61%
+|matched:context_int|165.9416|165.5584|-0.23%
+|matched:context_float|174.1849|172.3245|-1.07%
+|local:direct_call|1.4892|1.4844|-0.33%
+|local:method_call|1.5615|1.5553|-0.39%
+|local:polymorphic_call|17.7244|17.8355|+0.63%
+|local:polymorphic_float_call|17.6009|17.7516|+0.86%
+|local:boxed_int_method_fallback|31.5085|31.7988|+0.92%
+|local:boxed_float_method_fallback|34.2258|34.1885|-0.11%
+|local:boxed_int_method_effect|88.2965|87.9786|-0.36%
+|local:list_mutate|118.3938|116.4238|-1.66%
+|local:temporary_list|1.5912|1.5825|-0.54%
+|local:polymorphic_expression_call|6.1433|5.4027|-12.06%
+|local:polymorphic_float_expression_call|5.9109|5.3092|-10.18%
+|local:monomorphic_call|3.7136|3.6163|-2.62%
+|local:monomorphic_float_call|3.6565|3.7540|+2.67%
+|micro:polymorphic_call|17.3550|17.7267|+2.14%
+|micro:polymorphic_float_call|17.8392|17.2981|-3.03%
+|micro:boxed_int_method_call|102.1458|101.9344|-0.21%
+|micro:boxed_float_method_call|106.1726|105.9637|-0.20%
+|micro:boxed_int_method_fallback|113.7783|113.6136|-0.14%
+|micro:boxed_float_method_fallback|118.6878|120.0310|+1.13%
+|micro:boxed_int_method_effect|168.0074|169.1291|+0.67%
+|micro:indirect_call|8.3207|7.9699|-4.22%
+|micro:closure_call|17.8193|18.1469|+1.84%
+|micro:closure_capture|23.6270|23.6621|+0.15%
+|micro:list_read|2.8052|2.7974|-0.28%
+|micro:list_build|22.5598|22.1499|-1.82%
+|micro:list_mutate|115.5722|115.8463|+0.24%
+|micro:temporary_hash|1.5958|1.5810|-0.93%
+|micro:polymorphic_expression_call|6.1527|5.4304|-11.74%
+|micro:polymorphic_float_expression_call|5.9899|5.3965|-9.91%
+|float:callback_local_float_return|0.8206|0.8291|+1.04%
+|float:typed_local_int_unary|1.1627|1.1549|-0.67%
+|float:callback_loop_float_return|4.8329|4.8090|-0.49%
+|mixed:csv_report|918.4028|901.8991|-1.80%
+|mixed:object_orders|2974.0578|3006.5285|+1.09%
+|mixed:callback_pipeline|90.7616|91.2091|+0.49%
+|mixed:text_index|1292.9516|1298.8624|+0.46%
+|probe:object_short|1596.4712|1579.9052|-1.04%
+|probe:effect_short|1661.1057|1665.8257|+0.28%
+|probe:string_result_loop|523.8328|525.5932|+0.34%
+
+Retained under the user-authorized broader workload tradeoff. All four conditional-receiver targets improve by 9.91–12.06%, with gains in every confirmation layout and in the independent pilot. None of the 16 short-loop aggregates is slower, though fixed harness overhead prevents isolating entry cost. Slower controls remain visible: float monomorphic calls +2.67%, module integer polymorphic calls +2.14%, module closures +1.84%, and module float fallback +1.13%, with mixed results across layouts. Mixed object orders +1.09%, known floating callbacks +1.04%, local integer fallback +0.92%, and short effect +0.28% are slower in every layout. These controls do not establish that the new guard caused the slowdown; they remain part of the observed tradeoff. All 43 confirmation rows and all 16 short-loop rows are reported. This experiment supplies neither a fresh Java/develop ratio nor evidence of a performance ceiling.
+
+A separate short-loop campaign uses 1/4/16/64 iterations, three layouts and three forks (288 processes / 864 windows). Fixed harness cost dominates the smallest counts; it cannot isolate added entry cost.
+
+|!Workload and count|!Before ns/item|!After ns/item|!Change
+|local:polymorphic_expression_call:1|2570.5765|2523.9541|-1.81%
+|local:polymorphic_expression_call:4|649.4029|639.9450|-1.46%
+|local:polymorphic_expression_call:16|166.7588|164.4691|-1.37%
+|local:polymorphic_expression_call:64|45.6389|44.7476|-1.95%
+|local:polymorphic_float_expression_call:1|2636.1049|2615.0949|-0.80%
+|local:polymorphic_float_expression_call:4|664.1638|653.4803|-1.61%
+|local:polymorphic_float_expression_call:16|169.0018|167.1587|-1.09%
+|local:polymorphic_float_expression_call:64|46.7405|45.5151|-2.62%
+|micro:polymorphic_expression_call:1|2580.8869|2514.4718|-2.57%
+|micro:polymorphic_expression_call:4|645.1511|640.6858|-0.69%
+|micro:polymorphic_expression_call:16|164.4144|163.9104|-0.31%
+|micro:polymorphic_expression_call:64|45.8451|44.7439|-2.40%
+|micro:polymorphic_float_expression_call:1|2650.4795|2628.3979|-0.83%
+|micro:polymorphic_float_expression_call:4|664.0354|658.2468|-0.87%
+|micro:polymorphic_float_expression_call:16|170.8581|169.7940|-0.62%
+|micro:polymorphic_float_expression_call:64|47.5279|45.7557|-3.73%
+
+Release: five focused fixtures/3490 assertions plus 15 extended fixtures/6718 assertions. Debug: ten fixtures/5101 assertions and native 4003/5668 checks. The additional conditional-deletion fixture passes 68 assertions in each runtime, with codegen assertions confirming the new base guard is exercised for base/override/aliased receivers. Tests cover reflected replacement, deletion during an admitted loop, destructor/lifetime behavior, integer overflow/float edge cases, zero/short loops, foreign/imported Programs, disabled controls, O0/O3, stripped/included source, EH and split compilation. All 36 fresh artifacts/144 preparation processes/4698 reference outputs per variant pass; all 391 shipped qmods build with the same measured core. No sanitizer/other-platform claim.
+
+See the [complete evidence](results-pinned-base-macos-arm64.json) and [62-item audit](audit-pinned-base.md). This is a paired optimization experiment, not a fresh Java/develop checkpoint. The installed runtime remains 6c4d9cae71. Receiver selection and receiver-local assignment remain candidates for further work; no global performance ceiling is established.

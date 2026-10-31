@@ -126,6 +126,10 @@ static void checkAdditionalMethodTargets(QoreValue receiver, QoreValue base) {
     assert(!xsink);
     // The public C++ constructor permits the exact class with a different owning Program.
     ReferenceHolder<QoreObject> foreign_object(new QoreObject(qc, *foreign), &xsink);
+    // Exact base admission is deliberately independent of the object's Program;
+    // a compiler cache must not substitute the stricter override classifier.
+    assert(qore_rt_object_has_exact_aot_target_class_only(&ctx, 1, QoreValue(*foreign_object).rawBits()));
+    assert(qore_rt_object_has_exact_aot_target_class(&ctx, 1, QoreValue(*foreign_object).rawBits()));
     assert(!qore_rt_object_has_exact_aot_override_v1(&ctx, 0, 1, QoreValue(*foreign_object).rawBits()));
     assert(!qore_rt_get_live_aot_override_receiver_class_v1(&ctx, QoreValue(*foreign_object).rawBits()));
     QoreProgram* saved_program = ctx.pgm;

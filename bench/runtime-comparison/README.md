@@ -1630,3 +1630,6 @@ The [post-polymorphic optimized checkpoint](RESULTS.md#optimized-checkpoint-afte
 
 
 [Retained receiver classification](RESULTS.md#retained-receiver-classification-2026-10-31): bounded entry admission with live identity/deletion checks; optimized [evidence](results-pinned-override-macos-arm64.json) and [audit](audit-pinned-override.md).
+
+
+[Retained receiver base-class checks](RESULTS.md#retained-receiver-base-class-checks-2026-10-31): shared status views and cached base admission; optimized [evidence](results-pinned-base-macos-arm64.json) and [audit](audit-pinned-base.md).

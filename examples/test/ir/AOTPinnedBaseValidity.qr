@@ -1,0 +1,50 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+
+class PinnedBase {
+    int next(int value) { return value + 1; }
+}
+class PinnedDerived inherits PinnedBase {
+    int next(int value) { return value + 10; }
+}
+
+sub deletePinned(PinnedBase receiver) {
+    delete receiver;
+}
+
+int sub selectedDeleteLoop(PinnedBase left, PinnedBase right, bool remove_left) {
+    int value = 0;
+    for (int i = 0; i < 6; ++i) {
+        if (i == (remove_left ? 2 : 3)) {
+            deletePinned(remove_left ? left : right);
+        }
+        value = (i % 2 == 0 ? left : right).next(value);
+    }
+    return value;
+}
+
+string sub checkSelectedDelete(PinnedBase left, PinnedBase right, bool remove_left) {
+    try {
+        selectedDeleteLoop(left, right, remove_left);
+        return "not deleted";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+foreach bool remove_left in ((False, True)) {
+    foreach bool derived in ((False, True)) {
+        PinnedBase left = derived ? new PinnedDerived() : new PinnedBase();
+        PinnedBase right = derived ? new PinnedBase() : new PinnedDerived();
+        if (checkSelectedDelete(left, right, remove_left) != "OBJECT-ALREADY-DELETED") {
+            throw "PINNED-BASE-VALIDITY", "conditional receiver deletion was not observed";
+        }
+    }
+    PinnedBase shared();
+    if (checkSelectedDelete(shared, shared, remove_left) != "OBJECT-ALREADY-DELETED") {
+        throw "PINNED-BASE-VALIDITY", "aliased receiver deletion was not observed";
+    }
+}
+printf("pinned-base-validity: ok\n");

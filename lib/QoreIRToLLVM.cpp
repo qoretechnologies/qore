@@ -7096,6 +7096,87 @@ llvm::Value* QoreIRToLLVM::emitPinnedClassLocalBorrowGuard(uint32_t value_id, ll
     return pinned;
 }
 
+QoreIRToLLVM::AotPinnedReceiver& QoreIRToLLVM::getPinnedReceiverInfo(const LocalVar* owner,
+        llvm::Module& module) {
+    auto& info = aot_pinned_receivers[owner];
+    if (!info.status_view) {
+        auto* snapshot = llvm::cast<llvm::Instruction>(getPinnedClassEntryValue(owner));
+        llvm::IRBuilder<> eb(snapshot->getParent(), std::next(snapshot->getIterator()));
+        auto helper = module.getOrInsertFunction("qore_rt_get_object_status_view_v1",
+            llvm::FunctionType::get(ptr_type, {i64_type}, false));
+        info.status_view = eb.CreateCall(helper, {snapshot}, "pinned_receiver_status_view");
+    }
+    return info;
+}
+
+llvm::Value* QoreIRToLLVM::emitPinnedExactClassGuard(uint32_t value_id, llvm::Value* value, int32_t slot,
+        llvm::Module& module, llvm::Function* llvm_func) {
+    std::vector<const LocalVar*> owners;
+    if (!current_lowering_block_
+            || (!current_lowering_block_->is_loop_header && !current_lowering_block_->enclosing_loop_exit)
+            || q_env_is_set("QORE_DISABLE_AOT_PINNED_BASE_CLASS")
+            || q_env_is_set("QORE_DISABLE_AOT_INLINE_RECEIVER_VALIDITY")
+            || !collectPinnedClassLocalOwners(value_id, llvm_func, owners) || owners.size() < 2) {
+        return nullptr;
+    }
+    auto* null_ptr = llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type));
+    auto exact_helper = module.getOrInsertFunction("qore_rt_object_has_exact_aot_target_class_only",
+        llvm::FunctionType::get(i32_type, {ptr_type, i32_type, i64_type}, false));
+    llvm::Value* known = llvm::ConstantInt::getFalse(ctx);
+    llvm::Value* matches = llvm::ConstantInt::getFalse(ctx);
+    llvm::Value* status_view = null_ptr;
+    auto& guards = aot_pinned_base_class_guards[slot];
+    for (const LocalVar* owner : owners) {
+        auto* snapshot = llvm::cast<llvm::Instruction>(getPinnedClassEntryValue(owner));
+        auto guard = guards.find(owner);
+        if (guard == guards.end()) {
+            llvm::IRBuilder<> eb(snapshot->getParent(), std::next(snapshot->getIterator()));
+            // Preserve base admission: unlike override admission, this helper does
+            // not require the object's owning Program to be the context Program.
+            auto* exact = eb.CreateCall(exact_helper,
+                {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), snapshot}, "pinned_base_exact_class");
+            auto* accepted = eb.CreateICmpNE(exact, llvm::ConstantInt::get(i32_type, 0));
+            guard = guards.emplace(owner, accepted).first;
+        }
+        auto& info = getPinnedReceiverInfo(owner, module);
+        auto* same = builder->CreateICmpEQ(value, snapshot, "pinned_base_same_receiver");
+        known = builder->CreateOr(known, same, "pinned_base_receiver_known");
+        matches = builder->CreateSelect(same, guard->second, matches);
+        status_view = builder->CreateSelect(same, info.status_view, status_view);
+    }
+    auto* probe_bb = llvm::BasicBlock::Create(ctx, "pinned_base_probe", llvm_func);
+    auto* live_bb = llvm::BasicBlock::Create(ctx, "pinned_base_live", llvm_func);
+    auto* helper_bb = llvm::BasicBlock::Create(ctx, "pinned_base_helper", llvm_func);
+    auto* merge_bb = llvm::BasicBlock::Create(ctx, "pinned_base_merge", llvm_func);
+    auto* mismatch_bb = builder->GetInsertBlock();
+    // A known class mismatch stays false regardless of liveness. Leave its live
+    // check to override or ordinary dispatch, avoiding a duplicate atomic read.
+    auto* known_mismatch = builder->CreateAnd(known, builder->CreateNot(matches));
+    builder->CreateCondBr(known_mismatch, merge_bb, probe_bb);
+    builder->SetInsertPoint(probe_bb);
+    auto* has_view = builder->CreateAnd(known, builder->CreateICmpNE(status_view, null_ptr));
+    builder->CreateCondBr(has_view, live_bb, helper_bb);
+    builder->SetInsertPoint(live_bb);
+    auto* status = builder->CreateLoad(i32_type, status_view, "pinned_base_live_status");
+    status->setAlignment(llvm::Align(4));
+    status->setAtomic(llvm::AtomicOrdering::SequentiallyConsistent);
+    auto* valid = builder->CreateICmpNE(status, llvm::ConstantInt::getSigned(i32_type, -1));
+    builder->CreateBr(merge_bb);
+    builder->SetInsertPoint(helper_bb);
+    auto fallback = module.getOrInsertFunction("qore_rt_object_has_exact_aot_target_class",
+        llvm::FunctionType::get(i32_type, {ptr_type, i32_type, i64_type}, false));
+    auto* ordinary = builder->CreateCall(fallback,
+        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), value}, "pinned_base_fallback");
+    auto* ordinary_valid = builder->CreateICmpNE(ordinary, llvm::ConstantInt::get(i32_type, 0));
+    builder->CreateBr(merge_bb);
+    builder->SetInsertPoint(merge_bb);
+    auto* result = builder->CreatePHI(i1_type, 3, "pinned_base_valid");
+    result->addIncoming(llvm::ConstantInt::getFalse(ctx), mismatch_bb);
+    result->addIncoming(valid, live_bb);
+    result->addIncoming(ordinary_valid, helper_bb);
+    return result;
+}
+
 llvm::Value* QoreIRToLLVM::emitPinnedOverrideReceiverClass(uint32_t value_id, llvm::Value* value,
         llvm::Module& module, llvm::Function* llvm_func) {
     std::vector<const LocalVar*> owners;
@@ -7107,28 +7188,23 @@ llvm::Value* QoreIRToLLVM::emitPinnedOverrideReceiverClass(uint32_t value_id, ll
     auto* null_ptr = llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type));
     auto receiver_helper = module.getOrInsertFunction("qore_rt_get_live_aot_override_receiver_class_v1",
         llvm::FunctionType::get(ptr_type, {ptr_type, i64_type}, false));
-    auto status_helper = module.getOrInsertFunction("qore_rt_get_object_status_view_v1",
-        llvm::FunctionType::get(ptr_type, {i64_type}, false));
     llvm::Value* receiver_class = null_ptr;
     llvm::Value* status_view = null_ptr;
     for (const LocalVar* owner : owners) {
         llvm::Value* snapshot = getPinnedClassEntryValue(owner);
-        auto cached = aot_pinned_override_receivers.find(owner);
-        if (cached == aot_pinned_override_receivers.end()) {
+        auto& info = getPinnedReceiverInfo(owner, module);
+        if (!info.receiver_class) {
             // Insert after the snapshot even when an earlier borrow guard created it.
             // The logical entry remains dominated by the native stack guard.
             auto* load = llvm::cast<llvm::Instruction>(snapshot);
             llvm::IRBuilder<> eb(load->getParent(), std::next(load->getIterator()));
-            auto* entry_class = eb.CreateCall(receiver_helper, {aot_ctx_arg, snapshot},
+            info.receiver_class = eb.CreateCall(receiver_helper, {aot_ctx_arg, snapshot},
                 "pinned_override_class");
-            auto* entry_status = eb.CreateCall(status_helper, {snapshot}, "pinned_override_status_view");
-            cached = aot_pinned_override_receivers.emplace(owner,
-                AotPinnedOverrideReceiver{entry_class, entry_status}).first;
         }
         // Identity protects reflected replacements and address reuse without a new owner.
         auto* same = builder->CreateICmpEQ(value, snapshot, "pinned_override_same_receiver");
-        receiver_class = builder->CreateSelect(same, cached->second.receiver_class, receiver_class);
-        status_view = builder->CreateSelect(same, cached->second.status_view, status_view);
+        receiver_class = builder->CreateSelect(same, info.receiver_class, receiver_class);
+        status_view = builder->CreateSelect(same, info.status_view, status_view);
     }
     auto* live_bb = llvm::BasicBlock::Create(ctx, "pinned_override_live", llvm_func);
     auto* helper_bb = llvm::BasicBlock::Create(ctx, "pinned_override_helper", llvm_func);
@@ -11286,7 +11362,8 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
             && !q_env_is_set("QORE_DISABLE_AOT_COMBINED_EXACT_OBJECT_GUARD");
         llvm::Value* status_view = nullptr;
         if (require_exact_object_class) {
-            llvm::Value* exact_class = nullptr;
+            llvm::Value* exact_class = combined_exact_guard
+                ? emitPinnedExactClassGuard(object_base_id, object_base, slot, module, llvm_func) : nullptr;
             if (stable_receiver) {
                 auto& guards = aot_exact_class_guards[slot];
                 auto guard_it = guards.find(stable_receiver);
@@ -14189,7 +14266,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     aot_exact_class_guards.clear();
     stable_exact_receiver_loads.clear();
     aot_pinned_entry_values.clear();
-    aot_pinned_override_receivers.clear();
+    aot_pinned_receivers.clear();
+    aot_pinned_base_class_guards.clear();
     aot_body_local_slots.clear();
     aot_reload_local_slots.clear();
     aot_class_local_constraints.clear();

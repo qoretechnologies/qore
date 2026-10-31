@@ -41,6 +41,7 @@ class ExactReceiverIdentityTest inherits QUnit::Test {
                 "QORE_DISABLE_AOT_STABLE_EXACT_RECEIVER_HOIST=1 ",
                 "QORE_DISABLE_AOT_INLINE_RECEIVER_VALIDITY=1 ",
                 "QORE_DISABLE_AOT_PINNED_OVERRIDE_RECEIVER=1 ",
+                "QORE_DISABLE_AOT_PINNED_BASE_CLASS=1 ",
                 "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
             foreach string level in (("-O0", "-O3")) {
                 string executable = dir.path + "/fixture";
@@ -73,6 +74,12 @@ class ExactReceiverIdentityTest inherits QUnit::Test {
                     "selected receiver identity guard " + prefix + level);
                 assertEq(pinned, regex(selected[0] ?? "", "pinned_override_live_status"),
                     "selected receiver live validity " + prefix + level);
+                bool pinned_base = prefix != "QORE_DISABLE_AOT_INLINE_RECEIVER_VALIDITY=1 "
+                    && prefix != "QORE_DISABLE_AOT_PINNED_BASE_CLASS=1 ";
+                assertEq(pinned_base, regex(selected[0] ?? "", "pinned_base_receiver_known"),
+                    "selected base receiver identity " + prefix + level);
+                assertEq(pinned_base, regex(selected[0] ?? "", "pinned_base_live_status"),
+                    "selected base live validity " + prefix + level);
                 assertEq(expected, run((executable,)), prefix + level);
                 assertEq(expected, run((executable,), "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 "),
                     "generic method fallback " + prefix + level);
