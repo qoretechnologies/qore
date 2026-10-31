@@ -57,18 +57,18 @@ class OrNothingCompoundAssignmentTest inherits QUnit::Test {
 
         #! refused statements checked in every execution mode and in qcc: code, expected error description
         const MainProgramCases = (
-            ("*string s; s -= 1;", "lvalue has type type '*string', but the -= will assign it an integer "
+            ("*string s; s -= 1;", "lvalue has type '*string', but the -= operator will assign it an integer "
                 "value"),
-            ("*string s; s *= 2;", "lvalue has type type '*string', but the *= operator expression will assign it "
+            ("*string s; s *= 2;", "lvalue has type '*string', but the *= operator will assign it "
                 "an integer value"),
-            ("*string s; s /= 2;", "lvalue has type type '*string', but the /= operator expression will assign it "
+            ("*string s; s /= 2;", "lvalue has type '*string', but the /= operator will assign it "
                 "an integer value"),
-            ("*bool b; b += 1;", "lvalue has type type '*bool', but the += will assign it an integer value"),
-            ("*binary b; b -= 1;", "lvalue has type type '*binary', but the -= will assign it an integer "
+            ("*bool b; b += 1;", "lvalue has type '*bool', but the += operator will assign it an integer value"),
+            ("*binary b; b -= 1;", "lvalue has type '*binary', but the -= operator will assign it an integer "
                 "value"),
-            ("*list<auto> l; l -= 1;", "lvalue has type *list<auto>, but the -= will assign it an integer "
-                "value"),
-            ("our *string g; g -= 1;", "lvalue has type type '*string', but the -= will assign it an integer "
+            ("*list<auto> l; l -= 1;", "lvalue has type '*list<auto>', but the -= operator will assign it an "
+                "integer value"),
+            ("our *string g; g -= 1;", "lvalue has type '*string', but the -= operator will assign it an integer "
                 "value"),
         );
 
@@ -171,23 +171,23 @@ class OrNothingCompoundAssignmentTest inherits QUnit::Test {
             assertTrue(refused > 100, sprintf("%s refused: %d", i.key, refused));
         }
         # the error names the declared type of each kind of lvalue
-        assertParseError("our *string v; sub f() { v -= 1; }", "lvalue has type type '*string', but the -= will "
+        assertParseError("our *string v; sub f() { v -= 1; }", "lvalue has type '*string', but the -= operator will "
             "assign it an integer value");
-        assertParseError("class X { public { *string v; } f() { v *= 2; } }", "lvalue has type type '*string', but "
-            "the *= operator expression will assign it an integer value");
+        assertParseError("class X { public { *string v; } f() { v *= 2; } }", "lvalue has type '*string', but "
+            "the *= operator will assign it an integer value");
         assertParseError("hashdecl HX { *string v; } sub f(hash<HX> h) { h.v /= 2; }", "lvalue has type "
-            "type '*string', but the /= operator expression will assign it an integer value");
-        assertParseError("class X { public { *date v; } f() { v *= 2; } }", "lvalue has type type '*date', but "
-            "the *= operator expression will assign it an integer value");
+            "'*string', but the /= operator will assign it an integer value");
+        assertParseError("class X { public { *date v; } f() { v *= 2; } }", "lvalue has type '*date', but "
+            "the *= operator will assign it an integer value");
     }
 
     #! list elements and hash members whose type is or-nothing
     testElements() {
-        assertParseError("sub f(list<*string> l) { l[0] -= 1; }", "lvalue has type type '*string', but the -= "
+        assertParseError("sub f(list<*string> l) { l[0] -= 1; }", "lvalue has type '*string', but the -= operator "
             "will assign it an integer value");
-        assertParseError("sub f(hash<string, *string> h) { h.a *= 2; }", "lvalue has type type '*string', but the "
-            "*= operator expression will assign it an integer value");
-        assertParseError("sub f(reference<*string> r) { r -= 1; }", "but the -= will assign it an "
+        assertParseError("sub f(hash<string, *string> h) { h.a *= 2; }", "lvalue has type '*string', but the "
+            "*= operator will assign it an integer value");
+        assertParseError("sub f(reference<*string> r) { r -= 1; }", "but the -= operator will assign it an "
             "integer value");
         assertEq(NOTHING, parse("sub f(list<*int> l) { l[0] -= 1; l[0] *= 2; }"));
         assertEq(NOTHING, parse("sub f(hash<string, *float> h) { h.a /= 2; h.a -= 1; }"));

@@ -23,7 +23,11 @@
     operation either assigns a value that the lvalue does not accept or operates on a value of the plain type.  This
     applies to locals, globals, class and hashdecl members, hash members and list elements.  Statements that the
     plain type accepts are unchanged and run as before; \c *= and \c /= with a float operand on a \c *number
-    lvalue, which the parser refused although a \c number lvalue accepts them, are now accepted.
+    lvalue, which the parser refused although a \c number lvalue accepts them, are now accepted.  The
+    \c PARSE-TYPE-ERROR raised for a compound assignment, \c ++ or \c -- on an lvalue that cannot take the result
+    has the same form for every operator (ex: <tt>lvalue has type '*string', but the -= operator will assign it an
+    integer value</tt>); it named the type as <tt>type 'string'</tt> after "has type" and named \c *= and the other
+    operators as "operator expression".
 
     Objects and runtime call references retain the sandbox under which they were created. Their methods and
     callbacks remain restricted when trusted code invokes them later, including inherited module methods and
