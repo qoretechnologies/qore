@@ -333,6 +333,7 @@ public class DebugProgramControlTest inherits QUnit::Test {
         addTestCase("conditions, hit conditions and log messages of breakpoints", \breakpointConditionTest());
         addTestCase("the commands of the options of breakpoints", \breakpointOptionCommandTest());
         addTestCase("the stop at the start of a program", \attachStopTest());
+        addTestCase("the exceptions that stop threads", \exceptionFilterTest());
         set_return_value(main());
     }
 
@@ -1084,6 +1085,63 @@ public class DebugProgramControlTest inherits QUnit::Test {
         hash<auto> e = dpc.getInterrupt(p.pgmId);
         assertEq(9, e.line);
         assertEq({"rc": NOTHING}, p.finish());
+    }
+
+    #! runs UncaughtScript with the given exception filters of the client and returns the exceptions that stop it
+    /** @param filters the exception filters of the client, if any
+        @param second if another client without exception filters is connected
+    */
+    private list<string> getStoppingExceptions(*list<string> filters, bool second = False) {
+        if (exists filters) {
+            dpc.command("exception/filter/set", {"value": filters});
+        }
+        on_exit dpc.command("exception/filter/set", {"value": ("user", "system", "uncaught")});
+        if (second) {
+            dpc.registerConnection({"id": 2});
+        }
+        on_exit if (second) {
+            dpc.unregisterConnection({"id": 2});
+        }
+        DebuggedProgram p(dpc, UncaughtScript);
+        on_exit p.cleanup();
+        list<string> rv = ();
+        dpc.go(p.tid);
+        while (True) {
+            hash<auto> e = dpc.getInterrupt(p.pgmId);
+            if (e.func == "detach") {
+                break;
+            }
+            # an exception stops the thread in each frame that it leaves
+            if (e.func == "exception" && !inlist(e.exception.err, rv)) {
+                push rv, e.exception.err;
+            }
+            dpc.go(e.tid);
+        }
+        dpc.go(p.tid);
+        return rv;
+    }
+
+    exceptionFilterTest() {
+        list<string> all = ("CAUGHT-1", "CAUGHT-2", "CAUGHT-3", "UNCAUGHT");
+        # a client without exception filters stops at all exceptions
+        assertEq(("user", "system", "uncaught"), dpc.command("exception/filter/get"));
+        assertEq(all, getStoppingExceptions());
+        # exceptions that no try statement catches
+        assertEq(("UNCAUGHT",), getStoppingExceptions(("uncaught",)));
+        assertEq(("uncaught",), (dpc.command("exception/filter/set", {"value": ("UNCAUGHT",)}),
+            dpc.command("exception/filter/get"))[1]);
+        # the exceptions are user exceptions
+        assertEq(all, getStoppingExceptions(("user",)));
+        assertEq((), getStoppingExceptions(("system",)));
+        assertEq((), getStoppingExceptions(()));
+        # a thread stops if any client stops at the exception
+        assertEq(all, getStoppingExceptions((), True));
+        # negative: an invalid filter and a value that is not a list
+        assertThrows("DEBUG-HANDLER-ERROR", "invalid exception filter", \dpc.command(), ("exception/filter/set",
+            {"value": ("often",)}));
+        assertThrows("DEBUG-HANDLER-ERROR", "must be a list", \dpc.command(), ("exception/filter/set",
+            {"value": "user"}));
+        assertThrows("DEBUG-HANDLER-ERROR", "exception/filter", \dpc.command(), ("exception/x"));
     }
 
     breakpointErrorTest() {

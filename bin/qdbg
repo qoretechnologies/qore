@@ -36,6 +36,9 @@ class DebugCommandLineLocal inherits DebugLinenoiseCommandLine {
         bool stopPending;
         #! the thread that is waited for to stop; any thread if not set
         *int stopTid;
+        #! serializes the commands sent to stopped threads, as their responses are delivered one at a time; the
+        #! commands of stopping all threads together are sent in background threads
+        Mutex cmdLock();
     }
     constructor(DebugProgramControlLocal n_dpc): DebugLinenoiseCommandLine() {
         dpc = n_dpc;
@@ -47,23 +50,28 @@ class DebugCommandLineLocal inherits DebugLinenoiseCommandLine {
         }
         # a command that resumes the thread returns when it stops again; the wait starts before the command is sent,
         # as the thread can stop again before the answer to the command is received
-        bool resumes = waitForStops && data.cmd =~ /^thread\/go(\/|$)/;
+        # a command with "wait" False, as of the threads that continue with another one, does not wait
+        bool resumes = waitForStops && data.cmd =~ /^thread\/go(\/|$)/ && data.wait !== False;
         if (resumes) {
             expectStop(data.tid);
         }
         on_error if (resumes) {
             cancelStop();
         }
-        # the stopped thread answers every command, with the unique ID of the command
-        data.uid = string(uidSeq.next());
-        sync.prepare(data.uid);
-        on_error sync.cancel();
-        *hash<auto> ret = dpc.processCommand(DebugProgramControlLocal::CX, data);
-        if (ret.type == DebugResponseType::Thread) {
-            ret = sync.waitForResponse();
-        } else {
-            # answered without the thread, such as a thread that is not stopped
-            sync.cancel();
+        *hash<auto> ret;
+        {
+            AutoLock al(cmdLock);
+            # the stopped thread answers every command, with the unique ID of the command
+            data.uid = string(uidSeq.next());
+            sync.prepare(data.uid);
+            on_error sync.cancel();
+            ret = dpc.processCommand(DebugProgramControlLocal::CX, data);
+            if (ret.type == DebugResponseType::Thread) {
+                ret = sync.waitForResponse();
+            } else {
+                # answered without the thread, such as a thread that is not stopped
+                sync.cancel();
+            }
         }
         if (resumes) {
             if (ret.type == DebugResponseType::Error) {
@@ -133,11 +141,21 @@ class DebugProgramControlLocal inherits DebugProgramControl {
             dcl.printData(data);
         }
     }
+    #! Ends debugging: the programs are no longer debugged, and their stopped threads continue
+    /** The programs are removed first, so that a thread that continues does not stop again, as at the end of a
+        program, with nobody to resume it
+    */
+    endDebugging() {
+        map removeProgram($1), getAllPrograms();
+        shutdown();
+    }
+
     public nothing broadcastDataImpl(any data) {
         debug("broadcastDataImpl: %y", data);
         dcl.printData(data);
         if (data.typeCode() == NT_HASH) {
             dcl.eventReceived(data);
+            dcl.processEvent(data);
         }
     }
 }
@@ -202,7 +220,7 @@ class DebugWrapper {
         dcl.dpc.setLogger(logger);
         # signal handler for graceful shutdown
         code sig_handler = sub (int sig) {
-            dpcl.shutdown();
+            dpcl.endDebugging();
         };
         set_signal_handler(SIGINT, sig_handler);
         set_signal_handler(SIGTERM, sig_handler);
@@ -233,7 +251,7 @@ class DebugWrapper {
 
             # explicit cleanup before program exit to avoid PROGRAM-ERROR
             # in destructors when module programs are destroyed first
-            dpcl.shutdown();
+            dpcl.endDebugging();
         } catch (hash<ExceptionInfo> ex) {
             stderr.print(get_exception_string(ex) + "\n");
             exit(-1);

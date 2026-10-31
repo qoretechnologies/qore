@@ -37,6 +37,23 @@ public class QdbgScriptTest inherits QUnit::Test {
             "}\n"                                                           # 5
             "printf(\"total: %d\\n\", total);\n";                          # 6
 
+        #! a program with a line of three statements, calls to step into, a caught and an uncaught exception
+        const FeatureProgram = "%modern\n"                                   # 1
+            "int sub g(int x) { return x * 10; }\n"                           # 2
+            "hash<auto> h = {\"name\": \"é\", \"lines\": (1, 2, 3)};\n"      # 3
+            "string s = \"é😀\"; int x = g(1); int y = g(g(2));\n"           # 4
+            "try { throw \"CAUGHT\"; } catch (hash<ExceptionInfo> ex) {}\n"   # 5
+            "printf(\"%d %d %y\\n\", x, y, h.lines);\n"                      # 6
+            "throw \"UNCAUGHT\";\n";                                         # 7
+
+        #! a program with a thread that runs while the initial thread is stopped
+        const ThreadProgram = "%modern\n"                                    # 1
+            "our bool done;\n"                                                # 2
+            "Counter c(1);\n"                                                 # 3
+            "background sub () { on_exit c.dec(); int n; while (!done) { ++n; } printf(\"thread done\\n\"); }();\n" # 4
+            "done = True;\n"                                                  # 5
+            "c.waitForZero();\n";                                             # 6
+
         string qore_exe = QdbgScriptTest::getQoreExecutable();
         string qdbg = normalize_dir(get_script_dir() + "/../../../../bin/qdbg");
         string qlib_dir = normalize_dir(get_script_dir() + "/../../../../qlib");
@@ -56,6 +73,9 @@ public class QdbgScriptTest inherits QUnit::Test {
         addTestCase("a script of commands", \scriptTest());
         addTestCase("a program without statements", \emptyProgramTest());
         addTestCase("conditions, hit conditions and log messages of breakpoints", \breakpointConditionTest());
+        addTestCase("exception filters, columns, step-in targets and variables", \featureTest());
+        addTestCase("all threads stop together", \stopAllTest());
+        addTestCase("quitting while a thread is stopped", \quitTest());
         set_return_value(main());
     }
 
@@ -183,6 +203,98 @@ public class QdbgScriptTest inherits QUnit::Test {
             "total: 10",
             "interrupt/detach",
         ));
+    }
+
+    featureTest() {
+        hash<auto> res = runQdbg(FeatureProgram, (
+            # all exceptions stop threads by default
+            "exception filter",
+            "exception filter uncaught",
+            "exception filter",
+            # negative: an invalid filter
+            "exception filter often",
+            # the statements of line 4 with their columns, counted in characters
+            "stmt line 4",
+            # breakpoints on the second and the third statement of line 4
+            "break create target.q 4:20",
+            "break create target.q 4:33",
+            "go run",
+            # a hash with its keys, an element, a key, and a variable that does not exist
+            "thread var h",
+            "thread var h.lines[1]",
+            "thread var h{name}",
+            "thread var nosuch",
+            # an element set to the value of an expression
+            "thread var h.lines[1] = 40 + 2",
+            "go run",
+            # the calls of "int y = g(g(2));", and a step into the outer one
+            "thread targets",
+            "go stepinto 2",
+            "thread local x",
+            # negative: a call that the statement does not have
+            "go stepinto 9",
+            # the caught exception does not stop the thread
+            "go run",
+            "go run",
+            "quit",
+        ));
+        assertEq(0, res.rc);
+        assertInOrder(res.out, (
+            "exceptions that stop threads: user, system, uncaught",
+            "exceptions that stop threads: uncaught",
+            "invalid exception filter",
+        ));
+        assertInOrder(res.out, (
+            "column 1", "column 18", "column 32",
+            "bkptid: 1", "bkptid: 2",
+            "interrupt/step", "bkptid: 1",
+            "h: hash<auto>", "name: string \"é\"", "lines: list<int>",
+            "h.lines[1]: integer 2",
+            "h{name}: string \"é\"",
+            "no global variable \"nosuch\"",
+            "h.lines[1] = integer 42",
+            "interrupt/step", "bkptid: 2",
+            "1: g (target.q:4:42)", "2: g (target.q:4:40)",
+            "interrupt/funcEnter", "integer x = 20",
+            "the statement has no call",
+            "10 200 [1, 42, 3]",
+            "interrupt/exception", "(target.q:7",
+            "interrupt/detach",
+        ));
+        # the caught exception did not stop the thread
+        assertFalse(res.out =~ /target\.q:5/, "the caught exception does not stop the thread");
+    }
+
+    # when the initial thread stops, the thread that it started stops, and they continue together
+    stopAllTest() {
+        hash<auto> res = runQdbg(ThreadProgram, (
+            "options stopall set 1",
+            "break create target.q 5",
+            "go run",
+            "go run",
+            "quit",
+        ));
+        assertEq(0, res.rc);
+        assertInOrder(res.out, (
+            "interrupt/attach",
+            # the initial thread stops at the breakpoint; the other thread stops at its start or in its loop
+            "bkptid: 1",
+            "thread done",
+            "interrupt/detach",
+        ));
+        # the thread that the initial thread started stopped and continued with it
+        list<string> tids = (res.out =~ x/interrupt\/[a-z]+, pgm: [0-9]+, tid: ([0-9]+)/g) ?? ();
+        assertTrue((map {$1: True}, tids).size() >= 2, sprintf("%y", tids));
+    }
+
+    # a thread that continues when qdbg quits does not stop again, as at the end of the program
+    quitTest() {
+        hash<auto> res = runQdbg(FeatureProgram, (
+            "go run",
+            "quit",
+        ));
+        assertEq(0, res.rc);
+        assertInOrder(res.out, ("interrupt/exception", "CAUGHT"));
     }
 
     # a program that never attaches to the debugger, as it has no statements, does not keep qdbg waiting

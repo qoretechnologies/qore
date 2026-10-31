@@ -2062,6 +2062,13 @@ vda.run();
 
     public vsc_setExceptionBreakpoints(hash args) {
         m_programState{m_currentPgmId}.exceptionBreakpoints.filters = args.filters;
+        # the debugger does not stop threads at the exceptions that the client does not stop at; a debug server
+        # without exception filters stops them, and the adapter resumes them (see stopsAtException())
+        try {
+            doCommand({"cmd": "exception/filter/set", "value": map $1.lwr(), args.filters});
+        } catch (hash<ExceptionInfo> ex) {
+            debug("the debug server does not filter exceptions: %s", VscDebugAdapter::getErrorText(ex));
+        }
         # args.exceptionOptions
     }
 

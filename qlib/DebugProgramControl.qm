@@ -75,6 +75,9 @@ module DebugProgramControl {
       statement that apply to the thread are checked, and the interrupt gives those that stop it in \c bkptids; the
       \c thread/breakpoint/check command checks breakpoints for a thread that stopped at their statement for another
       reason (see @ref DebugProgramControl::DebugProgramControl::checkBreakpoint() "checkBreakpoint()")
+    - each client selects the exceptions that stop threads with the \c exception/filter/set command: all user
+      exceptions, all system exceptions, and exceptions that no try statement of debuggable code catches; an exception
+      that no client stops at does not stop the thread
     - at the stop at the start of a program (the \c attach interrupt), the thread has not entered the code of the
       program: expressions are evaluated with the code and the global variables of the program, and no local variables
       are read, as the frames are those of the code that started the program; reading them failed
@@ -166,6 +169,9 @@ public namespace DebugProgramControl {
 
             #! the options of breakpoints that are kept in bkptOptions
             const BreakpointOptions = ("condition", "hitCondition", "logMessage");
+            #! the exception filters of the exception/filter/set command; a client without filters has all of them
+            const ExceptionFilters = ("user", "system", "uncaught");
+
             #! the options of breakpoints by the names of their commands
             const BreakpointCommandOptions = {
                 "condition": "condition",
@@ -279,7 +285,8 @@ public namespace DebugProgramControl {
         public registerConnection(hash<auto> cx) {
             rwlConnection.writeLock();
             on_exit rwlConnection.writeUnlock();
-            ctxConnection{cx.id} = {"program": {}};
+            # also keeps the exception filters of the client, which are a list
+            ctxConnection{cx.id} = hash<auto>{"program": {}};
             # Note: we cannot sendDataImpl/broadcaseDataImpl as cx.id not registered in WebSocketHandler
         }
 
@@ -953,6 +960,34 @@ public namespace DebugProgramControl {
                         }
                         break;
 
+                    case 'exception':
+                        # the exceptions that stop threads for the client
+                        if (shift cmd != "filter") {
+                            throw "DEBUG-HANDLER-ERROR", "expecting exception/filter/get or exception/filter/set";
+                        }
+                        switch (shift cmd) {
+                            case 'get': {
+                                rwlConnection.readLock();
+                                on_exit rwlConnection.readUnlock();
+                                result = ctxConnection{cx.id}.exceptionFilters ?? ExceptionFilters;
+                                break;
+                            }
+                            case 'set': {
+                                list<string> filters = DebugProgramControl::checkExceptionFilters(receiveData.value);
+                                rwlConnection.writeLock();
+                                on_exit rwlConnection.writeUnlock();
+                                if (!ctxConnection{cx.id}) {
+                                    throw "DEBUG-HANDLER-ERROR", "the connection is not registered";
+                                }
+                                ctxConnection{cx.id}.exceptionFilters = filters;
+                                result = 'ok';
+                                break;
+                            }
+                            default:
+                                throw "DEBUG-HANDLER-ERROR", "expecting exception/filter/get or exception/filter/set";
+                        }
+                        break;
+
                     case 'shutdown':
                         shutdown();
                         result = 'ok';
@@ -1223,6 +1258,54 @@ public namespace DebugProgramControl {
             }
             AutoLock al(stepIntoLock);
             remove stepIntos{tid};
+            return False;
+        }
+
+        #! Returns the exception filters given to the exception/filter/set command
+        /** @param value a list of the filters: \c "user" for all user exceptions, \c "system" for all system
+            exceptions, and \c "uncaught" for exceptions that no try statement of debuggable code catches; an empty
+            list for none
+
+            @throw DEBUG-HANDLER-ERROR the value is not a list of filters
+        */
+        static list<string> checkExceptionFilters(auto value) {
+            if (exists value && value.typeCode() != NT_LIST) {
+                throw "DEBUG-HANDLER-ERROR", sprintf("the exception filters must be a list; got type %y",
+                    value.type());
+            }
+            list<string> rv = ();
+            foreach auto f in (value) {
+                if (f.typeCode() != NT_STRING || !inlist(f.lwr(), ExceptionFilters)) {
+                    throw "DEBUG-HANDLER-ERROR", sprintf("invalid exception filter %y; expecting: %y", f,
+                        ExceptionFilters);
+                }
+                if (!inlist(f.lwr(), rv)) {
+                    push rv, f.lwr();
+                }
+            }
+            return rv;
+        }
+
+        #! Returns True if a client stops threads at an exception
+        /** A client without exception filters stops at all exceptions; see the exception/filter/set command
+
+            @param ex the exception
+            @param uncaught @ref True if no try statement of debuggable code in the call stack catches it
+        */
+        private bool stopsAtException(hash<auto> ex, bool uncaught) {
+            rwlConnection.readLock();
+            on_exit rwlConnection.readUnlock();
+            if (!ctxConnection) {
+                return True;
+            }
+            *string type = ex.type.lwr();
+            foreach hash<auto> c in (ctxConnection.iterator()) {
+                if (!exists c.exceptionFilters
+                    || inlist(type, c.exceptionFilters)
+                    || (uncaught && inlist("uncaught", c.exceptionFilters))) {
+                    return True;
+                }
+            }
             return False;
         }
 
@@ -1836,6 +1919,8 @@ public namespace DebugProgramControl {
             if (checkStepInto(tid, func, \runState)) {
                 return;
             }
+            # kept for a thread that continues without stopping
+            auto runToStatementIdBefore = runToStatementId;
             runToStatementId = 0; # reset RunToStatement
             ctx.intrInfo.framecnt = ctx.stackSize - frameOffset;
             if (exists statementId) {
@@ -1890,6 +1975,12 @@ public namespace DebugProgramControl {
             if (exists refName) {
                 ctx.intrInfo.debugvar = refName;
                 ctx.intrInfo{refName} = refValue;
+            }
+            # an exception that no client stops at: the thread continues as it ran before; decided before the thread is
+            # registered as stopped
+            if (exists except && !stopsAtException(except, isUncaught(adjustStack(get_thread_call_stack(), ctx)))) {
+                runToStatementId = runToStatementIdBefore;
+                return;
             }
             # minor race issue when list of all thread stack might return internal frames till ctx is not registered in ctxThread
             {

@@ -3450,6 +3450,12 @@ while (*binary chunk = input.read(65536)) {
         printed as the programs wrote it
       - added the \c break \c condition, \c break \c hitcondition and \c break \c log commands, which set the
         condition, the hit condition and the log message of a breakpoint (conditional breakpoints and logpoints)
+      - added the \c exception \c filter command (exceptions that stop threads), <tt>line:column</tt> statements and
+        the \c statement \c line command (breakpoints on a statement of a line with more than one statement), the
+        \c thread \c targets command and <tt>go stepinto</tt> (stepping into a chosen call), the \c thread \c var
+        command (elements, keys and members of variables, also private ones, which can be set), and the
+        \c options \c stopall option (all threads stop together)
+      - fixed \c qdbg not ending when it quits while a thread of the program is stopped before the end of the program
     - @ref debugprogramcontrolintro "DebugProgramControl" module
       - stopped threads read and set the values of variables and of their elements, keys and members, also private
         ones, by their paths, and evaluate expressions with the variables of a frame
@@ -3459,6 +3465,8 @@ while (*binary chunk = input.read(65536)) {
       - interrupt events give the name of the thread
       - breakpoints have conditions, hit conditions and log messages, which all clients share; the thread that hits a
         breakpoint checks them before it stops, so it does not stop and wait for a client at each hit
+      - each client selects the exceptions that stop threads with \c exception/filter/set; an exception that no client
+        stops at does not stop the thread
     - @ref debugutilintro "DebugUtil" module
       - added functions that describe values, list their elements, keys and members, also private ones, and read and
         set values by their paths

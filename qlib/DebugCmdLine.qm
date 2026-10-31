@@ -58,6 +58,18 @@ module DebugCmdLine {
     - added the \c break \c condition, \c break \c hitcondition and \c break \c log commands, which set the
       condition, the hit condition and the log message of a breakpoint; \c break \c list shows them with the number
       of hits
+    - added the \c exception \c filter command, which selects the exceptions that stop threads: all user exceptions,
+      all system exceptions, and exceptions that no try statement of debuggable code catches
+    - a statement can be given by its line and its column as <tt>line:column</tt>, counted in characters from 1, for a
+      breakpoint on a statement of a line with more than one statement; added the \c statement \c line command,
+      which lists the statements of a line with their columns
+    - added the \c thread \c targets command, which lists the calls of the current statement, and
+      <tt>go stepinto <n></tt>, which steps into one of them
+    - added the \c thread \c var command, which shows a variable or an element, key or member of it, also a private
+      one, with its elements, keys and members, or sets it to the value of an expression
+    - added the \c options \c stopall option: all threads of a program stop when one of them stops, and continue
+      together
+    - fixed \c qdbg not ending when it quits while a thread of the program is stopped before the end of the program
 
     @subsection dcl_v0_1_2 v0.1.2
     - removed Linenoise stuff to new module
@@ -79,6 +91,12 @@ public namespace DebugCmdLine {
         public {
             hash<auto> cx;
             const defaultIndent = "  ";
+            #! the exception filters of the debugger; see the \c exception \c filter command
+            const ExceptionFilterNames = ("user", "system", "uncaught");
+            #! the maximum number of elements, keys or members of a value that \c thread \c var shows
+            const MaxShownChildren = 100;
+            #! True if all threads of a program stop when one of them stops, and continue together; see processEvent()
+            bool stopAllThreads;
             #! Terminal color support for colorized output
             TerminalColor tc;
         }
@@ -91,6 +109,18 @@ public namespace DebugCmdLine {
             *string historyFileName;
 
             Qore::Thread::RWLock rwlContext();
+
+            #! the threads that are stopped, by program ID and TID; see processEvent()
+            hash<string, hash<string, bool>> stoppedThreads = {};
+            #! the threads that were requested to stop as another thread stopped, by program ID and TID
+            hash<string, hash<string, bool>> stopAllRequests = {};
+            #! the threads that the user stepped or paused, by program ID and TID
+            hash<string, hash<string, bool>> userStops = {};
+            #! serializes the access to the state of stopping all threads
+            Mutex stopAllLock();
+            #! incremented when stopped threads continue, so that the threads are no longer requested to stop for an
+            #! earlier stop; see stopOtherThreads()
+            int stopAllGeneration;
         }
 
         #! Creates the object with optional logger and color control
@@ -290,6 +320,29 @@ public namespace DebugCmdLine {
                                 },
                                 'fallback': fallbackGetSetInt,
                                 'desc': 'remote logger verbosity commands',
+                            ),
+
+                            'stopall': (
+                                '>': {
+                                    'set': (
+                                        'desc': 'set if all threads of a program stop when one of them stops, and '
+                                            'continue together, args: 0|1',
+                                        '*': (
+                                            'validate': \DebugCommandLine::validateInt(),
+                                            'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
+                                                dcl.stopAllThreads = int(pop path) > 0;
+                                            },
+                                        ),
+                                    ),
+                                    'get': (
+                                        'desc': 'get if all threads of a program stop together',
+                                        'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
+                                            printfImpl("stop all threads: %d\n", dcl.stopAllThreads ? 1 : 0);
+                                        },
+                                    ),
+                                },
+                                'fallback': fallbackGetSetInt,
+                                'desc': 'commands of stopping all threads together',
                             ),
 
                             'fullexceptioninfo': (
@@ -565,6 +618,8 @@ public namespace DebugCmdLine {
                                     hash<auto> data.cmd = 'program/'+dcl.checkProgramId();
                                     if (exists args[0]) {
                                         data.cmd += '/thread/'+args[0];
+                                        # the stop of the thread is the user's
+                                        dcl.noteUserStop(dcl.checkProgramId(), args[0]);
                                     }
                                     data.cmd += '/stop';
                                     dcl.doCommand(data, True);
@@ -957,8 +1012,57 @@ public namespace DebugCmdLine {
                                 },
                                 'desc': 'get statement info and list related breakpoints, args: function[([param types, ...])] | [file] lineno | #statementId',
                             ),
+                            'line': (
+                                'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
+                                    hash<auto> value = dcl.getStatementValue(args);
+                                    if (!exists value.lineno) {
+                                        throw "DEBUG-COMMAND", "expecting a line: [file] lineno";
+                                    }
+                                    list<auto> stmts = dcl.doCommand({
+                                        "cmd": sprintf("program/%d/statement/list", dcl.checkProgramId()),
+                                        "value": value - "column",
+                                    }, False).result ?? ();
+                                    if (!stmts) {
+                                        printfImpl("no statement on the line\n");
+                                    }
+                                    foreach hash<auto> stmt in (stmts) {
+                                        if (stmt.start_column >= 0) {
+                                            stmt.column = DebugCommandLine::getCharColumn(dcl.getSourceLine(
+                                                value.file, stmt.start_line), stmt.start_column);
+                                        }
+                                        printfImpl(dcl.formatStatement(stmt));
+                                    }
+                                },
+                                'desc': 'list the statements of a line with their columns, args: [file] lineno',
+                            ),
                         ),
                         'desc': 'statement related commands',
+                    ),
+
+                    'exception': (
+                        '>': (
+                            'filter': (
+                                'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
+                                    if (!args) {
+                                        *list<auto> filters = dcl.doCommand({"cmd": "exception/filter/get"}, False)
+                                            .result;
+                                        printfImpl("exceptions that stop threads: %s\n",
+                                            filters ? filters.join(", ") : "none");
+                                        return;
+                                    }
+                                    list<string> filters = args.size() == 1 && args[0] == "none"
+                                        ? ()
+                                        : (args.size() == 1 && args[0] == "all"
+                                            ? ExceptionFilterNames
+                                            : args);
+                                    dcl.doCommand({"cmd": "exception/filter/set", "value": filters}, True);
+                                },
+                                'desc': 'get or set the exceptions that stop threads: user (all user exceptions), '
+                                    'system (all system exceptions), uncaught (exceptions that no try statement of '
+                                    'debuggable code catches), all or none; args: [filter ...]',
+                            ),
+                        ),
+                        'desc': 'exception related commands',
                     ),
 
                     'thread': (
@@ -1037,6 +1141,37 @@ public namespace DebugCmdLine {
                                     }
                                 },
                                 'desc': 'get/set local variable, args: varName [value]',
+                            ),
+                            'targets': (
+                                'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
+                                    list<auto> stack = dcl.doCommand({"cmd": "thread/stack",
+                                        "tid": dcl.checkThreadId()}, False).result ?? ();
+                                    if (!stack[0].statementid) {
+                                        throw "DEBUG-COMMAND", "the thread is not stopped at a statement";
+                                    }
+                                    list<auto> targets = dcl.doCommand({
+                                        "cmd": sprintf("program/%d/statement/stepintargets", dcl.checkProgramId()),
+                                        "value": {"id": stack[0].statementid},
+                                    }, False).result ?? ();
+                                    if (!targets) {
+                                        printfImpl("the statement makes no call to step into\n");
+                                    }
+                                    foreach hash<auto> t in (targets) {
+                                        printfImpl("  %d: %s (%s)\n", $# + 1, t.name, dcl.formatLocation(stack[0].file,
+                                            t.start_line, t.start_column));
+                                    }
+                                },
+                                'desc': 'list the calls of the statement of the current thread that can be stepped into '
+                                    'with "go stepinto <n>"',
+                            ),
+                            'var': (
+                                'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
+                                    dcl.variableCommand(args);
+                                },
+                                'desc': 'show a variable, or an element, key or member of it, with its elements, keys '
+                                    'and members, also private ones, or set it to the value of an expression; the '
+                                    'variable is a local variable of the current frame or a global variable, args: '
+                                    'name[.member|[index]|{key}...] [= expression]',
                             ),
                             'debug': (
                                 '*': (
@@ -1182,22 +1317,30 @@ public namespace DebugCmdLine {
                     'go': (
                         '*': (
                             'enum': list sub(DebugCommandLine dcl, softlist path, softlist args) {
-                                return DebugCommandLine::enumFilter(keys runStateStrings, pop path);
+                                return DebugCommandLine::enumFilter((keys runStateStrings) + ("stepinto",), pop path);
                             },
                             'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
-                                hash<auto> data.cmd = 'thread/go/'+pop path;
+                                string runState = pop path;
+                                hash<auto> data.cmd = 'thread/go/' + runState;
                                 data.tid = dcl.checkThreadId();
-                                if (args) {
+                                if (runState == "stepinto") {
+                                    # the number of a call that "thread targets" lists
+                                    if (args.size() != 1 || args[0] !~ /^[0-9]+$/ || int(args[0]) < 1) {
+                                        throw "DEBUG-COMMAND", "expecting the number of a call that \"thread targets\" "
+                                            "lists";
+                                    }
+                                    data.value = {"target": int(args[0]) - 1};
+                                } else if (args) {
                                     data.value = dcl.getStatementValue(args);
                                 }
-                                dcl.doCommand(data, True);
+                                dcl.goThread(data, runState);
                             },
                         ),
-                        'desc': sprintf('go thread with specified runstate and optionally to specified statement, arg: %s [ function[([param types, ...])] | [file] lineno | #statementId ]', (keys AbstractDebugControl::runStateStrings).join('|')),
+                        'desc': sprintf('go thread with specified runstate and optionally to specified statement, arg: %s [ function[([param types, ...])] | [file] lineno[:column] | #statementId ]; "go stepinto <n>" steps into the call <n> that "thread targets" lists', ((keys AbstractDebugControl::runStateStrings) + ("stepinto",)).join('|')),
                         'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                             hash<auto> data.cmd = 'thread/go';
                             data.tid = dcl.checkThreadId();
-                            dcl.doCommand(data, True);
+                            dcl.goThread(data);
                         },
                     ),
                 ),
@@ -1302,12 +1445,239 @@ public namespace DebugCmdLine {
             }, True);
         }
 
+        #! Returns a location of a file of the current program with a 1-based character column
+        /** @param file the file
+            @param line the line
+            @param byteColumn the 0-based byte column, or a negative value if unknown
+        */
+        public string formatLocation(string file, int line, int byteColumn) {
+            if (byteColumn < 0) {
+                return sprintf("%s:%d", file, line);
+            }
+            return sprintf("%s:%d:%d", file, line,
+                DebugCommandLine::getCharColumn(getSourceLine(file, line), byteColumn));
+        }
+
+        #! Shows a variable or an element, key or member of it, or sets it to the value of an expression
+        /** @param args the words of the command: the path of the value, and optionally \c "=" and an expression
+        */
+        public variableCommand(softlist args) {
+            string text = args.join(" ");
+            *list<*string> m = (text =~ x/^\s*([^=\s]+)\s*(?:=\s*(.*))?$/s);
+            if (!m) {
+                throw "DEBUG-COMMAND", "syntax: thread var name[.member|[index]|{key}...] [= expression]";
+            }
+            hash<auto> pv = DebugCommandLine::parseVariablePath(m[0]);
+            int tid = checkThreadId();
+            # a local variable of the current frame, or a global variable
+            *list<auto> locals = doCommand({"cmd": "thread/local//list", "tid": tid}, False).result;
+            hash<auto> cmd = {
+                "tid": tid,
+                "root": inlist(pv.name, locals) ? {"local": pv.name} : {"global": pv.name},
+                "path": pv.path,
+            };
+            if (exists m[1]) {
+                if (!m[1].val()) {
+                    throw "DEBUG-COMMAND", "the expression of the value is missing";
+                }
+                cmd.cmd = "thread/variable/set";
+                cmd.expression = m[1];
+                hash<auto> r = doCommand(cmd, False).result;
+                printfImpl("%s = %s %s\n", m[0], r.type, r.value);
+                return;
+            }
+            cmd.cmd = "thread/variable/get";
+            hash<auto> r = doCommand(cmd, False).result;
+            # the elements, keys and members of a list, hash or object
+            if (r.indexed || r.named) {
+                r = doCommand(cmd + {"children": True, "count": MaxShownChildren}, False).result;
+            }
+            printfImpl("%s: %s %s\n", m[0], r.type, r.value);
+            foreach hash<auto> c in (r.children) {
+                printfImpl("  %s: %s %s\n", c.name, c.type, c.value);
+            }
+            int total = r.indexed ?? r.named ?? 0;
+            if (total > r.children.size()) {
+                printfImpl("  ... %d more\n", total - r.children.size());
+            }
+        }
+
+        #! Returns the name of the variable and the keys of a path of a value, as \c "h.lines[1]" or \c "h{key}"
+        /** @param p the path: a variable name and optionally \c .member, \c [index], \c {key} or \c {"key"} parts
+
+            @return a hash with \c name, the name of the variable, and \c path, the list of the keys
+
+            @throw DEBUG-COMMAND the path is invalid
+        */
+        static hash<auto> parseVariablePath(string p) {
+            *list<*string> m = (p =~ x/^([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)(.*)$/);
+            if (!m) {
+                throw "DEBUG-COMMAND", sprintf("invalid variable path %y; expecting a variable name", p);
+            }
+            list<auto> path = ();
+            string rest = m[1] ?? "";
+            while (rest.val()) {
+                *list<*string> k = (rest =~ x/^\.([A-Za-z_][A-Za-z0-9_]*)(.*)$/);
+                if (k) {
+                    push path, k[0];
+                } else {
+                    k = (rest =~ x/^\[([0-9]+)\](.*)$/);
+                    if (k) {
+                        push path, int(k[0]);
+                    } else {
+                        k = (rest =~ x/^\{"([^"]*)"\}(.*)$/) ?? (rest =~ x/^\{([^}"]*)\}(.*)$/);
+                        if (!k) {
+                            throw "DEBUG-COMMAND", sprintf("invalid variable path %y at %y; expecting .member, "
+                                "[index] or {key}", p, rest);
+                        }
+                        push path, k[0];
+                    }
+                }
+                rest = k[1] ?? "";
+            }
+            return {"name": m[0], "path": path};
+        }
+
+        #! Resumes a stopped thread; with stopAllThreads, the other stopped threads of the program continue with it
+        /** @param data the go command
+            @param runState the run state, if given; a step of the thread is noted, so that its next stop is not taken
+            for a stop that another thread requested
+        */
+        public goThread(hash<auto> data, *string runState) {
+            string pid = string(checkProgramId());
+            string tid = string(data.tid);
+            if (stopAllThreads) {
+                list<string> others;
+                {
+                    AutoLock al(stopAllLock);
+                    # a thread that stops later for a stop requested before is resumed (see processEvent()), and no
+                    # thread is requested to stop for an earlier stop any more (see stopOtherThreads())
+                    ++stopAllGeneration;
+                    remove stopAllRequests{pid};
+                    others = (keys stoppedThreads{pid}) ?? ();
+                }
+                foreach string other in (others) {
+                    if (other == tid) {
+                        continue;
+                    }
+                    try {
+                        # the command does not wait for the thread to stop again
+                        doCommand({"cmd": "thread/go/run", "tid": int(other), "wait": False}, False);
+                    } catch (hash<ExceptionInfo> ex) {
+                        # a thread that is no longer stopped
+                        debug("thread %s not resumed: %s: %s", other, ex.err, ex.desc);
+                    }
+                }
+            }
+            if (runState && runState != "run") {
+                AutoLock al(stopAllLock);
+                userStops{pid}{tid} = True;
+            }
+            doCommand(data, True);
+        }
+
+        #! Notes a stop of a thread that the user requested, so that it is not taken for a stop of another thread
+        public noteUserStop(softstring pgmId, softstring tid) {
+            AutoLock al(stopAllLock);
+            userStops{pgmId}{tid} = True;
+        }
+
+        #! Processes an event of the debugger for stopping all threads together; see stopAllThreads
+        /** Called for each event that the client receives, in the thread that delivers it; the commands to other
+            threads are sent in a background thread, as the thread that delivers the event can be a stopped thread of
+            the program or the thread that receives the responses of the debug server.
+
+            When a thread stops, the other running threads of its program are requested to stop; a thread that stops
+            for such a request after the threads continued is resumed.
+        */
+        public processEvent(hash<auto> data) {
+            if (data.type != DebugResponseType::Event || !data.pgmid || !data.tid) {
+                return;
+            }
+            string pid = string(data.pgmid);
+            string tid = string(data.tid);
+            if (data.cmd == DebugEventCmd::Run) {
+                AutoLock al(stopAllLock);
+                remove stoppedThreads{pid}{tid};
+                return;
+            }
+            if (data.cmd != DebugEventCmd::Interrupt) {
+                return;
+            }
+            bool requested;
+            bool userStop;
+            int generation;
+            {
+                AutoLock al(stopAllLock);
+                generation = stopAllGeneration;
+                stoppedThreads{pid}{tid} = True;
+                requested = boolean(remove stopAllRequests{pid}{tid});
+                userStop = boolean(remove userStops{pid}{tid});
+            }
+            if (!stopAllThreads || inlist(data.func, ("attach", "detach", "exit")) || requested) {
+                return;
+            }
+            # a stop for a stop that was requested before the threads continued: the thread continues
+            if (data.func == "step" && !data.bkptid && !userStop) {
+                background resumeThreadInBackground(int(tid));
+                return;
+            }
+            background stopOtherThreads(pid, tid, generation);
+        }
+
+        #! Resumes a thread that stopped for a stop that is no longer requested
+        private resumeThreadInBackground(int tid) {
+            try {
+                doCommand({"cmd": "thread/go/run", "tid": tid, "wait": False}, False);
+            } catch (hash<ExceptionInfo> ex) {
+                debug("thread %d not resumed: %s: %s", tid, ex.err, ex.desc);
+            }
+        }
+
+        #! Requests the other running threads of a program to stop
+        /** @param pid the program
+            @param tid the thread that stopped
+            @param generation the generation of the stop; when the threads have continued since, which increments the
+            generation, no thread is requested to stop
+        */
+        private stopOtherThreads(string pid, string tid, int generation) {
+            try {
+                *list<auto> threads = doCommand({"cmd": "program//list"}, False).result{pid}.threads;
+                foreach softstring other in (threads) {
+                    {
+                        AutoLock al(stopAllLock);
+                        if (generation != stopAllGeneration) {
+                            return;
+                        }
+                        if (other == tid || stoppedThreads{pid}{other} || stopAllRequests{pid}{other}) {
+                            continue;
+                        }
+                        # noted before the request, as the thread can stop before the command returns
+                        stopAllRequests{pid}{other} = True;
+                    }
+                    try {
+                        doCommand({"cmd": sprintf("program/%s/thread/%s/stop", pid, other)}, False);
+                    } catch (hash<ExceptionInfo> ex) {
+                        # a thread that has ended in the meantime
+                        AutoLock al(stopAllLock);
+                        remove stopAllRequests{pid}{other};
+                    }
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                debug("the threads of program %s not stopped: %s: %s", pid, ex.err, ex.desc);
+            }
+        }
+
         public string formatStatement(hash<auto> stmt) {
             string res = sprintf(" @ %s %s:%s-%s",
                 tc.number(sprintf("%-5d", stmt.id)),
                 tc.value(stmt.file),
                 tc.number(string(stmt.start_line + stmt.offset)),
                 tc.number(string(stmt.end_line + stmt.offset)));
+            # the 1-based character column, if given
+            if (exists stmt.column) {
+                res += sprintf(" column %s", tc.number(string(stmt.column)));
+            }
             if (stmt.source) {
                 res += sprintf(" (%s:%s-%s)",
                     tc.value(stmt.source),
@@ -1439,6 +1809,11 @@ public namespace DebugCmdLine {
             if (s =~ /^[0-9]+$/) {
                 return {'file': '', 'lineno': int(s)};
             }
+            # a line and a column, for a statement of a line with more than one statement
+            *list<*string> lc = (s =~ x/^([0-9]+):([0-9]+)$/);
+            if (lc && !args) {
+                return getLineColumnValue('', int(lc[0]), int(lc[1]));
+            }
             *list<auto> l = s =~ x/^(.+)\((.*)\)$/;
             if (l) {
                 list<auto> la = ();
@@ -1457,13 +1832,100 @@ public namespace DebugCmdLine {
             if (args[0] =~ /^[0-9]+$/) {
                 return {'file': s, 'lineno': int(args[0])};
             }
+            lc = (args[0] =~ x/^([0-9]+):([0-9]+)$/);
+            if (lc) {
+                return getLineColumnValue(s, int(lc[0]), int(lc[1]));
+            }
             # a function given by its name only, which must have one variant
             if (!args && s =~ /^[A-Za-z_][A-Za-z0-9_]*(::[A-Za-z_][A-Za-z0-9_]*)*$/) {
                 return {'function': s};
             }
-            throw "DEBUG-PROGRAM-HELPER", sprintf("Wrong statement identification %y; expecting <line>, <file> "
-                "<line>, <function>, <function>(<param types>) or #<statement id>", s);
+            throw "DEBUG-PROGRAM-HELPER", sprintf("Wrong statement identification %y; expecting <line>[:<column>], "
+                "<file> <line>[:<column>], <function>, <function>(<param types>) or #<statement id>", s);
         }
+
+        #! Returns the statement value of a line and a column
+        /** @param file the file, or an empty string for the only file of the program
+            @param line the line
+            @param column the 1-based column, counted in characters; the debugger counts bytes from 0, which are
+            counted with the text of the line, or one byte per character if the text is not available
+        */
+        private hash<auto> getLineColumnValue(string file, int line, int column) {
+            return {
+                'file': file,
+                'lineno': line,
+                'column': DebugCommandLine::getByteColumn(getSourceLine(file, line), column),
+            };
+        }
+
+        #! Returns the 0-based byte column of a 1-based character column of a line
+        /** @param line the text of the line, if known; without it, a character is a byte
+            @param column the 1-based column, counted in characters
+        */
+        static int getByteColumn(*string line, int column) {
+            if (column <= 1) {
+                return 0;
+            }
+            if (!exists line) {
+                return column - 1;
+            }
+            int len = line.length();
+            # a column after the end of the line
+            if (column - 1 > len) {
+                return line.size() + column - 1 - len;
+            }
+            return line.substr(0, column - 1).size();
+        }
+
+        #! Returns the 1-based character column of a 0-based byte column of a line
+        /** @param line the text of the line, if known; without it, a character is a byte
+            @param byteColumn the 0-based column, counted in bytes
+        */
+        static int getCharColumn(*string line, int byteColumn) {
+            if (!exists line || byteColumn <= 0) {
+                return byteColumn + 1;
+            }
+            int bytes = 0;
+            int chars = 0;
+            int len = line.length();
+            for (int i = 0; i < len && bytes < byteColumn; ++i) {
+                bytes += line[i].size();
+                ++chars;
+            }
+            return chars + 1 + (bytes < byteColumn ? byteColumn - bytes : 0);
+        }
+
+        #! Returns a line of a file of the current program as the debugger gives it, or @ref nothing
+        /** @param file the file, also given by the end of its path, or an empty string for the only file of the
+            program
+            @param line the line
+        */
+        public *string getSourceLine(string file, int line) {
+            try {
+                int pgmId = checkProgramId();
+                *hash<auto> files = doCommand({"cmd": sprintf("program/%d/file/list", pgmId)}, False).result;
+                *string name;
+                foreach string f in (keys files) {
+                    if ((!file.val() && files.size() == 1) || f == file
+                        || (file.val() && f.size() > file.size() && f.substr(-(file.size() + 1)) == "/" + file)) {
+                        name = f;
+                        break;
+                    }
+                }
+                if (!name) {
+                    return;
+                }
+                return doCommand({
+                    "cmd": sprintf("program/%d/file/source", pgmId),
+                    "file": name,
+                    "line": line,
+                    "count": 1,
+                }, False).result.code;
+            } catch (hash<ExceptionInfo> ex) {
+                # the text of the line is not available
+            }
+        }
+
 
         private hash<auto> splitCmd(string line) {
             hash<auto> ret = {'args': (), 'pos': ()};

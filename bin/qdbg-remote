@@ -27,6 +27,9 @@ class DebugCommandLineRemote inherits DebugLinenoiseCommandLine {
         string serverName;
         string url;
         *hash<auto> headers;
+        #! serializes the commands, as one response is waited for at a time; the commands of stopping all threads
+        #! together are sent in background threads
+        Mutex cmdLock();
     }
 
     constructor(hash<auto> opts) : DebugLinenoiseCommandLine() {
@@ -46,6 +49,7 @@ class DebugCommandLineRemote inherits DebugLinenoiseCommandLine {
     }
 
     public *hash<auto> doCommandImpl(hash<auto> data) {
+        AutoLock al(cmdLock);
         pendingUid = clock_getmicros();
         data.uid = pendingUid;
         string d = make_yaml(data);
@@ -96,6 +100,7 @@ class DebugCommandLineRemote inherits DebugLinenoiseCommandLine {
                 }
             }
             printData(d);
+            processEvent(d);
         } catch (hash<ExceptionInfo> ex) {
             error("wscEvent: %s", get_exception_string(ex));
         }
