@@ -644,7 +644,8 @@ LValueHelper::LValueHelper(ExceptionSink* xsink, bool for_assignment) : vl(xsink
 LValueHelper::LValueHelper(LValueHelper&& o) : vl(std::move(o.vl)), tvec(std::move(o.tvec)), lvid_set(o.lvid_set),
         ocvec(std::move(o.ocvec)), before(o.before), removal_objects(std::move(o.removal_objects)), rdt(o.rdt),
         vivified(std::move(o.vivified)), member_lvalue(std::move(o.member_lvalue)),
-        assignment_only(o.assignment_only), member_lvalue_modified(o.member_lvalue_modified), robj(o.robj),
+        assignment_only(o.assignment_only), write_rejected(o.write_rejected),
+        member_lvalue_modified(o.member_lvalue_modified), robj(o.robj),
         buffer_lvalue(o.buffer_lvalue), buffer_lvalue_index(o.buffer_lvalue_index),
         buffer_lvalue_value(o.buffer_lvalue_value), val(o.val), qv(o.qv), typeInfo(o.typeInfo) {
     o.qv = nullptr;
@@ -665,11 +666,13 @@ int64 q_get_lvalue_scan_count() {
 #endif
 
 LValueHelper::~LValueHelper() {
-    // an operation that failed must not leave behind the entries created to reach its target, as a rejected
-    // assignment does not (see assign()); a compound assignment can fail after storing a default value in a new
-    // entry, or when it converts the value, and navigation can fail after creating the entries leading to the
-    // target; the entries are removed while the lvalue locks are still held
-    if (*vl.xsink && !vivified.empty()) {
+    // a write whose value was rejected must not leave behind the entries created to reach its target, as a rejected
+    // assignment does not (see assign()): a compound assignment can store a default value in a new entry and then
+    // fail to convert it, and navigation can fail after creating the entries leading to a target it cannot reach,
+    // which it then releases.  An operation that reached its target and failed for another reason keeps them, as
+    // the extract and splice operators do with a target that is not a list, string or binary object.  The entries
+    // are removed while the lvalue locks are still held
+    if (*vl.xsink && !vivified.empty() && (write_rejected || (!val && !qv))) {
         rollbackVivification();
     }
 
@@ -2363,6 +2366,7 @@ int LValueHelper::makeIntVal(const char* desc) {
     if (typeInfo && !QoreTypeInfo::parseAccepts(typeInfo, bigIntTypeInfo)) {
         // the 4th arg to doTypeException() is needed only for the type
         typeInfo->doTypeException("lvalue", 0, desc, QoreValue(1), vl.xsink);
+        write_rejected = true;
         return -1;
     }
 
@@ -2380,6 +2384,7 @@ int LValueHelper::makeIntQv(const char* desc) {
     if (typeInfo && qv->getType() != NT_INT && !QoreTypeInfo::parseAccepts(typeInfo, bigIntTypeInfo)) {
         // the 4th arg to doTypeException() is needed only for the type
         typeInfo->doTypeException("lvalue", 0, desc, QoreValue(1), vl.xsink);
+        write_rejected = true;
         return -1;
     }
 
@@ -2398,6 +2403,7 @@ int LValueHelper::makeFloat(const char* desc) {
         if (typeInfo && !QoreTypeInfo::parseAccepts(typeInfo, floatTypeInfo)) {
             // the 4th arg to doTypeException() is needed only for the type
             typeInfo->doTypeException("lvalue", 0, desc, QoreValue(1.0), vl.xsink);
+            write_rejected = true;
             return -1;
         }
 
@@ -2411,6 +2417,7 @@ int LValueHelper::makeFloat(const char* desc) {
         if (typeInfo && !QoreTypeInfo::parseAccepts(typeInfo, floatTypeInfo)) {
             // the 4th arg to doTypeException() is needed only for the type
             typeInfo->doTypeException("lvalue", 0, desc, QoreValue(1.0), vl.xsink);
+            write_rejected = true;
             return -1;
         }
 
@@ -2431,6 +2438,7 @@ int LValueHelper::makeNumber(const char* desc) {
     if (typeInfo && !QoreTypeInfo::parseAccepts(typeInfo, numberTypeInfo)) {
             // the 4th arg to doTypeException() is needed only for the type
         typeInfo->doTypeException("lvalue", 0, desc, QoreValue(ZeroNumber), vl.xsink);
+        write_rejected = true;
         return -1;
     }
 

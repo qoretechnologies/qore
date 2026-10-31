@@ -597,6 +597,8 @@ private:
     };
     std::unique_ptr<MemberLValue> member_lvalue;
     bool assignment_only = false;
+    //! set when the lvalue rejected the value an operation converted for it; see ~LValueHelper()
+    bool write_rejected = false;
     bool member_lvalue_modified = false;
 
     RObject* robj = nullptr;
