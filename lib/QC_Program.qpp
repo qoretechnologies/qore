@@ -209,6 +209,50 @@ hashdecl ParseDiagnosticInfo {
     list<hash<ParseDiagnosticFixInfo>> fixes;
 }
 
+//! Structured information about a runtime error that matches a known %Qore language trap
+/** Given as the \c arg of the exception, so that tools and AI coding assistants can act on a stable identifier
+    instead of the text of the message.  The identifiers are:
+    - \c NO-VALUE-FOR-TYPE: a value of a type is required, but there is no value (@ref nothing), as for a variable
+      that was declared but not assigned, a missing hash key, or the result of \c map over @ref nothing (see
+      @ref pitfalls_declaration and @ref pitfalls_map_nothing)
+    - \c CONTAINER-VALUE-TYPE: the value type of the hash or list holding the target does not accept the value;
+      the value type of a container created from values of one type, as with a literal, is narrowed to that type
+      (see @ref pitfalls_narrowing)
+    - \c INCOMPATIBLE-RUNTIME-TYPE: the value does not have the type that the target requires
+    - \c DELETED-OBJECT: a method is called or a member is accessed on an object that has been deleted, as through
+      a method call reference, which does not keep its object alive (see @ref pitfalls_background_callref)
+
+    @par Example:
+    @code{.py}
+try {
+    int i;
+    int j = i;
+} catch (hash<ExceptionInfo> ex) {
+    if (ex.arg instanceof hash<RuntimeDiagnosticInfo>) {
+        printf("%s: %s\n", ex.arg.id, ex.arg.hint);
+    }
+}
+    @endcode
+
+    @since %Qore 3.0
+*/
+hashdecl RuntimeDiagnosticInfo {
+    //! a stable identifier for the condition
+    string id;
+
+    //! concise plain-language guidance
+    string hint;
+
+    //! corrective actions
+    list<string> suggestions;
+
+    //! condition-specific facts, such as \c expectedType and \c actualType
+    hash<string, string> facts;
+
+    //! the name of the section of the language reference about the trap, such as \c "pitfalls_declaration"
+    *string doc;
+}
+
 /** @defgroup import_visibility_constants Import Visibility Constants
     Constants providing values for import visibility
 

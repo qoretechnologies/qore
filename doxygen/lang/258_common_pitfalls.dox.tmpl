@@ -15,12 +15,18 @@
     requiring the warning. Each targeted diagnostic includes a stable semantic ID, facts, suggestions, and
     applicability information for editors and coding agents.
 
+    Runtime errors that match a pitfall carry a @ref Qore::RuntimeDiagnosticInfo "RuntimeDiagnosticInfo" hash as
+    the \c arg of the exception, with a stable ID (\c NO-VALUE-FOR-TYPE, \c CONTAINER-VALUE-TYPE,
+    \c INCOMPATIBLE-RUNTIME-TYPE, or \c DELETED-OBJECT), a hint, facts, suggestions, and the name of the section of
+    this page that covers it; the default exception handler and @ref Util::get_exception_string() "get_exception_string()"
+    show it as a hint.
+
     @section pitfalls_index Index by Symptom
 
     |!What you see|!Cause|!Read
     |<tt>RUNTIME-TYPE-ERROR: &lt;lvalue&gt; expects type 'int', but got no value instead</tt>|a declared variable was read before being assigned; a declaration does not initialize|@ref declaration_vs_initialization
     |<tt>PARSE-TYPE-ERROR: ... the container's element type was inferred from an earlier assignment</tt>|a \c hash<auto> or \c list<auto> was narrowed by an assignment|@ref auto_no_narrow
-    |<tt>RUNTIME-TYPE-ERROR: ... this type is the declared value type of the hash holding the target</tt>|a hash or list received from elsewhere, such as a caller's literal option hash, kept its narrowed type in a \c hash<auto> or \c list<auto> lvalue|@ref auto_no_narrow
+    |<tt>RUNTIME-TYPE-ERROR: ... this type is the declared value type of the hash (or list) holding the target</tt>|a hash or list received from elsewhere, such as a caller's literal option hash, kept its narrowed type in a \c hash<auto> or \c list<auto> lvalue|@ref auto_no_narrow
     |a \c map result fails to satisfy a \c list&lt;T&gt; lvalue, but only sometimes|the source was @ref nothing, so \c map returned @ref nothing rather than an empty list|@ref map
     |a hash key that is present tests as absent|the key's value is an empty hash or list, which is @ref False|@ref hash_key_presence_tests
     |a value compares equal to both a real value and "missing"|@ref NULL is not @ref NOTHING; <tt>exists NULL</tt> is @ref True|@ref null

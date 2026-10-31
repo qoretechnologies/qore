@@ -68,7 +68,7 @@ module DebugProgramControl {
       stack catches the exception
     - breakpoints have conditions, hit conditions and log messages, which all clients share and the thread that hits
       a breakpoint checks before it stops: the \c condition, \c hitcondition and \c log commands of
-      \c program//breakpoint/<id> set and get them, \c breakpoint//create takes them in its value (\c condition,
+      \c program//breakpoint/&lt;id&gt; set and get them, \c breakpoint//create takes them in its value (\c condition,
       \c hitCondition and \c logMessage), and breakpoint lists give them with the number of \c hits; a logpoint and
       an error evaluating a condition are sent to the clients as \c "console" output events, and an interrupt of a
       breakpoint whose condition could not be evaluated gives the error in \c bkpterror; all breakpoints of the
@@ -83,13 +83,13 @@ module DebugProgramControl {
     - at the stop at the start of a program (the \c attach interrupt), the thread has not entered the code of the
       program: expressions are evaluated with the code and the global variables of the program, and no local variables
       are read, as the frames are those of the code that started the program; reading them failed
-    - the \c program/<id>/statement/stepintargets command gives the calls of a statement that can be stepped into
+    - the \c program/&lt;id&gt;/statement/stepintargets command gives the calls of a statement that can be stepped into
       (see @ref Qore::ProgramControl::getStepInTargets() "ProgramControl::getStepInTargets()"), and
       \c thread/go/stepinto with the index of a call in them as \c target in its value steps into the call: the
       thread matches the functions that its statement calls with the call, also a method of a subclass and the code
       of a call reference, and runs the others to their return
     - a statement can be given by its line and its 0-based byte \c column, for a breakpoint on a statement of a line
-      with more than one statement; the \c program/<id>/statement/list command gives the statements of a line with
+      with more than one statement; the \c program/&lt;id&gt;/statement/list command gives the statements of a line with
       their columns, and interrupt events and the frames of call stacks give the columns of their statements in
       \c column and \c endcolumn where they are known
     - interrupt events give the name of the thread in \c threadname, and program lists give the current names of the
@@ -97,7 +97,7 @@ module DebugProgramControl {
     - the interrupt event of a thread that attaches gives \c programstart: @ref True for the first thread of a
       program, which starts it, and @ref False for another thread that starts; without a client, a thread that starts
       does not stop
-    - added the \c program/<id>/terminate command,
+    - added the \c program/&lt;id&gt;/terminate command,
       @ref DebugProgramControl::DebugProgramControl::terminateProgram() "terminateProgram()" and
       @ref DebugProgramControl::DebugProgramControl::isTerminating() "isTerminating()": a debugged program ends, and its
       threads end with a \c THREAD-CANCELLED exception, also those that wait, as for a lock or for I/O
@@ -225,7 +225,7 @@ public namespace DebugProgramControl {
 
         #! Captures the output of the process and sends it to all clients as output events
         /** The standard output and standard error of the process, which debugged programs write to, are sent to the
-            clients as \c "output" events (@ref DebugUtil::DebugEventCmd::Output) with the \c category (\c "stdout"
+            clients as \c "output" events (@ref DebugUtil::DebugEventCmd "DebugEventCmd::Output") with the \c category (\c "stdout"
             or \c "stderr") and the \c output; the output written before an interrupt is sent before it.
 
             @param tee if @ref True, the output is also written to the original stdout and stderr

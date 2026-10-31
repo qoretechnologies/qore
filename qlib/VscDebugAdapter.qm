@@ -843,7 +843,7 @@ vda.run();
 
     #! Returns the IDs of the breakpoints that stop the thread among the given ones
     /** The debugger checks the conditions, hit conditions and log messages of breakpoints (see
-        @ref DebugProgramControl::DebugProgramControl::checkBreakpoint() "DebugProgramControl::checkBreakpoint()"): a
+        \c DebugProgramControl::checkBreakpoint()): a
         breakpoint that is the only reason of a stop has stopped the thread, and the breakpoints on the statement that
         a thread arrived at by a step at the start of a launched program are checked by the thread
     */

@@ -65,13 +65,13 @@ module DebugCmdLine {
       breakpoint on a statement of a line with more than one statement; added the \c statement \c line command,
       which lists the statements of a line with their columns
     - added the \c thread \c targets command, which lists the calls of the current statement, and
-      <tt>go stepinto <n></tt>, which steps into one of them
+      <tt>go stepinto &lt;n&gt;</tt>, which steps into one of them
     - added the \c thread \c var command, which shows a variable or an element, key or member of it, also a private
       one, with its elements, keys and members, or sets it to the value of an expression
     - added the \c options \c stopall option: all threads of a program stop when one of them stops, and continue
       together
     - added the \c display and \c undisplay commands: expressions that are shown at each stop
-    - <tt>thread var <path> from <index></tt> shows the elements, keys or members of a value from an index, and the
+    - <tt>thread var &lt;path&gt; from &lt;index&gt;</tt> shows the elements, keys or members of a value from an index, and the
       call stack gives the columns of the statements of its frames
     - fixed \c qdbg not ending when it quits while a thread of the program is stopped before the end of the program
     - fixed \c qdbg-remote failing at its start (a command whose hash had string values only), and not starting with

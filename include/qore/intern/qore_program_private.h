@@ -4376,6 +4376,7 @@ DLLLOCAL TypedHashDecl* init_hashdecl_ParseDiagnosticRelatedLocationInfo(QoreNam
 DLLLOCAL TypedHashDecl* init_hashdecl_ParseDiagnosticEditInfo(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_ParseDiagnosticFixInfo(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_ParseDiagnosticInfo(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_RuntimeDiagnosticInfo(QoreNamespace& ns);
 
 //! Builds precise structured metadata for assignment and append type errors
 DLLLOCAL QoreDiagnosticMetadata qore_make_lvalue_type_diagnostic(const QoreValue& left,

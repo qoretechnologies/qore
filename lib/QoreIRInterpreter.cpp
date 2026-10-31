@@ -7,6 +7,7 @@
     Copyright (C) 2026 Qore Technologies, s.r.o.
 */
 
+#include "qore/intern/QoreRuntimeDiagnostic.h"
 #include "qore/intern/QoreJITIncludes.h"
 #include <qore/intern/QoreIRInterpreter.h>
 #include <qore/intern/QoreHashKeyHelper.h>
@@ -4239,7 +4240,7 @@ static bool tryExecuteInterpreterInlineIRDotEvalMethod(DotEvalInst* inst, QoreVa
     } else if (base.getType() == NT_WEAKREF) {
         self = base.get<const WeakReferenceNode>()->get();
         if (!self || !self->isValid()) {
-            xsink->raiseException("OBJECT-ALREADY-DELETED",
+            qore_raise_deleted_object(xsink, 
                 "cannot call '%s()' on a deleted weak reference", method_name);
             result = QoreValue();
             return true;
@@ -4249,7 +4250,7 @@ static bool tryExecuteInterpreterInlineIRDotEvalMethod(DotEvalInst* inst, QoreVa
     }
 
     if (!self->isValid()) {
-        xsink->raiseException("OBJECT-ALREADY-DELETED",
+        qore_raise_deleted_object(xsink, 
             "cannot call '%s()' on an object that has already been deleted", method_name);
         result = QoreValue();
         return true;
@@ -15487,7 +15488,7 @@ load_local_done:
                 if (base.getType() == NT_WEAKREF) {
                     QoreObject* o = base.get<const WeakReferenceNode>()->get();
                     if (!o || !o->isValid()) {
-                        xsink->raiseException("OBJECT-ALREADY-DELETED",
+                        qore_raise_deleted_object(xsink, 
                             "cannot call method on a deleted weak reference");
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         cleanupLocalCaches();

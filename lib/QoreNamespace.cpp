@@ -73,6 +73,7 @@
 #include "qore/intern/QC_TreeMap.h"
 #include "qore/intern/QC_Serializable.h"
 #include "qore/intern/QC_AbstractPollableIoObjectBase.h"
+#include "qore/intern/QoreRuntimeDiagnostic.h"
 #include "qore/intern/QC_SocketPollOperationBase.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QC_FilePollOperation.h"
@@ -250,6 +251,9 @@ DLLLOCAL void preinitAbstractPollableIoObjectClass();
 DLLLOCAL void preinitSocketClass();
 
 StaticSystemNamespace* staticSystemNamespace;
+
+// the structured information of runtime errors that match a language trap; see QoreRuntimeDiagnostic.h
+const TypedHashDecl* hashdeclRuntimeDiagnosticInfo = nullptr;
 
 const TypedHashDecl* hashdeclStatInfo,
     * hashdeclDirStatInfo,
@@ -1462,6 +1466,7 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     hashdeclParseDiagnosticEditInfo = init_hashdecl_ParseDiagnosticEditInfo(qns);
     hashdeclParseDiagnosticFixInfo = init_hashdecl_ParseDiagnosticFixInfo(qns);
     hashdeclParseDiagnosticInfo = init_hashdecl_ParseDiagnosticInfo(qns);
+    hashdeclRuntimeDiagnosticInfo = init_hashdecl_RuntimeDiagnosticInfo(qns);
     hashdeclObjectSerializationInfo = init_hashdecl_ObjectSerializationInfo(qns);
     hashdeclSerializationInfo = init_hashdecl_SerializationInfo(qns);
     hashdeclIndexedObjectSerializationInfo = init_hashdecl_IndexedObjectSerializationInfo(qns);

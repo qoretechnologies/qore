@@ -217,7 +217,7 @@ struct qore_list_private {
                 // the outcome must reflect only this conversion; see ScopedTypeCheckSink.  Without this, a caller
                 // with a long-lived sink silently drops elements after an unrelated error
                 ScopedTypeCheckSink ts(xsink);
-                QoreTypeInfo::acceptAssignment(vti, "<list element assignment>", v, *ts);
+                QoreTypeInfo::acceptAssignment(vti, "<list element assignment>", v, *ts, QLVTS_List);
                 holder = v;
                 if (ts.raised()) {
                     (*ts)->appendLastDescription(" (while converting types for list<%s> subtype)",

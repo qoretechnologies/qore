@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreRuntimeDiagnostic.h"
 #include <qore/QoreRWLock.h>
 #include <unordered_set>
 #include "qore/intern/qore_program_private.h"
@@ -6089,17 +6090,18 @@ int QoreTypeInfo::doTypeException(const char* arg_type, int param_num, const cha
     if (!xsink)
         return -1;
 
-    QoreStringNode* desc = new QoreStringNode;
-    QoreTypeInfo::ptext(*desc, arg_type, param_num, param_name);
+    SimpleRefHolder<QoreStringNode> desc(new QoreStringNode);
+    QoreTypeInfo::ptext(**desc, arg_type, param_num, param_name);
     desc->sprintf("expects type '%s', but got ", tname.c_str());
-    QoreTypeInfo::getNodeType(*desc, n);
+    QoreTypeInfo::getNodeType(**desc, n);
     desc->concat(" instead");
+    // the structured diagnostic of the error, for tools and coding assistants; see QoreRuntimeDiagnostic.h
+    const char* container = nullptr;
     // At runtime we can prove that the rejected target type came from a container, but not whether
     // that container was declared with an inferred or explicit element type.  Keep this message
     // accurate for both cases; the parse-time diagnostic provides auto! guidance when it has the
     // variable declaration and narrowing location needed to prove that recommendation applies.
     if (vts != QLVTS_None && isSimpleTypeNarrowed()) {
-        const char* container = nullptr;
         switch (vts) {
             case QLVTS_Hash:
                 container = "hash";
@@ -6115,7 +6117,48 @@ int QoreTypeInfo::doTypeException(const char* arg_type, int param_num, const cha
                 "review the container declaration and the value being assigned", container);
         }
     }
-    xsink->raiseException("RUNTIME-TYPE-ERROR", desc);
+    ReferenceHolder<QoreHashNode> diag(makeRuntimeDiagnostic(n, container), nullptr);
+    xsink->raiseExceptionArg("RUNTIME-TYPE-ERROR", diag.release(), desc.release());
+    return -1;
+}
+
+QoreHashNode* QoreTypeInfo::makeRuntimeDiagnostic(const QoreValue& n, const char* container) const {
+    std::vector<std::pair<std::string, std::string>> facts = {{"expectedType", tname.c_str()}};
+    if (n.isNothing()) {
+        return qore_make_runtime_diagnostic(QORE_RTD_NO_VALUE_FOR_TYPE,
+            "a value of this type is required, but there is no value (NOTHING), as for a variable that was declared "
+            "but not assigned, a missing hash key, or the result of map over NOTHING", "pitfalls_declaration", facts,
+            {"assign the variable before it is read, as in the declaration (int i = 0;)",
+             "coalesce a value that can be missing, as in (h.count ?? 0) or ((map ..., l) ?? ())",
+             "declare an optional type, such as *int, where no value is expected"});
+    } else {
+        QoreString actual;
+        facts.push_back({"actualType", n.getFullTypeName(false, actual)});
+        if (container) {
+            facts.push_back({"container", container});
+            return qore_make_runtime_diagnostic(QORE_RTD_CONTAINER_VALUE_TYPE,
+                "the value type of the container holding the target does not accept this value; if the container "
+                "was created from values of one type, as with a literal, its value type was narrowed to that type",
+                "pitfalls_narrowing", facts,
+                {"create a container that holds values of different types as hash<auto!> or list<auto!>",
+                 "build a merged or widened result in a new hash<auto!> instead of writing it into the given one"});
+        } else {
+            return qore_make_runtime_diagnostic(QORE_RTD_INCOMPATIBLE_RUNTIME_TYPE,
+                "the value does not have the type that the target requires", nullptr, facts,
+                {"convert the value to the required type, or change the declared type of the target"});
+        }
+    }
+}
+
+int QoreTypeInfo::doObjectHashDeclTypeException(const char* arg_type, const char* param_name, const QoreValue& n,
+        ExceptionSink* xsink) const {
+    assert(xsink);
+    SimpleRefHolder<QoreStringNode> desc(new QoreStringNode);
+    desc->sprintf("%s '%s' expects type '%s', but got ", arg_type, param_name, tname.c_str());
+    QoreTypeInfo::getNodeType(**desc, n);
+    desc->concat(" instead");
+    ReferenceHolder<QoreHashNode> diag(makeRuntimeDiagnostic(n, nullptr), nullptr);
+    xsink->raiseExceptionArg("RUNTIME-TYPE-ERROR", diag.release(), desc.release());
     return -1;
 }
 

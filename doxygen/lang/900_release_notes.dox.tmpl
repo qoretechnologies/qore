@@ -619,6 +619,10 @@
       mistakes receive targeted errors, while intent-dependent constructs are available through the new strict
       \c language-traps warning; all targeted diagnostics expose stable semantic IDs, hints, facts, suggestions,
       related locations, and applicability-ranked fixes for editors and coding agents
+    - runtime errors that match a common pitfall (\c RUNTIME-TYPE-ERROR for a missing value or a container value
+      type, and \c OBJECT-ALREADY-DELETED) carry a @ref Qore::RuntimeDiagnosticInfo "RuntimeDiagnosticInfo" hash
+      with a stable ID, a hint, facts, and suggestions as the exception \c arg; the default exception handler and
+      @ref Util::get_exception_string() "get_exception_string()" show it as a hint (see @ref common_pitfalls)
     - added @ref <number>::toStringRoundTrip() "<number>::toStringRoundTrip()" and
       @ref <float>::toStringRoundTrip() "<float>::toStringRoundTrip()" for the shortest decimal
       significand that reconstructs the source binary value, with plain/scientific output and preserved signed zero
