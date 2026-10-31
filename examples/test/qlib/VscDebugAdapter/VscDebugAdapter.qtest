@@ -370,6 +370,9 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         addTestCase("a debug server that cannot be reached", \noServerTest());
         addTestCase("a debug server that ends during the session", \serverClosedTest());
         addTestCase("the adapter ends when the IDE closes its input", \endOfInputTest());
+        addTestCase("a launched program ends when the session ends", \terminateTest());
+        addTestCase("the restart request launches the program again", \restartTest());
+        addTestCase("integers in hexadecimal", \hexFormatTest());
         set_return_value(main());
     }
 
@@ -1253,6 +1256,94 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         hash<auto> r = dap.request("scopes", {"frameId": frame.id});
         assertTrue(r.success, r.message);
         return (select r.body.scopes, $1.name == scope)[0].variablesReference;
+    }
+
+    # a launched program ends when the IDE disconnects, also a thread that runs forever
+    terminateTest() {
+        TmpDir tmp("qore-vda-test-");
+        string path = writeProgram(tmp, "%modern\nint n;\nwhile (True) {\n    ++n;\n}\n");
+        Process proc = startAdapter();
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        launch(dap, {"program": path, "stopOnEntry": False});
+        assertTrue(capabilities.supportTerminateDebuggee);
+        hash<auto> r = dap.request("configurationDone");
+        assertTrue(r.success, r.message);
+        # the default of terminateDebuggee for a launched program
+        r = dap.request("disconnect");
+        assertTrue(r.success, r.message);
+        proc.closeStdin();
+        assertTrue(proc.wait(30s), "the adapter ends with the program");
+        assertEq(0, proc.exitCode());
+    }
+
+    # the program is ended and launched again; the IDE sets the breakpoints again after the "initialized" event
+    restartTest() {
+        TmpDir tmp("qore-vda-test-");
+        string path = writeProgram(tmp);
+        Process proc = startAdapter();
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        hash<auto> stopped = launchToStop(dap, path, ({"line": 3},));
+        assertTrue(capabilities.supportsRestartRequest);
+        assertEq("breakpoint", stopped.body.reason);
+        hash<auto> r = dap.request("restart", {"arguments": {"program": path, "stopOnEntry": False}});
+        assertTrue(r.success, r.message);
+        dap.waitForEvent("initialized");
+        r = dap.request("setBreakpoints", {"source": {"path": path}, "breakpoints": ({"line": 3},)});
+        assertTrue(r.success, r.message);
+        assertTrue(r.body.breakpoints[0].verified, sprintf("%y", r.body.breakpoints));
+        r = dap.request("configurationDone");
+        assertTrue(r.success, r.message);
+        stopped = dap.waitForEvent("stopped");
+        assertEq("breakpoint", stopped.body.reason);
+        int tid = stopped.body.threadId;
+        assertEq(3, topFrame(dap, tid).line);
+        # the end of the first run did not end the session
+        assertEq((), dap.getEvents("exited") + dap.getEvents("terminated"));
+        finish(dap, proc, tid);
+        # the first run ended at the breakpoint, before its output
+        assertEq(1, (select dap.getOutput("stdout"), $1 =~ /total: 5/).size());
+        # the end of the second run is reported
+        assertEq(1, dap.getEvents("exited").size());
+    }
+
+    # integers are shown in hexadecimal with the hex option of the format argument
+    hexFormatTest() {
+        TmpDir tmp("qore-vda-test-");
+        string path = writeProgram(tmp);
+        Process proc = startAdapter();
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        hash<auto> stopped = launchToStop(dap, path, ({"line": 8},));
+        int tid = stopped.body.threadId;
+        assertTrue(capabilities.supportsValueFormattingOptions);
+        hash<auto> frame = topFrame(dap, tid);
+        hash<auto> r = dap.request("evaluate", {"expression": "total * 3", "frameId": frame.id, "context": "watch",
+            "format": {"hex": True}});
+        assertTrue(r.success, r.message);
+        assertEq("0xf", r.body.result);
+        r = dap.request("evaluate", {"expression": "-total", "frameId": frame.id, "context": "watch",
+            "format": {"hex": True}});
+        assertEq("-0x5", r.body.result);
+        # without the option, and a value that is not an integer
+        assertEq("15", evaluate(dap, tid, "total * 3").body.result);
+        r = dap.request("evaluate", {"expression": "h.name", "frameId": frame.id, "context": "watch",
+            "format": {"hex": True}});
+        assertEq("\"invoice\"", r.body.result);
+        # variables and their elements
+        hash<auto> vars = getVariables(dap, getScope(dap, tid, "Locals"), {"format": {"hex": True}});
+        assertEq("0x5", vars.total.value);
+        hash<auto> h = getVariables(dap, vars.h.variablesReference, {"format": {"hex": True}});
+        assertEq(("0x1", "0x2", "0x3"), map $1.value,
+            getVariables(dap, h.lines.variablesReference, {"format": {"hex": True}}).iterator());
+        finish(dap, proc, tid);
     }
 
     #! Evaluates an expression with the top frame of a thread and returns the response

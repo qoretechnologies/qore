@@ -115,8 +115,10 @@ public namespace DebugLinenoiseCmdLine {
 
         #! Processes an event of the debug server: a thread that is waited for stops or stops being debugged
         eventReceived(hash<auto> data) {
-            # a thread that starts is resumed; see DebugCommandLine::processEvent()
-            if (DebugCommandLine::isThreadStart(data)) {
+            # a thread that starts, or that the debugger resumes, does not pause; see DebugCommandLine::processEvent(),
+            # which handles the event before
+            if (DebugCommandLine::isThreadStart(data)
+                || (data.cmd == DebugEventCmd::Interrupt && data.func != "detach" && isAutoResumed(data.tid))) {
                 return;
             }
             if (data.type != DebugResponseType::Event

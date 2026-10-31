@@ -151,7 +151,12 @@
     (step-in targets), pausing, all threads stopping together, call stacks, variables as trees whose values can be set,
     and expressions for watches, hovers and the debug console, where a line whose first word is a \c qdbg command is
     processed as the command; the shortcuts and aliases of \c qdbg, such as \c n and \c backtrace, are not commands
-    there, as they can be the names of variables, and a line that starts with \c $ is always an expression.  See @ref vscdebugadapterintro for details and limitations.
+    there, as they can be the names of variables, and a line that starts with \c $ is always an expression.
+
+    Stopping a launched program ends it, also its threads that wait, as for a lock or for input: they end with a
+    \c THREAD-CANCELLED exception; disconnecting from an attached program leaves it running.  Restarting ends a
+    launched program and launches it again with the same breakpoints, and attaches an attached program again.  Integers
+    can be shown in hexadecimal where the IDE offers it.  See @ref vscdebugadapterintro for details and limitations.
 
     @section debugging_qdbg Command-Line Debugging with qdbg
 
@@ -179,6 +184,9 @@ qdbg myfile.q < commands.txt
     |!Command|!Description
     |<tt>continue</tt> (<tt>c</tt>), <tt>step</tt> (<tt>s</tt>), <tt>next</tt> (<tt>n</tt>), <tt>finish</tt>|shortcuts of <tt>go run</tt>, <tt>go step</tt>, <tt>go stepover</tt> and <tt>go untilreturn</tt>, as in other debuggers
     |<tt>print expression</tt>, <tt>locals</tt>|shows the value of an expression, as \c eval, and the local variables of the current frame with their values
+    |<tt>b location</tt>|adds a breakpoint, as <tt>break create</tt>
+    |<tt>up [n]</tt>, <tt>down [n]</tt>|selects the frame that called the current frame, or the one that it called, and shows its line
+    |<tt>kill</tt>|ends the current program: its threads end with a \c THREAD-CANCELLED exception, also those that wait
     |<tt>break create [file] line[:column]</tt>|creates a breakpoint on a statement of a line; the column is counted in characters from 1
     |<tt>break create function[(types)]</tt>|creates a breakpoint on the start of a function
     |<tt>break list</tt>|lists the breakpoints of the current program with their conditions, hit conditions, log messages and number of hits
@@ -258,6 +266,9 @@ qdbg-remote localhost:8001 < commands.txt
 
     - A breakpoint is on a statement, so an expression with more than one call, such as <tt>f(g(x))</tt>, has one
       breakpoint location.
+    - Data breakpoints, which stop when a value changes
+      (<a href="https://github.com/qoretechnologies/qore/issues/5565">issue 5565</a>), jumping to a line and restarting
+      a frame (<a href="https://github.com/qoretechnologies/qore/issues/5566">issue 5566</a>) are not supported.
     - Stepping into a call matches the functions that the statement calls with the name of the call and the number
       of its calls before it; when an operand of a conditional operator, such as <tt>?:</tt>, <tt>&&</tt> or
       <tt>||</tt>, is not evaluated, a later call with the same name can be stepped into instead

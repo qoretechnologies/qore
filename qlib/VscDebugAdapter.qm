@@ -73,6 +73,11 @@ module VscDebugAdapter {
     - expressions for watches, hovers and the debug console, evaluated with the variables of a frame; in the debug
       console, a line whose first word is a debugger command is processed as the command
     - loaded sources and modules, and the output of the program
+    - ending the program when the session ends (the \c terminateDebuggee argument of the \c disconnect request: a
+      launched program ends unless it is \c false, an attached program keeps running unless it is \c true),
+      restarting the session (the \c restart request: a launched program ends and is launched again, an attached
+      program is attached again), and integers in hexadecimal (the \c hex option of the \c format argument of the
+      \c variables, \c evaluate and \c setVariable requests)
 
     Expressions are evaluated in a separate Program with @ref Qore::PO_LOCKDOWN "PO_LOCKDOWN", which cannot access
     the file system, the network or processes; the local variables of the frame and the global variables of the
@@ -82,7 +87,9 @@ module VscDebugAdapter {
     functions and methods that they call run in the program, with its permissions.
 
     Limitations:
-    - data breakpoints, stepping back, jumping to a line, and restarting a frame are not supported
+    - data breakpoints (<a href="https://github.com/qoretechnologies/qore/issues/5565">issue 5565</a>), jumping to a
+      line and restarting a frame (<a href="https://github.com/qoretechnologies/qore/issues/5566">issue 5566</a>), and
+      stepping back are not supported
     - stepping into a call matches the functions that the statement calls with the name of the call and the number
       of its calls before it; when an operand of a conditional operator, such as <tt>?:</tt>, <tt>&&</tt> or
       <tt>||</tt>, is not evaluated, a later call with the same name can be stepped into instead
@@ -95,6 +102,10 @@ module VscDebugAdapter {
     - the client is not notified when another debugger client changes a breakpoint
 
     @subsection vda_v0_3
+    - a launched program ends when the session ends, unless the \c disconnect request has \c terminateDebuggee
+      \c false, and an attached program ends with \c terminateDebuggee \c true; the \c restart request ends a
+      launched program and launches it again, or attaches an attached program again; integers are shown in
+      hexadecimal with the \c hex option of the \c format argument of requests
     - the "Exceptions by code" exception filter stops at the exceptions with the codes of its condition
     - step-in targets: the \c stepInTargets request gives the calls of the current statement, and \c stepIn with a
       \c targetId steps into the chosen call
@@ -234,6 +245,9 @@ public class VscDebugAdapter inherits DebugCommandLine {
 
         #! process loop flag
         bool m_running = True;
+
+        #! the launch configuration of a launched program that is restarted when it has ended; see vsc_restart()
+        *hash<auto> m_restartArgs;
 
         #! initialize command arguments
         hash m_initializeArgs;
@@ -583,6 +597,12 @@ vda.run();
         switch (event.cmd) {
         case "interrupt":
             if (event.func == "detach") {
+                # the end of a launched program, unless it is launched again (see vsc_restart()); its result is not
+                # known here
+                if (m_programState{event.pgmid}.startMethod == START_LAUNCH
+                    && m_programState{event.pgmid}.startThreadId == event.tid && !m_restartArgs) {
+                    sendVscEvent("exited", ("exitCode": 0));
+                }
                 detach(event);
             } else {
                 if (!m_programState{event.pgmid}.vcsNotified) {
@@ -709,7 +729,10 @@ vda.run();
                 if (event.func == "exit" || event.func == "detach") {
                     # a thread that ends is not reported as stopped; the IDE is told that it ended
                     if (m_programState{event.pgmid}.startThreadId == event.tid) {
-                        sendVscEvent("exited", ("exitCode": int(event.result)));
+                        # a program that is restarted is launched again; see vsc_restart()
+                        if (!m_restartArgs) {
+                            sendVscEvent("exited", ("exitCode": int(event.result)));
+                        }
                     } else {
                         sendVscEvent("thread", ("threadId": event.tid, "reason": "exited"));
                     }
@@ -749,6 +772,13 @@ vda.run();
                 remove m_programState{event.pgmid}.pauseRequests{event.tid};
                 m_programState{m_currentPgmId}.detachedThreads{event.tid} = True;
                 if (!getThreads()) {
+                    # a program that is restarted is launched again; the IDE sets its breakpoints again after the
+                    # "initialized" event (see vsc_restart())
+                    if (m_restartArgs) {
+                        remove m_programState{event.pgmid};
+                        vsc_launch(remove m_restartArgs);
+                        break;
+                    }
                     doCommand(("cmd": "shutdown"));
                     # the program has ended: the IDE gets all of its output before the end of the session
                     sendVscEventAfterOutput("terminated");
@@ -1352,6 +1382,7 @@ vda.run();
         m_currentPgmId = int(pgmId);
         m_programState{pgmId} += (
             "startMethod": START_ATTACH,
+            "attachArgs": args,
             # all threads stop together unless the client disables it; see stopOtherThreads()
             "stopAllThreads": args.stopAllThreads !== False,
         );
@@ -1703,7 +1734,7 @@ vda.run();
             foreach string name in (VscDebugAdapter::page(getFrameLocals(threadId, frameId), args)) {
                 hash<auto> root = VscDebugAdapter::getRootForName(name);
                 push res.variables, makeVariable(threadId, frameId, root, (), name,
-                    describeVariable(threadId, frameId, root, ()), root.local);
+                    describeVariable(threadId, frameId, root, ()), root.local, args.format);
             }
             return res;
         }
@@ -1715,7 +1746,7 @@ vda.run();
             foreach string name in (VscDebugAdapter::page(getGlobals(), args)) {
                 hash<auto> root = {"global": name};
                 push res.variables, makeVariable(vr.tid, vr.frameId, root, (), name,
-                    describeVariable(vr.tid, vr.frameId, root, ()), name);
+                    describeVariable(vr.tid, vr.frameId, root, ()), name, args.format);
             }
             return res;
         }
@@ -1735,7 +1766,7 @@ vda.run();
         }
         foreach hash<auto> child in (d.children) {
             push res.variables, makeVariable(vr.tid, vr.frameId, vr.root, vr.path + (child.key,), child.name, child,
-                VscDebugAdapter::getChildEvaluateName(vr.evaluateName, d, child.key));
+                VscDebugAdapter::getChildEvaluateName(vr.evaluateName, d, child.key), args.format);
         }
         return res;
     }
@@ -1774,7 +1805,7 @@ vda.run();
             # the value is a Qore expression, evaluated with the variables of the frame
             "expression": args.value,
         )).result;
-        hash<auto> v = makeVariable(threadId, frameId, root, path, args.name, d, evaluate_name);
+        hash<auto> v = makeVariable(threadId, frameId, root, path, args.name, d, evaluate_name, args.format);
         remove v.name;
         remove v.evaluateName;
         return v;
@@ -1800,7 +1831,7 @@ vda.run();
         int threadId = args.frameId >> 16;
         int frameId = args.frameId & 0xFFFF;
         hash<auto> d = evaluateInThread(threadId, expr, frameId);
-        hash<auto> v = makeVariable(threadId, frameId, {"eval": d.id}, (), expr, d);
+        hash<auto> v = makeVariable(threadId, frameId, {"eval": d.id}, (), expr, d, NOTHING, args.format);
         return {"result": v.value, "type": v.type, "variablesReference": v.variablesReference}
             + v{"indexedVariables", "namedVariables"};
     }
@@ -1833,8 +1864,9 @@ vda.run();
     /** A list, hash or object gets a variable reference whose children are read when they are shown
     */
     private:internal hash<auto> makeVariable(int threadId, int frameId, hash<auto> root, list<auto> path,
-            string name, hash<auto> d, *string evaluate_name) {
-        hash<auto> v = {"name": name, "value": d.value, "type": d.type, "variablesReference": 0};
+            string name, hash<auto> d, *string evaluate_name, *hash<auto> format) {
+        hash<auto> v = {"name": name, "value": VscDebugAdapter::formatValue(d, format), "type": d.type,
+            "variablesReference": 0};
         if (d.indexed || d.named) {
             v.variablesReference = getVarRef(threadId, frameId, root, path, evaluate_name);
             if (d.indexed) {
@@ -1848,6 +1880,19 @@ vda.run();
             v.evaluateName = evaluate_name;
         }
         return v;
+    }
+
+    #! Returns the text of a value in the format that the IDE requests: integers in hexadecimal with \c hex
+    static string formatValue(hash<auto> d, *hash<auto> format) {
+        if (format.hex && d.type == "integer" && d.value =~ /^-?[0-9]+$/) {
+            int v = int(d.value);
+            # the absolute value of the smallest integer is not an integer
+            if (v == MININT) {
+                return "-0x8000000000000000";
+            }
+            return v < 0 ? sprintf("-0x%x", -v) : sprintf("0x%x", v);
+        }
+        return d.value ?? "";
     }
 
     #! Returns a new variable reference for a structured value of a stopped thread
@@ -2145,10 +2190,40 @@ vda.run();
 
     public vsc_disconnect(*hash args) {
         m_running = False;
-        # terminate debugger
-        # args.terminateDebuggee not supported
+        # a launched program ends with the session unless the IDE keeps it running; an attached program keeps running
+        # unless the IDE ends it
+        if (m_currentPgmId && exists m_programState{m_currentPgmId}
+            && (args.terminateDebuggee ?? (m_programState{m_currentPgmId}.startMethod == START_LAUNCH))) {
+            try {
+                doCommand(("cmd": "program/" + m_currentPgmId + "/terminate"));
+            } catch (hash<ExceptionInfo> ex) {
+                # a program that has ended
+                info("program %d not ended: %s: %s", m_currentPgmId, ex.err, ex.desc);
+            }
+        }
+        # the other threads continue
         doCommand(("cmd": "shutdown"));
         sendVscEvent("terminated");
+    }
+
+    #! Restarts the session
+    /** A launched program is ended and launched again when it has ended, with the launch configuration of the
+        request, if given; an attached program is attached again.  The IDE sets the breakpoints again after the
+        \c "initialized" event.
+    */
+    public nothing vsc_restart(*hash args) {
+        *hash<auto> state = m_programState{m_currentPgmId};
+        if (!state) {
+            throw "VDA-ERROR", "there is no program to restart";
+        }
+        if (state.startMethod == START_LAUNCH) {
+            m_restartArgs = args.arguments ?? state.launchArgs;
+            doCommand(("cmd": "program/" + m_currentPgmId + "/terminate"));
+            return;
+        }
+        # the program is attached again, with its current threads
+        updateProgramCache(doCommand(("cmd": "program//list")));
+        vsc_attach(args.arguments ?? state.attachArgs);
     }
 
     private:internal hash getCapabilities() {
@@ -2235,7 +2310,7 @@ vda.run();
             /* The debug adapter supports the RestartRequest. In this case
                 a client should not implement 'restart' by terminating and
                 relaunching the adapter but by calling the RestartRequest. */
-            "supportsRestartRequest": False,
+            "supportsRestartRequest": True,
 
             /* The debug adapter supports 'exceptionOptions' on the
                 setExceptionBreakpoints request. */
@@ -2243,14 +2318,14 @@ vda.run();
 
             /* The debug adapter supports a 'format' attribute on the
                 stackTraceRequest, variablesRequest, and evaluateRequest. */
-            "supportsValueFormattingOptions": False,  # not supported in IDE ?
+            "supportsValueFormattingOptions": True,
 
             /* The debug adapter supports the exceptionInfo request. */
             "supportsExceptionInfoRequest": True,
 
             /* The debug adapter supports the 'terminateDebuggee' attribute
                 on the 'disconnect' request. */
-            "supportTerminateDebuggee": False,
+            "supportTerminateDebuggee": True,
 
             /* The debug adapter supports the delayed loading of parts of the stack,
                 which requires that both the 'startFrame' and 'levels' arguments and

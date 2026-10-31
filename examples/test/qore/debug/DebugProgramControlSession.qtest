@@ -42,6 +42,16 @@ r = r > 0 ? r : g(3);
 printf(\"%d\\n\", r);
 ";
 
+#! a program whose thread waits forever while the initial thread stops at line 6
+const BlockedThreadScript = "%modern
+Counter forever(1);
+Counter started(1);
+background sub () { started.dec(); forever.waitForZero(); }();
+started.waitForZero();
+int x = 1;
+forever.waitForZero();
+";
+
 #! a program that starts a thread and waits for it
 const ThreadStartScript = "%modern
 our int x;
@@ -360,6 +370,8 @@ public class DebugProgramControlTest inherits QUnit::Test {
         addTestCase("steps stop at statements, and a pause also in an empty loop", \stepStopTest());
         addTestCase("a thread that starts in a program that has started", \threadStartEventTest());
         addTestCase("a thread that starts without a client", \threadStartWithoutClientTest());
+        addTestCase("the debugger ends a stopped program", \terminateStoppedTest());
+        addTestCase("the debugger ends a program with a thread that waits", \terminateBlockedTest());
         set_return_value(main());
     }
 
@@ -1222,6 +1234,49 @@ public class DebugProgramControlTest inherits QUnit::Test {
         assertEq({"rc": NOTHING}, p.done.get(EventTimeout));
         p.finished = True;
         assertEq(1, p.pgm.getGlobalVariable("x"));
+    }
+
+    # a stopped thread continues and ends with THREAD-CANCELLED, and its detach is reported
+    terminateStoppedTest() {
+        DebuggedProgram p(dpc);
+        on_exit p.cleanup();
+        assertEq("ok", dpc.command(sprintf("program/%d/terminate", p.pgmId)));
+        assertTrue(dpc.isTerminating(p.pgmId));
+        hash<auto> e = dpc.getInterrupt(p.pgmId);
+        assertEq(("detach", p.tid), (e.func, e.tid));
+        dpc.go(p.tid);
+        hash<auto> rv = p.done.get(EventTimeout);
+        p.finished = True;
+        assertEq(("THREAD-CANCELLED", "the debugger ended the program"), (rv.ex.err, rv.ex.desc));
+        # negative: a program that does not exist
+        assertThrows("PROGRAM-ERROR", \dpc.command(), ("program/99999/terminate",));
+    }
+
+    # a thread that waits is cancelled, and the stopped initial thread ends
+    terminateBlockedTest() {
+        DebuggedProgram p(dpc, BlockedThreadScript);
+        on_exit p.cleanup();
+        p.breakAt(6);
+        dpc.go(p.tid);
+        # the thread that the program starts attaches before the initial thread reaches the breakpoint
+        hash<auto> e = dpc.getInterrupt(p.pgmId);
+        assertEq(("attach", False), (e.func, e.programstart));
+        int tid = e.tid;
+        dpc.go(tid);
+        e = dpc.getInterrupt(p.pgmId);
+        assertEq(("step", p.tid, 6), (e.func, e.tid, e.line));
+        dpc.command(sprintf("program/%d/terminate", p.pgmId));
+        # the end of the code of the waiting thread and the detach of both threads, in any order
+        hash<string, list<string>> funcs = {};
+        for (int i = 0; i < 3; ++i) {
+            e = dpc.getInterrupt(p.pgmId);
+            funcs{e.tid} += (e.func,);
+            dpc.go(e.tid);
+        }
+        assertEq({string(tid): ("exit", "detach"), string(p.tid): ("detach",)}, funcs);
+        hash<auto> rv = p.done.get(EventTimeout);
+        p.finished = True;
+        assertEq("THREAD-CANCELLED", rv.ex.err);
     }
 
     # without a client, a thread that starts does not stop, as nobody could resume it

@@ -85,6 +85,8 @@ module DebugCmdLine {
       shows whether each thread is paused
     - a thread that a program starts runs until a breakpoint, and its end does not pause it; a thread that pauses
       while the current thread runs becomes the current thread
+    - added the \c up, \c down, \c b and \c kill commands; a thread that starts while all threads of its program are
+      stopped together stays stopped with them
 
     @subsection dcl_v0_1_2 v0.1.2
     - removed Linenoise stuff to new module
@@ -475,13 +477,7 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
                                     },
                                     'validate': \DebugCommandLine::validateInt(),
                                     'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
-                                        hash<auto> data = (
-                                            "cmd": "thread/debug/frame/set",
-                                            "tid": dcl.checkThreadId(),
-                                            "value": pop path,
-                                        );
-                                        dcl.doCommand(data, True);
-                                        printfImpl("frameId set to %y\n", data.value);
+                                        dcl.selectFrame(int(pop path));
                                     },
                                 ),
                             ),
@@ -1453,6 +1449,38 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
                         },
                     ),
                     'c': ('alias': 'continue', 'shortcut': True),
+                    'b': (
+                        'shortcut': True,
+                        'desc': 'Add a breakpoint, as "break create". Usage: b [<file>] <line>[:<column>] | <function> '
+                            '| #<statement>',
+                        'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
+                            dcl.runCommand(("break", "create") + args);
+                        },
+                    ),
+                    'up': (
+                        'shortcut': True,
+                        'desc': 'Select the frame that called the current frame, or the frame that many frames up. '
+                            'Usage: up [<number of frames>]',
+                        'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
+                            dcl.moveFrame(DebugCommandLine::getFrameCount(args));
+                        },
+                    ),
+                    'down': (
+                        'shortcut': True,
+                        'desc': 'Select the frame that the current frame called, or the frame that many frames down. '
+                            'Usage: down [<number of frames>]',
+                        'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
+                            dcl.moveFrame(-DebugCommandLine::getFrameCount(args));
+                        },
+                    ),
+                    'kill': (
+                        'desc': 'End the current program: its threads end with a THREAD-CANCELLED exception, also those '
+                            'that wait, as for a lock or for input.',
+                        'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
+                            dcl.doCommand({"cmd": sprintf("program/%d/terminate", dcl.checkProgramId())}, False);
+                            printfImpl("The program ends\n");
+                        },
+                    ),
                     'step': (
                         'shortcut': True,
                         'desc': 'Run the current thread to the next line, also into the functions that it calls, as '
@@ -1834,7 +1862,8 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
                         .result;
                     printfImpl("%d: %s = %s\n", $# + 1, e, r.value);
                 } catch (hash<ExceptionInfo> ex) {
-                    printfImpl("%d: %s = <%s>\n", $# + 1, e, ex.desc);
+                    # as an expression with a variable of another frame or before the variable is declared
+                    printfImpl("%d: %s: cannot be shown: %s\n", $# + 1, e, ex.desc);
                 }
             }
         }
@@ -1899,6 +1928,13 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
             if (DebugCommandLine::isThreadStart(data) || DebugCommandLine::isThreadEnd(data)) {
                 {
                     AutoLock al(stopAllLock);
+                    # a thread that starts while all threads of its program are stopped together stays stopped with
+                    # them, and continues with them (see goThread())
+                    if (stopAllThreads && DebugCommandLine::isThreadStart(data)
+                        && (select keys stoppedThreads{data.pgmid}, $1 != string(data.tid))) {
+                        stoppedThreads{data.pgmid}{data.tid} = True;
+                        return;
+                    }
                     autoResumed{data.tid} = True;
                 }
                 background resumeThreadInBackground(data.tid);
@@ -1940,6 +1976,10 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
             }
             # a stop for a stop that was requested before the threads continued: the thread continues
             if (data.func == "step" && !data.bkptid && !userStop) {
+                {
+                    AutoLock al(stopAllLock);
+                    autoResumed{tid} = True;
+                }
                 background resumeThreadInBackground(int(tid));
                 return;
             }
@@ -2433,6 +2473,48 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
             return rv;
         }
 
+        #! Returns the number of frames of the \c up and \c down commands: the first argument, 1 by default
+        static int getFrameCount(softlist args) {
+            if (!args) {
+                return 1;
+            }
+            if (args.size() > 1 || args[0] !~ /^[0-9]+$/ || int(args[0]) < 1) {
+                throw "DEBUG-COMMAND", sprintf("expecting a number of frames; got %y", args.join(" "));
+            }
+            return int(args[0]);
+        }
+
+        #! Selects the frame that is the given number of frames up (positive) or down (negative) from the current one
+        public moveFrame(int frames) {
+            int current = doCommand({"cmd": "thread/debug/frame/get", "tid": checkThreadId()}, False).result ?? 0;
+            selectFrame(current + frames, frames > 0 ? "the call stack has no frame further up"
+                : "the current frame is the innermost frame");
+        }
+
+        #! Selects a frame of the call stack of the current thread and shows it with its line of code
+        /** @param n the number of the frame, as \c bt shows it
+            @param range_error the error if the frame does not exist; the range of the frames by default
+        */
+        public selectFrame(int n, *string range_error) {
+            int tid = checkThreadId();
+            list<hash<auto>> frames = DebugCommandLine::getShownFrames(doCommand({"cmd": "thread/stack", "tid": tid},
+                False).result ?? ());
+            if (n < 0 || n >= frames.size()) {
+                throw "DEBUG-COMMAND", range_error ?? sprintf("there is no frame %d; the frames are numbered from 0 "
+                    "to %d (\"bt\")", n, frames.size() - 1);
+            }
+            doCommand({"cmd": "thread/debug/frame/set", "tid": tid, "value": n}, False);
+            printfImpl("Frame %d: %s\n", n, formatFrame(frames[n]));
+            hash<auto> frame = frames[n];
+            if (frame.file && frame.line > 0) {
+                *string line = getSourceLine(frame.file, frame.line);
+                if (exists line) {
+                    printfImpl("%s\n", formatSource({"code": line, "startline": frame.line,
+                        "currentline": frame.line}));
+                }
+            }
+        }
+
         #! Runs a command given by its words, as the shortcut commands do
         public runCommand(list<auto> words) {
             processCmdLine(words.join(" "));
@@ -2884,6 +2966,8 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
                 # a thread that ends is no longer the current thread
                 if (getContextValue('threadId') == data.tid) {
                     setContextValue('threadId', NOTHING);
+                    # the next thread that pauses becomes the current thread
+                    setContextValue('threadEnded', True);
                 }
                 return tc.info(sprintf("Thread %d ended", data.tid));
             }
@@ -2893,8 +2977,9 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
             *softint current = getContextValue('threadId');
             if (!exists current) {
                 setContextValue('threadId', data.tid);
-                # as after the current thread ended; at the start of the program, the thread is the first one
-                switched = data.func != "attach";
+                # after the current thread ended; not for the first thread that pauses
+                switched = boolean(getContextValue('threadEnded'));
+                setContextValue('threadEnded', NOTHING);
             } else if (current != data.tid) {
                 bool current_paused;
                 {
@@ -2949,6 +3034,13 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
         }
 
         #! Returns the current names of the threads of the debugged programs, if the debug server gives them
+        #! Returns True if the debugger resumes a thread that stopped, as when it starts, ends, or stops for a stop of
+        #! all threads that is no longer requested; see processEvent()
+        public bool isAutoResumed(softint tid) {
+            AutoLock al(stopAllLock);
+            return boolean(autoResumed{tid});
+        }
+
         #! Returns True if a thread is paused, as known from the events of the debug server
         public bool isThreadPaused(softint pgm_id, softint tid) {
             AutoLock al(stopAllLock);

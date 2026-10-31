@@ -195,7 +195,16 @@ class DebugWrapper {
                 background sub () {
                     # a wait for the program ends with it
                     on_exit dcl.cancelStop();
-                    pgm.run();
+                    try {
+                        pgm.run();
+                    } catch (hash<ExceptionInfo> ex) {
+                        # a program that the debugger ended ("kill"); the thread is no longer cancelled
+                        if (DebugProgramControl::isTerminateException(ex)) {
+                            clear_thread_cancel();
+                            return;
+                        }
+                        rethrow;
+                    }
                 }();
             }
             dcl.init(opt);

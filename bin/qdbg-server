@@ -186,7 +186,16 @@ class DebugWrapper {
                 background sub () {
                     # all output of the program is sent before the server ends with it
                     on_exit dpc.stopOutputCapture();
-                    pgm.run();
+                    try {
+                        pgm.run();
+                    } catch (hash<ExceptionInfo> ex) {
+                        # a program that a client ended; the thread is no longer cancelled
+                        if (DebugProgramControl::isTerminateException(ex)) {
+                            clear_thread_cancel();
+                            return;
+                        }
+                        rethrow;
+                    }
                 }();
             }
             # signal handler for graceful shutdown

@@ -3569,6 +3569,11 @@ while (*binary chunk = input.read(65536)) {
       - a thread that the program starts runs until it reaches a breakpoint, as without the debugger, and its end
         does not pause it; a thread that pauses while the current thread runs becomes the current thread, and with
         input that is not a terminal, a command that resumes a thread returns when any thread pauses
+      - added the \c up, \c down, \c b and \c kill commands, as in other debuggers: \c up and \c down select the
+        frame that called the current frame or that it called, and show its line, and \c kill ends the program;
+        \c frame \c set shows the frame that it selects; a thread that starts while all threads of its program are
+        stopped together stays stopped with them; a display expression that cannot be evaluated is shown with the
+        reason
       - \c qdbg-server listens on \c 127.0.0.1 unless a listener is given with \c -l, as its clients can evaluate
         expressions and change the program; it listened on all interfaces; with \c -k (or the \c QDBG_SERVER_TOKEN
         environment variable), it requires a token from its clients, which they send as a bearer token
@@ -3588,6 +3593,9 @@ while (*binary chunk = input.read(65536)) {
         without a client a thread stops only at the start of a program
       - the interrupt event of a thread that attaches tells whether it starts the program (\c programstart); a thread
         that a program starts without a client does not stop
+      - added the <tt>program/&lt;id&gt;/terminate</tt> command and \c terminateProgram(), which end a debugged program: its
+        threads end with a \c THREAD-CANCELLED exception, also those that wait, as for a lock or for I/O
+      - fixed a program created with the \c program//create command staying debugged when it ends with an exception
       - fixed a step stopping twice at the first statement of a block or a function; it stops once at each statement
       - fixed stepping out of a function stopping at its first line; it stops at the closing brace of the function
       - fixed a pause not stopping a thread in a loop whose body is empty
@@ -4055,6 +4063,10 @@ while (*binary chunk = input.read(65536)) {
     - @ref vscdebugadapterintro "VscDebugAdapter" module
       - the shortcuts and aliases of \c qdbg, such as \c n and \c backtrace, are not commands in the debug console of
         Visual Studio Code, as they can be the names of variables
+      - a launched program ends when the session ends, unless Visual Studio Code keeps it running, and an attached
+        program ends when Visual Studio Code ends it (\c terminateDebuggee); the \c restart request ends a launched
+        program and launches it again, or attaches an attached program again; integers are shown in hexadecimal when
+        the IDE requests it
       - the exception filters of Visual Studio Code are described, and a breakpoint that cannot be set is explained
         in plain words, such as <tt>there is no statement on line 1 of "target.q" where the program can pause</tt>
       - lists, hashes and objects are shown as trees in Visual Studio Code, and their elements, keys and members can

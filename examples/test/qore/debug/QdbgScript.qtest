@@ -54,9 +54,12 @@ public class QdbgScriptTest inherits QUnit::Test {
         const ThreadProgram = "%modern\n"                                    # 1
             "our bool done;\n"                                                # 2
             "Counter c(1);\n"                                                 # 3
-            "background sub () { on_exit c.dec(); int n; while (!done) { ++n; } printf(\"thread done\\n\"); }();\n" # 4
-            "done = True;\n"                                                  # 5
-            "c.waitForZero();\n";                                             # 6
+            "Counter running(1);\n"                                           # 4
+            "background sub () { on_exit c.dec(); running.dec(); int n; while (!done) { ++n; } "
+                "printf(\"thread done\\n\"); }();\n"                           # 5
+            "running.waitForZero();\n"                                        # 6
+            "done = True;\n"                                                  # 7
+            "c.waitForZero();\n";                                             # 8
 
         #! a program whose initial thread waits for a thread that calls add(); the comments are the line numbers
         const TwoThreadProgram = "%modern\n"                                # 1
@@ -109,6 +112,7 @@ public class QdbgScriptTest inherits QUnit::Test {
         addTestCase("help and errors", \helpTest());
         addTestCase("shortcuts as in other debuggers", \shortcutTest());
         addTestCase("threads that start, pause and end", \threadStartTest());
+        addTestCase("frames, breakpoints and ending the program as in other debuggers", \frameKillTest());
         addTestCase("time zones", \timeZoneTest());
         addTestCase("the usage of the debugger tools", \usageTest());
         addTestCase("errors at the start of qdbg and qdbg-server", \startupErrorTest());
@@ -304,7 +308,8 @@ public class QdbgScriptTest inherits QUnit::Test {
     stopAllTest() {
         hash<auto> res = runQdbg(ThreadProgram, (
             "options stopall set 1",
-            "break create target.q 5",
+            # the other thread runs in its loop when the initial thread stops
+            "break create target.q 7",
             "go run",
             "go run",
             "quit",
@@ -509,7 +514,7 @@ public class QdbgScriptTest inherits QUnit::Test {
             # the call stacks of all threads have no current frame
             "Call stack of thread 2:", "  0  <top level> at ", "target.q:7",
             "* thread 2 (", "), paused: <top level> at ", "target.q:7",
-            "the thread has", "stack frames, numbered from 0",
+            "there is no frame 9; the frames are numbered from 0 to 0",
             "Paused at ", "target.q:3",
             "Paused before the function returns at ", "target.q:5",
             "Paused at breakpoint 2 at ", "target.q:8",
@@ -547,6 +552,44 @@ public class QdbgScriptTest inherits QUnit::Test {
         # the shortcuts are listed with the commands
         res = runQdbg(Program, ("help", "quit"));
         assertInOrder(res.out, ("continue (c) ", "finish ", "locals ", "next (n) ", "print ", "step (s) "));
+    }
+
+    frameKillTest() {
+        hash<auto> res = runQdbg(Program, (
+            "break create target.q 3",
+            "display nosuch",
+            "c",
+            # the frame of the call of add(), and back
+            "up",
+            "down",
+            # negative: no frame further down or up, and an invalid number of frames
+            "down",
+            "up 5",
+            "up x",
+            "frame set 1",
+            "b target.q 8",
+            "c",
+            # the program ends before line 8 prints its output
+            "kill",
+            "quit",
+        ));
+        assertEq(0, res.rc);
+        assertInOrder(res.out, (
+            "Breakpoint 1 created at ",
+            "Paused at breakpoint 1 at ", "target.q:3",
+            # a display expression that cannot be evaluated in the frame
+            "1: nosuch: cannot be shown: ",
+            "Frame 1: <top level> at ", "target.q:7:1", "7>: int total = add(2, 3);",
+            "Frame 0: add() at ", "target.q:3", "3>:     int sum = a + b;",
+            "Error: the current frame is the innermost frame",
+            "Error: the call stack has no frame further up",
+            "Error: expecting a number of frames; got \"x\"",
+            "Frame 1: <top level> at ",
+            "Breakpoint 2 created at ", "target.q:8",
+            "Paused at breakpoint 2 at ", "target.q:8",
+            "The program ends",
+        ));
+        assertFalse(res.out =~ /total: 5/, "the program ended before its output");
     }
 
     threadStartTest() {
