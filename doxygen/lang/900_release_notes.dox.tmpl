@@ -3456,6 +3456,10 @@ while (*binary chunk = input.read(65536)) {
         command (elements, keys and members of variables, also private ones, which can be set), and the
         \c options \c stopall option (all threads stop together)
       - fixed \c qdbg not ending when it quits while a thread of the program is stopped before the end of the program
+      - \c qdbg-server listens on \c 127.0.0.1 unless a listener is given with \c -l, as its clients can evaluate
+        expressions and change the program; it listened on all interfaces; with \c -k (or the \c QDBG_SERVER_TOKEN
+        environment variable), it requires a token from its clients, which they send as a bearer token
+        (\c qdbg-remote and \c qdbg-vsc-adapter: <tt>-H Authorization=Bearer <token></tt>)
     - @ref debugprogramcontrolintro "DebugProgramControl" module
       - stopped threads read and set the values of variables and of their elements, keys and members, also private
         ones, by their paths, and evaluate expressions with the variables of a frame

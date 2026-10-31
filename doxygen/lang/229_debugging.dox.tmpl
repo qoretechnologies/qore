@@ -137,7 +137,7 @@
     |\c stopOnEntry|launch|stop at the first statement of the program; default \c false
     |\c stopAllThreads|both|all threads stop when one of them stops, and continue together; default \c true
     |\c define, \c parseOptions, \c timeZone|launch|parse defines, parse options and the time zone of the program
-    |\c connection, \c headers, \c proxy, \c timeout, \c connTimeout, \c respTimeout, \c maxRedir|attach|the connection to the debug server
+    |\c connection, \c headers, \c proxy, \c timeout, \c connTimeout, \c respTimeout, \c maxRedir|attach|the connection to the debug server; a token of the server is given in \c headers as <tt>"Authorization=Bearer <token>"</tt>
     |\c logFilename, \c appendToLog, \c verbosity, \c fullException|both|the log of the adapter and the exception information that it gives
 
     The adapter supports source, function and exception breakpoints with conditions, hit conditions and log messages,
@@ -188,8 +188,17 @@ qdbg myfile.q < commands.txt
 qdbg-server -l 127.0.0.1:8001 myfile.q -my -program params
     @endcode
 
-    Without \c -l, the server listens on a free port, which it writes to its terminal.  \c qdbg-remote is the
-    command-line client, with the commands of \c qdbg:
+    Without \c -l, the server listens on a free port of \c 127.0.0.1, which it writes to its terminal, so that only
+    local clients can connect; a listener given with \c -l and a port only listens on all interfaces.  As a client
+    can evaluate expressions and change the program, a server that other hosts can reach should require a token: the
+    server reads it from the file given with \c -k or from the \c QDBG_SERVER_TOKEN environment variable, and the
+    clients send it as a bearer token in the \c Authorization header:
+    @code{.sh}
+QDBG_SERVER_TOKEN=s3cret qdbg-server -l 0.0.0.0:8001 myfile.q
+qdbg-remote -H "Authorization=Bearer s3cret" myhost:8001
+    @endcode
+
+    \c qdbg-remote is the command-line client, with the commands of \c qdbg:
     @code{.sh}
 qdbg-remote -v localhost:8001
     @endcode

@@ -356,6 +356,7 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         addTestCase("breakpoints on a statement of a line with more than one", \columnBreakpointTest());
         addTestCase("stepping into a chosen call", \stepInTargetTest());
         addTestCase("columns of a source that only the debug server can read", \remoteColumnTest());
+        addTestCase("a debug server that requires a token", \tokenTest());
         addTestCase("the adapter communicates over sockets, as Visual Studio Code starts it", \socketTest());
         addTestCase("the adapter logs to its file and to the debug console", \logTest());
         addTestCase("the end of a program that started a process is reported", \childProcessTest());
@@ -1823,6 +1824,68 @@ print('exit code: %d' % p.wait(30))
         assertEq("3", evaluate(dap, tid, "x").body.result);
 
         r = dap.request("continue", {"threadId": tid});
+        assertTrue(r.success, r.message);
+        dap.waitFor(bool sub (hash<auto> m) {
+            return m.type == "event" && m.event == "output" && m.body.category == "stdout" && m.body.output == "3\n";
+        }, "program output");
+        r = dap.request("disconnect");
+        assertTrue(r.success, r.message);
+        proc.closeStdin();
+        assertTrue(proc.wait(30s), "the adapter ends");
+        server.write("end\n");
+        assertTrue(server.wait(30s), "the debug server ends");
+    }
+
+    # a debug server with a token accepts only the clients that give it
+    tokenTest() {
+        TmpDir tmp("qore-vda-test-");
+        writeProgram(tmp, ColumnProgram);
+        File f();
+        f.open2(tmp.path + "/token", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("s3cret\n");
+        f.close();
+        Process server(qore_exe, (server_script, "-k", "token", "target.q"), {
+            "cwd": tmp.path,
+            "env": Process::getEnvironment() + {
+                "QORE_MODULE_DIR": qlib_dir + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : ""),
+            },
+        });
+        on_exit if (server.running()) {
+            server.terminate();
+        }
+        string line = readServerOutput(server, "\n");
+        int port = (line =~ x/listening on port ([0-9]+)/)[0].toInt();
+        string url = sprintf("ws://localhost:%d", port);
+
+        # negative: no token and a wrong token
+        list<list<string>> refused = (("-a", url), ("-a", url, "-H", "Authorization=Bearer wrong"));
+        foreach list<string> args in (refused) {
+            Process proc = startAdapter(args);
+            on_exit if (proc.running()) {
+                proc.terminate();
+            }
+            DapClient dap(proc);
+            hash<auto> r = dap.request("initialize", {"adapterID": "qore", "linesStartAt1": True,
+                "columnsStartAt1": True, "pathFormat": "path"});
+            assertFalse(r.success, sprintf("%y", args));
+            assertRegex("401", r.message);
+            proc.closeStdin();
+            assertTrue(proc.wait(30s), "the adapter ends");
+        }
+
+        # the token
+        Process proc = startAdapter(("-a", url, "-H", "Authorization=Bearer s3cret"));
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        hash<auto> r = dap.request("initialize", {"adapterID": "qore", "linesStartAt1": True,
+            "columnsStartAt1": True, "pathFormat": "path"});
+        assertTrue(r.success, r.message);
+        r = dap.request("attach", {"program": "target.q"});
+        assertTrue(r.success, r.message);
+        dap.waitForEvent("initialized");
+        r = dap.request("configurationDone");
         assertTrue(r.success, r.message);
         dap.waitFor(bool sub (hash<auto> m) {
             return m.type == "event" && m.event == "output" && m.body.category == "stdout" && m.body.output == "3\n";

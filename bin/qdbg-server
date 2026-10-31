@@ -22,6 +22,43 @@ class WebSocketDebugProgramControlHost inherits WebSocketDebugProgramControl {
     }
 }
 
+#! authenticates the clients of the debug server with a token, given as a bearer token in the \c Authorization header
+class TokenAuthenticator inherits AbstractAuthenticator {
+    private:internal {
+        binary token;
+    }
+
+    constructor(string token) {
+        self.token = binary(token);
+    }
+
+    *hash<HttpResponseInfo> authenticateRequest(HttpListenerInterface listener, hash<auto> hdr,
+            reference<hash<auto>> cx) {
+        *string auth = hdr.authorization;
+        *list<*string> m = auth ? (auth =~ x/^Bearer\s+(.+)$/i) : NOTHING;
+        if (!m || !TokenAuthenticator::equalTokens(binary(trim(m[0])), token)) {
+            return <HttpResponseInfo>{
+                "code": 401,
+                "body": "a valid token of the debug server is required",
+                "hdr": {"WWW-Authenticate": "Bearer realm=\"qdbg-server\""},
+            };
+        }
+    }
+
+    #! Compares tokens in a time that does not depend on where they differ
+    static bool equalTokens(binary a, binary b) {
+        if (a.size() != b.size()) {
+            return False;
+        }
+        int diff = 0;
+        int len = a.size();
+        for (int i = 0; i < len; ++i) {
+            diff |= a[i] ^ b[i];
+        }
+        return !diff;
+    }
+}
+
 #! writes the log of the server to the original stdout or stderr, so that it is not sent to clients as the output of
 #! the program
 class ServerLogAppender inherits LoggerAppenderWithLayout {
@@ -54,6 +91,7 @@ class DebugWrapper {
             'run': 'r,run',
             'listen': 'l,listen=s@',
             'path': 'p,path=s',
+            'token_file': 'k,token-file=s',
         );
         Logger logger;
         WebSocketDebugHandler wsHandler;
@@ -100,7 +138,16 @@ class DebugWrapper {
             logger.debug("create DebugProgram");
             dpc = new WebSocketDebugProgramControlHost(self, logger);
             logger.debug("create WebSocketDebugHandler");
-            AbstractWebSocketDebugHandler wsHandler = new WebSocketDebugHandler(dpc, NOTHING, {"logger": logger});
+            # the token of the clients, from a file or the environment, as the arguments of a process can be read by
+            # other users
+            *string token = opt.token_file
+                ? trim(ReadOnlyFile::readTextFile(opt.token_file))
+                : ENV.QDBG_SERVER_TOKEN;
+            if (exists token && !token.val()) {
+                throw "QDBG-SERVER-ERROR", "the token of the debug server is empty";
+            }
+            AbstractWebSocketDebugHandler wsHandler = new WebSocketDebugHandler(dpc,
+                token ? new TokenAuthenticator(token) : NOTHING, {"logger": logger});
 
             logger.debug("create HttpServer");
 
@@ -119,9 +166,16 @@ class DebugWrapper {
                 foreach string l in (opt.listen) {
                     mServer.addListener(http_get_listener_options_from_bind(l));
                     logger.info("started debug server listener: %s", l);
+                    # a client can evaluate expressions and change the program, so a server that other hosts can
+                    # reach should require a token
+                    if (!token && l !~ /^(\/|127\.|localhost:|\[::1\]:)/) {
+                        stderr.printf("WARNING: the debug server listens on %y without a token; any client that can "
+                            "reach it can debug the program (see -k)\n", l);
+                    }
                 }
             } else {
-                int port = mServer.addListener(0).port;
+                # only local clients by default
+                int port = mServer.addListener(http_get_listener_options_from_bind("127.0.0.1:0")).port;
                 stdout.printf("debug server listening on port %d\n", port);
             }
 
@@ -178,16 +232,20 @@ class DebugWrapper {
             "  where <file> is program being debugged, use \"/dev/stdin\" to get code from stdin\n"
             "  -v     verbose\n"
             "  -h     help\n"
-            "  -l,--listen=<addr:port>  listener address, multiple listeners is supported, default: %s\n"
+            "  -l,--listen=<addr:port>  listener address, multiple listeners is supported, default: a free port of\n"
+            "                           127.0.0.1, which is written to stdout; a port without an address listens on\n"
+            "                           all interfaces\n"
             "  -l,--listen=/<sock>      if begins with a \"/\" character then it is assumed to be a UNIX socket\n"
             "  -p,--path=<path>    URL path for HTTP handler, default is empty string\n"
+            "  -k,--token-file=<file>   require the token in the file from the clients, which send it as a bearer\n"
+            "                           token (Authorization: Bearer <token>); the QDBG_SERVER_TOKEN environment\n"
+            "                           variable gives the token too\n"
             "\n"
             "Example:\n"
             "  %s -v -l 127.0.0.1:10000 -p debug myfile.q -my -program params\n"
             "\n"
             ,
             get_script_name(),
-            0,
             get_script_name()
 
         );
