@@ -240,7 +240,14 @@ int QoreParseHashNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_con
     SimpleRefHolder<QoreParseHashNode> holder(this);
     ExceptionSink xsink;
     ValueEvalOptimizedRefHolder rv(this, &xsink);
-    assert(!xsink);
+    if (xsink) {
+        // an exception raised while folding a literal is a parse error at the literal; it must be reported with
+        // the parse diagnostics, never printed as an unhandled exception when the local sink goes out of scope
+        qore_program_private::addParseException(getProgram(), xsink, loc);
+        parse_error = true;
+        holder.release();
+        return -1;
+    }
     QoreValue result = rv.takeReferencedValue();
     // only use parse-time folding if we got a valid result
     // (constants may not be fully resolved at parse time, resulting in NOTHING)

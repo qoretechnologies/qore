@@ -5381,6 +5381,12 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a hash literal assigned to a typed hash, with a value that referred to an undefined namespace-scoped constant
+      (for example <tt>hash&lt;string, string&gt; h = {"a": Missing::Ref};</tt>), raised a spurious \c RUNTIME-TYPE-ERROR
+      (<em>expects type 'string', but got type 'namespace-scoped reference'</em>) after the parse error, which was
+      printed as an unhandled exception outside the structured diagnostics and so broke the output of
+      <tt>qore --diag-format=json</tt> for tools that also read stderr.  Only the parse error for the undefined
+      reference is now reported
     - \c qcc could hang forever at full CPU while compiling a module, when the JIT compiler started on a background
       thread at the same time: both registered LLVM's targets, which is not thread-safe, and the registry was left
       corrupted.  LLVM's targets are now registered once for the process, before any thread uses LLVM
