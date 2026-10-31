@@ -10016,11 +10016,20 @@ void QoreIRToLLVM::emitDebugStepHook(llvm::Module& module, llvm::Function* llvm_
 
     builder->SetInsertPoint(fire);
     if (synthetic) {
-        // the entered block is resolved from the marker's file and line
+        // the entered block, which the parse tree outlives the native code with; without it, the block is resolved
+        // from the marker's file and line
+        const StatementBlock* block = nullptr;
+        if (auto* dbg_inst = dynamic_cast<const QoreIRDebugStatementInstruction*>(inst)) {
+            block = dynamic_cast<const StatementBlock*>(dbg_inst->statement);
+        }
+        if (block) {
+            sb_ptr = builder->CreateIntToPtr(llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(block)),
+                ptr_type);
+        }
         const int64_t abs_line = static_cast<int64_t>(inst->cached_start_line) + inst->loc->offset;
-        // the file name is interned and stable
+        // the file name is interned and stable; no file means that the block is given
         llvm::Value* file_ptr = builder->CreateIntToPtr(
-                llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(inst->loc->getFile())),
+                llvm::ConstantInt::get(i64_type, block ? 0 : reinterpret_cast<uint64_t>(inst->loc->getFile())),
                 ptr_type);
         llvm::Value* line_val = llvm::ConstantInt::get(i64_type, static_cast<uint64_t>(abs_line));
         auto fn = module.getOrInsertFunction("qore_rt_dbg_synthetic_block_step",

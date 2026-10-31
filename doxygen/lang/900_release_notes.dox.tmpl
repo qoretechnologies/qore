@@ -3461,6 +3461,10 @@ while (*binary chunk = input.read(65536)) {
       - fixed \c qdbg-remote failing at its start, and not starting with the debugged program and its stopped thread
         as the current ones; with input that is not a terminal, it processes each command of a file of commands at the
         stop that it is written for, as \c qdbg does
+      - fixed the \c thread \c set and \c help \c thread commands, and \c bt \c all and \c thread \c list, failing with
+        an error; \c qdbg-remote \c -h shows the help without a URL
+      - \c go without arguments runs the current thread until its next breakpoint or exception; it resumed the thread
+        in the mode of its last command; \c frame \c set checks the number of the frame
       - \c qdbg-server listens on \c 127.0.0.1 unless a listener is given with \c -l, as its clients can evaluate
         expressions and change the program; it listened on all interfaces; with \c -k (or the \c QDBG_SERVER_TOKEN
         environment variable), it requires a token from its clients, which they send as a bearer token
@@ -3478,6 +3482,9 @@ while (*binary chunk = input.read(65536)) {
         stops at does not stop the thread
       - fixed the threads of a debug server staying stopped when its last client disconnects; they continue, and
         without a client a thread stops only at the start of a program
+      - fixed a step stopping twice at the first statement of a block or a function; it stops once at each statement
+      - fixed stepping out of a function stopping at its first line; it stops at the closing brace of the function
+      - fixed a pause not stopping a thread in a loop whose body is empty
     - @ref debugutilintro "DebugUtil" module
       - added functions that describe values, list their elements, keys and members, also private ones, and read and
         set values by their paths

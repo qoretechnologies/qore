@@ -1573,8 +1573,10 @@ void QoreIRBuilder::abandonTempScope() {
     }
 }
 
-QoreIRInstruction* QoreIRBuilder::createDebugBlock(const QoreProgramLocation* loc) {
-    auto inst = append<QoreIRInstruction>(QoreIROpcode::DebugBlock);
+QoreIRInstruction* QoreIRBuilder::createDebugBlock(const QoreProgramLocation* loc, const AbstractStatement* block) {
+    QoreIRInstruction* inst = block
+        ? static_cast<QoreIRInstruction*>(append<QoreIRDebugStatementInstruction>(QoreIROpcode::DebugBlock, block))
+        : append<QoreIRInstruction>(QoreIROpcode::DebugBlock);
     inst->loc = loc;
     return inst;
 }

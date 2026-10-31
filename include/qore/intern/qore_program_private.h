@@ -3991,6 +3991,18 @@ public:
     */
     DLLLOCAL QoreListNode* findStatementIds(const char* name, int line, ExceptionSink* xsink);
 
+    //! Returns the block that starts at a line of a file, for the step event of the start of a block whose block is
+    //! not known, as in the debug IR of AOT code
+    /** The line index has the first statement of each line, which is not the block on a line such as
+        <tt>while (x) {}</tt>; the blocks are found from the registered statements and cached
+
+        @param file the file of the location
+        @param line the absolute line
+
+        @return the innermost registered block that starts at the line, or nullptr
+    */
+    DLLLOCAL const StatementBlock* getBlockFromIndex(const char* file, int line);
+
     //! Returns the calls of a statement that a debugger can step into
     /** @param statement_id the ID of the statement
         @param xsink if an error occurs, the Qore-language exception info is added here
@@ -4070,6 +4082,8 @@ private:
     // statementId to AbstractStatement resolving
     typedef std::vector<AbstractStatement*> StatementVector_t;
     StatementVector_t statementIds;
+    //! the blocks found by getBlockFromIndex(), by file and line; cleared when a statement is registered
+    std::map<std::pair<std::string, int>, const StatementBlock*> blockIndexCache;
 
     // to get statementId
     typedef std::map<AbstractStatement*, unsigned long> ReverseStatementIdMap_t;

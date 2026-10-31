@@ -42,6 +42,16 @@ r = r > 0 ? r : g(3);
 printf(\"%d\\n\", r);
 ";
 
+#! a program with a function and a loop with an empty block
+const StepStopScript = "%modern
+int sub add(int a, int b) {
+    return a + b;
+}
+int x = add(1, 2);
+our bool done;
+while (!done) {}
+";
+
 #! a program whose line 4 runs five times, with i from 0 to 4
 const LoopScript = "%modern
 int total = 0;
@@ -335,6 +345,7 @@ public class DebugProgramControlTest inherits QUnit::Test {
         addTestCase("the stop at the start of a program", \attachStopTest());
         addTestCase("the exceptions that stop threads", \exceptionFilterTest());
         addTestCase("the threads continue when the last client disconnects", \lastClientTest());
+        addTestCase("steps stop at statements, and a pause also in an empty loop", \stepStopTest());
         set_return_value(main());
     }
 
@@ -839,10 +850,11 @@ public class DebugProgramControlTest inherits QUnit::Test {
         int g_entry = dpc.command(cmd + "statement/get", {"value": {"function": "g"}}).id;
         assertEq(g_entry, targets[1].statement_id);
 
-        # stepping into g() stops when the statement calls it, not when h(), which it calls first, calls it
+        # stepping into g() stops at its first statement when the statement calls it, not when h(), which it calls
+        # first, calls it
         dpc.threadSend(p.tid, "thread/go/stepinto", {"value": {"target": 1}});
         e = dpc.getInterrupt(p.pgmId);
-        assertEq(g_entry, e.statementid);
+        assertEq(("step", 2), (e.func, e.line));
         # g(h(1)) is g(4)
         assertEq(4, AbstractDebugControl::unserialize(dpc.threadCommand(p.tid, "thread/local/x/get").value));
 
@@ -1070,12 +1082,12 @@ public class DebugProgramControlTest inherits QUnit::Test {
             assertEq({"rc": NOTHING}, p.finish());
         }
         # the inner and the outer call of g()
-        assertEq({"func": "funcEnter", "function": "g", "value": 1}, stepIntoLine7(0, "x"));
-        assertEq({"func": "funcEnter", "function": "g", "value": 10}, stepIntoLine7(1, "x"));
+        assertEq({"func": "step", "function": "g", "value": 1}, stepIntoLine7(0, "x"));
+        assertEq({"func": "step", "function": "g", "value": 10}, stepIntoLine7(1, "x"));
         # the method of the subclass of the object
-        assertEq({"func": "funcEnter", "function": "B::m", "value": 1}, stepIntoLine7(2, "x"));
+        assertEq({"func": "step", "function": "B::m", "value": 1}, stepIntoLine7(2, "x"));
         # the closure of a call reference
-        assertEq({"func": "funcEnter", "function": "<anonymous closure>", "value": 5}, stepIntoLine7(3, "y"));
+        assertEq({"func": "step", "function": "<anonymous closure>", "value": 5}, stepIntoLine7(3, "y"));
 
         # a call that the statement does not make: the thread stops at the next statement
         DebuggedProgram p(dpc, StepIntoScript);
@@ -1167,6 +1179,37 @@ public class DebugProgramControlTest inherits QUnit::Test {
         # the program runs to its end without stopping at the breakpoint of line 8 or at its end
         assertEq({"rc": NOTHING}, p.done.get(EventTimeout));
         p.finished = True;
+    }
+
+    # a step stops once at each statement: not also at the start of a function or of a block; a pause stops a thread
+    # also in a loop with an empty block, and a function exit is at the end of the function
+    stepStopTest() {
+        DebuggedProgram p(dpc, StepStopScript);
+        on_exit p.cleanup();
+        # the loop of the program ends also when the test fails
+        on_exit p.pgm.setGlobalVarValue("done", True);
+        string cmd = sprintf("program/%d/", p.pgmId);
+        p.breakAt(5);
+        hash<auto> e = p.runToStop();
+        assertEq(5, e.line);
+        # into add(): its first statement, then out of it at its end
+        dpc.go(p.tid, "step");
+        e = dpc.getInterrupt(p.pgmId);
+        assertEq(("step", 3), (e.func, e.line));
+        dpc.go(p.tid, "untilreturn");
+        e = dpc.getInterrupt(p.pgmId);
+        assertEq(("funcExit", 4), (e.func, e.line));
+        # the next statement is the loop, as the declaration of line 6 is not executed
+        dpc.go(p.tid, "step");
+        e = dpc.getInterrupt(p.pgmId);
+        assertEq(7, e.line);
+        # a step in the loop with an empty block does not stop until the thread is paused
+        dpc.go(p.tid, "step");
+        dpc.command(cmd + "thread/" + p.tid + "/stop");
+        e = dpc.getInterrupt(p.pgmId);
+        assertEq(("step", 7), (e.func, e.line));
+        dpc.threadCommand(p.tid, "thread/variable/set", {"root": {"global": "done"}, "expression": "True"});
+        assertEq({"rc": NOTHING}, p.finish());
     }
 
     breakpointErrorTest() {

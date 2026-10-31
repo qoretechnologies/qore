@@ -12231,9 +12231,15 @@ load_local_done:
             }
             case QoreIROpcode::DebugBlock: {
                 if (debug_active && !(xsink && *xsink)) {
+                    // the block of the instruction, or the block that starts at its location, as for the debug IR of
+                    // AOT code; the block of the function otherwise
                     const StatementBlock* dbg_block = nullptr;
-                    if (AbstractStatement* dbg_stmt = getDebugStatement(inst)) {
-                        dbg_block = dynamic_cast<const StatementBlock*>(dbg_stmt);
+                    if (auto* dbg_inst = dynamic_cast<const QoreIRDebugStatementInstruction*>(inst)) {
+                        dbg_block = dynamic_cast<const StatementBlock*>(dbg_inst->statement);
+                    }
+                    if (!dbg_block && pgm && inst->loc && inst->cached_start_line >= 0) {
+                        dbg_block = qore_program_private::get(*pgm)->getBlockFromIndex(inst->loc->getFile(),
+                            inst->cached_start_line + inst->loc->offset);
                     }
                     if (!dbg_block) {
                         dbg_block = statements;

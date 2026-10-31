@@ -1202,12 +1202,11 @@ extern "C" DLLEXPORT void qore_rt_dbg_synthetic_block_step(const char* file, int
     if (!tlpd || !tlpd->runtimeCheck()) {
         return;
     }
+    // without a file, the block is given; otherwise the block that starts at the line, if any
     const StatementBlock* dbg_block = nullptr;
     QoreProgram* pgm = getProgram();
-    if (pgm) {
-        AbstractStatement* stmt = qore_program_private::get(*pgm)->getStatementFromIndex(file,
-                static_cast<int>(abs_line));
-        dbg_block = dynamic_cast<const StatementBlock*>(stmt);
+    if (file && pgm) {
+        dbg_block = qore_program_private::get(*pgm)->getBlockFromIndex(file, static_cast<int>(abs_line));
     }
     if (!dbg_block) {
         dbg_block = static_cast<const StatementBlock*>(statements_block);

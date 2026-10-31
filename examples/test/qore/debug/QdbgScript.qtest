@@ -92,6 +92,7 @@ public class QdbgScriptTest inherits QUnit::Test {
         addTestCase("exceptions by code", \exceptionCodeTest());
         addTestCase("display expressions, pages of values and columns of the call stack", \displayTest());
         addTestCase("qdbg-remote with a debug server that requires a token", \remoteTest());
+        addTestCase("commands of threads, frames and steps", \threadCommandTest());
         addTestCase("quitting while a thread is stopped", \quitTest());
         set_return_value(main());
     }
@@ -269,7 +270,7 @@ public class QdbgScriptTest inherits QUnit::Test {
             "h.lines[1] = integer 42",
             "interrupt/step", "bkptid: 2",
             "1: g (target.q:4:42)", "2: g (target.q:4:40)",
-            "interrupt/funcEnter", "integer x = 20",
+            "interrupt/step", "integer x = 20",
             "the statement has no call",
             "10 200 [1, 42, 3]",
             "interrupt/exception", "(target.q:7",
@@ -454,6 +455,41 @@ public class QdbgScriptTest inherits QUnit::Test {
         assertTrue(server.wait(30s), "the debug server ends");
     }
 %endif
+
+    threadCommandTest() {
+        hash<auto> res = runQdbg(Program, (
+            "help thread",
+            "thread set 2",
+            "break create target.q 7",
+            "break create target.q 8",
+            # without a mode, the thread continues to the next breakpoint
+            "go",
+            "bt all",
+            "thread list",
+            # negative: a frame that the stack does not have
+            "frame set 9",
+            # the only call of the line, and its first statement
+            "go stepinto",
+            # the end of the function
+            "go untilreturn",
+            "go",
+            "go",
+            "quit",
+        ));
+        assertEq(0, res.rc);
+        assertInOrder(res.out, (
+            "Subcommand list:",
+            "thread context set to TID 2",
+            "interrupt/step", "bkptid: 1", "(target.q:7",
+            "call stack:", "interrupt: step() (target.q:7",
+            "the thread has", "stack frames, numbered from 0",
+            "interrupt/step", "(target.q:3",
+            "interrupt/funcExit", "(target.q:5",
+            "interrupt/step", "bkptid: 2", "(target.q:8",
+            "total: 5",
+        ));
+        assertFalse(res.out =~ /RUNTIME-TYPE-ERROR|INVALID-MEMBER/, "no error of the debugger");
+    }
 
     # a thread that continues when qdbg quits does not stop again, as at the end of the program
     quitTest() {

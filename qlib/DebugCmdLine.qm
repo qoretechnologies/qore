@@ -1363,7 +1363,11 @@ public namespace DebugCmdLine {
                                 hash<auto> data.cmd = 'thread/go/' + runState;
                                 data.tid = dcl.checkThreadId();
                                 if (runState == "stepinto") {
-                                    # the number of a call that "thread targets" lists
+                                    # the number of a call that "thread targets" lists; the only call of the statement
+                                    # without a number
+                                    if (!args) {
+                                        args = (dcl.getOnlyStepInTarget(),);
+                                    }
                                     if (args.size() != 1 || args[0] !~ /^[0-9]+$/ || int(args[0]) < 1) {
                                         throw "DEBUG-COMMAND", "expecting the number of a call that \"thread targets\" "
                                             "lists";
@@ -1377,9 +1381,10 @@ public namespace DebugCmdLine {
                         ),
                         'desc': sprintf('go thread with specified runstate and optionally to specified statement, arg: %s [ function[([param types, ...])] | [file] lineno[:column] | #statementId ]; "go stepinto <n>" steps into the call <n> that "thread targets" lists', ((keys AbstractDebugControl::runStateStrings) + ("stepinto",)).join('|')),
                         'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
-                            hash<auto> data.cmd = 'thread/go';
+                            # without a mode, the thread continues to its next breakpoint, as "go run"
+                            hash<auto> data.cmd = 'thread/go/run';
                             data.tid = dcl.checkThreadId();
-                            dcl.goThread(data);
+                            dcl.goThread(data, "run");
                         },
                     ),
                 ),
@@ -1699,6 +1704,31 @@ public namespace DebugCmdLine {
             }
         }
 
+        #! Returns the number of the only call of the statement of the current thread that can be stepped into
+        /** @throw DEBUG-COMMAND the statement makes no call, or more than one, which are listed
+        */
+        public string getOnlyStepInTarget() {
+            list<auto> stack = doCommand({"cmd": "thread/stack", "tid": checkThreadId()}, False).result ?? ();
+            if (!stack[0].statementid) {
+                throw "DEBUG-COMMAND", "the thread is not stopped at a statement";
+            }
+            list<auto> targets = doCommand({
+                "cmd": sprintf("program/%d/statement/stepintargets", checkProgramId()),
+                "value": {"id": stack[0].statementid},
+            }, False).result ?? ();
+            if (targets.size() == 1) {
+                return "1";
+            }
+            if (!targets) {
+                throw "DEBUG-COMMAND", "the current statement makes no call to step into";
+            }
+            foreach hash<auto> t in (targets) {
+                printfImpl("  %d: %s (%s)\n", $# + 1, t.name, formatLocation(stack[0].file, t.start_line,
+                    t.start_column));
+            }
+            throw "DEBUG-COMMAND", "the statement makes more than one call; choose one: go stepinto <n>";
+        }
+
         #! Notes a stop of a thread that the user requested, so that it is not taken for a stop of another thread
         public noteUserStop(softstring pgmId, softstring tid) {
             AutoLock al(stopAllLock);
@@ -1833,7 +1863,9 @@ public namespace DebugCmdLine {
             }
         }
 
-        public string getThreadStackStr(hash<auto> lh) {
+        public string getThreadStackStr(hash<auto> frame) {
+            # a frame of a call stack that the program gives as a typed hash has no keys of the debugger
+            hash<auto!> lh = frame;
             string str;
             if (lh.function.val())
                 str += sprintf("%s()", lh.function);
@@ -1873,7 +1905,8 @@ public namespace DebugCmdLine {
 
         public showThreadStack(softint tid, list<auto> stack) {
             printfImpl("TID %d call stack:\n", tid);
-            foreach hash<auto> lh in (stack) {
+            foreach hash<auto> frame in (stack) {
+                hash<auto!> lh = frame;
                 printfImpl(" - %d%s: %s\n", $#, lh.current ? "*":" ", getThreadStackStr(lh));
             }
         }
@@ -2195,7 +2228,9 @@ public namespace DebugCmdLine {
         public *hash<auto> findCmd(list<auto> args, int opts = 0, *reference<int> last_param) {  /* public because it is needed from closure */
             hash<auto> result;
             result.path = ();
-            hash<auto> c = getCommands();
+            # the nodes of the command tree are copied as untyped hashes, as a node whose values are all hashes is a
+            # typed hash, and the name, aliases and variants are added to them
+            hash<auto!> c = getCommands();
             last_param = 0;
             while (args) {
                 bool doBreak = False;
@@ -2239,14 +2274,16 @@ public namespace DebugCmdLine {
                                 }
                                 if (args.size() == 1) { # only set variants on the last argument
                                     foreach string c2 in (pm) {
+                                        hash<auto!> variant;
                                         if (!exists c.">"{c2}.alias) {
-                                            result.variants{c2} = c.">"{c2};
-                                            result.variants{c2}.aliases = aliases{c2};
+                                            variant = c.">"{c2};
+                                            variant.aliases = aliases{c2};
                                         } else {
-                                            result.variants{c2} = c.">"{c.">"{c2}.alias};
-                                            result.variants{c2}.aliasOf = c.">"{c2}.alias;
-                                            result.variants{c2}.aliases = aliases{result.variants{c2}.aliasOf};
+                                            variant = c.">"{c.">"{c2}.alias};
+                                            variant.aliasOf = c.">"{c2}.alias;
+                                            variant.aliases = aliases{variant.aliasOf};
                                         }
+                                        result.variants{c2} = variant;
                                     }
                                 }
                             }

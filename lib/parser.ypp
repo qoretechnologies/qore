@@ -3417,10 +3417,15 @@ scoped_typedef_decl:
 
 block:
     '{' statements '}'
-    { $$ = $2; }
+    {
+        $$ = $2;
+        // the block ends with its closing brace, where a function returns; it starts with its first statement, so
+        // that the statements of a line are found as before
+        $$->finalizeBlock($$->loc->start_line, @3.last_line);
+    }
     |
     '{' /* NOTHING */ '}'
-    { $$ = new StatementBlock(@1.first_line, @1.last_line); }
+    { $$ = new StatementBlock(@1.first_line, @2.last_line); }
     ;
 
 statement_or_block:

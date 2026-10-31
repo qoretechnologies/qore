@@ -1126,8 +1126,17 @@ public:
             : QoreIRInstruction(QoreIROpcode::DebugStatement), statement(n_statement) {
     }
 
-    //! the statement that the step event is for; it lives as long as the parse tree that the function was lowered
-    //! from
+    //! Creates a DebugStatement instruction, or a DebugBlock instruction for the given block
+    DLLLOCAL QoreIRDebugStatementInstruction(QoreIROpcode op, const AbstractStatement* n_statement)
+            : QoreIRInstruction(op), statement(n_statement) {
+        assert(op == QoreIROpcode::DebugStatement || op == QoreIROpcode::DebugBlock);
+    }
+
+    //! the statement that the step event is for, or the block of a DebugBlock instruction; it lives as long as the
+    //! parse tree that the function was lowered from
+    /** A DebugBlock instruction is also a plain QoreIRInstruction, as when it is read from the debug IR of AOT code,
+        whose block is found from its location (qore_program_private::getBlockFromIndex())
+    */
     const AbstractStatement* statement;
 };
 

@@ -164,6 +164,11 @@ public namespace DebugProgramControl {
             #! serializes the access to bkptOptions
             Mutex bkptLock();
 
+            #! the threads that a client requested to stop (pause), by TID; see onStep()
+            hash<string, bool> pauseRequests = {};
+            #! serializes the access to pauseRequests
+            Mutex pauseLock();
+
             #! the steps of threads into a call of their statement, by TID; see startStepInto() and checkStepInto()
             hash<string, hash<auto>> stepIntos = {};
             #! serializes the access to stepIntos
@@ -589,6 +594,8 @@ public namespace DebugProgramControl {
                         }
                         switch (shift cmd) {
                             case 'stop':
+                                # the threads of the program stop where they are; see onStep()
+                                notePauseRequests(pgmb.getThreadList());
                                 # no locking
                                 switch (breakProgram(pgmb)) {
                                     case 0:
@@ -607,6 +614,7 @@ public namespace DebugProgramControl {
                                 softint tid = shift cmd;
                                 switch (shift cmd) {
                                     case 'stop':
+                                        notePauseRequests((tid,));
                                         switch (breakProgramThread(pgmb, tid)) {
                                             case 0:
                                                 result = 'ok';
@@ -1272,6 +1280,13 @@ public namespace DebugProgramControl {
                         runState = DebugUntilReturn;
                         return True;
                     }
+                    # the call: the thread stops at its first statement, as a step into a function does
+                    {
+                        AutoLock al(stepIntoLock);
+                        remove stepIntos{tid};
+                    }
+                    runState = DebugStep;
+                    return True;
                 } else if (func == "funcExit") {
                     # a call that is not the target has returned
                     runState = DebugStep;
@@ -1332,6 +1347,24 @@ public namespace DebugProgramControl {
                 }
             }
             return False;
+        }
+
+        #! Returns True if the thread steps into a call of its statement; see checkStepInto()
+        private bool hasStepInto(int tid) {
+            AutoLock al(stepIntoLock);
+            return exists stepIntos{tid};
+        }
+
+        #! Notes that a client requested threads to stop (pause); see onStep()
+        private notePauseRequests(*softlist<softint> tids) {
+            AutoLock al(pauseLock);
+            map pauseRequests{$1} = True, tids;
+        }
+
+        #! Returns True if a client requested the thread to stop (pause) and it has not stopped since
+        private bool isPauseRequested(int tid) {
+            AutoLock al(pauseLock);
+            return exists pauseRequests{tid};
         }
 
         #! Returns True if any breakpoint has a condition, hit condition or log message
@@ -1961,6 +1994,11 @@ public namespace DebugProgramControl {
             }
             if (exists statementId && statementId > 0) {
                 hash<auto> location = pgm.getStatementIdInfo(statementId);
+                # a function returns at the end of its block, which is the statement of the event
+                if (func == "funcExit") {
+                    location.start_line = location.end_line;
+                    location.start_column = -1;
+                }
                 ctx.intrInfo.file = location.file;
                 ctx.intrInfo.line = location.start_line;
                 ctx.intrInfo.endline = location.end_line;
@@ -2011,6 +2049,11 @@ public namespace DebugProgramControl {
             if (exists except && !stopsAtException(except, isUncaught(adjustStack(get_thread_call_stack(), ctx)))) {
                 runToStatementId = runToStatementIdBefore;
                 return;
+            }
+            # the thread stops: a pause that a client requested is done
+            {
+                AutoLock al(pauseLock);
+                remove pauseRequests{tid};
             }
             # minor race issue when list of all thread stack might return internal frames till ctx is not registered in ctxThread
             {
@@ -2176,13 +2219,17 @@ public namespace DebugProgramControl {
                                         } else {
                                             auto v = AbstractDebugControl::unserialize(rd.value);
                                             switch (varName) {
-                                                case 'frame':
-                                                    if (v <= 0) {
-                                                        ctxCT.frameId = 0;
-                                                    } else {
-                                                        ctxCT.frameId = int(v);
+                                                case 'frame': {
+                                                    # a frame of the call stack of the thread
+                                                    int frames = adjustStack(get_thread_call_stack(), ctx).size();
+                                                    if (v > 0 && int(v) >= frames) {
+                                                        throw "DEBUG-HANDLER-ERROR", sprintf("the thread has %d "
+                                                            "stack frames, numbered from 0 to %d", frames,
+                                                            frames - 1);
                                                     }
+                                                    ctxCT.frameId = v <= 0 ? 0 : int(v);
                                                     break;
+                                                }
                                             }
                                         }
                                         break;
@@ -2377,6 +2424,13 @@ public namespace DebugProgramControl {
         }
 
         onStep(ProgramControl pgm, int blockStatementId, *int statementId, *int breakpointId, reference flow, reference rs, reference runToStatementId) {
+            # a step to a block, which the debugger gives before the first statement of the block (so that an empty
+            # block can stop, as in "while (True);"), stops at the first statement instead; it stops at the block for
+            # a breakpoint of the block (as of a function), a pause, and a block to run to
+            if (!exists statementId && !breakpointId && (rs == DebugStep || rs == DebugStepOver)
+                && runToStatementId != blockStatementId && !isPauseRequested(gettid())) {
+                return;
+            }
             statementId = statementId ?? blockStatementId;
             /*
                 when a statement is parsed in non-pgm context then it is not registered in pgm and no statementId can be resolved
@@ -2398,6 +2452,12 @@ public namespace DebugProgramControl {
         }
 
         onFunctionEnter(ProgramControl pgm, int statementId, reference rs, reference runToStatementId) {
+            # a step into a function stops at its first statement, not also at its entry; it stops at the entry for a
+            # pause and a function to run to, and a step into a call of a statement checks the function
+            if (rs == DebugStep && runToStatementId != statementId && !isPauseRequested(gettid())
+                && !hasStepInto(gettid())) {
+                return;
+            }
             if (statementId) {
                 handleInterrupt('funcEnter', pgm, \rs, \runToStatementId, statementId);
             }

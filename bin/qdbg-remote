@@ -157,6 +157,10 @@ class DebugWrapper {
             GetOpt g(opts);
             list<auto> a = ARGV;
             opt = g.parse2(\a);
+            # the help is shown without a URL
+            if (opt.help) {
+                help();
+            }
             opt.url = shift a;
             if (a) {
                 throw "GETOPT-ERROR", "Only one URL can be specified";

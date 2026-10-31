@@ -2731,6 +2731,8 @@ void qore_program_private::registerStatement(QoreProgram *pgm, AbstractStatement
         // plock must already be held
         ReverseStatementIdMap_t::iterator i = pgm->priv->reverseStatementIds.find(statement);
         if (i == pgm->priv->reverseStatementIds.end()) {
+            // a new block can start at a line of the cache of blocks
+            pgm->priv->blockIndexCache.clear();
             pgm->priv->statementIds.push_back(statement);
             pgm->priv->reverseStatementIds.insert(std::pair<AbstractStatement*, unsigned long>(statement, pgm->priv->statementIds.size()));
         }
@@ -4281,6 +4283,35 @@ private:
         // other expressions make no calls that are known at parse time, or their calls are not searched
     }
 };
+}
+
+const StatementBlock* qore_program_private::getBlockFromIndex(const char* file, int line) {
+    if (!file) {
+        return nullptr;
+    }
+    AutoLocker al(&plock);
+    std::pair<std::string, int> key(file, line);
+    auto ci = blockIndexCache.find(key);
+    if (ci != blockIndexCache.end()) {
+        return ci->second;
+    }
+    const StatementBlock* rv = nullptr;
+    int rv_lines = -1;
+    for (const AbstractStatement* s : statementIds) {
+        const StatementBlock* b = dynamic_cast<const StatementBlock*>(s);
+        if (!b || !b->loc || b->loc->start_line + b->loc->offset != line || !b->loc->getFile()
+            || strcmp(b->loc->getFile(), file)) {
+            continue;
+        }
+        // the innermost block, which has the fewest lines
+        int lines = b->loc->end_line - b->loc->start_line;
+        if (rv_lines < 0 || lines < rv_lines) {
+            rv = b;
+            rv_lines = lines;
+        }
+    }
+    blockIndexCache[key] = rv;
+    return rv;
 }
 
 QoreListNode* qore_program_private::getStepInTargets(int64 statement_id, ExceptionSink* xsink) {

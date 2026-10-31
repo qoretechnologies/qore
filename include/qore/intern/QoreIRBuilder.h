@@ -334,7 +334,12 @@ public:
     void abandonTempScope();
     //! Emit a debug-only StatementBlock entry marker.  It is a no-op outside
     //! the IR interpreter's DebugProgram hook path.
-    QoreIRInstruction* createDebugBlock(const QoreProgramLocation* loc = nullptr);
+    //! Creates the instruction of the step event of the start of a block
+    /** @param loc the location of the block
+        @param block the block, if known; the event is for this block, otherwise for the block found from the location
+    */
+    QoreIRInstruction* createDebugBlock(const QoreProgramLocation* loc = nullptr,
+            const AbstractStatement* block = nullptr);
     //! Emit the debugger's step event for a statement (QoreIROpcode::DebugStatement)
     QoreIRInstruction* createDebugStatement(const AbstractStatement* statement);
     //! Emit a pending-exception check after cleanup code that can run destructors.

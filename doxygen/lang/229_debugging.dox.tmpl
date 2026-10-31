@@ -71,7 +71,7 @@
     A stopped thread continues:
     - to the next statement (step), also into the functions that the statement calls
     - to the next statement of its function (step over)
-    - until its function returns (step out)
+    - until its function returns (step out); it stops at the closing brace of the function before it returns
     - until a given statement (run to)
     - into a chosen call of its statement (step into a target), as \c g() in <tt>f(g(1), h(2))</tt>; the calls are
       given by @ref Qore::ProgramControl::getStepInTargets() "ProgramControl::getStepInTargets()", also calls of
@@ -79,6 +79,8 @@
       statement calls more than once; the thread stops at the start of the called code, and at the next statement if
       the statement does not make the call
     - until its next breakpoint or exception (run)
+
+    Each step stops once at the next statement.
 
     A running thread can be stopped (paused), and all threads of a program can stop together when one of them stops,
     and continue together.
@@ -137,7 +139,7 @@
     |\c stopOnEntry|launch|stop at the first statement of the program; default \c false
     |\c stopAllThreads|both|all threads stop when one of them stops, and continue together; default \c true
     |\c define, \c parseOptions, \c timeZone|launch|parse defines, parse options and the time zone of the program
-    |\c connection, \c headers, \c proxy, \c timeout, \c connTimeout, \c respTimeout, \c maxRedir|attach|the connection to the debug server; a token of the server is given in \c headers as <tt>"Authorization=Bearer <token>"</tt>
+    |\c connection, \c headers, \c proxy, \c timeout, \c connTimeout, \c respTimeout, \c maxRedir|attach|the connection to the debug server; a token of the server is given in \c headers as <tt>[{"name": "Authorization", "value": "Bearer <token>"}]</tt>
     |\c logFilename, \c appendToLog, \c verbosity, \c fullException|both|the log of the adapter and the exception information that it gives
 
     The exception breakpoints of the adapter stop at user, system or uncaught exceptions, and with the
@@ -172,8 +174,8 @@ qdbg myfile.q < commands.txt
     |<tt>break enable\|disable\|delete id</tt>|enables, disables or deletes a breakpoint
     |<tt>exception filter [user] [system] [uncaught] [code ...] \| all \| none</tt>|shows or sets the exceptions that stop threads; a code, such as \c FILE-OPEN-ERROR, selects the exceptions with the code
     |<tt>stmt line [file] line</tt>|lists the statements of a line with their columns
-    |<tt>go run\|step\|stepover\|untilreturn [statement]</tt>|resumes the current thread, optionally until a statement
-    |<tt>thread targets</tt>, <tt>go stepinto n</tt>|lists the calls of the current statement, and steps into one of them
+    |<tt>go [run\|step\|stepover\|untilreturn] [statement]</tt>|resumes the current thread, optionally until a statement; \c go alone runs it until its next breakpoint or exception
+    |<tt>thread targets</tt>, <tt>go stepinto [n]</tt>|lists the calls of the current statement, and steps into one of them; without \c n, it steps into the only call of the statement
     |<tt>bt</tt>, <tt>frame n</tt>|shows the call stack of the current thread with the lines and columns of its statements, and selects a frame
     |<tt>thread local [name [value]]</tt>|lists the local variables of the current frame, or shows or sets one
     |<tt>thread var path [from index \| = expression]</tt>|shows a variable or an element, key or member of it, as in <tt>h.lines[1]</tt> or <tt>h{key}</tt>, with its elements, keys and members, also from an index, or sets it to the value of an expression

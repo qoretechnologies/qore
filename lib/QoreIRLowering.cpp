@@ -3894,7 +3894,8 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
     }
 
     if (!root_statement_block) {
-        builder.createDebugBlock(block->loc);
+        // the event is for this block, which a step of a debugger can stop at, also when it is empty
+        builder.createDebugBlock(block->loc, block);
     }
 
     bool terminated = false;
