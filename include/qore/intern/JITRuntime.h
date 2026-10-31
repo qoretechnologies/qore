@@ -59,6 +59,16 @@ const QoreJITRuntimeSymbolInfo* qore_jit_get_runtime_symbols(size_t& count);
 //! Validates the central JIT runtime helper symbol registry.
 bool qore_jit_validate_runtime_symbols(std::string& error);
 
+//! Converts a value read from a key of a hash with a complex value type that the value type does not accept
+/** Shared by the IR interpreter and the native helpers that read a key from a hash, so that every compiled tier
+    reads the same value; a value that the value type accepts at runtime (QoreTypeInfo::runtimeAcceptsValue()) is
+    returned unchanged, as the AST interpreter returns it.
+
+    @return false if the conversion raised an exception in \a xsink
+*/
+DLLLOCAL bool qore_rt_apply_complex_hash_value_type(const QoreHashNode* h, const char* key, QoreValue& result,
+        ExceptionSink* xsink);
+
 enum class QoreStringCaseConsumer : int32_t {
     StartsWith,
     EndsWith,
@@ -1327,6 +1337,15 @@ void qore_rt_list_set_scanned_type(uint64_t list_val, const QoreTypeInfo* elemen
 //! AOT form of qore_rt_list_set_scanned_type(); \a has_element_type = 0 for no element type
 void qore_rt_list_set_scanned_type_by_type_path(uint64_t list_val, const char* element_type_path,
         int32_t has_element_type, ExceptionSink* xsink);
+
+//! Append a value to the result list of a map or map/select operator as QoreListNode::push() appends it.
+/** The value is converted to the element type of the list, which can raise an exception; \a value_val is not
+    consumed.  See QoreIROpcode::ListAppendElement.
+*/
+void qore_rt_list_append_element(uint64_t list_val, uint64_t value_val, ExceptionSink* xsink);
+
+//! Throwing form of qore_rt_list_append_element() for native code that unwinds with QoreJITException
+void qore_rt_list_append_element_throwing(uint64_t list_val, uint64_t value_val, ExceptionSink* xsink);
 
 //! Set the type of the result list of a select operator from its values or else the value type of its source.
 void qore_rt_list_set_scanned_type_from_source(uint64_t list_val, uint64_t source_val);

@@ -367,6 +367,9 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_list_set_common_type_by_type_path",
         reinterpret_cast<void*>(&qore_rt_list_set_common_type_by_type_path) },
     { "qore_rt_list_set_scanned_type", reinterpret_cast<void*>(&qore_rt_list_set_scanned_type) },
+    { "qore_rt_list_append_element", reinterpret_cast<void*>(&qore_rt_list_append_element) },
+    { "qore_rt_list_append_element_throwing",
+        reinterpret_cast<void*>(&qore_rt_list_append_element_throwing) },
     { "qore_rt_list_set_scanned_type_by_type_path",
         reinterpret_cast<void*>(&qore_rt_list_set_scanned_type_by_type_path) },
     { "qore_rt_list_set_scanned_type_from_source",
@@ -3096,7 +3099,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_cast_by_type_path_aot(QoreAOTContext* ctx,
     return qore_rt_cast_by_type_path_in_program(inner_bits, type_path, or_nothing, xsink, pgm);
 }
 
-static bool qore_rt_apply_complex_hash_value_type(const QoreHashNode* h, const char* key,
+bool qore_rt_apply_complex_hash_value_type(const QoreHashNode* h, const char* key,
         QoreValue& result, ExceptionSink* xsink) {
     if (!h || h->getHashDecl() || result.isNothing()) {
         return true;
@@ -6767,6 +6770,24 @@ static const QoreTypeInfo* qore_list_get_common_value_type(const QoreListNode* l
         }
     }
     return vtype;
+}
+
+extern "C" DLLEXPORT void qore_rt_list_append_element(uint64_t list_val, uint64_t value_val,
+        ExceptionSink* xsink) {
+    QoreValue v = fromBits(list_val);
+    if (v.getType() != NT_LIST) {
+        return;
+    }
+    // QoreListNode::push() takes the reference and releases the value if it is rejected
+    v.get<QoreListNode>()->push(fromBits(value_val).refSelf(), xsink);
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_list_append_element_throwing(uint64_t list_val,
+        uint64_t value_val, ExceptionSink* xsink) {
+    qore_rt_list_append_element(list_val, value_val, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
 }
 
 extern "C" DLLEXPORT void qore_rt_list_set_scanned_type(uint64_t list_val, const QoreTypeInfo* element_type) {

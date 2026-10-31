@@ -617,6 +617,15 @@ QoreIRInstruction* QoreIRBuilder::createHashSetCommonType(QoreIRValue hash, Qore
     return inst;
 }
 
+QoreIRInstruction* QoreIRBuilder::createListAppendElement(QoreIRValue list, QoreIRValue value,
+        const QoreProgramLocation* loc) {
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::ListAppendElement);
+    inst->loc = loc;
+    inst->operands.push_back(list);
+    inst->operands.push_back(value);
+    return inst;
+}
+
 QoreIRInstruction* QoreIRBuilder::createListSetScannedType(QoreIRValue list, const QoreTypeInfo* element_type,
         QoreIRValue source, const QoreProgramLocation* loc) {
     auto inst = append<QoreIRInstruction>(QoreIROpcode::ListSetScannedType);

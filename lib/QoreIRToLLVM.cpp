@@ -49,7 +49,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 416,
+static_assert(QORE_IR_MAX_OPCODE == 417,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 
@@ -24879,6 +24879,20 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto helper = module.getOrInsertFunction("qore_rt_hash_set_common_type",
                     llvm::FunctionType::get(void_type, {i64_type, i64_type}, false));
             builder->CreateCall(helper, {hash_boxed, state_int});
+            return true;
+        }
+        case QoreIROpcode::ListAppendElement: {
+            auto* list = getVal(inst->operands[0].id, error);
+            if (!list) { return false; }
+            auto* value = getVal(inst->operands[1].id, error);
+            if (!value) { return false; }
+            llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+            llvm::Value* value_boxed = boxValue(value, inst->operands[1].id);
+            auto append_ft = llvm::FunctionType::get(void_type, {i64_type, i64_type, ptr_type}, false);
+            auto helper = module.getOrInsertFunction("qore_rt_list_append_element", append_ft);
+            auto helper_throwing = module.getOrInsertFunction("qore_rt_list_append_element_throwing", append_ft);
+            emitMaybeInvoke(helper, helper_throwing, {list_boxed, value_boxed, xsink_arg}, module, llvm_func, inst);
+            emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
         case QoreIROpcode::ListSetScannedType: {

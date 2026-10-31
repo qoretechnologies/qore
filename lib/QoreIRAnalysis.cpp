@@ -6484,6 +6484,9 @@ static bool qore_ir_is_borrowed_list_element_consumer(const QoreIRInstruction& i
         case QoreIROpcode::CommonTypeFold:
             // reads only the type of the value
             return inst.operands.size() == 3 && inst.operands[1].id == value_id;
+        case QoreIROpcode::ListAppendElement:
+            // takes its own reference, like ListAppend
+            return inst.operands.size() == 2 && inst.operands[1].id == value_id;
         default:
             return false;
     }
@@ -6510,6 +6513,7 @@ static bool qore_ir_collect_borrowed_loop_safety(const QoreIRNaturalLoop& loop,
             }
             switch (inst->opcode) {
                 case QoreIROpcode::ListAppend:
+                case QoreIROpcode::ListAppendElement:
                 case QoreIROpcode::ListSetInt:
                 case QoreIROpcode::ListSetFloat:
                 case QoreIROpcode::ListSetValue:
@@ -6612,6 +6616,7 @@ static bool qore_ir_is_assigned_value(const QoreIRFunction& func, QoreIRValue va
 static bool qore_ir_may_mutate_list(QoreIROpcode opcode) {
     switch (opcode) {
         case QoreIROpcode::ListAppend:
+        case QoreIROpcode::ListAppendElement:
         case QoreIROpcode::ListSetInt:
         case QoreIROpcode::ListSetFloat:
         case QoreIROpcode::ListSetValue:

@@ -53,7 +53,12 @@
     JIT and tiered execution modes and compiled (AOT) code kept the type of the expression (ex:
     \c hash<string, list>), so \c fullType() and the writes that the container accepts could differ between modes.
     Compiled code also no longer removes the element type of an empty list stored in such a container or in a hash
-    literal such as <tt>{"a": (), "b": ()}</tt>.
+    literal such as <tt>{"a": (), "b": ()}</tt>.  The elements of these containers are now also the same in every
+    mode: each value is converted to the element type of the operator's container as it is stored, as with the AST
+    interpreter, also when operators are chained, as in <tt>select (map ((),), l), $1</tt> (ex: an element
+    <tt>((),)</tt> is stored as a \c list<list>; the IR, JIT and tiered modes and compiled code stored it as a
+    \c list<list<auto>> in a \c map over an untyped source, in the map/select form and in chained operators), and
+    the IR interpreter no longer converts a value read from a hash key when the value type of the hash accepts it.
 
     @ref Qore::HTTPClient::sendHttp2Connect() "HTTPClient::sendHttp2Connect()" and
     @ref Qore::HTTPClient::sendHttp3Connect() "HTTPClient::sendHttp3Connect()" now send their headers as every other

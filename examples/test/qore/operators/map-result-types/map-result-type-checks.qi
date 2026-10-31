@@ -14,6 +14,21 @@ public namespace MapResultTypeChecks {
         int x = 1;
     }
 
+    #! a hashdecl with two children for hashdecl hierarchies
+    public hashdecl MapParent {
+        int x = 1;
+    }
+
+    #! a child of MapParent
+    public hashdecl MapChild1 inherits MapParent {
+        int y = 2;
+    }
+
+    #! another child of MapParent
+    public hashdecl MapChild2 inherits MapParent {
+        int z = 3;
+    }
+
     #! a base class for object values
     public class MapBase {
     }
@@ -234,6 +249,58 @@ public namespace MapResultTypeChecks {
             rv."foldl-empty-lists" = type_of(f);
             auto g = foldl $1 + $2, (((),), ((),));
             rv."foldl-nested-lists" = type_of(g);
+        }
+        # the elements of the results: the AST interpreter converts each value to the element type of the list
+        # that it creates for the last operator, which keeps that type while it is filled; the stages before the
+        # last operator are evaluated lazily and build no list of their own
+        {
+            auto i = map ((),), any_keys;
+            rv."element-map-untyped-source" = type_of(i) + " " + type_of(i[0]);
+            auto d = map ((),), ks;
+            rv."element-map-typed-source" = type_of(d) + " " + type_of(d[0]);
+            auto o = map ((),), ks.iterator();
+            rv."element-map-iterator" = type_of(o) + " " + type_of(o[0]);
+            auto s = map ((),), ks, True;
+            rv."element-map-select" = type_of(s) + " " + type_of(s[0]);
+            auto u = map ((),), any_keys, True;
+            rv."element-map-select-untyped-source" = type_of(u) + " " + type_of(u[0]);
+            auto sm = select (map ((),), ks), True;
+            rv."element-select-of-map" = type_of(sm) + " " + type_of(sm[0]);
+            auto su = select (map ((),), any_keys), True;
+            rv."element-select-of-map-untyped-source" = type_of(su) + " " + type_of(su[0]);
+            auto mm = map $1, (map ((),), ks);
+            rv."element-map-of-map" = type_of(mm) + " " + type_of(mm[0]);
+            auto sms = select (map ((),), ks, True), True;
+            rv."element-select-of-map-select" = type_of(sms) + " " + type_of(sms[0]);
+            auto ssm = select (select (map ((),), ks), True), True;
+            rv."element-select-of-select-of-map" = type_of(ssm) + " " + type_of(ssm[0]);
+            auto ms = map $1, (select (map ((),), ks), True);
+            rv."element-map-of-select-of-map" = type_of(ms) + " " + type_of(ms[0]);
+            auto f = foldl $1 + $2, (map ((),), ks);
+            rv."element-foldl-of-map" = type_of(f);
+            hash<auto> h = map {$1: ((),)}, ks;
+            rv."element-hmap" = type_of(h) + " " + type_of(h.a);
+        }
+        {
+            list<hash<MapParent>> hs = (new hash<MapChild1>(), new hash<MapParent>(), new hash<MapChild2>());
+            auto a = select (map $1, hs), $# != 1;
+            rv."hashdecl-select-of-map-children" = type_of(a) + " " + type_of(a[0]) + " " + type_of(a[1]);
+            auto b = select (map $1, hs), True;
+            rv."hashdecl-select-of-map-all" = type_of(b) + " " + type_of(b[1]);
+            auto c = select hs, $# != 1;
+            rv."hashdecl-select-children" = type_of(c);
+            auto d = map $1, hs, $# != 1;
+            rv."hashdecl-map-select-children" = type_of(d);
+            auto e = select (select hs, True), $# != 1;
+            rv."hashdecl-select-of-select-children" = type_of(e);
+            auto f = map $1, (select hs, $# != 1);
+            rv."hashdecl-map-of-select-children" = type_of(f);
+            auto g = select (map $1, hs), $# == 1;
+            rv."hashdecl-select-of-map-parent" = type_of(g);
+            auto m = select (map $1, mixed), $1 != 1;
+            rv."select-of-map-mixed-rejected" = type_of(m);
+            auto n = select (map $1, mixed), False;
+            rv."select-of-map-none-selected" = type_of(n);
         }
         # writes to the results
         {

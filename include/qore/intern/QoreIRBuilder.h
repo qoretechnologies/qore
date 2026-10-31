@@ -98,6 +98,9 @@ public:
     //! Sets the type of a hash map result from the common value type; see QoreIROpcode::HashSetCommonType
     QoreIRInstruction* createHashSetCommonType(QoreIRValue hash, QoreIRValue state,
         const QoreProgramLocation* loc = nullptr);
+    //! Appends a value to a map result list as the AST interpreter pushes it; see QoreIROpcode::ListAppendElement
+    QoreIRInstruction* createListAppendElement(QoreIRValue list, QoreIRValue value,
+        const QoreProgramLocation* loc = nullptr);
     //! Sets the type of a select result list from its values; see QoreIROpcode::ListSetScannedType
     /** @param list the result list
         @param element_type the element type of the list created by the AST interpreter; ignored when \a source is

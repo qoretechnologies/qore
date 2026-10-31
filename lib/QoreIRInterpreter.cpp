@@ -80,7 +80,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 416,
+static_assert(QORE_IR_MAX_OPCODE == 417,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -7862,6 +7862,24 @@ next_instruction:
                 ++ip;
                 break;
             }
+            case QoreIROpcode::ListAppendElement: {
+                qore_rt_list_append_element(toBits(getIRValue(values, inst->operands[0])),
+                    toBits(getIRValue(values, inst->operands[1])), xsink);
+                if (xsink && *xsink) {
+                    if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                ++ip;
+                break;
+            }
             case QoreIROpcode::ListSetScannedType: {
                 uint64_t list_bits = toBits(getIRValue(values, inst->operands[0]));
                 if (inst->operands.size() > 1) {
@@ -8866,19 +8884,12 @@ load_local_done:
                             return false;
                         }
                         out.refSelf();
-                        if (!h->getHashDecl() && !out.isNothing()) {
-                            const QoreTypeInfo* vti = h->getValueTypeInfo();
-                            if (QoreTypeInfo::hasType(vti) && vti != autoTypeInfo && vti != anyTypeInfo
-                                    && !QoreTypeInfo::superSetOf(vti, out.getTypeInfo())) {
-                                ValueHolder holder(out, xsink);
-                                QoreTypeInfo::acceptInputKey(vti, hka_inst->key_name.c_str(), *holder, xsink);
-                                if (xsink && *xsink) {
-                                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                                    cleanupLocalCaches();
-                                    return false;
-                                }
-                                out = holder.release();
-                            }
+                        // convert the value as the native helpers do; a value that the value type accepts is
+                        // returned unchanged, as the AST interpreter returns it
+                        if (!qore_rt_apply_complex_hash_value_type(h, hka_inst->key_name.c_str(), out, xsink)) {
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupLocalCaches();
+                            return false;
                         }
                     }
                 } else if (base.getType() == NT_HASH) {
@@ -8890,19 +8901,12 @@ load_local_done:
                         return false;
                     }
                     out.refSelf();
-                    if (!h->getHashDecl() && !out.isNothing()) {
-                        const QoreTypeInfo* vti = h->getValueTypeInfo();
-                        if (QoreTypeInfo::hasType(vti) && vti != autoTypeInfo && vti != anyTypeInfo
-                                && !QoreTypeInfo::superSetOf(vti, out.getTypeInfo())) {
-                            ValueHolder holder(out, xsink);
-                            QoreTypeInfo::acceptInputKey(vti, hka_inst->key_name.c_str(), *holder, xsink);
-                            if (xsink && *xsink) {
-                                cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                                cleanupLocalCaches();
-                                return false;
-                            }
-                            out = holder.release();
-                        }
+                    // convert the value as the native helpers do; a value that the value type accepts is returned
+                    // unchanged, as the AST interpreter returns it
+                    if (!qore_rt_apply_complex_hash_value_type(h, hka_inst->key_name.c_str(), out, xsink)) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return false;
                     }
                 } else if (base.getType() == NT_OBJECT) {
                     QoreObject* o = const_cast<QoreObject*>(base.get<const QoreObject>());

@@ -884,7 +884,16 @@ enum class QoreIROpcode : uint16_t {
     //! the AST interpreter folds.
     ListSetScannedType = 416,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (417, 418, ...)
+    //! Append a value to the result list of a map or map/select operator as the AST interpreter pushes it.
+    //!
+    //! operands[0] = the result list; operands[1] = the value; no result.  The value is converted to the element
+    //! type of the list as QoreListNode::push() converts it (qore_list_private::checkVal()), which can raise
+    //! RUNTIME-TYPE-ERROR, and the type of the list is not changed: the AST interpreter creates the list with the
+    //! element type of the operator and keeps that type while it fills the list, and ListSetCommonType sets the
+    //! final type after the loop.
+    ListAppendElement = 417,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (418, 419, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -893,8 +902,8 @@ enum class QoreIROpcode : uint16_t {
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
 constexpr uint16_t QORE_IR_MAX_OPCODE
-    = static_cast<uint16_t>(QoreIROpcode::ListSetScannedType);
-static_assert(QORE_IR_MAX_OPCODE == 416, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+    = static_cast<uint16_t>(QoreIROpcode::ListAppendElement);
+static_assert(QORE_IR_MAX_OPCODE == 417, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Include the central opcode registry (must come after QoreIROpcode enum definition)
