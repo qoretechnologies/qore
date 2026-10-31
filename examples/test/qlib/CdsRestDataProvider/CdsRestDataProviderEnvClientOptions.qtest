@@ -1,0 +1,95 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../ExecModeHarness.qm
+
+%exec-class CdsRestDataProviderEnvClientOptionsTest
+
+#! CDS and Business Central data providers take their options, including the OAuth2 client options, from the
+#! environment
+/** With automatic configuration from the environment enabled, \c CDS_URL, \c CDS_CLIENT_ID,
+    \c CDS_CLIENT_SECRET, \c CDS_TENANT, and \c CDS_SCOPE give the \c url, \c oauth2_client_id,
+    \c oauth2_client_secret, \c tenant, and \c scope options of the \c CdsRestDataProvider,
+    \c CdsRestTablesDataProvider, \c BcRestDataProvider, and \c BcCompaniesDataProvider constructors.  Data providers
+    read the environment that the process started with, so the checks are in env-client-options-worker.qr, which is
+    run in each execution mode in an environment with only fake CDS values; no connection is made
+*/
+public class CdsRestDataProviderEnvClientOptionsTest inherits QUnit::Test {
+    public {
+        #! the result of every check the worker makes; the sources are given in the order: url, oauth2_client_id,
+        #! oauth2_client_secret, tenant, scope
+        const Expected = {
+            "cds-no-auto-config": "explicit/none/none/none/none",
+            "cds-tables-no-auto-config": "explicit/none/none/none/none",
+            "bc-no-auto-config": "explicit/none/none/none/none",
+            "bc-companies-no-auto-config": "explicit/none/none/none/none",
+            "cds": "env/env/env/env/env",
+            "cds-tables": "env/env/env/env/env",
+            "bc": "env/env/env/env/env",
+            "bc-companies": "env/env/env/env/env",
+            "cds-explicit": "env/explicit/explicit/env/env",
+            "cds-tables-explicit": "env/explicit/explicit/env/env",
+            "bc-explicit": "env/explicit/explicit/env/env",
+            "bc-companies-explicit": "env/explicit/explicit/env/env",
+            "cds-invalid": "CONSTRUCTOR-ERROR",
+            "cds-tables-invalid": "CONSTRUCTOR-ERROR",
+            "bc-invalid": "CONSTRUCTOR-ERROR",
+            "bc-companies-invalid": "CONSTRUCTOR-ERROR",
+        };
+
+        #! the fake environment of the worker; "env -i" clears every other variable, including any real CDS_*
+        #! variables of the developer's environment
+        const FakeEnv = "CDS_URL=https://cds.invalid/fake CDS_CLIENT_ID=fake-client-id "
+            "CDS_CLIENT_SECRET=fake-client-secret CDS_TENANT=fake-tenant CDS_SCOPE=fake-scope";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : Test("CdsRestDataProviderEnvClientOptions", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        addTestCase("client options from the environment in each execution mode", \testExecModes());
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        # only the variables needed to run qore are passed on; their values are not printed
+        list<string> pass = ();
+        foreach string var in (("PATH", "HOME")) {
+            if (exists ENV{var}) {
+                pass += sprintf("%s=%s", var, quote(ENV{var}));
+            }
+        }
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string out = ExecModeHarness::run(sprintf("env -i %s LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s %s -b "
+                "--enable-debug --exec-mode=%s %s", pass.join(" "), quote(libqore_dir), quote(libqore_dir),
+                FakeEnv, quote(qore_bin), mode, quote(get_script_dir() + DirSep + "env-client-options-worker.qr")),
+                ExecModeHarness::NativeCheck::None);
+            hash<string, string> results = {};
+            foreach string line in (out.split("\n")) {
+                *list<*string> parts = (line =~ x/^([-a-z]+)=(.*)$/);
+                if (parts) {
+                    results{parts[0]} = parts[1];
+                } else if (line.val()) {
+                    fail(sprintf("%s: unexpected worker output: %y", mode, out));
+                }
+            }
+            assertEq(Expected, results, mode);
+        }
+    }
+
+    #! quotes a value for the shell
+    private static string quote(string str) {
+        return "'" + replace(str, "'", "'\\''") + "'";
+    }
+}
