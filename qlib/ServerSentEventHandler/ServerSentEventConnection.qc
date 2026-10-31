@@ -187,7 +187,12 @@ public class ServerSentEventConnection {
             hash<auto> headers = getAsyncApiHeaders(event);
             asyncapi_validator.validateOutgoingMessage(asyncapi_channel, \payload, \headers);
             if (exists event.data) {
-                event.data = payload;
+                # the validated data is set in an "auto!" local: a caller's literal may be narrowed (e.g.
+                # hash<string, hash<string, date>> for {"data": {"when": now()}}), and the validator serializes
+                # the date to a string
+                hash<auto!> rv = event;
+                rv.data = payload;
+                return cast<hash<SseMessageInfo>>(rv);
             }
         }
         return cast<hash<SseMessageInfo>>(event);
@@ -216,7 +221,8 @@ public class ServerSentEventConnection {
     }
 
     private static hash<auto> getAsyncApiHeaders(hash<auto> event) {
-        hash<auto> headers;
+        # an event with none of these fields has an empty header hash
+        hash<auto> headers = {};
         foreach string key in (("event", "id", "retry", "comment")) {
             if (exists event{key}) {
                 headers{key} = event{key};

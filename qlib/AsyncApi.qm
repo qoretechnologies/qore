@@ -304,6 +304,9 @@ qore-asyncapi-gen -t "My Event API" -V "1.0.0" -o events.yaml src/*.qclass
 
     @subsection asyncapi_1_0 AsyncApi v1.0
     - initial release
+    - message payload objects and headers whose values all have the same type, such as a literal
+      <tt>{"when": now()}</tt>, are validated and serialized; serializing the date to a \c date-time string raised
+      \c RUNTIME-TYPE-ERROR
 */
 
 #! main namespace for all public %AsyncApi declarations
@@ -819,11 +822,15 @@ public class MessageObject inherits ObjectBase {
     #! Validates message headers against this schema
     validateHeaders(string channel, string operation, reference<hash<auto>> hdrs) {
         if (headers) {
-            foreach string key in (keys hdrs) {
-                auto val = hdrs{key};
+            # the headers are checked in an "auto!" local: a caller's literal may be narrowed (e.g.
+            # hash<string, date> for {"sent": now()}), and serializing a header to another type would throw
+            hash<auto!> h = hdrs;
+            foreach string key in (keys h) {
+                auto val = h{key};
                 headers.check(True, True, channel, operation, key, \val);
-                hdrs{key} = val;
+                h{key} = val;
             }
+            hdrs = h;
         }
     }
 }
@@ -1330,19 +1337,23 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             }
         }
 
+        # the properties are checked in an "auto!" local: a caller's literal may be narrowed (e.g.
+        # hash<string, date> for {"when": now()}), and serializing a property to another type would throw
+        hash<auto!> obj = value;
         # Check each property
-        foreach hash<auto> prop in (value.pairIterator()) {
+        foreach hash<auto> prop in (obj.pairIterator()) {
             if (properties{prop.key}) {
                 properties{prop.key}.check(serialize, request, channel, operation, pname + "." + prop.key,
-                    \value{prop.key});
+                    \obj{prop.key});
             } else if (additionalProperties.typeCode() == NT_BOOLEAN && !additionalProperties) {
                 throw "SCHEMA-VALIDATION-ERROR", sprintf("Parameter %y has unexpected property %y",
                     pname, prop.key);
             } else if (additionalProperties.typeCode() == NT_OBJECT) {
                 cast<SchemaObject>(additionalProperties).check(serialize, request, channel, operation,
-                    pname + "." + prop.key, \value{prop.key});
+                    pname + "." + prop.key, \obj{prop.key});
             }
         }
+        value = obj;
     }
 
     #! Returns the items schema for arrays

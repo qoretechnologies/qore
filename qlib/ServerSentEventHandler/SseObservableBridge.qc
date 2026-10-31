@@ -410,7 +410,8 @@ public class SseObservableBridge inherits DataProvider::Observer {
     }
 
     private static hash<auto> getAsyncApiHeaders(hash<auto> event) {
-        hash<auto> headers;
+        # an event with none of these fields has an empty header hash
+        hash<auto> headers = {};
         foreach string key in (("event", "id", "retry", "comment")) {
             if (exists event{key}) {
                 headers{key} = event{key};
