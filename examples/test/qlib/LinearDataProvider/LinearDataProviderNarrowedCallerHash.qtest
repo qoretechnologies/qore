@@ -1,0 +1,60 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires LinearDataProvider
+
+%exec-class LinearDataProviderNarrowedCallerHashTest
+
+#! A Linear client that returns two pages of records instead of sending GraphQL requests
+class PagingLinearRestClientIo inherits LinearRestClientIo {
+    public {
+        #! the variables of each request
+        list<hash<auto>> requests = ();
+    }
+
+    constructor() : LinearRestClientIo({"url": "https://linear.example.invalid/graphql", "token": "key"}) {
+    }
+
+    hash<auto> graphql(string query, *hash<auto> variables, *hash<auto> hdr) {
+        requests += variables;
+        bool first = !variables.after;
+        return {"body": {"data": {"issues": {
+            "nodes": ({"id": first ? "1" : "2"},),
+            "pageInfo": {"endCursor": first ? "cursor-1" : "cursor-2", "hasNextPage": first},
+        }}}};
+    }
+}
+
+#! GraphQL variable hashes whose values all have the same type
+/** A hash literal whose values all have the same type has a narrowed type, such as \c hash<string, int> for
+    <tt>{"count": 5}</tt>; adding the string cursor for the next page to the variables raised RUNTIME-TYPE-ERROR
+*/
+class LinearDataProviderNarrowedCallerHashTest inherits QUnit::Test {
+    constructor() : Test("LinearDataProviderNarrowedCallerHashTest", "1.0", \ARGV) {
+        addTestCase("LinearRecordIterator with narrowed variables", \iteratorPaging());
+        set_return_value(main());
+    }
+
+    #! Returns its argument with the type it was given
+    static auto mk(auto h) {
+        return h;
+    }
+
+    iteratorPaging() {
+        assertEq("hash<string, int>", mk({"count": 5}).fullType());
+        PagingLinearRestClientIo rest();
+        LinearRecordIterator i(rest, "query", "issues", {"count": 5}, 10);
+        list<string> ids;
+        while (i.next()) {
+            ids += i.getValue().id;
+        }
+        assertEq(("1", "2"), ids);
+        assertEq(({"first": 10, "count": 5}, {"first": 10, "count": 5, "after": "cursor-1"}), rest.requests);
+    }
+}

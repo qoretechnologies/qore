@@ -164,7 +164,9 @@ public class LinearRecordIterator inherits DataProvider::AbstractDataProviderRec
     private bool fetchNextPage() {
         @assert(rest, "REST client must be initialized");
         @assert(pageSize > 0, "page size must be positive");
-        hash<auto> vars = {
+        # the variables are set in an "auto!" local: the query variables may be narrowed (e.g. hash<string, int>
+        # for {"count": 5}), and adding the string cursor would throw
+        hash<auto!> vars = {
             "first": pageSize,
         } + (variables ?? {});
         if (cursor) {
