@@ -305,6 +305,27 @@ public class VscDebugAdapterTest inherits QUnit::Test {
             "int r = work(5);\n"                                             # 20
             "printf(\"r: %d\\n\", r);\n";                                     # 21
 
+        #! a program whose line 4 calls g() twice; the comments are the line numbers
+        const StepInProgram = "%modern\n"                                   # 1
+            "int sub g(int x) { return x + 1; }\n"                           # 2
+            "int sub h(int x) { return g(x) * 2; }\n"                        # 3
+            "int r = g(h(1));\n"                                             # 4
+            "r = h(r);\n"                                                    # 5
+            "printf(\"%d\\n\", r);\n";                                      # 6
+
+        #! a program with lines of more than one statement; the comments are the line numbers
+        /** in line 3, the second and third statements start at the UTF-16 code units 18 and 37, which are the bytes
+            21 and 40, as the string before them has a character of two bytes and one of four bytes and two UTF-16
+            code units
+        */
+        const ColumnProgram = "%modern\n"                                   # 1
+            "int sub add(int a, int b) { return a + b; }\n"                  # 2
+            "string s = \"é😀\"; int x = add(1, 2); printf(\"%d\\n\", x);\n"   # 3
+            "x = add(x, 4); x = add(x, 5);\n";                               # 4
+
+        #! the capabilities that the adapter gave in its response to the last initialize request
+        hash<auto> capabilities;
+
         string qore_exe = executablePath(ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore");
         string adapter = normalize_dir(get_script_dir() + "/../../../../bin/qdbg-vsc-adapter");
         string qlib_dir = normalize_dir(get_script_dir() + "/../../../../qlib");
@@ -331,6 +352,9 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         addTestCase("hit conditions of breakpoints", \hitConditionTest());
         addTestCase("logpoints", \logpointTest());
         addTestCase("a breakpoint whose condition is false does not hide a step", \conditionalStepTest());
+        addTestCase("the columns of the protocol and of the source", \columnConversionTest());
+        addTestCase("breakpoints on a statement of a line with more than one", \columnBreakpointTest());
+        addTestCase("stepping into a chosen call", \stepInTargetTest());
         addTestCase("the adapter communicates over sockets, as Visual Studio Code starts it", \socketTest());
         addTestCase("the adapter logs to its file and to the debug console", \logTest());
         addTestCase("the end of a program that started a process is reported", \childProcessTest());
@@ -619,6 +643,7 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         hash<auto> r = dap.request("initialize", {"adapterID": "qore", "linesStartAt1": True,
             "columnsStartAt1": True, "pathFormat": "path"});
         assertTrue(r.success, r.message);
+        capabilities = r.body;
         r = dap.request("launch", launch_args);
         assertTrue(r.success, r.message);
         dap.waitForEvent("initialized");
@@ -1028,6 +1053,147 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         finish(dap, proc, tid);
         # the output before the pause was taken above
         assertEq(("done\n",), dap.getOutput("stdout"));
+    }
+
+    columnConversionTest() {
+        # a character of two bytes and one of four bytes and two UTF-16 code units
+        string line = "a\u00e9\U0001f600b";
+        assertEq(0, VscDebugAdapter::getByteColumn(line, 1));
+        assertEq(1, VscDebugAdapter::getByteColumn(line, 2));
+        assertEq(3, VscDebugAdapter::getByteColumn(line, 3));
+        assertEq(7, VscDebugAdapter::getByteColumn(line, 5));
+        assertEq(7, VscDebugAdapter::getByteColumn(line, 4, False));
+        assertEq(1, VscDebugAdapter::getProtocolColumn(line, 0));
+        assertEq(3, VscDebugAdapter::getProtocolColumn(line, 3));
+        assertEq(5, VscDebugAdapter::getProtocolColumn(line, 7));
+        assertEq(4, VscDebugAdapter::getProtocolColumn(line, 7, False));
+        # columns after the end of the line
+        assertEq(10, VscDebugAdapter::getByteColumn(line, 8));
+        assertEq(8, VscDebugAdapter::getProtocolColumn(line, 10));
+        # without the text of the line, a character is a byte
+        assertEq(4, VscDebugAdapter::getByteColumn(NOTHING, 5));
+        assertEq(5, VscDebugAdapter::getProtocolColumn(NOTHING, 4));
+        # columns before the start of the line
+        assertEq(0, VscDebugAdapter::getByteColumn(line, 0));
+    }
+
+    columnBreakpointTest() {
+        TmpDir tmp("qore-vda-test-");
+        string path = writeProgram(tmp, ColumnProgram);
+        Process proc = startAdapter();
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        launch(dap, {"program": path, "stopOnEntry": False});
+
+        # each statement that starts on a line is a location
+        hash<auto> r = dap.request("breakpointLocations", {"source": {"path": path}, "line": 3});
+        assertTrue(r.success, r.message);
+        assertEq(({"line": 3, "column": 1}, {"line": 3, "column": 19}, {"line": 3, "column": 38}),
+            r.body.breakpoints);
+        # a range of lines and columns
+        r = dap.request("breakpointLocations", {"source": {"path": path}, "line": 3, "column": 2, "endLine": 4,
+            "endColumn": 10});
+        assertTrue(r.success, r.message);
+        assertEq(({"line": 3, "column": 19}, {"line": 3, "column": 38}, {"line": 4, "column": 1}),
+            r.body.breakpoints);
+        # negative: a line without a statement and a file that is not a source of the program
+        r = dap.request("breakpointLocations", {"source": {"path": path}, "line": 5});
+        assertTrue(r.success, r.message);
+        assertEq((), r.body.breakpoints);
+        r = dap.request("breakpointLocations", {"source": {"path": tmp.path + "/other.q"}, "line": 3});
+        assertTrue(r.success, r.message);
+        assertEq((), r.body.breakpoints);
+
+        # a breakpoint on the second statement of line 3, and one in the middle of the second statement of line 4
+        # (column 9 of "x = add(x, 4); x = add(x, 5);" is in the first statement, column 20 in the second)
+        r = dap.request("setBreakpoints", {"source": {"path": path}, "breakpoints": ({"line": 3, "column": 19},
+            {"line": 4, "column": 20})});
+        assertTrue(r.success, r.message);
+        assertEq((True, True), (map $1.verified, r.body.breakpoints));
+        # the IDE shows each breakpoint at the statement that it is set on
+        assertEq(((3, 19), (4, 16)), (map ($1.line, $1.column), r.body.breakpoints));
+        list<int> bkpt_ids = map $1.id, r.body.breakpoints;
+        r = dap.request("configurationDone");
+        assertTrue(r.success, r.message);
+
+        # the first statement of line 3 runs, the thread stops at its second statement
+        hash<auto> stopped = dap.waitForEvent("stopped");
+        assertEq("breakpoint", stopped.body.reason);
+        assertEq((bkpt_ids[0],), stopped.body.hitBreakpointIds);
+        int tid = stopped.body.threadId;
+        hash<auto> frame = topFrame(dap, tid);
+        assertEq((3, 19, 3, 36), (frame.line, frame.column, frame.endLine, frame.endColumn));
+        # the first statement of the line ran
+        assertEq("\"é😀\"", evaluate(dap, tid, "s").body.result);
+
+        # the second breakpoint is on the second statement of line 4
+        r = dap.request("continue", {"threadId": tid});
+        assertTrue(r.success, r.message);
+        stopped = dap.waitForEvent("stopped");
+        assertEq((bkpt_ids[1],), stopped.body.hitBreakpointIds);
+        frame = topFrame(dap, tid);
+        assertEq((4, 16), (frame.line, frame.column));
+        assertEq("7", evaluate(dap, tid, "x").body.result);
+
+        finish(dap, proc, tid);
+        assertEq(("3\n",), dap.getOutput("stdout"));
+    }
+
+    stepInTargetTest() {
+        TmpDir tmp("qore-vda-test-");
+        string path = writeProgram(tmp, StepInProgram);
+        Process proc = startAdapter();
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        hash<auto> stopped = launchToStop(dap, path, ({"line": 4}, {"line": 5}));
+        assertTrue(capabilities.supportsStepInTargetsRequest);
+        assertTrue(capabilities.supportsBreakpointLocationsRequest);
+        int tid = stopped.body.threadId;
+        hash<auto> frame = topFrame(dap, tid);
+        assertEq(4, frame.line);
+
+        # the calls of the statement, with their locations: "int r = g(h(1));"
+        hash<auto> r = dap.request("stepInTargets", {"frameId": frame.id});
+        assertTrue(r.success, r.message);
+        assertEq((("h", 4, 11, 15), ("g", 4, 9, 16)), (map ($1.label, $1.line, $1.column, $1.endColumn),
+            r.body.targets));
+        int g_target = r.body.targets[1].id;
+        # only the top frame has targets
+        r = dap.request("stepInTargets", {"frameId": frame.id + 1});
+        assertTrue(r.success, r.message);
+        assertEq((), r.body.targets);
+
+        # stepping into g(): the thread stops in g() when the statement calls it with the value of h(1), not in the
+        # call of g() in h()
+        r = dap.request("stepIn", {"threadId": tid, "targetId": g_target});
+        assertTrue(r.success, r.message);
+        stopped = dap.waitForEvent("stopped");
+        assertEq("step", stopped.body.reason);
+        frame = topFrame(dap, tid);
+        assertEq(2, frame.line);
+        assertEq("4", evaluate(dap, tid, "x").body.result);
+
+        # line 5 calls g() only in h(): stepping into g() steps over the statement
+        r = dap.request("continue", {"threadId": tid});
+        assertTrue(r.success, r.message);
+        stopped = dap.waitForEvent("stopped");
+        assertEq("breakpoint", stopped.body.reason);
+        frame = topFrame(dap, tid);
+        assertEq(5, frame.line);
+        r = dap.request("stepInTargets", {"frameId": frame.id});
+        assertEq(("h",), (map $1.label, r.body.targets));
+        r = dap.request("stepIn", {"threadId": tid, "targetId": g_target});
+        assertTrue(r.success, r.message);
+        stopped = dap.waitForEvent("stopped");
+        assertEq("step", stopped.body.reason);
+        assertEq(6, topFrame(dap, tid).line);
+
+        finish(dap, proc, tid);
+        assertEq(("12\n",), dap.getOutput("stdout"));
     }
 
     #! Launches the given program with breakpoints and returns the first stopped event

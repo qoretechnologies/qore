@@ -30,6 +30,21 @@ printf(\"%d %y\\n\", total, h);
 
 const TargetLabel = "dpc-target.q";
 
+#! a program whose line 4 calls g() twice: in h(), which is called first, and with the value of h()
+const StepInScript = "%modern
+int sub g(int x) { return x + 1; }
+int sub h(int x) { return g(x) * 2; }
+int r = g(h(1));
+printf(\"%d\\n\", r);
+";
+
+#! a program with a line of two statements; the second statement of line 3 starts at column 19
+const ColumnScript = "%modern
+int sub add(int a, int b) { return a + b; }
+int x = add(1, 2); int y = add(x, 4);
+printf(\"%d\\n\", y);
+";
+
 #! a program with exceptions that are caught in different ways, and one that is not caught
 const UncaughtScript = "%modern
 sub fail(string err) {
@@ -265,6 +280,8 @@ public class DebugProgramControlTest inherits QUnit::Test {
         addTestCase("structured variables of a stopped thread", \variableCommandTest());
         addTestCase("expressions evaluated with the variables of a stopped thread", \evaluateCommandTest());
         addTestCase("exceptions that no try statement catches", \uncaughtTest());
+        addTestCase("statements of a line with more than one statement", \columnTest());
+        addTestCase("stepping into a chosen call", \stepInTargetTest());
         set_return_value(main());
     }
 
@@ -713,6 +730,70 @@ public class DebugProgramControlTest inherits QUnit::Test {
         assertThrows("DEBUG-PROGRAM-HELPER", "Statement description is missing", \cl.getStatementValue(), ((),));
         assertThrows("DEBUG-PROGRAM-HELPER", "expecting", \cl.getStatementValue(), (("x.q",),));
         assertThrows("DEBUG-PROGRAM-HELPER", "expecting", \cl.getStatementValue(), (("x.q", "y"),));
+    }
+
+    columnTest() {
+        DebuggedProgram p(dpc, ColumnScript);
+        on_exit p.cleanup();
+        string cmd = sprintf("program/%d/", p.pgmId);
+        # the statements of line 3 in the order of their columns
+        list<hash<auto>> stmts = dpc.command(cmd + "statement/list", {"value": {"file": TargetLabel, "lineno": 3}});
+        assertEq(((3, 0, 17), (3, 19, 36)), (map ($1.start_line, $1.start_column, $1.end_column), stmts));
+        # the statement of a line without columns is the line's first statement
+        assertEq(stmts[0].id, dpc.command(cmd + "statement/get", {"value": {"file": TargetLabel, "lineno": 3}}).id);
+        # a column breakpoint is on the last statement that starts at or before the column, or on the first one
+        foreach list<int> i in (((0, 0), (5, 0), (19, 1), (25, 1), (200, 1))) {
+            hash<auto> bp = dpc.command(cmd + "breakpoint//create", {
+                "value": {"file": TargetLabel, "lineno": 3, "column": i[0]},
+            });
+            assertEq(stmts[i[1]].id, bp.stmtid, "column " + i[0]);
+            dpc.command(sprintf("program/%d/breakpoint/%d/delete", p.pgmId, bp.bkptid));
+        }
+        # negative: the line is missing, and a line without a statement
+        assertThrows("DEBUG-HANDLER-ERROR", "lineno", \dpc.command(), (cmd + "statement/list",
+            {"value": {"file": TargetLabel}}));
+        assertEq((), dpc.command(cmd + "statement/list", {"value": {"file": TargetLabel, "lineno": 100}}));
+        assertThrows("PROGRAM-STATEMENT-ERROR", \dpc.command(), (cmd + "breakpoint//create",
+            {"value": {"file": TargetLabel, "lineno": 100, "column": 0}}));
+
+        # the thread stops at the second statement of the line, which the interrupt and the stack give with its columns
+        hash<auto> bp = dpc.command(cmd + "breakpoint//create", {
+            "value": {"file": TargetLabel, "lineno": 3, "column": 19},
+        });
+        hash<auto> e = p.runToStop();
+        assertEq(bp.bkptid, e.bkptid);
+        assertEq((3, 19, 36), (e.line, e.column, e.endcolumn));
+        list<auto> stack = dpc.threadCommand(p.tid, "thread/stack");
+        assertEq((3, 19, 36), (stack[0].line, stack[0].column, stack[0].endcolumn));
+
+        assertEq({"rc": NOTHING}, p.finish());
+    }
+
+    stepInTargetTest() {
+        DebuggedProgram p(dpc, StepInScript);
+        on_exit p.cleanup();
+        string cmd = sprintf("program/%d/", p.pgmId);
+        hash<auto> bp = p.breakAt(4);
+        hash<auto> e = p.runToStop();
+        assertEq(bp.bkptid, e.bkptid);
+        # the calls of the statement in the order in which they are made; g() is given once
+        list<hash<auto>> targets = dpc.command(cmd + "statement/stepintargets", {"value": {"id": e.statementid}});
+        assertEq(("h", "g"), (map $1.name, targets));
+        int g_entry = dpc.command(cmd + "statement/get", {"value": {"function": "g"}}).id;
+        assertEq(g_entry, targets[1].statement_id);
+
+        # stepping into g() stops when the statement calls it, not when h(), which it calls first, calls it
+        dpc.threadSend(p.tid, "thread/go/stepover", {"value": {"id": g_entry}});
+        e = dpc.getInterrupt(p.pgmId);
+        assertEq(g_entry, e.statementid);
+        # g(h(1)) is g(4)
+        assertEq(4, AbstractDebugControl::unserialize(dpc.threadCommand(p.tid, "thread/local/x/get").value));
+
+        # negative: a statement ID that does not exist
+        assertThrows("PROGRAM-STATEMENT-ERROR", \dpc.command(), (cmd + "statement/stepintargets",
+            {"value": {"id": 999999}}));
+
+        assertEq({"rc": NOTHING}, p.finish());
     }
 
     breakpointErrorTest() {

@@ -58,7 +58,11 @@ module VscDebugAdapter {
       exceptions stop the program by their type (user or system exceptions) or when no try statement of the
       debugged code catches them (uncaught exceptions; the try statements of code that cannot be debugged are not
       seen)
-    - step over, into and out, continue and pause of a thread; all threads of the program stop when one of them
+    - breakpoints on any statement of a line with more than one statement (column breakpoints); columns are converted
+      between the UTF-16 code units of the protocol and the bytes of %Qore with the text of the line, if the file can
+      be read by the adapter, otherwise a character is assumed to be a byte
+    - step over, into and out, also into a chosen call of the statement (step-in targets), continue and pause of a
+      thread; all threads of the program stop when one of them
       stops, and continue together, unless the \c stopAllThreads argument of the \c launch or \c attach request is
       \c false
     - threads with their names; the default names that %Qore gives threads are not shown
@@ -77,14 +81,24 @@ module VscDebugAdapter {
     functions and methods that they call run in the program, with its permissions.
 
     Limitations:
-    - data breakpoints, stepping back, jumping to a line, restarting a frame, stepping into a chosen call, and column
-      breakpoints are not supported
+    - data breakpoints, stepping back, jumping to a line, and restarting a frame are not supported
+    - the calls that can be stepped into are the calls of user code that are known when the code is parsed; a call
+      of a method of an object of an unknown class or of a call reference is not offered, and stepping into a method
+      that a subclass overrides steps over the statement
+    - a breakpoint is on a statement, so an expression with more than one call, such as <tt>f(g(x))</tt>, has one
+      breakpoint location
     - when a thread stops, the other threads stop at their next statement, so a thread that waits, as for input,
       stops when it runs again; with \c stopAllThreads \c false, a breakpoint or a pause stops only the thread that
       reaches it
     - the client is not notified when another debugger client changes a breakpoint
 
     @subsection vda_v0_3
+    - step-in targets: the \c stepInTargets request gives the calls of the current statement, and \c stepIn with a
+      \c targetId steps into the chosen call
+    - breakpoints can be set on any statement of a line with more than one statement: the
+      \c breakpointLocations request gives the statements of a line, and a source breakpoint with a column is set on
+      the statement at the column; stack frames give the columns of their statements, and their end lines are given
+      as \c endLine, as the protocol defines it
     - the output of programs that are debugged in the adapter process is sent to the IDE as \c output events instead
       of being written to the channel of the protocol; see
       @ref VscDebugAdapter::VscDebugAdapter::captureProgramOutput() "VscDebugAdapter::captureProgramOutput()"
@@ -221,6 +235,9 @@ public class VscDebugAdapter inherits DebugCommandLine {
 
         #! initialize command arguments
         hash m_initializeArgs;
+        #! the lines of the files read for the conversion of columns, keyed by path; values are hashes with the
+        #! keys mtime, size and lines
+        hash<string, hash<auto>> m_fileLines;
 
         #! program stat information
         hash m_programState;
@@ -1175,6 +1192,97 @@ vda.run();
         return src;
     }
 
+    #! Returns the 0-based byte column of a column of the protocol in a line
+    /** @param line the text of the line, if known; without it, each character is assumed to be one byte
+        @param column the column of the protocol, which counts UTF-16 code units
+        @param columnsStartAt1 if the columns of the protocol start at 1
+
+        @return the 0-based byte column of the character at the column; columns after the end of the line are
+        counted from its end
+    */
+    static int getByteColumn(*string line, int column, bool columnsStartAt1 = True) {
+        int units = column - (columnsStartAt1 ? 1 : 0);
+        if (units <= 0) {
+            return 0;
+        }
+        if (!exists line) {
+            return units;
+        }
+        int bytes = 0;
+        int len = line.length();
+        for (int i = 0; i < len && units > 0; ++i) {
+            string c = line[i];
+            units -= c.getUnicode() > 0xffff ? 2 : 1;
+            bytes += c.size();
+        }
+        # a column after the end of the line
+        return bytes + (units > 0 ? units : 0);
+    }
+
+    #! Returns the column of the protocol of a 0-based byte column in a line
+    /** @param line the text of the line, if known; without it, each character is assumed to be one byte
+        @param byteColumn the 0-based byte column
+        @param columnsStartAt1 if the columns of the protocol start at 1
+
+        @return the column of the protocol, which counts UTF-16 code units
+    */
+    static int getProtocolColumn(*string line, int byteColumn, bool columnsStartAt1 = True) {
+        int units = 0;
+        if (!exists line) {
+            units = byteColumn;
+        } else {
+            int bytes = 0;
+            int len = line.length();
+            for (int i = 0; i < len && bytes < byteColumn; ++i) {
+                string c = line[i];
+                units += c.getUnicode() > 0xffff ? 2 : 1;
+                bytes += c.size();
+            }
+            # a column after the end of the line
+            if (bytes < byteColumn) {
+                units += byteColumn - bytes;
+            }
+        }
+        return units + (columnsStartAt1 ? 1 : 0);
+    }
+
+    #! Returns a line of a file, if the file can be read here
+    /** @param file the path of the file
+        @param line the 1-based line
+
+        @return the text of the line without its end of line characters, or @ref nothing if the file cannot be
+        read here, as for a file of a remote program, or has no such line
+    */
+    private:internal *string getFileLine(*string file, int line) {
+        if (!file || line < 1) {
+            return;
+        }
+        *hash<auto> stat = hstat(file);
+        if (!stat || stat.type != "REGULAR") {
+            return;
+        }
+        # the lines of a file are read again when it has changed
+        *hash<auto> cached = m_fileLines{file};
+        if (!cached || cached.mtime != stat.mtime || cached.size != stat.size) {
+            list<string> lines = ();
+            try {
+                FileLineIterator i(file);
+                while (i.next()) {
+                    lines += i.getValue();
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                return;
+            }
+            cached = m_fileLines{file} = {"mtime": stat.mtime, "size": stat.size, "lines": lines};
+        }
+        return cached.lines[line - 1];
+    }
+
+    #! Returns if the columns of the protocol start at 1
+    private:internal bool columnsStartAt1() {
+        return m_initializeArgs.columnsStartAt1 ?? True;
+    }
+
     #! Returns the name of a thread that is shown in the IDE
     /** @param tid the ID of the thread
         @param name the name of the thread, if known; the default names that %Qore gives threads, \c "qore/"
@@ -1386,7 +1494,57 @@ vda.run();
     }
 
     public vsc_stepIn(hash args) {
-        step(args.threadId, "step");
+        if (exists args.targetId) {
+            # a target is the entry of the called code: the thread steps over the statement and stops when the
+            # statement calls the code
+            step(args.threadId, "stepover", {"id": args.targetId});
+        } else {
+            step(args.threadId, "step");
+        }
+    }
+
+    #! Returns the calls of the statement of a stack frame that can be stepped into
+    /** The ID of a target is the statement ID of the start of the called code; the calls are given for the top frame
+        only, as stepping continues the thread from its current statement
+    */
+    public hash vsc_stepInTargets(hash args) {
+        int tid = args.frameId >> 16;
+        int frame = args.frameId & 0xffff;
+        hash res.targets = ();
+        *list l = m_programState{m_currentPgmId}.thread{tid}.stack;
+        if (!l) {
+            l = doCommand((
+                "cmd": "thread/stack",
+                "tid": tid,
+            )).result;
+            m_programState{m_currentPgmId}.thread{tid}.stack = l;
+        }
+        if (frame || !l || !l[0].statementid) {
+            return res;
+        }
+        string path = l[0].file;
+        *hash ls = m_programState{m_currentPgmId}.loadedSourceByName{getLoadedSourceName(l[0].file, l[0].source)};
+        if (ls) {
+            path = getSource(ls).path ?? path;
+        }
+        list<auto> targets = doCommand((
+            "cmd": "program/" + m_currentPgmId + "/statement/stepintargets",
+            "value": {"id": l[0].statementid},
+        )).result ?? ();
+        foreach hash<auto> t in (targets) {
+            hash<auto> target = {
+                "id": t.statement_id,
+                "label": t.name,
+                "line": t.start_line,
+                "endLine": t.end_line,
+            };
+            if (t.start_column >= 0) {
+                target.column = getProtocolColumn(getFileLine(path, t.start_line), t.start_column, columnsStartAt1());
+                target.endColumn = getProtocolColumn(getFileLine(path, t.end_line), t.end_column, columnsStartAt1());
+            }
+            push res.targets, target;
+        }
+        return res;
     }
 
     public vsc_stepOut(hash args) {
@@ -1394,10 +1552,18 @@ vda.run();
     }
 
     #! Resumes a thread with a step; the next stop of the thread ends the step (see processDebugEvent())
-    private:internal step(int tid, string run_state) {
+    /** @param tid the thread
+        @param run_state the run state of the step
+        @param runTo the statement to run to, if any, as given to the debugger, such as \c id
+    */
+    private:internal step(int tid, string run_state, *hash<auto> runTo) {
         m_programState{m_currentPgmId}.steppingThreads{tid} = True;
         on_error remove m_programState{m_currentPgmId}.steppingThreads{tid};
-        doCommand(("cmd": "thread/go/" + run_state, "tid": tid));
+        hash<auto> cmd = {"cmd": "thread/go/" + run_state, "tid": tid};
+        if (runTo) {
+            cmd.value = runTo;
+        }
+        doCommand(cmd);
     }
 
     public hash vsc_stackTrace(hash args) {
@@ -1442,9 +1608,15 @@ vda.run();
                 sf.source.presentationHint = "deemphasize";
             }
             sf.line = l[i].line;
-            sf.column = 0;
-            sf.endline = l[i].endline;
-            #sf.endcolumn
+            sf.endLine = l[i].endline;
+            if (exists l[i].column) {
+                # the frame's statement, where it is known
+                string path = sf.source.path ?? l[i].file;
+                sf.column = getProtocolColumn(getFileLine(path, l[i].line), l[i].column, columnsStartAt1());
+                sf.endColumn = getProtocolColumn(getFileLine(path, l[i].endline), l[i].endcolumn, columnsStartAt1());
+            } else {
+                sf.column = 0;
+            }
             #sf.moduleId
             push res.stackFrames, sf;
         }
@@ -1781,30 +1953,102 @@ vda.run();
         return res;
     }
 
-    public hash vsc_setBreakpoints(hash args) {
-        string sourceId = args.source.path;
+    #! Returns the ID and the file of a source of the protocol, as the program knows the file
+    private:internal hash<auto> getSourceFile(hash<auto> source) {
+        string sourceId = source.path;
         string file = sourceId;
-        if (args.source.sourceReference > 0) { # always ?? Probably not when launching script
-            *hash ls = m_programState{m_currentPgmId}.loadedSourceById{args.source.sourceReference};
+        if (source.sourceReference > 0) { # always ?? Probably not when launching script
+            *hash ls = m_programState{m_currentPgmId}.loadedSourceById{source.sourceReference};
             if (ls) {
                 sourceId = string(ls.id);
                 file = ls.file;
             }
         }
+        return {"sourceId": sourceId, "file": file};
+    }
+
+    #! Returns the line and the column of the protocol of a statement
+    /** @param file the file of the statement, whose lines are read for the conversion of the column
+        @param info the @ref Qore::StatementInfo "StatementInfo" of the statement
+    */
+    private:internal hash<auto> getStatementPosition(string file, hash<auto> info) {
+        hash<auto> rv = {"line": info.start_line};
+        if (info.start_column >= 0) {
+            rv.column = getProtocolColumn(getFileLine(file, info.start_line), info.start_column, columnsStartAt1());
+        }
+        return rv;
+    }
+
+    public hash vsc_setBreakpoints(hash args) {
+        hash<auto> sf = getSourceFile(args.source);
+        string sourceId = sf.sourceId;
+        string file = sf.file;
         deleteBreakpoints(m_programState{m_currentPgmId}.sourceBreakpoints{sourceId});
         remove m_programState{m_currentPgmId}.sourceBreakpoints{sourceId};
         hash res.breakpoints = ();
         if (args.breakpoints) {
             list bkpts;
             foreach hash b in (args.breakpoints) {
-                push bkpts, ("file": file, "lineno": b.line); # +b.("condition", "hitCondition", "logMessage");
+                hash<auto> bkpt = {"file": file, "lineno": b.line};
+                # a breakpoint on a statement of a line with more than one statement
+                if (exists b.column) {
+                    bkpt.column = getByteColumn(getFileLine(file, b.line), b.column, columnsStartAt1());
+                }
+                push bkpts, bkpt;
             }
             res.breakpoints = setBreakpoints(bkpts);
             foreach hash b in (\res.breakpoints) {
                 if (b.verified) {
+                    # the IDE shows a column breakpoint at the statement that it is set on
+                    if (exists args.breakpoints[$#].column && b.statementId) {
+                        hash<auto> info = doCommand((
+                            "cmd": "program/" + m_currentPgmId + "/statement/get",
+                            "value": {"id": b.statementId},
+                        )).result;
+                        b += getStatementPosition(file, info);
+                    }
                     m_programState{m_currentPgmId}.sourceBreakpoints{sourceId}{b.id} = b + args.breakpoints[$#];
                     remove b.statementId;
                 }
+            }
+        }
+        return res;
+    }
+
+    #! Returns the locations of a range of lines where breakpoints can be set
+    /** Each statement that starts on a line of the range is a location, so a line with more than one statement has
+        more than one location
+    */
+    public hash vsc_breakpointLocations(hash args) {
+        string file = getSourceFile(args.source).file;
+        int endLine = args.endLine ?? args.line;
+        hash res.breakpoints = ();
+        for (int line = args.line; line <= endLine; ++line) {
+            list<auto> stmts;
+            try {
+                stmts = doCommand((
+                    "cmd": "program/" + m_currentPgmId + "/statement/list",
+                    "value": {"file": file, "lineno": line},
+                )).result ?? ();
+            } catch (hash<ExceptionInfo> ex) {
+                # the file is not a source of the program
+                break;
+            }
+            foreach hash<auto> stmt in (stmts) {
+                # only statements that start on the line, not one that contains it
+                if (stmt.start_line != line && stmt.start_line + stmt.offset != line) {
+                    continue;
+                }
+                hash<auto> pos = getStatementPosition(file, stmt);
+                pos.line = line;
+                # the columns of the range are on its first and last lines
+                if (pos.column) {
+                    if ((line == args.line && exists args.column && pos.column < args.column)
+                        || (line == endLine && exists args.endColumn && pos.column > args.endColumn)) {
+                        continue;
+                    }
+                }
+                push res.breakpoints, pos;
             }
         }
         return res;
@@ -1951,7 +2195,8 @@ vda.run();
             "supportsGotoTargetsRequest": False,
 
             /* The debug adapter supports the stepInTargetsRequest. */
-            "supportsStepInTargetsRequest": False,
+            "supportsStepInTargetsRequest": True,
+            "supportsBreakpointLocationsRequest": True,
 
             /* The debug adapter supports the completionsRequest. */
             "supportsCompletionsRequest": True,

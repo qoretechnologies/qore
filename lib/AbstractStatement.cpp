@@ -194,6 +194,10 @@ void AbstractStatement::finalizeBlock(int sline, int eline) {
     }
 }
 
+void AbstractStatement::setColumns(int scol, int ecol) {
+    loc = qore_program_private::get(*getProgram())->getLocation(*loc, loc->start_line, loc->end_line, scol, ecol);
+}
+
 int AbstractStatement::exec(QoreValue& return_value, ExceptionSink *xsink) {
     RuntimeConfig& rc = rc_get_current_ref();
     return exec(rc, return_value, xsink);

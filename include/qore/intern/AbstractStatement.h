@@ -81,6 +81,14 @@ public:
 
     DLLLOCAL void finalizeBlock(int sline, int eline);
 
+    //! Sets the columns of the location of the statement, which the parser knows only after creating it
+    /** @param scol the 0-based column of the first character of the statement
+        @param ecol the 0-based column after the last character of the statement
+
+        Debuggers use the columns to find a statement of a line with more than one statement
+    */
+    DLLLOCAL void setColumns(int scol, int ecol);
+
     //! Returns true if the statement is in the body of a try statement of its function, method or top-level code
     /** An exception that the statement raises can then be caught in its function; set at parse time, for debuggers
     */

@@ -66,6 +66,13 @@ module DebugProgramControl {
       writes before an interrupt is sent before the interrupt
     - interrupt events of exceptions give \c uncaught: @ref True if no try statement of debuggable code in the call
       stack catches the exception
+    - the \c program/<id>/statement/stepintargets command gives the calls of a statement that can be stepped into
+      (see @ref Qore::ProgramControl::getStepInTargets() "ProgramControl::getStepInTargets()"); stepping over with the
+      statement of a target as the statement to run to steps into the call
+    - a statement can be given by its line and its 0-based byte \c column, for a breakpoint on a statement of a line
+      with more than one statement; the \c program/<id>/statement/list command gives the statements of a line with
+      their columns, and interrupt events and the frames of call stacks give the columns of their statements in
+      \c column and \c endcolumn where they are known
     - interrupt events give the name of the thread in \c threadname, and program lists give the current names of the
       threads of programs in \c threadNames
     - @ref DebugProgramControl::DebugProgramControl::createProgram() "createProgram()" parses a script in the mode
@@ -690,6 +697,17 @@ public namespace DebugProgramControl {
 
                             case 'statement':
                                 switch (shift cmd) {
+                                    case 'list':
+                                        if (!exists receiveData.value.lineno) {
+                                            throw "DEBUG-HANDLER-ERROR", "the line of the statements is missing "
+                                                "(value.lineno)";
+                                        }
+                                        result = getLineStatements(pgmb, receiveData.value.file ?? '',
+                                            receiveData.value.lineno);
+                                        break;
+                                    case 'stepintargets':
+                                        result = pgmb.getStepInTargets(resolveStatement(pgmb, receiveData.value));
+                                        break;
                                     case 'get':
                                         int sid = resolveStatement(pgmb, receiveData.value);
                                         result = hash(pgmb.getStatementIdInfo(sid, True));
@@ -967,9 +985,50 @@ public namespace DebugProgramControl {
                 return pgm.findFunctionStatementId(value.function, value.args);
             }
             if (exists value.lineno) {
+                if (exists value.column) {
+                    return findColumnStatement(pgm, value.file ?? '', value.lineno, value.column);
+                }
                 return pgm.findStatementId(value.file ?? '', value.lineno);
             }
             throw "DEBUG-HANDLER-ERROR", sprintf("Cannot resolve statement from %y", value);
+        }
+
+        #! Returns the ID of the statement of a column of a line
+        /** @param pgm the Program
+            @param file the file or the label of the source
+            @param line the line
+            @param column the 0-based column, counted in bytes
+
+            @return the last statement of the line that starts at or before the column, the first statement of the
+            line if none does
+
+            @throw PROGRAM-STATEMENT-ERROR no statement is found for the line, as for a line breakpoint
+        */
+        private static int findColumnStatement(ProgramControl pgm, string file, int line, int column) {
+            list<int> ids = pgm.findStatementIds(file, line);
+            if (!ids) {
+                throw "PROGRAM-STATEMENT-ERROR", sprintf("cannot find statement for \"%s:%d\"", file, line);
+            }
+            int rv = ids[0];
+            foreach int id in (ids) {
+                int start_column = pgm.getStatementIdInfo(id).start_column;
+                if (start_column >= 0 && start_column <= column) {
+                    rv = id;
+                }
+            }
+            return rv;
+        }
+
+        #! Returns the statements of a line with their locations
+        /** @param pgm the Program
+            @param file the file or the label of the source
+            @param line the line
+
+            @return a list of the statements of the line in the order of their columns, each a hash of the
+            @ref Qore::StatementInfo "StatementInfo" keys and \c id, the ID of the statement
+        */
+        private static list<hash<auto>> getLineStatements(ProgramControl pgm, string file, int line) {
+            return map hash(pgm.getStatementIdInfo($1)) + {"id": $1}, pgm.findStatementIds(file, line);
         }
 
         private hash<auto> getProgramInfo(ProgramControl p, bool listFiles = False, *list<auto> threads) {
@@ -1149,6 +1208,22 @@ public namespace DebugProgramControl {
                 stack[0].programid = ctx.intrInfo.pgmid;
                 if (ctx.intrInfo.statementid) {
                     stack[0].statementid = ctx.intrInfo.statementid;
+                }
+            }
+            # the columns of the statement of each frame, where they are known
+            foreach hash<auto> frame in (\stack) {
+                if (!frame.statementid || !frame.programid) {
+                    continue;
+                }
+                try {
+                    hash<StatementInfo> info = ProgramControl::resolveProgramId(frame.programid)
+                        .getStatementIdInfo(frame.statementid);
+                    if (info.start_column >= 0) {
+                        frame.column = info.start_column;
+                        frame.endcolumn = info.end_column;
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    # the Program of the frame cannot be debugged or no longer exists: no columns
                 }
             }
             return stack;
@@ -1374,6 +1449,10 @@ public namespace DebugProgramControl {
                 ctx.intrInfo.file = location.file;
                 ctx.intrInfo.line = location.start_line;
                 ctx.intrInfo.endline = location.end_line;
+                if (location.start_column >= 0) {
+                    ctx.intrInfo.column = location.start_column;
+                    ctx.intrInfo.endcolumn = location.end_column;
+                }
                 if (location.source != "") {
                     ctx.intrInfo.source = location.source;
                 }

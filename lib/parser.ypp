@@ -3493,12 +3493,15 @@ statement:
     { $$ = $1; }
     | TOK_RETHROW ';' {
         $$ = new RethrowStatement(@1.first_line, @1.last_line);
+        $$->setColumns(@1.first_col, @1.last_col);
     }
     | TOK_RETHROW exp ';' {
         $$ = new RethrowStatement(@1.first_line, @1.last_line, $2);
+        $$->setColumns(@1.first_col, @1.last_col);
     }
     | TOK_THROW exp ';' {
         $$ = new ThrowStatement(@1.first_line, @2.last_line, $2);
+        $$->setColumns(@1.first_col, @2.last_col);
     }
     | TOK_DISCARD '(' exp ')' ';' {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(
@@ -3510,24 +3513,31 @@ statement:
         // exp could be: single condition, or list (condition, msg, args...)
         // AssertStatement handles both cases
         $$ = new AssertStatement(@1.first_line, @4.last_line, $3);
+        $$->setColumns(@1.first_col, @4.last_col);
     }
     | TOK_DEBUG '(' exp ')' ';' {
         $$ = new DebugStatement(@1.first_line, @4.last_line, $3);
+        $$->setColumns(@1.first_col, @4.last_col);
     }
     | TOK_DEBUG_BLOCK statement_or_block {
         $$ = new DebugStatement(@1.first_line, @2.last_line, $2);
+        $$->setColumns(@1.first_col, @2.last_col);
     }
     | TOK_ON_EXIT statement_or_block {
         $$ = new OnBlockExitStatement(@1.first_line, @2.last_line, $2, OBE_Unconditional);
+        $$->setColumns(@1.first_col, @2.last_col);
     }
     | TOK_ON_SUCCESS statement_or_block {
         $$ = new OnBlockExitStatement(@1.first_line, @2.last_line, $2, OBE_Success);
+        $$->setColumns(@1.first_col, @2.last_col);
     }
     | TOK_ON_ERROR statement_or_block {
         $$ = new OnBlockExitStatement(@1.first_line, @2.last_line, $2, OBE_Error);
+        $$->setColumns(@1.first_col, @2.last_col);
     }
     | TOK_SUB_CONTEXT context_mods statement_or_block {
         $$ = new ContextStatement(@1.first_line, @3.last_line, 0, 0, $2, $3);
+        $$->setColumns(@1.first_col, @3.last_col);
     }
     | TOK_SUMMARIZE optname '(' exp ')' TOK_BY '(' exp ')' context_mods statement_or_block {
         if (parse_check_parse_option(QoreParseOptions::NO_SUMMARIZE)) {
@@ -3537,24 +3547,31 @@ statement:
                 "set (implied by '%%modern'); rewrite as a 'context' loop with manual grouping");
         }
         $$ = new SummarizeStatement(@1.first_line, @11.last_line, $2, $4, $10, $11, $8);
+        $$->setColumns(@1.first_col, @11.last_col);
     }
     | TOK_CONTEXT optname '(' exp ')' context_mods statement_or_block {
         $$ = new ContextStatement(@1.first_line, @7.last_line, $2, $4, $6, $7);
+        $$->setColumns(@1.first_col, @7.last_col);
     }
     | TOK_IF '(' exp ')' statement_or_block %prec IFX {
         $$ = new IfStatement(@1.first_line, @5.last_line, $3, $5);
+        $$->setColumns(@1.first_col, @5.last_col);
     }
     | TOK_IF '(' exp ')' statement_or_block TOK_ELSE statement_or_block {
         $$ = new IfStatement(@1.first_line, @7.last_line, $3, $5, $7);
+        $$->setColumns(@1.first_col, @7.last_col);
     }
     | TOK_WHILE '(' exp ')' statement_or_block {
         $$ = new WhileStatement(@1.first_line, @5.last_line, $3, $5);
+        $$->setColumns(@1.first_col, @5.last_col);
     }
     | TOK_DO statement_or_block TOK_WHILE '(' exp ')' ';' {
         $$ = new DoWhileStatement(@1.first_line, @5.last_line, $5, $2);
+        $$->setColumns(@1.first_col, @5.last_col);
     }
     | TOK_FOR '(' myexp ';' myexp ';' myexp ')' statement_or_block {
         $$ = new ForStatement(@1.first_line, @9.last_line, $3, $5, $7, $9);
+        $$->setColumns(@1.first_col, @9.last_col);
     }
     | TOK_FOREACH exp TOK_IN '(' exp ')' statement_or_block {
         QoreValue v2($2);
@@ -3565,6 +3582,7 @@ statement:
                 "read-only foreach variables are not supported; declare a mutable foreach variable");
         }
         $$ = new ForEachStatement(@1.first_line, @7.last_line, $2, $5, $7);
+        $$->setColumns(@1.first_col, @7.last_col);
     }
     | return_statement ';' { $$ = $1; }
     | TOK_THREAD_EXIT ';' {
@@ -3577,9 +3595,11 @@ statement:
     }
     | TOK_BREAK ';' {
         $$ = new BreakStatement(@1.first_line, @1.last_line);
+        $$->setColumns(@1.first_col, @1.last_col);
     }
     | TOK_CONTINUE ';' {
         $$ = new ContinueStatement(@1.first_line, @1.last_line);
+        $$->setColumns(@1.first_col, @1.last_col);
     }
     | switch_statement { $$ = $1; }
     | error ';'        { $$ = 0; }
@@ -3609,9 +3629,9 @@ context_mod:
     ;
 
 return_statement:
-    TOK_RETURN     { $$ = new ReturnStatement(@1.first_line, @1.last_line); }
+    TOK_RETURN     { $$ = new ReturnStatement(@1.first_line, @1.last_line); $$->setColumns(@1.first_col, @1.last_col); }
     |
-    TOK_RETURN exp { $$ = new ReturnStatement(@1.first_line, @2.last_line, $2); }
+    TOK_RETURN exp { $$ = new ReturnStatement(@1.first_line, @2.last_line, $2); $$->setColumns(@1.first_col, @2.last_col); }
     ;
 
 switch_statement:
@@ -3620,6 +3640,7 @@ switch_statement:
         $6->setSwitch($3);
         $$ = $6;
         $$->finalizeBlock(@1.first_line, @7.last_line);
+        $$->setColumns(@1.first_col, @7.last_col);
     }
     ;
 

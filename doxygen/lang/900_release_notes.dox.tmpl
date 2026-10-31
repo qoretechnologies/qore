@@ -2477,6 +2477,13 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
       parallel collection processing.  All of them honor cooperative cancellation
     - @ref Qore::ProgramControl::getStatementIdInfo() "ProgramControl::getStatementIdInfo()" tells with \c in_try if a
       statement is in the body of a try statement of its function, for debuggers
+    - new @ref Qore::ProgramControl::findStatementIds() "ProgramControl::findStatementIds()" method: finds all
+      statements of a line, and @ref Qore::ProgramControl::getStatementIdInfo() "ProgramControl::getStatementIdInfo()"
+      gives the columns of a statement with \c start_column and \c end_column, so that a debugger can set a breakpoint
+      on any statement of a line with more than one statement
+    - new @ref Qore::ProgramControl::getStepInTargets() "ProgramControl::getStepInTargets()" method: gives the calls
+      of a statement that a debugger can step into; stepping over with the start of the called code as the statement
+      to run to now stops only when the stepped code calls it, not when code that it calls does
     - new @ref Qore::ProgramControl::createEvalProgram() "ProgramControl::createEvalProgram()" method: creates a
       Program that inherits all code of a debugged Program, also the code that is not public, for evaluating
       expressions in a debugger
@@ -3941,6 +3948,10 @@ while (*binary chunk = input.read(65536)) {
       - threads are shown with their current names
       - added the "Uncaught exceptions" exception filter: the program stops at an exception that no try statement of
         the debugged code catches
+      - breakpoints can be set on any statement of a line with more than one statement (column breakpoints, with
+        the \c breakpointLocations request); stack frames give the columns of their statements; fixed the end line
+        of stack frames not being shown
+      - step into a chosen call of the current statement (step-in targets)
       - when a thread stops, the other threads of the program stop, and \c continue continues them all, as in other
         debuggers of Visual Studio Code; only the thread that stops was stopped; the \c stopAllThreads argument of
         \c launch and \c attach requests set to \c false keeps that

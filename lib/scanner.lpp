@@ -2704,7 +2704,7 @@ c\'                                     {
       last/{WSNL}+                       BEGIN(INITIAL); return TOK_LAST;
       one/{WSNL}+                        BEGIN(INITIAL); return TOK_ONE;
       <<EOF>>                            QORE_FLEX_DO_EOF
-      .                                  yyless(0); BEGIN(INITIAL);
+      .                                  yylloc->revertUpdate(); yyless(0); BEGIN(INITIAL);
 }
 where                                   return TOK_WHERE;
 private                                 return TOK_PRIVATE;
@@ -2759,8 +2759,8 @@ case                                    BEGIN(case_state); return TOK_CASE;
    m\{                                  yylval->Regex = new QoreRegex(); yylloc->saveFirst(); regex_brace_depth = 0; BEGIN(regex_brace_state);
    \/                                   yylval->Regex = new QoreRegex(); yylloc->saveFirst(); BEGIN(regex_state);
    {WS}+                                /* ignore */
-   [^\/m]                               yyless(0); BEGIN(INITIAL);
-   m                                    yyless(0); BEGIN(INITIAL);
+   [^\/m]                               yylloc->revertUpdate(); yyless(0); BEGIN(INITIAL);
+   m                                    yylloc->revertUpdate(); yyless(0); BEGIN(INITIAL);
    <<EOF>>                              {
                                            QORE_FLEX_DO_EOF
                                         }

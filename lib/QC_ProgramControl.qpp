@@ -63,8 +63,32 @@ hashdecl StatementInfo {
     int end_line;
     //! list of assigned breakpoints, unavailable if @ref no-debugging "%no-debugging" (since 0.9)
     *list breakpoints;
+    //! the 0-based column of the first character of the statement in its start line, or -1 if unknown, as for a block or for a statement of AOT-compiled code; a column counts bytes (since %Qore 3.0)
+    int start_column = -1;
+    //! the 0-based column after the last character of the statement in its end line, or -1 if unknown (since %Qore 3.0)
+    int end_column = -1;
     //! @ref True if the statement is in the body of a try statement of its function, method or top-level code, so an exception that it raises can be caught there (since %Qore 3.0)
     bool in_try = False;
+}
+
+//! A call of a statement that a debugger can step into
+/** @see @ref Qore::ProgramControl::getStepInTargets() "ProgramControl::getStepInTargets()"
+
+    @since %Qore 3.0
+*/
+hashdecl StepInTargetInfo {
+    //! the name of the called function, or of the method or constructor with its class
+    string name;
+    //! the ID of the statement block of the called code, which a debugger can run to so that it stops when the call is entered
+    int statement_id;
+    //! the start line of the call
+    int start_line;
+    //! the end line of the call
+    int end_line;
+    //! the 0-based column of the first character of the call in its start line, or -1 if unknown; a column counts bytes
+    int start_column = -1;
+    //! the 0-based column after the last character of the call in its end line, or -1 if unknown
+    int end_column = -1;
 }
 
 //! The ProgramControl class provides safe information about a Qore program
@@ -430,6 +454,8 @@ hash<StatementInfo> ProgramControl::getStatementIdInfo(int statement_id, bool li
    ph->setKeyValueIntern("offset", s->loc->offset);
    ph->setKeyValueIntern("start_line", s->loc->start_line);
    ph->setKeyValueIntern("end_line", s->loc->end_line);
+   ph->setKeyValueIntern("start_column", s->loc->start_column);
+   ph->setKeyValueIntern("end_column", s->loc->end_column);
    ph->setKeyValueIntern("in_try", s->isInTry());
    if (list_breakpoints && p->checkAllowDebugging(xsink)) {
       QoreBreakpointList_t bl;
@@ -484,6 +510,78 @@ int ProgramControl::findStatementId(string file, int line) [flags=NAMED_ARGS] {
         return xsink->raiseException("PROGRAM-STATEMENT-ERROR", "cannot find statement for \"%s:" QLLD "\"", file->c_str(), (int64)line);
     }
     return p->getStatementId(s);
+}
+
+//! Finds the statements of a line in a file
+/**
+   @param file the name of the file or the label of the source, which is resolved as with
+   @ref Qore::ProgramControl::findStatementId() "ProgramControl::findStatementId()"
+   @param line the line to find the statements of
+
+   @return the IDs of the statements that start on the line in the order of their columns, the first being the
+   statement that @ref Qore::ProgramControl::findStatementId() "ProgramControl::findStatementId()" finds if it has no
+   column; if no statement starts on the line, the innermost statement that contains it; an empty list if no
+   statement is found
+
+   @par Example:
+   @code{.py}
+# a breakpoint on the second statement of line 10 of a file with "a(); b();" on it
+list<int> ids = pc.findStatementIds("file.q", 10);
+Breakpoint bp();
+bp.assignStatement(ids[1]);
+   @endcode
+
+   A debugger can find the statement of a column of the line with
+   @ref Qore::ProgramControl::getStatementIdInfo() "ProgramControl::getStatementIdInfo()", which gives the columns
+   of each statement
+
+   @throw PROGRAM-STATEMENT-ERROR the source label contains a NUL character
+
+   @see
+      @ref Qore::ProgramControl::findStatementId "ProgramControl::findStatementId()"
+
+   @since %Qore 3.0
+*/
+list<int> ProgramControl::findStatementIds(string file, int line) [flags=NAMED_ARGS] {
+    // the label is looked up as a C string, which would be cut at a NUL character and name another source
+    if (q_check_no_nul(file->c_str(), file->size(), "source label", "source labels", "PROGRAM-STATEMENT-ERROR",
+            xsink)) {
+        return QoreValue();
+    }
+    if (!p->checkAllowDebugging(xsink)) {
+        return QoreValue();
+    }
+    return qore_program_private::get(*p)->findStatementIds(file->c_str(), line, xsink);
+}
+
+//! Returns the calls of a statement that a debugger can step into
+/**
+   @param statement_id the ID of the statement
+
+   @return the calls of the user code of the Program that the statement makes, in the order in which they are
+   evaluated, without the calls of the blocks of the statement and of closures that it creates; a call is given only
+   once with each called code, as a debugger running to the start of the called code stops at the first call of it;
+   calls whose called code is only known at runtime, such as calls of methods of objects of unknown classes or of
+   call references, are not given, nor are calls of builtin code or of the code of other Programs
+
+   @par Example:
+   @code{.py}
+# step into g() in "f(g(x));"
+hash<StepInTargetInfo> target = (select pc.getStepInTargets(statement_id), $1.name == "g")[0];
+   @endcode
+
+   @throw PROGRAM-STATEMENT-ERROR the statement ID cannot be resolved
+
+   @see
+      @ref Qore::ProgramControl::getStatementIdInfo() "ProgramControl::getStatementIdInfo()"
+
+   @since %Qore 3.0
+*/
+list<hash<StepInTargetInfo>> ProgramControl::getStepInTargets(int statement_id) [flags=NAMED_ARGS] {
+    if (!p->checkAllowDebugging(xsink)) {
+        return QoreValue();
+    }
+    return qore_program_private::get(*p)->getStepInTargets(statement_id, xsink);
 }
 
 //! Find the first statement for function entry point

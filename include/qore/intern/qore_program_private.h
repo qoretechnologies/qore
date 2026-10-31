@@ -336,6 +336,15 @@ private:
         runState = rs;
         runToStatement = rts;
     }
+
+    //! Returns true if a statement is the statement to run to
+    /** While stepping over, only a statement of the stepped code itself is, not one in the code that it calls, so that
+        stepping over with the entry of a function as the statement to run to stops when the stepped code calls the
+        function, not when a function that it calls does
+    */
+    DLLLOCAL inline bool isRunToStatement(const AbstractStatement* st) const {
+        return st == runToStatement && (runState != DBG_RS_STEP_OVER || !functionCallLevel);
+    }
     // set to true by any process do break running program asap
     std::atomic<bool> breakFlag{false};
     // called from running thread
@@ -3969,6 +3978,28 @@ public:
         }
         return st;
     }
+
+    //! Returns the IDs of the statements of a line in the order of their columns
+    /** The line is resolved as with getStatementFromIndex(); if a statement starts on it, all statements that start
+        on it are returned, otherwise the statement that contains it
+
+        @param name the name or label of the source
+        @param line the line to find the statements of
+        @param xsink if an error occurs, the Qore-language exception info is added here
+
+        @return the statement IDs, or nullptr if the operation was cancelled
+    */
+    DLLLOCAL QoreListNode* findStatementIds(const char* name, int line, ExceptionSink* xsink);
+
+    //! Returns the calls of a statement that a debugger can step into
+    /** @param statement_id the ID of the statement
+        @param xsink if an error occurs, the Qore-language exception info is added here
+
+        @return a list of StepInTargetInfo hashes, or nullptr if an exception was raised
+
+        @see ProgramControl::getStepInTargets()
+    */
+    DLLLOCAL QoreListNode* getStepInTargets(int64 statement_id, ExceptionSink* xsink);
 
     DLLLOCAL int serialize(ExceptionSink* xsink, StreamWriter& sw);
     DLLLOCAL int deserialize(ExceptionSink* xsink, StreamReader& sr);
