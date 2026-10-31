@@ -1,0 +1,283 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class OrNothingCompoundAssignmentTest
+
+#! Tests that an or-nothing lvalue (*T) gets the parse-time checks of its plain type T in compound assignments
+/** A compound assignment that the plain type T of an lvalue refuses at parse time, such as \c -= on a \c string,
+    could never succeed on an lvalue declared \c *T: it either assigned a value that \c *T does not accept or
+    operated on a value of type T.  It used to parse and then always fail at runtime; it must be refused at parse
+    time with the error that T gets, naming the declared type of the lvalue.
+
+    Every compound operator is checked on every lvalue type and operand in the matrix below in locals, and on a
+    smaller set of operands in globals, class members and hashdecl members: the or-nothing lvalue must get exactly
+    the parse error of the plain lvalue, or none when the plain lvalue gets none.  The valid compound assignments
+    on or-nothing lvalues are run in every execution mode and as a qcc-compiled executable, and refused ones are
+    checked as parse errors of the main program in every execution mode and in qcc.
+*/
+class OrNothingCompoundAssignmentTest inherits QUnit::Test {
+    public {
+        #! the compound assignment operators
+        const Operators = ("+=", "-=", "*=", "/=", "%=", "|=", "&=", "^=", "<<=", ">>=");
+
+        #! the plain lvalue types checked; each is also checked as an or-nothing type
+        const Types = (
+            "string", "int", "float", "number", "bool", "date", "binary", "hash", "list", "hash<auto>",
+            "hash<string, int>", "list<int>", "list<string>", "softint", "softstring", "softfloat", "softnumber",
+            "softbool", "softdate", "object", "code", "C", "hash<H>", "E",
+        );
+
+        #! the operands checked with locals; id() returns a value whose type is not known at parse time
+        const Operands = (
+            "1", "1.5", "1n", "\"a\"", "1D", "{}", "{\"a\": 1}", "(1,)", "NOTHING", "<00>", "True", "id()",
+            "new C()",
+        );
+
+        #! the operands checked with the other lvalue kinds
+        const OtherOperands = ("1", "1.5", "\"a\"", "id()");
+
+        #! the declarations the snippets use
+        const Prelude = "class C {} hashdecl H { int a = 1; } enum E { A = \"a\" } auto sub id() { return 1; } ";
+
+        #! snippets for the other lvalue kinds; arguments: type, operator, operand
+        const OtherContexts = {
+            "global": "our %s v; sub f() { v %s %s; }",
+            "member": "class X { public { %s v; } f() { v %s %s; } }",
+            "hashdecl member": "hashdecl HX { %s v; } sub f(hash<HX> h) { h.v %s %s; }",
+        };
+
+        #! refused statements checked in every execution mode and in qcc: code, expected error description
+        const MainProgramCases = (
+            ("*string s; s -= 1;", "lvalue has type type '*string', but the -= will assign it an integer "
+                "value"),
+            ("*string s; s *= 2;", "lvalue has type type '*string', but the *= operator expression will assign it "
+                "an integer value"),
+            ("*string s; s /= 2;", "lvalue has type type '*string', but the /= operator expression will assign it "
+                "an integer value"),
+            ("*bool b; b += 1;", "lvalue has type type '*bool', but the += will assign it an integer value"),
+            ("*binary b; b -= 1;", "lvalue has type type '*binary', but the -= will assign it an integer "
+                "value"),
+            ("*list<auto> l; l -= 1;", "lvalue has type *list<auto>, but the -= will assign it an integer "
+                "value"),
+            ("our *string g; g -= 1;", "lvalue has type type '*string', but the -= will assign it an integer "
+                "value"),
+        );
+
+        #! the output expected from the worker
+        const Expected = (
+            "*int += 1: 1 integer",
+            "*int -= NOTHING: 1 integer",
+            "*int *= 6: 6 integer",
+            "*int /= 2: 3 integer",
+            "*int -= 1: 2 integer",
+            "*int %= 2: 0 integer",
+            "*int |= 4: 4 integer",
+            "*int &= 5: 4 integer",
+            "*int ^= 1: 5 integer",
+            "*int <<= 2: 20 integer",
+            "*int >>= 1: 10 integer",
+            "*int NOTHING -= NOTHING: null nothing",
+            "*int NOTHING -= 2: -2 integer",
+            "*string += \"a\": \"a\" string",
+            "*string += NOTHING: \"a\" string",
+            "*string += 1: \"a1\" string",
+            "*list += 1: [1] list",
+            "*list += (2, 3): [1, 2, 3] list",
+            "*hash += {}: {} hash",
+            "*hash += {a, b}: {a: 1, b: 2} hash",
+            "*hash -= \"a\": {b: 2} hash",
+            "*date += 1D: <time: 1 day> date",
+            "*date -= 2h: <time: 1 day -2 hours> date",
+            "*float += 1: 1.0 float",
+            "*float -= 1.5: -0.5 float",
+            "*float *= 2: -1.0 float",
+            "*float /= 4: -0.25 float",
+            "*float += 1n: 0.75 float",
+            "*number += 1: 1 number",
+            "*number *= 1.5: 1.5 number",
+            "*number -= 1n: 0.5 number",
+            "*number /= 2: 0.25 number",
+            "*binary += <01>: !!binary AQ== binary",
+            "*binary += \"a\": !!binary AWE= binary",
+            "global *int: 6 integer",
+            "global *string: \"x2\" string",
+            "global *date: <time: 1 day> date",
+            "member *int: 2 integer",
+            "member *string: \"m1.5\" string",
+            "member *float: -3.0 float",
+            "hashdecl *int: 2 integer",
+            "hashdecl *string: \"h\" string",
+            "hashdecl *list: [1, \"two\"] list",
+        );
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string worker;
+    }
+
+    constructor() : QUnit::Test("OrNothingCompoundAssignment", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        worker = get_script_dir() + DirSep + "or-nothing-compound-assignment-worker.q";
+
+        addTestCase("refused like the plain type: locals", \testLocals());
+        addTestCase("refused like the plain type: other lvalues", \testOtherLValues());
+        addTestCase("refused like the plain type: elements", \testElements());
+        addTestCase("refused in every execution mode and qcc", \testMainProgram());
+        addTestCase("valid cases in each execution mode", \testExecModes());
+        addTestCase("valid cases in a compiled executable", \testCompiled());
+
+        set_return_value(main());
+    }
+
+    #! every operator, type and operand on locals
+    testLocals() {
+        int refused = 0;
+        foreach string op in (Operators) {
+            foreach string type in (Types) {
+                foreach string operand in (Operands) {
+                    refused += checkSame("sub f() { %s v; v %s %s; }", type, op, operand);
+                }
+            }
+        }
+        # the plain types refuse many of these statements, so the comparison is not vacuous
+        assertTrue(refused > 500, sprintf("refused: %d", refused));
+    }
+
+    #! every operator and type with fewer operands on globals, class members and hashdecl members
+    testOtherLValues() {
+        foreach hash<auto> i in (OtherContexts.pairIterator()) {
+            int refused = 0;
+            foreach string op in (Operators) {
+                foreach string type in (Types) {
+                    foreach string operand in (OtherOperands) {
+                        refused += checkSame(i.value, type, op, operand);
+                    }
+                }
+            }
+            assertTrue(refused > 100, sprintf("%s refused: %d", i.key, refused));
+        }
+        # the error names the declared type of each kind of lvalue
+        assertParseError("our *string v; sub f() { v -= 1; }", "lvalue has type type '*string', but the -= will "
+            "assign it an integer value");
+        assertParseError("class X { public { *string v; } f() { v *= 2; } }", "lvalue has type type '*string', but "
+            "the *= operator expression will assign it an integer value");
+        assertParseError("hashdecl HX { *string v; } sub f(hash<HX> h) { h.v /= 2; }", "lvalue has type "
+            "type '*string', but the /= operator expression will assign it an integer value");
+        assertParseError("class X { public { *date v; } f() { v *= 2; } }", "lvalue has type type '*date', but "
+            "the *= operator expression will assign it an integer value");
+    }
+
+    #! list elements and hash members whose type is or-nothing
+    testElements() {
+        assertParseError("sub f(list<*string> l) { l[0] -= 1; }", "lvalue has type type '*string', but the -= "
+            "will assign it an integer value");
+        assertParseError("sub f(hash<string, *string> h) { h.a *= 2; }", "lvalue has type type '*string', but the "
+            "*= operator expression will assign it an integer value");
+        assertParseError("sub f(reference<*string> r) { r -= 1; }", "but the -= will assign it an "
+            "integer value");
+        assertEq(NOTHING, parse("sub f(list<*int> l) { l[0] -= 1; l[0] *= 2; }"));
+        assertEq(NOTHING, parse("sub f(hash<string, *float> h) { h.a /= 2; h.a -= 1; }"));
+        assertEq(NOTHING, parse("sub f(reference<*int> r) { r -= 1; r *= 2; }"));
+    }
+
+    #! refused statements are parse errors of the main program in every execution mode and in qcc
+    testMainProgram() {
+        TmpDir tmp("qore-or-nothing-compound-");
+        foreach list<string> c in (MainProgramCases) {
+            string file = tmp.path + DirSep + sprintf("case%d.q", $#);
+            File f();
+            f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write("%modern\n" + c[0] + "\nprintf(\"ran\\n\");\n");
+            f.close();
+            foreach string mode in (ExecModeHarness::ExecModes) {
+                string out = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s "
+                    "--exec-mode=%s %s", libqore_dir, libqore_dir, qore_bin, mode, file),
+                    ExecModeHarness::NativeCheck::None);
+                assertTrue(out =~ /PARSE-TYPE-ERROR/, mode + ": " + c[0] + ": " + out);
+                assertTrue(out.find(c[1]) >= 0, mode + ": " + c[0] + ": " + out);
+                assertFalse(out =~ /^ran$/m, mode + ": " + c[0] + ": " + out);
+            }
+            string exe = tmp.path + DirSep + sprintf("case%d", $#);
+            string out = backquote(sprintf("QORE_LIBDIR=%s %s -o %s %s 2>&1", libqore_dir, qcc_bin, exe, file));
+            assertFalse(is_file(exe), "qcc: " + c[0] + ": " + out);
+            assertTrue(out =~ /PARSE-TYPE-ERROR/, "qcc: " + c[0] + ": " + out);
+            assertTrue(out.find(c[1]) >= 0, "qcc: " + c[0] + ": " + out);
+        }
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            checkOutput(mode, ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s "
+                "--exec-mode=%s %s", libqore_dir, libqore_dir, qore_bin, mode, worker)));
+        }
+    }
+
+    testCompiled() {
+        TmpDir tmp("qore-or-nothing-compound-exe-");
+        string exe = tmp.path + DirSep + "ornothing";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -o %s %s 2>&1", libqore_dir, qcc_bin, exe, worker));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        checkOutput("executable", ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
+            libqore_dir, libqore_dir, exe)));
+    }
+
+    #! checks that the or-nothing lvalue gets the parse error of the plain lvalue; returns 1 if it is refused
+    private int checkSame(string fmt, string type, string op, string operand) {
+        string plain_code = sprintf(fmt, type, op, operand);
+        string on_type = "*" + type;
+        string on_code = sprintf(fmt, on_type, op, operand);
+        *hash<ExceptionInfo> plain_ex = parse(plain_code);
+        *hash<ExceptionInfo> on_ex = parse(on_code);
+        if (!plain_ex) {
+            assertEq(NOTHING, on_ex ? on_ex.err + ": " + on_ex.desc : NOTHING, on_code);
+            return 0;
+        }
+        assertEq(plain_ex.err, on_ex.err, on_code);
+        *list<*string> plain_parts = (plain_ex.desc =~ x/^lvalue has type (.*), but (.*)$/);
+        if (!plain_parts) {
+            assertEq(plain_ex.desc, on_ex.desc, on_code);
+            return 1;
+        }
+        # the error is the same except that it names the declared type of the lvalue
+        *list<*string> on_parts = (on_ex.desc =~ x/^lvalue has type (.*), but (.*)$/);
+        assertEq(plain_parts[1], on_parts[1], on_code);
+        assertNeq(plain_parts[0], on_parts[0], on_code);
+        assertTrue(on_parts[0] =~ /\*/ || on_parts[0] =~ /or no value \(NOTHING\)/, on_code + ": " + on_ex.desc);
+        return 1;
+    }
+
+    private assertParseError(string code, string desc) {
+        *hash<ExceptionInfo> ex = parse(code);
+        assertEq("PARSE-TYPE-ERROR", ex.err, code);
+        assertTrue((ex.desc ?? "").find(desc) >= 0, code + ": " + (ex.desc ?? ""));
+    }
+
+    #! returns the parse error of the code given
+    private *hash<ExceptionInfo> parse(string code) {
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+        try {
+            p.parse(Prelude + code, "or-nothing-compound");
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+    }
+
+    private checkOutput(string label, string out) {
+        list<string> lines = (select out.split("\n"), $1);
+        assertEq(Expected, lines, label + ": " + out);
+    }
+}

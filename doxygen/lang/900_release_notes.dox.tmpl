@@ -4,6 +4,15 @@
 
     @section qore_3_0_0 Qore 3.0.0
 
+    A compound assignment to an lvalue declared with an or-nothing type (ex: \c *string, \c *bool, \c *date,
+    \c *list<auto>) is now refused at parse time wherever the same statement is refused for the plain type, with the
+    same \c PARSE-TYPE-ERROR naming the declared type of the lvalue (ex: <tt>*string s; s -= 1;</tt> or
+    <tt>*string s; s *= 2;</tt>).  These statements parsed before and then always failed at runtime, since the
+    operation either assigns a value that the lvalue does not accept or operates on a value of the plain type.  This
+    applies to locals, globals, class and hashdecl members, hash members and list elements.  Statements that the
+    plain type accepts are unchanged and run as before; \c *= and \c /= with a float operand on a \c *number
+    lvalue, which the parser refused although a \c number lvalue accepts them, are now accepted.
+
     Objects and runtime call references retain the sandbox under which they were created. Their methods and
     callbacks remain restricted when trusted code invokes them later, including inherited module methods and
     asynchronous callbacks. Access must satisfy both the caller's policy and the retained policies; interruption
