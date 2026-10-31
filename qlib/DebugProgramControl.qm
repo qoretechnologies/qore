@@ -1403,6 +1403,17 @@ public namespace DebugProgramControl {
             return True;
         }
 
+        #! Removes a Program from debugging, with the Program of its expressions, which keeps its code
+        /** @param program the Program to remove
+        */
+        nothing removeProgram(ProgramControl program) {
+            DebugProgram::removeProgram(program);
+            # the lock of the debugged Programs is released before evalLock is taken, which evaluateExpression() holds
+            # while it takes that lock
+            AutoLock al(evalLock);
+            remove evalPrograms{program.getProgramId()};
+        }
+
         #! Removes the Programs of expressions whose debugged Programs are no longer debugged; evalLock must be held
         /** A Program of expressions keeps the code of the debugged Program
         */

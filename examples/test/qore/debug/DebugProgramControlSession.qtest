@@ -91,6 +91,11 @@ const EventTimeout = 30s;
 
 #! a debug server that queues what it sends to its client so that a test can act on it deterministically
 class TestDebugProgramControl inherits DebugProgramControl {
+    #! returns True if the expressions of a debugged Program have a Program
+    bool hasEvalProgram(int pgmId) {
+        return exists evalPrograms{pgmId};
+    }
+
     public {
         const CX = {"id": 1};
 
@@ -563,6 +568,10 @@ public class DebugProgramControlTest inherits QUnit::Test {
             {"root": {"eval": 99}}));
 
         assertEq({"rc": NOTHING}, p.finish());
+        # the Program of the expressions, which keeps the code of the debugged Program, is removed with it
+        assertTrue(dpc.hasEvalProgram(p.pgmId));
+        dpc.removeProgram(p.pgm.getProgram());
+        assertFalse(dpc.hasEvalProgram(p.pgmId));
     }
 
     # a stopped thread answers every command of a client, so that the client can wait for the answer without a
