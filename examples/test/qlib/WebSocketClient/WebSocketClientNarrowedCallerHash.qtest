@@ -1,0 +1,100 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires WebSocketClient
+
+%exec-class WebSocketClientNarrowedCallerHashTest
+
+#! A client that records the connection options instead of connecting
+/** The handshake is replaced so that the options that connect(), connectAsync() and startPollConnect() pass on can be
+    checked without a server
+*/
+class RecordingWebSocketClient inherits WebSocketClient {
+    public {
+        #! the request headers passed to the handshake by startPollConnect()
+        *hash<auto> poll_hdr;
+    }
+
+    constructor() : WebSocketClient(sub () {}, {"url": "ws://localhost:1"}) {
+    }
+
+    private hash<auto> connectIntern(*hash<auto> opts, *reference<hash<auto>> info, *bool reconnecting) {
+        return {"opts": opts, "status_code": 101};
+    }
+
+    private hash<auto> connectUnlocked(*hash<auto> hdr0, *reference<hash<auto>> info, *bool reconnect) {
+        poll_hdr = hdr0;
+        return {"status_code": 101, "hdr": hdr0};
+    }
+}
+
+#! Connection option hashes whose values all have the same type
+/** A hash literal whose values all have the same type has a narrowed type, such as \c hash<string, int> for
+    <tt>{"X-Api-Version": 2}</tt>; adding the default \c Accept header to such a hash raised RUNTIME-TYPE-ERROR
+*/
+class WebSocketClientNarrowedCallerHashTest inherits QUnit::Test {
+    private {
+        const Accept = MimeTypeText + "," + MimeTypeOctetStream;
+    }
+
+    constructor() : Test("WebSocketClientNarrowedCallerHashTest", "1.0", \ARGV) {
+        addTestCase("connect() with narrowed headers", \connectNarrowedHeaders());
+        addTestCase("connect() with a narrowed option hash", \connectNarrowedOptions());
+        addTestCase("connectAsync() with narrowed headers", \connectAsyncNarrowedHeaders());
+        addTestCase("startPollConnect() with narrowed headers", \startPollConnectNarrowedHeaders());
+        addTestCase("connect() keeps a caller's Accept header", \connectKeepsAccept());
+        set_return_value(main());
+    }
+
+    #! Returns its argument with the type it was given
+    static auto mk(auto h) {
+        return h;
+    }
+
+    connectNarrowedHeaders() {
+        assertEq("hash<string, hash<string, int>>", mk({"hdr": {"X-Api-Version": 2}}).fullType());
+        RecordingWebSocketClient c();
+        hash<auto> rv = c.connect({"hdr": {"X-Api-Version": 2}});
+        assertEq({"hdr": {"X-Api-Version": 2, "Accept": Accept}}, rv.opts);
+    }
+
+    connectNarrowedOptions() {
+        assertEq("hash<string, int>", mk({"timeout": 5000}).fullType());
+        RecordingWebSocketClient c();
+        hash<auto> rv = c.connect({"timeout": 5000});
+        assertEq({"timeout": 5000, "hdr": {"Accept": Accept}}, rv.opts);
+    }
+
+    connectAsyncNarrowedHeaders() {
+        assertEq("hash<string, hash<string, int>>", mk({"hdr": {"X-Api-Version": 2}}).fullType());
+        RecordingWebSocketClient c();
+        Queue q();
+        c.connectAsync({"hdr": {"X-Api-Version": 2}}, q);
+        hash<auto> rv = q.get();
+        assertEq({"hdr": {"X-Api-Version": 2, "Accept": Accept}}, rv.opts);
+    }
+
+    startPollConnectNarrowedHeaders() {
+        assertEq("hash<string, hash<string, int>>", mk({"hdr": {"X-Api-Version": 2}}).fullType());
+        RecordingWebSocketClient c();
+        WebSocketConnectPollOperation op = c.startPollConnect({"hdr": {"X-Api-Version": 2}});
+        assertTrue(op.goalReached());
+        assertEq({"X-Api-Version": 2, "Accept": Accept}, c.poll_hdr);
+    }
+
+    connectKeepsAccept() {
+        assertEq("hash<string, hash<string, string>>", mk({"hdr": {"Accept": "application/json"}}).fullType());
+        RecordingWebSocketClient c();
+        hash<auto> rv = c.connect({"hdr": {"Accept": "application/json"}});
+        assertEq({"hdr": {"Accept": "application/json"}}, rv.opts);
+        # no options: the Accept header is added to an empty header hash
+        rv = c.connect();
+        assertEq({"hdr": {"Accept": Accept}}, rv.opts);
+    }
+}

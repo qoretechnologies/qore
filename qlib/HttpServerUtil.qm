@@ -131,6 +131,9 @@ module HttpServerUtil {
     @section httpserverutil_relnotes HttpServerUtil Module Release Notes
 
     @subsection httputil1_6 HttpServerUtil 1.6
+    - fixed @ref HttpServer::http_set_reply_headers() "http_set_reply_headers()" to accept a response or header hash
+      whose values all have the same type, such as a literal <tt>{"code": 204}</tt>; setting the response headers
+      raised \c RUNTIME-TYPE-ERROR
     - added @ref HttpServer::AbstractHttpSocketHandlerInterface::startClosingConnections()
       "AbstractHttpSocketHandlerInterface::startClosingConnections()" and
       @ref HttpServer::AbstractHttpSocketHandlerInterface::waitForConnectionsClosed() "waitForConnectionsClosed()",
@@ -1172,7 +1175,15 @@ public string sub http_get_charset_label(string encoding) {
     require the connection to be closed after the response (see @ref httpserverutil_request_context)
 */
 public nothing sub http_set_reply_headers(Socket s, hash<auto> cx, reference<auto> rv, *string server_string) {
-    rv.hdr = http_canonicalize_reply_header_names(rv.hdr);
+    # a caller's literal may be narrowed (e.g. hash<string, int> for {"code": 204}), and setting the "hdr" key would
+    # throw; a hashdecl such as HttpHandlerResponseInfo declares the "hdr" key and keeps its type
+    if (rv.typeCode() == NT_HASH && rv.fullType() =~ /^hash<string, /) {
+        hash<auto!> h = rv;
+        rv = h;
+    }
+    # the headers may be narrowed as well (e.g. hash<string, int> for {"X-Api-Version": 2})
+    *hash<auto!> hdr = http_canonicalize_reply_header_names(rv.hdr);
+    rv.hdr = hdr;
     bool is_http2 = cx."header-info".http2 ?? False;
     if (!is_http2) {
         if (!rv.hdr.Connection) {
