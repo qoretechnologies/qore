@@ -1077,8 +1077,36 @@ QoreModuleContextHelper::~QoreModuleContextHelper() {
 
 QoreUserModuleDefContextHelper::QoreUserModuleDefContextHelper(const char* name, const char* path, QoreProgram* p,
         ExceptionSink& xs)
-        : old_name(set_module_context_name(name)), old_path(set_module_context_path(path)),
+        : mod_name(name), old_name(set_module_context_name(name)), old_path(set_module_context_path(path)),
         pgm(qore_program_private::get(*p)), po(0), xsink(xs), dup(false) {
+}
+
+bool QoreModuleManager::isUserModuleContext(const char* name) {
+    QoreAbstractModule* mi = findModuleUnlocked(name);
+    if (mi) {
+        return mi->isUser();
+    }
+    // a user module is registered only once its source has been parsed, and it loads the modules it requires while
+    // it is parsed: it is then the module of the thread's module definition context, which is always a user module
+    // definition context; the module context name set for the initialization of an AOT module does not change it
+    QoreModuleDefContext* qmd = get_module_def_context();
+    if (!qmd) {
+        return false;
+    }
+    const char* def_name = static_cast<QoreUserModuleDefContextHelper*>(qmd)->getModuleName();
+    return def_name && !strcmp(def_name, name);
+}
+
+void QoreModuleManager::trySetUserModuleDependency(const QoreAbstractModule* mi) {
+    if (!mi->isUser()) {
+        return;
+    }
+
+    const char* old_name = get_module_context_name();
+    if (old_name && isUserModuleContext(old_name)) {
+        setUserModuleDependency(mi->getName(), old_name);
+    }
+    trySetUserModule(mi->getName());
 }
 
 void QoreUserModuleDefContextHelper::setNameInit(const char* name) {
@@ -4050,18 +4078,23 @@ void QoreModuleManager::delUser() {
     //md_map.show("md_map");
     //rmd_map.show("rmd_map");
 
+    // every user module, including the originals of reinjected modules; umset holds only the modules that no other
+    // user module depends on, which are the first to be deleted in Phase 2
+    std::vector<QoreUserModule*> user_modules;
+    for (auto& i : map) {
+        if (i.second->isUser()) {
+            user_modules.push_back(static_cast<QoreUserModule*>(i.second));
+        }
+    }
+
     // issue #5164: Phase 0 - run all del callbacks before clearing any module data
     // This ensures del callbacks execute while all module programs (and their TypeInfos) are alive,
     // preventing use-after-free when a del callback accesses a static var whose TypeInfo belongs to
     // a class from a module that would otherwise have been deleted in Phase 2 already
     {
         ExceptionSink xsink;
-        for (auto& name : umset) {
-            auto i = map.find(name.c_str());
-            assert(i != map.end());
-            QoreAbstractModule* m = i->second;
-            assert(m->isUser());
-            static_cast<QoreUserModule*>(m)->runDelCallback(xsink);
+        for (QoreUserModule* um : user_modules) {
+            um->runDelCallback(xsink);
         }
     }
 
@@ -4071,17 +4104,22 @@ void QoreModuleManager::delUser() {
     // (which may not be the module that owns the class program)
     {
         ExceptionSink xsink;
-        for (auto& name : umset) {
-            auto i = map.find(name.c_str());
-            assert(i != map.end());
-            QoreAbstractModule* m = i->second;
-            assert(m->isUser());
-            QoreUserModule* um = static_cast<QoreUserModule*>(m);
+        for (QoreUserModule* um : user_modules) {
             QoreProgram* pgm = um->getProgram();
             pgm->waitForTermination();
             qore_program_private::get(*pgm)->clearNamespaceData(&xsink);
         }
         qore_aot_clear_all_module_namespace_data(xsink);
+
+        // break the cycles held up by opaque references ('@=') that user module programs own while all module
+        // programs are still alive: such a cycle survives the namespace data cleared above, and an object that a
+        // module owns can hold objects of the classes of the modules that depend on it, which are deleted before
+        // it in Phase 2 (a type that DataProvider creates and a RestSchemaValidator schema object caches through an
+        // opaque reference refers to schema objects, for example); breaking the cycle only when the owning module
+        // is deleted would run the destructors of those objects after the programs of their classes are gone
+        for (QoreUserModule* um : user_modules) {
+            qore_program_private::get(*um->getProgram())->clearOpaqueTargets(&xsink);
+        }
     }
 
     // Phase 2 - delete user modules in dependency order

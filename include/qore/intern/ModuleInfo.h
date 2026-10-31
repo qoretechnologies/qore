@@ -628,22 +628,22 @@ public:
     DLLLOCAL void registerUserModuleFromSource(const char* name, const char* src, QoreProgram* pgm,
             ExceptionSink& xsink);
 
-    DLLLOCAL void trySetUserModuleDependency(const QoreAbstractModule* mi) {
-        if (!mi->isUser())
-            return;
+    //! Records that the module in the current module context depends on the given user module
+    /** User modules are deleted in dependency order at shutdown (see delUser()), so a module is deleted only after
+        every user module that loaded it.
 
-        const char* old_name = get_module_context_name();
-        if (old_name) {
-            // Only track dependency if the dependent module is also a user module.
-            // Binary modules (including AOT modules) are not cleaned up via delUser(),
-            // so tracking their dependencies would cause assertion failures.
-            QoreAbstractModule* dep_mi = findModuleUnlocked(old_name);
-            if (dep_mi && dep_mi->isUser()) {
-                setUserModuleDependency(mi->getName(), old_name);
-            }
-        }
-        trySetUserModule(mi->getName());
-    }
+        @param mi the module loaded
+    */
+    DLLLOCAL void trySetUserModuleDependency(const QoreAbstractModule* mi);
+
+    //! Returns true if the module named \a name in the current module context is a user module
+    /** Binary modules (including AOT modules) are not deleted by delUser(), so a dependency on one of them would
+        never be released.  A user module is not in the module map while its source is parsed, which is when it
+        loads the modules it requires; it is then the module of the user module definition context of the thread.
+
+        @param name the name of the module in the current module context
+    */
+    DLLLOCAL bool isUserModuleContext(const char* name);
 
     DLLLOCAL void trySetUserModule(const char* name) {
         md_map_t::iterator i = md_map.find(name);
@@ -1072,11 +1072,18 @@ public:
         dup = true;
     }
 
+    //! Returns the name of the user module being defined
+    DLLLOCAL const char* getModuleName() const {
+        return mod_name;
+    }
+
     DLLLOCAL void setNameInit(const char* name);
 
     DLLLOCAL void close();
 
 protected:
+    //! the name of the user module being defined
+    const char* mod_name;
     const char* old_name;
     const char* old_path;
 

@@ -1,0 +1,133 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# User modules are deleted at process teardown after every user module that requires them, and objects still held
+# by module Programs are released while the Programs of their classes exist.  Each case runs a qore subprocess (in
+# the execution mode of this test) that loads TdZzzUser, which requires TdAaaBase, and checks that it exits with
+# status 0, prints nothing on stderr, and that the destructors of the objects run:
+# - TdZzzUser has a constant holding an object of a TdAaaBase class; the constants of a module Program are released
+#   when the module is deleted, so TdAaaBase must be deleted after TdZzzUser (whose name sorts after it)
+# - TdZzzUser makes a cycle through an opaque reference to a holder that TdAaaBase creates and owns; the teardown of
+#   the holder's Program releases the cycle, which runs the destructor of a TdZzzUser class, so it must be released
+#   while the TdZzzUser Program still exists
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../../qlib"
+%requires QUnit
+%requires Util
+
+%exec-class ModuleTeardownTest
+
+#! the result of a qore subprocess
+hashdecl TeardownRunResult {
+    #! the exit status
+    int rc;
+    #! the output on stdout
+    string out;
+    #! the output on stderr
+    string err;
+}
+
+class ModuleTeardownTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+        *string exec_mode;
+        string tmp_dir;
+        #! the files created in tmp_dir
+        list<string> tmp_files;
+    }
+
+    constructor() : Test("ModuleTeardownTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        exec_mode = ModuleTeardownTest::getExecMode();
+        tmp_dir = tmp_location() + DirSep + sprintf("module-teardown-%d-%d", getpid(), now_us().durationMicroseconds());
+        mkdir(tmp_dir, 0700, True);
+        addTestCase("dependency order with parse-time require", \testOrderParse());
+        addTestCase("dependency order with runtime load", \testOrderRuntime());
+        addTestCase("opaque cycle with parse-time require", \testCycleParse());
+        addTestCase("opaque cycle with runtime load", \testCycleRuntime());
+        on_exit {
+            removeTmpDir();
+        }
+        set_return_value(main());
+    }
+
+    testOrderParse() {
+        checkRun(run("parse", ""), False);
+    }
+
+    testOrderRuntime() {
+        checkRun(run("runtime", ""), False);
+    }
+
+    testCycleParse() {
+        checkRun(run("parse", "cycle"), True);
+    }
+
+    testCycleRuntime() {
+        checkRun(run("runtime", "cycle"), True);
+    }
+
+    #! checks that the subprocess exited cleanly and that the destructors ran
+    private checkRun(hash<TeardownRunResult> r, bool cycle) {
+        assertEq("", r.err, "stderr");
+        assertEq(0, r.rc, "exit status; stderr: " + r.err);
+        list<string> expected = ("main done",);
+        if (cycle) {
+            expected += "opaque cycle item destroyed";
+        }
+        expected += "constant tracker destroyed";
+        assertEq(expected, (map $1, r.out.split("\n"), $1.val()), "stdout");
+    }
+
+    #! runs the given child program with the given argument
+    private hash<TeardownRunResult> run(string how, string arg) {
+        string err_file = tmp_dir + DirSep + sprintf("%s-%s.err", how, arg.val() ? arg : "none");
+        tmp_files += err_file;
+        string script = get_script_dir() + "module-teardown-" + how + ".q";
+        string cmd = sprintf("env LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s%s %s 2>%s; "
+            "echo \"rc=$?\"", ModuleTeardownTest::shellQuote(libqore_dir), ModuleTeardownTest::shellQuote(libqore_dir),
+            ModuleTeardownTest::shellQuote(get_script_dir()), ModuleTeardownTest::shellQuote(qore_bin),
+            exec_mode ? "--exec-mode=" + exec_mode + " " : "", ModuleTeardownTest::shellQuote(script),
+            arg.val() ? ModuleTeardownTest::shellQuote(arg) : "", ModuleTeardownTest::shellQuote(err_file));
+        string out = backquote(cmd);
+        *list<*string> m = (out =~ x/^(.*)rc=([0-9]+)\n$/s);
+        assertTrue(exists m, "exit status: " + out);
+        string err = is_file(err_file) ? ReadOnlyFile::readTextFile(err_file) : "";
+        return <TeardownRunResult>{
+            "rc": int(m[1]),
+            "out": m[0] ?? "",
+            "err": err,
+        };
+    }
+
+    private removeTmpDir() {
+        foreach string f in (tmp_files) {
+            unlink(f);
+        }
+        rmdir(tmp_dir);
+    }
+
+    #! Returns the execution mode given on the command line, if any
+    private static *string getExecMode() {
+        for (int i = 0; i < QORE_ARGV.size(); ++i) {
+            *string mode = (QORE_ARGV[i] =~ x/^--exec-mode=(.+)$/)[0];
+            if (mode) {
+                return mode;
+            }
+            if (QORE_ARGV[i] == "--exec-mode" && i + 1 < QORE_ARGV.size()) {
+                return QORE_ARGV[i + 1];
+            }
+        }
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+}

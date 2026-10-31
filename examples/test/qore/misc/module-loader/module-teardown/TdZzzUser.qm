@@ -1,0 +1,50 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# TdZzzUser.qm - module of the module teardown tests that requires TdAaaBase; its name sorts after it
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%allow-opaque-references
+
+%requires TdAaaBase
+
+module TdZzzUser {
+    version = "1.0";
+    desc = "dependent module for the module teardown tests";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+public namespace TdZzzUser {
+    #! a constant holding an object of the base module
+    /** The constants of a module's Program are cleared when the module is deleted, so the base module, which owns
+        the class of the object, must be deleted after this module
+    */
+    public const ConstantTracker = new TdAaaBase::Tracker("constant tracker");
+
+    #! reports its destruction on stdout; its destructor needs this module's Program
+    public class Item {
+        private {
+            auto holder;
+        }
+
+        #! makes a cycle that the garbage collector cannot see
+        /** The item holds a holder of the base module through an opaque reference, and the holder holds the item,
+            so only the teardown of the Program owning the holder (the base module) releases the cycle
+        */
+        constructor() {
+            TdAaaBase::Holder h = TdAaaBase::make_holder();
+            holder @= h;
+            h.value = self;
+        }
+
+        destructor() {
+            print("opaque cycle item destroyed\n");
+        }
+    }
+
+    #! makes an opaque cycle held by nothing else
+    public sub make_cycle() {
+        new Item();
+    }
+}

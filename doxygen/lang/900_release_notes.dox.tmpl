@@ -5361,6 +5361,14 @@ while (*binary chunk = input.read(65536)) {
     - \c qcc could hang forever at full CPU while compiling a module, when the JIT compiler started on a background
       thread at the same time: both registered LLVM's targets, which is not thread-safe, and the registry was left
       corrupted.  LLVM's targets are now registered once for the process, before any thread uses LLVM
+    - at process exit, user modules were deleted in the alphabetical order of their names instead of after the
+      modules that require them, and objects held through opaque references (\c \@=) were released only when the
+      module owning them was deleted, which could be after the modules owning the classes of the objects they
+      referred to.  Destructors then failed with unhandled \c PROGRAM-ERROR exceptions (<em>the Program accessed has
+      already been deleted</em>) on stderr, for example those of the schemas that the Stripe data provider caches
+      when it is loaded with other provider modules.  A user module is now deleted only after every user module that
+      requires it, and objects held through opaque references by module Programs are released while all module
+      Programs still exist
     - a debugged program could get a deleted @ref Qore::ProgramControl "ProgramControl" object in a debugger callback,
       such as \c onAttach() or \c onStep(), when another thread released the last reference to the object at the
       same time: the object was cached and returned again until its destructor ran.  The callback failed, so the
