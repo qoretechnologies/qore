@@ -1,0 +1,104 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class CompoundAssignmentDeclaredTypeTest
+
+#! Tests that a compound assignment stores its result through the lvalue's declared type in every execution mode
+/** - a typed lvalue holds only its declared type, or no value: a result of another type is stored as an assignment
+      of the result would store it, converted (ex: a float result in a \c number lvalue gives a number) or refused
+      with \c RUNTIME-TYPE-ERROR (ex: a float result in a \c timeout lvalue, as <tt>timeout t = 1.5</tt>)
+    - \c -= with a date operand on an lvalue of an int type gives the result of <tt>x = x - d</tt>, whether the
+      int-specialized operator or the generic operator applies it (ex: a narrowed hash member): the binary operator
+      gives a date, which an \c int lvalue refuses and a \c softint lvalue converts
+
+    The worker runs in every execution mode, the default execution mode and as a qcc-compiled executable.
+*/
+class CompoundAssignmentDeclaredTypeTest inherits QUnit::Test {
+    public {
+        #! the output expected from the worker
+        const Expected = (
+            "number *= float: 0 number",
+            "number = number * float: 0 number",
+            "number /= int: 0 number",
+            "number 2n *= float: 3 number",
+            "float member /= int: 0.0 float",
+            "float member ++: 1.0 float",
+            "hash<string, float> ++: 1.0 float",
+            "hash<string, float> /= int: 0.0 float",
+            "timeout *= float: RUNTIME-TYPE-ERROR",
+            "timeout 1000 *= float: RUNTIME-TYPE-ERROR",
+            "timeout = float: RUNTIME-TYPE-ERROR",
+            "timeout /= float: RUNTIME-TYPE-ERROR",
+            "int -= absolute date: RUNTIME-TYPE-ERROR",
+            "int = int - absolute date: RUNTIME-TYPE-ERROR",
+            "int -= relative date: RUNTIME-TYPE-ERROR",
+            "int -= literal date: RUNTIME-TYPE-ERROR",
+            "*int -= relative date: RUNTIME-TYPE-ERROR",
+            "global int -= relative date: RUNTIME-TYPE-ERROR",
+            "int member -= relative date: RUNTIME-TYPE-ERROR",
+            "narrowed hash member -= relative date: RUNTIME-TYPE-ERROR",
+            "narrowed hash member -= absolute date: RUNTIME-TYPE-ERROR",
+            "softint -= relative date: -3590 integer",
+            "softint = softint - relative date: -3590 integer",
+            "timeout -= relative date: 4000 integer",
+            "int -= NOTHING: 0 integer",
+            "*int -= NOTHING: null nothing",
+            "int -= int: 7 integer",
+        );
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string worker;
+    }
+
+    constructor() : QUnit::Test("CompoundAssignmentDeclaredType", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        worker = get_script_dir() + DirSep + "compound-assignment-declared-type-worker.q";
+
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("default execution mode", \testDefaultMode());
+        addTestCase("compiled executable", \testCompiled());
+
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            checkOutput(mode, ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s "
+                "--exec-mode=%s %s", libqore_dir, libqore_dir, qore_bin, mode, worker)));
+        }
+    }
+
+    testDefaultMode() {
+        checkOutput("default", ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s %s",
+            libqore_dir, libqore_dir, qore_bin, worker)));
+    }
+
+    testCompiled() {
+        TmpDir tmp("qore-compound-declared-type-");
+        string exe = tmp.path + DirSep + "declared";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -o %s %s 2>&1", libqore_dir, qcc_bin, exe, worker));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        checkOutput("executable", ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
+            libqore_dir, libqore_dir, exe)));
+    }
+
+    private checkOutput(string label, string out) {
+        list<string> lines = (select out.split("\n"), $1);
+        assertEq(Expected, lines, label + ": " + out);
+    }
+}

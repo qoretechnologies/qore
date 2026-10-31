@@ -134,6 +134,17 @@ DLLLOCAL QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right
 DLLLOCAL QoreValue qore_rt_apply_lvalue_compound(LValueHelper& lvh, LVCompoundOp compound_op,
         ValueHolder& rhs_holder, ExceptionSink* xsink);
 
+//! Returns true if the lvalue type is an int type (int, *int, softint), but not timeout
+DLLLOCAL bool qore_is_int_lvalue_type(const QoreTypeInfo* ti);
+
+//! Applies -= with a date operand to an lvalue of an int type
+/** The lvalue is assigned the result of the binary operator, as <tt>x = x - d</tt> assigns it: the result is a
+    date, which an int lvalue does not accept (RUNTIME-TYPE-ERROR) and a softint lvalue converts
+
+    @return the new value of the lvalue, holding a reference, or no value if an exception was raised
+*/
+DLLLOCAL QoreValue qore_int_lvalue_minus_date(LValueHelper& v, const QoreValue& right, ExceptionSink* xsink);
+
 //! Returns the value that a compound assignment gives an untyped lvalue holding the value given
 /** The result is the one the AST interpreter gives: the operation follows the type of the current value (ex: an
     int value converts the operand to an int, so 10 += 1.5 gives 11).  It serves the opcodes that load a variable,

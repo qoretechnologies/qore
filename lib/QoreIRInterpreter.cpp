@@ -18024,6 +18024,20 @@ static const QoreTypeInfo* get_compound_default_type(const QoreTypeInfo* ti) {
     return plain != ti && QoreTypeInfo::hasDefaultValue(plain) ? plain : ti;
 }
 
+bool qore_is_int_lvalue_type(const QoreTypeInfo* ti) {
+    const QoreTypeInfo* plain = get_or_nothing_base_type(ti);
+    return QoreTypeInfo::isType(plain, NT_INT) && !QoreTypeInfo::equal(plain, timeoutTypeInfo);
+}
+
+QoreValue qore_int_lvalue_minus_date(LValueHelper& v, const QoreValue& right, ExceptionSink* xsink) {
+    ValueHolder current(v.getReferencedValue(), xsink);
+    ValueHolder result(QoreIRInterpreter::evalBinary(QoreIROpcode::SubAny, *current, right, xsink), xsink);
+    if (*xsink || v.assign(result.release(), "<-= operator>")) {
+        return QoreValue();
+    }
+    return v.getReferencedValue();
+}
+
 //! returns true if the lvalue type is timeout or *timeout, which take a date operand as milliseconds
 static bool is_timeout_lvalue_type(const QoreTypeInfo* ti) {
     return QoreTypeInfo::equal(get_or_nothing_base_type(ti), timeoutTypeInfo);
@@ -18258,12 +18272,10 @@ QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, Excepti
                 int64 ms = right.get<const DateTimeNode>()->getRelativeMilliseconds();
                 return v.minusEqualsBigInt(ms);
             }
-            // an or-nothing int lvalue (*int) converts the date to an int, as the int-specialized operator does for
-            // an int lvalue
-            const QoreTypeInfo* lti = v.getTypeInfo();
-            const QoreTypeInfo* plain_lti = get_or_nothing_base_type(lti);
-            if (plain_lti != lti && QoreTypeInfo::isType(plain_lti, NT_INT)) {
-                return v.minusEqualsBigInt(right.getAsBigInt());
+            // an lvalue of an int type (int, *int, softint) is assigned the result of the binary operator, as
+            // x = x - d assigns it; see qore_int_lvalue_minus_date()
+            if (qore_is_int_lvalue_type(v.getTypeInfo())) {
+                return qore_int_lvalue_minus_date(v, right, xsink);
             }
             // any other lvalue subtracts the date's relative seconds
             return v.minusEqualsBigInt(right.get<const DateTimeNode>()->getRelativeSeconds());

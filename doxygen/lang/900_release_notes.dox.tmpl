@@ -4,20 +4,26 @@
 
     @section qore_3_0_0 Qore 3.0.0
 
-    A soft-typed lvalue (\c softint, \c softfloat, \c softnumber, \c softstring, \c softbool, \c softdate,
-    \c softlist and their or-nothing types) always holds its declared type after a compound assignment, \c ++ or
-    \c --: the result is converted to the declared type as an assignment converts it (ex:
-    <tt>softint v = 10; v *= x</tt> with \c x holding 1.5 leaves the int 15 in \c v, where it left the float 15.0).
-    The same applies to a hash member or list element of a soft type, and an or-nothing lvalue (\c *T) holds the
-    value that \c T holds (ex: <tt>*float f; f /= x</tt> gives the float 0.0, as for a \c float).  An or-nothing lvalue with no value no longer takes a float from
-    \c *= or \c /= when its type does not accept one (ex: \c *int), as the plain type does not.
+    A typed lvalue now holds only its declared type, or no value, after a compound assignment, \c ++ or \c --:
+    the result is stored as an assignment of the result stores it, converted to the declared type or refused (ex:
+    <tt>number n; n *= x</tt> with \c x holding 1.5 gives a number where it gave a float, \c ++ on a member of a
+    <tt>hash<string, float></tt> with no value gives the float 1.0 where it gave the int 1,
+    <tt>softint v = 10; v *= x</tt> leaves the int 15 where it left the float 15.0, and <tt>timeout t; t *= x</tt>
+    raises \c RUNTIME-TYPE-ERROR as <tt>timeout t = x</tt> does, where it stored a float).  An lvalue with no value
+    no longer takes a value of another type from these operators before its type is checked.
+
+    \c -= with a date operand on an lvalue of an int type (ex: \c int, \c *int, \c softint) now gives the result
+    of <tt>x = x - d</tt>, whichever operator implementation applies it: the binary operator gives a date, which an
+    \c int lvalue refuses with \c RUNTIME-TYPE-ERROR and a \c softint lvalue converts to an int.  The operator
+    subtracted the date's integer value from an \c int variable but its relative seconds from an int hash member,
+    so that the result depended on how the lvalue was declared; a \c timeout lvalue still subtracts the date in
+    milliseconds.
 
     An or-nothing lvalue (\c *T) with no value now gives the result of the plain type \c T with no value in a
     compound assignment with an operand that has a value: \c += and \c -= start from the default value of \c T
     (ex: <tt>*string s; s += 1</tt> gives \c "1" as for a \c string, where it raised \c RUNTIME-TYPE-ERROR, and
-    <tt>*int i; i += 1.5</tt> gives 1), a \c *timeout lvalue converts a date operand to milliseconds as a
-    \c timeout lvalue does, and \c -= with a date operand on a \c *int lvalue converts the date as for an \c int
-    lvalue.  With an operand with no value, \c += and \c -= leave an or-nothing lvalue with no value, as before.
+    <tt>*int i; i += 1.5</tt> gives 1), and a \c *timeout lvalue converts a date operand to milliseconds as a
+    \c timeout lvalue does.  With an operand with no value, the results are unchanged.
     A typed local with no value now also gets its type's default value in \c += in every execution mode (ex:
     <tt>string s; s += 2</tt> gives \c "2"); the IR, JIT and tiered modes and compiled code raised
     \c RUNTIME-TYPE-ERROR.

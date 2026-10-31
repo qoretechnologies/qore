@@ -8180,12 +8180,38 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
     if (changesThroughLValue(left_var)) {
         left_var = nullptr;
     }
+    // the int-specialized operator is applied as an integer subtraction only to an operand that is an int; a date
+    // operand assigns the binary operator's result (see qore_int_lvalue_minus_date()), which the lvalue path gives
+    if (force_int && left_var) {
+        QoreParseAnalysis operand_analysis;
+        if (!isIntConstant(right_expr)
+                && !(getAnalysis(right_expr, operand_analysis) && isNeverNothingInt(operand_analysis))) {
+            left_var = nullptr;
+        }
+    }
     if (!left_var) {
-        // the int-specialized operator converts the operand to an int (QoreIntMinusEqualsOperatorNode), so that an
-        // operand with no value subtracts 0 from an lvalue with no value, giving 0, where the generic operator leaves
-        // the lvalue unchanged; a timeout lvalue, which converts a date to milliseconds, is never int-specialized
+        // the int-specialized operator subtracts 0 for an operand with no value (QoreIntMinusEqualsOperatorNode), so
+        // that an lvalue with no value gets 0, where the generic operator leaves the lvalue unchanged; the lvalue
+        // path applies the generic operator, so the operand is given as 0 instead
         if (force_int) {
-            right = builder.createUnaryOp(QoreIROpcode::ToInt, right, op->loc)->result;
+            QoreIRValue is_nothing = builder.createUnaryOp(QoreIROpcode::IsNullOrNothing, right, op->loc)->result;
+            QoreIRBasicBlock* value_block = builder.getBlock();
+            QoreIRBasicBlock* zero_block = createBlock("me.int.nothing");
+            QoreIRBasicBlock* merge_block = createBlock("me.int.merge");
+            if (!zero_block || !merge_block) {
+                error = "IR builder failed to create blocks for the int -= operand";
+                return QoreIRValue();
+            }
+            builder.createBranchIf(is_nothing, zero_block, merge_block);
+            builder.setBlock(zero_block);
+            QoreIRValue zero = builder.createConstInt(0, op->loc)->result;
+            builder.createBranch(merge_block);
+            builder.setBlock(merge_block);
+            std::vector<QoreIRPhiIncoming> incoming = {
+                {right, value_block},
+                {zero, zero_block},
+            };
+            right = builder.createPhi(incoming)->result;
         }
         // Prefer true lvalue semantics for member/subscript compound assignments.
         {

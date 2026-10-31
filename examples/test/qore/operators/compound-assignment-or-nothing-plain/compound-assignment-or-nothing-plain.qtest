@@ -173,7 +173,7 @@ class CompoundAssignmentOrNothingPlainTest inherits QUnit::Test {
         assertEq(pairs, or_nothing.size(), "or-nothing results");
 
         list<string> diffs = ();
-        int plain_type_violations = 0;
+        list<string> plain_type_violations = ();
         foreach hash<auto> i in (plain.pairIterator()) {
             # key: kind type op operand
             *list<*string> k = (i.key =~ x/^[^ ]+ [^ ]+ ([^ ]+) (.*)$/);
@@ -181,14 +181,11 @@ class CompoundAssignmentOrNothingPlainTest inherits QUnit::Test {
             if (k[1] == "NOTHING") {
                 continue;
             }
-            # the AST interpreter can leave an lvalue of a plain type with no value holding a value of another type
-            # (ex: a float in a timeout or a number after *=); such a result is not the reference for *T, which
-            # holds a value of T's type
+            # a plain lvalue holds only its declared type, or no value (ex: a hash after -=)
             *list<*string> pk = (i.key =~ x/^[^ ]+ ([^ ]+) /);
             *list<*string> pv = (i.value =~ x/ ([a-z]+)$/);
-            if (pv && PlainResultType{pk[0]} && PlainResultType{pk[0]} != pv[0]) {
-                ++plain_type_violations;
-                continue;
+            if (pv && pv[0] != "nothing" && PlainResultType{pk[0]} && PlainResultType{pk[0]} != pv[0]) {
+                plain_type_violations += i.key + ": " + i.value;
             }
             string expected = i.value;
             if (or_nothing{i.key} != expected) {
@@ -196,6 +193,7 @@ class CompoundAssignmentOrNothingPlainTest inherits QUnit::Test {
             }
         }
         assertEq((), diffs, sprintf("%d or-nothing results differ from the plain type's", diffs.size()));
+        assertEq((), plain_type_violations, "plain lvalues hold their declared type");
 
         # a soft lvalue holds its declared type, or no value for an or-nothing type
         list<string> wrong = ();
@@ -221,11 +219,6 @@ class CompoundAssignmentOrNothingPlainTest inherits QUnit::Test {
         int count = 0;
         int n = max(expected.size(), actual.size());
         for (int i = 0; i < n; ++i) {
-            # the AST interpreter leaves a float in a timeout lvalue with no value after *= or /= with a float
-            # operand, which the other execution modes do not store in a timeout; the AST result is a known defect
-            if (expected[i] =~ / timeout (\*=|\/=) .* => [^ ]+ float$/) {
-                continue;
-            }
             if (expected[i] !== actual[i]) {
                 ++count;
                 if (diffs.size() < 20) {
