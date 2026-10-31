@@ -256,6 +256,10 @@ module SalesforceRestDataProvider {
     - fixed creating a data provider from an option hash whose values all have the same type, such as a literal
       <tt>{"salesforcerestclient_options": {...}}</tt>, with automatic configuration from the environment; adding
       an option from an environment variable raised \c RUNTIME-TYPE-ERROR
+    - fixed automatic configuration from the environment with \c SALESFORCE_CONSUMER_KEY and
+      \c SALESFORCE_CONSUMER_SECRET set: the data provider constructors raised \c CONSTRUCTOR-ERROR for the invalid
+      options \c client_id and \c client_secret; the variables now set the \c oauth2_client_id and
+      \c oauth2_client_secret options
 
     @subsection salesforcerestdataprovider_v2_0 SalesforceRestDataProvider v2.0
     - added support for the data provider action catalog API

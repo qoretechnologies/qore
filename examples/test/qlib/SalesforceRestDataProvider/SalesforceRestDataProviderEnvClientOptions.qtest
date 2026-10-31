@@ -1,0 +1,84 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../ExecModeHarness.qm
+
+%exec-class SalesforceRestDataProviderEnvClientOptionsTest
+
+#! Salesforce data providers take the OAuth2 client options from the environment
+/** With automatic configuration from the environment enabled, \c SALESFORCE_CONSUMER_KEY and
+    \c SALESFORCE_CONSUMER_SECRET give the \c oauth2_client_id and \c oauth2_client_secret options of the
+    Salesforce data provider constructors.  Data providers read the environment that the process started with, so
+    the checks are in env-client-options-worker.qr, which is run in each execution mode in an environment with only
+    fake Salesforce values; no connection is made
+*/
+public class SalesforceRestDataProviderEnvClientOptionsTest inherits QUnit::Test {
+    public {
+        #! the result of every check the worker makes; the sources are given in the order: oauth2_client_id,
+        #! oauth2_client_secret, username, password
+        const Expected = {
+            "salesforce-no-auto-config": "none/none/none/none",
+            "salesforce": "env/env/env/env",
+            "salesforce-tables": "env/env/env/env",
+            "salesforce-explicit": "explicit/explicit/env/env",
+            "salesforce-tables-explicit": "explicit/explicit/env/env",
+            "salesforce-invalid": "CONSTRUCTOR-ERROR",
+            "salesforce-tables-invalid": "CONSTRUCTOR-ERROR",
+        };
+
+        #! the fake environment of the worker; "env -i" clears every other variable, including any real
+        #! SALESFORCE_* variables of the developer's environment
+        const FakeEnv = "SALESFORCE_CONSUMER_KEY=fake-consumer-key SALESFORCE_CONSUMER_SECRET=fake-consumer-secret "
+            "SALESFORCE_USER=fake-user SALESFORCE_PASS=fake-pass";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : Test("SalesforceRestDataProviderEnvClientOptions", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        addTestCase("client options from the environment in each execution mode", \testExecModes());
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        # only the variables needed to run qore are passed on; their values are not printed
+        list<string> pass = ();
+        foreach string var in (("PATH", "HOME")) {
+            if (exists ENV{var}) {
+                pass += sprintf("%s=%s", var, quote(ENV{var}));
+            }
+        }
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string out = ExecModeHarness::run(sprintf("env -i %s LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s %s -b "
+                "--enable-debug --exec-mode=%s %s", pass.join(" "), quote(libqore_dir), quote(libqore_dir),
+                FakeEnv, quote(qore_bin), mode, quote(get_script_dir() + DirSep + "env-client-options-worker.qr")),
+                ExecModeHarness::NativeCheck::None);
+            hash<string, string> results = {};
+            foreach string line in (out.split("\n")) {
+                *list<*string> parts = (line =~ x/^([-a-z]+)=(.*)$/);
+                if (parts) {
+                    results{parts[0]} = parts[1];
+                } else if (line.val()) {
+                    fail(sprintf("%s: unexpected worker output: %y", mode, out));
+                }
+            }
+            assertEq(Expected, results, mode);
+        }
+    }
+
+    #! quotes a value for the shell
+    private static string quote(string str) {
+        return "'" + replace(str, "'", "'\\''") + "'";
+    }
+}
