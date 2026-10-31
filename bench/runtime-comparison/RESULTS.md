@@ -31530,3 +31530,56 @@ Across all seven epochs, 2070 processes/6210 windows are retained: 1854/5562 opt
 No fresh Java/develop ratio or global performance ceiling is claimed. The latest full optimized comparison remains the [post-local-receiver checkpoint](results-post-local-receiver-checkpoint-macos-arm64.json). Next inspect the remaining invariant callback helper/callee boundary and result-store costs, preserving live admission, diagnostic publication and stack semantics.
 
 [Full evidence](results-fast-method-float-to-int-macos-arm64.json); [all 62 audit checks](audit-fast-method-float-to-int.md).
+
+
+## Cleanup-output pointer attributes rejected (2026-10-31)
+
+Copyright 2026 Qore Technologies, s.r.o.
+
+Baseline 3d84c41b33 is the installed optimized fast-method floating-conversion checkpoint. An AOT-only candidate marked the private native-assignment cleanup pointer captures(none)/nocapture and writeonly. The runtime only writes through that pointer and never retains it; coercion, ownership and exception operations remained. This valid compiler contract reduced two real callback callers from 528/547 to 456/458 static instructions, with 496-byte frames unchanged. It did not improve their execution time.
+
+The candidate is rejected. Ordinary indirect callbacks regress 13.35% in the pilot and 10.59% in symmetric paired confirmation; wide callbacks regress 5.37% and 5.99%. Both paired regressions occur in every layout. Production source and the candidate test extension are restored to 3d84. The optimized system installation remains 3d84; no rejected code was installed.
+
+### Optimized pilot
+
+Apple M4 Pro ARM64, Apple clang 21, LLVM 22.1.8, -O3 -DNDEBUG, allocation tracking off. Fresh stripped O3 artifacts, identical frozen candidate runtime for both variants, default/reverse/shuffle-487 layouts, three forks, count 4096, seed 7, three warmups and three 100 ms measured windows. Before disables only these attributes. Eighteen disabled-control LLVM modules match the frozen pre-change compiler after normalizing only serialized runtime identity metadata, its size, and the explicit runtime identity descriptor. Runtime identity enforcement remains enabled.
+
+Whole-kernel ns/item, lower is better; these are not isolated physical-call latencies.
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change
+|local:direct_call|1.5768|1.5582|-1.18%
+|local:polymorphic_call|15.8135|15.5462|-1.69%
+|local:list_mutate|124.9389|126.5749|+1.31%
+|local:dynamic_float_result_call|10.7289|10.6683|-0.56%
+|micro:indirect_call|8.3577|9.4731|+13.35%
+|micro:indirect_wide|8.7698|9.2410|+5.37%
+|micro:indirect_int_result|9.0516|8.9541|-1.08%
+|micro:indirect_float|9.2028|9.0243|-1.94%
+|micro:indirect_float_result|9.5039|9.6610|+1.65%
+|micro:indirect_tagged_float|10.1488|10.1467|-0.02%
+|micro:closure_call|18.8468|19.0764|+1.22%
+|micro:closure_capture|24.7898|24.4943|-1.19%
+|micro:list_build|23.5589|23.5278|-0.13%
+|float:callback_loop_float_return|5.0340|5.0525|+0.37%
+|mixed:csv_report|974.0179|993.3962|+1.99%
+|mixed:object_orders|3353.7496|3364.2578|+0.31%
+|mixed:callback_pipeline|98.4578|98.7123|+0.26%
+|mixed:text_index|1409.1714|1399.3146|-0.70%
+
+### Paired confirmation
+
+Selected after the unfavorable pilot: three symmetric ABBA/BAAB blocks per layout, two processes per variant per block. The within-block ratio is the primary estimate; marginal medians are shown separately. Absolute times shifted between epochs on this shared host and must not be pooled.
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Marginal change|!Paired change
+|local:direct_call|1.7076|1.7143|+0.39%|-0.81%
+|micro:indirect_call|9.3425|10.2635|+9.86%|+10.59%
+|micro:indirect_wide|9.3941|10.6230|+13.08%|+5.99%
+|micro:indirect_int_result|10.1871|9.5019|-6.73%|+0.94%
+
+All 468 processes / 1404 measured windows replay independently. Candidate Release passes eight fixtures, 11 executed cases and 2430 assertions; 36 artifacts pass 4698 reference outputs per variant. The changed assignment fixture checks enabled/disabled attributes and throwing/nonthrowing paths at O0/O3, with scalar/owned/weak/exception regressions. Debug and short-loop retention qualification were not run because the candidate was rejected. The two failed control collectors are preserved: object-only emission omitted the linked wrapper metadata; the next collector omitted the explicit runtime-identity descriptor from its allowed normalization. The corrected collector matches all 18 disabled-control modules.
+
+A preceding scalar-return/cold-status ABI idea remains at compile-only feasibility. Two status representations each grow two callers from 496 to 512 bytes and add instructions to all three; neither was executed or timed. The second representation has no compiled matching helper. This is a reason to hold that design, not a measured speed rejection or a claim that every register-return ABI is slow. The cleanup-pointer compile-only probe also remains explicitly distinct from final artifact measurements.
+
+[Full evidence](results-coerce-cleanup-rejection-macos-arm64.json) includes raw timing outputs, actual exit receipts, source/driver hashes, qualification, all 62 audit decisions and failed stages. [Audit](audit-coerce-cleanup-rejection.md) covers the retained evidence-only change. No owned build/test/profile overlapped either timing epoch. This is a shared host without frequency/affinity control; no fresh Java/develop ratio, weighted application benefit or global performance ceiling is claimed.
+
+Next inspect whether a separate invariant-callback outcome can report proven clean native completion and avoid a redundant caller sink read. Prove the normal native body and frame teardown cannot set exception or thread-exit state; retain all live admission, stack, context and per-iteration cancellation checks. Start with compile-only caller/helper inspection, then require optimized measurements and full qualification before retention.

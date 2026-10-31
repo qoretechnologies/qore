@@ -1656,3 +1656,6 @@ The [post-local-receiver optimized checkpoint](RESULTS.md#optimized-checkpoint-a
 [Unary floating callback result initialization](RESULTS.md#unary-floating-callback-result-initialization-2026-10-31): a runtime-only unary floating improvement after rejecting integer and zero-argument extensions, with [all six measured epochs](results-deferred-float-unary-macos-arm64.json) and [62-item audit](audit-deferred-float-unary.md). Existing v9 AOT artifacts can benefit; measured controls and shared-host limits remain explicit.
 
 [Native floating conversion in fast AOT method entries](RESULTS.md#native-floating-conversion-in-fast-aot-method-entries-2026-10-31): AArch64 method-result conversion with a target-aware semantic proof, rejected broader scopes and all control costs. See the [evidence](results-fast-method-float-to-int-macos-arm64.json) and [62-item audit](audit-fast-method-float-to-int.md).
+
+
+Cleanup-pointer annotation experiment: [results](results-coerce-cleanup-rejection-macos-arm64.json), [audit](audit-coerce-cleanup-rejection.md). Rejected after 468 optimized processes / 1404 windows: paired indirect/wide callbacks regress 10.59%/5.99%; production code restored. Cold-status scalar ABI remains compile-only.
