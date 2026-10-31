@@ -59,8 +59,9 @@ module VscDebugAdapter {
       debugged code catches them (uncaught exceptions; the try statements of code that cannot be debugged are not
       seen)
     - breakpoints on any statement of a line with more than one statement (column breakpoints); columns are converted
-      between the UTF-16 code units of the protocol and the bytes of %Qore with the text of the line, if the file can
-      be read by the adapter, otherwise a character is assumed to be a byte
+      between the UTF-16 code units of the protocol and the bytes of %Qore with the text of the line, which is read
+      from the file or, for a source that the adapter cannot read, such as a label or a file of a remote program,
+      given by the debug server; only when no text is available is a character assumed to be a byte
     - step over, into and out, also into a chosen call of the statement (step-in targets), continue and pause of a
       thread; all threads of the program stop when one of them
       stops, and continue together, unless the \c stopAllThreads argument of the \c launch or \c attach request is
@@ -1190,6 +1191,63 @@ vda.run();
         return cached.lines[line - 1];
     }
 
+    #! Returns a line of a source of the current program, for the conversion of columns
+    /** The line is read from the file if the adapter can read it, otherwise the debug server gives the text of the
+        source, as of a label or of a file of a remote program
+
+        @param file the file, or the label of code that was parsed with a label
+        @param source the file that a label is a part of, if any
+        @param offset the line offset of a label in its file, if known
+        @param line the 1-based line in the file or label
+
+        @return the text of the line, or @ref nothing if the text of the source is not available
+    */
+    private:internal *string getSourceLine(string file, *string source, *int offset, int line) {
+        if (!source.val()) {
+            return getFileLine(file, line) ?? getServerSourceLine("file", file, line);
+        }
+        # the text of a label, if the debug server gives it, as Qorus does
+        *string rv = getServerSourceLine("label", file, line);
+        if (exists rv) {
+            return rv;
+        }
+        # the line of the file that the label is a part of
+        int n = line + (offset ?? m_programState{m_currentPgmId}.info.files{source}{file} ?? 0);
+        return getFileLine(source, n) ?? getServerSourceLine("file", source, n);
+    }
+
+    #! Returns a line of a source that the debug server gives
+    /** The text of a source is read once for a program; a source that the server cannot give is not read again
+
+        @param type \c file or \c label
+        @param name the name of the file or label
+        @param line the 1-based line
+
+        @return the text of the line, or @ref nothing if the server cannot give the source or it has no such line
+    */
+    private:internal *string getServerSourceLine(string type, string name, int line) {
+        if (!m_currentPgmId || line < 1) {
+            return;
+        }
+        string key = type + ":" + name;
+        auto lines = m_programState{m_currentPgmId}.sourceLines{key};
+        if (!exists lines) {
+            try {
+                # the name of the source is given with the key of its type
+                hash<auto> cmd = {"cmd": sprintf("program/%d/%s/source", m_currentPgmId, type)};
+                cmd{type} = name;
+                *string code = doCommand(cmd).result.code;
+                lines = exists code ? code.split("\n") : ();
+            } catch (hash<ExceptionInfo> ex) {
+                # the server does not give the text of the source
+                debug("the source of %s %y is not available: %s", type, name, VscDebugAdapter::getErrorText(ex));
+                lines = False;
+            }
+            m_programState{m_currentPgmId}.sourceLines{key} = lines;
+        }
+        return lines ? lines[line - 1] : NOTHING;
+    }
+
     #! Returns if the columns of the protocol start at 1
     private:internal bool columnsStartAt1() {
         return m_initializeArgs.columnsStartAt1 ?? True;
@@ -1434,11 +1492,6 @@ vda.run();
         if (frame || !l || !l[0].statementid) {
             return res;
         }
-        string path = l[0].file;
-        *hash ls = m_programState{m_currentPgmId}.loadedSourceByName{getLoadedSourceName(l[0].file, l[0].source)};
-        if (ls) {
-            path = getSource(ls).path ?? path;
-        }
         list<auto> targets = doCommand((
             "cmd": "program/" + m_currentPgmId + "/statement/stepintargets",
             "value": {"id": l[0].statementid},
@@ -1451,8 +1504,10 @@ vda.run();
                 "endLine": t.end_line,
             };
             if (t.start_column >= 0) {
-                target.column = getProtocolColumn(getFileLine(path, t.start_line), t.start_column, columnsStartAt1());
-                target.endColumn = getProtocolColumn(getFileLine(path, t.end_line), t.end_column, columnsStartAt1());
+                target.column = getProtocolColumn(getSourceLine(l[0].file, l[0].source, l[0].offset, t.start_line),
+                    t.start_column, columnsStartAt1());
+                target.endColumn = getProtocolColumn(getSourceLine(l[0].file, l[0].source, l[0].offset, t.end_line),
+                    t.end_column, columnsStartAt1());
             }
             push res.targets, target;
         }
@@ -1523,9 +1578,10 @@ vda.run();
             sf.endLine = l[i].endline;
             if (exists l[i].column) {
                 # the frame's statement, where it is known
-                string path = sf.source.path ?? l[i].file;
-                sf.column = getProtocolColumn(getFileLine(path, l[i].line), l[i].column, columnsStartAt1());
-                sf.endColumn = getProtocolColumn(getFileLine(path, l[i].endline), l[i].endcolumn, columnsStartAt1());
+                sf.column = getProtocolColumn(getSourceLine(l[i].file, l[i].source, l[i].offset, l[i].line),
+                    l[i].column, columnsStartAt1());
+                sf.endColumn = getProtocolColumn(getSourceLine(l[i].file, l[i].source, l[i].offset, l[i].endline),
+                    l[i].endcolumn, columnsStartAt1());
             } else {
                 sf.column = 0;
             }
@@ -1865,7 +1921,7 @@ vda.run();
         return res;
     }
 
-    #! Returns the ID and the file of a source of the protocol, as the program knows the file
+    #! Returns the ID and the file of a source of the protocol, as the program knows the file, and the file of a label
     private:internal hash<auto> getSourceFile(hash<auto> source) {
         string sourceId = source.path;
         string file = sourceId;
@@ -1876,17 +1932,19 @@ vda.run();
                 file = ls.file;
             }
         }
-        return {"sourceId": sourceId, "file": file};
+        return {"sourceId": sourceId, "file": file, "source": source.sourceReference > 0
+            ? m_programState{m_currentPgmId}.loadedSourceById{source.sourceReference}.source
+            : NOTHING};
     }
 
     #! Returns the line and the column of the protocol of a statement
-    /** @param file the file of the statement, whose lines are read for the conversion of the column
-        @param info the @ref Qore::StatementInfo "StatementInfo" of the statement
+    /** @param info the @ref Qore::StatementInfo "StatementInfo" of the statement
     */
-    private:internal hash<auto> getStatementPosition(string file, hash<auto> info) {
+    private:internal hash<auto> getStatementPosition(hash<auto> info) {
         hash<auto> rv = {"line": info.start_line};
         if (info.start_column >= 0) {
-            rv.column = getProtocolColumn(getFileLine(file, info.start_line), info.start_column, columnsStartAt1());
+            rv.column = getProtocolColumn(getSourceLine(info.file, info.source, info.offset, info.start_line),
+                info.start_column, columnsStartAt1());
         }
         return rv;
     }
@@ -1905,7 +1963,8 @@ vda.run();
                 hash<auto> bkpt = {"file": file, "lineno": b.line} + b{"condition", "hitCondition", "logMessage"};
                 # a breakpoint on a statement of a line with more than one statement
                 if (exists b.column) {
-                    bkpt.column = getByteColumn(getFileLine(file, b.line), b.column, columnsStartAt1());
+                    bkpt.column = getByteColumn(getSourceLine(file, sf.source, NOTHING, b.line), b.column,
+                        columnsStartAt1());
                 }
                 push bkpts, bkpt;
             }
@@ -1918,7 +1977,7 @@ vda.run();
                             "cmd": "program/" + m_currentPgmId + "/statement/get",
                             "value": {"id": b.statementId},
                         )).result;
-                        b += getStatementPosition(file, info);
+                        b += getStatementPosition(info);
                     }
                     m_programState{m_currentPgmId}.sourceBreakpoints{sourceId}{b.id} = b + args.breakpoints[$#];
                     remove b.statementId;
@@ -1952,7 +2011,7 @@ vda.run();
                 if (stmt.start_line != line && stmt.start_line + stmt.offset != line) {
                     continue;
                 }
-                hash<auto> pos = getStatementPosition(file, stmt);
+                hash<auto> pos = getStatementPosition(stmt);
                 pos.line = line;
                 # the columns of the range are on its first and last lines
                 if (pos.column) {

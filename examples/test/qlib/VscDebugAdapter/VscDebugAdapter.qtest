@@ -355,6 +355,7 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         addTestCase("the columns of the protocol and of the source", \columnConversionTest());
         addTestCase("breakpoints on a statement of a line with more than one", \columnBreakpointTest());
         addTestCase("stepping into a chosen call", \stepInTargetTest());
+        addTestCase("columns of a source that only the debug server can read", \remoteColumnTest());
         addTestCase("the adapter communicates over sockets, as Visual Studio Code starts it", \socketTest());
         addTestCase("the adapter logs to its file and to the debug console", \logTest());
         addTestCase("the end of a program that started a process is reported", \childProcessTest());
@@ -1760,6 +1761,72 @@ print('exit code: %d' % p.wait(30))
         server.write("end\n");
         assertTrue(server.wait(30s), "the debug server ends");
         assertEq(0, server.exitCode());
+    }
+
+    # the columns of a line of a source that the adapter cannot read are converted with the text that the debug
+    # server gives
+    remoteColumnTest() {
+        TmpDir tmp("qore-vda-test-");
+        writeProgram(tmp, ColumnProgram);
+        # the server parses the program with a relative path in its directory, which is not the directory of the adapter
+        assertFalse(is_file("target.q"));
+        Process server(qore_exe, (server_script, "-v", "target.q"), {
+            "cwd": tmp.path,
+            "env": Process::getEnvironment() + {
+                "QORE_MODULE_DIR": qlib_dir + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : ""),
+            },
+        });
+        on_exit if (server.running()) {
+            server.terminate();
+        }
+        string line = readServerOutput(server, "\n");
+        int port = (line =~ x/listening on port ([0-9]+)/)[0].toInt();
+
+        Process proc = startAdapter(("-a", sprintf("ws://localhost:%d", port)));
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        hash<auto> r = dap.request("initialize", {"adapterID": "qore", "linesStartAt1": True,
+            "columnsStartAt1": True, "pathFormat": "path"});
+        assertTrue(r.success, r.message);
+        r = dap.request("attach", {"program": "target.q"});
+        assertTrue(r.success, r.message);
+        dap.waitForEvent("initialized");
+
+        # the statements of line 3 after the string of characters of more than one byte: with the text of the line,
+        # the columns count UTF-16 code units, otherwise they would count bytes (22 and 41)
+        r = dap.request("breakpointLocations", {"source": {"path": "target.q"}, "line": 3});
+        assertTrue(r.success, r.message);
+        assertEq((1, 19, 38), (map $1.column, r.body.breakpoints));
+        r = dap.request("setBreakpoints", {"source": {"path": "target.q"}, "breakpoints": (
+            {"line": 3, "column": 38},
+        )});
+        assertTrue(r.success, r.message);
+        assertEq((True, 3, 38), (r.body.breakpoints[0].verified, r.body.breakpoints[0].line,
+            r.body.breakpoints[0].column));
+        r = dap.request("configurationDone");
+        assertTrue(r.success, r.message);
+
+        # the thread stops at the third statement, which the stack frame gives with its columns
+        hash<auto> stopped = dap.waitForEvent("stopped");
+        assertEq("breakpoint", stopped.body.reason);
+        int tid = stopped.body.threadId;
+        hash<auto> frame = topFrame(dap, tid);
+        assertEq((3, 38), (frame.line, frame.column));
+        assertEq("3", evaluate(dap, tid, "x").body.result);
+
+        r = dap.request("continue", {"threadId": tid});
+        assertTrue(r.success, r.message);
+        dap.waitFor(bool sub (hash<auto> m) {
+            return m.type == "event" && m.event == "output" && m.body.category == "stdout" && m.body.output == "3\n";
+        }, "program output");
+        r = dap.request("disconnect");
+        assertTrue(r.success, r.message);
+        proc.closeStdin();
+        assertTrue(proc.wait(30s), "the adapter ends");
+        server.write("end\n");
+        assertTrue(server.wait(30s), "the debug server ends");
     }
 
     # the IDE is told why the debug server cannot be reached
