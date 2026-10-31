@@ -2541,7 +2541,7 @@ static std::unique_ptr<QoreIRInstruction> readPlugin(
 }
 
 // ============================================================================
-// Group 67: DebugStatement - debugger step event for a statement
+// Group 67: DebugStatement - debugger step event for a statement, or for the start of a block (DebugBlock)
 // ============================================================================
 //
 // QoreIRDebugStatementInstruction carries a raw AbstractStatement* that points into the parse tree the function
@@ -2565,8 +2565,15 @@ static std::unique_ptr<QoreIRInstruction> readDebugStatement(
         const std::vector<QoreIRValue>& operands, uint32_t result_id,
         AOTInstReadCtx& ctx) {
     // Reconstruct with a null statement pointer: the parse tree is not available under AOT.  The source location
-    // is restored by the base-instruction reader, and the runtime resolves the statement from it on demand.
-    auto inst = std::make_unique<QoreIRDebugStatementInstruction>(nullptr);
+    // is restored by the base-instruction reader, and the runtime resolves the statement from it on demand.  The
+    // group also has the DebugBlock instructions of blocks that the lowering knew (QoreIRBuilder::createDebugBlock()),
+    // so the opcode is kept; the runtime resolves their blocks from the location as well.
+    QoreIROpcode opcode = static_cast<QoreIROpcode>(opcode_raw);
+    if (opcode != QoreIROpcode::DebugStatement && opcode != QoreIROpcode::DebugBlock) {
+        ctx.error = "invalid opcode " + std::to_string(opcode_raw) + " of a debugger step instruction";
+        return nullptr;
+    }
+    auto inst = std::make_unique<QoreIRDebugStatementInstruction>(opcode, nullptr);
     inst->result = QoreIRValue(result_id);
     inst->operands = std::move(operands);
     inst->exception_target = exc_target;

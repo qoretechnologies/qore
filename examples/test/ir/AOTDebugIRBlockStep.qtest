@@ -1,0 +1,128 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.  SPDX-License-Identifier: MIT
+
+# Regression test: a debugger attached to an AOT program gets the step event of the start of each block of an AOT
+# function with the block itself, as with the AST interpreter, also for a block without statements, such as the body
+# of an empty loop.
+#
+# The debug IR of AOT code is deserialized without the pointers of its blocks, so the IR interpreter finds the block
+# of a DebugBlock instruction by its location (qore_program_private::getBlockFromIndex()); the first statement of a
+# line is not the block on a line such as "for (...) {}", and a debugger that pauses a thread at the next block of the
+# loop needs the block of the loop body.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+
+%exec-class AOTDebugIRBlockStepTest
+
+class AOTDebugIRBlockStepTest inherits QUnit::Test {
+    private {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir;
+        string tmp_dir;
+
+        # probe() is called through call_function() so that the call is dispatched through the tiered entry of
+        # the variant, as calls between separately compiled AOT objects are; it is on lines 30-36
+        const ProbeSource = "%modern
+%allow-debugger
+
+class StepRecorder inherits DebugProgram {
+    public { list<string> seen = (); }
+    onAttach(ProgramControl pgm, reference rs, reference rts) { rs = DebugStep; }
+    onDetach(ProgramControl pgm, reference rs, reference rts) {}
+    onStep(ProgramControl pgm, int blockStatementId, *int statementId, *int breakpointId, reference flow,
+            reference rs, reference rts) {
+        # the start of a block, which the debugger gets before the first statement of the block
+        if (!statementId && blockStatementId) {
+            hash<auto> i = pgm.getStatementIdInfo(blockStatementId);
+            seen += sprintf(\"block %s:%d\", basename(i.file), i.start_line + i.offset);
+        }
+        rs = DebugStep;
+    }
+    onFunctionEnter(ProgramControl pgm, int statementId, reference rs, reference rts) { rs = DebugStep; }
+    onFunctionExit(ProgramControl pgm, int statementId, reference result, reference rs, reference rts) {
+        rs = DebugStep;
+    }
+    onException(ProgramControl pgm, int statementId, hash<auto> ex, reference dismiss, reference rs,
+            reference rts) {
+        rs = DebugStep;
+    }
+    onExit(ProgramControl pgm, int statementId, reference result, reference rs, reference rts) {
+        rs = DebugStep;
+    }
+}
+
+int sub probe(int a) {
+    for (int i = 0; i < a; ++i) {}
+    if (a > 1) {
+        a = 10;
+    }
+    return a;
+}
+
+StepRecorder r();
+ProgramControl pc = ProgramControl::getProgram();
+int rv;
+Counter cnt(1);
+background sub () {
+    on_exit cnt.dec();
+    r.addProgram(pc);
+    on_exit r.removeProgram(pc);
+    rv = call_function(\"probe\", 2);
+}();
+cnt.waitForZero();
+printf(\"rv=%d\\n\", rv);
+# only the blocks of probe(): AOT top-level code is native code without step events
+foreach string e in (r.seen) {
+    int line = (e =~ x/:([0-9]+)$/)[0].toInt();
+    if (line >= 30 && line <= 36) {
+        printf(\"%s\\n\", e);
+    }
+}
+";
+    }
+
+    constructor() : QUnit::Test("AOTDebugIRBlockStep", "1.0") {
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        tmp_dir = sprintf("%s/qore-aot-debug-ir-block-%d", (ENV.TMPDIR ?? "/tmp"), getpid());
+        mkdir(tmp_dir);
+        addTestCase("AOT function steps identify their blocks under a debugger", \testAotBlockSteps());
+        set_return_value(main());
+    }
+
+    destructor() {
+        system(sprintf("rm -rf %s", tmp_dir));
+    }
+
+    testAotBlockSteps() {
+        string src = tmp_dir + "/probe.q";
+        string exe = tmp_dir + "/probe.aot";
+        {
+            File f();
+            f.open2(src, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(ProbeSource);
+        }
+
+        # the AST interpreter is the benchmark
+        string ast_out = backquote(sprintf("%s -b --exec-mode=ast %s 2>&1", qore_bin, src));
+        # the function's block, the empty body of the loop at each iteration, and the block of the if statement; a
+        # block with statements starts at its first statement.  The blocks are compared by the lines that they start
+        # at, as the statement index of an AOT program has one entry for each line that a statement starts at, so the
+        # block of the if statement is the entry of its first statement there
+        assertEq("rv=10\nblock probe.q:31\nblock probe.q:31\nblock probe.q:31\nblock probe.q:33\n",
+            ast_out, "AST block step events of probe()");
+
+        foreach bool strip in ((False, True)) {
+            string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile%s --output %s %s 2>&1",
+                libqore_dir, qore_bin, strip ? " --strip-source" : "", exe, src));
+            assertTrue(is_file(exe), "AOT compile succeeds: " + compile_out);
+            string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
+            assertEq(ast_out, aot_out, sprintf("AOT block step events of probe() match the AST interpreter "
+                "(strip-source: %y)", strip));
+            unlink(exe);
+        }
+    }
+}

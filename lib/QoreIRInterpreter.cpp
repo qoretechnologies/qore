@@ -12272,7 +12272,7 @@ load_local_done:
                     }
                     if (!dbg_block && pgm && inst->loc && inst->cached_start_line >= 0) {
                         dbg_block = qore_program_private::get(*pgm)->getBlockFromIndex(inst->loc->getFile(),
-                            inst->cached_start_line + inst->loc->offset);
+                            inst->cached_start_line + inst->loc->offset, inst->loc->end_line + inst->loc->offset);
                     }
                     if (!dbg_block) {
                         dbg_block = statements;

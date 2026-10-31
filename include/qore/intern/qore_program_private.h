@@ -63,6 +63,7 @@ class QoreSandboxManager;
 #include <cerrno>
 #include <cstdarg>
 #include <map>
+#include <tuple>
 #include <mutex>
 #include <unordered_map>
 #include <unordered_set>
@@ -3998,10 +3999,15 @@ public:
 
         @param file the file of the location
         @param line the absolute line
+        @param end_line the absolute end line of the block, if known; then the block with these lines is returned,
+        as more than one block can start at a line
 
-        @return the innermost registered block that starts at the line, or nullptr
+        @return the registered block that starts at the line and ends at \a end_line, or the innermost registered
+        block that starts at the line if there is none or \a end_line is negative, as in the statement index of an
+        AOT program, which has one entry for each line that a statement starts at; nullptr if no block starts at the
+        line
     */
-    DLLLOCAL const StatementBlock* getBlockFromIndex(const char* file, int line);
+    DLLLOCAL const StatementBlock* getBlockFromIndex(const char* file, int line, int end_line = -1);
 
     //! Returns the calls of a statement that a debugger can step into
     /** @param statement_id the ID of the statement
@@ -4083,7 +4089,7 @@ private:
     typedef std::vector<AbstractStatement*> StatementVector_t;
     StatementVector_t statementIds;
     //! the blocks found by getBlockFromIndex(), by file and line; cleared when a statement is registered
-    std::map<std::pair<std::string, int>, const StatementBlock*> blockIndexCache;
+    std::map<std::tuple<std::string, int, int>, const StatementBlock*> blockIndexCache;
 
     // to get statementId
     typedef std::map<AbstractStatement*, unsigned long> ReverseStatementIdMap_t;

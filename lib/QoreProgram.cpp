@@ -4285,12 +4285,12 @@ private:
 };
 }
 
-const StatementBlock* qore_program_private::getBlockFromIndex(const char* file, int line) {
+const StatementBlock* qore_program_private::getBlockFromIndex(const char* file, int line, int end_line) {
     if (!file) {
         return nullptr;
     }
     AutoLocker al(&plock);
-    std::pair<std::string, int> key(file, line);
+    std::tuple<std::string, int, int> key(file, line, end_line);
     auto ci = blockIndexCache.find(key);
     if (ci != blockIndexCache.end()) {
         return ci->second;
@@ -4303,7 +4303,14 @@ const StatementBlock* qore_program_private::getBlockFromIndex(const char* file, 
             || strcmp(b->loc->getFile(), file)) {
             continue;
         }
-        // the innermost block, which has the fewest lines
+        // the block with the given lines
+        if (end_line >= 0 && b->loc->end_line + b->loc->offset == end_line) {
+            rv = b;
+            break;
+        }
+        // otherwise the innermost block, which has the fewest lines, as for the code of an AOT program, whose
+        // statement index has one entry for each line that a statement starts at, as a block, so a block that starts
+        // at the line of its first statement is the entry of that statement
         int lines = b->loc->end_line - b->loc->start_line;
         if (rv_lines < 0 || lines < rv_lines) {
             rv = b;
