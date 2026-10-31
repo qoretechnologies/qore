@@ -3101,34 +3101,6 @@ extern "C" DLLEXPORT uint64_t qore_rt_cast_by_type_path_aot(QoreAOTContext* ctx,
     return qore_rt_cast_by_type_path_in_program(inner_bits, type_path, or_nothing, xsink, pgm);
 }
 
-bool qore_rt_apply_complex_hash_value_type(const QoreHashNode* h, const char* key,
-        QoreValue& result, ExceptionSink* xsink) {
-    if (!h || h->getHashDecl() || result.isNothing()) {
-        return true;
-    }
-    const QoreTypeInfo* vti = h->getValueTypeInfo();
-    qore_type_t result_type = result.getType();
-    static constinit QoreEnvFlag exact_scalar_enabled_env("QORE_DISABLE_FAST_HASH_SCALAR_ACCEPTANCE");
-    const bool exact_scalar_enabled = !exact_scalar_enabled_env.get();
-    bool exact_scalar_type = exact_scalar_enabled
-        && ((vti == bigIntTypeInfo && result_type == NT_INT)
-            || (vti == floatTypeInfo && result_type == NT_FLOAT)
-            || (vti == boolTypeInfo && result_type == NT_BOOLEAN));
-    if (!QoreTypeInfo::hasType(vti) || vti == autoTypeInfo || vti == anyTypeInfo
-            || exact_scalar_type
-            || QoreTypeInfo::runtimeAcceptsValue(vti, result) != QTI_NOT_EQUAL) {
-        return true;
-    }
-
-    ValueHolder holder(result, xsink);
-    QoreTypeInfo::acceptInputKey(vti, key, *holder, xsink);
-    if (xsink && *xsink) {
-        return false;
-    }
-    result = holder.release();
-    return true;
-}
-
 // --- Call reference creation helper ---
 
 extern "C" DLLEXPORT uint64_t qore_rt_create_call_ref(uint64_t expr_bits, ExceptionSink* xsink) {
@@ -5370,10 +5342,7 @@ static uint64_t qore_rt_hash_key_access_hash_impl(uint64_t hash_val, const char*
         return toBits(QoreValue());
     }
     result.refSelf();
-    if (!qore_rt_apply_complex_hash_value_type(h, key, result, xsink)) {
-        result.discard(xsink);
-        return toBits(QoreValue());
-    }
+    // the value is returned as it is stored, as the AST interpreter returns it
     qore_rt_evaluate_owned_weak_reference_result(result, xsink);
     if (*xsink) {
         return toBits(QoreValue());
@@ -5418,10 +5387,7 @@ static uint64_t qore_rt_hash_key_access_impl(uint64_t hash_val, const char* key,
             return toBits(QoreValue());
         }
         result.refSelf();
-        if (!qore_rt_apply_complex_hash_value_type(h, key, result, xsink)) {
-            result.discard(xsink);
-            return toBits(QoreValue());
-        }
+        // the value is returned as it is stored, as the AST interpreter returns it
         if (!preserve_weak_result) {
             qore_rt_evaluate_owned_weak_reference_result(result, xsink);
             if (*xsink) {
@@ -5437,10 +5403,7 @@ static uint64_t qore_rt_hash_key_access_impl(uint64_t hash_val, const char* key,
             return toBits(QoreValue());
         }
         result.refSelf();
-        if (!qore_rt_apply_complex_hash_value_type(h, key, result, xsink)) {
-            result.discard(xsink);
-            return toBits(QoreValue());
-        }
+        // the value is returned as it is stored, as the AST interpreter returns it
         if (!preserve_weak_result) {
             qore_rt_evaluate_owned_weak_reference_result(result, xsink);
             if (*xsink) {
@@ -5564,20 +5527,12 @@ static int64_t qore_rt_hash_key_truthy_impl(uint64_t hash_val, const char* key,
         return 0;
     }
 
-    const QoreTypeInfo* value_type = hash->getValueTypeInfo();
-    bool type_accepted = hash->getHashDecl() || result.isNothing()
-        || !QoreTypeInfo::hasType(value_type) || value_type == autoTypeInfo
-        || value_type == anyTypeInfo
-        || QoreTypeInfo::runtimeAcceptsValue(value_type, result) != QTI_NOT_EQUAL;
-    if (!result.hasNode() && type_accepted) {
+    if (!result.hasNode()) {
         return result.getAsBool() ? 1 : 0;
     }
 
     result.refSelf();
-    if (!qore_rt_apply_complex_hash_value_type(hash, key, result, xsink)) {
-        result.discard(xsink);
-        return 0;
-    }
+    // the value is returned as it is stored, as the AST interpreter returns it
     qore_rt_evaluate_owned_weak_reference_result(result, xsink);
     if (*xsink) {
         return 0;

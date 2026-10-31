@@ -58,7 +58,10 @@
     interpreter, also when operators are chained, as in <tt>select (map ((),), l), $1</tt> (ex: an element
     <tt>((),)</tt> is stored as a \c list<list>; the IR, JIT and tiered modes and compiled code stored it as a
     \c list<list<auto>> in a \c map over an untyped source, in the map/select form and in chained operators), and
-    the IR interpreter no longer converts a value read from a hash key when the value type of the hash accepts it.
+    a value read from a hash key is now the value stored in every mode, as with the AST interpreter: the IR, JIT
+    and tiered modes and compiled code converted it to the value type of the hash, so that, for example, reading a
+    weak reference stored with \c ":=" in a \c hash<string, object> raised \c RUNTIME-TYPE-ERROR (and could crash
+    native code).
 
     @ref Qore::HTTPClient::sendHttp2Connect() "HTTPClient::sendHttp2Connect()" and
     @ref Qore::HTTPClient::sendHttp3Connect() "HTTPClient::sendHttp3Connect()" now send their headers as every other

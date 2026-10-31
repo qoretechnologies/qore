@@ -59,16 +59,6 @@ const QoreJITRuntimeSymbolInfo* qore_jit_get_runtime_symbols(size_t& count);
 //! Validates the central JIT runtime helper symbol registry.
 bool qore_jit_validate_runtime_symbols(std::string& error);
 
-//! Converts a value read from a key of a hash with a complex value type that the value type does not accept
-/** Shared by the IR interpreter and the native helpers that read a key from a hash, so that every compiled tier
-    reads the same value; a value that the value type accepts at runtime (QoreTypeInfo::runtimeAcceptsValue()) is
-    returned unchanged, as the AST interpreter returns it.
-
-    @return false if the conversion raised an exception in \a xsink
-*/
-DLLLOCAL bool qore_rt_apply_complex_hash_value_type(const QoreHashNode* h, const char* key, QoreValue& result,
-        ExceptionSink* xsink);
-
 enum class QoreStringCaseConsumer : int32_t {
     StartsWith,
     EndsWith,

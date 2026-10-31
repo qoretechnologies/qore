@@ -1,0 +1,119 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%allow-weak-references
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%include hash-key-read-checks.qi
+
+%exec-class HashKeyReadTest
+
+#! Tests that a value read from a key of a hash with a complex value type is the value stored, as with the AST interpreter
+/** The AST interpreter returns the value of a hash key as it is stored, without converting it to the value type of
+    the hash, for example a weak reference stored with ":=" in a hash<string, object>, or a value that a hash map
+    converted when it stored it, under the common type of the values.  Every execution mode and a compiled module must
+    read what the AST interpreter reads.  The checks are in hash-key-read-checks.qi.
+*/
+class HashKeyReadTest inherits QUnit::Test {
+    public {
+        #! check name -> the result that the AST interpreter gives
+        const Expected = {
+            "weak-object-live-argument": "\"object\"",
+            "weak-object-live-member": "7",
+            "weak-object-live-exists": "True",
+            "weak-object-live-instanceof": "True",
+            "weak-object-live-local": "\"object\"",
+            "weak-object-deleted-argument": "OBJECT-ALREADY-DELETED",
+            "weak-object-deleted-exists": "True",
+            "weak-object-deleted-member": "null",
+            "weak-optional-object-live-argument": "\"object\"",
+            "weak-optional-object-deleted-argument": "OBJECT-ALREADY-DELETED",
+            "weak-class-live-argument": "\"object\"",
+            "weak-class-live-member": "7",
+            "weak-class-deleted-argument": "OBJECT-ALREADY-DELETED",
+            "common-type-read": "\"list<list>\"",
+            "common-type-hash": "hash<string, list<list<auto>>>",
+            "int-read": "2",
+            "softint-read": "\"integer 2\"",
+            "optional-read": "\"0 x\"",
+        };
+
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("HashKeyReadTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("checks in this program", \testInProgram());
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("compiled module", \testCompiledModule());
+
+        set_return_value(main());
+    }
+
+    #! the checks in the execution mode that the test is run in
+    testInProgram() {
+        checkResults("in-program", HashKeyReadChecks::get_results());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModes) {
+            checkWorkerOutput(mode, runWorker("hash-key-read-worker.q", get_script_dir(), "--exec-mode=" + mode));
+        }
+    }
+
+    testCompiledModule() {
+        TmpDir tmp("qore-hash-key-read-");
+        string qmod_path = tmp.path + DirSep + "HashKeyReadChecks.qmod";
+        string src_path = get_script_dir() + DirSep + "HashKeyReadChecks.qm";
+        string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile-module --strip-source --output "
+            "%s %s 2>&1", libqore_dir, qore_bin, qmod_path, src_path));
+        assertTrue(is_file(qmod_path), "compiled checks module: " + compile_out);
+
+        # the directory holds only the compiled module, so the worker cannot load the source instead
+        checkWorkerOutput("aot", runWorker("hash-key-read-module-worker.q", tmp.path));
+    }
+
+    #! a run with an execution mode runs through ExecModeHarness, which checks its native compilation
+    private string runWorker(string worker_name, string module_dir, string opts = "") {
+        string worker = get_script_dir() + DirSep + worker_name;
+        return ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s %s",
+            libqore_dir, module_dir, qore_bin, opts, worker));
+    }
+
+    #! parses the "name=value" lines printed by the worker and checks them
+    private checkWorkerOutput(string label, string out) {
+        hash<string, string> results = {};
+        foreach string line in (out.split("\n")) {
+            *list<*string> parts = (line =~ x/^([-a-z]+)=(.*)$/);
+            if (!parts) {
+                if (line.val()) {
+                    fail(sprintf("%s: unexpected worker output: %y", label, out));
+                }
+                continue;
+            }
+            results{parts[0]} = parts[1];
+        }
+        checkResults(label, results);
+    }
+
+    private checkResults(string label, hash<string, string> results) {
+        assertEq(sort(keys Expected), sort(keys results), label + ": checks run");
+        foreach hash<auto> i in (Expected.pairIterator()) {
+            assertEq(i.value, results{i.key}, sprintf("%s: %s", label, i.key));
+        }
+    }
+}

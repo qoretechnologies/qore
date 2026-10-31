@@ -1,0 +1,94 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+# checks of the values read from the keys of hashes with a complex value type; included by hash-key-read-worker.q,
+# so that the checks run in the execution mode of the worker, and by HashKeyReadChecks.qm for the compiled run
+#
+# the AST interpreter returns the value of a key as it is stored; each check returns what it reads, or the err of
+# the exception raised, and every execution mode must give what the AST interpreter gives
+
+public namespace HashKeyReadChecks {
+    #! the target of the weak references
+    public class Target {
+        public {
+            int n = 7;
+        }
+    }
+
+    #! returns the err of the exception raised by the code, or the value it returns, as a string
+    string sub check(code c) {
+        try {
+            return sprintf("%y", c());
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! returns the type of a value without calling a method on it
+    string sub kind(auto v) {
+        return v.typeCode() == NT_OBJECT ? "object" : v.type();
+    }
+
+    #! returns the results of the checks: name -> result
+    public hash<string, string> sub get_results() {
+        hash<string, string> rv = {};
+        Target keep();
+        # a weak reference stored in a hash whose value type is object: the stored value is the weak reference
+        {
+            hash<string, object> h = {"a": new Target()};
+            h.w := keep;
+            rv."weak-object-live-argument" = check(auto sub () { return kind(h.w); });
+            rv."weak-object-live-member" = check(auto sub () { return h.w.n; });
+            rv."weak-object-live-exists" = check(auto sub () { return exists h.w; });
+            rv."weak-object-live-instanceof" = check(auto sub () { return h.w instanceof Target; });
+            rv."weak-object-live-local" = check(auto sub () { auto v = h.w; return kind(v); });
+        }
+        {
+            hash<string, object> h = {"a": new Target()};
+            {
+                Target t();
+                h.w := t;
+            }
+            rv."weak-object-deleted-argument" = check(auto sub () { return kind(h.w); });
+            rv."weak-object-deleted-exists" = check(auto sub () { return exists h.w; });
+            rv."weak-object-deleted-member" = check(auto sub () { return h.w.n; });
+        }
+        {
+            hash<string, *object> h = {"a": new Target()};
+            h.w := keep;
+            rv."weak-optional-object-live-argument" = check(auto sub () { return kind(h.w); });
+            {
+                Target t();
+                h.d := t;
+            }
+            rv."weak-optional-object-deleted-argument" = check(auto sub () { return kind(h.d); });
+        }
+        {
+            hash<string, Target> h = {"a": new Target()};
+            h.w := keep;
+            rv."weak-class-live-argument" = check(auto sub () { return kind(h.w); });
+            rv."weak-class-live-member" = check(auto sub () { return h.w.n; });
+            {
+                Target t();
+                h.d := t;
+            }
+            rv."weak-class-deleted-argument" = check(auto sub () { return kind(h.d); });
+        }
+        # a hash whose value type is the common type of its values, which were converted when they were stored
+        {
+            list<string> ks = ("a", "b");
+            hash<auto> h = map {$1: ((),)}, ks;
+            rv."common-type-read" = check(auto sub () { return h.a.fullType(); });
+            rv."common-type-hash" = h.fullType();
+        }
+        # typed scalar values
+        {
+            hash<string, int> h = {"a": 1};
+            rv."int-read" = check(auto sub () { return h.a + 1; });
+            hash<string, softint> s = {"a": "2"};
+            rv."softint-read" = check(auto sub () { return kind(s.a) + " " + s.a; });
+            hash<string, *string> o = {"a": NOTHING, "b": "x"};
+            rv."optional-read" = check(auto sub () { return (exists o.a) + " " + o.b; });
+        }
+        return rv;
+    }
+}

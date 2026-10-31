@@ -8897,14 +8897,8 @@ load_local_done:
                             cleanupLocalCaches();
                             return false;
                         }
+                        // the value is returned as it is stored, as the AST interpreter returns it
                         out.refSelf();
-                        // convert the value as the native helpers do; a value that the value type accepts is
-                        // returned unchanged, as the AST interpreter returns it
-                        if (!qore_rt_apply_complex_hash_value_type(h, hka_inst->key_name.c_str(), out, xsink)) {
-                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                            cleanupLocalCaches();
-                            return false;
-                        }
                     }
                 } else if (base.getType() == NT_HASH) {
                     const QoreHashNode* h = base.get<const QoreHashNode>();
@@ -8914,14 +8908,8 @@ load_local_done:
                         cleanupLocalCaches();
                         return false;
                     }
+                    // the value is returned as it is stored, as the AST interpreter returns it
                     out.refSelf();
-                    // convert the value as the native helpers do; a value that the value type accepts is returned
-                    // unchanged, as the AST interpreter returns it
-                    if (!qore_rt_apply_complex_hash_value_type(h, hka_inst->key_name.c_str(), out, xsink)) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupLocalCaches();
-                        return false;
-                    }
                 } else if (base.getType() == NT_OBJECT) {
                     QoreObject* o = const_cast<QoreObject*>(base.get<const QoreObject>());
                     out = o->evalMember(hka_inst->key_name.c_str(), xsink);
