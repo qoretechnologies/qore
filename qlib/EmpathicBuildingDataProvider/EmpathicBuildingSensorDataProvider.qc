@@ -107,26 +107,18 @@ public class EmpathicBuildingSensorDataProvider inherits EmpathicBuildingDataPro
         # hash<string, int> when all values are epoch offsets, and writing a date would then raise RUNTIME-TYPE-ERROR
         hash<auto!> sensor = sensor0;
         foreach string key in (("previous_measurement", "last_measurement")) {
-            if (sensor{key}.typeCode() == NT_HASH) {
-                hash<auto!> measurement = sensor{key};
-                sensor{key} = measurement;
+            if (sensor{key}.typeCode() != NT_HASH) {
+                continue;
             }
-        }
-        if (sensor.previous_measurement.time) {
-            sensor.previous_measurement.time =
-                EmpathicBuildingDataProviderBase::getTimestamp(sensor.previous_measurement.time);
-        }
-        if (sensor.previous_measurement.valid_to) {
-            sensor.previous_measurement.valid_to =
-                EmpathicBuildingDataProviderBase::getTimestamp(sensor.previous_measurement.valid_to);
-        }
-        if (sensor.last_measurement.time) {
-            sensor.last_measurement.time =
-                EmpathicBuildingDataProviderBase::getTimestamp(sensor.last_measurement.time);
-        }
-        if (sensor.last_measurement.valid_to) {
-            sensor.last_measurement.valid_to =
-                EmpathicBuildingDataProviderBase::getTimestamp(sensor.last_measurement.valid_to);
+            # the measurement hash may be narrowed as well
+            hash<auto!> measurement = sensor{key};
+            if (measurement.time) {
+                measurement.time = EmpathicBuildingDataProviderBase::getTimestamp(measurement.time);
+            }
+            if (measurement.valid_to) {
+                measurement.valid_to = EmpathicBuildingDataProviderBase::getTimestamp(measurement.valid_to);
+            }
+            sensor{key} = measurement;
         }
         if (sensor.last_communication_time) {
             sensor.last_communication_time =

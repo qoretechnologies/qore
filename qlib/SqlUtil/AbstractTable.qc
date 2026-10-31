@@ -1697,14 +1697,14 @@ list<auto> changes = source_table.getAlignSql(target);
         # and storing a partition with its driver options applied would throw
         if (desc.partitions) {
             hash<auto!> partitions = desc.partitions;
-            desc.partitions = partitions;
-        }
-        foreach string pn in (desc.partitions.keyIterator()) {
-            if (desc.partitions{pn}.typeCode() == NT_HASH) {
-                hash<auto> part = desc.partitions{pn};
-                AbstractDatabase::checkDriverOptions(\part, drv);
-                desc.partitions{pn} = part;
+            foreach string pn in (partitions.keyIterator()) {
+                if (partitions{pn}.typeCode() == NT_HASH) {
+                    hash<auto> part = partitions{pn};
+                    AbstractDatabase::checkDriverOptions(\part, drv);
+                    partitions{pn} = part;
+                }
             }
+            desc.partitions = partitions;
         }
 
         preSetupTableImpl(\desc, opt);

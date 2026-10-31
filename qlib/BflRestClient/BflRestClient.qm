@@ -553,9 +553,9 @@ public class BflImageGenerator inherits QoreMediaUtils::AbstractImageGenerator {
         model = config.model ?? BflRestClient::DefaultImageModel;
         # the provider options may be narrowed (ex: hash<string, int>), and adding the aspect ratio would throw
         hash<auto!> provider_defaults = config.provider_options ?? {};
+        if (exists config.aspect_ratio) { provider_defaults.aspect_ratio = config.aspect_ratio; }
+        if (exists config.output_format) { provider_defaults.output_format = config.output_format; }
         defaults = provider_defaults;
-        if (exists config.aspect_ratio) { defaults.aspect_ratio = config.aspect_ratio; }
-        if (exists config.output_format) { defaults.output_format = config.output_format; }
         if (!BflRestClient::ImageModelPathMap{model}) {
             throw "MEDIA-CONFIG-ERROR",
                 sprintf("BFL image model %y is unknown; known models: %y",

@@ -124,12 +124,12 @@ public class ServiceNowRestDataProvider inherits ServiceNowRestDataProviderBase 
     constructor(*hash<auto> options) {
         bool auto_config = DataProvider::getAutoConfig();
         if (auto_config) {
-            # the options may be narrowed (ex: hash<string, hash<string, string>>); adding a string from the
-            # environment would throw, so copy them to a hash that accepts any value first
-            *hash<auto!> h = options;
-            options = h;
-            map options{$1.key} = ENV{$1.value}, EnvOptions.pairIterator(),
-                exists ENV{$1.value} && !exists options{$1.key};
+            # the options may be narrowed (ex: hash<string, hash<string, string>>), and adding a string from the
+            # environment would throw, so the options are added in a hash<auto!> local
+            *hash<auto!> opts = options;
+            map opts{$1.key} = ENV{$1.value}, EnvOptions.pairIterator(),
+                exists ENV{$1.value} && !exists opts{$1.key};
+            options = opts;
         }
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
         if (copts.snrestclient) {

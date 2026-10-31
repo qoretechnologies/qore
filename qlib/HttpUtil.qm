@@ -247,27 +247,25 @@ public sub set_cookie_header(reference<hash<auto>> hdr, hash<CookieInfo> cookie,
         bool set_cache_control = True) {
     string cookie_str = format_set_cookie(cookie);
 
-    # a caller's literal may be narrowed (e.g. hash<string, string> for {"Content-Type": "text/html"}), and storing
-    # a second cookie as a list would throw
-    if (exists hdr) {
-        hash<auto!> h = hdr;
-        hdr = h;
-    }
+    # the headers are set in an "auto!" local: a caller's literal may be narrowed (e.g. hash<string, string> for
+    # {"Content-Type": "text/html"}), and storing a second cookie as a list would throw
+    *hash<auto!> h = hdr;
 
     # Append to existing Set-Cookie (as list for multiple cookies)
-    if (exists hdr."Set-Cookie") {
-        if (hdr."Set-Cookie".typeCode() == NT_LIST) {
-            hdr."Set-Cookie" += cookie_str;
+    if (exists h."Set-Cookie") {
+        if (h."Set-Cookie".typeCode() == NT_LIST) {
+            h."Set-Cookie" += cookie_str;
         } else {
-            hdr."Set-Cookie" = (hdr."Set-Cookie", cookie_str);
+            h."Set-Cookie" = (h."Set-Cookie", cookie_str);
         }
     } else {
-        hdr."Set-Cookie" = cookie_str;
+        h."Set-Cookie" = cookie_str;
     }
 
     if (set_cache_control) {
-        hdr."Cache-Control" = "no-cache=\"Set-Cookie\"";
+        h."Cache-Control" = "no-cache=\"Set-Cookie\"";
     }
+    hdr = h;
 }
 
 #! Domain matching per RFC 6265 Section 5.1.3

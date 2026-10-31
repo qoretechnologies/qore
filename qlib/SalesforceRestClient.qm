@@ -737,7 +737,7 @@ hash<auto> ans = rest.doRequest("GET", "sobjects");
         - \c request-body: the raw message body in the request (before any content encoding)
         - \c request-serialization: the type of message serialization in the request; see @ref DataSerializationOptions for possible values
         @param decode_errors decode the message body with HTTP error responses and throw an exception based on the message body
-        @param hdr any headers to be sent with the request; headers here will override default headers for the object as well
+        @param hdr0 any headers to be sent with the request; headers here will override default headers for the object as well
 
         @return A hash of headers received from the HTTP server with all key names converted to lower-case; if any message body is included in the response, it will be deserialized to %Qore data and assigned to the value of the \c "body" key
 
@@ -759,13 +759,10 @@ hash<auto> ans = rest.doRequest("GET", "sobjects");
         - @ref RestClient::RestClient::setSerialization() "RestClient::setSerialization()"
     */
     hash<auto> doRequest(string m, string path, auto body, *reference<hash<auto>> info, softbool decode_errors = True,
-            *hash<auto> hdr) {
+            *hash<auto> hdr0) {
         # the caller's headers may be narrowed (ex: hash<string, date> or hash<string, int>); converting dates or
         # adding headers would throw, so copy them to a hash that accepts any value first
-        {
-            *hash<auto!> h = hdr;
-            hdr = h;
-        }
+        *hash<auto!> hdr = hdr0;
         # convert any dates in headers to GMT format
         map hdr.($1.key) = getGmtDate($1.value), hdr.pairIterator(), $1.value.typeCode() == NT_DATE;
 
@@ -796,7 +793,7 @@ hash<auto> ans = rest.doBulkRequest("POST", "job", job);
         - \c request-body: the raw message body in the request (before any content encoding)
         - \c request-serialization: the type of message serialization in the request; see @ref DataSerializationOptions for possible values
         @param decode_errors decode the message body with HTTP error responses and throw an exception based on the message body
-        @param hdr any headers to be sent with the request; headers here will override default headers for the object as well
+        @param hdr0 any headers to be sent with the request; headers here will override default headers for the object as well
 
         @return A hash of headers received from the HTTP server with all key names converted to lower-case; if any message body is included in the response, it will be deserialized to %Qore data and assigned to the value of the \c "body" key
 
@@ -820,13 +817,10 @@ hash<auto> ans = rest.doBulkRequest("POST", "job", job);
         - @ref RestClient::RestClient::setSerialization() "RestClient::setSerialization()"
     */
     hash<auto> doBulkRequest(string m, string path, auto body, *reference<hash<auto>> info,
-            softbool decode_errors = True, *hash<auto> hdr) {
+            softbool decode_errors = True, *hash<auto> hdr0) {
         # the caller's headers may be narrowed (ex: hash<string, date> or hash<string, int>); converting dates or
         # adding headers would throw, so copy them to a hash that accepts any value first
-        {
-            *hash<auto!> h = hdr;
-            hdr = h;
-        }
+        *hash<auto!> hdr = hdr0;
         # convert any dates in headers to GMT format
         map hdr.($1.key) = getGmtDate($1.value), hdr.pairIterator(), $1.value.typeCode() == NT_DATE;
 
@@ -1036,7 +1030,7 @@ printf("batch ID: %y batch state: %y\n", h.id, h.state);
         - \c response-body: the raw message body in the response (after any content decoding)
         - \c response-serialization: the type of message serialization in the response; see @ref DataSerializationOptions for possible values
         - \c request-body: the raw message body in the request (before any content encoding)
-        @param hdr any headers to be sent with the request; headers here will override default headers for the object as well
+        @param hdr0 any headers to be sent with the request; headers here will override default headers for the object as well
 
         @return the deserialized message body returned by Salesforce.com
 
@@ -1045,7 +1039,7 @@ printf("batch ID: %y batch state: %y\n", h.id, h.state);
         @note authentication and authorization is done transparently as with the standard OAuth2 mechanism used with the non-bulk REST API
     */
     hash<auto> bulkJobAddBatch(string jobid, data batch_data, string job_content_type, *reference<hash<auto>> info,
-            *hash<auto> hdr) {
+            *hash<auto> hdr0) {
         *string ct = BulkJobContentTypes{job_content_type};
         if (!ct)
             throw "INVALID-OPERATION", sprintf("invalid Salesforce.com Bulk REST API job content type %y; known "
@@ -1053,10 +1047,7 @@ printf("batch ID: %y batch state: %y\n", h.id, h.state);
 
         # the caller's headers may be narrowed (ex: hash<string, date> or hash<string, int>); converting dates or
         # adding headers would throw, so copy them to a hash that accepts any value first
-        {
-            *hash<auto!> h = hdr;
-            hdr = h;
-        }
+        *hash<auto!> hdr = hdr0;
         # convert any dates in headers to GMT format
         map hdr.($1.key) = getGmtDate($1.value), hdr.pairIterator(), $1.value.typeCode() == NT_DATE;
 

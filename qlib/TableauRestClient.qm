@@ -261,18 +261,15 @@ TableauRestClient tableau({
         - Handles 401 re-authentication retry
     */
     hash<auto> doRequest(string method, string path, auto body,
-            *reference<hash<auto>> info, softbool decode_errors = True, *hash<auto> hdr) {
+            *reference<hash<auto>> info, softbool decode_errors = True, *hash<auto> hdr0) {
+        # the caller's headers may be narrowed (ex: hash<string, int>), and adding the session header would throw, so
+        # they are kept in a hash<auto!> local
+        *hash<auto!> hdr = hdr0;
         # Paths that don't need auth or site prefix
         bool is_auth_path = (path =~ /^auth\// || path == "serverinfo");
 
         if (!is_auth_path) {
             ensureAuthenticated();
-            # the caller's headers may be narrowed (ex: hash<string, int>); adding the session header would throw,
-            # so copy them to a hash that accepts any value first
-            {
-                *hash<auto!> h = hdr;
-                hdr = h;
-            }
             # Prefix with sites/{site_luid}/
             path = "sites/" + site_luid + "/" + path;
             # Add session token header

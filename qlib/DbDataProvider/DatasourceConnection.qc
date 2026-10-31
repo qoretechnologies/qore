@@ -207,50 +207,48 @@ public class DatasourceConnection inherits ConnectionProvider::AbstractConnectio
         children_can_support_records = True;
 
         # the caller's options may be a narrowed literal (e.g. hash<string, string> for {"min": "1", "max": "4"}),
-        # and adding URL options or converting the pool sizes to integers below would throw
-        {
-            *hash<auto!> o = opts;
-            opts = o;
-        }
+        # and adding URL options or converting the pool sizes to integers below would throw, so the options are
+        # processed in an "auto!" local and stored afterwards
+        *hash<auto!> o = opts;
 
         # unpack driver options into top-level options
-        if (opts.driver.typeCode() == NT_HASH) {
-            # build a new hash to avoid type narrowing issues
-            hash<auto!> driver_opts = remove opts.driver;
-            driver_opts += opts;
-            opts = driver_opts;
+        if (o.driver.typeCode() == NT_HASH) {
+            hash<auto!> driver_opts = remove o.driver;
+            driver_opts += o;
+            o = driver_opts;
         }
 
         # move URL options to opts
         if (urlh.options) {
-            opts += urlh.options;
+            o += urlh.options;
         }
 
         # validate min/max pool options: both must be present or both are stripped
-        if (exists opts.min || exists opts.max) {
-            if (!exists opts.min || !exists opts.max) {
+        if (exists o.min || exists o.max) {
+            if (!exists o.min || !exists o.max) {
                 # silently strip incomplete min/max pair
-                opts -= ("min", "max");
+                o -= ("min", "max");
             } else {
                 # ensure it's always integer for safe comparisons
-                opts.min = int(opts.min);
-                opts.max = int(opts.max);
+                o.min = int(o.min);
+                o.max = int(o.max);
 
-                if (opts.min < 0) {
+                if (o.min < 0) {
                     throw "DATASOURCE-CONNECTION-ERROR", sprintf("connection %y: 'min' pool option must be >= 0; "
-                        "got: %y", name, opts.min);
+                        "got: %y", name, o.min);
                 }
-                if (opts.max < 1) {
+                if (o.max < 1) {
                     throw "DATASOURCE-CONNECTION-ERROR", sprintf("connection %y: 'max' pool option must be > 0; "
-                        "got: %y", name, opts.max);
+                        "got: %y", name, o.max);
                 }
-                if (opts.max < opts.min) {
+                if (o.max < o.min) {
                     throw "DATASOURCE-CONNECTION-ERROR", sprintf("connection %y: 'max' (%d) must be >= 'min' (%d)",
-                        name, opts.max, opts.min);
+                        name, o.max, o.min);
                 }
             }
         }
 
+        opts = o;
         orig_opts = opts;
 
         # build the datasource URL hash (without protocol)

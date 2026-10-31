@@ -1175,28 +1175,22 @@ public string sub http_get_charset_label(string encoding) {
     require the connection to be closed after the response (see @ref httpserverutil_request_context)
 */
 public nothing sub http_set_reply_headers(Socket s, hash<auto> cx, reference<auto> rv, *string server_string) {
-    # a caller's literal may be narrowed (e.g. hash<string, int> for {"code": 204}), and setting the "hdr" key would
-    # throw; a hashdecl such as HttpHandlerResponseInfo declares the "hdr" key and keeps its type
-    if (rv.typeCode() == NT_HASH && rv.fullType() =~ /^hash<string, /) {
-        hash<auto!> h = rv;
-        rv = h;
-    }
-    # the headers may be narrowed as well (e.g. hash<string, int> for {"X-Api-Version": 2})
+    # the headers are set in an "auto!" local, since a caller's header hash may be narrowed (e.g. hash<string, int>
+    # for {"X-Api-Version": 2}) and would reject the string headers added here
     *hash<auto!> hdr = http_canonicalize_reply_header_names(rv.hdr);
-    rv.hdr = hdr;
     bool is_http2 = cx."header-info".http2 ?? False;
     if (!is_http2) {
-        if (!rv.hdr.Connection) {
+        if (!hdr.Connection) {
             # the server closes the connection if the request requires it, whatever the handler returned
             if (rv.close || cx.close) { # RFC 2616 section 14.10 is "close" in all lower-case
-                rv.hdr.Connection = "close";
+                hdr.Connection = "close";
             } else {
-                rv.hdr.Connection = "Keep-Alive";
+                hdr.Connection = "Keep-Alive";
             }
         }
     } else {
         # HTTP/2 forbids hop-by-hop headers; the names are canonical here
-        remove rv.hdr{
+        remove hdr{
             "Connection",
             "Keep-Alive",
             "Proxy-Connection",
@@ -1208,24 +1202,24 @@ public nothing sub http_set_reply_headers(Socket s, hash<auto> cx, reference<aut
 
     # HTTP/3 responses should not include Alt-Svc — the client is already on h3
     if (cx."header-info".http3) {
-        remove rv.hdr."Alt-Svc";
+        remove hdr."Alt-Svc";
     }
 
-    if (!rv.hdr.Date) {
+    if (!hdr.Date) {
         # RFC 2616 sec 14.18 date format
-        rv.hdr.Date = gmtime().format("Dy, DD Mon YYYY HH:mm:SS") + " GMT";
+        hdr.Date = gmtime().format("Dy, DD Mon YYYY HH:mm:SS") + " GMT";
     }
 
-    if (!rv.hdr.Server) {
-        rv.hdr.Server = server_string ?? HttpServerString;
+    if (!hdr.Server) {
+        hdr.Server = server_string ?? HttpServerString;
     }
 
     # "rv" may be a HttpHandlerResponseInfo hashdecl, so we can't access "chunked_body" directly in that case
     # https://datatracker.ietf.org/doc/html/rfc2616#section-7.2.1: HTTP messages with a body SHOULD include A
     # Content-Type (so it's optional); here we add a "charset=" parameter to the Content-Type header if it is not
     # already included and the message body is a string not in ISO-8859-1 encoding (the default for HTTP)
-    if ((rv.body || rv.hasKey("chunked_body") || rv.hdr."Transfer-Encoding" == "chunked")
-        && (rv.hdr."Content-Type" && (rv.hdr."Content-Type" !~ /charset=/i)
+    if ((rv.body || rv.hasKey("chunked_body") || hdr."Transfer-Encoding" == "chunked")
+        && (hdr."Content-Type" && (hdr."Content-Type" !~ /charset=/i)
         && ((rv.body.typeCode() == NT_STRING)
             || (rv.body instanceof StringInputStream)
             || (rv.hasKey("chunked_body") && (rv.chunked_body instanceof StringInputStream))))) {
@@ -1241,8 +1235,18 @@ public nothing sub http_set_reply_headers(Socket s, hash<auto> cx, reference<aut
         }
         # the label is canonical, so all aliases of ISO-8859-1 give the same label here
         if (re != "iso-8859-1") {
-            rv.hdr."Content-Type" += ";charset=" + re;
+            hdr."Content-Type" += ";charset=" + re;
         }
+    }
+
+    # a caller's literal response may be narrowed too (e.g. hash<string, int> for {"code": 204}) and would reject the
+    # "hdr" key; the response hashdecls declare the key, and keep their type
+    if (rv instanceof hash<HttpHandlerResponseInfo> || rv instanceof hash<HttpResponseInfo>) {
+        rv.hdr = hdr;
+    } else {
+        *hash<auto!> response = rv;
+        response.hdr = hdr;
+        rv = response;
     }
 }
 

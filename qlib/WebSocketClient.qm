@@ -1578,11 +1578,9 @@ ws.connect();
         # a caller's literal may be narrowed (e.g. hash<string, int> for {"timeout": 5000} or the headers in
         # {"hdr": {"X-Api-Version": 2}}), and adding the Accept header would throw
         *hash<auto!> opts = opts0;
-        if (opts.hdr.typeCode() == NT_HASH) {
-            hash<auto!> hdr = opts.hdr;
-            opts.hdr = hdr;
-        }
-        opts.hdr.Accept = getAcceptHeader();
+        *hash<auto!> hdr = opts.hdr;
+        hdr.Accept = getAcceptHeader();
+        opts.hdr = hdr;
         return opts;
     }
 
