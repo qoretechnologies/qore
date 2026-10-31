@@ -1659,3 +1659,6 @@ The [post-local-receiver optimized checkpoint](RESULTS.md#optimized-checkpoint-a
 
 
 Cleanup-pointer annotation experiment: [results](results-coerce-cleanup-rejection-macos-arm64.json), [audit](audit-coerce-cleanup-rejection.md). Rejected after 468 optimized processes / 1404 windows: paired indirect/wide callbacks regress 10.59%/5.99%; production code restored. Cold-status scalar ABI remains compile-only.
+
+
+Clean callback completion experiment: [results](results-clean-status-rejection-macos-arm64.json), [audit](audit-clean-status-rejection.md). Two variants rejected after 612 optimized processes / 1836 windows; the revised ordinary/wide/native-integer-result kernels regress 7.59%/10.12%/6.75%. Runtime source restored; a stale specialization test is corrected.

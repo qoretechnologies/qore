@@ -35,7 +35,7 @@ float sub hofResult(int count, code<float()> callback) {
     for (int i = 0; i < count; ++i) { sum += float(callback()); }
     return sum;
 }
-# The unconverted compound assignment currently needs a runtime-visible local and retains ordinary dispatch.
+# Native floating compound assignment also permits known callback specialization.
 float sub hofBoxedResult(int count, code<float()> callback) {
     float sum = 0.0;
     for (int i = 0; i < count; ++i) { sum += callback(); }

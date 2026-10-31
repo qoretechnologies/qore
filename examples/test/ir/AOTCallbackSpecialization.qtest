@@ -48,6 +48,7 @@ class CallbackSpecializationTest inherits QUnit::Test {
                 if (level == "-O0" && !prefix.contains("QCC_SPLIT_THRESHOLD")) {
                     int callers = 0;
                     int result_entries = 0;
+                    int compound_result_entries = 0;
                     foreach string definition in (generated.split("\ndefine ")) {
                         string header = definition.split("\n")[0];
                         string body = definition.split("\n}")[0];
@@ -58,12 +59,17 @@ class CallbackSpecializationTest inherits QUnit::Test {
                         if (header.contains("@hofResult_") && header.contains("_cb1_")) {
                             ++result_entries;
                         }
-                        if (header.contains("@mutatedParameter_") || header.contains("@hofBoxedResult_")) {
+                        if (header.contains("@hofBoxedResult_") && header.contains("_cb1_")) {
+                            ++compound_result_entries;
+                        }
+                        if (header.contains("@mutatedParameter_")) {
                             assertFalse(header.contains("_cb"), "written parameter has no specialized entry");
                         }
                     }
                     assertEq(1, callers, "inspected known caller fast entry");
                     assertEq(selected ? 4 : 0, result_entries, "bounded callback target entries");
+                    assertEq(selected ? 1 : 0, compound_result_entries,
+                        "native floating compound assignment permits callback specialization");
                 }
                 assertEq("callback-specialization: ok\n", run((executable,)), prefix + level);
             }

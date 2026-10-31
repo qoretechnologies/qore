@@ -31583,3 +31583,70 @@ A preceding scalar-return/cold-status ABI idea remains at compile-only feasibili
 [Full evidence](results-coerce-cleanup-rejection-macos-arm64.json) includes raw timing outputs, actual exit receipts, source/driver hashes, qualification, all 62 audit decisions and failed stages. [Audit](audit-coerce-cleanup-rejection.md) covers the retained evidence-only change. No owned build/test/profile overlapped either timing epoch. This is a shared host without frequency/affinity control; no fresh Java/develop ratio, weighted application benefit or global performance ceiling is claimed.
 
 Next inspect whether a separate invariant-callback outcome can report proven clean native completion and avoid a redundant caller sink read. Prove the normal native body and frame teardown cannot set exception or thread-exit state; retain all live admission, stack, context and per-iteration cancellation checks. Start with compile-only caller/helper inspection, then require optimized measurements and full qualification before retention.
+
+
+## Clean callback completion status rejected (2026-10-31)
+
+Copyright 2026 Qore Technologies, s.r.o.
+
+Two AOT int(int) callback implementations tried to avoid the caller's immediate exception-sink read after proven clean native completion. A separate native binding preserved the existing v3 ABI and unwound on stack failure; a new helper distinguished miss, handled/error, and clean completion. All live admission, context, stack, ownership, diagnostic-reader and per-iteration cancellation checks remained. Normal return from an existing v3 entry was never treated as proof of a clean sink.
+
+Both implementations are rejected. The first regressed ordinary/wide/native-integer-result callback kernels by 15.38%/7.53%/10.34% in symmetric paired confirmation. Moving Scope cleanup before outcome production and testing a clean bit directly reduced generated status handling, but the revised implementation still regressed these kernels by 7.59%/10.12%/6.75%, in every layout. A smaller amount of checking did not produce faster execution. Production source is restored to the validated 3d84 implementation; no rejected code was installed.
+
+### Optimized broad pilot
+
+Apple M4 Pro ARM64, Apple clang 21, LLVM 22.1.8, -O3 -DNDEBUG, allocation tracking off. Fresh stripped O3 artifacts; the same frozen candidate runtime for disabled/enabled compiler variants; default/reverse/shuffle-487 layouts; three forks; count 4096, seed 7; three warmups and three measured 100 ms windows. In both preparations, all 18 disabled LLVM modules match the frozen pre-change compiler after normalizing only serialized runtime identity metadata, its size and the explicit identity descriptor. Identity enforcement remains enabled.
+
+Whole-kernel ns/item, lower is better. These are not isolated physical-call latencies.
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change
+|local:direct_call|1.4900|1.4951|+0.35%
+|local:polymorphic_call|14.8965|14.9831|+0.58%
+|local:list_mutate|118.6440|117.9649|-0.57%
+|local:dynamic_float_result_call|10.2627|10.1717|-0.89%
+|micro:indirect_call|7.8545|9.1636|+16.67%
+|micro:indirect_wide|8.1399|9.0550|+11.24%
+|micro:indirect_int_result|8.4601|9.5869|+13.32%
+|micro:indirect_float|9.1506|8.6254|-5.74%
+|micro:indirect_float_result|9.1849|8.9127|-2.96%
+|micro:indirect_tagged_float|9.3359|9.1843|-1.62%
+|micro:closure_call|18.1327|18.1651|+0.18%
+|micro:closure_capture|23.7463|23.6652|-0.34%
+|micro:list_build|22.3665|22.3961|+0.13%
+|float:callback_loop_float_return|4.8319|4.8086|-0.48%
+|mixed:csv_report|927.5957|913.4295|-1.53%
+|mixed:object_orders|2987.5217|2960.7567|-0.90%
+|mixed:callback_pipeline|94.0142|93.7355|-0.30%
+|mixed:text_index|1297.2134|1300.2973|+0.24%
+
+### First implementation: paired confirmation
+
+Three symmetric ABBA/BAAB blocks per layout, two processes per variant per block. Within-block ratios are primary; marginal times are separate estimates and epochs must not be pooled.
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Marginal change|!Paired change
+|local:direct_call|1.4854|1.4879|+0.16%|+0.20%
+|micro:indirect_call|7.8619|9.0397|+14.98%|+15.38%
+|micro:indirect_wide|8.0629|9.0183|+11.85%|+7.53%
+|micro:indirect_int_result|8.6215|9.4079|+9.12%|+10.34%
+
+### Revised implementation: symmetric target pilot
+
+Three symmetric ABBA/BAAB blocks per layout, two processes per variant per block. Within-block ratios are primary; marginal times are separate estimates and epochs must not be pooled.
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Marginal change|!Paired change
+|local:direct_call|1.4896|1.4864|-0.22%|-0.17%
+|micro:indirect_call|7.9538|9.0067|+13.24%|+7.59%
+|micro:indirect_wide|8.2286|9.0951|+10.53%|+10.12%
+|micro:indirect_int_result|8.5299|9.1800|+7.62%|+6.75%
+
+All 612 processes / 1836 measured windows replay independently. Both artifact preparations validate 4698 reference outputs per variant, 36 artifacts each. The first corrected Release run passes 10 fixtures / 13 cases / 3232 assertions; the revised helper and caller pass 4 focused fixtures / 6 cases / 2202 assertions, including 60 native LLVM proof cases, real clean/error outcomes, pending exceptions/thread exit, forced stack-limit failures and caller-context restoration. Native C++ assertions are additional to QUnit counts.
+
+A pre-existing structural test expected floating compound assignment to forbid callback specialization. The frozen baseline produces the same specialization and executes correctly; the test now checks the supported entry and retains the negative check for reassigned callback parameters. The initial failed qualification is preserved. A separate replay-script failure used the wrong terminal-receipt filename; the corrected replay checks the actual successful stage receipt.
+
+The revised caller retains a 496-byte frame. Static instruction totals move 528/547/377 to532/551/381 across the three target callers; totals include cold paths and alignment padding. Runtime helper frames remain 80 bytes; the revised helper no longer carries the outcome through normal cleanup. These observations explain what changed, not measured cycle attribution.
+
+The restored qore/qcc executables are byte-identical to the frozen baseline. Every libqore section, including machine code and runtime identity, matches except the expected git revision string (3d84 to documentation-only 3ace). The original whole-file identity check correctly failed on that string change; the section comparison is preserved. The corrected specialization fixture passes on that restored build. No Debug, short-loop or original-runtime allocation/creation followup was performed because both candidates failed target timing. The broader pilot remains available, including incidental improvements in floating controls; it is not evidence of a retained floating optimization.
+
+[Full evidence](results-clean-status-rejection-macos-arm64.json) contains raw timings, actual exits, hashes, failed stages and all 62 audit decisions. [Audit](audit-clean-status-rejection.md) covers the retained test correction and evidence. No recorded owned build/test/profile stage overlaps timing. This shared-host experiment supplies no fresh Java/develop comparison or global performance ceiling.
+
+Next profile the remaining prepared-call/context and list-mutation costs, review prior rejected approaches, and select a distinct mechanism. Further changes must show optimized before/after benefit; the tri-state clean-success design is held after two regressions.
