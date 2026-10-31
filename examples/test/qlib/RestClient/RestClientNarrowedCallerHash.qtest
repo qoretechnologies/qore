@@ -23,6 +23,10 @@ class RestClientNarrowedCallerHashTest inherits QUnit::Test {
         addTestCase("RestClient adds Accept-Encoding to integer headers", \restClientContentEncoding());
         addTestCase("RestClientIo normalizes string options", \restClientIoStringOptions());
         addTestCase("RestClientDataProvider adds binary certificate data", \processRestOptionsBinary());
+        addTestCase("RestClient constructor options accept added values", \restClientConstructorOptions());
+        addTestCase("RestClientIo constructor options accept added values", \restClientIoConstructorOptions());
+        addTestCase("RestClientIo SSE reader adds Accept to integer headers", \restClientIoSseReader());
+        addTestCase("RestClientIo SSE observable adds Accept to integer headers", \restClientIoObserveSse());
         set_return_value(main());
     }
 
@@ -68,5 +72,55 @@ class RestClientNarrowedCallerHashTest inherits QUnit::Test {
         assertEq(<010203>, opts.ssl_cert_data);
         assertFalse(opts.hasKey("ssl_cert_location"));
         assertEq("http://localhost:1", opts.url);
+    }
+
+    #! Data providers copy a client's constructor options and add a token and flags to build another client
+    restClientConstructorOptions() {
+        assertEq("hash<string, string>", RestClientNarrowedCallerHashTest::mk({"url": "http://localhost:1"})
+            .fullType());
+        RestClient rest({"url": "http://localhost:1"}, True);
+        hash<auto> opts = rest.getConstructorOptions();
+        assertEq({"url": "http://localhost:1"}, opts);
+        opts.timeout = 5s;
+        opts.skip_login = True;
+        assertEq({"url": "http://localhost:1", "timeout": 5s, "skip_login": True}, opts);
+        # the client's own options are not changed
+        assertEq({"url": "http://localhost:1"}, rest.getConstructorOptions());
+
+        # integer-only options take string values
+        RestClient rest2({"connect_timeout": 5, "timeout": 10}, True);
+        opts = rest2.getConstructorOptions();
+        opts.token = "abc";
+        assertEq({"connect_timeout": 5, "timeout": 10, "token": "abc"}, opts);
+    }
+
+    #! As for RestClient, callers add values of other types to a copy of the constructor options
+    restClientIoConstructorOptions() {
+        RestClientIo rest({"url": "http://localhost:1", "token": "abc"});
+        on_exit rest.close();
+        hash<auto> opts = rest.getConstructorOptions();
+        assertEq({"url": "http://localhost:1", "token": "abc"}, opts);
+        opts.timeout = 5s;
+        opts.skip_login = True;
+        assertEq({"url": "http://localhost:1", "token": "abc", "timeout": 5s, "skip_login": True}, opts);
+        assertEq({"url": "http://localhost:1", "token": "abc"}, rest.getConstructorOptions());
+    }
+
+    #! The Accept header is added to the caller's headers before the request is sent; nothing listens on port 1
+    restClientIoSseReader() {
+        assertEq("hash<string, int>", RestClientNarrowedCallerHashTest::mk({"X-Count": 1}).fullType());
+        RestClientIo rest({"url": "http://localhost:1", "connect_timeout": 1s});
+        on_exit rest.close();
+        # the headers are accepted, and the request fails only when the connection is refused
+        assertThrows("HTTPCLIENT-CONNECT-ERROR", \rest.restSseReader(), ("GET", "/events", {"X-Count": 1}));
+    }
+
+    #! The observable is created with the caller's headers and the Accept header; it connects only when observed
+    restClientIoObserveSse() {
+        RestClientIo rest({"url": "http://localhost:1"});
+        on_exit rest.close();
+        HttpClientStreamingIo::SseObservable obs = rest.restObserveSse("GET", "/events", NOTHING,
+            {"X-Count": 1});
+        assertEq("SseObservable", obs.className());
     }
 }

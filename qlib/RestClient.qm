@@ -173,6 +173,9 @@ printf("%Y\n", ans.body);
     - fixed @ref RestClient::RestClient::constructor() "RestClient::constructor()" to accept a \c headers option
       whose values all have the same type, such as a literal \c {"X-Count": 1}, with the \c content_encoding
       option; adding the \c Accept-Encoding header raised \c RUNTIME-TYPE-ERROR
+    - fixed @ref RestClient::RestClient::getConstructorOptions() "RestClient::getConstructorOptions()" for a client
+      created with options whose values all have the same type, such as a literal \c {"url": "..."}: adding a value
+      of another type to the returned hash, such as a timeout or a flag, raised \c RUNTIME-TYPE-ERROR
     - added RestPathMode, RestRequestTarget, rest_request_path(), and explicit target methods for ordinary,
       raw-body, and polling requests; connection pings no longer clear the API root to address an absolute path
       (<a href="https://github.com/qoretechnologies/qore/issues/5485">issue 5485</a>)
@@ -1993,7 +1996,10 @@ hash<auto> h = rest.getDefaultHeaders();
         @since %RestClient 2.7
     */
     hash<auto> getConstructorOptions() {
-        return saved_opts;
+        # the caller's options may be narrowed (e.g. hash<string, string> for {"url": "..."}); callers add
+        # values of other types to the returned hash, such as a token or flags, to create another client
+        hash<auto!> rv = saved_opts;
+        return rv;
     }
 
     #! Declares further headers as sensitive: their values never appear in exception arguments or log messages

@@ -401,6 +401,11 @@ Content-Length: 16
     - fixed responses with headers whose values all have the same type, such as a literal
       \c {"X-Total-Count": 42}: a raw response without a \c Content-Type header raised \c RUNTIME-TYPE-ERROR, and
       a serialized response was answered with status 406 (Not Acceptable)
+    - fixed streamed responses where the response headers of the stream handler and the headers that the stream adds
+      have different value types, such as \c {"X-Count": 1} and \c {"X-Stream": "yes"}: the request was answered
+      with status 409 because of a \c RUNTIME-TYPE-ERROR
+    - fixed @ref RestHandler::RestHandler::handleExternalRequest() "handleExternalRequest()" with a context hash whose
+      values all have the same type, such as \c {"user": "admin"}: the call raised \c RUNTIME-TYPE-ERROR
     - a request whose query has a parameter name that decodes to a string with a NUL character (such as \c "a%00b")
       is answered with status 400 (Bad Request); before, it was handled with the name cut at the NUL character
       (\c "a").  @ref RestHandler::RestHandler::handleExternalRequest() "handleExternalRequest()" raises
@@ -584,8 +589,13 @@ public namespace RestHandler {
                 rethrow;
             }
 
-            if (h.code >= 200 && h.code <= 300 && rhdr)
-                h.hdr += rhdr;
+            if (h.code >= 200 && h.code <= 300 && rhdr) {
+                # the handler's headers and the stream's headers may each be narrowed to one value type (e.g.
+                # hash<string, int> for {"X-Count": 1}); they are combined in a hash that accepts any value type
+                hash<auto!> hdr = h.hdr ?? {};
+                hdr += rhdr;
+                h.hdr = hdr;
+            }
             return h;
         }
 
@@ -1374,8 +1384,10 @@ public namespace RestHandler {
                     "methods: %y", method, path, Methods), 400;
             }
 
-            # REST call context hash
-            cx += {
+            # REST call context hash; the caller's hash may be narrowed to one value type (e.g. hash<string, string>
+            # for {"user": "admin"}), so the context is built in a hash that accepts values of any type
+            hash<auto!> rcx = cx;
+            rcx += {
                 "hdr": (
                     "method": method,
                 ),
@@ -1431,17 +1443,17 @@ public namespace RestHandler {
                             "is not assigned to a string; got %y instead", path, action.type()), 400;
                     }
                     mn = action;
-                    cx.orig_method = mn;
+                    rcx.orig_method = mn;
                     # ensure first letter of the action is in upper case
                     splice mn, 0, 1, mn[0].upr();
-                    cx.rest_method = mn;
+                    rcx.rest_method = mn;
                     mn = Methods{method} + mn;
                 } else {
                     mn = Methods{method};
                 }
             }
 
-            cx.rest_action_method = mn;
+            rcx.rest_action_method = mn;
 
             # remove leading slash from method name
             if (ah.method =~ /^\//)
@@ -1457,7 +1469,7 @@ public namespace RestHandler {
 
             # get initial class
             *string cls = shift cl;
-            cx += {
+            rcx += {
                 "arg_path": cl,
             };
 
@@ -1466,7 +1478,7 @@ public namespace RestHandler {
             if (!cls.val()) {
                 rcls = self;
             } else {
-                *AbstractRestClass c = subClass(cls, cx, args);
+                *AbstractRestClass c = subClass(cls, rcx, args);
                 if (!c) {
                     # issue #2994: if we are on the last class and there is no "action" argument; see if we can find
                     # an action method instead
@@ -1480,7 +1492,7 @@ public namespace RestHandler {
 
                     if (!c) {
                         throw "REST-CLASS-ERROR", sprintf("unknown root REST class %y in path %y (valid classes: %y)",
-                            cls, cx.url.path, sort(keys doGetPossibleSubClasses(cx, args))), 404;
+                            cls, rcx.url.path, sort(keys doGetPossibleSubClasses(rcx, args))), 404;
                     }
                 }
                 rcls = c;
@@ -1491,7 +1503,7 @@ public namespace RestHandler {
             # socket object needed for call; will not be used
             Socket s();
 
-            hash<HttpHandlerResponseInfo> rv = rcls.handleRequest(listener, self, s, cl, mn, cx, args);
+            hash<HttpHandlerResponseInfo> rv = rcls.handleRequest(listener, self, s, cl, mn, rcx, args);
             if (rv.code < 200 || rv.code >= 300)
                 throw "REST-ERROR", rv.body, rv.code;
             return rv.body;

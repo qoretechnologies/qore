@@ -35,9 +35,75 @@ class NarrowedHeaderRestClass inherits AbstractRestClass {
     }
 }
 
+#! A stream handler that adds response headers whose values all have the same type
+class NarrowedHeaderStreamHandler inherits AbstractRestStreamRequestHandler {
+    private {
+        #! the handler's response headers
+        hash<auto> resp_hdr;
+        #! the headers that the stream adds
+        hash<auto> stream_hdr;
+    }
+
+    constructor(hash<auto> cx, *hash<auto> ah, hash<auto> resp_hdr, hash<auto> stream_hdr)
+            : AbstractRestStreamRequestHandler(cx, ah) {
+        self.resp_hdr = resp_hdr;
+        self.stream_hdr = stream_hdr;
+    }
+
+    private hash<auto> getResponseHeaderMessageImpl() {
+        return {
+            "code": 200,
+            "body": "streamed",
+            "hdr": resp_hdr,
+        };
+    }
+
+    private nothing recvImpl(hash<auto> v) {
+        # the end of the request body
+        if (v.hasKey("hdr")) {
+            rhdr = stream_hdr;
+        }
+    }
+
+    private auto sendImpl() {
+    }
+}
+
+#! Streams responses with integer and string headers
+class NarrowedHeaderStreamRestClass inherits AbstractRestClass {
+    string name() {
+        return "stream";
+    }
+
+    #! the handler's headers are integers and the stream adds string headers
+    AbstractRestStreamRequestHandler streamGetIntString(hash<auto> cx, *hash<auto> ah) {
+        return new NarrowedHeaderStreamHandler(cx, ah, RestHandlerNarrowedCallerHashTest::mk({"X-Count": 1}),
+            RestHandlerNarrowedCallerHashTest::mk({"X-Stream": "yes"}));
+    }
+
+    #! the handler's headers are strings and the stream adds integer headers
+    AbstractRestStreamRequestHandler streamGetStringInt(hash<auto> cx, *hash<auto> ah) {
+        return new NarrowedHeaderStreamHandler(cx, ah, RestHandlerNarrowedCallerHashTest::mk({"X-Stream": "yes"}),
+            RestHandlerNarrowedCallerHashTest::mk({"X-Count": 1}));
+    }
+
+    #! the handler's headers are boolean and the stream adds string headers
+    AbstractRestStreamRequestHandler streamGetBoolString(hash<auto> cx, *hash<auto> ah) {
+        return new NarrowedHeaderStreamHandler(cx, ah, RestHandlerNarrowedCallerHashTest::mk({"X-Debug": True}),
+            RestHandlerNarrowedCallerHashTest::mk({"X-Stream": "yes"}));
+    }
+
+    #! returns the context hash that the REST handler built
+    hash<HttpHandlerResponseInfo> getContext(hash<auto> cx, *hash<auto> ah) {
+        return RestHandler::makeResponse(200, {"user": cx.user, "method": cx.hdr.method, "path": cx.url.path,
+            "arg": ah.arg});
+    }
+}
+
 class NarrowedHeaderRestHandler inherits RestHandler {
     constructor() {
         addClass(new NarrowedHeaderRestClass());
+        addClass(new NarrowedHeaderStreamRestClass());
     }
 }
 
@@ -59,6 +125,13 @@ class RestHandlerNarrowedCallerHashTest inherits QUnit::Test {
         addTestCase("NullRestSchemaValidator::processResponse() adds Content-Type", \validatorResponse());
         addTestCase("RestHandler serializes a response with integer headers", \handlerResponse());
         addTestCase("RestHandler adds Content-Type to a raw response", \handlerRawResponse());
+        addTestCase("RestHandler stream adds string headers to integer headers", \streamIntString());
+        addTestCase("RestHandler stream adds integer headers to string headers", \streamStringInt());
+        addTestCase("RestHandler stream adds string headers to boolean headers", \streamBoolString());
+        addTestCase("handleExternalRequest() accepts a context hash with string values",
+            \externalRequestStringContext());
+        addTestCase("handleExternalRequest() accepts a context hash with boolean values",
+            \externalRequestBoolContext());
         set_return_value(main());
     }
 
@@ -90,6 +163,50 @@ class RestHandlerNarrowedCallerHashTest inherits QUnit::Test {
         assertEq(200, rv.code);
         assertEq({"X-Total-Count": 42, "Content-Type": "application/octet-stream"}, rv.hdr);
         assertEq("raw", rv.body);
+    }
+
+    streamIntString() {
+        hash<auto> rv = handle("stream?action=intString");
+        assertEq(200, rv.code);
+        # the body is serialized as JSON
+        assertEq("\"streamed\"", rv.body);
+        assertEq({"X-Count": 1, "X-Stream": "yes", "Content-Type": "application/json"},
+            rv.hdr{"X-Count", "X-Stream", "Content-Type"});
+    }
+
+    streamStringInt() {
+        hash<auto> rv = handle("stream?action=stringInt");
+        assertEq(200, rv.code);
+        # the body is serialized as JSON
+        assertEq("\"streamed\"", rv.body);
+        assertEq({"X-Stream": "yes", "X-Count": 1, "Content-Type": "application/json"},
+            rv.hdr{"X-Stream", "X-Count", "Content-Type"});
+    }
+
+    streamBoolString() {
+        hash<auto> rv = handle("stream?action=boolString");
+        assertEq(200, rv.code);
+        # the body is serialized as JSON
+        assertEq("\"streamed\"", rv.body);
+        assertEq({"X-Debug": True, "X-Stream": "yes", "Content-Type": "application/json"},
+            rv.hdr{"X-Debug", "X-Stream", "Content-Type"});
+    }
+
+    externalRequestStringContext() {
+        assertEq("hash<string, string>", RestHandlerNarrowedCallerHashTest::mk({"user": "admin"}).fullType());
+        NarrowedHeaderRestHandler handler();
+        hash<auto> cx = {"user": "admin"};
+        assertEq({"user": "admin", "method": "GET", "path": "stream?action=context&arg=1", "arg": "1"},
+            handler.handleExternalRequest("GET", "stream?action=context&arg=1", NOTHING, cx));
+        # the caller's hash is not changed
+        assertEq({"user": "admin"}, cx);
+    }
+
+    externalRequestBoolContext() {
+        NarrowedHeaderRestHandler handler();
+        assertEq({"user": NOTHING, "method": "GET", "path": "stream?action=context", "arg": NOTHING},
+            handler.handleExternalRequest("GET", "stream?action=context", NOTHING,
+                RestHandlerNarrowedCallerHashTest::mk({"internal": True})));
     }
 
     private hash<auto> handle(string path) {
