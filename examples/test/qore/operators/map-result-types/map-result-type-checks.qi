@@ -302,6 +302,27 @@ public namespace MapResultTypeChecks {
             auto n = select (map $1, mixed), False;
             rv."select-of-map-none-selected" = type_of(n);
         }
+        # the hash form with a key and a value read from each element: map {$1.k1: $1.k2}, l
+        {
+            list<hash<auto>> kv = ({"k": "a", "v": 1}, {"k": "b", "v": 2});
+            hash<auto> h = map {$1.k: $1.v}, kv;
+            rv."two-keys" = type_of(h) + " " + sprintf("%y", h);
+            list<hash<auto>> kx = ({"k": "a", "v": 1}, {"k": "b", "v": "x"}, {"k": "a", "v": 3});
+            hash<auto> x = map {$1.k: $1.v}, kx;
+            rv."two-keys-mixed-duplicate" = type_of(x) + " " + sprintf("%y", x);
+            list<*hash<auto>> ko = ({"k": "a", "v": 1}, NOTHING);
+            hash<auto> o = map {$1.k: $1.v}, ko;
+            rv."two-keys-optional-elements" = type_of(o) + " " + sprintf("%y", o);
+            list<*hash<auto>> kn = (NOTHING, {"k": "b", "v": 2});
+            hash<auto> n = map {$1.k: $1.v}, kn;
+            rv."two-keys-first-element-nothing" = type_of(n) + " " + sprintf("%y", n);
+            list<hash<auto>> ke = ();
+            hash<auto> e = map {$1.k: $1.v}, ke;
+            rv."two-keys-no-input" = type_of(e);
+            list<hash<MapPoint>> kp = (new hash<MapPoint>(), new hash<MapPoint>());
+            hash<auto> p = map {$1.x: $1.x}, kp;
+            rv."two-keys-hashdecl" = type_of(p) + " " + sprintf("%y", p);
+        }
         # soft scalar types: the values have the exact type, which the list of the operator accepts
         {
             softlist<softint> si = (1, "2", 3.0);

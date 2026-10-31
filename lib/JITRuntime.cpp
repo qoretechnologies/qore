@@ -7746,49 +7746,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_map_hash_key_scale_int(uint64_t list_val, 
     return toBits(result.release());
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_hash_map_two_keys(uint64_t list_val, const char* key1,
-        const char* key2, ExceptionSink* xsink) {
-    QoreValue v = fromBits(list_val);
-    if (v.getType() != NT_LIST) {
-        return toBits(QoreValue());
-    }
-    const QoreListNode* l = v.get<const QoreListNode>();
-    size_t sz = l->size();
-    ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), xsink);
-    for (size_t i = 0; i < sz; ++i) {
-        QoreValue elem = l->retrieveEntry(i);
-        if (elem.getType() == NT_HASH) {
-            const QoreHashNode* h = elem.get<const QoreHashNode>();
-            // note: the checking accessor is used here so that accessing an unknown member of a
-            // hashdecl-typed hash raises INVALID-MEMBER, as with the reference (AST) implementation
-            QoreValue k = h->getKeyValue(key1, xsink);
-            QoreValue val = *xsink ? QoreValue() : h->getKeyValue(key2, xsink);
-            if (*xsink) {
-                return toBits(QoreValue());
-            }
-            QoreHashKeyHelper sh(k, xsink);
-            if (*xsink) {
-                return toBits(QoreValue());
-            }
-            result->setKeyValue(sh.c_str(), val.refSelf(), xsink);
-            if (*xsink) {
-                return toBits(QoreValue());
-            }
-        }
-    }
-    return toBits(result.release());
-}
-
-extern "C" DLLEXPORT uint64_t qore_rt_hash_map_two_keys_prehashed(uint64_t list_val,
-        const char* key1, uint64_t key1_hash64, uint32_t key1_hash32,
-        const char* key2, uint64_t key2_hash64, uint32_t key2_hash32,
-        ExceptionSink* xsink) {
-    static constinit QoreEnvFlag enabled_env("QORE_DISABLE_AOT_HASH_MAP_TWO_KEYS_FAST_BUILD");
-    const bool enabled = !enabled_env.get();
-    if (!enabled) {
-        return qore_rt_hash_map_two_keys(list_val, key1, key2, xsink);
-    }
-
+// map {$1.k1: $1.k2}, l as the AST interpreter evaluates it (QoreHashMapOperatorNode::evalImpl()) for a list whose
+// element type is a hash or an optional hash and a hash map whose value type is auto, as the lowering selects it: an
+// element with no value gives no value for both keys, so its key is the empty string, the result hash gets the
+// common type of the values (with the value of the first element starting it), and a key set twice keeps the last
+// value
+static uint64_t qore_rt_hash_map_two_keys_impl(uint64_t list_val, const char* key1, size_t key1_hash,
+        const char* key2, size_t key2_hash, bool prehashed, ExceptionSink* xsink) {
     QoreValue value = fromBits(list_val);
     if (value.getType() != NT_LIST) {
         return toBits(QoreValue());
@@ -7799,37 +7763,64 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_map_two_keys_prehashed(uint64_t list_
     ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), xsink);
     qore_hash_private* result_priv = qore_hash_private::get(*result);
     result_priv->hm.reserve(size);
-    size_t key1_hash = qore_rt_select_precomputed_hash(key1_hash64, key1_hash32);
-    size_t key2_hash = qore_rt_select_precomputed_hash(key2_hash64, key2_hash32);
+    int64_t type_state = QORE_COMMON_TYPE_NO_VALUE;
     for (size_t i = 0; i < size; ++i) {
         if (i && !(i % 100) && qore_check_cancel(xsink, "hash map two-key projection")) {
             return toBits(QoreValue());
         }
 
         QoreValue element = list->retrieveEntry(i);
-        if (element.getType() != NT_HASH) {
-            continue;
-        }
-        const qore_hash_private* input_priv =
-            qore_hash_private::get(*element.get<const QoreHashNode>());
-        bool exists;
-        // note: the checking accessors are used here so that accessing an unknown member of a
-        // hashdecl-typed hash raises INVALID-MEMBER, as with the reference (AST) implementation
-        QoreValue key_value =
-            input_priv->getKeyValueExistencePrehashed(key1, key1_hash, exists, xsink);
-        QoreValue mapped = *xsink
-            ? QoreValue()
-            : input_priv->getKeyValueExistencePrehashed(key2, key2_hash, exists, xsink);
-        if (*xsink) {
-            return toBits(QoreValue());
+        QoreValue key_value;
+        QoreValue mapped;
+        if (element.getType() == NT_HASH) {
+            const QoreHashNode* h = element.get<const QoreHashNode>();
+            const qore_hash_private* input_priv = qore_hash_private::get(*h);
+            bool exists;
+            // note: the checking accessors are used here so that accessing an unknown member of a hashdecl-typed
+            // hash raises INVALID-MEMBER, as with the reference (AST) implementation
+            key_value = prehashed
+                ? input_priv->getKeyValueExistencePrehashed(key1, key1_hash, exists, xsink)
+                : h->getKeyValue(key1, xsink);
+            if (!*xsink) {
+                mapped = prehashed
+                    ? input_priv->getKeyValueExistencePrehashed(key2, key2_hash, exists, xsink)
+                    : h->getKeyValue(key2, xsink);
+            }
+            if (*xsink) {
+                return toBits(QoreValue());
+            }
+        } else {
+            // the element type is a hash or an optional hash
+            assert(element.isNothing());
         }
         QoreHashKeyHelper key_string(key_value, xsink);
         if (*xsink) {
             return toBits(QoreValue());
         }
-        result_priv->setKeyValueIntern(key_string.c_str(), mapped.refSelf());
+        type_state = qore_common_type_fold(type_state, mapped.getTypeInfo(), static_cast<int64_t>(i));
+        result->setKeyValue(key_string.c_str(), mapped.refSelf(), xsink);
+        if (*xsink) {
+            return toBits(QoreValue());
+        }
+    }
+    const QoreTypeInfo* common_type = qore_common_type_decode(type_state);
+    if (common_type) {
+        result_priv->complexTypeInfo = qore_get_complex_hash_type(common_type);
     }
     return toBits(result.release());
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_hash_map_two_keys(uint64_t list_val, const char* key1,
+        const char* key2, ExceptionSink* xsink) {
+    return qore_rt_hash_map_two_keys_impl(list_val, key1, 0, key2, 0, false, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_hash_map_two_keys_prehashed(uint64_t list_val,
+        const char* key1, uint64_t key1_hash64, uint32_t key1_hash32,
+        const char* key2, uint64_t key2_hash64, uint32_t key2_hash32,
+        ExceptionSink* xsink) {
+    return qore_rt_hash_map_two_keys_impl(list_val, key1, qore_rt_select_precomputed_hash(key1_hash64, key1_hash32),
+        key2, qore_rt_select_precomputed_hash(key2_hash64, key2_hash32), true, xsink);
 }
 
 // Optimized select operations - native loops that filter lists

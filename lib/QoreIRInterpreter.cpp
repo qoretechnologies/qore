@@ -9972,50 +9972,20 @@ load_local_done:
             }
             case QoreIROpcode::HashMapTwoKeys: {
                 const auto* mhk = static_cast<const QoreIRMapHashKeyInstruction*>(inst);
-                QoreValue list_val = getIRValue(values, mhk->operands[0]);
-                QoreValue out;
-                if (list_val.getType() == NT_LIST) {
-                    const QoreListNode* l = list_val.get<const QoreListNode>();
-                    size_t sz = l->size();
-                    ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), xsink);
-                    bool routed_to_handler = false;
-                    for (size_t i = 0; i < sz; ++i) {
-                        QoreValue elem = l->retrieveEntry(i);
-                        if (elem.getType() == NT_HASH) {
-                            const QoreHashNode* h = elem.get<const QoreHashNode>();
-                            // note: the checking accessor is used here so that accessing an
-                            // unknown member of a hashdecl-typed hash raises INVALID-MEMBER, as
-                            // with the reference (AST) implementation
-                            QoreValue k = h->getKeyValue(mhk->key1.c_str(), xsink);
-                            QoreValue val = *xsink
-                                ? QoreValue()
-                                : h->getKeyValue(mhk->key2.c_str(), xsink);
-                            if (!*xsink) {
-                                QoreHashKeyHelper key_str(k, xsink);
-                                if (!*xsink) {
-                                    result->setKeyValue(key_str.c_str(), val.refSelf(), xsink);
-                                }
-                            }
-                            if (*xsink) {
-                                if (inst->exception_target) {
-                                    cleanupToTempScope(inst->temp_scope_id, true, false, true);
-                                    prev_block = block;
-                                    block = inst->exception_target;
-                                    ip = 0;
-                                    routed_to_handler = true;
-                                    break;
-                                }
-                                cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                                cleanupLocalCaches();
-                                return false;
-                            }
-                        }
-                    }
-                    // the partially built result is discarded by the ReferenceHolder
-                    if (routed_to_handler) {
+                QoreValue out = fromBits(qore_rt_hash_map_two_keys(toBits(getIRValue(values, mhk->operands[0])),
+                    mhk->key1.c_str(), mhk->key2.c_str(), xsink));
+                if (xsink && *xsink) {
+                    out.discard(xsink);
+                    if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
                         break;
                     }
-                    out = result.release();
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
                 }
                 setValueSlot(values, mhk->result.id, out, xsink);
                 if (out.needsRef()) {

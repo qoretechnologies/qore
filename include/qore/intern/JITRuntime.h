@@ -1211,6 +1211,9 @@ uint64_t qore_rt_map_hash_key_offset_any_prehashed(uint64_t list_val, const char
         uint64_t hash64, uint32_t hash32, int64_t offset, ExceptionSink* xsink);
 
 //! Build a hash from two constant keys projected from each input hash.
+//! map {$1.k1: $1.k2}, l as the AST interpreter evaluates it; see QoreIROpcode::HashMapTwoKeys
+uint64_t qore_rt_hash_map_two_keys(uint64_t list_val, const char* key1, const char* key2, ExceptionSink* xsink);
+
 uint64_t qore_rt_hash_map_two_keys_prehashed(uint64_t list_val, const char* key1,
         uint64_t key1_hash64, uint32_t key1_hash32, const char* key2,
         uint64_t key2_hash64, uint32_t key2_hash32, ExceptionSink* xsink);

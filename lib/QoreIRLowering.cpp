@@ -14972,11 +14972,19 @@ QoreIRValue QoreIRLowering::lowerHashMap(const QoreValue& expr, std::string& err
         return QoreIRValue();
     }
 
-    // Try HashMapTwoKeys specialized opcode: map {$1.k1: $1.k2}, list
+    // Try HashMapTwoKeys specialized opcode: map {$1.k1: $1.k2}, list; it evaluates each element as the AST
+    // interpreter does when every element is a hash or no value, and it creates the result hash with the value type
+    // auto, which the AST interpreter creates it with when the map expression has no type (see
+    // QoreHashMapOperatorNode::getNewHash())
     {
         const QoreTypeInfo* list_type = getExprTypeInfo(map->get(2));
         const QoreTypeInfo* elem_type = QoreTypeInfo::getUniqueReturnComplexList(list_type);
-        if (elem_type && QoreTypeInfo::parseReturns(elem_type, NT_HASH) != QTI_NOT_EQUAL) {
+        const QoreTypeInfo* static_value_type = QoreTypeInfo::getUniqueReturnComplexHash(map->getTypeInfo());
+        bool hash_elements = elem_type
+            && (QoreTypeInfo::parseReturns(elem_type, NT_HASH) == QTI_IDENT
+                || QoreTypeInfo::getReturnComplexHashOrNothing(elem_type)
+                || elem_type == hashOrNothingTypeInfo);
+        if (hash_elements && (!static_value_type || static_value_type == autoTypeInfo)) {
             std::string key1_name;
             std::string key2_name;
             QoreIROpcode hk_opcode = analyzeHashMapTwoKeysPattern(map->get(0), map->get(1),
