@@ -1674,11 +1674,15 @@ list<auto> changes = source_table.getAlignSql(target);
         if (strategy_driver && (exists strategy_driver.method || exists strategy_driver.columns
                 || exists strategy_driver.auto || exists strategy_driver.driver)) {
             *hash<auto> structural_driver = strategy_driver.driver;
-            desc.partition_strategy += strategy_driver - "driver";
-            delete desc.partition_strategy.driver;
+            # a caller's literal strategy may be narrowed (e.g. hash<string, hash<string, hash<string, string>>>
+            # when it has only a "driver" key), and adding the "method" key to it would throw
+            hash<auto!> strategy = desc.partition_strategy;
+            strategy += strategy_driver - "driver";
+            delete strategy.driver;
             if (structural_driver) {
-                desc.partition_strategy.driver = structural_driver;
+                strategy.driver = structural_driver;
             }
+            desc.partition_strategy = strategy;
         }
 
         # process column definitions
@@ -1689,6 +1693,12 @@ list<auto> changes = source_table.getAlignSql(target);
             AbstractDatabase::checkDriverOptions(\desc.columns{cn}, drv);
         }
 
+        # a caller's literal partition hash may be narrowed (e.g. when every partition has only a "driver" key),
+        # and storing a partition with its driver options applied would throw
+        if (desc.partitions) {
+            hash<auto!> partitions = desc.partitions;
+            desc.partitions = partitions;
+        }
         foreach string pn in (desc.partitions.keyIterator()) {
             if (desc.partitions{pn}.typeCode() == NT_HASH) {
                 hash<auto> part = desc.partitions{pn};

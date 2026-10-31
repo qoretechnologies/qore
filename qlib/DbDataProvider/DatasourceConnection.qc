@@ -206,10 +206,17 @@ public class DatasourceConnection inherits ConnectionProvider::AbstractConnectio
         children_can_support_transactions = True;
         children_can_support_records = True;
 
+        # the caller's options may be a narrowed literal (e.g. hash<string, string> for {"min": "1", "max": "4"}),
+        # and adding URL options or converting the pool sizes to integers below would throw
+        {
+            *hash<auto!> o = opts;
+            opts = o;
+        }
+
         # unpack driver options into top-level options
         if (opts.driver.typeCode() == NT_HASH) {
             # build a new hash to avoid type narrowing issues
-            hash<auto> driver_opts = remove opts.driver;
+            hash<auto!> driver_opts = remove opts.driver;
             driver_opts += opts;
             opts = driver_opts;
         }

@@ -1,0 +1,58 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DbDataProvider
+
+%exec-class DbDataProviderNarrowedCallerHashTest
+
+#! DatasourceConnection accepts connection options whose values all have the same type
+/** A hash literal whose values all have the same type is narrowed, e.g. {"min": "1", "max": "4"} is
+    hash<string, string>; converting the pool sizes to integers or adding URL options raised RUNTIME-TYPE-ERROR.
+    No connection is opened.
+*/
+class DbDataProviderNarrowedCallerHashTest inherits QUnit::Test {
+    constructor() : Test("DbDataProviderNarrowedCallerHashTest", "1.0", \ARGV) {
+        addTestCase("pool sizes given as strings are converted", \poolSizeStrings());
+        addTestCase("URL options are added to integer pool sizes", \urlOptions());
+        addTestCase("pool sizes in driver options are converted", \driverOptions());
+        addTestCase("pool sizes in a configuration hash are converted", \configHash());
+        set_return_value(main());
+    }
+
+    #! returns the hash passed, keeping its runtime type
+    private static hash<auto> mk(hash<auto> h) {
+        return h;
+    }
+
+    poolSizeStrings() {
+        assertEq("hash<string, string>", mk({"min": "1", "max": "4"}).fullType());
+        DatasourceConnection c("nh", "narrowed", "db://sqlite3:x@:memory:", {}, {"min": "1", "max": "4"});
+        assertEq({"min": 1, "max": 4}, c.getRealOptions());
+    }
+
+    urlOptions() {
+        assertEq("hash<string, int>", mk({"min": 1, "max": 4}).fullType());
+        DatasourceConnection c("nh", "narrowed", "db://sqlite3:x@:memory:{numeric=string}", {}, {"min": 1, "max": 4});
+        assertEq({"min": 1, "max": 4, "numeric": "string"}, c.getRealOptions());
+        assertEq({"numeric": "string"}, c.getDatasourceHash().options);
+    }
+
+    driverOptions() {
+        assertEq("hash<string, hash<string, string>>", mk({"driver": {"min": "1", "max": "4"}}).fullType());
+        DatasourceConnection c("nh", "narrowed", "db://sqlite3:x@:memory:", {}, {"driver": {"min": "1", "max": "4"}});
+        assertEq({"min": 1, "max": 4}, c.getRealOptions());
+    }
+
+    configHash() {
+        assertEq("hash<string, hash<string, string>>", mk({"opts": {"min": "2", "max": "3"}}).fullType());
+        DatasourceConnection c({"name": "nh", "desc": "narrowed", "url": "db://sqlite3:x@:memory:",
+            "opts": {"min": "2", "max": "3"}});
+        assertEq({"min": 2, "max": 3}, c.getRealOptions());
+    }
+}

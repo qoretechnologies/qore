@@ -1,0 +1,42 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Mapper
+
+%exec-class MapperNarrowedCallerHashTest
+
+#! Mapper::mapBulk() accepts a record set whose values all have the same type
+/** A hash literal whose values all have the same type is narrowed, e.g. {"a": ("x", "y")} is
+    hash<string, list<string>>; adding a constant value from the \a crec argument raised RUNTIME-TYPE-ERROR
+*/
+class MapperNarrowedCallerHashTest inherits QUnit::Test {
+    constructor() : Test("MapperNarrowedCallerHashTest", "1.0", \ARGV) {
+        addTestCase("mapBulk() adds a constant to a narrowed record set", \mapBulkConstant());
+        set_return_value(main());
+    }
+
+    #! returns the hash passed, keeping its runtime type
+    private static hash<auto> mk(hash<auto> h) {
+        return h;
+    }
+
+    mapBulkConstant() {
+        assertEq("hash<string, list<string>>", mk({"a": ("x", "y"), "b": ("z", "w")}).fullType());
+
+        Mapper m({"a": "a", "b": "b", "c": "c"});
+        assertEq({"a": ("x", "y"), "b": ("z", "w"), "c": "k"},
+            m.mapBulk({"a": ("x", "y"), "b": ("z", "w")}, {"c": "k"}));
+
+        # a constant for a column given as a list is expanded to the size of the record set
+        assertEq({"a": ("x", "y"), "b": ("k", "k")}, m.mapBulk({"a": ("x", "y"), "b": ("z", "w")}, {"b": "k"}));
+
+        assertEq("hash<string, list<int>>", mk({"a": (1, 2), "b": (3, 4)}).fullType());
+        assertEq({"a": (1, 2), "b": (3, 4), "c": "k"}, m.mapBulk({"a": (1, 2), "b": (3, 4)}, {"c": "k"}));
+    }
+}

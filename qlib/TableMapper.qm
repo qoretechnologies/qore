@@ -38,7 +38,7 @@
 %requires SqlUtil
 
 module TableMapper {
-    version = "1.3";
+    version = "1.3.1";
     desc = "user module providing data mapping infrastructure to an SQL Table target";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -214,6 +214,11 @@ on_error table1.rollback();
     Additionally, the value is provided to any row code set with @ref TableMapper::InboundTableMapper::setRowCode(); see @ref tablemapper_bulk_insert_api for more information.
 
     @section tablemapperrelnotes Release Notes
+
+    @subsection tablemapperv1_3_1 TableMapper v1.3.1
+    - fixed @ref TableMapper::InboundTableMapper::queueData() "InboundTableMapper::queueData()" to accept a record set
+      whose values all have the same type, such as a literal <tt>{"a": ("1", "2")}</tt>; adding a constant value from
+      the second argument raised \c RUNTIME-TYPE-ERROR
 
     @subsection tablemapperv1_3 TableMapper v1.3
     - updated the module to use the @ref Qore::SQL::AbstractSQLStatement "AbstractSQLStatement" class instead of the @ref Qore::SQL::SQLStatement "SQLStatement"
@@ -763,7 +768,7 @@ table_mapper.setRowCode(rowcode);
             option, in which case this method returns all the data inserted/upserted.  In case the mapped data is only
             inserted into the cache, no value is returned.
 
-            @param rec the input record or record set in case a hash of lists is passed
+            @param rec0 the input record or record set in case a hash of lists is passed
             @param crec an optional simple hash of data to be added to each input row before mapping
 
             @return if batch data was inserted then a hash (columns) of lists (row data) of all data inserted and
@@ -804,7 +809,10 @@ table_mapper.setRowCode(rowcode);
             @throw STRING-TOO-LONG a field value exceeds the maximum value and the 'trunc' key is not set
             @throw INVALID-NUMBER the field is marked as numeric but the input value contains non-numeric data
         */
-        *hash<auto> queueData(hash<auto> rec, *hash<auto> crec) {
+        *hash<auto> queueData(hash<auto> rec0, *hash<auto> crec) {
+            # a caller's literal record set may be narrowed (e.g. hash<string, list<string>>), and adding a value
+            # from crec to it would throw
+            hash<auto!> rec = rec0;
             if (unstable_input)
                 throw "MAPPER-BATCH-ERROR", sprintf("cannot call %s::queueData() when the unstable_input option is "
                     "set", self.className());

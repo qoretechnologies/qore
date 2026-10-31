@@ -1,0 +1,133 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+%requires Sqlite3SqlUtil
+
+%try-module sqlite3
+%define NO_SQLITE3
+%endtry
+
+%exec-class SqlUtilNarrowedCallerHashTest
+
+#! An SQLite table that reports partitioning support, so that partitioned descriptions can be set up in memory
+class NarrowedHashPartitionedSqliteTable inherits Sqlite3SqlUtil::Sqlite3Table {
+    constructor(AbstractDatasource ds, string name) : Sqlite3Table(ds, name) {
+    }
+
+    private bool supportsPartitionsImpl() {
+        return True;
+    }
+}
+
+#! SqlUtil APIs accept descriptions and options whose values all have the same type
+/** A hash literal whose values all have the same type is narrowed, e.g. {"min": "1"} is hash<string, string>; an
+    API that adds a key or a value of another type to such a hash raised RUNTIME-TYPE-ERROR
+*/
+class SqlUtilNarrowedCallerHashTest inherits QUnit::Test {
+    constructor() : Test("SqlUtilNarrowedCallerHashTest", "1.0", \ARGV) {
+        addTestCase("setupTable() applies a driver-only partition strategy", \partitionStrategy());
+        addTestCase("setupTable() applies driver-only partition descriptions", \partitions());
+        addTestCase("createTempTable() adds a primary key", \tempTablePrimaryKey());
+        addTestCase("iterator inserts and upserts count changes in a narrowed option hash", \iteratorOptions());
+        addTestCase("creation SQL converts a narrowed omission option", \creationOptions());
+        set_return_value(main());
+    }
+
+    #! returns the hash passed, keeping its runtime type
+    private static hash<auto> mk(hash<auto> h) {
+        return h;
+    }
+
+    private Datasource getDatasource() {
+%ifdef NO_SQLITE3
+        testSkip("sqlite3 module unavailable");
+%endif
+        return new Datasource("sqlite3:x@:memory:");
+    }
+
+    partitionStrategy() {
+        Datasource ds = getDatasource();
+        assertEq("hash<string, hash<string, hash<string, string>>>",
+            mk({"driver": {"sqlite3": {"method": "range", "columns": "dt"}}}).fullType());
+
+        NarrowedHashPartitionedSqliteTable t(ds, "nh_ps");
+        t.setupTable({
+            "columns": {"dt": {"qore_type": "date"}},
+            "partition_strategy": {"driver": {"sqlite3": {"method": "range", "columns": "dt"}}},
+        });
+        hash<auto> strategy = t.getPartitionStrategy();
+        assertEq("range", strategy.method);
+        assertEq(("dt",), strategy.columns);
+    }
+
+    partitions() {
+        Datasource ds = getDatasource();
+        assertEq("hash<string, hash<string, hash<string, hash<string, string>>>>",
+            mk({"p1": {"driver": {"sqlite3": {"bound_from": "0", "bound_to": "100"}}}}).fullType());
+
+        NarrowedHashPartitionedSqliteTable t(ds, "nh_parts");
+        t.setupTable({
+            "columns": {"id": {"qore_type": "integer"}},
+            "partition_strategy": {"method": "range", "columns": "id"},
+            "partitions": {"p1": {"driver": {"sqlite3": {"bound_from": "0", "bound_to": "100"}}}},
+        });
+        hash<string, PartitionInfo> ph = t.listPartitions();
+        assertEq(("p1",), keys ph);
+        assertEq("range", ph.p1.method);
+        assertEq("0", ph.p1.bound_from);
+        assertEq("100", ph.p1.bound_to);
+    }
+
+    tempTablePrimaryKey() {
+        Datasource ds = getDatasource();
+        on_exit ds.rollback();
+        Database db(ds);
+        assertEq("hash<string, hash<string, string>>", mk({"id": {"qore_type": "integer"}}).fullType());
+
+        ds.beginTransaction();
+        AbstractTable t = db.createTempTable("nh_tmp", {"id": {"qore_type": "integer"}},
+            {"primary_key": {"name": "pk_nh_tmp", "columns": "id"}});
+        assertEq("nh_tmp", t.getName());
+        assertEq(("id",), t.getPrimaryKey().keys());
+    }
+
+    #! SqlUtil re-seeds the option hash when it validates it (AbstractSqlUtilBase::validateOptionsIntern())
+    iteratorOptions() {
+        Datasource ds = getDatasource();
+        Database db(ds);
+        map ds.exec($1), db.getAlignSql({"tables": {"nh_rows": {
+            "columns": {"id": {"qore_type": "integer", "notnull": True}, "name": {"qore_type": "string", "size": 20}},
+            "primary_key": {"name": "pk_nh_rows", "columns": "id"},
+        }}});
+        ds.commit();
+        Table t(ds, "nh_rows");
+
+        assertEq("hash<string, int>", mk({"commit_block": 1}).fullType());
+        assertEq(2, t.insertFromIterator(new ListIterator(({"id": 1, "name": "a"}, {"id": 2, "name": "b"})),
+            {"commit_block": 1}));
+
+        assertEq("hash<string, bool>", mk({"delete_others": True}).fullType());
+        assertEq({"verified": 1, "deleted": 1}, t.upsertFromIterator(new ListIterator(({"id": 1, "name": "a"},)),
+            AbstractTable::UpsertAuto, {"delete_others": True}));
+        assertEq(({"id": 1, "name": "a"},), t.selectRows());
+        ds.commit();
+    }
+
+    creationOptions() {
+        Datasource ds = getDatasource();
+        Table t(ds, "nh_create");
+        t.setupTable({"columns": {"id": {"qore_type": "integer"}}, "indexes": {"ix_nh_create": {"columns": "id"}}});
+
+        assertEq("hash<string, string>", mk({"omit": "indexes"}).fullType());
+        assertEq(1, t.getCreateSql({"omit": "indexes"}).size());
+        assertEq(2, t.getCreateSql().size());
+        assertEq(t.getCreateTableSql(), t.getCreateTableSql({"omit": "indexes"}));
+    }
+}

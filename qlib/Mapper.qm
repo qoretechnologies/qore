@@ -309,6 +309,9 @@ m.mapData(input1);           # output record hash date_begin = start_date = time
     @section mapperrelnotes Release Notes
 
     @subsection mapperv1_8 Mapper v1.8
+    - fixed @ref Mapper::Mapper::mapBulk() "Mapper::mapBulk()" to accept a record set whose values all have the same
+      type, such as a literal <tt>{"a": ("x", "y")}</tt>; adding a constant value from the second argument raised
+      \c RUNTIME-TYPE-ERROR
     - a field name with dots is split into its parts as
       @ref DataProvider::AbstractDataProvider::getFieldPath() "AbstractDataProvider::getFieldPath()" splits a field
       path: <tt>\\.</tt> is a dot and <tt>\\\\</tt> a backslash of a key, and any other backslash is itself; a
@@ -2409,7 +2412,7 @@ Mapper mapv(DataMap);
         hash<auto> output = mapper.mapBulk(h);
         @endcode
 
-        @param rec the input record or record set in case a hash of lists is passed
+        @param rec0 the input record or record set in case a hash of lists is passed
         @param crec an optional simple hash of data to be added to each input row before mapping
 
         @return returns a hash of lists of mapped data
@@ -2430,7 +2433,10 @@ Mapper mapv(DataMap);
         @throw STRING-TOO-LONG a field value exceeds the maximum value and the 'trunc' key is not set
         @throw INVALID-NUMBER the field is marked as numeric but the input value contains non-numeric data
     */
-    *hash<auto> mapBulk(hash<auto> rec, *hash<auto> crec) {
+    *hash<auto> mapBulk(hash<auto> rec0, *hash<auto> crec) {
+        # a caller's literal record set may be narrowed (e.g. hash<string, list<string>>), and adding a value from
+        # crec to it would throw
+        hash<auto!> rec = rec0;
         if (global_submappers) {
             error2("MAP-BULK-ERROR", "bulk mapping cannot be performed with mappers with global submappers");
         }

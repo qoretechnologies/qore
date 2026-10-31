@@ -156,11 +156,14 @@ public namespace CsvUtil {
         #! Creates the AbstractCsvWriter in single-type mode
         /**
             @param n_errname a string to construct child class error message. For example: value 'FOO' will result in exception names 'CSVFOOWRITER-ERROR'
-            @param n_opts @ref csvwriter_options
+            @param n_opts0 @ref csvwriter_options
 
             @throw CSV<errname>WRITER-ERROR in the case of incorrect options
          */
-        constructor(string n_errname, *hash<auto> n_opts): CsvHelper(sprintf("CSV%sWRITER-ERROR", n_errname)) {
+        constructor(string n_errname, *hash<auto> n_opts0): CsvHelper(sprintf("CSV%sWRITER-ERROR", n_errname)) {
+            # a caller's literal may be narrowed (e.g. hash<string, hash<string, string>> for {"fields": {...}}),
+            # and adding the "headers" key would throw
+            *hash<auto!> n_opts = n_opts0;
             processCommonOptions(n_opts, C_OPT1);
 
             # set headers automatically from field names if not set
