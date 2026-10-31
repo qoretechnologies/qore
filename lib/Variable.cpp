@@ -420,6 +420,29 @@ const char* Var::getClassName() const {
     return parseTypeInfo->cscope->getIdentifier();
 }
 
+//! Returns the lvalue type of a variable declared with auto!, which LValueHelper::assign() needs to see
+/** A variable declared as \c hash<auto!> or \c list<auto!> stores the plain auto container type; its lvalue must
+    have the no-narrow version of the type so that an assignment drops the narrowed type of the value assigned.
+*/
+static const QoreTypeInfo* get_no_narrow_lvalue_type(const QoreTypeInfo* ti) {
+    if (ti == autoHashTypeInfo) {
+        return autoNoNarrowHashTypeInfo;
+    }
+    if (ti == autoHashOrNothingTypeInfo) {
+        return autoNoNarrowHashOrNothingTypeInfo;
+    }
+    if (ti == autoListTypeInfo) {
+        return autoNoNarrowListTypeInfo;
+    }
+    if (ti == autoListOrNothingTypeInfo) {
+        return autoNoNarrowListOrNothingTypeInfo;
+    }
+    if (ti == autoTypeInfo) {
+        return autoNoNarrowTypeInfo;
+    }
+    return ti;
+}
+
 int Var::getLValue(LValueHelper& lvh, bool for_remove) const {
     QoreLValue<qore_gvar_ref_u>& val = getVal();
 
@@ -436,7 +459,8 @@ int Var::getLValue(LValueHelper& lvh, bool for_remove) const {
     if (checkFinalized(lvh.vl.xsink))
         return -1;
 
-    lvh.setValue((QoreLValueGeneric&)val, typeInfo);
+    // a global declared with auto! drops the narrowed type of the values assigned to it, as a local does
+    lvh.setValue((QoreLValueGeneric&)val, no_narrowing ? get_no_narrow_lvalue_type(typeInfo) : typeInfo);
     return 0;
 }
 
@@ -3999,27 +4023,8 @@ bool LocalVar::isNoNarrowMarkerType(const QoreTypeInfo* ti, const QoreTypeInfo*&
 }
 
 const QoreTypeInfo* LocalVar::getTypeInfoForLValue() const {
-    const QoreTypeInfo* ti;
-    if (!no_narrowing) {
-        ti = typeInfo;
-    } else {
-        // Return the NoNarrow version of the type so LValueHelper::assign() can properly strip types
-        if (typeInfo == autoHashTypeInfo) {
-            ti = autoNoNarrowHashTypeInfo;
-        } else if (typeInfo == autoHashOrNothingTypeInfo) {
-            ti = autoNoNarrowHashOrNothingTypeInfo;
-        } else if (typeInfo == autoListTypeInfo) {
-            ti = autoNoNarrowListTypeInfo;
-        } else if (typeInfo == autoListOrNothingTypeInfo) {
-            ti = autoNoNarrowListOrNothingTypeInfo;
-        } else if (typeInfo == autoTypeInfo) {
-            ti = autoNoNarrowTypeInfo;
-        } else {
-            ti = typeInfo;
-        }
-    }
-
-    return ti;
+    // Return the NoNarrow version of the type so LValueHelper::assign() can properly strip types
+    return no_narrowing ? get_no_narrow_lvalue_type(typeInfo) : typeInfo;
 }
 
 void LocalVar::parseSetNarrowedType(const QoreTypeInfo* ti, const QoreProgramLocation* loc) {

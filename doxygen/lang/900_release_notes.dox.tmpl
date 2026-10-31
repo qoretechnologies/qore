@@ -38,6 +38,11 @@
     holding no value or the default value of the value type; neither does an assignment that fails while reaching its
     target, such as <tt>h.new.x = 1</tt> where \c h is a \c hash<string, string>.
 
+    A global variable declared as \c hash<auto!> or \c list<auto!> now drops the narrowed type of a hash or list
+    assigned to it, as a local variable, a class member or a parameter does, so that values of any type can then be
+    written to it; it kept the type of the value assigned, so writing a value of another type raised
+    \c RUNTIME-TYPE-ERROR.
+
     \c HTTPClient now recognizes a WebSocket upgrade request from its \c Connection and \c Upgrade headers as RFC 9110
     defines them: as comma-separated token lists compared case-insensitively, given as a string or as a list of values;
     a list value or a token list in \c Upgrade was not recognized, and a \c Connection value merely containing
