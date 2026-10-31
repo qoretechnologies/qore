@@ -3586,6 +3586,10 @@ while (*binary chunk = input.read(65536)) {
         expressions and change the program; it listened on all interfaces; with \c -k (or the \c QDBG_SERVER_TOKEN
         environment variable), it requires a token from its clients, which they send as a bearer token
         (\c qdbg-remote and \c qdbg-vsc-adapter: <tt>-H Authorization=Bearer &lt;token&gt;</tt>)
+    - @ref debughandlerintro "DebugHandler" module
+      - fixed @ref DebugHandler::WebSocketDebugConnection "WebSocketDebugConnection" to accept a connection context
+        whose values all have the same type, such as a literal <tt>{"id": 1}</tt>; adding the handler raised
+        \c RUNTIME-TYPE-ERROR
     - @ref debugprogramcontrolintro "DebugProgramControl" module
       - stopped threads read and set the values of variables and of their elements, keys and members, also private
         ones, by their paths, and evaluate expressions with the variables of a frame
