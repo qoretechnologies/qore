@@ -90,6 +90,8 @@ printf("Organization: %s\n", result.body.organization_name);
 
     @subsection constantcontactrestclientv1_0 ConstantContactRestClient v1.0
     - initial release
+    - the client options accept a \c headers hash whose values all have the same type, such as a literal
+      <tt>{"X-Count": 1}</tt>, when adding the authentication headers
 */
 
 #! the ConstantContactRestClient namespace contains all the objects in the ConstantContactRestClient module
@@ -171,6 +173,9 @@ public class ConstantContactRestClientBase {
         # the options have values of different types, so the hash must not take the narrow type of the
         # defaults, which would prevent adding values of other types
         hash<auto!> rv = DefaultOptions + opts;
+        # the headers are set in an "auto!" local: a caller's headers option may be narrowed (e.g. hash<string, int>
+        # for {"X-Count": 1}), and adding a string header would throw
+        *hash<auto!> hdr = rv.headers;
 
         # Check if apikey-only mode (apikey provided without OAuth2 credentials)
         bool apikey_only = opts.apikey && !opts.oauth2_client_id && !opts.oauth2_client_secret
@@ -180,10 +185,13 @@ public class ConstantContactRestClientBase {
             rv += OAuth2Options;
         } else if (opts.apikey) {
             # Bearer token mode using apikey
-            rv.headers.Authorization = "Bearer " + opts.apikey;
+            hdr.Authorization = "Bearer " + opts.apikey;
             remove rv.apikey;
         }
 
+        if (exists hdr) {
+            rv.headers = hdr;
+        }
         return rv;
     }
 }

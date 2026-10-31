@@ -85,6 +85,8 @@ printf("Campaigns: %Y\n", result.body);
 
     @subsection instantlyrestclientv1_0 InstantlyRestClient v1.0
     - initial release
+    - the client options accept a \c headers hash whose values all have the same type, such as a literal
+      <tt>{"X-Count": 1}</tt>, when adding the authentication headers
 */
 
 #! the InstantlyRestClient namespace contains all the objects in the InstantlyRestClient module
@@ -153,6 +155,9 @@ public class InstantlyRestClientBase {
         # the options have values of different types, so the hash must not take the narrow type of the
         # defaults, which would prevent adding values of other types
         hash<auto!> rv = DefaultOptions + opts;
+        # the headers are set in an "auto!" local: a caller's headers option may be narrowed (e.g. hash<string, int>
+        # for {"X-Count": 1}), and adding a string header would throw
+        *hash<auto!> hdr = rv.headers;
 
         # an explicit URL takes precedence over the default URL
         if (!rv.url) {
@@ -166,8 +171,11 @@ public class InstantlyRestClientBase {
 
         # Set Bearer token authentication; the header is set (not added), so processing the options again does not
         # change them, and the apikey option is kept so that the options can be processed again
-        rv.headers.Authorization = "Bearer " + opts.apikey;
+        hdr.Authorization = "Bearer " + opts.apikey;
 
+        if (exists hdr) {
+            rv.headers = hdr;
+        }
         return rv;
     }
 }

@@ -87,6 +87,8 @@ printf("Calendars: %y\n", result.body.calendars);
 
     @subsection gohighlevelrestclientv1_0 GoHighLevelRestClient v1.0
     - initial release
+    - the client and connection options accept an \c oauth2_auth_args hash whose values all have the same type,
+      such as a literal <tt>{"max_age": 3600}</tt>, when adding the \c version_id argument
     - the clients add the location ID to a POST body whose values all have the same type, such as a literal
       \c {"pageLimit": 20}
 */
@@ -178,7 +180,11 @@ public class GoHighLevelRestClientBase {
             # client_id by taking the portion before the first hyphen
             *string version_id = (opts.oauth2_client_id =~ x/^([0-9a-f]{24})-/)[0];
             if (version_id) {
-                rv.oauth2_auth_args += {"version_id": version_id};
+                # the argument is set in an "auto!" local: a caller's oauth2_auth_args option may be narrowed (e.g.
+                # hash<string, int> for {"max_age": 3600}), and adding the string version_id would throw
+                hash<auto!> auth_args = rv.oauth2_auth_args ?? {};
+                auth_args.version_id = version_id;
+                rv.oauth2_auth_args = auth_args;
             }
         }
 
@@ -515,7 +521,11 @@ public class GoHighLevelRestConnection inherits RestClient::RestConnection {
         if (opts.oauth2_client_id && !opts.oauth2_auth_args.version_id) {
             *string version_id = (opts.oauth2_client_id =~ x/^([0-9a-f]{24})-/)[0];
             if (version_id) {
-                opts.oauth2_auth_args.version_id = version_id;
+                # the argument is set in an "auto!" local: the oauth2_auth_args option may be narrowed (e.g.
+                # hash<string, int> for {"max_age": 3600}), and adding the string version_id would throw
+                hash<auto!> auth_args = opts.oauth2_auth_args ?? {};
+                auth_args.version_id = version_id;
+                opts.oauth2_auth_args = auth_args;
             }
         }
         return RestConnection::getAuthorizationCodeRequest(info);
