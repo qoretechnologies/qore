@@ -11758,11 +11758,19 @@ __attribute__((always_inline)) static int tryInvariantFunctionRef(RuntimeConfig&
     if (!ctx || !inline_entry) {
         return Legacy(ref_bits, args..., result, xsink, &rc, &cache);
     }
-    *result = Result{};
+    // Keep the established initialization for integer and zero-argument calls.
+    // Only floating unary calls defer the successful path's preliminary store.
+    constexpr bool defer_result = std::is_same_v<Result, double> && sizeof...(Args) == 1;
+    if constexpr (!defer_result) {
+        *result = Result{};
+    }
 #if defined(__clang__)
     [[clang::always_inline]]
 #endif
     if (*xsink || RuntimeConfigNativeAccess::checkStackForPreparedCallback(rc, xsink)) {
+        if constexpr (defer_result) {
+            *result = Result{};
+        }
         return 1;
     }
     // The complete native-v3 proof excludes context observation and reentry.
@@ -11780,6 +11788,11 @@ __attribute__((always_inline)) static int tryInvariantFunctionRef(RuntimeConfig&
         *result = reinterpret_cast<Entry>(inline_entry)(args..., ctx, xsink, &rc,
             qore_rt_get_stack_limit_v1(&rc));
     } catch (const QoreJITException&) {
+        // The native output is private to the caller. Initialize it only on a
+        // handled failure; a successful scalar entry supplies its value directly.
+        if constexpr (defer_result) {
+            *result = Result{};
+        }
         // Overflow materialized this context; Scope restores it before reuse.
     }
     return 1;

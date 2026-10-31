@@ -2298,6 +2298,7 @@ static void checkFloat(QoreProgram* program, bool inline_entry) {
             unsigned observed_leaf = 0;
             unsigned observed_early = 0;
             for (unsigned gap = 0; gap < 4096; ++gap) {
+                result = -123.5;
                 *limit = get_stack_pos() - gap;
                 int handled = call(bits, 1.25, &result, &xsink, rc, &cache);
                 *limit = saved_limit;
@@ -2494,12 +2495,14 @@ static void check(bool inline_entry, bool inline_method) {
             // bytes to cover the caller/frame/callee guard boundaries independent
             // of release/debug frame sizes; always restore before inspecting errors.
             for (unsigned gap = 0; gap < 4096; ++gap) {
+                result = 123;
                 *limit = get_stack_pos() - gap;
                 int handled = call(bits, 7, &result, &xsink, rc, &cache);
                 *limit = saved_limit;
                 assert(handled == 1);
                 assert(qore_get_call_program_context() == caller);
                 if (xsink) {
+                    assert(result == 0);
                     assert(xsink.getExceptionErr().get<const QoreStringNode>()->equal("STACK-LIMIT-EXCEEDED"));
                     ReferenceHolder<QoreHashNode> info(xsink.getExceptionInfo(), &xsink);
                     assert(!xsink);

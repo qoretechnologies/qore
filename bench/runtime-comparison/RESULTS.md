@@ -31440,3 +31440,31 @@ Candidate qualification passed 4533 assertions across eight fixtures; 36 fresh b
 Restored Release and Debug cancellation checks pass. Every optimized library section/address/byte matches the frozen baseline except its revision string; the rejected compiler code and scalar fixtures match HEAD again. No candidate Debug, sanitizer, other-platform or universal parity result is claimed. The installed runtime remains the validated call-performance implementation. The next investigation is the remaining indirect entry/admission work and the narrower layout sensitivity of those entries; neither a new benefit nor a global performance ceiling is established.
 
 [Full evidence](results-inline-scalar-coerce-rejected-macos-arm64.json); [all 62 audit checks](audit-inline-scalar-coerce-rejected.md).
+
+## Unary floating callback result initialization (2026-10-31)
+
+Retain a runtime-only change to the invariant v9 unary floating helper: successful native calls write their result once; pending exceptions, stack failures and caught native unwinds still write zero. Integer and zero-argument helpers retain their established initialization. All live Program/debugger/body/readiness/stack guards, acquire context reads, per-call diagnostic publication and reader synchronization remain. There is no new calling convention, helper version, TLS change or compiler admission change. Existing AOT artifacts using this helper can benefit.
+
+Final measurements use Release -O3 -DNDEBUG with allocation tracking OFF, qcc -O3 --strip-source, LLVM 22.1.8 and Apple Clang 21 on M4 Pro/macOS ARM64. The baseline is installed 9460b55dae, including develop 3955cf3ac3. Both runtime variants execute the same absolute AOT artifact paths under default/reverse/shuffle-487 link layouts. Host scripts load verified AOT modules; there is no source fallback. Final timing has 4096 items, seed 7, three warmups and three 100 ms samples, three symmetric ABBA/BAAB blocks per workload/layout and two fresh processes per variant per block: 288 processes/864 windows. No owned build/test/profile/heavy scan overlaps any timing epoch.
+
+The primary effect is the median of within-block after/before ratios for each layout, then the median across layouts. Ordinary before/after figures are medians of layout medians of block process means; their percentage can differ from the paired measure. These are whole-kernel ns/item, not isolated call latency.
+
+|!Workload|!Before ns/item|!After ns/item|!Ordinary change|!Paired change|!Paired layout changes (default, reverse, shuffle)
+|micro:indirect_call|8.0884|8.1216|+0.41%|+0.78%|-0.83%, +0.78%, +4.55%
+|micro:indirect_int_result|8.9426|8.8506|-1.03%|-1.03%|-3.76%, -1.03%, +1.37%
+|micro:indirect_float|9.6187|9.3028|-3.28%|-2.69%|-1.49%, -2.69%, -7.90%
+|micro:indirect_float_result|10.1481|9.4806|-6.58%|-7.02%|-6.35%, -7.02%, -10.70%
+|micro:indirect_tagged_float|10.5443|9.7933|-7.12%|-5.83%|-8.20%, -1.99%, -5.83%
+|float:callback_loop_float_return|5.0377|5.0119|-0.51%|-0.14%|-0.14%, -0.63%, +0.84%
+|zero:float_zero_accumulate|8.1053|8.1086|+0.04%|+0.63%|+2.39%, -0.77%, +0.63%
+|zero:float_zero_convert|8.9549|9.0550|+1.12%|+1.98%|+1.98%, -1.05%, +6.88%
+
+All three unary floating targets improve in every final layout; paired aggregate gains are 2.69–7.02%. Controls remain visible: ordinary integer calls cost 0.41% (paired 0.78%) and zero-argument conversion costs 1.12% (paired 1.98%), with mixed per-layout signs and shared-host variability. This is a narrow measured benefit, not a claim of zero regression or a weighted application-wide gain.
+
+The combined integer/floating candidate was rejected after its pilot made the main integer callback 10.15% slower. Restricting deferral to floating calls repeated unary gains, but zero-argument conversion cost 2.32% in the short supplement and 6.03% in the tightly paired follow-up, while floating accumulation benefited. The final revision restores the original zero-argument implementation. The broader floating candidate also had a noisy 7.32% callback-loop control cost in confirmation; a separate tightly paired follow-up measured that unchanged control at -0.06%. All epochs, costs, process ranges and raw samples remain in the report. Earlier broad/short measurements belong to their stated predecessor runtimes and are not relabeled as final-runtime results.
+
+Across the investigation, six epochs retain 2268 processes/6804 windows. Final qualification passes 4801 Release and 851 Debug QUnit assertions plus native stack/context/unwind probes. Sentinel results cover pending/outer-stack/callee-stack/caught-unwind errors. The 21 shared artifacts pass 4833 reference outputs per runtime. Integer/zero hot instructions and entry addresses match baseline apart from verified cold relocations; the unary floating helper matches the earlier inspected implementation and keeps its 80-byte frame. Setup failures and the three-alias Debug restoration are documented separately.
+
+No new Java/develop ratio, other-platform result, sanitizer run or global performance ceiling is claimed. The latest full optimized comparison remains the [post-local-receiver checkpoint](results-post-local-receiver-checkpoint-macos-arm64.json). Next investigate native floating-to-integer conversion calls with a target-specific semantic proof for NaN, infinity and range boundaries before considering an inline replacement.
+
+[Full evidence](results-deferred-float-unary-macos-arm64.json); [all 62 audit checks](audit-deferred-float-unary.md).

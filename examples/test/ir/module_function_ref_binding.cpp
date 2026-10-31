@@ -7,6 +7,7 @@
 #include <qore/RuntimeConfig.h>
 #include <qore/intern/QoreAOT.h>
 #include <qore/intern/JITRuntime.h>
+#include <qore/intern/QoreJITException.h>
 #include <qore/intern/CallReferenceNode.h>
 #include <qore/intern/qore_program_private.h>
 #ifdef NDEBUG
@@ -51,6 +52,25 @@ struct Prepared {
 };
 
 static uint64_t otherBody(QoreAOTContext*, ExceptionSink*) { return 0; }
+
+// Test-only entries on unshared references exercise the helper's caught-unwind
+// contract. Production scalar-body eligibility is unchanged.
+[[noreturn]] static void throwInlineResult(ExceptionSink* xsink) {
+    xsink->raiseException("CALLBACK-INLINE-THROW", "test native callback unwind");
+    throw QoreJITException();
+}
+static int64_t throwIntUnary(int64_t, QoreAOTContext*, ExceptionSink* xsink, RuntimeConfig*, const size_t*) {
+    throwInlineResult(xsink);
+}
+static int64_t throwIntZero(QoreAOTContext*, ExceptionSink* xsink, RuntimeConfig*, const size_t*) {
+    throwInlineResult(xsink);
+}
+static double throwFloatUnary(double, QoreAOTContext*, ExceptionSink* xsink, RuntimeConfig*, const size_t*) {
+    throwInlineResult(xsink);
+}
+static double throwFloatZero(QoreAOTContext*, ExceptionSink* xsink, RuntimeConfig*, const size_t*) {
+    throwInlineResult(xsink);
+}
 
 // Test-only instrumentation on an unshared reference observes the live frame
 // through the existing builtin, without depending on RuntimeConfig's snapshot
@@ -220,6 +240,18 @@ static void checkInt(QoreProgram* pgm, const char* name, int64_t arg, int64_t ex
     CHECK(ref->getTypedRuntimeConfigEntry(5) == original_explicit);
     CHECK(ref->getTypedInlineStackEntry(5) == original_inline);
     {
+        auto* frame = prepared.frame.frame;
+        QoreProgram* caller = rc->getProgram();
+        ref->setTypedInlineStackEntry(reinterpret_cast<QoreFunctionRefTypedEntry>(throwIntUnary));
+        int64_t result = 123;
+        CHECK(call(result) == 1 && result == 0 && xsink);
+        CHECK(xsink.getExceptionErr().get<const QoreStringNode>()->equal("CALLBACK-INLINE-THROW"));
+        CHECK(rc->getProgram() == caller && prepared.frame.frame == frame);
+        xsink.clear();
+        ref->setTypedInlineStackEntry(original_inline);
+        CHECK(call(result) == 1 && !xsink && result == expected && prepared.frame.frame == frame);
+    }
+    {
         // Match an importing caller -> internal module loop -> captured caller
         // transition. A cold foreign-context invocation must not retain a cache.
         QoreExternalProgramContextHelper owner_context(&xsink, uvb->pgm);
@@ -355,6 +387,38 @@ static void checkOther(QoreProgram* pgm, bool enabled) {
                 CHECK(result == (enabled ? (unary ? 65533.75 : 17.5) : 123.0));
             }
             CHECK(!xsink && handled == enabled);
+        }
+        if (enabled) {
+            auto* ref = dynamic_cast<FunctionCallReferenceNode*>(value->getInternalNode());
+            CHECK(ref && prepared.frame.frame);
+            bool integer = !std::strcmp(name, "ModuleRefBinding::makeIntZero");
+            bool unary = !std::strcmp(name, "ModuleRefBinding::makeFloat");
+            uint32_t signature = integer ? 1 : unary ? 10 : 2;
+            auto original_inline = ref->getTypedInlineStackEntry(signature);
+            CHECK(original_inline);
+            auto* frame = prepared.frame.frame;
+            QoreProgram* caller = rc->getProgram();
+            ref->setTypedInlineStackEntry(integer
+                ? reinterpret_cast<QoreFunctionRefTypedEntry>(throwIntZero)
+                : unary ? reinterpret_cast<QoreFunctionRefTypedEntry>(throwFloatUnary)
+                    : reinterpret_cast<QoreFunctionRefTypedEntry>(throwFloatZero));
+            if (integer) {
+                int64_t result = 123;
+                CHECK(qore_rt_try_funcref_int_0_v9(bits(*value), &result, &xsink, rc,
+                    &prepared.cache, &prepared.frame) == 1 && result == 0);
+            } else {
+                double result = -123.5;
+                int handled = unary
+                    ? qore_rt_try_funcref_float_float_v9(bits(*value), 1.25, &result, &xsink, rc,
+                        &prepared.cache, &prepared.frame)
+                    : qore_rt_try_funcref_float_0_v9(bits(*value), &result, &xsink, rc,
+                        &prepared.cache, &prepared.frame);
+                CHECK(handled == 1 && result == 0.0);
+            }
+            CHECK(xsink && xsink.getExceptionErr().get<const QoreStringNode>()->equal("CALLBACK-INLINE-THROW"));
+            CHECK(rc->getProgram() == caller && prepared.frame.frame == frame);
+            xsink.clear();
+            ref->setTypedInlineStackEntry(original_inline);
         }
     }
     for (bool unary : {false, true}) {
