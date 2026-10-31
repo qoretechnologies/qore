@@ -123,7 +123,9 @@ public class OpenAiModelCreateResponseDataProvider inherits OpenAiDataProviderCo
     #! Prepares a response request for submission
     static hash<auto> prepareRequest(auto req, *hash<auto> model, *OpenAiConversationContextStore ctx_store,
             *reference<hash<auto>> ctx_info) {
-        hash<auto> rv = req;
+        # a caller's request may be narrowed (ex: hash<string, list<hash<string, string>>>), and setting the model
+        # or the converted input would throw
+        hash<auto!> rv = req;
         *hash<auto> ctx = rv.conversation_context;
         *string ctx_key = rv.conversation_key;
         if (!ctx && ctx_key && ctx_store) {

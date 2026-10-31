@@ -83,7 +83,8 @@ public class FirecrawlDataProviderBase inherits DataProvider::AbstractDataProvid
             if (!copts.apikey) {
                 throw "CONSTRUCTOR-ERROR", "missing 'apikey' argument for Firecrawl API communication";
             }
-            hash<auto> opts = copts.restclient_options ?? {};
+            # the caller's options may be narrowed (ex: hash<string, int>), and adding the API key would throw
+            hash<auto!> opts = copts.restclient_options ?? {};
             opts.apikey = copts.apikey;
             rest = new FirecrawlRestClient::FirecrawlRestClientIo(opts);
         }

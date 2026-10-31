@@ -107,6 +107,9 @@ printf("%Y\n", ans.body);
 
     @subsection FireworksRestClientv1_1 FireworksRestClient v1.1
     - initial release
+    - fixed @ref FireworksRestClient::FireworksRestConnection "FireworksRestConnection" to report a configuration or
+      option hash whose values all have the same type, such as \c {"timeout": 30}, with the real configuration error;
+      adding the URL, options or ping options raised \c RUNTIME-TYPE-ERROR instead
 */
 
 %requires json
@@ -249,14 +252,19 @@ public class FireworksRestConnection inherits RestClient::RestConnection {
             : RestConnection(FireworksRestConnection::getConfig(config), attr) {
     }
 
-    private static hash<auto> getConfig(hash<auto> config) {
+    private static hash<auto> getConfig(hash<auto> config0) {
+        # a caller's configuration hash may be narrowed (ex: hash<string, string>), and setting the URL or the
+        # options would throw
+        hash<auto!> config = config0;
         config.url = DefaultUrl;
         config.opts = fixPingOptions(config.opts ?? {});
         return config;
     }
 
     #! Migrates the previously shipped inference models ping when a connection is loaded
-    private static hash<auto> fixPingOptions(hash<auto> options) {
+    private static hash<auto> fixPingOptions(hash<auto> options0) {
+        # a caller's option hash may be narrowed (ex: hash<string, int>), and adding the ping options would throw
+        hash<auto!> options = options0;
         if ((options.ping_method ?? "GET") == "GET"
                 && (!exists options.ping_path || options.ping_path == "models"
                     || options.ping_path == "/models" || options.ping_path == "/v1/models")) {

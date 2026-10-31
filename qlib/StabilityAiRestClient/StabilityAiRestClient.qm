@@ -102,6 +102,9 @@ f.write(r.image);
 
     @subsection StabilityAiRestClientv1_1 StabilityAiRestClient v1.1
     - initial release
+    - fixed @ref StabilityAiRestClient::StabilityAiRestConnection "StabilityAiRestConnection" to report connection
+      options whose values all have the same type, such as \c {"timeout": 30}, with the real configuration error;
+      adding the ping options raised \c RUNTIME-TYPE-ERROR instead
 */
 
 #! contains all public symbols of the StabilityAiRestClient module
@@ -388,7 +391,8 @@ public class StabilityAiRestConnection inherits RestClient::RestConnection {
         }
         StabilityAiRestClientBase::normalizeEndpoint(regex_subst(target, "^stability-ai://", "https://"));
         target =~ s/^https:\/\//stability-ai:\/\//;
-        hash<auto> options = config.opts ?? {};
+        # a caller's option hash may be narrowed (ex: hash<string, int>), and adding the ping options would throw
+        hash<auto!> options = config.opts ?? {};
         options.ping_method = "GET";
         options.ping_path = "/v1/user/balance";
         options -= ("ping_body", "ping_headers");

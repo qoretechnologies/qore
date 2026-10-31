@@ -148,4 +148,7 @@ printf("Structured output: %s\n", result.content);
 
     @subsection qorellmutils_1_0 QoreLlmUtils Module Version 1.0
     - initial release
+    - fixed @ref QoreLlmUtils::GroundedAnswerVerifier::verify() "GroundedAnswerVerifier::verify()" to merge per-call
+      options into constructor defaults whose values all have the same type, such as \c {"require_sources": True};
+      merging a value of another type raised \c RUNTIME-TYPE-ERROR
 */

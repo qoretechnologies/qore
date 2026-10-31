@@ -319,6 +319,9 @@ stream.doRequest({
 
     @subsection grokdataprovider_v1_0 GrokDataProvider v1.0
     - initial release
+    - fixed @ref GrokDataProvider::GrokModelCreateResponseDataProvider::prepareRequest()
+      "GrokModelCreateResponseDataProvider::prepareRequest()" to accept a request whose values all have the same
+      type, such as \c {"input": ("...",)}; setting the model raised \c RUNTIME-TYPE-ERROR
 */
 
 #! contains all public definitions in the GrokDataProvider module

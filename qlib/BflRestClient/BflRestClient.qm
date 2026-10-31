@@ -97,6 +97,12 @@ binary image = job.media.data;
 
     @subsection BflRestClientv1_1 BflRestClient v1.1
     - initial release
+    - fixed @ref BflRestClient::BflImageGenerator "BflImageGenerator" to accept provider options whose values all
+      have the same type, such as \c {"seed": 42}; adding the aspect ratio or output format raised
+      \c RUNTIME-TYPE-ERROR
+    - fixed @ref BflRestClient::BflRestConnection "BflRestConnection" to report connection options whose values
+      all have the same type, such as \c {"timeout": 30}, with the real configuration error; adding the ping options
+      raised \c RUNTIME-TYPE-ERROR instead
 */
 
 #! contains all public symbols of the BflRestClient module
@@ -447,7 +453,8 @@ public class BflRestConnection inherits RestClient::RestConnection {
         if (inlist(target, ("bfl://x", "bfl://localhost"))) { target = DefaultUrl; }
         BflRestClientBase::normalizeEndpoint(regex_subst(target, "^bfl://", "https://"));
         target =~ s/^https:\/\//bfl:\/\//;
-        hash<auto> options = config.opts ?? {};
+        # a caller's option hash may be narrowed (ex: hash<string, int>), and adding the ping options would throw
+        hash<auto!> options = config.opts ?? {};
         options.ping_method = "GET";
         options.ping_path = "/v1/credits";
         options -= ("ping_body", "ping_headers");
@@ -544,7 +551,9 @@ public class BflImageGenerator inherits QoreMediaUtils::AbstractImageGenerator {
             "url":    config.url ?? BflRestClient::DefaultUrl,
         });
         model = config.model ?? BflRestClient::DefaultImageModel;
-        defaults = config.provider_options ?? {};
+        # the provider options may be narrowed (ex: hash<string, int>), and adding the aspect ratio would throw
+        hash<auto!> provider_defaults = config.provider_options ?? {};
+        defaults = provider_defaults;
         if (exists config.aspect_ratio) { defaults.aspect_ratio = config.aspect_ratio; }
         if (exists config.output_format) { defaults.output_format = config.output_format; }
         if (!BflRestClient::ImageModelPathMap{model}) {

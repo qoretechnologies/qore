@@ -112,6 +112,9 @@ printf("Transcript: %s\nSummary: %s\n", result.text, result.summary);
 
     @subsection AssemblyAiRestClientv1_0 AssemblyAiRestClient v1.0
     - initial release
+    - fixed @ref AssemblyAiRestClient::AssemblyAiRestConnection "AssemblyAiRestConnection" to report a
+      configuration or option hash whose values all have the same type, such as \c {"timeout": 30}, with the real
+      configuration error; adding the region or URL raised \c RUNTIME-TYPE-ERROR instead
 */
 
 %requires json
@@ -627,7 +630,14 @@ public class AssemblyAiRestConnection inherits RestClient::RestConnection {
     /** The region option selects the canonical US or EU transcript endpoint. An existing EU URL
         supplies the region when no option was stored. Canonicalization also supports URL-free connection editors.
     */
-    private static hash<auto> getConfig(hash<auto> config) {
+    private static hash<auto> getConfig(hash<auto> config0) {
+        # a caller's configuration and option hashes may be narrowed (ex: hash<string, string>), and setting the URL
+        # or the region would throw
+        hash<auto!> config = config0;
+        if (exists config.opts) {
+            hash<auto!> opts = config.opts;
+            config.opts = opts;
+        }
         string region = config.opts.region
             ?? (parse_url(config.url ?? DefaultUrl).host == "api.eu.assemblyai.com" ? "eu" : "us");
         if (region != "us" && region != "eu") {

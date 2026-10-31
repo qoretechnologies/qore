@@ -102,6 +102,9 @@ printf("%Y\n", ans.body);
 
     @subsection togetherrestclientv1_1 TogetherRestClient v1.1
     - initial release
+    - fixed @ref TogetherRestClient::TogetherRestConnection "TogetherRestConnection" to report a configuration
+      hash whose values all have the same type, such as \c {"opts": {"apikey": "..."}}, with the real configuration
+      error; setting the fixed URL raised \c RUNTIME-TYPE-ERROR instead
 */
 
 %requires json
@@ -249,7 +252,10 @@ public class TogetherRestConnection inherits RestClient::RestConnection {
     }
 
     #! Builds the fixed service URL for automatically configured connections
-    private static hash<auto> getConfig(hash<auto> config) {
+    private static hash<auto> getConfig(hash<auto> config0) {
+        # a caller's configuration hash may be narrowed (ex: hash<string, string>), and setting the URL or the
+        # options would throw
+        hash<auto!> config = config0;
         config.url = DefaultUrl;
         return config;
     }

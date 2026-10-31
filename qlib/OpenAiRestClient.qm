@@ -155,6 +155,9 @@ stream.close();
       never receive temporary null placeholders
     - unsupported strict-schema constraints report a local error before an API call
     - added SSE helper for streaming responses
+    - fixed @ref OpenAiRestClient::OpenAiRestClientBase::getOptions() "OpenAiRestClientBase::getOptions()" and
+      the client constructors to accept an option hash whose values all have the same type, such as
+      \c {"use_schema": True}; adding the schema path raised \c RUNTIME-TYPE-ERROR
 
     @subsection OpenAiRestClientv1_0 OpenAiRestClient v1.0
     - initial release
@@ -188,7 +191,9 @@ public class OpenAiRestClientBase {
     }
 
     #! returns options for @ref OpenAiRestClient::OpenAiRestClient::constructor()
-    static hash<auto> getOptions(hash<auto> opts) {
+    static hash<auto> getOptions(hash<auto> opts0) {
+        # a caller's option hash may be narrowed (ex: hash<string, bool>), and adding the schema path would throw
+        hash<auto!> opts = opts0;
         if (!opts.swagger && !opts.validator && opts.use_schema) {
             string path = dirname(get_module_hash().OpenAiRestClient.filename)
                 + "/OpenAiDataProvider/openai-swagger-2.0.yaml";

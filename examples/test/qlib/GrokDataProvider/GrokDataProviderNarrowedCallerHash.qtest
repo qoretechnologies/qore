@@ -1,0 +1,38 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires GrokDataProvider
+
+%exec-class GrokDataProviderNarrowedCallerHashTest
+
+#! Option and configuration hashes whose values all have the same type
+/** A hash literal whose values all have the same type, such as \c {"apikey": "..."}, has a narrowed type (here
+    \c hash<string, string>); the library must still be able to add values of other types to its own copy and report
+    the real problem with the configuration.  No request is sent: connections and clients are only created
+*/
+class GrokDataProviderNarrowedCallerHashTest inherits QUnit::Test {
+    constructor() : Test("GrokDataProviderNarrowedCallerHashTest", "1.0", \ARGV) {
+        addTestCase("response request with only list values", \responseRequest());
+        set_return_value(main());
+    }
+
+    #! Returns the hash with its runtime type, as a caller's literal arrives in a library function
+    static hash<auto> mk(hash<auto> h) {
+        return h;
+    }
+
+    responseRequest() {
+        # the request is a hash<string, list<string>>, which cannot take the string model ID
+        assertEq("hash<string, list<string>>", mk({"input": ("hello",)}).fullType());
+        hash<auto> ctx_info = {};
+        hash<auto> req = GrokModelCreateResponseDataProvider::prepareRequest({"input": ("hello",)}, {"id": "grok-4"},
+            NOTHING, \ctx_info);
+        assertEq({"input": ("hello",), "model": "grok-4"}, req);
+    }
+}

@@ -71,6 +71,9 @@ module FirecrawlRestClient {
 
     @subsection firecrawlrestclientv1_0 FirecrawlRestClient v1.0
     - initial release
+    - fixed @ref FirecrawlRestClient::FirecrawlRestConnection "FirecrawlRestConnection" to report a configuration
+      hash whose values all have the same type, such as \c {"opts": {"apikey": "..."}}, with the real configuration
+      error; setting the fixed URL raised \c RUNTIME-TYPE-ERROR instead
 */
 
 #! the FirecrawlRestClient namespace contains all the objects in the FirecrawlRestClient module
@@ -260,7 +263,10 @@ public class FirecrawlRestConnection inherits RestClient::RestConnection {
     #! Returns the config hash with the correct URL
     /** Firecrawl has a single fixed API endpoint, so the URL is always overridden
     */
-    private static hash<auto> getConfig(hash<auto> config) {
+    private static hash<auto> getConfig(hash<auto> config0) {
+        # a caller's configuration hash may be narrowed (ex: hash<string, string>), and setting the URL or the
+        # options would throw
+        hash<auto!> config = config0;
         # Firecrawl has a single fixed API endpoint — always override
         config.url = DefaultUrl;
         return config;

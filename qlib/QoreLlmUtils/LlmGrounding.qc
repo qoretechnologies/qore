@@ -290,7 +290,8 @@ public class GroundedAnswerVerifier {
     */
     hash<GroundingVerificationResult> verify(string answer,
             list<hash<LlmSourceRef>> sources, *hash<auto> opts = NOTHING) {
-        hash<auto> effective = options;
+        # the constructor's defaults may be narrowed (ex: hash<string, bool>), and merging other values would throw
+        hash<auto!> effective = options;
         if (opts) {
             effective += opts;
         }

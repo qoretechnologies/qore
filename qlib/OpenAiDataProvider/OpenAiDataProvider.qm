@@ -826,6 +826,10 @@ hash<auto> items = conversations.getChildProvider("items").getChildProvider("lis
     - added action catalog entry for streaming responses
     - added responses API input content support for text, image, audio, and file parts
     - added conversation context helpers for response continuity
+    - fixed @ref OpenAiDataProvider::OpenAiModelCreateResponseDataProvider::prepareRequest()
+      "OpenAiModelCreateResponseDataProvider::prepareRequest()" to accept a request whose values all have the same
+      type, such as \c {"input": ({"text": "..."},)}; setting the model or the converted input raised
+      \c RUNTIME-TYPE-ERROR
 
     @subsection openaidataprovider_v1_4 OpenAiDataProvider v1.4
     - missing APIs and actions to handle image analysis

@@ -101,8 +101,10 @@ public class GrokModelCreateResponseDataProvider inherits GrokDataProviderCommon
     }
 
     #! Prepares the request with model and context
-    static hash<auto> prepareRequest(hash<auto> req, *hash<auto> model, *GrokConversationContextStore ctx_store,
+    static hash<auto> prepareRequest(hash<auto> req0, *hash<auto> model, *GrokConversationContextStore ctx_store,
             reference<hash<auto>> ctx_info) {
+        # a caller's request may be narrowed (ex: hash<string, list<string>>), and setting the model would throw
+        hash<auto!> req = req0;
         # Set model from context if available
         if (model && !req.model) {
             req.model = model.id;

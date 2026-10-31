@@ -134,6 +134,10 @@ hash<ChatResponse> r = p.chat((<ChatMessage>{"role": "user", "content": "hi"},))
 
     @subsection azureopenairestclient_v1_0 AzureOpenAiRestClient v1.0
     - initial release
+    - fixed @ref AzureOpenAiRestClient::AzureOpenAiRestClientBase::getOptions()
+      "AzureOpenAiRestClientBase::getOptions()" and the client constructors to accept an option hash whose values all
+      have the same type, such as \c {"url": "...", "api_key": "..."}; adding the headers raised
+      \c RUNTIME-TYPE-ERROR
 */
 
 #! Contains all public definitions in the AzureOpenAiRestClient module
@@ -227,7 +231,8 @@ public class AzureOpenAiRestClientBase {
     */
     static hash<auto> getOptions(hash<auto> options) {
         AzureOpenAiRestClientBase::validateOptions(options);
-        hash<auto> rv = options - AzureOptions;
+        # a caller's option hash may be narrowed (ex: hash<string, string>), and adding the headers would throw
+        hash<auto!> rv = options - AzureOptions;
         if (!rv.data || rv.data == "auto") {
             rv.data = "json";
         }
