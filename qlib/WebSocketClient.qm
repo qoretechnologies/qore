@@ -259,6 +259,9 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
     @section websocketclient_relnotes WebSocketClient Module Release History
 
     @subsection wsc_v2_5 v2.5
+    - fixed the @ref WebSocketClient::WebSocketConnectPollOperation "WebSocketConnectPollOperation" constructor for
+      a completed connection to accept a result whose values all have the same type, such as a literal
+      <tt>{"upgrade": "websocket"}</tt>; adding the status code raised \c RUNTIME-TYPE-ERROR
     - a close started by the client completes when the server's CLOSE frame arrives, as RFC 6455 requires (sections
       7.1.5 and 7.1.6), over HTTP/1.1, HTTP/2 and HTTP/3, so the close code and reason reported after the close are
       those of the server's CLOSE frame; before, the client closed the connection as soon as its own CLOSE frame was
@@ -6858,8 +6861,11 @@ public class WebSocketConnectPollOperation inherits Qore::AbstractPollOperation<
         @since WebSocketClient 2.5
     */
     constructor(hash<auto> result) {
-        output = result;
-        output.status_code = result.status_code ?? 101;
+        # the status code is set in an "auto!" local: a caller's literal may be narrowed (e.g.
+        # hash<string, string> for {"upgrade": "websocket"}), and adding the int status code would throw
+        hash<auto!> rv = result;
+        rv.status_code = result.status_code ?? 101;
+        output = rv;
         state = "complete";
         goal_reached = True;
     }

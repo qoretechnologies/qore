@@ -49,6 +49,7 @@ class WebSocketClientNarrowedCallerHashTest inherits QUnit::Test {
         addTestCase("connectAsync() with narrowed headers", \connectAsyncNarrowedHeaders());
         addTestCase("startPollConnect() with narrowed headers", \startPollConnectNarrowedHeaders());
         addTestCase("connect() keeps a caller's Accept header", \connectKeepsAccept());
+        addTestCase("WebSocketConnectPollOperation with a narrowed result", \pollOperationNarrowedResult());
         set_return_value(main());
     }
 
@@ -96,5 +97,15 @@ class WebSocketClientNarrowedCallerHashTest inherits QUnit::Test {
         # no options: the Accept header is added to an empty header hash
         rv = c.connect();
         assertEq({"hdr": {"Accept": Accept}}, rv.opts);
+    }
+
+    pollOperationNarrowedResult() {
+        # the handshake result is a hash<string, string>, which cannot take the int status code
+        assertEq("hash<string, string>", mk({"upgrade": "websocket"}).fullType());
+        WebSocketConnectPollOperation op({"upgrade": "websocket"});
+        assertTrue(op.goalReached());
+        assertEq({"upgrade": "websocket", "status_code": 101}, op.getOutput());
+        op = new WebSocketConnectPollOperation({"upgrade": "websocket", "status_code": 200});
+        assertEq(200, op.getOutput().status_code);
     }
 }
