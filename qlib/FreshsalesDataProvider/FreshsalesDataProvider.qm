@@ -734,7 +734,4 @@ module FreshsalesDataProvider {
 
     @subsection freshsalesdataproviderv1_0 FreshsalesDataProvider v1.0
     - initial release
-    - \c FreshsalesDataProviderBase::fetchAllPages() accepts query parameters whose values all have the same type,
-      such as a literal \c {"filter": "open"}, when adding the page number; watching for new tasks and
-      appointments failed with \c RUNTIME-TYPE-ERROR
 */

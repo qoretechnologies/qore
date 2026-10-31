@@ -97,12 +97,6 @@ binary image = job.media.data;
 
     @subsection BflRestClientv1_1 BflRestClient v1.1
     - initial release
-    - fixed @ref BflRestClient::BflImageGenerator "BflImageGenerator" to accept provider options whose values all
-      have the same type, such as \c {"seed": 42}; adding the aspect ratio or output format raised
-      \c RUNTIME-TYPE-ERROR
-    - fixed @ref BflRestClient::BflRestConnection "BflRestConnection" to report connection options whose values
-      all have the same type, such as \c {"timeout": 30}, with the real configuration error; adding the ping options
-      raised \c RUNTIME-TYPE-ERROR instead
 */
 
 #! contains all public symbols of the BflRestClient module

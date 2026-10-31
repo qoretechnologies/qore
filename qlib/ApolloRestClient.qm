@@ -83,8 +83,6 @@ printf("Users: %y\n", result.body.users);
 
     @subsection apollorestclientv1_0 ApolloRestClient v1.0
     - initial release
-    - the client options accept a \c headers hash whose values all have the same type, such as a literal
-      <tt>{"X-Count": 1}</tt>, when adding the authentication headers
 */
 
 #! the ApolloRestClient namespace contains all the objects in the ApolloRestClient module

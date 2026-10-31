@@ -631,7 +631,5 @@ module SmartSheetDataProvider {
     @section smartsheetdataproviderrelnotes Release Notes
 
     @subsection smartsheetdataproviderv1_0 SmartSheetDataProvider v1.0
-    - searches accept query parameters whose values all have the same type, such as a literal
-      \c {"modifiedSince": "..."}, when adding the page keys
     - initial release
 */

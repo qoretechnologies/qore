@@ -817,8 +817,6 @@ module PdfCoDataProvider {
     @section pdfcodataproviderrelnotes Release Notes
 
     @subsection pdfcodataproviderv1_0 PdfCoDataProvider v1.0
-    - \c PdfCoDataProviderBase::uploadFileIfNeeded() accepts a request whose values all have the same type, such
-      as a literal \c {"file": {"name": "...", "content": "..."}}, when adding the uploaded file URL
     - initial release
 */
 

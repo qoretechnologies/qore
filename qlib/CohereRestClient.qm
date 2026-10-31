@@ -86,12 +86,6 @@ module CohereRestClient {
 
     @subsection CohereRestClientv1_0 CohereRestClient v1.0
     - initial release
-    - fixed @ref CohereRestClient::CohereLlmProvider "CohereLlmProvider"::complete() with an output
-      schema to accept body options whose values all have the same type, such as \c {"seed": 7}; adding the response
-      format raised \c RUNTIME-TYPE-ERROR
-    - fixed @ref CohereRestClient::CohereRestConnection "CohereRestConnection" to report a configuration or option
-      hash whose values all have the same type, such as \c {"timeout": 30}, with the real configuration error; adding
-      the URL, options or ping options raised \c RUNTIME-TYPE-ERROR instead
 */
 
 %requires json

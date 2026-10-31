@@ -214,13 +214,6 @@ resp = rc.restGet("/api/data");
     @section restclientio_relnotes Release Notes
 
     @subsection restclientio_v1_0 Version 1.0
-    - the constructor accepts an option hash whose values all have the same type, such as a literal
-      \c {"url": "...", "ssl_verify_cert": "false"}
-    - the hash returned by @ref RestClientIo::RestClientIo::getConstructorOptions() "getConstructorOptions()" accepts
-      added values of any type, also for a client created with options whose values all have the same type
-    - @ref RestClientIo::RestClientIo::restSseReader() "restSseReader()" and
-      @ref RestClientIo::RestClientIo::restObserveSse() "restObserveSse()" accept request headers whose values all have
-      the same type, such as a literal \c {"X-Count": 1}
     - initial release
 */
 

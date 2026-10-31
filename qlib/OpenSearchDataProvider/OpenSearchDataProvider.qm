@@ -413,8 +413,6 @@ module OpenSearchDataProvider {
     @section opensearchdataprovider_relnotes Release Notes
 
     @subsection opensearchdataprovider_v1_0 OpenSearchDataProvider v1.0
-    - k-NN, neural and hybrid searches accept search bodies whose values all have the same type when adding
-      \c k, \c size or \c filter, and a failed search request reports its REST error
     - initial release
 */
 

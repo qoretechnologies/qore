@@ -102,9 +102,6 @@ printf("%Y\n", ans.body);
 
     @subsection togetherrestclientv1_1 TogetherRestClient v1.1
     - initial release
-    - fixed @ref TogetherRestClient::TogetherRestConnection "TogetherRestConnection" to report a configuration
-      hash whose values all have the same type, such as \c {"opts": {"apikey": "..."}}, with the real configuration
-      error; setting the fixed URL raised \c RUNTIME-TYPE-ERROR instead
 */
 
 %requires json

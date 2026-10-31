@@ -1862,8 +1862,6 @@ module KeapDataProvider {
     @section keapdataproviderrelnotes Release Notes
 
     @subsection keapdataproviderv1_0 KeapDataProvider v1.0
-    - \c KeapDataProviderBase::transformContactResponse() accepts a contact whose values all have the same type
-      when adding the e-mail address
     - initial release
 */
 

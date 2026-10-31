@@ -107,8 +107,6 @@ printf("%Y\n", ans.body);
 
     @subsection SGLangRestClientv1_0 SGLangRestClient v1.0
     - initial release
-    - the client options accept a \c headers hash whose values all have the same type, such as a literal
-      <tt>{"X-Count": 1}</tt>, when adding the credential and \c Accept headers
 */
 
 #! the SGLangRestClient namespace contains all the objects in the SGLangRestClient module

@@ -2300,6 +2300,5 @@ module WooCommerceDataProvider {
     @section woocommercedataproviderrelnotes Release Notes
 
     @subsection woocommercedataproviderv1_0 WooCommerceDataProvider v1.0
-    - customer deletion with a reassignment target sends the target with the \c force flag
     - initial release
 */

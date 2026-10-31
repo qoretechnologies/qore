@@ -751,7 +751,5 @@ module SystemeIoDataProvider {
     @section systemeio_dataprovider_relnotes Release Notes
 
     @subsection systemeio_dataprovider_v1_0 SystemeIoDataProvider v1.0
-    - paginated requests accept query parameters whose values all have the same type, such as a literal
-      \c {"order": "desc"}, when adding the page keys; the tag and contact watches use such parameters
     - initial release
 */

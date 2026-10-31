@@ -89,9 +89,6 @@ printf("%Y\n", ans.body);
 
     @subsection JinaRestClientv1_1 JinaRestClient v1.1
     - initial release
-    - fixed @ref JinaRestClient::JinaRestConnection "JinaRestConnection" to report a configuration or option
-      hash whose values all have the same type, such as \c {"timeout": 30}, with the real configuration error; adding
-      the URL, options or ping options raised \c RUNTIME-TYPE-ERROR instead
 */
 
 %requires json

@@ -103,9 +103,6 @@ f.write(resp.body);
 
     @subsection DeepgramRestClientv1_1 DeepgramRestClient v1.1
     - initial release
-    - fixed @ref DeepgramRestClient::DeepgramRestConnection "DeepgramRestConnection" to report a configuration
-      hash whose values all have the same type, such as \c {"opts": {"apikey": "..."}}, with the real configuration
-      error; setting the fixed URL raised \c RUNTIME-TYPE-ERROR instead
 */
 
 %requires json

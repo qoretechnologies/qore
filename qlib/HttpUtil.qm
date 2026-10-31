@@ -63,8 +63,6 @@ module HttpUtil {
 
     @subsection httputil_1_0 HttpUtil 1.0
     - initial release
-    - @ref HttpUtil::set_cookie_header() "set_cookie_header()" accepts a header hash whose values all have the same
-      type, such as a literal <tt>{"Content-Type": "text/html"}</tt>, also when a second cookie is stored as a list
 */
 
 #! Main namespace for shared HTTP utilities

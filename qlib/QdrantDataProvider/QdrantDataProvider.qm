@@ -447,8 +447,6 @@ AbstractDataProviderRecordIterator i = products.searchRecords(<DataProviderExpre
 
     @subsection qdrantdataprovider_v1_0 QdrantDataProvider v1.0
     - initial release
-    - the connection options accept a \c headers hash whose values all have the same type, such as a literal
-      <tt>{"X-Count": 1}</tt>, when adding the \c api-key header
 */
 
 #! Contains all public definitions in the QdrantDataProvider module

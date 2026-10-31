@@ -107,8 +107,6 @@ module A2aServerHandler {
     @section A2aServerHandler_relnotes A2aServerHandler Release Notes
 
     @subsection A2aServerHandler_1_0 A2aServerHandler v1.0
-    - skills and extensions can be registered with an agent card whose values all have the same type, such as a
-      literal \c {"name": "agent", "url": "..."}
     - initial release
 */
 

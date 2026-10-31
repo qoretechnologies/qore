@@ -492,8 +492,6 @@ module FirecrawlDataProvider {
 
     @subsection firecrawldataproviderv1_0 FirecrawlDataProvider v1.0
     - initial release
-    - fixed the data provider constructors to accept \c restclient_options whose values all have the same type, such
-      as \c {"timeout": 30}; adding the API key raised \c RUNTIME-TYPE-ERROR
 */
 
 #! Contains all public definitions in the FirecrawlDataProvider module

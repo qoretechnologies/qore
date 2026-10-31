@@ -131,8 +131,6 @@ module A2aClient {
     @section A2aClient_relnotes A2aClient Release Notes
 
     @subsection A2aClient_1_0 A2aClient v1.0
-    - a2aTranslateAgentCardToV10() and a2aTranslateAgentCardToV03() accept an agent card whose values all have the
-      same type, such as a literal \c {"name": "agent", "url": "..."}
     - initial release
 */
 

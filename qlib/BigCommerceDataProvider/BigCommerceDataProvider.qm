@@ -1111,8 +1111,6 @@ module BigCommerceDataProvider {
 
     @subsection bigcommercedataproviderv1_0 BigCommerceDataProvider v1.0
     - initial release
-    - \c BigCommerceDataProviderBase::fetchAllPagesV2() and \c fetchAllPagesV3() accept query parameters whose
-      values all have the same type, such as a literal \c {"keyword": "shoe"}, when adding the page keys
 */
 
 #! the BigCommerceDataProvider namespace contains all the objects in the BigCommerceDataProvider module
