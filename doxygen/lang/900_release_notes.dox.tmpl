@@ -3585,6 +3585,12 @@ while (*binary chunk = input.read(65536)) {
         file of \c -i, unless \c -n is given) and of the files of \c -x at their start, and the \c script command runs
         a file of commands; a command of a file that resumes a thread waits until a thread pauses, and the first
         command that fails ends the file
+      - JSON output for programs such as coding agents: with \c --json, \c qdbg and \c qdbg-remote write one JSON
+        object for each command, event and output of the program; with \c --wait-timeout or the
+        \c options \c waittimeout command, a command that resumes a thread waits for a thread to pause only as long,
+        and then the program is paused (see @ref debugging_qdbg_json)
+      - an exception that matches a common pitfall of %Qore is shown with a hint when a thread stops at it, and a
+        variable that was declared but not assigned is shown as such with its declared type
       - session files keep the display expressions, the exception filters and the \c stopall option with the
         breakpoints; fixed \c session \c save and \c session \c load without a file name doing nothing, \c session
         \c save writing no file without breakpoints, \c session \c load failing with a type error for a file that is

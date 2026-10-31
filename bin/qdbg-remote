@@ -6,6 +6,7 @@
 %requires qore >= 2.0
 %requires WebSocketClient
 %requires yaml >= 0.5
+%requires json
 %requires DebugCmdLine
 %requires DebugLinenoiseCmdLine
 %requires ConnectionProvider
@@ -150,6 +151,8 @@ class DebugWrapper {
             "session": "s,session=s",
             "color": "color",
             "no_color": "no-color",
+            "json": "json",
+            "wait_timeout": "wait-timeout=i",
         );
         DebugCommandLineRemote dcl;
         Logger logger;
@@ -257,7 +260,11 @@ class DebugWrapper {
         try {
             dcl.connect();
             # unconditional connection message
-            stdout.printf("connected to debug server %y: %s; \"help\" for help\n", opt.url, dcl.serverName);
+            if (opt.json) {
+                stdout.print(make_json({"type": "connected", "url": opt.url, "server": dcl.serverName}) + "\n");
+            } else {
+                stdout.printf("connected to debug server %y: %s; \"help\" for help\n", opt.url, dcl.serverName);
+            }
             # the debugged programs, and the threads that are stopped, such as the thread of a program that the server
             # holds at its start
             *hash<auto> sess = dcl.doCommandImpl({'cmd': 'session/get'});
@@ -321,6 +328,12 @@ class DebugWrapper {
             "  -x, --execute=file           run the commands of the file at the start, after those of the init file;\n"
             "                               can be given more than once\n"
             "  --color, --no-color          always or never show colors; by default, colors are shown in a terminal\n"
+            "  --json                       write JSON Lines for programs such as coding agents: one object for each\n"
+            "                               command, event and output of the programs; commands are read without a\n"
+            "                               prompt\n"
+            "  --wait-timeout=ms            the time that a command that resumes a thread waits for a thread to pause\n"
+            "                               when the input is not a terminal; then the program is paused (default: no\n"
+            "                               limit)\n"
             "\n"
             "A file of commands has one command on each line; lines that start with \"#\" are comments.  A command\n"
             "that resumes a thread waits until a thread pauses, and the first command that fails ends the file.  The\n"

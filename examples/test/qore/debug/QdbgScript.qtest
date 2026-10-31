@@ -14,6 +14,7 @@
 %requires QUnit
 %requires FsUtil
 %requires Util
+%requires json
 
 %try-module process >= 2.2
 %define NoProcess
@@ -107,6 +108,7 @@ public class QdbgScriptTest inherits QUnit::Test {
         addTestCase("exceptions by code", \exceptionCodeTest());
         addTestCase("display expressions, pages of values and columns of the call stack", \displayTest());
         addTestCase("qdbg-remote with a debug server that requires a token", \remoteTest());
+        addTestCase("JSON output of qdbg-remote", \remoteJsonTest());
         addTestCase("commands of threads, frames and steps", \threadCommandTest());
         addTestCase("quitting while a thread is stopped", \quitTest());
         addTestCase("help and errors", \helpTest());
@@ -118,6 +120,9 @@ public class QdbgScriptTest inherits QUnit::Test {
         addTestCase("expressions and texts with quotes and spaces; NOTHING and NULL", \expressionTextTest());
         addTestCase("time zones", \timeZoneTest());
         addTestCase("hints for exceptions that match a common pitfall", \trapHintTest());
+        addTestCase("JSON output", \jsonOutputTest());
+        addTestCase("JSON output: hints and the end of the program", \jsonExceptionTest());
+        addTestCase("the time that a command waits for a thread to pause", \waitTimeoutTest());
         addTestCase("the usage of the debugger tools", \usageTest());
         addTestCase("errors at the start of qdbg and qdbg-server", \startupErrorTest());
         set_return_value(main());
@@ -402,6 +407,10 @@ public class QdbgScriptTest inherits QUnit::Test {
     remoteTest() {
         testSkip("no process module 2.2 or later");
     }
+
+    remoteJsonTest() {
+        testSkip("no process module 2.2 or later");
+    }
 %else
     #! runs qdbg-remote with the commands on its input for a debug server and returns its output and exit code
     private hash<auto> runRemote(int port, list<string> commands, *string token, *list<string> args) {
@@ -425,23 +434,21 @@ public class QdbgScriptTest inherits QUnit::Test {
         return {"out": out, "rc": rc};
     }
 
-    # qdbg-remote processes each command of a script at the stop that it is written for, as qdbg does, with a debug
-    # server that requires a token
-    remoteTest() {
-        TmpDir tmp("qore-qdbg-test-");
+    #! starts qdbg-server with a program in a folder and returns the process and its port
+    private hash<auto> startServer(string dir, string program) {
         File f();
-        f.open2(tmp.path + "/target.q", O_CREAT | O_WRONLY | O_TRUNC);
-        f.write(LoopProgram);
+        f.open2(dir + "/target.q", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(program);
         f.close();
         *string module_dir = ENV.QORE_MODULE_DIR;
         Process server(qore_exe, (qdbg_server, "target.q"), {
-            "cwd": tmp.path,
+            "cwd": dir,
             "env": Process::getEnvironment() + {
                 "QORE_MODULE_DIR": qlib_dir + (module_dir ? ":" + module_dir : ""),
                 "QDBG_SERVER_TOKEN": "s3cret",
             },
         });
-        on_exit if (server.running()) {
+        on_error if (server.running()) {
             server.terminate();
         }
         string line = "";
@@ -452,7 +459,46 @@ public class QdbgScriptTest inherits QUnit::Test {
             }
             line += s;
         }
-        int port = (line =~ x/listening on port ([0-9]+)/)[0].toInt();
+        return {"server": server, "port": (line =~ x/listening on port ([0-9]+)/)[0].toInt()};
+    }
+
+    # JSON output of qdbg-remote: the connection, the result of each command, the output of the program of the
+    # server, and the time that a command waits for a thread to pause
+    remoteJsonTest() {
+        TmpDir tmp("qore-qdbg-test-");
+        hash<auto> sh = startServer(tmp.path, "%modern\nprintf(\"start\\n\");\nint n = 0;\nwhile (True) {\n"
+            "    ++n;\n}\n");
+        Process server = sh.server;
+        on_exit if (server.running()) {
+            server.terminate();
+        }
+        hash<auto> res = runRemote(sh.port, ("options waittimeout", "go", "kill", "quit"), "s3cret",
+            ("--json", "--wait-timeout=300"));
+        assertEq(0, res.rc, res.out);
+        list<hash<auto>> objs = parseJsonLines(res.out);
+        assertEq("connected", objs[0].type);
+        assertEq(sprintf("ws://localhost:%d", sh.port), objs[0].url);
+        list<hash<auto>> results = select objs, $1.type == "result";
+        assertEq(("options waittimeout", "go", "kill", "quit"), map $1.command, results);
+        assertEq("wait timeout: 300 ms\n", results[0].output);
+        assertTrue(results[1].timedOut);
+        # the output of the program of the server
+        assertEq("start\n", (map $1.text, objs, $1.type == "output" && $1.category == "stdout").join(""));
+        assertTrue((select objs, $1.type == "event" && $1.text =~ /^Paused at target.q:/).size() > 0);
+        assertTrue(server.wait(30s), "the debug server ends with its program");
+    }
+
+    # qdbg-remote processes each command of a script at the stop that it is written for, as qdbg does, with a debug
+    # server that requires a token
+    remoteTest() {
+        TmpDir tmp("qore-qdbg-test-");
+        hash<auto> sh = startServer(tmp.path, LoopProgram);
+        Process server = sh.server;
+        on_exit if (server.running()) {
+            server.terminate();
+        }
+        int port = sh.port;
+        File f();
 
         # negative: no token and a wrong token
         hash<auto> res = runRemote(port, ("quit",));
@@ -490,6 +536,7 @@ public class QdbgScriptTest inherits QUnit::Test {
         ));
         # the acknowledgements of commands are not shown
         assertFalse(res.out =~ /"ok"/, "no acknowledgement is shown");
+
         server.write("end\n");
         assertTrue(server.wait(30s), "the debug server ends");
     }
@@ -895,6 +942,131 @@ public class QdbgScriptTest inherits QUnit::Test {
         ));
         # the locals command shows the variable as declared but not assigned too
         assertEq(2, (res.out =~ x/(int count = NOTHING \(declared but not assigned\))/g).size(), res.out);
+    }
+
+    #! returns the objects of JSON output; each line of the output is one
+    private list<hash<auto>> parseJsonLines(string out) {
+        list<hash<auto>> rv = ();
+        foreach string line in (out.split("\n")) {
+            if (line.val()) {
+                auto v = parse_json(line);
+                assertEq(NT_HASH, v.typeCode(), sprintf("a line of JSON output: %y", line));
+                push rv, v;
+            }
+        }
+        return rv;
+    }
+
+    # each command gives a result object, and events and the output of the program are objects of their own
+    jsonOutputTest() {
+        hash<auto> res = runQdbg(Program, (
+            "break create target.q 3",
+            "go",
+            "thread local sum",
+            "nosuchcommand",
+            "",
+            "go",
+            "quit",
+        ), ("--json",));
+        assertEq(0, res.rc);
+        list<hash<auto>> objs = parseJsonLines(res.out);
+        # the results of the commands in the order of the commands; an empty line is not a command
+        list<hash<auto>> results = select objs, $1.type == "result";
+        assertEq(("break create target.q 3", "go", "thread local sum", "nosuchcommand", "go", "quit"),
+            map $1.command, results);
+        assertEq((True, True, True, False, True, True), map $1.ok, results);
+        assertEq("int sum = NOTHING (declared but not assigned)\n", results[2].output);
+        assertEq("\"nosuchcommand\": unknown command", results[3].error);
+        assertTrue(results[5].quit);
+        assertFalse(results[1].hasKey("timedOut"));
+
+        # the stops, with their text and data, and the output of the program, which is not written as it is
+        list<hash<auto>> stops = select objs, $1.type == "event" && $1.event == "interrupt";
+        assertEq("Paused at the start of the program", stops[0].text.substr(0, 34));
+        assertEq("attach", stops[0].data.func);
+        assertRegex("^Paused at breakpoint 1 at target.q:3", stops[1].text);
+        assertEq(3, stops[1].data.line);
+        assertEq(1, stops[1].data.bkptid);
+        assertFalse(stops[1].data.hasKey("localvars"));
+        list<hash<auto>> output = select objs, $1.type == "output";
+        assertEq("total: 5 {name: \"invoice\", lines: [1, 2, 3]}\n", (map $1.text, output).join(""));
+        assertEq(("stdout",), keys (map {$1.category: True}, output));
+        # the end of the program
+        assertEq(1, (select objs, $1.type == "end" && !$1.hasKey("exception")).size());
+        # the stop at the breakpoint comes before the result of the command that resumed the thread
+        int stop_pos = (map $#, objs, $1.type == "event" && $1.text =~ /^Paused at breakpoint/)[0];
+        int go_pos = (map $#, objs, $1.type == "result" && $1.command == "go")[0];
+        assertLt(go_pos, stop_pos);
+    }
+
+    # the stop at an exception gives the hint of a common pitfall
+    jsonExceptionTest() {
+        hash<auto> res = runQdbg("%modern\nsub f() {\n    *int src;\n    int count = src;\n}\nf();\n", (
+            "exception filter uncaught",
+            "go",
+            "go",
+            "quit",
+        ), ("--json",));
+        list<hash<auto>> objs = parseJsonLines(res.out);
+        *hash<auto> stop = (select objs, $1.type == "event" && $1.data.func == "exception")[0];
+        assertEq("RUNTIME-TYPE-ERROR", stop.data.exception.err);
+        assertEq("NO-VALUE-FOR-TYPE", stop.data.exception.arg.id);
+        assertRegex("^hint \\(NO-VALUE-FOR-TYPE\\): ", stop.hint);
+        # the exception that ends the program is given with its end, which is the last object of the program
+        hash<auto> end = (select objs, $1.type == "end")[0];
+        assertEq("RUNTIME-TYPE-ERROR", end.exception.err);
+        assertEq("NO-VALUE-FOR-TYPE", end.exception.arg.id);
+        assertRegex("hint \\(NO-VALUE-FOR-TYPE\\)", end.exception.text);
+        assertFalse(end.exception.hasKey("callstack"));
+    }
+
+    # a command that resumes a thread waits for it to pause only as long as the wait timeout; then the program is
+    # paused, also when no thread can pause
+    waitTimeoutTest() {
+        string loop = "%modern\nint n = 0;\nwhile (True) {\n    ++n;\n}\n";
+        hash<auto> res = runQdbg(loop, (
+            "options waittimeout",
+            "go",
+            "thread local n",
+            "options waittimeout set 0",
+            "options waittimeout",
+            "kill",
+            "quit",
+        ), ("--wait-timeout=300",));
+        assertEq(0, res.rc);
+        assertInOrder(res.out, (
+            "wait timeout: 300 ms",
+            "No thread paused within 300 ms; pausing the program",
+            "Paused at target.q:",
+            "integer n = ",
+            "wait timeout: 0 ms",
+        ));
+
+        # with JSON output, the result of the command tells that its time passed
+        res = runQdbg(loop, ("go", "kill", "quit"), ("--json", "--wait-timeout=300"));
+        list<hash<auto>> objs = parseJsonLines(res.out);
+        hash<auto> go = (select objs, $1.type == "result" && $1.command == "go")[0];
+        assertTrue(go.timedOut);
+        assertTrue(go.ok);
+        assertEq("No thread paused within 300 ms; pausing the program\n", go.output);
+        # the program paused before the result
+        assertTrue((select objs, $1.type == "event" && $1.text =~ /^Paused at target.q:/).size() > 0);
+        # the debugger ended the program
+        assertEq({"type": "end", "terminated": True}, (select objs, $1.type == "end")[0]);
+
+        # a thread that waits cannot pause until it continues
+        res = runQdbg("%modern\nQueue q();\nq.get();\n", ("go", "kill", "quit"), ("--wait-timeout=300",));
+        assertEq(0, res.rc);
+        assertInOrder(res.out, (
+            "No thread paused within 300 ms; pausing the program",
+            "No thread paused within 300 ms after the request; a thread that waits, as for a lock or I/O, pauses "
+                "when it continues",
+        ));
+
+        # negative: a negative wait timeout
+        res = runQdbg(loop, ("quit",), ("--wait-timeout=-1",));
+        assertNeq(0, res.rc);
+        assertRegex("the wait timeout cannot be negative: -1", res.out);
     }
 
     # a thread that continues when qdbg quits does not stop again, as at the end of the program

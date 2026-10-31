@@ -53,6 +53,11 @@ module DebugLinenoiseCmdLine {
     - with input that is not a terminal, a command that resumes a thread returns when a thread pauses, or when the
       thread stops being debugged (see \c waitsForStops)
     - \c history \c load and \c history \c save without a file name show an error
+    - JSON output (see @ref DebugCmdLine::DebugCommandLine::jsonOutput "jsonOutput"): the commands are read without
+      a prompt and written to
+      @ref DebugLinenoiseCmdLine::DebugLinenoiseCommandLine::outputFile "outputFile"
+    - the wait of a command that resumes a thread is limited by
+      @ref DebugCmdLine::DebugCommandLine::waitTimeout "waitTimeout"; then the program is paused
 
     @subsection dlcl_v0_1 v0.1
     - initial release
@@ -80,6 +85,15 @@ public namespace DebugLinenoiseCmdLine {
             bool stopPending;
             #! the thread that is waited for to stop; any thread if not set
             *int stopTid;
+            #! serializes the lines of the output; see writeOutputLine()
+            Mutex writeLock();
+        }
+
+        public {
+            #! the file of the output; stdout if not set, as when the output of the debugged program is captured
+            /** @since DebugLinenoiseCmdLine 0.2
+            */
+            *File outputFile;
         }
 
         #! Creates the object
@@ -112,16 +126,67 @@ public namespace DebugLinenoiseCmdLine {
         }
 
         #! Waits until a thread pauses, the thread that is waited for stops being debugged, or the program ends
+        /** With a wait timeout (see DebugCommandLine::waitTimeout), the program is paused when no thread pauses in
+            time, and the wait for the pause takes as long at most; a thread that waits, as for a lock or I/O, pauses
+            only when it continues
+        */
         waitForStop() {
+            bool paused;
             {
                 AutoLock al(stopLock);
-                while (stopPending) {
-                    stopCond.wait(stopLock);
-                }
+                paused = waitForStopIntern();
+            }
+            if (!paused) {
+                pauseAfterTimeout();
             }
             # when all threads stop together, the next command is processed when the other threads are requested to
             # stop
             waitForStopRequests();
+        }
+
+        #! Waits for the stop that is expected, as long as the wait timeout at most; returns @ref False if the time
+        #! passed, and the stop is no longer expected; stopLock must be held
+        private bool waitForStopIntern() {
+            if (!waitTimeout) {
+                while (stopPending) {
+                    stopCond.wait(stopLock);
+                }
+                return True;
+            }
+            int deadline = clock_getmicros() + waitTimeout * 1000;
+            while (stopPending) {
+                int remaining = deadline - clock_getmicros();
+                if (remaining <= 0) {
+                    stopPending = False;
+                    return False;
+                }
+                stopCond.wait(stopLock, microseconds(remaining));
+            }
+            return True;
+        }
+
+        #! Pauses the current program after no thread paused in time, and waits for the pause; see waitForStop()
+        private pauseAfterTimeout() {
+            setCommandTimedOut();
+            *softint pgm_id = getContextValue('programId');
+            if (!exists pgm_id) {
+                printfImpl("%s\n", tc.warning(sprintf("No thread paused within %d ms", waitTimeout)));
+                return;
+            }
+            printfImpl("%s\n", tc.warning(sprintf("No thread paused within %d ms; pausing the program",
+                waitTimeout)));
+            expectStop();
+            bool paused;
+            {
+                on_error cancelStop();
+                doCommand({"cmd": "program/" + pgm_id + "/stop"}, False);
+                AutoLock al(stopLock);
+                paused = waitForStopIntern();
+            }
+            if (!paused) {
+                printfImpl("%s\n", tc.warning(sprintf("No thread paused within %d ms after the request; a thread "
+                    "that waits, as for a lock or I/O, pauses when it continues", waitTimeout)));
+            }
         }
 
         #! Processes an event of the debug server: a thread that is waited for stops or stops being debugged
@@ -153,6 +218,14 @@ public namespace DebugLinenoiseCmdLine {
                 stopPending = False;
                 stopCond.broadcast();
             }
+        }
+
+        #! Writes a line of the output as it is, as a line of JSON output
+        /** @since DebugLinenoiseCmdLine 0.2
+        */
+        public writeOutputLine(string line) {
+            AutoLock al(writeLock);
+            (outputFile ?? stdout).print(line + "\n");
         }
 
         #! Returns all commands from the subclass plus history commands added by this module
@@ -299,7 +372,8 @@ public namespace DebugLinenoiseCmdLine {
             while (True) {
                 # the display expressions of a thread that stopped since the last command
                 showPendingDisplays();
-                *string line = Linenoise::line(ln_prompt);
+                # JSON output is for programs, which write commands without a prompt and without editing
+                *string line = jsonOutput ? stdin.readLine(False) : Linenoise::line(ln_prompt);
                 # the end of the input, or Ctrl+D or Ctrl+C in a terminal
                 if (!exists line) {
                     if (stdin.isTty()) {
@@ -307,7 +381,13 @@ public namespace DebugLinenoiseCmdLine {
                     }
                     break;
                 }
-                if (line != '') {
+                if (jsonOutput) {
+                    # an empty line does not repeat the last command for a program
+                    trim line;
+                    if (line == '') {
+                        continue;
+                    }
+                } else if (line != '') {
                     if (line !~ /^ /) {
                         Linenoise::history_add(line);
                     }
@@ -421,15 +501,21 @@ public namespace DebugLinenoiseCmdLine {
             }
         }
 
-        #! Outputs data to a linenoise-configured terminal
+        #! Outputs data to a linenoise-configured terminal; with JSON output, the text is a part of the output of the
+        #! current command; see DebugCommandLine::printJsonText()
         public printfImpl(string fmt, ...) {
             string outs = vsprintf(fmt, argv);
+            if (jsonOutput) {
+                printJsonText(outs);
+                return;
+            }
             # linenoise terminal has somehow redefined CRLF so force \r (TODO: what is Qore line delimiter on Windows ?)
             outs = replace(outs, "\n", "\r\n");
             if (outs !~ /\n$/) {
                 outs += "\r\n";
             }
-            stdout.print(outs);
+            AutoLock al(writeLock);
+            (outputFile ?? stdout).print(outs);
             # TODO: how refresh linenoise command line ?
         }
     }

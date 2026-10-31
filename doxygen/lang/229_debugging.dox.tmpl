@@ -66,6 +66,11 @@
     exceptions), and exceptions with given codes, such as \c FILE-OPEN-ERROR.  A client without filters stops at all exceptions; an exception that no client stops at
     does not stop the thread.
 
+    An exception that matches a @ref common_pitfalls "common pitfall" of %Qore, such as a variable that was declared
+    but not assigned or a call reference to a deleted object, is shown with a hint and corrective actions: by \c qdbg
+    and \c qdbg-remote when the thread stops at it, and by the debug adapter in the details of the exception (see
+    @ref Qore::RuntimeDiagnosticInfo "RuntimeDiagnosticInfo").
+
     @subsection debugging_stepping Stepping
 
     A stopped thread continues:
@@ -90,7 +95,8 @@
     The local variables of each frame of the call stack of a stopped thread and the global variables of its program
     are shown with their values; lists, hashes and objects are shown as trees of their elements, keys and members,
     also private ones, which are read when they are shown.  A variable, or an element, key or member of it, can be
-    set to the value of an expression.
+    set to the value of an expression.  A variable that was declared but not assigned, whose type requires a value, is
+    shown as such with its declared type, as <tt>int count = NOTHING (declared but not assigned)</tt>.
 
     Expressions are evaluated with the variables of a frame, for watches, hovers and debug consoles of IDEs and the
     \c eval command of the command-line debuggers.  An expression can refer to all code of the program, its functions,
@@ -218,8 +224,34 @@ exception filter uncaught
     |<tt>thread list</tt>, <tt>bt all</tt>|lists the threads of the current program, whether they are paused, and where they are, and shows their call stacks
     |<tt>program stop [tid]</tt>|stops the threads of the program, or one of them
     |<tt>options stopall set 0\|1</tt>|all threads of a program stop together when one of them stops, and continue together
+    |<tt>options waittimeout set ms</tt>|the time that a command that resumes a thread waits for a thread to pause, as with \c --wait-timeout
 
     See @ref debugcmdlineintro for all commands.
+
+    @subsection debugging_qdbg_json JSON Output for Programs and Coding Agents
+
+    With \c --json, \c qdbg and \c qdbg-remote write JSON Lines: one JSON object on each line, which a program, such
+    as a coding agent, reads as it writes commands to their input.  Commands are read without a prompt, and an empty
+    line is not a command.  The objects are:
+    - \c result: the result of each command, with the \c command, \c ok, the text that the command printed in
+      \c output, the \c error of a command that failed, \c timedOut if no thread paused in time (see below), and
+      \c quit for a command that ends the debugger
+    - \c event: an event of the debugger, with its name in \c event, its text, such as
+      <tt>Paused at breakpoint 1 at main.q:3 (thread 2)</tt>, in \c text, and its \c data, such as the file, line and
+      exception of a stop; the stop at an exception that matches a common pitfall gives its hint in \c hint
+    - \c output: the output of the program, with its \c category (\c stdout or \c stderr) and \c text; the output
+      of a program of \c qdbg is not written to the output of \c qdbg
+    - \c end (\c qdbg): the end of the program, with the \c exception that ended it, or \c terminated for a program
+      that the \c kill command ended
+    - \c connected (\c qdbg-remote): the connection to the debug server
+    - \c message and \c error: text that is printed outside of a command, and an error of the debug server
+
+    With \c --wait-timeout, a command that resumes a thread waits for a thread to pause as many milliseconds at most;
+    then the program is paused, and the command waits as long again for the pause.  A thread that waits, as for a lock
+    or I/O, pauses only when it continues; \c kill ends the program also then.
+    @code{.sh}
+printf 'break create 3\ngo\nlocals\ngo\nquit\n' | qdbg --json --wait-timeout=5000 myfile.q
+    @endcode
 
     @section debugging_remote Remote Debugging
 

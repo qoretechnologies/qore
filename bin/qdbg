@@ -132,6 +132,8 @@ class DebugWrapper {
             "session": "s,session=s",
             "color": "color",
             "no_color": "no-color",
+            "json": "json",
+            "wait_timeout": "wait-timeout=i",
         );
         DebugCommandLineLocal dcl;
         Logger logger;
@@ -191,6 +193,8 @@ class DebugWrapper {
             # the files of commands of the start, which are run at the start of the program
             list<string> cmd_files = DebugLinenoiseCommandLine::getStartupCommandFiles(opt);
             bool wait_start = dcl.waitsForStops || cmd_files;
+            # the thread that runs the program; the output of the program is captured until it ends
+            Counter running();
             if (exists fileName) {
                 Program pgm = dcl.dpc.createProgram(fileName, opt, ARGV);
                 logger.info("run program");
@@ -198,15 +202,31 @@ class DebugWrapper {
                     # the first command is processed when the program has attached to the debugger
                     dcl.expectStop();
                 }
+                running.inc();
                 background sub () {
+                    on_exit running.dec();
                     # a wait for the program ends with it
                     on_exit dcl.cancelStop();
                     try {
                         pgm.run();
+                        if (opt.json) {
+                            dcl.writeJson({"type": "end"});
+                        }
                     } catch (hash<ExceptionInfo> ex) {
                         # a program that the debugger ended ("kill"); the thread is no longer cancelled
                         if (DebugProgramControl::isTerminateException(ex)) {
                             clear_thread_cancel();
+                            if (opt.json) {
+                                dcl.writeJson({"type": "end", "terminated": True});
+                            }
+                            return;
+                        }
+                        # with JSON output, the exception that ends the program is given in the object of its end
+                        if (opt.json) {
+                            hash<auto> e = map {$1.key: $1.value}, ex.pairIterator(),
+                                $1.key != "callstack" && $1.key != "next";
+                            e.text = get_exception_string(ex);
+                            dcl.writeJson({"type": "end", "exception": e});
                             return;
                         }
                         rethrow;
@@ -214,6 +234,16 @@ class DebugWrapper {
                 }();
             }
             dcl.init(opt);
+            # with JSON output, the output of the program is given as JSON objects, and the debugger writes to the
+            # original stdout
+            if (opt.json && dcl.dpc.captureOutput(False)) {
+                dcl.outputFile = dcl.dpc.getOutputCapture().getStdout();
+            }
+            on_exit if (opt.json) {
+                # the output of the program until its end is given
+                running.waitForZero();
+                dcl.dpc.stopOutputCapture();
+            }
             if (wait_start) {
                 dcl.waitForStop();
             }
@@ -264,6 +294,12 @@ class DebugWrapper {
             "  -x, --execute=file           run the commands of the file at the start, after those of the init file;\n"
             "                               can be given more than once\n"
             "  --color, --no-color          always or never show colors; by default, colors are shown in a terminal\n"
+            "  --json                       write JSON Lines for programs such as coding agents: one object for each\n"
+            "                               command, event and output of the script; commands are read without a\n"
+            "                               prompt\n"
+            "  --wait-timeout=ms            the time that a command that resumes a thread waits for a thread to pause\n"
+            "                               when the input is not a terminal; then the script is paused (default: no\n"
+            "                               limit)\n"
             "\n"
             "A file of commands has one command on each line; lines that start with \"#\" are comments.  A command\n"
             "that resumes a thread waits until a thread pauses, and the first command that fails ends the file.  The\n"

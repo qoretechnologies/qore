@@ -8,6 +8,8 @@
 %requires DebugCmdLine
 %requires Util
 %requires QUnit
+%requires json
+%requires FsUtil
 
 %exec-class DebugCmdLineTest
 
@@ -39,6 +41,30 @@ class TestDebugCommandLine inherits DebugCommandLine {
     }
 }
 
+#! a command line with JSON output, whose lines are kept
+class TestJsonCommandLine inherits TestDebugCommandLine {
+    public {
+        list<hash<auto>> objects = ();
+    }
+
+    constructor() {
+        init({"json": True});
+    }
+
+    public printfImpl(string fmt, ...) {
+        string text = vsprintf(fmt, argv);
+        # the trace of processCmdLine() in @debug blocks, which --enable-debug enables, is not output of the commands
+        if (text =~ /^(line|exec):/) {
+            return;
+        }
+        printJsonText(text);
+    }
+
+    public writeOutputLine(string line) {
+        push objects, parse_json(line);
+    }
+}
+
 public class DebugCmdLineTest inherits QUnit::Test {
     constructor() : Test("DebugCmdLineTest", "1.0") {
         addTestCase("splitCmd tests", \splitCmdTests());
@@ -54,6 +80,9 @@ public class DebugCmdLineTest inherits QUnit::Test {
         addTestCase("eval command", \evalCommandTests());
         addTestCase("thread names", \threadNameTests());
         addTestCase("threads that start", \threadStartTests());
+        addTestCase("JSON output of commands", \jsonCommandTests());
+        addTestCase("JSON output of events", \jsonEventTests());
+        addTestCase("the wait timeout option", \waitTimeoutOptionTests());
         set_return_value(main());
     }
 
@@ -448,6 +477,112 @@ public class DebugCmdLineTest inherits QUnit::Test {
         dcl.printData({"type": DebugResponseType::Event, "cmd": DebugEventCmd::Output, "stamp": now_us(),
             "category": "stdout", "output": "line 1\nline 2"});
         assertEq(("line 1\nline 2",), dcl.outputLines);
+    }
+
+    # each command gives one result object with its output; the commands that a command runs are a part of it
+    jsonCommandTests() {
+        TestJsonCommandLine dcl();
+        assertFalse(dcl.tc.enabled);
+        assertTrue(dcl.processCmdLine("options waittimeout"));
+        assertEq(({"type": "result", "command": "options waittimeout", "ok": True, "output": "wait timeout: 0 ms\n"},),
+            dcl.objects);
+
+        # an unknown command
+        dcl.objects = ();
+        assertTrue(dcl.processCmdLine("nosuchcommand"));
+        assertEq(1, dcl.objects.size());
+        assertFalse(dcl.objects[0].ok);
+        assertEq("\"nosuchcommand\": unknown command", dcl.objects[0].error);
+        assertRegex("Unknown command", dcl.objects[0].output);
+
+        # a file of commands run by a command: one result, with the output of the commands of the file
+        TmpDir tmp("qore-dcl-test-");
+        string fn = tmp.path + "/cmds";
+        File f();
+        f.open2(fn, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("options waittimeout set 250\noptions waittimeout\n");
+        f.close();
+        dcl.objects = ();
+        assertTrue(dcl.processCmdLine("script " + fn));
+        assertEq(({"type": "result", "command": "script " + fn, "ok": True, "output": "wait timeout: 250 ms\n"},),
+            dcl.objects);
+
+        # a file whose command fails fails the command that runs it
+        f.open2(fn, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("options waittimeout\nnosuchcommand\noptions waittimeout\n");
+        f.close();
+        dcl.objects = ();
+        dcl.processCmdLine("script " + fn);
+        assertEq(1, dcl.objects.size());
+        assertFalse(dcl.objects[0].ok);
+        assertRegex("^wait timeout: 250 ms\n[\\s\\S]*Unknown command[\\s\\S]*the command failed",
+            dcl.objects[0].output);
+        assertEq(1, (dcl.objects[0].output =~ x/(wait timeout)/g).size());
+
+        # an error of the arguments of a command, which is raised without JSON output, is the error of the result
+        dcl.objects = ();
+        assertTrue(dcl.processCmdLine("options waittimeout set x"));
+        assertEq(({"type": "result", "command": "options waittimeout set x", "ok": False, "output": "",
+            "error": "options waittimeout set: parameter \"x\" is not integer"},), dcl.objects);
+
+        # text printed outside of a command is a message
+        dcl.objects = ();
+        dcl.printfImpl("some text\n");
+        assertEq(({"type": "message", "text": "some text\n"},), dcl.objects);
+    }
+
+    # events, the output of programs and errors are objects of their own
+    jsonEventTests() {
+        TestJsonCommandLine dcl();
+        dcl.printData({"type": DebugResponseType::Event, "cmd": DebugEventCmd::Output, "category": "stderr",
+            "output": "err\n"});
+        assertEq({"type": "output", "category": "stderr", "text": "err\n"}, dcl.objects[0]);
+
+        # a stop at an exception that matches a common pitfall, as received from a remote debug server
+        dcl.objects = ();
+        hash<auto> ev = {"type": DebugResponseType::Event, "cmd": DebugEventCmd::Interrupt, "pgmid": 1, "tid": 2,
+            "func": "exception", "file": "a.q", "line": 4, "localvars": {"2": {}},
+            "exception": {"err": "RUNTIME-TYPE-ERROR", "desc": "d", "arg": {"id": "NO-VALUE-FOR-TYPE", "hint": "h",
+                "suggestions": ("s",)}}};
+        dcl.printData(ev);
+        assertEq(1, dcl.objects.size());
+        hash<auto> o = dcl.objects[0];
+        assertEq("event", o.type);
+        assertEq("interrupt", o.event);
+        assertRegex("^Paused at exception RUNTIME-TYPE-ERROR: d at a.q:4 \\(thread 2\\)", o.text);
+        assertEq("hint (NO-VALUE-FOR-TYPE): h\n  - s", o.hint);
+        assertEq(4, o.data.line);
+        assertFalse(o.data.hasKey("localvars"));
+        assertFalse(o.data.hasKey("type"));
+
+        # an event that is not shown gives no object: the end of the code of a thread
+        dcl.objects = ();
+        dcl.printData(ev + {"func": "exit", "tid": 3});
+        assertEq((), dcl.objects);
+
+        # an error of the debug server
+        dcl.printData({"type": DebugResponseType::Error, "cmd": "x/y", "result": {"err": "E", "desc": "failed"}});
+        assertEq(({"type": "error", "command": "x/y", "error": "E: failed"},), dcl.objects);
+    }
+
+    waitTimeoutOptionTests() {
+        TestDebugCommandLine dcl();
+        assertEq(0, dcl.waitTimeout);
+        dcl.init({"wait_timeout": 500});
+        assertEq(500, dcl.waitTimeout);
+        dcl.processCmdLine("options waittimeout set 20");
+        assertEq(20, dcl.waitTimeout);
+        dcl.processCmdLine("options waittimeout");
+        assertEq("wait timeout: 20 ms\n", dcl.outputLines.last());
+        # the short form sets it
+        dcl.processCmdLine("options waittimeout 30");
+        assertEq(30, dcl.waitTimeout);
+        # negative: not a number, and a negative timeout of the command line
+        assertThrows("CMD-ARG-ERROR", "is not integer", \dcl.processCmdLine(), "options waittimeout set x");
+        assertEq(30, dcl.waitTimeout);
+        assertThrows("GETOPT-ERROR", "cannot be negative", \dcl.init(), {"wait_timeout": -1});
+        # without JSON output, results are not objects
+        assertFalse(dcl.jsonOutput);
     }
 
     # a thread that starts runs, unless all threads of its program are stopped together; then it stays stopped

@@ -27,6 +27,7 @@
 %requires(reexport) DebugUtil
 %requires Util
 %requires yaml
+%requires json
 
 %modern
 %no-debugging
@@ -53,6 +54,13 @@ module DebugCmdLine {
     - the results of commands and the values of variables are printed in YAML style (the \c "%Y" format of
       @ref Qore::printf() "printf()")
     - added the \c eval command, which evaluates an expression with the variables of the current frame
+    - JSON output for programs such as coding agents (see
+      @ref DebugCmdLine::DebugCommandLine::jsonOutput "jsonOutput"): each command gives a \c result object, and
+      events and the output of programs are objects of their own
+    - added the \c options \c waittimeout command and the \c wait_timeout option of
+      @ref DebugCmdLine::DebugCommandLine::init() "init()": a command that resumes a thread waits for a thread to
+      pause only as long, and then the program is paused (see
+      @ref DebugCmdLine::DebugCommandLine::waitTimeout "waitTimeout")
     - an exception that matches a common pitfall of %Qore, such as a variable that was declared but not assigned or a
       call reference to a deleted object, is shown with a hint when a thread stops at it, and a local variable that
       was declared but not assigned is shown as such with its declared type
@@ -126,6 +134,21 @@ public namespace DebugCmdLine {
             bool waitsForStops = False;
             #! Terminal color support for colorized output
             TerminalColor tc;
+            #! True if the output is JSON Lines, one JSON object per line, for programs such as coding agents; see
+            #! writeJson()
+            /** Each command gives a \c "result" object with its output, and events, the output of programs and other
+                messages are given as objects of their own
+
+                @since DebugCmdLine 0.1.3
+            */
+            bool jsonOutput = False;
+            #! The maximum time in milliseconds that a command that resumes a thread waits for a thread to pause; 0
+            #! waits until a thread pauses or the program ends; see the \c options \c waittimeout command
+            /** When the time passes, the program is paused, and the command waits again as long for the pause
+
+                @since DebugCmdLine 0.1.3
+            */
+            int waitTimeout = 0;
         }
 
         public {
@@ -146,6 +169,14 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
         }
 
         private {
+            #! the output of the commands that processCmdLine() processes with JSON output, by the TID of the thread
+            #! that processes the command; see processCmdLine()
+            hash<string, string> commandOutput = {};
+            #! serializes the access to commandOutput
+            Mutex commandOutputLock();
+            #! True if the wait of the command that processCmdLine() processes ended because its time passed; see
+            #! waitTimeout
+            bool commandTimedOut;
             #! the error of the last command that processCmdLine() processed, if any; see runCommandFile()
             *string commandError;
             #! the text of the arguments of the command that processCmdLine() processes, as it is written; see
@@ -437,6 +468,33 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
                                 'fallback': fallbackGetSetInt,
                                 'desc': 'Show or change whether all threads of a program pause when one of them '
                                     'pauses.',
+                            ),
+
+                            'waittimeout': (
+                                '>': {
+                                    'set': (
+                                        'desc': 'Choose the time in milliseconds that a command that resumes a thread '
+                                            'waits for a thread to pause, when the commands are read from a file or '
+                                            'from input that is not a terminal; then the program is paused (0: no '
+                                            'limit). Usage: options waittimeout set <milliseconds>',
+                                        '*': (
+                                            'validate': \DebugCommandLine::validateInt(),
+                                            'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
+                                                dcl.waitTimeout = int(pop path);
+                                            },
+                                        ),
+                                    ),
+                                    'get': (
+                                        'desc': 'Show the time in milliseconds that a command that resumes a thread '
+                                            'waits for a thread to pause (0: no limit).',
+                                        'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
+                                            printfImpl("wait timeout: %d ms\n", dcl.waitTimeout);
+                                        },
+                                    ),
+                                },
+                                'fallback': fallbackGetSetInt,
+                                'desc': 'Show or change the time that a command that resumes a thread waits for a '
+                                    'thread to pause.',
                             ),
 
                             'fullexceptioninfo': (
@@ -2878,7 +2936,109 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
             }
         }
 
+        #! Processes a command; with JSON output, the command gives a \c "result" object; see jsonOutput
+        /** @param line the command
+
+            @return @ref False if the command ends the debugger, as \c quit
+
+            The \c "result" object of a command has the keys:
+            - \c type: \c "result"
+            - \c command: the command
+            - \c ok: @ref True if the command succeeded
+            - \c output: the text that the command printed
+            - \c error: the error of the command, if it failed
+            - \c timedOut: @ref True if the command resumed a thread and no thread paused before the time of
+              waitTimeout passed, so that the program was paused
+            - \c quit: @ref True if the command ends the debugger
+
+            A command that another command runs, as \c script, gives no object of its own; its output is in the output
+            of the command that runs it
+        */
         public bool processCmdLine(string line) {
+            if (!jsonOutput) {
+                return processCmdLineIntern(line);
+            }
+            string tid = string(gettid());
+            {
+                AutoLock al(commandOutputLock);
+                # a command that another command runs is a part of it
+                if (commandOutput.hasKey(tid)) {
+                    al.unlock();
+                    return processCmdLineIntern(line);
+                }
+                commandOutput{tid} = "";
+            }
+            commandTimedOut = False;
+            bool rv = True;
+            string output;
+            try {
+                on_exit {
+                    AutoLock al(commandOutputLock);
+                    output = remove commandOutput{tid};
+                }
+                rv = processCmdLineIntern(line);
+            } catch (hash<ExceptionInfo> ex) {
+                # the error is given in the result
+                commandError = DebugCommandLine::getErrorText(ex);
+            }
+            hash<auto> res = {"type": "result", "command": line, "ok": !exists commandError, "output": output};
+            if (exists commandError) {
+                res.error = commandError;
+            }
+            if (commandTimedOut) {
+                res.timedOut = True;
+            }
+            if (!rv) {
+                res.quit = True;
+            }
+            writeJson(res);
+            return rv;
+        }
+
+        #! Writes an object as a line of JSON; see jsonOutput
+        /** @since DebugCmdLine 0.1.3
+        */
+        public writeJson(hash<auto> h) {
+            writeOutputLine(make_json(h));
+        }
+
+        #! Writes a line of the output; the default implementation calls printfImpl()
+        /** A subclass with JSON output writes the line as it is
+
+            @since DebugCmdLine 0.1.3
+        */
+        public writeOutputLine(string line) {
+            printfImpl("%s\n", line);
+        }
+
+        #! Passes text that is printed with JSON output to the command that the current thread processes
+        /** @param text the text that is printed
+
+            Text that is printed outside of a command is written as a \c "message" object with the text in \c text
+
+            @since DebugCmdLine 0.1.3
+        */
+        public printJsonText(string text) {
+            {
+                AutoLock al(commandOutputLock);
+                string tid = string(gettid());
+                if (commandOutput.hasKey(tid)) {
+                    commandOutput{tid} += text;
+                    return;
+                }
+            }
+            writeJson({"type": "message", "text": text});
+        }
+
+        #! Notes that the wait of the current command for a thread to pause ended because its time passed
+        /** @since DebugCmdLine 0.1.3
+        */
+        public setCommandTimedOut() {
+            commandTimedOut = True;
+        }
+
+        #! Processes a command; see processCmdLine()
+        private bool processCmdLineIntern(string line) {
             # the error of this command; a command that runs other commands, as a shortcut, reports theirs
             commandError = NOTHING;
             int last_param;
@@ -2987,6 +3147,10 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
         }
 
         public printData(auto data) {
+            if (jsonOutput) {
+                printJsonData(data);
+                return;
+            }
             string outs;
             if (data.typeCode() == NT_HASH) {
                 switch (data.type) {
@@ -3032,6 +3196,59 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
                 outs = sprintf("%Y", data);
             }
             printfImpl("%s\n", outs);
+        }
+
+        #! Writes data of the debug server as JSON; see jsonOutput
+        /** - the output of a program: a \c "output" object with \c category (\c "stdout" or \c "stderr") and
+              \c text
+            - an event that is shown: an \c "event" object with the \c event, the \c text that is shown for it,
+              and the \c data of the event, as the file and line of a stop and its exception; the hint of an exception
+              that matches a common pitfall of %Qore is given in \c hint
+            - an error: an \c "error" object with the \c command and the \c error
+        */
+        private printJsonData(auto data) {
+            if (data.typeCode() != NT_HASH) {
+                writeJson({"type": "message", "text": sprintf("%y", data)});
+                return;
+            }
+            switch (data.type) {
+                case DebugResponseType::Response:
+                    # an empty result, as of a command that resumes a thread, and an acknowledgement are not shown
+                    if (data.result.val() && data.result !== "ok") {
+                        printHuman(data.result);
+                    }
+                    return;
+                case DebugResponseType::Event: {
+                    if (data.cmd == DebugEventCmd::Output) {
+                        writeJson({"type": "output", "category": data.category ?? "stdout", "text": data.output});
+                        return;
+                    }
+                    *string text = formatEvent(data);
+                    # an event that is not shown, as the end of the code of a thread
+                    if (!exists text) {
+                        return;
+                    }
+                    hash<auto> h = {"type": "event", "event": data.cmd, "text": text,
+                        "data": data - ("type", "localvars")};
+                    if (data.cmd == DebugEventCmd::Interrupt && data.func == "exception") {
+                        *string hint = AbstractDebugControl::formatRuntimeDiagnostic(data.exception);
+                        if (hint) {
+                            h.hint = hint;
+                        }
+                    }
+                    writeJson(h);
+                    return;
+                }
+                case DebugResponseType::Error:
+                    writeJson({"type": "error", "command": data.cmd, "error": data.result.ex
+                        ? DebugCommandLine::getErrorText(data.result.ex)
+                        : sprintf("%s: %s", data.result.err, data.result.desc)});
+                    return;
+                case DebugResponseType::Thread:
+                    # no output for "thread" messages
+                    return;
+            }
+            writeJson({"type": "message", "text": sprintf("%y", data)});
         }
 
         #! Returns the text of an event of the debug server, such as <tt>Paused at breakpoint 1 at main.q:3 (thread 2)</tt>
@@ -3289,11 +3506,28 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
             }
         }
 
+        #! Initializes the debugger with the options of its command line
+        /** @param opt the options: \c json for JSON output (see jsonOutput), \c wait_timeout for the time that a
+            command that resumes a thread waits for it to pause (see waitTimeout), and \c color and \c no_color, which
+            always or never show colors
+
+            @throw GETOPT-ERROR the wait timeout is negative
+        */
         public init(hash<auto> opt) {
-            if (opt.color) {
+            # the text of JSON output has no colors
+            if (opt.json) {
+                jsonOutput = True;
+                tc = new TerminalColor(False);
+            } else if (opt.color) {
                 tc = new TerminalColor(True);
             } else if (opt.no_color) {
                 tc = new TerminalColor(False);
+            }
+            if (exists opt.wait_timeout) {
+                if (opt.wait_timeout < 0) {
+                    throw "GETOPT-ERROR", sprintf("the wait timeout cannot be negative: %d", opt.wait_timeout);
+                }
+                waitTimeout = opt.wait_timeout;
             }
         }
 
