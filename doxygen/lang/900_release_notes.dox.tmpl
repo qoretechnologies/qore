@@ -5370,6 +5370,10 @@ while (*binary chunk = input.read(65536)) {
       it, including AOT-compiled modules (.qmod) and source modules that AOT-compiled modules require, and objects
       held through opaque references by the Programs of source and AOT-compiled modules are released while all module
       Programs still exist
+    - an unhandled exception raised when a program ends, by a destructor run as the Program's data or the loaded
+      modules are deleted, was printed on stderr but the exit status stayed 0; \c qore and programs compiled with
+      \c qcc now exit with status 3 in this case, as for an unhandled exception in the main thread, unless the program
+      set a non-zero exit status (see @ref exception_handling)
     - a debugged program could get a deleted @ref Qore::ProgramControl "ProgramControl" object in a debugger callback,
       such as \c onAttach() or \c onStep(), when another thread released the last reference to the object at the
       same time: the object was cached and returned again until its destructor ran.  The callback failed, so the

@@ -462,9 +462,24 @@ void ExceptionSink::outOfMemory() {
     _Exit(1);
 }
 
+//! the number of unhandled exceptions reported in this thread by ExceptionSink::defaultExceptionHandler()
+static thread_local uint64_t thread_unhandled_exception_count = 0;
+
+uint64_t qore_get_thread_unhandled_exception_count() {
+    return thread_unhandled_exception_count;
+}
+
+int qore_teardown_exit_status(int rc, uint64_t count) {
+    return (!rc && thread_unhandled_exception_count != count) ? 3 : rc;
+}
+
 // static member function
 void ExceptionSink::defaultExceptionHandler(QoreException* e) {
     ExceptionSink xsink;
+
+    if (e) {
+        ++thread_unhandled_exception_count;
+    }
 
     QoreString nstr;
     {

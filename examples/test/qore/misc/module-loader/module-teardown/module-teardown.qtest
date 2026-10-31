@@ -14,6 +14,9 @@
 #   while the TdZzzUser Program still exists
 # The modules are loaded from their source, compiled to AOT modules (.qmod) with qcc, and with only one of them
 # compiled; a module directory with a compiled module has no source for it, so the compiled module is the one loaded.
+# An unhandled exception raised at teardown, when a module or the Program is deleted, makes the exit status 3, as one
+# raised by the program does, unless the program set a non-zero exit status (module-teardown-exit.q, TdThrowing.qm),
+# for qore and for a program compiled with qcc.
 
 %modern
 %no-child-restrictions
@@ -69,6 +72,9 @@ class ModuleTeardownTest inherits QUnit::Test {
                 }
             }
         }
+        addTestCase("exit status after an unhandled exception at teardown", \testTeardownExitStatus());
+        addTestCase("exit status of an AOT program after an unhandled exception at teardown",
+            \testAotTeardownExitStatus());
         set_return_value(main());
     }
 
@@ -133,16 +139,27 @@ class ModuleTeardownTest inherits QUnit::Test {
 
     #! runs the given child program with modules from the given directory
     private hash<TeardownRunResult> run(string module_dir, string how, bool cycle) {
+        return runQore(module_dir, "module-teardown-" + how + ".q", cycle ? ("cycle",) : ());
+    }
+
+    #! runs the given script of the test directory with the qore under test and the given arguments
+    private hash<TeardownRunResult> runQore(string module_dir, string script, list<string> args) {
+        return runCommand(module_dir, sprintf("%s -b %s%s", ModuleTeardownTest::shellQuote(qore_bin),
+            exec_mode ? "--exec-mode=" + exec_mode + " " : "",
+            ModuleTeardownTest::shellQuote(get_script_dir() + script)), args);
+    }
+
+    #! runs the given command with modules from the given directory and the given arguments
+    private hash<TeardownRunResult> runCommand(string module_dir, string command, list<string> args) {
         string err_file = tmp.path + DirSep + sprintf("run-%d.err", ++runs);
         on_exit if (is_file(err_file)) {
             unlink(err_file);
         }
-        string script = get_script_dir() + "module-teardown-" + how + ".q";
-        string cmd = sprintf("env LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s%s %s 2>%s; "
-            "echo \"rc=$?\"", ModuleTeardownTest::shellQuote(libqore_dir), ModuleTeardownTest::shellQuote(libqore_dir),
-            ModuleTeardownTest::shellQuote(module_dir), ModuleTeardownTest::shellQuote(qore_bin),
-            exec_mode ? "--exec-mode=" + exec_mode + " " : "", ModuleTeardownTest::shellQuote(script),
-            cycle ? "cycle" : "", ModuleTeardownTest::shellQuote(err_file));
+        string cmd = sprintf("env LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s %s 2>%s; "
+            "echo \"rc=$?\"", ModuleTeardownTest::shellQuote(libqore_dir),
+            ModuleTeardownTest::shellQuote(libqore_dir), ModuleTeardownTest::shellQuote(module_dir), command,
+            (foldl $1 + " " + $2, (map ModuleTeardownTest::shellQuote($1), args)) ?? "",
+            ModuleTeardownTest::shellQuote(err_file));
         string out = backquote(cmd);
         *list<*string> m = (out =~ x/^(.*)rc=([0-9]+)\n$/s);
         assertTrue(exists m, "exit status: " + out);
@@ -151,6 +168,55 @@ class ModuleTeardownTest inherits QUnit::Test {
             "out": m[0] ?? "",
             "err": is_file(err_file) ? ReadOnlyFile::readTextFile(err_file) : "",
         };
+    }
+
+    #! checks the exit status of a child program for an unhandled exception at teardown or none
+    private checkExitStatus(hash<TeardownRunResult> r, string what, int rc, *string err) {
+        assertEq(rc, r.rc, what + ": exit status; stderr: " + r.err);
+        assertEq("main done\n", r.out, what + ": stdout");
+        if (err) {
+            assertRegex(err, r.err, what + ": stderr");
+        } else {
+            assertEq("", r.err, what + ": stderr");
+        }
+    }
+
+    #! an unhandled exception at teardown makes the exit status of qore non-zero
+    testTeardownExitStatus() {
+        string dir = get_script_dir();
+        checkExitStatus(runQore(dir, "module-teardown-exit.q", ("none",)), "normal teardown", 0);
+        checkExitStatus(runQore(dir, "module-teardown-exit.q", ("module",)), "module teardown", 3,
+            "TD-TEARDOWN-ERROR: thrown at module teardown");
+        checkExitStatus(runQore(dir, "module-teardown-exit.q", ("program",)), "Program teardown", 3,
+            "TD-PROGRAM-TEARDOWN-ERROR: thrown when the Program is deleted");
+        # an exit status set by the program is kept
+        checkExitStatus(runQore(dir, "module-teardown-exit.q", ("none", "5")), "normal teardown, status 5", 5);
+        checkExitStatus(runQore(dir, "module-teardown-exit.q", ("module", "5")), "module teardown, status 5", 5,
+            "TD-TEARDOWN-ERROR: thrown at module teardown");
+    }
+
+    #! an unhandled exception at teardown makes the exit status of an AOT-compiled program non-zero
+    testAotTeardownExitStatus() {
+        string exe = tmp.path + DirSep + "module-teardown-exit";
+        string out = backquote(sprintf("env LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s "
+            "%s -o %s %s 2>&1", ModuleTeardownTest::shellQuote(libqore_dir),
+            ModuleTeardownTest::shellQuote(libqore_dir), ModuleTeardownTest::shellQuote(libqore_dir),
+            ModuleTeardownTest::shellQuote(get_script_dir()), ModuleTeardownTest::shellQuote(qcc_bin),
+            ModuleTeardownTest::shellQuote(exe), ModuleTeardownTest::shellQuote(get_script_dir()
+                + "module-teardown-exit.q")));
+        if (!is_file(exe)) {
+            testSkip(sprintf("qcc could not compile module-teardown-exit.q: %s", out));
+        }
+        on_exit unlink(exe);
+        string dir = get_script_dir();
+        string cmd = ModuleTeardownTest::shellQuote(exe);
+        checkExitStatus(runCommand(dir, cmd, ("none",)), "normal teardown", 0);
+        checkExitStatus(runCommand(dir, cmd, ("module",)), "module teardown", 3,
+            "TD-TEARDOWN-ERROR: thrown at module teardown");
+        checkExitStatus(runCommand(dir, cmd, ("program",)), "Program teardown", 3,
+            "TD-PROGRAM-TEARDOWN-ERROR: thrown when the Program is deleted");
+        checkExitStatus(runCommand(dir, cmd, ("module", "5")), "module teardown, status 5", 5,
+            "TD-TEARDOWN-ERROR: thrown at module teardown");
     }
 
     #! Returns the execution mode given on the command line, if any

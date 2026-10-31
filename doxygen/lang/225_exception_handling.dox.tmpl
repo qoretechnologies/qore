@@ -31,6 +31,12 @@
     @ref Qore::Thread::AutoGate "AutoGate class", the @ref Qore::Thread::AutoReadLock "AutoReadLock class", and the
     @ref Qore::Thread::AutoWriteLock "AutoWriteLock class".
 
+    An exception that is not caught is printed on stderr by the default exception handler.  When the program's main
+    thread ends with an unhandled exception, \c qore (and a program compiled with \c qcc) exits with status 3.  An
+    unhandled exception raised in the main thread when the program ends, by a destructor run as the Program's data or
+    the loaded modules are deleted, also makes the exit status 3 unless the program set a non-zero exit status; an
+    unhandled exception in a background thread does not change the exit status.
+
     @note A maximum limit of 20 exceptions can be raised at any time; excess exceptions over this limit will be
     ignored.
 */

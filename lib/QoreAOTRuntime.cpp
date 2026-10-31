@@ -10734,6 +10734,8 @@ extern "C" DLLEXPORT int qore_aot_run(
     qore_init(QL_MIT, nullptr, false, init_signals ? QLO_NONE : QLO_DISABLE_SIGNAL_HANDLING);
 
     int rc = 0;
+    // the number of unhandled exceptions reported in this thread before the teardown
+    uint64_t teardown_exception_count = qore_get_thread_unhandled_exception_count();
     // Use do-while(false) to ensure ~QoreProgramHelper() runs before qore_cleanup().
     // ~QoreProgramHelper creates a QoreForeignThreadHelper which accesses Qore TLS;
     // if qore_cleanup() is called first, TLS is gone and the destructor crashes.
@@ -10875,9 +10877,14 @@ extern "C" DLLEXPORT int qore_aot_run(
         }
 
         xsink.handleExceptions();
+        // an unhandled exception reported in this thread from here on is raised by the teardown: by the destructors
+        // run when the Program or the modules are deleted
+        teardown_exception_count = qore_get_thread_unhandled_exception_count();
     } while (false);
 
     qore_cleanup();
+    // an unhandled exception in the teardown makes the exit status non-zero, as one in the program does
+    rc = qore_teardown_exit_status(rc, teardown_exception_count);
     // a child process created with fork() whose modules requested it ends without running exit-time handlers, as
     // when the main program of qore and qr ends (see qore_fork_child_exit_quickly())
     qore_fork_child_quick_exit(rc);
@@ -11137,6 +11144,8 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
     qore_init(QL_MIT, nullptr, false, init_signals ? QLO_NONE : QLO_DISABLE_SIGNAL_HANDLING);
 
     int rc = 0;
+    // the number of unhandled exceptions reported in this thread before the teardown
+    uint64_t teardown_exception_count = qore_get_thread_unhandled_exception_count();
     // Use do-while(false) to ensure ~QoreProgramHelper() runs before qore_cleanup().
     // ~QoreProgramHelper creates a QoreForeignThreadHelper which accesses Qore TLS;
     // if qore_cleanup() is called first, TLS is gone and the destructor crashes.
@@ -11432,10 +11441,15 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
         }
 
         xsink.handleExceptions();
+        // an unhandled exception reported in this thread from here on is raised by the teardown: by the destructors
+        // run when the Program or the modules are deleted
+        teardown_exception_count = qore_get_thread_unhandled_exception_count();
 
     } while (false);
 
     qore_cleanup();
+    // an unhandled exception in the teardown makes the exit status non-zero, as one in the program does
+    rc = qore_teardown_exit_status(rc, teardown_exception_count);
     // a child process created with fork() whose modules requested it ends without running exit-time handlers, as
     // when the main program of qore and qr ends (see qore_fork_child_exit_quickly())
     qore_fork_child_quick_exit(rc);
@@ -12840,6 +12854,8 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
     qore_init(QL_MIT, nullptr, false, init_signals ? QLO_NONE : QLO_DISABLE_SIGNAL_HANDLING);
 
     int rc = 0;
+    // the number of unhandled exceptions reported in this thread before the teardown
+    uint64_t teardown_exception_count = qore_get_thread_unhandled_exception_count();
     // Use do-while(false) to ensure ~QoreProgramHelper() runs before qore_cleanup().
     // ~QoreProgramHelper creates a QoreForeignThreadHelper which accesses Qore TLS;
     // if qore_cleanup() is called first, TLS is gone and the destructor crashes.
@@ -13188,10 +13204,15 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
         }
 
         xsink.handleExceptions();
+        // an unhandled exception reported in this thread from here on is raised by the teardown: by the destructors
+        // run when the Program or the modules are deleted
+        teardown_exception_count = qore_get_thread_unhandled_exception_count();
 
     } while (false);
 
     qore_cleanup();
+    // an unhandled exception in the teardown makes the exit status non-zero, as one in the program does
+    rc = qore_teardown_exit_status(rc, teardown_exception_count);
     // a child process created with fork() whose modules requested it ends without running exit-time handlers, as
     // when the main program of qore and qr ends (see qore_fork_child_exit_quickly())
     qore_fork_child_quick_exit(rc);

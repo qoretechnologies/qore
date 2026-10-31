@@ -36,6 +36,7 @@
 #include <qore/ParseOptionMap.h>
 #include <qore/safe_dslist>
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/QoreException.h"
 #include "qore/intern/QoreJIT.h"
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/qore_debug_narrowing.h"
@@ -1594,6 +1595,8 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
    qore_ensure_standard_fds();
 
    int rc = 0;
+   // the number of unhandled exceptions reported in this thread before the teardown
+   uint64_t teardown_exception_count = 0;
 
    if (other_po)
       parse_options |= other_po;
@@ -1953,7 +1956,9 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
       qpgm->printIRFallbackReport();
 
 exit:
-      ;
+      // an unhandled exception reported in this thread from here on is raised by the teardown: by the destructors run
+      // when the Program or the modules are deleted
+      teardown_exception_count = qore_get_thread_unhandled_exception_count();
    }
    // run the default exception handler on any unhandled exceptions if necessary (again)
    // -- exceptions could have been thrown in the QoreProgram object's destructor
@@ -1961,6 +1966,9 @@ exit:
 
    // cleanup Qore subsystem (deallocate memory, etc)
    qore_cleanup();
+
+   // an unhandled exception in the teardown makes the exit status non-zero, as one in the program does
+   rc = qore_teardown_exit_status(rc, teardown_exception_count);
 
    // a child process created with fork() whose modules requested it ends without running exit-time handlers (see
    // qore_fork_child_exit_quickly())
