@@ -286,18 +286,43 @@ public class OpenAiModelCreateResponseDataProvider inherits OpenAiDataProviderCo
     }
 
     #! Processes tools in a response request
+    /** a tool is a hash with one key giving the tool kind; the API takes the value of that key.  The \c filters of a
+        file search tool are unwrapped with getFilter()
+    */
     private static hash<auto> getTool(hash<auto> tool) {
-        hash<auto> rv = tool.firstValue();
+        # the tool may be narrowed (ex: hash<string, hash<string, string>>), so the converted filter is set in a
+        # hash<auto!> local
+        hash<auto!> rv = tool.firstValue();
         if (rv.filters) {
-            rv.filters = getFilter($1);
+            rv.filters = getFilter(rv.filters);
         }
         return rv;
     }
 
-    private static hash<auto> getFilter(hash<auto> filter) {
-        hash<auto> rv = filter.firstValue();;
-        if (rv.filters) {
-            rv.filters = map getFilter($1), rv.filters;
+    #! Processes a file search tool filter in a response request
+    /** a filter is a hash with one key, \c comparison or \c compound, giving the filter kind; the API takes the
+        value of that key, and the operator of a compound filter, given as \c operator, in its \c type field.  The
+        filters of a compound filter are processed in the same way
+
+        @throw INVALID-REQUEST the filter is not a hash with exactly one of the keys \c comparison or \c compound
+    */
+    private static hash<auto> getFilter(auto filter) {
+        if (filter.typeCode() != NT_HASH || filter.size() != 1
+            || (filter.firstKey() != "comparison" && filter.firstKey() != "compound")
+            || filter.firstValue().typeCode() != NT_HASH) {
+            throw "INVALID-REQUEST", sprintf("a file search filter must be a hash with one key, \"comparison\" or "
+                "\"compound\", whose value is a hash; got: %y", filter);
+        }
+        # the filter may be narrowed (ex: hash<string, string>), so the converted values are set in a hash<auto!>
+        # local
+        hash<auto!> rv = filter.firstValue();
+        if (filter.firstKey() == "compound") {
+            if (exists rv.operator) {
+                rv.type = remove rv.operator;
+            }
+            if (rv.filters) {
+                rv.filters = map getFilter($1), rv.filters;
+            }
         }
         return rv;
     }
@@ -1021,14 +1046,14 @@ public class OpenAiModelFileSearchToolFilterDataType inherits HashDataType {
                 "display_name": "Comparison Filter",
                 "short_desc": "A comparison filter to apply to the search",
                 "desc": "A comparison filter to apply to the search",
-                "type": OpenAiModelFileSearchToolComparisonFilterDataType,
+                "type": OpenAiModelFileSearchToolComparisonFilterDataType.getOrNothingType(),
                 "exclusive_with": ("compound",),
             },
             "compound": {
                 "display_name": "Compound Filter",
                 "short_desc": "A compound filter to apply to the search",
                 "desc": "A compound filter to apply to the search",
-                "type": OpenAiModelFileSearchToolCompoundFilterDataType,
+                "type": OpenAiModelFileSearchToolCompoundFilterDataType.getOrNothingType(),
                 "exclusive_with": ("comparison",),
             },
         };
@@ -1344,28 +1369,28 @@ public class OpenAiModelToolDataType inherits HashDataType {
                 "display_name": "File Search Tool",
                 "short_desc": "A tool that searches for relevant content from uploaded files",
                 "desc": "A tool that searches for relevant content from uploaded files",
-                "type": OpenAiModelFileSearchToolDataType,
+                "type": OpenAiModelFileSearchToolDataType.getOrNothingType(),
                 "exclusive_with": ("function", "web_search", "computer_use", "mcp"),
             },
             "function": {
                 "display_name": "Function Tool",
                 "short_desc": "Defines a function in your own code the model can choose to call",
                 "desc": "Defines a function in your own code the model can choose to call",
-                "type": OpenAiModelFunctionToolDataType,
+                "type": OpenAiModelFunctionToolDataType.getOrNothingType(),
                 "exclusive_with": ("file_search", "web_search", "computer_use", "mcp"),
             },
             "web_search": {
                 "display_name": "Web Search Tool",
                 "short_desc": "This tool searches the web for relevant results to use in a response",
                 "desc": "This tool searches the web for relevant results to use in a response",
-                "type": OpenAiModelWebSearchToolDataType,
+                "type": OpenAiModelWebSearchToolDataType.getOrNothingType(),
                 "exclusive_with": ("file_search", "function", "computer_use", "mcp"),
             },
             "computer_use": {
                 "display_name": "Computer Use Tool",
                 "short_desc": "A tool that controls a virtual computer",
                 "desc": "A tool that controls a virtual computer",
-                "type": OpenAiModelComputerUseToolDataType,
+                "type": OpenAiModelComputerUseToolDataType.getOrNothingType(),
                 "exclusive_with": ("file_search", "function", "web_search", "mcp"),
             },
             "mcp": {

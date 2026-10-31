@@ -830,6 +830,11 @@ hash<auto> items = conversations.getChildProvider("items").getChildProvider("lis
       "OpenAiModelCreateResponseDataProvider::prepareRequest()" to accept a request whose values all have the same
       type, such as \c {"input": ({"text": "..."},)}; setting the model or the converted input raised
       \c RUNTIME-TYPE-ERROR
+    - fixed create-response requests with tools: a request with a \c function, \c web_search, or
+      \c computer_use tool, or with a \c compound file search filter, was rejected with \c MISSING-VALUE-ERROR, and
+      a file search tool with \c filters raised \c RUNTIME-OVERLOAD-ERROR; filters are now sent in the API format,
+      with the \c operator of a compound filter as its \c type, and a filter that is not a hash with exactly one of
+      the keys \c comparison or \c compound raises \c INVALID-REQUEST
 
     @subsection openaidataprovider_v1_4 OpenAiDataProvider v1.4
     - missing APIs and actions to handle image analysis

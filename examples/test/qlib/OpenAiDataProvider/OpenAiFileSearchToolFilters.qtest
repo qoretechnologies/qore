@@ -1,0 +1,222 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires RestClient
+%requires OpenAiDataProvider
+
+%exec-class OpenAiFileSearchToolFiltersTest
+
+#! Records the request instead of sending it; no network connection is made
+class FilterTestRestClient inherits OpenAiRestClient::OpenAiRestClientIo {
+    public {
+        *hash<auto> last_request;
+        string last_path;
+    }
+
+    constructor() : OpenAiRestClientIo({"token": "x"}) {
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body, *hash<auto> hdr) {
+        last_path = path;
+        last_request = body;
+        return <RestClient::RestResponseInfo>{
+            "status_code": 200,
+            "body": {
+                "id": "resp_test",
+                "status": "completed",
+                "output": ({"content": ({"text": "ok"},)},),
+            },
+        };
+    }
+}
+
+#! File search tool filters in create-response requests
+/** A file search tool's \c filters value is a comparison or a compound filter wrapped in a hash with the key
+    \c comparison or \c compound; the request sent to the API has the unwrapped filter, with the operator of a
+    compound filter in its \c type field, and the filters of a compound filter unwrapped in the same way
+*/
+public class OpenAiFileSearchToolFiltersTest inherits QUnit::Test {
+    constructor() : Test("OpenAiFileSearchToolFilters", "1.0", \ARGV) {
+        addTestCase("comparison filter", \comparisonFilterTest());
+        addTestCase("nested compound filters", \compoundFilterTest());
+        addTestCase("narrowed tool and filter hashes", \narrowedTest());
+        addTestCase("tools without filters", \noFilterTest());
+        addTestCase("request through the data provider", \providerRequestTest());
+        addTestCase("invalid filters", \invalidFilterTest());
+        set_return_value(main());
+    }
+
+    comparisonFilterTest() {
+        hash<auto> req = makeRequest({"comparison": {"key": "author", "type": "eq", "value": "jane"}});
+        hash<auto> tool = OpenAiModelCreateResponseDataProvider::prepareRequest(req).tools[0];
+        assertEq({
+            "type": "file_search",
+            "vector_store_ids": ("vs_1",),
+            "filters": {"key": "author", "type": "eq", "value": "jane"},
+        }, tool);
+        # the caller's request is not changed
+        assertEq({"comparison": {"key": "author", "type": "eq", "value": "jane"}}, req.tools[0].file_search.filters);
+    }
+
+    compoundFilterTest() {
+        hash<auto> req = makeRequest({
+            "compound": {
+                "operator": "and",
+                "filters": (
+                    {"comparison": {"key": "year", "type": "gte", "value": 2020}},
+                    {
+                        "compound": {
+                            "operator": "or",
+                            "filters": (
+                                {"comparison": {"key": "lang", "type": "eq", "value": "en"}},
+                                {"comparison": {"key": "draft", "type": "ne", "value": True}},
+                            ),
+                        },
+                    },
+                ),
+            },
+        });
+        hash<auto> tool = OpenAiModelCreateResponseDataProvider::prepareRequest(req).tools[0];
+        assertEq({
+            "type": "and",
+            "filters": (
+                {"key": "year", "type": "gte", "value": 2020},
+                {
+                    "type": "or",
+                    "filters": (
+                        {"key": "lang", "type": "eq", "value": "en"},
+                        {"key": "draft", "type": "ne", "value": True},
+                    ),
+                },
+            ),
+        }, tool.filters);
+        assertEq("file_search", tool.type);
+    }
+
+    narrowedTest() {
+        # every value in each of these literals has the same type, so each keeps a narrow type when passed in
+        hash<auto> req = {
+            "tools": (
+                {"file_search": {"filters": {"comparison": {"key": "k", "type": "eq", "value": "v"}}}},
+            ),
+        };
+        assertEq({"key": "k", "type": "eq", "value": "v"},
+            OpenAiModelCreateResponseDataProvider::prepareRequest(req).tools[0].filters);
+
+        req = {
+            "tools": (
+                {"file_search": {"filters": {"compound": {"filters": (
+                    {"comparison": {"key": "k", "type": "eq", "value": "v"}},
+                )}}}},
+            ),
+        };
+        assertEq({"filters": ({"key": "k", "type": "eq", "value": "v"},)},
+            OpenAiModelCreateResponseDataProvider::prepareRequest(req).tools[0].filters);
+    }
+
+    noFilterTest() {
+        hash<auto> req = {
+            "tools": (
+                {"file_search": {"type": "file_search", "vector_store_ids": ("vs_1",), "max_num_results": 5}},
+                {"function": {"type": "function", "name": "f", "parameters": {"type": "object"}}},
+            ),
+        };
+        assertEq((
+            {"type": "file_search", "vector_store_ids": ("vs_1",), "max_num_results": 5},
+            {"type": "function", "name": "f", "parameters": {"type": "object"}},
+        ), OpenAiModelCreateResponseDataProvider::prepareRequest(req).tools);
+    }
+
+    providerRequestTest() {
+        FilterTestRestClient rest();
+        OpenAiModelCreateResponseDataProvider prov(rest);
+        hash<auto> req = makeRequest({
+            "compound": {
+                "operator": "or",
+                "filters": (
+                    {"comparison": {"key": "a", "type": "eq", "value": 1}},
+                    {"comparison": {"key": "b", "type": "lt", "value": 2.5}},
+                ),
+            },
+        });
+        req.input = ({"input_item": {"role": "user", "content": ({"type": "input_text", "text": "find"},)}},);
+        hash<auto> resp = prov.doRequest(req);
+        assertEq("responses", rest.last_path);
+        assertEq("ok", resp.output_text);
+        assertEq({
+            "type": "file_search",
+            "vector_store_ids": ("vs_1",),
+            "filters": {
+                "type": "or",
+                "filters": (
+                    {"key": "a", "type": "eq", "value": 1},
+                    {"key": "b", "type": "lt", "value": 2.5},
+                ),
+            },
+        }, rest.last_request.tools[0]);
+
+        # a comparison filter and the other kinds of tools, each of which is one alternative of the tool type
+        req = makeRequest({"comparison": {"key": "a", "type": "eq", "value": "x"}});
+        req.tools += (
+            {"function": {"type": "function", "name": "f", "parameters": {"type": "object"}}},
+            {"web_search": {"type": "web_search_preview"}},
+        );
+        req.input = ({"input_item": {"role": "user", "content": ({"type": "input_text", "text": "find"},)}},);
+        prov.doRequest(req);
+        assertEq({"key": "a", "type": "eq", "value": "x"}, rest.last_request.tools[0].filters);
+        assertEq("function", rest.last_request.tools[1].type);
+        assertEq("f", rest.last_request.tools[1].name);
+        assertEq("web_search_preview", rest.last_request.tools[2].type);
+        assertEq(3, rest.last_request.tools.size());
+    }
+
+    invalidFilterTest() {
+        # a filter in a compound filter must be a hash
+        hash<auto> req = makeRequest({"compound": {"operator": "and", "filters": ("not-a-filter",)}});
+        assertThrows("INVALID-REQUEST", \OpenAiModelCreateResponseDataProvider::prepareRequest(), req);
+
+        # a filter is either a comparison or a compound filter, not both
+        req = makeRequest({
+            "comparison": {"key": "a", "type": "eq", "value": 1},
+            "compound": {"operator": "and", "filters": ()},
+        });
+        assertThrows("INVALID-REQUEST", \OpenAiModelCreateResponseDataProvider::prepareRequest(), req);
+
+        # the filter kind must be "comparison" or "compound"
+        req = makeRequest({"other": {"key": "a", "type": "eq", "value": 1}});
+        assertThrows("INVALID-REQUEST", \OpenAiModelCreateResponseDataProvider::prepareRequest(), req);
+
+        # the filter must be a hash
+        req = makeRequest({"comparison": "a == 1"});
+        assertThrows("INVALID-REQUEST", \OpenAiModelCreateResponseDataProvider::prepareRequest(), req);
+
+        # no request is sent for an invalid filter
+        FilterTestRestClient rest();
+        OpenAiModelCreateResponseDataProvider prov(rest);
+        req = makeRequest({
+            "comparison": {"key": "a", "type": "eq", "value": 1},
+            "compound": {"operator": "and", "filters": ()},
+        });
+        req.input = ({"input_item": {"role": "user", "content": ({"type": "input_text", "text": "find"},)}},);
+        assertThrows("INVALID-REQUEST", \prov.doRequest(), req);
+        assertNothing(rest.last_request);
+    }
+
+    private static hash<auto> makeRequest(hash<auto> filters) {
+        hash<auto!> tool = {
+            "type": "file_search",
+            "vector_store_ids": ("vs_1",),
+            "filters": filters,
+        };
+        return {
+            "tools": ({"file_search": tool},),
+        };
+    }
+}
