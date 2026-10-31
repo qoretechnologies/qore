@@ -1,0 +1,152 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires Mime
+%requires json
+%requires HttpServerUtil
+%requires HttpServer
+%requires AnthropicRestClient
+%requires BgeM3RestClient
+%requires ElevenLabsRestClient
+%requires GeminiRestClient
+%requires GrokRestClient
+%requires HuggingFaceRestClient
+%requires OpenAiRestClient
+%requires PerplexityRestClient
+%requires SGLangRestClient
+
+%exec-class LlmRestClientsNarrowedCallerHashTest
+
+#! Answers every request with one SSE event giving the request headers that the tests check
+class SseHeaderEchoHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse({"Content-Type": "text/event-stream"}, 200, "data: " + make_json({
+            "x-count": hdr."x-count",
+            "content-type": hdr."content-type",
+        }) + "\n\n");
+    }
+}
+
+#! Request and option header hashes whose values all have the same type
+/** A hash literal whose values all have the same type has a narrowed type, such as \c hash<string, int> for
+    <tt>{"X-Count": 1}</tt>; adding the \c Content-Type header of a streaming request, or the credential and
+    \c Accept headers of the client options, to such a hash raised RUNTIME-TYPE-ERROR
+*/
+class LlmRestClientsNarrowedCallerHashTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        string url;
+    }
+
+    constructor() : Test("LlmRestClientsNarrowedCallerHashTest", "1.0", \ARGV) {
+        addTestCase("AnthropicSseStreamIo with narrowed headers", \anthropicSse());
+        addTestCase("GeminiResponseSseStreamIo with narrowed headers", \geminiSse());
+        addTestCase("GrokResponseSseStreamIo with narrowed headers", \grokSse());
+        addTestCase("OpenAiResponseSseStreamIo with narrowed headers", \openAiSse());
+        addTestCase("PerplexityChatSseStreamIo with narrowed headers", \perplexitySse());
+        addTestCase("AnthropicRestClientBase::getOptions() with narrowed headers", \anthropicOptions());
+        addTestCase("BgeM3RestClientBase::getOptions() with narrowed headers", \bgeM3Options());
+        addTestCase("ElevenLabsRestClientBase::getOptions() with narrowed headers", \elevenLabsOptions());
+        addTestCase("GeminiRestClientBase::getOptions() with narrowed headers", \geminiOptions());
+        addTestCase("HuggingFaceRestClientBase::getOptions() with narrowed headers", \huggingFaceOptions());
+        addTestCase("SGLangRestClientBase::getOptions() with narrowed headers", \sglangOptions());
+
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": new Logger("test", LoggerLevel::getLevelInfo()),
+            "debug": True,
+        });
+        server.setHandler("sse", "", NOTHING, new SseHeaderEchoHandler());
+        server.setDefaultHandler("sse", new SseHeaderEchoHandler());
+        url = "http://localhost:" + server.addListener(<HttpListenerOptionInfo>{"node": "localhost",
+            "service": 0}).port;
+
+        set_return_value(main());
+
+        server.stop();
+    }
+
+    #! Returns its argument with the type it was given
+    static auto mk(auto h) {
+        return h;
+    }
+
+    #! Checks the request headers echoed in the first event of a stream
+    private checkEvent(object stream, string msg) {
+        *hash<SseMessageInfo> event = stream.readEvent(30s);
+        assertEq({"x-count": "1", "content-type": "application/json"}, parse_json(event.data), msg);
+    }
+
+    anthropicSse() {
+        assertEq("hash<string, int>", mk({"X-Count": 1}).fullType());
+        AnthropicRestClientIo rest({"url": url, "apikey": "key"});
+        checkEvent(new AnthropicSseStreamIo(rest, "messages", {"stream": True}, {"X-Count": 1}), "anthropic");
+    }
+
+    geminiSse() {
+        GeminiRestClientIo rest({"url": url, "apikey": "key"});
+        checkEvent(new GeminiResponseSseStreamIo(rest, "gemini-test", {"contents": ()}, {"X-Count": 1}),
+            "gemini");
+    }
+
+    grokSse() {
+        GrokRestClientIo rest({"url": url, "apikey": "key"});
+        checkEvent(new GrokResponseSseStreamIo(rest, "responses", {"stream": True}, {"X-Count": 1}), "grok");
+    }
+
+    openAiSse() {
+        OpenAiRestClientIo rest({"url": url, "apikey": "key"});
+        checkEvent(new OpenAiResponseSseStreamIo(rest, "responses", {"stream": True}, {"X-Count": 1}),
+            "openai");
+    }
+
+    perplexitySse() {
+        PerplexityRestClientIo rest({"url": url, "apikey": "key"});
+        checkEvent(new PerplexityChatSseStreamIo(rest, "chat/completions", {"stream": True}, {"X-Count": 1}),
+            "perplexity");
+    }
+
+    #! Client options whose headers all have the same type
+    static hash<auto> getOpts() {
+        return {"apikey": "key", "headers": {"X-Count": 1}};
+    }
+
+    anthropicOptions() {
+        assertEq("hash<string, int>", getOpts().headers.fullType());
+        assertEq({"X-Count": 1, "Accept": MimeTypeJson,
+            "anthropic-version": AnthropicRestClientBase::DefaultAnthropicVersion, "x-api-key": "key"},
+            AnthropicRestClientBase::getOptions(getOpts()).headers);
+    }
+
+    bgeM3Options() {
+        assertEq({"X-Count": 1, "Accept": MimeTypeJson, "Authorization": "Bearer key"},
+            BgeM3RestClientBase::getOptions(getOpts()).headers);
+    }
+
+    elevenLabsOptions() {
+        assertEq({"X-Count": 1, "xi-api-key": "key"}, ElevenLabsRestClientBase::getOptions(getOpts()).headers);
+    }
+
+    geminiOptions() {
+        assertEq({"X-Count": 1, "x-goog-api-key": "key"}, GeminiRestClientBase::getOptions(getOpts()).headers);
+    }
+
+    huggingFaceOptions() {
+        assertEq({"X-Count": 1, "Accept": MimeTypeJson, "Authorization": "Bearer key"},
+            HuggingFaceRestClientBase::getOptions(getOpts()).headers);
+        # headers given by the caller are kept
+        assertEq({"Accept": "text/plain", "Authorization": "Bearer key"},
+            HuggingFaceRestClientBase::getOptions({"apikey": "key", "headers": {"Accept": "text/plain"}}).headers);
+    }
+
+    sglangOptions() {
+        assertEq({"X-Count": 1, "Accept": MimeTypeJson, "Authorization": "Bearer key"},
+            SGLangRestClientBase::getOptions(getOpts()).headers);
+    }
+}

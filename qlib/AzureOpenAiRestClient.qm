@@ -134,6 +134,8 @@ hash<ChatResponse> r = p.chat((<ChatMessage>{"role": "user", "content": "hi"},))
 
     @subsection azureopenairestclient_v1_0 AzureOpenAiRestClient v1.0
     - initial release
+    - @ref AzureOpenAiRestClient::AzureOpenAiRestClient "AzureOpenAiRestClient" signs requests whose headers all have
+      the same type, such as a literal <tt>{"X-Count": 1}</tt>, when adding the authentication header
     - fixed @ref AzureOpenAiRestClient::AzureOpenAiRestClientBase::getOptions()
       "AzureOpenAiRestClientBase::getOptions()" and the client constructors to accept an option hash whose values all
       have the same type, such as \c {"url": "...", "api_key": "..."}; adding the headers raised
@@ -293,7 +295,11 @@ public class AzureOpenAiRestClient inherits RestClient::RestClient, AzureOpenAiR
     }
 
     private signRequest(string method, *string path, *data body, reference<hash<auto>> hdr) {
-        hdr += getAzureAuthHeader();
+        # the header is added in an "auto!" local: a caller's literal may be narrowed (e.g. hash<string, int> for
+        # {"X-Count": 1}), and adding the authentication header would throw
+        *hash<auto!> h = hdr;
+        h += getAzureAuthHeader();
+        hdr = h;
     }
 
     private AbstractRestClient copySelf(hash<auto> options) {

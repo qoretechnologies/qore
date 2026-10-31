@@ -122,6 +122,9 @@ stream.close();
     @section OpenAiRestClientRelnotes Release Notes
 
     @subsection OpenAiRestClientv1_2 OpenAiRestClient v1.2
+    - fixed @ref OpenAiRestClient::OpenAiResponseSseStreamIo "OpenAiResponseSseStreamIo" to accept request headers
+      whose values all have the same type, such as a literal <tt>{"X-Count": 1}</tt>; adding the \c Content-Type
+      header raised \c RUNTIME-TYPE-ERROR
     - the OpenAI-compatible LLM providers send Chat Completions and Responses requests, including streams, to paths
       beneath the path of the endpoint URL: a path that ends in \c /v1, with or without a trailing slash (such as
       that of \c https://gateway.example.com/project/v1), is used as it is, and \c /v1 is appended to any other
@@ -557,7 +560,9 @@ public class OpenAiResponseSseStreamIo {
         if (to) {
             timeout_ms = to;
         }
-        hash<auto> headers = hdr ?? {};
+        # the headers are set in an "auto!" local: a caller's literal may be narrowed (e.g. hash<string, int> for
+        # {"X-Count": 1}), and adding the Content-Type header would throw
+        hash<auto!> headers = hdr ?? {};
         *data payload;
         if (exists body) {
             payload = body.typeCode() == NT_STRING ? body : make_json(body);

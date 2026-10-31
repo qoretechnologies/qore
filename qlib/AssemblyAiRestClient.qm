@@ -112,6 +112,8 @@ printf("Transcript: %s\nSummary: %s\n", result.text, result.summary);
 
     @subsection AssemblyAiRestClientv1_0 AssemblyAiRestClient v1.0
     - initial release
+    - the client options accept a \c headers hash whose values all have the same type, such as a literal
+      <tt>{"X-Count": 1}</tt>, when adding the \c Authorization header
     - fixed @ref AssemblyAiRestClient::AssemblyAiRestConnection "AssemblyAiRestConnection" to report a
       configuration or option hash whose values all have the same type, such as \c {"timeout": 30}, with the real
       configuration error; adding the region or URL raised \c RUNTIME-TYPE-ERROR instead
@@ -171,7 +173,9 @@ public class AssemblyAiRestClientBase {
             }
             remove rv.region;
         }
-        hash<auto> headers = rv.headers ?? {};
+        # the headers are set in an "auto!" local: a caller's headers option may be narrowed (e.g.
+        # hash<string, int> for {"X-Count": 1}), and adding the Authorization header would throw
+        hash<auto!> headers = rv.headers ?? {};
         if (exists rv.apikey) {
             if (rv.apikey.typeCode() != NT_STRING || rv.apikey !~ /\S/
                     || rv.apikey =~ /[\r\n]/) {

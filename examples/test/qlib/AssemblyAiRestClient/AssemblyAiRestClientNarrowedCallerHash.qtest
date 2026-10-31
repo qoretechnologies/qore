@@ -20,6 +20,7 @@ class AssemblyAiRestClientNarrowedCallerHashTest inherits QUnit::Test {
     constructor() : Test("AssemblyAiRestClientNarrowedCallerHashTest", "1.0", \ARGV) {
         addTestCase("string-only connection configuration", \stringConfig());
         addTestCase("option hash without string values", \nonStringOptions());
+        addTestCase("client options with narrowed headers", \narrowedHeaders());
         set_return_value(main());
     }
 
@@ -46,5 +47,12 @@ class AssemblyAiRestClientNarrowedCallerHashTest inherits QUnit::Test {
         assertThrows("CONNECTION-OPTION-ERROR", "apikey", sub () {
             AssemblyAiRestConnection c({"name": "test", "url": "https://example.invalid", "opts": {"timeout": 30}});
         });
+    }
+
+    narrowedHeaders() {
+        # the headers are a hash<string, int>, which cannot take the string Authorization header
+        hash<auto> opts = {"apikey": "key", "headers": {"X-Count": 1}};
+        assertEq("hash<string, int>", opts.headers.fullType());
+        assertEq({"X-Count": 1, "Authorization": "key"}, AssemblyAiRestClientBase::getOptions(opts).headers);
     }
 }

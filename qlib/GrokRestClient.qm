@@ -121,6 +121,8 @@ stream.close();
 
     @subsection GrokRestClientv1_0 GrokRestClient v1.0
     - initial release
+    - @ref GrokRestClient::GrokResponseSseStreamIo "GrokResponseSseStreamIo" accepts request headers whose values all
+      have the same type, such as a literal <tt>{"X-Count": 1}</tt>, when adding the \c Content-Type header
 */
 
 %requires json
@@ -485,7 +487,9 @@ public class GrokResponseSseStreamIo {
         if (to) {
             timeout_ms = to;
         }
-        hash<auto> headers = hdr ?? {};
+        # the headers are set in an "auto!" local: a caller's literal may be narrowed (e.g. hash<string, int> for
+        # {"X-Count": 1}), and adding the Content-Type header would throw
+        hash<auto!> headers = hdr ?? {};
         *data payload;
         if (exists body) {
             payload = body.typeCode() == NT_STRING ? body : make_json(body);

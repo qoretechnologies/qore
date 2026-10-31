@@ -102,6 +102,8 @@ f.write(r.image);
 
     @subsection StabilityAiRestClientv1_1 StabilityAiRestClient v1.1
     - initial release
+    - the \c headers option and the request headers accept a hash whose values all have the same type, such as a
+      literal <tt>{"X-Count": 1}</tt>, when adding the credential and \c organization headers
     - fixed @ref StabilityAiRestClient::StabilityAiRestConnection "StabilityAiRestConnection" to report connection
       options whose values all have the same type, such as \c {"timeout": 30}, with the real configuration error;
       adding the ping options raised \c RUNTIME-TYPE-ERROR instead
@@ -184,11 +186,14 @@ public class StabilityAiRestClientBase {
                 delete rv{option};
             }
         }
-        rv.headers = map {$1.key: $1.value}, rv.headers.pairIterator(),
+        # the headers are set in an "auto!" local: a caller's headers option may be narrowed (e.g.
+        # hash<string, int> for {"X-Count": 1}), and adding the organization header would throw
+        *hash<auto!> hdr = map {$1.key: $1.value}, rv.headers.pairIterator(),
             !inlist($1.key.lwr(), ("authorization", "organization"));
         if (rv.organization.val()) {
-            rv.headers.organization = rv.organization;
+            hdr.organization = rv.organization;
         }
+        rv.headers = hdr;
         rv -= ("apikey", "organization", "token_api_key_header", "username", "password");
         return rv;
     }
@@ -223,13 +228,15 @@ public class StabilityAiRestClientBase {
     #! Adds the selected credentials only after validating the request target
     private hash<auto> authenticate(string endpoint, *string path, *hash<auto> hdr) {
         validateTarget(endpoint, path);
-        hdr = map {$1.key: $1.value}, hdr.pairIterator(),
+        # the headers are set in an "auto!" local: a caller's literal may be narrowed (e.g. hash<string, int> for
+        # {"X-Count": 1}), and adding the credentials would throw
+        *hash<auto!> rv = map {$1.key: $1.value}, hdr.pairIterator(),
             !inlist($1.key.lwr(), ("authorization", "organization"));
-        hdr.authorization = "Bearer " + api_secret;
+        rv.authorization = "Bearer " + api_secret;
         if (exists organization) {
-            hdr.organization = organization;
+            rv.organization = organization;
         }
-        return hdr;
+        return rv;
     }
 
     #! Prevents a copied client from forwarding credentials to another origin

@@ -11,6 +11,16 @@
 
 %exec-class StabilityAiRestClientNarrowedCallerHashTest
 
+#! Gives access to the request authentication of the client
+class AuthenticatingStabilityAiRestClient inherits StabilityAiRestClient {
+    constructor(hash<auto> opts) : StabilityAiRestClient(opts, True) {
+    }
+
+    hash<auto> auth(*hash<auto> hdr) {
+        return authenticate(getURL(), "/v1/user/balance", hdr);
+    }
+}
+
 #! Option and configuration hashes whose values all have the same type
 /** A hash literal whose values all have the same type, such as \c {"apikey": "..."}, has a narrowed type (here
     \c hash<string, string>); the library must still be able to add values of other types to its own copy and report
@@ -19,6 +29,8 @@
 class StabilityAiRestClientNarrowedCallerHashTest inherits QUnit::Test {
     constructor() : Test("StabilityAiRestClientNarrowedCallerHashTest", "1.0", \ARGV) {
         addTestCase("option hash without string values", \nonStringOptions());
+        addTestCase("narrowed headers option", \narrowedHeadersOption());
+        addTestCase("authenticating narrowed request headers", \authenticateNarrowedHeaders());
         set_return_value(main());
     }
 
@@ -34,5 +46,22 @@ class StabilityAiRestClientNarrowedCallerHashTest inherits QUnit::Test {
         assertThrows("CONNECTION-OPTION-ERROR", "apikey", sub () {
             StabilityAiRestConnection c({"name": "test", "url": "stability-ai://api.stability.ai", "opts": {"timeout": 30}});
         });
+    }
+
+    narrowedHeadersOption() {
+        # the headers are a hash<string, int>, which cannot take the string organization header
+        hash<auto> opts = {"apikey": "key", "organization": "org-1", "headers": {"X-Count": 1}};
+        assertEq("hash<string, int>", opts.headers.fullType());
+        assertEq({"X-Count": 1, "organization": "org-1"}, StabilityAiRestClientBase::getOptions(opts).headers);
+    }
+
+    authenticateNarrowedHeaders() {
+        # the request headers are a hash<string, int>, which cannot take the string credentials
+        assertEq("hash<string, int>", mk({"X-Count": 1}).fullType());
+        AuthenticatingStabilityAiRestClient client({"apikey": "key", "organization": "org-1"});
+        assertEq({"X-Count": 1, "authorization": "Bearer key", "organization": "org-1"}, client.auth({"X-Count": 1}));
+        # credentials given by the caller are replaced
+        assertEq({"authorization": "Bearer key", "organization": "org-1"},
+            client.auth({"Authorization": "Bearer other", "Organization": "org-2"}));
     }
 }

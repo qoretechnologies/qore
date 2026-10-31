@@ -12,6 +12,17 @@
 
 %exec-class AzureOpenAiRestClientNarrowedCallerHashTest
 
+#! Gives access to the request signer of the client
+class SigningAzureOpenAiRestClient inherits AzureOpenAiRestClient {
+    constructor(hash<auto> options) : AzureOpenAiRestClient(options, True) {
+    }
+
+    hash<auto> sign(hash<auto> hdr) {
+        signRequest("GET", "/models", NOTHING, \hdr);
+        return hdr;
+    }
+}
+
 #! Option and configuration hashes whose values all have the same type
 /** A hash literal whose values all have the same type, such as \c {"apikey": "..."}, has a narrowed type (here
     \c hash<string, string>); the library must still be able to add values of other types to its own copy and report
@@ -20,6 +31,7 @@
 class AzureOpenAiRestClientNarrowedCallerHashTest inherits QUnit::Test {
     constructor() : Test("AzureOpenAiRestClientNarrowedCallerHashTest", "1.0", \ARGV) {
         addTestCase("string-only client options", \stringClientOptions());
+        addTestCase("signing narrowed request headers", \signNarrowedHeaders());
         set_return_value(main());
     }
 
@@ -38,5 +50,12 @@ class AzureOpenAiRestClientNarrowedCallerHashTest inherits QUnit::Test {
         assertEq({"accept": MimeTypeJson}, opts.headers);
         assertEq("https://example.openai.azure.com", opts.url);
         assertFalse(opts.hasKey("api_key"));
+    }
+
+    signNarrowedHeaders() {
+        # the request headers are a hash<string, int>, which cannot take the string api-key header
+        assertEq("hash<string, int>", mk({"X-Count": 1}).fullType());
+        SigningAzureOpenAiRestClient client({"url": "https://example.openai.azure.com", "api_key": "test-key"});
+        assertEq({"X-Count": 1, "api-key": "test-key"}, client.sign({"X-Count": 1}));
     }
 }
