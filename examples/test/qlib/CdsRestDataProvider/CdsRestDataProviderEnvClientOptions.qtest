@@ -63,10 +63,12 @@ public class CdsRestDataProviderEnvClientOptionsTest inherits QUnit::Test {
     }
 
     testExecModes() {
-        # only the variables needed to run qore are passed on; their values are not printed
+        # only the variables needed to run qore are passed on: the search path and home directory, and the QORE_*
+        # variables that tell qore where its modules and include files are (e.g. QORE_MODULE_DIR, which the CI jobs
+        # need to find binary modules); none of them holds credentials, and their values are not printed
         list<string> pass = ();
-        foreach string var in (("PATH", "HOME")) {
-            if (exists ENV{var}) {
+        foreach string var in (keys ENV) {
+            if (var == "PATH" || var == "HOME" || var =~ /^QORE_[A-Z0-9_]+$/) {
                 pass += sprintf("%s=%s", var, quote(ENV{var}));
             }
         }
