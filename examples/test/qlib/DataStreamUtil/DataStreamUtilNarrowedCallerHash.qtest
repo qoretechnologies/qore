@@ -1,0 +1,120 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Mime
+%requires DataStreamUtil
+
+%exec-class DataStreamUtilNarrowedCallerHashTest
+
+#! Header hashes whose values all have the same type
+/** A hash literal whose values all have the same type has a narrowed type, such as \c hash<string, int> for
+    <tt>{"X-Count": 1}</tt>; the header helpers raised RUNTIME-TYPE-ERROR adding their string headers to such a hash
+*/
+class DataStreamUtilNarrowedCallerHashTest inherits QUnit::Test {
+    constructor() : Test("DataStreamUtilNarrowedCallerHashTest", "1.0", \ARGV) {
+        addTestCase("ds_set_chunked_headers() with narrowed headers", \dsChunked());
+        addTestCase("ds_set_non_chunked_headers() with narrowed headers", \dsNonChunked());
+        addTestCase("connect_set_chunked_headers() with narrowed headers", \connectChunked());
+        addTestCase("connect_set_non_chunked_headers() with narrowed headers", \connectNonChunked());
+        addTestCase("header helpers keep the caller's headers", \keepHeaders());
+        set_return_value(main());
+    }
+
+    #! Returns its argument with the type it was given
+    static auto mk(auto h) {
+        return h;
+    }
+
+    dsChunked() {
+        assertEq("hash<string, int>", mk({"X-Count": 1}).fullType());
+        hash<auto> hdr = {"X-Count": 1};
+        ds_set_chunked_headers(\hdr, "gzip", True);
+        assertEq({
+            "X-Count": 1,
+            "Content-Type": MimeTypeOctetStream,
+            "DataStream-Content-Type": DataStreamMimeTypeYaml + ";charset=utf-8",
+            "Accept": DataStreamMimeTypeYaml + "," + MimeTypeOctetStream,
+            "DataStream-Accept": DataStreamMimeTypeYaml,
+            "DataStream-Accept-Encoding": "gzip,bzip2,deflate",
+            "Accept-Encoding": "gzip,bzip2,deflate",
+            "DataStream-Content-Encoding": "gzip",
+            "Trailer": "DataStream-Error",
+            "Transfer-Encoding": "chunked",
+        }, hdr);
+
+        # a response: no request headers
+        assertEq("hash<string, bool>", mk({"X-Debug": True}).fullType());
+        hdr = {"X-Debug": True};
+        ds_set_chunked_headers(\hdr);
+        assertEq({
+            "X-Debug": True,
+            "Content-Type": MimeTypeOctetStream,
+            "DataStream-Content-Type": DataStreamMimeTypeYaml + ";charset=utf-8",
+            "Trailer": "DataStream-Error",
+            "Transfer-Encoding": "chunked",
+        }, hdr);
+    }
+
+    dsNonChunked() {
+        hash<auto> hdr = {"X-Count": 1};
+        ds_set_non_chunked_headers(\hdr, "bzip2", True);
+        assertEq({
+            "X-Count": 1,
+            "Content-Type": DataStreamMimeTypeYaml + ";charset=utf-8",
+            "Accept": DataStreamMimeTypeYaml + "," + MimeTypeOctetStream,
+            "DataStream-Accept": DataStreamMimeTypeYaml,
+            "DataStream-Accept-Encoding": "gzip,bzip2,deflate",
+            "Accept-Encoding": "gzip,bzip2,deflate",
+            "Content-Encoding": "bzip2",
+        }, hdr);
+
+        hdr = {"X-Debug": True};
+        ds_set_non_chunked_headers(\hdr);
+        assertEq({
+            "X-Debug": True,
+            "Content-Type": DataStreamMimeTypeYaml + ";charset=utf-8",
+        }, hdr);
+    }
+
+    connectChunked() {
+        hash<auto> hdr = {"X-Count": 1};
+        connect_set_chunked_headers(\hdr, "gzip", True);
+        assertEq({
+            "X-Count": 1,
+            "Content-Type": ConnectStreamMimeTypeYaml,
+            ConnectProtocolVersionHdr: ConnectProtocolVersionVal,
+            ConnectContentEncodingHdr: "gzip",
+            "Transfer-Encoding": "chunked",
+        }, hdr);
+    }
+
+    connectNonChunked() {
+        hash<auto> hdr = {"X-Count": 1};
+        connect_set_non_chunked_headers(\hdr, "gzip", True);
+        assertEq({
+            "X-Count": 1,
+            "Content-Type": ConnectMimeTypeYaml,
+            ConnectProtocolVersionHdr: ConnectProtocolVersionVal,
+            "Content-Encoding": "gzip",
+        }, hdr);
+    }
+
+    keepHeaders() {
+        # headers already given are kept, and a charset is added to the DataStream type
+        hash<auto> hdr = {"Content-Type": "application/x-yaml", "Accept": "text/x-yaml"};
+        ds_set_non_chunked_headers(\hdr, NOTHING, True);
+        assertEq("application/x-yaml;charset=utf-8", hdr."Content-Type");
+        assertEq("text/x-yaml", hdr.Accept);
+
+        hdr = {"Content-Type": "application/x-test", ConnectProtocolVersionHdr: "0"};
+        connect_set_non_chunked_headers(\hdr);
+        assertEq("application/x-test", hdr."Content-Type");
+        assertEq(ConnectProtocolVersionVal, hdr{ConnectProtocolVersionHdr});
+    }
+}

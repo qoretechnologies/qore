@@ -147,6 +147,12 @@ client.setMaxMessageSize(8 * 1024 * 1024);  # 8 MB
     @section datastreamclientrelnotes Release Notes
 
     @subsection datastreamclient_v1_5_1 DataStreamClient v1.5.1
+    - fixed requests with headers whose values all have the same type, such as a literal <tt>{"X-Count": 1}</tt>:
+      @ref DataStreamClient::DataStreamClient::sendRawStream() "sendRawStream()",
+      @ref DataStreamClient::DataStreamClient::getRawStream() "getRawStream()", a request signed by
+      \c sendAndDecodeResponse(), and the DataStream requests, which add their protocol headers, raised
+      \c RUNTIME-TYPE-ERROR, and so did @ref DataStreamClient::DataStreamClient::addDefaultHeaders()
+      "addDefaultHeaders()" with headers that are not strings, such as <tt>{"X-Count": 1}</tt>
     - a response is read as YAML with any YAML media type: \c "application/yaml" (RFC 9512),
       \c "application/x-yaml", \c "text/x-yaml" or \c "text/yaml"; requests are sent with \c "text/x-yaml", the
       YAML media type of the DataStream protocol, which the servers of earlier releases require
@@ -234,8 +240,10 @@ DataStreamClient ds({"url": "http://localhost:8001/rest"});
             do_not_connect) {
         hash<auto> local_opts = ds_process_opts(opts);
 
-        # build default DataStream-Accept-Encoding header from Accept-Encoding header if present
-        hash<auto> dh = DefaultHeaders;
+        # build default DataStream-Accept-Encoding header from Accept-Encoding header if present; the default
+        # headers are built in an "auto!" local: the default header constant has only string values, and default
+        # headers of other types, such as <tt>{"X-Count": 1}</tt>, can be added later
+        hash<auto!> dh = DefaultHeaders;
         if (headers."Accept-Encoding") {
             *string dae = ds_get_ds_accept_enc_header(headers."Accept-Encoding");
             if (dae) {
@@ -854,9 +862,13 @@ hash<auto> h = rest.sendRawStream(sender, "POST", uri_path, 20s);
     */
     hash<auto> sendRawStream(code scb, string method, *string path, timeout timeout_ms = 0,
             *reference<hash<auto>> info, *hash<auto> hdr) {
-        if (!hdr.Accept)
-            hdr.Accept = DataStreamMimeTypeYaml;
-        hash<auto> h = sendWithSendCallback(scb, method, path, hdr, timeout_ms, False, \info);
+        # the headers are set in an "auto!" local: a caller's literal may be narrowed (e.g. hash<string, int> for
+        # {"X-Count": 1}), and adding the Accept header would throw
+        *hash<auto!> req_hdr = hdr;
+        if (!req_hdr.Accept) {
+            req_hdr.Accept = DataStreamMimeTypeYaml;
+        }
+        hash<auto> h = sendWithSendCallback(scb, method, path, req_hdr, timeout_ms, False, \info);
         if (ds_is_yaml_type(h."content-type") && h.body) {
             h.body = parse_yaml(h.body.typeCode() == NT_BINARY ? h.body.toString("utf-8") : h.body);
         }
@@ -901,6 +913,9 @@ hash<auto> h = rest.getRawStream(recv, "GET", uri_path, 20s);
     */
     hash<auto> getRawStream(code recv_callback, string method, *string path, auto body, timeout timeout_ms = 0,
             *reference<hash<auto>> info, *hash<auto> hdr) {
+        # the headers are set in an "auto!" local: a caller's literal may be narrowed (e.g. hash<string, int> for
+        # {"X-Count": 1}), and adding the Content-Type header would throw
+        *hash<auto!> req_hdr = hdr;
         hash<auto> rvhdr;
         code mrecv_callback = sub (hash<auto> h) {
             if (h.hdr && !rvhdr)
@@ -909,9 +924,9 @@ hash<auto> h = rest.getRawStream(recv, "GET", uri_path, 20s);
         };
         if (exists body) {
             body = make_yaml(body);
-            hdr."Content-Type" = DataStreamMimeTypeYaml;
+            req_hdr."Content-Type" = DataStreamMimeTypeYaml;
         }
-        sendWithRecvCallback(mrecv_callback, body, method, path, hdr, timeout_ms, False, \info);
+        sendWithRecvCallback(mrecv_callback, body, method, path, req_hdr, timeout_ms, False, \info);
         return rvhdr;
     }
 
@@ -1108,11 +1123,15 @@ rest.setContentEncoding("gzip");
         }
 
         if (signer && shdr.val()) {
-            hdr{shdr} = signer({
+            # the signature is added in an "auto!" local: a caller's literal may be narrowed (e.g.
+            # hash<string, int> for {"X-Count": 1}), and adding the signature string would throw
+            hash<auto!> signed_hdr = hdr;
+            signed_hdr{shdr} = signer({
                 "path": path,
                 "body": body,
                 "hdr": hdr - shdr,
             });
+            hdr = signed_hdr;
         }
 
         sendWithRecvCallback(recv_callback, body, m, path, hdr, getTimeout(), False, \info);
