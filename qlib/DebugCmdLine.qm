@@ -70,6 +70,9 @@ module DebugCmdLine {
       one, with its elements, keys and members, or sets it to the value of an expression
     - added the \c options \c stopall option: all threads of a program stop when one of them stops, and continue
       together
+    - added the \c display and \c undisplay commands: expressions that are shown at each stop
+    - <tt>thread var <path> from <index></tt> shows the elements, keys or members of a value from an index, and the
+      call stack gives the columns of the statements of its frames
     - fixed \c qdbg not ending when it quits while a thread of the program is stopped before the end of the program
 
     @subsection dcl_v0_1_2 v0.1.2
@@ -98,6 +101,9 @@ public namespace DebugCmdLine {
             const MaxShownChildren = 100;
             #! True if all threads of a program stop when one of them stops, and continue together; see processEvent()
             bool stopAllThreads;
+            #! True if the commands are read from input that is not a terminal, and a command that resumes a thread
+            #! returns when it stops again; the display expressions are then shown before the next command
+            bool waitsForStops;
             #! Terminal color support for colorized output
             TerminalColor tc;
         }
@@ -122,6 +128,13 @@ public namespace DebugCmdLine {
             #! incremented when stopped threads continue, so that the threads are no longer requested to stop for an
             #! earlier stop; see stopOtherThreads()
             int stopAllGeneration;
+
+            #! the expressions that are shown at each stop; see the \c display command
+            list<string> displays = ();
+            #! the thread whose display expressions are shown before the next command; see showPendingDisplays()
+            *int pendingDisplayTid;
+            #! serializes the access to the display expressions
+            Mutex displayLock();
         }
 
         #! Creates the object with optional logger and color control
@@ -1040,6 +1053,27 @@ public namespace DebugCmdLine {
                         'desc': 'statement related commands',
                     ),
 
+                    'display': (
+                        'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
+                            if (args) {
+                                dcl.addDisplay(args.join(" "));
+                            } else {
+                                dcl.listDisplays();
+                            }
+                        },
+                        'desc': 'add an expression that is shown with the variables of the stopped thread at each stop, '
+                            'or list them; args: [expression]',
+                    ),
+                    'undisplay': (
+                        'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
+                            if (args && args[0] !~ /^[0-9]+$/) {
+                                throw "DEBUG-COMMAND", "expecting the number of a display expression";
+                            }
+                            dcl.removeDisplay(args ? int(args[0]) : NOTHING);
+                        },
+                        'desc': 'remove a display expression, or all of them; args: [number]',
+                    ),
+
                     'exception': (
                         '>': (
                             'filter': (
@@ -1171,9 +1205,9 @@ public namespace DebugCmdLine {
                                     dcl.variableCommand(args);
                                 },
                                 'desc': 'show a variable, or an element, key or member of it, with its elements, keys '
-                                    'and members, also private ones, or set it to the value of an expression; the '
-                                    'variable is a local variable of the current frame or a global variable, args: '
-                                    'name[.member|[index]|{key}...] [= expression]',
+                                    'and members, also private ones, from the given index, or set it to the value of an '
+                                    'expression; the variable is a local variable of the current frame or a global '
+                                    'variable, args: name[.member|[index]|{key}...] [from index | = expression]',
                             ),
                             'debug': (
                                 '*': (
@@ -1465,6 +1499,13 @@ public namespace DebugCmdLine {
         */
         public variableCommand(softlist args) {
             string text = args.join(" ");
+            # the index of the first element, key or member that is shown
+            int start = 0;
+            *list<*string> page = (text =~ x/^\s*([^=\s]+)\s+from\s+([0-9]+)\s*$/);
+            if (page) {
+                text = page[0];
+                start = int(page[1]);
+            }
             *list<*string> m = (text =~ x/^\s*([^=\s]+)\s*(?:=\s*(.*))?$/s);
             if (!m) {
                 throw "DEBUG-COMMAND", "syntax: thread var name[.member|[index]|{key}...] [= expression]";
@@ -1492,15 +1533,16 @@ public namespace DebugCmdLine {
             hash<auto> r = doCommand(cmd, False).result;
             # the elements, keys and members of a list, hash or object
             if (r.indexed || r.named) {
-                r = doCommand(cmd + {"children": True, "count": MaxShownChildren}, False).result;
+                r = doCommand(cmd + {"children": True, "start": start, "count": MaxShownChildren}, False).result;
             }
             printfImpl("%s: %s %s\n", m[0], r.type, r.value);
             foreach hash<auto> c in (r.children) {
                 printfImpl("  %s: %s %s\n", c.name, c.type, c.value);
             }
             int total = r.indexed ?? r.named ?? 0;
-            if (total > r.children.size()) {
-                printfImpl("  ... %d more\n", total - r.children.size());
+            int rest = total - start - r.children.size();
+            if (rest > 0) {
+                printfImpl("  ... %d more (thread var %s from %d)\n", rest, m[0], start + r.children.size());
             }
         }
 
@@ -1578,6 +1620,82 @@ public namespace DebugCmdLine {
             doCommand(data, True);
         }
 
+        #! Adds a display expression and shows it for the current thread, if it is stopped
+        public addDisplay(string expr) {
+            {
+                AutoLock al(displayLock);
+                push displays, expr;
+            }
+            *softint tid = getContextValue("threadId");
+            if (exists tid) {
+                showDisplays(tid, displays.size() - 1);
+            }
+        }
+
+        #! Removes a display expression by its number, or all of them
+        public removeDisplay(*int n) {
+            AutoLock al(displayLock);
+            if (!exists n) {
+                displays = ();
+                return;
+            }
+            if (n < 1 || n > displays.size()) {
+                throw "DEBUG-COMMAND", sprintf("there is no display expression %d", n);
+            }
+            splice displays, n - 1, 1;
+        }
+
+        #! Lists the display expressions
+        public listDisplays() {
+            list<string> l;
+            {
+                AutoLock al(displayLock);
+                l = displays;
+            }
+            if (!l) {
+                printfImpl("no display expressions\n");
+            }
+            foreach string e in (l) {
+                printfImpl("%d: %s\n", $# + 1, e);
+            }
+        }
+
+        #! Shows the display expressions for a stopped thread
+        /** @param tid the thread
+            @param only the index of the only expression that is shown, if given
+        */
+        public showDisplays(int tid, *int only) {
+            list<string> l;
+            {
+                AutoLock al(displayLock);
+                l = displays;
+            }
+            foreach string e in (l) {
+                if (exists only && $# != only) {
+                    continue;
+                }
+                try {
+                    *hash<auto> r = doCommand({"cmd": "thread/evaluate", "tid": tid, "expression": e}, False)
+                        .result;
+                    printfImpl("%d: %s = %s\n", $# + 1, e, r.value);
+                } catch (hash<ExceptionInfo> ex) {
+                    printfImpl("%d: %s = <%s>\n", $# + 1, e, ex.desc);
+                }
+            }
+        }
+
+        #! Shows the display expressions of the thread that stopped since the last command, before the next command
+        public showPendingDisplays() {
+            *int tid;
+            {
+                AutoLock al(displayLock);
+                tid = remove pendingDisplayTid;
+            }
+            if (exists tid) {
+                showDisplays(tid);
+            }
+        }
+
         #! Notes a stop of a thread that the user requested, so that it is not taken for a stop of another thread
         public noteUserStop(softstring pgmId, softstring tid) {
             AutoLock al(stopAllLock);
@@ -1605,6 +1723,17 @@ public namespace DebugCmdLine {
             }
             if (data.cmd != DebugEventCmd::Interrupt) {
                 return;
+            }
+            # the display expressions of the stopped thread
+            {
+                AutoLock al(displayLock);
+                if (displays) {
+                    if (waitsForStops) {
+                        pendingDisplayTid = data.tid;
+                    } else {
+                        background showDisplays(data.tid);
+                    }
+                }
             }
             bool requested;
             bool userStop;
@@ -1715,6 +1844,11 @@ public namespace DebugCmdLine {
                 loc += sprintf("%s", lh.file ?? "<unknown>");
                 if (lh.line > 0) {
                     loc += sprintf(":%d", lh.line);
+                    # the 1-based character column of the statement of the frame, if known
+                    if (lh.column >= 0 && exists lh.column && lh.file) {
+                        loc += sprintf(":%d", DebugCommandLine::getCharColumn(getSourceLine(lh.file, lh.line),
+                            lh.column));
+                    }
                 }
             }
             if (lh.endline > 0) {

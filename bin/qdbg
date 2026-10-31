@@ -230,6 +230,7 @@ class DebugWrapper {
             }
             # with input that is not a terminal (a script), the commands are processed when the program is stopped
             dcl.waitForStops = !stdin.isTty();
+            dcl.waitsForStops = dcl.waitForStops;
             if (exists fileName) {
                 Program pgm = dcl.dpc.createProgram(fileName, opt, ARGV);
                 logger.info("run program");

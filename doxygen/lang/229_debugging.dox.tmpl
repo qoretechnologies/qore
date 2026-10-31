@@ -174,9 +174,10 @@ qdbg myfile.q < commands.txt
     |<tt>stmt line [file] line</tt>|lists the statements of a line with their columns
     |<tt>go run\|step\|stepover\|untilreturn [statement]</tt>|resumes the current thread, optionally until a statement
     |<tt>thread targets</tt>, <tt>go stepinto n</tt>|lists the calls of the current statement, and steps into one of them
-    |<tt>thread bt</tt>, <tt>frame n</tt>|shows the call stack of the current thread, and selects a frame
+    |<tt>bt</tt>, <tt>frame n</tt>|shows the call stack of the current thread with the lines and columns of its statements, and selects a frame
     |<tt>thread local [name [value]]</tt>|lists the local variables of the current frame, or shows or sets one
-    |<tt>thread var path [= expression]</tt>|shows a variable or an element, key or member of it, as in <tt>h.lines[1]</tt> or <tt>h{key}</tt>, with its elements, keys and members, or sets it to the value of an expression
+    |<tt>thread var path [from index \| = expression]</tt>|shows a variable or an element, key or member of it, as in <tt>h.lines[1]</tt> or <tt>h{key}</tt>, with its elements, keys and members, also from an index, or sets it to the value of an expression
+    |<tt>display [expression]</tt>, <tt>undisplay [n]</tt>|adds an expression that is shown at each stop, or lists them, and removes one or all of them
     |<tt>eval expression</tt>|evaluates an expression with the variables of the current frame
     |<tt>program stop [tid]</tt>|stops the threads of the program, or one of them
     |<tt>options stopall set 0\|1</tt>|all threads of a program stop together when one of them stops, and continue together
