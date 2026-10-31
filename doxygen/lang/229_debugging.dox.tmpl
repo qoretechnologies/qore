@@ -175,6 +175,18 @@ qdbg myfile.q -my -program params
 qdbg myfile.q < commands.txt
     @endcode
 
+    Files of commands have one command on each line; lines that start with \c # are comments.  \c qdbg and
+    \c qdbg-remote run the commands of the init file, \c .qdbginit in the home folder, at their start, unless \c -n is
+    given, or of the file of \c -i instead, and then the files of \c -x, and continue with the commands of their input;
+    the \c script command runs a file of commands at the prompt.  A command of a file that resumes a thread waits until
+    a thread pauses, and the first command that fails ends the file.  A file of commands in the current folder is not
+    run unless it is given with \c -i or \c -x:
+    @code{.sh}
+# ~/.qdbginit
+options stopall set 1
+exception filter uncaught
+    @endcode
+
     \c qdbg tells what happens in plain words, such as <tt>Paused at breakpoint 1 at main.q:3 (thread 2)</tt>, followed
     by the line of code.  A thread that the program starts runs until it reaches a breakpoint, as without the debugger,
     and a thread that pauses while the current thread runs becomes the current thread; the end of a thread is shown,
@@ -187,6 +199,8 @@ qdbg myfile.q < commands.txt
     |<tt>b location</tt>|adds a breakpoint, as <tt>break create</tt>
     |<tt>up [n]</tt>, <tt>down [n]</tt>|selects the frame that called the current frame, or the one that it called, and shows its line
     |<tt>kill</tt>|ends the current program: its threads end with a \c THREAD-CANCELLED exception, also those that wait
+    |<tt>script file</tt>|runs the commands of a file
+    |<tt>session save\|load file</tt>|saves the breakpoints, the display expressions, the exception filters and the \c stopall option to a file, or loads them, as with \c -s
     |<tt>break create [file] line[:column]</tt>|creates a breakpoint on a statement of a line; the column is counted in characters from 1
     |<tt>break create function[(types)]</tt>|creates a breakpoint on the start of a function
     |<tt>break list</tt>|lists the breakpoints of the current program with their conditions, hit conditions, log messages and number of hits

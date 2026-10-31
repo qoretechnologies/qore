@@ -31,7 +31,7 @@
 %no-debugging
 
 module DebugLinenoiseCmdLine {
-    version = "0.1";
+    version = "0.2";
     desc = "user module providing common Linenoise command line debug stuff";
     author = "Tomas Mandys <tomas.mandys@qoretechnologies.org>";
     url = "http://qoretechnologies.org";
@@ -46,6 +46,14 @@ module DebugLinenoiseCmdLine {
     editing/history support for %Qore debugging; it is dependent on the binary
     <a href="https://github.com/qoretechnologies/module-linenoise">linenoise</a> module.
 
+    @subsection dlcl_v0_2 v0.2
+    - files of commands: the init file (\c .qdbginit in the home folder, or the file of \c -i, unless \c -n is given)
+      and the files of \c -x are run at the start; see
+      @ref DebugLinenoiseCmdLine::DebugLinenoiseCommandLine::getStartupCommandFiles() "getStartupCommandFiles()"
+    - with input that is not a terminal, a command that resumes a thread returns when a thread pauses, or when the
+      thread stops being debugged (see \c waitsForStops)
+    - \c history \c load and \c history \c save without a file name show an error
+
     @subsection dlcl_v0_1 v0.1
     - initial release
 */
@@ -57,6 +65,9 @@ public namespace DebugLinenoiseCmdLine {
         public {
             string ln_prompt;
             const defaultHistoryFileName = '.qdbg.history';
+            #! the name of the file of commands in the home folder that the debugger runs at its start; see
+            #! getStartupCommandFiles()
+            const defaultInitFileName = '.qdbginit';
             const defaultIndent = "  ";
         }
 
@@ -320,6 +331,62 @@ public namespace DebugLinenoiseCmdLine {
                     printfImpl("Cannot save history to %y (%s)\n", historyFileName, ex.desc);
                 }
             }
+        }
+
+        #! Returns the files of commands that the debugger runs at its start
+        /** @param opt the options of the command line: \c init_file (\c -i: a file of commands instead of the file in
+            the home folder), \c no_init (\c -n: no such file), and \c execute (\c -x: files of commands that are run
+            after it)
+
+            @return the init file, which is the file of \c -i or \c .qdbginit in the home folder if it exists, unless
+            \c no_init is set, and the files of \c execute
+
+            @since DebugLinenoiseCmdLine 0.2
+        */
+        static list<string> getStartupCommandFiles(hash<auto> opt) {
+            list<string> rv = ();
+            if (!opt.no_init) {
+                if (opt.init_file) {
+                    push rv, opt.init_file;
+                } else {
+                    foreach string k in (('HOME', 'USERPROFILE')) {
+                        if (exists ENV{k}) {
+                            string fn = ENV{k} + DirSep + defaultInitFileName;
+                            if (is_file(fn)) {
+                                push rv, fn;
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+            foreach string fn in (opt.execute) {
+                push rv, fn;
+            }
+            return rv;
+        }
+
+        #! Runs the files of commands of the start of the debugger; see getStartupCommandFiles() and runCommandFile()
+        /** An error of a command ends its file, and the next file is run
+
+            @return @ref False if a command ended the debugger, as \c quit
+
+            @since DebugLinenoiseCmdLine 0.2
+        */
+        bool runStartupCommandFiles(list<string> files) {
+            foreach string fn in (files) {
+                try {
+                    if (!runCommandFile(fn)) {
+                        return False;
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    # a command that failed has been shown with the line of the file
+                    if (ex.err != "DEBUG-COMMAND-FILE") {
+                        printfImpl("%s %s\n", tc.error("Error:"), DebugCommandLine::getErrorText(ex));
+                    }
+                }
+            }
+            return True;
         }
 
         #! Initializes the history and command-line session

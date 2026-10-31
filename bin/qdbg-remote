@@ -144,6 +144,9 @@ class DebugWrapper {
             'connect_timeout': 'c,conn-timeout=i',
             'response_timeout': 'w,resp-timeout=i',
             "history": "y,history=s",
+            "init_file": "i,init-file=s",
+            "no_init": "n,no-init",
+            "execute": "x,execute=s@",
             "session": "s,session=s",
             "color": "color",
             "no_color": "no-color",
@@ -268,7 +271,10 @@ class DebugWrapper {
             dcl.init(opt);
             # each command of a script is processed when the program is stopped
             dcl.waitsForStops = !stdin.isTty();
-            dcl.runCmdLine();
+            # the files of commands of the start; a command of a file can end the debugger
+            if (dcl.runStartupCommandFiles(DebugLinenoiseCommandLine::getStartupCommandFiles(opt))) {
+                dcl.runCmdLine();
+            }
             dcl.wsc.disconnect();
         } catch (hash<ExceptionInfo> e) {
             stderr.printf("%s: %s\n", e.err, e.desc);
@@ -309,10 +315,19 @@ class DebugWrapper {
             "  -y, --history=file           the file of the commands that the up and down arrow keys recall; the\n"
             "                               default is %s in the home folder; \".\" keeps no history\n"
             "  -s, --session=file           load the breakpoints and settings that \"session save\" saved to a file\n"
+            "  -i, --init-file=file         run the commands of the file at the start instead of those of %s in\n"
+            "                               the home folder\n"
+            "  -n, --no-init                do not run the commands of %s in the home folder at the start\n"
+            "  -x, --execute=file           run the commands of the file at the start, after those of the init file;\n"
+            "                               can be given more than once\n"
             "  --color, --no-color          always or never show colors; by default, colors are shown in a terminal\n"
             "\n"
+            "A file of commands has one command on each line; lines that start with \"#\" are comments.  A command\n"
+            "that resumes a thread waits until a thread pauses, and the first command that fails ends the file.  The\n"
+            "\"script <file>\" command runs a file of commands at the prompt.\n"
+            "\n"
             "When the input is not a terminal, it is a script of commands: each command that resumes a thread waits\n"
-            "until the thread pauses again or ends.\n"
+            "until a thread pauses or the thread ends.\n"
             "\n"
             "Keys:\n"
             "  Ctrl+D                       end the debugger\n"
@@ -329,6 +344,8 @@ class DebugWrapper {
             get_script_name(),
             DebugCommandLineRemote::WSC_TIMEOUT.durationMilliseconds(),
             DebugLinenoiseCommandLine::defaultHistoryFileName,
+            DebugLinenoiseCommandLine::defaultInitFileName,
+            DebugLinenoiseCommandLine::defaultInitFileName,
             get_script_name(),
             get_script_name(),
             get_script_name(),

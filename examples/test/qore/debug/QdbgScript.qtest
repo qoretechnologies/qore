@@ -113,6 +113,8 @@ public class QdbgScriptTest inherits QUnit::Test {
         addTestCase("shortcuts as in other debuggers", \shortcutTest());
         addTestCase("threads that start, pause and end", \threadStartTest());
         addTestCase("frames, breakpoints and ending the program as in other debuggers", \frameKillTest());
+        addTestCase("files of commands: the init file, -x and script", \commandFileTest());
+        addTestCase("session files with breakpoints and settings", \sessionFileTest());
         addTestCase("time zones", \timeZoneTest());
         addTestCase("the usage of the debugger tools", \usageTest());
         addTestCase("errors at the start of qdbg and qdbg-server", \startupErrorTest());
@@ -120,7 +122,10 @@ public class QdbgScriptTest inherits QUnit::Test {
     }
 
     #! runs qdbg for the program with the commands on its input and returns its output and exit code
-    private hash<auto> runQdbg(string program, list<string> commands, *list<string> args) {
+    /** @param home the home folder of qdbg, for its init file; without it, qdbg runs no init file (-n), so that the
+        init file of the user does not change the test
+    */
+    private hash<auto> runQdbg(string program, list<string> commands, *list<string> args, *string home) {
         TmpDir tmp("qore-qdbg-test-");
         File f();
         f.open2(tmp.path + "/target.q", O_CREAT | O_WRONLY | O_TRUNC);
@@ -131,9 +136,9 @@ public class QdbgScriptTest inherits QUnit::Test {
         f.close();
         *string module_dir = ENV.QORE_MODULE_DIR;
         # -y . disables the command history file
-        string cmd = sprintf("cd '%s' && QORE_MODULE_DIR='%s' '%s' '%s' -y . --no-color %s target.q < commands 2>&1",
-            tmp.path, qlib_dir + (module_dir ? ":" + module_dir : ""), qore_exe, qdbg,
-            (map sprintf("'%s'", $1), args ?? ()).join(" "));
+        string cmd = sprintf("cd '%s' && %sQORE_MODULE_DIR='%s' '%s' '%s' -y . --no-color %s %s target.q < commands "
+            "2>&1", tmp.path, home ? sprintf("HOME='%s' ", home) : "", qlib_dir + (module_dir ? ":" + module_dir : ""),
+            qore_exe, qdbg, home ? "" : "-n", (map sprintf("'%s'", $1), args ?? ()).join(" "));
         int rc;
         string out = backquote(cmd, \rc);
         # loader warnings of AOT modules that are out of date are about the environment, not output of qdbg
@@ -397,16 +402,18 @@ public class QdbgScriptTest inherits QUnit::Test {
     }
 %else
     #! runs qdbg-remote with the commands on its input for a debug server and returns its output and exit code
-    private hash<auto> runRemote(int port, list<string> commands, *string token) {
+    private hash<auto> runRemote(int port, list<string> commands, *string token, *list<string> args) {
         TmpDir tmp("qore-qdbg-test-");
         File f();
         f.open2(tmp.path + "/commands", O_CREAT | O_WRONLY | O_TRUNC);
         f.write(commands.join("\n") + "\n");
         f.close();
         *string module_dir = ENV.QORE_MODULE_DIR;
-        string cmd = sprintf("cd '%s' && QORE_MODULE_DIR='%s' '%s' '%s' -y . --no-color %s localhost:%d < commands 2>&1",
-            tmp.path, qlib_dir + (module_dir ? ":" + module_dir : ""), qore_exe, qdbg_remote,
-            token ? sprintf("-H 'Authorization=Bearer %s'", token) : "", port);
+        # no init file of the user
+        string cmd = sprintf("cd '%s' && QORE_MODULE_DIR='%s' '%s' '%s' -y . -n --no-color %s %s localhost:%d < commands "
+            "2>&1", tmp.path, qlib_dir + (module_dir ? ":" + module_dir : ""), qore_exe, qdbg_remote,
+            token ? sprintf("-H 'Authorization=Bearer %s'", token) : "", (map sprintf("'%s'", $1), args ?? ()).join(" "),
+            port);
         int rc;
         string out = backquote(cmd, \rc);
         out = (select out.split("\n"), $1 !~ /^warning: (AOT|binary) module/).join("\n");
@@ -452,17 +459,22 @@ public class QdbgScriptTest inherits QUnit::Test {
         res = runRemote(port, ("quit",), "wrong");
         assertNeq(0, res.rc);
 
-        # the thread of the program that the server holds at its start is the current thread
+        # the thread of the program that the server holds at its start is the current thread; the breakpoint is set by
+        # a file of commands of the start
+        string cmd_file = tmp.path + "/start.cmds";
+        {
+            File f();
+            f.open2(cmd_file, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write("# the breakpoint of the loop\nbreak create target.q 4\nbreak condition 1 i == 2\n");
+        }
         res = runRemote(port, (
-            "break create target.q 4",
-            "break condition 1 i == 2",
             "display total",
             "go run",
             "thread local i",
             "thread var total",
             "go run",
             "quit",
-        ), "s3cret");
+        ), "s3cret", ("-x", cmd_file));
         assertEq(0, res.rc, res.out);
         assertInOrder(res.out, (
             "connected to debug server",
@@ -552,6 +564,103 @@ public class QdbgScriptTest inherits QUnit::Test {
         # the shortcuts are listed with the commands
         res = runQdbg(Program, ("help", "quit"));
         assertInOrder(res.out, ("continue (c) ", "finish ", "locals ", "next (n) ", "print ", "step (s) "));
+    }
+
+    #! writes a file of commands and returns its path
+    private string writeCommands(TmpDir tmp, string name, list<string> lines) {
+        string path = tmp.path + "/" + name;
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(lines.join("\n") + "\n");
+        return path;
+    }
+
+    commandFileTest() {
+        TmpDir tmp("qore-qdbg-test-");
+        # the init file in the home folder
+        writeCommands(tmp, ".qdbginit", ("# comment", "", "break create target.q 3", "display a"));
+        hash<auto> res = runQdbg(Program, ("c", "quit"), NOTHING, tmp.path);
+        assertEq(0, res.rc);
+        assertInOrder(res.out, ("Breakpoint 1 created at ", "Paused at breakpoint 1 at ", "target.q:3", "1: a = 2"));
+        # -n: no init file
+        res = runQdbg(Program, ("c", "quit"), ("-n",), tmp.path);
+        assertFalse(res.out =~ /Breakpoint 1/, "no init file with -n");
+        assertRegex("total: 5", res.out);
+
+        # -i instead of the init file of the home folder, then -x files in their order; a command that fails ends its
+        # file, and the next file is run
+        string init = writeCommands(tmp, "init.cmds", ("break create target.q 8",));
+        string x1 = writeCommands(tmp, "x1.cmds", ("c", "nosuch", "print 1"));
+        string x2 = writeCommands(tmp, "x2.cmds", ("print total + 1",));
+        res = runQdbg(Program, ("print 2", "quit"), ("-i", init, "-x", x1, "-x", x2), tmp.path);
+        assertEq(0, res.rc);
+        assertInOrder(res.out, (
+            "Breakpoint 1 created at ", "target.q:8",
+            "Paused at breakpoint 1 at ",
+            "\"nosuch\": Unknown command",
+            "Error: " + x1 + ":2: the command failed, so the rest of the file is not run",
+            "integer total + 1 = 6",
+            "integer 2 = 2",
+        ));
+        assertFalse(res.out =~ /integer 1 = 1/, "the rest of a file after a command that fails is not run");
+
+        # the script command: a file that fails in a file that runs it is shown once, and quit in a file ends the
+        # debugger
+        string bad = writeCommands(tmp, "bad.cmds", ("nosuch",));
+        string outer = writeCommands(tmp, "outer.cmds", ("script " + bad, "print 9"));
+        string quit = writeCommands(tmp, "quit.cmds", ("print 3", "quit", "print 4"));
+        string itself = writeCommands(tmp, "self.cmds", ("script " + tmp.path + "/self.cmds",));
+        res = runQdbg(Program, ("script " + outer, "print 7", "script " + itself, "script", "script " + tmp.path +
+            "/nosuch.cmds", "script " + quit, "print 8"));
+        assertEq(0, res.rc);
+        assertInOrder(res.out, (
+            "Error: " + bad + ":1: the command failed",
+            "integer 7 = 7",
+            "more than 16 files of commands run one another",
+            "Error: " + itself + ":1: the command failed",
+            "Error: the name of the file is missing: script <file>",
+            "Error: cannot read the commands of ",
+            "integer 3 = 3",
+        ));
+        assertEq(1, (res.out =~ x/(the command failed)/g).size() - 1, "each failure of a file is shown once");
+        assertFalse(res.out =~ /integer (4|8|9) = /, "the commands after a failure or quit are not run");
+    }
+
+    sessionFileTest() {
+        TmpDir tmp("qore-qdbg-test-");
+        string session = tmp.path + "/session.yaml";
+        hash<auto> res = runQdbg(Program, (
+            "break create target.q 3",
+            "display a",
+            "exception filter uncaught",
+            "options stopall set 1",
+            "session save " + session,
+            # negative: no file name
+            "session save",
+            "session load",
+            "quit",
+        ));
+        assertEq(0, res.rc);
+        assertInOrder(res.out, (
+            "The session is saved to ",
+            "Error: the name of the file is missing: session save <file>",
+            "Error: the name of the file is missing: session load <file>",
+        ));
+        # the breakpoint and the settings are loaded with -s
+        res = runQdbg(Program, ("break list", "display", "exception filter", "options stopall", "c", "quit"),
+            ("-s", session));
+        assertEq(0, res.rc);
+        assertInOrder(res.out, (
+            "target.q:3",
+            "1: a",
+            "exceptions that stop threads: uncaught",
+            "stop all threads: 1",
+            "Paused at breakpoint", "target.q:3", "1: a = 2",
+        ));
+        # negative: a file that is not a session file
+        string not_session = writeCommands(tmp, "x.cmds", ("print 1",));
+        res = runQdbg(Program, ("session load " + not_session, "quit"));
+        assertRegex("is not a session file of the debugger", res.out);
     }
 
     frameKillTest() {

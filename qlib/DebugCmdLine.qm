@@ -87,6 +87,10 @@ module DebugCmdLine {
       while the current thread runs becomes the current thread
     - added the \c up, \c down, \c b and \c kill commands; a thread that starts while all threads of its program are
       stopped together stays stopped with them
+    - added the \c script command and runCommandFile(), which run files of commands; session files keep the display
+      expressions, the exception filters and the \c stopall option with the breakpoints, and \c session \c save and
+      \c session \c load without a file name show an error; the \c session command showed the number of stopped
+      threads twice
 
     @subsection dcl_v0_1_2 v0.1.2
     - removed Linenoise stuff to new module
@@ -139,6 +143,15 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
         }
 
         private {
+            #! the error of the last command that processCmdLine() processed, if any; see runCommandFile()
+            *string commandError;
+            #! the number of files of commands that are run, one in another; see runCommandFile()
+            int commandFileDepth = 0;
+            #! the maximum number of files of commands that are run one in another, as a file that runs itself
+            const MaxCommandFileDepth = 16;
+            #! the description of the exception of a file of commands that ended at a command that failed
+            const CommandFileFailed = "a command of a file of commands failed";
+
             const fcHelp = 0x01;
             const fcExpandUniqueCmd = 0x02;
             const fcValidate = 0x04;
@@ -293,6 +306,19 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
                                 "serialize": True,
                             }, False).result;
                             dcl.printVar(expr, r.serialized);
+                        },
+                    ),
+                    'script': (
+                        'desc': 'Run the commands of a file, one on each line; lines that start with "#" are comments. A '
+                            'command that resumes a thread waits until a thread pauses, and the first command that '
+                            'fails ends the file. Usage: script <file>',
+                        'action': bool sub(DebugCommandLine dcl, softlist path, softlist args) {
+                            *string fn = shift args;
+                            if (!exists fn) {
+                                throw "DEBUG-COMMAND", "the name of the file is missing: script <file>";
+                            }
+                            # a command of the file, as quit, can end the debugger
+                            return !dcl.runCommandFile(fn);
                         },
                     ),
                     'cmd': (
@@ -508,11 +534,15 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
                                         bs = sprintf(", %s (enabled: %d)", plural(ph.value.breakpoints.size(), "breakpoint"), (select ph.value.breakpoints, AbstractDebugControl::boolStrings{$1.enabled}).size());
                                     }
                                     if (ph.value.interrupted) {
-                                        printfImpl("+ %y (program %d, %d blocked %s%s)\n", ph.value.scriptName, ph.key, ph.value.interrupted.size(), plural(ph.value.interrupted.size(), "thread"), bs);
-                                        printfImpl("  - blocked %s: %s\n", plural(ph.value.interrupted.size(), "TID"), (foldl $1 + ", " + $2, ph.value.interrupted));
+                                        # plural() gives the number with the word
+                                        printfImpl("+ %y (program %d, %s paused%s)\n", ph.value.scriptName, ph.key,
+                                            plural(ph.value.interrupted.size(), "thread"), bs);
+                                        printfImpl("  - paused threads: %s\n", (foldl $1 + ", " + $2,
+                                            ph.value.interrupted));
                                     }
                                     else
-                                        printfImpl("+ %y (program %d, no blocked threads%s)\n", ph.value.scriptName, ph.key, bs);
+                                        printfImpl("+ %y (program %d, no paused threads%s)\n", ph.value.scriptName,
+                                            ph.key, bs);
                                 }
                             }
                             else
@@ -520,26 +550,27 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
                         },
                         '>': (
                             'load': (
-                                'desc': 'Load the breakpoints and settings of a debugging session from a file. Usage: '
-                                    'session load <file>',
+                                'desc': 'Load the breakpoints, display expressions, exception filters and the stopall '
+                                    'option that "session save" saved to a file. Usage: session load <file>',
                                 'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
-                                    dcl.loadSession(shift args);
+                                    *string fn = shift args;
+                                    if (!exists fn) {
+                                        throw "DEBUG-COMMAND", "the name of the file is missing: session load <file>";
+                                    }
+                                    dcl.loadSession(fn);
                                 },
                             ),
                             'save': (
-                                'desc': 'Save the breakpoints and settings of the debugging session to a file. Usage: '
-                                    'session save <file>',
+                                'desc': 'Save the breakpoints, display expressions, exception filters and the stopall '
+                                    'option to a file, for "session load" or the -s option. Usage: session save '
+                                    '<file>',
                                 'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                                     *string fn = shift args;
-                                    if (exists fn) {
-                                        hash<auto> data.cmd = 'session/get';
-                                        hash<auto> sh.session.programs = dcl.doCommand(data, False).result;
-                                        if (sh.session.programs) {
-                                            File f();
-                                            f.open(fn, O_CREAT | O_TRUNC | O_WRONLY);
-                                            f.write(make_yaml(sh));
-                                        }
+                                    if (!exists fn) {
+                                        throw "DEBUG-COMMAND", "the name of the file is missing: session save <file>";
                                     }
+                                    dcl.saveSession(fn);
+                                    printfImpl("The session is saved to %y\n", fn);
                                 },
                             ),
                         ),
@@ -2515,6 +2546,83 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
             }
         }
 
+        #! Runs the commands of a file, one on each line
+        /** Empty lines and lines that start with \c # are ignored.  A command that resumes a thread returns when a
+            thread pauses again, as with a script of commands on the input, so the next command is processed at the
+            pause that it is written for.  The first command that fails ends the file.
+
+            @param fn the file
+            @return @ref False if a command ended the debugger, as \c quit
+
+            @throw DEBUG-COMMAND-FILE a command failed; its error and the line of the file are shown
+            @throw DEBUG-COMMAND the file cannot be read; the files run one another more than MaxCommandFileDepth times
+        */
+        public bool runCommandFile(string fn) {
+            if (commandFileDepth >= MaxCommandFileDepth) {
+                throw "DEBUG-COMMAND", sprintf("%s: more than %d files of commands run one another", fn,
+                    MaxCommandFileDepth);
+            }
+            string text;
+            try {
+                text = ReadOnlyFile::readTextFile(fn);
+            } catch (hash<ExceptionInfo> ex) {
+                throw "DEBUG-COMMAND", sprintf("cannot read the commands of %y: %s", fn, ex.desc);
+            }
+            ++commandFileDepth;
+            bool waits = waitsForStops;
+            waitsForStops = True;
+            on_exit {
+                waitsForStops = waits;
+                --commandFileDepth;
+            }
+            foreach string line in (text.split("\n")) {
+                trim line;
+                if (!line.val() || line =~ /^#/) {
+                    continue;
+                }
+                # the display expressions of a thread that paused at the last command
+                showPendingDisplays();
+                if (!processCmdLine(line)) {
+                    return False;
+                }
+                # the error of the command is shown; the file ends at it, which is shown once, by the file of the
+                # command, also for files that run this file
+                if (exists commandError) {
+                    string err = remove commandError;
+                    if (err != CommandFileFailed) {
+                        printfImpl("%s %s:%d: the command failed, so the rest of the file is not run\n",
+                            tc.error("Error:"), fn, $# + 1);
+                    }
+                    throw "DEBUG-COMMAND-FILE", CommandFileFailed;
+                }
+            }
+            return True;
+        }
+
+        #! Returns the settings of the debugger that a session file keeps; see saveSession()
+        public hash<auto> getSessionSettings() {
+            hash<auto> rv = {
+                "stopall": stopAllThreads,
+                "exceptionFilters": doCommand({"cmd": "exception/filter/get"}, False).result ?? (),
+            };
+            {
+                AutoLock al(displayLock);
+                rv.displays = displays;
+            }
+            return rv;
+        }
+
+        #! Saves the breakpoints of the debugged programs and the settings of the debugger to a file
+        /** @see loadSession()
+        */
+        public saveSession(string fn) {
+            hash<auto> sh.session.programs = doCommand({"cmd": "session/get"}, False).result ?? {};
+            sh.settings = getSessionSettings();
+            File f();
+            f.open2(fn, O_CREAT | O_TRUNC | O_WRONLY);
+            f.write(make_yaml(sh));
+        }
+
         #! Runs a command given by its words, as the shortcut commands do
         public runCommand(list<auto> words) {
             processCmdLine(words.join(" "));
@@ -2752,6 +2860,8 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
         }
 
         public bool processCmdLine(string line) {
+            # the error of this command; a command that runs other commands, as a shortcut, reports theirs
+            commandError = NOTHING;
             int last_param;
             list<auto> args = splitCmd(line).args;
             *hash<auto> cmd = findCmd(args, fcExpandUniqueCmd | fcValidate | fcFallback, \last_param);
@@ -2769,21 +2879,30 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
                             return False;
                         }
                     } catch (hash<ExceptionInfo> ex) {
-                        showFullException ? printfImpl("%Y\n", ex)
-                            : printfImpl("%s %s\n", tc.error("Error:"), DebugCommandLine::getErrorText(ex));
+                        # a file of commands that ended at a command that failed, which it has shown
+                        if (ex.err == "DEBUG-COMMAND-FILE") {
+                            commandError = ex.desc;
+                        } else {
+                            commandError = DebugCommandLine::getErrorText(ex);
+                            showFullException ? printfImpl("%Y\n", ex)
+                                : printfImpl("%s %s\n", tc.error("Error:"), commandError);
+                        }
                     }
                 } else {
                     if (cmd.variants.size() > 1) {
+                        commandError = sprintf("%y: ambiguous subcommand", args[0]);
                         printfImpl("%s: %s, use more characters to specify among (%y)\n",
                             tc.error(sprintf("%y", args[0])), tc.warning("Ambiguous subcommand"),
                             keys cmd.variants);
                     } else if (last_param < args.size()) {
+                        commandError = sprintf("%y: unknown parameter %y", args[0], args[last_param]);
                         string ctxt = (foldl $1 + " " + $2, (map $1, args, $# < last_param));
                         printfImpl("%s: %s %y; use <TAB> or \"help %s\" for more info\n",
                             tc.error(sprintf("%y", args[0])), tc.warning("Unknown parameter"),
                             args[last_param], ctxt);
                     } else {
                         string cmdstr = args.join(" ");
+                        commandError = sprintf("%y: missing required parameter", cmdstr);
                         # list available subcommands in the error message
                         string hint = "";
                         *hash<auto> sub_cmd = findCmd(args + '', fcHelp);
@@ -2797,10 +2916,12 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
                 }
             } else {
                 if (cmd.variants.size() > 1) {
+                    commandError = sprintf("%y: ambiguous command", args[0]);
                     printfImpl("%s: %s, use more characters to specify among (%y)\n",
                         tc.error(sprintf("%y", args[0])), tc.warning("Ambiguous command"),
                         keys cmd.variants);
                 } else {
+                    commandError = sprintf("%y: unknown command", args[0]);
                     printfImpl("%s: %s, use <TAB> key or \"help\" to get list of commands\n",
                         tc.error(sprintf("%y", args[0])), tc.warning("Unknown command"));
                 }
@@ -3083,9 +3204,17 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
                 @debug {
                     printfImpl("Load session: %y\n", fn);
                 }
-                *hash<auto> d = parse_yaml(ReadOnlyFile::readTextFile(fn));
+                auto d;
+                try {
+                    d = parse_yaml(ReadOnlyFile::readTextFile(fn));
+                } catch (hash<ExceptionInfo> ex) {
+                    throw "DEBUG-COMMAND", sprintf("%y is not a session file of the debugger: %s", fn, ex.desc);
+                }
                 @debug {
                     printfImpl("Load session data:\n%Y\n", d);
+                }
+                if (d.typeCode() != NT_HASH || (!exists d.session && !exists d.settings)) {
+                    throw "DEBUG-COMMAND", sprintf("%y is not a session file of the debugger", fn);
                 }
                 if (d.session.programs) {
                     hash<auto> data.cmd = 'session/set';
@@ -3094,6 +3223,22 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
                     if (ret.result) {
                         printData(ret);
                     }
+                }
+                # the settings of the debugger; see getSessionSettings()
+                if (exists d.settings.stopall) {
+                    stopAllThreads = parse_boolean(d.settings.stopall);
+                }
+                if (exists d.settings.exceptionFilters) {
+                    doCommand({"cmd": "exception/filter/set", "value": (map string($1), d.settings.exceptionFilters)
+                        ?? ()}, False);
+                }
+                if (exists d.settings.displays) {
+                    list<string> l = ();
+                    foreach auto e in (d.settings.displays) {
+                        push l, string(e);
+                    }
+                    AutoLock al(displayLock);
+                    displays = l;
                 }
             }
         }
