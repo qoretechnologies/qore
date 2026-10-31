@@ -76,8 +76,8 @@ module DebugProgramControl {
       \c thread/breakpoint/check command checks breakpoints for a thread that stopped at their statement for another
       reason (see @ref DebugProgramControl::DebugProgramControl::checkBreakpoint() "checkBreakpoint()")
     - each client selects the exceptions that stop threads with the \c exception/filter/set command: all user
-      exceptions, all system exceptions, and exceptions that no try statement of debuggable code catches; an exception
-      that no client stops at does not stop the thread
+      exceptions, all system exceptions, exceptions that no try statement of debuggable code catches, and exceptions
+      with given codes; an exception that no client stops at does not stop the thread
     - at the stop at the start of a program (the \c attach interrupt), the thread has not entered the code of the
       program: expressions are evaluated with the code and the global variables of the program, and no local variables
       are read, as the frames are those of the code that started the program; reading them failed
@@ -1263,8 +1263,8 @@ public namespace DebugProgramControl {
 
         #! Returns the exception filters given to the exception/filter/set command
         /** @param value a list of the filters: \c "user" for all user exceptions, \c "system" for all system
-            exceptions, and \c "uncaught" for exceptions that no try statement of debuggable code catches; an empty
-            list for none
+            exceptions, \c "uncaught" for exceptions that no try statement of debuggable code catches (in any case),
+            and exception codes, such as \c "FILE-OPEN-ERROR", for the exceptions with the code; an empty list for none
 
             @throw DEBUG-HANDLER-ERROR the value is not a list of filters
         */
@@ -1275,12 +1275,14 @@ public namespace DebugProgramControl {
             }
             list<string> rv = ();
             foreach auto f in (value) {
-                if (f.typeCode() != NT_STRING || !inlist(f.lwr(), ExceptionFilters)) {
-                    throw "DEBUG-HANDLER-ERROR", sprintf("invalid exception filter %y; expecting: %y", f,
-                        ExceptionFilters);
+                if (f.typeCode() != NT_STRING || !f.val() || f =~ /\s/) {
+                    throw "DEBUG-HANDLER-ERROR", sprintf("invalid exception filter %y; expecting %y or an exception "
+                        "code", f, ExceptionFilters);
                 }
-                if (!inlist(f.lwr(), rv)) {
-                    push rv, f.lwr();
+                # a keyword in any case, or an exception code as given
+                string filter = inlist(f.lwr(), ExceptionFilters) ? f.lwr() : f;
+                if (!inlist(filter, rv)) {
+                    push rv, filter;
                 }
             }
             return rv;
@@ -1302,7 +1304,8 @@ public namespace DebugProgramControl {
             foreach hash<auto> c in (ctxConnection.iterator()) {
                 if (!exists c.exceptionFilters
                     || inlist(type, c.exceptionFilters)
-                    || (uncaught && inlist("uncaught", c.exceptionFilters))) {
+                    || (uncaught && inlist("uncaught", c.exceptionFilters))
+                    || inlist(ex.err, c.exceptionFilters)) {
                     return True;
                 }
             }

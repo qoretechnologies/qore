@@ -75,6 +75,7 @@ public class QdbgScriptTest inherits QUnit::Test {
         addTestCase("conditions, hit conditions and log messages of breakpoints", \breakpointConditionTest());
         addTestCase("exception filters, columns, step-in targets and variables", \featureTest());
         addTestCase("all threads stop together", \stopAllTest());
+        addTestCase("exceptions by code", \exceptionCodeTest());
         addTestCase("quitting while a thread is stopped", \quitTest());
         set_return_value(main());
     }
@@ -211,8 +212,6 @@ public class QdbgScriptTest inherits QUnit::Test {
             "exception filter",
             "exception filter uncaught",
             "exception filter",
-            # negative: an invalid filter
-            "exception filter often",
             # the statements of line 4 with their columns, counted in characters
             "stmt line 4",
             # breakpoints on the second and the third statement of line 4
@@ -242,7 +241,6 @@ public class QdbgScriptTest inherits QUnit::Test {
         assertInOrder(res.out, (
             "exceptions that stop threads: user, system, uncaught",
             "exceptions that stop threads: uncaught",
-            "invalid exception filter",
         ));
         assertInOrder(res.out, (
             "column 1", "column 18", "column 32",
@@ -285,6 +283,27 @@ public class QdbgScriptTest inherits QUnit::Test {
         # the thread that the initial thread started stopped and continued with it
         list<string> tids = (res.out =~ x/interrupt\/[a-z]+, pgm: [0-9]+, tid: ([0-9]+)/g) ?? ();
         assertTrue((map {$1: True}, tids).size() >= 2, sprintf("%y", tids));
+    }
+
+    # the exception filter with the code of the caught exception stops only at that exception
+    exceptionCodeTest() {
+        hash<auto> res = runQdbg(FeatureProgram, (
+            "exception filter CAUGHT",
+            "exception filter",
+            "go run",
+            "go run",
+            "go run",
+            "quit",
+        ));
+        assertEq(0, res.rc);
+        assertInOrder(res.out, (
+            "exceptions that stop threads: CAUGHT",
+            "interrupt/exception", "(target.q:5",
+            "interrupt/detach",
+        ));
+        # the program ends with the uncaught exception, which it writes
+        assertFalse(res.out =~ /interrupt\/exception[^\n]*target\.q:7/, "the uncaught exception does not stop the "
+            "thread");
     }
 
     # a thread that continues when qdbg quits does not stop again, as at the end of the program

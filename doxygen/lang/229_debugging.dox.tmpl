@@ -62,8 +62,8 @@
     @subsection debugging_exceptions Exceptions
 
     A thread stops at an exception according to the exception filters of the debugger clients: all user exceptions,
-    all system exceptions, and exceptions that no try statement of debuggable code in the call stack catches
-    (uncaught exceptions).  A client without filters stops at all exceptions; an exception that no client stops at
+    all system exceptions, exceptions that no try statement of debuggable code in the call stack catches (uncaught
+    exceptions), and exceptions with given codes, such as \c FILE-OPEN-ERROR.  A client without filters stops at all exceptions; an exception that no client stops at
     does not stop the thread.
 
     @subsection debugging_stepping Stepping
@@ -140,6 +140,10 @@
     |\c connection, \c headers, \c proxy, \c timeout, \c connTimeout, \c respTimeout, \c maxRedir|attach|the connection to the debug server; a token of the server is given in \c headers as <tt>"Authorization=Bearer <token>"</tt>
     |\c logFilename, \c appendToLog, \c verbosity, \c fullException|both|the log of the adapter and the exception information that it gives
 
+    The exception breakpoints of the adapter stop at user, system or uncaught exceptions, and with the
+    "Exceptions by code" filter at the exceptions with the codes of its condition, as in
+    <tt>FILE-OPEN-ERROR, SOCKET-CONNECT-ERROR</tt>.
+
     The adapter supports source, function and exception breakpoints with conditions, hit conditions and log messages,
     breakpoints on any statement of a line (column breakpoints), stepping, also into a chosen call of a statement
     (step-in targets), pausing, all threads stopping together, call stacks, variables as trees whose values can be set,
@@ -166,7 +170,7 @@ qdbg myfile.q < commands.txt
     |<tt>break list</tt>|lists the breakpoints of the current program with their conditions, hit conditions, log messages and number of hits
     |<tt>break condition\|hitcondition\|log id [value]</tt>|sets or removes the condition, hit condition or log message of a breakpoint
     |<tt>break enable\|disable\|delete id</tt>|enables, disables or deletes a breakpoint
-    |<tt>exception filter [user] [system] [uncaught] \| all \| none</tt>|shows or sets the exceptions that stop threads
+    |<tt>exception filter [user] [system] [uncaught] [code ...] \| all \| none</tt>|shows or sets the exceptions that stop threads; a code, such as \c FILE-OPEN-ERROR, selects the exceptions with the code
     |<tt>stmt line [file] line</tt>|lists the statements of a line with their columns
     |<tt>go run\|step\|stepover\|untilreturn [statement]</tt>|resumes the current thread, optionally until a statement
     |<tt>thread targets</tt>, <tt>go stepinto n</tt>|lists the calls of the current statement, and steps into one of them

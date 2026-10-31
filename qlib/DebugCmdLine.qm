@@ -59,7 +59,8 @@ module DebugCmdLine {
       condition, the hit condition and the log message of a breakpoint; \c break \c list shows them with the number
       of hits
     - added the \c exception \c filter command, which selects the exceptions that stop threads: all user exceptions,
-      all system exceptions, and exceptions that no try statement of debuggable code catches
+      all system exceptions, exceptions that no try statement of debuggable code catches, and exceptions with given
+      codes
     - a statement can be given by its line and its column as <tt>line:column</tt>, counted in characters from 1, for a
       breakpoint on a statement of a line with more than one statement; added the \c statement \c line command,
       which lists the statements of a line with their columns
@@ -1059,7 +1060,8 @@ public namespace DebugCmdLine {
                                 },
                                 'desc': 'get or set the exceptions that stop threads: user (all user exceptions), '
                                     'system (all system exceptions), uncaught (exceptions that no try statement of '
-                                    'debuggable code catches), all or none; args: [filter ...]',
+                                    'debuggable code catches), exception codes such as FILE-OPEN-ERROR, all or none; '
+                                    'args: [filter ...]',
                             ),
                         ),
                         'desc': 'exception related commands',

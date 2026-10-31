@@ -357,6 +357,7 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         addTestCase("stepping into a chosen call", \stepInTargetTest());
         addTestCase("columns of a source that only the debug server can read", \remoteColumnTest());
         addTestCase("a debug server that requires a token", \tokenTest());
+        addTestCase("exceptions by code", \exceptionCodeTest());
         addTestCase("the adapter communicates over sockets, as Visual Studio Code starts it", \socketTest());
         addTestCase("the adapter logs to its file and to the debug console", \logTest());
         addTestCase("the end of a program that started a process is reported", \childProcessTest());
@@ -521,6 +522,16 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         # a debug server that does not give "uncaught"
         assertFalse(VscDebugAdapter::stopsAtException({"exception": {"type": "User"}}, ("uncaught",)));
         assertFalse(VscDebugAdapter::stopsAtException(user, NOTHING));
+        # exception codes
+        hash<auto> file_error = {"exception": {"type": "User", "err": "FILE-OPEN-ERROR"}, "uncaught": False};
+        assertTrue(VscDebugAdapter::stopsAtException(file_error, (), ("SOCKET-ERROR", "FILE-OPEN-ERROR")));
+        assertFalse(VscDebugAdapter::stopsAtException(file_error, (), ("SOCKET-ERROR",)));
+        assertEq(("FILE-OPEN-ERROR", "SOCKET-ERROR"), VscDebugAdapter::getExceptionCodes({"filterOptions": (
+            {"filterId": "code", "condition": " FILE-OPEN-ERROR,, SOCKET-ERROR "},
+            {"filterId": "uncaught"},
+        )}));
+        assertEq((), VscDebugAdapter::getExceptionCodes({"filters": ("User",)}));
+        assertEq((), VscDebugAdapter::getExceptionCodes({"filterOptions": ({"filterId": "code"},)}));
     }
 
     # the default names that Qore gives threads are not shown
@@ -896,7 +907,7 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         hash<auto> r = dap.request("initialize", {"adapterID": "qore", "linesStartAt1": True,
             "columnsStartAt1": True, "pathFormat": "path"});
         assertTrue(r.success, r.message);
-        assertEq(("User", "System", "uncaught"), map $1.filter, r.body.exceptionBreakpointFilters);
+        assertEq(("User", "System", "uncaught", "code"), map $1.filter, r.body.exceptionBreakpointFilters);
         r = dap.request("launch", {"program": path});
         assertTrue(r.success, r.message);
         dap.waitForEvent("initialized");
@@ -1834,6 +1845,44 @@ print('exit code: %d' % p.wait(30))
         assertTrue(proc.wait(30s), "the adapter ends");
         server.write("end\n");
         assertTrue(server.wait(30s), "the debug server ends");
+    }
+
+    # the "code" exception filter stops threads at the exceptions with the codes of its condition
+    exceptionCodeTest() {
+        TmpDir tmp("qore-vda-test-");
+        string path = writeProgram(tmp, UncaughtProgram);
+        Process proc = startAdapter();
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        launch(dap, {"program": path});
+        assertTrue(capabilities.supportsExceptionFilterOptions);
+        hash<auto> r = dap.request("setExceptionBreakpoints", {"filters": (), "filterOptions": (
+            {"filterId": "code", "condition": "CAUGHT-2, NO-SUCH-ERROR"},
+        )});
+        assertTrue(r.success, r.message);
+        r = dap.request("configurationDone");
+        assertTrue(r.success, r.message);
+        # the thread stops at CAUGHT-2 in each frame that it leaves, and at no other exception
+        list<string> stops = ();
+        while (True) {
+            hash<auto> m = dap.waitFor(bool sub (hash<auto> m) {
+                return m.type == "event" && (m.event == "stopped" || m.event == "terminated");
+            }, "stopped or terminated event");
+            if (m.event == "terminated") {
+                break;
+            }
+            push stops, m.body.text;
+            r = dap.request("continue", {"threadId": m.body.threadId});
+            assertTrue(r.success, r.message);
+        }
+        assertTrue(stops.size() > 0);
+        assertEq(("CAUGHT-2",), keys (map {$1: True}, stops));
+        r = dap.request("disconnect");
+        assertTrue(r.success, r.message);
+        proc.closeStdin();
+        assertTrue(proc.wait(30s), "the adapter ends");
     }
 
     # a debug server with a token accepts only the clients that give it

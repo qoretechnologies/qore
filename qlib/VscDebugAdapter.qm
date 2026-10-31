@@ -95,6 +95,7 @@ module VscDebugAdapter {
     - the client is not notified when another debugger client changes a breakpoint
 
     @subsection vda_v0_3
+    - the "Exceptions by code" exception filter stops at the exceptions with the codes of its condition
     - step-in targets: the \c stepInTargets request gives the calls of the current statement, and \c stepIn with a
       \c targetId steps into the chosen call
     - breakpoints can be set on any statement of a line with more than one statement: the
@@ -702,7 +703,8 @@ vda.run();
                 # an exception stops the thread if its type is selected, or if it is not caught and uncaught exceptions
                 # are selected
                 if (event.func == "exception" && !VscDebugAdapter::stopsAtException(event,
-                    m_programState{event.pgmid}.exceptionBreakpoints.filters)) {
+                    m_programState{event.pgmid}.exceptionBreakpoints.filters,
+                    m_programState{event.pgmid}.exceptionBreakpoints.codes)) {
                     refuseInterrupt(event);
                     break;
                 }
@@ -846,9 +848,26 @@ vda.run();
     /** @param event the exception event, with the \c exception and, from debug servers that give it, \c uncaught
         @param filters the selected filters: \c "User" and \c "System" for all exceptions of the type, and
         \c "uncaught" for exceptions that no try statement of the debugged code catches
+        @param codes the exception codes of the \c "code" filter
     */
-    static bool stopsAtException(hash<auto> event, *softlist<string> filters) {
-        return inlist(event.exception.type, filters) || (inlist("uncaught", filters) && event.uncaught);
+    static bool stopsAtException(hash<auto> event, *softlist<string> filters, *softlist<string> codes) {
+        return inlist(event.exception.type, filters) || (inlist("uncaught", filters) && event.uncaught)
+            || inlist(event.exception.err, codes);
+    }
+
+    #! Returns the exception codes of the condition of the \c "code" exception filter
+    /** @param args the arguments of a \c setExceptionBreakpoints request
+
+        @return the codes of the condition, separated by commas, if the filter is selected
+    */
+    static list<string> getExceptionCodes(hash<auto> args) {
+        list<string> rv = ();
+        foreach hash<auto> o in (args.filterOptions) {
+            if (o.filterId == "code" && o.condition.val()) {
+                rv += select (map trim($1), o.condition.split(",")), $1.val();
+            }
+        }
+        return rv;
     }
 
     #! Keeps the state of a thread that is reported as stopped; a step of the client ends with the stop
@@ -2061,15 +2080,18 @@ vda.run();
     }
 
     public vsc_setExceptionBreakpoints(hash args) {
-        m_programState{m_currentPgmId}.exceptionBreakpoints.filters = args.filters;
+        # the filters and the filters with options add up
+        list<string> filters = (select args.filters ?? (), $1 != "code")
+            + (args.filterOptions ? (select (map $1.filterId, args.filterOptions), $1 != "code" && $1.val()) : ());
+        list<string> codes = VscDebugAdapter::getExceptionCodes(args);
+        m_programState{m_currentPgmId}.exceptionBreakpoints = {"filters": filters, "codes": codes};
         # the debugger does not stop threads at the exceptions that the client does not stop at; a debug server
         # without exception filters stops them, and the adapter resumes them (see stopsAtException())
         try {
-            doCommand({"cmd": "exception/filter/set", "value": map $1.lwr(), args.filters});
+            doCommand({"cmd": "exception/filter/set", "value": (map $1.lwr(), filters) + codes});
         } catch (hash<ExceptionInfo> ex) {
             debug("the debug server does not filter exceptions: %s", VscDebugAdapter::getErrorText(ex));
         }
-        # args.exceptionOptions
     }
 
     public hash vsc_modules(hash args) {
@@ -2159,7 +2181,19 @@ vda.run();
                     "label": "Uncaught exceptions",
                     "description": "Exceptions that no try statement of the debugged code catches",
                 ),
+                (
+                    "filter": "code",
+                    "label": "Exceptions by code",
+                    "description": "Exceptions with the codes of the condition",
+                    "supportsCondition": True,
+                    "conditionDescription": "Comma-separated exception codes, such as FILE-OPEN-ERROR, "
+                        "SOCKET-CONNECT-ERROR",
+                ),
             ),
+
+            /* The debug adapter supports the filterOptions argument of setExceptionBreakpoints, for the condition of
+               the "code" filter. */
+            "supportsExceptionFilterOptions": True,
 
             /* The debug adapter supports stepping back via the stepBack and
                 reverseContinue requests. */

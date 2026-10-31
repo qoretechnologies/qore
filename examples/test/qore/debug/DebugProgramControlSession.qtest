@@ -1136,9 +1136,17 @@ public class DebugProgramControlTest inherits QUnit::Test {
         assertEq((), getStoppingExceptions(()));
         # a thread stops if any client stops at the exception
         assertEq(all, getStoppingExceptions((), True));
-        # negative: an invalid filter and a value that is not a list
+        # exception codes, also with the other filters
+        assertEq(("CAUGHT-2", "UNCAUGHT"), getStoppingExceptions(("CAUGHT-2", "UNCAUGHT")));
+        assertEq(("CAUGHT-3", "UNCAUGHT"), getStoppingExceptions(("CAUGHT-3", "uncaught")));
+        assertEq((), getStoppingExceptions(("NO-SUCH-ERROR",)));
+        # negative: invalid filters and a value that is not a list
         assertThrows("DEBUG-HANDLER-ERROR", "invalid exception filter", \dpc.command(), ("exception/filter/set",
-            {"value": ("often",)}));
+            {"value": ("",)}));
+        assertThrows("DEBUG-HANDLER-ERROR", "invalid exception filter", \dpc.command(), ("exception/filter/set",
+            {"value": ("A B",)}));
+        assertThrows("DEBUG-HANDLER-ERROR", "invalid exception filter", \dpc.command(), ("exception/filter/set",
+            {"value": (1,)}));
         assertThrows("DEBUG-HANDLER-ERROR", "must be a list", \dpc.command(), ("exception/filter/set",
             {"value": "user"}));
         assertThrows("DEBUG-HANDLER-ERROR", "exception/filter", \dpc.command(), ("exception/x"));
