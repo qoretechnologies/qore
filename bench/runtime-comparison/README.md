@@ -1662,3 +1662,6 @@ Cleanup-pointer annotation experiment: [results](results-coerce-cleanup-rejectio
 
 
 Clean callback completion experiment: [results](results-clean-status-rejection-macos-arm64.json), [audit](audit-clean-status-rejection.md). Two variants rejected after 612 optimized processes / 1836 windows; the revised ordinary/wide/native-integer-result kernels regress 7.59%/10.12%/6.75%. Runtime source restored; a stale specialization test is corrected.
+
+
+Callback cache pointer snapshots: [results](results-callback-cache-snapshot-rejection-macos-arm64.json), [audit](audit-callback-cache-snapshot-rejection.md). Rejected after 864 optimized processes / 2592 windows: ordinary/wide callbacks regress 7.20%/9.89% in the broader paired pass despite gains in some callback forms. Runtime restored exactly.

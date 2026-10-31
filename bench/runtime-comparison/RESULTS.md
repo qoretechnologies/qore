@@ -31650,3 +31650,54 @@ The restored qore/qcc executables are byte-identical to the frozen baseline. Eve
 [Full evidence](results-clean-status-rejection-macos-arm64.json) contains raw timings, actual exits, hashes, failed stages and all 62 audit decisions. [Audit](audit-clean-status-rejection.md) covers the retained test correction and evidence. No recorded owned build/test/profile stage overlaps timing. This shared-host experiment supplies no fresh Java/develop comparison or global performance ceiling.
 
 Next profile the remaining prepared-call/context and list-mutation costs, review prior rejected approaches, and select a distinct mechanism. Further changes must show optimized before/after benefit; the tri-state clean-success design is held after two regressions.
+
+
+## Callback cache pointer snapshots rejected (2026-10-31)
+
+Copyright 2026 Qore Technologies, s.r.o.
+
+Fresh untimed sampling points inside the prepared invariant callback helper, rather than TLS lookup, as the next call-cost target. Captured closures retain context and capture-lock work; list mutation retains value ownership, type and assignment work. Sampling uses files for child output, records both child and sampler exits, and verifies actual loaded library/artifact UUIDs. Idle signal-thread samples and instrumented durations are excluded from performance conclusions.
+
+The candidate copies the invocation-owned descriptor's program, body and reference pointer values into C++ locals. All live admission, debugger, binding, AOT-context acquire, stack, exception, ownership and diagnostic-reader checks remain. It caches no context across calls and changes no ABI or generated-call convention. All four helper variants emit two fewer real instructions, with unchanged frames (64 bytes for zero-argument helpers, 80 for unary) and entry addresses. All 18 generated LLVM modules match after normalizing only serialized runtime identity metadata and its length. Smaller native code is not proof of faster execution.
+
+Reject this implementation after evaluating the broader tradeoff. Ordinary and wide integer callback kernels regress in all three layouts in both campaigns: the broader paired effects are +7.20%/+9.89%. The native-integer-result callback improves 3.50%, and floating results improve 3.34%, but the mixed workloads show no consistent gain; list mutation and the floating accumulation loop regress 1.06%/1.15% in all layouts. Production source and optimized qore/qcc/libqore are restored byte-for-byte to frozen ec47; no candidate was installed.
+
+Apple M4 Pro ARM64, Apple clang 21/SDK 27.2/LLVM 22.1.8, Release -O3 -DNDEBUG with allocation tracking off. Each variant uses fresh stripped O3 artifacts and its matching frozen runtime/compiler; normal AOT identity checks remain enabled. Default/reverse/shuffle-487 caller layouts; count 4096, seed 7; three warmup and three measured 100 ms windows. Each campaign uses three symmetric ABBA/BAAB blocks per layout, two processes per variant per block. Within-block ratios are primary; marginal times are separately aggregated. Do not pool epochs or interpret these whole-kernel numbers as isolated call latency.
+
+### Six-workload target pilot
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Marginal change|!Paired change
+|local:direct_call|1.5272|1.5290|+0.11%|+0.26%
+|micro:indirect_call|8.0487|8.3743|+4.04%|+4.46%
+|micro:indirect_wide|8.2475|9.3047|+12.82%|+8.29%
+|micro:indirect_int_result|8.8215|8.1705|-7.38%|-2.59%
+|micro:indirect_float|9.0346|9.0141|-0.23%|-2.53%
+|micro:indirect_float_result|9.2613|8.8825|-4.09%|-6.92%
+
+### Eighteen-workload tradeoff evaluation
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Marginal change|!Paired change
+|local:direct_call|1.5311|1.5242|-0.45%|-0.52%
+|local:polymorphic_call|15.3260|15.4481|+0.80%|+0.43%
+|local:list_mutate|119.9899|122.5164|+2.11%|+1.06%
+|local:dynamic_float_result_call|10.3680|10.2945|-0.71%|-0.27%
+|micro:indirect_call|8.0312|8.4806|+5.60%|+7.20%
+|micro:indirect_wide|8.1536|9.3592|+14.79%|+9.89%
+|micro:indirect_int_result|8.5558|8.3552|-2.35%|-3.50%
+|micro:indirect_float|9.0336|8.9397|-1.04%|-3.56%
+|micro:indirect_float_result|9.3420|8.8084|-5.71%|-3.34%
+|micro:indirect_tagged_float|9.4156|9.8431|+4.54%|+4.54%
+|micro:closure_call|18.4752|18.6015|+0.68%|+0.14%
+|micro:closure_capture|23.9806|23.9327|-0.20%|-0.26%
+|micro:list_build|22.7365|22.5687|-0.74%|-0.35%
+|float:callback_loop_float_return|4.9104|4.9737|+1.29%|+1.15%
+|mixed:csv_report|941.9585|941.2191|-0.08%|+0.50%
+|mixed:object_orders|3059.0990|3059.7229|+0.02%|-0.60%
+|mixed:callback_pipeline|94.3955|95.1519|+0.80%|+0.31%
+|mixed:text_index|1345.7899|1339.9249|-0.44%|+0.45%
+
+All 864 processes / 2592 measured windows replay independently. Release qualification passes four fixtures/six cases / 1994 assertions, with additional native C++ assertions covering warmed cache fallback, pending exceptions, physical-stack failure, context restoration and ownership. Preparation validates 4698 reference outputs per variant across 36 fresh artifacts. Every recorded owned build/test/code-generation stage finishes outside timing. This shared host is not an exclusive CPU/frequency-controlled environment.
+
+[Complete evidence](results-callback-cache-snapshot-rejection-macos-arm64.json) includes raw samples, actual exits, hashes, code-shape observations, restored binary identity, untimed profiles and all 62 audit decisions. [Audit](audit-callback-cache-snapshot-rejection.md). No Debug or short-loop retention pass follows a rejected broad tradeoff. No fresh Java/develop comparison or global maximum-performance claim is made.
+
+Next separate the floating helper's promising code shape from the integer paths that regress. Start with an isolated compile-only reference-pointer snapshot or entry-read ordering probe, require useful code without extra spills, and treat any result as a separate candidate requiring optimized before/after and broader controls.
