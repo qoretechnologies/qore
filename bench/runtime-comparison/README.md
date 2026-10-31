@@ -1668,3 +1668,6 @@ Callback cache pointer snapshots: [results](results-callback-cache-snapshot-reje
 
 
 Floating callback load variants: [results](results-floating-callback-load-rejection-macos-arm64.json), [audit](audit-floating-callback-load-rejection.md). Two narrower variants rejected after 504 optimized processes / 1512 windows; floating target regressions persist despite one fewer instruction. Runtime restored; next investigate prepared-list ownership and reload work.
+
+
+Cleared AOT reload trackers: [results](results-cleared-reload-trackers-rejection-macos-arm64.json), [audit](audit-cleared-reload-trackers-rejection.md). Rejected after 900 optimized processes / 2700 windows: imported mutation improves 1.50%, local mutation 0.14%, while indirect/wide/integer-result callbacks regress 4.59%/2.62%/3.29% in the broader paired pass. Validated runtime restored exactly.

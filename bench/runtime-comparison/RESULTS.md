@@ -31744,3 +31744,57 @@ All 504 processes / 1512 measured windows replay independently. Each candidate p
 [Complete evidence](results-floating-callback-load-rejection-macos-arm64.json) includes raw timings, actual exits, hashes, both failed review stages, exact relocation resolution, restored binary sections and all 62 audit decisions. [Audit](audit-floating-callback-load-rejection.md). This shared-host work provides no fresh Java/develop comparison or global maximum-performance claim.
 
 Hold this family of callback load-order and descriptor-pointer micro-optimizations. Next investigate ownership and local reload work around prepared indexed integer mutation. Generated code still releases tracked/deferred owners, reloads the local list with a new owner, and then reads the same index for accumulation. Evaluate guarded scalar-result forwarding or safe deferred reload only after proving aliasing, reflection, copy-on-write, lifetime, exceptional cleanup and destruction order; generic fallback may reenter or replace the root. No implementation or speed claim is made for that next lead.
+
+
+## Cleared AOT reload tracker propagation rejected (2026-10-31)
+
+Copyright 2026 Qore Technologies, s.r.o.
+
+The compiler candidate carries the explicit clearing of both private reload-tracker slots into the immediate reload after a prepared indexed integer addition. It retains the owned root load, generic fallback, reflection, deferred cleanup, sink checks and cancellation behavior. Missing deferred slots do not qualify: later-compiled blocks can populate them before a runtime backedge. No runtime helper or public ABI changes.
+
+The optimized loop removes two tracker loads and one no-op decref per update. Only the local and imported listMutate bodies change, across three layouts; every other LLVM body is identical. All 18 disabled-control modules match the frozen baseline after serialized metadata/runtime identity normalization. Before and after use byte-identical runtime libraries; differences in native placement still count in the overall tradeoff.
+
+Reject after 900 optimized processes / 2700 measured windows. The broader paired run improves imported list mutation 1.50%, but local mutation is nearly flat at 0.14% faster. Indirect, wide and integer-result calls regress 4.59%, 2.62%, 3.29%, respectively, in every layout. Mixed application effects are below 0.7% in magnitude. These results do not justify retaining the candidate; product source and qore/qcc/libqore are restored byte-for-byte to the frozen 9ec checkpoint already installed in system paths.
+
+Apple M4 Pro ARM64; Apple clang 21 / SDK 27.2 / LLVM 22.1.8; Release -O3 -DNDEBUG, allocation tracking off; fresh stripped qcc -O3 artifacts. The before variant uses QORE_DISABLE_AOT_CLEARED_RELOAD_TRACKERS=1 only at compilation; after uses default compilation. Normal AOT identity checks remain. Default/reverse/shuffle-487 caller layouts, count 4096, seed 7, three warmup and three measured 100 ms windows. Three symmetric ABBA/BAAB blocks per layout, two processes per variant per block. Paired effects use within-block ratios and differ from ratios of separately aggregated marginal times. Whole kernels, not isolated call latency.
+
+### Six-workload target pilot
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Marginal change|!Paired change
+|local:list_mutate|117.8728|115.9247|-1.65%|-0.73%
+|local:direct_call|1.4828|1.4842|+0.09%|-0.09%
+|micro:list_mutate|118.1336|116.2256|-1.62%|-1.27%
+|micro:indirect_call|7.7252|8.5967|+11.28%|+5.60%
+|micro:indirect_wide|8.1734|8.4225|+3.05%|+2.26%
+|micro:list_build|22.1387|22.3063|+0.76%|+0.71%
+
+### Nineteen-workload tradeoff evaluation
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Marginal change|!Paired change
+|local:direct_call|1.4845|1.4837|-0.05%|+0.21%
+|local:polymorphic_call|15.2660|15.2004|-0.43%|-0.29%
+|local:list_mutate|117.6167|117.1167|-0.43%|-0.14%
+|local:dynamic_float_result_call|10.2076|10.2497|+0.41%|+1.81%
+|micro:indirect_call|7.8402|8.4974|+8.38%|+4.59%
+|micro:indirect_wide|8.2548|8.4577|+2.46%|+2.62%
+|micro:indirect_int_result|8.6036|8.5457|-0.67%|+3.29%
+|micro:indirect_float|8.8642|8.7632|-1.14%|-1.27%
+|micro:indirect_float_result|9.1932|8.7409|-4.92%|-2.81%
+|micro:indirect_tagged_float|9.2018|9.5027|+3.27%|+0.13%
+|micro:closure_call|18.2592|18.2278|-0.17%|-0.13%
+|micro:closure_capture|23.5552|23.5147|-0.17%|-0.06%
+|micro:list_build|22.2356|22.2509|+0.07%|-0.27%
+|micro:list_mutate|118.7187|116.4650|-1.90%|-1.50%
+|float:callback_loop_float_return|4.8159|4.8025|-0.28%|-0.14%
+|mixed:csv_report|919.3012|907.9235|-1.24%|-0.53%
+|mixed:object_orders|2974.1923|2958.0485|-0.54%|-0.56%
+|mixed:callback_pipeline|93.2604|92.7132|-0.59%|+0.42%
+|mixed:text_index|1300.3508|1299.4143|-0.07%|-0.65%
+
+All 900 timed processes and 2700 windows replay from raw output. Release qualification passes six fixtures / 11 cases / 5590 assertions, covering prepared updates, aliases, reflection, wide values, imported recursive storage, exceptional cleanup and compiler cancellation. Preparation validates 4698 reference outputs per variant across 36 artifacts. Recorded owned builds/tests/codegen run outside timing. This is a shared host without exclusive CPU/frequency control.
+
+The initial build failed on an LLVM pointer-type conditional expression and was corrected before qualification. The first codegen enumerator used a greedy function-header regex, allowing personality symbols to collide as dictionary keys; manual diff review rejected that summary before timing. The revised enumerator requires unique names and exact coverage of every definition, and a separate review confirms the intended removals. Both failed stages remain in the evidence.
+
+[Complete evidence](results-cleared-reload-trackers-rejection-macos-arm64.json) and [all 62 audit checks](audit-cleared-reload-trackers-rejection.md). No Debug or short-workload retention pass follows the rejected broader tradeoff. No fresh Java/develop comparison or maximum-performance claim.
+
+Next investigate combining the prepared mutation and owned root reload when the arithmetic result is unused. Preserve generic fallback, result disposal, pending-error and throwing paths, reflection, root ownership and deferred cleanup. This is a separate hypothesis requiring proof and fresh measurements.
