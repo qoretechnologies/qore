@@ -31701,3 +31701,46 @@ All 864 processes / 2592 measured windows replay independently. Release qualific
 [Complete evidence](results-callback-cache-snapshot-rejection-macos-arm64.json) includes raw samples, actual exits, hashes, code-shape observations, restored binary identity, untimed profiles and all 62 audit decisions. [Audit](audit-callback-cache-snapshot-rejection.md). No Debug or short-loop retention pass follows a rejected broad tradeoff. No fresh Java/develop comparison or global maximum-performance claim is made.
 
 Next separate the floating helper's promising code shape from the integer paths that regress. Start with an isolated compile-only reference-pointer snapshot or entry-read ordering probe, require useful code without extra spills, and treat any result as a separate candidate requiring optimized before/after and broader controls.
+
+
+## Floating callback load variants rejected (2026-10-31)
+
+Copyright 2026 Qore Technologies, s.r.o.
+
+Two narrower runtime candidates follow the rejected all-signature descriptor snapshot. Both affect only floating zero/unary invariant helpers. The first reads the immutable published typed-entry binding before acquiring the live AOT context. The second retains only the invocation-owned reference pointer across the acquire, keeping the original entry/context read order. Neither retains a context across calls or removes a live Program, debugger, body, readiness, stack, exception, ownership or diagnostic-reader check.
+
+Both candidates are rejected. In the entry-order pilot, ordinary/native-result/tagged-result floating callbacks regress 9.83%/4.87%/8.88% in paired comparisons, in all three layouts. The reference-only variant regresses 5.10%/6.57%/5.93%; native-result and tagged-result regress in every layout. Smaller helpers do not justify retaining slower target execution. The validated runtime is restored; no candidate is installed.
+
+Apple M4 Pro ARM64, Apple clang 21/SDK 27.2/LLVM 22.1.8, Release -O3 -DNDEBUG, allocation tracking off. Each preparation freshly compiles 36 stripped O3 artifacts with matching frozen before/after runtimes and normal AOT identity enforcement. Default/reverse/shuffle-487 caller layouts; count 4096, seed 7; three warmup and three measured 100 ms windows. Each pilot has three symmetric ABBA/BAAB blocks per layout, two processes per variant per block. Within-block ratios are primary; marginal times are separately aggregated. These are whole-kernel ns/item, not isolated call latencies, and epochs must not be pooled.
+
+### Immutable entry before live context acquire
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Marginal change|!Paired change
+|local:direct_call|1.5163|1.5257|+0.62%|-0.15%
+|micro:indirect_call|7.9728|8.0619|+1.12%|-1.59%
+|micro:indirect_wide|8.2742|8.2619|-0.15%|-0.30%
+|micro:indirect_int_result|8.6695|8.6276|-0.48%|+0.30%
+|micro:indirect_float|8.9419|9.8679|+10.36%|+9.83%
+|micro:indirect_float_result|9.3246|9.7005|+4.03%|+4.87%
+|micro:indirect_tagged_float|9.6375|10.4929|+8.88%|+8.88%
+
+### Reference-only snapshot with original read order
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Marginal change|!Paired change
+|local:direct_call|1.5224|1.5255|+0.21%|+0.05%
+|micro:indirect_call|8.0552|7.9354|-1.49%|-1.03%
+|micro:indirect_wide|8.3984|8.3744|-0.29%|+1.05%
+|micro:indirect_int_result|8.7524|8.6267|-1.44%|-2.99%
+|micro:indirect_float|9.1247|9.4279|+3.32%|+5.10%
+|micro:indirect_float_result|9.4107|10.0535|+6.83%|+6.57%
+|micro:indirect_tagged_float|9.5686|10.1059|+5.61%|+5.93%
+
+Each floating helper loses one real instruction (200 to 199) and keeps its 64/80-byte frame and entry address. All 18 generated LLVM modules per preparation match after normalizing only serialized runtime identity metadata and its length. Integer private operations, registers and internal branches match; eight cold address operands per helper move because later helpers, import stubs and error strings move. Every changed operand resolves independently to the same symbol or exact string, and integer public wrapper instructions and entry addresses match. These structural checks do not promise identical timing.
+
+The initial exact-disassembly gate failed on those relocations. Before timing, the plan was revised to allow only independently resolved cold target relocations. A subsequent review script expected the wrong prefix for the existing stack-limit message; its failure is retained, and the corrected check verifies the exact string. No runtime edit resolved either review failure.
+
+All 504 processes / 1512 measured windows replay independently. Each candidate passes four Release fixtures / six cases / 1994 assertions, with additional native C++ checks for warmed-cache fallback, pending exceptions, stack failure, context restoration and ownership. Each preparation validates 4698 reference outputs per variant. Recorded owned builds, tests and code-generation reviews finish outside timing. No broader, Debug or short-loop retention qualification follows target regressions. Restored qore/qcc match the frozen baseline byte-for-byte; all libqore sections match except the expected ec47-to-679 git revision string.
+
+[Complete evidence](results-floating-callback-load-rejection-macos-arm64.json) includes raw timings, actual exits, hashes, both failed review stages, exact relocation resolution, restored binary sections and all 62 audit decisions. [Audit](audit-floating-callback-load-rejection.md). This shared-host work provides no fresh Java/develop comparison or global maximum-performance claim.
+
+Hold this family of callback load-order and descriptor-pointer micro-optimizations. Next investigate ownership and local reload work around prepared indexed integer mutation. Generated code still releases tracked/deferred owners, reloads the local list with a new owner, and then reads the same index for accumulation. Evaluate guarded scalar-result forwarding or safe deferred reload only after proving aliasing, reflection, copy-on-write, lifetime, exceptional cleanup and destruction order; generic fallback may reenter or replace the root. No implementation or speed claim is made for that next lead.

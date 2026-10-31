@@ -1665,3 +1665,6 @@ Clean callback completion experiment: [results](results-clean-status-rejection-m
 
 
 Callback cache pointer snapshots: [results](results-callback-cache-snapshot-rejection-macos-arm64.json), [audit](audit-callback-cache-snapshot-rejection.md). Rejected after 864 optimized processes / 2592 windows: ordinary/wide callbacks regress 7.20%/9.89% in the broader paired pass despite gains in some callback forms. Runtime restored exactly.
+
+
+Floating callback load variants: [results](results-floating-callback-load-rejection-macos-arm64.json), [audit](audit-floating-callback-load-rejection.md). Two narrower variants rejected after 504 optimized processes / 1512 windows; floating target regressions persist despite one fewer instruction. Runtime restored; next investigate prepared-list ownership and reload work.
