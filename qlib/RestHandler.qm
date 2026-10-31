@@ -398,6 +398,9 @@ Content-Length: 16
     @section resthandler_relnotes RestHandler Release Notes
 
     @subsection rh_1_6_7 RestHandler v1.6.7
+    - fixed responses with headers whose values all have the same type, such as a literal
+      \c {"X-Total-Count": 42}: a raw response without a \c Content-Type header raised \c RUNTIME-TYPE-ERROR, and
+      a serialized response was answered with status 406 (Not Acceptable)
     - a request whose query has a parameter name that decodes to a string with a NUL character (such as \c "a%00b")
       is answered with status 400 (Bad Request); before, it was handled with the name cut at the NUL character
       (\c "a").  @ref RestHandler::RestHandler::handleExternalRequest() "handleExternalRequest()" raises
@@ -1700,11 +1703,12 @@ public namespace RestHandler {
                     || rv.hasKeyValue("chunked_body")
                     || rv.send_callback;
                 if (raw_response) {
-                    if (!rv.hdr) {
-                        rv.hdr = {};
-                    }
                     if (!exists rv.hdr."Content-Type") {
-                        rv.hdr."Content-Type" = "application/octet-stream";
+                        # the handler's headers may be narrowed (e.g. hash<string, int> for {"X-Total-Count": 42}),
+                        # and adding the Content-Type string header would throw
+                        hash<auto!> rhdr = rv.hdr ?? {};
+                        rhdr."Content-Type" = "application/octet-stream";
+                        rv.hdr = rhdr;
                     }
                 } else {
                     # verify response with the REST schema

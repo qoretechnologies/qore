@@ -170,6 +170,9 @@ printf("%Y\n", ans.body);
     @section restclientrelnotes Release Notes
 
     @subsection restclientv2_7 RestClient v2.7
+    - fixed @ref RestClient::RestClient::constructor() "RestClient::constructor()" to accept a \c headers option
+      whose values all have the same type, such as a literal \c {"X-Count": 1}, with the \c content_encoding
+      option; adding the \c Accept-Encoding header raised \c RUNTIME-TYPE-ERROR
     - added RestPathMode, RestRequestTarget, rest_request_path(), and explicit target methods for ordinary,
       raw-body, and polling requests; connection pings no longer clear the API root to address an absolute path
       (<a href="https://github.com/qoretechnologies/qore/issues/5485">issue 5485</a>)
@@ -1631,7 +1634,10 @@ RestClient rest({"url": "http://localhost:8001/rest"});
                 throw "RESTCLIENT-ERROR", sprintf("content encoding option %y is unknown; valid options: %y",
                     opts.content_encoding, keys EncodingSupport);
             }
-            opts.headers."Accept-Encoding" = opts.content_encoding;
+            # the caller's headers may be narrowed (e.g. hash<string, int>), and adding the string header would throw
+            hash<auto!> hdrs = opts.headers ?? {};
+            hdrs."Accept-Encoding" = opts.content_encoding;
+            opts.headers = hdrs;
         }
 
         # unconditionally set the encoding to utf-8

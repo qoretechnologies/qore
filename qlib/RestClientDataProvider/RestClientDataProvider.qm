@@ -304,6 +304,9 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
     @section restclientdataprovider_relnotes Release Notes
 
     @subsection restclientdataprovider_v2_4 RestClientDataProvider v2.4
+    - fixed @ref RestClientDataProvider::RestClientDataProvider::processRestOptions() "processRestOptions()" to
+      accept an option hash whose values all have the same type, such as a literal with \c ssl_cert_location and
+      \c ssl_cert_der strings; adding the binary certificate or key data raised \c RUNTIME-TYPE-ERROR
     - implements the framework-level generic API call auto-injection introduced in
       @ref dataprovider_v3_5 "DataProvider v3.5":
       - registers the

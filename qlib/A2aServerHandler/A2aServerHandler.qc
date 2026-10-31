@@ -100,7 +100,10 @@ public class A2aServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
 
     private {
         #! Agent card metadata
-        hash<auto> agent_card;
+        /** "auto!" so that a caller's card whose values share a type (for example a literal \c hash<string, string>)
+            does not reject the skills and extensions added to it
+        */
+        hash<auto!> agent_card;
 
         #! Extended agent card (optional)
         *hash<auto> extended_agent_card;
@@ -241,11 +244,11 @@ public class A2aServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
     registerSkill(hash<A2aAgentSkill> skill) {
         AutoWriteLock al(rwl);
         skill_map{skill.id} = skill;
-        # Update agent card skills list
-        if (!agent_card.skills) {
-            agent_card.skills = ();
-        }
-        agent_card.skills += skill;
+        # Update agent card skills list; the caller's list may be narrowed (e.g. list<hash<string, string>>) and
+        # would reject the skill hash
+        list<auto!> skills = agent_card.skills ?? ();
+        skills += skill;
+        agent_card.skills = skills;
     }
 
     #! Unregisters a skill
@@ -1267,7 +1270,10 @@ public class A2aServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
             throw "A2A-EXTENSION-ERROR", sprintf("extension %y is already registered", ext.uri);
         }
         extension_map{ext.uri} = ext;
-        agent_card.capabilities.extensions = map extension_map{$1}, keys extension_map;
+        # the caller's capabilities hash may be narrowed (e.g. hash<string, bool>) and would reject the list
+        hash<auto!> capabilities = agent_card.capabilities ?? {};
+        capabilities.extensions = map extension_map{$1}, keys extension_map;
+        agent_card.capabilities = capabilities;
     }
 
     #! Returns the extensions this agent supports, keyed by URI

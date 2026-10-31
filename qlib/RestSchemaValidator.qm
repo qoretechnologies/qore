@@ -82,6 +82,9 @@ module RestSchemaValidator {
     @section restschemavalidator_relnotes RestSchemaValidator Module Release Notes
 
     @subsection restschemavalidator_2_5 RestSchemaValidator v2.5
+    - fixed @ref RestSchemaValidator::AbstractRestSchemaValidator::processResponse() "processResponse()" to accept
+      response headers whose values all have the same type, such as a literal \c {"X-Total-Count": 42}; adding
+      the \c Content-Type header raised \c RUNTIME-TYPE-ERROR, which a REST server returned as a 406 error
     - a required property that a schema does not declare is a required field of type \c any (see
       @ref RestSchemaValidator::AbstractRestSchemaObject::undeclared_required "undeclared_required"), and a required
       field of type \c any is marked required and preselected, as its type accepts no value
@@ -2945,7 +2948,7 @@ setCatalogType(AbstractRestSchemaObject so, AbstractDataProviderType t) {
             @param path the URI path of the original request (without query arguments)
             @param code the HTTP response code
             @param response_body the response body data (if any)
-            @param headers HTTP headers to include in the response
+            @param headers0 HTTP headers to include in the response
             @param content_types the desired MIME types for serialization in order of preference; if none are usable
             then an exception is thrown; if this argument is not present, then json is preferred over yaml
 
@@ -2962,7 +2965,10 @@ setCatalogType(AbstractRestSchemaObject so, AbstractDataProviderType t) {
             be thrown
         */
         hash<HttpResponseInfo> processResponse(string method, string path, int code, auto response_body,
-                *hash<auto> headers, *softlist<string> content_types) {
+                *hash<auto> headers0, *softlist<string> content_types) {
+            # a caller's literal may be narrowed (e.g. hash<string, int> for {"X-Total-Count": 42}), and adding the
+            # Content-Type string header would throw
+            *hash<auto!> headers = headers0;
             return processResponseImpl(method, path, code, response_body, headers, content_types);
         }
 

@@ -2931,7 +2931,9 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
             }, t.getConstraints());
         }
 
-        hash<auto> info;
+        # "auto!" so that a literal description whose values share a type (e.g. the binary type's
+        # hash<string, string>) accepts a default value or constraint of another type
+        hash<auto!> info;
 
         switch (type) {
             case NT_DATE:

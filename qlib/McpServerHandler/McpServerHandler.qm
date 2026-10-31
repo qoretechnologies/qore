@@ -230,6 +230,8 @@ module McpServerHandler {
     @section McpServerHandler_relnotes McpServerHandler Release Notes
 
     @subsection McpServerHandler_1_1 McpServerHandler v1.1
+    - fixed registering a tool whose input type has a binary field with a default value; describing it raised
+      \c RUNTIME-TYPE-ERROR
     - a tool's input schema describes each type with fields that its input type refers to more than once, including
       a recursive type, once in the schema's \c "$defs" and refers to it with \c "$ref", so that the schema grows
       with the number of distinct types instead of describing a type again at every path to it; a tool's input type

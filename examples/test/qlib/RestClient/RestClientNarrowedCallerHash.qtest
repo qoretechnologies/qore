@@ -1,0 +1,72 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires RestClient
+%requires RestClientIo
+%requires RestClientDataProvider
+
+%exec-class RestClientNarrowedCallerHashTest
+
+#! Option hashes whose values all have the same type are accepted by the REST client entry points
+/** A hash literal whose values share a type, such as \c {"url": "...", "ssl_verify_cert": "false"}, has a narrowed
+    runtime type such as \c hash<string, string>; adding a value of another type to the caller's hash raised
+    RUNTIME-TYPE-ERROR.  No test connects to a server
+*/
+class RestClientNarrowedCallerHashTest inherits QUnit::Test {
+    constructor() : Test("RestClientNarrowedCallerHashTest", "1.0", \ARGV) {
+        addTestCase("RestClient adds Accept-Encoding to integer headers", \restClientContentEncoding());
+        addTestCase("RestClientIo normalizes string options", \restClientIoStringOptions());
+        addTestCase("RestClientDataProvider adds binary certificate data", \processRestOptionsBinary());
+        set_return_value(main());
+    }
+
+    #! Returns its argument, so that a literal keeps its narrowed runtime type
+    static hash<auto> mk(hash<auto> h) {
+        return h;
+    }
+
+    restClientContentEncoding() {
+        assertEq("hash<string, int>", RestClientNarrowedCallerHashTest::mk({"X-Count": 1}).fullType());
+        RestClient rest({"headers": {"X-Count": 1}, "content_encoding": "gzip"}, True);
+        hash<auto> hdr = rest.getDefaultHeaders();
+        assertEq("gzip", hdr."Accept-Encoding");
+        assertEq(1, hdr."X-Count");
+    }
+
+    restClientIoStringOptions() {
+        assertEq("hash<string, string>", RestClientNarrowedCallerHashTest::mk({"url": "http://localhost:1",
+            "ssl_verify_cert": "false", "token": "abc"}).fullType());
+        # the legacy "ssl_verify_cert" option is converted to the integer "ssl_verify_mode" option
+        RestClientIo rest({"url": "http://localhost:1", "ssl_verify_cert": "false", "token": "abc"});
+        on_exit rest.close();
+        assertEq("Bearer abc", rest.getDefaultHeaders().authorization);
+        # the caller's options are kept as given
+        assertEq({"url": "http://localhost:1", "ssl_verify_cert": "false", "token": "abc"},
+            rest.getConstructorOptions());
+    }
+
+    processRestOptionsBinary() {
+        string dir = tmp_location();
+        string path = sprintf("%s/rcnch-%s.der", dir, get_random_string(12));
+        File f();
+        f.open2(path, O_CREAT | O_TRUNC | O_WRONLY, 0600);
+        f.write(<010203>);
+        f.close();
+        on_exit unlink(path);
+
+        string loc = "file://" + path;
+        assertEq("hash<string, string>", RestClientNarrowedCallerHashTest::mk({"url": "http://localhost:1",
+            "ssl_cert_location": loc, "ssl_cert_der": "true"}).fullType());
+        hash<auto> opts = RestClientDataProvider::processRestOptions({"url": "http://localhost:1",
+            "ssl_cert_location": loc, "ssl_cert_der": "true"});
+        assertEq(<010203>, opts.ssl_cert_data);
+        assertFalse(opts.hasKey("ssl_cert_location"));
+        assertEq("http://localhost:1", opts.url);
+    }
+}

@@ -1,0 +1,113 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpServerUtil
+%requires RestSchemaValidator
+%requires RestHandler
+
+%exec-class RestHandlerNarrowedCallerHashTest
+
+#! Returns REST responses whose header values all have the same type
+class NarrowedHeaderRestClass inherits AbstractRestClass {
+    string name() {
+        return "items";
+    }
+
+    #! a serialized response with an integer header
+    hash<HttpHandlerResponseInfo> get(hash<auto> cx, *hash<auto> ah) {
+        return RestHandler::makeResponse(200, {"a": 1}, {"X-Total-Count": 42});
+    }
+
+    #! a raw response with an integer header and no Content-Type
+    hash<HttpHandlerResponseInfo> getRaw(hash<auto> cx, *hash<auto> ah) {
+        return <HttpHandlerResponseInfo>{
+            "code": 200,
+            "body": "raw",
+            "hdr": {"X-Total-Count": 42},
+            "raw_response": True,
+        };
+    }
+}
+
+class NarrowedHeaderRestHandler inherits RestHandler {
+    constructor() {
+        addClass(new NarrowedHeaderRestClass());
+    }
+}
+
+#! dummy HttpListenerInterface object for direct handleRequest() calls
+class NarrowedHeaderListener inherits HttpListenerInterface {
+    addUserThreadContext(hash<auto> uctx) {}
+    auto removeUserThreadContext(*string k) {}
+    log(string fmt, ...) {}
+    logError(string fmt, ...) {}
+}
+
+#! Response headers whose values all have the same type are accepted by the REST server and validators
+/** A hash literal such as \c {"X-Total-Count": 42} has the narrowed runtime type \c hash<string, int>; adding the
+    \c Content-Type string header to it raised RUNTIME-TYPE-ERROR, which the REST handler returned as a 406 error.
+    The handler is called directly, without a server
+*/
+class RestHandlerNarrowedCallerHashTest inherits QUnit::Test {
+    constructor() : Test("RestHandlerNarrowedCallerHashTest", "1.0", \ARGV) {
+        addTestCase("NullRestSchemaValidator::processResponse() adds Content-Type", \validatorResponse());
+        addTestCase("RestHandler serializes a response with integer headers", \handlerResponse());
+        addTestCase("RestHandler adds Content-Type to a raw response", \handlerRawResponse());
+        set_return_value(main());
+    }
+
+    #! Returns its argument, so that a literal keeps its narrowed runtime type
+    static hash<auto> mk(hash<auto> h) {
+        return h;
+    }
+
+    validatorResponse() {
+        assertEq("hash<string, int>", RestHandlerNarrowedCallerHashTest::mk({"X-Total-Count": 42}).fullType());
+        NullRestSchemaValidator validator();
+        hash<HttpResponseInfo> rv = validator.processResponse("GET", "/items", 200, {"a": 1},
+            {"X-Total-Count": 42}, "application/json");
+        assertEq(200, rv.code);
+        assertEq({"X-Total-Count": 42, "Content-Type": "application/json"}, rv.hdr);
+        assertEq("{\"a\":1}", rv.body);
+    }
+
+    handlerResponse() {
+        hash<auto> rv = handle("items");
+        assertEq(200, rv.code);
+        assertEq(42, rv.hdr."X-Total-Count");
+        assertEq("application/json", rv.hdr."Content-Type");
+        assertEq("{\"a\":1}", rv.body);
+    }
+
+    handlerRawResponse() {
+        hash<auto> rv = handle("items?action=raw");
+        assertEq(200, rv.code);
+        assertEq({"X-Total-Count": 42, "Content-Type": "application/octet-stream"}, rv.hdr);
+        assertEq("raw", rv.body);
+    }
+
+    private hash<auto> handle(string path) {
+        NarrowedHeaderRestHandler handler();
+        NarrowedHeaderListener listener();
+        Socket s();
+        hash<auto> hdr = {
+            "method": "GET",
+            "path": path,
+            "accept": "application/json",
+            "http_version": "1.1",
+            "host": "localhost",
+        };
+        hash<auto> cx = {
+            "url": parse_url("http://localhost/" + path),
+            "hdr": hdr,
+            "id": 1,
+        };
+        return handler.handleRequest(listener, s, cx, hdr);
+    }
+}

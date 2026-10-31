@@ -214,6 +214,8 @@ resp = rc.restGet("/api/data");
     @section restclientio_relnotes Release Notes
 
     @subsection restclientio_v1_0 Version 1.0
+    - the constructor accepts an option hash whose values all have the same type, such as a literal
+      \c {"url": "...", "ssl_verify_cert": "false"}
     - initial release
 */
 
@@ -1197,7 +1199,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
         }
 
         #! Creates a new RestClientIo with the given options
-        /** @param opts constructor options; see class documentation for valid keys
+        /** @param opts0 constructor options; see class documentation for valid keys
             @param shared_mgr an optional shared @ref HttpClientIo::HttpClientConnectionManager
                 "HttpClientConnectionManager" to use instead of creating a new one. When provided,
                 the manager is not closed by @ref close() — the caller retains ownership.
@@ -1206,11 +1208,14 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
 
             @throw RESTCLIENTIO-ERROR if the \c url option is missing or invalid
         */
-        constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr) {
+        constructor(hash<auto> opts0, *HttpClientIo::HttpClientConnectionManager shared_mgr) {
             # Capture caller options verbatim for copyWithUrl / getConstructorOptions;
             # validation and normalization below mutate the local 'opts' but saved_opts
             # preserves the caller's original intent for sibling construction
-            saved_opts = opts;
+            saved_opts = opts0;
+            # a caller's literal may be narrowed (e.g. hash<string, string>), and normalizing the options below
+            # adds values of other types, such as the integer ssl_verify_mode
+            hash<auto!> opts = opts0;
 
             # Strip unknown keys (e.g., service-specific options already consumed by subclass getOptions() calls
             # like "api_profile", "tenant", etc.)
