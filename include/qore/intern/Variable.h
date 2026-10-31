@@ -107,6 +107,7 @@ class LValueRemoveHelper;
 class RSetHelper;
 class QoreVarInfo;
 struct LVPathStep;
+class QoreMemberInfo;
 enum class LVPathStepKind : uint8_t;
 
 //! Returns the class static variable named by a \c "ClassPath::varName" lvalue path in the given program
@@ -482,7 +483,14 @@ public:
     */
     DLLLOCAL int setStaticVarAccessorLValue(QoreVarInfo& vi);
     //! Binds an external member to a temporary; writes are committed after releasing lvalue locks
-    DLLLOCAL int setMemberWriteGateLValue(QoreObject* object, const char* member);
+    //! Binds an external member to a temporary; writes are committed after releasing lvalue locks
+    /** @param object the object
+        @param member the member name
+        @param accessor_info the declaration of a member held in external storage with accessors, or nullptr for an
+        undeclared member handled by the class's write gate
+    */
+    DLLLOCAL int setMemberWriteGateLValue(QoreObject* object, const char* member,
+            const QoreMemberInfo* accessor_info = nullptr);
     // An object reached through an external member has its own identity; mutating it does not replace
     // the parent's reference. Keep the temporary alive, but stop writing it back to the parent.
     DLLLOCAL void disableMemberWriteBack() {
@@ -578,10 +586,14 @@ private:
         ReferenceHolder<QoreObject> object;
         std::string member;
         ValueHolder value;
+        //! the declaration of a member held in external storage with accessors; nullptr for the write gate
+        const QoreMemberInfo* accessor_info;
         bool write_back = true;
 
-        DLLLOCAL MemberLValue(QoreObject* obj, const char* name, ExceptionSink* xsink)
-            : object(static_cast<QoreObject*>(obj->refSelf()), xsink), member(name), value(xsink) {
+        DLLLOCAL MemberLValue(QoreObject* obj, const char* name, const QoreMemberInfo* accessor_info,
+                ExceptionSink* xsink)
+            : object(static_cast<QoreObject*>(obj->refSelf()), xsink), member(name), value(xsink),
+            accessor_info(accessor_info) {
         }
     };
     std::unique_ptr<MemberLValue> member_lvalue;

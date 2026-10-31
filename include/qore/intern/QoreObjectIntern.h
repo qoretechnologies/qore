@@ -276,6 +276,21 @@ public:
     DLLLOCAL void mergeIntern(ExceptionSink* xsink, const QoreHashNode* h, bool& check_recursive,
         const qore_class_private* class_ctx, SafeDerefHelper& sdh, const QoreHashNode* new_internal_data = nullptr);
 
+    //! moves the values of declared members held in external storage from a hash to be merged into \a ext
+    /** @param h the hash to merge, which is modified only if it has such members; the caller owns it
+        @param ext receives a hash of the values for such members, if there are any
+    */
+    DLLLOCAL void takeAccessorMembersForMerge(QoreHashNode* h, ReferenceHolder<QoreHashNode>& ext) const;
+
+    //! writes the values of declared members held in external storage that are merged into the object
+    /** called without any lock on the object; the lvalue lock in \a vl is released first, since the setters can
+        run any code; access and the declared types are checked as for an assignment
+
+        @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL int mergeAccessorMembers(const QoreHashNode* ext, const qore_class_private* class_ctx, AutoVLock& vl,
+        ExceptionSink* xsink);
+
     DLLLOCAL QoreHashNode* copyData(ExceptionSink* xsink, bool throw_exception = true) const;
 
     DLLLOCAL int getLValue(const char* key, LValueHelper& lvh, const qore_class_private* class_ctx, bool for_remove,

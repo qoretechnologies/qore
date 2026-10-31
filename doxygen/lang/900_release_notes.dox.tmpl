@@ -103,6 +103,14 @@
     their normal access rules and storage. See @ref member_write_gate
     (<a href="https://github.com/qoretechnologies/qore/issues/5511">issue 5511</a>).
 
+    C++ API: builtin classes can declare a member whose value is read from and written to the module's own storage
+    with QoreClass::addBuiltinMemberWithAccessors(), the counterpart for normal members of
+    QoreClass::addBuiltinStaticVarWithAccessors(). The member is declared and typed, so parse-time checks and
+    reflection see it, but the object holds no value for it and it is never initialized: every read calls the
+    module's getter and every assignment, including compound and nested assignments, removal and deletion, calls its
+    setter once the assignment is complete, in every execution mode. The jni module uses this for Java instance
+    fields, so that reading or assigning one reads or writes the field of the Java object.
+
     Assigning an object member through a variable of type <tt>object</tt> now calls <tt>memberNotification()</tt>
     in IR, JIT and AOT execution, matching AST execution and assignments through class-typed variables.
     Notification exceptions propagate after the value has been stored

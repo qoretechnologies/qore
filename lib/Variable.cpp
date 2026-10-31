@@ -711,9 +711,14 @@ LValueHelper::~LValueHelper() {
     vl.del();
 
     if (member_lvalue && member_lvalue->write_back && member_lvalue_modified && !*vl.xsink) {
-        qore_class_private::get(*member_lvalue->object->getClass())->evalMemberWriteGate(*member_lvalue->object,
-            member_lvalue->member.c_str(), *member_lvalue->value, QoreMemberWriteOp::Assign,
-            vl.xsink).discard(vl.xsink);
+        const qore_class_private* cls = qore_class_private::get(*member_lvalue->object->getClass());
+        if (member_lvalue->accessor_info) {
+            cls->evalMemberAccessorSet(*member_lvalue->object, member_lvalue->member.c_str(),
+                *member_lvalue->accessor_info, *member_lvalue->value, vl.xsink);
+        } else {
+            cls->evalMemberWriteGate(*member_lvalue->object, member_lvalue->member.c_str(), *member_lvalue->value,
+                QoreMemberWriteOp::Assign, vl.xsink).discard(vl.xsink);
+        }
     }
 
     if (static_var_lvalue) {
@@ -1220,8 +1225,9 @@ int LValueHelper::setBufferElementLValue(QoreBufferNode* b, size_t index) {
     return 0;
 }
 
-int LValueHelper::setMemberWriteGateLValue(QoreObject* object, const char* member) {
-    auto entry = std::make_unique<MemberLValue>(object, member, vl.xsink);
+int LValueHelper::setMemberWriteGateLValue(QoreObject* object, const char* member,
+        const QoreMemberInfo* accessor_info) {
+    auto entry = std::make_unique<MemberLValue>(object, member, accessor_info, vl.xsink);
     // Keep the receiver before unlocking the parent lvalue; a gate can call external or Qore code.
     vl.del();
     clearPtr();
@@ -1231,13 +1237,17 @@ int LValueHelper::setMemberWriteGateLValue(QoreObject* object, const char* membe
     if (*vl.xsink) {
         return -1;
     }
+    const qore_class_private* cls = qore_class_private::get(*object->getClass());
     if (!assignment_only) {
-        entry->value = qore_class_private::get(*object->getClass())->evalMemberGate(object, member, vl.xsink);
+        entry->value = accessor_info
+            ? cls->evalMemberAccessorGet(object, member, *accessor_info, vl.xsink)
+            : cls->evalMemberGate(object, member, vl.xsink);
         if (*vl.xsink) {
             return -1;
         }
     }
-    setValue(*entry->value, autoTypeInfo);
+    // a declared member keeps its type: a value that it does not accept is rejected before the setter is called
+    setValue(*entry->value, accessor_info ? accessor_info->getTypeInfo() : autoTypeInfo);
     // Crossing an object boundary mutates that object, not the external member holding its reference.
     // Keep only the final object's temporary; any containing hash/list copies are unchanged by that mutation.
     member_lvalue = std::move(entry);

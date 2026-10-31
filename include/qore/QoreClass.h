@@ -160,6 +160,58 @@ enum class QoreMemberWriteOp {
 using q_member_write_gate_t = QoreValue (*)(QoreObject* self, AbstractPrivateData* data, const char* member,
     QoreValue value, QoreMemberWriteOp operation, ExceptionSink* xsink);
 
+//! A callback that reads a declared member whose value is held in external storage
+/** @param self the object; borrowed for the duration of the call
+    @param data the object's private data for the class that declared the member; referenced for the duration of
+    the call
+    @param member the name of the member
+    @param ptr the module data registered with the member
+    @param xsink Qore-language exception information should be stored here by calling ExceptionSink::raiseException()
+
+    @return a new reference to the member's current value; the member's declared type is applied to it as it is to
+    an assigned value, so a value that the type rejects raises an exception in the reading code
+
+    @note called without any %Qore object or lvalue lock held; the module makes its own storage safe for concurrent
+    access, and the callback can call %Qore code
+
+    @see QoreClass::addBuiltinMemberWithAccessors()
+
+    @since %Qore 3.0
+*/
+using q_member_get_t = QoreValue (*)(QoreObject* self, AbstractPrivateData* data, const char* member,
+    const void* ptr, ExceptionSink* xsink);
+
+//! A callback that writes a declared member whose value is held in external storage
+/** @param self the object; borrowed for the duration of the call
+    @param data the object's private data for the class that declared the member; referenced for the duration of
+    the call
+    @param member the name of the member
+    @param ptr the module data registered with the member
+    @param value the value assigned, already accepted by the member's declared type; borrowed for the duration of the
+    call, so a module that stores it must take its own reference; \c NOTHING when the member is removed or deleted
+    @param xsink Qore-language exception information should be stored here by calling ExceptionSink::raiseException()
+
+    @note called without any %Qore object or lvalue lock held, once the assignment is complete; the module makes its
+    own storage safe for concurrent access, and the callback can call %Qore code
+
+    @see QoreClass::addBuiltinMemberWithAccessors()
+
+    @since %Qore 3.0
+*/
+using q_member_set_t = void (*)(QoreObject* self, AbstractPrivateData* data, const char* member, const void* ptr,
+    QoreValue value, ExceptionSink* xsink);
+
+//! A callback that releases the module data registered with a declared member held in external storage
+/** Called once, when the last class that declares or inherits the member is destroyed
+
+    @param ptr the module data registered with the member
+
+    @see QoreClass::addBuiltinMemberWithAccessors()
+
+    @since %Qore 3.0
+*/
+using q_member_del_t = void (*)(const void* ptr);
+
 //! method type enum
 /** @since %Qore 0.9
 */
@@ -1206,6 +1258,57 @@ public:
 
     //! adds a member
     DLLEXPORT void addMember(const char* mem, ClassAccess access, const QoreTypeInfo* n_typeInfo, QoreValue initial_value = QoreValue());
+
+    //! Adds a declared member whose value is read from and written to external storage owned by the module
+    /** Use this instead of addMember() when the member mirrors a value owned by the module (such as a field of an
+        object of a foreign runtime) that can change independently of %Qore code; a member holding a copy of such a
+        value silently diverges from it.  This is the counterpart for normal members of
+        addBuiltinStaticVarWithAccessors().
+
+        The member is declared with its type and access, as with addMember(), so parse-time type checks and
+        reflection see it, and it is accessible as any other member; however the object holds no value for it, so it
+        is never initialized when an object is created.  In every execution mode:
+        - every read calls \a get (outside the class, inside it, and through \c self);
+        - every assignment, including compound and nested assignments such as <tt>obj.m += 1</tt> or
+          <tt>obj.m.key = 1</tt>, calls \a set once the assignment is complete; an operation that needs the previous
+          value reads it first with \a get;
+        - \c remove and \c delete read the value with \a get and then call \a set with \c NOTHING; \c delete then
+          deletes the value as for any other member.
+
+        The member's private data is the data that the object holds for this class (see QoreObject::setPrivate());
+        a read or write of an object without it raises an exception.
+
+        @param name the name of the member; must not already be declared in the class
+        @param access the access of the member
+        @param typeInfo the type of the member; an assigned value is checked against it before \a set is called, and
+        a value returned by \a get is checked against it as an assigned value would be
+        @param get called to read the member's value; must return a new reference
+        @param set called with the value assigned
+        @param ptr module data passed to \a get and \a set
+        @param del called with \a ptr when the last class declaring or inheriting the member is destroyed, to release
+        the module data
+
+        @note
+        - call before the class is initialized and published, like addMember()
+        - %Qore serializes neither the accessors nor a read-modify-write of the member (such as <tt>obj.m++</tt>),
+          since the value is not held by the object; the module must make its own storage safe for concurrent access
+        - since the object holds no value for the member, it is not part of the object's member data: it is not
+          returned by the object's keys, hash conversions, iteration or serialization, and it is not copied with the
+          object; QoreObject::getMemberValueNoMethod() returns no value for it, while
+          QoreObject::getReferencedMemberNoMethod(), QoreObject::evalMember() and QoreObject::setValue() call the
+          accessors
+
+        @par Example
+        @code{.cpp}
+// a Java instance field read and written through the Java object held in the private data
+cls->addBuiltinMemberWithAccessors("count", Public, bigIntOrNothingTypeInfo, java_field_get, java_field_set,
+    field, java_field_del);
+        @endcode
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT void addBuiltinMemberWithAccessors(const char* name, ClassAccess access, const QoreTypeInfo* typeInfo,
+            q_member_get_t get, q_member_set_t set, const void* ptr = nullptr, q_member_del_t del = nullptr);
 
     //! sets a pointer to user-specific data in the class
     /** @deprecated use setManagedUserData(AbstractQoreClassUserData*) instead
