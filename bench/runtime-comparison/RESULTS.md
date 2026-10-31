@@ -31155,3 +31155,53 @@ The separate diagnostic crossover of the previous receiver-call PHI candidate us
 Rejected candidate qualification passed Release 10944 assertions, Debug 5837 assertions and native 4003/5668 checks; all 391 qmods and 36 fresh artifacts/144 preparation processes/4698 references per variant passed. All 1800 timing processes/5400 windows replay. The prior-candidate crossover passed 6660 references and exact-code checks for six diagnostic metadata copies. Before commit, production and fixture sources are restored to the audited baseline and the optimized core is verified byte-identical.
 
 See the [complete evidence](results-pinned-borrow-phi-macos-arm64.json) and [62-item audit](audit-pinned-borrow-phi.md). The candidate measurements total 1800 processes/5400 windows; the prior-candidate diagnostic is counted separately. This is an incremental optimized before/after experiment, not a fresh Java/develop checkpoint. Performance is not yet maximized.
+
+
+## Rejected uniform AOT function alignment (2026-10-31)
+
+A temporary compiler control raised the minimum alignment of every defined function to 16, 32 or 64 bytes after O3 optimization and before split code generation. The normal default remained unchanged. All measured artifacts came from Qore itself and used the same frozen optimized runtime. The optimized LLVM differed only in function alignment, and every defined native entry had the requested alignment. The control was removed after the experiment.
+
+The pilot tested four policies over three link layouts with three forks, three warmups and three 100 ms samples per process. A prospective confirmation selected only 64 versus the existing default, with five forks and 150 ms windows. Count 4096, seed 7; randomized policy/layout blocks. Values measure the entire kernel and harness in ns/item. Both campaigns passed independent raw replay and owned-stage overlap review.
+
+The targeted indirect call was 1.47% slower in the 64-byte pilot and 1.96% slower in confirmation; its default-layout costs were 10.57% and 6.05%. Integer receiver-expression performance changed from a 3.51% pilot gain to a 2.60% confirmation cost. Short objects were 1.04% slower across all layouts in confirmation. The 1.11% closure, 2.30% receiver-assignment integer and 1.55% receiver-expression float confirmation gains do not establish a reliable broader benefit. Reject all uniform policies here; do not infer that every alignment policy is unhelpful on every workload or architecture.
+
+Exploratory pilot, including every tested policy:
+
+|!Workload|!Default ns/item|!16-byte ns/item|!16-byte change|!32-byte ns/item|!32-byte change|!64-byte ns/item|!64-byte change
+|micro:direct_call|1.4816|1.4727|-0.60%|1.4846|+0.20%|1.4810|-0.04%
+|micro:indirect_call|8.4826|8.9013|+4.94%|8.9243|+5.21%|8.6074|+1.47%
+|micro:closure_call|18.2067|18.2210|+0.08%|17.9038|-1.66%|17.8103|-2.18%
+|micro:closure_capture|24.1980|24.6113|+1.71%|24.2591|+0.25%|24.1280|-0.29%
+|micro:polymorphic_call|18.1097|17.5517|-3.08%|17.6449|-2.57%|17.9702|-0.77%
+|micro:polymorphic_float_call|17.6565|17.6674|+0.06%|17.6264|-0.17%|17.5019|-0.88%
+|micro:polymorphic_expression_call|4.7466|4.6457|-2.13%|4.6476|-2.09%|4.5801|-3.51%
+|micro:polymorphic_float_expression_call|4.6496|4.4425|-4.45%|4.5339|-2.49%|4.4661|-3.95%
+|micro:boxed_int_method_fallback|115.9985|116.6096|+0.53%|117.0854|+0.94%|117.0826|+0.93%
+|mixed:object_orders|3000.6420|2952.6910|-1.60%|2965.5671|-1.17%|2984.2213|-0.55%
+|probe:object_short|1582.4127|1584.4320|+0.13%|1581.2836|-0.07%|1580.3172|-0.13%
+
+Fixed 64-byte confirmation:
+
+|!Workload|!Default ns/item|!64-byte ns/item|!Change|!Layout changes (default, reverse, shuffle)
+|micro:direct_call|1.4739|1.4770|+0.21%|-0.04%, +0.50%, -0.23%
+|micro:indirect_call|8.3861|8.5503|+1.96%|+6.05%, -1.52%, +1.99%
+|micro:closure_call|18.0101|17.8097|-1.11%|-0.11%, -0.24%, -2.59%
+|micro:closure_capture|24.0617|24.2027|+0.59%|-1.15%, +1.40%, +0.59%
+|micro:polymorphic_call|17.8554|17.4444|-2.30%|-2.30%, -3.13%, -3.51%
+|micro:polymorphic_float_call|17.5131|17.4777|-0.20%|-1.12%, -1.10%, -0.02%
+|micro:polymorphic_expression_call|4.6423|4.7631|+2.60%|+0.56%, +2.87%, -0.41%
+|micro:polymorphic_float_expression_call|4.5364|4.4660|-1.55%|-1.94%, -0.77%, -3.47%
+|micro:boxed_int_method_fallback|116.1418|116.4604|+0.27%|-0.43%, -0.57%, +1.52%
+|mixed:object_orders|2987.5613|2974.3965|-0.44%|+0.29%, -0.61%, +0.82%
+|probe:object_short|1574.0492|1590.4615|+1.04%|+0.99%, +0.46%, +1.72%
+
+Native text size in the default link layout:
+
+|!Suite|!Default bytes|!16-byte growth|!32-byte growth|!64-byte growth
+|micro|335380|+0.279%|+0.580%|+1.286%
+|mixed|121724|+0.122%|+0.358%|+0.831%
+|probe|156056|+0.092%|+0.318%|+0.707%
+
+Four Release fixtures passed 2662 assertions. All 36 artifacts passed 9396 reference outputs. Unset and explicit-zero controls produce identical binaries, and four invalid settings are rejected. The independent checks verify all 144 preparation processes, alignment-only LLVM changes and native entry addresses. Standalone LLVM reconstruction attempts did not reproduce all sections and were excluded from timing; their setup results are preserved. No compile-throughput, Debug or sanitizer result is claimed.
+
+All 726 processes/2178 timing windows are included in the [evidence](results-aot-function-alignment-macos-arm64.json), together with the [62-item audit](audit-aot-function-alignment.md). Before commit, the optimized core must match the installed 337ad71fef baseline byte for byte and all 391 qmods must rebuild. This is an incremental optimized comparison, not a fresh Java/develop checkpoint. Repeated class-assignment type admission and ownership remain investigation candidates; performance is not yet maximized.
