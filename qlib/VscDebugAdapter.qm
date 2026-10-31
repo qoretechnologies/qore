@@ -83,9 +83,9 @@ module VscDebugAdapter {
 
     Limitations:
     - data breakpoints, stepping back, jumping to a line, and restarting a frame are not supported
-    - the calls that can be stepped into are the calls of user code that are known when the code is parsed; a call
-      of a method of an object of an unknown class or of a call reference is not offered, and stepping into a method
-      that a subclass overrides steps over the statement
+    - stepping into a call matches the functions that the statement calls with the name of the call and the number
+      of its calls before it; when an operand of a conditional operator, such as <tt>?:</tt>, <tt>&&</tt> or
+      <tt>||</tt>, is not evaluated, a later call with the same name can be stepped into instead
     - a breakpoint is on a statement, so an expression with more than one call, such as <tt>f(g(x))</tt>, has one
       breakpoint location
     - when a thread stops, the other threads stop at their next statement, so a thread that waits, as for input,
@@ -1465,17 +1465,17 @@ vda.run();
 
     public vsc_stepIn(hash args) {
         if (exists args.targetId) {
-            # a target is the entry of the called code: the thread steps over the statement and stops when the
-            # statement calls the code
-            step(args.threadId, "stepover", {"id": args.targetId});
+            # the ID of a target is its index in the step-in targets of the statement plus 1; the thread steps into
+            # the call
+            step(args.threadId, "stepinto", {"target": args.targetId - 1});
         } else {
             step(args.threadId, "step");
         }
     }
 
     #! Returns the calls of the statement of a stack frame that can be stepped into
-    /** The ID of a target is the statement ID of the start of the called code; the calls are given for the top frame
-        only, as stepping continues the thread from its current statement
+    /** The ID of a target is its index in the step-in targets of the statement plus 1; the calls are given for the
+        top frame only, as stepping continues the thread from its current statement
     */
     public hash vsc_stepInTargets(hash args) {
         int tid = args.frameId >> 16;
@@ -1498,7 +1498,7 @@ vda.run();
         )).result ?? ();
         foreach hash<auto> t in (targets) {
             hash<auto> target = {
-                "id": t.statement_id,
+                "id": $# + 1,
                 "label": t.name,
                 "line": t.start_line,
                 "endLine": t.end_line,
@@ -1521,14 +1521,14 @@ vda.run();
     #! Resumes a thread with a step; the next stop of the thread ends the step (see processDebugEvent())
     /** @param tid the thread
         @param run_state the run state of the step
-        @param runTo the statement to run to, if any, as given to the debugger, such as \c id
+        @param value the value of the step, if any, such as the \c target of \c stepinto
     */
-    private:internal step(int tid, string run_state, *hash<auto> runTo) {
+    private:internal step(int tid, string run_state, *hash<auto> value) {
         m_programState{m_currentPgmId}.steppingThreads{tid} = True;
         on_error remove m_programState{m_currentPgmId}.steppingThreads{tid};
         hash<auto> cmd = {"cmd": "thread/go/" + run_state, "tid": tid};
-        if (runTo) {
-            cmd.value = runTo;
+        if (value) {
+            cmd.value = value;
         }
         doCommand(cmd);
     }

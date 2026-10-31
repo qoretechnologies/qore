@@ -79,8 +79,10 @@ hashdecl StatementInfo {
 hashdecl StepInTargetInfo {
     //! the name of the called function, or of the method or constructor with its class
     string name;
-    //! the ID of the statement block of the called code, which a debugger can run to so that it stops when the call is entered
-    int statement_id;
+    //! the name that the called code has in the call stack: the name of the function, or of the method without its class, as a method of a subclass can be called; empty for a call of a call reference
+    string function;
+    //! the ID of the statement block of the called code, or 0 if the called code is only known at runtime
+    int statement_id = 0;
     //! the start line of the call
     int start_line;
     //! the end line of the call
@@ -558,11 +560,14 @@ list<int> ProgramControl::findStatementIds(string file, int line) [flags=NAMED_A
 /**
    @param statement_id the ID of the statement
 
-   @return the calls of the user code of the Program that the statement makes, in the order in which they are
-   evaluated, without the calls of the blocks of the statement and of closures that it creates; a call is given only
-   once with each called code, as a debugger running to the start of the called code stops at the first call of it;
-   calls whose called code is only known at runtime, such as calls of methods of objects of unknown classes or of
-   call references, are not given, nor are calls of builtin code or of the code of other Programs
+   @return the calls that the statement makes, in the order in which they are evaluated, without the calls of the
+   blocks of the statement and of closures that it creates; also calls whose called code is only known at runtime,
+   such as calls of methods of objects of unknown classes and of call references, whose \c statement_id is 0; calls
+   of builtin code and of the user code of other Programs are not given, as a debugger of this Program does not
+   stop in them.  A debugger steps into a call by matching the functions that the statement calls with the
+   \c function of the call and the number of earlier calls with it in the list; when an operand of a conditional
+   operator, such as <tt>?:</tt>, <tt>&&</tt> or <tt>||</tt>, is not evaluated, a later call with the same
+   \c function can be stepped into instead
 
    @par Example:
    @code{.py}

@@ -61,6 +61,7 @@
 #include "qore/intern/SwitchStatement.h"
 #include "qore/intern/ThrowStatement.h"
 #include "qore/intern/WhileStatement.h"
+#include "qore/intern/VarRefNode.h"
 #include "qore/intern/QC_Breakpoint.h"
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/QoreSerializable.h"
@@ -4103,8 +4104,6 @@ private:
     qore_program_private& pgm;
     ExceptionSink* xsink;
     ReferenceHolder<QoreListNode> rv;
-    //! the statement blocks of the called code that are already given
-    std::set<const StatementBlock*> found;
     int depth = 0;
 
     DLLLOCAL void addArgs(const QoreParseListNode* parse_args, const QoreListNode* args) {
@@ -4121,39 +4120,48 @@ private:
         }
     }
 
-    //! Adds a call whose variant is known
-    /** @param cls the class of a method, if not given by its variant
+    //! Adds a call
+    /** @param variant the variant of the called code, if known at parse time; builtin code and the code of other
+        Programs are not stepped into, so their calls are not added
+        @param loc the location of the call
+        @param cls the class of a method, if not given by its variant
+        @param name the name of the called function or method, nullptr for the call of a call reference
+        @param label the label of a call of a call reference
     */
     DLLLOCAL void addCall(const AbstractQoreFunctionVariant* variant, const QoreProgramLocation* loc,
-            const QoreClass* cls, const char* name) {
-        if (!variant || !name) {
-            return;
-        }
-        const UserVariantBase* uvb = variant->getUserVariantBase();
-        const StatementBlock* entry = uvb ? uvb->getEntryStatementBlock() : nullptr;
-        if (!entry || found.find(entry) != found.end()) {
-            return;
-        }
-        // the called code of another Program has no statement ID here
-        unsigned long sid = pgm.getStatementId(entry);
-        if (!sid) {
-            return;
-        }
-        found.insert(entry);
-        // the class of a method, also of a constructor
-        if (!cls) {
-            if (auto* mvb = dynamic_cast<const MethodVariantBase*>(variant)) {
-                cls = mvb->getClass();
+            const QoreClass* cls, const char* name, const char* label = nullptr) {
+        unsigned long sid = 0;
+        if (variant) {
+            const UserVariantBase* uvb = variant->getUserVariantBase();
+            const StatementBlock* entry = uvb ? uvb->getEntryStatementBlock() : nullptr;
+            if (!entry) {
+                return;
+            }
+            // the called code of another Program has no statement ID here
+            sid = pgm.getStatementId(entry);
+            if (!sid) {
+                return;
+            }
+            // the class of a method, also of a constructor
+            if (!cls) {
+                if (auto* mvb = dynamic_cast<const MethodVariantBase*>(variant)) {
+                    cls = mvb->getClass();
+                }
             }
         }
         ReferenceHolder<QoreHashNode> h(new QoreHashNode(hashdeclStepInTargetInfo, xsink), xsink);
         qore_hash_private* ph = qore_hash_private::get(**h);
         QoreStringNode* str = new QoreStringNode;
-        if (cls) {
-            str->sprintf("%s::", cls->getName());
+        if (name) {
+            if (cls) {
+                str->sprintf("%s::", cls->getName());
+            }
+            str->concat(name);
+        } else {
+            str->concat(label ? label : "<call>");
         }
-        str->concat(name);
         ph->setKeyValueIntern("name", str);
+        ph->setKeyValueIntern("function", new QoreStringNode(name ? name : ""));
         ph->setKeyValueIntern("statement_id", static_cast<int64>(sid));
         if (loc) {
             ph->setKeyValueIntern("start_line", loc->start_line);
@@ -4201,6 +4209,14 @@ private:
         }
         if (auto* call = dynamic_cast<const AbstractFunctionCallNode*>(node)) {
             addArgs(call->getParseArgs(), call->getArgs());
+            // a function whose variant is chosen at runtime is stepped into only if it has user code
+            if (!call->getVariant()) {
+                auto* fc = dynamic_cast<const FunctionCallNode*>(call);
+                const QoreFunction* f = fc ? fc->getFunction() : nullptr;
+                if (f && !f->hasUser()) {
+                    return;
+                }
+            }
             addCall(call->getVariant(), call->loc, nullptr, call->getName());
             return;
         }
@@ -4208,6 +4224,9 @@ private:
         if (auto* call = dynamic_cast<const CallReferenceCallNode*>(node)) {
             add(call->getExp());
             addArgs(call->getParseArgs(), call->getArgs());
+            const AbstractQoreNode* exp = call->getExp().getInternalNode();
+            auto* var = dynamic_cast<const VarRefNode*>(exp);
+            addCall(nullptr, call->loc, nullptr, nullptr, var ? var->getName() : nullptr);
             return;
         }
         if (auto* op = dynamic_cast<const QoreQuestionMarkOperatorNode*>(node)) {

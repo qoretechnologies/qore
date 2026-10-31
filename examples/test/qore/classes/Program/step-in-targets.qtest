@@ -65,23 +65,33 @@ class StepInTargetsTest inherits QUnit::Test {
         assertEq(("C::constructor",), getNames(10));
         # methods and static methods; builtin functions are not stepped into
         assertEq(("C::m", "C::s"), getNames(11));
-        # a closure is called later, and the code of a call reference is only known at runtime
+        # a closure is called later; the call of a call reference is given with the name of its variable
         assertEq((), getNames(12));
-        assertEq((), getNames(13));
+        assertEq(("cl",), getNames(13));
         # the condition of an if statement, not its blocks
         assertEq(("g",), getNames(14));
-        # each called code once; both branches of the ternary operator
-        assertEq(("g", "f"), getNames(15));
+        # each call, also repeated ones; both branches of the ternary operator
+        assertEq(("g", "g", "f", "g"), getNames(15));
         # a method of an object of an unknown class
-        assertEq((), getNames(16, 14));
+        assertEq(("m",), getNames(16, 14));
         # the list of a foreach statement
         assertEq(("f", "g"), getNames(17));
         # hashes and lists
         assertEq(("f", "g"), getNames(18));
 
-        # the statement of a target is the start of the called code
+        # the statement of a target is the start of the called code, if it is known when the code is parsed
         hash<StepInTargetInfo> target = pc.getStepInTargets(pc.findStatementId("src", 9))[0];
         assertEq(pc.findFunctionStatementId("g", ("int",)), target.statement_id);
+        assertEq("g", target.function);
+        # the name that a method has in the call stack has no class
+        target = pc.getStepInTargets(pc.findStatementId("src", 11))[0];
+        assertEq(("C::m", "m"), (target.name, target.function));
+        # the called code of a call reference and of a method of an object of an unknown class is only known at runtime
+        target = pc.getStepInTargets(pc.findStatementId("src", 13))[0];
+        assertEq(("cl", "", 0), (target.name, target.function, target.statement_id));
+        int id = (select pc.findStatementIds("src", 16), pc.getStatementIdInfo($1).start_column == 14)[0];
+        target = pc.getStepInTargets(id)[0];
+        assertEq(("m", "m", 0), (target.name, target.function, target.statement_id));
     }
 
     locationTest() {

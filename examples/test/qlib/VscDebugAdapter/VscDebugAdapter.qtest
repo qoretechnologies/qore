@@ -1178,7 +1178,7 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         assertEq(2, frame.line);
         assertEq("4", evaluate(dap, tid, "x").body.result);
 
-        # line 5 calls g() only in h(): stepping into g() steps over the statement
+        # line 5 calls g() only in h(), so it has h() only
         r = dap.request("continue", {"threadId": tid});
         assertTrue(r.success, r.message);
         stopped = dap.waitForEvent("stopped");
@@ -1187,11 +1187,17 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         assertEq(5, frame.line);
         r = dap.request("stepInTargets", {"frameId": frame.id});
         assertEq(("h",), (map $1.label, r.body.targets));
-        r = dap.request("stepIn", {"threadId": tid, "targetId": g_target});
+        r = dap.request("stepIn", {"threadId": tid, "targetId": r.body.targets[0].id});
         assertTrue(r.success, r.message);
         stopped = dap.waitForEvent("stopped");
         assertEq("step", stopped.body.reason);
-        assertEq(6, topFrame(dap, tid).line);
+        frame = topFrame(dap, tid);
+        assertEq(3, frame.line);
+        assertEq("5", evaluate(dap, tid, "x").body.result);
+        # negative: a target that the statement does not have
+        r = dap.request("stepIn", {"threadId": tid, "targetId": 9});
+        assertFalse(r.success);
+        assertRegex("no call 8 to step into", r.message);
 
         finish(dap, proc, tid);
         assertEq(("12\n",), dap.getOutput("stdout"));

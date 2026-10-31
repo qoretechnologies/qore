@@ -79,8 +79,10 @@ module DebugProgramControl {
       program: expressions are evaluated with the code and the global variables of the program, and no local variables
       are read, as the frames are those of the code that started the program; reading them failed
     - the \c program/<id>/statement/stepintargets command gives the calls of a statement that can be stepped into
-      (see @ref Qore::ProgramControl::getStepInTargets() "ProgramControl::getStepInTargets()"); stepping over with the
-      statement of a target as the statement to run to steps into the call
+      (see @ref Qore::ProgramControl::getStepInTargets() "ProgramControl::getStepInTargets()"), and
+      \c thread/go/stepinto with the index of a call in them as \c target in its value steps into the call: the
+      thread matches the functions that its statement calls with the call, also a method of a subclass and the code
+      of a call reference, and runs the others to their return
     - a statement can be given by its line and its 0-based byte \c column, for a breakpoint on a statement of a line
       with more than one statement; the \c program/<id>/statement/list command gives the statements of a line with
       their columns, and interrupt events and the frames of call stacks give the columns of their statements in
@@ -156,6 +158,11 @@ public namespace DebugProgramControl {
             hash<string, hash<auto>> bkptOptions = {};
             #! serializes the access to bkptOptions
             Mutex bkptLock();
+
+            #! the steps of threads into a call of their statement, by TID; see startStepInto() and checkStepInto()
+            hash<string, hash<auto>> stepIntos = {};
+            #! serializes the access to stepIntos
+            Mutex stepIntoLock();
 
             #! the options of breakpoints that are kept in bkptOptions
             const BreakpointOptions = ("condition", "hitCondition", "logMessage");
@@ -1120,6 +1127,105 @@ public namespace DebugProgramControl {
             return result;
         }
 
+        #! Returns the key with which a step into a call matches the called code
+        /** The key of a constructor has its class, as the constructors of base classes are called in the constructor
+            of a class; the key of another method has no class, as a method of a subclass can be called; the key of a
+            call of a call reference is empty
+        */
+        private static string getStepIntoTargetKey(hash<auto> target) {
+            return target.function == "constructor" ? target.name : target.function;
+        }
+
+        #! Returns the key of the called code of a call stack frame, as one of the keys of the targets, or empty
+        private static string getStepIntoFrameKey(string name, hash<string, bool> targetKeys) {
+            if (targetKeys{name}) {
+                return name;
+            }
+            *string short = (name =~ x/([^:]+)$/)[0];
+            return short && targetKeys{short} ? short : "";
+        }
+
+        #! Starts a step into a call of the statement of a stopped thread; runs in the thread
+        /** @param tid the thread
+            @param pgm the Program of the thread
+            @param statementId the statement that the thread is stopped at
+            @param target the index of the call in the step-in targets of the statement (see
+            @ref Qore::ProgramControl::getStepInTargets() "ProgramControl::getStepInTargets()")
+
+            @throw DEBUG-HANDLER-ERROR the thread is not stopped at a statement or the statement has no such call
+
+            @note must be called directly by handleInterrupt(), as checkStepInto() is, as both count the frames of the
+            call stack
+        */
+        private startStepInto(int tid, ProgramControl pgm, *int statementId, auto target) {
+            if (!statementId) {
+                throw "DEBUG-HANDLER-ERROR", "the thread is not stopped at a statement";
+            }
+            list<hash<auto>> targets = pgm.getStepInTargets(statementId);
+            if (!exists target || target.typeCode() != NT_INT || target < 0 || target >= targets.size()) {
+                throw "DEBUG-HANDLER-ERROR", sprintf("the statement has no call %y to step into; it has %d", target,
+                    targets.size());
+            }
+            list<string> targetKeys = map DebugProgramControl::getStepIntoTargetKey($1), targets;
+            string key = targetKeys[target];
+            # the call is the nth call of the statement with its key
+            int ordinal = (select targetKeys[0..target], $1 == key).size();
+            int depth = (select get_thread_call_stack(), $1.type == "user").size();
+            AutoLock al(stepIntoLock);
+            stepIntos{tid} = {
+                "key": key,
+                "ordinal": ordinal,
+                "keys": (map {$1: True}, (select targetKeys, $1)) ?? {},
+                "depth": depth,
+                "counts": {},
+            };
+        }
+
+        #! Checks an interrupt of a thread that steps into a call of its statement; runs in the thread
+        /** A function that the statement calls (one level deeper than the statement) is the call that the thread steps
+            into if it is the nth function with the key of the call; another one runs until it returns, and then the
+            thread steps again.  Any other interrupt, such as the next statement, a breakpoint or an exception, ends
+            the step into the call, and the thread stops there.
+
+            @return @ref True if the thread continues with the given run state, @ref False if it stops
+
+            @note must be called directly by handleInterrupt(), as startStepInto() is, as both count the frames of the
+            call stack
+        */
+        private bool checkStepInto(int tid, string func, reference runState) {
+            *hash<auto> si;
+            {
+                AutoLock al(stepIntoLock);
+                si = stepIntos{tid};
+            }
+            if (!si) {
+                return False;
+            }
+            list<hash<auto>> stack = get_thread_call_stack();
+            if ((select stack, $1.type == "user").size() == si.depth + 1) {
+                if (func == "funcEnter") {
+                    # the frame of the called code, after this method, handleInterrupt() and the debugger's callback
+                    string key = DebugProgramControl::getStepIntoFrameKey(stack[2 + frameOffset].function, si.keys);
+                    int n;
+                    {
+                        AutoLock al(stepIntoLock);
+                        n = ++stepIntos{tid}.counts{key};
+                    }
+                    if (key != si.key || n != si.ordinal) {
+                        runState = DebugUntilReturn;
+                        return True;
+                    }
+                } else if (func == "funcExit") {
+                    # a call that is not the target has returned
+                    runState = DebugStep;
+                    return True;
+                }
+            }
+            AutoLock al(stepIntoLock);
+            remove stepIntos{tid};
+            return False;
+        }
+
         #! Returns True if any breakpoint has a condition, hit condition or log message
         private bool hasBreakpointOptions() {
             AutoLock al(bkptLock);
@@ -1726,6 +1832,10 @@ public namespace DebugProgramControl {
                 breakpointId = stopping[0];
                 ctx.intrInfo.bkptids = stopping;
             }
+            # a step into a call of a statement continues until the thread enters the call
+            if (checkStepInto(tid, func, \runState)) {
+                return;
+            }
             runToStatementId = 0; # reset RunToStatement
             ctx.intrInfo.framecnt = ctx.stackSize - frameOffset;
             if (exists statementId) {
@@ -1853,16 +1963,25 @@ public namespace DebugProgramControl {
                         list<auto> cmd = rd.cmd.split('/');
                         shift cmd;  # remove thread
                         switch (shift cmd) {
-                            case 'go':
-                                runState = resolveValue('runState', shift cmd, runStateStrings, runState);
+                            case 'go': {
+                                # without a run state, as from shutdown(), the thread continues as it ran before
+                                *string rsName = shift cmd;
+                                if (rsName == "stepinto") {
+                                    # a step into a call of the statement, given by its index in its step-in targets
+                                    startStepInto(tid, pgm, statementId, rd.value.target);
+                                    runState = DebugStep;
+                                } else {
+                                    runState = resolveValue('runState', rsName, runStateStrings, runState);
+                                }
                                 if (exists refName) {
                                     refValue = ctxCT{refName};
                                 }
-                                if (rd.value) {
+                                if (rd.value && rsName != "stepinto") {
                                     runToStatementId = resolveStatement(pgm, rd.value);
                                 }
                                 ret = True;
                                 break;
+                            }
 
                             case 'local':
                                 string varName = shift cmd;

@@ -2482,8 +2482,9 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
       gives the columns of a statement with \c start_column and \c end_column, so that a debugger can set a breakpoint
       on any statement of a line with more than one statement
     - new @ref Qore::ProgramControl::getStepInTargets() "ProgramControl::getStepInTargets()" method: gives the calls
-      of a statement that a debugger can step into; stepping over with the start of the called code as the statement
-      to run to now stops only when the stepped code calls it, not when code that it calls does
+      of a statement that a debugger can step into, also calls whose called code is only known at runtime, such as
+      methods that a subclass can override and call references; stepping over with the start of the called code as the
+      statement to run to now stops only when the stepped code calls it, not when code that it calls does
     - new @ref Qore::ProgramControl::createEvalProgram() "ProgramControl::createEvalProgram()" method: creates a
       Program that inherits all code of a debugged Program, also the code that is not public, for evaluating
       expressions in a debugger

@@ -30,6 +30,18 @@ printf(\"%d %y\\n\", total, h);
 
 const TargetLabel = "dpc-target.q";
 
+#! a program whose line 7 calls g() twice, a method that a subclass overrides and a closure
+const StepIntoScript = "%modern
+class A { int m(int x) { return x + 1; } }
+class B inherits A { int m(int x) { return x + 2; } }
+int sub g(int x) { return x * 10; }
+A a = new B();
+code cl = int sub (int y) { return y - 1; };
+int r = g(g(1)) + a.m(1) + cl(5);
+r = r > 0 ? r : g(3);
+printf(\"%d\\n\", r);
+";
+
 #! a program whose line 4 runs five times, with i from 0 to 4
 const LoopScript = "%modern
 int total = 0;
@@ -317,6 +329,7 @@ public class DebugProgramControlTest inherits QUnit::Test {
         addTestCase("exceptions that no try statement catches", \uncaughtTest());
         addTestCase("statements of a line with more than one statement", \columnTest());
         addTestCase("stepping into a chosen call", \stepInTargetTest());
+        addTestCase("stepping into calls known only at runtime and repeated calls", \stepIntoTest());
         addTestCase("conditions, hit conditions and log messages of breakpoints", \breakpointConditionTest());
         addTestCase("the commands of the options of breakpoints", \breakpointOptionCommandTest());
         addTestCase("the stop at the start of a program", \attachStopTest());
@@ -825,7 +838,7 @@ public class DebugProgramControlTest inherits QUnit::Test {
         assertEq(g_entry, targets[1].statement_id);
 
         # stepping into g() stops when the statement calls it, not when h(), which it calls first, calls it
-        dpc.threadSend(p.tid, "thread/go/stepover", {"value": {"id": g_entry}});
+        dpc.threadSend(p.tid, "thread/go/stepinto", {"value": {"target": 1}});
         e = dpc.getInterrupt(p.pgmId);
         assertEq(g_entry, e.statementid);
         # g(h(1)) is g(4)
@@ -834,6 +847,9 @@ public class DebugProgramControlTest inherits QUnit::Test {
         # negative: a statement ID that does not exist
         assertThrows("PROGRAM-STATEMENT-ERROR", \dpc.command(), (cmd + "statement/stepintargets",
             {"value": {"id": 999999}}));
+        # negative: a call that the statement does not have
+        assertThrows("DEBUG-HANDLER-ERROR", "no call 5", \dpc.threadSend(), (p.tid, "thread/go/stepinto",
+            {"value": {"target": 5}}));
 
         assertEq({"rc": NOTHING}, p.finish());
     }
@@ -1018,6 +1034,55 @@ public class DebugProgramControlTest inherits QUnit::Test {
         assertEq((bp.bkptid,), dpc.threadCommand(p.tid, "thread/breakpoint/check",
             {"value": {"ids": (bp.bkptid,)}}).stop);
         dpc.command(sprintf("program//breakpoint/%d/delete", bp.bkptid));
+        assertEq({"rc": NOTHING}, p.finish());
+    }
+
+    #! steps into a call of line 7 of StepIntoScript and returns the interrupt and the given local variable
+    private hash<auto> stepIntoLine7(int target, string var) {
+        DebuggedProgram p(dpc, StepIntoScript);
+        on_exit p.cleanup();
+        p.breakAt(7);
+        p.runToStop();
+        dpc.threadSend(p.tid, "thread/go/stepinto", {"value": {"target": target}});
+        hash<auto> e = dpc.getInterrupt(p.pgmId);
+        list<auto> stack = dpc.threadCommand(p.tid, "thread/stack");
+        hash<auto> rv = {
+            "func": e.func,
+            "function": stack[1].function,
+            "value": AbstractDebugControl::unserialize(dpc.threadCommand(p.tid, sprintf("thread/local/%s/get", var))
+                .value),
+        };
+        assertEq({"rc": NOTHING}, p.finish());
+        return rv;
+    }
+
+    stepIntoTest() {
+        {
+            DebuggedProgram p(dpc, StepIntoScript);
+            on_exit p.cleanup();
+            p.breakAt(7);
+            hash<auto> e = p.runToStop();
+            # "g(g(1)) + a.m(1) + cl(5)": the inner g() is evaluated first
+            assertEq(("g", "g", "A::m", "cl"), (map $1.name, dpc.command(sprintf("program/%d/statement/stepintargets",
+                p.pgmId), {"value": {"id": e.statementid}})));
+            assertEq({"rc": NOTHING}, p.finish());
+        }
+        # the inner and the outer call of g()
+        assertEq({"func": "funcEnter", "function": "g", "value": 1}, stepIntoLine7(0, "x"));
+        assertEq({"func": "funcEnter", "function": "g", "value": 10}, stepIntoLine7(1, "x"));
+        # the method of the subclass of the object
+        assertEq({"func": "funcEnter", "function": "B::m", "value": 1}, stepIntoLine7(2, "x"));
+        # the closure of a call reference
+        assertEq({"func": "funcEnter", "function": "<anonymous closure>", "value": 5}, stepIntoLine7(3, "y"));
+
+        # a call that the statement does not make: the thread stops at the next statement
+        DebuggedProgram p(dpc, StepIntoScript);
+        on_exit p.cleanup();
+        p.breakAt(8);
+        p.runToStop();
+        dpc.threadSend(p.tid, "thread/go/stepinto", {"value": {"target": 0}});
+        hash<auto> e = dpc.getInterrupt(p.pgmId);
+        assertEq(9, e.line);
         assertEq({"rc": NOTHING}, p.finish());
     }
 
