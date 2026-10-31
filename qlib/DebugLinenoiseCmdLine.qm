@@ -60,9 +60,66 @@ public namespace DebugLinenoiseCmdLine {
             const defaultIndent = "  ";
         }
 
+        private {
+            #! guards the wait for a thread to stop; see waitsForStops
+            Mutex stopLock();
+            #! signaled when the thread that is waited for stops
+            Condition stopCond();
+            #! True while a thread is waited for to stop
+            bool stopPending;
+            #! the thread that is waited for to stop; any thread if not set
+            *int stopTid;
+        }
+
         #! Creates the object
         constructor() {
             ln_prompt = tc.enabled ? "\033[1;36mqdbg>\033[0m " : "qdbg> ";
+        }
+
+        #! Returns True if a command resumes a thread and returns when it stops again; see waitsForStops
+        /** A command with \c "wait" @ref False, as of a thread that continues with another one, does not wait
+        */
+        bool resumesWithWait(hash<auto> data) {
+            return waitsForStops && data.cmd =~ /^thread\/go(\/|$)/ && data.wait !== False;
+        }
+
+        #! Starts waiting for a thread to stop; for any thread if \a tid is not given
+        /** The wait starts before the command that resumes the thread is sent, as the thread can stop again before the
+            answer to the command is received
+        */
+        expectStop(*int tid) {
+            AutoLock al(stopLock);
+            stopTid = tid;
+            stopPending = True;
+        }
+
+        #! Stops waiting for a thread to stop
+        cancelStop() {
+            AutoLock al(stopLock);
+            stopPending = False;
+            stopCond.broadcast();
+        }
+
+        #! Waits until the thread that is waited for stops, stops being debugged, or the program ends
+        waitForStop() {
+            AutoLock al(stopLock);
+            while (stopPending) {
+                stopCond.wait(stopLock);
+            }
+        }
+
+        #! Processes an event of the debug server: a thread that is waited for stops or stops being debugged
+        eventReceived(hash<auto> data) {
+            if (data.type != DebugResponseType::Event
+                || (data.cmd != DebugEventCmd::Interrupt
+                    && (data.cmd != DebugEventCmd::Run || data.runstate != "detach"))) {
+                return;
+            }
+            AutoLock al(stopLock);
+            if (stopPending && (!exists stopTid || data.tid == stopTid)) {
+                stopPending = False;
+                stopCond.broadcast();
+            }
         }
 
         #! Returns all commands from the subclass plus history commands added by this module

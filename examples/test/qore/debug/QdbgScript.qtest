@@ -15,6 +15,10 @@
 %requires FsUtil
 %requires Util
 
+%try-module process >= 2.2
+%define NoProcess
+%endtry
+
 %exec-class QdbgScriptTest
 
 public class QdbgScriptTest inherits QUnit::Test {
@@ -64,6 +68,8 @@ public class QdbgScriptTest inherits QUnit::Test {
 
         string qore_exe = QdbgScriptTest::getQoreExecutable();
         string qdbg = normalize_dir(get_script_dir() + "/../../../../bin/qdbg");
+        string qdbg_remote = normalize_dir(get_script_dir() + "/../../../../bin/qdbg-remote");
+        string qdbg_server = normalize_dir(get_script_dir() + "/../../../../bin/qdbg-server");
         string qlib_dir = normalize_dir(get_script_dir() + "/../../../../qlib");
     }
 
@@ -85,6 +91,7 @@ public class QdbgScriptTest inherits QUnit::Test {
         addTestCase("all threads stop together", \stopAllTest());
         addTestCase("exceptions by code", \exceptionCodeTest());
         addTestCase("display expressions, pages of values and columns of the call stack", \displayTest());
+        addTestCase("qdbg-remote with a debug server that requires a token", \remoteTest());
         addTestCase("quitting while a thread is stopped", \quitTest());
         set_return_value(main());
     }
@@ -358,6 +365,95 @@ public class QdbgScriptTest inherits QUnit::Test {
         int last = res.out.find("(target.q:6");
         assertFalse(res.out.substr(last) =~ /^1: a/m, "no display expression is shown");
     }
+
+%ifdef NoProcess
+    remoteTest() {
+        testSkip("no process module 2.2 or later");
+    }
+%else
+    #! runs qdbg-remote with the commands on its input for a debug server and returns its output and exit code
+    private hash<auto> runRemote(int port, list<string> commands, *string token) {
+        TmpDir tmp("qore-qdbg-test-");
+        File f();
+        f.open2(tmp.path + "/commands", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(commands.join("\n") + "\n");
+        f.close();
+        *string module_dir = ENV.QORE_MODULE_DIR;
+        string cmd = sprintf("cd '%s' && QORE_MODULE_DIR='%s' '%s' '%s' -y . --no-color %s localhost:%d < commands 2>&1",
+            tmp.path, qlib_dir + (module_dir ? ":" + module_dir : ""), qore_exe, qdbg_remote,
+            token ? sprintf("-H 'Authorization=Bearer %s'", token) : "", port);
+        int rc;
+        string out = backquote(cmd, \rc);
+        out = (select out.split("\n"), $1 !~ /^warning: (AOT|binary) module/).join("\n");
+        if (m_options.verbose > 1) {
+            printf("%s\n", out);
+        }
+        return {"out": out, "rc": rc};
+    }
+
+    # qdbg-remote processes each command of a script at the stop that it is written for, as qdbg does, with a debug
+    # server that requires a token
+    remoteTest() {
+        TmpDir tmp("qore-qdbg-test-");
+        File f();
+        f.open2(tmp.path + "/target.q", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(LoopProgram);
+        f.close();
+        *string module_dir = ENV.QORE_MODULE_DIR;
+        Process server(qore_exe, (qdbg_server, "target.q"), {
+            "cwd": tmp.path,
+            "env": Process::getEnvironment() + {
+                "QORE_MODULE_DIR": qlib_dir + (module_dir ? ":" + module_dir : ""),
+                "QDBG_SERVER_TOKEN": "s3cret",
+            },
+        });
+        on_exit if (server.running()) {
+            server.terminate();
+        }
+        string line = "";
+        while (line !~ /\n/) {
+            *string s = server.readStdout(1024, 30s);
+            if (!exists s) {
+                throw "TEST-ERROR", "the debug server did not start";
+            }
+            line += s;
+        }
+        int port = (line =~ x/listening on port ([0-9]+)/)[0].toInt();
+
+        # negative: no token and a wrong token
+        hash<auto> res = runRemote(port, ("quit",));
+        assertNeq(0, res.rc);
+        assertRegex("401", res.out);
+        res = runRemote(port, ("quit",), "wrong");
+        assertNeq(0, res.rc);
+
+        # the thread of the program that the server holds at its start is the current thread
+        res = runRemote(port, (
+            "break create target.q 4",
+            "break condition 1 i == 2",
+            "display total",
+            "go run",
+            "thread local i",
+            "thread var total",
+            "go run",
+            "quit",
+        ), "s3cret");
+        assertEq(0, res.rc, res.out);
+        assertInOrder(res.out, (
+            "connected to debug server",
+            "bkptid: 1",
+            # the command that resumes the thread returns when it stops at the breakpoint
+            "interrupt/step", "bkptid: 1",
+            "1: total = 1",
+            "integer i = 2",
+            "total: integer 1",
+            "total: 10",
+            "interrupt/detach",
+        ));
+        server.write("end\n");
+        assertTrue(server.wait(30s), "the debug server ends");
+    }
+%endif
 
     # a thread that continues when qdbg quits does not stop again, as at the end of the program
     quitTest() {

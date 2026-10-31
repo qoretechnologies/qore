@@ -334,6 +334,7 @@ public class DebugProgramControlTest inherits QUnit::Test {
         addTestCase("the commands of the options of breakpoints", \breakpointOptionCommandTest());
         addTestCase("the stop at the start of a program", \attachStopTest());
         addTestCase("the exceptions that stop threads", \exceptionFilterTest());
+        addTestCase("the threads continue when the last client disconnects", \lastClientTest());
         set_return_value(main());
     }
 
@@ -1150,6 +1151,22 @@ public class DebugProgramControlTest inherits QUnit::Test {
         assertThrows("DEBUG-HANDLER-ERROR", "must be a list", \dpc.command(), ("exception/filter/set",
             {"value": "user"}));
         assertThrows("DEBUG-HANDLER-ERROR", "exception/filter", \dpc.command(), ("exception/x"));
+    }
+
+    # nobody can resume a thread without a client: when the last client disconnects, the stopped threads continue, and
+    # they do not stop again
+    lastClientTest() {
+        DebuggedProgram p(dpc);
+        on_exit p.cleanup();
+        p.breakAt(7);
+        p.breakAt(8);
+        hash<auto> e = p.runToStop();
+        assertEq(7, e.line);
+        dpc.unregisterConnection(TestDebugProgramControl::CX);
+        on_exit dpc.registerConnection(TestDebugProgramControl::CX);
+        # the program runs to its end without stopping at the breakpoint of line 8 or at its end
+        assertEq({"rc": NOTHING}, p.done.get(EventTimeout));
+        p.finished = True;
     }
 
     breakpointErrorTest() {

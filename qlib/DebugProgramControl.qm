@@ -78,6 +78,8 @@ module DebugProgramControl {
     - each client selects the exceptions that stop threads with the \c exception/filter/set command: all user
       exceptions, all system exceptions, exceptions that no try statement of debuggable code catches, and exceptions
       with given codes; an exception that no client stops at does not stop the thread
+    - when the last client disconnects, the stopped threads continue, and without a client a thread stops only at the
+      start of a program (the \c attach interrupt); they stayed stopped with nobody to resume them
     - at the stop at the start of a program (the \c attach interrupt), the thread has not entered the code of the
       program: expressions are evaluated with the code and the global variables of the program, and no local variables
       are read, as the frames are those of the code that started the program; reading them failed
@@ -304,25 +306,45 @@ public namespace DebugProgramControl {
         }
 
         #! unregister a connection context
+        /** When the last client disconnects, the stopped threads continue, as nobody can resume them; see
+            handleInterrupt()
+        */
         public unregisterConnection(hash<auto> cx) {
-            rwlConnection.writeLock();
-            on_exit rwlConnection.writeUnlock();
+            bool last;
+            {
+                rwlConnection.writeLock();
+                on_exit rwlConnection.writeUnlock();
 
-            # remove attached programs
-            map removeProgram($1), ctxConnection{cx.id}.program.iterator();
+                # remove attached programs
+                map removeProgram($1), ctxConnection{cx.id}.program.iterator();
 
-            delete ctxConnection{cx.id};
-            # if (!ctxConnection)  run stopped programs ?
+                delete ctxConnection{cx.id};
+                last = !ctxConnection;
+            }
+            # the threads are resumed without the lock of the connections
+            if (last) {
+                shutdown();
+            }
         }
 
-        #! unregister all connections
+        #! Returns True if a client is connected
+        private bool hasConnection() {
+            rwlConnection.readLock();
+            on_exit rwlConnection.readUnlock();
+            return boolean(ctxConnection);
+        }
+
+        #! unregister all connections; the stopped threads continue
         public unregisterAllConnections() {
-            rwlConnection.writeLock();
-            on_exit rwlConnection.writeUnlock();
-            foreach string id in (keys ctxConnection) {
-                map removeProgram($1), ctxConnection{id}.program.iterator();
-                delete ctxConnection{id};
+            {
+                rwlConnection.writeLock();
+                on_exit rwlConnection.writeUnlock();
+                foreach string id in (keys ctxConnection) {
+                    map removeProgram($1), ctxConnection{id}.program.iterator();
+                    delete ctxConnection{id};
+                }
             }
+            shutdown();
         }
 
         #! get list of connection ids
@@ -1875,6 +1897,11 @@ public namespace DebugProgramControl {
         private *hash<auto> handleInterrupt(string func, ProgramControl pgm, reference runState, reference runToStatementId, *int statementId, *string refName, *reference refValue, *int breakpointId, *hash<auto> except) {
             # serialize data, send to all websockets, break/suspend thread
             int tid = gettid();
+            # without a client, nobody could resume the thread; the stop at the start of a program is kept, as a debug
+            # server holds its program there until a client connects
+            if (func != "attach" && !hasConnection()) {
+                return;
+            }
             hash<auto> ctx = {
                 "queue": new Queue(),
                 "pgmId": pgm.getProgramId(),

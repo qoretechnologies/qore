@@ -49,14 +49,36 @@ class DebugCommandLineRemote inherits DebugLinenoiseCommandLine {
     }
 
     public *hash<auto> doCommandImpl(hash<auto> data) {
-        AutoLock al(cmdLock);
-        pendingUid = clock_getmicros();
-        data.uid = pendingUid;
-        string d = make_yaml(data);
-        sync.prepare();
-        debug("send: %y", d);
-        wsc.send(d);
-        return sync.waitForResponse(wscTimeout);
+        # a command that resumes the thread returns when it stops again (see waitsForStops); the wait starts before
+        # the command is sent, as the thread can stop again before the answer to the command is received
+        bool resumes = resumesWithWait(data);
+        if (resumes) {
+            expectStop(data.tid);
+        }
+        on_error if (resumes) {
+            cancelStop();
+        }
+        *hash<auto> ret;
+        {
+            AutoLock al(cmdLock);
+            pendingUid = clock_getmicros();
+            # an untyped hash, as a hash of strings, such as {"cmd": "session"}, also gets the integer ID
+            hash<auto!> cmd = data;
+            cmd.uid = pendingUid;
+            string d = make_yaml(cmd);
+            sync.prepare();
+            debug("send: %y", d);
+            wsc.send(d);
+            ret = sync.waitForResponse(wscTimeout);
+        }
+        if (resumes) {
+            if (!ret || ret.type == DebugResponseType::Error) {
+                cancelStop();
+            } else {
+                waitForStop();
+            }
+        }
+        return ret;
     }
 
     public nothing connect() {
@@ -100,6 +122,7 @@ class DebugCommandLineRemote inherits DebugLinenoiseCommandLine {
                 }
             }
             printData(d);
+            eventReceived(d);
             processEvent(d);
         } catch (hash<ExceptionInfo> ex) {
             error("wscEvent: %s", get_exception_string(ex));
@@ -227,7 +250,9 @@ class DebugWrapper {
             dcl.connect();
             # unconditional connection message
             stdout.printf("connected to debug server %y: %s; \"help\" for help\n", opt.url, dcl.serverName);
-            *hash<auto> sess = dcl.doCommandImpl({'cmd': 'session'});
+            # the debugged programs, and the threads that are stopped, such as the thread of a program that the server
+            # holds at its start
+            *hash<auto> sess = dcl.doCommandImpl({'cmd': 'session/get'});
             if (sess.result) {
                 string pgmId = sess.result.firstKey();
                 dcl.setContextValue('programId', pgmId);
@@ -236,6 +261,8 @@ class DebugWrapper {
                 }
             }
             dcl.init(opt);
+            # each command of a script is processed when the program is stopped
+            dcl.waitsForStops = !stdin.isTty();
             dcl.runCmdLine();
             dcl.wsc.disconnect();
         } catch (hash<ExceptionInfo> e) {

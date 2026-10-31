@@ -3458,6 +3458,9 @@ while (*binary chunk = input.read(65536)) {
         \c options \c stopall option (all threads stop together), and the \c display and \c undisplay commands
         (expressions that are shown at each stop)
       - fixed \c qdbg not ending when it quits while a thread of the program is stopped before the end of the program
+      - fixed \c qdbg-remote failing at its start, and not starting with the debugged program and its stopped thread
+        as the current ones; with input that is not a terminal, it processes each command of a file of commands at the
+        stop that it is written for, as \c qdbg does
       - \c qdbg-server listens on \c 127.0.0.1 unless a listener is given with \c -l, as its clients can evaluate
         expressions and change the program; it listened on all interfaces; with \c -k (or the \c QDBG_SERVER_TOKEN
         environment variable), it requires a token from its clients, which they send as a bearer token
@@ -3473,6 +3476,8 @@ while (*binary chunk = input.read(65536)) {
         breakpoint checks them before it stops, so it does not stop and wait for a client at each hit
       - each client selects the exceptions that stop threads with \c exception/filter/set; an exception that no client
         stops at does not stop the thread
+      - fixed the threads of a debug server staying stopped when its last client disconnects; they continue, and
+        without a client a thread stops only at the start of a program
     - @ref debugutilintro "DebugUtil" module
       - added functions that describe values, list their elements, keys and members, also private ones, and read and
         set values by their paths

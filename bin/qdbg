@@ -22,20 +22,9 @@ class DebugCommandLineLocal inherits DebugLinenoiseCommandLine {
         ResponseSync sync();
         #! gives the commands sent to stopped threads their unique IDs
         Sequence uidSeq();
-        #! True if a command that resumes a thread returns when the thread stops again; for input that is not a
-        #! terminal, so that each command of a script is processed when the program is stopped
-        bool waitForStops;
     }
 
     private {
-        #! guards the wait for a thread to stop
-        Mutex stopLock();
-        #! signaled when the thread that is waited for stops
-        Condition stopCond();
-        #! True while a thread is waited for to stop
-        bool stopPending;
-        #! the thread that is waited for to stop; any thread if not set
-        *int stopTid;
         #! serializes the commands sent to stopped threads, as their responses are delivered one at a time; the
         #! commands of stopping all threads together are sent in background threads
         Mutex cmdLock();
@@ -51,7 +40,7 @@ class DebugCommandLineLocal inherits DebugLinenoiseCommandLine {
         # a command that resumes the thread returns when it stops again; the wait starts before the command is sent,
         # as the thread can stop again before the answer to the command is received
         # a command with "wait" False, as of the threads that continue with another one, does not wait
-        bool resumes = waitForStops && data.cmd =~ /^thread\/go(\/|$)/ && data.wait !== False;
+        bool resumes = resumesWithWait(data);
         if (resumes) {
             expectStop(data.tid);
         }
@@ -81,42 +70,6 @@ class DebugCommandLineLocal inherits DebugLinenoiseCommandLine {
             }
         }
         return ret;
-    }
-
-    #! Starts waiting for a thread to stop; for any thread if \a tid is not given
-    expectStop(*int tid) {
-        AutoLock al(stopLock);
-        stopTid = tid;
-        stopPending = True;
-    }
-
-    #! Stops waiting for a thread to stop
-    cancelStop() {
-        AutoLock al(stopLock);
-        stopPending = False;
-        stopCond.broadcast();
-    }
-
-    #! Waits until the thread that is waited for stops, stops being debugged, or the program ends
-    waitForStop() {
-        AutoLock al(stopLock);
-        while (stopPending) {
-            stopCond.wait(stopLock);
-        }
-    }
-
-    #! Processes an event of the debug server: a thread that is waited for stops or stops being debugged
-    eventReceived(hash<auto> data) {
-        if (data.type != DebugResponseType::Event
-            || (data.cmd != DebugEventCmd::Interrupt
-                && (data.cmd != DebugEventCmd::Run || data.runstate != "detach"))) {
-            return;
-        }
-        AutoLock al(stopLock);
-        if (stopPending && (!exists stopTid || data.tid == stopTid)) {
-            stopPending = False;
-            stopCond.broadcast();
-        }
     }
 }
 
@@ -229,12 +182,12 @@ class DebugWrapper {
                 fileName = "/dev/stdin";
             }
             # with input that is not a terminal (a script), the commands are processed when the program is stopped
-            dcl.waitForStops = !stdin.isTty();
-            dcl.waitsForStops = dcl.waitForStops;
+            # each command of a script is processed when the program is stopped
+            dcl.waitsForStops = !stdin.isTty();
             if (exists fileName) {
                 Program pgm = dcl.dpc.createProgram(fileName, opt, ARGV);
                 logger.info("run program");
-                if (dcl.waitForStops) {
+                if (dcl.waitsForStops) {
                     # the first command is processed when the program has attached to the debugger
                     dcl.expectStop();
                 }
@@ -245,7 +198,7 @@ class DebugWrapper {
                 }();
             }
             dcl.init(opt);
-            if (dcl.waitForStops) {
+            if (dcl.waitsForStops) {
                 dcl.waitForStop();
             }
             dcl.runCmdLine();
