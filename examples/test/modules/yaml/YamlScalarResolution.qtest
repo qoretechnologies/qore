@@ -241,6 +241,18 @@ class YamlScalarResolutionTest inherits QUnit::Test {
             assertScalar(scalar, scalar);
         }
 
+        # a scalar with components that ISO 8601 does not read as a duration, repeated or out of order, is a string
+        foreach string scalar in (("P1D1D", "P1D1Y", "PT1M1H", "P1Y1Y")) {
+            assertScalar(scalar, scalar);
+        }
+
+        # a scalar tagged as a duration must be one
+        assertEq(1D + 2h, parse_yaml("v: !duration P1DT2H").v);
+        foreach string scalar in (("P1H", "P1D1D", "P1", "P")) {
+            assertThrows("YAML-PARSER-ERROR", "cannot parse duration value '" + scalar + "': cannot parse ISO 8601 "
+                "duration string", \parse_yaml(), ("v: !duration " + scalar,), scalar);
+        }
+
         # a list of plain country codes keeps its strings, and they survive a round trip
         list<auto> countries = parse_yaml("- NL\n- NO\n- PT\n- PS\n");
         assertEq(("NL", "NO", "PT", "PS"), countries);

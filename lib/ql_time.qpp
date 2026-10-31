@@ -1898,22 +1898,24 @@ date d = date("Sun Nov  6 08:49:37 1994");       # asctime
 date d = date("Mon, 06 Nov 1994 08:49:37 +0500");
     @endcode
 
-    A string starting with \c "P" is read as an ISO 8601 duration in the
-    @ref short_reldates "short relative time format" and gives a @ref relative_dates "relative date/time value":
+    A string starting with \c "P" is read as an ISO 8601 duration, in the format with designators
+    (@ref short_reldates "PnYnMnWnDTnHnMnS") or in the alternative format (@ref long_reldates "PYYYY-MM-DDThh:mm:ss"
+    or \c PYYYYMMDDThhmmss), and gives a @ref relative_dates "relative date/time value":
     @code{.py}
-date d = date("P1DT12H"); # returns <time: 1 day 12 hours>
-date w = date("P2W");     # returns <time: 14 days>
+date d = date("P1DT12H");             # returns <time: 1 day 12 hours>
+date w = date("P2W");                 # returns <time: 14 days>
+date a = date("P0000-00-01T12:00:00"); # returns <time: 1 day 12 hours>
     @endcode
 
-    @throw INVALID-DATE thrown if the date is invalid; invalid or missing date components, or an ISO 8601 duration
-    that cannot be read (ex: \c "P1", \c "P1DT", \c "P1H")
+    @throw INVALID-DATE thrown if the date is invalid; invalid or missing date components, or a duration that does not
+    follow ISO 8601 (ex: \c "P1", \c "P1DT", \c "P1H" (use \c "PT1H"), \c "P1D1D", \c "P00:01:00")
 
     @see date(string, string)
 
     @since %Qore 0.8.12.4 \c INVALID-DATE exceptions are thrown if the date is invalid
 
     @since %Qore 3.0.0 RFC 7231 (HTTP) and RFC 2822 (email) date formats are supported; \c INVALID-DATE is thrown
-    for an ISO 8601 duration that cannot be read, and weeks (\c "P1W") are read
+    for a duration that does not follow ISO 8601, and weeks (\c "P1W") and the alternative format are read
  */
 date date(string date_string) [flags=CONSTANT,NAMED_ARGS] {
     DateTimeNodeValueHelper date(date_string, xsink);

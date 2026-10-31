@@ -25,12 +25,25 @@ class DateIso8601DurationStringsTest inherits QUnit::Test {
             "P1D-", "P1Dx", "P1X", "PX", "P1D x", "P 1D", "P1 D", "PT1H\t1M", "P1DT1H-", "PT1Hz",
             # a time component before the time designator, a date component after it
             "P1H", "P1S", "P1u", "P1D2H", "PT1D", "PT1Y", "PT1W", "P1DT1H1D",
+            # a component repeated or out of order: ISO 8601 orders them as Y, M, W, D, T, H, M, S
+            "P1D1D", "P1M1Y", "P1D1W", "P1D1M", "PT1M1H", "PT1S1M", "PT1H1H", "PT1u1S", "P1W1W", "P1Y1Y",
+            # a decimal fraction on a component that is not the last one
+            "P1.5DT1H", "P1.5D1H", "P0.5Y1M", "PT1.5H30M", "PT1.5S1u", "P1,5W1D", "PT1.0M1S",
             # a repeated time designator
             "PTT1H", "PT1HT1M", "P1DTT1H",
             # values out of range
-            "P2147483648D", "P99999999999999999999Y", "P2147483647D1D", "P-2147483647D-2D", "P306783379W",
-            # the long format, which only the parser reads, as a literal
-            "P0001-02-03", "P0001-02-03T04:05:06", "P00:01:00", "PT01:00:00",
+            "P2147483648D", "P99999999999999999999Y", "P306783379W",
+            # the alternative format: a time without its date
+            "P00:01:00", "PT01:00:00", "P01:00", "PT00:00:01.5",
+            # the alternative format: values over the carry-over points (12 months, 30 days, 24 hours, 60 minutes,
+            # 60 seconds)
+            "P0000-13-00", "P0000-00-31", "P0000-00-00T25:00:00", "P0000-00-00T00:61:00", "P0000-00-00T00:00:61",
+            "P00001300", "P00000000T250000",
+            # the alternative format: incomplete, mixed basic and extended, or other text
+            "P0001-02", "P0001-0203", "P0001-02-3", "P0001-02-03T", "P0001-02-03T04", "P0001-02-03T04:5",
+            "P0001-02-03T04:05:", "P0001-02-03T04:05:06.", "P0001-02-03T040506", "P00010203T04:05:06",
+            "P0001-02-03x", "P0001-02-03T04:05:06Z", "P0001-02-03T04:05:06 x", "P0001-02-03T04:05.5",
+            "P-0001-02-03", "P00010203T0405060", "P2026-",
         );
     }
 
@@ -78,11 +91,34 @@ class DateIso8601DurationStringsTest inherits QUnit::Test {
             "P-0.5D": -12h,
             "PT-1.5S": -1s - 500ms,
             "PT1H-30M": 1h - 30m,
+            # weeks combined with the other components, as in ISO 8601-1:2019
+            "P1W2D": 9D,
+            "P1Y1WT1H": 1Y + 7D + 1h,
+            "P1Y2M3W4DT5H6M7.5S": 1Y + 2M + 25D + 5h + 6m + 7s + 500ms,
+            # the fraction is on the last component
+            "P1DT0.5S": 1D + 500ms,
+            "P1YT1.5H": 1Y + 1h + 30m,
+            "PT1S1.5u": 1s + microseconds(1),
+            # the alternative format (ISO 8601:2004 4.4.3.3), extended and basic
+            "P0001-02-03": 1Y + 2M + 3D,
+            "P0001-02-03T04:05:06": 1Y + 2M + 3D + 4h + 5m + 6s,
+            "P00010203T040506": 1Y + 2M + 3D + 4h + 5m + 6s,
+            "P00010203": 1Y + 2M + 3D,
+            "P0000-00-00T01:00": 1h,
+            "P00000000T0100": 1h,
+            "P0000-00-00T00:04:00.000551": 4m + microseconds(551),
+            "P0000-00-00T00:00:01,5": 1s + 500ms,
+            "P00000000T000001.5": 1s + 500ms,
+            "P0000-00-00T00:00:00.1234567": microseconds(123456),
+            "P0000-00-03T21:00:00": 3D + 21h,
+            "P0001-00-00T00:00:00": 1Y,
+            "P0000-12-30T24:60:60": 1Y + 30D + 25h + 1m,
+            "p0001-02-03t04:05:06": 1Y + 2M + 3D + 4h + 5m + 6s,
+            "P0001-02-03 ": 1Y + 2M + 3D,
             "p1d": 1D,
             "p1y2m3dt4h5m6s": 1Y + 2M + 3D + 4h + 5m + 6s,
             "P1D ": 1D,
             "PT1H\t\r\n": 1h,
-            "P1D1D": 2D,
             "P2147483647D": days(2147483647),
             "P-2147483647D": days(-2147483647),
             "P306783378W": days(2147483646),
@@ -98,10 +134,6 @@ class DateIso8601DurationStringsTest inherits QUnit::Test {
             assertEq(d, sd, "softdate: " + i.key);
         }
 
-        # a literal is read by the same parser: the fraction of a negative value is negative
-        assertEq(-1D - 12h, P-1.5D, "literal P-1.5D");
-        assertEq(-12h, P-0.5D, "literal P-0.5D");
-        assertEq(1D + 12h, P1.5D, "literal P1.5D");
 
         # the components are kept as given, not normalized
         assertEq(25, date("PT25H").hours(), "PT25H hours");
@@ -114,7 +146,7 @@ class DateIso8601DurationStringsTest inherits QUnit::Test {
         foreach string str in (Malformed) {
             assertThrows("INVALID-DATE", "ISO 8601 duration string", \date(), (str,), str);
             # the message names the string
-            string prefix = sprintf("cannot parse ISO 8601 duration string '%s'; ", str);
+            string prefix = sprintf("cannot parse ISO 8601 duration string '%s' at ", str);
             try {
                 date d = date(str);
                 fail(sprintf("no exception for %y: %y", str, d));
@@ -124,18 +156,39 @@ class DateIso8601DurationStringsTest inherits QUnit::Test {
         }
 
         # the message says where the string cannot be read
-        assertThrows("INVALID-DATE", "a number has no designator at the end of the string", \date(), ("P1",));
-        assertThrows("INVALID-DATE", "a number has no designator at the end of the string", \date(), ("PT1H2",));
+        assertThrows("INVALID-DATE", "at the end of the string: a number has no designator$", \date(), ("P1",));
+        assertThrows("INVALID-DATE", "at the end of the string: a number has no designator$", \date(), ("PT1H2",));
         assertThrows("INVALID-DATE", "the time designator 'T' is not followed by a time component", \date(),
             ("P1DT",));
         assertThrows("INVALID-DATE", "the duration has no component", \date(), ("P",));
-        assertThrows("INVALID-DATE", "unknown designator at offset 2 \\(char 'X'\\)", \date(), ("P1X",));
-        assertThrows("INVALID-DATE", "a time component \\(H, S or u\\) does not follow", \date(), ("P1H",));
+        assertThrows("INVALID-DATE", "at offset 2 \\(char 'X'\\): unknown designator", \date(), ("P1X",));
+        # a time component before the time designator: the message shows where the "T" goes
+        assertThrows("INVALID-DATE", "'P1H' at offset 2 \\(char 'H'\\): the time component 'H' must follow the "
+            "time designator 'T', as in ISO 8601 \\(ex: 'PT1H'\\)$", \date(), ("P1H",));
+        assertThrows("INVALID-DATE", "\\(ex: 'PT1S'\\)$", \date(), ("P1S",));
+        assertThrows("INVALID-DATE", "\\(ex: 'PT1u'\\)$", \date(), ("P1u",));
+        assertThrows("INVALID-DATE", "\\(ex: 'P1DT2H'\\)$", \date(), ("P1D2H",));
         assertThrows("INVALID-DATE", "a date component \\(Y, W or D\\) follows", \date(), ("PT1D",));
+        assertThrows("INVALID-DATE", "a component is repeated or out of order; ISO 8601 orders them as Y, M, W, D, "
+            "then after the time designator 'T': H, M, S", \date(), ("P1D1Y",));
+        assertThrows("INVALID-DATE", "only the last \\(smallest\\) component can have a decimal fraction", \date(),
+            ("P1.5DT1H",));
+        assertThrows("INVALID-DATE", "a time in the alternative format must follow its date", \date(),
+            ("P00:01:00",));
+        assertThrows("INVALID-DATE", "the months value 13 exceeds its carry-over point 12", \date(), ("P0000-13-00",));
+        assertThrows("INVALID-DATE", "the days value 31 exceeds its carry-over point 30", \date(), ("P0000-00-31",));
+        assertThrows("INVALID-DATE", "the hours value 25 exceeds its carry-over point 24", \date(),
+            ("P0000-00-00T25:00:00",));
+        assertThrows("INVALID-DATE", "the minutes value 61 exceeds", \date(), ("P0000-00-00T00:61:00",));
+        assertThrows("INVALID-DATE", "the seconds value 61 exceeds", \date(), ("P0000-00-00T00:00:61",));
+        assertThrows("INVALID-DATE", "expecting ':' after the hours", \date(), ("P0001-02-03T040506",));
+        assertThrows("INVALID-DATE", "expecting the two digits of the minutes", \date(), ("P00010203T04:05:06",));
+        assertThrows("INVALID-DATE", "unexpected text in a duration in the alternative format", \date(),
+            ("P0001-02-03T04:05:06Z",));
         assertThrows("INVALID-DATE", "the time designator 'T' is repeated", \date(), ("PT1HT1M",));
         assertThrows("INVALID-DATE", "a decimal sign is not followed by digits", \date(), ("P1.",));
         assertThrows("INVALID-DATE", "a number is too large", \date(), ("P2147483648D",));
-        assertThrows("INVALID-DATE", "a component value is out of range", \date(), ("P2147483647D1D",));
+        assertThrows("INVALID-DATE", "a component value is out of range", \date(), ("P306783379W",));
         assertThrows("INVALID-DATE", "unexpected text after white space", \date(), ("P1D x",));
 
         # named argument
@@ -150,7 +203,7 @@ class DateIso8601DurationStringsTest inherits QUnit::Test {
     private terminatingNul() {
         string p1_5d = (<5031003544>).toString();
         assertEq(5, p1_5d.size());
-        assertThrows("INVALID-DATE", "a number has no designator at the end of the string", \date(), (p1_5d,));
+        assertThrows("INVALID-DATE", "at the end of the string: a number has no designator$", \date(), (p1_5d,));
         softdate sd = p1_5d;
         assertEq(0s, sd, "softdate P1<NUL>5D");
 
@@ -179,8 +232,13 @@ class DateIso8601DurationStringsTest inherits QUnit::Test {
             "P1D2H": 1D,
             "PT1D": 0s,
             "PT1HT1M": 1h,
-            "P2147483647D1D": days(2147483647),
-            "P0001-02-03": 0s,
+            "P1D1D": 1D,
+            "P1D1Y": 1D,
+            "P1.5DT1H": 1D + 12h,
+            # the alternative format is read completely or not at all
+            "P00:01:00": 0s,
+            "P0000-13-00": 0s,
+            "P0001-02-03T04:05:": 0s,
         };
         foreach hash<auto> i in (cases.pairIterator()) {
             for (int n = 0; n < 20; ++n) {

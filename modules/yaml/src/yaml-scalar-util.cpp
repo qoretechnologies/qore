@@ -549,8 +549,9 @@ DateTimeNode* yaml_parse_absolute_date(const char* val, size_t len, ExceptionSin
     return yaml_return_date(DateTimeNode::makeAbsolute(zone, year, month, day, hour, minute, second, us));
 }
 
-DateTimeNode* yaml_parse_duration(const char* val) {
-    return new DateTimeNode(val);
+DateTimeNode* yaml_parse_duration(const char* val, ExceptionSink* xsink) {
+    ReferenceHolder<DateTimeNode> rv(new DateTimeNode(val, xsink), xsink);
+    return *xsink ? nullptr : rv.release();
 }
 
 QoreValue yaml_parse_tagged_scalar(const char* val, size_t len, const char* tag, ExceptionSink* xsink) {
@@ -575,8 +576,22 @@ QoreValue yaml_parse_tagged_scalar(const char* val, size_t len, const char* tag,
     if (!strcmp(tag, YAML_FLOAT_TAG)) {
         return yaml_parse_float(val, len, xsink);
     }
-    if (!strcmp(tag, QORE_YAML_DURATION_TAG))
-        return new DateTimeNode(val);
+    if (!strcmp(tag, QORE_YAML_DURATION_TAG)) {
+        // a duration tagged as such must be one that Qore reads
+        ExceptionSink dsink;
+        DateTimeNode* rv = yaml_parse_duration(val, &dsink);
+        if (dsink) {
+            // the description belongs to the exception, so it is used before the exception is cleared
+            {
+                QoreValue desc = dsink.getExceptionDesc();
+                QoreStringValueHelper desc_str(desc);
+                xsink->raiseException(QY_PARSE_ERR, "cannot parse duration value '%s': %s", val, desc_str->c_str());
+            }
+            dsink.clear();
+            return QoreValue();
+        }
+        return rv;
+    }
     if (!strcmp(tag, QORE_YAML_NUMBER_TAG))
         return yaml_parse_number(val, len, xsink);
     if (!strcmp(tag, QORE_YAML_SQLNULL_TAG))
@@ -778,7 +793,15 @@ QoreValue yaml_parse_implicit_scalar(const char* val, size_t len, yaml_scalar_st
 
     // check for relative date/time values (durations)
     if (yaml_check_duration(val, xsink)) {
-        return yaml_parse_duration(val);
+        // a plain scalar that ISO 8601 does not read as a duration (ex: "P1D1D", with a repeated component) is a
+        // string
+        ExceptionSink dsink;
+        DateTimeNode* rv = yaml_parse_duration(val, &dsink);
+        if (!dsink) {
+            return rv;
+        }
+        dsink.clear();
+        return new QoreStringNode(val, len, QCS_UTF8);
     }
 
     if (*xsink) return QoreValue();

@@ -127,11 +127,11 @@ class DateTest inherits QUnit::Test {
 
         # time periods
         testAssertionValue("third date hour subtraction", date1 - P0000-00-00T01:00:00, 2004-02-01T11:30:00);
-        testAssertionValue("third date minute subtraction", date1 - P00:01:00,            2004-02-01T12:29:00);
-        testAssertionValue("third date second subtraction", date1 - PT00:00:01,           2004-02-01T12:29:59);
-        testAssertionValue("third date hour addition", date1 + P01:00:00,            2004-02-01T13:30:00);
-        testAssertionValue("third date minute addition", date1 + PT00:01:00,           2004-02-01T12:31:00);
-        testAssertionValue("third date second addition", date1 + P00:00:01,            2004-02-01T12:30:01);
+        testAssertionValue("third date minute subtraction", date1 - P0000-00-00T00:01:00, 2004-02-01T12:29:00);
+        testAssertionValue("third date second subtraction", date1 - P00000000T000001,     2004-02-01T12:29:59);
+        testAssertionValue("third date hour addition", date1 + P0000-00-00T01:00,    2004-02-01T13:30:00);
+        testAssertionValue("third date minute addition", date1 + PT1M,                 2004-02-01T12:31:00);
+        testAssertionValue("third date second addition", date1 + P00000000T000001,     2004-02-01T12:30:01);
 
         # arithmetic on dates with ms overflow
         testAssertionValue("third millisecond addition", 2006-01-02T00:00:00.112, 2006-01-01T23:59:59.800 + 312ms);

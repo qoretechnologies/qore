@@ -106,7 +106,8 @@ DLLLOCAL DateTimeNode* yaml_parse_absolute_date(const char* val, size_t len, Exc
 /** @param val the duration string
     @return the parsed DateTimeNode (relative)
 */
-DLLLOCAL DateTimeNode* yaml_parse_duration(const char* val);
+//! Parses an ISO 8601 duration; raises an exception and returns nullptr if Qore cannot read it
+DLLLOCAL DateTimeNode* yaml_parse_duration(const char* val, ExceptionSink* xsink);
 
 //! Try to parse a value as a number (int, float, or arbitrary precision)
 /** Uses locale-independent parsing.

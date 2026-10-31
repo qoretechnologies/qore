@@ -1,0 +1,130 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+%exec-class DateIso8601DurationLiteralsTest
+
+#! ISO 8601 duration literals: the parser reads them as date(string) reads duration strings
+class DateIso8601DurationLiteralsTest inherits QUnit::Test {
+    public {
+        #! literals that are a parse error, with the text the error has to give
+        const Invalid = {
+            # a time component before the time designator: the error shows where the "T" goes
+            "P1H": "the time component 'H' must follow the time designator 'T', as in ISO 8601 \\(ex: 'PT1H'\\)",
+            "P1S": "\\(ex: 'PT1S'\\)",
+            "P1u": "\\(ex: 'PT1u'\\)",
+            "P1D2H": "\\(ex: 'P1DT2H'\\)",
+            "P1Y2M3D4H": "\\(ex: 'P1Y2M3DT4H'\\)",
+            # a date component after the time designator
+            "PT1D": "a date component \\(Y, W or D\\) follows the time designator 'T'",
+            "P1DT1H1D": "a date component \\(Y, W or D\\) follows the time designator 'T'",
+            "PT1W": "a date component \\(Y, W or D\\) follows the time designator 'T'",
+            # a time designator without a time component
+            "P1DT": "the time designator 'T' is not followed by a time component",
+            # a component repeated or out of order
+            "P1D1D": "a component is repeated or out of order",
+            "P1D1Y": "a component is repeated or out of order",
+            "PT1M1H": "a component is repeated or out of order",
+            "P1D1W": "a component is repeated or out of order",
+            # a decimal fraction on a component that is not the last one
+            "P1.5DT1H": "only the last \\(smallest\\) component can have a decimal fraction",
+            "PT1.5H30M": "only the last \\(smallest\\) component can have a decimal fraction",
+            # values that do not fit
+            "P2147483648D": "a number is too large",
+            # the alternative format: a time without its date, or values over the carry-over points
+            "P00:01:00": "a time in the alternative format must follow its date",
+            "PT01:00:00": "a time in the alternative format must follow its date",
+            "P00:00:01.5": "a time in the alternative format must follow its date",
+            "P0000-13-00": "the months value 13 exceeds its carry-over point 12",
+            "P0000-00-31": "the days value 31 exceeds its carry-over point 30",
+            "P0000-00-00T25:00:00": "the hours value 25 exceeds its carry-over point 24",
+            "P0000-00-00T00:61:00": "the minutes value 61 exceeds its carry-over point 60",
+            "P0000-00-00T00:00:61": "the seconds value 61 exceeds its carry-over point 60",
+            "P00001300": "the months value 13 exceeds its carry-over point 12",
+            "P00000000T250000": "the hours value 25 exceeds its carry-over point 24",
+        };
+    }
+
+    constructor() : QUnit::Test("ISO 8601 duration literals", "1.0") {
+        addTestCase("valid literals", \validLiterals());
+        addTestCase("invalid literals are parse errors", \invalidLiterals());
+        addTestCase("week literals and identifiers", \weekLiterals());
+        set_return_value(main());
+    }
+
+    private validLiterals() {
+        # the expected values are built from single-unit literals and functions, which do not use the parser of
+        # ISO 8601 durations
+        assertEq(1D, P1D);
+        assertEq(1h, PT1H);
+        assertEq(7D, P1W);
+        assertEq(14D, P2W);
+        assertEq(9D, P1W2D);
+        assertEq(1Y + 7D + 1h, P1Y1WT1H);
+        assertEq(1Y + 2M + 25D + 5h + 6m + 7s + 500ms, P1Y2M3W4DT5H6M7.5S);
+        assertEq(1Y + 2M + 3D + 4h + 5m + 6s, P1Y2M3DT4H5M6S);
+        assertEq(4m + microseconds(551), PT4M551u);
+        assertEq(1D + 12h, P1.5D);
+        assertEq(-1D - 12h, P-1.5D);
+        assertEq(-12h, P-0.5D);
+        assertEq(-7D, P-1W);
+        assertEq(1h - 30m, PT1H-30M);
+        assertEq(1D + 500ms, P1DT0.5S);
+        assertEq(3D + 12h, P0.5W);
+        # the alternative format, extended and basic
+        assertEq(1Y + 2M + 3D, P0001-02-03);
+        assertEq(1Y + 2M + 3D + 4h + 5m + 6s, P0001-02-03T04:05:06);
+        assertEq(1Y + 2M + 3D + 4h + 5m + 6s, P00010203T040506);
+        assertEq(1Y + 2M + 3D, P00010203);
+        assertEq(1h, P0000-00-00T01:00);
+        assertEq(1h, P00000000T0100);
+        assertEq(4m + microseconds(551), P0000-00-00T00:04:00.000551);
+        assertEq(1s + 500ms, P00000000T000001.5);
+        assertEq(1Y + 30D + 25h + 1m, P0000-12-30T24:60:60);
+        # the components of the format with designators are kept as given
+        assertEq(25, PT25H.hours());
+        # a literal and the same string give the same value
+        foreach string str in (("P1D", "PT1H", "P1W", "P1W2D", "P1Y2M3W4DT5H6M7.5S", "P-1.5D", "P0001-02-03T04:05:06",
+                "P00010203T040506", "PT4M551u")) {
+            Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_NO_GLOBAL_VARS);
+            p.parse("date sub get() { return " + str + "; }", "literal " + str);
+            assertEq(date(str), p.callFunction("get"), "literal " + str);
+        }
+    }
+
+    private invalidLiterals() {
+        foreach hash<auto> i in (Invalid.pairIterator()) {
+            Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_NO_GLOBAL_VARS);
+            try {
+                p.parse("date sub get() { return " + i.key + "; }", "literal " + i.key);
+                fail("no parse error for " + i.key);
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("PARSE-EXCEPTION", ex.err, i.key);
+                string prefix = "invalid duration literal: cannot parse ISO 8601 duration string '" + i.key + "' at ";
+                assertEq(prefix, ex.desc.substr(0, prefix.length()), "message: " + i.key);
+                assertRegex(i.value, ex.desc, "reason: " + i.key);
+            }
+        }
+    }
+
+    #! "P1W" is a literal as "P1D" is: a word is an identifier only if it is longer than the literal
+    private weekLiterals() {
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_NO_GLOBAL_VARS);
+        p.parse("int sub get() { int P1Wx = 2; int P1W_ = 3; int xP1W = 5; return P1Wx + P1W_ + xP1W; } "
+            "date sub week() { return P1W; } date sub day() { return P1D; } "
+            "hash<auto> sub keys() { return {\"P1W\": 1, \"P1D\": 2}; }", "week literals");
+        assertEq(10, p.callFunction("get"));
+        assertEq(7D, p.callFunction("week"));
+        assertEq(1D, p.callFunction("day"));
+        assertEq({"P1W": 1, "P1D": 2}, p.callFunction("keys"));
+
+        # neither "P1W" nor "P1D" can be a variable name
+        foreach string name in (("P1W", "P1D")) {
+            Program q(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_NO_GLOBAL_VARS);
+            assertThrows("PARSE-EXCEPTION", \q.parse(), ("sub f() { int " + name + " = 1; }", name), name);
+        }
+    }
+}

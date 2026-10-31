@@ -914,6 +914,30 @@
     The conversions that do not raise exceptions (a string assigned to a \c softdate, for example) keep the
     components read before the text they cannot read.
 
+    @par Duration Literals and Strings Follow ISO 8601
+    Duration literals and the duration strings read by @ref Qore::date(string) "date(string)" now follow the two
+    duration formats of ISO 8601 (@ref short_reldates "PnYnMnWnDTnHnMnS" and the
+    @ref long_reldates "alternative format" \c PYYYY-MM-DDThh:mm:ss); a literal that does not is a parse error that
+    says what is wrong, and a string raises \c INVALID-DATE:
+    - an hour, minute or second must follow the time designator \c "T": \c P1H, \c P1S and \c P1u are errors (use
+      \c PT1H; before, they were zero)
+    - the components must be in the order Y, M, W, D, T, H, M, S, each at most once: \c P1D1D and \c PT1M1H are
+      errors (before, the values were added)
+    - only the last component can have a decimal fraction: \c P1.5DT1H is an error
+    - in the alternative format, a time must follow its date: \c P00:01:00 and \c PT01:00:00 are errors (use
+      \c P0000-00-00T00:01:00 or \c PT1M), and the values cannot exceed 12 months, 30 days, 24 hours, 60 minutes or
+      60 seconds
+    .
+    These are now read as well:
+    - weeks in literals (\c P1W, \c P1W2D), as in strings
+    - the alternative format in strings (<tt>date("P0001-02-03T04:05:06")</tt>; before, a zero duration), and its
+      basic form in literals and strings (\c P00010203T040506)
+    .
+    The %Qore extensions to ISO 8601 remain: negative components (\c P-1D), microseconds after the seconds
+    (\c PT1S5u), and in strings lower-case designators and trailing white space.  A YAML plain
+    scalar that ISO 8601 does not read as a duration (ex: \c P1D1D) is a string, and a \c !duration scalar that it
+    does not read raises \c YAML-PARSER-ERROR.
+
     @par The Ends of File::getPipe() Are Closed
     The ends of a pipe made by @ref Qore::File::getPipe() "File::getPipe()" now own their descriptors:
     @ref Qore::ReadOnlyFile::close() "close()" closes the descriptor and returns 0 (it returned -1 and closed
