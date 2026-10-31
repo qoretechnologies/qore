@@ -80,5 +80,10 @@ class LocalCleanupCancellationTest inherits QUnit::Test {
         string expected = "aot-local-cleanup-cancellation: ok\n";
         assertEq(expected, run((executable,)));
         assertEq(expected, run((executable,), "QORE_AOT_EH=1 "));
+        # Isolate the original later cleanup checkpoint as well as the earlier
+        # receiver-source analysis checkpoint exercised by the default runs.
+        assertEq(expected, run((executable,), "QORE_DISABLE_AOT_PINNED_LOCAL_RECEIVER=1 "));
+        assertEq(expected, run((executable,),
+            "QORE_AOT_EH=1 QORE_DISABLE_AOT_PINNED_LOCAL_RECEIVER=1 "));
     }
 }

@@ -15,19 +15,22 @@
 #endif
 #include <cassert>
 #include <cstdio>
+#include <cstdlib>
 #include <string>
 
 static constexpr unsigned local_count = 51;
 static_assert(local_count < 100 && local_count * 2 >= 100);
 
-static void checkLowering(const LVList& locals, bool fast, bool following_block) {
+static void checkLowering(const LVList& locals, bool fast, bool following_block, bool late_cleanup) {
     llvm::LLVMContext context;
     llvm::Module module("local-cleanup-cancellation", context);
     QoreIRFunction ir("cleanup_probe");
     ir.all_body_locals = locals.lv;
     // An optimized-away body can still have runtime-visible local declarations.
-    // With 51 locals and one instruction, earlier independent scans stay below
-    // 100; the cleanup's shared forward/reverse counter reaches its checkpoint.
+    // With the receiver source scan disabled, 51 locals and one instruction
+    // keep earlier independent scans below 100; the cleanup's shared
+    // forward/reverse counter reaches its checkpoint. With that scan enabled,
+    // cancellation is checked on its first block, before cleanup emission.
     ir.createBlock("entry")->appendInstruction<QoreIRReturnInstruction>();
     if (following_block) {
         // Exercise the instruction-loop rejection as well as the final
@@ -50,7 +53,9 @@ static void checkLowering(const LVList& locals, bool fast, bool following_block)
     std::string error;
     bool lowered = lowerer.lowerFunction(ir, module, error);
     qore_clear_thread_cancel();
-    if (lowered || error != "cancelled during LLVM local cleanup emission") {
+    const char* expected_error = late_cleanup ? "cancelled during LLVM local cleanup emission"
+        : "cancelled during LLVM local receiver source analysis";
+    if (lowered || error != expected_error) {
         std::fprintf(stderr, "unexpected lowering result (%d): %s\n", lowered, error.c_str());
         assert(false);
     }
@@ -87,10 +92,12 @@ static void check() {
     assert(function && function->first()->getUserVariantBase());
     const LVList* locals = function->first()->getUserVariantBase()->getStatementBlock()->getLVList();
     assert(locals && locals->size() == local_count);
-    checkLowering(*locals, false, false);
-    checkLowering(*locals, false, true);
-    checkLowering(*locals, true, false);
-    checkLowering(*locals, true, true);
+    const char* disable_receiver_scan = std::getenv("QORE_DISABLE_AOT_PINNED_LOCAL_RECEIVER");
+    const bool late_cleanup = disable_receiver_scan && *disable_receiver_scan;
+    checkLowering(*locals, false, false, late_cleanup);
+    checkLowering(*locals, false, true, late_cleanup);
+    checkLowering(*locals, true, false, late_cleanup);
+    checkLowering(*locals, true, true, late_cleanup);
     assert(!xsink);
 }
 

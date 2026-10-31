@@ -1650,3 +1650,5 @@ The [post-pinned-base optimized checkpoint](RESULTS.md#optimized-checkpoint-afte
 
 
 The [post-local-receiver optimized checkpoint](RESULTS.md#optimized-checkpoint-after-receiver-local-optimization-2026-10-31) compares 39 workloads with develop and 32 Java rows, including 29 fresh ordinary-C2 counterparts alongside original boundary controls. All 885 processes / 2,655 windows are retained.
+
+[Rejected inline scalar assignment coercion omission](RESULTS.md#rejected-inline-scalar-assignment-coercion-omission-2026-10-31): repeated list-mutation gains and adverse indirect-call controls, with [evidence](results-inline-scalar-coerce-rejected-macos-arm64.json) and [62-item audit](audit-inline-scalar-coerce-rejected.md). The cancellation regression now exercises both early analysis and late cleanup checkpoints.

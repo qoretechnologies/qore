@@ -31392,3 +31392,51 @@ Host load, thermals, frequency and affinity are uncontrolled. Data representatio
 Next profile the remaining receiver-assignment and indirect-wrapper work, then evaluate single-owner receiver-local guards and compile-time or prepared admission proofs. Preserve actual receiver identity, live deletion/debugger/body binding checks, Program context, ownership, cycle-collector roots and physical-stack behavior. Public generic/class metadata mutation APIs prevent blindly hoisting all type-admission checks. Every further candidate needs optimized before/after measurements, short-loop and broader controls, regression qualification and the full audit before retention.
 
 [Complete evidence](results-post-local-receiver-checkpoint-macos-arm64.json); [all 62 audit checks](audit-post-local-receiver-checkpoint.md).
+
+## Rejected inline scalar assignment coercion omission (2026-10-31)
+
+The experiment omitted assignment coercion only for canonical int/bool locals receiving native inline integers or booleans. Integer range facts excluded owning wide integers; publication, reflective reload and nontrivial cleanup remained. Each local/module list-mutation body lost one hot coercion call and eight static cleanup sites, retaining its publication helper and all eight atomic cancellation loads. List-building and indirect-call LLVM bodies were unchanged. The candidate and added scalar fixtures were archived and removed.
+
+Reject under the authorized broader workload tradeoff. List mutation improved 2.76–3.23% in the pilot and 3.39–4.14% in confirmation, across every layout. Indirect calls cost 12.59% and 10.44% overall; confirmation per-layout costs were 2.36%, 12.30% and 3.40%. The reverse and shuffled indirect ranges were disjoint worse in both epochs; default ranges overlapped. These repeated call costs outweigh the narrow mutation benefit and small mixed-workload changes for the current goal. This decision is not a zero-regression requirement. Unchanged indirect LLVM and runtime wrapper addresses do not establish the cause of its slowdown; other code layout and shared-host effects remain possible.
+
+Both variants use Release -O3 -DNDEBUG, allocation tracking OFF, qcc -O3 --strip-source, LLVM 22.1.8 and Apple Clang 21 on M4 Pro/macOS ARM64. Baseline is installed runtime f1adb09eb9 with evidence HEAD 24cada8e8d, including develop 3955cf3ac3. Fresh artifacts use default/reverse/shuffle-487 link layouts, 4096 items/seed 7, three warmups and three samples. The pilot uses three forks and 100 ms windows; confirmation uses five fresh forks and 150 ms windows, with separate prospective randomized job orders. No owned build/test/profile/heavy scan overlaps timing. These are incremental whole-workload measurements, not new Java/develop ratios.
+
+Pilot:
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change|!Layout changes (default, reverse, shuffle)
+|local:list_build|23.2733|23.1769|-0.41%|+0.33%, -0.24%, -0.41%
+|local:list_mutate|124.0602|120.6307|-2.76%|-1.79%, -3.74%, -2.76%
+|local:direct_call|1.5636|1.5581|-0.35%|-0.17%, -1.18%, -0.16%
+|local:polymorphic_call|15.7222|15.7800|+0.37%|+0.37%, +0.37%, +0.85%
+|micro:list_build|23.1893|23.4116|+0.96%|+1.26%, +1.63%, -1.91%
+|micro:list_mutate|124.2337|120.2156|-3.23%|-2.91%, -4.89%, -3.82%
+|micro:indirect_call|8.1426|9.1677|+12.59%|+4.94%, +14.61%, +3.84%
+|micro:closure_call|18.6802|18.8161|+0.73%|+0.73%, -0.46%, +1.70%
+|float:callback_loop_float_return|5.0642|5.0196|-0.88%|-1.39%, +2.15%, -4.08%
+|mixed:csv_report|956.5273|969.7172|+1.38%|+1.38%, -1.37%, +1.63%
+|mixed:object_orders|3304.1178|3302.8971|-0.04%|-1.71%, +0.77%, -0.15%
+|mixed:callback_pipeline|97.8890|97.7909|-0.10%|+0.68%, -0.10%, +0.87%
+|mixed:text_index|1389.8655|1375.5054|-1.03%|-0.54%, +0.27%, -1.34%
+
+Confirmation:
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Change|!Layout changes (default, reverse, shuffle)
+|local:list_build|23.3257|23.1725|-0.66%|+0.54%, +0.59%, -1.46%
+|local:list_mutate|124.5509|119.3889|-4.14%|-4.54%, -3.57%, -2.83%
+|local:direct_call|1.5593|1.5525|-0.44%|-0.44%, -0.35%, -0.18%
+|local:polymorphic_call|15.6870|15.6550|-0.20%|-1.61%, +0.21%, -0.00%
+|micro:list_build|23.0931|23.3581|+1.15%|-0.32%, +1.15%, +0.86%
+|micro:list_mutate|124.2689|120.0509|-3.39%|-4.75%, -3.20%, -3.18%
+|micro:indirect_call|8.1739|9.0276|+10.44%|+2.36%, +12.30%, +3.40%
+|micro:closure_call|18.5968|18.9168|+1.72%|+2.02%, +1.79%, +0.17%
+|float:callback_loop_float_return|5.0805|5.0246|-1.10%|-0.99%, -2.81%, +0.28%
+|mixed:csv_report|966.9458|970.9644|+0.42%|+0.55%, +0.50%, -0.53%
+|mixed:object_orders|3333.8734|3286.8381|-1.41%|-1.41%, +0.75%, -2.38%
+|mixed:callback_pipeline|97.5366|98.1564|+0.64%|+0.64%, +0.55%, +1.07%
+|mixed:text_index|1381.9359|1375.4280|-0.47%|-0.47%, -0.56%, -0.07%
+
+Candidate qualification passed 4533 assertions across eight fixtures; 36 fresh benchmark artifacts passed 4698 reference outputs per variant. All 624 processes/1872 windows replay independently. The original primary fixture passed before a harness attempted a nonexistent secondary test name; corrected selection then exposed an older cancellation-test assumption. The frozen f1 baseline independently reproduces that failure: receiver-source analysis now sees pending cancellation before cleanup generation. The retained test repair exercises both checkpoints, checks that no partial function is published, and reuses the same lowerer in normal/fast and one/two-block modes, with EH controls. A Debug setup attempt passed the native test but loaded three source modules after Release qmod identity mismatches; the corrected Debug gate switches exactly those three aliases and restores them afterward.
+
+Restored Release and Debug cancellation checks pass. Every optimized library section/address/byte matches the frozen baseline except its revision string; the rejected compiler code and scalar fixtures match HEAD again. No candidate Debug, sanitizer, other-platform or universal parity result is claimed. The installed runtime remains the validated call-performance implementation. The next investigation is the remaining indirect entry/admission work and the narrower layout sensitivity of those entries; neither a new benefit nor a global performance ceiling is established.
+
+[Full evidence](results-inline-scalar-coerce-rejected-macos-arm64.json); [all 62 audit checks](audit-inline-scalar-coerce-rejected.md).
