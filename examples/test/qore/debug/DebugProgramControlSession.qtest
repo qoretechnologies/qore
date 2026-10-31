@@ -319,6 +319,7 @@ public class DebugProgramControlTest inherits QUnit::Test {
         addTestCase("stepping into a chosen call", \stepInTargetTest());
         addTestCase("conditions, hit conditions and log messages of breakpoints", \breakpointConditionTest());
         addTestCase("the commands of the options of breakpoints", \breakpointOptionCommandTest());
+        addTestCase("the stop at the start of a program", \attachStopTest());
         set_return_value(main());
     }
 
@@ -990,6 +991,32 @@ public class DebugProgramControlTest inherits QUnit::Test {
             bp.bkptid), {"value": "x"}));
         assertThrows("DEBUG-HANDLER-ERROR", "get or set", \dpc.command(), (sprintf("program//breakpoint/%d/condition/x",
             bp.bkptid)));
+        dpc.command(sprintf("program//breakpoint/%d/delete", bp.bkptid));
+        assertEq({"rc": NOTHING}, p.finish());
+    }
+
+    # at the start of a program, the thread has not entered its code: the local variables of the code that started the
+    # program are not read, and expressions are evaluated with the code and the global variables of the program
+    attachStopTest() {
+        DebuggedProgram p(dpc);
+        on_exit p.cleanup();
+        assertEq(2, AbstractDebugControl::unserialize(dpc.threadCommand(p.tid, "thread/evaluate",
+            {"expression": "add(1, 1)", "serialize": True}).serialized));
+        assertEq((), dpc.threadCommand(p.tid, "thread/local//list"));
+        assertEq((), dpc.threadCommand(p.tid, "thread/local//list", {"frameid": 1}));
+        assertEq({}, dpc.threadCommand(p.tid, "thread/local/p/get"));
+        # negative: there is no local variable to read or set
+        assertThrows("DEBUG-ERROR", \dpc.threadCommand(), (p.tid, "thread/variable/get", {"root": {"local": "p"}}));
+        assertThrows("DEBUG-HANDLER-ERROR", "no local variables", \dpc.threadCommand(), (p.tid,
+            "thread/local/x/set", {"value": AbstractDebugControl::serialize(1)}));
+        assertThrows("DEBUG-EVALUATE-ERROR", \dpc.threadCommand(), (p.tid, "thread/evaluate",
+            {"expression": "p"}));
+        # a breakpoint is checked without local variables
+        hash<auto> bp = dpc.command(sprintf("program/%d/breakpoint//create", p.pgmId), {
+            "value": {"file": TargetLabel, "lineno": 7, "condition": "add(1, 1) == 2"},
+        });
+        assertEq((bp.bkptid,), dpc.threadCommand(p.tid, "thread/breakpoint/check",
+            {"value": {"ids": (bp.bkptid,)}}).stop);
         dpc.command(sprintf("program//breakpoint/%d/delete", bp.bkptid));
         assertEq({"rc": NOTHING}, p.finish());
     }

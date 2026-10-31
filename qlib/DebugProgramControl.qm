@@ -75,6 +75,9 @@ module DebugProgramControl {
       statement that apply to the thread are checked, and the interrupt gives those that stop it in \c bkptids; the
       \c thread/breakpoint/check command checks breakpoints for a thread that stopped at their statement for another
       reason (see @ref DebugProgramControl::DebugProgramControl::checkBreakpoint() "checkBreakpoint()")
+    - at the stop at the start of a program (the \c attach interrupt), the thread has not entered the code of the
+      program: expressions are evaluated with the code and the global variables of the program, and no local variables
+      are read, as the frames are those of the code that started the program; reading them failed
     - the \c program/<id>/statement/stepintargets command gives the calls of a statement that can be stepped into
       (see @ref Qore::ProgramControl::getStepInTargets() "ProgramControl::getStepInTargets()"); stepping over with the
       statement of a target as the statement to run to steps into the call
@@ -1828,6 +1831,9 @@ public namespace DebugProgramControl {
             }
 
             hash<auto> ctxCT;
+            # at the start of the program, the thread has not entered its code: the frames are those of the code that
+            # started the program, whose local variables are not read
+            bool noLocals = func == "attach";
             if (exists refName) {
                 ctxCT{refName} = refValue;
             }
@@ -1863,16 +1869,20 @@ public namespace DebugProgramControl {
                                 int frameId2 = (rd.frameid ?? ctxCT.frameId) + frameOffset;
                                 switch (shift cmd) {
                                     case 'get':
-                                        *hash<auto> lv = get_local_vars(frameId2);
+                                        *hash<auto> lv = noLocals ? NOTHING : get_local_vars(frameId2);
                                         if (exists lv{varName}) {
                                             result = serializeLocal(varName, lv{varName});
                                         }
                                         break;
                                     case 'set':
+                                        if (noLocals) {
+                                            throw "DEBUG-HANDLER-ERROR", "the thread has not started the code of the "
+                                                "program, so it has no local variables";
+                                        }
                                         set_local_var_value(frameId2, varName, AbstractDebugControl::unserialize(rd.value));
                                         break;
                                     case 'list':
-                                        softlist l  = keys get_local_vars(frameId2);
+                                        softlist l = noLocals ? () : keys get_local_vars(frameId2);
                                         result = AbstractDebugControl::enumFilter(l, varName);
                                         break;
                                 }
@@ -1949,7 +1959,7 @@ public namespace DebugProgramControl {
                             case 'variable': {
                                 # the local variables are read here, as the frame numbers count from this frame
                                 int frameId2 = (rd.frameid ?? ctxCT.frameId) + frameOffset;
-                                *hash<auto> lv = exists rd.root.local || exists rd.expression
+                                *hash<auto> lv = !noLocals && (exists rd.root.local || exists rd.expression)
                                     ? get_local_vars(frameId2)
                                     : NOTHING;
                                 auto val = getDebugRootValue(pgm, rd.root, lv, ctxCT, refName);
@@ -1988,7 +1998,7 @@ public namespace DebugProgramControl {
                                 if (shift cmd != "check") {
                                     throw "DEBUG-HANDLER-ERROR", "expecting thread/breakpoint/check";
                                 }
-                                *hash<auto> lv = get_local_vars(frameOffset);
+                                *hash<auto> lv = noLocals ? NOTHING : get_local_vars(frameOffset);
                                 result = {"stop": (), "errors": {}};
                                 foreach softint id in (rd.value.ids) {
                                     hash<auto> check = checkBreakpoint(id, pgm, lv);
@@ -2005,7 +2015,8 @@ public namespace DebugProgramControl {
                             case 'evaluate': {
                                 # the local variables are read here, as the frame numbers count from this frame
                                 int frameId2 = (rd.frameid ?? ctxCT.frameId) + frameOffset;
-                                auto v = evaluateExpression(pgm, rd.expression, get_local_vars(frameId2));
+                                auto v = evaluateExpression(pgm, rd.expression,
+                                    noLocals ? NOTHING : get_local_vars(frameId2));
                                 # the value is kept while the thread is stopped, so that its elements can be read
                                 push ctxCT.evals, v;
                                 result = AbstractDebugControl::describe(v) + {

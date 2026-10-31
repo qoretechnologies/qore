@@ -98,6 +98,9 @@ public class QdbgScriptTest inherits QUnit::Test {
 
     scriptTest() {
         hash<auto> res = runQdbg(Program, (
+            # at the start of the program, expressions are evaluated with its code and there are no local variables
+            "eval add(20, 22)",
+            "thread local",
             "break create add",
             "break create target.q 8",
             "go run",
@@ -116,6 +119,8 @@ public class QdbgScriptTest inherits QUnit::Test {
         assertEq(0, res.rc);
         assertInOrder(res.out, (
             "interrupt/attach",
+            "integer add(20, 22) = 42",
+            "no local vars in frame",
             # the results of commands are printed in YAML style
             "bkptid: 1",
             "bkptid: 2",
