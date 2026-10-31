@@ -150,7 +150,8 @@
     breakpoints on any statement of a line (column breakpoints), stepping, also into a chosen call of a statement
     (step-in targets), pausing, all threads stopping together, call stacks, variables as trees whose values can be set,
     and expressions for watches, hovers and the debug console, where a line whose first word is a \c qdbg command is
-    processed as the command.  See @ref vscdebugadapterintro for details and limitations.
+    processed as the command; the shortcuts and aliases of \c qdbg, such as \c n and \c backtrace, are not commands
+    there, as they can be the names of variables, and a line that starts with \c $ is always an expression.  See @ref vscdebugadapterintro for details and limitations.
 
     @section debugging_qdbg Command-Line Debugging with qdbg
 
@@ -163,13 +164,21 @@ qdbg myfile.q -my -program params
     start, and <tt>help command</tt> shows the details of a command.  Commands can be shortened while they stay unique,
     as <tt>br cr 10</tt> for <tt>break create 10</tt>.  The time zone of the program is given with \c -z as a region
     name, such as \c Europe/Prague, or as a UTC offset, such as \c +01:00.  With input that is not
-    a terminal, each command that resumes a thread returns when the thread stops again, so a file of commands is
-    processed at the stops that it is written for:
+    a terminal, each command that resumes a thread returns when a thread pauses again or the thread ends, so a file of
+    commands is processed at the stops that it is written for:
     @code{.sh}
 qdbg myfile.q < commands.txt
     @endcode
 
+    \c qdbg tells what happens in plain words, such as <tt>Paused at breakpoint 1 at main.q:3 (thread 2)</tt>, followed
+    by the line of code.  A thread that the program starts runs until it reaches a breakpoint, as without the debugger,
+    and a thread that pauses while the current thread runs becomes the current thread; the end of a thread is shown,
+    but it does not pause the thread.  The call stacks show the frames of the program, each named after its function,
+    without the frames of the debugger.
+
     |!Command|!Description
+    |<tt>continue</tt> (<tt>c</tt>), <tt>step</tt> (<tt>s</tt>), <tt>next</tt> (<tt>n</tt>), <tt>finish</tt>|shortcuts of <tt>go run</tt>, <tt>go step</tt>, <tt>go stepover</tt> and <tt>go untilreturn</tt>, as in other debuggers
+    |<tt>print expression</tt>, <tt>locals</tt>|shows the value of an expression, as \c eval, and the local variables of the current frame with their values
     |<tt>break create [file] line[:column]</tt>|creates a breakpoint on a statement of a line; the column is counted in characters from 1
     |<tt>break create function[(types)]</tt>|creates a breakpoint on the start of a function
     |<tt>break list</tt>|lists the breakpoints of the current program with their conditions, hit conditions, log messages and number of hits
@@ -184,6 +193,7 @@ qdbg myfile.q < commands.txt
     |<tt>thread var path [from index \| = expression]</tt>|shows a variable or an element, key or member of it, as in <tt>h.lines[1]</tt> or <tt>h{key}</tt>, with its elements, keys and members, also from an index, or sets it to the value of an expression
     |<tt>display [expression]</tt>, <tt>undisplay [n]</tt>|adds an expression that is shown at each stop, or lists them, and removes one or all of them
     |<tt>eval expression</tt>|evaluates an expression with the variables of the current frame
+    |<tt>thread list</tt>, <tt>bt all</tt>|lists the threads of the current program, whether they are paused, and where they are, and shows their call stacks
     |<tt>program stop [tid]</tt>|stops the threads of the program, or one of them
     |<tt>options stopall set 0\|1</tt>|all threads of a program stop together when one of them stops, and continue together
 

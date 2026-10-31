@@ -3474,6 +3474,15 @@ while (*binary chunk = input.read(65536)) {
         \c qdbg-vsc-adapter showing 1 as the default of \c -w; it is 1500 milliseconds
       - fixed \c qdbg \c -z, \c qdbg-vsc-adapter \c -z and the \c timeZone of a Visual Studio Code launch
         configuration failing with a UTC offset, such as \c +01:00
+      - added the \c continue (\c c), \c step (\c s), \c next (\c n), \c finish, \c print and \c locals commands, as in
+        other debuggers
+      - the events of the debugger are shown in plain words, such as
+        <tt>Paused at breakpoint 1 at main.q:3 (thread 2)</tt>, the frames of call stacks are named after their
+        functions, without the frames and threads of the debugger, and \c thread \c list shows whether each thread
+        is paused
+      - a thread that the program starts runs until it reaches a breakpoint, as without the debugger, and its end
+        does not pause it; a thread that pauses while the current thread runs becomes the current thread, and with
+        input that is not a terminal, a command that resumes a thread returns when any thread pauses
       - \c qdbg-server listens on \c 127.0.0.1 unless a listener is given with \c -l, as its clients can evaluate
         expressions and change the program; it listened on all interfaces; with \c -k (or the \c QDBG_SERVER_TOKEN
         environment variable), it requires a token from its clients, which they send as a bearer token
@@ -3491,6 +3500,8 @@ while (*binary chunk = input.read(65536)) {
         stops at does not stop the thread
       - fixed the threads of a debug server staying stopped when its last client disconnects; they continue, and
         without a client a thread stops only at the start of a program
+      - the interrupt event of a thread that attaches tells whether it starts the program (\c programstart); a thread
+        that a program starts without a client does not stop
       - fixed a step stopping twice at the first statement of a block or a function; it stops once at each statement
       - fixed stepping out of a function stopping at its first line; it stops at the closing brace of the function
       - fixed a pause not stopping a thread in a loop whose body is empty
@@ -3956,6 +3967,8 @@ while (*binary chunk = input.read(65536)) {
         it: \c "/../etc" was returned as the relative path \c "etc"
 
     - @ref vscdebugadapterintro "VscDebugAdapter" module
+      - the shortcuts and aliases of \c qdbg, such as \c n and \c backtrace, are not commands in the debug console of
+        Visual Studio Code, as they can be the names of variables
       - the exception filters of Visual Studio Code are described, and a breakpoint that cannot be set is explained
         in plain words, such as <tt>there is no statement on line 1 of "target.q" where the program can pause</tt>
       - lists, hashes and objects are shown as trees in Visual Studio Code, and their elements, keys and members can

@@ -94,6 +94,9 @@ module DebugProgramControl {
       \c column and \c endcolumn where they are known
     - interrupt events give the name of the thread in \c threadname, and program lists give the current names of the
       threads of programs in \c threadNames
+    - the interrupt event of a thread that attaches gives \c programstart: @ref True for the first thread of a
+      program, which starts it, and @ref False for another thread that starts; without a client, a thread that starts
+      does not stop
     - @ref DebugProgramControl::DebugProgramControl::createProgram() "createProgram()" parses a script in the mode
       that the interpreter gives its file: in @ref modern "%modern" mode unless its name ends in \c .q (see
       @ref Qore::Program::applySourceDefaults() "Program::applySourceDefaults()")
@@ -168,6 +171,11 @@ public namespace DebugProgramControl {
             hash<string, bool> pauseRequests = {};
             #! serializes the access to pauseRequests
             Mutex pauseLock();
+
+            #! the programs whose first thread has attached, by program ID; see isProgramStart()
+            hash<string, bool> startedPrograms = {};
+            #! serializes the access to startedPrograms
+            Mutex startedLock();
 
             #! the steps of threads into a call of their statement, by TID; see startStepInto() and checkStepInto()
             hash<string, hash<auto>> stepIntos = {};
@@ -1932,6 +1940,10 @@ public namespace DebugProgramControl {
         */
         nothing removeProgram(ProgramControl program) {
             DebugProgram::removeProgram(program);
+            {
+                AutoLock al(startedLock);
+                remove startedPrograms{program.getProgramId()};
+            }
             # the lock of the debugged Programs is released before evalLock is taken, which evaluateExpression() holds
             # while it takes that lock
             AutoLock al(evalLock);
@@ -1953,9 +1965,11 @@ public namespace DebugProgramControl {
         private *hash<auto> handleInterrupt(string func, ProgramControl pgm, reference runState, reference runToStatementId, *int statementId, *string refName, *reference refValue, *int breakpointId, *hash<auto> except) {
             # serialize data, send to all websockets, break/suspend thread
             int tid = gettid();
+            # the attach of the first thread of a program is its start; other threads attach when they start
+            bool program_start = func == "attach" && isProgramStart(pgm.getProgramId());
             # without a client, nobody could resume the thread; the stop at the start of a program is kept, as a debug
             # server holds its program there until a client connects
-            if (func != "attach" && !hasConnection()) {
+            if (!program_start && !hasConnection()) {
                 return;
             }
             hash<auto> ctx = {
@@ -1971,6 +1985,8 @@ public namespace DebugProgramControl {
                     'threadname': get_thread_name(),
                     'stamp': now_us(),
                     'func': func,
+                    # for an attach: True for the start of the program, False for another thread that starts
+                    'programstart': func == "attach" ? program_start : NOTHING,
                     'runstate': encodeValue('runState', runState, runStateStrings),
                     'runtostatementid': runToStatementId,
                     'frame': 0,
@@ -2436,6 +2452,16 @@ public namespace DebugProgramControl {
             } catch (hash<ExceptionInfo> ex) {
                 # suppress exceptions
             }
+        }
+
+        #! Returns True for the first thread of a program that attaches, which starts the program
+        private:internal bool isProgramStart(int pgm_id) {
+            AutoLock al(startedLock);
+            if (startedPrograms{pgm_id}) {
+                return False;
+            }
+            startedPrograms{pgm_id} = True;
+            return True;
         }
 
         onAttach(ProgramControl pgm, reference rs, reference runToStatementId) {

@@ -63,7 +63,7 @@ public namespace DebugLinenoiseCmdLine {
         private {
             #! guards the wait for a thread to stop; see waitsForStops
             Mutex stopLock();
-            #! signaled when the thread that is waited for stops
+            #! signaled when a thread pauses, or when the thread that is waited for stops being debugged
             Condition stopCond();
             #! True while a thread is waited for to stop
             bool stopPending;
@@ -100,23 +100,43 @@ public namespace DebugLinenoiseCmdLine {
             stopCond.broadcast();
         }
 
-        #! Waits until the thread that is waited for stops, stops being debugged, or the program ends
+        #! Waits until a thread pauses, the thread that is waited for stops being debugged, or the program ends
         waitForStop() {
-            AutoLock al(stopLock);
-            while (stopPending) {
-                stopCond.wait(stopLock);
+            {
+                AutoLock al(stopLock);
+                while (stopPending) {
+                    stopCond.wait(stopLock);
+                }
             }
+            # when all threads stop together, the next command is processed when the other threads are requested to
+            # stop
+            waitForStopRequests();
         }
 
         #! Processes an event of the debug server: a thread that is waited for stops or stops being debugged
         eventReceived(hash<auto> data) {
+            # a thread that starts is resumed; see DebugCommandLine::processEvent()
+            if (DebugCommandLine::isThreadStart(data)) {
+                return;
+            }
             if (data.type != DebugResponseType::Event
                 || (data.cmd != DebugEventCmd::Interrupt
                     && (data.cmd != DebugEventCmd::Run || data.runstate != "detach"))) {
                 return;
             }
             AutoLock al(stopLock);
-            if (stopPending && (!exists stopTid || data.tid == stopTid)) {
+            if (!stopPending) {
+                return;
+            }
+            # the wait ends when any thread pauses, as in other debuggers, as a thread that is resumed can wait for one
+            # that pauses; it also ends when the thread that is waited for leaves the program or is no longer debugged;
+            # the end of the code of a thread is not a pause, as the thread is resumed (see
+            # DebugCommandLine::processEvent())
+            if (data.cmd == DebugEventCmd::Interrupt && data.func == "exit") {
+                return;
+            }
+            bool pause = data.cmd == DebugEventCmd::Interrupt && data.func != "detach";
+            if (pause || !exists stopTid || data.tid == stopTid) {
                 stopPending = False;
                 stopCond.broadcast();
             }
@@ -267,8 +287,11 @@ public namespace DebugLinenoiseCmdLine {
                 # the display expressions of a thread that stopped since the last command
                 showPendingDisplays();
                 *string line = Linenoise::line(ln_prompt);
+                # the end of the input, or Ctrl+D or Ctrl+C in a terminal
                 if (!exists line) {
-                    printfImpl("\n^C signal caught. Exiting.\n");
+                    if (stdin.isTty()) {
+                        printfImpl("\n");
+                    }
                     break;
                 }
                 if (line != '') {

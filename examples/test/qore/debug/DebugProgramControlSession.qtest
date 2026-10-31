@@ -42,6 +42,14 @@ r = r > 0 ? r : g(3);
 printf(\"%d\\n\", r);
 ";
 
+#! a program that starts a thread and waits for it
+const ThreadStartScript = "%modern
+our int x;
+Counter c(1);
+background sub () { on_exit c.dec(); x = 1; }();
+c.waitForZero();
+";
+
 #! a program with a function and a loop with an empty block
 const StepStopScript = "%modern
 int sub add(int a, int b) {
@@ -248,6 +256,9 @@ class DebuggedProgram {
         #! TID of the thread running the program, which the debugger stopped at its start
         int tid;
 
+        #! the event of the stop at the start of the program
+        hash<auto> startEvent;
+
         #! receives the result of the program run when it ends
         Queue done();
 
@@ -260,11 +271,12 @@ class DebuggedProgram {
         pgm = dpc.createProgram(label, NOTHING, (), script);
         pgmId = pgm.getProgram().getProgramId();
         background run();
-        hash<auto> e = dpc.getInterrupt(pgmId);
-        if (e.func != "attach") {
-            throw "TEST-ERROR", sprintf("expecting the attach event at the start of the program; got: %y", e);
+        startEvent = dpc.getInterrupt(pgmId);
+        if (startEvent.func != "attach") {
+            throw "TEST-ERROR", sprintf("expecting the attach event at the start of the program; got: %y",
+                startEvent);
         }
-        tid = e.tid;
+        tid = startEvent.tid;
     }
 
     private run() {
@@ -346,6 +358,8 @@ public class DebugProgramControlTest inherits QUnit::Test {
         addTestCase("the exceptions that stop threads", \exceptionFilterTest());
         addTestCase("the threads continue when the last client disconnects", \lastClientTest());
         addTestCase("steps stop at statements, and a pause also in an empty loop", \stepStopTest());
+        addTestCase("a thread that starts in a program that has started", \threadStartEventTest());
+        addTestCase("a thread that starts without a client", \threadStartWithoutClientTest());
         set_return_value(main());
     }
 
@@ -1179,6 +1193,47 @@ public class DebugProgramControlTest inherits QUnit::Test {
         # the program runs to its end without stopping at the breakpoint of line 8 or at its end
         assertEq({"rc": NOTHING}, p.done.get(EventTimeout));
         p.finished = True;
+    }
+
+    # the attach of the first thread of a program is the start of the program; another thread that starts attaches as
+    # a thread that starts
+    threadStartEventTest() {
+        DebuggedProgram p(dpc, ThreadStartScript);
+        on_exit p.cleanup();
+        assertTrue(p.startEvent.programstart);
+        dpc.go(p.tid);
+        hash<auto> e = dpc.getInterrupt(p.pgmId);
+        assertEq(("attach", False), (e.func, e.programstart));
+        int tid = e.tid;
+        assertNeq(p.tid, tid);
+        # the thread ends its code and leaves the program; the initial thread continues when the other one has
+        # decremented the counter, so the events of the threads come in any order
+        dpc.go(tid);
+        hash<string, list<string>> funcs = {};
+        for (int i = 0; i < 3; ++i) {
+            e = dpc.getInterrupt(p.pgmId);
+            funcs{e.tid} += (e.func,);
+            if (e.func == "exit") {
+                assertFalse(exists e.programstart);
+            }
+            dpc.go(e.tid);
+        }
+        assertEq({string(tid): ("exit", "detach"), string(p.tid): ("detach",)}, funcs);
+        assertEq({"rc": NOTHING}, p.done.get(EventTimeout));
+        p.finished = True;
+        assertEq(1, p.pgm.getGlobalVariable("x"));
+    }
+
+    # without a client, a thread that starts does not stop, as nobody could resume it
+    threadStartWithoutClientTest() {
+        DebuggedProgram p(dpc, ThreadStartScript);
+        on_exit p.cleanup();
+        # the initial thread continues when the last client disconnects
+        dpc.unregisterConnection(TestDebugProgramControl::CX);
+        on_exit dpc.registerConnection(TestDebugProgramControl::CX);
+        assertEq({"rc": NOTHING}, p.done.get(EventTimeout));
+        p.finished = True;
+        assertEq(1, p.pgm.getGlobalVariable("x"));
     }
 
     # a step stops once at each statement: not also at the start of a function or of a block; a pause stops a thread

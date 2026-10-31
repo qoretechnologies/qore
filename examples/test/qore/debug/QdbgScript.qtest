@@ -58,6 +58,17 @@ public class QdbgScriptTest inherits QUnit::Test {
             "done = True;\n"                                                  # 5
             "c.waitForZero();\n";                                             # 6
 
+        #! a program whose initial thread waits for a thread that calls add(); the comments are the line numbers
+        const TwoThreadProgram = "%modern\n"                                # 1
+            "int sub add(int a, int b) {\n"                                  # 2
+            "    int sum = a + b;\n"                                         # 3
+            "    return sum;\n"                                              # 4
+            "}\n"                                                            # 5
+            "Counter c(1);\n"                                                # 6
+            "background sub () { on_exit c.dec(); int x = add(1, 1); }();\n" # 7
+            "c.waitForZero();\n"                                             # 8
+            "printf(\"total: %d\\n\", add(2, 3));\n";                      # 9
+
         #! a program with a long list and a function that is called in a loop
         const DisplayProgram = "%modern\n"                                   # 1
             "list<int> big = range(0, 249);\n"                                # 2
@@ -96,6 +107,8 @@ public class QdbgScriptTest inherits QUnit::Test {
         addTestCase("commands of threads, frames and steps", \threadCommandTest());
         addTestCase("quitting while a thread is stopped", \quitTest());
         addTestCase("help and errors", \helpTest());
+        addTestCase("shortcuts as in other debuggers", \shortcutTest());
+        addTestCase("threads that start, pause and end", \threadStartTest());
         addTestCase("time zones", \timeZoneTest());
         addTestCase("the usage of the debugger tools", \usageTest());
         addTestCase("errors at the start of qdbg and qdbg-server", \startupErrorTest());
@@ -156,36 +169,37 @@ public class QdbgScriptTest inherits QUnit::Test {
             "thread local total",
             "eval h.lines[1] + total",
             "eval nosuch",
-            "go run",
+            # the thread ends with the program, and is resumed then
             "go run",
             "quit",
         ));
         assertEq(0, res.rc);
         assertInOrder(res.out, (
-            "interrupt/attach",
+            "Paused at the start of the program (thread 2)",
             "integer add(20, 22) = 42",
             "no local vars in frame",
-            # the results of commands are printed in YAML style
-            "bkptid: 1",
-            "bkptid: 2",
+            "Breakpoint 1 created at ",
+            "Breakpoint 2 created at ", "target.q:8",
             # the commands after "go run" are processed at the stop in add()
-            "interrupt/step", "bkptid: 1", "(target.q:3",
-            "TID 2 call stack:", " - 0*: interrupt: step()", " - 1 : add()",
+            "Paused at breakpoint 1 at ", "target.q:3 (thread 2)",
+            # each frame is named after its function, and the frames of the debugger are not shown
+            "Call stack of thread 2:", "* 0  add() at ", "target.q:3", "  1  <top level> at ", "target.q:7:1",
             "local vars in frame: sum, argv, b, a",
             "integer a = 2",
             "there is no local var \"nosuch\"",
             # and at the stop at line 8
-            "interrupt/step", "bkptid: 2", "(target.q:8",
+            "Paused at breakpoint 2 at ", "target.q:8",
             "integer total = 5",
             # an expression with the local variables of the frame
             "integer h.lines[1] + total = 7",
             "DEBUG-EVALUATE-ERROR",
             "total: 5",
-            "interrupt/detach",
+            "Thread 2 ended",
         ));
+        assertFalse(res.out =~ /Program::run|qdbg/, "the frames of the debugger are not shown");
         # no command was processed when the thread was not stopped
         assertFalse(res.out =~ /is not stopped/, "no command is processed when the thread is not stopped");
-        assertFalse(res.out =~ /Program is not set/, "no command is processed before the program attaches");
+        assertFalse(res.out =~ /there is no current program/, "no command is processed before the program attaches");
     }
 
     breakpointConditionTest() {
@@ -211,21 +225,21 @@ public class QdbgScriptTest inherits QUnit::Test {
         ));
         assertEq(0, res.rc);
         assertInOrder(res.out, (
-            "interrupt/attach",
-            "bkptid: 1",
-            "bkptid: 2",
+            "Paused at the start of the program",
+            "Breakpoint 1 created",
+            "Breakpoint 2 created",
             "BREAKPOINT-HIT-CONDITION-ERROR",
             # the options of the breakpoints
             "condition: i == 3", "log: i={i} total={total}",
             # the logpoint writes its message at each hit, and the thread stops when the condition is true
             "i=0 total=0", "i=1 total=0", "i=2 total=1", "i=3 total=3",
-            "interrupt/step", "bkptid: 1", "integer i = 3",
+            "Paused at breakpoint 1 at ", "integer i = 3",
             # the logpoint was hit four times
             "hitcondition: 1", "log: i={i} total={total} hits: 4",
             "i=4 total=6",
-            "interrupt/step", "bkptid: 1", "integer i = 4",
+            "Paused at breakpoint 1 at ", "integer i = 4",
             "total: 10",
-            "interrupt/detach",
+            "Thread 2 ended",
         ));
     }
 
@@ -267,20 +281,20 @@ public class QdbgScriptTest inherits QUnit::Test {
         ));
         assertInOrder(res.out, (
             "column 1", "column 18", "column 32",
-            "bkptid: 1", "bkptid: 2",
-            "interrupt/step", "bkptid: 1",
+            "Breakpoint 1 created", "Breakpoint 2 created",
+            "Paused at breakpoint 1 at ",
             "h: hash<auto>", "name: string \"é\"", "lines: list<int>",
             "h.lines[1]: integer 2",
             "h{name}: string \"é\"",
             "no global variable \"nosuch\"",
             "h.lines[1] = integer 42",
-            "interrupt/step", "bkptid: 2",
+            "Paused at breakpoint 2 at ",
             "1: g (target.q:4:42)", "2: g (target.q:4:40)",
-            "interrupt/step", "integer x = 20",
+            "Paused at ", "target.q:2", "integer x = 20",
             "the statement has no call",
             "10 200 [1, 42, 3]",
-            "interrupt/exception", "(target.q:7",
-            "interrupt/detach",
+            "Paused at uncaught exception UNCAUGHT", "target.q:7",
+            "Thread 2 ended",
         ));
         # the caught exception did not stop the thread
         assertFalse(res.out =~ /target\.q:5/, "the caught exception does not stop the thread");
@@ -297,14 +311,15 @@ public class QdbgScriptTest inherits QUnit::Test {
         ));
         assertEq(0, res.rc);
         assertInOrder(res.out, (
-            "interrupt/attach",
-            # the initial thread stops at the breakpoint; the other thread stops at its start or in its loop
-            "bkptid: 1",
+            "Paused at the start of the program",
+            # the thread that the program starts runs until the initial thread stops at the breakpoint
+            "Thread 3 started",
+            "Paused at breakpoint 1",
             "thread done",
-            "interrupt/detach",
+            "Thread 2 ended",
         ));
         # the thread that the initial thread started stopped and continued with it
-        list<string> tids = (res.out =~ x/interrupt\/[a-z]+, pgm: [0-9]+, tid: ([0-9]+)/g) ?? ();
+        list<string> tids = (res.out =~ x/Paused[^\n]*\(thread ([0-9]+)/g) ?? ();
         assertTrue((map {$1: True}, tids).size() >= 2, sprintf("%y", tids));
     }
 
@@ -315,18 +330,16 @@ public class QdbgScriptTest inherits QUnit::Test {
             "exception filter",
             "go run",
             "go run",
-            "go run",
             "quit",
         ));
         assertEq(0, res.rc);
         assertInOrder(res.out, (
             "exceptions that stop threads: CAUGHT",
-            "interrupt/exception", "(target.q:5",
-            "interrupt/detach",
+            "Paused at exception CAUGHT", "target.q:5",
+            "Thread 2 ended",
         ));
         # the program ends with the uncaught exception, which it writes
-        assertFalse(res.out =~ /interrupt\/exception[^\n]*target\.q:7/, "the uncaught exception does not stop the "
-            "thread");
+        assertFalse(res.out =~ /Paused at uncaught exception/, "the uncaught exception does not stop the thread");
     }
 
     displayTest() {
@@ -357,19 +370,19 @@ public class QdbgScriptTest inherits QUnit::Test {
         assertRegex("(?m)^1: a\r?\n2: a \\* 10\r?$", res.out, "the list of the display expressions");
         assertInOrder(res.out, (
             # the expressions are shown at each stop
-            "interrupt/step", "1: a = 0", "2: a * 10 = 0",
-            "0*: interrupt: step() (target.q:3:20-3", "1 : f() (target.q:5:31-5",
-            "interrupt/step", "1: a = 1", "2: a * 10 = 10",
-            "interrupt/step", "1: a * 10 = 20",
+            "Paused at breakpoint 1 at ", "1: a = 0", "2: a * 10 = 0",
+            "* 0  f() at ", "target.q:3:20", "  1  <top level> at ", "target.q:5:31",
+            "Paused at breakpoint 1 at ", "1: a = 1", "2: a * 10 = 10",
+            "Paused at breakpoint 1 at ", "1: a * 10 = 20",
             "there is no display expression 5",
-            "interrupt/step", "(target.q:6",
+            "Paused at breakpoint 2 at ", "target.q:6 (thread",
             "big: list<int> list (249)", "  240: integer 240", "  248: integer 248",
             "big: list<int> list (249)", "  0: integer 0", "  99: integer 99",
             "... 149 more (thread var big from 100)",
             "6\n",
         ));
         # no expression is shown after they were removed
-        int last = res.out.find("(target.q:6");
+        int last = res.out.find("target.q:6 (thread");
         assertFalse(res.out.substr(last) =~ /^1: a/m, "no display expression is shown");
     }
 
@@ -448,15 +461,18 @@ public class QdbgScriptTest inherits QUnit::Test {
         assertEq(0, res.rc, res.out);
         assertInOrder(res.out, (
             "connected to debug server",
-            "bkptid: 1",
+            "Breakpoint 1 created",
             # the command that resumes the thread returns when it stops at the breakpoint
-            "interrupt/step", "bkptid: 1",
+            "Paused at breakpoint 1 at ",
             "1: total = 1",
             "integer i = 2",
             "total: integer 1",
             "total: 10",
-            "interrupt/detach",
+            # the TIDs of the server are not those of a qdbg process
+            "Thread ", " ended",
         ));
+        # the acknowledgements of commands are not shown
+        assertFalse(res.out =~ /"ok"/, "no acknowledgement is shown");
         server.write("end\n");
         assertTrue(server.wait(30s), "the debug server ends");
     }
@@ -479,23 +495,93 @@ public class QdbgScriptTest inherits QUnit::Test {
             # the end of the function
             "go untilreturn",
             "go",
+            # negative: a frame of a thread that has ended
             "go",
+            "frame set 0",
             "quit",
         ));
         assertEq(0, res.rc);
         assertInOrder(res.out, (
             "Subcommands; \"help thread <subcommand>\" shows the details of one:",
             "  set      Select the current thread.",
-            "thread context set to TID 2",
-            "interrupt/step", "bkptid: 1", "(target.q:7",
-            "call stack:", "interrupt: step() (target.q:7",
+            "Thread 2 is now the current thread",
+            "Paused at breakpoint 1 at ", "target.q:7",
+            # the call stacks of all threads have no current frame
+            "Call stack of thread 2:", "  0  <top level> at ", "target.q:7",
+            "* thread 2 (", "), paused: <top level> at ", "target.q:7",
             "the thread has", "stack frames, numbered from 0",
-            "interrupt/step", "(target.q:3",
-            "interrupt/funcExit", "(target.q:5",
-            "interrupt/step", "bkptid: 2", "(target.q:8",
+            "Paused at ", "target.q:3",
+            "Paused before the function returns at ", "target.q:5",
+            "Paused at breakpoint 2 at ", "target.q:8",
             "total: 5",
+            "Thread 2 ended",
+            "there is no current thread",
         ));
         assertFalse(res.out =~ /RUNTIME-TYPE-ERROR|INVALID-MEMBER/, "no error of the debugger");
+    }
+
+    shortcutTest() {
+        hash<auto> res = runQdbg(Program, (
+            "break create target.q 3",
+            "c",
+            "locals",
+            "print a + b",
+            "n",
+            "finish",
+            "s",
+            "continue",
+            "quit",
+        ));
+        assertEq(0, res.rc);
+        assertInOrder(res.out, (
+            "Paused at breakpoint 1 at ", "target.q:3",
+            # the local variables with their values
+            "integer b = 3", "integer a = 2",
+            "integer a + b = 5",
+            "Paused at ", "target.q:4",
+            "Paused before the function returns at ", "target.q:5",
+            "Paused at ", "target.q:8",
+            "total: 5",
+            "Thread 2 ended",
+        ));
+        # the shortcuts are listed with the commands
+        res = runQdbg(Program, ("help", "quit"));
+        assertInOrder(res.out, ("continue (c) ", "finish ", "locals ", "next (n) ", "print ", "step (s) "));
+    }
+
+    threadStartTest() {
+        hash<auto> res = runQdbg(TwoThreadProgram, (
+            "break create target.q 3",
+            # the thread that the program starts runs, and pauses at the breakpoint; it becomes the current thread,
+            # as the initial thread does not pause
+            "c",
+            "thread list",
+            "bt all",
+            "bt",
+            # the thread ends, and the initial thread pauses at the breakpoint
+            "c",
+            "c",
+            "quit",
+        ));
+        assertEq(0, res.rc);
+        assertInOrder(res.out, (
+            "Paused at the start of the program (thread 2)",
+            "Thread 3 started",
+            "Paused at breakpoint 1 at ", "target.q:3 (thread 3, now the current thread)",
+            "  thread 2 (", "), running: ",
+            "* thread 3 (", "), paused: add() at ", "target.q:3",
+            "Call stack of thread 2:",
+            "Call stack of thread 3:", "  0  add() at ", "  1  <anonymous closure>() at ", "target.q:7",
+            "Call stack of thread 3:", "* 0  add() at ",
+            # the end of thread 3 and the stop of thread 2 happen at the same time
+            "Paused at breakpoint 1 at ", "target.q:3 (thread 2, now the current thread)",
+            "total: 5",
+            "Thread 2 ended",
+        ));
+        assertInOrder(res.out, ("Call stack of thread 3:", "* 0  add() at ", "Thread 3 ended", "total: 5"));
+        # the thread of the command line of the debugger is not shown, nor does a thread pause when it starts or
+        # when its code ends
+        assertFalse(res.out =~ /thread 1 |DebugProgramControl|Paused at the start of the program \(thread 3/);
     }
 
     helpTest() {
@@ -607,13 +693,13 @@ public class QdbgScriptTest inherits QUnit::Test {
             "quit",
         ));
         assertEq(0, res.rc);
-        assertInOrder(res.out, ("interrupt/exception", "CAUGHT"));
+        assertInOrder(res.out, ("Paused at exception CAUGHT",));
     }
 
     # a program that never attaches to the debugger, as it has no statements, does not keep qdbg waiting
     emptyProgramTest() {
         hash<auto> res = runQdbg("%modern\n", ("quit",));
         assertEq(0, res.rc);
-        assertFalse(res.out =~ /Program is not set/, "no command is processed before the program attaches");
+        assertFalse(res.out =~ /there is no current program/, "no command is processed before the program attaches");
     }
 }

@@ -77,6 +77,14 @@ module DebugCmdLine {
     - fixed \c qdbg-remote failing at its start (a command whose hash had string values only), and not starting with
       the debugged program and its stopped thread as the current ones; with input that is not a terminal,
       \c qdbg-remote processes each command at the stop that it is written for, as \c qdbg does
+    - \c help lists the commands with what they do and a quick start; the descriptions are written in plain language;
+      errors are shown as <tt>Error: description (CODE)</tt>
+    - added the \c continue (\c c), \c step (\c s), \c next (\c n), \c finish, \c print and \c locals commands
+    - events are shown in plain words, such as <tt>Paused at breakpoint 1 at main.q:3 (thread 2)</tt>; the frames of
+      call stacks are named after their functions, without the frames and threads of the debugger; \c thread \c list
+      shows whether each thread is paused
+    - a thread that a program starts runs until a breakpoint, and its end does not pause it; a thread that pauses
+      while the current thread runs becomes the current thread
 
     @subsection dcl_v0_1_2 v0.1.2
     - removed Linenoise stuff to new module
@@ -103,23 +111,26 @@ public namespace DebugCmdLine {
             #! the maximum number of elements, keys or members of a value that \c thread \c var shows
             const MaxShownChildren = 100;
             #! True if all threads of a program stop when one of them stops, and continue together; see processEvent()
-            bool stopAllThreads;
+            bool stopAllThreads = False;
             #! True if the commands are read from input that is not a terminal, and a command that resumes a thread
             #! returns when it stops again; the display expressions are then shown before the next command
-            bool waitsForStops;
+            bool waitsForStops = False;
             #! Terminal color support for colorized output
             TerminalColor tc;
         }
 
         public {
+            #! The name of the frame of the code of a program outside of functions
+            const TopLevelFrameName = "<top level>";
+
             #! The quick start that \c help shows after the list of commands
             const QuickStart = "Quick start:
   break create <line>    pause the program when it reaches a line of the current file
-  go                     continue until a breakpoint, an exception or the end
-  go step, go stepover   run to the next line, into called functions or over them
-  go untilreturn         run until the current function returns
-  bt, thread local       show the call stack and the local variables
-  eval <expression>      show the value of an expression
+  continue (c)           continue until a breakpoint, an exception or the end
+  step (s), next (n)     run to the next line, into called functions or over them
+  finish                 run until the current function returns
+  bt, locals             show the call stack and the local variables
+  print <expression>     show the value of an expression
   quit                   end the debugger
 Commands can be shortened while they stay unique, such as \"br cr 10\" for \"break create 10\".
 ";
@@ -144,7 +155,12 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
             Mutex stopAllLock();
             #! incremented when stopped threads continue, so that the threads are no longer requested to stop for an
             #! earlier stop; see stopOtherThreads()
-            int stopAllGeneration;
+            int stopAllGeneration = 0;
+            #! the threads that the debugger resumes as they start or end, by TID, whose run events are not shown; see
+            #! processEvent()
+            hash<string, bool> autoResumed = {};
+            #! the requests to stop the other threads of a program that are being sent; see stopOtherThreads()
+            Counter stopAllPending();
 
             #! the expressions that are shown at each stop; see the \c display command
             list<string> displays = ();
@@ -636,7 +652,7 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
                                             val = sd.result.firstKey();
                                         }
                                         dcl.setContextValue('programId', val);
-                                        printfImpl("program context set to %y\n", val);
+                                        printfImpl("Program %y is now the current program\n", val);
                                     },
                                 ),
                             ),
@@ -862,7 +878,8 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
                                     if (args) {
                                         data.value = dcl.getStatementValue(args);
                                     }
-                                    dcl.doCommand(data, True);
+                                    # the event of the new breakpoint shows its number and place
+                                    dcl.doCommand(data, False);
                                 },
                             ),
                             'delete': (
@@ -1174,7 +1191,7 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
                                     'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                                         softint val = pop path;
                                         dcl.setContextValue('threadId', val);
-                                        printfImpl("remote thread context set to TID %y\n", val);
+                                        printfImpl("Thread %y is now the current thread\n", val);
                                     },
                                 ),
                             ),
@@ -1328,17 +1345,27 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
                                 },
                             ),
                             'list': (
-                                'desc': 'List the threads and where each one is.',
+                                'desc': 'List the threads of the current program, whether they are paused, and '
+                                    'where each one is; the current one is marked with "*".',
                                 'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                                     hash<auto> data.cmd = 'thread/stack';
                                     *hash<auto> threads = dcl.doCommand(data, False).result;
                                     if (threads) {
                                         # the current names of the threads of the debugged programs
                                         hash<string, *string> names = dcl.getThreadNames();
+                                        *softint current = dcl.getContextValue('threadId');
+                                        int pgm_id = dcl.checkProgramId();
                                         foreach softint tid in (keys threads) {
+                                            # the threads of the current program; not those of the debugger itself
+                                            list<hash<auto>> frames = DebugCommandLine::getShownFrames(threads{tid});
+                                            if (!frames || frames[0].programid != pgm_id) {
+                                                continue;
+                                            }
                                             *string name = names{tid};
-                                            printfImpl(" %4d%s : %s\n", tid, name ? sprintf(" (%s)", name) : "",
-                                                dcl.getThreadStackStr(threads{tid}[0]));
+                                            printfImpl("%s thread %d%s, %s: %s\n", tid == current ? "*" : " ", tid,
+                                                name ? sprintf(" (%s)", name) : "",
+                                                dcl.isThreadPaused(frames[0].programid, tid) ? "paused" : "running",
+                                                dcl.formatFrame(frames[0]));
                                         }
                                     }
                                 },
@@ -1367,17 +1394,23 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
                         },
                         '>': (
                             'all': (
-                                'desc': 'Show the call stacks of all threads.',
+                                'desc': 'Show the call stacks of all threads of the current program.',
                                 'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                                     hash<auto> data.cmd = 'thread/stack';
                                     *hash<auto> threads = dcl.doCommand(data, False).result;
-                                    if (threads) {
-                                        foreach softint tid in (keys threads) {
-                                            # do not output a trailing blank line
-                                            if ($#) {
-                                                printfImpl("\n");
-                                            }
-                                            dcl.showThreadStack(tid, threads{tid});
+                                    # the threads of the current program; not those of the debugger itself
+                                    int pgm_id = dcl.checkProgramId();
+                                    bool shown;
+                                    foreach softint tid in (keys threads) {
+                                        if (threads{tid}[0].programid != pgm_id) {
+                                            continue;
+                                        }
+                                        # a blank line between the threads
+                                        if (shown) {
+                                            printfImpl("\n");
+                                        }
+                                        if (dcl.showThreadStack(tid, threads{tid})) {
+                                            shown = True;
                                         }
                                     }
                                 },
@@ -1407,6 +1440,55 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
                                 data.linesafter = data.linesbefore;
                             }
                             dcl.printfImpl("%s", dcl.formatSource(dcl.doCommand(data, False).result));
+                        },
+                    ),
+                    # shortcuts as in other debuggers; they are not commands in the debug console of an IDE, where
+                    # they can be the names of variables
+                    'continue': (
+                        'shortcut': True,
+                        'desc': 'Continue the current thread until a breakpoint, an exception or the end, as "go". '
+                            'Usage: continue [<place to run to>]',
+                        'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
+                            dcl.runCommand(("go", "run") + args);
+                        },
+                    ),
+                    'c': ('alias': 'continue', 'shortcut': True),
+                    'step': (
+                        'shortcut': True,
+                        'desc': 'Run the current thread to the next line, also into the functions that it calls, as '
+                            '"go step".',
+                        'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
+                            dcl.runCommand(("go", "step") + args);
+                        },
+                    ),
+                    's': ('alias': 'step', 'shortcut': True),
+                    'next': (
+                        'shortcut': True,
+                        'desc': 'Run the current thread to the next line of the current function, as "go stepover".',
+                        'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
+                            dcl.runCommand(("go", "stepover") + args);
+                        },
+                    ),
+                    'n': ('alias': 'next', 'shortcut': True),
+                    'finish': (
+                        'shortcut': True,
+                        'desc': 'Run the current thread until the current function returns, as "go untilreturn".',
+                        'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
+                            dcl.runCommand(("go", "untilreturn") + args);
+                        },
+                    ),
+                    'print': (
+                        'shortcut': True,
+                        'desc': 'Show the value of an expression, as "eval". Usage: print <expression>',
+                        'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
+                            dcl.runCommand(("eval",) + args);
+                        },
+                    ),
+                    'locals': (
+                        'shortcut': True,
+                        'desc': 'Show the local variables of the current stack frame with their values.',
+                        'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
+                            dcl.showLocals();
                         },
                     ),
                     'go': (
@@ -1812,6 +1894,16 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
             if (data.type != DebugResponseType::Event || !data.pgmid || !data.tid) {
                 return;
             }
+            # a thread that starts in a program that has started runs until a breakpoint, as without the debugger, and a
+            # thread that ends its code or leaves the program continues, as there is no code to debug
+            if (DebugCommandLine::isThreadStart(data) || DebugCommandLine::isThreadEnd(data)) {
+                {
+                    AutoLock al(stopAllLock);
+                    autoResumed{data.tid} = True;
+                }
+                background resumeThreadInBackground(data.tid);
+                return;
+            }
             string pid = string(data.pgmid);
             string tid = string(data.tid);
             if (data.cmd == DebugEventCmd::Run) {
@@ -1851,7 +1943,16 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
                 background resumeThreadInBackground(int(tid));
                 return;
             }
+            # counted before the event ends the wait of a command, so that the next command is processed when the
+            # other threads are requested to stop; see waitForStopRequests()
+            stopAllPending.inc();
+            on_error stopAllPending.dec();
             background stopOtherThreads(pid, tid, generation);
+        }
+
+        #! Waits until the requests to stop the other threads of a program, after a thread stopped, have been sent
+        public waitForStopRequests() {
+            stopAllPending.waitForZero();
         }
 
         #! Resumes a thread that stopped for a stop that is no longer requested
@@ -1870,6 +1971,7 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
             generation, no thread is requested to stop
         */
         private stopOtherThreads(string pid, string tid, int generation) {
+            on_exit stopAllPending.dec();
             try {
                 *list<auto> threads = doCommand({"cmd": "program//list"}, False).result{pid}.threads;
                 foreach softstring other in (threads) {
@@ -1968,12 +2070,67 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
             return str;
         }
 
-        public showThreadStack(softint tid, list<auto> stack) {
-            printfImpl("TID %d call stack:\n", tid);
-            foreach hash<auto> frame in (stack) {
-                hash<auto!> lh = frame;
-                printfImpl(" - %d%s: %s\n", $#, lh.current ? "*":" ", getThreadStackStr(lh));
+        #! Returns the frames of a call stack that are shown, with the names of their functions
+        /** Each frame of a call stack gives a function and the location of its call, which is in the function of the
+            next frame; the location of the first frame is the statement that the thread is paused at, so each frame is
+            named after the function of the next one.  The frames at the end that are not in the program of the first
+            frame, as of the debugger, are not shown, nor the call of the code of a thread by the operator that started
+            it, whose location is in another thread.
+
+            @return the frames that are shown, with the \c name key; their indexes are the frame numbers
+        */
+        static list<hash<auto>> getShownFrames(list<auto> stack) {
+            *int pgm_id = stack[0].programid;
+            int n = stack.size();
+            while (n > 0 && exists pgm_id && exists stack[n - 1].programid && stack[n - 1].programid != pgm_id) {
+                --n;
             }
+            int shown = n;
+            if (shown > 1 && stack[shown - 1].type == "new-thread") {
+                --shown;
+            }
+            list<hash<auto>> rv = ();
+            for (int i = 0; i < shown; ++i) {
+                hash<auto!> frame = stack[i];
+                frame.name = (i + 1 < n && stack[i + 1].function.val()) ? stack[i + 1].function : TopLevelFrameName;
+                push rv, frame;
+            }
+            return rv;
+        }
+
+        #! Returns the text of a frame of getShownFrames(), such as <tt>add() at main.q:3:5</tt>
+        public string formatFrame(hash<auto> frame) {
+            string loc;
+            if (frame.source) {
+                loc = sprintf("%s:%d", frame.source, frame.line + frame.offset);
+            } else if (frame.file) {
+                loc = frame.file;
+                if (frame.line > 0) {
+                    loc += sprintf(":%d", frame.line);
+                    # the 1-based character column of the statement of the frame, if known
+                    if (exists frame.column && frame.column >= 0) {
+                        loc += sprintf(":%d", DebugCommandLine::getCharColumn(getSourceLine(frame.file, frame.line),
+                            frame.column));
+                    }
+                }
+            }
+            string name = frame.name == TopLevelFrameName ? frame.name : frame.name + "()";
+            return loc ? sprintf("%s at %s", tc.value(name), loc) : tc.value(name);
+        }
+
+        #! Shows the call stack of a thread; the current frame is marked with \c *
+        /** @return True if the thread has frames to show; see getShownFrames()
+        */
+        public bool showThreadStack(softint tid, list<auto> stack) {
+            list<hash<auto>> frames = DebugCommandLine::getShownFrames(stack);
+            if (!frames) {
+                return False;
+            }
+            printfImpl("Call stack of thread %d:\n", tid);
+            foreach hash<auto> frame in (frames) {
+                printfImpl("%s %-2d %s\n", frame.current ? "*" : " ", $#, formatFrame(frame));
+            }
+            return True;
         }
 
         # src keys: code, [startLine], [currentLine]
@@ -2276,6 +2433,25 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
             return rv;
         }
 
+        #! Runs a command given by its words, as the shortcut commands do
+        public runCommand(list<auto> words) {
+            processCmdLine(words.join(" "));
+        }
+
+        #! Shows the local variables of the current frame with their values
+        public showLocals() {
+            int tid = checkThreadId();
+            *list<auto> names = doCommand({"cmd": "thread/local//list", "tid": tid}, False).result;
+            if (!names) {
+                printfImpl("no local vars in frame\n");
+                return;
+            }
+            foreach string name in (names) {
+                *hash<auto> vh = doCommand({"cmd": "thread/local/" + name + "/get", "tid": tid}, False);
+                printVar(name, vh.result.value);
+            }
+        }
+
         #! Returns the text of an error for the user: its description, and its code unless it is an error of a command
         static string getErrorText(hash<ExceptionInfo> ex) {
             return (ex.err == "DEBUG-COMMAND" || ex.err == "CMD-ARG-ERROR")
@@ -2573,7 +2749,10 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
             if (data.typeCode() == NT_HASH) {
                 switch (data.type) {
                 case DebugResponseType::Response:
-                    printHuman(data.result);
+                    # an empty result, as of a command that resumes a thread, and an acknowledgement are not shown
+                    if (data.result.val() && data.result !== "ok") {
+                        printHuman(data.result);
+                    }
                     return; # already printed
                 case DebugResponseType::Event:
                     if (data.cmd == DebugEventCmd::Output) {
@@ -2581,71 +2760,12 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
                         printfImpl("%s", data.output);
                         return;
                     }
-                    outs = tc.dim(data.stamp.format("YYYY-MM-DD HH:mm:SS.xx")) + ": ";
-                    switch (data.cmd) {
-                        case DebugEventCmd::Interrupt:
-                            outs += tc.error(data.cmd);
-                            break;
-                        case DebugEventCmd::Run:
-                            outs += tc.success(data.cmd);
-                            break;
-                        default:
-                            outs += tc.info(data.cmd);
+                    *string text = formatEvent(data);
+                    # an event that is not shown, as the end of the code of a thread
+                    if (!exists text) {
+                        return;
                     }
-                    if (data.cmd == DebugEventCmd::Run && exists data.runstate) {
-                        outs += "/" + data.runstate;
-                    }
-                    if (data.func) {
-                        outs += "/" + data.func;
-                    }
-                    if (data.pgmid) {
-                        outs += ", pgm: " + tc.number(string(data.pgmid));
-                    }
-                    if (data.tid) {
-                        outs += ", tid: " + tc.number(string(data.tid));
-                    }
-                    if (data.bkptid) {
-                        outs += ", bkptid: " + tc.number(string(data.bkptid));
-                    }
-                    if (data.file || data.line || data.statementid) {
-                        outs += ", (";
-                        if (data.line) {
-                            if (!data.file.val()) {
-                                data.file = "<unknown>";
-                            }
-                            outs += tc.value(sprintf("%s:%d", data.file, data.line));
-                        } else if (data.file) {
-                            outs += tc.value(data.file);
-                        }
-                        if (data.statementid) {
-                            if (data.line || data.file.val()) {
-                                outs += ", ";
-                            }
-                            outs += "stmtid: " + tc.number(string(data.statementid));
-                        }
-                        outs += ")";
-                    }
-                    switch (data.cmd) {
-                        case DebugEventCmd::Interrupt: {
-                            if (!exists getContextValue('programId')) {
-                                setContextValue('programId', data.pgmid);
-                                outs += ", " + tc.dim("[pgm ctx set]");
-                            }
-                            if (!exists getContextValue('threadId')) {
-                                setContextValue('threadId', data.tid);
-                                outs += ", " + tc.dim("[thread ctx set]");
-                            }
-                            if (exists data.linecode) {
-                                outs += "\n";
-                                outs += formatSource({
-                                    'code': data.linecode,
-                                    'startline': data.line,
-                                    'currentline': data.line,
-                                });
-                            }
-                        }
-                        break;
-                    }
+                    outs = text;
                     break;
 
                 case DebugResponseType::Error:
@@ -2672,7 +2792,169 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
             printfImpl("%s\n", outs);
         }
 
+        #! Returns the text of an event of the debug server, such as <tt>Paused at breakpoint 1 at main.q:3 (thread 2)</tt>
+        /** An interrupt sets the current program and thread when none is set, and its text is followed by the source
+            line of the thread
+        */
+        public *string formatEvent(hash<auto> data) {
+            switch (data.cmd) {
+                case DebugEventCmd::Interrupt:
+                    return formatInterrupt(data);
+
+                case DebugEventCmd::Run: {
+                    # the other threads continue with the current one, and the debugger resumes threads that start or
+                    # end
+                    {
+                        AutoLock al(stopAllLock);
+                        if (remove autoResumed{data.tid}) {
+                            return NOTHING;
+                        }
+                    }
+                    if (data.tid != getContextValue('threadId')) {
+                        return NOTHING;
+                    }
+                    switch (data.runstate) {
+                        case DebugRunStateName::Run:
+                            return tc.success(sprintf("Thread %d continues", data.tid));
+                        case DebugRunStateName::Detach:
+                            return tc.success(sprintf("Thread %d is no longer debugged", data.tid));
+                        case DebugRunStateName::UntilReturn:
+                            return tc.success(sprintf("Thread %d runs until its function returns", data.tid));
+                    }
+                    # a step is followed by the pause at the next statement
+                    return tc.success(sprintf("Thread %d steps", data.tid));
+                }
+
+                case DebugEventCmd::Breakpoint: {
+                    string text = sprintf("Breakpoint %d", data.info.id);
+                    switch (data.event) {
+                        case "create":
+                            text += " created";
+                            if (*hash<auto> st = data.info.statements[0]) {
+                                text += sprintf(" at %s:%d", st.file ?? "<unknown>", st.start_line + st.offset);
+                            }
+                            break;
+                        case "delete":
+                            text += " deleted";
+                            break;
+                        case "enabled":
+                        case "disabled":
+                            text += " " + data.event;
+                            break;
+                        default:
+                            text += sprintf(" changed (%s)", data.event);
+                            break;
+                    }
+                    return tc.info(text);
+                }
+
+                case DebugEventCmd::Welcome:
+                    return tc.info(sprintf("Connected to the debug server %y", data.result));
+            }
+            return sprintf("%Y", data);
+        }
+
+        #! Returns True for the stop of a thread that starts in a program that has started, which the debugger resumes
+        /** A debug server that does not tell the start of a program stops each thread when it starts
+        */
+        static bool isThreadStart(hash<auto> data) {
+            return data.type == DebugResponseType::Event && data.cmd == DebugEventCmd::Interrupt
+                && data.func == "attach" && data.programstart === False;
+        }
+
+        #! Returns True for the stop of a thread that ends its code or leaves the program, which the debugger resumes
+        static bool isThreadEnd(hash<auto> data) {
+            return data.type == DebugResponseType::Event && data.cmd == DebugEventCmd::Interrupt
+                && (data.func == "exit" || data.func == "detach");
+        }
+
+        #! Returns the text of an interrupt event; see formatEvent()
+        private *string formatInterrupt(hash<auto> data) {
+            if (DebugCommandLine::isThreadStart(data)) {
+                return tc.info(sprintf("Thread %d started", data.tid));
+            }
+            if (!exists getContextValue('programId')) {
+                setContextValue('programId', data.pgmid);
+            }
+            # the end of the code of a thread is followed by the thread leaving the program
+            if (data.func == "exit") {
+                return NOTHING;
+            }
+            if (data.func == "detach") {
+                # a thread that ends is no longer the current thread
+                if (getContextValue('threadId') == data.tid) {
+                    setContextValue('threadId', NOTHING);
+                }
+                return tc.info(sprintf("Thread %d ended", data.tid));
+            }
+            # a thread that pauses while the current thread runs becomes the current thread, as the commands are for
+            # a paused thread
+            bool switched;
+            *softint current = getContextValue('threadId');
+            if (!exists current) {
+                setContextValue('threadId', data.tid);
+                # as after the current thread ended; at the start of the program, the thread is the first one
+                switched = data.func != "attach";
+            } else if (current != data.tid) {
+                bool current_paused;
+                {
+                    AutoLock al(stopAllLock);
+                    current_paused = boolean(stoppedThreads{data.pgmid}{current});
+                }
+                if (!current_paused) {
+                    setContextValue('threadId', data.tid);
+                    switched = True;
+                }
+            }
+            string what;
+            if (data.func == "exception") {
+                what = sprintf("Paused at %sexception %s: %s", data.uncaught ? "uncaught " : "",
+                    data.exception.err ?? "", data.exception.desc ?? "");
+            } else if (data.bkptids.size() > 1) {
+                what = sprintf("Paused at breakpoints %s", (map string($1), data.bkptids).join(", "));
+            } else if (data.bkptid) {
+                what = sprintf("Paused at breakpoint %d", data.bkptid);
+            } else {
+                switch (data.func) {
+                    case "attach":
+                        what = "Paused at the start of the program";
+                        break;
+                    case "funcEnter":
+                        what = "Paused at the start of a function";
+                        break;
+                    case "funcExit":
+                        what = "Paused before the function returns";
+                        break;
+                    default:
+                        what = "Paused";
+                        break;
+                }
+            }
+            if (data.line) {
+                what += sprintf(" at %s:%d", data.file.val() ? data.file : "<unknown>", data.line);
+            }
+            string outs = tc.error(what) + sprintf(" (thread %d%s)", data.tid,
+                switched ? ", now the current thread" : "");
+            if (data.bkpterror) {
+                outs += "\n" + tc.warning(sprintf("A breakpoint could not be checked: %s", data.bkpterror));
+            }
+            if (exists data.linecode) {
+                outs += "\n" + formatSource({
+                    'code': data.linecode,
+                    'startline': data.line,
+                    'currentline': data.line,
+                });
+            }
+            return outs;
+        }
+
         #! Returns the current names of the threads of the debugged programs, if the debug server gives them
+        #! Returns True if a thread is paused, as known from the events of the debug server
+        public bool isThreadPaused(softint pgm_id, softint tid) {
+            AutoLock al(stopAllLock);
+            return boolean(stoppedThreads{pgm_id}{tid});
+        }
+
         public hash<string, *string> getThreadNames() {
             *hash<auto> pgm_info = doCommand({"cmd": "program//list"}, False).result;
             hash<string, *string> rv = {};
@@ -2683,7 +2965,8 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
         public int checkProgramId() {
             *softint pgmId = getContextValue('programId');
             if (!exists pgmId) {
-                throw "DEBUG-COMMAND", "Program is not set (try: \"pgm list\", \"pgm search <regex>\", \"pgm set [id]\")";
+                throw "DEBUG-COMMAND", "there is no current program; \"pgm list\" lists the programs and \"pgm set "
+                    "<program>\" selects one";
             }
             return pgmId;
         }
@@ -2691,7 +2974,8 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
         public int checkThreadId() {
             *softint threadId = getContextValue('threadId');
             if (!exists threadId) {
-                throw "DEBUG-COMMAND", "Thread context is not set (try: \"thread set [id]\")";
+                throw "DEBUG-COMMAND", "there is no current thread; \"thread list\" lists the threads and \"thread set "
+                    "<thread>\" selects one";
             }
             return threadId;
         }

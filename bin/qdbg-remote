@@ -122,8 +122,9 @@ class DebugCommandLineRemote inherits DebugLinenoiseCommandLine {
                 }
             }
             printData(d);
-            eventReceived(d);
+            # the state of the threads is updated before a command that waits for the event continues
             processEvent(d);
+            eventReceived(d);
         } catch (hash<ExceptionInfo> ex) {
             error("wscEvent: %s", get_exception_string(ex));
         }

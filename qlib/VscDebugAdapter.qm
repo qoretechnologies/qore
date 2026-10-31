@@ -229,8 +229,6 @@ public class VscDebugAdapter inherits DebugCommandLine {
         const START_ATTACH = 2;
         const START_ATTACH_SUSPENDED = 3;
         const DEBUGVAR_PREFIX = "$";
-        #! the name of the stack frame of the top-level code of a program
-        const TopLevelFrameName = "<top level>";
         #! the first variable reference of a structured value; the references below it are those of stack frames
         const VarRefBase = 0x40000000;
 
@@ -1808,10 +1806,16 @@ vda.run();
     }
 
     #! Returns True if the first word of the given line is a debugger command
+    /** Aliases, such as \c bt for \c backtrace, and shortcuts, such as \c n for \c "go stepover", are not commands
+        in the debug console, as they can be the names of variables
+    */
     private:internal bool isDebuggerCommand(string line) {
         *string word = (line =~ x/^\s*(\S+)/)[0];
-        hash<auto> commands = getCommands();
-        return exists word && exists commands{">"}{word};
+        if (!exists word) {
+            return False;
+        }
+        *hash<auto> cmd = getCommands(){">"}{word};
+        return exists cmd && !cmd.alias && !cmd.shortcut;
     }
 
     #! Returns a description of a variable or of an element, key or member of a structured value

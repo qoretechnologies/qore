@@ -1424,6 +1424,16 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         r = evaluate(dap, tid, "help", "repl");
         assertTrue(r.success, r.message);
         assertEq("", r.body.result);
+        # the shortcuts of the command line, such as "n" for "go stepover", and aliases, such as "backtrace" for "bt",
+        # are not commands in the debug console, as they can be the names of variables
+        r = evaluate(dap, tid, "n", "repl");
+        assertEq("5", r.body.result);
+        foreach string word in ("locals", "continue", "backtrace") {
+            r = evaluate(dap, tid, word, "repl");
+            assertFalse(r.success, word);
+            # evaluated as an expression
+            assertRegex("^DEBUG-EVALUATE-ERROR: ", r.message, word);
+        }
 
         # the code of the program: a function, and a class whose private member is read by its method
         r = evaluate(dap, tid, "work(n) + new Account().getBalance()", "repl");

@@ -107,8 +107,9 @@ class DebugProgramControlLocal inherits DebugProgramControl {
         debug("broadcastDataImpl: %y", data);
         dcl.printData(data);
         if (data.typeCode() == NT_HASH) {
-            dcl.eventReceived(data);
+            # the state of the threads is updated before a command that waits for the event continues
             dcl.processEvent(data);
+            dcl.eventReceived(data);
         }
     }
 }
