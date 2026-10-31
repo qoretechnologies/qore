@@ -242,8 +242,10 @@ public class HttpClientDataProviderBase inherits AbstractDataProvider {
         meth = meth.upr();
         string req_path = getRequestPath(path);
 
-        # merge headers case-insensitively; headers given for the request override the default headers
-        hash<auto> req_hdr = default_headers;
+        # merge headers case-insensitively; headers given for the request override the default headers; they are
+        # merged in an "auto!" local, as the default and the request headers can each be narrowed (e.g.
+        # hash<string, int> for {"X-Count": 1})
+        hash<auto!> req_hdr = default_headers;
         foreach hash<auto> i in (hdr.pairIterator()) {
             req_hdr -= (map $1, keys req_hdr, $1.lwr() == i.key.lwr());
             req_hdr{i.key} = i.value;
@@ -448,8 +450,10 @@ public class HttpClientDataProviderBase inherits AbstractDataProvider {
         url_path =~ s/#.*//s;
         self.url = origin + url_path;
 
-        default_headers = options.headers ?? {};
-        if (!(map 1, keys default_headers, $1.lwr() == "authorization")) {
+        # the headers are set in an "auto!" local: the headers option may be narrowed (e.g. hash<string, int> for
+        # {"X-Count": 1}), and adding the Authorization header would throw
+        hash<auto!> dh = options.headers ?? {};
+        if (!(map 1, keys dh, $1.lwr() == "authorization")) {
             *string username;
             *string password;
             if (options.username.val()) {
@@ -462,10 +466,11 @@ public class HttpClientDataProviderBase inherits AbstractDataProvider {
                 password = url_info.password;
             }
             if (exists username) {
-                default_headers.Authorization = "Basic " + make_base64_string(sprintf("%s:%s", username,
+                dh.Authorization = "Basic " + make_base64_string(sprintf("%s:%s", username,
                     password ?? ""));
             }
         }
+        default_headers = dh;
         error_passthru = options.error_passthru.toBool();
         pre_encoded_urls = options.pre_encoded_urls.toBool();
         if (options.assume_encoding.val()) {

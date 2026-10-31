@@ -214,6 +214,11 @@ if (state == HttpClientConnectionState::Draining) {
 
     @subsection httpclientio_v1_0 Version 1.0
     - initial release
+    - @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager" requests,
+      @ref HttpClientIo::HttpClientConnectionManager::addDefaultHeaders() "addDefaultHeaders()" and
+      @ref HttpClientIo::HttpClientConnectionManager::addCookieHeaders() "addCookieHeaders()" accept request headers
+      whose values all have the same type, such as a literal <tt>{"X-Count": 1}</tt>, when adding the
+      \c User-Agent, \c Accept-Encoding and \c Cookie headers
 */
 
 #! Main namespace for HttpClientIo module

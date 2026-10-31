@@ -1,0 +1,93 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+
+%exec-class HttpClientIoNarrowedCallerHashTest
+
+#! Answers with the request headers that the tests check
+class HeaderEchoHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse({"Content-Type": "text/plain;charset=utf-8"}, 200,
+            sprintf("%s|%s|%s", hdr."x-count" ?? "", hdr."user-agent" ?? "", hdr.cookie ?? ""));
+    }
+}
+
+#! Request header hashes whose values all have the same type
+/** A hash literal whose values all have the same type has a narrowed type, such as \c hash<string, int> for
+    <tt>{"X-Count": 1}</tt>; adding the default and cookie headers to such a hash raised RUNTIME-TYPE-ERROR
+*/
+class HttpClientIoNarrowedCallerHashTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        int port;
+    }
+
+    constructor() : Test("HttpClientIoNarrowedCallerHashTest", "1.0", \ARGV) {
+        addTestCase("addDefaultHeaders() with narrowed headers", \addDefaultHeadersTest());
+        addTestCase("addCookieHeaders() with narrowed headers", \addCookieHeadersTest());
+        addTestCase("request() with narrowed headers", \requestTest());
+
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": new Logger("test", LoggerLevel::getLevelInfo()),
+            "debug": True,
+        });
+        server.setHandler("echo", "", NOTHING, new HeaderEchoHandler());
+        server.setDefaultHandler("echo", new HeaderEchoHandler());
+        port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+
+        set_return_value(main());
+
+        server.stop();
+    }
+
+    #! Returns its argument with the type it was given
+    static auto mk(auto h) {
+        return h;
+    }
+
+    addDefaultHeadersTest() {
+        assertEq("hash<string, int>", mk({"X-Count": 1}).fullType());
+        HttpClientConnectionManager mgr();
+        hash<auto> hdr = mgr.addDefaultHeaders({"X-Count": 1});
+        assertEq(1, hdr."X-Count");
+        assertEq(HttpClientIo::DefaultUserAgent, hdr."User-Agent");
+        assertEq(HttpClientIo::DefaultAcceptEncoding, hdr."Accept-Encoding");
+
+        hdr = mgr.addDefaultHeaders({"X-Debug": True}, False);
+        assertEq({"X-Debug": True, "User-Agent": HttpClientIo::DefaultUserAgent}, hdr);
+
+        # the caller's headers are kept
+        hdr = mgr.addDefaultHeaders({"user-agent": "test"});
+        assertEq("test", hdr."user-agent");
+        assertFalse(hdr.hasKey("User-Agent"));
+    }
+
+    addCookieHeadersTest() {
+        HttpClientConnectionManager mgr();
+        CookieJar jar();
+        jar.processResponseHeaders("localhost", "/", False, {"set-cookie": "session=abc"});
+        hash<auto> hdr = mgr.addCookieHeaders("http://localhost", "/", {"X-Count": 1}, jar);
+        assertEq({"X-Count": 1, "Cookie": "session=abc"}, hdr);
+
+        # a Cookie header in another case is extended
+        hdr = mgr.addCookieHeaders("http://localhost", "/", {"cookie": "a=b"}, jar);
+        assertEq({"cookie": "a=b; session=abc"}, hdr);
+    }
+
+    requestTest() {
+        HttpClientConnectionManager mgr();
+        hash<auto> resp = mgr.request("http://localhost:" + port, "GET", "/echo", {"X-Count": 1});
+        assertEq(200, resp.status_code);
+        assertEq("1|" + HttpClientIo::DefaultUserAgent + "|", resp.body);
+    }
+}
