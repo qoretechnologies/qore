@@ -58,6 +58,51 @@
 // Thread-local flag to detect when JIT cleared the stack location for exception safety
 thread_local bool jit_cleared_stack_location = false;
 
+void QoreOnceInit::ensureSlow() {
+    std::unique_lock<std::mutex> lock(m, std::try_to_lock);
+    if (!lock.owns_lock()) {
+#ifdef DEBUG
+        if (void (*hook)(QoreOnceInit&) = contended_hook.load()) {
+            hook(*this);
+        }
+#endif
+        lock.lock();
+    }
+    if (done.load(std::memory_order_relaxed)) {
+        // another caller completed it while this one waited
+        return;
+    }
+    // if it throws, nothing is recorded and the lock is released
+    init();
+    assert(!run_count.load(std::memory_order_relaxed));
+    run_count.fetch_add(1, std::memory_order_release);
+    done.store(true, std::memory_order_release);
+}
+
+namespace {
+//! registers every LLVM target; see qore_llvm_initialize_targets()
+void qore_llvm_register_all_targets() {
+    // InitializeAllTargets() registers the target infos too; the native target is one of the targets
+    llvm::InitializeAllTargets();
+    llvm::InitializeAllTargetMCs();
+    llvm::InitializeAllAsmPrinters();
+    llvm::InitializeAllAsmParsers();
+}
+
+QoreOnceInit qore_llvm_targets(qore_llvm_register_all_targets);
+//! fork() waits for a thread registering the targets, so that the registry is consistent in the child
+QoreForkStdMutex qore_llvm_targets_fork_handler(qore_llvm_targets.getMutex(), QFLR_LLVM_TARGET_INIT,
+    "llvm_target_init");
+}
+
+void qore_llvm_initialize_targets() {
+    qore_llvm_targets.ensure();
+}
+
+QoreOnceInit& qore_llvm_target_init() {
+    return qore_llvm_targets;
+}
+
 DLLLOCAL void set_jit_cleared_stack_flag(bool cleared) {
     jit_cleared_stack_location = cleared;
 }
@@ -979,9 +1024,7 @@ bool QoreJIT::canJit(int64 parse_options, std::string& reason) const {
 }
 
 bool QoreJIT::initialize(std::string& error) {
-    llvm::InitializeNativeTarget();
-    llvm::InitializeNativeTargetAsmPrinter();
-    llvm::InitializeNativeTargetAsmParser();
+    qore_llvm_initialize_targets();
 
 #if LLVM_VERSION_MAJOR == 20 && defined(__aarch64__)
     // Workaround: LLVM 20's greedy/basic register allocators crash on certain

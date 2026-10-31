@@ -1,0 +1,140 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class LlvmTargetInitTest
+
+#! Checks that the library registers LLVM's targets once for the process, from one place
+/** LLVM's target registration is not thread-safe: "Clients are responsible for ensuring that registration doesn't
+    occur while another thread is attempting to access the registry" (llvm/MC/TargetRegistry.h).  The JIT and each
+    AOT compilation path registered the targets themselves, so qcc compiling a module while the JIT's background
+    compile thread initialized itself registered the same target twice at once; the target was linked to itself in
+    the registry's list, and both threads looped forever in TargetRegistry::lookupTarget().
+
+    Every use of LLVM now calls qore_llvm_initialize_targets(), which registers all targets once (lib/QoreJIT.cpp).
+    This test checks the sources: no LLVM registration function is called anywhere else.  With a debug build of the
+    library it also runs the C++ unit tests: callers that arrive while the registration runs wait for it, it runs
+    exactly once, and the registry is consistent afterwards.
+*/
+class LlvmTargetInitTest inherits QUnit::Test {
+    public {
+        #! the only file that may call LLVM's registration functions
+        const InitFile = "lib/QoreJIT.cpp";
+
+        #! the only function in InitFile that may call them
+        const InitFunction = "void qore_llvm_register_all_targets() {";
+
+        #! the source directories checked, relative to the source tree's root
+        const SourceDirs = ("lib", "include", "modules");
+
+        #! the source files checked at the root
+        const RootSources = ("qcc-main.cpp",);
+    }
+
+    constructor() : QUnit::Test("LlvmTargetInitTest", "1.0", \ARGV) {
+        addTestCase("LLVM targets are registered only by the once-only initialization", \testSingleInitPoint());
+%ifdef QoreDebug
+        addTestCase("the once-only initialization runs once for concurrent callers", \testUnitTests());
+%endif
+%ifndef QoreDebug
+        addTestCase("the once-only initialization unit tests", \testRequiresDebugBuild());
+%endif
+        set_return_value(main());
+    }
+
+    testSingleInitPoint() {
+        string root = get_script_dir() + "/../../../../../";
+        if (!is_file(root + InitFile)) {
+            testSkip("the sources are not available");
+        }
+        list<string> files = ();
+        foreach string dir in (SourceDirs) {
+            if (is_dir(root + dir)) {
+                files += findSources(root, dir);
+            }
+        }
+        foreach string file in (RootSources) {
+            if (is_file(root + file)) {
+                push files, file;
+            }
+        }
+        assertGt(100, files.size(), "the library sources were found");
+
+        list<string> found = ();
+        int init_calls = 0;
+        foreach string file in (files) {
+            list<string> lines = ReadOnlyFile::readTextFile(root + file).split("\n");
+            bool in_init = False;
+            foreach string line in (lines) {
+                int i = $#;
+                if (file == InitFile) {
+                    if (line == InitFunction) {
+                        in_init = True;
+                        continue;
+                    }
+                    if (in_init && line == "}") {
+                        in_init = False;
+                        continue;
+                    }
+                }
+                if (!isRegistrationCall(line)) {
+                    continue;
+                }
+                if (in_init) {
+                    ++init_calls;
+                    continue;
+                }
+                push found, sprintf("%s:%d: %s", file, i + 1, trim(line));
+            }
+        }
+        assertEq((), found, "LLVM registration functions are called only by " + InitFunction);
+        assertEq(4, init_calls, "the initialization registers the targets, MC layers, asm printers and parsers");
+    }
+
+%ifdef QoreDebug
+    testUnitTests() {
+        hash<auto> res = dbg_run_llvm_target_init_tests();
+        assertGt(0, res.test_count, "the C++ unit tests ran");
+        assertEq(0, res.fail_count, sprintf("all %d C++ unit test assertions passed", res.test_count));
+    }
+%endif
+
+%ifndef QoreDebug
+    testRequiresDebugBuild() {
+        testSkip("the C++ unit tests require a debug build of the Qore library: dbg_run_llvm_target_init_tests() is "
+            "registered by init_debug_functions(), which is only called when the library is built with DEBUG");
+    }
+%endif
+
+    #! Returns True if the line calls an LLVM target registration function outside a comment
+    private static bool isRegistrationCall(string line) {
+        string code = trim(line);
+        if (code =~ /^(\/\/|\*|\/\*)/) {
+            return False;
+        }
+        # drop a trailing line comment
+        code = regex_subst(code, "//.*$", "");
+        return code =~ /\b(llvm::Initialize[A-Za-z]*|LLVMInitialize[A-Za-z]*)\s*\(/;
+    }
+
+    #! Returns the C and C++ sources below the given directory, relative to the root
+    private static list<string> findSources(string root, string dir) {
+        list<string> rv = ();
+        Dir d();
+        if (!d.chdir(root + dir)) {
+            return rv;
+        }
+        foreach string file in (d.listFiles("\\.(cpp|cc|c|h|hpp|qpp)$")) {
+            push rv, dir + "/" + file;
+        }
+        foreach string subdir in (d.listDirs()) {
+            rv += findSources(root, dir + "/" + subdir);
+        }
+        return rv;
+    }
+}

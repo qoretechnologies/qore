@@ -5335,6 +5335,9 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - \c qcc could hang forever at full CPU while compiling a module, when the JIT compiler started on a background
+      thread at the same time: both registered LLVM's targets, which is not thread-safe, and the registry was left
+      corrupted.  LLVM's targets are now registered once for the process, before any thread uses LLVM
     - a debugged program could get a deleted @ref Qore::ProgramControl "ProgramControl" object in a debugger callback,
       such as \c onAttach() or \c onStep(), when another thread released the last reference to the object at the
       same time: the object was cached and returned again until its destructor ran.  The callback failed, so the

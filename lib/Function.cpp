@@ -6688,8 +6688,8 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
         // read once for the call, so that argv and self are uninstantiated exactly when they were instantiated
         const bool call_uses_argv = uses_argv.load(std::memory_order_acquire);
         const bool call_uses_self = uses_self.load(std::memory_order_acquire);
-        printd(3, "evalTiered JIT/AOT '%s' exec_count=%lu aot_ctx=%p\n",
-            name, exec_count.load(), static_cast<void*>(aot_ctx));
+        printd(3, "evalTiered JIT/AOT '%s' exec_count=%llu aot_ctx=%p\n",
+            name, (unsigned long long)exec_count.load(), static_cast<void*>(aot_ctx));
 
         // self might be 0 if instantiated by a constructor call
         // Only instantiate if actually used in the function body
@@ -6973,8 +6973,8 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
 
         // Check for JIT promotion while on IR tier
         uint64_t count = exec_count.fetch_add(1, std::memory_order_relaxed) + 1;
-        printd(3, "evalTiered IR '%s' exec_count=%lu jit_threshold=%lu is_closure=%d jit_failed=%d\n",
-            name, count, (unsigned long)QoreJIT::getJITThreshold(), (int)is_closure,
+        printd(3, "evalTiered IR '%s' exec_count=%llu jit_threshold=%lu is_closure=%d jit_failed=%d\n",
+            name, (unsigned long long)count, (unsigned long)QoreJIT::getJITThreshold(), (int)is_closure,
             (int)jit_compile_failed.load(std::memory_order_acquire));
         // OSR: hot loop detected by IR interpreter — trigger JIT compilation early
         // On-demand promotion: explicit --exec-mode=jit promotes on the first call

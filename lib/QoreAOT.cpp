@@ -22485,14 +22485,12 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
     // Phase 1 instrumentation: Chrome trace for opt + codegen.
     TimeTraceRAII time_trace;
 
+    // registers every target, the cross-compilation targets too
+    qore_llvm_initialize_targets();
+
     std::string triple;
     if (target_triple) {
         triple = target_triple;
-        // Initialize all targets for cross-compilation
-        llvm::InitializeAllTargets();
-        llvm::InitializeAllTargetMCs();
-        llvm::InitializeAllAsmPrinters();
-        llvm::InitializeAllAsmParsers();
     } else {
         triple = llvm::sys::getDefaultTargetTriple();
     }
@@ -23185,9 +23183,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
     }
 
     // Initialize LLVM targets (needed for object emission)
-    llvm::InitializeNativeTarget();
-    llvm::InitializeNativeTargetAsmPrinter();
-    llvm::InitializeNativeTargetAsmParser();
+    qore_llvm_initialize_targets();
 
     // Create LLVM context and module
     llvm::LLVMContext ctx;
@@ -25755,9 +25751,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
     }
 
     // Step 3: Initialize LLVM and compile functions
-    llvm::InitializeNativeTarget();
-    llvm::InitializeNativeTargetAsmPrinter();
-    llvm::InitializeNativeTargetAsmParser();
+    qore_llvm_initialize_targets();
 
     llvm::LLVMContext ctx;
     auto module = std::make_unique<llvm::Module>("qore_aot_module_" + mod_info.name, ctx);
@@ -26244,9 +26238,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
         }
 
         // Step 9: Initialize LLVM and compile functions
-        llvm::InitializeNativeTarget();
-        llvm::InitializeNativeTargetAsmPrinter();
-        llvm::InitializeNativeTargetAsmParser();
+        qore_llvm_initialize_targets();
 
         llvm::LLVMContext ctx;
         auto module = std::make_unique<llvm::Module>("qore_aot_module_" + mod_info.name, ctx);
@@ -26874,15 +26866,9 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
         const std::unordered_set<std::string>* shared_pending_init_constant_fqns = nullptr,
         const AOTStatementLocIndex* shared_statement_locs = nullptr,
         AOTBatchEmitTiming* batch_timing = nullptr) {
-    // Global LLVM target init is process-wide and not safe to call
-    // concurrently; run it exactly once so this emit can be invoked from a
-    // batch worker-thread pool (compileScriptFilesBatch parallel codegen).
-    static std::once_flag llvm_native_init_once;
-    std::call_once(llvm_native_init_once, [] {
-        llvm::InitializeNativeTarget();
-        llvm::InitializeNativeTargetAsmPrinter();
-        llvm::InitializeNativeTargetAsmParser();
-    });
+    // LLVM target registration is process-wide and not safe to run concurrently; the helper runs it once, so this
+    // emit can be invoked from a batch worker-thread pool (compileScriptFilesBatch parallel codegen)
+    qore_llvm_initialize_targets();
 
     llvm::LLVMContext ctx;
     std::string mod_name_san = scriptBatchSourceId(target_canon);
@@ -29038,9 +29024,7 @@ bool QoreAOT::compileScriptAggregate(
         }
     }
 
-    llvm::InitializeNativeTarget();
-    llvm::InitializeNativeTargetAsmPrinter();
-    llvm::InitializeNativeTargetAsmParser();
+    qore_llvm_initialize_targets();
 
     llvm::LLVMContext ctx;
     auto module = std::make_unique<llvm::Module>(
@@ -29368,9 +29352,7 @@ bool QoreAOT::compileScriptRegisterAggregate(
         return false;
     }
 
-    llvm::InitializeNativeTarget();
-    llvm::InitializeNativeTargetAsmPrinter();
-    llvm::InitializeNativeTargetAsmParser();
+    qore_llvm_initialize_targets();
 
     llvm::LLVMContext ctx;
     auto module = std::make_unique<llvm::Module>(
@@ -29706,9 +29688,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
     }
 
     // LLVM codegen setup.
-    llvm::InitializeNativeTarget();
-    llvm::InitializeNativeTargetAsmPrinter();
-    llvm::InitializeNativeTargetAsmParser();
+    qore_llvm_initialize_targets();
 
     llvm::LLVMContext ctx;
     std::string mod_name_san = sanitizeCIdentifier(fileBasenameNoExt(output_path));
@@ -30327,9 +30307,7 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
             return false;
         }
 
-        llvm::InitializeNativeTarget();
-        llvm::InitializeNativeTargetAsmPrinter();
-        llvm::InitializeNativeTargetAsmParser();
+        qore_llvm_initialize_targets();
 
         llvm::LLVMContext ctx;
         auto module = std::make_unique<llvm::Module>(
@@ -30839,9 +30817,7 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
         // Initialize LLVM (native target suffices for the aggregator's glue
         // module — the heavy LLVM codegen already ran in the per-file .qo
         // builds).
-        llvm::InitializeNativeTarget();
-        llvm::InitializeNativeTargetAsmPrinter();
-        llvm::InitializeNativeTargetAsmParser();
+        qore_llvm_initialize_targets();
 
         llvm::LLVMContext ctx;
         auto module = std::make_unique<llvm::Module>(
@@ -31384,9 +31360,7 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
             return false;
         }
 
-        llvm::InitializeNativeTarget();
-        llvm::InitializeNativeTargetAsmPrinter();
-        llvm::InitializeNativeTargetAsmParser();
+        qore_llvm_initialize_targets();
 
         llvm::LLVMContext ctx;
         auto module = std::make_unique<llvm::Module>(
@@ -36255,9 +36229,7 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
 
 
 void QoreAOT::printSupportedTargets() {
-    llvm::InitializeAllTargets();
-    llvm::InitializeAllTargetMCs();
-    llvm::InitializeAllAsmPrinters();
+    qore_llvm_initialize_targets();
 
     std::string default_triple = llvm::sys::getDefaultTargetTriple();
     printf("Default target: %s\n\n", default_triple.c_str());

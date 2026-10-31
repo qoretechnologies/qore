@@ -112,6 +112,9 @@ enum QoreForkLockRank : int {
     //! leaf locks: caches and registries whose critical sections take no other registered lock (but the ones below),
     //! also the leaf locks of modules (QFR_MODULE_LEAF)
     QFLR_LEAF = 1000,
+    //! the LLVM target initialization lock (see qore_llvm_initialize_targets()): held while LLVM registers its
+    //! targets, which takes no registered lock; it ranks after the leaf locks so that their holders may compile
+    QFLR_LLVM_TARGET_INIT = 1100,
     //! the process environment (SystemEnvironment): its holders take no other registered lock (but the ones below)
     QFLR_ENVIRONMENT = 1500,
     //! the debug output lock (printd())
