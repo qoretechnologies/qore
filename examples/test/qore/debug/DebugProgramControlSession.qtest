@@ -357,6 +357,7 @@ public class DebugProgramControlTest inherits QUnit::Test {
         addTestCase("statement identification of the command line", \commandLineStatementTest());
         addTestCase("breakpoint errors", \breakpointErrorTest());
         addTestCase("structured variables of a stopped thread", \variableCommandTest());
+        addTestCase("declared types of local variables and unassigned variables", \declaredTypeTest());
         addTestCase("expressions evaluated with the variables of a stopped thread", \evaluateCommandTest());
         addTestCase("exceptions that no try statement catches", \uncaughtTest());
         addTestCase("statements of a line with more than one statement", \columnTest());
@@ -540,6 +541,36 @@ public class DebugProgramControlTest inherits QUnit::Test {
     }
 
     # the values of variables are described, and their elements, keys and members are read and set by their paths
+    # a local variable is given with its declared type, and a variable that was declared but not assigned is marked
+    declaredTypeTest() {
+        DebuggedProgram p(dpc);
+        on_exit p.cleanup();
+        # before "int sum = a + b;" runs
+        p.breakAt(3);
+        p.runToStop();
+
+        hash<auto> sum = dpc.threadCommand(p.tid, "thread/local/sum/get");
+        assertEq("int", sum.declaredType);
+        assertTrue(sum.unassigned);
+        assertNothing(AbstractDebugControl::unserialize(sum.value));
+        hash<auto> a = dpc.threadCommand(p.tid, "thread/local/a/get");
+        assertEq("int", a.declaredType);
+        assertFalse(a.hasKey("unassigned"));
+
+        hash<auto> d = dpc.threadCommand(p.tid, "thread/variable/get", {"root": {"local": "sum"}});
+        assertEq({"type": "nothing", "value": "NOTHING", "declaredType": "int", "unassigned": True}, d);
+        # an element of a value is not a variable: it has no declared type
+        d = dpc.threadCommand(p.tid, "thread/variable/get", {"root": {"local": "h"}, "frameid": 1,
+            "path": ("lines",)});
+        assertFalse(d.hasKey("declaredType"));
+
+        # a variable set by the debugger is no longer unassigned
+        d = dpc.threadCommand(p.tid, "thread/variable/set", {"root": {"local": "sum"},
+            "value": AbstractDebugControl::serialize(7)});
+        assertEq({"type": "integer", "value": "7", "declaredType": "int"}, d);
+        assertEq({"rc": NOTHING}, p.finish());
+    }
+
     variableCommandTest() {
         DebuggedProgram p(dpc);
         on_exit p.cleanup();
@@ -547,7 +578,7 @@ public class DebugProgramControlTest inherits QUnit::Test {
         p.runToStop();
 
         hash<auto> d = dpc.threadCommand(p.tid, "thread/variable/get", {"root": {"local": "h"}});
-        assertEq({"type": "hash<auto>", "value": "hash<auto> (2)", "named": 2}, d);
+        assertEq({"type": "hash<auto>", "value": "hash<auto> (2)", "named": 2, "declaredType": "hash<auto>"}, d);
         d = dpc.threadCommand(p.tid, "thread/variable/get", {"root": {"local": "h"}, "children": True});
         assertEq(("name", "lines"), map $1.name, d.children);
         assertEq(3, d.children[1].indexed);

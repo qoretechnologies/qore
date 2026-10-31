@@ -20,6 +20,7 @@ public class DebugUtilTest inherits QUnit::Test {
         addTestCase("ResponseSync tests", \responseSyncTests());
         addTestCase("value descriptions and paths", \describeTests());
         addTestCase("values written for debuggers", \formatTests());
+        addTestCase("hints of runtime diagnostics", \runtimeDiagnosticTests());
         addTestCase("marks in the output of programs", \outputMarkTest());
         addTestCase("UTF-8 characters in the output of programs", \utf8SizeTest());
         addTestCase("capture of the output of the process", \outputCaptureTest());
@@ -592,6 +593,45 @@ public class DebugUtilTest inherits QUnit::Test {
     }
 
     # NOTHING and NULL are written as in Qore at every level; other values as with "%y" and "%Y"
+    runtimeDiagnosticTests() {
+        hash<ExceptionInfo> ex;
+        try {
+            *int i;
+            int j = i;
+            remove j;
+        } catch (hash<ExceptionInfo> e) {
+            ex = e;
+        }
+        *hash<auto> diag = AbstractDebugControl::getRuntimeDiagnostic(ex);
+        assertEq("NO-VALUE-FOR-TYPE", diag.id);
+        *string hint = AbstractDebugControl::formatRuntimeDiagnostic(ex);
+        assertRegex("^hint \\(NO-VALUE-FOR-TYPE\\): a value of this type is required", hint);
+        assertEq(ex.arg.suggestions.size() + 1, hint.split("\n").size());
+        assertRegex("\n  - assign the variable before it is read", hint);
+
+        # a remote debugger receives the diagnostic as a plain hash
+        hash<auto> remote = {
+            "err": "OBJECT-ALREADY-DELETED",
+            "desc": "x",
+            "arg": {"id": "DELETED-OBJECT", "hint": "h", "suggestions": ("s",), "facts": {}},
+        };
+        assertEq("hint (DELETED-OBJECT): h\n  - s", AbstractDebugControl::formatRuntimeDiagnostic(remote));
+        # a plain hash is a diagnostic only for the errors that carry one
+        remote.err = "USER-ERROR";
+        assertNothing(AbstractDebugControl::getRuntimeDiagnostic(remote));
+        assertNothing(AbstractDebugControl::formatRuntimeDiagnostic(remote));
+        # and only with a string ID and hint
+        assertNothing(AbstractDebugControl::getRuntimeDiagnostic({"err": "RUNTIME-TYPE-ERROR", "arg": {"id": 1,
+            "hint": "h"}}));
+        assertNothing(AbstractDebugControl::getRuntimeDiagnostic({"err": "RUNTIME-TYPE-ERROR", "arg": "text"}));
+        # an exception without an argument, and no exception
+        assertNothing(AbstractDebugControl::formatRuntimeDiagnostic({"err": "RUNTIME-TYPE-ERROR"}));
+        assertNothing(AbstractDebugControl::formatRuntimeDiagnostic());
+        # a typed hash argument of another type is not read
+        assertNothing(AbstractDebugControl::getRuntimeDiagnostic({"err": "RUNTIME-TYPE-ERROR",
+            "arg": new hash<ExceptionInfo>({"err": "E"})}));
+    }
+
     formatTests() {
         assertEq("NOTHING", AbstractDebugControl::formatValue(NOTHING));
         assertEq("NULL", AbstractDebugControl::formatValue(NULL));

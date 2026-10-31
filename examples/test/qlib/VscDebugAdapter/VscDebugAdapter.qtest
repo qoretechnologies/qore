@@ -373,6 +373,7 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         addTestCase("a launched program ends when the session ends", \terminateTest());
         addTestCase("the restart request launches the program again", \restartTest());
         addTestCase("integers in hexadecimal", \hexFormatTest());
+        addTestCase("hints for exceptions that match a common pitfall", \trapHintTest());
         set_return_value(main());
     }
 
@@ -432,6 +433,10 @@ public class VscDebugAdapterTest inherits QUnit::Test {
     }
 
     uncaughtExceptionTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
+    trapHintTest() {
         testSkip("no process module 2.2 or later");
     }
 
@@ -1344,6 +1349,58 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         assertEq(("0x1", "0x2", "0x3"), map $1.value,
             getVariables(dap, h.lines.variablesReference, {"format": {"hex": True}}).iterator());
         finish(dap, proc, tid);
+    }
+
+    # an exception that matches a common pitfall is shown with a hint, and a variable that was declared but not
+    # assigned is shown as such
+    trapHintTest() {
+        TmpDir tmp("qore-vda-test-");
+        string path = writeProgram(tmp, "%modern\n"                     # 1
+            "sub f() {\n"                                                # 2
+            "    *int src;\n"                                            # 3
+            "    int count = src;\n"                                     # 4
+            "    printf(\"%d\\n\", count);\n"                             # 5
+            "}\n"                                                        # 6
+            "f();\n");                                                   # 7
+        Process proc = startAdapter();
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        launch(dap, {"program": path, "stopOnEntry": False});
+        hash<auto> r = dap.request("setExceptionBreakpoints", {"filters": ("uncaught",)});
+        assertTrue(r.success, r.message);
+        r = dap.request("configurationDone");
+        assertTrue(r.success, r.message);
+
+        hash<auto> stopped = dap.waitForEvent("stopped");
+        assertEq("exception", stopped.body.reason);
+        assertEq("RUNTIME-TYPE-ERROR", stopped.body.text);
+        int tid = stopped.body.threadId;
+        assertEq(4, topFrame(dap, tid).line);
+        r = dap.request("exceptionInfo", {"threadId": tid});
+        assertTrue(r.success, r.message);
+        assertEq("RUNTIME-TYPE-ERROR", r.body.exceptionId);
+        assertRegex("^<lvalue> expects type 'int', but got no value instead\n\nhint \\(NO-VALUE-FOR-TYPE\\): ",
+            r.body.description);
+        assertRegex("\n  - assign the variable before it is read", r.body.description);
+        # the message is the description of the exception only
+        assertEq("<lvalue> expects type 'int', but got no value instead", r.body.details.message);
+
+        hash<auto> locals = getVariables(dap, getScope(dap, tid, "Locals"));
+        assertEq("NOTHING (declared but not assigned)", locals.count.value);
+        assertEq("int", locals.count.type);
+        # a variable whose type allows no value is not unassigned
+        assertEq("NOTHING", locals.src.value);
+        assertEq("nothing", locals.src.type);
+
+        r = dap.request("continue", {"threadId": tid});
+        assertTrue(r.success, r.message);
+        dap.waitForEvent("terminated");
+        r = dap.request("disconnect");
+        assertTrue(r.success, r.message);
+        proc.closeStdin();
+        assertTrue(proc.wait(30s), "the adapter ends");
     }
 
     #! Evaluates an expression with the top frame of a thread and returns the response

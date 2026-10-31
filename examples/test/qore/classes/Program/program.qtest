@@ -835,10 +835,10 @@ class Complete inherits AbstractBase { string get() { return \"complete\"; } }",
             p.parse("hash sub test(int frame) { int i = 1; string str = 'hi'; return get_local_vars(frame); }", "");
 
             hash vh = (
-                "frame": ("type": "local", "value": 0),
-                "i": ("type": "local", "value": 1),
-                "str": ("type": "local", "value": "hi"),
-                "argv": ("type": "local", "value": NOTHING),
+                "frame": ("type": "local", "value": 0, "declaredType": "int"),
+                "i": ("type": "local", "value": 1, "declaredType": "int"),
+                "str": ("type": "local", "value": "hi", "declaredType": "string"),
+                "argv": ("type": "local", "value": NOTHING, "declaredType": "*list<auto>"),
                 );
 
             assertEq(vh, p.callFunction("test", 0));
@@ -850,10 +850,10 @@ class Complete inherits AbstractBase { string get() { return \"complete\"; } }",
             p.parse("hash sub test(int frame) { int i = 1; string str = 'hi'; set_local_var_value(0, 'i', 2); set_local_var_value(0, 'str', 'bye'); code f = sub() {i = 3;}; return get_local_vars(frame); }", "");
 
             hash vh = (
-                "frame": ("type": "local", "value": 0),
-                "i": ("type": "closure", "value": 2),
-                "str": ("type": "local", "value": "bye"),
-                "argv": ("type": "local", "value": NOTHING),
+                "frame": ("type": "local", "value": 0, "declaredType": "int"),
+                "i": ("type": "closure", "value": 2, "declaredType": "int"),
+                "str": ("type": "local", "value": "bye", "declaredType": "string"),
+                "argv": ("type": "local", "value": NOTHING, "declaredType": "*list<auto>"),
                 );
 
             assertEq(vh, p.callFunction("test", 0) - "f");
@@ -883,18 +883,18 @@ class Complete inherits AbstractBase { string get() { return \"complete\"; } }",
             p.parse("hash sub test1(int frame) { code c = sub () { if (frame > 10) throw 1; }; c(); return get_local_vars(frame); } hash sub test2(int frame) { int i = 1; string str = 'hi'; return test1(frame); }", "");
 
             hash vh = (
-                "str": ("type": "local", "value": "hi"),
-                "i": ("type": "local", "value": 1),
-                "argv": ("type": "local", "value": NOTHING),
-                "frame": ("type": "local", "value": 1),
+                "str": ("type": "local", "value": "hi", "declaredType": "string"),
+                "i": ("type": "local", "value": 1, "declaredType": "int"),
+                "argv": ("type": "local", "value": NOTHING, "declaredType": "*list<auto>"),
+                "frame": ("type": "local", "value": 1, "declaredType": "int"),
                 );
 
             assertEq(vh, p.callFunction("test2", 1));
 
             vh = (
-                "c": ("type": "local", "value": NOTHING),
-                "frame": ("type": "closure", "value": 0),
-                "argv": ("type": "local", "value": NOTHING),
+                "c": ("type": "local", "value": NOTHING, "declaredType": "code"),
+                "frame": ("type": "closure", "value": 0, "declaredType": "int"),
+                "argv": ("type": "local", "value": NOTHING, "declaredType": "*list<auto>"),
                 );
 
             hash pvh = p.callFunction("test2", 0);

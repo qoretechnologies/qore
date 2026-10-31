@@ -623,6 +623,9 @@
       type, and \c OBJECT-ALREADY-DELETED) carry a @ref Qore::RuntimeDiagnosticInfo "RuntimeDiagnosticInfo" hash
       with a stable ID, a hint, facts, and suggestions as the exception \c arg; the default exception handler and
       @ref Util::get_exception_string() "get_exception_string()" show it as a hint (see @ref common_pitfalls)
+    - @ref Qore::get_local_vars() "get_local_vars()" gives the declared type of each typed variable and marks a
+      variable that was declared but not assigned; the debuggers show such variables and the hints of runtime
+      diagnostics
     - added @ref <number>::toStringRoundTrip() "<number>::toStringRoundTrip()" and
       @ref <float>::toStringRoundTrip() "<float>::toStringRoundTrip()" for the shortest decimal
       significand that reconstructs the source binary value, with plain/scientific output and preserved signed zero

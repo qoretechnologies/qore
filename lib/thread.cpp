@@ -2106,6 +2106,16 @@ void thread_pop_frame_boundary() {
     td->tlpd->cvstack.popFrameBoundary();
 }
 
+void qore_set_local_var_debug_type(QoreHashNode& v, const QoreTypeInfo* typeInfo, ExceptionSink* xsink) {
+    if (!QoreTypeInfo::hasType(typeInfo)) {
+        return;
+    }
+    v.setKeyValue("declaredType", new QoreStringNode(QoreTypeInfo::getName(typeInfo)), xsink);
+    if (v.getKeyValue("value").isNothing() && !QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_NOTHING)) {
+        v.setKeyValue("unassigned", true, xsink);
+    }
+}
+
 QoreHashNode* thread_get_local_vars(int frame, ExceptionSink* xsink) {
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
     ThreadLocalProgramData* tlpd = ProgramThreadCountContextHelper::getContextFrame(frame, xsink);

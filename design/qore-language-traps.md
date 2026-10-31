@@ -73,6 +73,12 @@ so the wording names the container and the possibility of narrowing without clai
 | `INCOMPATIBLE-RUNTIME-TYPE` | any other `RUNTIME-TYPE-ERROR` from `doTypeException()`; `doc` is not set | none |
 | `DELETED-OBJECT` | `OBJECT-ALREADY-DELETED` for a method call, call reference, or member access on a deleted object (`qore_raise_deleted_object()`); the HTTPClient poll-abort errors are excluded | [16](#16-background-keeps-an-object-alive-but-a-method-call-reference-does-not) |
 
+The debuggers show the hint when a thread stops at such an exception: qdbg and qdbg-remote in the stop message, and
+the debug adapter in the `exceptionInfo` description (`AbstractDebugControl::formatRuntimeDiagnostic()` in DebugUtil,
+which also accepts the plain hash that a remote debugger receives). For trap 1, `get_local_vars()` gives the
+`declaredType` of each typed variable and `unassigned: True` for a variable without a value whose type requires one;
+qdbg shows it as `int count = NOTHING (declared but not assigned)`, and the debug adapter shows its declared type.
+
 ---
 
 ## 1. A declaration does not initialize

@@ -53,6 +53,9 @@ module DebugCmdLine {
     - the results of commands and the values of variables are printed in YAML style (the \c "%Y" format of
       @ref Qore::printf() "printf()")
     - added the \c eval command, which evaluates an expression with the variables of the current frame
+    - an exception that matches a common pitfall of %Qore, such as a variable that was declared but not assigned or a
+      call reference to a deleted object, is shown with a hint when a thread stops at it, and a local variable that
+      was declared but not assigned is shown as such with its declared type
     - \c thread \c list shows the names of threads
     - the output of programs of a debug server is printed as the programs wrote it
     - added the \c break \c condition, \c break \c hitcondition and \c break \c log commands, which set the
@@ -1263,7 +1266,7 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
                                                 printfImpl("there is no local var %y; use \"thread local\" to list local vars in this frame\n", var);
                                             }
                                             else {
-                                                dcl.printVar(var, vh.result.value);
+                                                dcl.printVar(var, vh.result.value, vh.result);
                                             }
                                         }
                                     },
@@ -2654,7 +2657,7 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
             }
             foreach string name in (names) {
                 *hash<auto> vh = doCommand({"cmd": "thread/local/" + name + "/get", "tid": tid}, False);
-                printVar(name, vh.result.value);
+                printVar(name, vh.result.value, vh.result);
             }
         }
 
@@ -2952,7 +2955,18 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
         }
 
         #! Prints the value of a variable; a list or hash is printed in YAML style (the \c "%Y" format)
-        public printVar(string name, hash<auto> value) {
+        /** @param name the name of the variable
+            @param value the serialized value
+            @param info the variable as given by the \c thread/local/&lt;name&gt;/get command, with its declared type and
+            whether it is unassigned (a variable that was declared but not assigned is shown as such)
+        */
+        public printVar(string name, hash<auto> value, *hash<auto> info) {
+            # a variable that was declared but not assigned is shown with its declared type
+            if (info.unassigned) {
+                printfImpl("%s %s = NOTHING %s\n", info.declaredType, name,
+                    tc.warning("(declared but not assigned)"));
+                return;
+            }
             auto v = AbstractDebugControl::unserialize(value);
             # NOTHING and NULL are written as in Qore; see AbstractDebugControl::formatValue()
             if ((v.typeCode() == NT_HASH || v.typeCode() == NT_LIST) && v) {
@@ -3168,6 +3182,13 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
                 switched ? ", now the current thread" : "");
             if (data.bkpterror) {
                 outs += "\n" + tc.warning(sprintf("A breakpoint could not be checked: %s", data.bkpterror));
+            }
+            # the hint of an exception that matches a common pitfall of Qore
+            if (data.func == "exception") {
+                *string hint = AbstractDebugControl::formatRuntimeDiagnostic(data.exception);
+                if (hint) {
+                    outs += "\n" + tc.warning(hint);
+                }
             }
             if (exists data.linecode) {
                 outs += "\n" + formatSource({

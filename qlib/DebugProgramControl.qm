@@ -101,6 +101,10 @@ module DebugProgramControl {
       @ref DebugProgramControl::DebugProgramControl::terminateProgram() "terminateProgram()" and
       @ref DebugProgramControl::DebugProgramControl::isTerminating() "isTerminating()": a debugged program ends, and its
       threads end with a \c THREAD-CANCELLED exception, also those that wait, as for a lock or for I/O
+    - the \c thread/local/&lt;name&gt;/get and \c thread/variable/get commands give the declared type of a local
+      variable in \c declaredType, and \c unassigned is @ref True for a variable that was declared but not assigned;
+      exception events give the hint of an exception that matches a common pitfall of %Qore in its \c arg (see
+      @ref DebugUtil::AbstractDebugControl::formatRuntimeDiagnostic() "AbstractDebugControl::formatRuntimeDiagnostic()")
     - a program created with the \c program//create command is removed from debugging also when it ends with an
       exception
     - @ref DebugProgramControl::DebugProgramControl::createProgram() "createProgram()" parses a script in the mode
@@ -1800,6 +1804,27 @@ public namespace DebugProgramControl {
             };
         }
 
+        #! Returns the declared type of a local variable and whether it is unassigned, for a thread/variable command
+        /** @param rd the command, whose \c root and \c path give the value
+            @param lv the local variables of the frame, from get_local_vars()
+
+            @return \c declaredType and \c unassigned as given by get_local_vars() for a local variable itself, and an
+            empty hash for other values
+        */
+        private static hash<auto> getLocalTypeInfo(hash<auto> rd, *hash<auto> lv) {
+            hash<auto> rv = {};
+            if (exists rd.root.local && !rd.path) {
+                *hash<auto> var = lv{rd.root.local};
+                if (exists var.declaredType) {
+                    rv.declaredType = var.declaredType;
+                }
+                if (var.unassigned) {
+                    rv.unassigned = True;
+                }
+            }
+            return rv;
+        }
+
         private *hash<auto> serializeLocal(string name, hash<auto> val) {
             val.value = AbstractDebugControl::serialize(val.value);
             return ('name': name) + val;
@@ -2416,7 +2441,8 @@ public namespace DebugProgramControl {
                                 switch (shift cmd) {
                                     case 'get': {
                                         auto v = AbstractDebugControl::getPath(val, rd.path);
-                                        result = AbstractDebugControl::describe(v);
+                                        result = AbstractDebugControl::describe(v)
+                                            + DebugProgramControl::getLocalTypeInfo(rd, lv);
                                         if (rd.children) {
                                             result.children = AbstractDebugControl::describeChildren(v, rd.start ?? 0,
                                                 rd.count);
@@ -2438,7 +2464,8 @@ public namespace DebugProgramControl {
                                         # int local variable converts a string
                                         *hash<auto> lv2 = exists rd.root.local ? get_local_vars(frameId2) : lv;
                                         result = AbstractDebugControl::describe(AbstractDebugControl::getPath(
-                                            getDebugRootValue(pgm, rd.root, lv2, ctxCT, refName), rd.path));
+                                            getDebugRootValue(pgm, rd.root, lv2, ctxCT, refName), rd.path))
+                                            + DebugProgramControl::getLocalTypeInfo(rd, lv2);
                                         break;
                                     }
                                 }

@@ -117,6 +117,7 @@ public class QdbgScriptTest inherits QUnit::Test {
         addTestCase("session files with breakpoints and settings", \sessionFileTest());
         addTestCase("expressions and texts with quotes and spaces; NOTHING and NULL", \expressionTextTest());
         addTestCase("time zones", \timeZoneTest());
+        addTestCase("hints for exceptions that match a common pitfall", \trapHintTest());
         addTestCase("the usage of the debugger tools", \usageTest());
         addTestCase("errors at the start of qdbg and qdbg-server", \startupErrorTest());
         set_return_value(main());
@@ -655,9 +656,9 @@ public class QdbgScriptTest inherits QUnit::Test {
             "h.name = string \"s  t\"",
             "total = integer 0",
         ));
-        # the local variable that has no value yet
+        # the local variable that has no value yet is shown with its declared type
         res = runQdbg(Program, ("break create target.q 3", "c", "thread local sum", "quit"));
-        assertRegex("nothing sum = NOTHING", res.out);
+        assertRegex("int sum = NOTHING \\(declared but not assigned\\)", res.out);
     }
 
     sessionFileTest() {
@@ -870,6 +871,30 @@ public class QdbgScriptTest inherits QUnit::Test {
         res = runTool(qdbg, ("-v", file));
         assertNeq(0, res.rc);
         assertRegex("called at", res.out);
+    }
+
+    # an exception that matches a common pitfall is shown with a hint, and a variable that was declared but not
+    # assigned is shown as such
+    trapHintTest() {
+        hash<auto> res = runQdbg("%modern\nsub f() {\n    *int src;\n    int count = src;\n    printf(\"%d\\n\", count);\n}\nf();\n", (
+            "exception filter uncaught",
+            "go run",
+            "thread local count",
+            "thread local src",
+            "locals",
+            "go run",
+            "quit",
+        ));
+        assertInOrder(res.out, (
+            "Paused at uncaught exception RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got no value instead",
+            "target.q:4",
+            "hint (NO-VALUE-FOR-TYPE): a value of this type is required",
+            "  - assign the variable before it is read",
+            "int count = NOTHING (declared but not assigned)",
+            "nothing src = NOTHING",
+        ));
+        # the locals command shows the variable as declared but not assigned too
+        assertEq(2, (res.out =~ x/(int count = NOTHING \(declared but not assigned\))/g).size(), res.out);
     }
 
     # a thread that continues when qdbg quits does not stop again, as at the end of the program

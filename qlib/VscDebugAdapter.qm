@@ -129,6 +129,9 @@ module VscDebugAdapter {
       \c "function breakpoint" with the IDs of the breakpoints that are hit in \c hitBreakpointIds, \c "entry",
       \c "pause", \c "step", and \c "exception" with the name of the exception in \c text; the reason was the
       name of the debugger event, such as \c "step" for a breakpoint, and \c text was the whole event
+    - the \c exceptionInfo request gives the hint of an exception that matches a common pitfall of %Qore, such as a
+      variable that was declared but not assigned, in its \c description, and a local variable that was declared but
+      not assigned is shown as such with its declared type
     - each stack frame is named after the function that its line is in, and the frame of the top-level code of the
       program is named \c "\<top level\>"; the top frame was named after the debugger event, and each other frame
       after the function called at its line
@@ -1646,6 +1649,11 @@ vda.run();
         if (ex) {
             res.exceptionId = ex.err;
             res.description = ex.desc;
+            # the hint of an exception that matches a common pitfall of Qore
+            *string hint = AbstractDebugControl::formatRuntimeDiagnostic(ex);
+            if (hint) {
+                res.description += "\n\n" + hint;
+            }
             res.breakMode = "always";    # 'never' | 'always' | 'unhandled' | 'userUnhandled';
             res.details.message = ex.desc;
             res.details.typeName = ex.err;
@@ -1867,6 +1875,11 @@ vda.run();
             string name, hash<auto> d, *string evaluate_name, *hash<auto> format) {
         hash<auto> v = {"name": name, "value": VscDebugAdapter::formatValue(d, format), "type": d.type,
             "variablesReference": 0};
+        # a local variable that was declared but not assigned is shown with its declared type
+        if (d.unassigned) {
+            v.value = "NOTHING (declared but not assigned)";
+            v.type = d.declaredType;
+        }
         if (d.indexed || d.named) {
             v.variablesReference = getVarRef(threadId, frameId, root, path, evaluate_name);
             if (d.indexed) {

@@ -89,6 +89,12 @@ public:
     }
 };
 
+//! Adds the declared type of a variable to its hash from get_local_vars(), for debuggers
+/** sets \c "declaredType" to the name of the type if the variable has one, and \c "unassigned" to @ref True if the
+    variable has no value but its type requires one, as for a variable that was declared but not assigned
+*/
+DLLLOCAL void qore_set_local_var_debug_type(QoreHashNode& v, const QoreTypeInfo* typeInfo, ExceptionSink* xsink);
+
 class VarValueBase {
 protected:
     DLLLOCAL int checkFinalized(ExceptionSink* xsink) const {

@@ -61,6 +61,9 @@ module DebugUtil {
       @ref DebugUtil::AbstractDebugControl::formatTree() "AbstractDebugControl::formatTree()", which write values as
       the \c "%y" and \c "%Y" formats, but with @ref NOTHING and @ref NULL written as in %Qore, as they are shown in
       debuggers
+    - added @ref DebugUtil::AbstractDebugControl::getRuntimeDiagnostic() "AbstractDebugControl::getRuntimeDiagnostic()"
+      and @ref DebugUtil::AbstractDebugControl::formatRuntimeDiagnostic() "AbstractDebugControl::formatRuntimeDiagnostic()",
+      which give the hint of an exception that matches a common pitfall of %Qore
     - added @ref DebugUtil::DebugOutputCapture "DebugOutputCapture", which captures the standard output and standard
       error of the process, so that the output of debugged programs can be sent to debugger clients, and the
       @ref DebugUtil::DebugEventCmd::Output "output" event
@@ -521,6 +524,58 @@ string text = AbstractDebugControl::formatValue({"a": NOTHING, "b": NULL}); # {a
                     return rv;
             }
             return (AbstractDebugControl::formatValue(val),);
+        }
+
+        #! Returns the runtime diagnostic of an exception, if it has one
+        /** A runtime error that matches a common pitfall of %Qore, such as a variable that was declared but not
+            assigned, carries a @ref Qore::RuntimeDiagnosticInfo "RuntimeDiagnosticInfo" hash as its \c arg; a remote
+            debugger receives it as a plain hash
+
+            @param ex the exception, as in the \c exception key of an exception event
+
+            @return the diagnostic, with the keys of @ref Qore::RuntimeDiagnosticInfo "RuntimeDiagnosticInfo", or
+            @ref NOTHING if the exception has none
+
+            @since DebugUtil 0.2
+        */
+        static public *hash<auto> getRuntimeDiagnostic(*hash<auto> ex) {
+            auto arg = ex.arg;
+            if (arg instanceof hash<RuntimeDiagnosticInfo>) {
+                return arg;
+            }
+            # a remote debugger receives the diagnostic without its type; only the errors that carry one are checked
+            if (arg.typeCode() == NT_HASH && (ex.err == "RUNTIME-TYPE-ERROR" || ex.err == "OBJECT-ALREADY-DELETED")
+                && arg.hasKey("id") && arg.hasKey("hint") && arg.id.typeCode() == NT_STRING
+                && arg.hint.typeCode() == NT_STRING) {
+                return arg;
+            }
+        }
+
+        #! Returns the text of the runtime diagnostic of an exception, if it has one: its hint and its suggestions
+        /** @par Example:
+            @code{.py}
+*string hint = AbstractDebugControl::formatRuntimeDiagnostic(event.exception);
+# hint (NO-VALUE-FOR-TYPE): a value of this type is required, but there is no value (NOTHING), ...
+#   - assign the variable before it is read, as in the declaration (int i = 0;)
+            @endcode
+
+            @param ex the exception, as in the \c exception key of an exception event
+
+            @return the hint, as \c "hint (ID): text", followed by one line for each suggestion, or @ref NOTHING if the
+            exception has no runtime diagnostic; see getRuntimeDiagnostic()
+
+            @since DebugUtil 0.2
+        */
+        static public *string formatRuntimeDiagnostic(*hash<auto> ex) {
+            *hash<auto> diag = AbstractDebugControl::getRuntimeDiagnostic(ex);
+            if (!diag) {
+                return;
+            }
+            string rv = sprintf("hint (%s): %s", diag.id, diag.hint);
+            foreach auto suggestion in (diag.suggestions) {
+                rv += sprintf("\n  - %s", suggestion);
+            }
+            return rv;
         }
 
         #! Returns True if the value is a hash or a list with elements
