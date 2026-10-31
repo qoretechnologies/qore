@@ -495,8 +495,10 @@ int QoreListNode::insert(QoreValue val, ExceptionSink* xsink) {
     if (priv->length - 1) {
         memmove(static_cast<void*>(priv->entry + 1), priv->entry, sizeof(QoreValue) * (priv->length - 1));
     }
+    // the value stored, not the argument: checkVal() can replace the argument with a converted value and release
+    // it, as when a string is converted for a list<softint>
     priv->entry[0] = holder.release();
-    if (needs_scan(val)) {
+    if (needs_scan(priv->entry[0])) {
         priv->incScanCount(1);
     }
     return 0;

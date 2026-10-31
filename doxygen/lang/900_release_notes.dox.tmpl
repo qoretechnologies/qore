@@ -52,6 +52,10 @@
     written to it; it kept the type of the value assigned, so writing a value of another type raised
     \c RUNTIME-TYPE-ERROR.
 
+    The @ref unshift "unshift" operator no longer reads freed memory when the list's element type converts the
+    value, as for a string unshifted onto a \c list<softint>; the read could leave the list's recursive-reference
+    accounting wrong or crash the process.
+
     \c HTTPClient now recognizes a WebSocket upgrade request from its \c Connection and \c Upgrade headers as RFC 9110
     defines them: as comma-separated token lists compared case-insensitively, given as a string or as a list of values;
     a list value or a token list in \c Upgrade was not recognized, and a \c Connection value merely containing

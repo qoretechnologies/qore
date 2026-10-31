@@ -1,0 +1,53 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%requires QUnit
+
+%exec-class UnshiftConvertedElementTest
+
+#! Tests unshift with a value that the list's element type converts
+/** QoreListNode::insert() converts the value for a list with an element type, which releases the value given when
+    it is replaced with a converted one, and then read the released value to decide whether the list holds a value
+    that needs a recursive-reference scan.  Only a memory checker such as valgrind shows the read of the released
+    value; the test is deterministic and checks the results in any case.
+
+    The values are created at runtime, so that the conversion releases their last reference, and the cases are run
+    in a function called three times, so that tiered execution also runs them as native code.
+*/
+class UnshiftConvertedElementTest inherits QUnit::Test {
+    constructor() : QUnit::Test("UnshiftConvertedElement", "1.0", \ARGV) {
+        addTestCase("unshift converted element", \unshiftConvertedElement());
+        set_return_value(main());
+    }
+
+    unshiftConvertedElement() {
+        for (int i = 0; i < 3; ++i) {
+            checkCases(i);
+        }
+    }
+
+    private checkCases(int i) {
+        string label = sprintf("run %d", i);
+        # a string converted to an int for list<softint>
+        list<softint> l1;
+        unshift l1, sprintf("%d", 3);
+        assertEq((3,), l1, label + ": unshift to an empty list<softint>");
+        unshift l1, sprintf("%d", 2);
+        assertEq((2, 3), l1, label + ": unshift to a list<softint>");
+        assertEq("list<softint>", l1.fullType(), label + ": list<softint> type");
+
+        # a string converted to a float for list<softfloat>
+        list<softfloat> l2 = (2.5,);
+        unshift l2, sprintf("%g", 1.5);
+        assertEq((1.5, 2.5), l2, label + ": unshift to a list<softfloat>");
+
+        # an int converted to a string for list<softstring>, in a hash member
+        hash<auto> h = {"l": cast<list<softstring>>(("b",))};
+        unshift h.l, i + 1;
+        assertEq((string(i + 1), "b"), h.l, label + ": unshift to a list<softstring> hash member");
+    }
+}
