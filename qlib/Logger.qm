@@ -275,6 +275,8 @@ if (laq.isFull()) {
     - @ref Qore::Logger::LoggerAppenderQueue::isFull() "isFull()": Returns @ref True if at or above the limit
 
     @subsection logger_v1_1 v1.1
+    - searchable appenders can describe their search sources with hashes whose values all have the same type,
+      such as \c {"name": "x", "kind": "memory"}
     - Added memory-based backpressure support to @ref Qore::Logger::LoggerAppenderQueue "LoggerAppenderQueue"
       to prevent unbounded memory growth when log producers outpace consumers
       - new \c Qore::Logger::LoggerAppenderQueue::constructor(softint) with
