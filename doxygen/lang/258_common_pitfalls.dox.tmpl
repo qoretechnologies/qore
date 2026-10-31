@@ -20,6 +20,7 @@
     |!What you see|!Cause|!Read
     |<tt>RUNTIME-TYPE-ERROR: &lt;lvalue&gt; expects type 'int', but got no value instead</tt>|a declared variable was read before being assigned; a declaration does not initialize|@ref declaration_vs_initialization
     |<tt>PARSE-TYPE-ERROR: ... the container's element type was inferred from an earlier assignment</tt>|a \c hash<auto> or \c list<auto> was narrowed by an assignment|@ref auto_no_narrow
+    |<tt>RUNTIME-TYPE-ERROR: ... this type is the declared value type of the hash holding the target</tt>|a hash or list received from elsewhere, such as a caller's literal option hash, kept its narrowed type in a \c hash<auto> or \c list<auto> lvalue|@ref auto_no_narrow
     |a \c map result fails to satisfy a \c list&lt;T&gt; lvalue, but only sometimes|the source was @ref nothing, so \c map returned @ref nothing rather than an empty list|@ref map
     |a hash key that is present tests as absent|the key's value is an empty hash or list, which is @ref False|@ref hash_key_presence_tests
     |a value compares equal to both a real value and "missing"|@ref NULL is not @ref NOTHING; <tt>exists NULL</tt> is @ref True|@ref null
@@ -46,6 +47,12 @@
     is a parse error.  A <i>heterogeneous</i> initial value does not narrow, which is why this only
     bites sometimes.  Declare the variable <tt>hash&lt;auto!&gt;</tt> or <tt>list&lt;auto!&gt;</tt> when it
     genuinely holds mixed types; see @ref auto_no_narrow.
+
+    The same applies at run time to a hash or list received from elsewhere: a caller's literal
+    <tt>{"url": "x"}</tt> is a <tt>hash&lt;string, string&gt;</tt>, and assigning it to a <tt>hash&lt;auto&gt;</tt>
+    lvalue keeps that type, so adding an \c int default to it raises \c RUNTIME-TYPE-ERROR.  Assigning it to a
+    <tt>hash&lt;auto!&gt;</tt> lvalue drops the narrowed type of the hash (but not of the hashes it holds), so
+    values of any type can be added; see @ref auto_no_narrow.
 
     @subsection pitfalls_null NULL is not NOTHING
     @ref NULL is the SQL \c NULL value and is a value: <tt>exists NULL</tt> is @ref True and

@@ -1796,7 +1796,7 @@ h1.y = "string";  # PARSE-TYPE-ERROR: type narrowed to hash<string, int>
 
 # With auto! - parsing succeeds
 hash<auto!> h2 = {"x": 1};
-h2.y = "string";  # parsing succeeds (runtime type still enforced)
+h2.y = "string";  # succeeds: h2 does not keep the hash<string, int> type of the literal
 h2 = {"z": "text"};  # whole hash reassignment works
 
 # list<auto!> works similarly
@@ -1844,10 +1844,56 @@ our hash<auto!> global_config = {"setting": 1};
 global_config = {"setting": "value"};
     @endcode
 
-    @note While \c auto! prevents parse-time type narrowing errors, the runtime type of values is still
-    enforced. For example, adding a string to a hash that was created with integer values will still
-    raise a \c RUNTIME-TYPE-ERROR. The \c auto! syntax allows flexible typing at the variable level,
-    but individual values retain their types.
+    @par Runtime Types of Assigned Values
+    A hash or list value has a runtime type of its own: a literal such as <tt>{"url": "x"}</tt> is a
+    <tt>hash&lt;string, string&gt;</tt>, and <tt>("a", "b")</tt> is a <tt>list&lt;string&gt;</tt>.  The value
+    keeps this type when it is passed to a function or returned from one, so code receiving a hash or list from
+    elsewhere, such as a caller's option hash, gets the type the caller's value was created with.  What happens to
+    that type when the value is assigned depends on the lvalue's declaration:
+    - a \c hash<auto> or \c list<auto> lvalue keeps the type of the value assigned to it, so a later write of a
+      value of another type to one of its keys or elements raises a \c RUNTIME-TYPE-ERROR, as it would on the
+      original value
+    - a \c hash<auto!> or \c list<auto!> lvalue (a local variable, a global variable, a class member or a
+      parameter) drops the narrowed type: it holds a \c hash<auto> or \c list<auto>, and later writes of any
+      value type succeed; a value that is also referenced elsewhere is copied, so the original value, such as the
+      caller's hash, keeps its type and its contents
+
+    Dropping the type is shallow: only the hash or list assigned loses its narrowed type, while the hashes and lists
+    it holds keep theirs.  To write values of another type into a nested container, assign that container to a
+    \c hash<auto!> or \c list<auto!> lvalue as well.
+
+    @par Example: Adding Defaults to a Caller's Option Hash
+    @code{.py}
+# the caller's literal {"url": "x"} is a hash<string, string>
+
+# fails: opts keeps the hash<string, string> type of the caller's hash
+hash<auto> sub get_options_narrowed(hash<auto> opts0) {
+    hash<auto> opts = opts0;
+    if (!exists opts.timeout) {
+        opts.timeout = 30;  # RUNTIME-TYPE-ERROR: the value type is string
+    }
+    return opts;
+}
+
+# works: opts drops the narrowed type and accepts values of any type
+hash<auto> sub get_options(hash<auto> opts0) {
+    hash<auto!> opts = opts0;
+    if (!exists opts.timeout) {
+        opts.timeout = 30;  # OK; the caller's hash is not changed
+    }
+    return opts;
+}
+
+get_options_narrowed({"url": "x"});  # RUNTIME-TYPE-ERROR
+get_options({"url": "x"});           # returns {"url": "x", "timeout": 30}
+
+# the strip is shallow: nested hashes keep their narrowed types
+hash<auto!> h = get_nested();  # returns {"inner": {"a": "b"}}
+h.n = 1;                       # OK
+h.inner.n = 1;                 # RUNTIME-TYPE-ERROR: h.inner is still a hash<string, string>
+hash<auto!> inner = h.inner;
+inner.n = 1;                   # OK
+    @endcode
 
     @warning The \c %%broken-narrowed-types parse directive will also suppress parse-time type narrowing
     errors, but it only moves the error to runtime rather than fixing the underlying type issue. Using
