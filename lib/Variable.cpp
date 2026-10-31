@@ -619,11 +619,13 @@ LValueHelper::LValueHelper(ExceptionSink* xsink, bool for_assignment) : vl(xsink
 
 LValueHelper::LValueHelper(LValueHelper&& o) : vl(std::move(o.vl)), tvec(std::move(o.tvec)), lvid_set(o.lvid_set),
         ocvec(std::move(o.ocvec)), before(o.before), removal_objects(std::move(o.removal_objects)), rdt(o.rdt),
-        member_lvalue(std::move(o.member_lvalue)), assignment_only(o.assignment_only),
-        member_lvalue_modified(o.member_lvalue_modified), robj(o.robj),
+        vivified(std::move(o.vivified)), member_lvalue(std::move(o.member_lvalue)),
+        assignment_only(o.assignment_only), member_lvalue_modified(o.member_lvalue_modified), robj(o.robj),
         buffer_lvalue(o.buffer_lvalue), buffer_lvalue_index(o.buffer_lvalue_index),
         buffer_lvalue_value(o.buffer_lvalue_value), val(o.val), qv(o.qv), typeInfo(o.typeInfo) {
     o.qv = nullptr;
+    // the entries created to reach the target belong to the new helper, which removes them if its operation fails
+    o.vivified.clear();
     o.buffer_lvalue = nullptr;
     o.buffer_lvalue_index = 0;
     o.buffer_lvalue_value = QoreValue();
@@ -639,6 +641,14 @@ int64 q_get_lvalue_scan_count() {
 #endif
 
 LValueHelper::~LValueHelper() {
+    // an operation that failed must not leave behind the entries created to reach its target, as a rejected
+    // assignment does not (see assign()); a compound assignment can fail after storing a default value in a new
+    // entry, or when it converts the value, and navigation can fail after creating the entries leading to the
+    // target; the entries are removed while the lvalue locks are still held
+    if (*vl.xsink && !vivified.empty()) {
+        rollbackVivification();
+    }
+
     if (buffer_lvalue) {
         if (!*vl.xsink) {
             buffer_lvalue->setEntry(buffer_lvalue_index, buffer_lvalue_value, vl.xsink);
@@ -2373,7 +2383,8 @@ int LValueHelper::makeFloat(const char* desc) {
            return 0;
         }
 
-        if (typeInfo && qv->getType() != NT_FLOAT && !QoreTypeInfo::parseAccepts(typeInfo, bigIntTypeInfo)) {
+        // the lvalue must accept the float result, as for the value case above
+        if (typeInfo && !QoreTypeInfo::parseAccepts(typeInfo, floatTypeInfo)) {
             // the 4th arg to doTypeException() is needed only for the type
             typeInfo->doTypeException("lvalue", 0, desc, QoreValue(1.0), vl.xsink);
             return -1;

@@ -30,6 +30,14 @@
     a \c hash<auto!> local or global variable; the parser refused it, taking the type, which is named
     \c hash<string, auto>, for a hash with a typed value type.
 
+    The compound assignment operators now enforce the value type of the hash or list holding their target as an
+    assignment with \c = does: the float result of \c *= or \c /= is no longer stored in a hash member or list
+    element of an integer value type, such as a key of a \c hash<string, int>, but raises \c RUNTIME-TYPE-ERROR, as
+    for an \c int variable.  A compound assignment that fails, for example with \c RUNTIME-TYPE-ERROR or
+    \c DIVISION-BY-ZERO, no longer leaves behind the hash key or list elements it created to reach its target,
+    holding no value or the default value of the value type; neither does an assignment that fails while reaching its
+    target, such as <tt>h.new.x = 1</tt> where \c h is a \c hash<string, string>.
+
     \c HTTPClient now recognizes a WebSocket upgrade request from its \c Connection and \c Upgrade headers as RFC 9110
     defines them: as comma-separated token lists compared case-insensitively, given as a string or as a list of values;
     a list value or a token list in \c Upgrade was not recognized, and a \c Connection value merely containing

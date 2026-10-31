@@ -1,0 +1,163 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class CompoundAssignmentNarrowedTypeTest
+
+#! Tests that the compound assignment operators enforce the value type of the container holding their target
+/** A compound assignment to a hash member or a list element must store a value of the container's value type, as
+    an assignment with \c = must, and a rejected compound assignment must not leave behind the hash key or list
+    elements created to reach its target, as a rejected assignment does not.
+
+    Two defects broke this:
+    - a float result of \c *= or \c /= was stored in a hash member or list element of an integer value type,
+      since the check made before converting the value to a float accepted any lvalue that accepts integers
+    - a compound assignment to a new hash key or list element that failed, for example because the value type
+      cannot hold its result or because of a division by zero, left the new key or elements behind, holding no
+      value or the default value of the value type; the same happened when an assignment with \c = failed while
+      reaching its target, for example \c h.new.x = 1 with a string value type
+
+    The worker prints the outcome of each operation and the container afterwards.  It runs in every execution mode
+    and as a qcc-compiled executable.  The parse-time checks are tested with containers narrowed at parse time.
+*/
+class CompoundAssignmentNarrowedTypeTest inherits QUnit::Test {
+    public {
+        #! the output expected from the worker
+        const Expected = (
+            "hash<string, int> type: ok \"hash<string, int>\"",
+            "existing *= float: RUNTIME-TYPE-ERROR {a: 2}",
+            "existing /= float: RUNTIME-TYPE-ERROR {a: 2}",
+            "existing *= number: RUNTIME-TYPE-ERROR {a: 2}",
+            "new *= float: RUNTIME-TYPE-ERROR {a: 2}",
+            "new /= float: RUNTIME-TYPE-ERROR {a: 2}",
+            "new /= 0: DIVISION-BY-ZERO {a: 2}",
+            "new.x += 1: RUNTIME-TYPE-ERROR {a: 2}",
+            "new.x = 1: RUNTIME-TYPE-ERROR {a: 2}",
+            "existing += float: ok {a: 3}",
+            "new += float: ok {a: 3, b: 1}",
+            "new -= number: ok {a: 3, b: 1, c: -1}",
+            "new *= int: ok {a: 3, b: 1, c: -1, d: 0}",
+            "hash<string, string> type: ok \"hash<string, string>\"",
+            "new = int: RUNTIME-TYPE-ERROR {a: \"b\"}",
+            "new -= int: RUNTIME-TYPE-ERROR {a: \"b\"}",
+            "new *= int: RUNTIME-TYPE-ERROR {a: \"b\"}",
+            "new /= int: RUNTIME-TYPE-ERROR {a: \"b\"}",
+            "new %= int: RUNTIME-TYPE-ERROR {a: \"b\"}",
+            "new |= int: RUNTIME-TYPE-ERROR {a: \"b\"}",
+            "new &= int: RUNTIME-TYPE-ERROR {a: \"b\"}",
+            "new ^= int: RUNTIME-TYPE-ERROR {a: \"b\"}",
+            "new <<= int: RUNTIME-TYPE-ERROR {a: \"b\"}",
+            "new >>= int: RUNTIME-TYPE-ERROR {a: \"b\"}",
+            "new *= float: RUNTIME-TYPE-ERROR {a: \"b\"}",
+            "new -= number: RUNTIME-TYPE-ERROR {a: \"b\"}",
+            "new ++: RUNTIME-TYPE-ERROR {a: \"b\"}",
+            "new --: RUNTIME-TYPE-ERROR {a: \"b\"}",
+            "new pre ++: RUNTIME-TYPE-ERROR {a: \"b\"}",
+            "new pre --: RUNTIME-TYPE-ERROR {a: \"b\"}",
+            "existing -= int: RUNTIME-TYPE-ERROR {a: \"b\"}",
+            "existing *= float: RUNTIME-TYPE-ERROR {a: \"b\"}",
+            "new += int: ok {a: \"b\", y: \"1\"}",
+            "existing += int: ok {a: \"b1\", y: \"1\"}",
+            "new -= int binary: RUNTIME-TYPE-ERROR {a: !!binary AA==}",
+            "list<int> type: ok \"list<int>\"",
+            "existing elem *= float: RUNTIME-TYPE-ERROR [2, 3]",
+            "existing elem /= float: RUNTIME-TYPE-ERROR [2, 3]",
+            "new elem *= float: RUNTIME-TYPE-ERROR [2, 3]",
+            "new elem /= 0: DIVISION-BY-ZERO [2, 3]",
+            "existing elem += float: ok [3, 3]",
+            "list<string> type: ok \"list<string>\"",
+            "new elem = int: RUNTIME-TYPE-ERROR [\"a\", \"b\"]",
+            "new elem -= int: RUNTIME-TYPE-ERROR [\"a\", \"b\"]",
+            "new elem ++: RUNTIME-TYPE-ERROR [\"a\", \"b\"]",
+            "existing elem *= float: RUNTIME-TYPE-ERROR [\"a\", \"b\"]",
+            "new elem += int: ok [\"a\", \"b\", \"1\"]",
+            "declared existing *= float: RUNTIME-TYPE-ERROR {a: 2}",
+            "declared new /= float: RUNTIME-TYPE-ERROR {a: 2}",
+            "seeded type: ok \"hash<auto>\"",
+            "seeded new = int: ok {a: \"b\", n: 1}",
+            "uncaptured local: RUNTIME-TYPE-ERROR RUNTIME-TYPE-ERROR RUNTIME-TYPE-ERROR {a: 2} [\"a\"]",
+        );
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string worker;
+    }
+
+    constructor() : QUnit::Test("CompoundAssignmentNarrowedType", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        worker = get_script_dir() + DirSep + "compound-assignment-narrowed-type-worker.q";
+
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("compiled executable", \testCompiled());
+        addTestCase("parse-time narrowed containers", \testParseTime());
+
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            checkOutput(mode, ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s "
+                "--exec-mode=%s %s", libqore_dir, libqore_dir, qore_bin, mode, worker)));
+        }
+    }
+
+    testCompiled() {
+        TmpDir tmp("qore-compound-assignment-narrowed-type-");
+        string exe = tmp.path + DirSep + "narrowed";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -o %s %s 2>&1", libqore_dir, qcc_bin, exe, worker));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        checkOutput("executable", ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
+            libqore_dir, libqore_dir, exe)));
+    }
+
+    #! a compound assignment whose result the narrowed value type cannot hold is rejected at parse time like "="
+    testParseTime() {
+        # the float result of *= and /= cannot be stored in an int value type
+        assertParseTypeError("hash<auto> h = {\"a\": 1}; h.a = 1.5;", "assignment operator '='");
+        assertParseTypeError("hash<auto> h = {\"a\": 1}; h.a *= 1.5;", "*= operator");
+        assertParseTypeError("hash<auto> h = {\"a\": 1}; h.n *= 1.5;", "*= operator");
+        assertParseTypeError("hash<auto> h = {\"a\": 1}; h.a /= 1.5;", "/= operator");
+        assertParseTypeError("list<auto> l = (1, 2); l[0] *= 1.5;", "*= operator");
+        # the integer result of the bitwise operators and ++ cannot be stored in a string value type
+        assertParseTypeError("hash<auto> h = {\"a\": \"b\"}; h.x = 1;", "assignment operator '='");
+        assertParseTypeError("hash<auto> h = {\"a\": \"b\"}; h.x |= 1;", "|= operator");
+        assertParseTypeError("hash<auto> h = {\"a\": \"b\"}; h.x++;", "++ (post-increment) operator");
+        # an int operand of += is converted to the int value type, as for an int variable
+        assertEq(NOTHING, parse("hash<auto> h = {\"a\": 1}; h.a += 1.5;"));
+        # an int operand of += is converted to the string value type, as for a string variable
+        assertEq(NOTHING, parse("hash<auto> h = {\"a\": \"b\"}; h.x += 1;"));
+    }
+
+    private assertParseTypeError(string code, string op) {
+        *hash<ExceptionInfo> ex = parse(code);
+        assertEq("PARSE-TYPE-ERROR", ex.err, code);
+        assertTrue((ex.desc ?? "").find(op) >= 0, code + ": " + (ex.desc ?? ""));
+    }
+
+    private *hash<ExceptionInfo> parse(string code) {
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+        try {
+            p.parse(code, "parse-time-narrowed");
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+    }
+
+    private checkOutput(string label, string out) {
+        list<string> lines = (select out.split("\n"), $1);
+        assertEq(Expected, lines, label + ": " + out);
+    }
+}
