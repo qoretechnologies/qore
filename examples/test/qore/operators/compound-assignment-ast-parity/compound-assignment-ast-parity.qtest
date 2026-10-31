@@ -32,16 +32,18 @@ class CompoundAssignmentAstParityTest inherits QUnit::Test {
         const Operators = ("+=", "-=", "*=", "/=", "%=", "|=", "&=", "^=", "<<=", ">>=");
 
         #! the lvalue types and the initial values (as Qore source) of their lvalues
-        /** Types that convert the values assigned to them (\c softint, \c softstring, \c softbool and their
-            or-nothing types) are left out: the AST interpreter stores the unconverted result of a compound
-            assignment in such an lvalue (ex: <tt>softint v = 10; v *= 1.5</tt> leaves the float 15.0 in \c v),
-            which the other execution modes do not do
-        */
         const Types = (
             ("auto", ("10", "2.5", "2.5n", "\"s\"", "True", "2024-01-02T03:04:05Z", "1h", "(1, 2)",
                 "{\"a\": 1, \"b\": 2}", "<0102>", "NOTHING", "NULL", "new C()")),
             ("int", ("10",)),
             ("*int", ("10", "NOTHING")),
+            ("softint", ("10",)),
+            ("*softint", ("10", "NOTHING")),
+            ("softfloat", ("2.5",)),
+            ("softnumber", ("2.5n",)),
+            ("softstring", ("\"s\"",)),
+            ("softbool", ("True",)),
+            ("softdate", ("2024-01-02T03:04:05Z",)),
             ("float", ("2.5",)),
             ("*float", ("2.5", "NOTHING")),
             ("number", ("2.5n",)),

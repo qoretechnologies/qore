@@ -4,6 +4,24 @@
 
     @section qore_3_0_0 Qore 3.0.0
 
+    A soft-typed lvalue (\c softint, \c softfloat, \c softnumber, \c softstring, \c softbool, \c softdate,
+    \c softlist and their or-nothing types) always holds its declared type after a compound assignment, \c ++ or
+    \c --: the result is converted to the declared type as an assignment converts it (ex:
+    <tt>softint v = 10; v *= x</tt> with \c x holding 1.5 leaves the int 15 in \c v, where it left the float 15.0).
+    The same applies to an or-nothing lvalue or a hash member or list element whose type converts the result (ex:
+    \c ++ on a member of a <tt>hash<string, float></tt> with no value gives the float 1.0, where it gave the int 1).  An or-nothing lvalue with no value no longer takes a float from
+    \c *= or \c /= when its type does not accept one (ex: \c *int), as the plain type does not.
+
+    An or-nothing lvalue (\c *T) with no value now gives the result of the plain type \c T with no value in a
+    compound assignment with an operand that has a value: \c += and \c -= start from the default value of \c T
+    (ex: <tt>*string s; s += 1</tt> gives \c "1" as for a \c string, where it raised \c RUNTIME-TYPE-ERROR, and
+    <tt>*int i; i += 1.5</tt> gives 1), a \c *timeout lvalue converts a date operand to milliseconds as a
+    \c timeout lvalue does, and \c -= with a date operand on a \c *int lvalue converts the date as for an \c int
+    lvalue.  With an operand with no value, \c += and \c -= leave an or-nothing lvalue with no value, as before.
+    A typed local with no value now also gets its type's default value in \c += in every execution mode (ex:
+    <tt>string s; s += 2</tt> gives \c "2"); the IR, JIT and tiered modes and compiled code raised
+    \c RUNTIME-TYPE-ERROR.
+
     Compound assignments (\c +=, \c -=, \c *=, \c /=, \c %=, \c |=, \c &=, \c ^=, \c <<= and \c >>=)
     now give the result of the AST interpreter in every execution mode and in compiled code.  The operation follows
     the type of the lvalue's current value: an int value converts the operand to an int (ex: \c 10 \c += \c 1.5

@@ -7930,8 +7930,10 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
                 || QoreTypeInfo::getBaseType(ti) == NT_NUMBER
                 || QoreTypeInfo::getBaseType(ti) == NT_DATE
                 || QoreTypeInfo::isReference(ti)
-                // a timeout lvalue adds a date as milliseconds, which the value alone does not show
-                || QoreTypeInfo::equal(get_or_nothing_base_type(ti), timeoutTypeInfo)) {
+                // a timeout lvalue adds a date as milliseconds, and an or-nothing lvalue (*T) with no value takes
+                // the default value of T, which the value alone does not show
+                || get_or_nothing_base_type(ti) != ti
+                || QoreTypeInfo::equal(ti, timeoutTypeInfo)) {
             left_var = nullptr;  // Force lvalue path
         }
     }
@@ -8035,12 +8037,14 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
     // PlusEquals semantics (QorePlusEqualsOperatorNode::evalImpl lines 155-187) via
     // proper IR lowering.
     const QoreTypeInfo* lvar_ti = left_var->getTypeInfo();
-    bool left_local_known_assigned = parse_context
-        && left_var->getType() == VT_LOCAL
-        && left_var->ref.id
-        && parse_context->isLocalDefinitelyAssigned(left_var->ref.id)
-        && lvar_ti
-        && QoreTypeInfo::parseReturns(lvar_ti, NT_NOTHING) == QTI_NOT_EQUAL;
+    // the state of the variable where it is read; isLocalDefinitelyAssigned() gives its state at the end of its
+    // scope, which this operation itself can assign
+    QoreParseAnalysis left_var_analysis;
+    bool left_local_known_assigned = getAnalysis(op->getLeft(), left_var_analysis)
+        && (left_var_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+            || (left_var_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+                && lvar_ti
+                && QoreTypeInfo::parseReturns(lvar_ti, NT_NOTHING) == QTI_NOT_EQUAL));
     if (lvar_ti && QoreTypeInfo::hasDefaultValue(lvar_ti) && !left_local_known_assigned) {
         QoreIRBasicBlock* has_value_bb = createBlock("pe.has_value");
         QoreIRBasicBlock* nothing_bb = createBlock("pe.nothing");
@@ -8142,8 +8146,10 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
                 || QoreTypeInfo::isReference(ti)
                 || QoreTypeInfo::isHashType(ti)
                 || QoreTypeInfo::getBaseType(ti) == NT_OBJECT
-                // a timeout lvalue subtracts a date as milliseconds, which the value alone does not show
-                || QoreTypeInfo::equal(get_or_nothing_base_type(ti), timeoutTypeInfo)) {
+                // a timeout lvalue subtracts a date as milliseconds, and an or-nothing lvalue (*T) with no value
+                // takes the default value of T, which the value alone does not show
+                || get_or_nothing_base_type(ti) != ti
+                || QoreTypeInfo::equal(ti, timeoutTypeInfo)) {
             left_var = nullptr;
         }
     }
@@ -8175,9 +8181,9 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
         left_var = nullptr;
     }
     if (!left_var) {
-        // the int-specialized operator converts the operand to an int (QoreIntMinusEqualsOperatorNode), so that a
-        // date gives its int value, where the generic operator subtracts its relative seconds; a timeout lvalue,
-        // which converts a date to milliseconds, is never int-specialized
+        // the int-specialized operator converts the operand to an int (QoreIntMinusEqualsOperatorNode), so that an
+        // operand with no value subtracts 0 from an lvalue with no value, giving 0, where the generic operator leaves
+        // the lvalue unchanged; a timeout lvalue, which converts a date to milliseconds, is never int-specialized
         if (force_int) {
             right = builder.createUnaryOp(QoreIROpcode::ToInt, right, op->loc)->result;
         }
@@ -8231,12 +8237,14 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
 
     // Generic NOTHING→default coercion for typed variables (see lowerPlusEquals)
     const QoreTypeInfo* lvar_ti = left_var->getTypeInfo();
-    bool left_local_known_assigned = parse_context
-        && left_var->getType() == VT_LOCAL
-        && left_var->ref.id
-        && parse_context->isLocalDefinitelyAssigned(left_var->ref.id)
-        && lvar_ti
-        && QoreTypeInfo::parseReturns(lvar_ti, NT_NOTHING) == QTI_NOT_EQUAL;
+    // the state of the variable where it is read; isLocalDefinitelyAssigned() gives its state at the end of its
+    // scope, which this operation itself can assign
+    QoreParseAnalysis left_var_analysis;
+    bool left_local_known_assigned = getAnalysis(op->getLeft(), left_var_analysis)
+        && (left_var_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+            || (left_var_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+                && lvar_ti
+                && QoreTypeInfo::parseReturns(lvar_ti, NT_NOTHING) == QTI_NOT_EQUAL));
     if (lvar_ti && QoreTypeInfo::hasDefaultValue(lvar_ti) && !left_local_known_assigned) {
         QoreIRBasicBlock* has_value_bb = createBlock("me.has_value");
         QoreIRBasicBlock* nothing_bb = createBlock("me.nothing");

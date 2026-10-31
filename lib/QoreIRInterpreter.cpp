@@ -18013,6 +18013,22 @@ QoreValue QoreIRInterpreter::evalLValueUnary(QoreIROpcode op, const QoreValue& l
     return QoreValue();
 }
 
+//! returns the type whose default value += and -= give an lvalue of the given type with no value
+/** an or-nothing type (*T) gives T, so that the lvalue gives the result of T for an operand with a value
+*/
+static const QoreTypeInfo* get_compound_default_type(const QoreTypeInfo* ti) {
+    if (QoreTypeInfo::hasDefaultValue(ti)) {
+        return ti;
+    }
+    const QoreTypeInfo* plain = get_or_nothing_base_type(ti);
+    return plain != ti && QoreTypeInfo::hasDefaultValue(plain) ? plain : ti;
+}
+
+//! returns true if the lvalue type is timeout or *timeout, which take a date operand as milliseconds
+static bool is_timeout_lvalue_type(const QoreTypeInfo* ti) {
+    return QoreTypeInfo::equal(get_or_nothing_base_type(ti), timeoutTypeInfo);
+}
+
 // Direct compound assignment helpers — avoid allocating temporary AST operator nodes
 // Inner function: perform += on an already-navigated LValueHelper.
 // Used by both evalPlusEquals (AST path) and LValuePathCompound (path-based).
@@ -18026,8 +18042,14 @@ QoreValue doPlusEqualsOnLValue(LValueHelper& v, ValueHolder& right_holder, Excep
 
     if (vtype == NT_NOTHING || vtype == NT_NULL) {
         const QoreTypeInfo* typeInfo = v.getTypeInfo();
-        if (QoreTypeInfo::hasDefaultValue(typeInfo)) {
-            if (v.assign(QoreTypeInfo::getDefaultQoreValue(typeInfo), "<lvalue for += operator>")) {
+        // the type whose default value the lvalue takes; an or-nothing lvalue (*T) takes the default value of T
+        const QoreTypeInfo* default_ti = get_compound_default_type(typeInfo);
+        if (right.isNothing() && get_or_nothing_base_type(typeInfo) != typeInfo) {
+            // an or-nothing lvalue keeps no value for an operand with no value
+            return QoreValue();
+        }
+        if (QoreTypeInfo::hasDefaultValue(default_ti)) {
+            if (v.assign(QoreTypeInfo::getDefaultQoreValue(default_ti), "<lvalue for += operator>")) {
                 return QoreValue();
             }
             vtype = v.getType();
@@ -18109,7 +18131,7 @@ QoreValue doPlusEqualsOnLValue(LValueHelper& v, ValueHolder& right_holder, Excep
         }
     } else {
         // if the lvalue is a timeout, then convert any date/time value as if it were a timeout
-        if (right.getType() == NT_DATE && QoreTypeInfo::equal(v.getTypeInfo(), timeoutTypeInfo)) {
+        if (right.getType() == NT_DATE && is_timeout_lvalue_type(v.getTypeInfo())) {
             int64 ms = right.get<const DateTimeNode>()->getRelativeMilliseconds();
             return v.plusEqualsBigInt(ms);
         }
@@ -18142,10 +18164,12 @@ QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, Excepti
 
     if (vtype == NT_NOTHING) {
         const QoreTypeInfo* typeInfo = v.getTypeInfo();
+        // an or-nothing lvalue (*T) takes the default value of T
+        const QoreTypeInfo* default_ti = get_compound_default_type(typeInfo);
         if (QoreTypeInfo::isHashType(typeInfo)) {
             return QoreValue();
-        } else if (QoreTypeInfo::hasDefaultValue(typeInfo)) {
-            if (v.assign(QoreTypeInfo::getDefaultQoreValue(typeInfo))) {
+        } else if (QoreTypeInfo::hasDefaultValue(default_ti)) {
+            if (v.assign(QoreTypeInfo::getDefaultQoreValue(default_ti))) {
                 return QoreValue();
             }
             vtype = v.getType();
@@ -18172,7 +18196,7 @@ QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, Excepti
     } else if (vtype == NT_DATE) {
         // the operation follows QoreMinusEqualsOperatorNode::evalImpl()
         // issue #3157: if the lvalue is a timeout, then convert any date/time value as if it were a timeout too
-        if (right.getType() == NT_DATE && QoreTypeInfo::equal(v.getTypeInfo(), timeoutTypeInfo)) {
+        if (right.getType() == NT_DATE && is_timeout_lvalue_type(v.getTypeInfo())) {
             int64 ms = right.get<const DateTimeNode>()->getRelativeMilliseconds();
             return v.minusEqualsBigInt(ms);
         }
@@ -18229,11 +18253,15 @@ QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, Excepti
     } else {
         if (right.getType() == NT_DATE) {
             // if the lvalue is a timeout, convert date/time value as timeout
-            if (QoreTypeInfo::equal(v.getTypeInfo(), timeoutTypeInfo)) {
+            if (is_timeout_lvalue_type(v.getTypeInfo())) {
                 int64 ms = right.get<const DateTimeNode>()->getRelativeMilliseconds();
                 return v.minusEqualsBigInt(ms);
             }
-            // any other lvalue subtracts the date's relative seconds, as the AST interpreter does
+            // an int lvalue (int, *int, softint) converts the date to an int, as the int-specialized operator does
+            if (QoreTypeInfo::isType(get_or_nothing_base_type(v.getTypeInfo()), NT_INT)) {
+                return v.minusEqualsBigInt(right.getAsBigInt());
+            }
+            // any other lvalue subtracts the date's relative seconds
             return v.minusEqualsBigInt(right.get<const DateTimeNode>()->getRelativeSeconds());
         }
         // do integer minus-equals
