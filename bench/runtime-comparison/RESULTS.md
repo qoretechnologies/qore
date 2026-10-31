@@ -31798,3 +31798,73 @@ The initial build failed on an LLVM pointer-type conditional expression and was 
 [Complete evidence](results-cleared-reload-trackers-rejection-macos-arm64.json) and [all 62 audit checks](audit-cleared-reload-trackers-rejection.md). No Debug or short-workload retention pass follows the rejected broader tradeoff. No fresh Java/develop comparison or maximum-performance claim.
 
 Next investigate combining the prepared mutation and owned root reload when the arithmetic result is unused. Preserve generic fallback, result disposal, pending-error and throwing paths, reflection, root ownership and deferred cleanup. This is a separate hypothesis requiring proof and fresh measurements.
+
+
+## Fused indexed update and owned reload rejected (2026-10-31)
+
+Copyright 2026 Qore Technologies, s.r.o.
+
+Two candidates combine a prepared indexed integer update with acquisition of the owned local root. Both preserve actual strong-list identity/type/uniqueness guards, fallback reflection, arithmetic-result lifetime, deferred root ownership and language cancellation. Both are rejected. Product source matches HEAD exactly. The rebuilt qore/qcc binaries match the validated 9ec checkpoint byte-for-byte; libqore differs only in the embedded Git revision (9ec to docs-only ab0), its dependent Mach-O UUID and code signature. All other library bytes, including executable code, match exactly. The installed runtime remains the validated 9ec checkpoint.
+
+The first helper writes the arithmetic result into its existing registered cleanup slot before evaluating the root, then returns one owned root. Generic RHS/index holders finish destruction before root evaluation. Native throwing mutation errors bypass the reload; pending reload errors retain the normal publication/check order. The output pointer adds cleanup bookkeeping: 85 to 91 static decref calls in the target body, including cold paths. The combined helper has a 176 byte frame; the original update helper has 128 bytes and separate load 64 bytes. The caller remains 352 bytes and shrinks 814 to 809 instructions. The pilot regresses local/imported mutation 0.81%/1.40% and list construction 6.50%; this version is rejected without a broader retention pass.
+
+The second candidate returns a trivial two-word aggregate containing the owned root and inline arithmetic result. It only succeeds for guarded inline integer updates; a miss changes no value/ownership/error and follows the existing mutation, result publication and root reload. Native C++/LLVM probing verifies the six-argument ABI and both returned fields. The target is resolved in emitObjectFile: ARM64 Darwin retains the call; unsupported targets replace it with a constant miss before native code generation. O0/O3 object checks for ARM64 Darwin, x86-64 Darwin and ARM64 Linux confirm selection and absence of unsupported ABI calls. Foreign objects are not executed.
+
+This inline-only probe avoids the output pointer and extra cleanup calls. The target still has 85 static decrefs and a 352 byte caller frame; caller instructions grow 814 to 827. The probe has 48 bytes/135 instructions, including its shrink-wrapped prologue. The ordinary prepared helper grows 128 to 144 bytes and 241 to 242 instructions; the separate load remains 64 bytes/95 instructions. All 18 baseline LLVM modules match the frozen baseline after metadata/identity normalization. Only local/imported listMutate bodies change across three layouts; 12 other modules are identical. Unchanged caller LLVM does not eliminate runtime placement effects.
+
+The pair pilot shows paired mutation gains of 1.03% local and 2.26% imported, with indirect/wide regressions 1.31%/3.94%. The broader 19 workload pass does not sustain the imported gain: local mutation improves 1.16%, imported regresses 0.30%; indirect and wide calls regress 4.85%/4.97% in every layout. Mixed workloads have small/mixed effects (CSV -1.05%, orders +0.33%, pipeline -0.58%, text -0.37%). This tradeoff does not justify the added helper/CFG, so the pair version is also rejected.
+
+Apple M4 Pro ARM64; Apple clang 21 / SDK 27.2 / LLVM 22.1.8. Release -O3 -DNDEBUG, allocation tracking off; fresh stripped qcc -O3 artifacts and separate frozen before/after runtimes with normal identity checks. Count 4096, seed 7; three warmup and three measured 100 ms windows; three symmetric ABBA/BAAB blocks per default/reverse/shuffle-487 layout, two processes per variant per block. Primary effects are median within-block ratios, then median across layouts; they differ from ratios of separately aggregated marginal times. Campaigns are reported separately and never pooled across time epochs. Whole kernels in ns/item, not isolated call latency.
+
+### Pointer-output pilot
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Marginal change|!Paired change
+|local:list_mutate|126.8884|127.2744|+0.30%|+0.81%
+|local:direct_call|1.5754|1.5771|+0.11%|+0.79%
+|micro:list_mutate|125.8099|127.5487|+1.38%|+1.40%
+|micro:indirect_call|8.2410|9.0305|+9.58%|+2.43%
+|micro:indirect_wide|8.6202|8.9168|+3.44%|+1.36%
+|micro:list_build|23.4660|24.9752|+6.43%|+6.50%
+
+### Inline-only pair pilot
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Marginal change|!Paired change
+|local:list_mutate|126.6291|124.8123|-1.43%|-1.03%
+|local:direct_call|1.5669|1.5725|+0.36%|+0.50%
+|micro:list_mutate|126.7302|123.6183|-2.46%|-2.26%
+|micro:indirect_call|8.1613|8.4618|+3.68%|+1.31%
+|micro:indirect_wide|8.7455|8.9696|+2.56%|+3.94%
+|micro:list_build|23.3549|23.3880|+0.14%|+1.17%
+
+### Inline-only pair broader tradeoff
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Marginal change|!Paired change
+|local:direct_call|1.5697|1.5773|+0.48%|-0.24%
+|local:polymorphic_call|15.6074|15.7824|+1.12%|+1.19%
+|local:list_mutate|125.0230|123.2940|-1.38%|-1.16%
+|local:dynamic_float_result_call|10.7168|10.8916|+1.63%|+1.66%
+|micro:indirect_call|8.3013|8.5059|+2.46%|+4.85%
+|micro:indirect_wide|8.5786|9.0156|+5.09%|+4.97%
+|micro:indirect_int_result|9.0054|8.8719|-1.48%|+2.96%
+|micro:indirect_float|9.3307|9.3501|+0.21%|+1.76%
+|micro:indirect_float_result|9.5301|9.4605|-0.73%|-0.74%
+|micro:indirect_tagged_float|9.8279|10.0210|+1.96%|+2.20%
+|micro:closure_call|19.2085|18.7975|-2.14%|-2.07%
+|micro:closure_capture|24.8584|24.9569|+0.40%|-0.54%
+|micro:list_build|23.3566|23.5242|+0.72%|+0.81%
+|micro:list_mutate|126.3565|124.5650|-1.42%|+0.30%
+|float:callback_loop_float_return|5.0395|5.0768|+0.74%|-0.45%
+|mixed:csv_report|984.6848|975.8143|-0.90%|-1.05%
+|mixed:object_orders|3357.0302|3342.9209|-0.42%|+0.33%
+|mixed:callback_pipeline|98.3078|97.9970|-0.32%|-0.58%
+|mixed:text_index|1405.4847|1395.7520|-0.69%|-0.37%
+
+All 1116 timed processes/3348 windows replay from raw output. Final Release qualification passes 5719 assertions for pointer output and 5733 for the pair variant, including aliases, reflected values, RHS destructor reflection, wide values, native EH, imported recursion and cancellation. Each final preparation checks 4698 reference outputs per variant across 36 artifacts. Recorded owned build/test/probe/codegen stages do not overlap timing. Neither rejected candidate is installed.
+
+Failed work is preserved. An initial fixture recursively reflected from its destructor; a recursion guard corrected it. A throwing-destructor fixture then exposed an existing baseline AST/IR/AOT difference: AST catches FUSED-RHS-DELETE, while frozen baseline IR/AOT let it escape. That remains a separate unresolved issue; the final fixture uses a throwing RHS function and keeps nonthrowing destructor reflection. A boxed index parameter did not qualify for the prepared helper; the selection fixture uses a native local index. An initial function enumerator and an address-indentation parser were corrected before timing. A capture/write-only annotation probe did not remove the pointer variant's extra hot cleanup and was not retained.
+
+The first pair build never selected its helper because lowering precedes target assignment; all 18 before/after LLVM modules were identical. Selection review rejected it before timing. The fixed test inspects post-optimization IR and requires a nonempty target triple. A native-frame parser initially scanned only the first 12 instructions and missed a shrink-wrapped 48 byte prologue; full-function review corrected it before timing. The first native ABI link lacked an explicit SDK sysroot. Executable cross-target qcc commands also produced an appended .o while its frontend checked the requested name; compile-only -c object generation completed the ABI checks. These failures are not counted as successful qualification.
+
+[Complete evidence](results-fused-indexed-reload-rejection-macos-arm64.json) and [all 62 audit checks](audit-fused-indexed-reload-rejection.md). No Debug/short retention campaign follows rejection. A strict byte-for-byte library comparison initially failed because recompilation refreshed the embedded Git revision. The final review compares all library bytes after masking that 40 byte field, LC_UUID and LC_CODE_SIGNATURE, and verifies every other file-backed section exactly. No new Java/develop comparison, application-weighted speedup or maximum-performance claim.
+
+Next outline the cold generic fallback from the existing prepared indexed-add helper while preserving the current ABI and caller LLVM. Confirm a smaller hot frame before fresh Release correctness and symmetric measurements; preserve all guards, RHS/index destruction order, exceptions, owned reload and cancellation.

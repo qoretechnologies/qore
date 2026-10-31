@@ -1671,3 +1671,6 @@ Floating callback load variants: [results](results-floating-callback-load-reject
 
 
 Cleared AOT reload trackers: [results](results-cleared-reload-trackers-rejection-macos-arm64.json), [audit](audit-cleared-reload-trackers-rejection.md). Rejected after 900 optimized processes / 2700 windows: imported mutation improves 1.50%, local mutation 0.14%, while indirect/wide/integer-result callbacks regress 4.59%/2.62%/3.29% in the broader paired pass. Validated runtime restored exactly.
+
+
+Fused indexed update/reload: [results](results-fused-indexed-reload-rejection-macos-arm64.json), [audit](audit-fused-indexed-reload-rejection.md). Two variants rejected after 1116 optimized processes/3348 windows. The broader pair run gives local mutation -1.16%, imported +0.30%, indirect +4.85%, wide +4.97%; production runtime code restored exactly.
