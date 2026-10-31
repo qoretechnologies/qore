@@ -645,6 +645,15 @@ public:
     */
     DLLLOCAL bool isUserModuleContext(const char* name);
 
+    //! Records that the user module in the current module context requires the given AOT user module
+    /** An AOT user module is a binary module, deleted in cleanup(); a user module that requires it can hold objects
+        of its classes, so a user module whose deletion is deferred to cleanup() is deleted before the AOT modules it
+        requires (see delUser())
+
+        @param name the name of the AOT user module imported
+    */
+    DLLLOCAL void trySetUserAotModuleDependency(const char* name);
+
     DLLLOCAL void trySetUserModule(const char* name) {
         md_map_t::iterator i = md_map.find(name);
         if (i == md_map.end()) {
@@ -805,6 +814,8 @@ protected:
     ModMap md_map;
     // user module dependent map: dependent -> module
     ModMap rmd_map;
+    // AOT user module dependency map: AOT user module -> the user modules that require it
+    ModMap aot_user_dep_map;
 
     // module blacklist — name and reason are stored as std::string so the map owns
     // its own copies; callers pass through ephemeral buffers (TempEncodingHelper
@@ -816,6 +827,15 @@ protected:
     // module hash
     typedef std::map<const char*, QoreAbstractModule*, ltstr> module_map_t;
     module_map_t map;
+
+    //! Returns the user modules that the AOT user modules left require, directly or through other user modules
+    DLLLOCAL strset_t getAotRequiredUserModules();
+
+    //! Returns true if the given user module requires itself through other user modules
+    DLLLOCAL bool isInUserModuleDependencyCycle(const std::string& name);
+
+    //! Deletes the user module at the given position of the module map, with the originals of its reinjections
+    DLLLOCAL void deleteUserModule(module_map_t::iterator i);
 
     // set of user modules with no dependencies
     strset_t umset;

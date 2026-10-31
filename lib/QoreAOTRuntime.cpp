@@ -11468,6 +11468,8 @@ struct AotModuleState {
         std::make_shared<QoreRecursiveThreadLock>();
     //! Modules that should be reexported (from %requires(reexport) directives)
     std::vector<std::string> reexport_deps;
+    //! Every module that this module requires; this module is deleted before them at shutdown
+    std::vector<std::string> deps;
     //! Serialized metadata retained only when deferred init cannot reuse an open reader.
     std::shared_ptr<const std::vector<uint8_t>> metadata;
     //! Reader opened during module_init and reused by deferred ns_init work.
@@ -11504,6 +11506,20 @@ struct AotModuleState {
     module-manager mutex while running module init code, so this state cannot rely on QoreModuleManager locking.
 */
 static std::unordered_map<std::string, AotModuleState> aot_module_map;
+
+//! Returns the names of the modules that an AOT module requires: its providers and its imports
+static std::vector<std::string> aotModuleDependencyNames(const std::vector<std::string>& providers,
+        const std::vector<std::string>* imports = nullptr) {
+    std::vector<std::string> rv = providers;
+    if (imports) {
+        for (const std::string& dep : *imports) {
+            if (std::find(rv.begin(), rv.end(), dep) == rv.end()) {
+                rv.push_back(dep);
+            }
+        }
+    }
+    return rv;
+}
 
 static bool useAOTSharedInitMetadata() {
     static constinit QoreEnvFlag enabled_env("QORE_DISABLE_AOT_SHARED_INIT_METADATA");
@@ -13385,6 +13401,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
         state.funcs = functions;
         state.num_funcs = num_functions;
         state.reexport_deps = std::move(reexport_deps);
+        state.deps = aotModuleDependencyNames(deps);
         state.path = label ? label : "";
         aot_module_map[mod_name] = std::move(state);
     }
@@ -13745,6 +13762,42 @@ DLLLOCAL int qore_aot_initialize_module(const char* name, ExceptionSink& xsink) 
     return xsink ? -1 : 0;
 }
 
+DLLLOCAL void qore_aot_clear_all_module_opaque_targets(ExceptionSink& xsink) {
+    std::vector<QoreProgram*> programs;
+    {
+        AutoLocker aot_state_al(get_aot_module_state_lock());
+        for (auto& entry : aot_module_map) {
+            if (entry.second.pgm) {
+                programs.push_back(entry.second.pgm);
+            }
+        }
+    }
+    for (QoreProgram* pgm : programs) {
+        qore_program_private::get(*pgm)->clearOpaqueTargets(&xsink);
+    }
+}
+
+DLLLOCAL bool qore_aot_get_module_dependencies(const char* name, std::vector<std::string>& deps) {
+    AutoLocker aot_state_al(get_aot_module_state_lock());
+    auto it = aot_module_map.find(name);
+    if (it == aot_module_map.end()) {
+        return false;
+    }
+    deps = it->second.deps;
+    return true;
+}
+
+DLLLOCAL bool qore_aot_module_has_dependent(const char* name) {
+    AutoLocker aot_state_al(get_aot_module_state_lock());
+    for (auto& entry : aot_module_map) {
+        if (entry.first != name
+                && std::find(entry.second.deps.begin(), entry.second.deps.end(), name) != entry.second.deps.end()) {
+            return true;
+        }
+    }
+    return false;
+}
+
 DLLLOCAL void qore_aot_clear_all_module_namespace_data(ExceptionSink& xsink) {
     std::vector<QoreProgram*> programs;
     {
@@ -13977,6 +14030,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
         state.funcs = functions;
         state.num_funcs = num_functions;
         state.reexport_deps = std::move(reexport_deps);
+        state.deps = aotModuleDependencyNames(deps, &import_deps);
         state.path = label ? label : "";
         aot_module_map[mod_name] = std::move(state);
     }
@@ -15879,6 +15933,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
         state.funcs = functions;
         state.num_funcs = num_functions;
         state.reexport_deps = std::move(reexport_deps);
+        state.deps = aotModuleDependencyNames(deps, &import_deps);
         if (!init_descriptors.empty()) {
             state.init_descriptors = std::make_shared<const std::vector<AOTInitFuncDescriptor>>(
                 std::move(init_descriptors));

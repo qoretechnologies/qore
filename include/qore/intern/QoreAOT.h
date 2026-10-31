@@ -755,6 +755,20 @@ DLLLOCAL const QoreClass* qore_aot_resolve_class_ref(QoreProgram* pgm,
  */
 DLLLOCAL void qore_aot_clear_all_module_namespace_data(ExceptionSink& xsink);
 
+//! Breaks the cycles held up by opaque references that the Programs of all registered AOT user modules own
+/** Called at shutdown while the Programs of all modules still exist, so that the destructors of the objects
+    released run while the Programs of their classes exist; see QoreModuleManager::delUser()
+ */
+DLLLOCAL void qore_aot_clear_all_module_opaque_targets(ExceptionSink& xsink);
+
+//! Gets the modules that the registered AOT user module \a name requires; returns false if it is not one
+DLLLOCAL bool qore_aot_get_module_dependencies(const char* name, std::vector<std::string>& deps);
+
+//! Returns true if a registered AOT user module other than \a name requires the module \a name
+/** Used at shutdown to delete an AOT user module only after the AOT user modules that require it
+ */
+DLLLOCAL bool qore_aot_module_has_dependent(const char* name);
+
 //! AOT compiler class — compiles a parsed QoreProgram to a standalone executable
 class QoreAOT {
 public:

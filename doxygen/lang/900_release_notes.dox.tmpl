@@ -5366,8 +5366,9 @@ while (*binary chunk = input.read(65536)) {
       module owning them was deleted, which could be after the modules owning the classes of the objects they
       referred to.  Destructors then failed with unhandled \c PROGRAM-ERROR exceptions (<em>the Program accessed has
       already been deleted</em>) on stderr, for example those of the schemas that the Stripe data provider caches
-      when it is loaded with other provider modules.  A user module is now deleted only after every user module that
-      requires it, and objects held through opaque references by module Programs are released while all module
+      when it is loaded with other provider modules.  A module is now deleted only after every module that requires
+      it, including AOT-compiled modules (.qmod) and source modules that AOT-compiled modules require, and objects
+      held through opaque references by the Programs of source and AOT-compiled modules are released while all module
       Programs still exist
     - a debugged program could get a deleted @ref Qore::ProgramControl "ProgramControl" object in a debugger callback,
       such as \c onAttach() or \c onStep(), when another thread released the last reference to the object at the
