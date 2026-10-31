@@ -40,6 +40,7 @@ DLLLOCAL QoreClass *initDebugProgramClass(QoreNamespace& ns);
 #include <qore/QoreDebugProgram.h>
 #include <qore/ReferenceArgumentHelper.h>
 #include "qore/intern/qore_thread_intern.h"
+#include "qore/intern/qore_program_private.h"
 
 // class needed to handle calls from C++ to Qore script instance
 class QoreDebugProgramWithQoreObject: public QoreDebugProgram {
