@@ -732,7 +732,11 @@ sse.setEventQueue();
         }
         # remove the "token" option and use it if the Authorization header is not set
         if ((*string token = remove http_opts.token) && !http_opts.headers.Authorization) {
-            http_opts.headers.Authorization = sprintf("%s %s", http_opts.token_type ?? "Bearer", token);
+            # the header is set in an "auto!" local: a caller's headers option may be narrowed (e.g.
+            # hash<string, int> for {"X-Count": 1}), and adding the Authorization header would throw
+            hash<auto!> hdr = http_opts.headers ?? {};
+            hdr.Authorization = sprintf("%s %s", http_opts.token_type ?? "Bearer", token);
+            http_opts.headers = hdr;
         }
         # unconditionally remove any "token_type" option
         remove http_opts.token_type;
@@ -840,7 +844,8 @@ sse.setEventQueue();
     }
 
     private static hash<auto> getAsyncApiHeaders(hash<auto> event) {
-        hash<auto> headers;
+        # an event with none of these fields has an empty header hash
+        hash<auto> headers = {};
         foreach string key in (("event", "id", "retry", "comment")) {
             if (exists event{key}) {
                 headers{key} = event{key};

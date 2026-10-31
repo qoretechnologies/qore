@@ -138,6 +138,12 @@ sse.observersReady();
     @section serversenteventclient_relnotes ServerSentEventClient Release History
 
     @subsection serversenteventclient_v1_1 Version 1.1
+    - fixed the \c token option with a \c headers option whose values all have the same type, such as a literal
+      <tt>{"X-Count": 1}</tt>: adding the \c Authorization header raised \c RUNTIME-TYPE-ERROR in
+      @ref ServerSentEventClient::ServerSentEventClient "ServerSentEventClient" and
+      @ref ServerSentEventClient::ServerSentEventConnection "ServerSentEventConnection"; an incoming event with
+      none of the \c event, \c id, \c retry and \c comment fields that is validated against an AsyncAPI schema
+      also raised \c RUNTIME-TYPE-ERROR
     - the connect log message gives the URL without its password
     - @ref ServerSentEventClient::ServerSentEventClientDataProvider "ServerSentEventClientDataProvider" receives
       events with @ref ServerSentEventClient::ServerSentEventClientIo "ServerSentEventClientIo"; a synchronous client
