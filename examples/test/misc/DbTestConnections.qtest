@@ -30,6 +30,7 @@ class DbTestConnectionsTest inherits QUnit::Test {
         hash<auto> env = {
             "QORE_DB_CONNSTR_MYSQL": "mysql:u/p@db%mysql",
             "QORE_DB_CONNSTR_FREETDS": "freetds:u/p@db%mssql",
+            "QORE_DB_CONNSTR_SYBASE": "sybase:u/p@db%sybase",
             "QORE_DB_CONNSTR_PGSQL": "pgsql:u/p@db%pgsql",
             "QORE_DB_CONNSTR_ORACLE": "oracle:u/p@db",
             "QORE_DB_CONNSTR": "sqlite3:@/tmp/x.db",
@@ -38,7 +39,8 @@ class DbTestConnectionsTest inherits QUnit::Test {
         };
         list<hash<DbTestConnection>> l = DbTestConnections::get(NOTHING, env);
         assertEq(("QORE_DB_CONNSTR:sqlite3", "QORE_DB_CONNSTR_PGSQL:pgsql", "QORE_DB_CONNSTR_ORACLE:oracle",
-            "QORE_DB_CONNSTR_MYSQL:mysql", "QORE_DB_CONNSTR_FREETDS:freetds"), describe(l),
+            "QORE_DB_CONNSTR_MYSQL:mysql", "QORE_DB_CONNSTR_FREETDS:freetds", "QORE_DB_CONNSTR_SYBASE:sybase"),
+            describe(l),
             "every connection variable gives a connection, in the order of DbTestConnections::EnvVars");
         assertEq("mysql:u/p@db%mysql", l[3].connstr, "the connection has its datasource string");
     }
