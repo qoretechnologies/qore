@@ -1097,10 +1097,10 @@ bool QoreModuleManager::isUserModuleContext(const char* name) {
     return def_name && !strcmp(def_name, name);
 }
 
-void QoreModuleManager::trySetUserAotModuleDependency(const char* name) {
+void QoreModuleManager::trySetUserBinaryModuleDependency(const char* name) {
     const char* old_name = get_module_context_name();
     if (old_name && strcmp(old_name, name) && isUserModuleContext(old_name)) {
-        aot_user_dep_map.addDep(name, old_name);
+        binary_user_dep_map.addDep(name, old_name);
     }
 }
 
@@ -1197,10 +1197,11 @@ void QoreBuiltinModule::addToProgramImpl(QoreProgram* tpgm, ExceptionSink& xsink
     const bool is_aot_user = qore_is_aot_user_module(name.c_str());
     if (is_aot_user) {
         qore_program_private::get(*tpgm)->addUserFeature(name.c_str());
-        QMM.trySetUserAotModuleDependency(name.c_str());
     } else {
         tpgm->addFeature(name.c_str());
     }
+    // a user module importing a binary module can hold objects of its classes, so it is deleted first
+    QMM.trySetUserBinaryModuleDependency(name.c_str());
 
     // Make sure getProgram() returns this Program when module_ns_init() is called.
     // A call-only context is not enough when a child Program loads a module from
@@ -4132,14 +4133,30 @@ void QoreModuleManager::delUser() {
         qore_aot_clear_all_module_opaque_targets(xsink);
     }
 
-    // Phase 2 - delete user modules in dependency order
-    // A user module that an AOT user module requires, directly or through other user modules, is deleted after it in
-    // cleanup(), as AOT user modules are binary modules; it can hold objects of the user module's classes
-    strset_t aot_required = getAotRequiredUserModules();
+    // Phase 2 - delete the user modules and the native binary modules in dependency order
+    // - a native binary module (a binary module that is not an AOT module) is deleted first, as soon as no module left
+    //   requires it: it can own Programs that it deletes only when it is deleted (the jni module's global context
+    //   Program), whose data is not cleared above and can hold objects of the classes of any module imported into
+    //   them; deleting it here releases them while the Programs of their classes exist, and while the services that
+    //   destructors use (the asynchronous I/O controller and thread pools, stopped after delUser()) still run
+    // - a user module is deleted after the user modules requiring it, and not while it is imported into a Program that
+    //   still holds data (one that a binary module owns), which can hold objects of its classes
+    // - a user module that an AOT user module requires, directly or through other user modules, is left to cleanup(),
+    //   as AOT user modules are binary modules deleted there, which can hold objects of its classes; so are the user
+    //   modules imported into Programs that still hold data once no other module can be deleted here, and the native
+    //   binary modules that AOT modules require
+    strset_t left;
     while (true) {
+        if (deleteUnrequiredNativeModule()) {
+            continue;
+        }
+        // the user modules imported into Programs that still hold data
+        strset_t held;
+        qore_program_private::getUserFeaturesOfProgramsWithData(held);
+        left = getUserModulesLeftForCleanup(held);
         // a user module that no other user module requires
         strset_t::iterator ui = umset.begin();
-        while (ui != umset.end() && aot_required.find(*ui) != aot_required.end()) {
+        while (ui != umset.end() && left.find(*ui) != left.end()) {
             ++ui;
         }
         if (ui != umset.end()) {
@@ -4149,11 +4166,11 @@ void QoreModuleManager::delUser() {
             deleteUserModule(i);
             continue;
         }
-        // the user modules left are required by AOT user modules, or they are in a dependency cycle or required by
-        // one; a cycle is broken by deleting one of its modules
+        // the user modules left are left to cleanup(), or they are in a dependency cycle or required by one; a cycle
+        // is broken by deleting one of its modules
         module_map_t::iterator i = map.end();
         for (module_map_t::iterator j = map.begin(), e = map.end(); j != e; ++j) {
-            if (!j->second->isUser() || aot_required.find(j->first) != aot_required.end()) {
+            if (!j->second->isUser() || left.find(j->first) != left.end()) {
                 continue;
             }
             if (i == map.end()) {
@@ -4173,7 +4190,7 @@ void QoreModuleManager::delUser() {
 
 #ifdef DEBUG
     for (module_map_t::iterator i = map.begin(), e = map.end(); i != e; ++i) {
-        if (i->second->isUser() && aot_required.find(i->first) == aot_required.end()) {
+        if (i->second->isUser() && left.find(i->first) == left.end()) {
             printd(0, "QoreModuleManager::delUser() '%s' %p not yet removed\n", i->second->getName(), i->second);
 
             for (md_map_t::iterator i = md_map.begin(), e = md_map.end(); i != e; ++i) {
@@ -4194,15 +4211,23 @@ void QoreModuleManager::delUser() {
 #endif
 
     // the dependencies are all released unless user modules are left for cleanup()
-    assert(!aot_required.empty() || (md_map.empty() && rmd_map.empty()));
+    assert(!left.empty() || (md_map.empty() && rmd_map.empty()));
 }
 
-strset_t QoreModuleManager::getAotRequiredUserModules() {
+strset_t QoreModuleManager::getUserModulesLeftForCleanup(const strset_t& held) {
     strset_t rv;
     std::vector<std::string> pending;
+    // the user modules that AOT user modules require
     for (module_map_t::iterator i = map.begin(), e = map.end(); i != e; ++i) {
         if (i->second->isUser() && qore_aot_module_has_dependent(i->first)) {
             pending.push_back(i->first);
+        }
+    }
+    // the user modules imported into Programs that still hold data
+    for (const std::string& name : held) {
+        module_map_t::iterator i = map.find(name.c_str());
+        if (i != map.end() && i->second->isUser()) {
+            pending.push_back(name);
         }
     }
     // add the user modules that they require
@@ -4220,6 +4245,55 @@ strset_t QoreModuleManager::getAotRequiredUserModules() {
         }
     }
     return rv;
+}
+
+bool QoreModuleManager::getBinaryModuleDependencies(module_map_t::const_iterator i, std::vector<std::string>& deps) {
+    assert(!i->second->isUser());
+    assert(i->second->isBuiltin());
+    if (qore_aot_get_module_dependencies(i->first, deps)) {
+        return false;
+    }
+    const QoreBuiltinModule* bm = static_cast<const QoreBuiltinModule*>(i->second);
+    if (bm->isAot()) {
+        return false;
+    }
+    deps = bm->getDependencies();
+    return true;
+}
+
+bool QoreModuleManager::deleteUnrequiredNativeModule() {
+    // the modules that the binary modules left and the user modules left require
+    strset_t required;
+    // the native binary modules left
+    std::vector<module_map_t::iterator> native_mods;
+    for (module_map_t::iterator i = map.begin(), e = map.end(); i != e; ++i) {
+        if (i->second->isUser()) {
+            continue;
+        }
+        std::vector<std::string> deps;
+        if (getBinaryModuleDependencies(i, deps)) {
+            native_mods.push_back(i);
+        }
+        required.insert(deps.begin(), deps.end());
+    }
+    for (md_map_t::iterator i = binary_user_dep_map.begin(), e = binary_user_dep_map.end(); i != e; ++i) {
+        for (const std::string& user : i->second) {
+            if (map.find(user.c_str()) != map.end()) {
+                required.insert(i->first);
+                break;
+            }
+        }
+    }
+    for (module_map_t::iterator i : native_mods) {
+        if (required.find(i->first) == required.end()) {
+            printd(5, "QoreModuleManager::deleteUnrequiredNativeModule() deleting '%s'\n", i->first);
+            QoreAbstractModule* m = i->second;
+            map.erase(i);
+            delete m;
+            return true;
+        }
+    }
+    return false;
 }
 
 bool QoreModuleManager::isInUserModuleDependencyCycle(const std::string& name) {
@@ -4258,6 +4332,20 @@ void QoreModuleManager::deleteUserModule(module_map_t::iterator i) {
     delete m;
 }
 
+//! The deletion rank of a module that cleanup() can delete: the module with the lowest rank is deleted first
+enum class CleanupRank {
+    //! a native binary module: it can own Programs holding objects of the classes of any module loaded
+    NATIVE = 0,
+    //! a user module that a native binary module left needs deleted first: it requires one, maybe indirectly
+    NATIVE_DEPENDENT_USER = 1,
+    //! an AOT module that a native binary module left needs deleted first
+    NATIVE_DEPENDENT_AOT = 2,
+    //! another user module
+    USER = 3,
+    //! another AOT module
+    AOT = 4,
+};
+
 void QoreModuleManager::cleanup() {
     QORE_TRACE("ModuleManager::cleanup()");
 
@@ -4267,11 +4355,25 @@ void QoreModuleManager::cleanup() {
         qore_aot_clear_all_module_opaque_targets(xsink);
     }
 
-    // a module is deleted only after the modules that require it, which can hold objects of its classes: AOT user
-    // modules and the user modules left by delUser(), which AOT user modules require; user modules are deleted
-    // first, as in delUser(), and other modules in the order of their names
+    // The modules left are deleted so that the classes of a module outlive every object of them:
+    // - a module is deleted only after the modules that require it, which can hold objects of its classes (in the
+    //   constants of their Programs, which are released only when the module is deleted): AOT user modules, native
+    //   binary modules, and the user modules left by delUser() (see getUserModulesLeftForCleanup())
+    // - of the modules that can be deleted, a native binary module (a binary module that is not an AOT module) is
+    //   deleted first: it can own Programs that it deletes only when it is deleted (the jni module's global context
+    //   Program, for example), which can hold objects of the classes of any module imported into them, user and AOT
+    //   modules that no recorded dependency links to the native module; then the modules that a native binary module
+    //   left requires (directly or indirectly), as they must be deleted before it; then the other modules
+    // - user modules are deleted before AOT user modules of the same rank, and modules of the same rank in the order
+    //   of their names
+    // The data of the user and AOT module Programs has been cleared in delUser() and above, while all module Programs
+    // existed, and the native binary modules that no module required have been deleted in delUser(); a native binary
+    // module left here is required by an AOT module or by a user module left.  A dependency cycle is broken at the
+    // module of the lowest rank.
     // module -> the modules left that it requires
     std::map<std::string, std::vector<std::string>> required_mods;
+    // the native binary modules left
+    strset_t native_mods;
     for (module_map_t::iterator i = map.begin(), e = map.end(); i != e; ++i) {
         std::vector<std::string>& req = required_mods[i->first];
         if (i->second->isUser()) {
@@ -4279,12 +4381,14 @@ void QoreModuleManager::cleanup() {
             if (deps) {
                 req.assign(deps->begin(), deps->end());
             }
-        } else {
-            qore_aot_get_module_dependencies(i->first, req);
+            continue;
+        }
+        if (getBinaryModuleDependencies(i, req)) {
+            native_mods.insert(i->first);
         }
     }
-    // a user module requiring an AOT user module
-    for (md_map_t::iterator i = aot_user_dep_map.begin(), e = aot_user_dep_map.end(); i != e; ++i) {
+    // a user module requiring a binary module
+    for (md_map_t::iterator i = binary_user_dep_map.begin(), e = binary_user_dep_map.end(); i != e; ++i) {
         for (const std::string& user : i->second) {
             auto ri = required_mods.find(user);
             if (ri != required_mods.end()) {
@@ -4309,23 +4413,56 @@ void QoreModuleManager::cleanup() {
         i.second.assign(seen.begin(), seen.end());
     }
     while (!map.empty()) {
-        module_map_t::iterator i = map.end();
-        for (module_map_t::iterator j = map.begin(), e = map.end(); j != e; ++j) {
-            auto di = dependents.find(j->first);
-            if (di == dependents.end() || !di->second) {
-                if (j->second->isUser()) {
-                    i = j;
-                    break;
+        // the native binary modules left and the modules that require one of them, directly or indirectly
+        strset_t native_reach = native_mods;
+        bool changed = true;
+        while (changed) {
+            changed = false;
+            for (auto& i : required_mods) {
+                if (native_reach.find(i.first) != native_reach.end()) {
+                    continue;
                 }
-                if (i == map.end()) {
-                    i = j;
+                for (const std::string& dep : i.second) {
+                    if (native_reach.find(dep) != native_reach.end()) {
+                        native_reach.insert(i.first);
+                        changed = true;
+                        break;
+                    }
                 }
             }
         }
-        // if every module left is required by another one, the modules left are in a cycle, which is broken here
-        if (i == map.end()) {
-            i = map.begin();
+        auto get_rank = [&](module_map_t::iterator j) -> CleanupRank {
+            if (native_mods.find(j->first) != native_mods.end()) {
+                return CleanupRank::NATIVE;
+            }
+            bool user = j->second->isUser();
+            if (native_reach.find(j->first) != native_reach.end()) {
+                return user ? CleanupRank::NATIVE_DEPENDENT_USER : CleanupRank::NATIVE_DEPENDENT_AOT;
+            }
+            return user ? CleanupRank::USER : CleanupRank::AOT;
+        };
+        // the module of the lowest rank that no module left requires; if every module left is required by another
+        // one, the modules left are in a cycle, which is broken at the module of the lowest rank
+        module_map_t::iterator i = map.end();
+        CleanupRank rank = CleanupRank::AOT;
+        for (int pass = 0; pass < 2 && i == map.end(); ++pass) {
+            for (module_map_t::iterator j = map.begin(), e = map.end(); j != e; ++j) {
+                if (!pass) {
+                    auto di = dependents.find(j->first);
+                    if (di != dependents.end() && di->second) {
+                        continue;
+                    }
+                }
+                CleanupRank r = get_rank(j);
+                if (i == map.end() || r < rank) {
+                    i = j;
+                    rank = r;
+                }
+            }
         }
+        assert(i != map.end());
+        printd(5, "QoreModuleManager::cleanup() deleting '%s' (rank %d)\n", i->first, static_cast<int>(rank));
+        native_mods.erase(i->first);
         if (i->second->isUser()) {
             deleteUserModule(i);
         } else {

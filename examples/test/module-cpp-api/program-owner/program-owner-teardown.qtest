@@ -1,0 +1,227 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# The tdpgmowner test module (examples/test/module-cpp-api) is built into the build tree and never installed, so
+# QORE_MODULE_DIR must include the build tree (run_tests.sh does this)
+
+# A native binary module can own a Program that it deletes only when the module is deleted (the jni module's global
+# context Program); the data of that Program can hold objects of the classes of the user and AOT modules imported
+# into it, so the binary module must be deleted at teardown while the Programs of those modules exist, and a module
+# that requires the binary module must still be deleted before it (see "Module Teardown Order" in
+# design/qore-module-structure.md).  Each case runs a qore subprocess (in the execution mode of this test) that loads
+# tdpgmowner and makes it own a Program that imports TdOwnedGuard and keeps two TdOwnedGuard::Guard objects, one in a
+# global variable of the owned Program and one in a class static variable shared with the TdOwnedGuard Program; the
+# destructors of the guards call a function of TdOwnedGuard, from a ThreadPool task when tdpgmowner is deleted while
+# the library's services run.  With "user", the main program also loads TdOwnedUser, which requires tdpgmowner and
+# holds an object of a tdpgmowner class in a constant: tdpgmowner raises an exception if the object is destroyed after
+# the module was deleted.  The modules are loaded from their source and compiled to AOT modules (.qmod) with qcc; an
+# AOT module requiring tdpgmowner (TdOwnedUser) is deleted at the end of the teardown, so tdpgmowner is deleted then
+# too, when no ThreadPool can run.  A case passes if the subprocess exits with status 0, prints nothing on stderr (an
+# unhandled exception at teardown is printed there and makes the exit status 3), and the guard destructors run.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+
+%exec-class ProgramOwnerTeardownTest
+
+#! the result of a qore subprocess
+hashdecl ProgramOwnerRunResult {
+    #! the exit status
+    int rc;
+    #! the output on stdout
+    string out;
+    #! the output on stderr
+    string err;
+}
+
+class ProgramOwnerTeardownTest inherits QUnit::Test {
+    public {
+        #! the test modules
+        const Modules = ("TdOwnedGuard", "TdOwnedUser");
+
+        #! the code that the owned Program runs: it keeps guards in a global and in a class static variable
+        /** "{pool}" is replaced with whether the destructors of the guards run a ThreadPool task
+        */
+        const OwnedCode = "%new-style\n"
+            "%requires TdOwnedGuard\n"
+            "our TdOwnedGuard::Guard g = new TdOwnedGuard::Guard(\"owned global guard\", {pool});\n"
+            "TdOwnedGuard::Guard::hold(\"owned static guard\", {pool});\n";
+
+        #! the lines that the guard destructors print, sorted
+        const GuardLines = (
+            "owned global guard destroyed by TdOwnedGuard",
+            "owned static guard destroyed by TdOwnedGuard",
+        );
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        *string exec_mode;
+        #! the directory of the tdpgmowner module
+        string owner_dir;
+        TmpDir tmp("qore-program-owner-teardown-");
+        #! the error compiling the modules to AOT modules, if any
+        *string compile_error;
+        #! true once the AOT modules have been prepared
+        bool aot_prepared;
+        #! the number of subprocesses run
+        int runs;
+    }
+
+    constructor() : Test("ProgramOwnerTeardownTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        exec_mode = ProgramOwnerTeardownTest::getExecMode();
+        owner_dir = ProgramOwnerTeardownTest::findOwnerModuleDir();
+        foreach string config in (("source", "aot")) {
+            foreach string how in (("parse", "runtime")) {
+                foreach bool user in ((False, True)) {
+                    string name = sprintf("%s modules, %s load%s", config, how,
+                        user ? ", with a module requiring the owner" : ", with a ThreadPool task in the destructors");
+                    addTestCase(name, makeTestCase(config, how, user));
+                }
+            }
+        }
+        addTestCase("an owned Program holding objects of its own classes", \testOwnClasses());
+        addTestCase("an owned Program that cannot be parsed", \testParseError());
+        set_return_value(main());
+    }
+
+    #! returns the code of a test case; each case has its own copy of the arguments
+    private code makeTestCase(string config, string how, bool user) {
+        return sub () { testTeardown(config, how, user); };
+    }
+
+    private testTeardown(string config, string how, bool user) {
+        string dir = getModuleDir(config);
+        # an AOT module requiring tdpgmowner is deleted at the end of the teardown, when no ThreadPool can run, and
+        # tdpgmowner after it; tdpgmowner is deleted while the library's services run in the other cases, which only
+        # the case with the source of TdOwnedUser checks with a ThreadPool too
+        bool pool = !user || config == "source";
+        hash<ProgramOwnerRunResult> r = run(dir, how, replace(OwnedCode, "{pool}", pool ? "True" : "False"),
+            user ? ("user",) : ());
+        assertEq("", r.err, "stderr");
+        assertEq(0, r.rc, "exit status; stderr: " + r.err);
+        list<string> lines = map $1, r.out.split("\n"), $1.val();
+        assertEq("main done", lines[0], "stdout: " + r.out);
+        assertEq(GuardLines, sort(lines[1..]), "stdout: " + r.out);
+    }
+
+    #! the objects of classes that the owned Program defines are destroyed when the owner is deleted
+    testOwnClasses() {
+        string code = "%new-style\n"
+            "class LocalGuard { destructor() { print(\"local guard destroyed\\n\"); } }\n"
+            "our LocalGuard g = new LocalGuard();\n";
+        hash<ProgramOwnerRunResult> r = run(get_script_dir(), "runtime", code);
+        assertEq("", r.err, "stderr");
+        assertEq(0, r.rc, "exit status; stderr: " + r.err);
+        assertEq("main done\nlocal guard destroyed\n", r.out, "stdout");
+    }
+
+    #! a Program that cannot be parsed is deleted with the owner, and only the parse error is reported
+    testParseError() {
+        hash<ProgramOwnerRunResult> r = run(get_script_dir(), "runtime",
+            "%new-style\n%requires TdNoSuchOwnedModule\n");
+        # the exception is unhandled in the main program, which ends before printing anything
+        assertEq("", r.out, "stdout");
+        assertRegex("LOAD-MODULE-ERROR", r.err, "stderr");
+        assertNRegex("PROGRAM-ERROR", r.err, "stderr");
+        assertNeq(0, r.rc, "exit status");
+        # not a crash
+        assertLt(128, r.rc, "exit status; stderr: " + r.err);
+    }
+
+    #! returns the module directory of the given configuration, compiling its modules first if necessary
+    private string getModuleDir(string config) {
+        if (config == "source") {
+            return get_script_dir();
+        }
+        string dir = tmp.path + DirSep + config;
+        if (!aot_prepared) {
+            aot_prepared = True;
+            mkdir(dir, 0700);
+            foreach string mod in (Modules) {
+                string qmod = dir + DirSep + mod + ".qmod";
+                string out = backquote(sprintf("env LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s "
+                    "QORE_MODULE_DIR=%s %s --module --strip-source -o %s %s 2>&1",
+                    ProgramOwnerTeardownTest::shellQuote(libqore_dir),
+                    ProgramOwnerTeardownTest::shellQuote(libqore_dir),
+                    ProgramOwnerTeardownTest::shellQuote(libqore_dir),
+                    ProgramOwnerTeardownTest::shellQuote(get_script_dir() + ":" + owner_dir),
+                    ProgramOwnerTeardownTest::shellQuote(qcc_bin), ProgramOwnerTeardownTest::shellQuote(qmod),
+                    ProgramOwnerTeardownTest::shellQuote(get_script_dir() + mod + ".qm")));
+                if (!is_file(qmod)) {
+                    compile_error = sprintf("qcc could not compile %s: %s", mod, out);
+                    break;
+                }
+            }
+        }
+        if (compile_error) {
+            testSkip(compile_error);
+        }
+        return dir;
+    }
+
+    #! runs the given child program with modules from the given directory and the code for the owned Program
+    private hash<ProgramOwnerRunResult> run(string module_dir, string how, string owned_code, list<string> args = ()) {
+        string err_file = tmp.path + DirSep + sprintf("run-%d.err", ++runs);
+        on_exit if (is_file(err_file)) {
+            unlink(err_file);
+        }
+        string cmd = sprintf("env LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s%s %s%s 2>%s; "
+            "echo \"rc=$?\"", ProgramOwnerTeardownTest::shellQuote(libqore_dir),
+            ProgramOwnerTeardownTest::shellQuote(libqore_dir),
+            ProgramOwnerTeardownTest::shellQuote(module_dir + ":" + owner_dir),
+            ProgramOwnerTeardownTest::shellQuote(qore_bin), exec_mode ? "--exec-mode=" + exec_mode + " " : "",
+            ProgramOwnerTeardownTest::shellQuote(get_script_dir() + "program-owner-" + how + ".q"),
+            ProgramOwnerTeardownTest::shellQuote(owned_code),
+            (foldl $1 + $2, (map " " + ProgramOwnerTeardownTest::shellQuote($1), args)) ?? "",
+            ProgramOwnerTeardownTest::shellQuote(err_file));
+        string out = backquote(cmd);
+        *list<*string> m = (out =~ x/^(.*)rc=([0-9]+)\n$/s);
+        assertTrue(exists m, "exit status: " + out);
+        return <ProgramOwnerRunResult>{
+            "rc": int(m[1]),
+            "out": m[0] ?? "",
+            "err": is_file(err_file) ? ReadOnlyFile::readTextFile(err_file) : "",
+        };
+    }
+
+    #! returns the directory of the tdpgmowner module, from the module path
+    private static string findOwnerModuleDir() {
+        foreach string dir in ((ENV.QORE_MODULE_DIR ?? "").split(PathSep)) {
+            if (dir && glob(dir + DirSep + "tdpgmowner-api-*.qmod")) {
+                return dir;
+            }
+        }
+        throw "TEST-SETUP-ERROR", sprintf("the tdpgmowner test module is not in QORE_MODULE_DIR (%y); it is built "
+            "into the build tree (modules/tdpgmowner)", ENV.QORE_MODULE_DIR);
+    }
+
+    #! Returns the execution mode given on the command line, if any
+    private static *string getExecMode() {
+        for (int i = 0; i < QORE_ARGV.size(); ++i) {
+            *string mode = (QORE_ARGV[i] =~ x/^--exec-mode=(.+)$/)[0];
+            if (mode) {
+                return mode;
+            }
+            if (QORE_ARGV[i] == "--exec-mode" && i + 1 < QORE_ARGV.size()) {
+                return QORE_ARGV[i + 1];
+            }
+        }
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+}

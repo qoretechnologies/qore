@@ -645,14 +645,14 @@ public:
     */
     DLLLOCAL bool isUserModuleContext(const char* name);
 
-    //! Records that the user module in the current module context requires the given AOT user module
-    /** An AOT user module is a binary module, deleted in cleanup(); a user module that requires it can hold objects
-        of its classes, so a user module whose deletion is deferred to cleanup() is deleted before the AOT modules it
-        requires (see delUser())
+    //! Records that the user module in the current module context requires the given binary module
+    /** A binary module (an AOT user module or a native binary module) is deleted in cleanup(); a user module that
+        requires it can hold objects of its classes, so a user module whose deletion is deferred to cleanup() is
+        deleted before the binary modules it requires (see delUser() and cleanup())
 
-        @param name the name of the AOT user module imported
+        @param name the name of the binary module imported
     */
-    DLLLOCAL void trySetUserAotModuleDependency(const char* name);
+    DLLLOCAL void trySetUserBinaryModuleDependency(const char* name);
 
     DLLLOCAL void trySetUserModule(const char* name) {
         md_map_t::iterator i = md_map.find(name);
@@ -814,8 +814,8 @@ protected:
     ModMap md_map;
     // user module dependent map: dependent -> module
     ModMap rmd_map;
-    // AOT user module dependency map: AOT user module -> the user modules that require it
-    ModMap aot_user_dep_map;
+    // binary module dependency map: binary module (AOT or native) -> the user modules that require it
+    ModMap binary_user_dep_map;
 
     // module blacklist — name and reason are stored as std::string so the map owns
     // its own copies; callers pass through ephemeral buffers (TempEncodingHelper
@@ -828,8 +828,25 @@ protected:
     typedef std::map<const char*, QoreAbstractModule*, ltstr> module_map_t;
     module_map_t map;
 
-    //! Returns the user modules that the AOT user modules left require, directly or through other user modules
-    DLLLOCAL strset_t getAotRequiredUserModules();
+    //! Returns the user modules that delUser() cannot delete yet, with the user modules that they require
+    /** These are the user modules that AOT user modules require, which are left to cleanup(), and the given user
+        modules imported into Programs that still hold data: Programs that binary modules own and delete only when they
+        are deleted, which can hold objects of the classes of the modules imported into them (see delUser())
+
+        @param held the modules imported into the Programs that still hold data
+    */
+    DLLLOCAL strset_t getUserModulesLeftForCleanup(const strset_t& held);
+
+    //! Gets the modules that the given binary module requires; returns true if it is a native binary module
+    /** A native binary module is a binary module that is not an AOT user module; its dependencies are those declared
+        with qore_module_dependencies, while those of an AOT user module are recorded by the AOT runtime
+    */
+    DLLLOCAL bool getBinaryModuleDependencies(module_map_t::const_iterator i, std::vector<std::string>& deps);
+
+    //! Deletes a native binary module that no module left requires; returns true if one was deleted
+    /** See the teardown order in delUser()
+    */
+    DLLLOCAL bool deleteUnrequiredNativeModule();
 
     //! Returns true if the given user module requires itself through other user modules
     DLLLOCAL bool isInUserModuleDependencyCycle(const std::string& name);
@@ -937,7 +954,8 @@ public:
               api_major(mod_info.api_major), api_minor(mod_info.api_minor),
               module_init(mod_info.init), module_ns_init(mod_info.ns_init),
               module_delete(mod_info.del), module_parse_cmd(mod_info.parse_cmd),
-              info(module_info.release(), &info_xsink), dlptr(dlptr), feature(mod_info.name) {
+              info(module_info.release(), &info_xsink), dlptr(dlptr), feature(mod_info.name),
+              dependencies(mod_info.dependencies), aot(mod_info.is_aot) {
     }
 
     DLLLOCAL virtual ~QoreBuiltinModule() {
@@ -976,6 +994,19 @@ public:
         return dlptr;
     }
 
+    //! Returns the modules that this module requires (qore_module_dependencies), which are loaded before it
+    DLLLOCAL const std::vector<std::string>& getDependencies() const {
+        return dependencies;
+    }
+
+    //! Returns true if this module is a user module compiled to a binary module with qcc (an AOT module)
+    /** A binary module that is not an AOT module is a native binary module: its code can own Programs, which it
+        deletes when it is deleted (see QoreModuleManager::cleanup())
+    */
+    DLLLOCAL bool isAot() const {
+        return aot;
+    }
+
     DLLLOCAL virtual void issueModuleCmd(const QoreProgramLocation* loc, const QoreString& cmd, ExceptionSink* xsink)
         override;
 
@@ -991,6 +1022,10 @@ protected:
     const void* dlptr;
     //! the feature name the module was initialized with; unlike QoreAbstractModule::name, it is never renamed
     const QoreString feature;
+    //! the modules that this module requires
+    const std::vector<std::string> dependencies;
+    //! true for an AOT module
+    const bool aot;
 
     DLLLOCAL virtual void addToProgramImpl(QoreProgram* pgm, ExceptionSink& xsink) const override;
 };

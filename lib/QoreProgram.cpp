@@ -468,6 +468,20 @@ void qore_program_private::fixupAllAfterFork(int tid, ThreadProgramData* tpd) {
     }
 }
 
+void qore_program_private::getUserFeaturesOfProgramsWithData(strset_t& features) {
+    QoreAutoRWReadLocker al(&lck_programMap);
+    for (QoreProgram* p : qore_program_set) {
+        qore_program_private* pp = qore_program_private::get(*p);
+        // only the teardown thread runs Qore code now, so ns_vars, which is set when the data is cleared, can be read
+        // unlocked
+        if (pp->ns_vars) {
+            continue;
+        }
+        QoreSafeRWReadLocker rl(pp->featureLock);
+        features.insert(pp->userFeatureList.begin(), pp->userFeatureList.end());
+    }
+}
+
 namespace {
 //! the fork handler of the Program registry: the Programs are made consistent in the child (see
 //! qore_program_private::fixupAfterFork())

@@ -893,6 +893,70 @@ inert exactly where it matters.
   runtime (`stripRequiresDirectives()`), because by then the declaration has
   already arrived through the description function.
 
+## Module Teardown Order
+
+`qore_cleanup()` deletes the loaded modules in `QoreModuleManager::delUser()` and
+`QoreModuleManager::cleanup()` (`lib/ModuleManager.cpp`). The invariant is that
+**the classes of a module outlive every object of them**: a destructor runs in the
+Program of its class, and once that Program is deleted the destructor fails with
+`PROGRAM-ERROR: the Program accessed has already been deleted`. Objects of a module's
+classes can be held by:
+
+1. the data (globals, class static variables, opaque references) of the module
+   Programs — of user modules and of AOT user modules (`.qmod`);
+2. the constants of the module Programs, which are released only when the module is
+   deleted;
+3. Programs that a native binary module (a binary module that is not an AOT module)
+   owns and deletes only when it is deleted, such as the global context Program of
+   the jni module; the class static variables of an imported class are shared, and
+   the last Program sharing them releases them, which can be such a Program.
+
+The teardown handles each holder:
+
+- **Phase 0** (`delUser()`): the `del` callbacks of all user modules run.
+- **Phase 1** (`delUser()`): the namespace data of every user and AOT module Program
+  is cleared, and the cycles held up by opaque references that they own are broken,
+  while every module Program exists (holder 1).
+- **Phase 2** (`delUser()`): user modules and native binary modules are deleted in
+  dependency order. A native binary module is deleted first, as soon as no module
+  left requires it (`deleteUnrequiredNativeModule()`): its `module_delete` function
+  deletes the Programs it owns, which releases their objects while the Programs of
+  their classes exist, and while the services that destructors use (the asynchronous
+  I/O controller and thread pools, stopped after `delUser()`) still run (holder 3).
+  A user module is deleted after the user modules requiring it (holder 2), and not
+  while it is imported into a Program that still holds data
+  (`qore_program_private::getUserFeaturesOfProgramsWithData()`), as such a Program
+  is owned by a binary module that cannot be deleted yet. A user module that an AOT
+  module requires, and one still held when nothing else can be deleted, is left to
+  `cleanup()` with the user modules it requires.
+- **`cleanup()`**: the modules left (AOT modules, the native binary modules that AOT
+  modules or user modules left require, and the user modules left) are deleted in
+  dependency order: a module only after every module left that requires it — AOT
+  modules from their compiled dependencies, native binary modules from
+  `qore_module_dependencies`, user modules from their `%requires` of user and binary
+  modules. Of the modules that can be deleted, a native binary module is deleted
+  first; then the modules that a native binary module left requires (they block it);
+  then the other modules; user modules before AOT modules, and by name within a rank.
+
+The Programs that a native binary module owns are deleted by the module itself:
+Qore does not clear their data, as an owner can still use its Program (a module's
+program cleanup callback can delete it, for example). Their objects are released
+while every module exists and the library's services run only if the native module
+is deleted in `delUser()`, that is, if no AOT module requires it.
+
+A dependency cycle (a native binary module required by a module whose classes its
+own Programs hold objects of, for example) cannot be ordered and is broken at the
+module of the lowest rank. A native binary module must also release everything it
+holds in Qore — Programs and exception sinks — in its `module_delete` function, while
+libqore exists: `qore_cleanup()` frees the thread infrastructure afterwards, and an
+`ExceptionSink` with exceptions that is a static object reports them only when static
+objects are destroyed, which then crashes.
+
+Tests: `examples/test/qore/misc/module-loader/module-teardown/module-teardown.qtest`
+(user and AOT module dependency order, opaque cycles, exit status) and
+`examples/test/module-cpp-api/program-owner/program-owner-teardown.qtest` (Programs
+owned by a native binary module).
+
 ## %include Deprecation (Modules)
 
 The `%include` parse directive is deprecated for Qore user modules in this
