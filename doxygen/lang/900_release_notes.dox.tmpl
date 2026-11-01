@@ -5556,6 +5556,16 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - @ref Qore::set_local_var_value() "set_local_var_value()", which debuggers use to set a local variable, assigned
+      a value to a local variable that is not bound to a closure without its type: a value of another type was
+      converted to the type of the value holder of the variable, such as a string to \c 0 for an \c int variable, and
+      a read-only variable was changed.  The value is now assigned as an assignment in the code assigns it: converted
+      to the type of the variable if it accepts it, or refused with \c RUNTIME-TYPE-ERROR or
+      \c RUNTIME-READONLY-VIOLATION
+    - \c qdbg did not end on \c SIGINT or \c SIGTERM: the program was no longer debugged, but it continued, and
+      \c qdbg with it; \c qdbg now ends the program and exits with 128 plus the number of the signal, as does
+      \c qdbg-remote, whose debug server's programs continue.  \c qdbg-remote also looked up a connection for a URL
+      without a scheme, such as \c localhost:8001, which loaded the modules of all connections
     - a hash literal assigned to a typed hash, with a value that referred to an undefined namespace-scoped constant
       (for example <tt>hash&lt;string, string&gt; h = {"a": Missing::Ref};</tt>), raised a spurious \c RUNTIME-TYPE-ERROR
       (<em>expects type 'string', but got type 'namespace-scoped reference'</em>) after the parse error, which was

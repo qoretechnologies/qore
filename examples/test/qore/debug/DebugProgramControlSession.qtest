@@ -348,6 +348,7 @@ public class DebugProgramControlTest inherits QUnit::Test {
         addTestCase("thread stack frame", \threadStackFrameTest());
         addTestCase("breakpoint on top-level statement", \topLevelBreakpointTest());
         addTestCase("local variables of the frames of a stopped thread", \localVariableTest());
+        addTestCase("the program uses the values that the debugger sets", \setValueUsedTest());
         addTestCase("local variables of the frames of a thread stopped in a function", \functionFrameVariableTest());
         addTestCase("every command of a stopped thread is answered", \threadAnswerTest());
         addTestCase("breakpoint on statement without temporaries", \noTempBreakpointTest());
@@ -506,6 +507,34 @@ public class DebugProgramControlTest inherits QUnit::Test {
         assertEq({"rc": NOTHING}, p.finish());
     }
 
+    # a local variable that the debugger sets has the value for the code that runs after the stop, also in the
+    # top-level code, whose variables the interpreters keep in their own slots, and at the stop of an exception
+    setValueUsedTest() {
+        DebuggedProgram p(dpc, "%modern
+our int seen1;
+our int seen2;
+int total = int(\"5\");
+seen1 = total;
+try {
+    throw \"TEST-ERROR\";
+} catch (hash<ExceptionInfo> ex) {
+    seen2 = total;
+}
+");
+        on_exit p.cleanup();
+        p.breakAt(5);
+        hash<auto> e = p.runToStop();
+        assertEq(5, e.line);
+        dpc.threadSend(p.tid, "thread/local/total/set", {"value": AbstractDebugControl::serialize(10)});
+        dpc.go(p.tid);
+        e = dpc.getInterrupt(p.pgmId);
+        assertEq("exception", e.func);
+        dpc.threadSend(p.tid, "thread/local/total/set", {"value": AbstractDebugControl::serialize(20)});
+        assertEq({"rc": NOTHING}, p.finish());
+        assertEq(10, p.pgm.getGlobalVariable("seen1"));
+        assertEq(20, p.pgm.getGlobalVariable("seen2"));
+    }
+
     # each frame of a thread stopped in a function has the local variables of its code: the callee of a call that
     # the interpreter would inline or make through a fast path has a frame of its own while a debugger is attached,
     # and the temporaries of the debugger's callbacks are not variables of the stopped code
@@ -600,6 +629,18 @@ public class DebugProgramControlTest inherits QUnit::Test {
         d = dpc.threadCommand(p.tid, "thread/variable/set", {"root": {"local": "total"},
             "expression": "total * 2 + h.lines[0]"});
         assertEq("20", d.value);
+
+        # negative: a value that the type of a variable or of the container of an element does not accept is refused,
+        # as an assignment in the code is, and the variable keeps its value
+        assertThrows("RUNTIME-TYPE-ERROR", "expects type 'int'", \dpc.threadCommand(), (p.tid, "thread/variable/set",
+            {"root": {"local": "total"}, "value": AbstractDebugControl::serialize("s t")}));
+        assertThrows("RUNTIME-TYPE-ERROR", "expects type 'int'", \dpc.threadSend(), (p.tid, "thread/local/total/set",
+            {"value": AbstractDebugControl::serialize("5")}));
+        assertEq(20, AbstractDebugControl::unserialize(dpc.threadCommand(p.tid, "thread/local/total/get").value));
+        assertThrows("RUNTIME-TYPE-ERROR", \dpc.threadCommand(), (p.tid, "thread/variable/set",
+            {"root": {"local": "h"}, "path": ("lines", 0), "value": AbstractDebugControl::serialize("x")}));
+        assertEq((10, 2, 3), AbstractDebugControl::unserialize(dpc.threadCommand(p.tid, "thread/local/h/get").value)
+            .lines);
 
         # negative: a path and a variable that do not exist, and an invalid root
         assertThrows("DEBUG-ERROR", "no key \"nope\"", \dpc.threadCommand(), (p.tid, "thread/variable/get",

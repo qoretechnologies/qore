@@ -6860,6 +6860,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             tlpd->dbgFunctionExit(statements, return_value, xsink);
             return false;  // local_cleanup RAII handles cleanup
         }
+        // the debugger can set the local variables of the frame while the thread is stopped, through the runtime
+        // stack, as a callee can
+        invalidateExternalCaches();
     }
 
     if (func.blocks.empty()) {
@@ -8256,6 +8259,8 @@ next_instruction:
                     }
                     if (debug_active) {
                         tlpd->dbgException(get_exception_statement(inst), xsink);
+                        // the debugger can set the local variables of the frame at the stop of the exception
+                        invalidateExternalCaches();
                         if (ir_trace_exceptions_env.get()) {
                             fprintf(stderr, "[ir-exception] func='%s' after-dbgException xsink=%d ex-target=%p\n",
                                 func.name.c_str(), xsink && *xsink ? 1 : 0,
@@ -12297,6 +12302,9 @@ load_local_done:
                         // the current statement of the frame, which the frames of its calls record
                         *rl_cache.stmt_ptr = dbg_stmt;
                         int dbg_rc = tlpd->dbgStep(statements, dbg_stmt, xsink);
+                        // the debugger can set the local variables of the frame while the thread is stopped,
+                        // through the runtime stack, as a callee can: they are read from it again
+                        invalidateExternalCaches();
                         if (ir_trace_debug_env.get()) {
                             fprintf(stderr, "[ir-debug] func='%s' line=%d stmt=%p dbg_rc=%d xsink=%d\n",
                                 func.name.c_str(), dbg_stmt->loc->start_line + dbg_stmt->loc->offset,
@@ -16152,6 +16160,8 @@ load_local_done:
                 }
                 if (debug_active && xsink && *xsink) {
                     tlpd->dbgException(get_exception_statement(inst), xsink);
+                    // the debugger can set the local variables of the frame at the stop of the exception
+                    invalidateExternalCaches();
                 }
                 if (throw_inst->exception_target) {
                     // The landing pad is in this frame, so only the throwing statement's own
@@ -16212,6 +16222,8 @@ load_local_done:
                 }
                 if (debug_active && *xsink) {
                     tlpd->dbgException(get_exception_statement(inst), xsink);
+                    // the debugger can set the local variables of the frame at the stop of the exception
+                    invalidateExternalCaches();
                 }
                 // Clean up ALL active catch scopes (catch_depth levels)
                 for (int i = 0; i < rethrow_inst->catch_depth; ++i) {

@@ -907,6 +907,25 @@ public:
         exception was raised or, with @a for_remove, if the variable holds a reference whose target does not exist
         (nothing to remove; no exception is raised)
     */
+    //! Binds a value of the variable on a thread's local variable stack, as of a frame that a debugger selects, to
+    //! @a lvh, with the type and the read-only state of the variable, as an assignment in the code
+    /** @return 0 if the value is bound, -1 if an exception was raised, as for a read-only variable
+    */
+    DLLLOCAL int getLValueForValue(const LocalVarValue& val, LValueHelper& lvh) const {
+        if (read_only) {
+            lvh.vl.xsink->raiseException("RUNTIME-READONLY-VIOLATION",
+                "cannot modify read-only local variable '%s'", name.c_str());
+            return -1;
+        }
+        // Use getTypeInfoForLValue() to include NoNarrow marker for hash<auto!>/list<auto!> variables
+        const QoreTypeInfo* ti = getTypeInfoForLValue();
+        const QoreTypeInfo* rti = refTypeInfo;
+        if (type_info_needs_substitution || ref_type_info_needs_substitution) {
+            val.resolveLValueTypeInfo(ti, rti, type_info_needs_substitution, ref_type_info_needs_substitution);
+        }
+        return val.getLValue(lvh, false, ti, rti);
+    }
+
     DLLLOCAL LocalVarLValueLookup tryGetLValue(LValueHelper& lvh, bool for_remove, bool initial_assignment) const {
         //printd(5, "LocalVar::tryGetLValue() this: %p '%s' for_remove: %d closure_use: %d ti: '%s' rti: '%s'\n", this,
         //  getName(), for_remove, closure_use, QoreTypeInfo::getName(typeInfo), QoreTypeInfo::getName(refTypeInfo));

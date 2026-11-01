@@ -109,6 +109,7 @@ public class QdbgScriptTest inherits QUnit::Test {
         addTestCase("display expressions, pages of values and columns of the call stack", \displayTest());
         addTestCase("qdbg-remote with a debug server that requires a token", \remoteTest());
         addTestCase("JSON output of qdbg-remote", \remoteJsonTest());
+        addTestCase("SIGTERM ends qdbg and qdbg-remote", \signalTest());
         addTestCase("commands of threads, frames and steps", \threadCommandTest());
         addTestCase("quitting while a thread is stopped", \quitTest());
         addTestCase("help and errors", \helpTest());
@@ -414,6 +415,10 @@ public class QdbgScriptTest inherits QUnit::Test {
     remoteJsonTest() {
         testSkip("no process module 2.2 or later");
     }
+
+    signalTest() {
+        testSkip("no process module 2.2 or later");
+    }
 %else
     #! runs qdbg-remote with the commands on its input for a debug server and returns its output and exit code
     private hash<auto> runRemote(int port, list<string> commands, *string token, *list<string> args) {
@@ -489,6 +494,68 @@ public class QdbgScriptTest inherits QUnit::Test {
         assertEq("start\n", (map $1.text, objs, $1.type == "output" && $1.category == "stdout").join(""));
         assertTrue((select objs, $1.type == "event" && $1.text =~ /^Paused at target.q:/).size() > 0);
         assertTrue(server.wait(30s), "the debug server ends with its program");
+    }
+
+    #! sends SIGTERM to a process
+    private sendTerm(Process p) {
+        string out = backquote(sprintf("kill -TERM %d 2>&1", p.id()));
+        assertEq("", out);
+    }
+
+    # SIGTERM ends qdbg and the program that it debugs, also while a command waits for a thread to pause; it ends
+    # qdbg-remote, and the program of the debug server continues
+    signalTest() {
+        TmpDir tmp("qore-qdbg-test-");
+        string path = tmp.path + "/target.q";
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%modern\nint n = 0;\nwhile (True) {\n    ++n;\n}\n");
+        f.close();
+        *string module_dir = ENV.QORE_MODULE_DIR;
+        hash<auto> env = Process::getEnvironment() + {"QORE_MODULE_DIR": qlib_dir + (module_dir ? ":" + module_dir : "")};
+        Process p(qore_exe, (qdbg, "-n", "-y", ".", "--no-color", "target.q"), {"cwd": tmp.path, "env": env});
+        on_exit if (p.running()) {
+            p.terminate();
+        }
+        # the command waits for a thread to pause, which it does not
+        p.write("go\n");
+        string out = "";
+        while (out !~ /Thread 2 continues/) {
+            *string s = p.readStdout(1024, 30s);
+            if (!exists s) {
+                break;
+            }
+            out += s;
+        }
+        assertRegex("Thread 2 continues", out);
+        sendTerm(p);
+        assertTrue(p.wait(30s), "qdbg ends with SIGTERM");
+        assertEq(128 + SIGTERM, p.exitCode(), p.readStderr(65536, 0) ?? "");
+
+        # qdbg-remote ends, and the program of the debug server continues
+        hash<auto> sh = startServer(tmp.path, LoopProgram);
+        Process server = sh.server;
+        on_exit if (server.running()) {
+            server.terminate();
+        }
+        Process r(qore_exe, (qdbg_remote, "-n", "-y", ".", "--no-color", "-H", "Authorization=Bearer s3cret",
+            sprintf("localhost:%d", sh.port)), {"cwd": tmp.path, "env": env});
+        on_exit if (r.running()) {
+            r.terminate();
+        }
+        out = "";
+        while (out !~ /connected to debug server/) {
+            *string s = r.readStdout(1024, 30s);
+            if (!exists s) {
+                break;
+            }
+            out += s;
+        }
+        assertRegex("connected to debug server", out);
+        sendTerm(r);
+        assertTrue(r.wait(30s), "qdbg-remote ends with SIGTERM");
+        assertEq(128 + SIGTERM, r.exitCode(), r.readStderr(65536, 0) ?? "");
+        assertTrue(server.running(), "the debug server continues");
     }
 
     # qdbg-remote processes each command of a script at the stop that it is written for, as qdbg does, with a debug
@@ -691,8 +758,10 @@ public class QdbgScriptTest inherits QUnit::Test {
             "c",
             "display \"<\" + total + \">\"",
             "thread var h.name = \"s  t\"",
-            # a variable with a type converts the value, which is shown as it is stored
+            # a variable with a type accepts a value of the type, as an assignment in the code does
             "thread var total = \"x\"",
+            "thread var total = 9",
+            "thread local total",
             "quit",
         ));
         assertEq(0, res.rc);
@@ -704,7 +773,9 @@ public class QdbgScriptTest inherits QUnit::Test {
             "a=\"2\"  b=3",
             "1: \"<\" + total + \">\" = \"<5>\"",
             "h.name = string \"s  t\"",
-            "total = integer 0",
+            "Error: <API assignment> expects type 'int', but got type 'string' instead (RUNTIME-TYPE-ERROR)",
+            "total = integer 9",
+            "integer total = 9",
         ));
         # the local variable that has no value yet is shown with its declared type
         res = runQdbg(Program, ("break create target.q 3", "c", "thread local sum", "quit"));

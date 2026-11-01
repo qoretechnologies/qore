@@ -164,6 +164,16 @@ class DebugProgramControlLocal inherits DebugProgramControl {
 }
 
 class DebugWrapper {
+    public {
+        #! the time that qdbg waits for the end of the program on SIGINT or SIGTERM; see endOnSignal()
+        const SignalEndTimeout = 5s;
+
+        #! serializes the end of qdbg: the end of the commands, or SIGINT or SIGTERM; see ending
+        Mutex shutdown();
+        #! True when qdbg ends, so that only one of them ends it
+        bool ending;
+    }
+
     private {
         hash<auto> opts = (
             'help': 'h,help',
@@ -226,9 +236,9 @@ class DebugWrapper {
         dcl = new DebugCommandLineLocal(dpcl);
         dcl.setLogger(logger);
         dcl.dpc.setLogger(logger);
-        # signal handler for graceful shutdown
+        # SIGINT and SIGTERM end the program and qdbg
         code sig_handler = sub (int sig) {
-            dpcl.endDebugging();
+            endOnSignal(sig);
         };
         set_signal_handler(SIGINT, sig_handler);
         set_signal_handler(SIGTERM, sig_handler);
@@ -301,6 +311,11 @@ class DebugWrapper {
                 dcl.runCmdLine();
             }
 
+            # qdbg ends; a signal no longer ends it
+            {
+                AutoLock al(shutdown);
+                ending = True;
+            }
             # explicit cleanup before program exit to avoid PROGRAM-ERROR
             # in destructors when module programs are destroyed first
             dpcl.endDebugging();
@@ -318,6 +333,34 @@ class DebugWrapper {
         # shutdown when module programs may already be deleted
         remove_signal_handler(SIGINT);
         remove_signal_handler(SIGTERM);
+    }
+
+    #! Ends the debugged program and qdbg, on SIGINT or SIGTERM
+    /** The program ends first, as a program that is no longer debugged would continue, and qdbg with it until it
+        ended; a thread that does not end within SignalEndTimeout, as in a call that cannot be interrupted, ends with
+        the process
+    */
+    private endOnSignal(int sig) {
+        # qdbg is not already ending
+        {
+            AutoLock al(shutdown);
+            if (ending) {
+                return;
+            }
+            ending = True;
+        }
+        foreach ProgramControl pgm in (dcl.dpc.getAllPrograms()) {
+            try {
+                dcl.dpc.terminateProgram(pgm);
+            } catch (hash<ExceptionInfo> ex) {
+                # a program that ends meanwhile
+            }
+        }
+        dcl.running.waitForZero(SignalEndTimeout);
+        dcl.dpc.endDebugging();
+        # the output of the program until its end is given, with JSON output
+        dcl.dpc.stopOutputCapture();
+        exit(128 + sig);
     }
 
     private help(int exCode=1) {

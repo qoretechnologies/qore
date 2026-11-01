@@ -878,6 +878,21 @@ class Complete inherits AbstractBase { string get() { return \"complete\"; } }",
             assertThrows("RUNTIME-TYPE-ERROR", \p.callFunction(), "test");
         }
 
+        # a value is set as an assignment in the code sets it: a local variable that is not bound to a closure is
+        # converted to its type or refused, as is a read-only variable
+        {
+            Program p(PO_NEW_STYLE|PO_STRICT_ARGS|PO_REQUIRE_TYPES|PO_ALLOW_DEBUGGER);
+            p.parse("auto sub test(string name, auto v) { int i = 1; softint si = 1; *int oi; const int c = 2; "
+                "list<int> li = (1,); set_local_var_value(0, name, v); return get_local_vars(0){name}.value; }", "");
+            assertThrows("RUNTIME-TYPE-ERROR", "expects type 'int', but got type 'string'", \p.callFunction(),
+                ("test", "i", "hi"));
+            assertEq(7, p.callFunction("test", "i", 7));
+            assertEq(5, p.callFunction("test", "si", "5"));
+            assertNothing(p.callFunction("test", "oi", NOTHING));
+            assertThrows("RUNTIME-TYPE-ERROR", \p.callFunction(), ("test", "li", (1, "a")));
+            assertThrows("RUNTIME-READONLY-VIOLATION", "'c'", \p.callFunction(), ("test", "c", 3));
+        }
+
         {
             Program p(PO_NEW_STYLE|PO_STRICT_ARGS|PO_REQUIRE_TYPES|PO_ALLOW_DEBUGGER);
             p.parse("hash sub test1(int frame) { code c = sub () { if (frame > 10) throw 1; }; c(); return get_local_vars(frame); } hash sub test2(int frame) { int i = 1; string str = 'hi'; return test1(frame); }", "");

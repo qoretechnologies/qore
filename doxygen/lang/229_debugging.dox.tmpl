@@ -98,7 +98,8 @@
     The local variables of each frame of the call stack of a stopped thread and the global variables of its program
     are shown with their values; lists, hashes and objects are shown as trees of their elements, keys and members,
     also private ones, which are read when they are shown.  A variable, or an element, key or member of it, can be
-    set to the value of an expression.  A variable that was declared but not assigned, whose type requires a value, is
+    set to the value of an expression; the value is assigned as an assignment in the code assigns it, so a variable
+    with a type converts it or refuses it, and a read-only variable cannot be set.  A variable that was declared but not assigned, whose type requires a value, is
     shown as such with its declared type, as <tt>int count = NOTHING (declared but not assigned)</tt>.
 
     Expressions are evaluated with the variables of a frame and the top-level local variables of the program, which
@@ -198,6 +199,9 @@ qdbg myfile.q < commands.txt
 options stopall set 1
 exception filter uncaught
     @endcode
+
+    \c SIGINT or \c SIGTERM ends \c qdbg and the program that it debugs, with the exit code 128 plus the number of the
+    signal; it ends \c qdbg-remote, and the programs of its debug server continue.
 
     \c qdbg tells what happens in plain words, such as <tt>Paused at breakpoint 1 at main.q:3 (thread 2)</tt>, followed
     by the line of code.  A thread that the program starts runs until it reaches a breakpoint, as without the debugger,

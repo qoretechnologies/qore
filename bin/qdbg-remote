@@ -133,6 +133,13 @@ class DebugCommandLineRemote inherits DebugLinenoiseCommandLine {
 }
 
 class DebugWrapper {
+    public {
+        #! serializes the end of qdbg-remote: the end of the commands, or SIGINT or SIGTERM; see ending
+        Mutex shutdown();
+        #! True when qdbg-remote ends, so that only one of them ends it
+        bool ending;
+    }
+
     private {
         hash<auto> opts = (
             'help': 'h,help',
@@ -177,13 +184,16 @@ class DebugWrapper {
             }
             *string path_suffix;
             string orig_url = opt.url;
+            # a connection is looked up only for an argument in the form of a connection name, optionally with a path:
+            # a URL, such as localhost:8001, is not one, and the lookup loads the modules of all connections, as a
+            # JVM, whose signal handlers would end the process instead of qdbg-remote
+            *list<auto> l = opt.url =~ x/^([A-Za-z_\-0-9]+)\/([A-Za-z_\-0-9\.]+)$/;
             try {
                 # check if it's in "connection_name/path" format
-                *list<auto> l = opt.url =~ x/^([A-Za-z_\-0-9]+)\/([A-Za-z_\-0-9\.]+)$/;
                 if (l) {
                     opt.url = get_connection_url(l[0]);
                     path_suffix = l[1];
-                } else {
+                } else if (opt.url =~ /^[A-Za-z_\-0-9]+$/) {
                     opt.url = get_connection_url(opt.url);
                 }
             } catch (hash<ExceptionInfo> ex) {
@@ -247,13 +257,22 @@ class DebugWrapper {
         }
         logger.info("url: %s verbose: %s", opt.url, logger.getLevel().getStr());
         dcl = new DebugCommandLineRemote(opt + {"logger": logger});
-        # signal handler for clean WebSocket shutdown
+        # SIGINT and SIGTERM end qdbg-remote; the programs of the debug server continue
         code sig_handler = sub (int sig) {
+            # qdbg-remote is not already ending
+            {
+                AutoLock al(shutdown);
+                if (ending) {
+                    return;
+                }
+                ending = True;
+            }
             try {
                 dcl.wsc.disconnect();
             } catch () {
                 # suppress exceptions during signal-triggered disconnect
             }
+            exit(128 + sig);
         };
         set_signal_handler(SIGINT, sig_handler);
         set_signal_handler(SIGTERM, sig_handler);
@@ -285,6 +304,11 @@ class DebugWrapper {
             # the files of commands of the start; a command of a file can end the debugger
             if (dcl.runStartupCommandFiles(DebugLinenoiseCommandLine::getStartupCommandFiles(opt))) {
                 dcl.runCmdLine();
+            }
+            # qdbg-remote ends; a signal no longer ends it
+            {
+                AutoLock al(shutdown);
+                ending = True;
             }
             dcl.wsc.disconnect();
         } catch (hash<ExceptionInfo> e) {
