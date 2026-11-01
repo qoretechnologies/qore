@@ -232,6 +232,13 @@ $function$
     @section pgsql_relnotes Release Notes
 
     @subsection pgsqlsqlutilbasev119 PgsqlSqlUtilBase v1.19
+    - a table object for a view or a materialized view, as from
+      @ref SqlUtil::AbstractTable::getTable() "AbstractTable::getTable()", now describes its columns, so the view can
+      be read with the table object's select APIs; the columns of a materialized view are read from \c pg_catalog,
+      as \c information_schema.columns does not list them, and a view's columns were not read at all;
+      @ref SqlUtil::AbstractDatabase::getTable() "AbstractDatabase::getTable()" still does not open a view
+    - @ref SqlUtil::AbstractDatabase::supportsMaterializedViews() "AbstractDatabase::supportsMaterializedViews()"
+      returns @ref True
     - fixed @ref SqlUtil::AbstractDatabase::listTables() "listTables()" and
       @ref SqlUtil::AbstractDatabase::tableIterator() "tableIterator()" listing views as well as tables, although
       @ref SqlUtil::AbstractDatabase::getTable() "getTable()" returns nothing for a view; they now list only ordinary,
@@ -2608,6 +2615,13 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
         return False;
     }
 
+    #! returns @ref True "True", as PostgreSQL supports materialized views; see listMaterializedViews()
+    /** @since PgsqlSqlUtilBase 1.19
+    */
+    private bool supportsMaterializedViewsImpl() {
+        return True;
+    }
+
     #! rebuild index implementation. See @ref SqlUtil::AbstractDatabase::rebuildIndex()
     private bool rebuildIndexImpl(string name, *hash options) {
         string sql = sprintf("reindex index %s", pgsql_get_sql_object_name(name));
@@ -4483,10 +4497,52 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         return True;
     }
 
+    #! returns the column descriptions of a materialized view, with the columns of information_schema.columns
+    /** information_schema.columns does not list the columns of materialized views, so they are read from pg_catalog
+        with the expressions of information_schema.columns
+    */
+    private *hash<auto> describeMaterializedViewIntern() {
+        return ds.select("select a.attname as column_name, "
+            "case when t.typtype = 'd' then "
+            "case when bt.typelem <> 0 and bt.typlen = -1 then 'ARRAY' "
+            "when nbt.nspname = 'pg_catalog' then pg_catalog.format_type(t.typbasetype, null) "
+            "else 'USER-DEFINED' end "
+            "else case when t.typelem <> 0 and t.typlen = -1 then 'ARRAY' "
+            "when nt.nspname = 'pg_catalog' then pg_catalog.format_type(a.atttypid, null) "
+            "else 'USER-DEFINED' end end as data_type, "
+            "coalesce(bt.typname, t.typname) as udt_name, "
+            "information_schema._pg_char_max_length(information_schema._pg_truetypid(a.*, t.*), "
+            "information_schema._pg_truetypmod(a.*, t.*)) as character_maximum_length, "
+            "information_schema._pg_char_octet_length(information_schema._pg_truetypid(a.*, t.*), "
+            "information_schema._pg_truetypmod(a.*, t.*)) as character_octet_length, "
+            "information_schema._pg_numeric_precision(information_schema._pg_truetypid(a.*, t.*), "
+            "information_schema._pg_truetypmod(a.*, t.*)) as numeric_precision, "
+            "information_schema._pg_numeric_scale(information_schema._pg_truetypid(a.*, t.*), "
+            "information_schema._pg_truetypmod(a.*, t.*)) as numeric_scale, "
+            "information_schema._pg_datetime_precision(information_schema._pg_truetypid(a.*, t.*), "
+            "information_schema._pg_truetypmod(a.*, t.*)) as datetime_precision, "
+            "a.atttypmod, "
+            "case when a.attnotnull or (t.typtype = 'd' and t.typnotnull) then 'NO' else 'YES' end as is_nullable, "
+            "pg_catalog.pg_get_expr(ad.adbin, ad.adrelid) as column_default, pgd.description "
+            "from pg_catalog.pg_attribute a "
+            "join pg_catalog.pg_class c on (c.oid = a.attrelid) "
+            "join pg_catalog.pg_namespace n on (n.oid = c.relnamespace) "
+            "join pg_catalog.pg_type t on (t.oid = a.atttypid) "
+            "join pg_catalog.pg_namespace nt on (nt.oid = t.typnamespace) "
+            "left join (pg_catalog.pg_type bt join pg_catalog.pg_namespace nbt on (nbt.oid = bt.typnamespace)) "
+            "on (t.typtype = 'd' and t.typbasetype = bt.oid) "
+            "left join pg_catalog.pg_attrdef ad on (ad.adrelid = a.attrelid and ad.adnum = a.attnum) "
+            "left join pg_catalog.pg_description pgd on (pgd.objoid = c.oid and pgd.objsubid = a.attnum) "
+            "where c.relkind = 'm' and n.nspname = %v and c.relname = %v and a.attnum > 0 "
+            "and not a.attisdropped order by a.attnum", schema, getRelationName());
+    }
+
     private Columns describeImpl() {
         # get column descriptions; the relation join uses pg_class/pg_namespace (not
         # pg_statio_all_tables, which omits partitioned parent tables - relkind 'p' - because
-        # they have no physical storage) so that partitioned tables can be described too
+        # they have no physical storage) so that partitioned tables can be described too; a view (relkind 'v') is
+        # described as well, so that a table object for a view can read it, as the DbDataProvider module's view
+        # data providers do; a view is still not opened as a table by getTable(), see checkExistenceImpl()
         *hash<auto> qh = ds.select("select column_name, data_type, c.udt_name, "
             "character_maximum_length, "
             "character_octet_length, numeric_precision, numeric_scale, datetime_precision, "
@@ -4494,12 +4550,17 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             "column_default, description from information_schema.columns c "
             "join (select rc.oid as relid, rn.nspname as schemaname, rc.relname as relname "
             "from pg_catalog.pg_class rc join pg_catalog.pg_namespace rn on (rn.oid = rc.relnamespace) "
-            "where rc.relkind in ('r', 'p', 'm', 'f')) st on (c.table_schema = st.schemaname and "
+            "where rc.relkind in ('r', 'p', 'v', 'f')) st on (c.table_schema = st.schemaname and "
             "c.table_name = st.relname) left join pg_catalog.pg_description pgd on (st.relid = pgd.objoid "
             "and pgd.objsubid = c.ordinal_position) left join pg_catalog.pg_attribute pa on (st.relid = pa.attrelid and "
             "pa.attnum = c.ordinal_position and not pa.attisdropped) "
             "where table_schema = %v and table_name = %v order by ordinal_position", schema,
             getRelationName());
+        if (!qh.column_name) {
+            # information_schema.columns has no columns of a materialized view (relkind 'm'), so they are read from
+            # pg_catalog with the expressions that information_schema.columns uses for the other relations
+            qh = describeMaterializedViewIntern();
+        }
         if (!qh.column_name)
             throw "TABLE-ERROR", sprintf("cannot retrieve table information for table %y in %y", name, dsdesc);
 

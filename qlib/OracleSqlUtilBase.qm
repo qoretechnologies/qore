@@ -370,6 +370,8 @@ hash schema = (
     @section ora_relnotes Release Notes
 
     @subsection oracle17 OracleSqlUtilBase v1.7
+    - @ref SqlUtil::AbstractDatabase::supportsMaterializedViews() "AbstractDatabase::supportsMaterializedViews()"
+      returns @ref True
     - a date value compared with a \c DATE or \c TIMESTAMP column in a where clause or a comparison expression is
       bound in the column's type, so that an index on the column can be used; before, Oracle converted the column to
       the \c TIMESTAMP \c WITH \c TIME \c ZONE type of the bound value, which prevented an index range scan and
@@ -2425,6 +2427,13 @@ public class OracleDatabase inherits SqlUtil::AbstractDatabase {
 
     #! returns @ref True "True" if the database supports sequences
     private bool supportsSequencesImpl() {
+        return True;
+    }
+
+    #! returns @ref True "True", as Oracle supports materialized views; see listMaterializedViews()
+    /** @since OracleSqlUtilBase 1.7
+    */
+    private bool supportsMaterializedViewsImpl() {
         return True;
     }
 

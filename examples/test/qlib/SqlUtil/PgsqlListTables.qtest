@@ -91,6 +91,8 @@ class PgsqlListTablesTest inherits QUnit::Test {
         addTestCase("a foreign table is listed and opens with getTable()", \foreignTableTest());
         addTestCase("empty search_path lists nothing", \emptySearchPathTest());
         addTestCase("db tables data provider children are scoped", \dataProviderTest());
+        addTestCase("a table object for a view or a materialized view describes and reads it",
+            \viewTableObjectTest());
 
         set_return_value(main());
     }
@@ -355,6 +357,53 @@ class PgsqlListTablesTest inherits QUnit::Test {
         assertFalse(inlist("dup", mvs), "an ordinary table is not listed as a materialized view");
         assertEq(mvs, scratchNames(map $1, db.materializedViewIterator()),
             "materializedViewIterator() lists the same materialized views");
+    }
+
+    private viewTableObjectTest() {
+        checkConnection();
+        setSearchPath(cur + ", " + second);
+
+        # a view and a materialized view with typed columns, dropped after the test case, as other test cases
+        # check the exact lists of the schema's objects
+        {
+            on_error ds.rollback();
+            on_success ds.commit();
+            ds.exec(sprintf("create table %s.typed (id int not null, name varchar(20) not null, "
+                "amount numeric(10,2), created timestamp)", cur));
+            ds.exec(sprintf("insert into %s.typed values (1, 'one', 1.25, '2026-01-02 03:04:05'), "
+                "(2, 'two', 2.5, null)", cur));
+            ds.exec(sprintf("create view %s.v_typed as select id, name, amount, created from %s.typed", cur, cur));
+            ds.exec(sprintf("create materialized view %s.mv_typed as select id, name, amount, created "
+                "from %s.typed", cur, cur));
+        }
+        on_exit {
+            ds.rollback();
+            ds.exec(sprintf("drop materialized view %s.mv_typed", cur));
+            ds.exec(sprintf("drop view %s.v_typed", cur));
+            ds.exec(sprintf("drop table %s.typed", cur));
+            ds.commit();
+        }
+
+        PgsqlDatabase db(ds);
+        assertTrue(db.supportsMaterializedViews());
+        # the view is neither listed nor opened as a table
+        assertNothing(db.getTable("v_typed"));
+        assertFalse(inlist("v_typed", db.listTables()));
+        assertFalse(inlist("mv_typed", db.listTables()));
+
+        # a table object for each describes the columns of the table that it selects from
+        hash<auto> table_cols = map {$1.key: $1.value.native_type}, AbstractTable::getTable(ds, "typed")
+            .describe().getHash().pairIterator();
+        foreach string name in ("v_typed", "mv_typed") {
+            AbstractTable t = AbstractTable::getTable(ds, name);
+            hash<auto> cols = map {$1.key: $1.value.native_type}, t.describe().getHash().pairIterator();
+            assertEq(table_cols, cols, name);
+            assertEq(20, t.describe().name.size, name);
+            assertEq(("id", "name", "amount", "created"), keys t.getRecordType(), name);
+            assertEq((1, 2), t.select({"orderby": "id"}).id, name);
+            assertEq("two", t.selectRow({"where": {"id": 2}}).name, name);
+            ds.rollback();
+        }
     }
 
     private relationKindTest() {
