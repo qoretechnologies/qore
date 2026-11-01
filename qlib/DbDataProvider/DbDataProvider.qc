@@ -24,8 +24,21 @@
 
 #! contains all public definitions in the DbDataProvider module
 public namespace DbDataProvider {
-#! The database data provider class, provides tables as children
-/** Record filtering must be included in the \c sql search option.  Generic data provider search conditions and
+#! The database data provider class, provides tables, views and raw SQL execution as children
+/** The children are:
+    - \c exec-sql: executes raw SQL (@ref DbDataProvider::DbExecSqlDataProvider "DbExecSqlDataProvider")
+    - \c tables: the tables of the database (@ref DbDataProvider::DbTablesDataProvider "DbTablesDataProvider")
+    - \c views: the views of the database as read-only providers
+      (@ref DbDataProvider::DbViewsDataProvider "DbViewsDataProvider")
+    - \c materialized-views: the materialized views of the database as read-only providers
+      (@ref DbDataProvider::DbMaterializedViewsDataProvider "DbMaterializedViewsDataProvider"); only if the database
+      supports materialized views
+
+    For backwards compatibility, a child name that is not one of these is opened as a table with
+    @ref SqlUtil::AbstractDatabase::getTable() "AbstractDatabase::getTable()"; use the \c views and
+    \c materialized-views children to read views.
+
+    Record filtering must be included in the \c sql search option.  Generic data provider search conditions and
     expressions are intentionally not advertised because raw SQL result filtering is not implemented by this provider.
 */
 public class DbDataProvider inherits DbDataProviderBase {
@@ -124,7 +137,14 @@ public class DbDataProvider inherits DbDataProviderBase {
         const ChildMap = {
             "exec-sql": Class::forName("DbDataProvider::DbExecSqlDataProvider"),
             "tables": Class::forName("DbDataProvider::DbTablesDataProvider"),
+            "views": Class::forName("DbDataProvider::DbViewsDataProvider"),
         };
+
+        #! The name of the child for materialized views, present only if the database supports materialized views
+        const MaterializedViewsChild = "materialized-views";
+
+        #! The class of the child for materialized views
+        const MaterializedViewsClass = Class::forName("DbDataProvider::DbMaterializedViewsDataProvider");
     }
 
     #! creates the object
@@ -241,15 +261,27 @@ public class DbDataProvider inherits DbDataProviderBase {
     }
 
     #! Return data provider summary info
+    /** The \c materialized-views child is included only if the database supports materialized views
+    */
     *list<hash<DataProviderSummaryInfo>> getChildProviderSummaryInfo() {
-        return map $1.getConstant("ProviderSummaryInfo").getValue(), ChildMap.iterator();
+        return map $1.getConstant("ProviderSummaryInfo").getValue(), getChildClassMap().iterator();
     }
 
     #! Returns a list of child data provider names, if any
-    /** @return a list of child data provider names, if any
+    /** @return a list of child data provider names: \c exec-sql, \c tables, \c views, and
+        \c materialized-views if the database supports materialized views
     */
     private *list<string> getChildProviderNamesImpl() {
-        return keys ChildMap;
+        return keys getChildClassMap();
+    }
+
+    #! Returns the classes of the children of this provider keyed by child name
+    private hash<string, Class> getChildClassMap() {
+        hash<string, Class> rv = ChildMap;
+        if (db.supportsMaterializedViews()) {
+            rv{MaterializedViewsChild} = MaterializedViewsClass;
+        }
+        return rv;
     }
 
     #! Returns the given child provider or @ref nothing if the given child is unknown
@@ -263,7 +295,11 @@ public class DbDataProvider inherits DbDataProviderBase {
         if (*Class cls = ChildMap{name}) {
             return cls.newObject(db, logger);
         }
-        # for backwards compatibility, we try to get a table object
+        if (name == MaterializedViewsChild && db.supportsMaterializedViews()) {
+            return MaterializedViewsClass.newObject(db, logger);
+        }
+        # for backwards compatibility, we try to get a table object; views are only provided by the "views" and
+        # "materialized-views" children
         *AbstractTable table;
         try {
             table = db.getTable(name);

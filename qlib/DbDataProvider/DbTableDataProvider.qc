@@ -629,15 +629,7 @@ public class DbTableDataProvider inherits DbDataProviderBase {
         @throw MULTIPLE-RECORDS-ERROR multiple records found
     */
     private *hash<auto> searchSingleRecordImpl(*hash<auto> where_cond, *hash<auto> search_options) {
-        AbstractDataProviderRecordIterator<hash<auto>> i = getReadIterator(where_cond, search_options);
-        *hash<auto> rv;
-        if (i.next()) {
-            rv = i.getValue();
-        }
-        if (i.next()) {
-            throw "MULTIPLE-RECORDS-ERROR", sprintf("multiple records found for search: %y", where_cond);
-        }
-        return rv;
+        return DbTableReadHelper::searchSingleRecord(table, where_cond, search_options);
     }
 
     #! Returns an iterator for zero or more records matching the search options
@@ -650,12 +642,7 @@ public class DbTableDataProvider inherits DbDataProviderBase {
     */
     private AbstractDataProviderBulkRecordInterface searchRecordsBulkImpl(int block_size = 1000,
             *hash<auto> where_cond, *hash<auto> search_options) {
-        hash<auto> split = getReadExpressionSplit(where_cond, search_options);
-        if (!exists split.client) {
-            return new DbTableBulkRecordInterface(block_size, table, split.pushdown,
-                search_options - "allow_client_side_filter");
-        }
-        return getReadIteratorFromSplit(split, search_options).getBulkApi(block_size);
+        return DbTableReadHelper::getBulkReadInterface(table, block_size, where_cond, search_options);
     }
 
     #! Returns an iterator for zero or more records matching the search options
@@ -669,25 +656,7 @@ public class DbTableDataProvider inherits DbDataProviderBase {
     */
     private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
-        return getReadIterator(where_cond, search_options);
-    }
-
-    #! Splits a read predicate into native SQL and optional client-side portions
-    private hash<auto> getReadExpressionSplit(*hash<auto> where_cond, *hash<auto> search_options) {
-        if (!(where_cond instanceof hash<DataProviderExpression>)) {
-            return {"pushdown": where_cond, "client": NOTHING};
-        }
-        # a field that SqlUtil cannot name as a column is read client-side
-        hash<auto> split = AbstractDataProvider::splitPushdownableExpression(
-            cast<hash<DataProviderExpression>>(where_cond), table.getExpressionMap(),
-            \DbTableDataProvider::getColumnReference());
-        if (exists split.client && !search_options.allow_client_side_filter) {
-            throw "CLIENT-SIDE-FILTER-DISABLED", sprintf(
-                "operator(s) in the search predicate have no native SQL implementation for database driver %y; "
-                "set search option allow_client_side_filter to True to evaluate the residual predicate on returned "
-                "rows, or rewrite the predicate using native operators", table.getDatasource().getDriverName());
-        }
-        return split;
+        return DbTableReadHelper::getReadIterator(table, where_cond, search_options);
     }
 
     #! Returns the field reference to the column of a field reference of an expression, or @ref nothing
@@ -755,49 +724,9 @@ column = DbTableDataProvider::getColumnReference(<DataProviderFieldReference>{"f
             });
     }
 
-    #! Returns a read iterator after splitting any residual expression
-    private AbstractDataProviderRecordIterator<hash<auto>> getReadIterator(*hash<auto> where_cond,
-            *hash<auto> search_options) {
-        return getReadIteratorFromSplit(getReadExpressionSplit(where_cond, search_options), search_options);
-    }
-
-    #! Returns a read iterator from an already split expression
-    private AbstractDataProviderRecordIterator<hash<auto>> getReadIteratorFromSplit(hash<auto> split,
-            *hash<auto> search_options) {
-        hash<auto> public_options = search_options - "allow_client_side_filter";
-        if (!exists split.client) {
-            return new DbTableRecordIterator(table, split.pushdown, public_options);
-        }
-
-        if (exists public_options.groupby || exists public_options.having) {
-            throw "CLIENT-SIDE-FILTER-OPTIONS-UNSUPPORTED",
-                "groupby and having search options cannot be combined with a client-side residual filter";
-        }
-        if (exists public_options.columns) {
-            foreach auto column in (public_options.columns) {
-                if (column.typeCode() != NT_STRING) {
-                    throw "CLIENT-SIDE-FILTER-OPTIONS-UNSUPPORTED",
-                        "computed column expressions cannot be combined with a client-side residual filter";
-                }
-            }
-        }
-
-        # Paging, projections, and result-count constraints must apply after the residual predicate. Query all
-        # columns so the client expression has every field it may reference.
-        hash<auto> native_options = public_options - ("columns", "limit", "offset", "requires_result", "max_records");
-        DbTableRecordIterator native_iter(table, split.pushdown, native_options);
-        return new DefaultRecordIterator<hash<auto>>(native_iter, split.client, public_options,
-            table.getRecordType(), NOTHING, NOTHING);
-    }
-
     #! Returns expression info annotated with native pushdown capability
     private hash<string, hash<DataProviderExpressionInfo>> getTableExpressionInfo() {
-        return cast<hash<string, hash<DataProviderExpressionInfo>>>(
-            map {
-                $1.key: cast<hash<DataProviderExpressionInfo>>(
-                    $1.value.exp + {"supports_pushdown": exists $1.value.code})
-            }, table.getExpressionMap().pairIterator()
-        );
+        return DbTableReadHelper::getTableExpressionInfo(table);
     }
 
     #! Updates a single record matching the search options

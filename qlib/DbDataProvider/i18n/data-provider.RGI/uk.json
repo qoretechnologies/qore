@@ -182,6 +182,102 @@
         "app.RGI.action.ZGVsZXRl.option.dGFibGU.desc": {
           "source": "The name of the table",
           "message": "Назва таблиці"
+        },
+        "app.RGI.action.ZmluZF92aWV3.display_name": {
+          "source": "Find Matching View Records",
+          "message": "Знайти відповідні записи подання"
+        },
+        "app.RGI.action.ZmluZF92aWV3.short_desc": {
+          "source": "Find records in the view",
+          "message": "Знайти записи в поданні"
+        },
+        "app.RGI.action.ZmluZF92aWV3.desc": {
+          "source": "Find records in the view; the view is read-only",
+          "message": "Знайти записи в поданні; подання доступне лише для читання"
+        },
+        "app.RGI.action.ZmluZF92aWV3.option.dmlldw.display_name": {
+          "source": "View",
+          "message": "Подання"
+        },
+        "app.RGI.action.ZmluZF92aWV3.option.dmlldw.short_desc": {
+          "source": "The name of the view",
+          "message": "Назва подання"
+        },
+        "app.RGI.action.ZmluZF92aWV3.option.dmlldw.desc": {
+          "source": "The name of the view",
+          "message": "Назва подання"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.display_name": {
+          "source": "Find Single View Record",
+          "message": "Знайти один запис подання"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.short_desc": {
+          "source": "Find a single record in the view",
+          "message": "Знайти один запис у поданні"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.desc": {
+          "source": "Find a single record in the view; the view is read-only",
+          "message": "Знайти один запис у поданні; подання доступне лише для читання"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.option.dmlldw.display_name": {
+          "source": "View",
+          "message": "Подання"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.option.dmlldw.short_desc": {
+          "source": "The name of the view",
+          "message": "Назва подання"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.option.dmlldw.desc": {
+          "source": "The name of the view",
+          "message": "Назва подання"
+        },
+        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.display_name": {
+          "source": "Find Matching Materialized View Records",
+          "message": "Знайти відповідні записи матеріалізованого подання"
+        },
+        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.short_desc": {
+          "source": "Find records in the materialized view",
+          "message": "Знайти записи в матеріалізованому поданні"
+        },
+        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.desc": {
+          "source": "Find records in the materialized view; reads the stored data of the materialized view without refreshing it",
+          "message": "Знайти записи в матеріалізованому поданні; читає збережені дані матеріалізованого подання без його оновлення"
+        },
+        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.option.dmlldw.display_name": {
+          "source": "Materialized View",
+          "message": "Матеріалізоване подання"
+        },
+        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.option.dmlldw.short_desc": {
+          "source": "The name of the materialized view",
+          "message": "Назва матеріалізованого подання"
+        },
+        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.option.dmlldw.desc": {
+          "source": "The name of the materialized view",
+          "message": "Назва матеріалізованого подання"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.display_name": {
+          "source": "Find Single Materialized View Record",
+          "message": "Знайти один запис матеріалізованого подання"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.short_desc": {
+          "source": "Find a single record in the materialized view",
+          "message": "Знайти один запис у матеріалізованому поданні"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.desc": {
+          "source": "Find a single record in the materialized view; reads the stored data of the materialized view without refreshing it",
+          "message": "Знайти один запис у матеріалізованому поданні; читає збережені дані матеріалізованого подання без його оновлення"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.option.dmlldw.display_name": {
+          "source": "Materialized View",
+          "message": "Матеріалізоване подання"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.option.dmlldw.short_desc": {
+          "source": "The name of the materialized view",
+          "message": "Назва матеріалізованого подання"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.option.dmlldw.desc": {
+          "source": "The name of the materialized view",
+          "message": "Назва матеріалізованого подання"
         }
       }
     }

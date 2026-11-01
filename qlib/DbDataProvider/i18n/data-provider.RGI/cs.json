@@ -182,6 +182,102 @@
         "app.RGI.action.ZGVsZXRl.option.dGFibGU.desc": {
           "source": "The name of the table",
           "message": "Název tabulky"
+        },
+        "app.RGI.action.ZmluZF92aWV3.display_name": {
+          "source": "Find Matching View Records",
+          "message": "Vyhledat odpovídající záznamy pohledu"
+        },
+        "app.RGI.action.ZmluZF92aWV3.short_desc": {
+          "source": "Find records in the view",
+          "message": "Vyhledat záznamy v pohledu"
+        },
+        "app.RGI.action.ZmluZF92aWV3.desc": {
+          "source": "Find records in the view; the view is read-only",
+          "message": "Vyhledat záznamy v pohledu; pohled je jen pro čtení"
+        },
+        "app.RGI.action.ZmluZF92aWV3.option.dmlldw.display_name": {
+          "source": "View",
+          "message": "Pohled"
+        },
+        "app.RGI.action.ZmluZF92aWV3.option.dmlldw.short_desc": {
+          "source": "The name of the view",
+          "message": "Název pohledu"
+        },
+        "app.RGI.action.ZmluZF92aWV3.option.dmlldw.desc": {
+          "source": "The name of the view",
+          "message": "Název pohledu"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.display_name": {
+          "source": "Find Single View Record",
+          "message": "Vyhledat jeden záznam pohledu"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.short_desc": {
+          "source": "Find a single record in the view",
+          "message": "Vyhledat jeden záznam v pohledu"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.desc": {
+          "source": "Find a single record in the view; the view is read-only",
+          "message": "Vyhledat jeden záznam v pohledu; pohled je jen pro čtení"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.option.dmlldw.display_name": {
+          "source": "View",
+          "message": "Pohled"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.option.dmlldw.short_desc": {
+          "source": "The name of the view",
+          "message": "Název pohledu"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.option.dmlldw.desc": {
+          "source": "The name of the view",
+          "message": "Název pohledu"
+        },
+        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.display_name": {
+          "source": "Find Matching Materialized View Records",
+          "message": "Vyhledat odpovídající záznamy materializovaného pohledu"
+        },
+        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.short_desc": {
+          "source": "Find records in the materialized view",
+          "message": "Vyhledat záznamy v materializovaném pohledu"
+        },
+        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.desc": {
+          "source": "Find records in the materialized view; reads the stored data of the materialized view without refreshing it",
+          "message": "Vyhledat záznamy v materializovaném pohledu; čte uložená data materializovaného pohledu bez jeho obnovení"
+        },
+        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.option.dmlldw.display_name": {
+          "source": "Materialized View",
+          "message": "Materializovaný pohled"
+        },
+        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.option.dmlldw.short_desc": {
+          "source": "The name of the materialized view",
+          "message": "Název materializovaného pohledu"
+        },
+        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.option.dmlldw.desc": {
+          "source": "The name of the materialized view",
+          "message": "Název materializovaného pohledu"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.display_name": {
+          "source": "Find Single Materialized View Record",
+          "message": "Vyhledat jeden záznam materializovaného pohledu"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.short_desc": {
+          "source": "Find a single record in the materialized view",
+          "message": "Vyhledat jeden záznam v materializovaném pohledu"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.desc": {
+          "source": "Find a single record in the materialized view; reads the stored data of the materialized view without refreshing it",
+          "message": "Vyhledat jeden záznam v materializovaném pohledu; čte uložená data materializovaného pohledu bez jeho obnovení"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.option.dmlldw.display_name": {
+          "source": "Materialized View",
+          "message": "Materializovaný pohled"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.option.dmlldw.short_desc": {
+          "source": "The name of the materialized view",
+          "message": "Název materializovaného pohledu"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.option.dmlldw.desc": {
+          "source": "The name of the materialized view",
+          "message": "Název materializovaného pohledu"
         }
       }
     }
