@@ -427,6 +427,7 @@ set(QORE_BIN_FILES
     bin/qdbg-server
     bin/qdbg-remote
     bin/qdbg-vsc-adapter
+    bin/qdbg-mcp
     bin/qore-i18n
     bin/qore-data-provider-i18n
     bin/qore-openapi3-gen
@@ -4124,6 +4125,8 @@ qore_user_module("qlib/JsonRpcHandler.qm")
 qore_user_module("qlib/McpClient")
 qore_user_module("qlib/McpClientDataProvider")
 qore_user_module("qlib/McpServerHandler")
+set(QORE_DOC_EXTRA_MODULES_DebugMcpServer DebugCmdLine DebugProgramControl McpServerHandler HttpServer)
+qore_user_module("qlib/DebugMcpServer")
 qore_user_module("qlib/NdjsonDataProvider")
 qore_user_module("qlib/OneRecordClient")
 qore_user_module("qlib/OneRecordServerHandler")

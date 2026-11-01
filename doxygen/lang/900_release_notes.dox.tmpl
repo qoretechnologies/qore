@@ -4568,6 +4568,11 @@ while (*binary chunk = input.read(65536)) {
     - @ref datastreamutilintro "DataStreamUtil" module
       - migrated from module-yaml; framing, serialization, and protocol negotiation for data streams
 
+    - @ref debugmcpserverintro "DebugMcpServer" module
+      - an <a href="https://modelcontextprotocol.io">MCP</a> server that lets coding agents debug %Qore programs:
+        launch a script or attach to a debug server, such as \c qdbg-server or Qorus, set breakpoints with
+        conditions, run until a thread pauses or a time passes, and read the call stack, the variables and the values
+        of expressions; the new \c qdbg-mcp tool runs it (see @ref debugging_mcp)
     - @ref deeldataproviderintro "DeelDataProvider" module
       - new module providing a data provider API for <a href="https://www.deel.com/">Deel</a> global workforce management
 

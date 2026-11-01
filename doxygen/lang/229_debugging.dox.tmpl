@@ -253,6 +253,31 @@ exception filter uncaught
 printf 'break create 3\ngo\nlocals\ngo\nquit\n' | qdbg --json --wait-timeout=5000 myfile.q
     @endcode
 
+    @section debugging_mcp Debugging with Coding Agents
+
+    \c qdbg-mcp runs an <a href="https://modelcontextprotocol.io">MCP</a> server that lets coding agents, such as
+    Claude Code, debug %Qore programs (see @ref debugmcpserverintro).  It listens on \c 127.0.0.1 and prints its URL;
+    the agent connects to it with the HTTP transport of MCP:
+    @code{.sh}
+qdbg-mcp -l 127.0.0.1:8100
+claude mcp add --transport http qore-debug http://127.0.0.1:8100/mcp
+    @endcode
+
+    The agent launches a script with \c qore_debug_launch, which runs in the process of the server and pauses at its
+    start, or attaches to a debug server, such as \c qdbg-server or Qorus, with \c qore_debug_attach.  It sets
+    breakpoints with conditions with \c qore_debug_set_breakpoint, and resumes threads with \c qore_debug_continue,
+    which returns when a thread pauses, the program ends, or its timeout passes; then the program is paused, so that
+    a loop that does not end can be inspected.  At a pause, \c qore_debug_stack, \c qore_debug_variables and
+    \c qore_debug_evaluate read the program; \c qore_debug_command runs any command of \c qdbg.  Each tool reports
+    the pauses with their locations and exceptions, the output of the program and its end since the last tool; an
+    exception that matches a @ref common_pitfalls "common pitfall" is reported with a hint, and a variable that was
+    declared but not assigned is marked as such.
+
+    The tools can run code with the permissions of the server: a launched script, and expressions with the code of
+    the debugged programs.  With \c -k, or the \c QDBG_MCP_TOKEN environment variable, the server requires a token,
+    which the agent sends as a bearer token; it does not listen on an address that other hosts can reach without one,
+    and \c --no-launch allows attaching to debug servers only.
+
     @section debugging_remote Remote Debugging
 
     \c qdbg-server runs a program and lets debugger clients connect to it over a websocket; it holds the program at

@@ -1,0 +1,108 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file DebugMcpServer.qm an MCP server that lets coding agents debug Qore programs
+
+/*  DebugMcpServer.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 3.0
+%requires(reexport) DebugCmdLine
+%requires(reexport) DebugProgramControl
+%requires(reexport) McpServerHandler
+%requires HttpServer
+%requires DataProvider
+%requires WebSocketClient
+%requires Logger
+%requires yaml
+%requires json
+
+%modern
+%no-debugging
+%allow-debugger
+# child program won't inherit parent program options (including %allow-debugger)
+%no-child-restrictions
+
+module DebugMcpServer {
+    version = "1.0";
+    desc = "user module providing an MCP server that debugs Qore programs for coding agents";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage DebugMcpServer Module
+
+    @tableofcontents
+
+    @section debugmcpserverintro Introduction to the DebugMcpServer Module
+
+    The %DebugMcpServer module provides an <a href="https://modelcontextprotocol.io">MCP</a> server that lets coding
+    agents, such as Claude Code, debug %Qore programs: launch a script or attach to a debug server, set breakpoints with
+    conditions, run until a thread pauses or a time passes, and read the call stack, the variables and the values of
+    expressions.  The \c qdbg-mcp tool runs it; see @ref debugging_mcp.
+
+    A debugged program runs in the server's process, like with \c qdbg, or in a debug server, such as \c qdbg-server or
+    Qorus, that the server attaches to.  Each tool answers with a JSON object that tells what happened: the stops and
+    other events of the debugger with their text, such as <tt>Paused at breakpoint 1 at main.q:3 (thread 2)</tt>, the
+    output of the program, the end of the program, and the state of the debugger.  A command that resumes a thread
+    returns when a thread pauses, when the program ends, or when its time passes; then the program is paused.  An
+    exception that matches a common pitfall of %Qore is given with a hint (see @ref common_pitfalls).
+
+    |!Tool|!Description
+    |\c qore_debug_launch|launches a %Qore script in the debugger; it pauses at its start
+    |\c qore_debug_attach|attaches to a debug server, such as \c qdbg-server or Qorus
+    |\c qore_debug_set_breakpoint|sets a breakpoint on a line, a statement of a line or a function, with an optional condition, hit condition or log message
+    |\c qore_debug_delete_breakpoint|deletes a breakpoint
+    |\c qore_debug_exception_filter|sets the exceptions that pause threads
+    |\c qore_debug_continue|resumes a thread: runs it, steps into or over a statement, or runs it until its function returns; it returns when a thread pauses, the program ends or the time passes
+    |\c qore_debug_pause|pauses the program
+    |\c qore_debug_stack|returns the call stack of a thread
+    |\c qore_debug_variables|returns the local variables of a frame, or the elements, keys or members of a value
+    |\c qore_debug_evaluate|evaluates an expression with the variables of a frame
+    |\c qore_debug_command|runs a command of the \c qdbg command-line debugger, for everything else
+    |\c qore_debug_status|returns the state of the debugger and what happened since the last tool
+    |\c qore_debug_terminate|ends the debugged program, or detaches from the debug server
+
+    @par Example:
+    @code{.py}
+%requires DebugMcpServer
+%requires HttpServer
+
+DebugMcpServer handler(new Logger(), new PermissiveAuthenticator());
+HttpServer http({});
+http.setHandler("mcp", "", MimeTypeJson, handler);
+http.setDefaultHandler("mcp", handler);
+int port = http.addListener(http_get_listener_options_from_bind("127.0.0.1:0")).port;
+    @endcode
+
+    @note A debugger client can evaluate expressions and change the program, and a launched script runs with the
+    permissions of the server; the server should only be reachable by its own user, as with a listener on
+    \c 127.0.0.1 and a token (see \c qdbg-mcp \c -k).
+
+    @section debugmcpserver_relnotes Release Notes
+
+    @subsection debugmcpserver_v1_0 v1.0
+    - initial release
+*/
+
+#! the DebugMcpServer namespace contains all the definitions in the DebugMcpServer module
+public namespace DebugMcpServer {
+}

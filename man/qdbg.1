@@ -2,7 +2,7 @@
 .\"
 .\" Copyright (C) 2017 - 2026 Qore Technologies, s.r.o.
 .\"
-.TH QDBG 1 "2026 July 10" "Qore 3.0" "Qore Programming Language"
+.TH QDBG 1 "2026 October 31" "Qore 3.0" "Qore Programming Language"
 .SH NAME
 qdbg \- interactive debugger for Qore programs
 .br
@@ -11,6 +11,8 @@ qdbg-remote \- remote debugger client for Qore
 qdbg-server \- debug server for remote Qore debugging
 .br
 qdbg-vsc-adapter \- VS Code Debug Adapter Protocol bridge
+.br
+qdbg-mcp \- MCP server that lets coding agents debug Qore programs
 .SH SYNOPSIS
 .B qdbg
 [\fIoptions\fP] \fIprogram\fP [\fIprogram-args\fP]...
@@ -22,6 +24,9 @@ qdbg-vsc-adapter \- VS Code Debug Adapter Protocol bridge
 [\fIoptions\fP] \fIprogram\fP [\fIprogram-args\fP]...
 .PP
 .B qdbg-vsc-adapter
+[\fIoptions\fP]
+.PP
+.B qdbg-mcp
 [\fIoptions\fP]
 .SH DESCRIPTION
 The \fBqdbg\fR family provides debugging support for Qore programs.
@@ -44,6 +49,12 @@ Run the target program under this server, then attach with
 .SS qdbg-vsc-adapter
 Debug Adapter Protocol (DAP) implementation for Visual Studio Code.
 Can launch programs locally or attach to a remote \fBqdbg-server\fR.
+.SS qdbg-mcp
+Model Context Protocol (MCP) server that lets coding agents debug Qore
+programs: launch a script in its process or attach to a debug server, set
+breakpoints, run until a thread pauses or a time passes, and read the call
+stack, the variables and the values of expressions.
+Agents connect to it with the HTTP transport of MCP.
 .SH "QDBG OPTIONS"
 .TP
 .BR \-h ", " \-\-help
@@ -73,6 +84,26 @@ Force color output.
 .TP
 .B \-\-no\-color
 Disable color output.
+.TP
+.BR \-i ", " \-\-init\-file =\fIfile\fP
+Run the commands of \fIfile\fP at the start instead of those of
+\fI~/.qdbginit\fP.
+.TP
+.BR \-n ", " \-\-no\-init
+Do not run the commands of \fI~/.qdbginit\fP at the start.
+.TP
+.BR \-x ", " \-\-execute =\fIfile\fP
+Run the commands of \fIfile\fP at the start, after those of the init file
+(repeatable).
+.TP
+.B \-\-json
+Write JSON Lines for programs such as coding agents: one object for each
+command, event and output of the program; commands are read without a
+prompt.
+.TP
+.BR \-\-wait\-timeout =\fIms\fP
+The time that a command that resumes a thread waits for a thread to pause
+when the input is not a terminal; then the program is paused.
 .SH "QDBG-REMOTE OPTIONS"
 .TP
 .BR \-h ", " \-\-help
@@ -111,6 +142,26 @@ Force color output.
 .TP
 .B \-\-no\-color
 Disable color output.
+.TP
+.BR \-i ", " \-\-init\-file =\fIfile\fP
+Run the commands of \fIfile\fP at the start instead of those of
+\fI~/.qdbginit\fP.
+.TP
+.BR \-n ", " \-\-no\-init
+Do not run the commands of \fI~/.qdbginit\fP at the start.
+.TP
+.BR \-x ", " \-\-execute =\fIfile\fP
+Run the commands of \fIfile\fP at the start, after those of the init file
+(repeatable).
+.TP
+.B \-\-json
+Write JSON Lines for programs such as coding agents: one object for each
+command, event and output of the program; commands are read without a
+prompt.
+.TP
+.BR \-\-wait\-timeout =\fIms\fP
+The time that a command that resumes a thread waits for a thread to pause
+when the input is not a terminal; then the program is paused.
 .SH "QDBG-SERVER OPTIONS"
 .TP
 .BR \-h ", " \-\-help
@@ -182,6 +233,33 @@ The supported command is \fBpgmlist\fP, which lists all programs.
 .TP
 .BR \-h ", " \-\-help
 Show help text and exit.
+.SH "QDBG-MCP OPTIONS"
+.TP
+.BR \-h ", " \-\-help
+Show help text and exit.
+.TP
+.BR \-l ", " \-\-listen =\fIaddress\fP
+Listen on an address, such as \fB127.0.0.1:8100\fP or a UNIX socket path
+(repeatable).
+Default: a free port of 127.0.0.1.
+.TP
+.BR \-p ", " \-\-path =\fIpath\fP
+The path of the MCP endpoint (default: \fBmcp\fP).
+.TP
+.BR \-k ", " \-\-token\-file =\fIfile\fP
+Require the token in \fIfile\fP from the clients, sent as a bearer token;
+the \fBQDBG_MCP_TOKEN\fP environment variable gives it too.
+Required for an address that other hosts can reach.
+.TP
+.B \-\-no\-launch
+Do not launch scripts in the process of the server; only attach to debug
+servers.
+.TP
+.BR \-L ", " \-\-log\-file =\fIfile\fP
+Write the log of the server to \fIfile\fP.
+.TP
+.BR \-v ", " \-\-verbose
+Log more details (repeatable).
 .SH EXAMPLES
 Debug a program locally:
 .RS
@@ -191,6 +269,18 @@ Debug a program locally:
 Run a script of debugger commands, without command history:
 .RS
 .B qdbg \-y . myprogram.q < commands
+.RE
+.PP
+Run debugger commands from a program, with JSON output:
+.RS
+.B qdbg \-\-json \-\-wait\-timeout=5000 myprogram.q < commands
+.RE
+.PP
+Let a coding agent debug Qore programs:
+.RS
+.B qdbg-mcp \-l 127.0.0.1:8100
+.br
+.B claude mcp add \-\-transport http qore-debug http://127.0.0.1:8100/mcp
 .RE
 .PP
 Start a debug server:

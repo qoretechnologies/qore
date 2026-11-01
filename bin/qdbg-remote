@@ -274,6 +274,10 @@ class DebugWrapper {
                 if (sess.result{pgmId}.interrupted) {
                     dcl.setContextValue('threadId', sess.result{pgmId}.interrupted[0]);
                 }
+                # the threads that are stopped are paused
+                foreach string pid in (keys sess.result) {
+                    dcl.notePausedThreads(pid, sess.result{pid}.interrupted ?? ());
+                }
             }
             dcl.init(opt);
             # each command of a script is processed when the program is stopped
