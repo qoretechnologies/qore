@@ -76,6 +76,18 @@ public class DgcScanCollisionsTest inherits QUnit::Test {
     private {
         Counter cnt();
         list<auto> ring_holder = ();
+        #! the members of the cycle that chainTest() and lockedTest() scan
+        /** The scanning threads read the list from here and keep no reference to it.  A thread that captured the list
+            in a closure or took it as an argument would hold it until the thread ended, after the on_exit block that
+            tells the test that its scan is done, so that releasing the list would sometimes leave the cycle alive.
+        */
+        list<auto> graph = ();
+
+        #! the scanning threads of chainTest() and lockedTest() end only when this is released
+        /** The test checks that the cycle is collected while every scanning thread is still alive, so a thread that
+            kept a reference to the cycle fails the check every time instead of only when it is slow to end.
+        */
+        Counter threads_end();
     }
 
     constructor() : Test("DGC scan collisions", "1.0", \ARGV) {
@@ -115,17 +127,36 @@ public class DgcScanCollisionsTest inherits QUnit::Test {
     */
     private chainTest() {
         checkHooks();
-        list<auto> l = makeCycle();
+        holdThreads();
+        on_exit releaseThreads();
+        graph = makeCycle();
         for (int round = 0; round < 2; ++round) {
-            chainRound(l, round);
+            chainRound(round);
         }
 
         Counted::dc = 0;
-        l = ();
+        graph = ();
         assertEq(3, Counted::dc, "the cycle is collected once the list is released");
     }
 
-    private chainRound(list<auto> l, int round) {
+    #! Keeps the scanning threads alive after they report their scans until releaseThreads()
+    private holdThreads() {
+        assertEq(0, threads_end.getCount(), "no scanning threads are held from an earlier test case");
+        threads_end.inc();
+    }
+
+    #! Lets the scanning threads held by holdThreads() end
+    private releaseThreads() {
+        release(threads_end);
+    }
+
+    #! Reports a scanning thread's scan as done and keeps the thread alive until releaseThreads()
+    private scanDone(Counter done) {
+        done.dec();
+        threads_end.waitForZero();
+    }
+
+    private chainRound(int round) {
         string prefix = sprintf("round %d: ", round);
         Counter c_held(1);
         Counter c_release(1);
@@ -144,8 +175,8 @@ public class DgcScanCollisionsTest inherits QUnit::Test {
         }
 
         code scan = sub (string name, int i) {
-            on_exit done.dec();
-            hash<auto> h = call_function("dbg_rset_scan", l, i, True);
+            on_exit scanDone(done);
+            hash<auto> h = call_function("dbg_rset_scan", graph, i, True);
             m.lock();
             on_exit m.unlock();
             results{name} = h + {"tid": gettid()};
@@ -216,24 +247,25 @@ public class DgcScanCollisionsTest inherits QUnit::Test {
     */
     private lockedTest() {
         checkHooks();
-        list<auto> l;
+        holdThreads();
+        on_exit releaseThreads();
         {
             LockedY y();
             LockedW w();
             y.next = w;
             w.next = y;
-            l = (y, w);
+            graph = (y, w);
         }
         for (int round = 0; round < 2; ++round) {
-            lockedRound(l, round);
+            lockedRound(round);
         }
 
         Counted::dc = 0;
-        l = ();
+        graph = ();
         assertEq(2, Counted::dc, "the cycle is collected once the list is released");
     }
 
-    private lockedRound(list<auto> l, int round) {
+    private lockedRound(int round) {
         string prefix = sprintf("round %d: ", round);
         Counter a_held(1);
         Counter a_release(1);
@@ -253,8 +285,8 @@ public class DgcScanCollisionsTest inherits QUnit::Test {
         call_function("dbg_hold_scan", "LockedY", a_held, a_release);
         done.inc();
         background sub () {
-            on_exit done.dec();
-            hash<auto> h = call_function("dbg_rset_scan", l, 0, True);
+            on_exit scanDone(done);
+            hash<auto> h = call_function("dbg_rset_scan", graph, 0, True);
             m.lock();
             on_exit m.unlock();
             results.A = h;
@@ -264,8 +296,8 @@ public class DgcScanCollisionsTest inherits QUnit::Test {
         # T holds W's write lock and scans from Y, which needs Y's scan lock
         done.inc();
         int t_tid = background sub () {
-            on_exit done.dec();
-            hash<auto> h = call_function("dbg_rset_scan_locked", l, 0, True, l[1], t_locked);
+            on_exit scanDone(done);
+            hash<auto> h = call_function("dbg_rset_scan_locked", graph, 0, True, graph[1], t_locked);
             m.lock();
             on_exit m.unlock();
             results.T = h;
