@@ -186,6 +186,16 @@ hash<auto> desc = {
     @section mysql_relnotes Release Notes
 
     @subsection mysqlsqlutilv16 MysqlSqlUtil v1.6
+    - fixed @ref SqlUtil::AbstractDatabase::listTables() "listTables()" and
+      @ref SqlUtil::AbstractDatabase::tableIterator() "tableIterator()" listing views, and on MariaDB sequences, as
+      tables, and @ref SqlUtil::AbstractDatabase::getTable() "getTable()" opening a view or a sequence as a table:
+      only base tables, system-versioned tables, and temporary tables that the server reports in
+      \c information_schema.tables are tables; a view is acquired with
+      @ref SqlUtil::AbstractDatabase::getView() "getView()" and listed by
+      @ref SqlUtil::AbstractDatabase::listViews() "listViews()" only
+    - fixed @ref SqlUtil::AbstractDatabase::getView() "getView()", which returned nothing for a view name without
+      a schema and raised a \c RUNTIME-OVERLOAD-ERROR exception for a view that exists; a name without a schema is
+      now a view of the database's schema, as for tables
     - emulated-sequence connections retain typed driver options when cloning the datasource configuration
     - security: names are quoted and escaped where they are not ordinary names, or refused if they cannot be
       identifiers in SQL run through the \c mysql driver, so that a table, column, index, constraint, sequence,
@@ -1482,16 +1492,18 @@ end";
         }
 
         private *AbstractView getViewImpl(string name) {
-            *string schema;
-            parse_schema_name(name, \schema, \name);
+            # a name without a schema is a view of the database's schema, as for tables; with no schema, no view was
+            # found, as the name was looked up with a NULL schema
+            *string vschema;
+            parse_schema_name(name, \vschema, \name);
 
-            *hash<auto> row = ds.selectRow("select * from information_schema.views where table_schema = %v and table_name = %v", schema, name);
+            *hash<auto> row = ds.selectRow("select * from information_schema.views where table_schema = %v and table_name = %v", vschema ?? schema, name);
             if (!row)
                 return;
 
             return new MysqlView(name, row.view_definition, row.table_catalog,
                                  row.table_schema, row.check_option, row.definer,
-                                 row.security_type, row.is_updatable);
+                                 row.security_type, row.is_updatable == "YES");
         }
 
         private MysqlFunction makeFunctionImpl(string name, string src, *hash opts) {
@@ -1585,8 +1597,18 @@ end";
         }
 
         #! returns a list of string table names in the database
+        /** Only the tables that @ref SqlUtil::AbstractDatabase::getTable() "getTable()" opens are listed: base
+            tables, MariaDB system-versioned tables, and the session's temporary tables on MariaDB servers that
+            report them in \c information_schema.tables (MariaDB 11.2 and later); views are listed by
+            @ref SqlUtil::AbstractDatabase::listViews() "listViews()" only, and MariaDB sequences are not listed
+        */
         private list<string> listTablesImpl() {
-            return ds.select("select table_name from information_schema.tables where table_schema = %v", schema).table_name;
+            # NOTE: information_schema.tables also has every view, and on MariaDB every sequence, which are not
+            # tables; a temporary table with the name of a base table is reported in a row of its own, so the name
+            # is listed once
+            return ds.select("select distinct table_name as name from information_schema.tables "
+                "where table_schema = %v and table_type in (" + MysqlTable::TableTypeList + ") order by 1",
+                schema).name ?? ();
         }
 
         #! returns a list of string function names in the database
@@ -1741,6 +1763,15 @@ end";
     #! provides the MySQL-specific implementation of the AbstractTable interface
     public class MysqlTable inherits SqlUtil::AbstractTable {
         public {
+            #! the \c information_schema.tables \c table_type values of tables, as an SQL list
+            /** \c "BASE TABLE" is a table, \c "SYSTEM VERSIONED" a MariaDB system-versioned table, and
+                \c "TEMPORARY" a temporary table of the session on MariaDB 11.2 and later; \c "VIEW",
+                \c "SYSTEM VIEW" and MariaDB's \c "SEQUENCE" are not tables
+
+                @since MysqlSqlUtil 1.6
+            */
+            const TableTypeList = "'BASE TABLE', 'SYSTEM VERSIONED', 'TEMPORARY'";
+
             #! maps mysql type names to type configurations
             const MysqlTypeMap = {
                 "decimal": {
@@ -2599,7 +2630,10 @@ end";
         }
 
         private bool checkExistenceImpl() {
-            *hash qh = ds.selectRow("select * from information_schema.tables where table_name = %v and table_schema = %v", name, schema);
+            # only a table exists as a table: a view or a MariaDB sequence with this name does not; see
+            # MysqlDatabase::listTablesImpl()
+            *hash qh = ds.selectRow("select table_name from information_schema.tables where table_name = %v "
+                "and table_schema = %v and table_type in (" + TableTypeList + ") limit 1", name, schema);
             if (qh)
                 return inDb = True;
             return False;

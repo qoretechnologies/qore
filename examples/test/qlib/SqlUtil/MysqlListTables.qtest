@@ -1,0 +1,261 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+%requires MysqlSqlUtil
+%requires DbDataProvider
+
+%exec-class MysqlListTablesTest
+
+#! Tests that MySQL and MariaDB list as tables exactly the relations that getTable() opens as tables
+/** Every object is created by the test with a name of its own run and dropped at the end.
+
+    The connection string is taken from the \c -c / \c --conn option or the \c QORE_DB_CONNSTR_MYSQL environment
+    variable; all tests are skipped if no MySQL connection can be made.
+*/
+class MysqlListTablesTest inherits QUnit::Test {
+    private {
+        const MyOpts = Opts + {
+            "connstr": "c,conn=s",
+        };
+
+        #! the test connection; NOTHING if no MySQL connection is available
+        *Datasource ds;
+
+        #! the prefix of every object that the test creates
+        string prefix;
+
+        #! True if the server is MariaDB
+        bool mariadb = False;
+
+        #! the reason the tests are skipped, if they are
+        string skip_reason = "no MySQL connection";
+    }
+
+    constructor() : Test("MysqlListTablesTest", "1.0", \ARGV, MyOpts) {
+        try {
+            *string connstr = m_options.connstr ?? ENV.QORE_DB_CONNSTR_MYSQL;
+            if (connstr) {
+                Datasource nds(connstr);
+                if (nds.getDriverName() != "mysql") {
+                    skip_reason = sprintf("connection uses driver %y, not mysql", nds.getDriverName());
+                } else {
+                    nds.open();
+                    ds = nds;
+                }
+            } else {
+                skip_reason = "no MySQL connection configured (use -c or QORE_DB_CONNSTR_MYSQL)";
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            skip_reason = sprintf("cannot connect to MySQL: %s: %s", ex.err, ex.desc);
+        }
+
+        prefix = "qore_mlt_" + get_random_string(8).lwr() + "_";
+        on_exit {
+            if (ds) {
+                dropObjects();
+            }
+        }
+        if (ds) {
+            mariadb = (ds.selectRow("select version() as v").v =~ /mariadb/i);
+            setupObjects();
+        }
+
+        addTestCase("every listed table opens with getTable(); views are not tables", \relationKindTest());
+        addTestCase("temporary tables are listed exactly when getTable() opens them", \temporaryTableTest());
+        addTestCase("a MariaDB sequence is not a table", \sequenceTest());
+        addTestCase("a MariaDB system-versioned table is a table", \systemVersionedTest());
+        addTestCase("db tables data provider children are the listed tables", \dataProviderTest());
+
+        set_return_value(main());
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(22);
+        printOption("-c,--conn=ARG", "set DB connection argument (ex: \"mysql:user/pass@db\")", 22);
+    }
+
+    #! creates the test's base table and views
+    private setupObjects() {
+        on_error ds.rollback();
+        on_success ds.commit();
+        ds.exec(sprintf("create table %st (id int)", prefix));
+        ds.exec(sprintf("create view %sv as select 1 as id", prefix));
+        ds.exec(sprintf("create view %sv_t as select id from %st", prefix, prefix));
+    }
+
+    #! drops every object of the test; never throws, so it can run on exit
+    private dropObjects() {
+        try {
+            ds.rollback();
+            foreach hash<auto> row in (ds.select("select table_name as name, table_type as type "
+                    "from information_schema.tables where table_schema = database() and table_name like %v",
+                    prefix + "%").contextIterator()) {
+                string kind = row.type == "VIEW" ? "view" : (row.type == "SEQUENCE" ? "sequence" : "table");
+                try {
+                    ds.exec(sprintf("drop %s if exists %s", kind, row.name));
+                } catch (hash<ExceptionInfo> ex) {
+                    printf("WARNING: cannot drop %s %y: %s: %s\n", kind, row.name, ex.err, ex.desc);
+                }
+            }
+            ds.commit();
+        } catch (hash<ExceptionInfo> ex) {
+            printf("WARNING: cannot drop the test's objects: %s: %s\n", ex.err, ex.desc);
+        }
+    }
+
+    private checkConnection() {
+        if (!ds) {
+            testSkip(skip_reason);
+        }
+    }
+
+    #! returns the given list as a set
+    private static hash<string, bool> toSet(list<string> l) {
+        return map {$1: True}, l;
+    }
+
+    #! asserts that each listed name opens as a table
+    private assertOpens(Database db, list<string> names) {
+        foreach string name in (names) {
+            *AbstractTable t = db.getTable(name);
+            assertTrue(exists t, sprintf("listed name %y opens with getTable()", name));
+            if (t) {
+                assertTrue(t.checkExistence(), sprintf("listed name %y is an existing table", name));
+            }
+        }
+    }
+
+    private relationKindTest() {
+        checkConnection();
+
+        Database db(ds);
+        string dbname = ds.getDBName();
+        list<string> tables = db.listTables();
+        hash<string, bool> listed = toSet(tables);
+        hash<string, bool> views = toSet(db.listViews());
+
+        # every name listed as a table opens as a table, and none is listed twice
+        assertOpens(db, tables);
+        assertEq(tables.size(), listed.size(), "no table name is listed twice");
+        assertEq(sort(tables), sort(map $1, db.tableIterator()), "tableIterator() lists the same tables");
+
+        # a base table
+        string tname = prefix + "t";
+        assertTrue(listed{tname}, "a base table is listed as a table");
+        assertFalse(views.hasKey(tname), "a base table is not listed as a view");
+        assertNothing(db.getView(tname), "a base table does not open as a view");
+
+        # views, of a constant and of the table, are listed and opened only as views
+        foreach string vname in ((prefix + "v", prefix + "v_t")) {
+            assertFalse(listed.hasKey(vname), sprintf("view %y is not listed as a table", vname));
+            assertTrue(views{vname}, sprintf("view %y is listed as a view", vname));
+            assertNothing(db.getTable(vname), sprintf("view %y does not open with getTable()", vname));
+            assertFalse(AbstractTable::getTable(ds, vname).checkExistence(),
+                sprintf("view %y does not exist as a table", vname));
+            *AbstractView v = db.getView(vname);
+            assertTrue(exists v, sprintf("view %y opens with getView()", vname));
+            assertEq(dbname, v ? v.schema : NOTHING, sprintf("view %y opens in the database's schema", vname));
+            *AbstractView qv = db.getView(dbname + "." + vname);
+            assertTrue(exists qv, sprintf("view %y opens with getView() with its schema", vname));
+            assertEq(vname, qv ? qv.name : NOTHING, sprintf("view %y opens by its name with its schema", vname));
+        }
+        assertTrue(db.getView(prefix + "v").updatable === False, "a view of a constant is not updatable");
+        assertTrue(db.getView(prefix + "v_t").updatable === True, "a view of a table's column is updatable");
+        assertFalse(inlist(prefix + "v", map $1, db.tableIterator()), "tableIterator() does not list a view");
+    }
+
+    private temporaryTableTest() {
+        checkConnection();
+
+        # does the server report a session's temporary tables in information_schema.tables (MariaDB 11.2+)?
+        string probe = prefix + "tmp_probe";
+        ds.exec(sprintf("create temporary table %s (id int)", probe));
+        on_exit {
+            try {
+                ds.exec(sprintf("drop temporary table if exists %s", probe));
+            } catch (hash<ExceptionInfo> ex) {
+                printf("WARNING: cannot drop temporary table %y: %s: %s\n", probe, ex.err, ex.desc);
+            }
+        }
+        bool reported = exists ds.selectRow("select table_name from information_schema.tables "
+            "where table_schema = database() and table_name = %v", probe);
+
+        # a temporary table is listed if and only if getTable() opens it
+        Database db(ds);
+        list<string> tables = db.listTables();
+        assertEq(reported, inlist(probe, tables),
+            sprintf("a temporary table is listed exactly when the server reports it (%y)", reported));
+        assertEq(reported, exists db.getTable(probe),
+            sprintf("a temporary table opens with getTable() exactly when it is listed (%y)", reported));
+        assertOpens(db, tables);
+
+        # a temporary table with the name of a base table hides it in the session; the name is listed once
+        string tname = prefix + "t";
+        ds.exec(sprintf("create temporary table %s (id int, tmp_col int)", tname));
+        on_exit {
+            try {
+                ds.exec(sprintf("drop temporary table if exists %s", tname));
+            } catch (hash<ExceptionInfo> ex) {
+                printf("WARNING: cannot drop temporary table %y: %s: %s\n", tname, ex.err, ex.desc);
+            }
+        }
+        tables = db.listTables();
+        assertEq(1, (select tables, $1 == tname).size(),
+            "a base table hidden by a temporary table of the same name is listed once");
+        assertTrue(exists db.getTable(tname), "the name of a hidden base table opens with getTable()");
+        assertEq(tables.size(), toSet(tables).size(), "no table name is listed twice");
+    }
+
+    private sequenceTest() {
+        checkConnection();
+        if (!mariadb) {
+            testSkip("only MariaDB has sequences");
+        }
+
+        string sname = prefix + "s";
+        ds.exec(sprintf("create sequence %s", sname));
+        ds.commit();
+
+        Database db(ds);
+        list<string> tables = db.listTables();
+        assertFalse(inlist(sname, tables), "a MariaDB sequence is not listed as a table");
+        assertNothing(db.getTable(sname), "a MariaDB sequence does not open with getTable()");
+        assertFalse(inlist(sname, db.listViews()), "a MariaDB sequence is not listed as a view");
+        assertOpens(db, tables);
+    }
+
+    private systemVersionedTest() {
+        checkConnection();
+        if (!mariadb) {
+            testSkip("only MariaDB has system-versioned tables");
+        }
+
+        string tname = prefix + "sv";
+        ds.exec(sprintf("create table %s (id int) with system versioning", tname));
+        ds.commit();
+
+        Database db(ds);
+        list<string> tables = db.listTables();
+        assertTrue(inlist(tname, tables), "a system-versioned table is listed as a table");
+        assertTrue(exists db.getTable(tname), "a system-versioned table opens with getTable()");
+        assertOpens(db, tables);
+    }
+
+    private dataProviderTest() {
+        checkConnection();
+
+        DbTablesDataProvider prov(ds);
+        list<string> children = prov.getChildProviderNames() ?? ();
+        assertEq((new Database(ds)).listTables(), children, "the data provider's children are the listed tables");
+        assertTrue(inlist(prefix + "t", children), "the base table is a child");
+        assertFalse(inlist(prefix + "v", children), "a view is not a child");
+        assertNothing(prov.getChildProvider(prefix + "v"), "a view is not a table data provider");
+        assertTrue(exists prov.getChildProvider(prefix + "t"), "the base table is a table data provider");
+    }
+}
