@@ -32,6 +32,7 @@
 #include "qore/intern/QoreException.h"
 #include "qore/intern/QoreRuntimeDiagnostic.h"
 #include "qore/intern/qore_list_private.h"
+#include "qore/intern/QoreHashNodeIntern.h"
 
 #include <cstdlib>
 

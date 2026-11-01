@@ -32,6 +32,8 @@
 #ifndef _QORE_INTERN_QORERUNTIMEDIAGNOSTIC_H
 #define _QORE_INTERN_QORERUNTIMEDIAGNOSTIC_H
 
+#include <qore/Qore.h>
+
 #include <string>
 #include <utility>
 #include <vector>
