@@ -150,6 +150,15 @@ hash<auto> desc = {
     @ref SqlUtil::AbstractSequence::getAlterSql() "AbstractSequence::getAlterSql()"), so that it keeps its current
     value.
 
+    The function updates the table, so it is neither deterministic nor free of SQL that modifies data.  A server with binary logging enabled (the default of MySQL 8.0 and later) creates such a function
+    only with the global \c log_bin_trust_function_creators system variable set to 1: then any user with the
+    \c CREATE \c ROUTINE privilege can create it.  Without it, the server refuses the function for every user,
+    one with the \c SUPER privilege too, with error 1418, or for a user without \c SUPER with error 1419.  When
+    the function is created with @ref SqlUtil::AbstractDatabase::tryExecRaw() "AbstractDatabase::tryExecRaw()",
+    as schema alignment with the Schema module creates it, such a refusal raises \c MYSQL-SEQUENCE-ERROR, which
+    names the requirement and gives the server's message.  A server without binary logging, as MariaDB's default,
+    has no such requirement.
+
     @subsection mysql_identifiers Identifiers and String Literals on MySQL
 
     Names are given to MySQL as described in @ref sql_identifiers: an ordinary name (a letter, an underscore or a
@@ -186,6 +195,11 @@ hash<auto> desc = {
     @section mysql_relnotes Release Notes
 
     @subsection mysqlsqlutilv16 MysqlSqlUtil v1.6
+    - documented that a server with binary logging enabled, as MySQL 8.0 and later by default, creates the function
+      that emulates sequences only with \c log_bin_trust_function_creators set to 1 (see @ref mysql_sequences), and
+      a refusal to create it with @ref SqlUtil::AbstractDatabase::tryExecRaw() "AbstractDatabase::tryExecRaw()", as
+      schema alignment creates it, raises \c MYSQL-SEQUENCE-ERROR, which names the requirement and gives the
+      server's message
     - fixed @ref SqlUtil::AbstractDatabase::computeStatistics() "computeStatistics()" and
       @ref SqlUtil::AbstractDatabase::reclaimSpace() "reclaimSpace()", which never wrote the statement to the binary
       log, whatever the \c no-binlog option was, as \c LOCAL is MySQL's synonym for \c NO_WRITE_TO_BINLOG, so
@@ -1673,6 +1687,55 @@ end";
         #! returns driver-specific options to the base abstract class
         private hash getReclaimSpaceOptions() {
             return MysqlReclaimSpaceOptions;
+        }
+
+        #! executes SQL so that a refusal to create the function that emulates sequences names its requirement
+        /** @throw MYSQL-SEQUENCE-ERROR the server refused to create the sequence function, as binary logging is
+            enabled and \c log_bin_trust_function_creators is not set (see @ref mysql_sequences); the server's own
+            message is in the description, and its exception is the argument
+        */
+        private auto tryExecArgsImpl(string sql, *softlist<auto> args) {
+            try {
+                return ds.vexec(sql, args);
+            } catch (hash<ExceptionInfo> ex) {
+                checkSequenceFunctionRefusal(sql, ex);
+                rethrow;
+            }
+        }
+
+        #! executes SQL so that a refusal to create the function that emulates sequences names its requirement
+        /** @throw MYSQL-SEQUENCE-ERROR the server refused to create the sequence function, as binary logging is
+            enabled and \c log_bin_trust_function_creators is not set (see @ref mysql_sequences); the server's own
+            message is in the description, and its exception is the argument
+        */
+        private auto tryExecRawImpl(string sql) {
+            try {
+                return ds.execRaw(sql);
+            } catch (hash<ExceptionInfo> ex) {
+                checkSequenceFunctionRefusal(sql, ex);
+                rethrow;
+            }
+        }
+
+        #! raises MYSQL-SEQUENCE-ERROR if the exception is the server's refusal to create the sequence function
+        /** MySQL and MariaDB refuse a function that is not declared deterministic, without SQL or reading SQL
+            data only, with error 1418 (\c ER_BINLOG_UNSAFE_ROUTINE), and any function for a user without the
+            \c SUPER privilege with error 1419 (\c ER_BINLOG_CREATE_ROUTINE_NEED_SUPER), when binary logging is
+            enabled and \c log_bin_trust_function_creators is not set
+        */
+        private checkSequenceFunctionRefusal(string sql, hash<ExceptionInfo> ex) {
+            auto code = ex.arg.typeCode() == NT_HASH ? ex.arg.alterr_code : NOTHING;
+            if (code != 1418 && code != 1419) {
+                return;
+            }
+            string prefix = "create function " + mysql_get_sql_object_name(sequence_function) + "(";
+            if (sql.lwr().substr(0, prefix.size()) != prefix.lwr()) {
+                return;
+            }
+            throw "MYSQL-SEQUENCE-ERROR", sprintf("cannot create function %y, which emulates sequences: the server "
+                "has binary logging enabled, and it creates this function, which modifies data, only with the global "
+                "system variable log_bin_trust_function_creators set to 1, for any user, one with the SUPER "
+                "privilege too; the server said: %s: %s", sequence_function, ex.err, ex.desc), ex;
         }
 
         #! returns the next value in the given sequence
