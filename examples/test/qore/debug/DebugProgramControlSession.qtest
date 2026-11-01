@@ -373,6 +373,7 @@ public class DebugProgramControlTest inherits QUnit::Test {
         addTestCase("a thread that starts without a client", \threadStartWithoutClientTest());
         addTestCase("the debugger ends a stopped program", \terminateStoppedTest());
         addTestCase("the debugger ends a program with a thread that waits", \terminateBlockedTest());
+        addTestCase("the debugger ends a program whose thread runs", \terminateRunningTest());
         set_return_value(main());
     }
 
@@ -1330,6 +1331,23 @@ public class DebugProgramControlTest inherits QUnit::Test {
         hash<auto> rv = p.done.get(EventTimeout);
         p.finished = True;
         assertEq("THREAD-CANCELLED", rv.ex.err);
+    }
+
+    # the thread that runs a program ends when the debugger ends the program while it runs, as while it waits: it is
+    # cancelled, and its detach is reported without a second exception of the debugger
+    terminateRunningTest() {
+        DebuggedProgram p(dpc, "%modern\nCounter forever(1);\nforever.waitForZero();\n");
+        on_exit p.cleanup();
+        dpc.go(p.tid);
+        dpc.command(sprintf("program/%d/terminate", p.pgmId));
+        hash<auto> e = dpc.getInterrupt(p.pgmId);
+        assertEq(("detach", p.tid), (e.func, e.tid));
+        dpc.go(e.tid);
+        hash<auto> rv = p.done.get(EventTimeout);
+        p.finished = True;
+        assertEq("THREAD-CANCELLED", rv.ex.err);
+        assertRegex("the debugger ended the program$", rv.ex.desc);
+        assertFalse(rv.ex.hasKey("next") && exists rv.ex.next, sprintf("%y", rv.ex.next));
     }
 
     # without a client, a thread that starts does not stop, as nobody could resume it

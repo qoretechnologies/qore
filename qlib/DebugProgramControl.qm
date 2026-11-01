@@ -2202,8 +2202,14 @@ public namespace DebugProgramControl {
             # detach are reported as for any thread that ends, so that the clients know when the program has ended
             # (see terminateProgram())
             bool ends = func == "exit" || func == "detach";
-            if (isTerminating(pgm.getProgramId())) {
+            # a thread that ends its code is still cancelled if the debugger ended it while it waited, as for a lock, so
+            # the flag is read without startedLock, whose lock is a cancellation point; reading a member is atomic
+            if (ends ? boolean(terminatingPrograms{pgm.getProgramId()}) : isTerminating(pgm.getProgramId())) {
                 if (!ends) {
+                    # a thread that raises an exception, as the THREAD-CANCELLED exception that ends it, ends with it
+                    if (func == "exception") {
+                        return;
+                    }
                     throw "THREAD-CANCELLED", TerminateReason;
                 }
                 # a thread that the debugger cancelled has ended its code; it is no longer cancelled, so that it can
