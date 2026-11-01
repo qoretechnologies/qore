@@ -126,6 +126,7 @@ public class QdbgScriptTest inherits QUnit::Test {
         addTestCase("the time that a command waits for a thread to pause", \waitTimeoutTest());
         addTestCase("quitting while the program runs", \quitRunningTest());
         addTestCase("pausing threads that log, and the ends of the threads of a program", \threadEndTest());
+        addTestCase("a pause in blocks, and the threads of logpoints in JSON output", \pauseBlockTest());
         addTestCase("conditions are checked when they are set", \conditionCheckTest());
         addTestCase("top-level local variables in functions", \topLevelVarTest());
         addTestCase("the usage of the debugger tools", \usageTest());
@@ -627,7 +628,7 @@ public class QdbgScriptTest inherits QUnit::Test {
             "frame set 9",
             # the only call of the line, and its first statement
             "go stepinto",
-            # the end of the function
+            # out of the function, to the next statement of the caller
             "go untilreturn",
             "go",
             # negative: a frame of a thread that has ended
@@ -646,8 +647,8 @@ public class QdbgScriptTest inherits QUnit::Test {
             "* thread 2 (", "), paused: <top level> at ", "target.q:7",
             "there is no frame 9; the frames are numbered from 0 to 0",
             "Paused at ", "target.q:3",
-            "Paused before the function returns at ", "target.q:5",
-            "Paused at breakpoint 2 at ", "target.q:8",
+            # the thread pauses at the next statement of the caller, which shows the value that add() returned
+            "Paused at ", "target.q:8", "add() returned 5", "8>: printf(",
             "total: 5",
             "Thread 2 ended",
             "there is no current thread",
@@ -674,8 +675,7 @@ public class QdbgScriptTest inherits QUnit::Test {
             "integer b = 3", "integer a = 2",
             "integer a + b = 5",
             "Paused at ", "target.q:4",
-            "Paused before the function returns at ", "target.q:5",
-            "Paused at ", "target.q:8",
+            "Paused at ", "target.q:8", "add() returned 5",
             "total: 5",
             "Thread 2 ended",
         ));
@@ -1138,6 +1138,42 @@ public class QdbgScriptTest inherits QUnit::Test {
             assertEq(4, ends.size(), res.out);
             assertEq("The program ended", ends.last(), res.out);
         }
+    }
+
+    # a pause stops at a statement, not at a block, so that the next step goes on to another line
+    pauseBlockTest() {
+        string program = "%modern\n"             # 1
+            "int n = 0;\n"                        # 2
+            "while (True) {\n"                    # 3
+            "    if (n > 2) {\n"                  # 4
+            "        n = 0;\n"                    # 5
+            "        continue;\n"                 # 6
+            "    }\n"                             # 7
+            "    ++n;\n"                          # 8
+            "}\n";                                # 9
+        for (int i = 0; i < 5; ++i) {
+            hash<auto> res = runQdbg(program, ("c", "s", "kill", "quit"), ("--json", "--wait-timeout=100"));
+            list<hash<auto>> stops = select parseJsonLines(res.out), $1.type == "event" && $1.event == "interrupt"
+                && $1.data.func == "step";
+            assertEq(2, stops.size(), res.out);
+            # the pause, at a statement, which has a column
+            assertTrue(stops[0].data.pause, res.out);
+            assertTrue(exists stops[0].data.column, res.out);
+            assertNeq(stops[0].data.line, stops[1].data.line, res.out);
+        }
+        # a thread in an empty block of a loop is paused at the block
+        hash<auto> res = runQdbg("%modern\nwhile (True);\n", ("c", "kill", "quit"), ("--wait-timeout=100",));
+        assertInOrder(res.out, ("No thread paused within 100 ms; pausing the program", "Paused at target.q:2"));
+
+        # the messages of logpoints give their thread and breakpoint
+        res = runQdbg(LoopProgram, ("break create target.q 4", "break log 1 i={i}", "c", "quit"), ("--json",));
+        list<hash<auto>> logs = select parseJsonLines(res.out), $1.type == "output" && $1.category == "console";
+        assertEq(("i=0\n", "i=1\n", "i=2\n", "i=3\n", "i=4\n"), map $1.text, logs);
+        assertEq(("1",), keys (map {$1.breakpoint: True}, logs));
+        assertEq(1, (map {$1.tid: True}, logs).size());
+        # the output of the program does not
+        hash<auto> out = (select parseJsonLines(res.out), $1.type == "output" && $1.category == "stdout")[0];
+        assertFalse(out.hasKey("tid"));
     }
 
     # a command that resumes a thread waits for it to pause only as long as the wait timeout; then the program is

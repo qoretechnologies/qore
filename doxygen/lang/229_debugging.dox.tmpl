@@ -210,7 +210,7 @@ exception filter uncaught
     without the frames of the debugger.
 
     |!Command|!Description
-    |<tt>continue</tt> (<tt>c</tt>), <tt>step</tt> (<tt>s</tt>), <tt>next</tt> (<tt>n</tt>), <tt>finish</tt>|shortcuts of <tt>go run</tt>, <tt>go step</tt>, <tt>go stepover</tt> and <tt>go untilreturn</tt>, as in other debuggers
+    |<tt>continue</tt> (<tt>c</tt>), <tt>step</tt> (<tt>s</tt>), <tt>next</tt> (<tt>n</tt>), <tt>finish</tt>|shortcuts of <tt>go run</tt>, <tt>go step</tt>, <tt>go stepover</tt> and <tt>go untilreturn</tt>, as in other debuggers; \c finish pauses at the next statement of the caller and shows the value that the function returned
     |<tt>print expression</tt>, <tt>locals</tt>|shows the value of an expression, as \c eval, and the local variables of the current frame with their values
     |<tt>b location</tt>|adds a breakpoint, as <tt>break create</tt>
     |<tt>up [n]</tt>, <tt>down [n]</tt>|selects the frame that called the current frame, or the one that it called, and shows its line

@@ -98,6 +98,8 @@ module DebugCmdLine {
       while the current thread runs becomes the current thread
     - added the \c up, \c down, \c b and \c kill commands; a thread that starts while all threads of its program are
       stopped together stays stopped with them
+    - \c finish and <tt>go untilreturn</tt> pause at the next statement of the caller and show the value that the
+      function returned, and with JSON output, the messages of logpoints give their \c tid and \c breakpoint
     - added @ref DebugCmdLine::DebugCommandLine::waitForLiveThreads() "waitForLiveThreads()", which waits for the
       ends of the threads that started in the debugged programs, so that a debugger that ends its program with \c kill
       reports the ends of all its threads
@@ -163,7 +165,7 @@ public namespace DebugCmdLine {
   break create <line>    pause the program when it reaches a line of the current file
   continue (c)           continue until a breakpoint, an exception or the end
   step (s), next (n)     run to the next line, into called functions or over them
-  finish                 run until the current function returns
+  finish                 run until the current function returns, and show the value
   bt, locals             show the call stack and the local variables
   print <expression>     show the value of an expression
   quit                   end the debugger
@@ -1621,7 +1623,8 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
                     'n': ('alias': 'next', 'shortcut': True),
                     'finish': (
                         'shortcut': True,
-                        'desc': 'Run the current thread until the current function returns, as "go untilreturn".',
+                        'desc': 'Run the current thread until the current function returns, as "go untilreturn"; it '
+                            'pauses at the next statement of the caller and shows the returned value.',
                         'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                             dcl.runCommand("go untilreturn");
                         },
@@ -1670,7 +1673,8 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
                             "  go, go run         continue until a breakpoint, an exception or the end\n"
                             "  go step            run to the next line, also into the functions that it calls\n"
                             "  go stepover        run to the next line of the current function\n"
-                            "  go untilreturn     run until the current function returns\n"
+                            "  go untilreturn     run until the current function returns, to the next statement of "
+                            "the caller\n"
                             "  go stepinto [<n>]  run into a call of the current line (\"thread targets\" lists them)\n"
                             "  go detach          stop debugging the thread; it continues without pausing\n"
                             "A place to run to can follow the mode: [<file>] <line>[:<column>] | <function> | "
@@ -3470,7 +3474,9 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
                     return;
                 case DebugResponseType::Event: {
                     if (data.cmd == DebugEventCmd::Output) {
-                        writeJson({"type": "output", "category": data.category ?? "stdout", "text": data.output});
+                        # the output of a logpoint gives its thread and breakpoint
+                        writeJson({"type": "output", "category": data.category ?? "stdout", "text": data.output}
+                            + data{"tid", "breakpoint"});
                         return;
                     }
                     *string text = formatEvent(data);
@@ -3656,6 +3662,11 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
                 if (hint) {
                     outs += "\n" + tc.warning(hint);
                 }
+            }
+            # the value that the function returned, after a thread ran until it returned
+            if (data.returned) {
+                outs += "\n" + tc.info(sprintf("%s() returned %s", data.returned.function,
+                    AbstractDebugControl::formatValue(AbstractDebugControl::unserialize(data.returned.value))));
             }
             if (exists data.linecode) {
                 outs += "\n" + formatSource({

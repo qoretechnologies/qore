@@ -106,6 +106,13 @@ module DebugProgramControl {
       are evaluated also with the top-level local variables of the program, which have global scope
     - the \c thread/variable/get command gives the whole value in \c serialized with \c serialize, for a value with at
       most \c serializeMax elements, keys or members
+    - the \c "console" output event of a logpoint, or of a condition that cannot be evaluated, gives the \c tid of the
+      thread and the \c breakpoint
+    - a thread that runs until its function returns (\c untilreturn) continues to the next statement of the caller,
+      stepping over the calls of the rest of the caller's statement, and its interrupt event there gives the function
+      and the serialized value that it returned in \c returned
+    - a pause stops at the first statement of a block, not at the block, unless the thread reaches the block again
+      without a statement, as an empty block of a loop; a step after the pause stopped at the same line
     - the interrupt event of a thread that stops for a pause that a client requested, and not at a breakpoint, gives
       \c pause as @ref True, so that clients can tell the pause from the end of a step
     - the \c thread/local/&lt;name&gt;/get and \c thread/variable/get commands give the declared type of a local
@@ -189,8 +196,16 @@ public namespace DebugProgramControl {
 
             #! the threads that a client requested to stop (pause), by TID; see onStep()
             hash<string, bool> pauseRequests = {};
-            #! serializes the access to pauseRequests
+            #! the block that a thread to pause passed to stop at its first statement, by TID; see onStep()
+            hash<string, int> pauseSkippedBlocks = {};
+            #! serializes the access to pauseRequests and pauseSkippedBlocks
             Mutex pauseLock();
+
+            #! the function that returned, and its value, of a thread that ran until its function returned, by TID,
+            #! which the next stop of the thread gives; see onFunctionExit()
+            hash<string, hash<auto>> returnedValues = {};
+            #! serializes the access to returnedValues
+            Mutex returnLock();
 
             #! the programs whose first thread has attached, by program ID; see isProgramStart()
             hash<string, bool> startedPrograms = {};
@@ -286,7 +301,12 @@ public namespace DebugProgramControl {
         }
 
         #! Sends output of the process to all clients
-        private broadcastOutput(string category, string output) {
+        /** @param category the category of the output: \c "stdout" or \c "stderr" of the process, or \c "console" for
+            the output of the debugger, as the message of a logpoint
+            @param output the output
+            @param info for \c "console" output, the \c tid of the thread and the \c breakpoint that it is for
+        */
+        private broadcastOutput(string category, string output, *hash<auto> info) {
             try {
                 broadcastDataImpl({
                     "type": DebugResponseType::Event,
@@ -294,7 +314,7 @@ public namespace DebugProgramControl {
                     "stamp": now_us(),
                     "category": category,
                     "output": output,
-                });
+                } + info);
             } catch (hash<ExceptionInfo> ex) {
                 # the output is not sent to a client that cannot be reached
             }
@@ -1503,6 +1523,18 @@ public namespace DebugProgramControl {
             map pauseRequests{$1} = True, tids;
         }
 
+        #! Returns True if a thread to pause stops at a block, as it reached the block again without a statement
+        /** The first time, the block is noted, and the thread stops at its first statement; see onStep()
+        */
+        private bool stopsAtBlockForPause(int tid, int block_id) {
+            AutoLock al(pauseLock);
+            if (pauseSkippedBlocks{tid} === block_id) {
+                return True;
+            }
+            pauseSkippedBlocks{tid} = block_id;
+            return False;
+        }
+
         #! Returns True if a client requested the thread to stop (pause) and it has not stopped since
         private bool isPauseRequested(int tid) {
             AutoLock al(pauseLock);
@@ -1712,22 +1744,26 @@ public namespace DebugProgramControl {
                 }
             } catch (hash<ExceptionInfo> ex) {
                 string error = sprintf("%s: %s", ex.err, ex.desc);
-                sendConsoleOutput(sprintf("breakpoint %d: %s\n", id, error));
+                sendConsoleOutput(sprintf("breakpoint %d: %s\n", id, error), {"tid": gettid(), "breakpoint": id});
                 return {"stop": True, "error": error};
             }
             if (opts.logMessage) {
-                sendConsoleOutput(formatLogMessage(pgm, opts.logMessage, lv) + "\n");
+                sendConsoleOutput(formatLogMessage(pgm, opts.logMessage, lv) + "\n", {"tid": gettid(),
+                    "breakpoint": id});
                 return {"stop": False};
             }
             return {"stop": True};
         }
 
         #! Sends output of the debugger to all clients, after the output that the program wrote before it
-        private sendConsoleOutput(string output) {
+        /** @param output the output
+            @param info the \c tid of the thread and the \c breakpoint that the output is for
+        */
+        private sendConsoleOutput(string output, hash<auto> info) {
             if (outputCapture) {
                 outputCapture.flushAndWait();
             }
-            broadcastOutput("console", output);
+            broadcastOutput("console", output, info);
         }
 
         #! Returns the message of a logpoint with the values of the expressions in braces
@@ -2220,6 +2256,16 @@ public namespace DebugProgramControl {
                 # wait for the debugger
                 clear_thread_cancel();
             }
+            # a thread that leaves the program has no more stops to give a returned value or to pause at a block; the
+            # locks are cancellation points, so they are taken when the thread is no longer cancelled
+            if (func == "detach") {
+                {
+                    AutoLock al(returnLock);
+                    remove returnedValues{tid};
+                }
+                AutoLock al(pauseLock);
+                remove pauseSkippedBlocks{tid};
+            }
             # the attach of the first thread of a program is its start; other threads attach when they start
             bool program_start = func == "attach" && isProgramStart(pgm.getProgramId());
             # without a client, nobody could resume the thread; the stop at the start of a program is kept, as a debug
@@ -2350,6 +2396,14 @@ public namespace DebugProgramControl {
                 AutoLock al(pauseLock);
                 if ((remove pauseRequests{tid}) && func == "step" && !exists breakpointId) {
                     ctx.intrInfo.pause = True;
+                }
+                remove pauseSkippedBlocks{tid};
+            }
+            # the stop after a function returned to a thread that ran until it returned gives the returned value
+            {
+                AutoLock al(returnLock);
+                if (*hash<auto> ret = remove returnedValues{tid}) {
+                    ctx.intrInfo.returned = ret;
                 }
             }
             # minor race issue when list of all thread stack might return internal frames till ctx is not registered in ctxThread
@@ -2757,10 +2811,15 @@ public namespace DebugProgramControl {
         onStep(ProgramControl pgm, int blockStatementId, *int statementId, *int breakpointId, reference flow, reference rs, reference runToStatementId) {
             # a step to a block, which the debugger gives before the first statement of the block (so that an empty
             # block can stop, as in "while (True);"), stops at the first statement instead; it stops at the block for
-            # a breakpoint of the block (as of a function), a pause, and a block to run to
+            # a breakpoint of the block (as of a function), and a block to run to
             if (!exists statementId && !breakpointId && (rs == DebugStep || rs == DebugStepOver)
-                && runToStatementId != blockStatementId && !isPauseRequested(gettid())) {
-                return;
+                && runToStatementId != blockStatementId) {
+                # a pause stops at the first statement of the block too, as a step would stop there next on the same
+                # line; it stops at the block when the thread reaches it again without a statement, as an empty block
+                # of a loop
+                if (!isPauseRequested(gettid()) || !stopsAtBlockForPause(gettid(), blockStatementId)) {
+                    return;
+                }
             }
             statementId = statementId ?? blockStatementId;
             /*
@@ -2795,9 +2854,34 @@ public namespace DebugProgramControl {
         }
 
         onFunctionExit(ProgramControl pgm, int statementId, reference result, reference rs, reference runToStatementId) {
-            if (statementId) {
-                handleInterrupt('funcExit', pgm, \rs, \runToStatementId, statementId, "result", \result);
+            if (!statementId) {
+                return;
             }
+            # a thread that runs until its function returns continues to the next statement of the caller, as in other
+            # debuggers, and stepping over the calls of the rest of the caller's statement; its stop there gives the
+            # function and the value that it returned (see handleInterrupt()); a step into a call of a statement runs
+            # until the calls before it return, which it checks (see checkStepInto())
+            if (rs == DebugUntilReturn && !hasStepInto(gettid()) && !isTerminating(pgm.getProgramId())) {
+                # the frame of the function that returns follows the frame of this callback
+                list<auto> stack = get_thread_call_stack();
+                *string name;
+                foreach hash<auto> frame in (stack) {
+                    if (frame.function == "DebugProgramControl::onFunctionExit") {
+                        name = stack[$# + 1].function;
+                        break;
+                    }
+                }
+                {
+                    AutoLock al(returnLock);
+                    returnedValues{gettid()} = {
+                        "function": name ?? "<unknown>",
+                        "value": AbstractDebugControl::serialize(result),
+                    };
+                }
+                rs = DebugStepOver;
+                return;
+            }
+            handleInterrupt('funcExit', pgm, \rs, \runToStatementId, statementId, "result", \result);
         }
 
         onException(ProgramControl pgm, int statementId, hash<auto> ex, reference dismiss, reference rs, reference runToStatementId) {

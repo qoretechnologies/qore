@@ -179,9 +179,11 @@ public class DebugMcpSession inherits DebugCmdLine::DebugCommandLine {
                     }
                     break;
                 case "output":
-                    # the messages of logpoints are output of the debugger
+                    # the messages of logpoints are output of the debugger; each line tells its thread
                     if (o.category == "console") {
-                        log += o.text;
+                        log += o.tid
+                            ? (map sprintf("[thread %d] %s\n", o.tid, $1), o.text.split("\n")).join("")
+                            : o.text;
                     } else {
                         output += o.text;
                     }
@@ -484,6 +486,12 @@ public class DebugMcpSession inherits DebugCmdLine::DebugCommandLine {
                     rv.breakpoints = d.bkptids;
                 } else if (d.bkptid) {
                     rv.breakpoints = (d.bkptid,);
+                }
+                # the value that the function returned to a thread that ran until it returned
+                if (d.returned) {
+                    rv.returned = {"function": d.returned.function} + DebugMcpSession::describeValue(
+                        AbstractDebugControl::describe(AbstractDebugControl::unserialize(d.returned.value)),
+                        d.returned.value);
                 }
                 if (d.func == "exception") {
                     rv.exception = d.exception{"err", "desc"};

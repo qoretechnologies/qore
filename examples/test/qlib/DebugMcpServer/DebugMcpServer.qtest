@@ -387,6 +387,14 @@ public class DebugMcpServerTest inherits QUnit::Test {
         r = call(c, "qore_debug_continue", {"mode": "next"});
         assertEq(4, (select r.events, $1.reason == "step")[0].line);
 
+        # the thread runs until add() returns: it pauses at the next statement of the caller, the call of the next
+        # iteration of the loop, and the stop gives the value that add() returned
+        r = call(c, "qore_debug_continue", {"mode": "finish"});
+        stop = (select r.events, $1.returned)[0];
+        assertEq(9, stop.line);
+        assertEq("<top level>", stop.function);
+        assertEq({"function": "add", "type": "integer", "value": "3"}, stop.returned);
+
         # the program runs to its end without the breakpoint; its output is reported
         call(c, "qore_debug_delete_breakpoint", {"id": id});
         r = call(c, "qore_debug_continue");
@@ -495,7 +503,8 @@ public class DebugMcpServerTest inherits QUnit::Test {
         assertEq("work", pauses[0].function);
         # the threads were paused although they are logging
         assertTrue(r.state.paused, sprintf("%y", r - "logOutput"));
-        assertRegex("\nw[0-2] n[0-9]+\n", r.logOutput);
+        # each message tells its thread
+        assertRegex("\n\\[thread [0-9]+\\] w[0-2] n[0-9]+\n", r.logOutput);
         assertFalse(r.programOutput =~ /w[0-2] n/);
         # the last lines of the messages are reported
         assertEq(DebugMcpSession::MaxOutputLines + 1, r.logOutput.split("\n").size());

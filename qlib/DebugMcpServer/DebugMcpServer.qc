@@ -157,7 +157,10 @@ public const DebugMcpFields = {
     "mode": {
         "display_name": "Mode",
         "type": AbstractDataProviderTypeMap."*string",
-        "desc": "How the thread is resumed; the default is `run`",
+        "desc": "How the thread is resumed: `run` until a breakpoint, an exception or the end (the default), `step` "
+            "to the next statement, also into calls, `next` to the next statement of the function, or `finish` until "
+            "the function returns: the thread pauses at the next statement of the caller, and the stop gives the "
+            "function and the value that it returned in `returned`",
         "allowed_values": (
             <AllowedValueInfo>{
                 "value": "run",
@@ -181,7 +184,8 @@ public const DebugMcpFields = {
                 "value": "finish",
                 "display_name": "Step Out",
                 "short_desc": "Run until the function returns",
-                "desc": "Runs the thread until its function returns",
+                "desc": "Runs the thread until its function returns, and pauses it at the next statement of the "
+                    "caller",
             },
         ),
     },

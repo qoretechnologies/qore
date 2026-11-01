@@ -1404,7 +1404,7 @@ try {
     }
 
     # a step stops once at each statement: not also at the start of a function or of a block; a pause stops a thread
-    # also in a loop with an empty block, and a function exit is at the end of the function
+    # also in a loop with an empty block, and a thread that runs until its function returns stops in the caller
     stepStopTest() {
         DebuggedProgram p(dpc, StepStopScript);
         on_exit p.cleanup();
@@ -1414,17 +1414,16 @@ try {
         p.breakAt(5);
         hash<auto> e = p.runToStop();
         assertEq(5, e.line);
-        # into add(): its first statement, then out of it at its end
+        # into add(): its first statement, then out of it to the next statement of the caller, which is the loop, as
+        # the declaration of line 6 is not executed; the stop gives the value that add() returned
         dpc.go(p.tid, "step");
         e = dpc.getInterrupt(p.pgmId);
         assertEq(("step", 3), (e.func, e.line));
         dpc.go(p.tid, "untilreturn");
         e = dpc.getInterrupt(p.pgmId);
-        assertEq(("funcExit", 4), (e.func, e.line));
-        # the next statement is the loop, as the declaration of line 6 is not executed
-        dpc.go(p.tid, "step");
-        e = dpc.getInterrupt(p.pgmId);
-        assertEq(7, e.line);
+        assertEq(("step", 7), (e.func, e.line));
+        assertEq("add", e.returned.function);
+        assertEq(3, AbstractDebugControl::unserialize(e.returned.value));
         # a step in the loop with an empty block does not stop until the thread is paused
         dpc.go(p.tid, "step");
         dpc.command(cmd + "thread/" + p.tid + "/stop");
