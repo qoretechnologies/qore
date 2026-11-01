@@ -370,6 +370,14 @@ hash schema = (
     @section ora_relnotes Release Notes
 
     @subsection oracle17 OracleSqlUtilBase v1.7
+    - fixed @ref SqlUtil::AbstractDatabase::getTable() "getTable()", which opened a view or a materialized view as a
+      table, so a writable table object was returned for it, and
+      @ref SqlUtil::AbstractDatabase::listTables() "listTables()", which listed materialized views, whose container
+      tables are in \c user_tables, as tables; getTable() now opens only the tables that listTables() lists, views
+      are acquired with @ref SqlUtil::AbstractDatabase::getView() "getView()" and materialized views with
+      @ref OracleSqlUtilBase::OracleDatabase::getMaterializedView() "OracleDatabase::getMaterializedView()"; a table
+      object made for a view or a materialized view with
+      @ref SqlUtil::AbstractTable::getTable() "AbstractTable::getTable()" still describes and reads it
     - @ref SqlUtil::AbstractDatabase::supportsMaterializedViews() "AbstractDatabase::supportsMaterializedViews()"
       returns @ref True
     - a date value compared with a \c DATE or \c TIMESTAMP column in a where clause or a comparison expression is
@@ -2341,11 +2349,19 @@ public class OracleDatabase inherits SqlUtil::AbstractDatabase {
         return listMaterializedViews().iterator();
     }
 
+    #! returns the tables of the user and the tables that the user's synonyms name
+    /** The container table of a materialized view is listed in \c user_tables and \c all_tables, but a materialized
+        view is not a table: materialized views are listed by listMaterializedViews(), and views by
+        @ref SqlUtil::AbstractDatabase::listViews() "listViews()"
+    */
     private list<string> listTablesImpl() {
-        list<string> l = getListIntern(ds.select("select table_name from user_tables order by 1").table_name);
+        list<string> l = getListIntern(ds.select("select table_name from user_tables t where not exists (select 1 "
+            "from user_mviews m where m.mview_name = t.table_name) order by 1").table_name);
 
         # add all tables accessible with synonyms
-        *list<string> tl = ds.select("select synonym_name from user_synonyms s, all_tables t where s.table_owner = t.owner and s.table_name = t.table_name order by 1").synonym_name;
+        *list<string> tl = ds.select("select synonym_name from user_synonyms s, all_tables t where s.table_owner = "
+            "t.owner and s.table_name = t.table_name and not exists (select 1 from all_mviews m where m.owner = "
+            "t.owner and m.mview_name = t.table_name) order by 1").synonym_name;
         if (tl)
             l += native_case ? tl : (map $1.lwr(), tl);
 
@@ -3865,6 +3881,9 @@ public class OracleTable inherits SqlUtil::AbstractTable {
         # helper flag to indicate if is the OracleTable real table or a view
         bool m_isView = False;
 
+        # True if the object is the container table of a materialized view
+        bool m_isMaterializedView = False;
+
         # oraclesqlutilbase: allow to use DBA_* views instead of ALL_* if possible #2418
         # An internal cache to find the highest priority available
         # system dictionary object. Priority: DBA > ALL
@@ -3873,6 +3892,7 @@ public class OracleTable inherits SqlUtil::AbstractTable {
             "dba_cons_columns"      : "all_cons_columns",
             "dba_constraints"       : "all_constraints",
             "dba_db_links"          : "all_db_links",
+            "dba_mviews"            : "all_mviews",
             "dba_ind_columns"       : "all_ind_columns",
             "dba_ind_expressions"   : "all_ind_expressions",
             "dba_ind_partitions"    : "all_ind_partitions",
@@ -3957,6 +3977,13 @@ public class OracleTable inherits SqlUtil::AbstractTable {
         return m_sys_views{name};
     }
 
+    #! returns @ref True if the object exists as a table: not a view or a materialized view
+    /** A view and a materialized view can be read with a table object, which describes them, but they do not exist
+        as tables: @ref SqlUtil::AbstractDatabase::getTable() "getTable()" opens only the tables that
+        @ref SqlUtil::AbstractDatabase::listTables() "listTables()" lists; views are acquired with
+        @ref SqlUtil::AbstractDatabase::getView() "getView()" and materialized views with
+        @ref OracleSqlUtilBase::OracleDatabase::getMaterializedView() "OracleDatabase::getMaterializedView()"
+    */
     private bool checkExistenceImpl() {
         try {
             setTableInfoIntern();
@@ -3965,6 +3992,11 @@ public class OracleTable inherits SqlUtil::AbstractTable {
                 return False;
             }
             rethrow;
+        }
+        if (m_isView || m_isMaterializedView) {
+            # setTableInfoIntern() marks the object as present in the database; it is not present as a table
+            inDb = False;
+            return False;
         }
         return True;
     }
@@ -4007,6 +4039,12 @@ public class OracleTable inherits SqlUtil::AbstractTable {
 
     private setTableInfoIntern() {
         hash<auto> row = (schema.lwr() == ds.getUserName().lwr()) ? setTable() : setSchemaTable();
+
+        # the container table of a materialized view is in dba_tables and user_tables like any table
+        if (!m_isView) {
+            m_isMaterializedView = exists ds.selectRow("select 1 as v from " + systemView("dba_mviews")
+                + (dblink ? "@" + dblink : "") + " where owner = %v and mview_name = %v", schema.upr(), name.upr());
+        }
 
         tablespace = row.tablespace_name;
         readonly = row.read_only == "YES";
@@ -4093,6 +4131,13 @@ public class OracleTable inherits SqlUtil::AbstractTable {
     #! This method can change itself or disappear in the near future. Do not use it.
     bool isView() {
         return m_isView;
+    }
+
+    #! Returns @ref True if the object is a materialized view, once the object's information has been read
+    /** @since OracleSqlUtilBase 1.7
+    */
+    bool isMaterializedView() {
+        return m_isMaterializedView;
     }
 
     private hash<auto> setSchemaTable() {
