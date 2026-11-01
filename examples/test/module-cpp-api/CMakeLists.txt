@@ -91,3 +91,25 @@ foreach(_forkexit_module forkexita forkexitb)
 endforeach()
 target_compile_definitions(forkexita PRIVATE FORKEXIT_NS="ForkExitA" FORKEXIT_ATEXIT=1 FORKEXIT_RANK=QFR_MODULE_LEAF)
 target_compile_definitions(forkexitb PRIVATE FORKEXIT_NS="ForkExitB" FORKEXIT_ATEXIT=0 FORKEXIT_RANK=QFR_MODULE_RESET)
+
+# --- the module that owns Programs, which it deletes when it is deleted ---------------------------
+# (see program-owner/tdpgmowner-module.cpp and program-owner/program-owner-teardown.qtest)
+
+add_library(tdpgmowner MODULE program-owner/tdpgmowner-module.cpp)
+add_dependencies(tdpgmowner libqore)
+target_include_directories(tdpgmowner PRIVATE
+    ${CMAKE_BINARY_DIR}
+    ${CMAKE_BINARY_DIR}/include
+    ${CMAKE_SOURCE_DIR}/include)
+target_compile_definitions(tdpgmowner PRIVATE
+    BUILDING_DLL=1
+    HAVE_UNIX_CONFIG_H
+    PACKAGE_VERSION="${VERSION}"
+    $<$<BOOL:${HAVE_GCC_VISIBILITY}>:HAVE_GCC_VISIBILITY=1>)
+set_target_properties(tdpgmowner PROPERTIES
+    PREFIX ""
+    SUFFIX "${_cppapi_test_module_suffix}"
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/modules/tdpgmowner")
+if (CMAKE_HOST_APPLE)
+    target_link_options(tdpgmowner PRIVATE -Wl,-undefined -Wl,dynamic_lookup)
+endif()

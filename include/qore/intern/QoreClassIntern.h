@@ -1340,6 +1340,12 @@ public:
         return val.assignInitial(v);
     }
 
+    //! removes the variable's value for the remove and delete operators; the removed value is held by \a lvrh
+    /** A variable whose value is held in external storage is read through its accessor, and no value is written back
+        through it, as for an assignment; see getLValue()
+    */
+    DLLLOCAL void remove(LValueRemoveHelper& lvrh);
+
     DLLLOCAL int getLValue(LValueHelper& lvh, const char* name = "<static variable>") {
         if (get_cb) {
             if (checkFinalized(lvh.vl.xsink)) {

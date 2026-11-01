@@ -19,7 +19,7 @@ class MemberAccessorTest inherits QUnit::Test {
     public {
         #! every check passes
         const Checks = ("typed", "object", "auto", "subclass", "cpp-created", "type-error", "private", "self",
-            "declaration", "cpp-api", "slice-merge", "reference");
+            "declaration", "cpp-api", "slice-merge", "reference", "static");
 
         #! the execution modes that the worker is run in
         const ExecModes = ("ast", "ir", "jit", "tiered");

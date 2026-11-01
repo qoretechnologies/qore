@@ -2418,8 +2418,9 @@ cargo install tree-sitter-cli@0.26.5
     storage with @ref QoreClass::addBuiltinStaticVarWithAccessors() "QoreClass::addBuiltinStaticVarWithAccessors()",
     instead of holding a copy of a value the module owns.  Use it when the value can change independently of %Qore
     code, such as a field of a foreign runtime: a variable holding a copy silently diverges from the value it
-    mirrors as soon as either side changes it.  Every read calls the module's \c get function and every assignment
-    calls its \c set function once the assignment is complete, so both sides always agree.
+    mirrors as soon as either side changes it.  Every read calls the module's \c get function, and every assignment
+    and every @ref remove "remove" or @ref delete "delete" calls its \c set function once the operation is complete,
+    in every execution mode, so both sides always agree.
 
     The <a href="https://docs.qore.org/modules/jni/current/jni/html/index.html#jniintro">jni</a> module uses this to mirror mutable Java static fields.
     @endparblock
@@ -5577,6 +5578,12 @@ while (*binary chunk = input.read(65536)) {
       \c qdbg with it; \c qdbg now ends the program and exits with 128 plus the number of the signal, as does
       \c qdbg-remote, whose debug server's programs continue.  \c qdbg-remote also looked up a connection for a URL
       without a scheme, such as \c localhost:8001, which loaded the modules of all connections
+    - a call passing no value for a parameter of an overloaded function or method (a literal \c NOTHING, an omitted
+      argument, or a variable holding no value) could select a different variant at parse time than at run time
+      when three or more variants accepted no value equally well: the parse-time resolution selected the last of
+      them, and the run-time resolution the first one.  Such a call now always selects the first variant declared
+      among them (ex: \c *string over <tt>*softlist&lt;string&gt;</tt> when declared first); see
+      @ref overloading_no_value for how arguments with no value are matched
     - a hash literal assigned to a typed hash, with a value that referred to an undefined namespace-scoped constant
       (for example <tt>hash&lt;string, string&gt; h = {"a": Missing::Ref};</tt>), raised a spurious \c RUNTIME-TYPE-ERROR
       (<em>expects type 'string', but got type 'namespace-scoped reference'</em>) after the parse error, which was
@@ -5595,6 +5602,12 @@ while (*binary chunk = input.read(65536)) {
       it, including AOT-compiled modules (.qmod) and source modules that AOT-compiled modules require, and objects
       held through opaque references by the Programs of source and AOT-compiled modules are released while all module
       Programs still exist
+    - at process exit, the objects held by a Program that a binary module owns, such as the global context Program of
+      the \c jni module, were released only after the modules owning their classes had been deleted, so their
+      destructors failed with unhandled \c PROGRAM-ERROR exceptions.  A binary module that no other module requires
+      is now deleted before the user and AOT-compiled modules, while the asynchronous I/O services still run, and a
+      module imported into a Program that a binary module owns is deleted after that binary module, unless it
+      requires it
     - an unhandled exception raised when a program ends, by a destructor run as the Program's data or the loaded
       modules are deleted, was printed on stderr but the exit status stayed 0; \c qore and programs compiled with
       \c qcc now exit with status 3 in this case, as for an unhandled exception in the main thread, unless the program

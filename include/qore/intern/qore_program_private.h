@@ -4192,6 +4192,17 @@ public:
     //! calls fixupAfterFork() for every Program; the Program registry lock is held (see QoreForkHandlers.h)
     DLLLOCAL static void fixupAllAfterFork(int tid, ThreadProgramData* tpd);
 
+    //! Adds the user modules (source and AOT) imported into every Program whose namespace data is not cleared
+    /** Called at teardown by QoreModuleManager::delUser() after the namespace data of every user and AOT module
+        Program has been cleared, when no other thread runs Qore code: a Program that still holds data then is owned
+        by code outside the module Programs, such as a Program that a binary module creates (the jni module's global
+        context Program) and deletes when the module is deleted; its data can hold objects of the classes of the
+        modules imported into it
+
+        @param features the names of the modules imported are added to this set
+    */
+    DLLLOCAL static void getUserFeaturesOfProgramsWithData(strset_t& features);
+
     //! the Program registry lock (lck_programMap), for the fork handlers
     DLLLOCAL static QoreRWLock& getProgramMapLock() {
         return lck_programMap;

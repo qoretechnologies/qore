@@ -1,0 +1,23 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# TdOwnedUser.qm - module of the program owner teardown tests that requires the binary module tdpgmowner
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires tdpgmowner
+
+module TdOwnedUser {
+    version = "1.0";
+    desc = "module requiring the binary module tdpgmowner, for the module teardown tests";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+public namespace TdOwnedUser {
+    #! a constant holding an object of a class of tdpgmowner
+    /** The constants of a module's Program are released when the module is deleted, so tdpgmowner must be deleted
+        after this module
+    */
+    public const TokenHolder = new TdPgmOwner::Token();
+}
