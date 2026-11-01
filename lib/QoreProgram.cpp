@@ -4148,12 +4148,12 @@ namespace {
 //! evaluated
 class StepInTargetCollector {
 public:
-    DLLLOCAL StepInTargetCollector(qore_program_private& pgm, ExceptionSink* xsink) : pgm(pgm), xsink(xsink),
+    StepInTargetCollector(qore_program_private& pgm, ExceptionSink* xsink) : pgm(pgm), xsink(xsink),
             rv(new QoreListNode(hashdeclStepInTargetInfo->getTypeInfo()), xsink) {
     }
 
     //! Adds the calls of a statement; its blocks are not searched
-    DLLLOCAL void addStatement(const AbstractStatement* st) {
+    void addStatement(const AbstractStatement* st) {
         if (auto* s = dynamic_cast<const ExpressionStatement*>(st)) {
             add(s->getExpression());
         } else if (auto* s = dynamic_cast<const ReturnStatement*>(st)) {
@@ -4176,7 +4176,7 @@ public:
         }
     }
 
-    DLLLOCAL QoreListNode* release() {
+    QoreListNode* release() {
         return *xsink ? nullptr : rv.release();
     }
 
@@ -4189,7 +4189,7 @@ private:
     ReferenceHolder<QoreListNode> rv;
     int depth = 0;
 
-    DLLLOCAL void addArgs(const QoreParseListNode* parse_args, const QoreListNode* args) {
+    void addArgs(const QoreParseListNode* parse_args, const QoreListNode* args) {
         if (parse_args) {
             for (size_t i = 0; i < parse_args->size(); ++i) {
                 add(parse_args->get(i));
@@ -4211,7 +4211,7 @@ private:
         @param name the name of the called function or method, nullptr for the call of a call reference
         @param label the label of a call of a call reference
     */
-    DLLLOCAL void addCall(const AbstractQoreFunctionVariant* variant, const QoreProgramLocation* loc,
+    void addCall(const AbstractQoreFunctionVariant* variant, const QoreProgramLocation* loc,
             const QoreClass* cls, const char* name, const char* label = nullptr) {
         unsigned long sid = 0;
         if (variant) {
@@ -4255,7 +4255,7 @@ private:
         rv->push(h.release(), xsink);
     }
 
-    DLLLOCAL void add(const QoreValue& val) {
+    void add(const QoreValue& val) {
         const AbstractQoreNode* node = val.getInternalNode();
         if (!node || val.isValue() || depth >= MaxDepth || *xsink) {
             return;
@@ -4265,7 +4265,7 @@ private:
         --depth;
     }
 
-    DLLLOCAL void addNode(const AbstractQoreNode* node) {
+    void addNode(const AbstractQoreNode* node) {
         // a closure is called later, if at all
         if (dynamic_cast<const QoreClosureParseNode*>(node)) {
             return;

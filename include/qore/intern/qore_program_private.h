@@ -2891,10 +2891,10 @@ public:
         ObjectSubstitutionHelper osh(nullptr, nullptr);
         class RuntimeLocationGuard {
         public:
-            DLLLOCAL RuntimeLocationGuard(ExceptionSink* xsink, const QoreParseOptions& po) {
+            RuntimeLocationGuard(ExceptionSink* xsink, const QoreParseOptions& po) {
                 swap_runtime_statement_location(xsink, nullptr, get_runtime_location(), po, stmt, loc, saved_po);
             }
-            DLLLOCAL ~RuntimeLocationGuard() {
+            ~RuntimeLocationGuard() {
                 update_runtime_statement_location(stmt, loc, saved_po);
             }
         private:
