@@ -358,6 +358,24 @@ public class DbMaterializedViewDataProvider inherits DbViewDataProvider {
         return ResponseType;
     }
 
+    #! Returns the options of an action of this provider: for a request, only the refresh options of the database
+    /** The \c refresh-materialized-view action is registered with the refresh options of all databases; the options
+        of the action for this provider are those of its database
+
+        @param action the action
+        @param options the option values given so far
+
+        @return the action options
+    */
+    private *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForRequestWithOptionsImpl(
+            hash<DataProviderActionInfo> action, *hash<auto> options) {
+        *hash<string, hash<ActionOptionInfo>> rv = DbViewDataProvider::tryGetActionOptionsForRequestWithOptionsImpl(
+            action, options);
+        hash<string, bool> db_opts = map {$1: True}, keys db.getMaterializedViewRefreshOptions();
+        return map {$1.key: $1.value}, rv.pairIterator(),
+            db_opts{$1.key} || !DbMaterializedViewRefreshRequestType::Fields.hasKey($1.key);
+    }
+
     #! Returns data provider static info
     private hash<DataProviderInfo> getStaticInfoImpl() {
         return ProviderInfo;

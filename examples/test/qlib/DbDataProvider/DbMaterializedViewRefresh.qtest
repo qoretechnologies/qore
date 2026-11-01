@@ -186,8 +186,10 @@ class DbMaterializedViewRefreshTest inherits QUnit::Test {
 
     requestTypeTest() {
         AbstractDataProvider mv = getMv("mv_sales");
-        # only the options of the database
+        # only the options of the database, in the request type and in the options of the action for this provider
         assertEq(("concurrent",), keys mv.getRequestType().getFields());
+        assertEq(("concurrent",), keys mv.tryGetActionOptionsWithOptions(
+            DataProviderActionCatalog::getAppActionEx(DbDataProvider::AppName, "refresh-materialized-view"), {}));
         assertEq(("materialized_view", "options"), keys mv.getResponseType().getFields());
         # an option of another database is refused
         assertThrows("RUNTIME-TYPE-ERROR", "unsupported fields in value: \\[\"method\"\\]", \mv.doRequest(),
