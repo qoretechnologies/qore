@@ -1,22 +1,17 @@
-#!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
-%modern
-%no-child-restrictions
-
-%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
-%requires QUnit
-%requires FsUtil
-%requires ../../../ExecModeHarness.qm
-
-%exec-class CompoundAssignmentAstParityTest
+# the compound-assignment parity matrix shared by the compound-assignment-ast-parity-*.qtest tests; each checks one
+# family of operators
 
 #! Tests that every compound assignment gives the AST interpreter's result in every execution mode
 /** The AST interpreter is the reference: a compound assignment operates on the lvalue's current value by its type,
     so an int lvalue converts the operand to an int (<tt>i += 1.5</tt> gives 11 for 10), a string lvalue appends the
     operand as a string, a hash lvalue merges a hash or removes keys, and so on.  The other execution modes and
     compiled code must give the same value or raise the same exception.
+
+    The matrix is split by operator family (see OperatorFamilies), and each family is checked by its own test, so
+    that each runs in a short time; together they cover every operator.
 
     The test generates a program that applies each compound operator to lvalues of many declared types and values:
     - with operands of many types whose type is not known at parse time, looping over the values at runtime, in
@@ -26,10 +21,17 @@
     expected result, then with every other execution mode and as a qcc-compiled executable, whose output must be
     identical.
 */
-class CompoundAssignmentAstParityTest inherits QUnit::Test {
+class CompoundAssignmentAstParityBase inherits QUnit::Test {
     public {
-        #! the compound assignment operators
-        const Operators = ("+=", "-=", "*=", "/=", "%=", "|=", "&=", "^=", "<<=", ">>=");
+        #! the compound assignment operators, in the families that each test checks
+        const OperatorFamilies = (
+            ("+=",),
+            ("-=",),
+            ("*=", "/="),
+            ("%=", "|="),
+            ("&=", "^="),
+            ("<<=", ">>="),
+        );
 
         #! the lvalue types and the initial values (as Qore source) of their lvalues
         const Types = (
@@ -86,12 +88,17 @@ class CompoundAssignmentAstParityTest inherits QUnit::Test {
     }
 
     private {
+        #! the operators that this test checks
+        list<string> Operators;
+
         string qore_bin;
         string libqore_dir;
         string qcc_bin;
     }
 
-    constructor() : QUnit::Test("CompoundAssignmentAstParity", "1.0", \ARGV) {
+    #! checks the operators given; the matrix is split into families so that each test runs in a short time
+    constructor(string name, list<string> operators) : QUnit::Test(name, "1.0", \ARGV) {
+        Operators = operators;
         qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
@@ -108,9 +115,9 @@ class CompoundAssignmentAstParityTest inherits QUnit::Test {
 
         list<string> expected = runMode("ast", file);
         # the runtime matrix gives a result for every combination
-        assertTrue(combinations > 5000, sprintf("runtime combinations: %d", combinations));
+        assertTrue(combinations > 1000, sprintf("runtime combinations: %d", combinations));
         assertEq(combinations, (select expected, $1 =~ /^rt /).size(), "runtime combinations");
-        assertTrue((select expected, $1 =~ /^lit /).size() > 500, "literal statements");
+        assertTrue((select expected, $1 =~ /^lit /).size() > 50, "literal statements");
 
         foreach string mode in (ExecModeHarness::ExecModes) {
             if (mode == "ast") {
