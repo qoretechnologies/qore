@@ -139,9 +139,11 @@ public class DebugMcpSession inherits DebugCmdLine::DebugCommandLine {
           <tt>Paused at breakpoint 1 at main.q:3 (thread 2)</tt>, and its \c tid, \c file, \c line, \c function, the
           \c reason of a stop, the \c exception of a stop at an exception with the \c hint of a common pitfall, and the
           \c breakpoint of an event of a breakpoint
-        - \c programOutput: the output of the program, and \c logOutput: the messages of logpoints; each gives the last
-          @ref MaxOutputLines lines, after a line such as <tt>[12 earlier lines are omitted]</tt>, and
-          \c programOutputOmitted or \c logOutputOmitted the number of lines before them that are left out
+        - \c programOutput: the output of the program, and \c logOutput: the messages of logpoints, each with its
+          thread, where consecutive identical messages are given once with their count, as
+          <tt>[thread 2] i=3 (x48)</tt>; each gives the last @ref MaxOutputLines lines, after a line such as
+          <tt>[12 earlier lines are omitted]</tt>, and \c programOutputOmitted or \c logOutputOmitted the number of
+          lines before them that are left out (see limitOutput())
         - \c programEnd: the end of the program, with the \c exception that ended it, or \c terminated if the debugger
           ended it
         - \c state: the state of the debugger; see getState()
@@ -208,8 +210,9 @@ public class DebugMcpSession inherits DebugCmdLine::DebugCommandLine {
         if (output.val()) {
             rv += DebugMcpSession::limitOutput("programOutput", output);
         }
+        # a logpoint in a loop logs the same message again and again: repeated messages are given once
         if (log.val()) {
-            rv += DebugMcpSession::limitOutput("logOutput", log);
+            rv += DebugMcpSession::limitOutput("logOutput", log, True);
         }
         rv += extra;
         rv.state = getState();
@@ -389,21 +392,42 @@ public class DebugMcpSession inherits DebugCmdLine::DebugCommandLine {
     }
 
     #! Returns the output in a report: its last lines, and the number of the lines before them
-    static hash<auto> limitOutput(string key, string output) {
+    /** @param key the key of the output in the report, as \c "logOutput"
+        @param output the output
+        @param collapse if @ref True, consecutive identical lines are given once with their count, as
+        <tt>[thread 2] i=3 (x48)</tt>; the lines stay in their order, as the order of the lines of threads matters
+
+        @return the output in \c key, as @ref MaxOutputLines lines at most, after a line that tells how many lines
+        of the output are omitted before them, and their number in <tt>key + "Omitted"</tt>; a line that is given
+        with its count counts as that many lines of the output
+    */
+    static hash<auto> limitOutput(string key, string output, bool collapse = False) {
         list<string> lines = output.split("\n");
         # the output that ends with a line ends with an empty element
         if (lines && lines.last() == "") {
             pop lines;
         }
-        hash<auto> rv = {};
-        if (lines.size() > MaxOutputLines) {
-            int omitted = lines.size() - MaxOutputLines;
-            rv{key + "Omitted"} = omitted;
-            # the output tells itself that it is the end only
-            lines = (sprintf("[%d earlier line%s omitted]", omitted, omitted == 1 ? " is" : "s are"),)
-                + lines[lines.size() - MaxOutputLines..];
+        # the lines of the output with the number of times that each is repeated
+        list<hash<auto>> runs = ();
+        foreach string line in (lines) {
+            if (collapse && runs && runs.last().line == line) {
+                ++runs[runs.size() - 1].count;
+            } else {
+                push runs, {"line": line, "count": 1};
+            }
         }
-        rv{key} = lines.join("\n") + "\n";
+        hash<auto> rv = {};
+        if (runs.size() > MaxOutputLines) {
+            # the lines of the output that are omitted, also those of repeated lines
+            int omitted = 0;
+            map omitted += $1.count, runs[0..runs.size() - MaxOutputLines - 1];
+            rv{key + "Omitted"} = omitted;
+            runs = runs[runs.size() - MaxOutputLines..];
+            # the output tells itself that it is the end only
+            unshift runs, {"line": sprintf("[%d earlier line%s omitted]", omitted, omitted == 1 ? " is" : "s are"),
+                "count": 1};
+        }
+        rv{key} = (map $1.count > 1 ? sprintf("%s (x%d)", $1.line, $1.count) : $1.line, runs).join("\n") + "\n";
         return rv;
     }
 

@@ -146,6 +146,24 @@ public class DebugMcpServerTest inherits QUnit::Test {
         many = (map sprintf("line %d", $1), xrange(DebugMcpSession::MaxOutputLines + 1)).join("\n");
         assertRegex("^\\[1 earlier line is omitted\\]\nline 1\n", DebugMcpSession::limitOutput("o", many).o);
 
+        # consecutive identical lines are given once with their count, in their order
+        assertEq({"logOutput": "a (x3)\nb\na (x2)\n"}, DebugMcpSession::limitOutput("logOutput", "a\na\na\nb\na\na\n",
+            True));
+        # without collapse, as the output of the program
+        assertEq({"programOutput": "a\na\n"}, DebugMcpSession::limitOutput("programOutput", "a\na\n"));
+        # lines of other threads are not identical
+        assertEq({"logOutput": "[thread 2] x\n[thread 3] x\n[thread 2] x\n"},
+            DebugMcpSession::limitOutput("logOutput", "[thread 2] x\n[thread 3] x\n[thread 2] x\n", True));
+        # the limit applies to the collapsed lines, and the omitted lines are those of the output
+        many = (map sprintf("line %d\nline %d", $1, $1), xrange(DebugMcpSession::MaxOutputLines + 2)).join("\n");
+        l = DebugMcpSession::limitOutput("logOutput", many, True);
+        assertEq(4, l.logOutputOmitted);
+        list<string> ll = l.logOutput.split("\n");
+        assertEq(DebugMcpSession::MaxOutputLines + 1, ll.size());
+        assertEq("[4 earlier lines are omitted]", ll[0]);
+        assertEq("line 2 (x2)", ll[1]);
+        assertEq(sprintf("line %d (x2)", DebugMcpSession::MaxOutputLines + 1), ll.last());
+
         # the arguments of a tool
         DebugMcpServer::checkArguments("t", ("a", "b"), {"a": 1});
         DebugMcpServer::checkArguments("t", NOTHING, NOTHING);
@@ -520,6 +538,16 @@ public class DebugMcpServerTest inherits QUnit::Test {
         assertEq({"terminated": True}, r.programEnd);
         assertEq({"session": False}, r.state);
         assertEq(3, (select r.events, $1.reason == "thread end").size(), sprintf("%y", r.events));
+
+        # a logpoint that logs the same message in a loop gives one line with the number of its messages
+        path = writeProgram(tmp.path, LoopProgram, "loop.q");
+        call(c, "qore_debug_launch", {"script": path});
+        r = call(c, "qore_debug_set_breakpoint", {"location": "loop.q 4", "log_message": "loop"});
+        assertTrue(r.ok, r.error);
+        r = call(c, "qore_debug_continue", {"timeout_ms": 200});
+        assertRegex("^\\[thread [0-9]+\\] loop \\(x[0-9]+\\)\n$", r.logOutput);
+        assertFalse(r.hasKey("logOutputOmitted"));
+        call(c, "qore_debug_terminate");
 
         # a program ends with the last of its threads: a thread that the initial thread waited for ends after its code
         # let the initial thread continue, and its end is reported before the end of the program
