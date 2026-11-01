@@ -287,6 +287,37 @@ module DbDataProvider {
             "data_provider_info": DbMaterializedViewDataProvider::ProviderInfo,
         });
 
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DbDataProvider::AppName,
+            "path": "/materialized-views/{view}",
+            "action": "refresh-materialized-view",
+            "display_name": "Refresh Materialized View",
+            "short_desc": "Refresh the stored data of a materialized view",
+            "desc": "Refreshes the stored data of a materialized view from its defining query.\n\n"
+                "The options depend on the database:\n"
+                "- **PostgreSQL**: `concurrent` refreshes without blocking readers; it needs a unique index on the "
+                "materialized view\n"
+                "- **Oracle**: `method` and `atomic_refresh`; the refresh commits implicitly, so it cannot be made "
+                "in a transaction\n\n"
+                "On PostgreSQL, the refresh is committed unless a transaction is already in progress.",
+            "path_vars": {
+                "view": <DataProviderPathVarInfo>{
+                    "display_name": "Materialized View",
+                    "short_desc": "The name of the materialized view",
+                    "desc": "The name of the materialized view, as the database lists it",
+                },
+            },
+            "action_code": DPAT_API,
+            # the refresh rewrites the stored data of the materialized view
+            "mutates_state": True,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DbMaterializedViewRefreshRequestType::Fields
+            ),
+            "output_type": DbMaterializedViewDataProvider::ResponseType,
+            "data_dependent_options": True,
+            "data_provider_info": DbMaterializedViewDataProvider::ProviderInfo,
+        });
+
         # register per-vendor database applications
         registerDbVendorApp(<DbVendorInfo>{
             "display_name": "PostgreSQL",
@@ -435,6 +466,19 @@ while (i.next()) {
 }
     @endcode
 
+    A materialized view's provider also takes a request, which refreshes the materialized view with
+    @ref SqlUtil::AbstractDatabase::refreshMaterializedView() "AbstractDatabase::refreshMaterializedView()"; the
+    request type has the refresh options of the database (\c concurrent on PostgreSQL, \c method and
+    \c atomic_refresh on Oracle), and the \c refresh-materialized-view action of the \c Db app makes the request.
+    The refresh is not a record write: the records of a materialized view stay read-only.
+
+    @par Example:
+    @code{.py}
+DbDataProvider db(ds);
+AbstractDataProvider mv = db.getChildProviderPath("materialized-views/mv_sales_by_region");
+mv.doRequest({"concurrent": True});
+    @endcode
+
     A view is not opened as a top-level child of a database data provider; the top-level fallback for a name that is
     not a child of the provider opens a table only, as before.
 
@@ -470,6 +514,8 @@ while (i.next()) {
       not be opened, and opened as writable tables on MySQL; see @ref dbdataprovider_views
     - added the \c find_view, \c find_single_view, \c find_materialized_view and
       \c find_single_materialized_view actions to the \c Db app
+    - added refreshing a materialized view with a request of its provider, and the \c refresh-materialized-view
+      action of the \c Db app; see @ref dbdataprovider_views
     - a table named \c views, or \c materialized-views on a database with materialized views, is no longer
       reachable through the top-level table fallback of a database data provider, as the name is now a child of the
       provider; the table is still reachable through the \c tables child, as <tt>tables/views</tt>

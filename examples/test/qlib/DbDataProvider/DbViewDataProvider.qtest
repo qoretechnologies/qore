@@ -398,9 +398,11 @@ class DbViewDataProviderTest inherits QUnit::Test {
             foreach string flag in ("supports_create", "supports_update", "supports_upsert", "supports_delete",
                     "supports_bulk_create", "supports_bulk_upsert", "supports_add_field", "supports_update_field",
                     "supports_delete_field", "supports_children", "supports_child_create", "supports_child_delete",
-                    "supports_request", "transaction_management") {
+                    "transaction_management") {
                 assertFalse(info{flag}, path + ": " + flag);
             }
+            # a view has no request; a request of a materialized view refreshes it, which is not a record write
+            assertEq(path =~ /^materialized-views\//, info.supports_request, path + ": supports_request");
             assertNothing(info.create_options, path);
             assertNothing(info.upsert_options, path);
             assertFalse(view.requiresTransactionManagement(), path);
@@ -463,7 +465,8 @@ class DbViewDataProviderTest inherits QUnit::Test {
 
         AbstractDataProvider mview = mviews.getChildProvider(objName(label, "mv"));
         assertEq("DbMaterializedViewDataProvider", mview.getInfo().type);
-        assertRegex("^Read-only record-based data provider for db materialized view", mview.getDesc());
+        assertRegex("^Record-based data provider for db materialized view .*; supports read/search .*read-only, "
+            "and refreshing it with a request$", mview.getDesc());
         assertEq(("id", "name"), keys mview.getRecordType());
         list<hash<auto>> recs = getRecords(mview, NOTHING, {"orderby": "id"});
         assertEq((1, 2, 3), map $1.id, recs);
@@ -520,10 +523,14 @@ class DbViewDataProviderTest inherits QUnit::Test {
             assertFalse(boolean(action.mutates_state), i.key);
             assertEq(("view",), keys action.path_vars, i.key);
         }
-        # no write action is registered for views
+        # no record write action is registered for views; the only other action of a materialized view refreshes it
         foreach hash<DataProviderActionInfo> action in (actions.iterator()) {
-            if (action.path =~ /^\/(materialized-)?views\//) {
+            if (action.path =~ /^\/views\//) {
                 assertTrue(inlist(action.action_code, (DPAT_FIND, DPAT_FIND_SINGLE)), action.action);
+            } else if (action.path =~ /^\/materialized-views\//) {
+                assertTrue(inlist(action.action_code, (DPAT_FIND, DPAT_FIND_SINGLE))
+                    || (action.action_code == DPAT_API && action.action == "refresh-materialized-view"),
+                    action.action);
             }
         }
     }
