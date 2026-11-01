@@ -183,99 +183,99 @@
           "source": "The name of the table",
           "message": "Názov tabuľky"
         },
-        "app.RGI.action.ZmluZF92aWV3.display_name": {
+        "app.RGI.action.ZmluZC12aWV3.display_name": {
           "source": "Find Matching View Records",
           "message": "Nájsť zodpovedajúce záznamy pohľadu"
         },
-        "app.RGI.action.ZmluZF92aWV3.short_desc": {
+        "app.RGI.action.ZmluZC12aWV3.short_desc": {
           "source": "Find records in the view",
           "message": "Nájsť záznamy v pohľade"
         },
-        "app.RGI.action.ZmluZF92aWV3.desc": {
-          "source": "Find records in the view; the view is read-only",
-          "message": "Nájsť záznamy v pohľade; pohľad je len na čítanie"
+        "app.RGI.action.ZmluZC12aWV3.desc": {
+          "source": "Finds the records of a database view that match the search criteria.\n\nThe view is **read-only**: its records cannot be created, updated or deleted.",
+          "message": "Vyhľadá záznamy databázového pohľadu, ktoré zodpovedajú kritériám vyhľadávania.\n\nPohľad je **len na čítanie**: jeho záznamy nemožno vytvárať, aktualizovať ani odstraňovať."
         },
-        "app.RGI.action.ZmluZF92aWV3.option.dmlldw.display_name": {
+        "app.RGI.action.ZmluZC12aWV3.option.dmlldw.display_name": {
           "source": "View",
           "message": "Pohľad"
         },
-        "app.RGI.action.ZmluZF92aWV3.option.dmlldw.short_desc": {
+        "app.RGI.action.ZmluZC12aWV3.option.dmlldw.short_desc": {
           "source": "The name of the view",
           "message": "Názov pohľadu"
         },
-        "app.RGI.action.ZmluZF92aWV3.option.dmlldw.desc": {
+        "app.RGI.action.ZmluZC12aWV3.option.dmlldw.desc": {
           "source": "The name of the view",
           "message": "Názov pohľadu"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.display_name": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtdmlldw.display_name": {
           "source": "Find Single View Record",
           "message": "Nájsť jeden záznam pohľadu"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.short_desc": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtdmlldw.short_desc": {
           "source": "Find a single record in the view",
           "message": "Nájsť jeden záznam v pohľade"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.desc": {
-          "source": "Find a single record in the view; the view is read-only",
-          "message": "Nájsť jeden záznam v pohľade; pohľad je len na čítanie"
+        "app.RGI.action.ZmluZC1zaW5nbGUtdmlldw.desc": {
+          "source": "Finds the single record of a database view that matches the search criteria; more than one matching record is an error.\n\nThe view is **read-only**: its records cannot be created, updated or deleted.",
+          "message": "Vyhľadá jediný záznam databázového pohľadu, ktorý zodpovedá kritériám vyhľadávania; viac zodpovedajúcich záznamov je chyba.\n\nPohľad je **len na čítanie**: jeho záznamy nemožno vytvárať, aktualizovať ani odstraňovať."
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.option.dmlldw.display_name": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtdmlldw.option.dmlldw.display_name": {
           "source": "View",
           "message": "Pohľad"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.option.dmlldw.short_desc": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtdmlldw.option.dmlldw.short_desc": {
           "source": "The name of the view",
           "message": "Názov pohľadu"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.option.dmlldw.desc": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtdmlldw.option.dmlldw.desc": {
           "source": "The name of the view",
           "message": "Názov pohľadu"
         },
-        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.display_name": {
+        "app.RGI.action.ZmluZC1tYXRlcmlhbGl6ZWQtdmlldw.display_name": {
           "source": "Find Matching Materialized View Records",
           "message": "Nájsť zodpovedajúce záznamy materializovaného pohľadu"
         },
-        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.short_desc": {
+        "app.RGI.action.ZmluZC1tYXRlcmlhbGl6ZWQtdmlldw.short_desc": {
           "source": "Find records in the materialized view",
           "message": "Nájsť záznamy v materializovanom pohľade"
         },
-        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.desc": {
-          "source": "Find records in the materialized view; reads the stored data of the materialized view without refreshing it",
-          "message": "Nájsť záznamy v materializovanom pohľade; číta uložené údaje materializovaného pohľadu bez jeho obnovenia"
+        "app.RGI.action.ZmluZC1tYXRlcmlhbGl6ZWQtdmlldw.desc": {
+          "source": "Finds the records of a materialized view that match the search criteria.\n\nThe stored data of the materialized view is read as it is, **without refreshing it**; use the `refresh-materialized-view` action to refresh it. Its records cannot be created, updated or deleted.",
+          "message": "Vyhľadá záznamy materializovaného pohľadu, ktoré zodpovedajú kritériám vyhľadávania.\n\nUložené údaje materializovaného pohľadu sa čítajú tak, ako sú, **bez jeho obnovenia**; na obnovenie použite akciu `refresh-materialized-view`. Jeho záznamy nemožno vytvárať, aktualizovať ani odstraňovať."
         },
-        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.option.dmlldw.display_name": {
+        "app.RGI.action.ZmluZC1tYXRlcmlhbGl6ZWQtdmlldw.option.dmlldw.display_name": {
           "source": "Materialized View",
           "message": "Materializovaný pohľad"
         },
-        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.option.dmlldw.short_desc": {
+        "app.RGI.action.ZmluZC1tYXRlcmlhbGl6ZWQtdmlldw.option.dmlldw.short_desc": {
           "source": "The name of the materialized view",
           "message": "Názov materializovaného pohľadu"
         },
-        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.option.dmlldw.desc": {
+        "app.RGI.action.ZmluZC1tYXRlcmlhbGl6ZWQtdmlldw.option.dmlldw.desc": {
           "source": "The name of the materialized view",
           "message": "Názov materializovaného pohľadu"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.display_name": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtbWF0ZXJpYWxpemVkLXZpZXc.display_name": {
           "source": "Find Single Materialized View Record",
           "message": "Nájsť jeden záznam materializovaného pohľadu"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.short_desc": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtbWF0ZXJpYWxpemVkLXZpZXc.short_desc": {
           "source": "Find a single record in the materialized view",
           "message": "Nájsť jeden záznam v materializovanom pohľade"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.desc": {
-          "source": "Find a single record in the materialized view; reads the stored data of the materialized view without refreshing it",
-          "message": "Nájsť jeden záznam v materializovanom pohľade; číta uložené údaje materializovaného pohľadu bez jeho obnovenia"
+        "app.RGI.action.ZmluZC1zaW5nbGUtbWF0ZXJpYWxpemVkLXZpZXc.desc": {
+          "source": "Finds the single record of a materialized view that matches the search criteria; more than one matching record is an error.\n\nThe stored data of the materialized view is read as it is, **without refreshing it**; use the `refresh-materialized-view` action to refresh it. Its records cannot be created, updated or deleted.",
+          "message": "Vyhľadá jediný záznam materializovaného pohľadu, ktorý zodpovedá kritériám vyhľadávania; viac zodpovedajúcich záznamov je chyba.\n\nUložené údaje materializovaného pohľadu sa čítajú tak, ako sú, **bez jeho obnovenia**; na obnovenie použite akciu `refresh-materialized-view`. Jeho záznamy nemožno vytvárať, aktualizovať ani odstraňovať."
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.option.dmlldw.display_name": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtbWF0ZXJpYWxpemVkLXZpZXc.option.dmlldw.display_name": {
           "source": "Materialized View",
           "message": "Materializovaný pohľad"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.option.dmlldw.short_desc": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtbWF0ZXJpYWxpemVkLXZpZXc.option.dmlldw.short_desc": {
           "source": "The name of the materialized view",
           "message": "Názov materializovaného pohľadu"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.option.dmlldw.desc": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtbWF0ZXJpYWxpemVkLXZpZXc.option.dmlldw.desc": {
           "source": "The name of the materialized view",
           "message": "Názov materializovaného pohľadu"
         },

@@ -183,99 +183,99 @@
           "source": "The name of the table",
           "message": "Der Name der Tabelle"
         },
-        "app.RGI.action.ZmluZF92aWV3.display_name": {
+        "app.RGI.action.ZmluZC12aWV3.display_name": {
           "source": "Find Matching View Records",
           "message": "Passende Datensätze der Sicht suchen"
         },
-        "app.RGI.action.ZmluZF92aWV3.short_desc": {
+        "app.RGI.action.ZmluZC12aWV3.short_desc": {
           "source": "Find records in the view",
           "message": "Datensätze in der Sicht suchen"
         },
-        "app.RGI.action.ZmluZF92aWV3.desc": {
-          "source": "Find records in the view; the view is read-only",
-          "message": "Datensätze in der Sicht suchen; die Sicht ist schreibgeschützt"
+        "app.RGI.action.ZmluZC12aWV3.desc": {
+          "source": "Finds the records of a database view that match the search criteria.\n\nThe view is **read-only**: its records cannot be created, updated or deleted.",
+          "message": "Sucht die Datensätze einer Datenbanksicht, die den Suchkriterien entsprechen.\n\nDie Sicht ist **schreibgeschützt**: Ihre Datensätze können nicht erstellt, aktualisiert oder gelöscht werden."
         },
-        "app.RGI.action.ZmluZF92aWV3.option.dmlldw.display_name": {
+        "app.RGI.action.ZmluZC12aWV3.option.dmlldw.display_name": {
           "source": "View",
           "message": "Sicht"
         },
-        "app.RGI.action.ZmluZF92aWV3.option.dmlldw.short_desc": {
+        "app.RGI.action.ZmluZC12aWV3.option.dmlldw.short_desc": {
           "source": "The name of the view",
           "message": "Der Name der Sicht"
         },
-        "app.RGI.action.ZmluZF92aWV3.option.dmlldw.desc": {
+        "app.RGI.action.ZmluZC12aWV3.option.dmlldw.desc": {
           "source": "The name of the view",
           "message": "Der Name der Sicht"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.display_name": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtdmlldw.display_name": {
           "source": "Find Single View Record",
           "message": "Einzelnen Datensatz der Sicht suchen"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.short_desc": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtdmlldw.short_desc": {
           "source": "Find a single record in the view",
           "message": "Einen einzelnen Datensatz in der Sicht suchen"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.desc": {
-          "source": "Find a single record in the view; the view is read-only",
-          "message": "Einen einzelnen Datensatz in der Sicht suchen; die Sicht ist schreibgeschützt"
+        "app.RGI.action.ZmluZC1zaW5nbGUtdmlldw.desc": {
+          "source": "Finds the single record of a database view that matches the search criteria; more than one matching record is an error.\n\nThe view is **read-only**: its records cannot be created, updated or deleted.",
+          "message": "Sucht den einzelnen Datensatz einer Datenbanksicht, der den Suchkriterien entspricht; mehr als ein passender Datensatz ist ein Fehler.\n\nDie Sicht ist **schreibgeschützt**: Ihre Datensätze können nicht erstellt, aktualisiert oder gelöscht werden."
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.option.dmlldw.display_name": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtdmlldw.option.dmlldw.display_name": {
           "source": "View",
           "message": "Sicht"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.option.dmlldw.short_desc": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtdmlldw.option.dmlldw.short_desc": {
           "source": "The name of the view",
           "message": "Der Name der Sicht"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.option.dmlldw.desc": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtdmlldw.option.dmlldw.desc": {
           "source": "The name of the view",
           "message": "Der Name der Sicht"
         },
-        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.display_name": {
+        "app.RGI.action.ZmluZC1tYXRlcmlhbGl6ZWQtdmlldw.display_name": {
           "source": "Find Matching Materialized View Records",
           "message": "Passende Datensätze der materialisierten Sicht suchen"
         },
-        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.short_desc": {
+        "app.RGI.action.ZmluZC1tYXRlcmlhbGl6ZWQtdmlldw.short_desc": {
           "source": "Find records in the materialized view",
           "message": "Datensätze in der materialisierten Sicht suchen"
         },
-        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.desc": {
-          "source": "Find records in the materialized view; reads the stored data of the materialized view without refreshing it",
-          "message": "Datensätze in der materialisierten Sicht suchen; liest die gespeicherten Daten der materialisierten Sicht, ohne sie zu aktualisieren"
+        "app.RGI.action.ZmluZC1tYXRlcmlhbGl6ZWQtdmlldw.desc": {
+          "source": "Finds the records of a materialized view that match the search criteria.\n\nThe stored data of the materialized view is read as it is, **without refreshing it**; use the `refresh-materialized-view` action to refresh it. Its records cannot be created, updated or deleted.",
+          "message": "Sucht die Datensätze einer materialisierten Sicht, die den Suchkriterien entsprechen.\n\nDie gespeicherten Daten der materialisierten Sicht werden unverändert gelesen, **ohne sie zu aktualisieren**; verwenden Sie die Aktion `refresh-materialized-view`, um sie zu aktualisieren. Ihre Datensätze können nicht erstellt, aktualisiert oder gelöscht werden."
         },
-        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.option.dmlldw.display_name": {
+        "app.RGI.action.ZmluZC1tYXRlcmlhbGl6ZWQtdmlldw.option.dmlldw.display_name": {
           "source": "Materialized View",
           "message": "Materialisierte Sicht"
         },
-        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.option.dmlldw.short_desc": {
+        "app.RGI.action.ZmluZC1tYXRlcmlhbGl6ZWQtdmlldw.option.dmlldw.short_desc": {
           "source": "The name of the materialized view",
           "message": "Der Name der materialisierten Sicht"
         },
-        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.option.dmlldw.desc": {
+        "app.RGI.action.ZmluZC1tYXRlcmlhbGl6ZWQtdmlldw.option.dmlldw.desc": {
           "source": "The name of the materialized view",
           "message": "Der Name der materialisierten Sicht"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.display_name": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtbWF0ZXJpYWxpemVkLXZpZXc.display_name": {
           "source": "Find Single Materialized View Record",
           "message": "Einzelnen Datensatz der materialisierten Sicht suchen"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.short_desc": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtbWF0ZXJpYWxpemVkLXZpZXc.short_desc": {
           "source": "Find a single record in the materialized view",
           "message": "Einen einzelnen Datensatz in der materialisierten Sicht suchen"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.desc": {
-          "source": "Find a single record in the materialized view; reads the stored data of the materialized view without refreshing it",
-          "message": "Einen einzelnen Datensatz in der materialisierten Sicht suchen; liest die gespeicherten Daten der materialisierten Sicht, ohne sie zu aktualisieren"
+        "app.RGI.action.ZmluZC1zaW5nbGUtbWF0ZXJpYWxpemVkLXZpZXc.desc": {
+          "source": "Finds the single record of a materialized view that matches the search criteria; more than one matching record is an error.\n\nThe stored data of the materialized view is read as it is, **without refreshing it**; use the `refresh-materialized-view` action to refresh it. Its records cannot be created, updated or deleted.",
+          "message": "Sucht den einzelnen Datensatz einer materialisierten Sicht, der den Suchkriterien entspricht; mehr als ein passender Datensatz ist ein Fehler.\n\nDie gespeicherten Daten der materialisierten Sicht werden unverändert gelesen, **ohne sie zu aktualisieren**; verwenden Sie die Aktion `refresh-materialized-view`, um sie zu aktualisieren. Ihre Datensätze können nicht erstellt, aktualisiert oder gelöscht werden."
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.option.dmlldw.display_name": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtbWF0ZXJpYWxpemVkLXZpZXc.option.dmlldw.display_name": {
           "source": "Materialized View",
           "message": "Materialisierte Sicht"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.option.dmlldw.short_desc": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtbWF0ZXJpYWxpemVkLXZpZXc.option.dmlldw.short_desc": {
           "source": "The name of the materialized view",
           "message": "Der Name der materialisierten Sicht"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.option.dmlldw.desc": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtbWF0ZXJpYWxpemVkLXZpZXc.option.dmlldw.desc": {
           "source": "The name of the materialized view",
           "message": "Der Name der materialisierten Sicht"
         },

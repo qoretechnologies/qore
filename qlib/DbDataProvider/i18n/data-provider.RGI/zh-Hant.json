@@ -183,99 +183,99 @@
           "source": "The name of the table",
           "message": "資料表的名稱"
         },
-        "app.RGI.action.ZmluZF92aWV3.display_name": {
+        "app.RGI.action.ZmluZC12aWV3.display_name": {
           "source": "Find Matching View Records",
           "message": "尋找相符的檢視表記錄"
         },
-        "app.RGI.action.ZmluZF92aWV3.short_desc": {
+        "app.RGI.action.ZmluZC12aWV3.short_desc": {
           "source": "Find records in the view",
           "message": "查詢檢視表中的記錄"
         },
-        "app.RGI.action.ZmluZF92aWV3.desc": {
-          "source": "Find records in the view; the view is read-only",
-          "message": "查詢檢視表中的記錄；檢視表為唯讀"
+        "app.RGI.action.ZmluZC12aWV3.desc": {
+          "source": "Finds the records of a database view that match the search criteria.\n\nThe view is **read-only**: its records cannot be created, updated or deleted.",
+          "message": "尋找資料庫檢視表中符合搜尋條件的記錄。\n\n檢視表為**唯讀**：無法建立、更新或刪除其記錄。"
         },
-        "app.RGI.action.ZmluZF92aWV3.option.dmlldw.display_name": {
+        "app.RGI.action.ZmluZC12aWV3.option.dmlldw.display_name": {
           "source": "View",
           "message": "檢視表"
         },
-        "app.RGI.action.ZmluZF92aWV3.option.dmlldw.short_desc": {
+        "app.RGI.action.ZmluZC12aWV3.option.dmlldw.short_desc": {
           "source": "The name of the view",
           "message": "檢視表的名稱"
         },
-        "app.RGI.action.ZmluZF92aWV3.option.dmlldw.desc": {
+        "app.RGI.action.ZmluZC12aWV3.option.dmlldw.desc": {
           "source": "The name of the view",
           "message": "檢視表的名稱"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.display_name": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtdmlldw.display_name": {
           "source": "Find Single View Record",
           "message": "尋找單筆檢視表記錄"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.short_desc": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtdmlldw.short_desc": {
           "source": "Find a single record in the view",
           "message": "查詢檢視表中的單一記錄"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.desc": {
-          "source": "Find a single record in the view; the view is read-only",
-          "message": "查詢檢視表中的單一記錄；檢視表為唯讀"
+        "app.RGI.action.ZmluZC1zaW5nbGUtdmlldw.desc": {
+          "source": "Finds the single record of a database view that matches the search criteria; more than one matching record is an error.\n\nThe view is **read-only**: its records cannot be created, updated or deleted.",
+          "message": "尋找資料庫檢視表中符合搜尋條件的單一記錄；符合的記錄超過一筆即為錯誤。\n\n檢視表為**唯讀**：無法建立、更新或刪除其記錄。"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.option.dmlldw.display_name": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtdmlldw.option.dmlldw.display_name": {
           "source": "View",
           "message": "檢視表"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.option.dmlldw.short_desc": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtdmlldw.option.dmlldw.short_desc": {
           "source": "The name of the view",
           "message": "檢視表的名稱"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.option.dmlldw.desc": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtdmlldw.option.dmlldw.desc": {
           "source": "The name of the view",
           "message": "檢視表的名稱"
         },
-        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.display_name": {
+        "app.RGI.action.ZmluZC1tYXRlcmlhbGl6ZWQtdmlldw.display_name": {
           "source": "Find Matching Materialized View Records",
           "message": "尋找相符的具體化檢視表記錄"
         },
-        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.short_desc": {
+        "app.RGI.action.ZmluZC1tYXRlcmlhbGl6ZWQtdmlldw.short_desc": {
           "source": "Find records in the materialized view",
           "message": "查詢具體化檢視表中的記錄"
         },
-        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.desc": {
-          "source": "Find records in the materialized view; reads the stored data of the materialized view without refreshing it",
-          "message": "查詢具體化檢視表中的記錄；讀取具體化檢視表已儲存的資料，而不重新整理"
+        "app.RGI.action.ZmluZC1tYXRlcmlhbGl6ZWQtdmlldw.desc": {
+          "source": "Finds the records of a materialized view that match the search criteria.\n\nThe stored data of the materialized view is read as it is, **without refreshing it**; use the `refresh-materialized-view` action to refresh it. Its records cannot be created, updated or deleted.",
+          "message": "尋找具體化檢視表中符合搜尋條件的記錄。\n\n具體化檢視表的已儲存資料會依原樣讀取，**不會重新整理**；若要重新整理，請使用 `refresh-materialized-view` 動作。無法建立、更新或刪除其記錄。"
         },
-        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.option.dmlldw.display_name": {
+        "app.RGI.action.ZmluZC1tYXRlcmlhbGl6ZWQtdmlldw.option.dmlldw.display_name": {
           "source": "Materialized View",
           "message": "具體化檢視表"
         },
-        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.option.dmlldw.short_desc": {
+        "app.RGI.action.ZmluZC1tYXRlcmlhbGl6ZWQtdmlldw.option.dmlldw.short_desc": {
           "source": "The name of the materialized view",
           "message": "具體化檢視表的名稱"
         },
-        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.option.dmlldw.desc": {
+        "app.RGI.action.ZmluZC1tYXRlcmlhbGl6ZWQtdmlldw.option.dmlldw.desc": {
           "source": "The name of the materialized view",
           "message": "具體化檢視表的名稱"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.display_name": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtbWF0ZXJpYWxpemVkLXZpZXc.display_name": {
           "source": "Find Single Materialized View Record",
           "message": "尋找單筆具體化檢視表記錄"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.short_desc": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtbWF0ZXJpYWxpemVkLXZpZXc.short_desc": {
           "source": "Find a single record in the materialized view",
           "message": "查詢具體化檢視表中的單一記錄"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.desc": {
-          "source": "Find a single record in the materialized view; reads the stored data of the materialized view without refreshing it",
-          "message": "查詢具體化檢視表中的單一記錄；讀取具體化檢視表已儲存的資料，而不重新整理"
+        "app.RGI.action.ZmluZC1zaW5nbGUtbWF0ZXJpYWxpemVkLXZpZXc.desc": {
+          "source": "Finds the single record of a materialized view that matches the search criteria; more than one matching record is an error.\n\nThe stored data of the materialized view is read as it is, **without refreshing it**; use the `refresh-materialized-view` action to refresh it. Its records cannot be created, updated or deleted.",
+          "message": "尋找具體化檢視表中符合搜尋條件的單一記錄；符合的記錄超過一筆即為錯誤。\n\n具體化檢視表的已儲存資料會依原樣讀取，**不會重新整理**；若要重新整理，請使用 `refresh-materialized-view` 動作。無法建立、更新或刪除其記錄。"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.option.dmlldw.display_name": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtbWF0ZXJpYWxpemVkLXZpZXc.option.dmlldw.display_name": {
           "source": "Materialized View",
           "message": "具體化檢視表"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.option.dmlldw.short_desc": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtbWF0ZXJpYWxpemVkLXZpZXc.option.dmlldw.short_desc": {
           "source": "The name of the materialized view",
           "message": "具體化檢視表的名稱"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.option.dmlldw.desc": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtbWF0ZXJpYWxpemVkLXZpZXc.option.dmlldw.desc": {
           "source": "The name of the materialized view",
           "message": "具體化檢視表的名稱"
         },

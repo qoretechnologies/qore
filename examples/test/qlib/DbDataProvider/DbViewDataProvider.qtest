@@ -506,11 +506,11 @@ class DbViewDataProviderTest inherits QUnit::Test {
         hash<string, hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActionHashEx(
             DbDataProvider::AppName);
         hash<string, hash<auto>> expected = {
-            "find_view": {"path": "/views/{view}", "code": DPAT_FIND, "type": "DbViewDataProvider"},
-            "find_single_view": {"path": "/views/{view}", "code": DPAT_FIND_SINGLE, "type": "DbViewDataProvider"},
-            "find_materialized_view": {"path": "/materialized-views/{view}", "code": DPAT_FIND,
+            "find-view": {"path": "/views/{view}", "code": DPAT_FIND, "type": "DbViewDataProvider"},
+            "find-single-view": {"path": "/views/{view}", "code": DPAT_FIND_SINGLE, "type": "DbViewDataProvider"},
+            "find-materialized-view": {"path": "/materialized-views/{view}", "code": DPAT_FIND,
                 "type": "DbMaterializedViewDataProvider"},
-            "find_single_materialized_view": {"path": "/materialized-views/{view}", "code": DPAT_FIND_SINGLE,
+            "find-single-materialized-view": {"path": "/materialized-views/{view}", "code": DPAT_FIND_SINGLE,
                 "type": "DbMaterializedViewDataProvider"},
         };
         foreach hash<auto> i in (expected.pairIterator()) {
@@ -523,6 +523,29 @@ class DbViewDataProviderTest inherits QUnit::Test {
             assertFalse(boolean(action.mutates_state), i.key);
             assertEq(("view",), keys action.path_vars, i.key);
         }
+        # the presentation of the actions of views and materialized views
+        foreach hash<DataProviderActionInfo> action in (actions.iterator()) {
+            *string group = action.path =~ /^\/views\// ? "Views"
+                : (action.path =~ /^\/materialized-views\// ? "Materialized Views" : NOTHING);
+            if (!group) {
+                continue;
+            }
+            assertRegex("^[a-z]+(-[a-z]+)+$", action.action, "verb-noun action name");
+            assertEq((group,), action.groups, action.action);
+            assertTrue(action.display_name.val(), action.action);
+            assertTrue(action.short_desc.size() < 80, action.action + ": short_desc under 80 characters");
+            assertNRegex("[`*]", action.short_desc, action.action + ": short_desc is plain text");
+            assertRegex("\\.\n\n", action.desc, action.action + ": desc has paragraphs");
+            assertTrue(action.path_vars.view.display_name.val(), action.action);
+            assertTrue(action.path_vars.view.short_desc.val(), action.action);
+        }
+        # the refresh options: the most used ones are preselected
+        hash<string, hash<ActionOptionInfo>> refresh_opts = actions."refresh-materialized-view".options;
+        assertTrue(refresh_opts.concurrent.preselected);
+        assertTrue(refresh_opts.method.preselected);
+        assertFalse(boolean(refresh_opts.atomic_refresh.preselected));
+        assertEq(("Force", "Complete", "Fast"), map $1.display_name, refresh_opts.method.allowed_values);
+
         # no record write action is registered for views; the only other action of a materialized view refreshes it
         foreach hash<DataProviderActionInfo> action in (actions.iterator()) {
             if (action.path =~ /^\/views\//) {

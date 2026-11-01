@@ -183,99 +183,99 @@
           "source": "The name of the table",
           "message": "테이블 이름"
         },
-        "app.RGI.action.ZmluZF92aWV3.display_name": {
+        "app.RGI.action.ZmluZC12aWV3.display_name": {
           "source": "Find Matching View Records",
           "message": "일치하는 뷰 레코드 찾기"
         },
-        "app.RGI.action.ZmluZF92aWV3.short_desc": {
+        "app.RGI.action.ZmluZC12aWV3.short_desc": {
           "source": "Find records in the view",
           "message": "뷰에서 레코드 찾기"
         },
-        "app.RGI.action.ZmluZF92aWV3.desc": {
-          "source": "Find records in the view; the view is read-only",
-          "message": "뷰에서 레코드 찾기; 뷰는 읽기 전용입니다"
+        "app.RGI.action.ZmluZC12aWV3.desc": {
+          "source": "Finds the records of a database view that match the search criteria.\n\nThe view is **read-only**: its records cannot be created, updated or deleted.",
+          "message": "검색 조건과 일치하는 데이터베이스 뷰의 레코드를 찾습니다.\n\n뷰는 **읽기 전용**이므로 레코드를 생성, 업데이트 또는 삭제할 수 없습니다."
         },
-        "app.RGI.action.ZmluZF92aWV3.option.dmlldw.display_name": {
+        "app.RGI.action.ZmluZC12aWV3.option.dmlldw.display_name": {
           "source": "View",
           "message": "뷰"
         },
-        "app.RGI.action.ZmluZF92aWV3.option.dmlldw.short_desc": {
+        "app.RGI.action.ZmluZC12aWV3.option.dmlldw.short_desc": {
           "source": "The name of the view",
           "message": "뷰 이름"
         },
-        "app.RGI.action.ZmluZF92aWV3.option.dmlldw.desc": {
+        "app.RGI.action.ZmluZC12aWV3.option.dmlldw.desc": {
           "source": "The name of the view",
           "message": "뷰 이름"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.display_name": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtdmlldw.display_name": {
           "source": "Find Single View Record",
           "message": "단일 뷰 레코드 찾기"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.short_desc": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtdmlldw.short_desc": {
           "source": "Find a single record in the view",
           "message": "뷰에서 단일 레코드 찾기"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.desc": {
-          "source": "Find a single record in the view; the view is read-only",
-          "message": "뷰에서 단일 레코드 찾기; 뷰는 읽기 전용입니다"
+        "app.RGI.action.ZmluZC1zaW5nbGUtdmlldw.desc": {
+          "source": "Finds the single record of a database view that matches the search criteria; more than one matching record is an error.\n\nThe view is **read-only**: its records cannot be created, updated or deleted.",
+          "message": "검색 조건과 일치하는 데이터베이스 뷰의 단일 레코드를 찾습니다. 일치하는 레코드가 둘 이상이면 오류입니다.\n\n뷰는 **읽기 전용**이므로 레코드를 생성, 업데이트 또는 삭제할 수 없습니다."
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.option.dmlldw.display_name": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtdmlldw.option.dmlldw.display_name": {
           "source": "View",
           "message": "뷰"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.option.dmlldw.short_desc": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtdmlldw.option.dmlldw.short_desc": {
           "source": "The name of the view",
           "message": "뷰 이름"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.option.dmlldw.desc": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtdmlldw.option.dmlldw.desc": {
           "source": "The name of the view",
           "message": "뷰 이름"
         },
-        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.display_name": {
+        "app.RGI.action.ZmluZC1tYXRlcmlhbGl6ZWQtdmlldw.display_name": {
           "source": "Find Matching Materialized View Records",
           "message": "일치하는 구체화된 뷰 레코드 찾기"
         },
-        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.short_desc": {
+        "app.RGI.action.ZmluZC1tYXRlcmlhbGl6ZWQtdmlldw.short_desc": {
           "source": "Find records in the materialized view",
           "message": "구체화된 뷰에서 레코드 찾기"
         },
-        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.desc": {
-          "source": "Find records in the materialized view; reads the stored data of the materialized view without refreshing it",
-          "message": "구체화된 뷰에서 레코드 찾기; 구체화된 뷰를 새로 고치지 않고 저장된 데이터를 읽습니다"
+        "app.RGI.action.ZmluZC1tYXRlcmlhbGl6ZWQtdmlldw.desc": {
+          "source": "Finds the records of a materialized view that match the search criteria.\n\nThe stored data of the materialized view is read as it is, **without refreshing it**; use the `refresh-materialized-view` action to refresh it. Its records cannot be created, updated or deleted.",
+          "message": "검색 조건과 일치하는 구체화된 뷰의 레코드를 찾습니다.\n\n구체화된 뷰의 저장된 데이터는 **새로 고치지 않고** 그대로 읽힙니다. 새로 고치려면 `refresh-materialized-view` 작업을 사용하십시오. 레코드를 생성, 업데이트 또는 삭제할 수 없습니다."
         },
-        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.option.dmlldw.display_name": {
+        "app.RGI.action.ZmluZC1tYXRlcmlhbGl6ZWQtdmlldw.option.dmlldw.display_name": {
           "source": "Materialized View",
           "message": "구체화된 뷰"
         },
-        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.option.dmlldw.short_desc": {
+        "app.RGI.action.ZmluZC1tYXRlcmlhbGl6ZWQtdmlldw.option.dmlldw.short_desc": {
           "source": "The name of the materialized view",
           "message": "구체화된 뷰 이름"
         },
-        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.option.dmlldw.desc": {
+        "app.RGI.action.ZmluZC1tYXRlcmlhbGl6ZWQtdmlldw.option.dmlldw.desc": {
           "source": "The name of the materialized view",
           "message": "구체화된 뷰 이름"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.display_name": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtbWF0ZXJpYWxpemVkLXZpZXc.display_name": {
           "source": "Find Single Materialized View Record",
           "message": "단일 구체화된 뷰 레코드 찾기"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.short_desc": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtbWF0ZXJpYWxpemVkLXZpZXc.short_desc": {
           "source": "Find a single record in the materialized view",
           "message": "구체화된 뷰에서 단일 레코드 찾기"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.desc": {
-          "source": "Find a single record in the materialized view; reads the stored data of the materialized view without refreshing it",
-          "message": "구체화된 뷰에서 단일 레코드 찾기; 구체화된 뷰를 새로 고치지 않고 저장된 데이터를 읽습니다"
+        "app.RGI.action.ZmluZC1zaW5nbGUtbWF0ZXJpYWxpemVkLXZpZXc.desc": {
+          "source": "Finds the single record of a materialized view that matches the search criteria; more than one matching record is an error.\n\nThe stored data of the materialized view is read as it is, **without refreshing it**; use the `refresh-materialized-view` action to refresh it. Its records cannot be created, updated or deleted.",
+          "message": "검색 조건과 일치하는 구체화된 뷰의 단일 레코드를 찾습니다. 일치하는 레코드가 둘 이상이면 오류입니다.\n\n구체화된 뷰의 저장된 데이터는 **새로 고치지 않고** 그대로 읽힙니다. 새로 고치려면 `refresh-materialized-view` 작업을 사용하십시오. 레코드를 생성, 업데이트 또는 삭제할 수 없습니다."
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.option.dmlldw.display_name": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtbWF0ZXJpYWxpemVkLXZpZXc.option.dmlldw.display_name": {
           "source": "Materialized View",
           "message": "구체화된 뷰"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.option.dmlldw.short_desc": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtbWF0ZXJpYWxpemVkLXZpZXc.option.dmlldw.short_desc": {
           "source": "The name of the materialized view",
           "message": "구체화된 뷰 이름"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.option.dmlldw.desc": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtbWF0ZXJpYWxpemVkLXZpZXc.option.dmlldw.desc": {
           "source": "The name of the materialized view",
           "message": "구체화된 뷰 이름"
         },

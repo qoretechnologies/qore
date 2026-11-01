@@ -74,6 +74,7 @@ module DbDataProvider {
             "app": DbDataProvider::AppName,
             "path": "/",
             "action": "select-sql",
+            "groups": ("SQL",),
             "display_name": "Execute an SQL Select Statement",
             "short_desc": "Execute an SQL select statement",
             "desc": "Execute an SQL select statement",
@@ -87,6 +88,7 @@ module DbDataProvider {
             "app": DbDataProvider::AppName,
             "path": "/exec-sql",
             "action": "exec-sql",
+            "groups": ("SQL",),
             "display_name": "Execute an SQL Statement",
             "short_desc": "Execute an SQL statement",
             "desc": "Execute an SQL statement",
@@ -101,6 +103,7 @@ module DbDataProvider {
             "app": DbDataProvider::AppName,
             "path": "/tables/{table}",
             "action": "create",
+            "groups": ("Tables",),
             "display_name": "Create Record",
             "short_desc": "Create a record in the table",
             "desc": "Create a record in the table",
@@ -120,6 +123,7 @@ module DbDataProvider {
             "app": DbDataProvider::AppName,
             "path": "/tables/{table}",
             "action": "find_single",
+            "groups": ("Tables",),
             "display_name": "Find Single Record",
             "short_desc": "Find a single record in the table",
             "desc": "Find a single record in the table",
@@ -139,6 +143,7 @@ module DbDataProvider {
             "app": DbDataProvider::AppName,
             "path": "/tables/{table}",
             "action": "find",
+            "groups": ("Tables",),
             "display_name": "Find Matching Records",
             "short_desc": "Find records in the table",
             "desc": "Find records in the table",
@@ -158,6 +163,7 @@ module DbDataProvider {
             "app": DbDataProvider::AppName,
             "path": "/tables/{table}",
             "action": "update",
+            "groups": ("Tables",),
             "display_name": "Update Records",
             "short_desc": "Update records in the table",
             "desc": "Update records in the table",
@@ -177,6 +183,7 @@ module DbDataProvider {
             "app": DbDataProvider::AppName,
             "path": "/tables/{table}",
             "action": "upsert",
+            "groups": ("Tables",),
             "display_name": "Upsert Records",
             "short_desc": "Upsert records in the table",
             "desc": "Upsert records in the table",
@@ -196,6 +203,7 @@ module DbDataProvider {
             "app": DbDataProvider::AppName,
             "path": "/tables/{table}",
             "action": "delete",
+            "groups": ("Tables",),
             "display_name": "Delete Records",
             "short_desc": "Delete records in the table",
             "desc": "Delete records in the table",
@@ -214,10 +222,12 @@ module DbDataProvider {
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": DbDataProvider::AppName,
             "path": "/views/{view}",
-            "action": "find_view",
+            "action": "find-view",
+            "groups": ("Views",),
             "display_name": "Find Matching View Records",
             "short_desc": "Find records in the view",
-            "desc": "Find records in the view; the view is read-only",
+            "desc": "Finds the records of a database view that match the search criteria.\n\n"
+                "The view is **read-only**: its records cannot be created, updated or deleted.",
             "path_vars": {
                 "view": <DataProviderPathVarInfo>{
                     "display_name": "View",
@@ -233,10 +243,13 @@ module DbDataProvider {
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": DbDataProvider::AppName,
             "path": "/views/{view}",
-            "action": "find_single_view",
+            "action": "find-single-view",
+            "groups": ("Views",),
             "display_name": "Find Single View Record",
             "short_desc": "Find a single record in the view",
-            "desc": "Find a single record in the view; the view is read-only",
+            "desc": "Finds the single record of a database view that matches the search criteria; more than one "
+                "matching record is an error.\n\n"
+                "The view is **read-only**: its records cannot be created, updated or deleted.",
             "path_vars": {
                 "view": <DataProviderPathVarInfo>{
                     "display_name": "View",
@@ -252,10 +265,14 @@ module DbDataProvider {
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": DbDataProvider::AppName,
             "path": "/materialized-views/{view}",
-            "action": "find_materialized_view",
+            "action": "find-materialized-view",
+            "groups": ("Materialized Views",),
             "display_name": "Find Matching Materialized View Records",
             "short_desc": "Find records in the materialized view",
-            "desc": "Find records in the materialized view; reads the stored data of the materialized view without refreshing it",
+            "desc": "Finds the records of a materialized view that match the search criteria.\n\n"
+                "The stored data of the materialized view is read as it is, **without refreshing it**; use the "
+                "`refresh-materialized-view` action to refresh it. Its records cannot be created, updated or "
+                "deleted.",
             "path_vars": {
                 "view": <DataProviderPathVarInfo>{
                     "display_name": "Materialized View",
@@ -271,10 +288,15 @@ module DbDataProvider {
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": DbDataProvider::AppName,
             "path": "/materialized-views/{view}",
-            "action": "find_single_materialized_view",
+            "action": "find-single-materialized-view",
+            "groups": ("Materialized Views",),
             "display_name": "Find Single Materialized View Record",
             "short_desc": "Find a single record in the materialized view",
-            "desc": "Find a single record in the materialized view; reads the stored data of the materialized view without refreshing it",
+            "desc": "Finds the single record of a materialized view that matches the search criteria; more than "
+                "one matching record is an error.\n\n"
+                "The stored data of the materialized view is read as it is, **without refreshing it**; use the "
+                "`refresh-materialized-view` action to refresh it. Its records cannot be created, updated or "
+                "deleted.",
             "path_vars": {
                 "view": <DataProviderPathVarInfo>{
                     "display_name": "Materialized View",
@@ -291,6 +313,7 @@ module DbDataProvider {
             "app": DbDataProvider::AppName,
             "path": "/materialized-views/{view}",
             "action": "refresh-materialized-view",
+            "groups": ("Materialized Views",),
             "display_name": "Refresh Materialized View",
             "short_desc": "Refresh the stored data of a materialized view",
             "desc": "Refreshes the stored data of a materialized view from its defining query.\n\n"
@@ -310,8 +333,11 @@ module DbDataProvider {
             "action_code": DPAT_API,
             # the refresh rewrites the stored data of the materialized view
             "mutates_state": True,
+            # the most used option of each database is preselected
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                DbMaterializedViewRefreshRequestType::Fields
+                DbMaterializedViewRefreshRequestType::Fields{"concurrent", "method"}, {"preselected": True}
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                DbMaterializedViewRefreshRequestType::Fields{"atomic_refresh",}
             ),
             "output_type": DbMaterializedViewDataProvider::ResponseType,
             "data_dependent_options": True,
@@ -453,8 +479,8 @@ module DbDataProvider {
     read-only: its record type is the description of the view's columns, and it supports searches, single-record
     searches and bulk reads with the same search conditions, expressions and search options as a table's provider,
     except \c forupdate and \c partition.  It advertises no create, update, upsert, delete or field operations, and
-    refuses them.  The \c Db app has the \c find_view and \c find_single_view actions for views and the
-    \c find_materialized_view and \c find_single_materialized_view actions for materialized views.
+    refuses them.  The \c Db app has the \c find-view and \c find-single-view actions for views and the
+    \c find-materialized-view and \c find-single-materialized-view actions for materialized views.
 
     @par Example:
     @code{.py}
@@ -512,8 +538,9 @@ mv.doRequest({"concurrent": True});
       lists the database's views, and the \c materialized-views child, present only on databases that support
       materialized views, lists its materialized views; views were listed as tables on PostgreSQL, where they could
       not be opened, and opened as writable tables on MySQL; see @ref dbdataprovider_views
-    - added the \c find_view, \c find_single_view, \c find_materialized_view and
-      \c find_single_materialized_view actions to the \c Db app
+    - added the \c find-view, \c find-single-view, \c find-materialized-view and
+      \c find-single-materialized-view actions to the \c Db app, and action groups (\c SQL, \c Tables, \c Views,
+      \c Materialized \c Views) to all of its actions
     - added refreshing a materialized view with a request of its provider, and the \c refresh-materialized-view
       action of the \c Db app; see @ref dbdataprovider_views
     - a table named \c views, or \c materialized-views on a database with materialized views, is no longer
