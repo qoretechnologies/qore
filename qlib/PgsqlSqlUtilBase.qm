@@ -232,6 +232,10 @@ $function$
     @section pgsql_relnotes Release Notes
 
     @subsection pgsqlsqlutilbasev119 PgsqlSqlUtilBase v1.19
+    - fixed @ref SqlUtil::AbstractDatabase::getTable() "getTable()", which opened a materialized view as a table,
+      although @ref SqlUtil::AbstractDatabase::listTables() "listTables()" does not list it, so a writable table
+      object was returned for a materialized view; getTable() now opens only the relations that listTables() lists:
+      ordinary, partitioned and foreign tables
     - a table object for a view or a materialized view, as from
       @ref SqlUtil::AbstractTable::getTable() "AbstractTable::getTable()", now describes its columns, so the view can
       be read with the table object's select APIs; the columns of a materialized view are read from \c pg_catalog,
@@ -4459,16 +4463,19 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         # note: cannot use pg_catalog.pg_statio_all_tables here, as it lists only relations with
         # physical storage and therefore excludes partitioned parent tables (relkind 'p'); query
         # pg_class directly so that partitioned tables are recognized as well
+        # note: only the relations that listTablesImpl() lists are tables: ordinary ('r'), partitioned ('p') and
+        # foreign ('f') tables; a materialized view ('m') was opened as a table as well, so a writable table object
+        # was returned for it; materialized views are listed by PgsqlDatabase::listMaterializedViews()
         *hash<auto> qh = ds.selectRow("select 1 as v from pg_catalog.pg_class c "
             "join pg_catalog.pg_namespace n on (n.oid = c.relnamespace) where n.nspname = %v and "
-            "c.relname = %v and c.relkind in ('r', 'p', 'm', 'f')", schema, getRelationName());
+            "c.relname = %v and c.relkind in ('r', 'p', 'f')", schema, getRelationName());
         if (qh) {
             return inDb = True;
         }
         if (resolveTemporaryTableSchema(True)) {
             qh = ds.selectRow("select 1 as v from pg_catalog.pg_class c "
                 "join pg_catalog.pg_namespace n on (n.oid = c.relnamespace) where n.nspname = %v and "
-                "c.relname = %v and c.relkind in ('r', 'p', 'm', 'f')", schema, getRelationName());
+                "c.relname = %v and c.relkind in ('r', 'p', 'f')", schema, getRelationName());
             if (qh) {
                 return inDb = True;
             }

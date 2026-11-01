@@ -442,6 +442,10 @@ class PgsqlListTablesTest inherits QUnit::Test {
             assertFalse(listed.hasKey(name), sprintf("materialized view %y is not listed as a table", name));
             assertFalse(views.hasKey(name), sprintf("materialized view %y is not listed as a view", name));
             assertTrue(mvs{name}, sprintf("materialized view %y is listed as a materialized view", name));
+            # getTable() opens only what listTables() lists; a materialized view was opened as a writable table
+            assertNothing(db.getTable(name), sprintf("materialized view %y does not open as a table", name));
+            assertFalse(AbstractTable::getTable(ds, name).checkExistence(),
+                sprintf("materialized view %y does not exist as a table", name));
         }
 
         # a view created after the fixtures is not listed as a table either
@@ -575,5 +579,18 @@ class PgsqlListTablesTest inherits QUnit::Test {
         assertTrue(sec_dup.getRecordType().hasKey("sec_col"), "the qualified child is the second schema's table");
         assertThrows("INVALID-CHILD-PROVIDER", \prov.getChildProviderEx(), "no_such_table_qore_plt");
         assertThrows("INVALID-CHILD-PROVIDER", \prov.getChildProviderEx(), outside + "_nonexistent.dup");
+
+        # a materialized view is not a child of the tables provider nor opened by the top-level table fallback; it
+        # is read only through the materialized-views child
+        assertNothing(prov.getChildProvider("mv_dup"), "a materialized view is not a table child");
+        DbDataProvider db_prov(ds);
+        assertNothing(db_prov.getChildProvider("mv_dup"), "a materialized view is not opened by the table fallback");
+        AbstractDataProvider mv = db_prov.getChildProviderPath("materialized-views/mv_dup");
+        assertEq("DbMaterializedViewDataProvider", mv.getInfo().type);
+        assertFalse(mv.getInfo().supports_create, "a materialized view is read-only");
+        AbstractDataProviderRecordIterator i = mv.searchRecords();
+        assertTrue(i.next(), "a materialized view is read");
+        assertEq(1, i.getValue().id, "a materialized view is read");
+        assertFalse(i.next(), "a materialized view is read");
     }
 }
