@@ -61,7 +61,9 @@ access (below), because the value belongs to that object.
 
 `QoreReflectionCaller::Access` distinguishes structural navigation, value access and member-default evaluation.
 Every checked operation first permits access from the target itself or from its creator chain (including independent
-Programs). Other callers must restrict no functional domain the target allows and must have no governing sandbox
+Programs). A child Program has its parent's chain; one that the code of another Program creates for a Program
+(`ProgramControl::createEvalProgram()`, as a debugger does for the Program that it debugs) also has the chain of the
+creating Program. Other callers must restrict no functional domain the target allows and must have no governing sandbox
 manager other than the target's own (see [Sandbox managers](#sandbox-managers)). `PO_IN_MODULE` is an
 execution-context marker, not a restricting capability.
 

@@ -1322,6 +1322,20 @@ void qore_program_private_base::setCreatorChain(const QoreProgram& creator) {
     creator_ids.insert(creator_ids.end(), creator.priv->creator_ids.begin(), creator.priv->creator_ids.end());
 }
 
+void qore_program_private_base::addCreatorChain(const QoreProgram& creator) {
+    // the chain of the parent is set when the child is created
+    assert(!creator_ids.empty());
+    qore_program_id_t creator_id = creator.priv->getProgramId();
+    if (!isCreatedBy(creator_id)) {
+        creator_ids.push_back(creator_id);
+    }
+    for (qore_program_id_t id : creator.priv->creator_ids) {
+        if (!isCreatedBy(id)) {
+            creator_ids.push_back(id);
+        }
+    }
+}
+
 void qore_program_private_base::setParent(QoreProgram* p_pgm, const QoreParseOptions& n_parse_options) {
     //printd(5, "qore_program_private_base::setParent() this: %p parent: %p (parent lvl: %p) this: %p (this pgm: %p) "
     //    "parent po: %lld new po: %lld parent no_child_po_restrictions: %d\n", this, p_pgm,

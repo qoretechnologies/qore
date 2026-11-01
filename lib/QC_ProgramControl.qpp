@@ -180,10 +180,11 @@ Program ProgramControl::createEvalProgram(softint parse_options = PO_DEFAULT) [f
     if (parse_options & PO_ALLOW_REPARSE) {
         qore_program_private::get(*pgm)->setParseOptionsIntern(PO_ALLOW_REPARSE);
     }
-    // the code that creates the Program controls it, as for an independent Program
+    // the code that creates the Program controls it, as does this Program, its parent, whose chain the new Program
+    // already has
     const QoreProgram* creator = getProgram();
     if (creator) {
-        qore_program_private::setCreator(*pgm, *creator);
+        qore_program_private::addCreator(*pgm, *creator);
     }
     return new QoreObject(QC_PROGRAM, getProgram(), pgm);
 }

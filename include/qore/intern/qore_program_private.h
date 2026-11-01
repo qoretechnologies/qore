@@ -1155,11 +1155,20 @@ protected:
     */
     DLLLOCAL void setCreatorChain(const QoreProgram& creator);
 
+    //! Adds the Program whose code created this child Program, and the Programs that created it, after its parent
+    /** For a child Program that the code of another Program than its parent creates
+        (ProgramControl::createEvalProgram(), which a debugger calls for the Program that it debugs): both the parent
+        and the creating code control it.  The chain must have been set by setParent(); IDs that it has are not added
+        again
+    */
+    DLLLOCAL void addCreatorChain(const QoreProgram& creator);
+
     //! The IDs of the Programs that created this Program: its creator first, then the creator's creator, and so on
     /** Set once, by setParent() or, for an independent Program created by %Qore code (the \c Program constructor), by
-        qore_program_private::setCreator(), and never changed; empty for a module Program or a Program created by C++
-        code without a parent.  Reflection allows a Program that created another Program to navigate it; see
-        design/reflection-caller-privilege.md.
+        qore_program_private::setCreator(), and never changed afterwards, except that the chain of the Program that
+        created a child Program for another Program is added by qore_program_private::addCreator() when the child is
+        created; empty for a module Program or a Program created by C++ code without a parent.  Reflection allows a
+        Program that created another Program to navigate it; see design/reflection-caller-privilege.md.
     */
     std::vector<qore_program_id_t> creator_ids;
 
@@ -3211,6 +3220,14 @@ public:
     */
     DLLLOCAL static void setCreator(QoreProgram& pgm, const QoreProgram& creator) {
         pgm.priv->setCreatorChain(creator);
+    }
+
+    //! Records the Program whose code created the child Program \a pgm of another Program
+    /** The parent of the child, which setParent() recorded, controls it, and so does the code that created it; see
+        qore_program_private_base::addCreatorChain()
+    */
+    DLLLOCAL static void addCreator(QoreProgram& pgm, const QoreProgram& creator) {
+        pgm.priv->addCreatorChain(creator);
     }
 
     // called when thread startup fails after preregistration
