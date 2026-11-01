@@ -10,7 +10,53 @@
 %requires MysqlSqlUtil
 %requires DbDataProvider
 
+%try-module mysql
+%define NoMysql
+%endtry
+
 %exec-class MysqlListTablesTest
+
+#! a datasource that records the SQL that it is given, so SQL is generated without a MySQL server
+class MysqlListTablesRecordingDatasource inherits Qore::SQL::AbstractDatasource {
+    public {
+        #! each statement given
+        list<string> log = ();
+    }
+
+    *string getPassword() {}
+    *string getOSEncoding() {}
+    *string getDBName() { return "mtest"; }
+    *string getUserName() { return "muser"; }
+    *string getHostName() {}
+    *int getPort() {}
+    *string getDBEncoding() {}
+    string getDriverName() { return "mysql"; }
+    auto getServerVersion() {}
+    auto getClientVersion() {}
+    string getConfigString() { return "mysql:muser@mtest"; }
+    # MysqlDatabase makes a datasource of its own for sequences from this configuration; it is never opened
+    hash<auto> getConfigHash() { return {"type": "mysql", "user": "muser", "db": "mtest"}; }
+    auto getOption(string opt) {}
+    bool inTransaction() { return False; }
+    bool currentThreadInTransaction() { return False; }
+    nothing beginTransaction() {}
+    nothing commit() {}
+    nothing rollback() {}
+
+    auto exec(string sql, ...) { log += sql; return 0; }
+    auto vexec(string sql, *softlist<auto> vargs) { log += sql; return 0; }
+    auto execRaw(string sql) { log += sql; return 0; }
+    auto select(string sql, ...) { log += sql; }
+    auto vselect(string sql, *softlist<auto> vargs) { log += sql; }
+    auto selectRow(string sql, ...) { log += sql; }
+    auto vselectRow(string sql, *softlist<auto> vargs) { log += sql; }
+    auto selectRows(string sql, ...) { log += sql; }
+    auto vselectRows(string sql, *softlist<auto> vargs) { log += sql; }
+    auto selectTyped(string sql, ...) {}
+    auto vselectTyped(string sql, *softlist<auto> vargs) {}
+    auto selectRowsTyped(string sql, ...) {}
+    auto vselectRowsTyped(string sql, *softlist<auto> vargs) {}
+}
 
 #! Tests that MySQL and MariaDB list as tables exactly the relations that getTable() opens as tables
 /** Every object is created by the test with a name of its own run and dropped at the end.
@@ -71,6 +117,7 @@ class MysqlListTablesTest inherits QUnit::Test {
         addTestCase("a MariaDB sequence is not a table", \sequenceTest());
         addTestCase("a MariaDB system-versioned table is a table", \systemVersionedTest());
         addTestCase("db tables data provider children are the listed tables", \dataProviderTest());
+        addTestCase("the SQL of computeStatistics() and reclaimSpace()", \maintenanceSql());
 
         set_return_value(main());
     }
@@ -245,6 +292,37 @@ class MysqlListTablesTest inherits QUnit::Test {
         assertTrue(inlist(tname, tables), "a system-versioned table is listed as a table");
         assertTrue(exists db.getTable(tname), "a system-versioned table opens with getTable()");
         assertOpens(db, tables);
+    }
+
+    private maintenanceSql() {
+%ifdef NoMysql
+        testSkip("the mysql module is not available");
+%else
+        MysqlListTablesRecordingDatasource rds();
+        MysqlDatabase db(rds);
+
+        # without the no-binlog option, the statement is written to the binary log: no "local" keyword, which is
+        # MySQL's synonym for "no_write_to_binlog"
+        db.computeStatistics({"tables": ("t1", "t2")});
+        assertEq(("analyze table t1, t2",), rds.log, "computeStatistics() is written to the binary log");
+        rds.log = ();
+        db.reclaimSpace({"tables": "t1"});
+        assertEq(("optimize table t1",), rds.log, "reclaimSpace() is written to the binary log");
+
+        rds.log = ();
+        db.computeStatistics({"tables": "t1", "no-binlog": True});
+        assertEq(("analyze no_write_to_binlog table t1",), rds.log, "computeStatistics() with no-binlog");
+        rds.log = ();
+        db.reclaimSpace({"tables": "t1", "no-binlog": True});
+        assertEq(("optimize no_write_to_binlog table t1",), rds.log, "reclaimSpace() with no-binlog");
+
+        # with no table, nothing is done: listTables() lists none here
+        rds.log = ();
+        db.computeStatistics();
+        db.reclaimSpace();
+        assertEq(0, (select rds.log, $1 =~ /^(analyze|optimize)/).size(),
+            "no statement is given without a table");
+%endif
     }
 
     private dataProviderTest() {

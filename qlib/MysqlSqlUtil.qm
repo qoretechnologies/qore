@@ -186,6 +186,11 @@ hash<auto> desc = {
     @section mysql_relnotes Release Notes
 
     @subsection mysqlsqlutilv16 MysqlSqlUtil v1.6
+    - fixed @ref SqlUtil::AbstractDatabase::computeStatistics() "computeStatistics()" and
+      @ref SqlUtil::AbstractDatabase::reclaimSpace() "reclaimSpace()", which never wrote the statement to the binary
+      log, whatever the \c no-binlog option was, as \c LOCAL is MySQL's synonym for \c NO_WRITE_TO_BINLOG, so
+      that MySQL 8.4 refused them without the \c OPTIMIZE_LOCAL_TABLE privilege; without the option, the statement
+      is now written to the binary log.  With no table to process, nothing is done; the SQL had no table name
     - fixed @ref SqlUtil::AbstractDatabase::listTables() "listTables()" and
       @ref SqlUtil::AbstractDatabase::tableIterator() "tableIterator()" listing views, and on MariaDB sequences, as
       tables, and @ref SqlUtil::AbstractDatabase::getTable() "getTable()" opening a view or a sequence as a table:
@@ -1710,11 +1715,20 @@ end";
 
         #! compute statistics implementation. See @ref SqlUtil::AbstractDatabase::computeStatistics()
         private computeStatisticsImpl(*hash options) {
+            # "local" is MySQL's synonym for "no_write_to_binlog", so the statement was never written to the binary
+            # log, whatever the "no-binlog" option was, and MySQL 8.4 refuses it without the
+            # OPTIMIZE_LOCAL_TABLE privilege
             string sql = "analyze ";
-            sql += options."no-binlog" ? "no_write_to_binlog " : "local ";
+            if (options."no-binlog") {
+                sql += "no_write_to_binlog ";
+            }
             sql += "table ";
 
             softlist tables = options.tables ? options.tables : listTables();
+            # there is nothing to do without a table; the SQL had no table name
+            if (!tables) {
+                return;
+            }
 
             sql += (foldl $1 + ", " + $2, (map mysql_get_sql_object_name($1), tables));
 
@@ -1723,11 +1737,20 @@ end";
 
         #! reclaim space implementation. See @ref SqlUtil::AbstractDatabase::reclaimSpace()
         private reclaimSpaceImpl(*hash options) {
+            # "local" is MySQL's synonym for "no_write_to_binlog", so the statement was never written to the binary
+            # log, whatever the "no-binlog" option was, and MySQL 8.4 refuses it without the
+            # OPTIMIZE_LOCAL_TABLE privilege
             string sql = "optimize ";
-            sql += options."no-binlog" ? "no_write_to_binlog " : "local ";
+            if (options."no-binlog") {
+                sql += "no_write_to_binlog ";
+            }
             sql += "table ";
 
             softlist tables = options.tables ? options.tables : listTables();
+            # there is nothing to do without a table; the SQL had no table name
+            if (!tables) {
+                return;
+            }
 
             sql += (foldl $1 + ", " + $2, (map mysql_get_sql_object_name($1), tables));
 
