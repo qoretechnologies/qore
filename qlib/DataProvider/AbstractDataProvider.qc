@@ -6040,6 +6040,61 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
         return getStaticInfoImpl().expressions;
     }
 
+    #! Returns @ref True if the value is an operator hash in a where hash
+    /** An operator hash has a string \c op key and an \c arg key, as a
+        @ref DataProvider::SearchOperatorInfo "SearchOperatorInfo" hash returned by the search operator functions
+        such as @ref DataProvider::dp_op_gt() "dp_op_gt()" has, or an operator hash of another module of the same
+        shape, such as a SqlUtil \c OperatorInfo hash
+
+        @since DataProvider 3.11
+    */
+    static private bool isOperatorHash(auto value) {
+        return value.typeCode() == NT_HASH && value.op.typeCode() == NT_STRING && value.hasKey("arg");
+    }
+
+    #! Returns the expression for an operator hash applied to a field in a where hash
+    /** The number of arguments that the operator takes after the field is the \c op_args key of the operator hash,
+        when it has one, as a @ref DataProvider::SearchOperatorInfo "SearchOperatorInfo" hash does: with more than one,
+        the \c arg list gives them.  An operator hash without an \c op_args key, such as a SqlUtil \c OperatorInfo
+        hash, gives the arguments in an \c arg list when the operator's expression takes more than two arguments
+        (for example \c "between"), and otherwise in \c arg itself.  An operator whose argument is an operator hash,
+        such as \c "not", applies to the expression of that operator on the field.
+
+        @since DataProvider 3.11 an operator hash without an \c op_args key no longer raises \c INVALID-MEMBER when
+        it is a typed hash, and the argument of an operator whose argument is an operator hash may be any value
+    */
+    private hash<DataProviderExpression> getOperatorExpressionIntern(int role, hash<DataProviderInfo> info,
+            string key, hash<auto> value) {
+        hash<DataProviderExpressionInfo> op_info = getExpression(role, value.op, info.expressions);
+        if (AbstractDataProvider::isOperatorHash(value.arg)) {
+            return <DataProviderExpression>{
+                "exp": op_info.name,
+                "args": (getOperatorExpressionIntern(role, info, key, value.arg),),
+            };
+        }
+        # the list is assigned element by element, so it keeps the type list<auto> for the arguments that follow
+        list<auto> args = ();
+        push args, <DataProviderFieldReference>{"field": key};
+        # a typed operator hash may have no "op_args" member, which then cannot be read with the "." operator
+        *int op_args = value.hasKey("op_args") ? value{"op_args"} : NOTHING;
+        if (!exists op_args && value.arg.typeCode() == NT_LIST && op_info.args.size() > 2) {
+            op_args = op_info.args.size() - 1;
+        }
+        if (op_args && op_args != 1) {
+            if (exists value.arg) {
+                args += value.arg;
+            }
+        } else {
+            # an operator with one argument has it even if it is NOTHING (ex: dp_op_ne() for != NOTHING), so
+            # the expression has all its required arguments
+            push args, value.arg;
+        }
+        return <DataProviderExpression>{
+            "exp": op_info.name,
+            "args": args,
+        };
+    }
+
     #! Returns an argument for an expression
     /**
         @since DataProvider 2.3
@@ -6049,35 +6104,8 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
         # remove any unique suffix from key to get field name
         key =~ s/:.*//g;
         hash<DataProviderExpression> rv;
-        if (value.typeCode() == NT_HASH && value.op && value.hasKey("arg")) {
-            hash<DataProviderExpressionInfo> op_info = getExpression(role, value.op, info.expressions);
-            auto args;
-            args[0] = <DataProviderFieldReference>{"field": key};
-            if (value.arg.op && value.arg.arg) {
-                if (exists value.arg.arg) {
-                    if (value.op_args && (value.op_args != 1)) {
-                        args += value.arg.arg;
-                    } else {
-                        push args, value.arg.arg;
-                    }
-                }
-                args = <DataProviderExpression>{
-                    "exp": getExpression(role, value.arg.op, info.expressions).name,
-                    "args": args,
-                };
-            } else if (value.op_args && (value.op_args != 1)) {
-                if (exists value.arg) {
-                    args += value.arg;
-                }
-            } else {
-                # an operator with one argument has it even if it is NOTHING (ex: dp_op_ne() for != NOTHING), so
-                # the expression has all its required arguments
-                push args, value.arg;
-            }
-            rv = <DataProviderExpression>{
-                "exp": op_info.name,
-                "args": args,
-            };
+        if (AbstractDataProvider::isOperatorHash(value)) {
+            rv = getOperatorExpressionIntern(role, info, key, value);
         } else {
             rv = getEqualityComparisonExpression(role, info, key, value);
         }
