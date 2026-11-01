@@ -36,16 +36,19 @@ class CatalogDatasource inherits Datasource {
         list<string> user_views;
         #! the user's materialized views
         list<string> user_mviews;
+        #! the user's dropped tables in the recycle bin, which are in user_tables with dropped = 'YES'
+        list<string> user_dropped;
         #! the user's synonyms: name -> hash of owner, name and type of the object named
         hash<string, hash<auto>> synonyms;
-        #! the objects of other schemas: "OWNER.NAME" -> "TABLE", "VIEW" or "MATERIALIZED VIEW"
+        #! the objects of other schemas: "OWNER.NAME" -> "TABLE", "VIEW", "MATERIALIZED VIEW" or "DROPPED TABLE"
         hash<string, string> other_objects;
     }
 
     constructor(list<string> user_tables, list<string> user_views, list<string> user_mviews,
-            hash<string, hash<auto>> synonyms, hash<string, string> other_objects)
+            list<string> user_dropped, hash<string, hash<auto>> synonyms, hash<string, string> other_objects)
             : Datasource("oracle:qtest/none@qtest") {
-        self.user_tables = user_tables + user_mviews;
+        self.user_tables = user_tables + user_mviews + user_dropped;
+        self.user_dropped = user_dropped;
         self.user_views = user_views;
         self.user_mviews = user_mviews;
         self.synonyms = synonyms;
@@ -77,19 +80,35 @@ class CatalogDatasource inherits Datasource {
         }
         # the listing of the user's tables: user_tables has the container tables of materialized views, which the
         # query has to exclude
+        # and the dropped tables in the recycle bin, with dropped = 'YES'
         if (sql =~ /^select table_name from user_tables/) {
             bool excl = (sql =~ /not exists \(select 1 from user_mviews m where m\.mview_name = t\.table_name\)/);
-            return {"table_name": sort(map $1, user_tables, !excl || !inlist($1, user_mviews))};
+            bool excl_dropped = (sql =~ /nvl\(t\.dropped, 'NO'\) != 'YES'/);
+            return {"table_name": sort(map $1, user_tables, (!excl || !inlist($1, user_mviews))
+                && (!excl_dropped || !inlist($1, user_dropped)))};
         }
         # the listing of the tables of the user's synonyms: all_tables has the container tables of materialized
         # views as well
         if (sql =~ /^select synonym_name from user_synonyms s, all_tables t/) {
             bool excl = (sql =~ /not exists \(select 1 from all_mviews m where m\.owner = t\.owner and m\.mview_name = t\.table_name\)/);
+            bool excl_dropped = (sql =~ /nvl\(t\.dropped, 'NO'\) != 'YES'/);
             return {"synonym_name": sort(map $1.key, synonyms.pairIterator(), $1.value.type == "TABLE"
-                || (!excl && $1.value.type == "MATERIALIZED VIEW"))};
+                || (!excl && $1.value.type == "MATERIALIZED VIEW")
+                || (!excl_dropped && $1.value.type == "DROPPED TABLE"))};
+        }
+        # the views, materialized views and sequences: the recycle bin has none of them
+        if (sql =~ /^select object_name from user_objects where object_type = %v order by 1$/) {
+            switch (args[0]) {
+                case "VIEW": return {"object_name": user_views};
+                case "MATERIALIZED VIEW": return {"object_name": user_mviews};
+            }
+            return {"object_name": ()};
         }
         if (sql =~ /^select \* from user_tables where table_name = %v$/) {
-            return inlist(args[0], user_tables) ? {"table_name": args[0], "tablespace_name": "USERS"} : NOTHING;
+            return inlist(args[0], user_tables)
+                ? {"table_name": args[0], "tablespace_name": "USERS",
+                    "dropped": inlist(args[0], user_dropped) ? "YES" : "NO"}
+                : NOTHING;
         }
         if (sql =~ /^select \* from user_views where view_name = %v$/) {
             return inlist(args[0], user_views) ? {"view_name": args[0]} : NOTHING;
@@ -102,8 +121,8 @@ class CatalogDatasource inherits Datasource {
         }
         if (sql =~ /^select \* from dba_tables where owner = %v and table_name = %v$/) {
             *string type = other_objects{args[0] + "." + args[1]};
-            return (type == "TABLE" || type == "MATERIALIZED VIEW")
-                ? {"table_name": args[1], "tablespace_name": "USERS"}
+            return (type == "TABLE" || type == "MATERIALIZED VIEW" || type == "DROPPED TABLE")
+                ? {"table_name": args[1], "tablespace_name": "USERS", "dropped": type == "DROPPED TABLE" ? "YES" : "NO"}
                 : NOTHING;
         }
         if (sql =~ /^select \* from dba_views where owner = %v and view_name = %v$/) {
@@ -122,7 +141,8 @@ class CatalogDatasource inherits Datasource {
             # the fallback synonym resolution, after dbms_utility.name_resolve() failed
             *hash<auto> syn = args[0] == "QTEST" ? synonyms{args[1]} : NOTHING;
             return (syn && syn.type != "MATERIALIZED VIEW")
-                ? {"table_owner": syn.owner, "table_name": syn.name, "object_type": syn.type}
+                ? {"table_owner": syn.owner, "table_name": syn.name,
+                    "object_type": syn.type == "DROPPED TABLE" ? "TABLE" : syn.type}
                 : NOTHING;
         }
         if (sql =~ /from dba_tab_comments/) {
@@ -141,19 +161,23 @@ class OracleListTablesTest inherits QUnit::Test {
         addTestCase("getTable() opens only tables", \getTableTest());
         addTestCase("a synonym opens only a table", \synonymTest());
         addTestCase("a table object reads a view or a materialized view", \tableObjectTest());
+        addTestCase("dropped tables in the recycle bin are not tables", \recycleBinTest());
         set_return_value(main());
     }
 
-    #! returns a catalog with a table, a view and a materialized view of the user, and synonyms of each kind
+    #! returns a catalog with a table, a view, a materialized view and a dropped table of the user, and synonyms of
+    #! each kind
     private CatalogDatasource getCatalog() {
-        return new CatalogDatasource(("T1",), ("V1",), ("MV1",), {
+        return new CatalogDatasource(("T1",), ("V1",), ("MV1",), ("BIN$TBL1$0",), {
             "SYN_T": {"owner": "OTHER", "name": "T2", "type": "TABLE"},
             "SYN_V": {"owner": "OTHER", "name": "V2", "type": "VIEW"},
             "SYN_MV": {"owner": "OTHER", "name": "MV2", "type": "MATERIALIZED VIEW"},
+            "SYN_DROPPED": {"owner": "OTHER", "name": "BIN$TBL2$0", "type": "DROPPED TABLE"},
         }, {
             "OTHER.T2": "TABLE",
             "OTHER.V2": "VIEW",
             "OTHER.MV2": "MATERIALIZED VIEW",
+            "OTHER.BIN$TBL2$0": "DROPPED TABLE",
         });
     }
 
@@ -167,8 +191,8 @@ class OracleListTablesTest inherits QUnit::Test {
         checkDriver();
         CatalogDatasource ds = getCatalog();
         OracleDatabase db(ds);
-        # the materialized view's container table and the synonym of the other schema's materialized view are not
-        # listed; the synonym of the view was never listed
+        # the materialized view's container table, the dropped table and the synonyms of the other schema's
+        # materialized view and dropped table are not listed; the synonym of the view was never listed
         assertEq(("syn_t", "t1"), db.listTables());
         assertEq(2, ds.queries.size(), "a query each for the user's tables and the tables of the user's synonyms");
     }
@@ -211,5 +235,25 @@ class OracleListTablesTest inherits QUnit::Test {
         assertFalse(t.isView());
         assertFalse(t.isMaterializedView());
         assertTrue(t.inDb());
+    }
+
+    recycleBinTest() {
+        checkDriver();
+        CatalogDatasource ds = getCatalog();
+        OracleDatabase db(ds);
+        assertFalse(inlist("bin$tbl1$0", db.listTables()), "a dropped table is not listed");
+        assertFalse(inlist("syn_dropped", db.listTables()), "a synonym of a dropped table is not listed");
+        assertNothing(db.getTable("bin$tbl1$0"), "a dropped table is not opened as a table");
+        assertNothing(db.getTable("syn_dropped"), "a synonym of a dropped table does not open as a table");
+        OracleTable t = AbstractTable::getTable(ds, "bin$tbl1$0");
+        assertFalse(t.checkExistence());
+        assertTrue(t.isDropped());
+        OracleTable t1 = AbstractTable::getTable(ds, "t1");
+        assertTrue(t1.checkExistence());
+        assertFalse(t1.isDropped());
+        # the recycle bin has no views, materialized views or sequences, so their listings are unchanged
+        assertEq(("v1",), db.listViews());
+        assertEq(("mv1",), db.listMaterializedViews());
+        assertEq((), db.listSequences());
     }
 }
