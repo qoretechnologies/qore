@@ -564,6 +564,11 @@ int StatementBlock::parseInitImpl(QoreParseContext& parse_context) {
     // this call will pop all local vars off the stack
     setupLVList(parse_context);
 
+    // the body of a function, method or closure is not initialized with AbstractStatement::parseInit(): its scope is
+    // recorded here, with the parameters, which are still in scope, so that the statement of a breakpoint on the
+    // function has the local variables that its condition and log message are checked with
+    setParseScope();
+
     //printd(5, "StatementBlock::parseInitImpl(this=%p): done (lvars=%p, %d vars, vstack = %p)\n", this, lvars, lvids,
     //    getVStack());
     return err;

@@ -80,5 +80,9 @@ class StatementLocalsTest inherits QUnit::Test {
         assertEq(("argv", "p", "top"), getLocals(pc, 21));
         # the innermost variable is first
         assertEq("b", pc.getStatementIdInfo(pc.findStatementId("src", 5)).locals[0]);
+        # the statement of a function, as of a breakpoint on the function: its parameters, but not the variables
+        # that its body declares
+        *list<string> fl = pc.getStatementIdInfo(pc.findFunctionStatementId("f", ("int", "string"))).locals;
+        assertEq(("argv", "s", "top", "x"), sort(fl ?? ()));
     }
 }

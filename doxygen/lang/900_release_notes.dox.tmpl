@@ -3647,7 +3647,8 @@ while (*binary chunk = input.read(65536)) {
         a file of commands; a command of a file that resumes a thread waits until a thread pauses, and the first
         command that fails ends the file
       - \c quit tells when the program continues without the debugger, and <tt>quit kill</tt> ends it first; the
-        condition and the expressions of the log message of a breakpoint are checked when they are set
+        condition and the expressions of the log message of a breakpoint are checked when they are set, also for a
+        breakpoint on a function, whose parameters they can use
       - JSON output for programs such as coding agents: with \c --json, \c qdbg and \c qdbg-remote write one JSON
         object for each command, event and output of the program; with \c --wait-timeout or the
         \c options \c waittimeout command, a command that resumes a thread waits for a thread to pause only as long,

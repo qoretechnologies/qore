@@ -236,6 +236,11 @@ int AbstractStatement::parseInit(QoreParseContext& parse_context) {
     in_try = (parse_context.pflag & PF_IN_TRY) != 0;
 
     int rc = parseInitImpl(parse_context);
+    setParseScope();
+    return rc;
+}
+
+void AbstractStatement::setParseScope() {
     // the local variables of the frame of the statement that it can refer to, also those that it declares, for
     // debuggers; the top-level variables of the program, which have global scope, are visible to all code, and a
     // variable of another Program, as of a Program whose parse loads this one, is not one of them
@@ -243,7 +248,6 @@ int AbstractStatement::parseInit(QoreParseContext& parse_context) {
     const void* owner = qore_program_private::get(*getProgram());
     scope_top = (v && v->lvar && v->lvar->getOwner() == owner) ? v->lvar : nullptr;
     scope_known = true;
-    return rc;
 }
 
 QoreBreakpoint* AbstractStatement::getBreakpoint() const {

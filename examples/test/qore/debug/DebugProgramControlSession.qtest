@@ -860,6 +860,17 @@ try {
         assertThrows("VARIANT-MATCH-ERROR", \dpc.command(), (cmd, {"value": {"function": "add", "args": ()}}));
         # a function that does not exist
         assertThrows("PROGRAM-ERROR", \dpc.command(), (cmd, {"value": {"function": "no_such_function"}}));
+        # the condition and log message of a breakpoint on a function are checked with its parameters when they are
+        # set: an invalid one is refused, and a valid one is accepted
+        assertThrows("BREAKPOINT-CONDITION-ERROR", "invalid condition \"a \\+\"", \dpc.command(),
+            (cmd, {"value": {"function": "add", "condition": "a +"}}));
+        assertThrows("BREAKPOINT-CONDITION-ERROR", "bareword 'nope'", \dpc.command(),
+            (cmd, {"value": {"function": "add", "logMessage": "a={a} n={nope}"}}));
+        assertThrows("BREAKPOINT-CONDITION-ERROR", "invalid condition \"sum > 0\"", \dpc.command(),
+            (sprintf("program//breakpoint/%d/condition/set", bp.bkptid), {"value": "sum > 0"}));
+        assertEq("ok", dpc.command(sprintf("program//breakpoint/%d/condition/set", bp_args.bkptid),
+            {"value": "a + b == 5"}));
+        assertEq(2, dpc.command(sprintf("program/%d/breakpoint//list", p.pgmId)).size());
 
         hash<auto> e = p.runToStop();
         assertEq("step", e.func);

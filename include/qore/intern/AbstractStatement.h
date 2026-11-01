@@ -169,6 +169,12 @@ protected:
     //! Returns -1 = parse error raised, 0 = OK
     DLLLOCAL virtual int parseInitImpl(QoreParseContext& parse_context) = 0;
 
+    //! Records the local variables of the current parse scope as those that the statement can refer to
+    /** Called after the statement is initialized, when the variables that it declares are in scope; see
+        getScopeLocalVars()
+    */
+    DLLLOCAL void setParseScope();
+
     friend class qore_program_private;
     // executed when qore_program_private::lck_breakpoint lock is acquired
     DLLLOCAL QoreBreakpoint* getBreakpoint() const;
