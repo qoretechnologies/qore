@@ -3922,7 +3922,9 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
                 } else {
                     variant = nullptr;
                     pmatch = variant_pmatch;
-                    score_len = -1;
+                    // the match is ambiguous and is resolved at runtime: score_len keeps the length of the best
+                    // match, so that a later variant matching no better than the variants seen so far is not
+                    // selected at parse time when the runtime match would select another one
                 }
             }
         }
@@ -4287,7 +4289,9 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNoDiagnostics(c
                     } else {
                         variant = nullptr;
                         pmatch = variant_pmatch;
-                        score_len = -1;
+                        // the match is ambiguous and is resolved at runtime: score_len keeps the length of the best
+                        // match, so that a later variant matching no better than the variants seen so far is not
+                        // selected at parse time when the runtime match would select another one
                     }
                 }
             }
@@ -4590,7 +4594,9 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
                         // then we have to match at runtime
                         variant = nullptr;
                         pmatch = variant_pmatch;
-                        score_len = -1;
+                        // the match is ambiguous and is resolved at runtime: score_len keeps the length of the best
+                        // match, so that a later variant matching no better than the variants seen so far is not
+                        // selected at parse time when the runtime match would select another one
                     }
                 }
             }

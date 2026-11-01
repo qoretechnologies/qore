@@ -1494,4 +1494,35 @@ bool cpp_api_ext_data_read_while_locked() [dom=PROCESS] {
     return getProgram()->getExternalData(ExtDataOwner) != nullptr;
 }
 
+
+//! returns \c "*string": a variant of an overload whose variants all accept no value
+/** Used to check that an argument with no value selects the same variant at parse time and at run time; see
+    nothing-variants/nothing-variants.qtest
+
+    @param s a string or no value
+
+    @return the variant called
+*/
+string cpp_api_nothing_variant(*string s) [flags=CONSTANT] {
+    return new QoreStringNode("*string");
+}
+
+//! returns \c "*object": a variant of an overload whose variants all accept no value
+/** @param o an object or no value
+
+    @return the variant called
+*/
+string cpp_api_nothing_variant(*object o) [flags=CONSTANT] {
+    return new QoreStringNode("*object");
+}
+
+//! returns \c "*softlist": a variant of an overload whose variants all accept no value
+/** @param l a list of strings, a string, or no value
+
+    @return the variant called
+*/
+string cpp_api_nothing_variant(*softlist<*string> l) [flags=CONSTANT] {
+    return new QoreStringNode("*softlist");
+}
+
 ///@}
