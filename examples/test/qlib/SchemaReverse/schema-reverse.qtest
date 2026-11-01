@@ -27,6 +27,8 @@
 #
 our hash REF_TABLE;
 our hash REF_SCHEMA;
+#! the description that TableReverse gives for REF_TABLE: REF_TABLE, but for what the server makes of its columns
+our hash REF_TABLE_REVERSE;
 
 class Main inherits QUnit::Test {
     private {
@@ -96,6 +98,23 @@ class Main inherits QUnit::Test {
         if (m_ds.getDriverName() == "oracle") {
             REF_TABLE.columns.loc_col = ( "driver" : ( "oracle" : ("native_type" : "sdo_geometry", "notnull" : False )));
         }
+        REF_TABLE_REVERSE = REF_TABLE;
+        string drv = m_ds.getDriverName();
+        if (drv == "pgsql" || drv == "mysql") {
+            # an integer column is a bigint, which TableReverse gives with its native type, and with its comment
+            REF_TABLE.columns.cnt = {"qore_type": Type::Int, "notnull": True, "comment": "comment for cnt"};
+            REF_TABLE_REVERSE.columns.cnt = {
+                "driver": {drv: {"native_type": "bigint", "notnull": True}},
+                "comment": "comment for cnt",
+            };
+        }
+        if (drv == "mysql") {
+            # MySQL has no numeric without a precision: a numeric column without one is decimal(10,0)
+            REF_TABLE_REVERSE.columns.id.size = 10;
+            # MySQL has no date type with a time, as Oracle has: a date column is a timestamp; the c_date() native
+            # types are for Oracle and PostgreSQL only
+            REF_TABLE_REVERSE.columns.bar = c_timestamp(C_NOT_NULL, "comment for bar");
+        }
 
         REF_SCHEMA = (
             "sequences" : (
@@ -121,7 +140,7 @@ class Main inherits QUnit::Test {
 
         TableReverse r(m_ds, "schema_reverse_t1");
         hash q = r.toQore();
-        assertEq(REF_TABLE, q, "TableReverse::toQore()");
+        assertEq(REF_TABLE_REVERSE, q, "TableReverse::toQore()");
     }
 
     testSchemaReverseTables() {
@@ -132,7 +151,7 @@ class Main inherits QUnit::Test {
         # "<schema>.schema_reverse_t1"
         TablesReverse r(m_ds, "^schema_reverse_t1$");
         hash q = r.toQore();
-        assertEq(REF_SCHEMA.tables, q, "TableReverse::toQore()");
+        assertEq({"schema_reverse_t1": REF_TABLE_REVERSE}, q, "TableReverse::toQore()");
     }
 
     testSchemaReverseSequence() {

@@ -168,6 +168,9 @@ The output will be:
     @section schemareverse_relnotes SchemaReverse Module Release History
 
     @subsection schemareverse_v1_2 SchemaReverse Module v1.2
+    - fixed the comment of a column of a type without a generic description, as \c bigint, which was dropped
+    - fixed a MySQL or Microsoft SQL Server \c decimal column, which was given as a column of that native type,
+      without its comment, instead of as a numeric column with its precision and scale
     - fixed numeric scale bug: scale is now correctly extracted from column metadata
     - fixed trigger accumulation bug: triggers are accumulated into a hash instead of overwriting
     - added foreign key constraint extraction via \c getForeignConstraints()
@@ -588,6 +591,8 @@ class <X_SCHEMA_NAME> inherits AbstractSchema {
                     break;
                 case "number":
                 case "numeric":
+                # MySQL's and Microsoft SQL Server's name for numeric
+                case "decimal":
                     ret = c_number(c.size, c.scale ?? 0, !c.nullable, c.comment);
                     break;
                 case "clob":
@@ -615,9 +620,11 @@ class <X_SCHEMA_NAME> inherits AbstractSchema {
                 #    # TODO/FIXME ret =  ("qore_type": SQL::RAW, "comment": c.comment, "notnull" : !c.nullable);
                 #    break;
                 default:
+                    # the column's comment is kept, as for the other column types; it was dropped
                     ret = (
                         #"unknown_column_type": sprintf("%n", c),
                         "driver": (self.datasource().getDriverName(): ("native_type": c.native_type, "notnull": !c.nullable)),
+                        "comment": c.comment,
                     );
             }
 
