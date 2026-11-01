@@ -150,6 +150,10 @@ public class McpServerHandlerTypeInfoTest inherits QUnit::Test {
         assertEq(("name", "code", "either", "inner"), handler.getInput("tool").required);
     }
 
+    #! a description longer than a short description, with the syntax of the value
+    const WhenDesc = "When the tag applies, as `n` or `>= n` (from the nth order), `== n` (only the nth order), "
+        "`> n`, or `% n` (every nth order); without a value, the tag applies to every order";
+
     #! Returns an input type with a reference-data parameter, a fixed-value parameter and a plain one
     private static HashDataType getReferenceInputType() {
         HashDataType type("CustomerTag");
@@ -160,6 +164,8 @@ public class McpServerHandlerTypeInfoTest inherits QUnit::Test {
                 <AllowedValueInfo>{"value": "add"}, <AllowedValueInfo>{"value": "remove"}),
                 "attr": {"ref_data": "mode"}},
             "note": {"name": "note", "type": AbstractDataProviderTypeMap."*string"},
+            "when": {"name": "when", "type": AbstractDataProviderTypeMap."*string",
+                "desc": WhenDesc},
         });
         return type;
     }
@@ -183,6 +189,8 @@ public class McpServerHandlerTypeInfoTest inherits QUnit::Test {
             assertEq(("add", "remove"), props.mode."enum", tool);
             assertFalse(props.mode.hasKey("description"), tool);
             assertEq({"type": "string"}, props.note, tool);
+            # a parameter is described in full, as the model reads the syntax of its values
+            assertEq(WhenDesc, props.when.description, tool);
             assertEq(("customerId",), handler.getInput(tool).required, tool);
         }
         assertEq(make_json(handler.getInput("from-type")), make_json(handler.getInput("from-info")));

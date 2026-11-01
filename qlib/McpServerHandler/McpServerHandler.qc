@@ -2632,7 +2632,9 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
         list<string> required;
         foreach AbstractDataField field in (fields.iterator()) {
             AbstractDataProviderType t = field.getType();
-            *hash<auto> info = getTypeDescription(field.getName(), field.getShortDescription(), t, prov, tmap);
+            # the whole description, as the model reads it to call the tool, and a short one leaves out the syntax of
+            # values
+            *hash<auto> info = getTypeDescription(field.getName(), field.getDescription(), t, prov, tmap);
             # NOTHING omits the field; an empty description is a field of any value
             if (!exists info) {
                 continue;
@@ -3289,7 +3291,8 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
         };
         list<string> required;
         foreach hash<auto> field in (fields.iterator()) {
-            *hash<auto> info = getTypeInfoDescription(field.name, field.short_desc, field.type, prov, \memo);
+            # the whole description; see getObjectDescription()
+            *hash<auto> info = getTypeInfoDescription(field.name, field.desc, field.type, prov, \memo);
             # NOTHING omits the field; an empty description is a field of any value
             if (!exists info) {
                 continue;

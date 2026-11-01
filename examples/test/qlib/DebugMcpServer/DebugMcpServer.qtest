@@ -305,6 +305,10 @@ public class DebugMcpServerTest inherits QUnit::Test {
         # the modes of resuming a thread are listed
         hash<auto> cont = (select s.client.listTools(), $1.name == "qore_debug_continue")[0];
         assertEq(("run", "step", "next", "finish"), cont.inputSchema.properties.mode{"enum"});
+        # the parameters are described in full, with the syntax of their values
+        hash<auto> bp = (select s.client.listTools(), $1.name == "qore_debug_set_breakpoint")[0];
+        assertEq(DebugMcpFields.location.desc, bp.inputSchema.properties.location.description);
+        assertEq(DebugMcpFields.hit_condition.desc, bp.inputSchema.properties.hit_condition.description);
 
         # without launching scripts
         hash<auto> s2 = startServer(tmp.path, ("--no-launch",));
