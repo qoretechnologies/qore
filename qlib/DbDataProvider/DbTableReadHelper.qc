@@ -29,6 +29,94 @@ public namespace DbDataProvider {
     that is evaluated on the rows returned, which requires the \c allow_client_side_filter search option.
 */
 class DbTableReadHelper {
+    #! Rolls back a transaction that the current thread holds only since an operation that failed
+    /** When a statement fails before the object that would release its implicit transaction exists, as when the
+        constructor of an iterator fails, the transaction lock acquired by the statement must be released here.  An
+        error in the rollback itself is ignored, so the caller rethrows the error of the operation.
+
+        @param ds the datasource
+        @param in_trans @ref True if the current thread held a transaction before the operation; nothing is done then
+    */
+    static releaseImplicitTransaction(AbstractDatasource ds, bool in_trans) {
+        if (in_trans || !ds.currentThreadInTransaction()) {
+            return;
+        }
+        try {
+            ds.rollback();
+        } catch (hash<ExceptionInfo> ex) {
+            # the error of the failed operation is the error to report
+        }
+    }
+
+    #! Returns a statement for a select on the given table, releasing any implicit transaction if it fails
+    /** @param table the table
+        @param select_options the select options, including any \c where clause
+    */
+    static AbstractSQLStatement getTableStatement(AbstractTable table, *hash<auto> select_options) {
+        AbstractDatasource ds = table.getDatasource();
+        bool in_trans = ds.currentThreadInTransaction();
+        try {
+            return table.getStatement(select_options);
+        } catch (hash<ExceptionInfo> ex) {
+            DbTableReadHelper::releaseImplicitTransaction(ds, in_trans);
+            rethrow;
+        }
+    }
+
+    #! Returns @ref True if the where hash is a SqlUtil where clause
+    /** A where hash is a SqlUtil where clause if a value is a SqlUtil operator hash, as returned by the
+        @ref sql_op_funcs "SqlUtil operator functions" such as @ref SqlUtil::op_gt() "op_gt()" and by
+        @ref SqlUtil::wop_or() "wop_or()", or a SqlUtil column operator hash
+    */
+    static bool isSqlUtilWhere(*hash<auto> where_cond) {
+        if (!where_cond || where_cond instanceof hash<DataProviderExpression>) {
+            return False;
+        }
+        foreach auto value in (where_cond.iterator()) {
+            if (value instanceof hash<OperatorInfo> || value instanceof hash<ColumnOperatorInfo>) {
+                return True;
+            }
+        }
+        return False;
+    }
+
+    #! Returns a SqlUtil where clause with its plain values converted to the types of their fields
+    /** The where clause is evaluated by SqlUtil, with SqlUtil's semantics for its operators.  A key may have a
+        disposable unique prefix (<tt>"1:id"</tt>) to give more than one condition on a column, as in SqlUtil, and the
+        conditions of a @ref SqlUtil::wop_or() "wop_or()" operator are where clauses themselves.
+
+        @param provider_name the name of the provider for error messages
+        @param rec the record type of the relation
+        @param where_cond the SqlUtil where clause
+
+        @return the where clause with each plain value converted to the type of its field
+
+        @throw INVALID-FIELD a key names no field of the relation
+    */
+    static hash<auto> processSqlUtilWhere(string provider_name, hash<string, AbstractDataField> rec,
+            hash<auto> where_cond) {
+        hash<auto> rv;
+        foreach hash<auto> i in (where_cond.pairIterator()) {
+            if (i.value instanceof hash<OperatorInfo> && i.value.op == OP_OR) {
+                # each element of the argument of an "or" operator is a where clause
+                hash<OperatorInfo> op = i.value;
+                op.arg = map DbTableReadHelper::processSqlUtilWhere(provider_name, rec, $1), i.value.arg;
+                rv{i.key} = op;
+                continue;
+            }
+            # remove any disposable unique prefix, as SqlUtil does
+            string field = i.key;
+            field =~ s/^[0-9]+://;
+            if (!rec{field}) {
+                throw "INVALID-FIELD", sprintf("data provider %y: field %y is not a defined field; valid fields: %y",
+                    provider_name, field, keys rec);
+            }
+            # a hash is an operator; SqlUtil processes its arguments
+            rv{i.key} = i.value.typeCode() == NT_HASH ? i.value : rec{field}.acceptsValue(i.value);
+        }
+        return rv;
+    }
+
     #! Returns an iterator for zero or more records of the relation matching the search options
     static AbstractDataProviderRecordIterator<hash<auto>> getReadIterator(AbstractTable table,
             *hash<auto> where_cond, *hash<auto> search_options) {

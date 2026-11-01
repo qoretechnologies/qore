@@ -38,7 +38,10 @@ public class DbTableRecordIterator inherits AbstractDbRecordIterator {
     */
     constructor(AbstractTable table, *hash<auto> where_cond, *hash<auto> search_options)
         : AbstractDbRecordIterator(!table.getDatasource().currentThreadInTransaction() && !search_options.forupdate,
-            table.getStatement(search_options - ("requires_result", "max_records") + {"where": where_cond}),
+            # the object does not exist yet if the statement fails, so an implicit transaction acquired by it is
+            # released there
+            DbTableReadHelper::getTableStatement(table, search_options - ("requires_result", "max_records")
+                + {"where": where_cond}),
             search_options) {
         self.table = table;
     }

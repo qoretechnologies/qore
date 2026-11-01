@@ -52,7 +52,10 @@ public class DbTableBulkRecordInterface inherits AbstractDataProviderBulkRecordI
         self.table = table;
         # release the transaction with a rollback in the destructor if we do not already have a transaction lock
         release_transaction = !table.getDatasource().currentThreadInTransaction() && !search_options.forupdate;
-        stmt = table.getStatement(search_options - ("requires_result", "max_records") + {"where": where_cond});
+        # the destructor does not run if the constructor fails, so an implicit transaction acquired by the
+        # statement is released there
+        stmt = DbTableReadHelper::getTableStatement(table, search_options - ("requires_result", "max_records")
+            + {"where": where_cond});
 
         foreach AbstractColumn col in (table.describe().iterator()) {
             if (col.qore_type == Type::Binary) {

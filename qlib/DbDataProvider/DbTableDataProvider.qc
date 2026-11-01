@@ -456,6 +456,29 @@ public class DbTableDataProvider inherits DbDataProviderBase {
         return DbDataProviderBase::getMapperRuntimeKeys();
     }
 
+    #! Returns the search condition for a where hash, which may be a SqlUtil where clause
+    /** A where hash with a SqlUtil operator (see @ref sql_op_funcs "SqlUtil operator functions", such as
+        @ref SqlUtil::op_gt() "op_gt()", and @ref SqlUtil::wop_or() "wop_or()") is a SqlUtil where clause: it is
+        evaluated by SqlUtil, with SqlUtil's semantics, such as @ref SqlUtil::op_ne() "op_ne()" matching null values
+        too; only its plain values are converted to the types of their fields.  Any other search condition is
+        processed as by any data provider.
+
+        @param where_cond the search condition
+        @param search_options the search options
+
+        @return the search condition to give to the table
+
+        @throw INVALID-FIELD a key of a SqlUtil where clause names no field of the table
+
+        @since DbDataProvider 2.5
+    */
+    *hash<auto> getSearchExpression(*hash<auto> where_cond, *hash<auto> search_options) {
+        if (DbTableReadHelper::isSqlUtilWhere(where_cond)) {
+            return DbTableReadHelper::processSqlUtilWhere(getName(), table.getRecordType(), where_cond);
+        }
+        return AbstractDataProvider::getSearchExpression(where_cond, search_options);
+    }
+
     #! Returns the description of the record type, if any
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
         return table.getRecordType();

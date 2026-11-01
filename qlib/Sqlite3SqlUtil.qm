@@ -238,6 +238,9 @@ hash<auto> desc = {
     @section sqlite3_relnotes Release Notes
 
     @subsection sqlite3sqlutilv12 Sqlite3SqlUtil_1_2 Sqlite3SqlUtil Module v1.2
+    - fixed @ref SqlUtil::op_substr() "op_substr()" in where clauses, which generated the ANSI
+      <tt>substring(... from ... for ...)</tt> syntax that SQLite does not have, so the query failed with
+      \c SQLITE3-PREPARE-ERROR; SQLite's \c substr() function is now used
     - Security: a name of a table, column, index, constraint, trigger, view, savepoint or collation that is not an
       ordinary SQLite identifier is given in double quotes, each double quote doubled, wherever SQL is generated, so
       that a name from untrusted data can never change the SQL; an ordinary name is given as before (see
@@ -1365,6 +1368,27 @@ string sql = pk.getTableConstraintSql();
                 SqlUtil::BLOB: "blob",
             );
 
+            #! where operator specializations for Sqlite3
+            /** SQLite has no ANSI \c substring(... from ... for ...) syntax, so @ref SqlUtil::op_substr() "op_substr()"
+                uses SQLite's \c substr() function
+
+                @since Sqlite3SqlUtil 1.2
+            */
+            const Sqlite3OpMap = DefaultOpMap + {
+                OP_SUBSTR: {
+                    "code": string sub (reference<hash<QueryInfo>> info, string cn, softlist<auto> arg) {
+                        info.args += arg[0]; # start
+                        if (!exists arg[1]) {
+                            info.args += arg[2]; # text
+                            return sprintf("substr(%s, %v) = %v", cn);
+                        }
+                        info.args += arg[1]; # count
+                        info.args += arg[2]; # text
+                        return sprintf("substr(%s, %v, %v) = %v", cn);
+                    },
+                },
+            };
+
             #! column operator specializations for Sqlite3
             const Sqlite3CopMap = (
                 COP_CAST: (
@@ -1607,6 +1631,13 @@ string sql = pk.getTableConstraintSql();
         #! returns the column operator map for this object
         private hash getColumnOperatorMapImpl() {
             return Sqlite3CopMap;
+        }
+
+        #! returns the "where" operator map for SQLite
+        /** @since Sqlite3SqlUtil 1.2
+        */
+        hash<auto> getWhereOperatorMap() {
+            return Sqlite3OpMap;
         }
 
         #! SQLite has no row locks and no \c "for update" clause
