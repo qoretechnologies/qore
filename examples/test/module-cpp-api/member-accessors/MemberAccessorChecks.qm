@@ -61,6 +61,11 @@ public namespace MemberAccessorChecks {
         int readSelf() {
             return self.count + count + self.count;
         }
+
+        #! removes the inherited static variable by its bare name
+        static auto removeStatic() {
+            return remove sany;
+        }
     }
 
     class Tracked {
@@ -323,6 +328,49 @@ public namespace MemberAccessorChecks {
         return p.raw("count") == 13 ? 1 : 0;
     }
 
+    #! static variables held in external storage: reads, assignments, compound assignments, removal and deletion
+    int sub check_static() {
+        # the storage as the module's own code leaves it
+        CppApiTest::MemberAccessorProbe::setStaticRaw("scount", 0);
+        CppApiTest::MemberAccessorProbe::setStaticRaw("sany", NOTHING);
+        CppApiTest::MemberAccessorProbe::setStaticRaw("sstr", "s");
+        list<int> c0 = CppApiTest::MemberAccessorProbe::staticCounts("scount");
+        # an assignment calls the setter once
+        CppApiTest::MemberAccessorProbe::scount = 3;
+        list<int> c1 = CppApiTest::MemberAccessorProbe::staticCounts("scount");
+        if (c1[1] != c0[1] + 1 || CppApiTest::MemberAccessorProbe::staticRaw("scount") != 3) {
+            return 0;
+        }
+        # reads come from the storage, also after the module's own code changed it
+        CppApiTest::MemberAccessorProbe::setStaticRaw("scount", 40);
+        if (CppApiTest::MemberAccessorProbe::scount != 40) { return 0; }
+        # compound assignments read with the getter and write with the setter
+        CppApiTest::MemberAccessorProbe::scount += 2;
+        ++CppApiTest::MemberAccessorProbe::scount;
+        CppApiTest::MemberAccessorProbe::scount--;
+        if (CppApiTest::MemberAccessorProbe::staticRaw("scount") != 42) { return 0; }
+        # remove reads the value and leaves the storage without a value
+        CppApiTest::MemberAccessorProbe::sany = (1, 2);
+        if ((remove CppApiTest::MemberAccessorProbe::sany) != (1, 2)) { return 0; }
+        if (CppApiTest::MemberAccessorProbe::staticRaw("sany") != NOTHING) { return 0; }
+        if ((remove CppApiTest::MemberAccessorProbe::sstr) != "s") { return 0; }
+        if (CppApiTest::MemberAccessorProbe::staticRaw("sstr") != NOTHING
+            || CppApiTest::MemberAccessorProbe::sstr != NOTHING) {
+            return 0;
+        }
+        # delete deletes an object held by the variable and leaves the storage without a value
+        CppApiTest::MemberAccessorProbe::sany = new Tracked();
+        if (Tracked::live != 1) { return 0; }
+        delete CppApiTest::MemberAccessorProbe::sany;
+        if (Tracked::live != 0 || CppApiTest::MemberAccessorProbe::staticRaw("sany") != NOTHING) { return 0; }
+        # removal through a variable without the class name in a method of the class's subclass
+        CppApiTest::MemberAccessorProbe::sany = 5;
+        if (Sub::removeStatic() != 5 || CppApiTest::MemberAccessorProbe::staticRaw("sany") != NOTHING) {
+            return 0;
+        }
+        return 1;
+    }
+
     #! returns the result of each check: 1 for a pass, 0 for a failure (an exception is printed on stderr)
     public hash<string, int> sub get_results() {
         hash<string, int> rv = {};
@@ -339,6 +387,7 @@ public namespace MemberAccessorChecks {
             "cpp-api": \check_cpp_api(),
             "slice-merge": \check_slice_merge(),
             "reference": \check_reference(),
+            "static": \check_static(),
         };
         foreach hash<auto> i in (checks.pairIterator()) {
             try {

@@ -28,8 +28,10 @@
 #include "QC_MemberAccessorProbe.h"
 
 #include <cstring>
+#include <map>
 #include <memory>
 #include <mutex>
+#include <string>
 
 // the external storage of a MemberAccessorProbe object; members are not scannable values in this test class
 class MemberAccessorProbeData : public AbstractPrivateData {
@@ -170,7 +172,103 @@ static void add_probe_member(QoreClass& qc, const char* name, ClassAccess access
         m.release(), member_accessor_probe_del);
 }
 
+// the external storage of a static variable of MemberAccessorProbe, as a module holds a value that a static
+// variable mirrors (ex: a Java static field)
+struct StaticAccessorProbeVar {
+    std::string name;
+    std::mutex mutex;
+    QoreValue value;
+    int64 gets = 0;
+    int64 sets = 0;
+
+    DLLLOCAL StaticAccessorProbeVar(const char* name, QoreValue value) : name(name), value(value) {
+    }
+
+    // returns a new reference to the stored value; counts an accessor call if \a count is true
+    DLLLOCAL QoreValue get(bool count) {
+        std::lock_guard<std::mutex> lock(mutex);
+        if (count) {
+            ++gets;
+        }
+        return value.refSelf();
+    }
+
+    // stores a value, taking ownership of it; counts an accessor call if \a count is true
+    DLLLOCAL void set(QoreValue v, bool count, ExceptionSink* xsink) {
+        ValueHolder old(xsink);
+        std::lock_guard<std::mutex> lock(mutex);
+        if (count) {
+            ++sets;
+        }
+        old = value;
+        value = v;
+    }
+};
+
+// the static variables by name; the variables are owned by the class, which releases them when it is destroyed.
+// The registry lives as long as the process: the class can be destroyed after the module's static objects were
+// destroyed (when the module is unloaded at exit), so a static object here would be used after its destruction
+struct StaticAccessorProbeRegistry {
+    std::mutex mutex;
+    std::map<std::string, StaticAccessorProbeVar*> vars;
+};
+
+static StaticAccessorProbeRegistry& static_probe_registry() {
+    static StaticAccessorProbeRegistry* registry = new StaticAccessorProbeRegistry;
+    return *registry;
+}
+
+static StaticAccessorProbeVar* get_static_probe_var(const char* name, ExceptionSink* xsink) {
+    StaticAccessorProbeRegistry& registry = static_probe_registry();
+    std::lock_guard<std::mutex> lock(registry.mutex);
+    auto i = registry.vars.find(name);
+    if (i == registry.vars.end()) {
+        xsink->raiseException("CPPAPI-ERROR", "unknown static variable '%s'", name);
+        return nullptr;
+    }
+    return i->second;
+}
+
+static QoreValue static_accessor_probe_get(const QoreClass& cls, const void* ptr, ExceptionSink* xsink) {
+    return const_cast<StaticAccessorProbeVar*>(static_cast<const StaticAccessorProbeVar*>(ptr))->get(true);
+}
+
+static void static_accessor_probe_set(const QoreClass& cls, const void* ptr, QoreValue val, ExceptionSink* xsink) {
+    const_cast<StaticAccessorProbeVar*>(static_cast<const StaticAccessorProbeVar*>(ptr))->set(val, true, xsink);
+}
+
+static void static_accessor_probe_del(const QoreClass& cls, const void* ptr) {
+    StaticAccessorProbeVar* var = const_cast<StaticAccessorProbeVar*>(static_cast<const StaticAccessorProbeVar*>(ptr));
+    {
+        StaticAccessorProbeRegistry& registry = static_probe_registry();
+        std::lock_guard<std::mutex> lock(registry.mutex);
+        auto i = registry.vars.find(var->name);
+        if (i != registry.vars.end() && i->second == var) {
+            registry.vars.erase(i);
+        }
+    }
+    ExceptionSink xsink;
+    var->value.discard(&xsink);
+    delete var;
+}
+
+static void add_static_probe_var(QoreClass& qc, const char* name, const QoreTypeInfo* type, QoreValue value) {
+    std::unique_ptr<StaticAccessorProbeVar> var(new StaticAccessorProbeVar(name, value));
+    {
+        StaticAccessorProbeRegistry& registry = static_probe_registry();
+        std::lock_guard<std::mutex> lock(registry.mutex);
+        registry.vars[name] = var.get();
+    }
+    // the class takes ownership of the module data
+    qc.addBuiltinStaticVarWithAccessors(name, Public, type, static_accessor_probe_get, static_accessor_probe_set,
+        var.release(), static_accessor_probe_del);
+}
+
 void init_member_accessor_probe_members(QoreClass& qc) {
+    // static variables held in external storage
+    add_static_probe_var(qc, "scount", bigIntTypeInfo, 0ll);
+    add_static_probe_var(qc, "sany", autoTypeInfo, QoreValue());
+    add_static_probe_var(qc, "sstr", stringOrNothingTypeInfo, new QoreStringNode("s"));
     // a normal member read before and after the accessors to check that they are called without the object lock
     qc.addMember("declared", Public, bigIntTypeInfo, QoreValue(7ll));
     add_probe_member(qc, "count", Public, bigIntTypeInfo);
@@ -182,7 +280,8 @@ void init_member_accessor_probe_members(QoreClass& qc) {
 }
 
 //! builtin test class with declared members held in its private data
-/** The members \c count (int), \c h (*hash), \c any (auto), \c bad (int, whose getter returns a string),
+/** The static variables \c scount (int), \c sany (auto) and \c sstr (*string) are read and written through accessors.
+    The members \c count (int), \c h (*hash), \c any (auto), \c bad (int, whose getter returns a string),
     \c fail (auto, whose setter raises an exception) and the private member \c secret (int) are read and written
     through accessors; \c declared is an ordinary member.
 */
@@ -290,4 +389,40 @@ static auto MemberAccessorProbe::cppWrite(object obj, string member, auto value,
     }
     xsink->raiseException("CPPAPI-ERROR", "unknown API '%s'", api->c_str());
     return QoreValue();
+}
+
+//! returns the stored value of a static variable without calling the accessors
+/** @param name the static variable name
+    @return the stored value
+    @throw CPPAPI-ERROR unknown static variable */
+static auto MemberAccessorProbe::staticRaw(string name) {
+    StaticAccessorProbeVar* var = get_static_probe_var(name->c_str(), xsink);
+    return var ? var->get(false) : QoreValue();
+}
+
+//! stores a value for a static variable without calling the accessors, as a change made by the module's own code
+/** @param name the static variable name
+    @param value the value to store
+    @throw CPPAPI-ERROR unknown static variable */
+static nothing MemberAccessorProbe::setStaticRaw(string name, auto value) {
+    StaticAccessorProbeVar* var = get_static_probe_var(name->c_str(), xsink);
+    if (var) {
+        var->set(value.refSelf(), false, xsink);
+    }
+}
+
+//! returns the accessor call counts of a static variable in get, set order
+/** @param name the static variable name
+    @return the number of getter and setter calls
+    @throw CPPAPI-ERROR unknown static variable */
+static list<int> MemberAccessorProbe::staticCounts(string name) {
+    StaticAccessorProbeVar* var = get_static_probe_var(name->c_str(), xsink);
+    if (!var) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreListNode> result(new QoreListNode(bigIntTypeInfo), xsink);
+    std::lock_guard<std::mutex> lock(var->mutex);
+    result->push(var->gets, xsink);
+    result->push(var->sets, xsink);
+    return result.release();
 }

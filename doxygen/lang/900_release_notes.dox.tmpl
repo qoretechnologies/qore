@@ -2408,8 +2408,9 @@ cargo install tree-sitter-cli@0.26.5
     storage with @ref QoreClass::addBuiltinStaticVarWithAccessors() "QoreClass::addBuiltinStaticVarWithAccessors()",
     instead of holding a copy of a value the module owns.  Use it when the value can change independently of %Qore
     code, such as a field of a foreign runtime: a variable holding a copy silently diverges from the value it
-    mirrors as soon as either side changes it.  Every read calls the module's \c get function and every assignment
-    calls its \c set function once the assignment is complete, so both sides always agree.
+    mirrors as soon as either side changes it.  Every read calls the module's \c get function, and every assignment
+    and every @ref remove "remove" or @ref delete "delete" calls its \c set function once the operation is complete,
+    in every execution mode, so both sides always agree.
 
     The <a href="https://docs.qore.org/modules/jni/current/jni/html/index.html#jniintro">jni</a> module uses this to mirror mutable Java static fields.
     @endparblock
