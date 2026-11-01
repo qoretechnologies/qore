@@ -121,7 +121,37 @@ public class DebugMcpRemoteSession inherits DebugMcpSession {
                 notePausedThreads(pid, sess{pid}.interrupted ?? ());
             }
         }
-        return makeReport({"server": serverName, "programs": sess ? keys sess : ()});
+        # the threads that paused before the session are reported as the threads that pause in it
+        list<hash<auto>> paused = ();
+        foreach string pid in (keys sess) {
+            foreach softint tid in (sess{pid}.interrupted) {
+                push paused, describePausedThread(tid);
+            }
+        }
+        hash<auto> rv = makeReport({"server": serverName, "programs": sess ? keys sess : ()});
+        if (paused) {
+            rv.events = paused + rv.events;
+        }
+        return rv;
+    }
+
+    #! Returns the event of a thread that paused before the session, with its location
+    private hash<auto> describePausedThread(int tid) {
+        *hash<auto> top = getFrames(tid)[0];
+        if (top.line) {
+            return {
+                "text": sprintf("Thread %d is paused at %s:%d", tid, top.file, top.line),
+                "reason": "paused",
+                "tid": tid,
+                "file": top.file,
+                "line": top.line,
+            };
+        }
+        return {
+            "text": sprintf("Thread %d is paused at the start of the program, before its first statement", tid),
+            "reason": "start",
+            "tid": tid,
+        };
     }
 
     #! Sends a command to the debug server; a command that resumes a thread returns when a thread pauses again

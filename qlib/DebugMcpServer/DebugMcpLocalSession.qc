@@ -89,6 +89,10 @@ public class DebugMcpLocalSession inherits DebugMcpSession {
         int programTid;
         #! True when the thread that runs the program left it, so that the program ends
         bool programLeft;
+        #! the program, which is referenced until the session ends or launches another program: the threads that it
+        #! started can outlive the thread that runs it, and the debugger is not called for the threads of a program
+        #! without references, so that their ends would not be reported
+        *Program program;
     }
 
     #! Creates the session
@@ -136,26 +140,34 @@ public class DebugMcpLocalSession inherits DebugMcpSession {
 
     #! Notes that the thread that runs the program leaves it, before the event is processed
     public handleEvent(auto data) {
-        if (data.typeCode() == NT_HASH && data.type == DebugResponseType::Event && data.tid == programTid
-            && ((data.cmd == DebugEventCmd::Interrupt && data.func == "detach")
-                || (data.cmd == DebugEventCmd::Run && data.runstate == DebugRunStateName::Detach))) {
-            programLeft = True;
+        if (data.typeCode() == NT_HASH && data.type == DebugResponseType::Event && data.tid) {
+            bool left = (data.cmd == DebugEventCmd::Interrupt && data.func == "detach")
+                || (data.cmd == DebugEventCmd::Run && data.runstate == DebugRunStateName::Detach);
+            if (left && data.tid == programTid) {
+                programLeft = True;
+            }
         }
         DebugMcpSession::handleEvent(data);
     }
 
     #! Waits for the end of the program after its thread left it, so that the report gives the end
+    /** The program ends when the threads that it started have ended too; a command waits for them as long as the
+        wait timeout at most, as threads that continue are a program that runs
+    */
     private commandsDone() {
         if (programLeft) {
             # the thread returns from Program::run() and reports the end
-            running.waitForZero();
+            running.waitForZero(waitTimeout ?: DefaultWaitTimeout);
         }
     }
 
     #! Waits for the end of the program after the \c kill command, as long as the wait timeout at most
     public bool waitForProgramEnd() {
         int timeout_ms = waitTimeout ?: DefaultWaitTimeout;
-        if (running.waitForZero(timeout_ms)) {
+        int deadline = clock_getmicros() + timeout_ms * 1000;
+        # the thread that runs the program, and the threads that it started, whose ends are reported
+        if (running.waitForZero(timeout_ms)
+            || !waitForLiveThreads(max(1, (deadline - clock_getmicros()) / 1000))) {
             printfImpl("the program did not end within %d ms\n", timeout_ms);
             return False;
         }
@@ -186,12 +198,15 @@ public class DebugMcpLocalSession inherits DebugMcpSession {
             capturing = dpc.captureOutput(False);
         }
         Program pgm = dpc.createProgram(script, opts, args ?? ());
+        program = pgm;
         # the program and thread of the new program are the current ones when it pauses at its start
         setContextValue('programId', NOTHING);
         setContextValue('threadId', NOTHING);
         expectStop();
         programLeft = False;
         programTid = 0;
+        # a thread of an earlier program that did not report its end is no longer waited for
+        resetLiveThreads();
         running.inc();
         try {
             background runProgram(pgm);
@@ -229,10 +244,24 @@ public class DebugMcpLocalSession inherits DebugMcpSession {
             running.waitForZero();
         }
         map dpc.removeProgram($1), dpc.getAllPrograms();
+        remove program;
         if (capturing) {
             dpc.stopOutputCapture();
             capturing = False;
         }
+    }
+
+    #! Returns the summary of an exception that ends a program: its code, description, location and the hint of a
+    #! common pitfall of %Qore, without the call stack, which gives the frames of the debugger
+    static hash<auto> summarizeException(hash<auto> ex) {
+        hash<auto!> rv = ex{"err", "desc", "file", "line"};
+        *hash<auto> diag = AbstractDebugControl::getRuntimeDiagnostic(ex);
+        if (diag) {
+            rv.hint = diag{"id", "hint", "suggestions"};
+        } else if (exists ex.arg) {
+            rv.arg = ex.arg;
+        }
+        return rv;
     }
 
     #! Runs the program, and reports its end
@@ -241,20 +270,33 @@ public class DebugMcpLocalSession inherits DebugMcpSession {
         on_exit running.dec();
         # a command that waits for a thread to pause ends with the program
         on_exit cancelStop();
+        hash<auto!> end = {"type": "end"};
         try {
             pgm.run();
-            writeJson({"type": "end"});
         } catch (hash<ExceptionInfo> ex) {
-            # a program that the debugger ended; the thread is no longer cancelled
-            if (DebugProgramControl::isTerminateException(ex)) {
-                clear_thread_cancel();
-                writeJson({"type": "end", "terminated": True});
-                return;
+            # a program that the debugger ended, also at an exception that ended it, as at an uncaught exception
+            # where the thread stopped; the thread is no longer cancelled
+            bool terminated;
+            for (*hash<ExceptionInfo> e = ex; e; e = e.next) {
+                if (DebugProgramControl::isTerminateException(e)) {
+                    terminated = True;
+                    break;
+                }
             }
-            hash<auto> e = map {$1.key: $1.value}, ex.pairIterator(), $1.key != "callstack" && $1.key != "next";
-            e.text = get_exception_string(ex);
-            writeJson({"type": "end", "exception": e});
+            if (terminated) {
+                clear_thread_cancel();
+            }
+            if (terminated) {
+                end.terminated = True;
+            }
+            # the exception that ends the program, unless it is the end by the debugger
+            if (!terminated || !DebugProgramControl::isTerminateException(ex)) {
+                end.exception = DebugMcpLocalSession::summarizeException(ex);
+            }
         }
+        # the program ends with the last of its threads, whose ends are reported before the end of the program
+        waitForLiveThreads();
+        writeJson(end);
     }
 }
 }

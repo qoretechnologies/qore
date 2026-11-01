@@ -104,6 +104,10 @@ module DebugProgramControl {
     - the condition and the expressions of the log message of a breakpoint are parsed with the variables of its
       statements when they are set, and refused with \c BREAKPOINT-CONDITION-ERROR if they cannot be parsed; expressions
       are evaluated also with the top-level local variables of the program, which have global scope
+    - the \c thread/variable/get command gives the whole value in \c serialized with \c serialize, for a value with at
+      most \c serializeMax elements, keys or members
+    - the interrupt event of a thread that stops for a pause that a client requested, and not at a breakpoint, gives
+      \c pause as @ref True, so that clients can tell the pause from the end of a step
     - the \c thread/local/&lt;name&gt;/get and \c thread/variable/get commands give the declared type of a local
       variable in \c declaredType, and \c unassigned is @ref True for a variable that was declared but not assigned;
       exception events give the hint of an exception that matches a common pitfall of %Qore in its \c arg (see
@@ -2340,10 +2344,13 @@ public namespace DebugProgramControl {
                 runToStatementId = runToStatementIdBefore;
                 return;
             }
-            # the thread stops: a pause that a client requested is done
+            # the thread stops: a pause that a client requested is done; a stop of a step that is not at a breakpoint is
+            # given as the pause, so that the clients can tell it from the end of a step
             {
                 AutoLock al(pauseLock);
-                remove pauseRequests{tid};
+                if ((remove pauseRequests{tid}) && func == "step" && !exists breakpointId) {
+                    ctx.intrInfo.pause = True;
+                }
             }
             # minor race issue when list of all thread stack might return internal frames till ctx is not registered in ctxThread
             # a thread is not registered as stopped once the debugger ends its program, as terminateProgram()
@@ -2554,6 +2561,12 @@ public namespace DebugProgramControl {
                                         auto v = AbstractDebugControl::getPath(val, rd.path);
                                         result = AbstractDebugControl::describe(v)
                                             + DebugProgramControl::getLocalTypeInfo(rd, lv);
+                                        # the whole value, for clients that show it; one with more elements, keys or
+                                        # members than serializeMax is not serialized
+                                        if (rd.serialize && (result.indexed ?? result.named ?? 0)
+                                                <= (rd.serializeMax ?? MAXINT)) {
+                                            result.serialized = AbstractDebugControl::serialize(v);
+                                        }
                                         if (rd.children) {
                                             result.children = AbstractDebugControl::describeChildren(v, rd.start ?? 0,
                                                 rd.count);

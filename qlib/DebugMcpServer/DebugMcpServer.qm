@@ -66,6 +66,19 @@ module DebugMcpServer {
     returns when a thread pauses, when the program ends, or when its time passes; then the program is paused.  An
     exception that matches a common pitfall of %Qore is given with a hint (see @ref common_pitfalls).
 
+    A stop is given with its \c reason: \c start, \c "thread start", \c breakpoint, \c step, \c pause (a pause that was requested,
+    as when the time of a command passed),
+    \c "function entry", \c "function exit", \c exception, \c "end of code" or \c "thread end", and a thread that
+    was paused before \c qore_debug_attach attached, as by another client, is given with \c paused, or with \c start
+    at the start of its program.  When the session ends, \c qore_debug_terminate reports the end of each thread of
+    a launched program, and a detach tells that the paused threads of the debug server continue.  A value is given
+    with its type and a short \c value, and with its whole value in \c text, written as in %Qore, when it says more,
+    as for a list, a hash or an object with at most @ref DebugMcpServer::DebugMcpSession::MaxInlineSize "MaxInlineSize"
+    elements, or the string itself for a string.  The messages of logpoints are given in \c logOutput, apart from the
+    output of the program in \c programOutput.  \c qore_debug_launch, \c qore_debug_attach and
+    \c qore_debug_exception_filter give the exceptions that pause threads in \c exceptionFilters.  A tool rejects an
+    argument that it does not have, so that a misspelled option, as \c log for \c log_message, is not ignored.
+
     |!Tool|!Description
     |\c qore_debug_launch|launches a %Qore script in the debugger; it pauses at its start
     |\c qore_debug_attach|attaches to a debug server, such as \c qdbg-server or Qorus

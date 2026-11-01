@@ -125,6 +125,7 @@ public class QdbgScriptTest inherits QUnit::Test {
         addTestCase("JSON output: hints and the end of the program", \jsonExceptionTest());
         addTestCase("the time that a command waits for a thread to pause", \waitTimeoutTest());
         addTestCase("quitting while the program runs", \quitRunningTest());
+        addTestCase("pausing threads that log, and the ends of the threads of a program", \threadEndTest());
         addTestCase("conditions are checked when they are set", \conditionCheckTest());
         addTestCase("top-level local variables in functions", \topLevelVarTest());
         addTestCase("the usage of the debugger tools", \usageTest());
@@ -886,7 +887,9 @@ public class QdbgScriptTest inherits QUnit::Test {
             "total: 5",
             "Thread 2 ended",
         ));
-        assertInOrder(res.out, ("Call stack of thread 3:", "* 0  add() at ", "Thread 3 ended", "total: 5"));
+        # thread 3 ends after it continues; the initial thread, which waits for it, can print its output before the end
+        # of thread 3 is shown, as its code ends before the thread does
+        assertInOrder(res.out, ("Call stack of thread 3:", "* 0  add() at ", "Thread 3 ended"));
         # the thread of the command line of the debugger is not shown, nor does a thread pause when it starts or
         # when its code ends
         assertFalse(res.out =~ /thread 1 |DebugProgramControl|Paused at the start of the program \(thread 3/);
@@ -1092,6 +1095,49 @@ public class QdbgScriptTest inherits QUnit::Test {
         assertEq("NO-VALUE-FOR-TYPE", end.exception.arg.id);
         assertRegex("hint \\(NO-VALUE-FOR-TYPE\\)", end.exception.text);
         assertFalse(end.exception.hasKey("callstack"));
+    }
+
+    # a thread that runs the code of the debugger, as for a logpoint, is paused at its next statement; the debugger
+    # reports the ends of all threads of the program that it ends
+    threadEndTest() {
+        string program = "%modern\n"                     # 1
+            "sub work(int w) {\n"                         # 2
+            "    int n = 0;\n"                            # 3
+            "    while (True) {\n"                        # 4
+            "        ++n;\n"                              # 5
+            "        usleep(1ms);\n"                      # 6
+            "    }\n"                                     # 7
+            "}\n"                                         # 8
+            "background work(1);\n"                       # 9
+            "background work(2);\n"                       # 10
+            "work(0);\n";                                 # 11
+        hash<auto> res = runQdbg(program, (
+            "break create target.q 6",
+            "break log 1 w{w} n{n}",
+            "go",
+            "thread list",
+            "kill",
+            "quit",
+        ), ("--wait-timeout=300",));
+        assertEq(0, res.rc);
+        # the output of qdbg ends lines with \r\n
+        assertRegex("\nw[0-2] n[0-9]+\r?\n", res.out);
+        assertInOrder(res.out, (
+            "No thread paused within 300 ms; pausing the program",
+            "Paused at target.q:",
+        ));
+        # the threads paused in the loop of the function
+        assertRegex("thread [0-9]+ \\(qore/[0-9]+\\), paused: work\\(\\) at target.q:[4-6]", res.out);
+
+        # all threads stop at the breakpoint; kill reports the end of each of them before the end of the program
+        for (int i = 0; i < 3; ++i) {
+            res = runQdbg(program, ("break create target.q 6", "go", "go", "go", "kill", "quit"),
+                ("--wait-timeout=2000",));
+            assertEq(0, res.rc);
+            *list<string> ends = (res.out =~ x/(Thread [0-9]+ ended|The program ended)/g);
+            assertEq(4, ends.size(), res.out);
+            assertEq("The program ended", ends.last(), res.out);
+        }
     }
 
     # a command that resumes a thread waits for it to pause only as long as the wait timeout; then the program is

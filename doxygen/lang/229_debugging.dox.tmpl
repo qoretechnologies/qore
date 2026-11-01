@@ -281,7 +281,10 @@ claude mcp add --transport http qore-debug http://127.0.0.1:8100/mcp
     \c qore_debug_evaluate read the program; \c qore_debug_command runs any command of \c qdbg.  Each tool reports
     the pauses with their locations and exceptions, the output of the program and its end since the last tool; an
     exception that matches a @ref common_pitfalls "common pitfall" is reported with a hint, and a variable that was
-    declared but not assigned is marked as such.
+    declared but not assigned is marked as such.  A stop is given with its reason, such as \c breakpoint, \c step or
+    \c exception; a small list, hash or object is given with its whole value, and a string as it is; the messages of
+    logpoints are reported apart from the output of the program; and the end of a program reports the end of each of
+    its threads.  A tool rejects an argument that it does not have, so that a misspelled option is not ignored.
 
     The tools can run code with the permissions of the server: a launched script, and expressions with the code of
     the debugged programs.  With \c -k, or the \c QDBG_MCP_TOKEN environment variable, the server requires a token,

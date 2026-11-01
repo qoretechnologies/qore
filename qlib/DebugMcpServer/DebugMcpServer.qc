@@ -140,7 +140,7 @@ public const DebugMcpFields = {
         "display_name": "Log Message",
         "type": AbstractDataProviderTypeMap."*string",
         "desc": "A message that the breakpoint logs instead of pausing a thread (a logpoint), with expressions in "
-            "braces, as `count={count}`",
+            "braces, as `count={count}`; the messages are given in `logOutput` of the reports of the tools",
     },
     "id": {
         "display_name": "Breakpoint",
@@ -290,46 +290,69 @@ public class DebugMcpServer inherits McpServerHandler::McpServerHandler {
     #! Registers the tools of the server
     private registerTools() {
         if (allowLaunch) {
-            registerTool("qore_debug_launch", "Launches a Qore script in the debugger; it pauses at its start, so "
+            addTool("qore_debug_launch", "Launches a Qore script in the debugger; it pauses at its start, so "
                 "that breakpoints can be set before it runs; an earlier session ends",
-                toolInput(("script", "args", "define", "time_zone")), \launchTool());
+                ("script", "args", "define", "time_zone"), \launchTool());
         }
-        registerTool("qore_debug_attach", "Attaches to a debug server, such as qdbg-server or Qorus, whose programs "
+        addTool("qore_debug_attach", "Attaches to a debug server, such as qdbg-server or Qorus, whose programs "
             "are then debugged; an earlier session ends",
-            toolInput(("url", "token")), \attachTool());
-        registerTool("qore_debug_set_breakpoint", "Sets a breakpoint on a line, a statement of a line or the start "
+            ("url", "token"), \attachTool());
+        addTool("qore_debug_set_breakpoint", "Sets a breakpoint on a line, a statement of a line or the start "
             "of a function of the current program, with an optional condition, hit condition or log message; returns "
             "its number",
-            toolInput(("location", "condition", "hit_condition", "log_message")), \setBreakpointTool());
-        registerTool("qore_debug_delete_breakpoint", "Deletes a breakpoint", toolInput(("id",)),
+            ("location", "condition", "hit_condition", "log_message"), \setBreakpointTool());
+        addTool("qore_debug_delete_breakpoint", "Deletes a breakpoint", ("id",),
             \deleteBreakpointTool());
-        registerTool("qore_debug_exception_filter", "Sets the exceptions that pause threads",
-            toolInput(("filters",)), \exceptionFilterTool());
-        registerTool("qore_debug_continue", "Resumes a paused thread: runs it, steps into or over its statement, or "
+        addTool("qore_debug_exception_filter", "Sets the exceptions that pause threads",
+            ("filters",), \exceptionFilterTool());
+        addTool("qore_debug_continue", "Resumes a paused thread: runs it, steps into or over its statement, or "
             "runs it until its function returns; returns when a thread pauses, the program ends, or the timeout "
             "passes, and then the program is paused",
-            toolInput(("mode", "thread", "timeout_ms")), \continueTool());
-        registerTool("qore_debug_pause", "Pauses the threads of the current program", toolInput(("timeout_ms",)),
+            ("mode", "thread", "timeout_ms"), \continueTool());
+        addTool("qore_debug_pause", "Pauses the threads of the current program", ("timeout_ms",),
             \pauseTool());
-        registerTool("qore_debug_stack", "Returns the call stack of a paused thread", toolInput(("thread",)),
+        addTool("qore_debug_stack", "Returns the call stack of a paused thread", ("thread",),
             \stackTool());
-        registerTool("qore_debug_variables", "Returns the local variables of a frame of a paused thread with their "
+        addTool("qore_debug_variables", "Returns the local variables of a frame of a paused thread with their "
             "types and values (a variable that was declared but not assigned is marked unassigned), or the elements, "
             "keys or members of a value",
-            toolInput(("thread", "frame", "path", "start")), \variablesTool());
-        registerTool("qore_debug_evaluate", "Evaluates a Qore expression with the variables of a frame of a paused "
+            ("thread", "frame", "path", "start"), \variablesTool());
+        addTool("qore_debug_evaluate", "Evaluates a Qore expression with the variables of a frame of a paused "
             "thread; it can call the functions and methods of the program",
-            toolInput(("expression", "thread", "frame")), \evaluateTool());
-        registerTool("qore_debug_command", "Runs a command of the qdbg command-line debugger, such as \"break list\", "
+            ("expression", "thread", "frame"), \evaluateTool());
+        addTool("qore_debug_command", "Runs a command of the qdbg command-line debugger, such as \"break list\", "
             "\"thread list\", \"thread var h.name = 1\" or \"help\"; a command that resumes a thread returns when a "
             "thread pauses or the timeout passes",
-            toolInput(("command", "timeout_ms")), \commandTool());
-        registerTool("qore_debug_status", "Returns the state of the debugger, and the events and the output of the "
+            ("command", "timeout_ms"), \commandTool());
+        addTool("qore_debug_status", "Returns the state of the debugger, and the events and the output of the "
             "program since the last tool",
             NOTHING, \statusTool());
-        registerTool("qore_debug_terminate", "Ends the debug session: a launched program ends, and the connection to "
+        addTool("qore_debug_terminate", "Ends the debug session: a launched program ends, and the connection to "
             "a debug server is closed while its programs continue",
             NOTHING, \terminateTool());
+    }
+
+    #! Registers a tool whose arguments are the given fields of DebugMcpFields
+    private addTool(string name, string desc, *list<string> fields, code<hash<auto>(*hash<auto>)> tool) {
+        registerTool(name, desc, fields ? toolInput(fields) : NOTHING, hash<auto> sub (*hash<auto> args) {
+            DebugMcpServer::checkArguments(name, fields, args);
+            return tool(args);
+        });
+    }
+
+    #! Checks that the arguments of a tool are its fields
+    /** A misspelled argument would otherwise be ignored, so that the tool would do something else than was asked,
+        as set a breakpoint that pauses threads instead of a logpoint
+
+        @throw DEBUG-MCP-ERROR an argument is not a field of the tool
+    */
+    static checkArguments(string name, *list<string> fields, *hash<auto> args) {
+        *list<string> unknown = keys (args - (fields ?? ()));
+        if (unknown) {
+            throw "DEBUG-MCP-ERROR", sprintf("%s: unknown argument%s %s; the arguments of the tool are: %s", name,
+                unknown.size() == 1 ? "" : "s", (map sprintf("%y", $1), unknown).join(", "),
+                fields ? fields.join(", ") : "none");
+        }
     }
 
     #! Returns the input type of a tool with the given fields of DebugMcpFields
@@ -373,7 +396,8 @@ public class DebugMcpServer inherits McpServerHandler::McpServerHandler {
         if (args.time_zone) {
             opts.time_zone = args.time_zone;
         }
-        return local.launch(args.script, args.args, opts);
+        hash<auto> rv = local.launch(args.script, args.args, opts);
+        return rv + {"exceptionFilters": local.getExceptionFilters()};
     }
 
     #! Attaches to a debug server
@@ -386,7 +410,19 @@ public class DebugMcpServer inherits McpServerHandler::McpServerHandler {
             remote.close();
             remove session;
         }
-        return remote.connect();
+        hash<auto> rv;
+        try {
+            rv = remote.connect();
+        } catch (hash<ExceptionInfo> ex) {
+            # nothing listens at the address: the server is not running, or it listens on another port or host
+            if (ex.err == "HTTPCLIENT-CONNECT-ERROR" && ex.desc =~ /Connection refused/) {
+                throw ex.err, sprintf("%s; no debug server listens at %y: check that the debug server runs and the "
+                    "port that it printed when it started (qdbg-server prints \"debug server listening on port "
+                    "<port>\")", ex.desc, args.url), ex.arg;
+            }
+            rethrow;
+        }
+        return rv + {"exceptionFilters": remote.getExceptionFilters()};
     }
 
     #! Sets a breakpoint with its options
@@ -419,9 +455,11 @@ public class DebugMcpServer inherits McpServerHandler::McpServerHandler {
         # the breakpoint is not kept without its options
         if (!opt_rv.ok) {
             s.execute(sprintf("break delete %d", id));
-            return opt_rv + {"events": rv.events + opt_rv.events};
+            return opt_rv + {"events": rv.events};
         }
-        return opt_rv + {"breakpoint": id, "events": rv.events + opt_rv.events};
+        # the event of the new breakpoint tells where it is; the events of setting its options say nothing more
+        return opt_rv + {"breakpoint": id, "events": rv.events
+            + (select opt_rv.events ?? (), $1.breakpoint != id)};
     }
 
     #! Deletes a breakpoint
@@ -438,7 +476,9 @@ public class DebugMcpServer inherits McpServerHandler::McpServerHandler {
                 throw "DEBUG-MCP-ERROR", sprintf("invalid exception filter %y", f);
             }
         }
-        return checkSession().execute("exception filter " + (args.filters ?: ("none",)).join(" "));
+        DebugMcpSession s = checkSession();
+        hash<auto> rv = s.execute("exception filter " + (args.filters ?: ("none",)).join(" "));
+        return rv + {"exceptionFilters": s.getExceptionFilters()};
     }
 
     #! Resumes a thread
@@ -526,8 +566,15 @@ public class DebugMcpServer inherits McpServerHandler::McpServerHandler {
         } else {
             rv = s.makeReport();
         }
+        bool remote = s instanceof DebugMcpRemoteSession;
         endSessionIntern();
-        return rv + {"sessionEnded": True};
+        rv += {"sessionEnded": True, "state": {"session": False}};
+        # the threads that the session paused continue when the last client of the debug server disconnects
+        if (remote) {
+            rv.text = (rv.text ?? "") + "Detached from the debug server; the paused threads of its programs "
+                "continue unless another client of the server keeps them paused\n";
+        }
+        return rv;
     }
 }
 

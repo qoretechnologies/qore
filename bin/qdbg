@@ -41,14 +41,18 @@ class DebugCommandLineLocal inherits DebugLinenoiseCommandLine {
     }
     #! Waits for the end of the program after the kill command, as long as the wait timeout if one is set
     public bool waitForProgramEnd() {
+        # the thread that runs the program, and the threads that it started, whose ends are reported
         if (waitTimeout) {
-            if (running.waitForZero(waitTimeout)) {
+            int deadline = clock_getmicros() + waitTimeout * 1000;
+            if (running.waitForZero(waitTimeout)
+                || !waitForLiveThreads(max(1, (deadline - clock_getmicros()) / 1000))) {
                 printfImpl("%s\n", tc.warning(sprintf("The program did not end within %d ms", waitTimeout)));
                 return False;
             }
             return True;
         }
         running.waitForZero();
+        waitForLiveThreads();
         return True;
     }
 
@@ -254,8 +258,27 @@ class DebugWrapper {
             bool wait_start = dcl.waitsForStops || cmd_files;
             # the thread that runs the program; the output of the program is captured until it ends
             Counter running = dcl.running;
+            # the program is referenced until the debugger ends: the threads that it started can outlive the thread
+            # that runs it, and the debugger is not called for the threads of a program without references, so
+            # that their ends would not be reported
+            *Program pgm;
             if (exists fileName) {
-                Program pgm = dcl.dpc.createProgram(fileName, opt, ARGV);
+                pgm = dcl.dpc.createProgram(fileName, opt, ARGV);
+            }
+            # the options apply before the program runs, so that its events, as its start, and its output are given as
+            # they set; a session file is loaded for the program that was created
+            dcl.init(opt);
+            # with JSON output, the output of the program is given as JSON objects, and the debugger writes to the
+            # original stdout
+            if (opt.json && dcl.dpc.captureOutput(False)) {
+                dcl.outputFile = dcl.dpc.getOutputCapture().getStdout();
+            }
+            on_exit if (opt.json) {
+                # the output of the program until its end is given
+                running.waitForZero();
+                dcl.dpc.stopOutputCapture();
+            }
+            if (pgm) {
                 logger.info("run program");
                 if (wait_start) {
                     # the first command is processed when the program has attached to the debugger
@@ -291,17 +314,6 @@ class DebugWrapper {
                         rethrow;
                     }
                 }();
-            }
-            dcl.init(opt);
-            # with JSON output, the output of the program is given as JSON objects, and the debugger writes to the
-            # original stdout
-            if (opt.json && dcl.dpc.captureOutput(False)) {
-                dcl.outputFile = dcl.dpc.getOutputCapture().getStdout();
-            }
-            on_exit if (opt.json) {
-                # the output of the program until its end is given
-                running.waitForZero();
-                dcl.dpc.stopOutputCapture();
             }
             if (wait_start) {
                 dcl.waitForStop();

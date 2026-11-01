@@ -3652,12 +3652,26 @@ public:
     DLLLOCAL void onException(const AbstractStatement* statement, DebugRunStateEnum& rs, const AbstractStatement*& rts, ExceptionSink* xsink);
     DLLLOCAL void onExit(const StatementBlock* statement, QoreValue& returnValue, DebugRunStateEnum& rs, const AbstractStatement*& rts, ExceptionSink* xsink);
 
+    //! Returns the threads that run the code of the Program, also those that run other code that its code called, as
+    //! the code of a module or of a debugger callback
+    DLLLOCAL std::set<int> getThreadsInProgram() const {
+        std::set<int> rv;
+        AutoLocker al(plock);
+        for (auto& i : tidmap) {
+            rv.insert(i.first);
+        }
+        return rv;
+    }
+
     DLLLOCAL int breakProgramThread(int tid) {
         printd(5, "qore_program_private::breakProgramThread(), this: %p, tid: %d\n", this, q_gettid());
+        // a thread that runs other code that the Program's code called, as a debugger callback or a module, stops at
+        // the next statement of the Program, as it is a thread of the Program
+        std::set<int> in_program = getThreadsInProgram();
         AutoLocker al(tlock);
         for (auto& i : pgm_data_map) {
             if (i.first->gettid() == tid) {
-                if (!i.first->canRunDebugCallbacks() || !i.first->isActiveProgram(pgm)) {
+                if (!i.first->canRunDebugCallbacks() || !in_program.count(tid)) {
                     return -1;
                 }
                 i.second->dbgBreak();
@@ -3669,10 +3683,12 @@ public:
 
     DLLLOCAL bool breakProgram() {
         printd(5, "qore_program_private::breakProgram(), this: %p\n", this);
+        // see breakProgramThread()
+        std::set<int> in_program = getThreadsInProgram();
         AutoLocker al(tlock);
         bool rv = false;
         for (auto& i : pgm_data_map) {
-            if (!i.first->canRunDebugCallbacks() || !i.first->isActiveProgram(pgm)) {
+            if (!i.first->canRunDebugCallbacks() || !in_program.count(i.first->gettid())) {
                 continue;
             }
             i.second->dbgBreak();

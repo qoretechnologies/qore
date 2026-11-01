@@ -5562,6 +5562,13 @@ while (*binary chunk = input.read(65536)) {
       a read-only variable was changed.  The value is now assigned as an assignment in the code assigns it: converted
       to the type of the variable if it accepts it, or refused with \c RUNTIME-TYPE-ERROR or
       \c RUNTIME-READONLY-VIOLATION
+    - a request of a debugger to pause a program (@ref Qore::DebugProgram::breakProgram() "breakProgram()" and
+      @ref Qore::DebugProgram::breakProgramThread() "breakProgramThread()") skipped a thread of the program that ran
+      other code at that moment, such as the code of a module, or a debugger callback, as for a logpoint, so that a
+      thread that logged in a loop could not be paused; such a thread is now paused at the next statement of the
+      program.  \c qdbg also reported the ends of the threads of a program that it ended with \c kill only in part,
+      and possibly after the end of the program, as it released the program while its threads ran, and the debugger
+      is not called for a program without references
     - \c qdbg did not end on \c SIGINT or \c SIGTERM: the program was no longer debugged, but it continued, and
       \c qdbg with it; \c qdbg now ends the program and exits with 128 plus the number of the signal, as does
       \c qdbg-remote, whose debug server's programs continue.  \c qdbg-remote also looked up a connection for a URL

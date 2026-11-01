@@ -40,6 +40,15 @@ public class DebugMcpSession inherits DebugCmdLine::DebugCommandLine {
 
         #! the most elements, keys or members of a value that are returned at once
         const MaxChildren = 100;
+
+        #! the longest text of a value that a report gives in full, in characters; see describeValue()
+        const MaxValueText = 2000;
+
+        #! the most elements, keys or members of a variable whose whole value a report gives; see getVariables()
+        const MaxInlineSize = 50;
+
+        #! the most lines of the output of the program, and of logpoints, that a report gives; see makeReport()
+        const MaxOutputLines = 50;
     }
 
     private {
@@ -127,10 +136,12 @@ public class DebugMcpSession inherits DebugCmdLine::DebugCommandLine {
         - \c timedOut: @ref True if no thread paused before the time of a command passed, so that the program was
           paused
         - \c events: the events of the debugger, each with its \c text, such as
-          <tt>Paused at breakpoint 1 at main.q:3 (thread 2)</tt>, and its \c tid, \c file, \c line, the \c reason of a
-          stop, the \c exception of a stop at an exception with the \c hint of a common pitfall, and the
+          <tt>Paused at breakpoint 1 at main.q:3 (thread 2)</tt>, and its \c tid, \c file, \c line, \c function, the
+          \c reason of a stop, the \c exception of a stop at an exception with the \c hint of a common pitfall, and the
           \c breakpoint of an event of a breakpoint
-        - \c programOutput: the output of the program
+        - \c programOutput: the output of the program, and \c logOutput: the messages of logpoints; each gives the last
+          @ref MaxOutputLines lines, after a line such as <tt>[12 earlier lines are omitted]</tt>, and
+          \c programOutputOmitted or \c logOutputOmitted the number of lines before them that are left out
         - \c programEnd: the end of the program, with the \c exception that ended it, or \c terminated if the debugger
           ended it
         - \c state: the state of the debugger; see getState()
@@ -148,6 +159,7 @@ public class DebugMcpSession inherits DebugCmdLine::DebugCommandLine {
         list<hash<auto>> events = ();
         string text = "";
         string output = "";
+        string log = "";
         foreach hash<auto> o in (objs) {
             switch (o.type) {
                 case "result":
@@ -161,10 +173,18 @@ public class DebugMcpSession inherits DebugCmdLine::DebugCommandLine {
                     }
                     break;
                 case "event":
-                    push events, DebugMcpSession::summarizeEvent(o);
+                    # that a thread continues is the result of the tool that resumed it
+                    if (o.event != DebugEventCmd::Run) {
+                        push events, DebugMcpSession::summarizeEvent(o);
+                    }
                     break;
                 case "output":
-                    output += o.text;
+                    # the messages of logpoints are output of the debugger
+                    if (o.category == "console") {
+                        log += o.text;
+                    } else {
+                        output += o.text;
+                    }
                     break;
                 case "end":
                     rv.programEnd = o - "type";
@@ -184,7 +204,10 @@ public class DebugMcpSession inherits DebugCmdLine::DebugCommandLine {
             rv.events = events;
         }
         if (output.val()) {
-            rv.programOutput = output;
+            rv += DebugMcpSession::limitOutput("programOutput", output);
+        }
+        if (log.val()) {
+            rv += DebugMcpSession::limitOutput("logOutput", log);
         }
         rv += extra;
         rv.state = getState();
@@ -211,6 +234,15 @@ public class DebugMcpSession inherits DebugCmdLine::DebugCommandLine {
         return rv;
     }
 
+    #! Returns the filters of the exceptions that pause threads, as given to the exception filter tool
+    /** @return the filters, as \c "user", \c "system", \c "uncaught" or exception codes; \c ("none",) if no
+        exception pauses threads
+    */
+    public list<string> getExceptionFilters() {
+        *list<auto> l = doCommand({"cmd": "exception/filter/get"}, False).result;
+        return l ? (map string($1), l) : ("none",);
+    }
+
     #! Makes a thread the current thread, if given, and returns the current thread
     /** @throw DEBUG-COMMAND there is no current thread
     */
@@ -229,7 +261,11 @@ public class DebugMcpSession inherits DebugCmdLine::DebugCommandLine {
         other tools use by default
     */
     public list<hash<auto>> getStack(*int tid) {
-        int t = selectThread(tid);
+        return getFrames(selectThread(tid));
+    }
+
+    #! Returns the call stack of a paused thread, without the frames of the debugger; see getStack()
+    private list<hash<auto>> getFrames(int t) {
         list<auto> stack = doCommand({"cmd": "thread/stack", "tid": t}, False).result ?? ();
         list<hash<auto>> rv = ();
         foreach hash<auto> frame in (DebugCommandLine::getShownFrames(stack)) {
@@ -240,7 +276,8 @@ public class DebugMcpSession inherits DebugCmdLine::DebugCommandLine {
             if (frame.source) {
                 f.file = frame.source;
                 f.line = frame.line + frame.offset;
-            } else if (frame.file) {
+            } else if (frame.file && frame.file != "<builtin>") {
+                # a thread at the start of a program has no file and line
                 f.file = frame.file;
                 if (frame.line > 0) {
                     f.line = frame.line;
@@ -282,8 +319,13 @@ public class DebugMcpSession inherits DebugCmdLine::DebugCommandLine {
         if (!path.val()) {
             list<hash<auto>> vars = ();
             foreach string name in (sort(locals ?? ())) {
-                hash<auto> d = doCommand(cmd + {"cmd": "thread/variable/get", "root": {"local": name}}, False).result;
-                push vars, {"name": name} + DebugMcpSession::describeValue(d);
+                hash<auto> d = doCommand(cmd + {"cmd": "thread/variable/get", "root": {"local": name},
+                    "serialize": True, "serializeMax": MaxInlineSize}, False).result;
+                # the implicit argument list of a function without arguments says nothing
+                if (name == "argv" && d.type == "nothing") {
+                    continue;
+                }
+                push vars, {"name": name} + DebugMcpSession::describeValue(d, d.serialized);
             }
             return {"variables": vars};
         }
@@ -293,8 +335,8 @@ public class DebugMcpSession inherits DebugCmdLine::DebugCommandLine {
             "root": inlist(pv.name, locals ?? ()) ? {"local": pv.name} : {"global": pv.name},
             "path": pv.path,
         };
-        hash<auto> d = doCommand(cmd, False).result;
-        hash<auto!> rv = {"path": path} + DebugMcpSession::describeValue(d);
+        hash<auto> d = doCommand(cmd + {"serialize": True, "serializeMax": MaxInlineSize}, False).result;
+        hash<auto!> rv = {"path": path} + DebugMcpSession::describeValue(d, d.serialized);
         if (d.indexed || d.named) {
             d = doCommand(cmd + {"children": True, "start": start, "count": MaxChildren}, False).result;
             rv.children = map {"name": $1.name} + DebugMcpSession::describeValue($1), d.children;
@@ -316,11 +358,12 @@ public class DebugMcpSession inherits DebugCmdLine::DebugCommandLine {
     */
     public hash<auto> evaluate(string expr, *int tid, *int frame) {
         int t = selectThread(tid);
-        hash<auto!> cmd = {"cmd": "thread/evaluate", "tid": t, "expression": expr};
+        hash<auto!> cmd = {"cmd": "thread/evaluate", "tid": t, "expression": expr, "serialize": True};
         if (exists frame) {
             cmd.frameid = frame;
         }
-        return {"expression": expr} + DebugMcpSession::describeValue(doCommand(cmd, False).result);
+        hash<auto> d = doCommand(cmd, False).result;
+        return {"expression": expr} + DebugMcpSession::describeValue(d, d.serialized);
     }
 
     #! Pauses the current program, and waits for a thread to pause as long as the wait timeout
@@ -343,9 +386,47 @@ public class DebugMcpSession inherits DebugCmdLine::DebugCommandLine {
         return makeReport();
     }
 
-    #! Returns the description of a value of the debugger for a tool
-    static hash<auto> describeValue(hash<auto> d) {
+    #! Returns the output in a report: its last lines, and the number of the lines before them
+    static hash<auto> limitOutput(string key, string output) {
+        list<string> lines = output.split("\n");
+        # the output that ends with a line ends with an empty element
+        if (lines && lines.last() == "") {
+            pop lines;
+        }
+        hash<auto> rv = {};
+        if (lines.size() > MaxOutputLines) {
+            int omitted = lines.size() - MaxOutputLines;
+            rv{key + "Omitted"} = omitted;
+            # the output tells itself that it is the end only
+            lines = (sprintf("[%d earlier line%s omitted]", omitted, omitted == 1 ? " is" : "s are"),)
+                + lines[lines.size() - MaxOutputLines..];
+        }
+        rv{key} = lines.join("\n") + "\n";
+        return rv;
+    }
+
+    #! Returns the description of a value for a tool, with its whole value in \c text if it is given
+    /** @param d the description of the value by the debugger
+        @param full the serialized value, as given by the debugger, if available
+
+        @return the \c type and the short \c value, \c size for a value with elements, keys or members, the
+        \c declaredType and \c unassigned of a local variable, and \c text, the whole value written as in %Qore, or
+        the string itself for a string, with \c truncated if it is longer than @ref MaxValueText characters
+    */
+    static hash<auto> describeValue(hash<auto> d, *hash<auto> full) {
         hash<auto!> rv = {"type": d.type, "value": d.value};
+        if (full) {
+            auto v = AbstractDebugControl::unserialize(full);
+            string text = v.typeCode() == NT_STRING ? v : AbstractDebugControl::formatValue(v);
+            if (text.length() > MaxValueText) {
+                text = text.substr(0, MaxValueText);
+                rv.truncated = True;
+            }
+            # the text is given when it says more than the short value
+            if (text != d.value) {
+                rv.text = text;
+            }
+        }
         if (d.indexed || d.named) {
             rv.size = d.indexed ?? d.named;
         }
@@ -358,13 +439,31 @@ public class DebugMcpSession inherits DebugCmdLine::DebugCommandLine {
         return rv;
     }
 
+    #! Returns the reason of an interrupt event of the debugger for a report
+    /** @return \c "start" (the start of the program), \c "thread start", \c "breakpoint", \c "step", \c "pause" (a
+        pause that was requested, as when the time of a command passed), \c "function entry", \c "function exit",
+        \c "exception", \c "end of code" or \c "thread end"
+    */
+    static string getStopReason(hash<auto> d) {
+        switch (d.func) {
+            case "attach": return d.programstart === False ? "thread start" : "start";
+            case "step": return (d.bkptid || d.bkptids) ? "breakpoint" : (d.pause ? "pause" : "step");
+            case "funcEnter": return (d.bkptid || d.bkptids) ? "breakpoint" : "function entry";
+            case "funcExit": return "function exit";
+            case "exception": return "exception";
+            case "exit": return "end of code";
+            case "detach": return "thread end";
+        }
+        return d.func ?? "stop";
+    }
+
     #! Returns the summary of an event object of the JSON output for a report
     static hash<auto> summarizeEvent(hash<auto> o) {
         hash<auto!> rv = {"text": o.text};
         hash<auto> d = o.data ?? {};
         switch (o.event) {
             case DebugEventCmd::Interrupt:
-                rv.reason = d.func;
+                rv.reason = DebugMcpSession::getStopReason(d);
                 if (exists d.tid) {
                     rv.tid = d.tid;
                 }
@@ -373,6 +472,13 @@ public class DebugMcpSession inherits DebugCmdLine::DebugCommandLine {
                 }
                 if (d.line > 0) {
                     rv.line = d.line;
+                }
+                # the function of the statement, as the stack tool gives it
+                if (d.stack) {
+                    *string func = DebugCommandLine::getShownFrames(d.stack)[0].name;
+                    if (func) {
+                        rv.function = func;
+                    }
                 }
                 if (d.bkptids) {
                     rv.breakpoints = d.bkptids;

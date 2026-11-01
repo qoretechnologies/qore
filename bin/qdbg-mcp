@@ -53,8 +53,11 @@ class QdbgMcp {
             Logger logger();
             logger.setLevel(opt.verbose > 1 ? "DEBUG" : (opt.verbose ? "INFO" : "ERROR"));
             if (opt.log_file) {
-                logger.addAppender(new LoggerAppenderFile("log", opt.log_file,
-                    new LoggerLayoutPattern("%d{YYYY-MM-DD HH:mm:SS.xx} T%t [%p]: %m%n")));
+                LoggerAppenderFile appender("log",
+                    new LoggerLayoutPattern("%d{YYYY-MM-DD HH:mm:SS.xx} T%t [%p]: %m%n"), opt.log_file);
+                # the appender writes nothing until it is opened
+                appender.open();
+                logger.addAppender(appender);
             }
             # the token of the clients, from a file or the environment, as the arguments of a process can be read by
             # other users

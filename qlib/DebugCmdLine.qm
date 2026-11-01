@@ -98,6 +98,9 @@ module DebugCmdLine {
       while the current thread runs becomes the current thread
     - added the \c up, \c down, \c b and \c kill commands; a thread that starts while all threads of its program are
       stopped together stays stopped with them
+    - added @ref DebugCmdLine::DebugCommandLine::waitForLiveThreads() "waitForLiveThreads()", which waits for the
+      ends of the threads that started in the debugged programs, so that a debugger that ends its program with \c kill
+      reports the ends of all its threads
     - added the \c script command and runCommandFile(), which run files of commands; session files keep the display
       expressions, the exception filters and the \c stopall option with the breakpoints, and \c session \c save and
       \c session \c load without a file name show an error; the \c session command showed the number of stopped
@@ -198,6 +201,12 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
             const MaxCommandFileDepth = 16;
             #! the description of the exception of a file of commands that ended at a command that failed
             const CommandFileFailed = "a command of a file of commands failed";
+            #! the threads that started in a debugged program and did not leave it, by TID; see waitForLiveThreads()
+            hash<string, bool> liveThreads = {};
+            #! counts liveThreads
+            Counter liveThreadCount();
+            #! serializes the access to liveThreads
+            Mutex liveLock();
 
             const fcHelp = 0x01;
             const fcExpandUniqueCmd = 0x02;
@@ -2052,6 +2061,9 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
             if (data.type != DebugResponseType::Event || !data.pgmid || !data.tid) {
                 return;
             }
+            # the event has been shown when it is processed, so a thread whose end is waited for has been reported
+            # when the wait ends
+            on_exit noteLiveThread(data);
             # a thread that starts in a program that has started runs until a breakpoint, as without the debugger, and a
             # thread that ends its code or leaves the program continues, as there is no code to debug
             if (DebugCommandLine::isThreadStart(data) || DebugCommandLine::isThreadEnd(data)) {
@@ -3203,6 +3215,55 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
         */
         public bool waitForProgramEnd() {
             return False;
+        }
+
+        #! Waits for the end of the threads that started in the debugged programs and did not leave them
+        /** The threads are those whose start the debugger reported; their ends are reported when the wait ends
+
+            @param timeout_ms the maximum time to wait in milliseconds; 0 waits until the threads have ended
+
+            @return @ref True if the threads ended, @ref False if the time passed before
+
+            @see resetLiveThreads()
+
+            @since DebugCmdLine 0.1.3
+        */
+        public bool waitForLiveThreads(int timeout_ms = 0) {
+            if (timeout_ms > 0) {
+                return !liveThreadCount.waitForZero(timeout_ms);
+            }
+            liveThreadCount.waitForZero();
+            return True;
+        }
+
+        #! Forgets the threads that waitForLiveThreads() waits for, as of an earlier program whose end was not reported
+        /** @since DebugCmdLine 0.1.3
+        */
+        public resetLiveThreads() {
+            AutoLock al(liveLock);
+            map liveThreadCount.dec(), keys liveThreads;
+            liveThreads = {};
+        }
+
+        #! Notes the start of a thread in a debugged program, and its end; see waitForLiveThreads()
+        private:internal noteLiveThread(hash<auto> data) {
+            bool started = data.cmd == DebugEventCmd::Interrupt && data.func == "attach";
+            # a thread leaves the program after its code, or when the debugger detaches it
+            bool left = (data.cmd == DebugEventCmd::Interrupt && data.func == "detach")
+                || (data.cmd == DebugEventCmd::Run && data.runstate == DebugRunStateName::Detach);
+            if (!started && !left) {
+                return;
+            }
+            string tid = string(data.tid);
+            AutoLock al(liveLock);
+            if (started) {
+                if (!liveThreads{tid}) {
+                    liveThreads{tid} = True;
+                    liveThreadCount.inc();
+                }
+            } else if (remove liveThreads{tid}) {
+                liveThreadCount.dec();
+            }
         }
 
         #! Notes that the \c quit command that is processed leaves a program running; see getQuitNote()
