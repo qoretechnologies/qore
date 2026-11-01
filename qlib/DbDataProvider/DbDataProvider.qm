@@ -211,6 +211,82 @@ module DbDataProvider {
             "data_provider_info": DbTableDataProvider::ProviderInfo,
         });
 
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DbDataProvider::AppName,
+            "path": "/views/{view}",
+            "action": "find_view",
+            "display_name": "Find Matching View Records",
+            "short_desc": "Find records in the view",
+            "desc": "Find records in the view; the view is read-only",
+            "path_vars": {
+                "view": <DataProviderPathVarInfo>{
+                    "display_name": "View",
+                    "short_desc": "The name of the view",
+                    "desc": "The name of the view",
+                },
+            },
+            "action_code": DPAT_FIND,
+            "data_dependent_options": True,
+            "data_provider_info": DbViewDataProvider::ProviderInfo,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DbDataProvider::AppName,
+            "path": "/views/{view}",
+            "action": "find_single_view",
+            "display_name": "Find Single View Record",
+            "short_desc": "Find a single record in the view",
+            "desc": "Find a single record in the view; the view is read-only",
+            "path_vars": {
+                "view": <DataProviderPathVarInfo>{
+                    "display_name": "View",
+                    "short_desc": "The name of the view",
+                    "desc": "The name of the view",
+                },
+            },
+            "action_code": DPAT_FIND_SINGLE,
+            "data_dependent_options": True,
+            "data_provider_info": DbViewDataProvider::ProviderInfo,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DbDataProvider::AppName,
+            "path": "/materialized-views/{view}",
+            "action": "find_materialized_view",
+            "display_name": "Find Matching Materialized View Records",
+            "short_desc": "Find records in the materialized view",
+            "desc": "Find records in the materialized view; reads the stored data of the materialized view without refreshing it",
+            "path_vars": {
+                "view": <DataProviderPathVarInfo>{
+                    "display_name": "Materialized View",
+                    "short_desc": "The name of the materialized view",
+                    "desc": "The name of the materialized view",
+                },
+            },
+            "action_code": DPAT_FIND,
+            "data_dependent_options": True,
+            "data_provider_info": DbMaterializedViewDataProvider::ProviderInfo,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DbDataProvider::AppName,
+            "path": "/materialized-views/{view}",
+            "action": "find_single_materialized_view",
+            "display_name": "Find Single Materialized View Record",
+            "short_desc": "Find a single record in the materialized view",
+            "desc": "Find a single record in the materialized view; reads the stored data of the materialized view without refreshing it",
+            "path_vars": {
+                "view": <DataProviderPathVarInfo>{
+                    "display_name": "Materialized View",
+                    "short_desc": "The name of the materialized view",
+                    "desc": "The name of the materialized view",
+                },
+            },
+            "action_code": DPAT_FIND_SINGLE,
+            "data_dependent_options": True,
+            "data_provider_info": DbMaterializedViewDataProvider::ProviderInfo,
+        });
+
         # register per-vendor database applications
         registerDbVendorApp(<DbVendorInfo>{
             "display_name": "PostgreSQL",
@@ -328,6 +404,40 @@ module DbDataProvider {
     \c find / \c find_single actions accept the SqlUtil \c partition search option to restrict reads to one physical
     partition.
 
+    @subsection dbdataprovider_views Views and Materialized Views
+
+    The views of a database are read through the \c views child of a database data provider, as
+    <tt>views/</tt><em>view</em>, and its materialized views through the \c materialized-views child, as
+    <tt>materialized-views/</tt><em>view</em>; the \c materialized-views child is present only if the database
+    supports materialized views (PostgreSQL and Oracle; see
+    @ref SqlUtil::AbstractDatabase::supportsMaterializedViews() "AbstractDatabase::supportsMaterializedViews()").
+    The children of \c views are exactly the views that
+    @ref SqlUtil::AbstractDatabase::listViews() "AbstractDatabase::listViews()" lists, and those of
+    \c materialized-views the materialized views that
+    @ref SqlUtil::AbstractDatabase::listMaterializedViews() "AbstractDatabase::listMaterializedViews()" lists; the
+    \c tables child lists only tables.
+
+    A view's provider (@ref DbDataProvider::DbViewDataProvider "DbViewDataProvider", or
+    @ref DbDataProvider::DbMaterializedViewDataProvider "DbMaterializedViewDataProvider" for a materialized view) is
+    read-only: its record type is the description of the view's columns, and it supports searches, single-record
+    searches and bulk reads with the same search conditions, expressions and search options as a table's provider,
+    except \c forupdate and \c partition.  It advertises no create, update, upsert, delete or field operations, and
+    refuses them.  The \c Db app has the \c find_view and \c find_single_view actions for views and the
+    \c find_materialized_view and \c find_single_materialized_view actions for materialized views.
+
+    @par Example:
+    @code{.py}
+DbDataProvider db(ds);
+AbstractDataProvider view = db.getChildProviderPath("views/v_open_orders");
+AbstractDataProviderRecordIterator i = view.searchRecords({"region": "EU"}, {"orderby": "id", "limit": 10});
+while (i.next()) {
+    printf("%y\n", i.getValue());
+}
+    @endcode
+
+    A view is not opened as a top-level child of a database data provider; the top-level fallback for a name that is
+    not a child of the provider opens a table only, as before.
+
     The following classes are provided by this module:
     - @ref DbDataProvider::AbstractDbTableBulkOperation "AbstractDbTableBulkOperation"
     - @ref DbDataProvider::DatasourceConnection "DatasourceConnection"
@@ -335,15 +445,34 @@ module DbDataProvider {
     - @ref DbDataProvider::DbDataProviderFactory "DbDataProviderFactory"
     - @ref DbDataProvider::DbIndexDataType "DbIndexDataType"
     - @ref DbDataProvider::DbIndexesDataType "DbIndexesDataType"
+    - @ref DbDataProvider::DbMaterializedViewDataProvider "DbMaterializedViewDataProvider"
+    - @ref DbDataProvider::DbMaterializedViewsDataProvider "DbMaterializedViewsDataProvider"
     - @ref DbDataProvider::DbTableBulkInserter "DbTableBulkInserter"
     - @ref DbDataProvider::DbTableBulkRecordInterface "DbTableBulkRecordInterface"
     - @ref DbDataProvider::DbTableBulkUpserter "DbTableBulkUpserter"
     - @ref DbDataProvider::DbTableDataProvider "DbTableDataProvider"
     - @ref DbDataProvider::DbTableRecordIterator "DbTableRecordIterator"
+    - @ref DbDataProvider::DbViewDataProvider "DbViewDataProvider"
+    - @ref DbDataProvider::DbViewsDataProvider "DbViewsDataProvider"
 
     @section dbdataprovider_relnotes Release Notes
 
     @subsection dbdataprovider_v2_5 DbDataProvider v2.5
+    - a where hash with a SqlUtil operator, such as from \c op_gt(), \c op_between(), \c op_in(), \c op_not(),
+      \c op_clt() or \c wop_or(), in a search, update or delete of a table or a search of a view is a SqlUtil where
+      clause, evaluated by SqlUtil with its own semantics; such a search raised \c INVALID-MEMBER or
+      \c DATA-PROVIDER-EXPRESSION-ERROR
+    - a search whose statement failed when the iterator was made, such as for a table that no longer exists, left the
+      transaction lock that the statement acquired; the lock is now released, as it is when the iterator is destroyed
+    - added read-only providers for views and materialized views: the \c views child of a database data provider
+      lists the database's views, and the \c materialized-views child, present only on databases that support
+      materialized views, lists its materialized views; views were listed as tables on PostgreSQL, where they could
+      not be opened, and opened as writable tables on MySQL; see @ref dbdataprovider_views
+    - added the \c find_view, \c find_single_view, \c find_materialized_view and
+      \c find_single_materialized_view actions to the \c Db app
+    - a table named \c views, or \c materialized-views on a database with materialized views, is no longer
+      reachable through the top-level table fallback of a database data provider, as the name is now a child of the
+      provider; the table is still reachable through the \c tables child, as <tt>tables/views</tt>
     - fixed @ref DbDataProvider::DatasourceConnection "DatasourceConnection" to accept connection options whose
       values all have the same type, such as a literal <tt>{"min": "1", "max": "4"}</tt>; converting the pool sizes
       or adding the options of the URL raised \c RUNTIME-TYPE-ERROR

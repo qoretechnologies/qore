@@ -151,6 +151,9 @@ module SqlUtil {
     @section sqlutil_relnotes Release Notes for the SqlUtil Module
 
     @subsection sqlutilv3_11_0 SqlUtil v3.11.0
+    - added @ref SqlUtil::AbstractDatabase::supportsMaterializedViews() "AbstractDatabase::supportsMaterializedViews()"
+      and @ref SqlUtil::AbstractDatabase::listMaterializedViews() "AbstractDatabase::listMaterializedViews()" for
+      every database; a database without materialized views lists none
     - fixed @ref SqlUtil::AbstractTable::setupTable() "AbstractTable::setupTable()" to accept a partition strategy or
       partition descriptions given only as driver-specific overrides, such as a literal
       <tt>{"driver": {"pgsql": {"method": "range", "columns": "dt"}}}</tt>, and

@@ -125,8 +125,6 @@ printf("Projects: %Y\n", result.body);
 
     @subsection gitlabrestclientv1_0 GitLabRestClient v1.0
     - initial release
-    - a GitLab connection whose options all have the same type and lack credentials, such as a literal
-      \c {"connect_timeout": 10}, reports the missing credentials rather than a \c RUNTIME-TYPE-ERROR
 */
 
 #! the GitLabRestClient namespace contains all the objects in the GitLabRestClient module

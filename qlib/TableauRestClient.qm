@@ -82,8 +82,6 @@ printf("Projects: %y\n", result.body.projects);
     @section tableaurestclientrelnotes Release Notes
 
     @subsection tableaurestclientv1_0 TableauRestClient v1.0
-    - \c TableauRestClient::doRequest() accepts request headers whose values all have the same type, such as
-      \c {"X-Page": 1}, when adding the session header
     - initial release
 */
 

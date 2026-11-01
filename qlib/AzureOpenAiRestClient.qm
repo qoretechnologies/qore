@@ -134,12 +134,6 @@ hash<ChatResponse> r = p.chat((<ChatMessage>{"role": "user", "content": "hi"},))
 
     @subsection azureopenairestclient_v1_0 AzureOpenAiRestClient v1.0
     - initial release
-    - @ref AzureOpenAiRestClient::AzureOpenAiRestClient "AzureOpenAiRestClient" signs requests whose headers all have
-      the same type, such as a literal <tt>{"X-Count": 1}</tt>, when adding the authentication header
-    - fixed @ref AzureOpenAiRestClient::AzureOpenAiRestClientBase::getOptions()
-      "AzureOpenAiRestClientBase::getOptions()" and the client constructors to accept an option hash whose values all
-      have the same type, such as \c {"url": "...", "api_key": "..."}; adding the headers raised
-      \c RUNTIME-TYPE-ERROR
 */
 
 #! Contains all public definitions in the AzureOpenAiRestClient module

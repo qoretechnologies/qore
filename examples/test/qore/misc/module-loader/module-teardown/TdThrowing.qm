@@ -1,0 +1,25 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# TdThrowing.qm - module of the module teardown tests whose constant's destructor throws when the module is deleted
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+module TdThrowing {
+    version = "1.0";
+    desc = "module whose teardown raises an exception, for the module teardown tests";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+public namespace TdThrowing {
+    #! throws in its destructor
+    public class Thrower {
+        destructor() {
+            throw "TD-TEARDOWN-ERROR", "thrown at module teardown";
+        }
+    }
+
+    #! released when the module is deleted at process exit
+    public const ThrowingConstant = new Thrower();
+}

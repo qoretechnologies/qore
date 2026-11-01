@@ -123,8 +123,6 @@ printf("%Y\n", ans.body.dense);
 
     @subsection BgeM3RestClientv1_0 BgeM3RestClient v1.0
     - initial release
-    - the client options accept a \c headers hash whose values all have the same type, such as a literal
-      <tt>{"X-Count": 1}</tt>, when adding the credential and \c Accept headers
 */
 
 #! the BgeM3RestClient namespace contains all the objects in the BgeM3RestClient module

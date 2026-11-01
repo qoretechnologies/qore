@@ -55,9 +55,16 @@ public class DbSelectBulkRecordInterface inherits AbstractDataProviderBulkRecord
         # lock
         release_transaction = !ds.currentThreadInTransaction();
         stmt = ds.getSQLStatement();
-        stmt.prepare(select_options.sql);
-        if (select_options.args) {
-            stmt.bindArgs(select_options.args);
+        # the destructor does not run if the constructor fails, so an implicit transaction acquired by a failed
+        # statement is released here
+        try {
+            stmt.prepare(select_options.sql);
+            if (select_options.args) {
+                stmt.bindArgs(select_options.args);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            DbTableReadHelper::releaseImplicitTransaction(ds, !release_transaction);
+            rethrow;
         }
     }
 

@@ -613,6 +613,4 @@ module GorgiasDataProvider {
 
     @subsection gorgiasdataproviderv1_0 GorgiasDataProvider v1.0
     - initial release
-    - \c GorgiasDataProviderBase::fetchAllPages() accepts query parameters whose values all have the same type, such
-      as a literal \c {"order_by": "created_datetime:desc"}, when adding the page keys
 */

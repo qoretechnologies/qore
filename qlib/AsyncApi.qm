@@ -304,9 +304,6 @@ qore-asyncapi-gen -t "My Event API" -V "1.0.0" -o events.yaml src/*.qclass
 
     @subsection asyncapi_1_0 AsyncApi v1.0
     - initial release
-    - message payload objects and headers whose values all have the same type, such as a literal
-      <tt>{"when": now()}</tt>, are validated and serialized; serializing the date to a \c date-time string raised
-      \c RUNTIME-TYPE-ERROR
 */
 
 #! main namespace for all public %AsyncApi declarations

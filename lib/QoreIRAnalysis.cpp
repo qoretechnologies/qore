@@ -6481,8 +6481,12 @@ static bool qore_ir_is_borrowed_list_element_consumer(const QoreIRInstruction& i
         case QoreIROpcode::HashSetKeyValue:
             return inst.operands.size() == 3
                 && (inst.operands[1].id == value_id || inst.operands[2].id == value_id);
-        case QoreIROpcode::CommonTypeFold:
-            // reads only the type of the value
+        case QoreIROpcode::HashSetKeyValueFold:
+            // takes its own reference, like HashSetKeyValue
+            return inst.operands.size() == 5
+                && (inst.operands[1].id == value_id || inst.operands[2].id == value_id);
+        case QoreIROpcode::ListAppendElement:
+            // takes its own reference, like ListAppend
             return inst.operands.size() == 3 && inst.operands[1].id == value_id;
         default:
             return false;
@@ -6510,6 +6514,7 @@ static bool qore_ir_collect_borrowed_loop_safety(const QoreIRNaturalLoop& loop,
             }
             switch (inst->opcode) {
                 case QoreIROpcode::ListAppend:
+                case QoreIROpcode::ListAppendElement:
                 case QoreIROpcode::ListSetInt:
                 case QoreIROpcode::ListSetFloat:
                 case QoreIROpcode::ListSetValue:
@@ -6612,6 +6617,7 @@ static bool qore_ir_is_assigned_value(const QoreIRFunction& func, QoreIRValue va
 static bool qore_ir_may_mutate_list(QoreIROpcode opcode) {
     switch (opcode) {
         case QoreIROpcode::ListAppend:
+        case QoreIROpcode::ListAppendElement:
         case QoreIROpcode::ListSetInt:
         case QoreIROpcode::ListSetFloat:
         case QoreIROpcode::ListSetValue:
@@ -13600,10 +13606,23 @@ size_t qore_ir_specialize_proven_native_operations(QoreIRFunction& func,
                         || inst->opcode == QoreIROpcode::SubAny
                         || inst->opcode == QoreIROpcode::MulAny
                         || inst->opcode == QoreIROpcode::DivAny;
-            if (proven_numeric
+            // a compound assignment operates by the type of the lvalue's value, as the AST interpreter does: an
+            // int lvalue converts a float operand to an int, so only a float lvalue gives a float operation
+            bool compound_float_safe = true;
+            switch (inst->opcode) {
+                case QoreIROpcode::AddAssignAny:
+                case QoreIROpcode::SubAssignAny:
+                case QoreIROpcode::MulAssignAny:
+                case QoreIROpcode::DivAssignAny:
+                    compound_float_safe = lhs_exact_float;
+                    break;
+                default:
+                    break;
+            }
+            if (compound_float_safe && (proven_numeric
                     || (lhs_numeric && rhs_numeric
                         && (lhs_exact_float || rhs_exact_float)
-                        && optional_float_safe)) {
+                        && optional_float_safe))) {
                 replacement = float_opcode(inst->opcode);
                 representation = QoreIRValueRepresentation::NativeFloat;
                 type_info = floatTypeInfo;

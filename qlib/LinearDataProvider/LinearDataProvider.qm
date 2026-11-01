@@ -839,8 +839,6 @@ printf("Created issue: %s\n", issue.identifier);
 
     @subsection lineardataproviderv1_0 LinearDataProvider v1.0
     - initial release
-    - @ref LinearDataProvider::LinearRecordIterator "LinearRecordIterator" accepts query variables whose values all
-      have the same type, such as a literal <tt>{"count": 5}</tt>, when adding the cursor of the next page
 */
 
 #! Contains all public definitions in the LinearDataProvider module

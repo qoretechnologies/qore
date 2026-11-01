@@ -81,7 +81,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 416,
+static_assert(QORE_IR_MAX_OPCODE == 417,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -7864,18 +7864,50 @@ next_instruction:
                 ++ip;
                 break;
             }
-            case QoreIROpcode::CommonTypeFold: {
-                int64_t state = getIRValue(values, inst->operands[0]).getAsBigInt();
-                int64_t new_state = qore_rt_common_type_fold(state,
-                    toBits(getIRValue(values, inst->operands[1])),
-                    getIRValue(values, inst->operands[2]).getAsBigInt());
+            case QoreIROpcode::HashSetKeyValueFold: {
+                int64_t new_state = qore_rt_hash_set_key_value_fold(toBits(getIRValue(values, inst->operands[0])),
+                    toBits(getIRValue(values, inst->operands[1])), toBits(getIRValue(values, inst->operands[2])),
+                    getIRValue(values, inst->operands[3]).getAsBigInt(),
+                    getIRValue(values, inst->operands[4]).getAsBigInt(), xsink);
                 setValueSlotDirect(values, inst->result.id, QoreValue(new_state));
+                if (xsink && *xsink) {
+                    if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
                 ++ip;
                 break;
             }
             case QoreIROpcode::HashSetCommonType: {
                 qore_rt_hash_set_common_type(toBits(getIRValue(values, inst->operands[0])),
                     getIRValue(values, inst->operands[1]).getAsBigInt());
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::ListAppendElement: {
+                int64_t new_state = qore_rt_list_append_element(toBits(getIRValue(values, inst->operands[0])),
+                    toBits(getIRValue(values, inst->operands[1])),
+                    getIRValue(values, inst->operands[2]).getAsBigInt(), xsink);
+                setValueSlotDirect(values, inst->result.id, QoreValue(new_state));
+                if (xsink && *xsink) {
+                    if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
                 ++ip;
                 break;
             }
@@ -8882,21 +8914,8 @@ load_local_done:
                             cleanupLocalCaches();
                             return false;
                         }
+                        // the value is returned as it is stored, as the AST interpreter returns it
                         out.refSelf();
-                        if (!h->getHashDecl() && !out.isNothing()) {
-                            const QoreTypeInfo* vti = h->getValueTypeInfo();
-                            if (QoreTypeInfo::hasType(vti) && vti != autoTypeInfo && vti != anyTypeInfo
-                                    && !QoreTypeInfo::superSetOf(vti, out.getTypeInfo())) {
-                                ValueHolder holder(out, xsink);
-                                QoreTypeInfo::acceptInputKey(vti, hka_inst->key_name.c_str(), *holder, xsink);
-                                if (xsink && *xsink) {
-                                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                                    cleanupLocalCaches();
-                                    return false;
-                                }
-                                out = holder.release();
-                            }
-                        }
                     }
                 } else if (base.getType() == NT_HASH) {
                     const QoreHashNode* h = base.get<const QoreHashNode>();
@@ -8906,21 +8925,8 @@ load_local_done:
                         cleanupLocalCaches();
                         return false;
                     }
+                    // the value is returned as it is stored, as the AST interpreter returns it
                     out.refSelf();
-                    if (!h->getHashDecl() && !out.isNothing()) {
-                        const QoreTypeInfo* vti = h->getValueTypeInfo();
-                        if (QoreTypeInfo::hasType(vti) && vti != autoTypeInfo && vti != anyTypeInfo
-                                && !QoreTypeInfo::superSetOf(vti, out.getTypeInfo())) {
-                            ValueHolder holder(out, xsink);
-                            QoreTypeInfo::acceptInputKey(vti, hka_inst->key_name.c_str(), *holder, xsink);
-                            if (xsink && *xsink) {
-                                cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                                cleanupLocalCaches();
-                                return false;
-                            }
-                            out = holder.release();
-                        }
-                    }
                 } else if (base.getType() == NT_OBJECT) {
                     QoreObject* o = const_cast<QoreObject*>(base.get<const QoreObject>());
                     out = o->evalMember(hka_inst->key_name.c_str(), xsink);
@@ -8961,10 +8967,10 @@ load_local_done:
                     const QoreHashNode* h = base.get<const QoreHashNode>();
                     bool exists = false;
                     QoreValue v = h->getKeyValueExistence(hka_inst->key_name.c_str(), exists);
-                    if (exists) {
+                    // a key with no value gives no value, as a missing key does and as the AST interpreter reads it
+                    if (exists && !v.isNothing()) {
                         out = v.getAsBigInt();
                     }
-                    // else: key missing → NOTHING
                 }
                 setValueSlot(values, hka_inst->result.id, out, xsink);
                 ++ip;
@@ -9983,50 +9989,20 @@ load_local_done:
             }
             case QoreIROpcode::HashMapTwoKeys: {
                 const auto* mhk = static_cast<const QoreIRMapHashKeyInstruction*>(inst);
-                QoreValue list_val = getIRValue(values, mhk->operands[0]);
-                QoreValue out;
-                if (list_val.getType() == NT_LIST) {
-                    const QoreListNode* l = list_val.get<const QoreListNode>();
-                    size_t sz = l->size();
-                    ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), xsink);
-                    bool routed_to_handler = false;
-                    for (size_t i = 0; i < sz; ++i) {
-                        QoreValue elem = l->retrieveEntry(i);
-                        if (elem.getType() == NT_HASH) {
-                            const QoreHashNode* h = elem.get<const QoreHashNode>();
-                            // note: the checking accessor is used here so that accessing an
-                            // unknown member of a hashdecl-typed hash raises INVALID-MEMBER, as
-                            // with the reference (AST) implementation
-                            QoreValue k = h->getKeyValue(mhk->key1.c_str(), xsink);
-                            QoreValue val = *xsink
-                                ? QoreValue()
-                                : h->getKeyValue(mhk->key2.c_str(), xsink);
-                            if (!*xsink) {
-                                QoreHashKeyHelper key_str(k, xsink);
-                                if (!*xsink) {
-                                    result->setKeyValue(key_str.c_str(), val.refSelf(), xsink);
-                                }
-                            }
-                            if (*xsink) {
-                                if (inst->exception_target) {
-                                    cleanupToTempScope(inst->temp_scope_id, true, false, true);
-                                    prev_block = block;
-                                    block = inst->exception_target;
-                                    ip = 0;
-                                    routed_to_handler = true;
-                                    break;
-                                }
-                                cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                                cleanupLocalCaches();
-                                return false;
-                            }
-                        }
-                    }
-                    // the partially built result is discarded by the ReferenceHolder
-                    if (routed_to_handler) {
+                QoreValue out = fromBits(qore_rt_hash_map_two_keys(toBits(getIRValue(values, mhk->operands[0])),
+                    mhk->key1.c_str(), mhk->key2.c_str(), xsink));
+                if (xsink && *xsink) {
+                    out.discard(xsink);
+                    if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
                         break;
                     }
-                    out = result.release();
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
                 }
                 setValueSlot(values, mhk->result.id, out, xsink);
                 if (out.needsRef()) {
@@ -13541,81 +13517,7 @@ load_local_done:
                     LValueHelper lvh(xsink);
                     navigation_failed = lvh.navigatePath(path_copy.data(), path_copy.size(), false);
                     if (!navigation_failed) {
-                        switch (path_inst->compound_op) {
-                            case LVCompoundOp::AddAssign:
-                                res = doPlusEqualsOnLValue(lvh, rhs_holder, xsink);
-                                break;
-                            case LVCompoundOp::SubAssign:
-                                res = doMinusEqualsOnLValue(lvh, rhs, xsink);
-                                break;
-                            default: {
-                                qore_type_t vtype = lvh.getType();
-                                if (vtype == NT_NUMBER || rhs.getType() == NT_NUMBER) {
-                                    switch (path_inst->compound_op) {
-                                        case LVCompoundOp::MulAssign:
-                                            lvh.multiplyEqualsNumber(rhs);
-                                            if (!*xsink) {
-                                                res = lvh.getReferencedValue();
-                                            }
-                                            break;
-                                        case LVCompoundOp::DivAssign:
-                                            if (rhs.getAsFloat() == 0.0) {
-                                                xsink->raiseException("DIVISION-BY-ZERO",
-                                                    "division by zero in arbitrary-precision numeric expression");
-                                            } else {
-                                                lvh.divideEqualsNumber(rhs);
-                                                if (!*xsink) {
-                                                    res = lvh.getReferencedValue();
-                                                }
-                                            }
-                                            break;
-                                        default: res = QoreValue(); break;
-                                    }
-                                } else if (vtype == NT_FLOAT || rhs.getType() == NT_FLOAT) {
-                                    double rv = rhs.getAsFloat();
-                                    switch (path_inst->compound_op) {
-                                        case LVCompoundOp::MulAssign: res = lvh.multiplyEqualsFloat(rv); break;
-                                        case LVCompoundOp::DivAssign:
-                                            if (rv == 0.0) {
-                                                xsink->raiseException("DIVISION-BY-ZERO",
-                                                    "division by zero in floating-point expression");
-                                            } else {
-                                                res = lvh.divideEqualsFloat(rv);
-                                            }
-                                            break;
-                                        default: res = QoreValue(); break;
-                                    }
-                                } else {
-                                    int64 rv = rhs.getAsBigInt();
-                                    switch (path_inst->compound_op) {
-                                        case LVCompoundOp::MulAssign: res = lvh.multiplyEqualsBigInt(rv); break;
-                                        case LVCompoundOp::DivAssign:
-                                            if (!rv) {
-                                                xsink->raiseException("DIVISION-BY-ZERO",
-                                                    "division by zero in integer expression");
-                                            } else {
-                                                res = lvh.divideEqualsBigInt(rv);
-                                            }
-                                            break;
-                                        case LVCompoundOp::ModAssign:
-                                            if (!rv) {
-                                                lvh.assign(0ll, "<%= operator>");
-                                                res = 0ll;
-                                            } else {
-                                                res = lvh.modulaEqualsBigInt(rv);
-                                            }
-                                            break;
-                                        case LVCompoundOp::AndAssign: res = lvh.andEqualsBigInt(rv); break;
-                                        case LVCompoundOp::OrAssign: res = lvh.orEqualsBigInt(rv); break;
-                                        case LVCompoundOp::XorAssign: res = lvh.xorEqualsBigInt(rv); break;
-                                        case LVCompoundOp::ShlAssign: res = lvh.shiftLeftEqualsBigInt(rv); break;
-                                        case LVCompoundOp::ShrAssign: res = lvh.shiftRightEqualsBigInt(rv); break;
-                                        default: break;
-                                    }
-                                }
-                                break;
-                            }
-                        }
+                        res = qore_rt_apply_lvalue_compound(lvh, path_inst->compound_op, rhs_holder, xsink);
                     }
                 }
                 // lvh is now destructed — object lock released
@@ -14645,7 +14547,9 @@ load_local_done:
                 bool fast_path_done = false;
                 {
                     LValueHelper v(lval_inst->lvalue, xsink);
-                    if (v && v.getType() == NT_INT) {
+                    // only an int operand gives an int lvalue an integer addition in every case; a date operand of a
+                    // timeout lvalue is added as milliseconds (see doPlusEqualsOnLValue())
+                    if (v && v.getType() == NT_INT && right.getType() == NT_INT) {
                         v.plusEqualsBigInt(right.getAsBigInt());
                         if (!*xsink) {
                             res = v.getReferencedValue();
@@ -14698,7 +14602,12 @@ load_local_done:
                 bool fast_path_done = false;
                 {
                     LValueHelper v(lval_inst->lvalue, xsink);
-                    if (v && v.getType() == NT_INT) {
+                    // the AST interpreter gives an int lvalue and an int operand an integer operation; a zero
+                    // divisor is left to evalLValueBinary(), which handles it as the AST interpreter does
+                    if (v && v.getType() == NT_INT && right.getType() == NT_INT
+                            && (right.getAsBigInt()
+                                || (inst->opcode != QoreIROpcode::DivAssignLValue
+                                    && inst->opcode != QoreIROpcode::ModAssignLValue))) {
                         int64 rhs = right.getAsBigInt();
                         switch (inst->opcode) {
                             case QoreIROpcode::SubAssignLValue:
@@ -16765,45 +16674,21 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             return QoreValue(left.getAsBigInt() + right.getAsBigInt());
         case QoreIROpcode::AddAssignFloat:
             return QoreValue(left.getAsFloat() + right.getAsFloat());
-        case QoreIROpcode::AddAssignAny: {
-            // If the left operand is NOTHING, return the right operand directly
-            // to avoid NOTHING being treated as a list element in concatenation
-            if (left.isNothing()) {
-                return right.refSelf();
-            }
-            // issue #3157: timeout (int ms) += date → integer ms arithmetic
-            if (left.getType() == NT_INT && right.getType() == NT_DATE) {
-                int64_t ms = right.get<const DateTimeNode>()->getRelativeMilliseconds();
-                return QoreValue(left.getAsBigInt() + ms);
-            }
-            bool needs_deref = true;
-            QorePlusOperatorNode node(nullptr, left.refSelf(), right.refSelf());
-            return evalAndRef(&node, xsink);
-        }
+        case QoreIROpcode::AddAssignAny:
+            // the value the AST interpreter gives the lvalue (see qore_compound_assign_value())
+            return qore_compound_assign_value(LVCompoundOp::AddAssign, left, right, xsink);
         case QoreIROpcode::SubAssignInt:
             return QoreValue(left.getAsBigInt() - right.getAsBigInt());
         case QoreIROpcode::SubAssignFloat:
             return QoreValue(left.getAsFloat() - right.getAsFloat());
-        case QoreIROpcode::SubAssignAny: {
-            // Special handling for timeout type: stored as int (milliseconds), RHS may be date
-            if (left.getType() == NT_INT && right.getType() == NT_DATE) {
-                // Treat as timeout arithmetic: int (ms) - date
-                int64_t ms = right.get<const DateTimeNode>()->getRelativeMilliseconds();
-                return QoreValue(left.getAsBigInt() - ms);
-            }
-            bool needs_deref = true;
-            QoreMinusOperatorNode node(nullptr, left.refSelf(), right.refSelf());
-            return evalAndRef(&node, xsink);
-        }
+        case QoreIROpcode::SubAssignAny:
+            return qore_compound_assign_value(LVCompoundOp::SubAssign, left, right, xsink);
         case QoreIROpcode::MulAssignInt:
             return QoreValue(left.getAsBigInt() * right.getAsBigInt());
         case QoreIROpcode::MulAssignFloat:
             return QoreValue(left.getAsFloat() * right.getAsFloat());
-        case QoreIROpcode::MulAssignAny: {
-            bool needs_deref = true;
-            QoreMultiplicationOperatorNode node(nullptr, left.refSelf(), right.refSelf());
-            return evalAndRef(&node, xsink);
-        }
+        case QoreIROpcode::MulAssignAny:
+            return qore_compound_assign_value(LVCompoundOp::MulAssign, left, right, xsink);
         case QoreIROpcode::DivAssignInt: {
             int64_t divisor = right.getAsBigInt();
             if (!divisor) {
@@ -16825,9 +16710,10 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             return QoreValue(left.getAsFloat() / divisor);
         }
         case QoreIROpcode::DivAssignAny:
-            return QoreDivisionOperatorNode::doDivision(left, right, xsink);
-        case QoreIROpcode::ModAssignInt:
-        case QoreIROpcode::ModAssignAny: {
+            return qore_compound_assign_value(LVCompoundOp::DivAssign, left, right, xsink);
+        case QoreIROpcode::ModAssignAny:
+            return qore_compound_assign_value(LVCompoundOp::ModAssign, left, right, xsink);
+        case QoreIROpcode::ModAssignInt: {
             // the modulo-equals operator assigns 0 for a divisor of 0, as AST execution does
             // (QoreModuloEqualsOperatorNode); only the modulo operator raises an exception
             int64_t divisor = right.getAsBigInt();
@@ -16835,25 +16721,16 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         }
         case QoreIROpcode::AndAssignInt:
             return QoreValue(left.getAsBigInt() & right.getAsBigInt());
-        case QoreIROpcode::AndAssignAny: {
-            bool needs_deref = true;
-            ValueHolder node(QoreValue(new QoreBinaryAndOperatorNode(get_runtime_location(), left.refSelf(), right.refSelf())), xsink);
-            return evalAndRef(*node, xsink);
-        }
+        case QoreIROpcode::AndAssignAny:
+            return qore_compound_assign_value(LVCompoundOp::AndAssign, left, right, xsink);
         case QoreIROpcode::OrAssignInt:
             return QoreValue(left.getAsBigInt() | right.getAsBigInt());
-        case QoreIROpcode::OrAssignAny: {
-            bool needs_deref = true;
-            ValueHolder node(QoreValue(new QoreBinaryOrOperatorNode(get_runtime_location(), left.refSelf(), right.refSelf())), xsink);
-            return evalAndRef(*node, xsink);
-        }
+        case QoreIROpcode::OrAssignAny:
+            return qore_compound_assign_value(LVCompoundOp::OrAssign, left, right, xsink);
         case QoreIROpcode::XorAssignInt:
             return QoreValue(left.getAsBigInt() ^ right.getAsBigInt());
-        case QoreIROpcode::XorAssignAny: {
-            bool needs_deref = true;
-            ValueHolder node(QoreValue(new QoreBinaryXorOperatorNode(get_runtime_location(), left.refSelf(), right.refSelf())), xsink);
-            return evalAndRef(*node, xsink);
-        }
+        case QoreIROpcode::XorAssignAny:
+            return qore_compound_assign_value(LVCompoundOp::XorAssign, left, right, xsink);
         case QoreIROpcode::ShlInt:
             return QoreValue(left.getAsBigInt() << right.getAsBigInt());
         case QoreIROpcode::ShlAny: {
@@ -16870,18 +16747,12 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         }
         case QoreIROpcode::ShlAssignInt:
             return QoreValue(left.getAsBigInt() << right.getAsBigInt());
-        case QoreIROpcode::ShlAssignAny: {
-            bool needs_deref = true;
-            ValueHolder node(QoreValue(new QoreShiftLeftEqualsOperatorNode(get_runtime_location(), left.refSelf(), right.refSelf())), xsink);
-            return evalAndRef(*node, xsink);
-        }
+        case QoreIROpcode::ShlAssignAny:
+            return qore_compound_assign_value(LVCompoundOp::ShlAssign, left, right, xsink);
         case QoreIROpcode::ShrAssignInt:
             return QoreValue(left.getAsBigInt() >> right.getAsBigInt());
-        case QoreIROpcode::ShrAssignAny: {
-            bool needs_deref = true;
-            ValueHolder node(QoreValue(new QoreShiftRightEqualsOperatorNode(get_runtime_location(), left.refSelf(), right.refSelf())), xsink);
-            return evalAndRef(*node, xsink);
-        }
+        case QoreIROpcode::ShrAssignAny:
+            return qore_compound_assign_value(LVCompoundOp::ShrAssign, left, right, xsink);
         case QoreIROpcode::FoldlAny:
         case QoreIROpcode::FoldlInt:
         case QoreIROpcode::FoldlFloat: {
@@ -18167,6 +18038,36 @@ QoreValue QoreIRInterpreter::evalLValueUnary(QoreIROpcode op, const QoreValue& l
     return QoreValue();
 }
 
+//! returns the type whose default value += and -= give an lvalue of the given type with no value
+/** an or-nothing type (*T) gives T, so that the lvalue gives the result of T for an operand with a value
+*/
+static const QoreTypeInfo* get_compound_default_type(const QoreTypeInfo* ti) {
+    if (QoreTypeInfo::hasDefaultValue(ti)) {
+        return ti;
+    }
+    const QoreTypeInfo* plain = get_or_nothing_base_type(ti);
+    return plain != ti && QoreTypeInfo::hasDefaultValue(plain) ? plain : ti;
+}
+
+bool qore_is_int_lvalue_type(const QoreTypeInfo* ti) {
+    const QoreTypeInfo* plain = get_or_nothing_base_type(ti);
+    return QoreTypeInfo::isType(plain, NT_INT) && !QoreTypeInfo::equal(plain, timeoutTypeInfo);
+}
+
+QoreValue qore_int_lvalue_minus_date(LValueHelper& v, const QoreValue& right, ExceptionSink* xsink) {
+    ValueHolder current(v.getReferencedValue(), xsink);
+    ValueHolder result(QoreIRInterpreter::evalBinary(QoreIROpcode::SubAny, *current, right, xsink), xsink);
+    if (*xsink || v.assign(result.release(), "<-= operator>")) {
+        return QoreValue();
+    }
+    return v.getReferencedValue();
+}
+
+//! returns true if the lvalue type is timeout or *timeout, which take a date operand as milliseconds
+static bool is_timeout_lvalue_type(const QoreTypeInfo* ti) {
+    return QoreTypeInfo::equal(get_or_nothing_base_type(ti), timeoutTypeInfo);
+}
+
 // Direct compound assignment helpers — avoid allocating temporary AST operator nodes
 // Inner function: perform += on an already-navigated LValueHelper.
 // Used by both evalPlusEquals (AST path) and LValuePathCompound (path-based).
@@ -18180,6 +18081,8 @@ QoreValue doPlusEqualsOnLValue(LValueHelper& v, ValueHolder& right_holder, Excep
 
     if (vtype == NT_NOTHING || vtype == NT_NULL) {
         const QoreTypeInfo* typeInfo = v.getTypeInfo();
+        // an or-nothing lvalue (*T) with no value takes the default value of T for an operand with a value
+        const QoreTypeInfo* plain_default_ti = get_compound_default_type(typeInfo);
         if (QoreTypeInfo::hasDefaultValue(typeInfo)) {
             if (v.assign(QoreTypeInfo::getDefaultQoreValue(typeInfo), "<lvalue for += operator>")) {
                 return QoreValue();
@@ -18193,6 +18096,11 @@ QoreValue doPlusEqualsOnLValue(LValueHelper& v, ValueHolder& right_holder, Excep
             vtype = v.getType();
         } else if (right.isNothing()) {
             return QoreValue();
+        } else if (plain_default_ti != typeInfo) {
+            if (v.assign(QoreTypeInfo::getDefaultQoreValue(plain_default_ti), "<lvalue for += operator>")) {
+                return QoreValue();
+            }
+            vtype = v.getType();
         } else if (QoreTypeInfo::isHashType(typeInfo)) {
             if (v.assign(new QoreHashNode(QoreTypeInfo::getReturnComplexHashOrNothing(typeInfo)),
                     "<lvalue for += operator>")) {
@@ -18263,7 +18171,7 @@ QoreValue doPlusEqualsOnLValue(LValueHelper& v, ValueHolder& right_holder, Excep
         }
     } else {
         // if the lvalue is a timeout, then convert any date/time value as if it were a timeout
-        if (right.getType() == NT_DATE && QoreTypeInfo::equal(v.getTypeInfo(), timeoutTypeInfo)) {
+        if (right.getType() == NT_DATE && is_timeout_lvalue_type(v.getTypeInfo())) {
             int64 ms = right.get<const DateTimeNode>()->getRelativeMilliseconds();
             return v.plusEqualsBigInt(ms);
         }
@@ -18296,10 +18204,12 @@ QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, Excepti
 
     if (vtype == NT_NOTHING) {
         const QoreTypeInfo* typeInfo = v.getTypeInfo();
+        // an or-nothing lvalue (*T) takes the default value of T
+        const QoreTypeInfo* default_ti = get_compound_default_type(typeInfo);
         if (QoreTypeInfo::isHashType(typeInfo)) {
             return QoreValue();
-        } else if (QoreTypeInfo::hasDefaultValue(typeInfo)) {
-            if (v.assign(QoreTypeInfo::getDefaultQoreValue(typeInfo))) {
+        } else if (QoreTypeInfo::hasDefaultValue(default_ti)) {
+            if (v.assign(QoreTypeInfo::getDefaultQoreValue(default_ti))) {
                 return QoreValue();
             }
             vtype = v.getType();
@@ -18324,16 +18234,11 @@ QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, Excepti
     } else if (vtype == NT_NUMBER) {
         v.minusEqualsNumber(right, "<-= operator>");
     } else if (vtype == NT_DATE) {
-        // Check if this is a timeout type, which uses integer arithmetic
-        if (QoreTypeInfo::equal(v.getTypeInfo(), timeoutTypeInfo)) {
-            // if the right side is also a date/timeout, convert to milliseconds
-            if (right.getType() == NT_DATE) {
-                int64 ms = right.get<const DateTimeNode>()->getRelativeMilliseconds();
-                return v.minusEqualsBigInt(ms);
-            } else {
-                // Regular integer minus for timeout
-                return v.minusEqualsBigInt(right.getAsBigInt());
-            }
+        // the operation follows QoreMinusEqualsOperatorNode::evalImpl()
+        // issue #3157: if the lvalue is a timeout, then convert any date/time value as if it were a timeout too
+        if (right.getType() == NT_DATE && is_timeout_lvalue_type(v.getTypeInfo())) {
+            int64 ms = right.get<const DateTimeNode>()->getRelativeMilliseconds();
+            return v.minusEqualsBigInt(ms);
         }
         // Regular date arithmetic
         if (right.getType() == NT_DATE) {
@@ -18386,10 +18291,19 @@ QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, Excepti
             }
         }
     } else {
-        // if the lvalue is a timeout, convert date/time value as timeout
-        if (right.getType() == NT_DATE && QoreTypeInfo::equal(v.getTypeInfo(), timeoutTypeInfo)) {
-            int64 ms = right.get<const DateTimeNode>()->getRelativeMilliseconds();
-            return v.minusEqualsBigInt(ms);
+        if (right.getType() == NT_DATE) {
+            // if the lvalue is a timeout, convert date/time value as timeout
+            if (is_timeout_lvalue_type(v.getTypeInfo())) {
+                int64 ms = right.get<const DateTimeNode>()->getRelativeMilliseconds();
+                return v.minusEqualsBigInt(ms);
+            }
+            // an lvalue of an int type (int, *int, softint) is assigned the result of the binary operator, as
+            // x = x - d assigns it; see qore_int_lvalue_minus_date()
+            if (qore_is_int_lvalue_type(v.getTypeInfo())) {
+                return qore_int_lvalue_minus_date(v, right, xsink);
+            }
+            // any other lvalue subtracts the date's relative seconds
+            return v.minusEqualsBigInt(right.get<const DateTimeNode>()->getRelativeSeconds());
         }
         // do integer minus-equals
         return v.minusEqualsBigInt(right.getAsBigInt());
@@ -18569,7 +18483,7 @@ QoreValue QoreIRInterpreter::evalLValueBinary(QoreIROpcode op, const QoreValue& 
             if (!v) {
                 return QoreValue();
             }
-            return v.shiftRightEqualsBigInt(val, ">>= operator>");
+            return v.shiftRightEqualsBigInt(val, "<>>= operator>");
         }
         case QoreIROpcode::UnshiftLValue:
             return evalUnshift(lvalue, right, xsink);

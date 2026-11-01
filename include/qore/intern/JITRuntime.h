@@ -1211,6 +1211,9 @@ uint64_t qore_rt_map_hash_key_offset_any_prehashed(uint64_t list_val, const char
         uint64_t hash64, uint32_t hash32, int64_t offset, ExceptionSink* xsink);
 
 //! Build a hash from two constant keys projected from each input hash.
+//! map {$1.k1: $1.k2}, l as the AST interpreter evaluates it; see QoreIROpcode::HashMapTwoKeys
+uint64_t qore_rt_hash_map_two_keys(uint64_t list_val, const char* key1, const char* key2, ExceptionSink* xsink);
+
 uint64_t qore_rt_hash_map_two_keys_prehashed(uint64_t list_val, const char* key1,
         uint64_t key1_hash64, uint32_t key1_hash32, const char* key2,
         uint64_t key2_hash64, uint32_t key2_hash32, ExceptionSink* xsink);
@@ -1301,11 +1304,16 @@ uint64_t* qore_rt_list_get_mutable_data_unchecked(uint64_t list_val);
 //! Finalize the logical length of a fresh list after direct scalar stores.
 void qore_rt_list_set_length_unchecked(uint64_t list_val, int64_t length);
 
-//! Fold the type of a map or hash map value into the common value type state; returns the new state.
-/** The state is 0 before the first value; \a index is the index of the source element of a hash map operator, or
-    -1 for a list.  See QoreIROpcode::CommonTypeFold.
+//! Set a key of the result hash of a hash map operator and fold the type of the value into the common value type
+/** Sets the key as qore_rt_hash_set_key_value() sets it; the state is 0 before the first value; \a index is the
+    index of the source element; returns the new state.  See QoreIROpcode::HashSetKeyValueFold.
 */
-int64_t qore_rt_common_type_fold(int64_t state, uint64_t value, int64_t index);
+int64_t qore_rt_hash_set_key_value_fold(uint64_t hash_bits, uint64_t key_bits, uint64_t value_bits, int64_t state,
+        int64_t index, ExceptionSink* xsink);
+
+//! Throwing form of qore_rt_hash_set_key_value_fold() for native code that unwinds with QoreJITException
+int64_t qore_rt_hash_set_key_value_fold_throwing(uint64_t hash_bits, uint64_t key_bits, uint64_t value_bits,
+        int64_t state, int64_t index, ExceptionSink* xsink);
 
 //! Set the type of the result list of a map or map/select operator from the common value type state.
 /** When the values had a common type, the list gets list<common type>; otherwise it gets the type of a list
@@ -1327,6 +1335,17 @@ void qore_rt_list_set_scanned_type(uint64_t list_val, const QoreTypeInfo* elemen
 //! AOT form of qore_rt_list_set_scanned_type(); \a has_element_type = 0 for no element type
 void qore_rt_list_set_scanned_type_by_type_path(uint64_t list_val, const char* element_type_path,
         int32_t has_element_type, ExceptionSink* xsink);
+
+//! Append a value to the result list of a map or map/select operator as QoreListNode::push() appends it, and fold
+//! its type into the common value type state
+/** The value is converted to the element type of the list, which can raise an exception; \a value_val is not
+    consumed; the state is 0 before the first value; returns the new state.  See QoreIROpcode::ListAppendElement.
+*/
+int64_t qore_rt_list_append_element(uint64_t list_val, uint64_t value_val, int64_t state, ExceptionSink* xsink);
+
+//! Throwing form of qore_rt_list_append_element() for native code that unwinds with QoreJITException
+int64_t qore_rt_list_append_element_throwing(uint64_t list_val, uint64_t value_val, int64_t state,
+        ExceptionSink* xsink);
 
 //! Set the type of the result list of a select operator from its values or else the value type of its source.
 void qore_rt_list_set_scanned_type_from_source(uint64_t list_val, uint64_t source_val);

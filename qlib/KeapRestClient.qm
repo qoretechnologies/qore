@@ -83,8 +83,6 @@ printf("Contacts: %y\n", result.body.contacts);
 
     @subsection keaprestclientv1_0 KeapRestClient v1.0
     - initial release
-    - the client options accept a \c headers hash whose values all have the same type, such as a literal
-      <tt>{"X-Count": 1}</tt>, when adding the authentication headers
 */
 
 #! the KeapRestClient namespace contains all the objects in the KeapRestClient module

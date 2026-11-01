@@ -39,7 +39,7 @@ public class DbSelectRecordIterator inherits AbstractDbRecordIterator {
     constructor(AbstractDatasource ds, *hash<auto> where_cond, hash<auto> select_options)
             : AbstractDbRecordIterator(
                 !ds.currentThreadInTransaction() && !select_options.forupdate,
-                DbSelectRecordIterator::prepareStatement(ds.getSQLStatement(), where_cond, select_options),
+                DbSelectRecordIterator::prepareStatement(ds, where_cond, select_options),
                 select_options
             ) {
     }
@@ -56,7 +56,7 @@ public class DbSelectRecordIterator inherits AbstractDbRecordIterator {
     }
 
     #! Prepares the AbstractSQLStatement object for the iterator
-    private static AbstractSQLStatement prepareStatement(AbstractSQLStatement stmt, *hash<auto> where_cond,
+    private static AbstractSQLStatement prepareStatement(AbstractDatasource ds, *hash<auto> where_cond,
             hash<auto> select_options) {
         # Validate before constructing AbstractDbRecordIterator: preparing/executing the statement can acquire an
         # implicit transaction that a partially constructed Qore object cannot reliably release.
@@ -64,9 +64,17 @@ public class DbSelectRecordIterator inherits AbstractDbRecordIterator {
             throw "DBSELECT-ERROR", sprintf("where_cond must be empty for DbSelectRecordIterator; value provided: %y",
                 where_cond);
         }
-        stmt.prepare(select_options.sql);
-        if (select_options.args) {
-            stmt.bindArgs(select_options.args);
+        # an implicit transaction acquired by a failed statement is released here, as the iterator does not exist
+        AbstractSQLStatement stmt = ds.getSQLStatement();
+        bool in_trans = ds.currentThreadInTransaction();
+        try {
+            stmt.prepare(select_options.sql);
+            if (select_options.args) {
+                stmt.bindArgs(select_options.args);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            DbTableReadHelper::releaseImplicitTransaction(ds, in_trans);
+            rethrow;
         }
         return stmt;
     }

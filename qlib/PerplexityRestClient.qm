@@ -80,9 +80,6 @@ module PerplexityRestClient {
 
     @subsection perplexityrestclientv1_0 PerplexityRestClient v1.0
     - initial release
-    - @ref PerplexityRestClient::PerplexityChatSseStreamIo "PerplexityChatSseStreamIo" accepts request headers whose
-      values all have the same type, such as a literal <tt>{"X-Count": 1}</tt>, when adding the \c Content-Type
-      header
 */
 
 #! the PerplexityRestClient namespace contains all the objects in the PerplexityRestClient module

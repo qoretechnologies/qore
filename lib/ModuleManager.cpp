@@ -1077,8 +1077,43 @@ QoreModuleContextHelper::~QoreModuleContextHelper() {
 
 QoreUserModuleDefContextHelper::QoreUserModuleDefContextHelper(const char* name, const char* path, QoreProgram* p,
         ExceptionSink& xs)
-        : old_name(set_module_context_name(name)), old_path(set_module_context_path(path)),
+        : mod_name(name), old_name(set_module_context_name(name)), old_path(set_module_context_path(path)),
         pgm(qore_program_private::get(*p)), po(0), xsink(xs), dup(false) {
+}
+
+bool QoreModuleManager::isUserModuleContext(const char* name) {
+    QoreAbstractModule* mi = findModuleUnlocked(name);
+    if (mi) {
+        return mi->isUser();
+    }
+    // a user module is registered only once its source has been parsed, and it loads the modules it requires while
+    // it is parsed: it is then the module of the thread's module definition context, which is always a user module
+    // definition context; the module context name set for the initialization of an AOT module does not change it
+    QoreModuleDefContext* qmd = get_module_def_context();
+    if (!qmd) {
+        return false;
+    }
+    const char* def_name = static_cast<QoreUserModuleDefContextHelper*>(qmd)->getModuleName();
+    return def_name && !strcmp(def_name, name);
+}
+
+void QoreModuleManager::trySetUserAotModuleDependency(const char* name) {
+    const char* old_name = get_module_context_name();
+    if (old_name && strcmp(old_name, name) && isUserModuleContext(old_name)) {
+        aot_user_dep_map.addDep(name, old_name);
+    }
+}
+
+void QoreModuleManager::trySetUserModuleDependency(const QoreAbstractModule* mi) {
+    if (!mi->isUser()) {
+        return;
+    }
+
+    const char* old_name = get_module_context_name();
+    if (old_name && isUserModuleContext(old_name)) {
+        setUserModuleDependency(mi->getName(), old_name);
+    }
+    trySetUserModule(mi->getName());
 }
 
 void QoreUserModuleDefContextHelper::setNameInit(const char* name) {
@@ -1162,6 +1197,7 @@ void QoreBuiltinModule::addToProgramImpl(QoreProgram* tpgm, ExceptionSink& xsink
     const bool is_aot_user = qore_is_aot_user_module(name.c_str());
     if (is_aot_user) {
         qore_program_private::get(*tpgm)->addUserFeature(name.c_str());
+        QMM.trySetUserAotModuleDependency(name.c_str());
     } else {
         tpgm->addFeature(name.c_str());
     }
@@ -4050,18 +4086,23 @@ void QoreModuleManager::delUser() {
     //md_map.show("md_map");
     //rmd_map.show("rmd_map");
 
+    // every user module, including the originals of reinjected modules; umset holds only the modules that no other
+    // user module depends on, which are the first to be deleted in Phase 2
+    std::vector<QoreUserModule*> user_modules;
+    for (auto& i : map) {
+        if (i.second->isUser()) {
+            user_modules.push_back(static_cast<QoreUserModule*>(i.second));
+        }
+    }
+
     // issue #5164: Phase 0 - run all del callbacks before clearing any module data
     // This ensures del callbacks execute while all module programs (and their TypeInfos) are alive,
     // preventing use-after-free when a del callback accesses a static var whose TypeInfo belongs to
     // a class from a module that would otherwise have been deleted in Phase 2 already
     {
         ExceptionSink xsink;
-        for (auto& name : umset) {
-            auto i = map.find(name.c_str());
-            assert(i != map.end());
-            QoreAbstractModule* m = i->second;
-            assert(m->isUser());
-            static_cast<QoreUserModule*>(m)->runDelCallback(xsink);
+        for (QoreUserModule* um : user_modules) {
+            um->runDelCallback(xsink);
         }
     }
 
@@ -4071,40 +4112,68 @@ void QoreModuleManager::delUser() {
     // (which may not be the module that owns the class program)
     {
         ExceptionSink xsink;
-        for (auto& name : umset) {
-            auto i = map.find(name.c_str());
-            assert(i != map.end());
-            QoreAbstractModule* m = i->second;
-            assert(m->isUser());
-            QoreUserModule* um = static_cast<QoreUserModule*>(m);
+        for (QoreUserModule* um : user_modules) {
             QoreProgram* pgm = um->getProgram();
             pgm->waitForTermination();
             qore_program_private::get(*pgm)->clearNamespaceData(&xsink);
         }
         qore_aot_clear_all_module_namespace_data(xsink);
+
+        // break the cycles held up by opaque references ('@=') that user module programs own while all module
+        // programs are still alive: such a cycle survives the namespace data cleared above, and an object that a
+        // module owns can hold objects of the classes of the modules that depend on it, which are deleted before
+        // it in Phase 2 (a type that DataProvider creates and a RestSchemaValidator schema object caches through an
+        // opaque reference refers to schema objects, for example); breaking the cycle only when the owning module
+        // is deleted would run the destructors of those objects after the programs of their classes are gone
+        for (QoreUserModule* um : user_modules) {
+            qore_program_private::get(*um->getProgram())->clearOpaqueTargets(&xsink);
+        }
+        // AOT user modules are binary modules, deleted after all user modules in cleanup()
+        qore_aot_clear_all_module_opaque_targets(xsink);
     }
 
     // Phase 2 - delete user modules in dependency order
-    while (!umset.empty()) {
+    // A user module that an AOT user module requires, directly or through other user modules, is deleted after it in
+    // cleanup(), as AOT user modules are binary modules; it can hold objects of the user module's classes
+    strset_t aot_required = getAotRequiredUserModules();
+    while (true) {
+        // a user module that no other user module requires
         strset_t::iterator ui = umset.begin();
-        module_map_t::iterator i = map.find((*ui).c_str());
-        assert(i != map.end());
-        QoreAbstractModule* m = i->second;
-        assert(m->isUser());
-
-        delOrig(m->getNext());
-        //printd(5, "QoreModuleManager::delUser() deleting '%s' (%s) %p\n", (*ui).c_str(), i->first, m);
-        umset.erase(ui);
-
-        removeUserModuleDependency(m->getName(), m->getOrigName());
-
-        map.erase(i);
-        delete m;
+        while (ui != umset.end() && aot_required.find(*ui) != aot_required.end()) {
+            ++ui;
+        }
+        if (ui != umset.end()) {
+            module_map_t::iterator i = map.find((*ui).c_str());
+            assert(i != map.end());
+            assert(i->second->isUser());
+            deleteUserModule(i);
+            continue;
+        }
+        // the user modules left are required by AOT user modules, or they are in a dependency cycle or required by
+        // one; a cycle is broken by deleting one of its modules
+        module_map_t::iterator i = map.end();
+        for (module_map_t::iterator j = map.begin(), e = map.end(); j != e; ++j) {
+            if (!j->second->isUser() || aot_required.find(j->first) != aot_required.end()) {
+                continue;
+            }
+            if (i == map.end()) {
+                i = j;
+            }
+            if (isInUserModuleDependencyCycle(j->first)) {
+                i = j;
+                break;
+            }
+        }
+        if (i == map.end()) {
+            break;
+        }
+        printd(5, "QoreModuleManager::delUser() breaking a dependency cycle at '%s'\n", i->first);
+        deleteUserModule(i);
     }
 
 #ifdef DEBUG
     for (module_map_t::iterator i = map.begin(), e = map.end(); i != e; ++i) {
-        if (i->second->isUser()) {
+        if (i->second->isUser() && aot_required.find(i->first) == aot_required.end()) {
             printd(0, "QoreModuleManager::delUser() '%s' %p not yet removed\n", i->second->getName(), i->second);
 
             for (md_map_t::iterator i = md_map.begin(), e = md_map.end(); i != e; ++i) {
@@ -4124,8 +4193,69 @@ void QoreModuleManager::delUser() {
     }
 #endif
 
-    assert(md_map.empty());
-    assert(rmd_map.empty());
+    // the dependencies are all released unless user modules are left for cleanup()
+    assert(!aot_required.empty() || (md_map.empty() && rmd_map.empty()));
+}
+
+strset_t QoreModuleManager::getAotRequiredUserModules() {
+    strset_t rv;
+    std::vector<std::string> pending;
+    for (module_map_t::iterator i = map.begin(), e = map.end(); i != e; ++i) {
+        if (i->second->isUser() && qore_aot_module_has_dependent(i->first)) {
+            pending.push_back(i->first);
+        }
+    }
+    // add the user modules that they require
+    while (!pending.empty()) {
+        std::string name = std::move(pending.back());
+        pending.pop_back();
+        if (!rv.insert(name).second) {
+            continue;
+        }
+        const strset_t* required = rmd_map.getDeps(name);
+        if (required) {
+            for (const std::string& dep : *required) {
+                pending.push_back(dep);
+            }
+        }
+    }
+    return rv;
+}
+
+bool QoreModuleManager::isInUserModuleDependencyCycle(const std::string& name) {
+    // follows the modules requiring the module until it is found again
+    strset_t seen;
+    std::vector<std::string> pending;
+    const strset_t* dependents = md_map.getDeps(name);
+    if (dependents) {
+        pending.assign(dependents->begin(), dependents->end());
+    }
+    while (!pending.empty()) {
+        std::string dep = std::move(pending.back());
+        pending.pop_back();
+        if (dep == name) {
+            return true;
+        }
+        if (!seen.insert(dep).second) {
+            continue;
+        }
+        dependents = md_map.getDeps(dep);
+        if (dependents) {
+            pending.insert(pending.end(), dependents->begin(), dependents->end());
+        }
+    }
+    return false;
+}
+
+void QoreModuleManager::deleteUserModule(module_map_t::iterator i) {
+    QoreAbstractModule* m = i->second;
+    assert(m->isUser());
+    delOrig(m->getNext());
+    //printd(5, "QoreModuleManager::deleteUserModule() deleting '%s' %p\n", i->first, m);
+    umset.erase(m->getName());
+    removeUserModuleDependency(m->getName(), m->getOrigName());
+    map.erase(i);
+    delete m;
 }
 
 void QoreModuleManager::cleanup() {
@@ -4134,13 +4264,90 @@ void QoreModuleManager::cleanup() {
     {
         ExceptionSink xsink;
         qore_aot_clear_all_module_namespace_data(xsink);
+        qore_aot_clear_all_module_opaque_targets(xsink);
     }
 
-    module_map_t::iterator i;
-    while ((i = map.begin()) != map.end()) {
-        QoreAbstractModule* m = i->second;
-        map.erase(i);
-        delete m;
+    // a module is deleted only after the modules that require it, which can hold objects of its classes: AOT user
+    // modules and the user modules left by delUser(), which AOT user modules require; user modules are deleted
+    // first, as in delUser(), and other modules in the order of their names
+    // module -> the modules left that it requires
+    std::map<std::string, std::vector<std::string>> required_mods;
+    for (module_map_t::iterator i = map.begin(), e = map.end(); i != e; ++i) {
+        std::vector<std::string>& req = required_mods[i->first];
+        if (i->second->isUser()) {
+            const strset_t* deps = rmd_map.getDeps(i->first);
+            if (deps) {
+                req.assign(deps->begin(), deps->end());
+            }
+        } else {
+            qore_aot_get_module_dependencies(i->first, req);
+        }
+    }
+    // a user module requiring an AOT user module
+    for (md_map_t::iterator i = aot_user_dep_map.begin(), e = aot_user_dep_map.end(); i != e; ++i) {
+        for (const std::string& user : i->second) {
+            auto ri = required_mods.find(user);
+            if (ri != required_mods.end()) {
+                ri->second.push_back(i->first);
+            }
+        }
+    }
+    // module -> the number of modules left that require it
+    std::map<std::string, int> dependents;
+    for (auto& i : required_mods) {
+        dependents.emplace(i.first, 0);
+    }
+    for (auto& i : required_mods) {
+        // a module listed twice is counted once
+        strset_t seen;
+        for (const std::string& dep : i.second) {
+            auto di = dependents.find(dep);
+            if (di != dependents.end() && dep != i.first && seen.insert(dep).second) {
+                ++di->second;
+            }
+        }
+        i.second.assign(seen.begin(), seen.end());
+    }
+    while (!map.empty()) {
+        module_map_t::iterator i = map.end();
+        for (module_map_t::iterator j = map.begin(), e = map.end(); j != e; ++j) {
+            auto di = dependents.find(j->first);
+            if (di == dependents.end() || !di->second) {
+                if (j->second->isUser()) {
+                    i = j;
+                    break;
+                }
+                if (i == map.end()) {
+                    i = j;
+                }
+            }
+        }
+        // if every module left is required by another one, the modules left are in a cycle, which is broken here
+        if (i == map.end()) {
+            i = map.begin();
+        }
+        if (i->second->isUser()) {
+            deleteUserModule(i);
+        } else {
+            QoreAbstractModule* m = i->second;
+            map.erase(i);
+            delete m;
+        }
+        // the modules that the modules deleted (with the originals of a reinjected user module) required have one
+        // dependent less
+        for (auto ri = required_mods.begin(); ri != required_mods.end();) {
+            if (map.find(ri->first.c_str()) != map.end()) {
+                ++ri;
+                continue;
+            }
+            for (const std::string& dep : ri->second) {
+                auto di = dependents.find(dep);
+                if (di != dependents.end()) {
+                    --di->second;
+                }
+            }
+            ri = required_mods.erase(ri);
+        }
     }
 
     assert(modset.empty());

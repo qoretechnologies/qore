@@ -7930,7 +7930,11 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
                 || QoreTypeInfo::getBaseType(ti) == NT_FLOAT
                 || QoreTypeInfo::getBaseType(ti) == NT_NUMBER
                 || QoreTypeInfo::getBaseType(ti) == NT_DATE
-                || QoreTypeInfo::isReference(ti)) {
+                || QoreTypeInfo::isReference(ti)
+                // a timeout lvalue adds a date as milliseconds, and an or-nothing lvalue (*T) with no value takes
+                // the default value of T, which the value alone does not show
+                || get_or_nothing_base_type(ti) != ti
+                || QoreTypeInfo::equal(ti, timeoutTypeInfo)) {
             left_var = nullptr;  // Force lvalue path
         }
     }
@@ -8034,12 +8038,14 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
     // PlusEquals semantics (QorePlusEqualsOperatorNode::evalImpl lines 155-187) via
     // proper IR lowering.
     const QoreTypeInfo* lvar_ti = left_var->getTypeInfo();
-    bool left_local_known_assigned = parse_context
-        && left_var->getType() == VT_LOCAL
-        && left_var->ref.id
-        && parse_context->isLocalDefinitelyAssigned(left_var->ref.id)
-        && lvar_ti
-        && QoreTypeInfo::parseReturns(lvar_ti, NT_NOTHING) == QTI_NOT_EQUAL;
+    // the state of the variable where it is read; isLocalDefinitelyAssigned() gives its state at the end of its
+    // scope, which this operation itself can assign
+    QoreParseAnalysis left_var_analysis;
+    bool left_local_known_assigned = getAnalysis(op->getLeft(), left_var_analysis)
+        && (left_var_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+            || (left_var_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+                && lvar_ti
+                && QoreTypeInfo::parseReturns(lvar_ti, NT_NOTHING) == QTI_NOT_EQUAL));
     if (lvar_ti && QoreTypeInfo::hasDefaultValue(lvar_ti) && !left_local_known_assigned) {
         QoreIRBasicBlock* has_value_bb = createBlock("pe.has_value");
         QoreIRBasicBlock* nothing_bb = createBlock("pe.nothing");
@@ -8140,7 +8146,11 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
                 || QoreTypeInfo::getBaseType(ti) == NT_DATE
                 || QoreTypeInfo::isReference(ti)
                 || QoreTypeInfo::isHashType(ti)
-                || QoreTypeInfo::getBaseType(ti) == NT_OBJECT) {
+                || QoreTypeInfo::getBaseType(ti) == NT_OBJECT
+                // a timeout lvalue subtracts a date as milliseconds, and an or-nothing lvalue (*T) with no value
+                // takes the default value of T, which the value alone does not show
+                || get_or_nothing_base_type(ti) != ti
+                || QoreTypeInfo::equal(ti, timeoutTypeInfo)) {
             left_var = nullptr;
         }
     }
@@ -8171,7 +8181,39 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
     if (changesThroughLValue(left_var)) {
         left_var = nullptr;
     }
+    // the int-specialized operator is applied as an integer subtraction only to an operand that is an int; a date
+    // operand assigns the binary operator's result (see qore_int_lvalue_minus_date()), which the lvalue path gives
+    if (force_int && left_var) {
+        QoreParseAnalysis operand_analysis;
+        if (!isIntConstant(right_expr)
+                && !(getAnalysis(right_expr, operand_analysis) && isNeverNothingInt(operand_analysis))) {
+            left_var = nullptr;
+        }
+    }
     if (!left_var) {
+        // the int-specialized operator subtracts 0 for an operand with no value (QoreIntMinusEqualsOperatorNode), so
+        // that an lvalue with no value gets 0, where the generic operator leaves the lvalue unchanged; the lvalue
+        // path applies the generic operator, so the operand is given as 0 instead
+        if (force_int) {
+            QoreIRValue is_nothing = builder.createUnaryOp(QoreIROpcode::IsNullOrNothing, right, op->loc)->result;
+            QoreIRBasicBlock* value_block = builder.getBlock();
+            QoreIRBasicBlock* zero_block = createBlock("me.int.nothing");
+            QoreIRBasicBlock* merge_block = createBlock("me.int.merge");
+            if (!zero_block || !merge_block) {
+                error = "IR builder failed to create blocks for the int -= operand";
+                return QoreIRValue();
+            }
+            builder.createBranchIf(is_nothing, zero_block, merge_block);
+            builder.setBlock(zero_block);
+            QoreIRValue zero = builder.createConstInt(0, op->loc)->result;
+            builder.createBranch(merge_block);
+            builder.setBlock(merge_block);
+            std::vector<QoreIRPhiIncoming> incoming = {
+                {right, value_block},
+                {zero, zero_block},
+            };
+            right = builder.createPhi(incoming)->result;
+        }
         // Prefer true lvalue semantics for member/subscript compound assignments.
         {
             QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathCompound,
@@ -8222,12 +8264,14 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
 
     // Generic NOTHING→default coercion for typed variables (see lowerPlusEquals)
     const QoreTypeInfo* lvar_ti = left_var->getTypeInfo();
-    bool left_local_known_assigned = parse_context
-        && left_var->getType() == VT_LOCAL
-        && left_var->ref.id
-        && parse_context->isLocalDefinitelyAssigned(left_var->ref.id)
-        && lvar_ti
-        && QoreTypeInfo::parseReturns(lvar_ti, NT_NOTHING) == QTI_NOT_EQUAL;
+    // the state of the variable where it is read; isLocalDefinitelyAssigned() gives its state at the end of its
+    // scope, which this operation itself can assign
+    QoreParseAnalysis left_var_analysis;
+    bool left_local_known_assigned = getAnalysis(op->getLeft(), left_var_analysis)
+        && (left_var_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+            || (left_var_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+                && lvar_ti
+                && QoreTypeInfo::parseReturns(lvar_ti, NT_NOTHING) == QTI_NOT_EQUAL));
     if (lvar_ti && QoreTypeInfo::hasDefaultValue(lvar_ti) && !left_local_known_assigned) {
         QoreIRBasicBlock* has_value_bb = createBlock("me.has_value");
         QoreIRBasicBlock* nothing_bb = createBlock("me.nothing");
@@ -14949,7 +14993,7 @@ QoreIRValue QoreIRLowering::lowerMapSelect(const QoreValue& expr, std::string& e
 //! Returns true if every value of an expression of this type has exactly this type
 /** The AST interpreter gives the result container of a map, map/select, select or hash map operator the common
     type of its values when they have one (see QoreIROpcode::ListSetCommonType and
-    QoreIROpcode::CommonTypeFold); for such a value type the common type can only be the type itself, which the
+    QoreIROpcode::HashSetKeyValueFold); for such a value type the common type can only be the type itself, which the
     result container already has, so the compiled tiers need not compute it.
 */
 static bool qore_ir_map_value_type_is_exact(const QoreTypeInfo* type) {
@@ -14963,11 +15007,19 @@ QoreIRValue QoreIRLowering::lowerHashMap(const QoreValue& expr, std::string& err
         return QoreIRValue();
     }
 
-    // Try HashMapTwoKeys specialized opcode: map {$1.k1: $1.k2}, list
+    // Try HashMapTwoKeys specialized opcode: map {$1.k1: $1.k2}, list; it evaluates each element as the AST
+    // interpreter does when every element is a hash or no value, and it creates the result hash with the value type
+    // auto, which the AST interpreter creates it with when the map expression has no type (see
+    // QoreHashMapOperatorNode::getNewHash())
     {
         const QoreTypeInfo* list_type = getExprTypeInfo(map->get(2));
         const QoreTypeInfo* elem_type = QoreTypeInfo::getUniqueReturnComplexList(list_type);
-        if (elem_type && QoreTypeInfo::parseReturns(elem_type, NT_HASH) != QTI_NOT_EQUAL) {
+        const QoreTypeInfo* static_value_type = QoreTypeInfo::getUniqueReturnComplexHash(map->getTypeInfo());
+        bool hash_elements = elem_type
+            && (QoreTypeInfo::parseReturns(elem_type, NT_HASH) == QTI_IDENT
+                || QoreTypeInfo::getReturnComplexHashOrNothing(elem_type)
+                || elem_type == hashOrNothingTypeInfo);
+        if (hash_elements && (!static_value_type || static_value_type == autoTypeInfo)) {
             std::string key1_name;
             std::string key2_name;
             QoreIROpcode hk_opcode = analyzeHashMapTwoKeysPattern(map->get(0), map->get(1),
@@ -15124,7 +15176,7 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
             || QoreTypeInfo::parseReturns(expTypeInfo, NT_FLOAT) == QTI_IDENT);
 
     // the AST interpreter gives the result list the common type of its values (QoreMapOperatorNode::evalImpl());
-    // see QoreIROpcode::CommonTypeFold
+    // see QoreIROpcode::ListAppendElement
     bool track_value_type = need_result && !qore_ir_map_value_type_is_exact(map->getMapExpType());
     if (track_value_type) {
         // the invariant value is stored without being evaluated for each element, so its type is not folded
@@ -15175,7 +15227,10 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         QoreIRValue zero = builder.createConstInt(0, map->loc)->result;
         QoreIRValue result_list;
         if (need_result) {
-            result_list = builder.createSizedList(list_size, map->loc, expTypeInfo)->result;
+            QoreIRInstruction* result_inst = builder.createSizedList(list_size, map->loc, expTypeInfo);
+            // a list that the values are appended to (see QoreIROpcode::ListAppendElement) only reserves its size
+            result_inst->list_reserve_only = track_value_type;
+            result_list = result_inst->result;
         }
         QoreIRValue type_state_init = track_value_type ? builder.createConstInt(0, map->loc)->result : QoreIRValue();
         QoreIRValue invariant_map_value;
@@ -15285,12 +15340,17 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         }
 
         QoreIRValue next_type_state;
-        if (type_state_phi) {
-            // fold the value before it is stored, which can convert it to the element type
-            next_type_state = builder.createCommonTypeFold(type_state_phi->result, expr_result, QoreIRValue(),
-                map->loc)->result;
-        }
-        if (need_result) {
+        if (need_result && type_state_phi) {
+            // push the value as the AST interpreter pushes it: converted to the element type of the list, which
+            // keeps its type until the loop ends
+            // the type of the value is folded before it is converted
+            auto* append = builder.createListAppendElement(result_list, expr_result, type_state_phi->result,
+                map->loc);
+            next_type_state = append->result;
+            if (!exception_stack.empty()) {
+                append->exception_target = exception_stack.back();
+            }
+        } else if (need_result) {
             // Store result directly at index position in pre-sized list
             auto* set_inst = builder.createListSetValue(result_list, index_val, expr_result,
                 map->loc, expTypeInfo);
@@ -15485,12 +15545,17 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
     }
 
     QoreIRValue next_type_state;
-    if (type_state_phi) {
-        // fold the value before it is stored, which can convert it to the element type
-        next_type_state = builder.createCommonTypeFold(type_state_phi->result, expr_result, QoreIRValue(),
-            map->loc)->result;
-    }
-    if (need_result) {
+    if (need_result && type_state_phi) {
+        // push the value as the AST interpreter pushes it: converted to the element type of the list, which keeps
+        // its type until the loop ends
+        // the type of the value is folded before it is converted
+        auto* append = builder.createListAppendElement(result_list, expr_result, type_state_phi->result,
+            map->loc);
+        next_type_state = append->result;
+        if (!exception_stack.empty()) {
+            append->exception_target = exception_stack.back();
+        }
+    } else if (need_result) {
         // Append result to output list
         builder.createListAppend(result_list, expr_result, map->loc);
     } else {
@@ -16530,11 +16595,13 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
 
     const QoreTypeInfo* map_type = ms->getMapExpType();
     // the AST interpreter gives the result list the common type of its values
-    // (QoreMapSelectOperatorNode::evalImpl()); see QoreIROpcode::CommonTypeFold
+    // (QoreMapSelectOperatorNode::evalImpl()); see QoreIROpcode::ListAppendElement
     bool track_value_type = need_result && !qore_ir_map_value_type_is_exact(map_type);
     bool map_is_int = QoreTypeInfo::parseReturns(map_type, NT_INT) == QTI_IDENT;
     bool map_is_float = QoreTypeInfo::parseReturns(map_type, NT_FLOAT) == QTI_IDENT;
-    bool use_typed_scalar_construction = need_result && (map_is_int || map_is_float);
+    // a tracked value type folds each value as it is appended (see QoreIROpcode::ListAppendElement), which the
+    // typed scalar stores do not do
+    bool use_typed_scalar_construction = need_result && (map_is_int || map_is_float) && !track_value_type;
 
     // Check if the input list has a known element type for direct-index optimization
     const QoreTypeInfo* list_type = getExprTypeInfo(ms->get(1));
@@ -16591,9 +16658,11 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
         QoreIRValue zero = builder.createConstInt(0, ms->loc)->result;
         QoreIRValue result_list;
         if (need_result) {
+            // a list whose values are converted when they are stored has the type that the AST interpreter creates
+            // it with
             QoreIRInstruction* result_inst = use_typed_scalar_construction
                 ? builder.createSizedList(list_size, ms->loc, map_type)
-                : builder.createEmptyList(ms->loc);
+                : builder.createEmptyList(ms->loc, track_value_type ? map_type : nullptr);
             result_inst->list_reserve_only = use_typed_scalar_construction;
             result_list = result_inst->result;
         }
@@ -16695,11 +16764,6 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
         }
 
         QoreIRValue appended_type_state;
-        if (type_state_phi) {
-            // fold the value before it is stored, which can convert it to the element type
-            appended_type_state = builder.createCommonTypeFold(type_state_phi->result, map_result, QoreIRValue(),
-                ms->loc)->result;
-        }
         if (need_result) {
             if (use_typed_scalar_construction) {
                 // LLVM selects a guardless native store only from lowered
@@ -16709,6 +16773,16 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
                     map_result, ms->loc, map_type);
                 if (!exception_stack.empty()) {
                     store->exception_target = exception_stack.back();
+                }
+            } else if (track_value_type) {
+                // push the value as the AST interpreter pushes it: converted to the element type of the list,
+                // which keeps its type until the loop ends
+                // the type of the value is folded before it is converted
+                auto* append = builder.createListAppendElement(result_list, map_result, type_state_phi->result,
+                    ms->loc);
+                appended_type_state = append->result;
+                if (!exception_stack.empty()) {
+                    append->exception_target = exception_stack.back();
                 }
             } else {
                 builder.createListAppend(result_list, map_result, ms->loc);
@@ -16862,7 +16936,9 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
     builder.setBlock(preheader_block);
     QoreIRValue result_list;
     if (need_result) {
-        result_list = builder.createEmptyList(ms->loc)->result;
+        // a list whose values are converted when they are stored has the type that the AST interpreter creates it
+        // with
+        result_list = builder.createEmptyList(ms->loc, track_value_type ? map_type : nullptr)->result;
     }
     QoreIRValue init_index = builder.createConstInt(0, ms->loc)->result;
     QoreIRValue type_state_init = track_value_type ? builder.createConstInt(0, ms->loc)->result : QoreIRValue();
@@ -16921,12 +16997,16 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
     }
 
     QoreIRValue appended_type_state;
-    if (type_state_phi) {
-        // fold the value before it is stored, which can convert it to the element type
-        appended_type_state = builder.createCommonTypeFold(type_state_phi->result, map_result, QoreIRValue(),
-            ms->loc)->result;
-    }
-    if (need_result) {
+    if (need_result && track_value_type) {
+        // push the value as the AST interpreter pushes it: converted to the element type of the list, which keeps
+        // its type until the loop ends
+        // the type of the value is folded before it is converted
+        auto* append = builder.createListAppendElement(result_list, map_result, type_state_phi->result, ms->loc);
+        appended_type_state = append->result;
+        if (!exception_stack.empty()) {
+            append->exception_target = exception_stack.back();
+        }
+    } else if (need_result) {
         builder.createListAppend(result_list, map_result, ms->loc);
     } else {
         builder.createDiscardTemps(ms->loc);
@@ -17045,7 +17125,7 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
         }
     }
     // the AST interpreter gives the result hash the common type of its values
-    // (QoreHashMapOperatorNode::evalImpl()); see QoreIROpcode::CommonTypeFold
+    // (QoreHashMapOperatorNode::evalImpl()); see QoreIROpcode::HashSetKeyValueFold
     bool track_value_type = !qore_ir_map_value_type_is_exact(
         QoreTypeInfo::getUniqueReturnComplexHash(hm->getTypeInfo()));
 
@@ -17162,14 +17242,14 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
             builder.createPopImplicitElement(old_element, hm->loc);
         }
 
+        // Set key-value in hash; with the type of the value folded into the common value type
         QoreIRValue next_type_state;
         if (type_state_phi) {
-            next_type_state = builder.createCommonTypeFold(type_state_phi->result, value_result, index_val,
-                hm->loc)->result;
+            next_type_state = builder.createHashSetKeyValueFold(result_hash, key_result, value_result,
+                type_state_phi->result, index_val, hm->loc)->result;
+        } else {
+            builder.createHashSetKeyValue(result_hash, key_result, value_result, hm->loc);
         }
-
-        // Set key-value in hash
-        builder.createHashSetKeyValue(result_hash, key_result, value_result, hm->loc);
 
         // Increment index
         QoreIRValue one = builder.createConstInt(1, hm->loc)->result;
@@ -17319,14 +17399,14 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
         builder.createPopImplicitElement(old_element, hm->loc);
     }
 
+    // Set key-value in hash; with the type of the value folded into the common value type
     QoreIRValue next_type_state;
     if (type_state_phi) {
-        next_type_state = builder.createCommonTypeFold(type_state_phi->result, value_result, index_val,
-            hm->loc)->result;
+        next_type_state = builder.createHashSetKeyValueFold(result_hash, key_result, value_result,
+            type_state_phi->result, index_val, hm->loc)->result;
+    } else {
+        builder.createHashSetKeyValue(result_hash, key_result, value_result, hm->loc);
     }
-
-    // Set key-value in hash
-    builder.createHashSetKeyValue(result_hash, key_result, value_result, hm->loc);
 
     // Increment index
     QoreIRValue one = builder.createConstInt(1, hm->loc)->result;
@@ -17395,7 +17475,7 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
         }
     }
     // the AST interpreter gives the result hash the common type of its values
-    // (QoreHashMapSelectOperatorNode::evalImpl()); see QoreIROpcode::CommonTypeFold
+    // (QoreHashMapSelectOperatorNode::evalImpl()); see QoreIROpcode::HashSetKeyValueFold
     bool track_value_type = !qore_ir_map_value_type_is_exact(
         QoreTypeInfo::getUniqueReturnComplexHash(hms->getTypeInfo()));
 
@@ -17499,14 +17579,14 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
             return QoreIRValue();
         }
 
+        // Set key-value in hash; with the type of the value folded into the common value type
         QoreIRValue inserted_type_state;
         if (type_state_phi) {
-            inserted_type_state = builder.createCommonTypeFold(type_state_phi->result, value_result, index_val,
-                hms->loc)->result;
+            inserted_type_state = builder.createHashSetKeyValueFold(result_hash, key_result, value_result,
+                type_state_phi->result, index_val, hms->loc)->result;
+        } else {
+            builder.createHashSetKeyValue(result_hash, key_result, value_result, hms->loc);
         }
-
-        // Set key-value in hash
-        builder.createHashSetKeyValue(result_hash, key_result, value_result, hms->loc);
         QoreIRBasicBlock* insert_exit_block = builder.getBlock();
         builder.createBranch(cont_block, hms->loc);
 
@@ -17687,14 +17767,14 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
         return QoreIRValue();
     }
 
+    // Set key-value in hash; with the type of the value folded into the common value type
     QoreIRValue inserted_type_state;
     if (type_state_phi) {
-        inserted_type_state = builder.createCommonTypeFold(type_state_phi->result, value_result, index_val,
-            hms->loc)->result;
+        inserted_type_state = builder.createHashSetKeyValueFold(result_hash, key_result, value_result,
+            type_state_phi->result, index_val, hms->loc)->result;
+    } else {
+        builder.createHashSetKeyValue(result_hash, key_result, value_result, hms->loc);
     }
-
-    // Set key-value in hash
-    builder.createHashSetKeyValue(result_hash, key_result, value_result, hms->loc);
     QoreIRBasicBlock* insert_exit_block = builder.getBlock();
     builder.createBranch(cont_block, hms->loc);
 
@@ -18093,17 +18173,36 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     }
 
     // the AST interpreter gives the result list of the last operator the common type of its values; for a map or
-    // map/select operator the values are folded before they are stored (see QoreIROpcode::CommonTypeFold), and
-    // for a select operator the stored values are scanned (see QoreIROpcode::ListSetScannedType)
+    // map/select operator the values are folded as they are stored (see QoreIROpcode::ListAppendElement), and
+    // for a select operator the stored values are scanned (see QoreIROpcode::ListSetScannedType).
+    //
+    // The AST interpreter evaluates the stages lazily, through the functional iterators of the operators, so no
+    // stage builds a list of its own: the last operator creates its list with the value type of its source and
+    // pushes each value into it, which converts the value to that type (qore_list_private::checkVal()).  The
+    // value type is the type of the map expression of a map or map/select operator, and the value type of the
+    // source of a select operator, which for a select stage is the value type of the stage before it (see
+    // QoreFunctionalSelectOperator::getValueTypeImpl()): the type of the map expression of the nearest map stage,
+    // or the value type of the base source of the pipeline, whose values already have that type.
     bool fold_root_type = false;
     bool scan_root_type = false;
+    const QoreTypeInfo* root_ast_element_type = nullptr;
     if (build_result_list && root.set_common_type) {
         assert(!stages.empty());
-        const LazyPipelineStage& last = stages.back();
-        if (last.kind == LazyPipelineStage::Map || last.kind == LazyPipelineStage::MapSelect) {
-            fold_root_type = !qore_ir_map_value_type_is_exact(last.ast_element_type);
+        size_t i = stages.size() - 1;
+        if (stages[i].kind == LazyPipelineStage::Select) {
+            while (i && stages[i].kind != LazyPipelineStage::Map && stages[i].kind != LazyPipelineStage::MapSelect) {
+                --i;
+            }
+        }
+        if (stages[i].kind == LazyPipelineStage::Map || stages[i].kind == LazyPipelineStage::MapSelect) {
+            root_ast_element_type = stages[i].ast_element_type;
+            fold_root_type = !qore_ir_map_value_type_is_exact(root_ast_element_type);
+            if (fold_root_type) {
+                // the typed list sink stores scalars without folding their types (for example for softint values)
+                use_typed_list_sink = false;
+            }
         } else {
-            assert(last.kind == LazyPipelineStage::Select);
+            assert(stages.back().kind == LazyPipelineStage::Select);
             scan_root_type = true;
         }
     }
@@ -18147,7 +18246,9 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
             result_inst = builder.createSizedList(source_size, loc, elem_type);
             result_inst->list_reserve_only = true;
         } else {
-            result_inst = builder.createEmptyList(loc, elem_type);
+            // a list whose values are converted when they are stored has the type that the AST interpreter creates
+            // it with
+            result_inst = builder.createEmptyList(loc, fold_root_type ? root_ast_element_type : elem_type);
         }
         result_list = result_inst->result;
     }
@@ -18412,11 +18513,8 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     }
 
     if (root_list) {
-        if (type_state_phi) {
-            // fold the value before it is stored, which can convert it to the element type
-            state.type_state = builder.createCommonTypeFold(state.type_state, element_val, QoreIRValue(),
-                loc)->result;
-        }
+        // a list whose values are converted when they are stored needs a result
+        assert(!type_state_phi || need_result);
         if (!need_result) {
             add_continue(state, loc);
         } else if (use_typed_list_sink) {
@@ -18430,7 +18528,16 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
                 state.root_index, one, loc)->result;
             add_continue(next_state, loc);
         } else {
-            builder.createListAppend(result_list, element_val, loc);
+            if (type_state_phi) {
+                // the type of the value is folded before it is converted
+                auto* append = builder.createListAppendElement(result_list, element_val, state.type_state, loc);
+                if (!exception_stack.empty()) {
+                    append->exception_target = exception_stack.back();
+                }
+                state.type_state = append->result;
+            } else {
+                builder.createListAppend(result_list, element_val, loc);
+            }
             add_continue(state, loc);
         }
     } else if (root_accumulator) {
@@ -18715,20 +18822,13 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     }
     if (type_state_phi) {
         // every path to the exit leaves the loop before the value of the element is folded
-        builder.createListSetCommonType(result_list, type_state_phi->result, stages.back().ast_element_type, loc);
+        builder.createListSetCommonType(result_list, type_state_phi->result, root_ast_element_type, loc);
     } else if (scan_root_type) {
-        // the source of the select operator is the list built by the stage before it, which, when the selected
-        // values have no common type, has the type of the list created for the nearest map stage, or else the
-        // value type of the base source of the pipeline
-        size_t i = stages.size() - 1;
-        while (i && stages[i].kind != LazyPipelineStage::Map && stages[i].kind != LazyPipelineStage::MapSelect) {
-            --i;
-        }
-        if (stages[i].kind == LazyPipelineStage::Map || stages[i].kind == LazyPipelineStage::MapSelect) {
-            builder.createListSetScannedType(result_list, stages[i].ast_element_type, QoreIRValue(), loc);
-        } else {
-            builder.createListSetScannedType(result_list, nullptr, source, loc);
-        }
+        // a select operator whose stages before it are select stages stores the values of the base source
+        builder.createListSetScannedType(result_list, nullptr, source, loc);
+    } else if (build_result_list && root.set_common_type) {
+        // the values have the exact element type of the nearest map stage, which is the type of the list
+        builder.createListSetScannedType(result_list, root_ast_element_type, QoreIRValue(), loc);
     }
     if (root_accumulator) {
         QoreIRBasicBlock* fold_result_block = createBlock("stream.fused.fold.result");

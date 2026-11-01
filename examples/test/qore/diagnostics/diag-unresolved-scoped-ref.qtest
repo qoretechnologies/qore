@@ -1,0 +1,214 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires json
+
+%exec-class DiagUnresolvedScopedRefTest
+
+#! a source that references an unresolvable scoped constant
+hashdecl ScopedRefCase {
+    #! the case name
+    string name;
+    #! the source to parse
+    string src;
+    #! the line of the unresolved reference
+    int line;
+}
+
+#! Tests that an unresolved scoped constant in a hash literal reports only its parse error
+/** A hash literal assigned to a typed hash was folded at parse time even when one of its values was a
+    scoped constant reference that could not be resolved; the fold then raised a spurious RUNTIME-TYPE-ERROR
+    ("key 'a' expects type 'string', but got type 'namespace-scoped reference'") outside the parse diagnostics,
+    which was printed as an unhandled exception and broke the output of --diag-format=json.
+*/
+public class DiagUnresolvedScopedRefTest inherits QUnit::Test {
+    public {
+        #! the sources: each has exactly one unresolved reference, to Missing::Ref
+        const Cases = (
+            <ScopedRefCase>{
+                "name": "local typed hash",
+                "src": "sub f() {\nhash<string, string> h = {\"a\": Missing::Ref};\n}\n",
+                "line": 2,
+            },
+            <ScopedRefCase>{
+                "name": "typed hash with several values",
+                "src": "sub f() {\nhash<string, string> h = {\n\"a\": \"x\",\n\"b\": Missing::Ref,\n};\n}\n",
+                "line": 4,
+            },
+            <ScopedRefCase>{
+                "name": "int typed hash",
+                "src": "sub f() {\nhash<string, int> h = {\"a\": Missing::Ref};\n}\n",
+                "line": 2,
+            },
+            <ScopedRefCase>{
+                "name": "nested typed hash",
+                "src": "sub f() {\nhash<string, hash<string, string>> h = {\"a\": {\"b\": Missing::Ref}};\n}\n",
+                "line": 2,
+            },
+            <ScopedRefCase>{
+                "name": "hashdecl",
+                "src": "hashdecl Hd { string a; }\nsub f() {\nhash<Hd> h = <Hd>{\"a\": Missing::Ref};\n}\n",
+                "line": 3,
+            },
+            <ScopedRefCase>{
+                "name": "class member initializer",
+                "src": "class C {\npublic { hash<string, string> h = {\"a\": Missing::Ref}; }\n}\n",
+                "line": 2,
+            },
+            <ScopedRefCase>{
+                "name": "typed hash in a list",
+                "src": "sub f() {\nlist<hash<string, string>> l = ({\"a\": Missing::Ref},);\n}\n",
+                "line": 2,
+            },
+            <ScopedRefCase>{
+                "name": "untyped hash",
+                "src": "sub f() {\nhash<auto> h = {\"a\": Missing::Ref};\n}\n",
+                "line": 2,
+            },
+        );
+
+        #! the message of the only diagnostic
+        const Message = "cannot find any namespace or class 'Missing' in 'Missing::Ref' providing a constant "
+            "or static class variable 'Ref'";
+    }
+
+    constructor() : Test("DiagUnresolvedScopedRefTest", "1.0") {
+        addTestCase("json diagnostics for an unresolved scoped reference", \testJson());
+        addTestCase("text diagnostics for an unresolved scoped reference", \testText());
+        addTestCase("resolved scoped references are still folded", \testResolved());
+        set_return_value(main());
+    }
+
+    private string qoreBin() {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? ENV.QORE_EXECUTABLE ?? QORE_ARGV[0] ?? ARGV[0];
+        assertTrue(exists qore_bin, "no qore binary path available");
+        return qore_bin;
+    }
+
+    private static string shellQuote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+
+    #! Runs qore on the source with stderr merged into stdout, as tools reading the diagnostics do
+    private string run(string args, string src, reference<int> rc) {
+        return backquote(sprintf("%s %s -e %s 2>&1", qoreBin(), args, shellQuote("%new-style\n" + src)), \rc);
+    }
+
+    #! Checks the type of every field the JSON diagnostic serializer writes
+    private checkSpanFields(string ctx, hash<auto> d) {
+        foreach string k in (("file", "source")) {
+            assertTrue(d.hasKey(k), sprintf("%s: missing %y", ctx, k));
+            assertTrue(!exists d{k} || d{k}.typeCode() == NT_STRING, sprintf("%s: %y is %s", ctx, k, d{k}.type()));
+        }
+        foreach string k in (("startLine", "endLine", "startColumn", "endColumn")) {
+            assertEq(Type::Int, d{k}.type(), sprintf("%s: %y", ctx, k));
+        }
+    }
+
+    private checkDiagnostic(string ctx, hash<auto> d) {
+        checkSpanFields(ctx, d);
+        foreach string k in (("severity", "code", "id", "message")) {
+            assertEq(Type::String, d{k}.type(), sprintf("%s: %y", ctx, k));
+        }
+        assertTrue(!exists d.warningCode || d.warningCode.typeCode() == NT_INT, ctx + ": warningCode");
+        assertTrue(!exists d.hint || d.hint.typeCode() == NT_STRING, ctx + ": hint");
+        assertEq(Type::List, d.suggestions.type(), ctx + ": suggestions");
+        foreach auto s in (d.suggestions) {
+            assertEq(Type::String, s.type(), ctx + ": suggestion");
+        }
+        assertEq(Type::Hash, d.facts.type(), ctx + ": facts");
+        foreach hash<auto> i in (d.facts.pairIterator()) {
+            assertEq(Type::String, i.value.type(), sprintf("%s: fact %y", ctx, i.key));
+        }
+        assertEq(Type::List, d.relatedLocations.type(), ctx + ": relatedLocations");
+        foreach hash<auto> r in (d.relatedLocations) {
+            checkSpanFields(ctx + ": related location", r);
+            assertEq(Type::String, r.role.type(), ctx + ": related location role");
+        }
+        assertEq(Type::List, d.fixes.type(), ctx + ": fixes");
+        foreach hash<auto> fix in (d.fixes) {
+            assertEq(Type::String, fix.title.type(), ctx + ": fix title");
+            assertEq(Type::List, fix.edits.type(), ctx + ": fix edits");
+            foreach hash<auto> edit in (fix.edits) {
+                checkSpanFields(ctx + ": fix edit", edit);
+                assertEq(Type::String, edit.replacement.type(), ctx + ": fix edit replacement");
+            }
+        }
+    }
+
+    testJson() {
+        foreach hash<ScopedRefCase> c in (Cases) {
+            int rc;
+            string out = run("--diag-format=json", c.src, \rc);
+            assertEq(2, rc, c.name + ": exit code");
+            assertFalse(out =~ /RUNTIME-TYPE-ERROR/, c.name + ": no runtime error during parsing");
+            auto diags;
+            try {
+                diags = parse_json(out);
+            } catch (hash<ExceptionInfo> ex) {
+                fail(sprintf("%s: the output is not JSON: %s: %s; output: %s", c.name, ex.err, ex.desc, out));
+            }
+            assertEq(Type::List, diags.type(), c.name + ": a JSON array");
+            assertEq(1, diags.size(), c.name + ": one diagnostic: " + out);
+            hash<auto> d = diags[0];
+            checkDiagnostic(c.name, d);
+            assertEq("error", d.severity, c.name);
+            assertEq("PARSE-EXCEPTION", d.code, c.name);
+            assertEq(Message, d.message, c.name);
+            # the location is the reference itself, written after the line's prefix in the source
+            assertEq(c.line + 1, d.startLine, c.name);
+            assertEq(d.startLine, d.endLine, c.name);
+            assertGt(0, d.startColumn, c.name);
+            assertEq(d.startColumn + "Missing::Ref".size(), d.endColumn, c.name);
+        }
+    }
+
+    testText() {
+        foreach hash<ScopedRefCase> c in (Cases) {
+            int rc;
+            string out = run("", c.src, \rc);
+            assertEq(2, rc, c.name + ": exit code");
+            assertFalse(out =~ /RUNTIME-TYPE-ERROR/, c.name + ": no runtime error during parsing");
+            assertRegex("PARSE-EXCEPTION: " + Message, out, c.name);
+            assertEq(1, (out =~ x/(unhandled QORE)/g).size(), c.name + ": one exception: " + out);
+        }
+    }
+
+    testResolved() {
+        int rc;
+        string out = run("", "namespace Ns { const S = \"y\"; const I = 2; }\n"
+            "hashdecl Hd { string a; }\n"
+            "hash<string, string> h = {\"a\": Ns::S};\n"
+            "hash<string, int> hi = {\"a\": Ns::I};\n"
+            "hash<Hd> hd = <Hd>{\"a\": Ns::S};\n"
+            "printf(\"%s %d %s %s\", h.a, hi.a, hd.a, h.fullType());\n", \rc);
+        assertEq(0, rc, out);
+        assertEq("y 2 y hash<string, string>", out);
+    }
+}

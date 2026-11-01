@@ -150,6 +150,17 @@ hash<auto> desc = {
     @ref SqlUtil::AbstractSequence::getAlterSql() "AbstractSequence::getAlterSql()"), so that it keeps its current
     value.
 
+    The function updates the table, so it is neither deterministic nor free of SQL that modifies data.  A server
+    with binary logging enabled (the default of MySQL 8.0 and later) creates such a function only when the global
+    system variable \c log_bin_trust_function_creators is 1, whatever the user's privileges (\c SUPER does not
+    lift this); then any user with the \c CREATE \c ROUTINE privilege can create it.  Otherwise the server
+    refuses the function with error 1418; error 1419, which MySQL gives a user without \c SUPER for a function
+    that passes its check of the function's characteristics, is handled the same way.  When
+    the function is created with @ref SqlUtil::AbstractDatabase::tryExecRaw() "AbstractDatabase::tryExecRaw()",
+    as schema alignment with the Schema module creates it, such a refusal raises \c MYSQL-SEQUENCE-ERROR, which
+    names the requirement and gives the server's message.  A server without binary logging, as MariaDB's default,
+    has no such requirement.
+
     @subsection mysql_identifiers Identifiers and String Literals on MySQL
 
     Names are given to MySQL as described in @ref sql_identifiers: an ordinary name (a letter, an underscore or a
@@ -186,6 +197,26 @@ hash<auto> desc = {
     @section mysql_relnotes Release Notes
 
     @subsection mysqlsqlutilv16 MysqlSqlUtil v1.6
+    - documented that a server with binary logging enabled, as MySQL 8.0 and later by default, creates the function
+      that emulates sequences only when \c log_bin_trust_function_creators is 1 (see @ref mysql_sequences), and
+      a refusal to create it with @ref SqlUtil::AbstractDatabase::tryExecRaw() "AbstractDatabase::tryExecRaw()", as
+      schema alignment creates it, raises \c MYSQL-SEQUENCE-ERROR, which names the requirement and gives the
+      server's message
+    - fixed @ref SqlUtil::AbstractDatabase::computeStatistics() "computeStatistics()" and
+      @ref SqlUtil::AbstractDatabase::reclaimSpace() "reclaimSpace()", which never wrote the statement to the binary
+      log, whatever the \c no-binlog option was, as \c LOCAL is MySQL's synonym for \c NO_WRITE_TO_BINLOG, so
+      that MySQL 8.4 refused them without the \c OPTIMIZE_LOCAL_TABLE privilege; without the option, the statement
+      is now written to the binary log.  With no table to process, nothing is done; the SQL had no table name
+    - fixed @ref SqlUtil::AbstractDatabase::listTables() "listTables()" and
+      @ref SqlUtil::AbstractDatabase::tableIterator() "tableIterator()" listing views, and on MariaDB sequences, as
+      tables, and @ref SqlUtil::AbstractDatabase::getTable() "getTable()" opening a view or a sequence as a table:
+      only base tables, system-versioned tables, and temporary tables that the server reports in
+      \c information_schema.tables are tables; a view is acquired with
+      @ref SqlUtil::AbstractDatabase::getView() "getView()" and listed by
+      @ref SqlUtil::AbstractDatabase::listViews() "listViews()" only
+    - fixed @ref SqlUtil::AbstractDatabase::getView() "getView()", which returned nothing for a view name without
+      a schema and raised a \c RUNTIME-OVERLOAD-ERROR exception for a view that exists; a name without a schema is
+      now a view of the database's schema, as for tables
     - emulated-sequence connections retain typed driver options when cloning the datasource configuration
     - security: names are quoted and escaped where they are not ordinary names, or refused if they cannot be
       identifiers in SQL run through the \c mysql driver, so that a table, column, index, constraint, sequence,
@@ -1482,16 +1513,18 @@ end";
         }
 
         private *AbstractView getViewImpl(string name) {
-            *string schema;
-            parse_schema_name(name, \schema, \name);
+            # a name without a schema is a view of the database's schema, as for tables; with no schema, no view was
+            # found, as the name was looked up with a NULL schema
+            *string vschema;
+            parse_schema_name(name, \vschema, \name);
 
-            *hash<auto> row = ds.selectRow("select * from information_schema.views where table_schema = %v and table_name = %v", schema, name);
+            *hash<auto> row = ds.selectRow("select * from information_schema.views where table_schema = %v and table_name = %v", vschema ?? schema, name);
             if (!row)
                 return;
 
             return new MysqlView(name, row.view_definition, row.table_catalog,
                                  row.table_schema, row.check_option, row.definer,
-                                 row.security_type, row.is_updatable);
+                                 row.security_type, row.is_updatable == "YES");
         }
 
         private MysqlFunction makeFunctionImpl(string name, string src, *hash opts) {
@@ -1585,8 +1618,18 @@ end";
         }
 
         #! returns a list of string table names in the database
+        /** Only the tables that @ref SqlUtil::AbstractDatabase::getTable() "getTable()" opens are listed: base
+            tables, MariaDB system-versioned tables, and the session's temporary tables on MariaDB servers that
+            report them in \c information_schema.tables (MariaDB 11.2 and later); views are listed by
+            @ref SqlUtil::AbstractDatabase::listViews() "listViews()" only, and MariaDB sequences are not listed
+        */
         private list<string> listTablesImpl() {
-            return ds.select("select table_name from information_schema.tables where table_schema = %v", schema).table_name;
+            # NOTE: information_schema.tables also has every view, and on MariaDB every sequence, which are not
+            # tables; a temporary table with the name of a base table is reported in a row of its own, so the name
+            # is listed once
+            return ds.select("select distinct table_name as name from information_schema.tables "
+                "where table_schema = %v and table_type in (" + MysqlTable::TableTypeList + ") order by 1",
+                schema).name ?? ();
         }
 
         #! returns a list of string function names in the database
@@ -1648,6 +1691,55 @@ end";
             return MysqlReclaimSpaceOptions;
         }
 
+        #! executes SQL so that a refusal to create the function that emulates sequences names its requirement
+        /** @throw MYSQL-SEQUENCE-ERROR the server refused to create the sequence function, as binary logging is
+            enabled and \c log_bin_trust_function_creators is not set (see @ref mysql_sequences); the server's own
+            message is in the description, and its exception is the argument
+        */
+        private auto tryExecArgsImpl(string sql, *softlist<auto> args) {
+            try {
+                return ds.vexec(sql, args);
+            } catch (hash<ExceptionInfo> ex) {
+                checkSequenceFunctionRefusal(sql, ex);
+                rethrow;
+            }
+        }
+
+        #! executes SQL so that a refusal to create the function that emulates sequences names its requirement
+        /** @throw MYSQL-SEQUENCE-ERROR the server refused to create the sequence function, as binary logging is
+            enabled and \c log_bin_trust_function_creators is not set (see @ref mysql_sequences); the server's own
+            message is in the description, and its exception is the argument
+        */
+        private auto tryExecRawImpl(string sql) {
+            try {
+                return ds.execRaw(sql);
+            } catch (hash<ExceptionInfo> ex) {
+                checkSequenceFunctionRefusal(sql, ex);
+                rethrow;
+            }
+        }
+
+        #! raises MYSQL-SEQUENCE-ERROR if the exception is the server's refusal to create the sequence function
+        /** MySQL and MariaDB refuse a function that is not declared deterministic, without SQL or reading SQL
+            data only, with error 1418 (\c ER_BINLOG_UNSAFE_ROUTINE), and any function for a user without the
+            \c SUPER privilege with error 1419 (\c ER_BINLOG_CREATE_ROUTINE_NEED_SUPER), when binary logging is
+            enabled and \c log_bin_trust_function_creators is not set
+        */
+        private checkSequenceFunctionRefusal(string sql, hash<ExceptionInfo> ex) {
+            auto code = ex.arg.typeCode() == NT_HASH ? ex.arg.alterr_code : NOTHING;
+            if (code != 1418 && code != 1419) {
+                return;
+            }
+            string prefix = "create function " + mysql_get_sql_object_name(sequence_function) + "(";
+            if (sql.lwr().substr(0, prefix.size()) != prefix.lwr()) {
+                return;
+            }
+            throw "MYSQL-SEQUENCE-ERROR", sprintf("cannot create function %y, which emulates sequences: the server "
+                "has binary logging enabled, and it creates this function, which modifies data, only when the "
+                "global system variable log_bin_trust_function_creators is 1, whatever the user's privileges (SUPER "
+                "does not lift this); the server said: %s: %s", sequence_function, ex.err, ex.desc), ex;
+        }
+
         #! returns the next value in the given sequence
         private softint getNextSequenceValueImpl(string name) {
             on_error seqds.rollback();
@@ -1688,11 +1780,20 @@ end";
 
         #! compute statistics implementation. See @ref SqlUtil::AbstractDatabase::computeStatistics()
         private computeStatisticsImpl(*hash options) {
+            # "local" is MySQL's synonym for "no_write_to_binlog", so the statement was never written to the binary
+            # log, whatever the "no-binlog" option was, and MySQL 8.4 refuses it without the
+            # OPTIMIZE_LOCAL_TABLE privilege
             string sql = "analyze ";
-            sql += options."no-binlog" ? "no_write_to_binlog " : "local ";
+            if (options."no-binlog") {
+                sql += "no_write_to_binlog ";
+            }
             sql += "table ";
 
             softlist tables = options.tables ? options.tables : listTables();
+            # there is nothing to do without a table; the SQL had no table name
+            if (!tables) {
+                return;
+            }
 
             sql += (foldl $1 + ", " + $2, (map mysql_get_sql_object_name($1), tables));
 
@@ -1701,11 +1802,20 @@ end";
 
         #! reclaim space implementation. See @ref SqlUtil::AbstractDatabase::reclaimSpace()
         private reclaimSpaceImpl(*hash options) {
+            # "local" is MySQL's synonym for "no_write_to_binlog", so the statement was never written to the binary
+            # log, whatever the "no-binlog" option was, and MySQL 8.4 refuses it without the
+            # OPTIMIZE_LOCAL_TABLE privilege
             string sql = "optimize ";
-            sql += options."no-binlog" ? "no_write_to_binlog " : "local ";
+            if (options."no-binlog") {
+                sql += "no_write_to_binlog ";
+            }
             sql += "table ";
 
             softlist tables = options.tables ? options.tables : listTables();
+            # there is nothing to do without a table; the SQL had no table name
+            if (!tables) {
+                return;
+            }
 
             sql += (foldl $1 + ", " + $2, (map mysql_get_sql_object_name($1), tables));
 
@@ -1741,6 +1851,15 @@ end";
     #! provides the MySQL-specific implementation of the AbstractTable interface
     public class MysqlTable inherits SqlUtil::AbstractTable {
         public {
+            #! the \c information_schema.tables \c table_type values of tables, as an SQL list
+            /** \c "BASE TABLE" is a table, \c "SYSTEM VERSIONED" a MariaDB system-versioned table, and
+                \c "TEMPORARY" a temporary table of the session on MariaDB 11.2 and later; \c "VIEW",
+                \c "SYSTEM VIEW" and MariaDB's \c "SEQUENCE" are not tables
+
+                @since MysqlSqlUtil 1.6
+            */
+            const TableTypeList = "'BASE TABLE', 'SYSTEM VERSIONED', 'TEMPORARY'";
+
             #! maps mysql type names to type configurations
             const MysqlTypeMap = {
                 "decimal": {
@@ -2599,7 +2718,10 @@ end";
         }
 
         private bool checkExistenceImpl() {
-            *hash qh = ds.selectRow("select * from information_schema.tables where table_name = %v and table_schema = %v", name, schema);
+            # only a table exists as a table: a view or a MariaDB sequence with this name does not; see
+            # MysqlDatabase::listTablesImpl()
+            *hash qh = ds.selectRow("select table_name from information_schema.tables where table_name = %v "
+                "and table_schema = %v and table_type in (" + TableTypeList + ") limit 1", name, schema);
             if (qh)
                 return inDb = True;
             return False;

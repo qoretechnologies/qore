@@ -1410,6 +1410,37 @@ string sql = t.getSqlFromList(list);
         return supportsPackagesImpl();
     }
 
+    #! returns @ref True "True" if the database supports materialized views
+    /** A database that supports materialized views lists them with listMaterializedViews()
+
+        @par Example:
+        @code{.py}
+if (db.supportsMaterializedViews()) {
+    printf("materialized views: %y\n", db.listMaterializedViews());
+}
+        @endcode
+
+        @return @ref True "True" if the database supports materialized views; the base implementation returns
+        @ref False "False", PostgreSQL and Oracle return @ref True "True"
+
+        @since SqlUtil 3.11.0
+    */
+    bool supportsMaterializedViews() {
+        return supportsMaterializedViewsImpl();
+    }
+
+    #! returns a list of string materialized view names in the database
+    /** @return a sorted list of the names of the materialized views visible to the connection, named as for
+        listTables(); the base implementation returns an empty list, as a database that does not support
+        materialized views (see supportsMaterializedViews()) has none
+
+        @since SqlUtil 3.11.0 this method is available for every database; before, only the PostgreSQL and Oracle
+        modules provided it
+    */
+    list<string> listMaterializedViews() {
+        return ();
+    }
+
     #! returns a list of string table names in the database
     /** @return a sorted list of the names of the tables visible to the connection; a name is qualified with a
         schema only where the connection would otherwise resolve it in another schema
@@ -1859,6 +1890,13 @@ string sql = t.getSqlFromList(list);
     private abstract bool supportsSequencesImpl();
     private abstract bool supportsPackagesImpl();
     private abstract bool supportsTypesImpl();
+
+    #! returns @ref True "True" if the database supports materialized views; this base implementation returns @ref False "False"
+    /** @since SqlUtil 3.11.0
+    */
+    private bool supportsMaterializedViewsImpl() {
+        return False;
+    }
 
     private abstract bool rebuildIndexImpl(string name, *hash<auto> options);
     private abstract computeStatisticsImpl(*hash<auto> options);

@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -79,24 +79,26 @@ int ScopedRefNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context
     assert(!parse_context.typeInfo);
     printd(5, "ScopedRefNode::parseInit() resolving scoped constant \"%s\"\n", scoped_ref->ostr);
 
-    int err = 0;
-
     bool found;
     QoreValue rv = qore_root_ns_private::parseResolveReferencedScopedReference(loc, *scoped_ref,
         parse_context.typeInfo, found);
-    if (found) {
-        //printd(5, "ScopedRefNode::parseInit() '%s' => rv: %s\n", scoped_ref->ostr, rv.getFullTypeName());
-        // Save the typeInfo from the constant lookup (e.g., for enum constants)
-        const QoreTypeInfo* constantTypeInfo = parse_context.typeInfo;
-        parse_context.typeInfo = nullptr;
-        err = parse_init_value(rv, parse_context);
-        // Restore the constant's typeInfo - this is important for enum constants which have
-        // enum type info that should be preserved over the underlying base type
-        if (constantTypeInfo) {
-            parse_context.typeInfo = constantTypeInfo;
-        }
-        val = rv;
-        delete this;
+    if (!found) {
+        // the parse exception has already been raised; the failure must be returned so that the enclosing
+        // expression does not take this unresolved node for a value: a hash literal folded at parse time stored it
+        // as a value and raised a spurious RUNTIME-TYPE-ERROR outside the parse diagnostics
+        return -1;
     }
+    //printd(5, "ScopedRefNode::parseInit() '%s' => rv: %s\n", scoped_ref->ostr, rv.getFullTypeName());
+    // Save the typeInfo from the constant lookup (e.g., for enum constants)
+    const QoreTypeInfo* constantTypeInfo = parse_context.typeInfo;
+    parse_context.typeInfo = nullptr;
+    int err = parse_init_value(rv, parse_context);
+    // Restore the constant's typeInfo - this is important for enum constants which have
+    // enum type info that should be preserved over the underlying base type
+    if (constantTypeInfo) {
+        parse_context.typeInfo = constantTypeInfo;
+    }
+    val = rv;
+    delete this;
     return err;
 }

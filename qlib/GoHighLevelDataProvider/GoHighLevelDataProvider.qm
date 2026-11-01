@@ -1083,8 +1083,6 @@ module GoHighLevelDataProvider {
 
     @subsection gohighleveldataproviderv1_0 GoHighLevelDataProvider v1.0
     - initial release
-    - the \c GoHighLevelDataProviderBase paging methods accept query parameters or a search body whose values all
-      have the same type, such as a literal \c {"limit": 10}, when adding the page keys
 */
 
 #! Contains all public definitions in the GoHighLevelDataProvider module

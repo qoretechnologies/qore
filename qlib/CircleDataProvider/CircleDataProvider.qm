@@ -742,6 +742,4 @@ module CircleDataProvider {
 
     @subsection circledataproviderv1_0 CircleDataProvider v1.0
     - initial release
-    - \c CircleDataProviderBase::fetchAllPages() accepts query parameters whose values all have the same type, such
-      as a literal \c {"sort": "latest"}, when adding the page keys
 */

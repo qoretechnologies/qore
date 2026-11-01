@@ -182,6 +182,102 @@
         "app.RGI.action.ZGVsZXRl.option.dGFibGU.desc": {
           "source": "The name of the table",
           "message": "Nazwa tabeli"
+        },
+        "app.RGI.action.ZmluZF92aWV3.display_name": {
+          "source": "Find Matching View Records",
+          "message": "Znajdź pasujące rekordy widoku"
+        },
+        "app.RGI.action.ZmluZF92aWV3.short_desc": {
+          "source": "Find records in the view",
+          "message": "Znajdź rekordy w widoku"
+        },
+        "app.RGI.action.ZmluZF92aWV3.desc": {
+          "source": "Find records in the view; the view is read-only",
+          "message": "Znajdź rekordy w widoku; widok jest tylko do odczytu"
+        },
+        "app.RGI.action.ZmluZF92aWV3.option.dmlldw.display_name": {
+          "source": "View",
+          "message": "Widok"
+        },
+        "app.RGI.action.ZmluZF92aWV3.option.dmlldw.short_desc": {
+          "source": "The name of the view",
+          "message": "Nazwa widoku"
+        },
+        "app.RGI.action.ZmluZF92aWV3.option.dmlldw.desc": {
+          "source": "The name of the view",
+          "message": "Nazwa widoku"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.display_name": {
+          "source": "Find Single View Record",
+          "message": "Znajdź pojedynczy rekord widoku"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.short_desc": {
+          "source": "Find a single record in the view",
+          "message": "Znajdź pojedynczy rekord w widoku"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.desc": {
+          "source": "Find a single record in the view; the view is read-only",
+          "message": "Znajdź pojedynczy rekord w widoku; widok jest tylko do odczytu"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.option.dmlldw.display_name": {
+          "source": "View",
+          "message": "Widok"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.option.dmlldw.short_desc": {
+          "source": "The name of the view",
+          "message": "Nazwa widoku"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.option.dmlldw.desc": {
+          "source": "The name of the view",
+          "message": "Nazwa widoku"
+        },
+        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.display_name": {
+          "source": "Find Matching Materialized View Records",
+          "message": "Znajdź pasujące rekordy widoku zmaterializowanego"
+        },
+        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.short_desc": {
+          "source": "Find records in the materialized view",
+          "message": "Znajdź rekordy w widoku zmaterializowanym"
+        },
+        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.desc": {
+          "source": "Find records in the materialized view; reads the stored data of the materialized view without refreshing it",
+          "message": "Znajdź rekordy w widoku zmaterializowanym; odczytuje zapisane dane widoku zmaterializowanego bez jego odświeżania"
+        },
+        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.option.dmlldw.display_name": {
+          "source": "Materialized View",
+          "message": "Widok zmaterializowany"
+        },
+        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.option.dmlldw.short_desc": {
+          "source": "The name of the materialized view",
+          "message": "Nazwa widoku zmaterializowanego"
+        },
+        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.option.dmlldw.desc": {
+          "source": "The name of the materialized view",
+          "message": "Nazwa widoku zmaterializowanego"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.display_name": {
+          "source": "Find Single Materialized View Record",
+          "message": "Znajdź pojedynczy rekord widoku zmaterializowanego"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.short_desc": {
+          "source": "Find a single record in the materialized view",
+          "message": "Znajdź pojedynczy rekord w widoku zmaterializowanym"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.desc": {
+          "source": "Find a single record in the materialized view; reads the stored data of the materialized view without refreshing it",
+          "message": "Znajdź pojedynczy rekord w widoku zmaterializowanym; odczytuje zapisane dane widoku zmaterializowanego bez jego odświeżania"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.option.dmlldw.display_name": {
+          "source": "Materialized View",
+          "message": "Widok zmaterializowany"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.option.dmlldw.short_desc": {
+          "source": "The name of the materialized view",
+          "message": "Nazwa widoku zmaterializowanego"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.option.dmlldw.desc": {
+          "source": "The name of the materialized view",
+          "message": "Nazwa widoku zmaterializowanego"
         }
       }
     }

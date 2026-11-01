@@ -1592,6 +1592,12 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
     @section dataprovider_relnotes Release Notes
 
     @subsection dataprovider_v3_11 DataProvider v3.11
+    - fixed searches with a where hash whose operator hash is a typed hash without an \c op_args member, such as a
+      SqlUtil \c OperatorInfo hash from \c op_gt(), which raised \c INVALID-MEMBER; the arguments of such an operator
+      of more than two arguments, such as \c "between", are taken from its \c arg list, and the argument count of
+      an operator given as the argument of another one, such as \c dp_op_not(dp_op_between(...)), is its own; an
+      operator whose argument is an operator with a false argument, such as \c dp_op_not(dp_op_eq(0)), is
+      supported as well
     - the presentation identity of a type with a path or a schema identity no longer names the class that implements
       it (@ref DataProvider::DataProviderPresentation::typePresentationIdentity()
       "DataProviderPresentation::typePresentationIdentity()"), so building a type with another class keeps the message

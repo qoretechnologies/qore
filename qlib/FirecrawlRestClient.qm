@@ -71,9 +71,6 @@ module FirecrawlRestClient {
 
     @subsection firecrawlrestclientv1_0 FirecrawlRestClient v1.0
     - initial release
-    - fixed @ref FirecrawlRestClient::FirecrawlRestConnection "FirecrawlRestConnection" to report a configuration
-      hash whose values all have the same type, such as \c {"opts": {"apikey": "..."}}, with the real configuration
-      error; setting the fixed URL raised \c RUNTIME-TYPE-ERROR instead
 */
 
 #! the FirecrawlRestClient namespace contains all the objects in the FirecrawlRestClient module

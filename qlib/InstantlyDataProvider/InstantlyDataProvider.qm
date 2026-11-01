@@ -2053,8 +2053,6 @@ printf("Created lead: %s\n", result.id);
     @section instantlydataproviderrelnotes Release Notes
 
     @subsection instantlydataproviderv1_0 InstantlyDataProvider v1.0
-    - paginated requests accept query parameters and bodies whose values all have the same type, such as a
-      literal \c {"search": "x"}, and campaign-completed webhook events are processed with their lead count
     - initial release
 */
 

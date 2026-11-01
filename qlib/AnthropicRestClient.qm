@@ -108,9 +108,6 @@ stream.close();
 
     @subsection AnthropicRestClientv1_0 AnthropicRestClient v1.0
     - initial release
-    - the client options and @ref AnthropicRestClient::AnthropicSseStreamIo "AnthropicSseStreamIo" accept headers
-      whose values all have the same type, such as a literal <tt>{"X-Count": 1}</tt>, when adding the credential,
-      \c Accept, \c anthropic-version and \c Content-Type headers
 */
 
 %requires json

@@ -346,6 +346,22 @@ struct qore_es_private {
     }
 };
 
+//! Returns the number of unhandled exceptions that the default exception handler has reported in the calling thread
+/** A program's entry point takes the count before the program and the library are torn down, and makes its exit
+    status non-zero if the teardown reported any (see qore_teardown_exit_status())
+*/
+DLLEXPORT uint64_t qore_get_thread_unhandled_exception_count();
+
+//! Returns the exit status of a program whose teardown has finished
+/** @param rc the exit status of the program
+    @param count the number of unhandled exceptions reported in the calling thread before the teardown, as returned by
+    qore_get_thread_unhandled_exception_count()
+
+    @return \a rc if it is not 0 or if the teardown reported no unhandled exception in the calling thread, otherwise 3,
+    the exit status of a program ending with an unhandled exception
+*/
+DLLEXPORT int qore_teardown_exit_status(int rc, uint64_t count);
+
 class ParseExceptionSink {
 protected:
     ExceptionSink xsink;

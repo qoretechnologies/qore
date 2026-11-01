@@ -31,6 +31,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/ParseNode.h"
+#include "qore/intern/QoreIRInterpreter.h"
 
 QoreString QoreMinusEqualsOperatorNode::op_str("-= operator expression");
 
@@ -146,134 +147,10 @@ QoreValue QoreMinusEqualsOperatorNode::evalImpl(bool& needs_deref, ExceptionSink
         return QoreValue();
     }
 
-    if (new_right->isNothing()) {
-        return needs_deref ? v.getReferencedValue() : QoreValue();
-    }
-
-    // do float minus-equals if left side is a float
-    qore_type_t vtype = v.getType();
-
-    //printd(5, "QoreMinusEqualsOperatorNode::evalImpl() vtype: %d rtype: %d\n", vtype, new_right->getType());
-
-    if (vtype == NT_NOTHING) {
-        // see if the lvalue has a default type
-        const QoreTypeInfo* typeInfo = v.getTypeInfo();
-        if (QoreTypeInfo::isHashType(typeInfo)) {
-            // do nothing
-            return QoreValue();
-        } else if (QoreTypeInfo::hasDefaultValue(typeInfo)) {
-            if (v.assign(QoreTypeInfo::getDefaultQoreValue(typeInfo))) {
-                return QoreValue();
-            }
-            vtype = v.getType();
-        } else {
-            if (new_right->getType() == NT_FLOAT) {
-                v.assign(-new_right->getAsFloat());
-            } else if (new_right->getType() == NT_NUMBER) {
-                const QoreNumberNode* num = reinterpret_cast<const QoreNumberNode*>(new_right->getInternalNode());
-                v.assign(num->negate());
-            } else {
-                v.assign(-new_right->getAsBigInt());
-            }
-
-            if (*xsink) {
-                return QoreValue();
-            }
-
-            // v has been assigned to a value by this point
-            return ref_rv ? v.getReferencedValue() : QoreValue();
-        }
-    }
-
-    if (vtype == NT_FLOAT) {
-        return v.minusEqualsFloat(new_right->getAsFloat());
-    } else if (vtype == NT_NUMBER) {
-        v.minusEqualsNumber(*new_right, "<-= operator>");
-    } else if (vtype == NT_DATE) {
-        // issue #3157: if the lvalue is a timeout, then convert any date/time value as if it were a timeout too
-        if (new_right->getType() == NT_DATE && QoreTypeInfo::equal(v.getTypeInfo(), timeoutTypeInfo)) {
-            int64 ms = new_right->get<const DateTimeNode>()->getRelativeMilliseconds();
-            // do minus-equals with milliseconds
-            return v.minusEqualsBigInt(ms);
-        }
-        // Regular date arithmetic
-        if (new_right->getType() == NT_DATE) {
-            v.assign(v.getValue().get<DateTimeNode>()->subtractBy(*new_right->get<DateTimeNode>()));
-        } else {
-            // get a relative date-time value
-            DateTime date(*new_right);
-            //DateTimeValueHelper date(*new_right);
-            v.assign(v.getValue().get<DateTimeNode>()->subtractBy(date));
-        }
-    } else if (vtype == NT_HASH) {
-        if (new_right->getType() != NT_HASH && new_right->getType() != NT_OBJECT) {
-            v.ensureUnique();
-            QoreHashNode* vh = v.getValue().get<QoreHashNode>();
-
-            const QoreListNode* nrl = (new_right->getType() == NT_LIST)
-                ? reinterpret_cast<const QoreListNode*>(new_right->getInternalNode())
-                : 0;
-            if (nrl && nrl->size()) {
-                // treat each element in the list as a string giving a key to delete
-                ConstListIterator li(nrl);
-                while (li.next()) {
-                    QoreStringValueHelper val(li.getValue());
-
-                    vh->removeKey(*val, xsink);
-                    if (*xsink)
-                        return QoreValue();
-                }
-            } else {
-                QoreStringValueHelper str(*new_right);
-                vh->removeKey(*str, xsink);
-            }
-        }
-    } else if (vtype == NT_OBJECT) {
-        if (new_right->getType() != NT_HASH && new_right->getType() != NT_OBJECT) {
-            QoreObject *o = v.getValue().get<QoreObject>();
-
-            const QoreListNode *nrl = (new_right->getType() == NT_LIST)
-                ? reinterpret_cast<const QoreListNode *>(new_right->getInternalNode())
-                : 0;
-            if (nrl && nrl->size()) {
-                // treat each element in the list as a string giving a key to delete
-                ConstListIterator li(nrl);
-                while (li.next()) {
-                    QoreStringValueHelper val(li.getValue());
-
-                    o->removeMember(*val, xsink);
-                    if (*xsink)
-                        return QoreValue();
-                }
-            } else {
-                QoreStringValueHelper str(*new_right);
-                o->removeMember(*str, xsink);
-            }
-        }
-    } else {
-        // issue #3157: if the lvalue is a timeout, then convert any date/time value as if it were a timeout too
-        // Note: timeout type stores its value as an int (milliseconds), so vtype will be NT_INT
-        if (new_right->getType() == NT_DATE) {
-            // For timeout variables (which store int but have timeoutTypeInfo),
-            // convert the right operand (date/time) to milliseconds for subtraction
-            if (QoreTypeInfo::equal(v.getTypeInfo(), timeoutTypeInfo)) {
-                int64 ms = new_right->get<const DateTimeNode>()->getRelativeMilliseconds();
-                // do minus-equals with milliseconds
-                return v.minusEqualsBigInt(ms);
-            }
-            // For non-timeout int types, convert date to int (for compatibility)
-            return v.minusEqualsBigInt(new_right->get<const DateTimeNode>()->getRelativeSeconds());
-        }
-
-        // do integer minus-equals
-        return v.minusEqualsBigInt(new_right->getAsBigInt());
-    }
-
-    if (*xsink) {
+    // the implementation is shared with the other execution modes
+    ValueHolder rv(doMinusEqualsOnLValue(v, *new_right, xsink), xsink);
+    if (*xsink || !ref_rv) {
         return QoreValue();
     }
-
-    // here we know that v has a value
-    // reference return value and return
-    return ref_rv ? v.getReferencedValue() : QoreValue();
+    return rv.release();
 }

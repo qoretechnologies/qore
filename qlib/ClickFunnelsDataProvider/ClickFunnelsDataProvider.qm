@@ -1443,8 +1443,6 @@ module ClickFunnelsDataProvider {
 
     @subsection clickfunnelsdataproviderv1_0 ClickFunnelsDataProvider v1.0
     - initial release
-    - \c ClickFunnelsDataProviderBase::fetchAllPages() accepts query parameters whose values all have the same
-      type, such as a literal \c {"limit": 10}, when adding the page cursor
 */
 
 #! Contains all public definitions in the ClickFunnelsDataProvider module

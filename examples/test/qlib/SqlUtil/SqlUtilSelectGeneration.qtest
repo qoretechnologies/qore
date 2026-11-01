@@ -6,6 +6,8 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %prepend-module-path "${SCRIPT_DIR}"
 %requires ./PgsqlTestIsolation.qm
+# the test runs against every database connection that is configured
+%requires ../../DbTestConnections.qm
 %requires Util
 %requires DataProvider
 %requires SqlUtil
@@ -67,6 +69,38 @@ class CountingDatasource inherits Datasource {
     }
 }
 
+#! a connection of the test and its tables
+class SelectGenerationContext {
+    public {
+        #! the connection
+        hash<DbTestConnection> conn;
+
+        #! the open connection, or @ref nothing if it could not be opened
+        *CountingDatasource ds;
+
+        #! the reason the connection's test cases are skipped, if it is not open
+        string skip_reason = "the connection is not open";
+
+        #! the error table
+        *AbstractTable errs;
+
+        #! the member table
+        *AbstractTable mem;
+
+        #! the error that creating the tables raised, if any
+        *hash<ExceptionInfo> setup_error;
+    }
+
+    constructor(hash<DbTestConnection> conn) {
+        self.conn = conn;
+    }
+
+    #! returns the name of the connection's test case
+    string name(string test) {
+        return sprintf("%s (%s): %s", conn.label, conn.driver ?? "unknown driver", test);
+    }
+}
+
 class SqlUtilSelectGenerationTest inherits QUnit::Test {
     public {
         const MyOpts = Opts + {
@@ -81,62 +115,94 @@ class SqlUtilSelectGenerationTest inherits QUnit::Test {
     }
 
     private {
+        #! the test's connections (see DbTestConnections)
+        list<SelectGenerationContext> contexts = ();
+
+        #! the connection of the running test case and its tables
         *CountingDatasource ds;
         *AbstractTable errs;
         *AbstractTable mem;
     }
 
     constructor() : Test("SqlUtilSelectGenerationTest", "1.0", \ARGV, MyOpts) {
-        try {
-            ds = getDatasource();
-        } catch (hash<ExceptionInfo> ex) {
-            if (m_options.verbose) {
-                printf("%s: %s\n", ex.err, ex.desc);
-            }
-        }
-        if (ds) {
-            setupTables();
-        }
+        contexts = map new SelectGenerationContext($1), DbTestConnections::get(m_options.connstr);
+        # a run on PostgreSQL uses its own schema; this is set up before any connection is opened
+        map PgsqlRunSchema::setup($1.conn.connstr, "SqlUtilSelectGeneration"), contexts;
+        map setUpContext($1), contexts;
 
-        addTestCase("resolution order", \testResolutionOrder());
-        addTestCase("unresolved names are never cached", \testNoStaleDescriptionByDefault());
-        addTestCase("registered resolver is used", \testRegisteredResolverIsUsed());
-        addTestCase("caching resolver issues no queries", \testCachingResolverIssuesNoQueries());
-        addTestCase("caching resolver is invalidatable", \testCachingResolverIsInvalidatable());
-        addTestCase("generation is stable", \testGenerationIsStable());
-        addTestCase("concurrent resolution", \testConcurrentResolution());
-        addTestCase("concurrent generation", \testConcurrentGeneration());
-        addTestCase("name reference costs no more than object", \testNameReferenceCost());
+        if (!contexts) {
+            addTestCase("select generation", sub () { testSkip("no DB connection; set QORE_DB_CONNSTR"); });
+        }
+        foreach SelectGenerationContext ctx in (contexts) {
+            addTestCase(ctx.name("resolution order"), \testResolutionOrder(), ctx);
+            addTestCase(ctx.name("unresolved names are never cached"), \testNoStaleDescriptionByDefault(), ctx);
+            addTestCase(ctx.name("registered resolver is used"), \testRegisteredResolverIsUsed(), ctx);
+            addTestCase(ctx.name("caching resolver issues no queries"), \testCachingResolverIssuesNoQueries(), ctx);
+            addTestCase(ctx.name("caching resolver is invalidatable"), \testCachingResolverIsInvalidatable(), ctx);
+            addTestCase(ctx.name("generation is stable"), \testGenerationIsStable(), ctx);
+            addTestCase(ctx.name("concurrent resolution"), \testConcurrentResolution(), ctx);
+            addTestCase(ctx.name("concurrent generation"), \testConcurrentGeneration(), ctx);
+            addTestCase(ctx.name("name reference costs no more than object"), \testNameReferenceCost(), ctx);
+        }
 
         set_return_value(main());
+    }
+
+    #! opens the connection and creates its tables; the connection's test cases are skipped if it fails
+    private setUpContext(SelectGenerationContext ctx) {
+        try {
+            ctx.ds = getDatasource(ctx.conn.connstr);
+        } catch (hash<ExceptionInfo> ex) {
+            ctx.skip_reason = sprintf("cannot open the connection: %s: %s", ex.err, ex.desc);
+            if (m_options.verbose) {
+                printf("%s: %s\n", ctx.conn.label, ctx.skip_reason);
+            }
+            return;
+        }
+        use(ctx);
+        try {
+            setupTables();
+        } catch (hash<ExceptionInfo> ex) {
+            # the connection's test cases fail with the error
+            ctx.setup_error = ex;
+        }
+        ctx.errs = errs;
+        ctx.mem = mem;
+    }
+
+    #! makes the connection the one that the test case uses
+    private use(SelectGenerationContext ctx) {
+        ds = ctx.ds;
+        errs = ctx.errs;
+        mem = ctx.mem;
     }
 
     globalTearDown() {
         # the resolver and its cache are process-wide; leave neither behind
         sqlutil_register_table_resolver();
         sqlutil_clear_table_cache();
-        if (ds) {
-            map $1.dropCommit(), (mem, errs), exists $1;
-            ds.rollback();
+        foreach SelectGenerationContext ctx in (contexts) {
+            if (!ctx.ds) {
+                continue;
+            }
+            try {
+                map $1.dropCommit(), (ctx.mem, ctx.errs), exists $1;
+                ctx.ds.rollback();
+            } catch (hash<ExceptionInfo> ex) {
+                printf("WARNING: %s: cannot drop the test tables: %s: %s\n", ctx.conn.label, ex.err, ex.desc);
+            }
         }
         # drops the run's schema with everything left in it, if the connection is a PostgreSQL connection
         PgsqlRunSchema::teardown();
     }
 
     #! returns the name in the run's schema on PostgreSQL, so that it can never resolve to a table in another schema
-    private static string q(string name) {
-        *string schema = PgsqlRunSchema::getName();
+    private string q(string name) {
+        *string schema = ds.getDriverName() == "pgsql" ? PgsqlRunSchema::getName() : NOTHING;
         return schema ? schema + "." + name : name;
     }
 
-    private CountingDatasource getDatasource() {
-        string connstr = m_options.connstr ?? ENV.QORE_DB_CONNSTR ?? ENV.QORE_DB_CONNSTR_PGSQL
-            ?? ENV.QORE_DB_CONNSTR_ORACLE ?? ENV.QORE_DB_CONNSTR_MYSQL ?? ENV.QORE_DB_CONNSTR_FREETDS ?? "";
-        if (!connstr.val()) {
-            testSkip("no DB connection; set QORE_DB_CONNSTR");
-        }
-        # a run on PostgreSQL uses its own schema
-        PgsqlRunSchema::setup(connstr, "SqlUtilSelectGeneration");
+    private static CountingDatasource getDatasource(string connstr) {
         CountingDatasource ds(connstr);
         ds.open();
         return ds;
@@ -173,12 +239,16 @@ class SqlUtilSelectGenerationTest inherits QUnit::Test {
     }
 
     #! skips the current test case if no database connection is available, and clears process-wide state
-    private checkDb() {
+    private checkDb(SelectGenerationContext ctx) {
         sqlutil_register_table_resolver();
         sqlutil_clear_table_cache();
-        if (!ds) {
-            testSkip("no DB connection; set QORE_DB_CONNSTR");
+        if (!ctx.ds) {
+            testSkip(ctx.skip_reason);
         }
+        if (*hash<ExceptionInfo> ex = ctx.setup_error) {
+            throw ex.err, sprintf("the test tables could not be created: %s", ex.desc), ex.arg;
+        }
+        use(ctx);
     }
 
     #! Returns a select hash on the member table joining the error table and testing a sub-select, both by name
@@ -208,8 +278,8 @@ class SqlUtilSelectGenerationTest inherits QUnit::Test {
     }
 
     #! a "tablecode" option wins over a registered resolver, which wins over building a new table object
-    testResolutionOrder() {
-        checkDb();
+    testResolutionOrder(SelectGenerationContext ctx) {
+        checkDb(ctx);
         # no resolver: a new object every time
         AbstractTable plain = mem.getSubtableFromString(ErrTable, NOTHING);
         assertEq(ErrTable, plain.getName());
@@ -244,8 +314,8 @@ class SqlUtilSelectGenerationTest inherits QUnit::Test {
         generated for a name-referenced sub-select would then keep using a description that no longer matches
         the database.
     */
-    testNoStaleDescriptionByDefault() {
-        checkDb();
+    testNoStaleDescriptionByDefault(SelectGenerationContext ctx) {
+        checkDb(ctx);
         string tmp_table = ErrTable + "_alt";
         Database db(ds);
         {
@@ -285,8 +355,8 @@ class SqlUtilSelectGenerationTest inherits QUnit::Test {
     }
 
     #! a registered resolver receives the query's connection and the table name as given
-    testRegisteredResolverIsUsed() {
-        checkDb();
+    testRegisteredResolverIsUsed(SelectGenerationContext ctx) {
+        checkDb(ctx);
         list<string> names = ();
         list<bool> same_ds = ();
         sqlutil_register_table_resolver(AbstractTable sub (AbstractDatasource cb_ds, string name) {
@@ -307,8 +377,8 @@ class SqlUtilSelectGenerationTest inherits QUnit::Test {
     }
 
     #! the caching resolver reads a referenced table's description only once per connection and name
-    testCachingResolverIssuesNoQueries() {
-        checkDb();
+    testCachingResolverIssuesNoQueries(SelectGenerationContext ctx) {
+        checkDb(ctx);
         hash<auto> sh = nameReferencedSelectHash();
         list<auto> args;
 
@@ -339,8 +409,8 @@ class SqlUtilSelectGenerationTest inherits QUnit::Test {
     }
 
     #! sqlutil_clear_table_cache() discards cached tables so a changed definition is picked up
-    testCachingResolverIsInvalidatable() {
-        checkDb();
+    testCachingResolverIsInvalidatable(SelectGenerationContext ctx) {
+        checkDb(ctx);
         sqlutil_register_table_resolver(\sqlutil_get_cached_table());
         AbstractTable first = sqlutil_get_cached_table(ds, ErrTable);
         assertEq(True, first === sqlutil_get_cached_table(ds, ErrTable));
@@ -365,8 +435,8 @@ class SqlUtilSelectGenerationTest inherits QUnit::Test {
     }
 
     #! repeated generation produces byte-identical SQL and bind arguments, cached or not
-    testGenerationIsStable() {
-        checkDb();
+    testGenerationIsStable(SelectGenerationContext ctx) {
+        checkDb(ctx);
         hash<auto> sh = nameReferencedSelectHash();
         list<auto> first_args;
         string first = mem.getSelectSql(sh, \first_args);
@@ -389,8 +459,8 @@ class SqlUtilSelectGenerationTest inherits QUnit::Test {
     }
 
     #! concurrent resolution through the caching resolver yields a single shared object
-    testConcurrentResolution() {
-        checkDb();
+    testConcurrentResolution(SelectGenerationContext ctx) {
+        checkDb(ctx);
         sqlutil_register_table_resolver(\sqlutil_get_cached_table());
         const int Threads = 8;
         Counter cnt(Threads);
@@ -419,8 +489,8 @@ class SqlUtilSelectGenerationTest inherits QUnit::Test {
     }
 
     #! concurrent generation through shared resolved tables is safe and produces identical SQL
-    testConcurrentGeneration() {
-        checkDb();
+    testConcurrentGeneration(SelectGenerationContext ctx) {
+        checkDb(ctx);
         sqlutil_register_table_resolver(\sqlutil_get_cached_table());
         hash<auto> sh = nameReferencedSelectHash();
         const int Threads = 8;
@@ -457,8 +527,8 @@ class SqlUtilSelectGenerationTest inherits QUnit::Test {
         resolved by building a new table object.  The queries and the tables resolved are counted, which makes this
         independent of the speed and load of the machine and of the database.
     */
-    testNameReferenceCost() {
-        checkDb();
+    testNameReferenceCost(SelectGenerationContext ctx) {
+        checkDb(ctx);
         list<AbstractTable> resolved = ();
         sqlutil_register_table_resolver(AbstractTable sub (AbstractDatasource rds, string name) {
             AbstractTable t = sqlutil_get_cached_table(rds, name);

@@ -103,7 +103,9 @@ class BgCompileShutdownTest inherits QUnit::Test {
             "LD_LIBRARY_PATH=%s %s -b --exec-mode=tiered -l %s -e \"int value = 0;\" >%s 2>&1",
             shellQuote(libqore_dir), shellQuote(qore_bin), shellQuote(module_path), shellQuote(log_path)));
         string output = File::readTextFile(log_path);
-        assertEq(0, rc, "module delete callback completed after JIT quiescence: " + output);
+        # the exception the delete callback throws is unhandled at teardown, which makes the exit status 3; a crash
+        # would give another status
+        assertEq(3, rc, "module delete callback completed after JIT quiescence: " + output);
         assertTrue(output =~ /\[BG-JIT\] compiled 'hot@.*promoted to JIT tier/,
             "the function used by the delete callback reached the native tier: " + output);
         assertTrue(output =~ /JIT-DELETE-CALLBACK.*42/s,

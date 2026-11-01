@@ -65,8 +65,6 @@ module SegmentRestClient {
 
     @subsection segmentrestclientv1_0 SegmentRestClient v1.0
     - initial release
-    - the client options accept a \c headers hash whose values all have the same type, such as a literal
-      <tt>{"X-Count": 1}</tt>, when adding the authentication headers
 */
 
 #! the SegmentRestClient namespace contains all the objects in the SegmentRestClient module

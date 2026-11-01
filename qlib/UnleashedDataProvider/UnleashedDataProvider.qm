@@ -553,8 +553,6 @@ printf("Created customer: %s\n", new_customer.CustomerCode);
     @section unleashedataproviderrelnotes Release Notes
 
     @subsection unleashedataproviderv1_0 UnleashedDataProvider v1.0
-    - product creation and customer updates send numeric and boolean fields in request bodies whose other
-      values are all strings
     - initial release
 */
 

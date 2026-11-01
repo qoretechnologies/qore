@@ -82,8 +82,6 @@ printf("%Y\n", ans.body);
 
     @subsection HuggingFaceRestClientv1_0 HuggingFaceRestClient v1.0
     - initial release
-    - the client options accept a \c headers hash whose values all have the same type, such as a literal
-      <tt>{"X-Count": 1}</tt>, when adding the credential and \c Accept headers
 */
 
 #! the HuggingFaceRestClient namespace contains all the objects in the HuggingFaceRestClient module

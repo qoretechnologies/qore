@@ -508,6 +508,28 @@ protected:
     DLLLOCAL int doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* op, RuntimeConfig& rc, bool for_remove);
 
     DLLLOCAL int makeIntQv(const char* desc);
+
+    //! returns true if the lvalue's type does not hold an integer but takes one with a conversion
+    /** an integer result of an operation is then stored as an integer assigned to the lvalue would be, converted to
+        the lvalue's type, so that a typed lvalue always holds a value of its declared type (ex: \c float,
+        \c softfloat or \c softstring)
+    */
+    DLLLOCAL bool intResultNeedsConversion() const;
+
+    //! stores an integer result of an operation, converted to the lvalue's type; returns the integer result
+    DLLLOCAL int64 storeIntResult(int64 newVal, const char* desc);
+
+    //! returns true if the lvalue's type does not hold a float but takes one with a conversion (ex: number)
+    DLLLOCAL bool floatResultNeedsConversion() const;
+
+    //! stores a float result of an operation, converted to the lvalue's type; returns the float result
+    DLLLOCAL double storeFloatResult(double newVal, const char* desc);
+
+    //! returns true if the lvalue's type does not hold a number but takes one with a conversion (ex: softint)
+    DLLLOCAL bool numberResultNeedsConversion() const;
+
+    //! stores a number result of an operation, converted to the lvalue's type; takes the reference of \a n
+    DLLLOCAL void storeNumberResult(QoreNumberNode* n, const char* desc);
     DLLLOCAL int makeIntVal(const char* desc);
 
     //! returns true if a removal started with startContainerRemoval() left the reachable objects unchanged
@@ -597,6 +619,8 @@ private:
     };
     std::unique_ptr<MemberLValue> member_lvalue;
     bool assignment_only = false;
+    //! set when the lvalue rejected the value an operation converted for it; see ~LValueHelper()
+    bool write_rejected = false;
     bool member_lvalue_modified = false;
 
     RObject* robj = nullptr;
