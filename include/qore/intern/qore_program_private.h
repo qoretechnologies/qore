@@ -248,6 +248,12 @@ public:
         Executed from any thread when terminated to detach program
     */
     DLLLOCAL void dbgDetach(ExceptionSink* xsink);
+    //! Removes the THREAD-CANCELLED exception that ends a thread of a Program that a debugger ends
+    /** Executed when the thread has left the Program, before its unhandled exceptions are reported; the debugger
+        cancels the threads to end the Program, so that their end is not an error (see
+        QoreDebugProgram::setProgramTerminating())
+    */
+    DLLLOCAL void dbgClearTermination(ExceptionSink& xsink);
     /**
         Executed every step in BlockStatement.
         @param statement is step being processed
@@ -451,6 +457,11 @@ public:
     /** This state belongs to the target Program so teardown cannot leave stale
         raw Program pointers in process-wide AOT module state. */
     std::unordered_set<std::string> initialized_aot_modules;
+
+    //! true if a debugger ends the Program: its threads that end with THREAD-CANCELLED end without reporting it
+    /** see QoreDebugProgram::setProgramTerminating() and ThreadLocalProgramData::dbgClearTermination()
+    */
+    std::atomic<bool> debugger_terminating{false};
 
     // for the thread counter, used only with plock
     QoreCondition pcond;
@@ -4368,6 +4379,19 @@ public:
             return -2;
         if (i->second->breakProgramThread(tid))
             return -3;
+        return 0;
+    }
+
+    DLLLOCAL int setProgramTerminating(QoreProgram* pgm) {
+        // a Program that does not support debugging is not ended by a debugger
+        if (pgm->priv->pwo.parse_options & PO_NO_DEBUGGING) {
+            return -1;
+        }
+        QoreAutoRWReadLocker al(&tlock);
+        if (qore_program_map.find(pgm) == qore_program_map.end()) {
+            return -2;
+        }
+        pgm->priv->debugger_terminating = true;
         return 0;
     }
 

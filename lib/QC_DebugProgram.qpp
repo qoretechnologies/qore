@@ -267,6 +267,24 @@ int DebugProgram::breakProgramThread(ProgramControl[QoreProgram] program, int th
    return dpgm->breakProgramThread(*program, thread_id);
 }
 
+//! Notes that the debugger ends a program by cancelling its threads
+/** The threads of the program that end with a \c THREAD-CANCELLED exception, as when the debugger cancels them with
+    @ref Qore::cancel_thread() "cancel_thread()" to end the program, end without reporting it as an unhandled
+    exception, as their end is not an error; the thread that runs the program with
+    @ref Qore::Program::run() "Program::run()" still raises it to the code that runs the program.  The program stays
+    marked until it is deleted.
+
+    @param program the program that the debugger ends
+
+    @return 0 if the operation was successful, -1 if the program does not allow debugging (i.e.
+    @ref Qore::PO_NO_DEBUGGING is set), or -2 if the program has not been set as a debug target
+
+    @since %Qore 3.0
+ */
+int DebugProgram::setProgramTerminating(ProgramControl[QoreProgram] program) [flags=NAMED_ARGS] {
+   return dpgm->setProgramTerminating(*program);
+}
+
 //! Break program, i.e. all threads
 /**
   * @param program the program to interrupt

@@ -565,6 +565,8 @@ public namespace DebugProgramControl {
                     }
                 }
             }
+            # the threads that end with the cancellation end without an error
+            setProgramTerminating(pgm);
             # a thread that is stopped, or that stops while the program ends, is not cancelled, as it waits for the
             # debugger; it ends when it continues (see handleInterrupt())
             foreach int tid in (pgm.getThreadList()) {

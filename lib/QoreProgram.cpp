@@ -2950,6 +2950,21 @@ void ThreadLocalProgramData::dbgDetach(ExceptionSink* xsink) {
     }
 }
 
+void ThreadLocalProgramData::dbgClearTermination(ExceptionSink& xsink) {
+    if (!xsink.isException()) {
+        return;
+    }
+    QoreProgram* pgm = getProgram();
+    if (!pgm || !pgm->priv->debugger_terminating) {
+        return;
+    }
+    QoreValue err = xsink.getExceptionErr();
+    if (err.getType() == NT_STRING && !strcmp(err.get<const QoreStringNode>()->c_str(), "THREAD-CANCELLED")) {
+        printd(5, "ThreadLocalProgramData::dbgClearTermination() this: %p, tid: %d\n", this, q_gettid());
+        xsink.clear();
+    }
+}
+
 int ThreadLocalProgramData::dbgStep(const StatementBlock* blockStatement, const AbstractStatement* statement, ExceptionSink* xsink) {
     checkAttach(xsink);
     checkBreakFlag();
@@ -4036,6 +4051,11 @@ QoreListNode* QoreDebugProgram::getAllProgramObjects() {
 int QoreDebugProgram::breakProgramThread(QoreProgram *pgm, int tid) const {
    printd(5, "QoreDebugProgram::breakProgramThread(), this: %p, pgm: %p, tid: %d\n", this, pgm, tid);
    return priv->breakProgramThread(pgm, tid);
+}
+
+int QoreDebugProgram::setProgramTerminating(QoreProgram* pgm) const {
+   printd(5, "QoreDebugProgram::setProgramTerminating(), this: %p, pgm: %p\n", this, pgm);
+   return priv->setProgramTerminating(pgm);
 }
 
 int QoreDebugProgram::breakProgram(QoreProgram *pgm) const {

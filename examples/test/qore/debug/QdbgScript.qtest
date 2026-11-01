@@ -1137,7 +1137,19 @@ public class QdbgScriptTest inherits QUnit::Test {
             *list<string> ends = (res.out =~ x/(Thread [0-9]+ ended|The program ended)/g);
             assertEq(4, ends.size(), res.out);
             assertEq("The program ended", ends.last(), res.out);
+            # the threads that the debugger cancelled end without an error
+            assertFalse(res.out =~ /THREAD-CANCELLED|unhandled QORE/, res.out);
         }
+
+        # without a debugger, a thread that is cancelled reports the exception that ends it
+        TmpDir tmp("qore-qdbg-test-");
+        File f();
+        string script = tmp.path + "/cancel.q";
+        f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%modern\nCounter c(1);\nint tid = background c.waitForZero();\ncancel_thread(tid, \"stop\");\n");
+        f.close();
+        hash<auto> r = runTool(script, ());
+        assertRegex("unhandled QORE .*\nTHREAD-CANCELLED: .*stop", r.out);
     }
 
     # a pause stops at a statement, not at a block, so that the next step goes on to another line

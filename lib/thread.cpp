@@ -4877,6 +4877,8 @@ namespace {
                     tlpd->dbgExit(nullptr, val, &xsink);
                     // notify debugger that thread is terminated
                     tlpd->dbgDetach(&xsink);
+                    // a thread that a debugger cancelled to end its Program ends without an error
+                    tlpd->dbgClearTermination(xsink);
                 }
 
                 // cleanup thread resources
@@ -4979,6 +4981,8 @@ namespace {
                         // notify return value and notify thread detach to program
                         tlpd->dbgExit(nullptr, rv, &xsink);
                         tlpd->dbgDetach(&xsink);
+                        // a thread that a debugger cancelled to end its Program ends without an error
+                        tlpd->dbgClearTermination(xsink);
                     }
 
                     // if there is an object, we dereference the extra reference here

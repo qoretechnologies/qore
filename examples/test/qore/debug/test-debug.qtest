@@ -249,6 +249,7 @@ class DebugTest inherits QUnit::Test {
         addTestCase("DebugCallbackLifetimeTest",
             \debugCallbackLifetimeTest());
         addTestCase("InterruptedCountTest", \interruptedCountTest());
+        addTestCase("ProgramTerminatingTest", \programTerminatingTest());
         #addTestCase("MultiThreadDebugTest", \multiThreadDebugTest());
 
         thisProgram = ProgramControl::getProgram();
@@ -667,6 +668,24 @@ class DebugTest inherits QUnit::Test {
             total += i;
         }
         done.dec();
+    }
+
+    # a debugger marks a program that it ends; only a program that it debugs, and that allows debugging
+    programTerminatingTest() {
+        NoopDebugProgram dbg();
+        Program pgm();
+        ProgramControl p = pgm.getProgram();
+        # a program that is not a debug target
+        assertEq(-2, dbg.setProgramTerminating(p));
+        dbg.addProgram(p);
+        assertEq(0, dbg.setProgramTerminating(p));
+        # marked again
+        assertEq(0, dbg.setProgramTerminating(p));
+        dbg.removeProgram(p);
+        # a program that does not allow debugging
+        Program nd(PO_NO_DEBUGGING);
+        assertEq(-1, dbg.setProgramTerminating(nd.getProgram()));
+        dbg.waitForTerminationAndClear();
     }
 
     concurrentAttachDetachTest() {

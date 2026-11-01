@@ -2620,6 +2620,10 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
       parallel collection processing.  All of them honor cooperative cancellation
     - @ref Qore::ProgramControl::getStatementIdInfo() "ProgramControl::getStatementIdInfo()" tells with \c in_try if a
       statement is in the body of a try statement of its function, for debuggers
+    - new @ref Qore::DebugProgram::setProgramTerminating() "DebugProgram::setProgramTerminating()" method: a debugger
+      that ends a program by cancelling its threads marks it, so that the threads that end with \c THREAD-CANCELLED
+      end without the message of an unhandled exception; \c qdbg, \c qdbg-mcp and the Visual Studio Code debug adapter
+      end programs quietly with \c kill and their terminate requests
     - @ref Qore::ProgramControl::getStatementIdInfo() "ProgramControl::getStatementIdInfo()" gives the local variables
       that a statement can refer to in \c locals, with the top-level local variables of the program, which have global
       scope, and the new @ref Qore::ProgramControl::getTopLevelLocalVars() "ProgramControl::getTopLevelLocalVars()"
