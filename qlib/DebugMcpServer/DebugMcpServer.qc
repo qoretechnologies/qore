@@ -224,6 +224,13 @@ public const DebugMcpFields = {
             "`thread var h.name = \"x\"` or `help`",
         "example_value": "thread list",
     },
+    "details": {
+        "display_name": "Details",
+        "type": AbstractDataProviderTypeMap."*bool",
+        "desc": "If the program is paused, as when no thread paused before the timeout passed, the report gives the "
+            "call stack of the paused thread in `frames` and the local variables of its top frame in `variables`; "
+            "`false` leaves them out; the default is `true`",
+    },
     "timeout_ms": {
         "display_name": "Timeout",
         "type": AbstractDataProviderTypeMap."*int",
@@ -312,9 +319,9 @@ public class DebugMcpServer inherits McpServerHandler::McpServerHandler {
         addTool("qore_debug_continue", "Resumes a paused thread: runs it, steps into or over its statement, or "
             "runs it until its function returns; returns when a thread pauses, the program ends, or the timeout "
             "passes, and then the program is paused",
-            ("mode", "thread", "timeout_ms"), \continueTool());
-        addTool("qore_debug_pause", "Pauses the threads of the current program", ("timeout_ms",),
-            \pauseTool());
+            ("mode", "thread", "timeout_ms", "details"), \continueTool());
+        addTool("qore_debug_pause", "Pauses the threads of the current program; returns where the current thread "
+            "is paused and its local variables", ("timeout_ms", "details"), \pauseTool());
         addTool("qore_debug_stack", "Returns the call stack of a paused thread", ("thread",),
             \stackTool());
         addTool("qore_debug_variables", "Returns the local variables of a frame of a paused thread with their "
@@ -501,7 +508,12 @@ public class DebugMcpServer inherits McpServerHandler::McpServerHandler {
         if (exists args.thread) {
             s.selectThread(args.thread);
         }
-        return s.execute(cmd, args.timeout_ms);
+        hash<auto> rv = s.execute(cmd, args.timeout_ms);
+        # the program was paused after the timeout: where the thread is, as in a loop that does not end
+        if (rv.timedOut && (args.details ?? True)) {
+            rv += s.getPauseDetails();
+        }
+        return rv;
     }
 
     #! Pauses the program
@@ -513,7 +525,11 @@ public class DebugMcpServer inherits McpServerHandler::McpServerHandler {
             s.waitTimeout = args.timeout_ms;
         }
         on_exit s.waitTimeout = old_timeout;
-        return s.pause();
+        hash<auto> rv = s.pause();
+        if (args.details ?? True) {
+            rv += s.getPauseDetails();
+        }
+        return rv;
     }
 
     #! Returns the call stack of a thread

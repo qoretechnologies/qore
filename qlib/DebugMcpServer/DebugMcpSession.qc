@@ -49,6 +49,9 @@ public class DebugMcpSession inherits DebugCmdLine::DebugCommandLine {
 
         #! the most lines of the output of the program, and of logpoints, that a report gives; see makeReport()
         const MaxOutputLines = 50;
+
+        #! the most frames of the call stack that the details of a pause give; see getPauseDetails()
+        const MaxDetailFrames = 20;
     }
 
     private {
@@ -298,6 +301,34 @@ public class DebugMcpSession inherits DebugCmdLine::DebugCommandLine {
             push rv, f;
         }
         return rv;
+    }
+
+    #! Returns where the current thread is paused and its variables, for the report of a pause
+    /** A pause stops a thread wherever it is, as in a loop that does not end, so its report tells where it is
+
+        @return \c frames: the call stack of the current thread, as getStack() gives it, at most
+        @ref MaxDetailFrames frames from the top, with \c framesOmitted, the number of the frames below them, and
+        \c variables: the local variables of its top frame, as getVariables() gives them; nothing if the current
+        thread is not paused, or \c detailsError if they could not be read, as when the thread ended meanwhile
+    */
+    public *hash<auto> getPauseDetails() {
+        if (!getState().paused) {
+            return;
+        }
+        try {
+            list<hash<auto>> frames = getStack();
+            hash<auto!> rv = {
+                "variables": getVariables(NOTHING, 0).variables,
+            };
+            if (frames.size() > MaxDetailFrames) {
+                rv.framesOmitted = frames.size() - MaxDetailFrames;
+                frames = frames[0..MaxDetailFrames - 1];
+            }
+            return {"frames": frames} + rv;
+        } catch (hash<ExceptionInfo> ex) {
+            # the thread can continue or end before the details are read; the report tells why they are missing
+            return {"detailsError": sprintf("%s: %s", ex.err, ex.desc)};
+        }
     }
 
     #! Returns the local variables of a frame, or the elements, keys or members of a value

@@ -474,13 +474,26 @@ public class DebugMcpServerTest inherits QUnit::Test {
         assertTrue(r.state.paused);
         # the stop is the pause, not a step
         assertEq(("pause",), map $1.reason, r.events, $1.tid == r.state.threadId);
+        # where the thread is paused, and its variables
+        assertEq(("<top level>",), map $1.function, r.frames);
+        assertRegex("/target.q$", r.frames[0].file);
+        assertEq("integer", (select r.variables, $1.name == "n")[0].type);
+        assertFalse(r.hasKey("framesOmitted"));
+        # without the details
+        r = call(c, "qore_debug_continue", {"timeout_ms": 100, "details": False});
+        assertTrue(r.timedOut);
+        assertFalse(r.hasKey("frames") || r.hasKey("variables"));
         r = call(c, "qore_debug_variables");
         assertEq("integer", (select r.variables, $1.name == "n")[0].type);
 
-        # a paused thread is not paused again
+        # a paused thread is not paused again; the pause tells where it is
         r = call(c, "qore_debug_pause");
         assertEq("thread " + r.state.threadId + " is paused\n", r.text);
         assertTrue(r.state.paused);
+        assertEq(("<top level>",), map $1.function, r.frames);
+        assertEq("integer", (select r.variables, $1.name == "n")[0].type);
+        r = call(c, "qore_debug_pause", {"details": False});
+        assertFalse(r.hasKey("frames"));
 
         # the program is ended
         r = call(c, "qore_debug_terminate");
@@ -497,8 +510,23 @@ public class DebugMcpServerTest inherits QUnit::Test {
         r = call(c, "qore_debug_pause", {"timeout_ms": 200});
         assertRegex("No thread paused within 200 ms", r.text);
         assertFalse(r.state.paused);
+        # a thread that is not paused has no details
+        assertFalse(r.hasKey("frames") || r.hasKey("detailsError"));
         r = call(c, "qore_debug_terminate");
         assertEq({"terminated": True}, r.programEnd);
+
+        # a thread deep in a recursion: the frames from the top are given
+        path = writeProgram(tmp.path, "%modern\nsub f(int d) {\n    if (d > 0) {\n        f(d - 1);\n    }\n"
+            "    while (True) {\n        ++d;\n    }\n}\nf(30);\n", "deep.q");
+        call(c, "qore_debug_launch", {"script": path});
+        r = call(c, "qore_debug_continue", {"timeout_ms": 200});
+        assertTrue(r.timedOut);
+        assertEq(DebugMcpSession::MaxDetailFrames, r.frames.size());
+        # 31 calls of f() and the top-level code
+        assertEq(32 - DebugMcpSession::MaxDetailFrames, r.framesOmitted);
+        assertEq("f", r.frames[0].function);
+        assertEq(("d",), map $1.name, r.variables);
+        call(c, "qore_debug_terminate");
     }
 
     threadTest() {

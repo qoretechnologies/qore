@@ -78,7 +78,9 @@ module DebugMcpServer {
     output of the program in \c programOutput, each line with its thread, as in <tt>[thread 3] count=4</tt>;
     consecutive identical messages are given once with their count, as <tt>[thread 3] count=4 (x20)</tt>.  The
     \c finish mode of \c qore_debug_continue pauses the thread at the next statement of the caller, and the stop gives
-    the function and the value that it returned in \c returned.  \c qore_debug_launch, \c qore_debug_attach and
+    the function and the value that it returned in \c returned.  When \c qore_debug_continue pauses the program
+    after its timeout, and with \c qore_debug_pause, the report gives where the current thread is paused, its call
+    stack in \c frames, and the local variables of its top frame in \c variables, unless \c details is \c false.  \c qore_debug_launch, \c qore_debug_attach and
     \c qore_debug_exception_filter give the exceptions that pause threads in \c exceptionFilters.  A tool rejects an
     argument that it does not have, so that a misspelled option, as \c log for \c log_message, is not ignored.
 
