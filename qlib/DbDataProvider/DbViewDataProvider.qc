@@ -89,18 +89,24 @@ public class DbViewDataProvider inherits DbDataProviderBase {
     private {
         #! the table object used to read the view
         AbstractTable table;
+
+        #! the name of the view as the database lists it
+        string relation_name;
     }
 
     #! Creates the object from a table object for the view
     /** @param db the database
         @param table the SqlUtil table object for the view, used for reading only
         @param logger an optional logger
+        @param name the name of the view as the database lists it; if not given, the name of \a table
 
         @note the caller must check that \a table names a view of the kind of this provider; use the
         @ref DbDataProvider::DbViewsDataProvider "DbViewsDataProvider" to acquire a view provider by name
     */
-    constructor(AbstractDatabase db, AbstractTable table, *LoggerInterface logger) : DbDataProviderBase(db, logger) {
+    constructor(AbstractDatabase db, AbstractTable table, *LoggerInterface logger, *string name)
+            : DbDataProviderBase(db, logger) {
         self.table = table;
+        relation_name = name ?? table.getName();
     }
 
     #! Creates the object from constructor options
@@ -118,11 +124,12 @@ public class DbViewDataProvider inherits DbDataProviderBase {
                 db.getDatasourceDesc());
         }
         table = AbstractTable::getTable(ds, copts.view);
+        relation_name = copts.view;
     }
 
     #! Returns the data provider name
     string getName() {
-        return table.getName();
+        return relation_name;
     }
 
     #! Returns the data provider description
@@ -237,9 +244,22 @@ public class DbViewDataProvider inherits DbDataProviderBase {
     }
 }
 
-#! Defines a read-only data provider based on a single materialized view
+#! Defines a data provider based on a single materialized view: its records are read-only, and a request refreshes it
 /** The provider reads the materialized view's stored data as @ref DbDataProvider::DbViewDataProvider
-    "DbViewDataProvider" reads a view; the materialized view is not refreshed.
+    "DbViewDataProvider" reads a view; reading does not refresh it.  Its records cannot be written.
+
+    A request (@ref DataProvider::AbstractDataProvider::doRequest() "doRequest()") refreshes the materialized view
+    with @ref SqlUtil::AbstractDatabase::refreshMaterializedView() "AbstractDatabase::refreshMaterializedView()"; the
+    request type has the refresh options of the database (see getRequestType()):
+    - PostgreSQL: \c concurrent
+    - Oracle: \c method and \c atomic_refresh
+
+    @par Example:
+    @code{.py}
+DbDataProvider db(ds);
+AbstractDataProvider mv = db.getChildProviderPath("materialized-views/mv_sales_by_region");
+hash<auto> rv = mv.doRequest({"concurrent": True});
+    @endcode
 
     @since DbDataProvider 2.5
 */
@@ -249,7 +269,15 @@ public class DbMaterializedViewDataProvider inherits DbViewDataProvider {
         const ProviderInfo = cast<hash<DataProviderInfo>>(DbViewDataProvider::ProviderInfo + {
             "type": "DbMaterializedViewDataProvider",
             "constructor_options": ConstructorOptions,
+            # a request refreshes the materialized view
+            "supports_request": True,
         });
+
+        #! Request type: the refresh options of all databases; see getRequestType() for those of the database
+        const RequestType = DbMaterializedViewRefreshRequestType;
+
+        #! Response type
+        const ResponseType = DbMaterializedViewRefreshResponseType;
 
         #! Constructor options
         const ConstructorOptions = DbViewDataProvider::ConstructorOptions + {
@@ -268,8 +296,8 @@ public class DbMaterializedViewDataProvider inherits DbViewDataProvider {
         @param table the SqlUtil table object for the materialized view, used for reading only
         @param logger an optional logger
     */
-    constructor(AbstractDatabase db, AbstractTable table, *LoggerInterface logger)
-            : DbViewDataProvider(db, table, logger) {
+    constructor(AbstractDatabase db, AbstractTable table, *LoggerInterface logger, *string name)
+            : DbViewDataProvider(db, table, logger, name) {
     }
 
     #! Creates the object from constructor options
@@ -293,9 +321,172 @@ public class DbMaterializedViewDataProvider inherits DbViewDataProvider {
         return "materialized view";
     }
 
+    #! Returns the data provider description
+    *string getDesc() {
+        return sprintf("Record-based data provider for db materialized view `%s`; supports read/search and bulk "
+            "read operations on its stored data, which is read-only, and refreshing it with a request",
+            table.getSqlName());
+    }
+
+    #! Refreshes the materialized view
+    /** @param req the refresh options of the database; see getRequestType()
+        @param request_options the request options after processing by validateRequestOptions()
+
+        @return a hash with the name of the materialized view refreshed and the options used; see
+        @ref DbDataProvider::DbMaterializedViewRefreshResponseType "DbMaterializedViewRefreshResponseType"
+
+        @throw MATERIALIZED-VIEW-ERROR the materialized view cannot be refreshed; see
+        @ref SqlUtil::AbstractDatabase::refreshMaterializedView() "AbstractDatabase::refreshMaterializedView()"
+    */
+    private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        # the request is validated against the request type, a hash of the database's refresh options
+        *hash<auto> opts = req.typeCode() == NT_HASH ? req : NOTHING;
+        db.refreshMaterializedView(relation_name, opts);
+        return {
+            "materialized_view": relation_name,
+            "options": opts ?? {},
+        };
+    }
+
+    #! Returns the request type: the refresh options of the database
+    private *AbstractDataProviderType getRequestTypeImpl() {
+        return new DbMaterializedViewRefreshRequestType(keys db.getMaterializedViewRefreshOptions());
+    }
+
+    #! Returns the response type
+    private *AbstractDataProviderType getResponseTypeImpl() {
+        return ResponseType;
+    }
+
+    #! Returns the options of an action of this provider: for a request, only the refresh options of the database
+    /** The \c refresh-materialized-view action is registered with the refresh options of all databases; the options
+        of the action for this provider are those of its database
+
+        @param action the action
+        @param options the option values given so far
+
+        @return the action options
+    */
+    private *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForRequestWithOptionsImpl(
+            hash<DataProviderActionInfo> action, *hash<auto> options) {
+        *hash<string, hash<ActionOptionInfo>> rv = DbViewDataProvider::tryGetActionOptionsForRequestWithOptionsImpl(
+            action, options);
+        hash<string, bool> db_opts = map {$1: True}, keys db.getMaterializedViewRefreshOptions();
+        return map {$1.key: $1.value}, rv.pairIterator(),
+            db_opts{$1.key} || !DbMaterializedViewRefreshRequestType::Fields.hasKey($1.key);
+    }
+
     #! Returns data provider static info
     private hash<DataProviderInfo> getStaticInfoImpl() {
         return ProviderInfo;
     }
 }
+
+#! The request type of a refresh of a materialized view: the refresh options of the database
+/** The fields are the options of @ref SqlUtil::AbstractDatabase::refreshMaterializedView()
+    "AbstractDatabase::refreshMaterializedView()"; the type of a materialized view's provider has only those of its
+    database.
+
+    @since DbDataProvider 2.5
+*/
+public class DbMaterializedViewRefreshRequestType inherits HashDataType {
+    public {
+        #! The fields of all databases
+        const Fields = {
+            "concurrent": {
+                "display_name": "Concurrent Refresh",
+                "short_desc": "Refresh without blocking readers (PostgreSQL)",
+                "type": AbstractDataProviderTypeMap."*bool",
+                "desc": "PostgreSQL only: if `True`, the materialized view is refreshed with "
+                    "`REFRESH MATERIALIZED VIEW CONCURRENTLY`, which does not block readers.\n\n"
+                    "**Requirements:** the materialized view must have a unique index that uses only column names "
+                    "and has no `WHERE` clause, and it must already be populated.\n\n"
+                    "If `False` (the default), the refresh locks the materialized view against reads until it "
+                    "completes.",
+                "example_value": True,
+            },
+            "method": {
+                "display_name": "Refresh Method",
+                "short_desc": "How the stored data is refreshed (Oracle)",
+                "type": AbstractDataProviderTypeMap."*string",
+                "desc": "Oracle only: the refresh method of `DBMS_MVIEW.REFRESH`; the default is `force`.",
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "value": "force",
+                        "display_name": "Force",
+                        "short_desc": "Fast refresh if possible, otherwise complete",
+                        "desc": "A fast refresh if it is possible, otherwise a complete refresh",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "complete",
+                        "display_name": "Complete",
+                        "short_desc": "Recompute all of the stored data",
+                        "desc": "The stored data is recomputed from the defining query",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "fast",
+                        "display_name": "Fast",
+                        "short_desc": "Apply the changes recorded since the last refresh",
+                        "desc": "The changes recorded in the materialized view logs since the last refresh are "
+                            "applied; the materialized view must support fast refresh",
+                    },
+                ),
+                "example_value": "force",
+            },
+            "atomic_refresh": {
+                "display_name": "Atomic Refresh",
+                "short_desc": "Refresh in a single transaction (Oracle)",
+                "type": AbstractDataProviderTypeMap."*bool",
+                "desc": "Oracle only: if `True` (the default), the materialized view is refreshed in a single "
+                    "transaction, so readers see the previous data until the refresh completes.\n\n"
+                    "If `False`, a complete refresh may truncate the materialized view first, which is faster, but "
+                    "readers see it empty until the refresh completes.",
+                "example_value": True,
+            },
+        };
+    }
+
+    #! Creates the type with the given fields, or all fields
+    /** @param field_names the names of the fields; if not given, all fields; names that have no field are ignored
+    */
+    constructor(*list<string> field_names) : HashDataType("DbMaterializedViewRefreshRequest") {
+        addQoreFields(exists field_names ? Fields{field_names} : Fields);
+    }
+}
+
+#! The request type of a refresh with the fields of all databases
+public const DbMaterializedViewRefreshRequestType = new DbMaterializedViewRefreshRequestType();
+
+#! The response type of a refresh of a materialized view
+/** @since DbDataProvider 2.5
+*/
+public class DbMaterializedViewRefreshResponseType inherits HashDataType {
+    public {
+        #! The fields of the response
+        const Fields = {
+            "materialized_view": {
+                "display_name": "Materialized View",
+                "short_desc": "The name of the materialized view refreshed",
+                "type": AbstractDataProviderTypeMap."string",
+                "desc": "The name of the materialized view refreshed, as the database lists it",
+                "example_value": "mv_sales_by_region",
+            },
+            "options": {
+                "display_name": "Refresh Options",
+                "short_desc": "The refresh options used",
+                "type": AbstractDataProviderType::get(AutoHashType),
+                "desc": "The refresh options given in the request; options not given take their default values",
+                "example_value": {"concurrent": True},
+            },
+        };
+    }
+
+    #! Creates the type
+    constructor() : HashDataType("DbMaterializedViewRefreshResponse") {
+        addQoreFields(Fields);
+    }
+}
+
+#! The response type of a refresh
+public const DbMaterializedViewRefreshResponseType = new DbMaterializedViewRefreshResponseType();
 }

@@ -183,101 +183,197 @@
           "source": "The name of the table",
           "message": "Název tabulky"
         },
-        "app.RGI.action.ZmluZF92aWV3.display_name": {
+        "app.RGI.action.ZmluZC12aWV3.display_name": {
           "source": "Find Matching View Records",
           "message": "Vyhledat odpovídající záznamy pohledu"
         },
-        "app.RGI.action.ZmluZF92aWV3.short_desc": {
+        "app.RGI.action.ZmluZC12aWV3.short_desc": {
           "source": "Find records in the view",
           "message": "Vyhledat záznamy v pohledu"
         },
-        "app.RGI.action.ZmluZF92aWV3.desc": {
-          "source": "Find records in the view; the view is read-only",
-          "message": "Vyhledat záznamy v pohledu; pohled je jen pro čtení"
+        "app.RGI.action.ZmluZC12aWV3.desc": {
+          "source": "Finds the records of a database view that match the search criteria.\n\nThe view is **read-only**: its records cannot be created, updated or deleted.",
+          "message": "Vyhledá záznamy databázového pohledu, které odpovídají kritériím vyhledávání.\n\nPohled je **jen pro čtení**: jeho záznamy nelze vytvářet, aktualizovat ani mazat."
         },
-        "app.RGI.action.ZmluZF92aWV3.option.dmlldw.display_name": {
+        "app.RGI.action.ZmluZC12aWV3.option.dmlldw.display_name": {
           "source": "View",
           "message": "Pohled"
         },
-        "app.RGI.action.ZmluZF92aWV3.option.dmlldw.short_desc": {
+        "app.RGI.action.ZmluZC12aWV3.option.dmlldw.short_desc": {
           "source": "The name of the view",
           "message": "Název pohledu"
         },
-        "app.RGI.action.ZmluZF92aWV3.option.dmlldw.desc": {
+        "app.RGI.action.ZmluZC12aWV3.option.dmlldw.desc": {
           "source": "The name of the view",
           "message": "Název pohledu"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.display_name": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtdmlldw.display_name": {
           "source": "Find Single View Record",
           "message": "Vyhledat jeden záznam pohledu"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.short_desc": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtdmlldw.short_desc": {
           "source": "Find a single record in the view",
           "message": "Vyhledat jeden záznam v pohledu"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.desc": {
-          "source": "Find a single record in the view; the view is read-only",
-          "message": "Vyhledat jeden záznam v pohledu; pohled je jen pro čtení"
+        "app.RGI.action.ZmluZC1zaW5nbGUtdmlldw.desc": {
+          "source": "Finds the single record of a database view that matches the search criteria; more than one matching record is an error.\n\nThe view is **read-only**: its records cannot be created, updated or deleted.",
+          "message": "Vyhledá jediný záznam databázového pohledu, který odpovídá kritériím vyhledávání; více odpovídajících záznamů je chyba.\n\nPohled je **jen pro čtení**: jeho záznamy nelze vytvářet, aktualizovat ani mazat."
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.option.dmlldw.display_name": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtdmlldw.option.dmlldw.display_name": {
           "source": "View",
           "message": "Pohled"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.option.dmlldw.short_desc": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtdmlldw.option.dmlldw.short_desc": {
           "source": "The name of the view",
           "message": "Název pohledu"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.option.dmlldw.desc": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtdmlldw.option.dmlldw.desc": {
           "source": "The name of the view",
           "message": "Název pohledu"
         },
-        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.display_name": {
+        "app.RGI.action.ZmluZC1tYXRlcmlhbGl6ZWQtdmlldw.display_name": {
           "source": "Find Matching Materialized View Records",
           "message": "Vyhledat odpovídající záznamy materializovaného pohledu"
         },
-        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.short_desc": {
+        "app.RGI.action.ZmluZC1tYXRlcmlhbGl6ZWQtdmlldw.short_desc": {
           "source": "Find records in the materialized view",
           "message": "Vyhledat záznamy v materializovaném pohledu"
         },
-        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.desc": {
-          "source": "Find records in the materialized view; reads the stored data of the materialized view without refreshing it",
-          "message": "Vyhledat záznamy v materializovaném pohledu; čte uložená data materializovaného pohledu bez jeho obnovení"
+        "app.RGI.action.ZmluZC1tYXRlcmlhbGl6ZWQtdmlldw.desc": {
+          "source": "Finds the records of a materialized view that match the search criteria.\n\nThe stored data of the materialized view is read as it is, **without refreshing it**; use the `refresh-materialized-view` action to refresh it. Its records cannot be created, updated or deleted.",
+          "message": "Vyhledá záznamy materializovaného pohledu, které odpovídají kritériím vyhledávání.\n\nUložená data materializovaného pohledu se čtou tak, jak jsou, **bez jeho obnovení**; k obnovení použijte akci `refresh-materialized-view`. Jeho záznamy nelze vytvářet, aktualizovat ani mazat."
         },
-        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.option.dmlldw.display_name": {
+        "app.RGI.action.ZmluZC1tYXRlcmlhbGl6ZWQtdmlldw.option.dmlldw.display_name": {
           "source": "Materialized View",
           "message": "Materializovaný pohled"
         },
-        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.option.dmlldw.short_desc": {
+        "app.RGI.action.ZmluZC1tYXRlcmlhbGl6ZWQtdmlldw.option.dmlldw.short_desc": {
           "source": "The name of the materialized view",
           "message": "Název materializovaného pohledu"
         },
-        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.option.dmlldw.desc": {
+        "app.RGI.action.ZmluZC1tYXRlcmlhbGl6ZWQtdmlldw.option.dmlldw.desc": {
           "source": "The name of the materialized view",
           "message": "Název materializovaného pohledu"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.display_name": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtbWF0ZXJpYWxpemVkLXZpZXc.display_name": {
           "source": "Find Single Materialized View Record",
           "message": "Vyhledat jeden záznam materializovaného pohledu"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.short_desc": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtbWF0ZXJpYWxpemVkLXZpZXc.short_desc": {
           "source": "Find a single record in the materialized view",
           "message": "Vyhledat jeden záznam v materializovaném pohledu"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.desc": {
-          "source": "Find a single record in the materialized view; reads the stored data of the materialized view without refreshing it",
-          "message": "Vyhledat jeden záznam v materializovaném pohledu; čte uložená data materializovaného pohledu bez jeho obnovení"
+        "app.RGI.action.ZmluZC1zaW5nbGUtbWF0ZXJpYWxpemVkLXZpZXc.desc": {
+          "source": "Finds the single record of a materialized view that matches the search criteria; more than one matching record is an error.\n\nThe stored data of the materialized view is read as it is, **without refreshing it**; use the `refresh-materialized-view` action to refresh it. Its records cannot be created, updated or deleted.",
+          "message": "Vyhledá jediný záznam materializovaného pohledu, který odpovídá kritériím vyhledávání; více odpovídajících záznamů je chyba.\n\nUložená data materializovaného pohledu se čtou tak, jak jsou, **bez jeho obnovení**; k obnovení použijte akci `refresh-materialized-view`. Jeho záznamy nelze vytvářet, aktualizovat ani mazat."
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.option.dmlldw.display_name": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtbWF0ZXJpYWxpemVkLXZpZXc.option.dmlldw.display_name": {
           "source": "Materialized View",
           "message": "Materializovaný pohled"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.option.dmlldw.short_desc": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtbWF0ZXJpYWxpemVkLXZpZXc.option.dmlldw.short_desc": {
           "source": "The name of the materialized view",
           "message": "Název materializovaného pohledu"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.option.dmlldw.desc": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtbWF0ZXJpYWxpemVkLXZpZXc.option.dmlldw.desc": {
           "source": "The name of the materialized view",
           "message": "Název materializovaného pohledu"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.display_name": {
+          "source": "Refresh Materialized View",
+          "message": "Obnovit materializovaný pohled"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.short_desc": {
+          "source": "Refresh the stored data of a materialized view",
+          "message": "Obnovit uložená data materializovaného pohledu"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.desc": {
+          "source": "Refreshes the stored data of a materialized view from its defining query.\n\nThe options depend on the database:\n- **PostgreSQL**: `concurrent` refreshes without blocking readers; it needs a unique index on the materialized view\n- **Oracle**: `method` and `atomic_refresh`; the refresh commits implicitly, so it cannot be made in a transaction\n\nOn PostgreSQL, the refresh is committed unless a transaction is already in progress.",
+          "message": "Obnoví uložená data materializovaného pohledu z jeho definujícího dotazu.\n\nMožnosti závisí na databázi:\n- **PostgreSQL**: `concurrent` obnovuje bez blokování čtenářů; vyžaduje jedinečný index na materializovaném pohledu\n- **Oracle**: `method` a `atomic_refresh`; obnovení implicitně potvrzuje transakci, takže je nelze provést v transakci\n\nV PostgreSQL se obnovení potvrdí, pokud již neprobíhá transakce."
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.dmlldw.display_name": {
+          "source": "Materialized View",
+          "message": "Materializovaný pohled"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.dmlldw.short_desc": {
+          "source": "The name of the materialized view",
+          "message": "Název materializovaného pohledu"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.dmlldw.desc": {
+          "source": "The name of the materialized view, as the database lists it",
+          "message": "Název materializovaného pohledu, jak jej uvádí databáze"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.Y29uY3VycmVudA.display_name": {
+          "source": "Concurrent Refresh",
+          "message": "Souběžné obnovení"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.Y29uY3VycmVudA.short_desc": {
+          "source": "Refresh without blocking readers (PostgreSQL)",
+          "message": "Obnovit bez blokování čtenářů (PostgreSQL)"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.Y29uY3VycmVudA.desc": {
+          "source": "PostgreSQL only: if `True`, the materialized view is refreshed with `REFRESH MATERIALIZED VIEW CONCURRENTLY`, which does not block readers.\n\n**Requirements:** the materialized view must have a unique index that uses only column names and has no `WHERE` clause, and it must already be populated.\n\nIf `False` (the default), the refresh locks the materialized view against reads until it completes.",
+          "message": "Pouze PostgreSQL: je-li `True`, materializovaný pohled se obnoví pomocí `REFRESH MATERIALIZED VIEW CONCURRENTLY`, což neblokuje čtenáře.\n\n**Požadavky:** materializovaný pohled musí mít jedinečný index, který používá pouze názvy sloupců a nemá klauzuli `WHERE`, a musí již být naplněn.\n\nJe-li `False` (výchozí), obnovení zamkne materializovaný pohled proti čtení, dokud neskončí."
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.bWV0aG9k.display_name": {
+          "source": "Refresh Method",
+          "message": "Metoda obnovení"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.bWV0aG9k.short_desc": {
+          "source": "How the stored data is refreshed (Oracle)",
+          "message": "Jak se obnoví uložená data (Oracle)"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.bWV0aG9k.desc": {
+          "source": "Oracle only: the refresh method of `DBMS_MVIEW.REFRESH`; the default is `force`.",
+          "message": "Pouze Oracle: metoda obnovení `DBMS_MVIEW.REFRESH`; výchozí je `force`."
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.bWV0aG9k.allowed-value.c3RyaW5nOmZvcmNl.display_name": {
+          "source": "Force",
+          "message": "Vynucené"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.bWV0aG9k.allowed-value.c3RyaW5nOmZvcmNl.short_desc": {
+          "source": "Fast refresh if possible, otherwise complete",
+          "message": "Rychlé obnovení, je-li možné, jinak úplné"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.bWV0aG9k.allowed-value.c3RyaW5nOmZvcmNl.desc": {
+          "source": "A fast refresh if it is possible, otherwise a complete refresh",
+          "message": "Rychlé obnovení, je-li možné, jinak úplné obnovení"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.bWV0aG9k.allowed-value.c3RyaW5nOmNvbXBsZXRl.display_name": {
+          "source": "Complete",
+          "message": "Úplné"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.bWV0aG9k.allowed-value.c3RyaW5nOmNvbXBsZXRl.short_desc": {
+          "source": "Recompute all of the stored data",
+          "message": "Znovu vypočítat všechna uložená data"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.bWV0aG9k.allowed-value.c3RyaW5nOmNvbXBsZXRl.desc": {
+          "source": "The stored data is recomputed from the defining query",
+          "message": "Uložená data se znovu vypočítají z definujícího dotazu"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.bWV0aG9k.allowed-value.c3RyaW5nOmZhc3Q.display_name": {
+          "source": "Fast",
+          "message": "Rychlé"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.bWV0aG9k.allowed-value.c3RyaW5nOmZhc3Q.short_desc": {
+          "source": "Apply the changes recorded since the last refresh",
+          "message": "Použít změny zaznamenané od posledního obnovení"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.bWV0aG9k.allowed-value.c3RyaW5nOmZhc3Q.desc": {
+          "source": "The changes recorded in the materialized view logs since the last refresh are applied; the materialized view must support fast refresh",
+          "message": "Použijí se změny zaznamenané v protokolech materializovaného pohledu od posledního obnovení; materializovaný pohled musí podporovat rychlé obnovení"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.YXRvbWljX3JlZnJlc2g.display_name": {
+          "source": "Atomic Refresh",
+          "message": "Atomické obnovení"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.YXRvbWljX3JlZnJlc2g.short_desc": {
+          "source": "Refresh in a single transaction (Oracle)",
+          "message": "Obnovit v jedné transakci (Oracle)"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.YXRvbWljX3JlZnJlc2g.desc": {
+          "source": "Oracle only: if `True` (the default), the materialized view is refreshed in a single transaction, so readers see the previous data until the refresh completes.\n\nIf `False`, a complete refresh may truncate the materialized view first, which is faster, but readers see it empty until the refresh completes.",
+          "message": "Pouze Oracle: je-li `True` (výchozí), materializovaný pohled se obnoví v jedné transakci, takže čtenáři vidí předchozí data, dokud obnovení neskončí.\n\nJe-li `False`, úplné obnovení může materializovaný pohled nejprve zkrátit, což je rychlejší, ale čtenáři jej vidí prázdný, dokud obnovení neskončí."
         }
       }
     }

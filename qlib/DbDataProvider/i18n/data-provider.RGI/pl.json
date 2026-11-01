@@ -183,101 +183,197 @@
           "source": "The name of the table",
           "message": "Nazwa tabeli"
         },
-        "app.RGI.action.ZmluZF92aWV3.display_name": {
+        "app.RGI.action.ZmluZC12aWV3.display_name": {
           "source": "Find Matching View Records",
           "message": "Znajdź pasujące rekordy widoku"
         },
-        "app.RGI.action.ZmluZF92aWV3.short_desc": {
+        "app.RGI.action.ZmluZC12aWV3.short_desc": {
           "source": "Find records in the view",
           "message": "Znajdź rekordy w widoku"
         },
-        "app.RGI.action.ZmluZF92aWV3.desc": {
-          "source": "Find records in the view; the view is read-only",
-          "message": "Znajdź rekordy w widoku; widok jest tylko do odczytu"
+        "app.RGI.action.ZmluZC12aWV3.desc": {
+          "source": "Finds the records of a database view that match the search criteria.\n\nThe view is **read-only**: its records cannot be created, updated or deleted.",
+          "message": "Znajduje rekordy widoku bazy danych pasujące do kryteriów wyszukiwania.\n\nWidok jest **tylko do odczytu**: jego rekordów nie można tworzyć, aktualizować ani usuwać."
         },
-        "app.RGI.action.ZmluZF92aWV3.option.dmlldw.display_name": {
+        "app.RGI.action.ZmluZC12aWV3.option.dmlldw.display_name": {
           "source": "View",
           "message": "Widok"
         },
-        "app.RGI.action.ZmluZF92aWV3.option.dmlldw.short_desc": {
+        "app.RGI.action.ZmluZC12aWV3.option.dmlldw.short_desc": {
           "source": "The name of the view",
           "message": "Nazwa widoku"
         },
-        "app.RGI.action.ZmluZF92aWV3.option.dmlldw.desc": {
+        "app.RGI.action.ZmluZC12aWV3.option.dmlldw.desc": {
           "source": "The name of the view",
           "message": "Nazwa widoku"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.display_name": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtdmlldw.display_name": {
           "source": "Find Single View Record",
           "message": "Znajdź pojedynczy rekord widoku"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.short_desc": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtdmlldw.short_desc": {
           "source": "Find a single record in the view",
           "message": "Znajdź pojedynczy rekord w widoku"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.desc": {
-          "source": "Find a single record in the view; the view is read-only",
-          "message": "Znajdź pojedynczy rekord w widoku; widok jest tylko do odczytu"
+        "app.RGI.action.ZmluZC1zaW5nbGUtdmlldw.desc": {
+          "source": "Finds the single record of a database view that matches the search criteria; more than one matching record is an error.\n\nThe view is **read-only**: its records cannot be created, updated or deleted.",
+          "message": "Znajduje pojedynczy rekord widoku bazy danych pasujący do kryteriów wyszukiwania; więcej niż jeden pasujący rekord jest błędem.\n\nWidok jest **tylko do odczytu**: jego rekordów nie można tworzyć, aktualizować ani usuwać."
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.option.dmlldw.display_name": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtdmlldw.option.dmlldw.display_name": {
           "source": "View",
           "message": "Widok"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.option.dmlldw.short_desc": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtdmlldw.option.dmlldw.short_desc": {
           "source": "The name of the view",
           "message": "Nazwa widoku"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.option.dmlldw.desc": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtdmlldw.option.dmlldw.desc": {
           "source": "The name of the view",
           "message": "Nazwa widoku"
         },
-        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.display_name": {
+        "app.RGI.action.ZmluZC1tYXRlcmlhbGl6ZWQtdmlldw.display_name": {
           "source": "Find Matching Materialized View Records",
           "message": "Znajdź pasujące rekordy widoku zmaterializowanego"
         },
-        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.short_desc": {
+        "app.RGI.action.ZmluZC1tYXRlcmlhbGl6ZWQtdmlldw.short_desc": {
           "source": "Find records in the materialized view",
           "message": "Znajdź rekordy w widoku zmaterializowanym"
         },
-        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.desc": {
-          "source": "Find records in the materialized view; reads the stored data of the materialized view without refreshing it",
-          "message": "Znajdź rekordy w widoku zmaterializowanym; odczytuje zapisane dane widoku zmaterializowanego bez jego odświeżania"
+        "app.RGI.action.ZmluZC1tYXRlcmlhbGl6ZWQtdmlldw.desc": {
+          "source": "Finds the records of a materialized view that match the search criteria.\n\nThe stored data of the materialized view is read as it is, **without refreshing it**; use the `refresh-materialized-view` action to refresh it. Its records cannot be created, updated or deleted.",
+          "message": "Znajduje rekordy widoku zmaterializowanego pasujące do kryteriów wyszukiwania.\n\nZapisane dane widoku zmaterializowanego są odczytywane bez zmian, **bez jego odświeżania**; aby go odświeżyć, użyj akcji `refresh-materialized-view`. Jego rekordów nie można tworzyć, aktualizować ani usuwać."
         },
-        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.option.dmlldw.display_name": {
+        "app.RGI.action.ZmluZC1tYXRlcmlhbGl6ZWQtdmlldw.option.dmlldw.display_name": {
           "source": "Materialized View",
           "message": "Widok zmaterializowany"
         },
-        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.option.dmlldw.short_desc": {
+        "app.RGI.action.ZmluZC1tYXRlcmlhbGl6ZWQtdmlldw.option.dmlldw.short_desc": {
           "source": "The name of the materialized view",
           "message": "Nazwa widoku zmaterializowanego"
         },
-        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.option.dmlldw.desc": {
+        "app.RGI.action.ZmluZC1tYXRlcmlhbGl6ZWQtdmlldw.option.dmlldw.desc": {
           "source": "The name of the materialized view",
           "message": "Nazwa widoku zmaterializowanego"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.display_name": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtbWF0ZXJpYWxpemVkLXZpZXc.display_name": {
           "source": "Find Single Materialized View Record",
           "message": "Znajdź pojedynczy rekord widoku zmaterializowanego"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.short_desc": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtbWF0ZXJpYWxpemVkLXZpZXc.short_desc": {
           "source": "Find a single record in the materialized view",
           "message": "Znajdź pojedynczy rekord w widoku zmaterializowanym"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.desc": {
-          "source": "Find a single record in the materialized view; reads the stored data of the materialized view without refreshing it",
-          "message": "Znajdź pojedynczy rekord w widoku zmaterializowanym; odczytuje zapisane dane widoku zmaterializowanego bez jego odświeżania"
+        "app.RGI.action.ZmluZC1zaW5nbGUtbWF0ZXJpYWxpemVkLXZpZXc.desc": {
+          "source": "Finds the single record of a materialized view that matches the search criteria; more than one matching record is an error.\n\nThe stored data of the materialized view is read as it is, **without refreshing it**; use the `refresh-materialized-view` action to refresh it. Its records cannot be created, updated or deleted.",
+          "message": "Znajduje pojedynczy rekord widoku zmaterializowanego pasujący do kryteriów wyszukiwania; więcej niż jeden pasujący rekord jest błędem.\n\nZapisane dane widoku zmaterializowanego są odczytywane bez zmian, **bez jego odświeżania**; aby go odświeżyć, użyj akcji `refresh-materialized-view`. Jego rekordów nie można tworzyć, aktualizować ani usuwać."
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.option.dmlldw.display_name": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtbWF0ZXJpYWxpemVkLXZpZXc.option.dmlldw.display_name": {
           "source": "Materialized View",
           "message": "Widok zmaterializowany"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.option.dmlldw.short_desc": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtbWF0ZXJpYWxpemVkLXZpZXc.option.dmlldw.short_desc": {
           "source": "The name of the materialized view",
           "message": "Nazwa widoku zmaterializowanego"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.option.dmlldw.desc": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtbWF0ZXJpYWxpemVkLXZpZXc.option.dmlldw.desc": {
           "source": "The name of the materialized view",
           "message": "Nazwa widoku zmaterializowanego"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.display_name": {
+          "source": "Refresh Materialized View",
+          "message": "Odśwież widok zmaterializowany"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.short_desc": {
+          "source": "Refresh the stored data of a materialized view",
+          "message": "Odśwież zapisane dane widoku zmaterializowanego"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.desc": {
+          "source": "Refreshes the stored data of a materialized view from its defining query.\n\nThe options depend on the database:\n- **PostgreSQL**: `concurrent` refreshes without blocking readers; it needs a unique index on the materialized view\n- **Oracle**: `method` and `atomic_refresh`; the refresh commits implicitly, so it cannot be made in a transaction\n\nOn PostgreSQL, the refresh is committed unless a transaction is already in progress.",
+          "message": "Odświeża zapisane dane widoku zmaterializowanego na podstawie jego zapytania definiującego.\n\nOpcje zależą od bazy danych:\n- **PostgreSQL**: `concurrent` odświeża bez blokowania czytelników; wymaga indeksu unikalnego na widoku zmaterializowanym\n- **Oracle**: `method` i `atomic_refresh`; odświeżanie niejawnie zatwierdza transakcję, więc nie można go wykonać w transakcji\n\nW PostgreSQL odświeżenie jest zatwierdzane, chyba że transakcja jest już w toku."
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.dmlldw.display_name": {
+          "source": "Materialized View",
+          "message": "Widok zmaterializowany"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.dmlldw.short_desc": {
+          "source": "The name of the materialized view",
+          "message": "Nazwa widoku zmaterializowanego"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.dmlldw.desc": {
+          "source": "The name of the materialized view, as the database lists it",
+          "message": "Nazwa widoku zmaterializowanego w postaci podawanej przez bazę danych"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.Y29uY3VycmVudA.display_name": {
+          "source": "Concurrent Refresh",
+          "message": "Odświeżenie współbieżne"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.Y29uY3VycmVudA.short_desc": {
+          "source": "Refresh without blocking readers (PostgreSQL)",
+          "message": "Odśwież bez blokowania czytelników (PostgreSQL)"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.Y29uY3VycmVudA.desc": {
+          "source": "PostgreSQL only: if `True`, the materialized view is refreshed with `REFRESH MATERIALIZED VIEW CONCURRENTLY`, which does not block readers.\n\n**Requirements:** the materialized view must have a unique index that uses only column names and has no `WHERE` clause, and it must already be populated.\n\nIf `False` (the default), the refresh locks the materialized view against reads until it completes.",
+          "message": "Tylko PostgreSQL: jeśli `True`, widok zmaterializowany jest odświeżany za pomocą `REFRESH MATERIALIZED VIEW CONCURRENTLY`, co nie blokuje czytelników.\n\n**Wymagania:** widok zmaterializowany musi mieć indeks unikalny, który używa tylko nazw kolumn i nie ma klauzuli `WHERE`, oraz musi być już wypełniony.\n\nJeśli `False` (domyślnie), odświeżanie blokuje odczyt widoku zmaterializowanego do swojego zakończenia."
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.bWV0aG9k.display_name": {
+          "source": "Refresh Method",
+          "message": "Metoda odświeżania"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.bWV0aG9k.short_desc": {
+          "source": "How the stored data is refreshed (Oracle)",
+          "message": "Sposób odświeżania zapisanych danych (Oracle)"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.bWV0aG9k.desc": {
+          "source": "Oracle only: the refresh method of `DBMS_MVIEW.REFRESH`; the default is `force`.",
+          "message": "Tylko Oracle: metoda odświeżania `DBMS_MVIEW.REFRESH`; domyślnie `force`."
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.bWV0aG9k.allowed-value.c3RyaW5nOmZvcmNl.display_name": {
+          "source": "Force",
+          "message": "Wymuszone"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.bWV0aG9k.allowed-value.c3RyaW5nOmZvcmNl.short_desc": {
+          "source": "Fast refresh if possible, otherwise complete",
+          "message": "Szybkie odświeżenie, jeśli możliwe, inaczej pełne"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.bWV0aG9k.allowed-value.c3RyaW5nOmZvcmNl.desc": {
+          "source": "A fast refresh if it is possible, otherwise a complete refresh",
+          "message": "Szybkie odświeżenie, jeśli to możliwe, w przeciwnym razie pełne odświeżenie"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.bWV0aG9k.allowed-value.c3RyaW5nOmNvbXBsZXRl.display_name": {
+          "source": "Complete",
+          "message": "Pełne"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.bWV0aG9k.allowed-value.c3RyaW5nOmNvbXBsZXRl.short_desc": {
+          "source": "Recompute all of the stored data",
+          "message": "Ponownie oblicz wszystkie zapisane dane"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.bWV0aG9k.allowed-value.c3RyaW5nOmNvbXBsZXRl.desc": {
+          "source": "The stored data is recomputed from the defining query",
+          "message": "Zapisane dane są ponownie obliczane na podstawie zapytania definiującego"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.bWV0aG9k.allowed-value.c3RyaW5nOmZhc3Q.display_name": {
+          "source": "Fast",
+          "message": "Szybkie"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.bWV0aG9k.allowed-value.c3RyaW5nOmZhc3Q.short_desc": {
+          "source": "Apply the changes recorded since the last refresh",
+          "message": "Zastosuj zmiany zarejestrowane od ostatniego odświeżenia"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.bWV0aG9k.allowed-value.c3RyaW5nOmZhc3Q.desc": {
+          "source": "The changes recorded in the materialized view logs since the last refresh are applied; the materialized view must support fast refresh",
+          "message": "Stosowane są zmiany zarejestrowane w dziennikach widoku zmaterializowanego od ostatniego odświeżenia; widok zmaterializowany musi obsługiwać szybkie odświeżanie"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.YXRvbWljX3JlZnJlc2g.display_name": {
+          "source": "Atomic Refresh",
+          "message": "Odświeżenie atomowe"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.YXRvbWljX3JlZnJlc2g.short_desc": {
+          "source": "Refresh in a single transaction (Oracle)",
+          "message": "Odśwież w jednej transakcji (Oracle)"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.YXRvbWljX3JlZnJlc2g.desc": {
+          "source": "Oracle only: if `True` (the default), the materialized view is refreshed in a single transaction, so readers see the previous data until the refresh completes.\n\nIf `False`, a complete refresh may truncate the materialized view first, which is faster, but readers see it empty until the refresh completes.",
+          "message": "Tylko Oracle: jeśli `True` (domyślnie), widok zmaterializowany jest odświeżany w jednej transakcji, więc czytelnicy widzą poprzednie dane do zakończenia odświeżania.\n\nJeśli `False`, pełne odświeżenie może najpierw obciąć widok zmaterializowany, co jest szybsze, ale czytelnicy widzą go pustym do zakończenia odświeżania."
         }
       }
     }

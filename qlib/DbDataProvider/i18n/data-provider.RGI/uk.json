@@ -183,101 +183,197 @@
           "source": "The name of the table",
           "message": "Назва таблиці"
         },
-        "app.RGI.action.ZmluZF92aWV3.display_name": {
+        "app.RGI.action.ZmluZC12aWV3.display_name": {
           "source": "Find Matching View Records",
           "message": "Знайти відповідні записи подання"
         },
-        "app.RGI.action.ZmluZF92aWV3.short_desc": {
+        "app.RGI.action.ZmluZC12aWV3.short_desc": {
           "source": "Find records in the view",
           "message": "Знайти записи в поданні"
         },
-        "app.RGI.action.ZmluZF92aWV3.desc": {
-          "source": "Find records in the view; the view is read-only",
-          "message": "Знайти записи в поданні; подання доступне лише для читання"
+        "app.RGI.action.ZmluZC12aWV3.desc": {
+          "source": "Finds the records of a database view that match the search criteria.\n\nThe view is **read-only**: its records cannot be created, updated or deleted.",
+          "message": "Знаходить записи подання бази даних, які відповідають критеріям пошуку.\n\nПодання доступне **лише для читання**: його записи не можна створювати, оновлювати чи видаляти."
         },
-        "app.RGI.action.ZmluZF92aWV3.option.dmlldw.display_name": {
+        "app.RGI.action.ZmluZC12aWV3.option.dmlldw.display_name": {
           "source": "View",
           "message": "Подання"
         },
-        "app.RGI.action.ZmluZF92aWV3.option.dmlldw.short_desc": {
+        "app.RGI.action.ZmluZC12aWV3.option.dmlldw.short_desc": {
           "source": "The name of the view",
           "message": "Назва подання"
         },
-        "app.RGI.action.ZmluZF92aWV3.option.dmlldw.desc": {
+        "app.RGI.action.ZmluZC12aWV3.option.dmlldw.desc": {
           "source": "The name of the view",
           "message": "Назва подання"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.display_name": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtdmlldw.display_name": {
           "source": "Find Single View Record",
           "message": "Знайти один запис подання"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.short_desc": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtdmlldw.short_desc": {
           "source": "Find a single record in the view",
           "message": "Знайти один запис у поданні"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.desc": {
-          "source": "Find a single record in the view; the view is read-only",
-          "message": "Знайти один запис у поданні; подання доступне лише для читання"
+        "app.RGI.action.ZmluZC1zaW5nbGUtdmlldw.desc": {
+          "source": "Finds the single record of a database view that matches the search criteria; more than one matching record is an error.\n\nThe view is **read-only**: its records cannot be created, updated or deleted.",
+          "message": "Знаходить єдиний запис подання бази даних, який відповідає критеріям пошуку; більше одного відповідного запису є помилкою.\n\nПодання доступне **лише для читання**: його записи не можна створювати, оновлювати чи видаляти."
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.option.dmlldw.display_name": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtdmlldw.option.dmlldw.display_name": {
           "source": "View",
           "message": "Подання"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.option.dmlldw.short_desc": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtdmlldw.option.dmlldw.short_desc": {
           "source": "The name of the view",
           "message": "Назва подання"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfdmlldw.option.dmlldw.desc": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtdmlldw.option.dmlldw.desc": {
           "source": "The name of the view",
           "message": "Назва подання"
         },
-        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.display_name": {
+        "app.RGI.action.ZmluZC1tYXRlcmlhbGl6ZWQtdmlldw.display_name": {
           "source": "Find Matching Materialized View Records",
           "message": "Знайти відповідні записи матеріалізованого подання"
         },
-        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.short_desc": {
+        "app.RGI.action.ZmluZC1tYXRlcmlhbGl6ZWQtdmlldw.short_desc": {
           "source": "Find records in the materialized view",
           "message": "Знайти записи в матеріалізованому поданні"
         },
-        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.desc": {
-          "source": "Find records in the materialized view; reads the stored data of the materialized view without refreshing it",
-          "message": "Знайти записи в матеріалізованому поданні; читає збережені дані матеріалізованого подання без його оновлення"
+        "app.RGI.action.ZmluZC1tYXRlcmlhbGl6ZWQtdmlldw.desc": {
+          "source": "Finds the records of a materialized view that match the search criteria.\n\nThe stored data of the materialized view is read as it is, **without refreshing it**; use the `refresh-materialized-view` action to refresh it. Its records cannot be created, updated or deleted.",
+          "message": "Знаходить записи матеріалізованого подання, які відповідають критеріям пошуку.\n\nЗбережені дані матеріалізованого подання читаються як є, **без його оновлення**; щоб оновити його, скористайтеся дією `refresh-materialized-view`. Його записи не можна створювати, оновлювати чи видаляти."
         },
-        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.option.dmlldw.display_name": {
+        "app.RGI.action.ZmluZC1tYXRlcmlhbGl6ZWQtdmlldw.option.dmlldw.display_name": {
           "source": "Materialized View",
           "message": "Матеріалізоване подання"
         },
-        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.option.dmlldw.short_desc": {
+        "app.RGI.action.ZmluZC1tYXRlcmlhbGl6ZWQtdmlldw.option.dmlldw.short_desc": {
           "source": "The name of the materialized view",
           "message": "Назва матеріалізованого подання"
         },
-        "app.RGI.action.ZmluZF9tYXRlcmlhbGl6ZWRfdmlldw.option.dmlldw.desc": {
+        "app.RGI.action.ZmluZC1tYXRlcmlhbGl6ZWQtdmlldw.option.dmlldw.desc": {
           "source": "The name of the materialized view",
           "message": "Назва матеріалізованого подання"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.display_name": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtbWF0ZXJpYWxpemVkLXZpZXc.display_name": {
           "source": "Find Single Materialized View Record",
           "message": "Знайти один запис матеріалізованого подання"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.short_desc": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtbWF0ZXJpYWxpemVkLXZpZXc.short_desc": {
           "source": "Find a single record in the materialized view",
           "message": "Знайти один запис у матеріалізованому поданні"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.desc": {
-          "source": "Find a single record in the materialized view; reads the stored data of the materialized view without refreshing it",
-          "message": "Знайти один запис у матеріалізованому поданні; читає збережені дані матеріалізованого подання без його оновлення"
+        "app.RGI.action.ZmluZC1zaW5nbGUtbWF0ZXJpYWxpemVkLXZpZXc.desc": {
+          "source": "Finds the single record of a materialized view that matches the search criteria; more than one matching record is an error.\n\nThe stored data of the materialized view is read as it is, **without refreshing it**; use the `refresh-materialized-view` action to refresh it. Its records cannot be created, updated or deleted.",
+          "message": "Знаходить єдиний запис матеріалізованого подання, який відповідає критеріям пошуку; більше одного відповідного запису є помилкою.\n\nЗбережені дані матеріалізованого подання читаються як є, **без його оновлення**; щоб оновити його, скористайтеся дією `refresh-materialized-view`. Його записи не можна створювати, оновлювати чи видаляти."
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.option.dmlldw.display_name": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtbWF0ZXJpYWxpemVkLXZpZXc.option.dmlldw.display_name": {
           "source": "Materialized View",
           "message": "Матеріалізоване подання"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.option.dmlldw.short_desc": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtbWF0ZXJpYWxpemVkLXZpZXc.option.dmlldw.short_desc": {
           "source": "The name of the materialized view",
           "message": "Назва матеріалізованого подання"
         },
-        "app.RGI.action.ZmluZF9zaW5nbGVfbWF0ZXJpYWxpemVkX3ZpZXc.option.dmlldw.desc": {
+        "app.RGI.action.ZmluZC1zaW5nbGUtbWF0ZXJpYWxpemVkLXZpZXc.option.dmlldw.desc": {
           "source": "The name of the materialized view",
           "message": "Назва матеріалізованого подання"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.display_name": {
+          "source": "Refresh Materialized View",
+          "message": "Оновити матеріалізоване подання"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.short_desc": {
+          "source": "Refresh the stored data of a materialized view",
+          "message": "Оновити збережені дані матеріалізованого подання"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.desc": {
+          "source": "Refreshes the stored data of a materialized view from its defining query.\n\nThe options depend on the database:\n- **PostgreSQL**: `concurrent` refreshes without blocking readers; it needs a unique index on the materialized view\n- **Oracle**: `method` and `atomic_refresh`; the refresh commits implicitly, so it cannot be made in a transaction\n\nOn PostgreSQL, the refresh is committed unless a transaction is already in progress.",
+          "message": "Оновлює збережені дані матеріалізованого подання за його визначальним запитом.\n\nПараметри залежать від бази даних:\n- **PostgreSQL**: `concurrent` оновлює без блокування читачів; для цього потрібен унікальний індекс на матеріалізованому поданні\n- **Oracle**: `method` і `atomic_refresh`; оновлення неявно фіксує транзакцію, тому його не можна виконати в транзакції\n\nУ PostgreSQL оновлення фіксується, якщо транзакція ще не виконується."
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.dmlldw.display_name": {
+          "source": "Materialized View",
+          "message": "Матеріалізоване подання"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.dmlldw.short_desc": {
+          "source": "The name of the materialized view",
+          "message": "Назва матеріалізованого подання"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.dmlldw.desc": {
+          "source": "The name of the materialized view, as the database lists it",
+          "message": "Назва матеріалізованого подання так, як її перелічує база даних"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.Y29uY3VycmVudA.display_name": {
+          "source": "Concurrent Refresh",
+          "message": "Паралельне оновлення"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.Y29uY3VycmVudA.short_desc": {
+          "source": "Refresh without blocking readers (PostgreSQL)",
+          "message": "Оновити без блокування читачів (PostgreSQL)"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.Y29uY3VycmVudA.desc": {
+          "source": "PostgreSQL only: if `True`, the materialized view is refreshed with `REFRESH MATERIALIZED VIEW CONCURRENTLY`, which does not block readers.\n\n**Requirements:** the materialized view must have a unique index that uses only column names and has no `WHERE` clause, and it must already be populated.\n\nIf `False` (the default), the refresh locks the materialized view against reads until it completes.",
+          "message": "Лише PostgreSQL: якщо `True`, матеріалізоване подання оновлюється за допомогою `REFRESH MATERIALIZED VIEW CONCURRENTLY`, що не блокує читачів.\n\n**Вимоги:** матеріалізоване подання повинно мати унікальний індекс, який використовує лише назви стовпців і не має речення `WHERE`, і воно повинно бути вже заповнене.\n\nЯкщо `False` (за замовчуванням), оновлення блокує читання матеріалізованого подання до свого завершення."
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.bWV0aG9k.display_name": {
+          "source": "Refresh Method",
+          "message": "Метод оновлення"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.bWV0aG9k.short_desc": {
+          "source": "How the stored data is refreshed (Oracle)",
+          "message": "Як оновлюються збережені дані (Oracle)"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.bWV0aG9k.desc": {
+          "source": "Oracle only: the refresh method of `DBMS_MVIEW.REFRESH`; the default is `force`.",
+          "message": "Лише Oracle: метод оновлення `DBMS_MVIEW.REFRESH`; за замовчуванням `force`."
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.bWV0aG9k.allowed-value.c3RyaW5nOmZvcmNl.display_name": {
+          "source": "Force",
+          "message": "Примусове"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.bWV0aG9k.allowed-value.c3RyaW5nOmZvcmNl.short_desc": {
+          "source": "Fast refresh if possible, otherwise complete",
+          "message": "Швидке оновлення, якщо можливо, інакше повне"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.bWV0aG9k.allowed-value.c3RyaW5nOmZvcmNl.desc": {
+          "source": "A fast refresh if it is possible, otherwise a complete refresh",
+          "message": "Швидке оновлення, якщо можливо, інакше повне оновлення"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.bWV0aG9k.allowed-value.c3RyaW5nOmNvbXBsZXRl.display_name": {
+          "source": "Complete",
+          "message": "Повне"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.bWV0aG9k.allowed-value.c3RyaW5nOmNvbXBsZXRl.short_desc": {
+          "source": "Recompute all of the stored data",
+          "message": "Повторно обчислити всі збережені дані"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.bWV0aG9k.allowed-value.c3RyaW5nOmNvbXBsZXRl.desc": {
+          "source": "The stored data is recomputed from the defining query",
+          "message": "Збережені дані повторно обчислюються за визначальним запитом"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.bWV0aG9k.allowed-value.c3RyaW5nOmZhc3Q.display_name": {
+          "source": "Fast",
+          "message": "Швидке"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.bWV0aG9k.allowed-value.c3RyaW5nOmZhc3Q.short_desc": {
+          "source": "Apply the changes recorded since the last refresh",
+          "message": "Застосувати зміни, записані після останнього оновлення"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.bWV0aG9k.allowed-value.c3RyaW5nOmZhc3Q.desc": {
+          "source": "The changes recorded in the materialized view logs since the last refresh are applied; the materialized view must support fast refresh",
+          "message": "Застосовуються зміни, записані в журналах матеріалізованого подання після останнього оновлення; матеріалізоване подання повинно підтримувати швидке оновлення"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.YXRvbWljX3JlZnJlc2g.display_name": {
+          "source": "Atomic Refresh",
+          "message": "Атомарне оновлення"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.YXRvbWljX3JlZnJlc2g.short_desc": {
+          "source": "Refresh in a single transaction (Oracle)",
+          "message": "Оновити в одній транзакції (Oracle)"
+        },
+        "app.RGI.action.cmVmcmVzaC1tYXRlcmlhbGl6ZWQtdmlldw.option.YXRvbWljX3JlZnJlc2g.desc": {
+          "source": "Oracle only: if `True` (the default), the materialized view is refreshed in a single transaction, so readers see the previous data until the refresh completes.\n\nIf `False`, a complete refresh may truncate the materialized view first, which is faster, but readers see it empty until the refresh completes.",
+          "message": "Лише Oracle: якщо `True` (за замовчуванням), матеріалізоване подання оновлюється в одній транзакції, тому читачі бачать попередні дані до завершення оновлення.\n\nЯкщо `False`, повне оновлення може спочатку очистити матеріалізоване подання, що швидше, але читачі бачать його порожнім до завершення оновлення."
         }
       }
     }

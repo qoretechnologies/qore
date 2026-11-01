@@ -1,0 +1,207 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file OracleCatalogDatasource.qm an Oracle datasource for offline tests that answers catalog queries in memory
+
+/*  OracleCatalogDatasource.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+module OracleCatalogDatasource {
+    version = "1.0";
+    desc = "an Oracle datasource for offline tests that answers catalog queries in memory";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+}
+
+/** @mainpage OracleCatalogDatasource Module
+
+    @ref OracleCatalogDatasource::CatalogDatasource "CatalogDatasource" lets a test exercise OracleSqlUtilBase
+    without an Oracle server: the catalog queries that OracleTable and OracleDatabase make are answered from the
+    objects given to it, statements executed with \c exec() are recorded, and the transaction state is set by the
+    test.  It needs the \c oracle driver module, as a datasource of the \c oracle driver is made (never opened).
+*/
+
+#! the namespace of the module
+public namespace OracleCatalogDatasource {
+#! A datasource that answers the catalog queries of OracleSqlUtilBase from an in-memory catalog and records them
+/** No connection is opened: the queries that OracleTable and OracleDatabase make to list and acquire tables are
+    answered from the objects given, so that what is listed and opened as a table is tested without an Oracle server.
+*/
+public class CatalogDatasource inherits Datasource {
+    public {
+        #! the queries made, with their arguments
+        list<hash<auto>> queries = ();
+
+        #! the statements executed with exec(), with their arguments
+        list<hash<auto>> execs = ();
+
+        #! the number of calls to commit() and rollback()
+        int commits = 0;
+        int rollbacks = 0;
+
+        #! True if the calling thread is to be reported as in a transaction
+        bool in_trans = False;
+    }
+
+    private {
+        #! the user's tables, with the container tables of the user's materialized views
+        list<string> user_tables;
+        #! the user's views
+        list<string> user_views;
+        #! the user's materialized views
+        list<string> user_mviews;
+        #! the user's dropped tables in the recycle bin, which are in user_tables with dropped = 'YES'
+        list<string> user_dropped;
+        #! the user's synonyms: name -> hash of owner, name and type of the object named
+        hash<string, hash<auto>> synonyms;
+        #! the objects of other schemas: "OWNER.NAME" -> "TABLE", "VIEW", "MATERIALIZED VIEW" or "DROPPED TABLE"
+        hash<string, string> other_objects;
+    }
+
+    constructor(list<string> user_tables, list<string> user_views, list<string> user_mviews,
+            list<string> user_dropped, hash<string, hash<auto>> synonyms, hash<string, string> other_objects)
+            : Datasource("oracle:qtest/none@qtest") {
+        self.user_tables = user_tables + user_mviews + user_dropped;
+        self.user_dropped = user_dropped;
+        self.user_views = user_views;
+        self.user_mviews = user_mviews;
+        self.synonyms = synonyms;
+        self.other_objects = other_objects;
+    }
+
+    auto getServerVersion() {
+        return "19.3.0.0.0";
+    }
+
+    string getDriverRealName() {
+        return "oracle";
+    }
+
+    auto exec(string sql) {
+        execs += {"sql": sql, "args": argv};
+        if (sql =~ /dbms_mview\.refresh/) {
+            return NOTHING;
+        }
+        throw "UNEXPECTED-STATEMENT", sprintf("unexpected statement: %s (args: %y)", sql, argv);
+    }
+
+    commit() {
+        ++commits;
+    }
+
+    rollback() {
+        ++rollbacks;
+    }
+
+    bool currentThreadInTransaction() {
+        return in_trans;
+    }
+
+    *hash<auto> select(string sql) {
+        return answer(sql, argv, True);
+    }
+
+    *hash<auto> selectRow(string sql) {
+        return answer(sql, argv, False);
+    }
+
+    #! returns the answer to a query, as a hash of lists for select() (\a as_list) or a row for selectRow()
+    private *hash<auto> answer(string sql, *list<auto> args, bool as_list) {
+        queries += {"sql": sql, "args": args};
+        # system view introspection: every DBA_* view is available
+        if (sql =~ /from all_objects/) {
+            return {"object_name": map $1.upr(), args[1]."^values^"};
+        }
+        # the listing of the user's tables: user_tables has the container tables of materialized views, which the
+        # query has to exclude
+        # and the dropped tables in the recycle bin, with dropped = 'YES'
+        if (sql =~ /^select table_name from user_tables/) {
+            bool excl = (sql =~ /not exists \(select 1 from user_mviews m where m\.mview_name = t\.table_name\)/);
+            bool excl_dropped = (sql =~ /nvl\(t\.dropped, 'NO'\) != 'YES'/);
+            return {"table_name": sort(map $1, user_tables, (!excl || !inlist($1, user_mviews))
+                && (!excl_dropped || !inlist($1, user_dropped)))};
+        }
+        # the listing of the tables of the user's synonyms: all_tables has the container tables of materialized
+        # views as well
+        if (sql =~ /^select synonym_name from user_synonyms s, all_tables t/) {
+            bool excl = (sql =~ /not exists \(select 1 from all_mviews m where m\.owner = t\.owner and m\.mview_name = t\.table_name\)/);
+            bool excl_dropped = (sql =~ /nvl\(t\.dropped, 'NO'\) != 'YES'/);
+            return {"synonym_name": sort(map $1.key, synonyms.pairIterator(), $1.value.type == "TABLE"
+                || (!excl && $1.value.type == "MATERIALIZED VIEW")
+                || (!excl_dropped && $1.value.type == "DROPPED TABLE"))};
+        }
+        # the views, materialized views and sequences: the recycle bin has none of them
+        if (sql =~ /^select object_name from user_objects where object_type = %v order by 1$/) {
+            switch (args[0]) {
+                case "VIEW": return {"object_name": sort(user_views)};
+                case "MATERIALIZED VIEW": return {"object_name": sort(user_mviews)};
+            }
+            return {"object_name": ()};
+        }
+        if (sql =~ /^select \* from user_tables where table_name = %v$/) {
+            return inlist(args[0], user_tables)
+                ? {"table_name": args[0], "tablespace_name": "USERS",
+                    "dropped": inlist(args[0], user_dropped) ? "YES" : "NO"}
+                : NOTHING;
+        }
+        if (sql =~ /^select \* from user_views where view_name = %v$/) {
+            return inlist(args[0], user_views) ? {"view_name": args[0]} : NOTHING;
+        }
+        if (sql =~ /^select 1 as v from dba_mviews where owner = %v and mview_name = %v$/) {
+            if (args[0] == "QTEST") {
+                return inlist(args[1], user_mviews) ? {"v": 1} : NOTHING;
+            }
+            return other_objects{args[0] + "." + args[1]} == "MATERIALIZED VIEW" ? {"v": 1} : NOTHING;
+        }
+        if (sql =~ /^select \* from dba_tables where owner = %v and table_name = %v$/) {
+            *string type = other_objects{args[0] + "." + args[1]};
+            return (type == "TABLE" || type == "MATERIALIZED VIEW" || type == "DROPPED TABLE")
+                ? {"table_name": args[1], "tablespace_name": "USERS", "dropped": type == "DROPPED TABLE" ? "YES" : "NO"}
+                : NOTHING;
+        }
+        if (sql =~ /^select \* from dba_views where owner = %v and view_name = %v$/) {
+            return other_objects{args[0] + "." + args[1]} == "VIEW" ? {"view_name": args[1]} : NOTHING;
+        }
+        if (sql =~ /dbms_utility\.name_resolve/) {
+            # the name is given as "OWNER"."NAME"
+            string name = (args[0] =~ x/\.(.*)$/)[0];
+            name =~ s/"//g;
+            if (*hash<auto> syn = synonyms{name}) {
+                return {"owner": syn.owner, "table": syn.name, "link": NULL};
+            }
+            throw "ORA-06564", "object does not exist";
+        }
+        if (sql =~ /from dba_synonyms s/) {
+            # the fallback synonym resolution, after dbms_utility.name_resolve() failed
+            *hash<auto> syn = args[0] == "QTEST" ? synonyms{args[1]} : NOTHING;
+            return (syn && syn.type != "MATERIALIZED VIEW")
+                ? {"table_owner": syn.owner, "table_name": syn.name,
+                    "object_type": syn.type == "DROPPED TABLE" ? "TABLE" : syn.type}
+                : NOTHING;
+        }
+        if (sql =~ /from dba_tab_comments/) {
+            return as_list ? {} : {"comments": NULL};
+        }
+        throw "UNEXPECTED-QUERY", sprintf("unexpected query: %s (args: %y)", sql, args);
+    }
+}
+
+}

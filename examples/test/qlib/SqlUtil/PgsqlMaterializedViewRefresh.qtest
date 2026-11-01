@@ -1,0 +1,219 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%enable-all-warnings
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires DataProvider
+%requires SqlUtil
+%requires PgsqlSqlUtilBase
+%requires QUnit
+
+%prepend-module-path "${SCRIPT_DIR}"
+%requires ./PgsqlTestIsolation.qm
+
+%try-module pgsql
+%define NoPgsql
+%endtry
+
+%exec-class PgsqlMaterializedViewRefreshTest
+
+#! Tests AbstractDatabase::refreshMaterializedView() on PostgreSQL
+/** Runs with the connection in \c QORE_DB_CONNSTR_PGSQL (or \c -c) in a schema of its own, and is skipped without one
+*/
+class PgsqlMaterializedViewRefreshTest inherits QUnit::Test {
+    public {
+        const MyOpts = Opts + {
+            "connstr": "c,conn=s",
+        };
+    }
+
+    private {
+        *Datasource ds;
+        string skip_reason = "no PostgreSQL connection; set QORE_DB_CONNSTR_PGSQL";
+    }
+
+    constructor() : Test("PgsqlMaterializedViewRefresh", "1.0", \ARGV, MyOpts) {
+%ifndef NoPgsql
+        *string connstr = m_options.connstr ?? ENV.QORE_DB_CONNSTR_PGSQL;
+        if (connstr) {
+            try {
+                PgsqlRunSchema::setup(connstr, "PgsqlMaterializedViewRefresh");
+                ds = new Datasource(connstr);
+                ds.open();
+                setupObjects();
+            } catch (hash<ExceptionInfo> ex) {
+                skip_reason = sprintf("cannot set up PostgreSQL: %s: %s", ex.err, ex.desc);
+                remove ds;
+            }
+        }
+%else
+        skip_reason = "the pgsql driver is not available";
+%endif
+        on_exit {
+            if (ds) {
+                try {
+                    PgsqlRunSchema::teardown();
+                } catch (hash<ExceptionInfo> ex) {
+                    printf("WARNING: cannot drop the run schema: %s: %s\n", ex.err, ex.desc);
+                }
+            }
+        }
+
+        addTestCase("a refresh reads new rows of the base table", \refreshTest());
+        addTestCase("a concurrent refresh needs a unique index", \concurrentTest());
+        addTestCase("a concurrent refresh needs a populated materialized view", \unpopulatedTest());
+        addTestCase("a refresh is part of the caller's transaction", \transactionTest());
+        addTestCase("names are quoted and must be listed materialized views", \nameTest());
+        addTestCase("invalid options are refused", \optionTest());
+        set_return_value(main());
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(22);
+        printOption("-c,--conn=ARG", "set DB connection argument (ex: \"pgsql:user/pass@db\")", 22);
+    }
+
+    #! creates the base table and the materialized views in the run's schema
+    private setupObjects() {
+        on_error ds.rollback();
+        on_success ds.commit();
+        ds.exec("create table base (id int not null primary key, region varchar(10) not null, amount int not null)");
+        ds.exec("insert into base values (1, 'EU', 10), (2, 'US', 20)");
+        # with a unique index, so it can be refreshed concurrently
+        ds.exec("create materialized view mv_unique as select id, region, amount from base");
+        ds.exec("create unique index mv_unique_id on mv_unique (id)");
+        # without a unique index; a unique index with a predicate does not allow a concurrent refresh
+        ds.exec("create materialized view mv_plain as select region, sum(amount) as total from base group by region");
+        ds.exec("create unique index mv_plain_part on mv_plain (region) where total > 0");
+        # never populated
+        ds.exec("create materialized view mv_empty as select id from base with no data");
+        ds.exec("create unique index mv_empty_id on mv_empty (id)");
+        # a name that needs quotes
+        ds.exec("create materialized view \"Mv Mixed\" as select id from base");
+    }
+
+    private Datasource getDs() {
+        if (!ds) {
+            testSkip(skip_reason);
+        }
+        return ds;
+    }
+
+    private int count(string sql_name) {
+        return ds.selectRow("select count(1) as c from " + sql_name).c.toInt();
+    }
+
+    #! adds a row to the base table and commits it
+    private addRow(int id) {
+        on_error ds.rollback();
+        on_success ds.commit();
+        ds.exec("insert into base values (%v, 'EU', %v)", id, id * 10);
+    }
+
+    refreshTest() {
+        Datasource ds = getDs();
+        PgsqlDatabase db(ds);
+        assertTrue(db.supportsMaterializedViews());
+        assertEq({"concurrent": Type::Boolean}, db.getMaterializedViewRefreshOptions());
+        int before = count("mv_unique");
+        addRow(100);
+        # the stored data does not change until the refresh
+        assertEq(before, count("mv_unique"));
+        db.refreshMaterializedView("mv_unique");
+        assertEq(before + 1, count("mv_unique"));
+        # the refresh outside a transaction is committed and leaves no transaction
+        assertFalse(ds.currentThreadInTransaction());
+        Datasource other(ds.getConfigString());
+        other.open();
+        assertEq(before + 1, other.selectRow("select count(1) as c from mv_unique").c.toInt(),
+            "another connection sees the refreshed data");
+        other.rollback();
+        db.refreshMaterializedView("mv_plain", {"concurrent": False});
+        assertEq(1010, ds.selectRow("select total from mv_plain where region = 'EU'").total.toInt());
+        ds.rollback();
+    }
+
+    concurrentTest() {
+        Datasource ds = getDs();
+        PgsqlDatabase db(ds);
+        addRow(101);
+        int before = count("mv_unique");
+        db.refreshMaterializedView("mv_unique", {"concurrent": True});
+        assertEq(before + 1, count("mv_unique"));
+        assertFalse(ds.currentThreadInTransaction());
+        ds.rollback();
+        # without a unique index that a concurrent refresh can use
+        assertThrows("MATERIALIZED-VIEW-ERROR", "cannot be refreshed concurrently: a concurrent refresh needs a "
+            "unique index", \db.refreshMaterializedView(), ("mv_plain", {"concurrent": True}));
+        assertFalse(ds.currentThreadInTransaction());
+        # a concurrent refresh in a transaction is part of it
+        addRow(102);
+        ds.beginTransaction();
+        db.refreshMaterializedView("mv_unique", {"concurrent": True});
+        assertTrue(ds.currentThreadInTransaction());
+        assertEq(before + 2, count("mv_unique"));
+        ds.commit();
+    }
+
+    unpopulatedTest() {
+        Datasource ds = getDs();
+        PgsqlDatabase db(ds);
+        assertThrows("MATERIALIZED-VIEW-ERROR", "not populated", \db.refreshMaterializedView(),
+            ("mv_empty", {"concurrent": True}));
+        db.refreshMaterializedView("mv_empty");
+        assertEq(count("base"), count("mv_empty"));
+        # now it can be refreshed concurrently
+        db.refreshMaterializedView("mv_empty", {"concurrent": True});
+        ds.rollback();
+    }
+
+    transactionTest() {
+        Datasource ds = getDs();
+        PgsqlDatabase db(ds);
+        int before = count("mv_unique");
+        ds.rollback();
+        ds.beginTransaction();
+        ds.exec("insert into base values (200, 'US', 1)");
+        db.refreshMaterializedView("mv_unique");
+        assertTrue(ds.currentThreadInTransaction(), "the caller's transaction is still open");
+        assertEq(before + 1, count("mv_unique"));
+        ds.rollback();
+        # the refresh was rolled back with the transaction
+        assertEq(before, count("mv_unique"));
+        ds.rollback();
+        # a failed refresh outside a transaction leaves none
+        assertThrows("MATERIALIZED-VIEW-ERROR", \db.refreshMaterializedView(), ("mv_plain", {"concurrent": True}));
+        assertFalse(ds.currentThreadInTransaction());
+    }
+
+    nameTest() {
+        Datasource ds = getDs();
+        PgsqlDatabase db(ds);
+        list<string> mvs = db.listMaterializedViews();
+        *string mixed = (map $1, mvs, $1 =~ /Mv Mixed/)[0];
+        assertTrue(exists mixed, sprintf("the quoted name is listed: %y", mvs));
+        addRow(103);
+        db.refreshMaterializedView(mixed);
+        assertEq(count("base"), count("\"Mv Mixed\""));
+        ds.rollback();
+        foreach string name in ("no_such_mview", "base", "mv_unique; drop table base", "mv_unique\"; drop table base;--") {
+            assertThrows("MATERIALIZED-VIEW-ERROR", "does not exist", \db.refreshMaterializedView(), name, name);
+        }
+        assertTrue(count("base") > 0, "the base table is still there");
+        ds.rollback();
+    }
+
+    optionTest() {
+        Datasource ds = getDs();
+        PgsqlDatabase db(ds);
+        assertThrows("MATERIALIZED-VIEW-ERROR", "unknown key \"method\"", \db.refreshMaterializedView(),
+            ("mv_unique", {"method": "fast"}));
+        assertThrows("MATERIALIZED-VIEW-ERROR", "expecting \"boolean\"", \db.refreshMaterializedView(),
+            ("mv_unique", {"concurrent": "yes"}));
+        assertFalse(ds.currentThreadInTransaction());
+    }
+}

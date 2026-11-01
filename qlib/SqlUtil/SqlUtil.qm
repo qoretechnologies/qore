@@ -151,6 +151,11 @@ module SqlUtil {
     @section sqlutil_relnotes Release Notes for the SqlUtil Module
 
     @subsection sqlutilv3_11_0 SqlUtil v3.11.0
+    - added @ref SqlUtil::AbstractDatabase::refreshMaterializedView() "AbstractDatabase::refreshMaterializedView()"
+      and @ref SqlUtil::AbstractDatabase::getMaterializedViewRefreshOptions()
+      "AbstractDatabase::getMaterializedViewRefreshOptions()" to refresh the stored data of a materialized view, with
+      the transaction semantics of each database; a database without materialized views raises
+      \c MATERIALIZED-VIEW-ERROR
     - added @ref SqlUtil::AbstractDatabase::supportsMaterializedViews() "AbstractDatabase::supportsMaterializedViews()"
       and @ref SqlUtil::AbstractDatabase::listMaterializedViews() "AbstractDatabase::listMaterializedViews()" for
       every database; a database without materialized views lists none

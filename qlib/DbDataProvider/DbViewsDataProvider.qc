@@ -111,7 +111,7 @@ public class DbViewsDataProvider inherits DbDataProviderBase {
             if (!inlist(name, getChildProviderNamesImpl())) {
                 return;
             }
-            return makeChild(AbstractTable::getTable(db.getDatasource(), name));
+            return makeChild(AbstractTable::getTable(db.getDatasource(), name), name);
         } catch (hash<ExceptionInfo> ex) {
             rethrow "CHILD-PROVIDER-ERROR", sprintf("view %y cannot be acquired from %y: %s: %s", name, getName(),
                 ex.err, ex.desc), ex.arg;
@@ -119,8 +119,8 @@ public class DbViewsDataProvider inherits DbDataProviderBase {
     }
 
     #! Returns the child provider for the given table object
-    private AbstractDataProvider makeChild(AbstractTable table) {
-        return new DbViewDataProvider(db, table, logger);
+    private AbstractDataProvider makeChild(AbstractTable table, string name) {
+        return new DbViewDataProvider(db, table, logger, name);
     }
 
     #! Returns data provider static info
@@ -176,8 +176,9 @@ public class DbMaterializedViewsDataProvider inherits DbViewsDataProvider {
         return cast<hash<DataProviderSummaryInfo>>(
             DbMaterializedViewDataProvider::ProviderInfo{DataProviderSummaryInfoKeys} + {
             "name": name,
-            "desc": sprintf("Read-only record-based data provider for db materialized view `%s`; supports "
-                "read/search and bulk read operations", name),
+            "desc": sprintf("Record-based data provider for db materialized view `%s`; supports read/search and "
+                "bulk read operations on its stored data, which is read-only, and refreshing it with a request",
+                name),
             "type": "DbMaterializedViewDataProvider",
             "supports_children": False,
             "children_can_support_records": False,
@@ -192,8 +193,8 @@ public class DbMaterializedViewsDataProvider inherits DbViewsDataProvider {
     }
 
     #! Returns the child provider for the given table object
-    private AbstractDataProvider makeChild(AbstractTable table) {
-        return new DbMaterializedViewDataProvider(db, table, logger);
+    private AbstractDataProvider makeChild(AbstractTable table, string name) {
+        return new DbMaterializedViewDataProvider(db, table, logger, name);
     }
 
     #! Returns data provider static info

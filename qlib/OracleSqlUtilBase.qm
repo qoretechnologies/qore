@@ -370,6 +370,9 @@ hash schema = (
     @section ora_relnotes Release Notes
 
     @subsection oracle17 OracleSqlUtilBase v1.7
+    - added @ref SqlUtil::AbstractDatabase::refreshMaterializedView() "refreshMaterializedView()" with
+      \c DBMS_MVIEW.REFRESH, with the \c method (\c complete, \c fast or \c force) and \c atomic_refresh options;
+      as \c DBMS_MVIEW.REFRESH commits implicitly, a refresh is refused in a transaction
     - fixed @ref SqlUtil::AbstractDatabase::getTable() "getTable()", which opened a view or a materialized view as a
       table, so a writable table object was returned for it, and
       @ref SqlUtil::AbstractDatabase::listTables() "listTables()", which listed materialized views, whose container
@@ -1847,6 +1850,23 @@ public class OracleMaterializedView inherits OracleCodeBaseNoRename {
 #! the Oracle specialization for SqlUtil::AbstractDatabase
 public class OracleDatabase inherits SqlUtil::AbstractDatabase {
     public {
+        #! options of @ref SqlUtil::AbstractDatabase::refreshMaterializedView() "refreshMaterializedView()"
+        /** @since OracleSqlUtilBase 1.7
+        */
+        const OracleMaterializedViewRefreshOptions = {
+            "method": Type::String,
+            "atomic_refresh": Type::Boolean,
+        };
+
+        #! maps the \c method option of refreshMaterializedView() to the method code of \c DBMS_MVIEW.REFRESH
+        /** @since OracleSqlUtilBase 1.7
+        */
+        const OracleRefreshMethodMap = {
+            "complete": "C",
+            "fast": "F",
+            "force": "?",
+        };
+
         #! oracle-specific generic creation options
         const OracleCreationOptions = AbstractDatabase::CreationOptions + (
             "compute_statistics": Type::Boolean,
@@ -2461,6 +2481,55 @@ public class OracleDatabase inherits SqlUtil::AbstractDatabase {
     */
     private bool supportsMaterializedViewsImpl() {
         return True;
+    }
+
+    #! returns the options of @ref SqlUtil::AbstractDatabase::refreshMaterializedView() "refreshMaterializedView()"
+    /** - \c method: (string) \c "complete", \c "fast" or \c "force" (the default)
+        - \c atomic_refresh: (bool) refresh in one transaction (the default: @ref True "True")
+
+        @since OracleSqlUtilBase 1.7
+    */
+    hash<auto> getMaterializedViewRefreshOptions() {
+        return OracleMaterializedViewRefreshOptions;
+    }
+
+    #! refreshes a materialized view with \c DBMS_MVIEW.REFRESH
+    /** \c DBMS_MVIEW.REFRESH commits implicitly, before and after the refresh, so the refresh is refused when the
+        calling thread is in a transaction, as it would commit the caller's work; the transaction lock acquired by
+        the call is released when the refresh ends.
+
+        @throw MATERIALIZED-VIEW-ERROR the calling thread is in a transaction, the \c method option is invalid, or the
+        name cannot be given to \c DBMS_MVIEW.REFRESH
+
+        @since OracleSqlUtilBase 1.7
+    */
+    private refreshMaterializedViewImpl(string name, *hash<auto> opts) {
+        if (ds.currentThreadInTransaction()) {
+            throw "MATERIALIZED-VIEW-ERROR", sprintf("%s: materialized view %y cannot be refreshed in a transaction: "
+                "DBMS_MVIEW.REFRESH commits implicitly, which would commit the current transaction; commit or roll "
+                "back the transaction first", getDatasourceDesc(), name);
+        }
+        string method = (opts.method ?? "force").lwr();
+        *string method_code = OracleRefreshMethodMap{method};
+        if (!method_code) {
+            throw "MATERIALIZED-VIEW-ERROR", sprintf("%s: invalid refresh method %y for materialized view %y; "
+                "expecting one of: %y", getDatasourceDesc(), opts.method, name, keys OracleRefreshMethodMap);
+        }
+        # the name is given as SQL names the object, quoted where needed; DBMS_MVIEW.REFRESH reads a list of names
+        # separated by commas, so a name with a comma cannot be given to it
+        string list = oracle_get_sql_object_name(name);
+        if (list.find(",") >= 0) {
+            throw "MATERIALIZED-VIEW-ERROR", sprintf("%s: materialized view %y has a comma in its name, which "
+                "DBMS_MVIEW.REFRESH cannot take", getDatasourceDesc(), name);
+        }
+        bool atomic = opts.atomic_refresh ?? True;
+        # DBMS_MVIEW.REFRESH commits; the transaction lock taken by the call is released here in any case
+        on_success ds.commit();
+        on_error ds.rollback();
+        # the name and method are bound; the boolean is a PL/SQL literal, as PL/SQL BOOLEAN cannot be bound by every
+        # client version
+        ds.exec("begin dbms_mview.refresh(list => %v, method => %v, atomic_refresh => "
+            + (atomic ? "true" : "false") + "); end;", list, method_code);
     }
 
     #! returns @ref True "True" as Oracle supports temporary tables (global temporary tables and, on 18c+, private temporary tables)

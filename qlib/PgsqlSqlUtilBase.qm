@@ -232,6 +232,9 @@ $function$
     @section pgsql_relnotes Release Notes
 
     @subsection pgsqlsqlutilbasev119 PgsqlSqlUtilBase v1.19
+    - added @ref SqlUtil::AbstractDatabase::refreshMaterializedView() "refreshMaterializedView()" for
+      <tt>REFRESH MATERIALIZED VIEW</tt>, with the \c concurrent option for <tt>REFRESH MATERIALIZED VIEW
+      CONCURRENTLY</tt>
     - fixed @ref SqlUtil::AbstractDatabase::getTable() "getTable()", which opened a materialized view as a table,
       although @ref SqlUtil::AbstractDatabase::listTables() "listTables()" does not list it, so a writable table
       object was returned for a materialized view; getTable() now opens only the relations that listTables() lists:
@@ -1880,6 +1883,13 @@ public class PgsqlTriggerFunction inherits PgsqlFunction {
 #! provides the PostgreSQL-specific implementation of the AbstractDatabase interface
 public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
     public {
+        #! options of @ref SqlUtil::AbstractDatabase::refreshMaterializedView() "refreshMaterializedView()"
+        /** @since PgsqlSqlUtilBase 1.19
+        */
+        const PgsqlMaterializedViewRefreshOptions = {
+            "concurrent": Type::Boolean,
+        };
+
         #! PostgreSQL-specific schema description keys
         const PgsqlSchemaDescriptionOptions = AbstractDatabase::SchemaDescriptionOptions + (
             "types": Type::Hash,
@@ -2624,6 +2634,64 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
     */
     private bool supportsMaterializedViewsImpl() {
         return True;
+    }
+
+    #! returns the options of @ref SqlUtil::AbstractDatabase::refreshMaterializedView() "refreshMaterializedView()"
+    /** - \c concurrent: (bool) refresh with <tt>REFRESH MATERIALIZED VIEW CONCURRENTLY</tt>
+
+        @since PgsqlSqlUtilBase 1.19
+    */
+    hash<auto> getMaterializedViewRefreshOptions() {
+        return PgsqlMaterializedViewRefreshOptions;
+    }
+
+    #! refreshes a materialized view with <tt>REFRESH MATERIALIZED VIEW [CONCURRENTLY]</tt>
+    /** The refresh is transactional: in a transaction of the calling thread, it is part of that transaction;
+        otherwise it is committed when it succeeds and rolled back when it fails.
+
+        A concurrent refresh does not block readers; it needs a unique index on the materialized view that uses only
+        column names and has no \c WHERE clause, and a populated materialized view, which is checked before the
+        refresh.  A refresh that is not concurrent locks the materialized view against reads until the transaction
+        ends.
+
+        @throw MATERIALIZED-VIEW-ERROR a concurrent refresh of a materialized view without a suitable unique index or
+        that is not populated
+
+        @since PgsqlSqlUtilBase 1.19
+    */
+    private refreshMaterializedViewImpl(string name, *hash<auto> opts) {
+        # the name is quoted where needed for SQL; it is a listed materialized view, see refreshMaterializedView()
+        string sql_name = pgsql_get_sql_object_name(name);
+        bool in_trans = ds.currentThreadInTransaction();
+        on_error {
+            if (!in_trans) {
+                ds.rollback();
+            }
+        }
+        on_success {
+            if (!in_trans) {
+                ds.commit();
+            }
+        }
+        if (opts.concurrent) {
+            # to_regclass() reads the name as SQL names the relation; the name is bound, never substituted
+            *hash<auto> row = ds.selectRow("select c.relispopulated as populated, exists (select 1 "
+                "from pg_catalog.pg_index i where i.indrelid = c.oid and i.indisunique and i.indpred is null "
+                "and i.indexprs is null) as has_unique from pg_catalog.pg_class c "
+                "where c.oid = pg_catalog.to_regclass(%v)", sql_name);
+            if (!row.has_unique) {
+                throw "MATERIALIZED-VIEW-ERROR", sprintf("%s: materialized view %y cannot be refreshed concurrently: "
+                    "a concurrent refresh needs a unique index on the materialized view that uses only column names "
+                    "and has no WHERE clause; create one, or refresh without the \"concurrent\" option, which locks "
+                    "the materialized view against reads during the refresh", getDatasourceDesc(), name);
+            }
+            if (!row.populated) {
+                throw "MATERIALIZED-VIEW-ERROR", sprintf("%s: materialized view %y cannot be refreshed concurrently "
+                    "because it is not populated; refresh it without the \"concurrent\" option first",
+                    getDatasourceDesc(), name);
+            }
+        }
+        ds.execRaw("refresh materialized view " + (opts.concurrent ? "concurrently " : "") + sql_name);
     }
 
     #! rebuild index implementation. See @ref SqlUtil::AbstractDatabase::rebuildIndex()
