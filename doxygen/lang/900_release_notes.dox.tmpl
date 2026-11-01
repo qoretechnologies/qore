@@ -5392,7 +5392,8 @@ while (*binary chunk = input.read(65536)) {
       argument, or a variable holding no value) could select a different variant at parse time than at run time
       when three or more variants accepted no value equally well: the parse-time resolution selected the last of
       them, and the run-time resolution the first one.  Such a call now always selects the first variant declared
-      among them (ex: \c *string over <tt>*softlist&lt;string&gt;</tt> when declared first)
+      among them (ex: \c *string over <tt>*softlist&lt;string&gt;</tt> when declared first); see
+      @ref overloading_no_value for how arguments with no value are matched
     - a hash literal assigned to a typed hash, with a value that referred to an undefined namespace-scoped constant
       (for example <tt>hash&lt;string, string&gt; h = {"a": Missing::Ref};</tt>), raised a spurious \c RUNTIME-TYPE-ERROR
       (<em>expects type 'string', but got type 'namespace-scoped reference'</em>) after the parse error, which was

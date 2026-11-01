@@ -68,6 +68,24 @@ public namespace NothingVariantChecks {
     string sub two(int i, *Foo o) { return "*Foo"; }
     string sub two(int i, *softlist<*string> l) { return "*softlist"; }
 
+    # a variant whose last parameter takes no value, and one without the parameter: an argument with no value counts
+    # toward the number of arguments, whether it is a literal or a variable (issue #1897), so the variant with the
+    # parameter is selected, and the one without it only when the argument is omitted
+    public string sub fi(int i) { return "f(int)"; }
+    public string sub fi(int i, *string s) { return "f(int, *string)"; }
+
+    # a variant taking a value and a variadic variant: a variable with no value is one argument, selecting the
+    # variant taking a value, while a lone literal NOTHING is parsed as no argument (see make_args()), so that call
+    # has no argument, as the call without one, and selects the variadic variant, with fewer parameters
+    public string sub va(*string s) { return "*string"; }
+    public string sub va(...) { return "varargs"; }
+
+    # the arguments a variadic function receives are those of the call; a lone literal NOTHING is no argument
+    string sub vcount(...) { return string(argv.size()); }
+
+    # a parameter taking no value by position receives no value
+    string sub pos(int i, *string s, int j) { return sprintf("%d:%s:%d", i, exists s ? "value" : "none", j); }
+
     class Methods {
         static string s(*string s) { return "*string"; }
         static string s(*Foo o) { return "*Foo"; }
@@ -76,12 +94,16 @@ public namespace NothingVariantChecks {
         string m(*string s) { return "*string"; }
         string m(*Foo o) { return "*Foo"; }
         string m(*softlist<*string> l) { return "*softlist"; }
+
+        string mi(int i) { return "f(int)"; }
+        string mi(int i, *string s) { return "f(int, *string)"; }
     }
 
     #! returns the variant each call selects, by call name; the calls pass no value as a literal NOTHING, by omitting
     #! the argument, and as the value of a variable whose type is not known at parse time
     public hash<string, string> sub get_results() {
         auto none;
+        code fi_ref = \fi();
         Methods obj();
         object uobj = obj;
         return {
@@ -97,6 +119,21 @@ public namespace NothingVariantChecks {
             "method-object-literal": uobj.m(NOTHING), "method-object-variable": uobj.m(none),
             "builtin-literal": cpp_api_nothing_variant(NOTHING), "builtin-omitted": cpp_api_nothing_variant(),
             "builtin-variable": cpp_api_nothing_variant(none),
+            "fi-literal": fi(1, NOTHING), "fi-omitted": fi(1), "fi-variable": fi(1, none),
+            "fi-value": fi(1, "x"),
+            "va-literal": va(NOTHING), "va-omitted": va(), "va-variable": va(none), "va-value": va("x"),
+            "vcount-literal": vcount(NOTHING), "vcount-omitted": vcount(), "vcount-variable": vcount(none),
+            "vcount-literal2": vcount(NOTHING, NOTHING), "vcount-value": vcount(1, NOTHING),
+            "pos-literal": pos(1, NOTHING, 2), "pos-variable": pos(1, none, 2),
+            "mi-literal": obj.mi(1, NOTHING), "mi-omitted": obj.mi(1), "mi-variable": obj.mi(1, none),
+            "mi-object-variable": uobj.mi(1, none),
+            "call-function-args-variable": call_function_args("NothingVariantChecks::fi", (1, none)),
+            "call-function-args-omitted": call_function_args("NothingVariantChecks::fi", (1,)),
+            "call-function-variable": call_function("NothingVariantChecks::fi", 1, none),
+            "call-function-va": call_function("NothingVariantChecks::va", none),
+            "call-ref-variable": fi_ref(1, none),
+            "call-ref-args-variable": call_function_args(fi_ref, (1, none)),
+            "builtin-call-function-args": call_function_args(\cpp_api_nothing_variant(), (none,)),
         };
     }
 }

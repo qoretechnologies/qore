@@ -3108,6 +3108,9 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
     if (content_dependent) {
         *content_dependent = false;
     }
+    // every argument counts toward the number of arguments, also one with no value (issue #1897: an omitted
+    // argument does not count, but an explicit NOTHING does, whether a literal or a variable); the parse-time
+    // resolution counts the same arguments, except a lone literal NOTHING, which the parser drops (see make_args())
     unsigned nargs = args ? args->size() : 0;
     QoreParseOptions ppo = runtime_get_parse_options();
 
@@ -4349,6 +4352,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
     // pointer to the last possible variant matched
     const AbstractQoreFunctionVariant* pvariant = nullptr;
     QoreTypeParamInstantiation best_type_param_inst;
+    // every argument counts, also one whose type is nothing, as at run time (issue #1897; see runtimeFindVariant())
     unsigned num_args = argTypeInfo.size();
 
     printd(5, "QoreFunction::parseFindVariant() this: %p %s() vlist: %d ilist: %d num_args: %d\n", this, getName(),
