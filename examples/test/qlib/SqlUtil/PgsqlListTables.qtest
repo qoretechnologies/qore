@@ -86,6 +86,9 @@ class PgsqlListTablesTest inherits QUnit::Test {
         addTestCase("temporary tables are listed only with pg_temp in the search_path", \temporaryTableTest());
         addTestCase("views and sequences are scoped and qualified", \viewSequenceTest());
         addTestCase("materialized views are listed, tables are not", \materializedViewTest());
+        addTestCase("every listed table opens with getTable(); views are not tables", \relationKindTest());
+        addTestCase("a temporary view is not listed as a table", \temporaryViewTest());
+        addTestCase("a foreign table is listed and opens with getTable()", \foreignTableTest());
         addTestCase("empty search_path lists nothing", \emptySearchPathTest());
         addTestCase("db tables data provider children are scoped", \dataProviderTest());
 
@@ -176,11 +179,6 @@ class PgsqlListTablesTest inherits QUnit::Test {
         return select l, isScratchQualified($1) || !($1 =~ /\./);
     }
 
-    #! returns the listed names without the test's views, which getTable() does not acquire
-    private static list<string> tableNames(list<string> l) {
-        return select l, !($1 =~ /(^|\.)v_dup$/);
-    }
-
     #! asserts that each listed table name resolves to an existing table in the expected schema
     private assertResolves(Database db, list<string> names, hash<string, string> expected_schema) {
         foreach string name in (names) {
@@ -214,14 +212,14 @@ class PgsqlListTablesTest inherits QUnit::Test {
         assertFalse(listed.hasKey("sec_only"), "a table in a schema not in the search_path is not listed");
         assertFalse(listed.hasKey(second + ".sec_only"), "a table in a schema not in the search_path is not listed");
 
-        # with only scratch schemas in the search_path, every table listed is one of the test's own; views are
-        # listed as well, as information_schema.tables reports them
-        assertEq(sort(("ci_child", "ci_parent", "cur_only", "dup", "part", "v_dup")), tables,
+        # with only scratch schemas in the search_path, every table listed is one of the test's own; views and
+        # materialized views are not tables
+        assertEq(sort(("ci_child", "ci_parent", "cur_only", "dup", "part")), tables,
             "exactly the tables of the search_path schema are listed");
         # names must not repeat
         assertEq(tables.size(), listed.size(), "no table name is listed twice");
 
-        assertResolves(db, tableNames(tables), {"cur_only": cur, "dup": cur});
+        assertResolves(db, tables, {"cur_only": cur, "dup": cur});
         # the iterator lists the same tables
         assertEq(tables, map $1, db.tableIterator(), "tableIterator() lists the same tables");
     }
@@ -242,12 +240,12 @@ class PgsqlListTablesTest inherits QUnit::Test {
         assertFalse(listed.hasKey(outside + ".dup"), "a table outside the search_path is not listed");
         assertEq(tables.size(), listed.size(), "no table name is listed twice");
 
-        assertEq(sort(("ci_child", "ci_parent", "cur_only", "dup", "part", "v_dup", second + ".dup",
-            second + ".sec_only", second + ".v_dup")), tables,
+        assertEq(sort(("ci_child", "ci_parent", "cur_only", "dup", "part", second + ".dup",
+            second + ".sec_only")), tables,
             "exactly the tables of both search_path schemas are listed");
 
         # every listed name resolves to the table listed, not to a same-named table in current_schema()
-        assertResolves(db, tableNames(tables), {"dup": cur, second + ".dup": second, second + ".sec_only": second});
+        assertResolves(db, tables, {"dup": cur, second + ".dup": second, second + ".sec_only": second});
     }
 
     private publicQualifiedTest() {
@@ -259,7 +257,7 @@ class PgsqlListTablesTest inherits QUnit::Test {
         Database db(ds);
         list<string> tables = db.listTables();
         list<string> public_unqualified = select tables, !($1 =~ /\./) && !inlist($1,
-            ("ci_child", "ci_parent", "cur_only", "dup", "part", "v_dup"));
+            ("ci_child", "ci_parent", "cur_only", "dup", "part"));
         assertEq((), public_unqualified, "no public table is listed unqualified when public is not current_schema()");
         list<string> scratch_qualified = select tables, isScratchQualified($1);
         assertEq((), scratch_qualified, "no scratch schema is listed qualified");
@@ -357,6 +355,139 @@ class PgsqlListTablesTest inherits QUnit::Test {
         assertFalse(inlist("dup", mvs), "an ordinary table is not listed as a materialized view");
         assertEq(mvs, scratchNames(map $1, db.materializedViewIterator()),
             "materializedViewIterator() lists the same materialized views");
+    }
+
+    private relationKindTest() {
+        checkConnection();
+        setSearchPath(cur + ", " + second);
+
+        Database db(ds);
+        list<string> tables = db.listTables();
+        hash<string, bool> listed = toSet(tables);
+        hash<string, bool> views = toSet(db.listViews());
+        hash<string, bool> mvs = toSet((new PgsqlDatabase(ds)).listMaterializedViews());
+
+        # every name listed as a table opens as a table
+        assertResolves(db, tables, {});
+
+        # an ordinary table, relkind 'r'
+        assertTrue(listed.cur_only, "an ordinary table is listed as a table");
+        assertFalse(views.hasKey("cur_only"), "an ordinary table is not listed as a view");
+        # a partitioned table, relkind 'p'
+        assertTrue(listed.part, "a partitioned table is listed as a table");
+        assertTrue(exists db.getTable("part"), "a partitioned table opens with getTable()");
+        assertFalse(views.hasKey("part"), "a partitioned table is not listed as a view");
+
+        # a view, relkind 'v', is listed only as a view, in either search_path schema
+        foreach string name in (("v_dup", second + ".v_dup")) {
+            assertFalse(listed.hasKey(name), sprintf("view %y is not listed as a table", name));
+            assertTrue(views{name}, sprintf("view %y is listed as a view", name));
+            assertFalse(mvs.hasKey(name), sprintf("view %y is not listed as a materialized view", name));
+            assertNothing(db.getTable(name), sprintf("view %y does not open as a table", name));
+            assertTrue(exists db.getView(name), sprintf("view %y opens with getView()", name));
+        }
+        assertFalse(inlist("v_dup", map $1, db.tableIterator()), "tableIterator() does not list the view");
+
+        # a materialized view, relkind 'm', is listed only as a materialized view
+        foreach string name in (("mv_dup", second + ".mv_dup")) {
+            assertFalse(listed.hasKey(name), sprintf("materialized view %y is not listed as a table", name));
+            assertFalse(views.hasKey(name), sprintf("materialized view %y is not listed as a view", name));
+            assertTrue(mvs{name}, sprintf("materialized view %y is listed as a materialized view", name));
+        }
+
+        # a view created after the fixtures is not listed as a table either
+        string vname = "qore_plt_v_" + get_random_string(8).lwr();
+        {
+            on_error ds.rollback();
+            on_success ds.commit();
+            ds.exec(sprintf("create view %s.%s as select 1 as id", cur, vname));
+        }
+        on_exit {
+            try {
+                on_error ds.rollback();
+                on_success ds.commit();
+                ds.exec(sprintf("drop view if exists %s.%s", cur, vname));
+            } catch (hash<ExceptionInfo> ex) {
+                printf("WARNING: cannot drop view %y: %s: %s\n", vname, ex.err, ex.desc);
+            }
+        }
+        assertFalse(inlist(vname, db.listTables()), "a view created by the test is not listed as a table");
+        assertTrue(inlist(vname, db.listViews()), "a view created by the test is listed as a view");
+        assertNothing(db.getTable(vname), "a view created by the test does not open as a table");
+    }
+
+    private temporaryViewTest() {
+        checkConnection();
+        setSearchPath(cur);
+
+        # information_schema.tables reports a temporary view as 'LOCAL TEMPORARY', as it does a temporary table
+        on_exit ds.rollback();
+        string tname = "qore_plt_tmpt_" + get_random_string(8).lwr();
+        string vname = "qore_plt_tmpv_" + get_random_string(8).lwr();
+        ds.exec(sprintf("create temporary table %s (id int) on commit drop", tname));
+        ds.exec(sprintf("create temporary view %s as select 1 as id", vname));
+        ds.exec("set local search_path to pg_temp, " + cur);
+
+        Database db(ds);
+        list<string> tables = db.listTables();
+        hash<string, bool> listed = toSet(tables);
+        assertTrue(listed{tname}, "a temporary table is listed with pg_temp in the search_path");
+        assertFalse(listed.hasKey(vname), "a temporary view is not listed as a table");
+        assertNothing(db.getTable(vname), "a temporary view does not open as a table");
+        assertResolves(db, tables, {});
+    }
+
+    private foreignTableTest() {
+        checkConnection();
+        setSearchPath(cur);
+
+        # a foreign table needs a foreign-data wrapper: a superuser creates one without a handler, which is enough
+        # for the catalog; otherwise one that the user can use is taken
+        string fdw = PgsqlRunSchema::getAuxName("fdw");
+        string srv = PgsqlRunSchema::getAuxName("srv");
+        bool own_fdw = False;
+        if (ds.selectRow("select rolsuper from pg_catalog.pg_roles where rolname = current_user").rolsuper) {
+            on_error ds.rollback();
+            on_success ds.commit();
+            ds.exec(sprintf("create foreign data wrapper %s", fdw));
+            own_fdw = True;
+        } else {
+            *string usable = ds.selectRow("select fdwname from pg_catalog.pg_foreign_data_wrapper "
+                "where has_foreign_data_wrapper_privilege(oid, 'USAGE') order by 1 limit 1").fdwname;
+            ds.rollback();
+            if (!usable) {
+                testSkip("no foreign-data wrapper can be created or used by the connection's user");
+            }
+            fdw = usable;
+        }
+        on_exit {
+            try {
+                on_error ds.rollback();
+                on_success ds.commit();
+                if (own_fdw) {
+                    ds.exec(sprintf("drop foreign data wrapper if exists %s cascade", fdw));
+                } else {
+                    ds.exec(sprintf("drop server if exists %s cascade", srv));
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                printf("WARNING: cannot drop foreign server %y: %s: %s\n", srv, ex.err, ex.desc);
+            }
+        }
+        {
+            on_error ds.rollback();
+            on_success ds.commit();
+            ds.exec(sprintf("create server %s foreign data wrapper %s", srv, fdw));
+            ds.exec(sprintf("create foreign table %s.ft (id int) server %s", cur, srv));
+        }
+
+        Database db(ds);
+        list<string> tables = db.listTables();
+        assertTrue(inlist("ft", tables), "a foreign table is listed as a table");
+        assertFalse(inlist("ft", db.listViews()), "a foreign table is not listed as a view");
+        *AbstractTable t = db.getTable("ft");
+        assertTrue(exists t, "a foreign table opens with getTable()");
+        assertEq(cur, t ? t.getSchemaName() : NOTHING, "the foreign table opens in its schema");
+        assertResolves(db, tables, {});
     }
 
     private emptySearchPathTest() {

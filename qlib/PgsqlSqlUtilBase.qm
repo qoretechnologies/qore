@@ -94,10 +94,13 @@ module PgsqlSqlUtilBase {
 
     An object in <tt>current_schema()</tt> is listed by its name alone, and an object in any other
     \c search_path schema as \c "schema.name", so that every name listed resolves to the object listed, and an
-    object name present in more than one \c search_path schema is listed once per schema.  Partition child
-    tables are not listed as tables, views are listed by
-    @ref SqlUtil::AbstractDatabase::listTables() "listTables()" as well, as \c information_schema.tables
-    reports them, and session temporary tables are listed only if \c pg_temp is named
+    object name present in more than one \c search_path schema is listed once per schema.
+    @ref SqlUtil::AbstractDatabase::listTables() "listTables()" lists only the relations that
+    @ref SqlUtil::AbstractDatabase::getTable() "getTable()" opens as tables: ordinary, partitioned, and foreign
+    tables.  Partition child tables are not listed as tables, views are listed only by
+    @ref SqlUtil::AbstractDatabase::listViews() "listViews()", materialized views only by
+    @ref PgsqlSqlUtilBase::PgsqlDatabase::listMaterializedViews() "PgsqlDatabase::listMaterializedViews()",
+    and session temporary tables are listed only if \c pg_temp is named
     explicitly in the \c search_path.  If the \c search_path names no existing schema, these methods return an
     empty list.
 
@@ -229,6 +232,11 @@ $function$
     @section pgsql_relnotes Release Notes
 
     @subsection pgsqlsqlutilbasev119 PgsqlSqlUtilBase v1.19
+    - fixed @ref SqlUtil::AbstractDatabase::listTables() "listTables()" and
+      @ref SqlUtil::AbstractDatabase::tableIterator() "tableIterator()" listing views as well as tables, although
+      @ref SqlUtil::AbstractDatabase::getTable() "getTable()" returns nothing for a view; they now list only ordinary,
+      partitioned, and foreign tables, and views are listed by
+      @ref SqlUtil::AbstractDatabase::listViews() "listViews()" only
     - Security: a name of a table, column, index, constraint, sequence, schema, tablespace, trigger, view or alias
       that is not an ordinary PostgreSQL identifier is given in double quotes, each double quote doubled, wherever
       SQL is generated, so that a name from untrusted data can never change the SQL; an ordinary name is given as
@@ -2400,10 +2408,19 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
         listed, as Oracle and MySQL list only the tables of the connection's own schema.  A table in
         <tt>current_schema()</tt> is listed unqualified, a table in any other \c search_path schema is listed
         as \c "schema.table", so that every name returned resolves in the schema of the table listed.
-        Partition child relations are not listed; views are listed as \c information_schema.tables reports them.
+        Only the relations that @ref SqlUtil::AbstractDatabase::getTable() "getTable()" opens as tables are listed:
+        ordinary, partitioned, and foreign tables.  Partition child relations are not listed, views are listed only
+        by @ref SqlUtil::AbstractDatabase::listViews() "listViews()", and materialized views only by
+        @ref PgsqlSqlUtilBase::PgsqlDatabase::listMaterializedViews() "listMaterializedViews()".
         An empty list is returned if the \c search_path names no existing schema.
     */
     private list<string> listTablesImpl() {
+        # NOTE: information_schema.tables also has every view (table_type 'VIEW', and 'LOCAL TEMPORARY' for a
+        # temporary view), which getTable() does not open, so the relation's kind is read from pg_class: 'r' is an
+        # ordinary table, 'p' a partitioned table and 'f' a foreign table, as PgsqlTable::checkExistenceImpl()
+        # accepts them.  information_schema.tables is still read, as it lists only the relations that the user
+        # has a privilege on.  Materialized views, relkind 'm', are not in information_schema.tables, and are
+        # listed by listMaterializedViews()
         # NOTE: exclude partition child relations. PostgreSQL exposes each declarative partition as its own
         # relation, but a partition is not a standalone logical table and must not appear in the table list
         # (Oracle and MySQL already behave this way). A partition child is a pg_inherits child whose parent is a
@@ -2413,7 +2430,10 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
         # NOTE: listing every schema of the database exposed other schemas' tables and, in a database with
         # one schema per tenant, repeated the same table names once per schema
         string sql = sprintf("select %s as name from information_schema.tables t "
+            "join pg_catalog.pg_namespace n on n.nspname = t.table_schema "
+            "join pg_catalog.pg_class c on c.relnamespace = n.oid and c.relname = t.table_name "
             "where t.table_schema = any (current_schemas(false)) "
+            "and c.relkind in ('r', 'p', 'f') "
             "and not exists (select 1 from pg_catalog.pg_inherits inh "
             "join pg_catalog.pg_class child on child.oid = inh.inhrelid "
             "join pg_catalog.pg_namespace cn on cn.oid = child.relnamespace "
