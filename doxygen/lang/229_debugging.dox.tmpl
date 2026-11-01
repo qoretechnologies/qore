@@ -354,4 +354,8 @@ qdbg-remote localhost:8001 < commands.txt
       stops when it runs again.
     - The columns of the debugger count bytes; the clients convert them to characters with the text of the line, and
       count a character as a byte for a source whose text is not available.
+    - A function of AOT-compiled code that is already running when a debugger attaches, and a closure created in it,
+      does not stop at breakpoints or steps, as it continues in its native code; functions that are called after the
+      debugger attached are debugged
+      (<a href="https://github.com/qoretechnologies/qore/issues/5567">issue 5567</a>).
 */
