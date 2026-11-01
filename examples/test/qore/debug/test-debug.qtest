@@ -860,7 +860,7 @@ class DebugTest inherits QUnit::Test {
 
         hash info;
         info = pp.getStatementIdInfo(sid, True);
-        testAssertionValue(name+'getStatementIdInfo("main.q", 1)', info, ('file': 'main.q', 'source': '', 'offset': 0, 'start_line': 1, 'end_line': 1, 'start_column': 13, 'end_column': 27, 'breakpoints': (), 'in_try': False) );
+        testAssertionValue(name+'getStatementIdInfo("main.q", 1)', info, ('file': 'main.q', 'source': '', 'offset': 0, 'start_line': 1, 'end_line': 1, 'start_column': 13, 'end_column': 27, 'breakpoints': (), 'in_try': False, 'locals': ('argv',)) );
 
         sid = pp.findStatementId("label-f1", 2);
         testAssertionValue(name+'findStatementId("label-f1", 2) label match', sid > 0, True);
@@ -872,20 +872,20 @@ class DebugTest inherits QUnit::Test {
         assertThrows('PROGRAM-STATEMENT-ERROR', \pp.findStatementId(), ("ib/my-source.q", 102), name+'findStatementId("ib/my-source.q", 12) no suffix match');
 
         info = pp.getStatementIdInfo(sid);
-        testAssertionValue(name+'getStatementIdInfo("label-f1", 1)', info, ('file': 'label-f1', 'source': '/usr/lib/my-source.q', 'offset': 10, 'start_line': 2, 'end_line': 2, 'start_column': 16, 'end_column': 21, 'in_try': False) );
+        testAssertionValue(name+'getStatementIdInfo("label-f1", 1)', info - "locals", ('file': 'label-f1', 'source': '/usr/lib/my-source.q', 'offset': 10, 'start_line': 2, 'end_line': 2, 'start_column': 16, 'end_column': 21, 'in_try': False) );
 
 
         sid = pp.findStatementId("label-f1", 8);
         testAssertionValue(name+'findStatementId("label-f1", 8)', sid > 0, True);
         testAssertionValue(name+'findStatementId("label-f1", 11) multiline', pp.findStatementId("label-f1", 11), sid);
         info = pp.getStatementIdInfo(sid);
-        testAssertionValue(name+'getStatementIdInfo("label-f1", 11)', info, ('file': 'label-f1', 'source': '/usr/lib/my-source.q', 'offset': 10, 'start_line': 8, 'end_line': 12, 'start_column': 20, 'end_column': 25, 'in_try': False) );
+        testAssertionValue(name+'getStatementIdInfo("label-f1", 11)', info - "locals", ('file': 'label-f1', 'source': '/usr/lib/my-source.q', 'offset': 10, 'start_line': 8, 'end_line': 12, 'start_column': 20, 'end_column': 25, 'in_try': False) );
 
         sid = pp.findStatementId("label-sleep", 2);
         testAssertionValue(name+'findStatementId("label-sleep", 2)', sid > 0, True);
         testAssertionValue(name+'findStatementId("/usr/lib/my-source.q", 102) full file', pp.findStatementId("/usr/lib/my-source.q", 102), sid);
         info = pp.getStatementIdInfo(sid);
-        testAssertionValue(name+'getStatementIdInfo("label-sleep", 2)', info, ('file': 'label-sleep', 'source': '/usr/lib/my-source.q', 'offset': 100, 'start_line': 2, 'end_line': 2, 'start_column': 16, 'end_column': 25, 'in_try': False) );
+        testAssertionValue(name+'getStatementIdInfo("label-sleep", 2)', info - "locals", ('file': 'label-sleep', 'source': '/usr/lib/my-source.q', 'offset': 100, 'start_line': 2, 'end_line': 2, 'start_column': 16, 'end_column': 25, 'in_try': False) );
     }
 
     tlsStatementTest() {

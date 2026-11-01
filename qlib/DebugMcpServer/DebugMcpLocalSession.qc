@@ -152,6 +152,16 @@ public class DebugMcpLocalSession inherits DebugMcpSession {
         }
     }
 
+    #! Waits for the end of the program after the \c kill command, as long as the wait timeout at most
+    public bool waitForProgramEnd() {
+        int timeout_ms = waitTimeout ?: DefaultWaitTimeout;
+        if (running.waitForZero(timeout_ms)) {
+            printfImpl("the program did not end within %d ms\n", timeout_ms);
+            return False;
+        }
+        return True;
+    }
+
     #! Returns @ref True if no program runs
     public bool isProgramEnded() {
         return !running.getCount();
@@ -203,12 +213,8 @@ public class DebugMcpLocalSession inherits DebugMcpSession {
         if (!running.getCount()) {
             throw "DEBUG-MCP-ERROR", "no program is being debugged";
         }
+        # the kill command waits for the end of the program; see waitForProgramEnd()
         processCmdLine("kill");
-        if (!exists commandError) {
-            if (running.waitForZero(waitTimeout ?: DefaultWaitTimeout)) {
-                printfImpl("the program did not end within %d ms\n", waitTimeout ?: DefaultWaitTimeout);
-            }
-        }
         return makeReport();
     }
 

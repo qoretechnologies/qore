@@ -420,6 +420,12 @@ public class DebugMcpServerTest inherits QUnit::Test {
         call(c, "qore_debug_launch", {"script": path});
         hash<auto> r = call(c, "qore_debug_set_breakpoint", {"location": "target.q 1"});
         assertFalse(r.ok);
+        r = call(c, "qore_debug_set_breakpoint", {"location": "target.q 3", "condition": "a ==="});
+        assertFalse(r.ok);
+        assertRegex("^invalid condition \"a ===\"", r.error);
+        r = call(c, "qore_debug_set_breakpoint", {"location": "target.q 3", "condition": "nosuchvar > 1"});
+        assertFalse(r.ok);
+        assertRegex("nosuchvar", r.error);
         r = call(c, "qore_debug_set_breakpoint", {"location": "target.q 3", "hit_condition": "sometimes"});
         assertFalse(r.ok);
         assertRegex("invalid hit condition", r.error);

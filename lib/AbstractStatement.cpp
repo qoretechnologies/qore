@@ -33,6 +33,7 @@
 #include "qore/intern/RuntimeConfig.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreStatementTemps.h"
+#include "qore/intern/StatementBlock.h"
 
 #include <typeinfo>
 
@@ -234,7 +235,15 @@ int AbstractStatement::parseInit(QoreParseContext& parse_context) {
 
     in_try = (parse_context.pflag & PF_IN_TRY) != 0;
 
-    return parseInitImpl(parse_context);
+    int rc = parseInitImpl(parse_context);
+    // the local variables of the frame of the statement that it can refer to, also those that it declares, for
+    // debuggers; the top-level variables of the program, which have global scope, are visible to all code, and a
+    // variable of another Program, as of a Program whose parse loads this one, is not one of them
+    VNode* v = getVStack();
+    const void* owner = qore_program_private::get(*getProgram());
+    scope_top = (v && v->lvar && v->lvar->getOwner() == owner) ? v->lvar : nullptr;
+    scope_known = true;
+    return rc;
 }
 
 QoreBreakpoint* AbstractStatement::getBreakpoint() const {

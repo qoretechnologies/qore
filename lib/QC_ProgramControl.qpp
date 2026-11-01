@@ -38,6 +38,10 @@
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/qore_date_private.h"
 #include "qore/intern/QoreHashNodeIntern.h"
+#include "qore/intern/LocalVar.h"
+
+#include <set>
+#include <string>
 
 //! statement information hash as returned by @ref Qore::ProgramControl::getStatementIdInfo() "ProgramControl::getStatementIdInfo()"
 /**
@@ -69,6 +73,8 @@ hashdecl StatementInfo {
     int end_column = -1;
     //! @ref True if the statement is in the body of a try statement of its function, method or top-level code, so an exception that it raises can be caught there (since %Qore 3.0)
     bool in_try = False;
+    //! the names of the local variables that the statement can refer to, also those that it declares and the top-level local variables of the program, which have global scope, from the innermost one, as debuggers use them to check the expressions of breakpoints; not set if they are not known, as for a statement of AOT-compiled code (since %Qore 3.0)
+    *list<string> locals;
 }
 
 //! A call of a statement that a debugger can step into
@@ -431,6 +437,27 @@ list<Breakpoint> ProgramControl::getBreakpoints() {
     return l;
 }
 
+//! Returns the top-level local variables of the Program in the current thread
+/** Top-level local variables have global scope: code in functions and methods can refer to them, and each thread has
+    its own values of them.  Debuggers evaluate expressions with them, as the code that a thread runs sees them
+
+    @return a hash of the top-level local variables that are instantiated in the current thread; the keys are the
+    names of the variables, and the values are hashes as returned by @ref Qore::get_local_vars() "get_local_vars()"
+
+    @par Example:
+    @code{.py}
+hash<auto> h = pc.getTopLevelLocalVars();
+    @endcode
+
+    @since %Qore 3.0
+*/
+hash<auto> ProgramControl::getTopLevelLocalVars() [dom=DEBUGGER] {
+   if (!p->checkAllowDebugging(xsink)) {
+      return QoreValue();
+   }
+   return qore_program_private::get(*p)->getTopLevelLocalVars(xsink);
+}
+
 //! get information related to statement id
 /**
    @param statement_id the statement ID to resolve
@@ -459,6 +486,19 @@ hash<StatementInfo> ProgramControl::getStatementIdInfo(int statement_id, bool li
    ph->setKeyValueIntern("start_column", s->loc->start_column);
    ph->setKeyValueIntern("end_column", s->loc->end_column);
    ph->setKeyValueIntern("in_try", s->isInTry());
+   if (s->isScopeKnown()) {
+      // an inner variable hides an outer one with the same name
+      ReferenceHolder<QoreListNode> locals(new QoreListNode(stringTypeInfo), xsink);
+      std::set<std::string> names;
+      for (const LocalVar* lv = s->getScopeLocalVars(); lv; lv = lv->getParseScopePrev()) {
+         if (names.insert(lv->getName()).second) {
+            locals->push(new QoreStringNode(lv->getName()), xsink);
+         }
+      }
+      // the top-level variables have global scope: all code of the Program can refer to them
+      qore_program_private::get(*p)->addTopLevelLocalVarNames(**locals, names, xsink);
+      ph->setKeyValueIntern("locals", locals.release());
+   }
    if (list_breakpoints && p->checkAllowDebugging(xsink)) {
       QoreBreakpointList_t bl;
       p->getStatementBreakpoints(s, bl);

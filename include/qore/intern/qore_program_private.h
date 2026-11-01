@@ -2252,6 +2252,25 @@ public:
         return 0;
     }
 
+    //! Returns the top-level local variables of the Program in the current thread, as get_local_vars() returns them
+    /** Top-level local variables have global scope, and each thread has its own values of them; those inherited from
+        a parent Program are not variables of the code of this one
+    */
+    DLLLOCAL QoreHashNode* getTopLevelLocalVars(ExceptionSink* xsink);
+
+    //! Adds the names of the top-level local variables of the Program, which its code can refer to, to a list
+    DLLLOCAL void addTopLevelLocalVarNames(QoreListNode& l, std::set<std::string>& names, ExceptionSink* xsink) {
+        const LVList* lvl = sb.getLVList();
+        if (!lvl) {
+            return;
+        }
+        for (unsigned i = sb.getInheritedLocalVarCount(); i < lvl->size(); ++i) {
+            if (names.insert(lvl->lv[i]->getName()).second) {
+                l.push(new QoreStringNode(lvl->lv[i]->getName()), xsink);
+            }
+        }
+    }
+
     DLLLOCAL void doTopLevelInstantiation(ThreadLocalProgramData& tlpd) {
         // instantiate top-level vars for this thread
         const LVList* lvl = sb.getLVList();

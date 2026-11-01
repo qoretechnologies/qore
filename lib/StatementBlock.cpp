@@ -65,6 +65,12 @@ extern void removeBlockLocalsFromBodyLocals(const StatementBlock* block, std::ve
 VNode::VNode(LocalVar* lv, const QoreProgramLocation* n_loc, int n_refs, bool n_top_level) :
         lvar(lv), refs(n_refs), loc(n_loc), block_start(false), top_level(n_top_level) {
     next = update_get_vstack(this);
+    // the variable below this one in its frame, for the chains of the local variables that statements can refer to;
+    // the chain of a function ends with its first variable, as the top-level variables, which have global scope, are
+    // visible to all code (see ProgramControl::getStatementIdInfo()); see LocalVar::setParseScopePrev()
+    if (lvar) {
+        lvar->setParseScopePrev(next ? next->lvar : nullptr);
+    }
 
     //printd(5, "VNode::VNode() this: %p '%s' %p top_level: %d\n", this, lvar ? lvar->getName() : "n/a", lvar, top_level);
 

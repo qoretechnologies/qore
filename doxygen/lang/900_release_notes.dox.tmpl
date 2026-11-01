@@ -2570,6 +2570,12 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
       parallel collection processing.  All of them honor cooperative cancellation
     - @ref Qore::ProgramControl::getStatementIdInfo() "ProgramControl::getStatementIdInfo()" tells with \c in_try if a
       statement is in the body of a try statement of its function, for debuggers
+    - @ref Qore::ProgramControl::getStatementIdInfo() "ProgramControl::getStatementIdInfo()" gives the local variables
+      that a statement can refer to in \c locals, with the top-level local variables of the program, which have global
+      scope, and the new @ref Qore::ProgramControl::getTopLevelLocalVars() "ProgramControl::getTopLevelLocalVars()"
+      method gives the values of the top-level local variables in the current thread, so that debuggers check the
+      conditions and log messages of breakpoints when they are set and evaluate expressions with the variables that
+      the code sees
     - new @ref Qore::ProgramControl::findStatementIds() "ProgramControl::findStatementIds()" method: finds all
       statements of a line, and @ref Qore::ProgramControl::getStatementIdInfo() "ProgramControl::getStatementIdInfo()"
       gives the columns of a statement with \c start_column and \c end_column, so that a debugger can set a breakpoint
@@ -3585,6 +3591,8 @@ while (*binary chunk = input.read(65536)) {
         file of \c -i, unless \c -n is given) and of the files of \c -x at their start, and the \c script command runs
         a file of commands; a command of a file that resumes a thread waits until a thread pauses, and the first
         command that fails ends the file
+      - \c quit tells when the program continues without the debugger, and <tt>quit kill</tt> ends it first; the
+        condition and the expressions of the log message of a breakpoint are checked when they are set
       - JSON output for programs such as coding agents: with \c --json, \c qdbg and \c qdbg-remote write one JSON
         object for each command, event and output of the program; with \c --wait-timeout or the
         \c options \c waittimeout command, a command that resumes a thread waits for a thread to pause only as long,

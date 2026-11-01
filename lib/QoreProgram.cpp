@@ -2653,13 +2653,60 @@ int qore_program_private::setGlobalVarValue(const char* name, QoreValue val, Exc
    return lvh.assign(holder.release(), "<API assignment>");
 }
 
+QoreHashNode* qore_program_private::getTopLevelLocalVars(ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    ThreadLocalProgramData* tlpd = nullptr;
+    {
+        AutoLocker al(tlock);
+        pgm_data_map_t::iterator i = pgm_data_map.find(get_thread_program_data());
+        if (i != pgm_data_map.end()) {
+            tlpd = i->second;
+        }
+    }
+    const LVList* lvl = sb.getLVList();
+    if (!tlpd || !lvl) {
+        return rv.release();
+    }
+    // only the variables that are instantiated in the thread have values; the inherited ones are not variables of the
+    // code of this Program
+    unsigned n = std::min(static_cast<unsigned>(lvl->size()), tlpd->inst_count);
+    for (unsigned i = sb.getInheritedLocalVarCount(); i < n; ++i) {
+        const LocalVar* lv = lvl->lv[i];
+        ReferenceHolder<QoreHashNode> v(new QoreHashNode(autoTypeInfo), xsink);
+        // a variable that a closure uses is found by its name, as the code finds it
+        if (lv->closureUse()) {
+            ClosureVarValue* cvv = tlpd->cvstack.try_find(lv->getName());
+            if (!cvv) {
+                continue;
+            }
+            v->setKeyValue("type", new QoreStringNode("closure"), xsink);
+            v->setKeyValue("value", cvv->eval(xsink), xsink);
+        } else {
+            LocalVarValue* lvv = tlpd->lvstack.findMaybe(lv);
+            if (!lvv) {
+                continue;
+            }
+            v->setKeyValue("type", new QoreStringNode("local"), xsink);
+            v->setKeyValue("value", lvv->eval(xsink), xsink);
+        }
+        if (*xsink) {
+            return nullptr;
+        }
+        qore_set_local_var_debug_type(**v, lv->getTypeInfo(), xsink);
+        rv->setKeyValue(lv->getName(), v.release(), xsink);
+    }
+    return rv.release();
+}
+
 LocalVar* qore_program_private::createLocalVar(const char* name, const QoreTypeInfo* typeInfo) {
     std::lock_guard<std::recursive_mutex> lock(runtime_metadata_lock);
     // emplace into the deque-backed arena; returns a stable pointer
     // that stays valid for the Program's lifetime.  Avoids the per-
     // LocalVar `new`+list-node allocation of the prior safe_dslist
     // implementation — hot path in AOT deserialization.
-    return local_var_list.emplace(name, typeInfo);
+    LocalVar* lv = local_var_list.emplace(name, typeInfo);
+    lv->setOwner(this);
+    return lv;
 }
 
 void qore_program_private::addStatementToIndexIntern(name_section_sline_statement_map_t* statementIndex, const char* key, AbstractStatement *statement, int offs, const char* section, int sectionOffs) {

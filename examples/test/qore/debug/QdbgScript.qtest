@@ -123,6 +123,9 @@ public class QdbgScriptTest inherits QUnit::Test {
         addTestCase("JSON output", \jsonOutputTest());
         addTestCase("JSON output: hints and the end of the program", \jsonExceptionTest());
         addTestCase("the time that a command waits for a thread to pause", \waitTimeoutTest());
+        addTestCase("quitting while the program runs", \quitRunningTest());
+        addTestCase("conditions are checked when they are set", \conditionCheckTest());
+        addTestCase("top-level local variables in functions", \topLevelVarTest());
         addTestCase("the usage of the debugger tools", \usageTest());
         addTestCase("errors at the start of qdbg and qdbg-server", \startupErrorTest());
         set_return_value(main());
@@ -778,7 +781,7 @@ public class QdbgScriptTest inherits QUnit::Test {
             "Frame 1: <top level> at ",
             "Breakpoint 2 created at ", "target.q:8",
             "Paused at breakpoint 2 at ", "target.q:8",
-            "The program ends",
+            "The program ended",
         ));
         assertFalse(res.out =~ /total: 5/, "the program ended before its output");
     }
@@ -1067,6 +1070,99 @@ public class QdbgScriptTest inherits QUnit::Test {
         res = runQdbg(loop, ("quit",), ("--wait-timeout=-1",));
         assertNeq(0, res.rc);
         assertRegex("the wait timeout cannot be negative: -1", res.out);
+    }
+
+    # quit tells that a program continues without the debugger, and "quit kill" ends it first
+    quitRunningTest() {
+        # the program continues to its end, and qdbg ends with it
+        hash<auto> res = runQdbg(Program, ("break create target.q 3", "go", "quit"));
+        assertEq(0, res.rc);
+        assertInOrder(res.out, (
+            "Paused at breakpoint 1",
+            "The program continues without the debugger, and qdbg ends when the program ends; \"quit kill\" ends the "
+                "program first",
+            "total: 5",
+        ));
+        # a program that does not end is ended first
+        string loop = "%modern\nint n = 0;\nwhile (True) {\n    ++n;\n}\n";
+        res = runQdbg(loop, ("go", "quit kill"), ("--wait-timeout=200",));
+        assertEq(0, res.rc);
+        assertFalse(res.out =~ /continues without the debugger/, res.out);
+        # without a program, quit says nothing
+        res = runQdbg(Program, ("go", "quit"));
+        assertEq(0, res.rc);
+        assertFalse(res.out =~ /continues without the debugger/, res.out);
+        # JSON output tells that the program continues
+        res = runQdbg(Program, ("break create target.q 3", "go", "quit"), ("--json",));
+        hash<auto> q = (select parseJsonLines(res.out), $1.type == "result" && $1.command == "quit")[0];
+        assertTrue(q.quit);
+        assertTrue(q.programRunning);
+        # negative: an unknown argument does not end the debugger
+        res = runQdbg(Program, ("quit now", "kill", "quit"));
+        assertEq(0, res.rc);
+        assertInOrder(res.out, ("unknown argument \"now\"; usage: quit [kill]",));
+    }
+
+    # a condition that cannot be parsed with the variables of its statement is refused when it is set
+    conditionCheckTest() {
+        hash<auto> res = runQdbg(Program, (
+            "break create target.q 3",
+            "break condition 1 a ===",
+            "break condition 1 nosuchvar > 1",
+            "break log 1 a={a} n={nosuchvar}",
+            "break condition 1 a == 2 && b == 3",
+            "break list",
+            "go",
+            "eval a",
+            "go",
+            "quit",
+        ));
+        assertEq(0, res.rc);
+        assertInOrder(res.out, (
+            "invalid condition \"a ===\": ",
+            "invalid condition \"nosuchvar > 1\": ",
+            "invalid expression of the log message \"nosuchvar\": ",
+            "condition: a == 2 && b == 3",
+            "Paused at breakpoint 1",
+            "= 2",
+        ));
+        assertFalse(res.out =~ /could not be checked/, res.out);
+    }
+
+    # top-level local variables have global scope: expressions and conditions in functions can refer to them, with the
+    # values of the thread
+    topLevelVarTest() {
+        string program = "%modern\n"                                      # 1
+            "int top = 5;\n"                                                # 2
+            "sub f() {\n"                                                   # 3
+            "    int a = (top ?? 0) + 1;\n"                                 # 4
+            "    printf(\"a: %d\\n\", a);\n"                               # 5
+            "}\n"                                                           # 6
+            "f();\n"                                                        # 7
+            "Counter c(1);\n"                                               # 8
+            "background sub () { on_exit c.dec(); f(); }();\n"              # 9
+            "c.waitForZero();\n";                                           # 10
+        hash<auto> res = runQdbg(program, (
+            "break create target.q 5",
+            "break condition 1 top > 1 || !exists top",
+            "go",
+            "eval top * 2",
+            "go",
+            "eval top",
+            "go",
+            "quit",
+        ));
+        assertEq(0, res.rc);
+        assertInOrder(res.out, (
+            "Paused at breakpoint 1",
+            "= 10",
+            "a: 6",
+            "Paused at breakpoint 1",
+            # the thread that the program started has its own value
+            "top = NOTHING",
+            "a: 1",
+        ));
+        assertFalse(res.out =~ /invalid condition|could not be checked/, res.out);
     }
 
     # a thread that continues when qdbg quits does not stop again, as at the end of the program

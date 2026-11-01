@@ -19,6 +19,12 @@
 class DebugCommandLineLocal inherits DebugLinenoiseCommandLine {
     public {
         DebugProgramControlLocal dpc;
+        #! counts the thread that runs the program
+        Counter running();
+        #! the threads that left the program, by TID; see getQuitNote()
+        hash<string, bool> leftThreads = {};
+        #! serializes the access to leftThreads
+        Mutex leftLock();
         ResponseSync sync();
         #! gives the commands sent to stopped threads their unique IDs
         Sequence uidSeq();
@@ -33,6 +39,49 @@ class DebugCommandLineLocal inherits DebugLinenoiseCommandLine {
         dpc = n_dpc;
         dpc.dcl = self;
     }
+    #! Waits for the end of the program after the kill command, as long as the wait timeout if one is set
+    public bool waitForProgramEnd() {
+        if (waitTimeout) {
+            if (running.waitForZero(waitTimeout)) {
+                printfImpl("%s\n", tc.warning(sprintf("The program did not end within %d ms", waitTimeout)));
+                return False;
+            }
+            return True;
+        }
+        running.waitForZero();
+        return True;
+    }
+
+    #! Notes the threads that leave the program before the event is processed; see getQuitNote()
+    public processEvent(hash<auto> data) {
+        if (DebugCommandLine::isThreadEnd(data) && data.func == "detach") {
+            AutoLock al(leftLock);
+            leftThreads{data.tid} = True;
+        }
+        DebugLinenoiseCommandLine::processEvent(data);
+    }
+
+    #! Tells that the program continues without the debugger, and that qdbg ends when the program ends
+    public *string getQuitNote() {
+        if (!running.getCount()) {
+            return;
+        }
+        # the program continues while a thread is in it that did not leave it; without one, the thread that ran it is
+        # returning
+        hash<string, bool> left;
+        {
+            AutoLock al(leftLock);
+            left = leftThreads;
+        }
+        foreach ProgramControl pgm in (dpc.getAllPrograms()) {
+            if (select pgm.getThreadList(), !left{$1}) {
+                return "The program continues without the debugger, and qdbg ends when the program ends; \"quit "
+                    "kill\" ends the program first";
+            }
+        }
+        running.waitForZero();
+    }
+
     public *hash<auto> doCommandImpl(hash<auto> data) {
         if (!exists data.tid) {
             return dpc.processCommand(DebugProgramControlLocal::CX, data);
@@ -194,7 +243,7 @@ class DebugWrapper {
             list<string> cmd_files = DebugLinenoiseCommandLine::getStartupCommandFiles(opt);
             bool wait_start = dcl.waitsForStops || cmd_files;
             # the thread that runs the program; the output of the program is captured until it ends
-            Counter running();
+            Counter running = dcl.running;
             if (exists fileName) {
                 Program pgm = dcl.dpc.createProgram(fileName, opt, ARGV);
                 logger.info("run program");

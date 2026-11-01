@@ -673,11 +673,15 @@ public class DebugProgramControlTest inherits QUnit::Test {
         dpc.threadCommand(p.tid, "thread/evaluate", {"expression": "a = 100"});
         assertEq(2, AbstractDebugControl::unserialize(dpc.threadCommand(p.tid, "thread/local/a/get").value));
 
+        # a top-level local variable has global scope: it is seen with the value of the thread, which has not assigned
+        # it yet in add()
+        assertEq("NOTHING", dpc.threadCommand(p.tid, "thread/evaluate", {"expression": "total"}).text);
+
         # negative: a syntax error, an unknown variable, code that expressions may not run, and an unknown ID
         assertThrows("DEBUG-EVALUATE-ERROR", \dpc.threadCommand(), (p.tid, "thread/evaluate",
             {"expression": "a +"}));
         assertThrows("DEBUG-EVALUATE-ERROR", \dpc.threadCommand(), (p.tid, "thread/evaluate",
-            {"expression": "total"}));
+            {"expression": "nosuchvar"}));
         assertThrows("DEBUG-EVALUATE-ERROR", "system", \dpc.threadCommand(), (p.tid, "thread/evaluate",
             {"expression": "system(\"true\")"}));
         assertThrows("DEBUG-ERROR", "ID 99", \dpc.threadCommand(), (p.tid, "thread/variable/get",
@@ -968,17 +972,17 @@ public class DebugProgramControlTest inherits QUnit::Test {
             assertEq(3, getI(p));
             assertEq({"rc": NOTHING}, p.finish());
         }
-        # a logpoint writes its message and does not stop the thread; an expression that cannot be evaluated is
-        # replaced with its error
+        # a logpoint writes its message and does not stop the thread; an expression that raises an error when it is
+        # evaluated is replaced with its error
         {
             DebuggedProgram p(dpc, LoopScript);
             on_exit p.cleanup();
             dpc.getConsoleOutput();
-            breakAtLoop(p, {"logMessage": "i={i} total={total} bad={i +}"});
+            breakAtLoop(p, {"logMessage": "i={i} total={total} bad={i.nosuchmethod()}"});
             assertEq({"rc": NOTHING}, p.finish());
             list<string> log = dpc.getConsoleOutput();
             assertEq(5, log.size(), sprintf("%y", log));
-            assertRegex("^i=0 total=0 bad=<DEBUG-EVALUATE-ERROR: ", log[0]);
+            assertRegex("^i=0 total=0 bad=<[A-Z-]+: .*nosuchmethod", log[0]);
             assertRegex("^i=4 total=6 ", log[4]);
         }
         # all breakpoints of a statement are checked: a logpoint writes its message also when the condition of
@@ -996,16 +1000,16 @@ public class DebugProgramControlTest inherits QUnit::Test {
             assertEq({"rc": NOTHING}, p.finish());
             assertEq(("i=0\n", "i=1\n", "i=2\n", "i=3\n", "i=4\n"), dpc.getConsoleOutput());
         }
-        # negative: a condition that cannot be evaluated stops the thread with the error
+        # negative: a condition that raises an error when it is evaluated stops the thread with the error
         {
             DebuggedProgram p(dpc, LoopScript);
             on_exit p.cleanup();
             dpc.getConsoleOutput();
-            hash<auto> bp = breakAtLoop(p, {"condition": "i +"});
+            hash<auto> bp = breakAtLoop(p, {"condition": "i.nosuchmethod()"});
             hash<auto> e = p.runToStop();
             assertEq(bp.bkptid, e.bkptid);
-            assertRegex("^DEBUG-EVALUATE-ERROR: ", e.bkpterror);
-            assertRegex(sprintf("^breakpoint %d: DEBUG-EVALUATE-ERROR: ", bp.bkptid),
+            assertRegex("^[A-Z-]+: .*nosuchmethod", e.bkpterror);
+            assertRegex(sprintf("^breakpoint %d: [A-Z-]+: .*nosuchmethod", bp.bkptid),
                 dpc.getConsoleOutput().join(""));
             assertEq(0, getI(p));
             dpc.command(sprintf("program//breakpoint/%d/delete", bp.bkptid));
@@ -1022,7 +1026,7 @@ public class DebugProgramControlTest inherits QUnit::Test {
             hash<auto> stops = breakAtLoop(p, {"condition": "1 == 1"});
             hash<auto> skips = breakAtLoop(p, {"condition": "1 == 2"});
             hash<auto> plain = breakAtLoop(p, {});
-            hash<auto> fails = breakAtLoop(p, {"condition": "1 +"});
+            hash<auto> fails = breakAtLoop(p, {"condition": "i.nosuchmethod()"});
             hash<auto> r = dpc.threadCommand(p.tid, "thread/breakpoint/check", {"value": {"ids": (stops.bkptid,
                 skips.bkptid, plain.bkptid, fails.bkptid)}});
             assertEq((stops.bkptid, plain.bkptid, fails.bkptid), r.stop);
@@ -1078,7 +1082,25 @@ public class DebugProgramControlTest inherits QUnit::Test {
             bp.bkptid), {"value": "x"}));
         assertThrows("DEBUG-HANDLER-ERROR", "get or set", \dpc.command(), (sprintf("program//breakpoint/%d/condition/x",
             bp.bkptid)));
+
+        # negative: a condition or an expression of a log message that cannot be parsed, or that refers to a variable
+        # that the statement cannot refer to, is refused when it is set, and the option is not changed
+        cmd = sprintf("program//breakpoint/%d/", bp.bkptid);
+        assertThrows("BREAKPOINT-CONDITION-ERROR", "invalid condition \"i ===\"", \dpc.command(),
+            (cmd + "condition/set", {"value": "i ==="}));
+        assertThrows("BREAKPOINT-CONDITION-ERROR", "invalid condition \"count > 1\".*bareword 'count'", \dpc.command(),
+            (cmd + "condition/set", {"value": "count > 1"}));
+        assertThrows("BREAKPOINT-CONDITION-ERROR", "invalid expression of the log message \"nope\"", \dpc.command(),
+            (cmd + "log/set", {"value": "i={i} n={nope}"}));
+        assertEq("", dpc.command(cmd + "condition/get"));
+        assertEq("", dpc.command(cmd + "log/get"));
+        # the local variables of the statement, the global variables and the code of the program can be used
+        assertEq("ok", dpc.command(cmd + "condition/set", {"value": "i > total && i.toString().size() == 1"}));
+        assertEq("ok", dpc.command(cmd + "log/set", {"value": "i={i} total={total}"}));
+        # a breakpoint is not created with an invalid condition
+        assertThrows("BREAKPOINT-CONDITION-ERROR", \breakAtLoop(), (p, {"condition": "i ==="}));
         dpc.command(sprintf("program//breakpoint/%d/delete", bp.bkptid));
+        assertEq((), dpc.command(sprintf("program/%d/breakpoint//list", p.pgmId)));
         assertEq({"rc": NOTHING}, p.finish());
     }
 

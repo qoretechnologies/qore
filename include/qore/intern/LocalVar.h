@@ -1144,8 +1144,44 @@ public:
         return decl_seq;
     }
 
+    //! Sets the private data of the Program that created the variable; see setParseScopePrev()
+    DLLLOCAL void setOwner(const void* o) {
+        owner = o;
+    }
+
+    //! Returns the private data of the Program that created the variable, if any
+    DLLLOCAL const void* getOwner() const {
+        return owner;
+    }
+
+    //! Records the variable that was below this one in its frame when it was first pushed on the parse stack
+    /** The variables of a Program form chains of the variables of the frame of each point of its code, which
+        statements keep for debuggers (see AbstractStatement::getScopeLocalVars()); the chain of a function ends with
+        its first variable, as the top-level variables of the program, which have global scope, are visible to all of
+        its code.  A variable of another Program, or of none, is not linked, so that a chain stays in one Program,
+        which owns all of its variables.  A variable that is pushed again, as a parameter for each parse of its
+        function, keeps its first link, which is the same each time
+    */
+    DLLLOCAL void setParseScopePrev(const LocalVar* prev) {
+        if (!parse_scope_set) {
+            parse_scope_set = true;
+            parse_scope_prev = (prev && owner && prev->owner == owner) ? prev : nullptr;
+        }
+    }
+
+    //! Returns the variable that was visible below this one at parse time; see setParseScopePrev()
+    DLLLOCAL const LocalVar* getParseScopePrev() const {
+        return parse_scope_prev;
+    }
+
 private:
     std::string name;
+    //! the private data of the Program that created the variable; see setParseScopePrev()
+    const void* owner = nullptr;
+    //! the variable that was visible below this one at parse time; see setParseScopePrev()
+    const LocalVar* parse_scope_prev = nullptr;
+    //! true when parse_scope_prev has been set
+    bool parse_scope_set = false;
     //! the order of the variable's creation at parse time
     uint64_t decl_seq;
     bool closure_use = false,

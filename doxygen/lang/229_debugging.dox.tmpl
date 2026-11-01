@@ -56,8 +56,11 @@
 
     The thread that hits a breakpoint checks its condition, hit condition and log message itself before it stops, so
     it does not wait for a debugger client at each hit; all breakpoints of the statement that apply to the thread are
-    checked.  A condition that cannot be evaluated stops the thread, and the error is shown.  The breakpoints, with
-    their conditions, are shared by all clients of a debugger.
+    checked.  A condition or an expression of a log message that cannot be parsed with the variables of the statement
+    of the breakpoint, as with a syntax error or a variable that the statement cannot refer to, is refused when it is
+    set (see @ref Qore::ProgramControl::getStatementIdInfo() "ProgramControl::getStatementIdInfo()"); a condition that
+    raises an error when it is evaluated stops the thread, and the error is shown.  The breakpoints, with their
+    conditions, are shared by all clients of a debugger.
 
     @subsection debugging_exceptions Exceptions
 
@@ -98,7 +101,10 @@
     set to the value of an expression.  A variable that was declared but not assigned, whose type requires a value, is
     shown as such with its declared type, as <tt>int count = NOTHING (declared but not assigned)</tt>.
 
-    Expressions are evaluated with the variables of a frame, for watches, hovers and debug consoles of IDEs and the
+    Expressions are evaluated with the variables of a frame and the top-level local variables of the program, which
+    have global scope, with the values of the thread (see
+    @ref Qore::ProgramControl::getTopLevelLocalVars() "ProgramControl::getTopLevelLocalVars()"), for watches, hovers and
+    debug consoles of IDEs and the
     \c eval command of the command-line debuggers.  An expression can refer to all code of the program, its functions,
     classes, constants and other declarations, also those that are not public (see
     @ref Qore::ProgramControl::createEvalProgram() "ProgramControl::createEvalProgram()").  It is evaluated in a

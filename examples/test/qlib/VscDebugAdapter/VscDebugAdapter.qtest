@@ -1649,19 +1649,44 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         assertEq((), runToEnd(dap, proc, tid));
         assertEq(("r: 10\n",), dap.getOutput("stdout"));
 
-        # negative: a condition that cannot be evaluated stops the thread, and the error is shown
+        # negative: a condition that raises an error when it is evaluated stops the thread, and the error is shown
         Process proc2 = startAdapter();
         on_exit if (proc2.running()) {
             proc2.terminate();
         }
         DapClient dap2(proc2);
-        stopped = launchToStop(dap2, path, ({"line": 13, "condition": "i =="},));
+        stopped = launchToStop(dap2, path, ({"line": 13, "condition": "i.nosuchmethod()"},));
         assertEq("breakpoint", stopped.body.reason);
-        assertRegex("DEBUG-EVALUATE-ERROR", dap2.getOutput("console").join(""));
+        assertRegex("nosuchmethod", dap2.getOutput("console").join(""));
         tid = stopped.body.threadId;
         assertEq("0", evaluate(dap2, tid, "i").body.result);
         # every hit stops the thread
         assertEq((13, 13, 13, 13), runToEnd(dap2, proc2, tid));
+
+        # negative: a breakpoint with a condition that cannot be parsed with the variables of its statement is not
+        # set, and the IDE shows why
+        Process proc3 = startAdapter();
+        on_exit if (proc3.running()) {
+            proc3.terminate();
+        }
+        DapClient dap3(proc3);
+        launch(dap3, {"program": path, "stopOnEntry": False});
+        hash<auto> r = dap3.request("setBreakpoints", {"source": {"path": path}, "breakpoints": (
+            {"line": 13, "condition": "i =="},
+            {"line": 13, "condition": "nosuchvar > 1"},
+        )});
+        assertTrue(r.success, r.message);
+        assertEq((False, False), map $1.verified, r.body.breakpoints);
+        assertRegex("^invalid condition \"i ==\": ", r.body.breakpoints[0].message);
+        assertRegex("^invalid condition \"nosuchvar > 1\": .*nosuchvar", r.body.breakpoints[1].message);
+        r = dap3.request("configurationDone");
+        assertTrue(r.success, r.message);
+        # no breakpoint was left set: the program runs to its end
+        dap3.waitForEvent("terminated");
+        assertEq((), dap3.getEvents("stopped"));
+        dap3.request("disconnect");
+        proc3.closeStdin();
+        assertTrue(proc3.wait(30s), "the adapter ends");
     }
 
     hitConditionTest() {
@@ -1730,7 +1755,7 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         DapClient dap(proc);
         launch(dap, {"program": path, "stopOnEntry": False});
         hash<auto> r = dap.request("setBreakpoints", {"source": {"path": path}, "breakpoints": (
-            {"line": 13, "logMessage": "i={i} total={total} name={h.name} bad={i +}"},
+            {"line": 13, "logMessage": "i={i} total={total} name={h.name} bad={i.nosuchmethod()}"},
         )});
         assertTrue(r.success, r.message);
         r = dap.request("configurationDone");
@@ -1740,7 +1765,7 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         assertEq((), dap.getEvents("stopped"));
         list<string> log = select dap.getOutput("console"), $1 =~ /^i=/;
         assertEq(5, log.size(), sprintf("%y", log));
-        assertRegex("^i=0 total=0 name=invoice bad=<DEBUG-EVALUATE-ERROR: ", log[0]);
+        assertRegex("^i=0 total=0 name=invoice bad=<[A-Z-]+: .*nosuchmethod", log[0]);
         assertRegex("^i=4 total=6 ", log[4]);
         assertEq(("r: 10\n",), dap.getOutput("stdout"));
         r = dap.request("disconnect");

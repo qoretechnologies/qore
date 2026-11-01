@@ -277,6 +277,12 @@ public:
     DLLLOCAL virtual int execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);
 
     // assign inherited local var list from parent program
+    //! Returns the number of the top-level local variables inherited from the parent Program, which are the first
+    //! ones of getLVList() and which the code of this Program cannot refer to
+    DLLLOCAL unsigned getInheritedLocalVarCount() const {
+        return inherited_lvars;
+    }
+
     DLLLOCAL void assignLocalVars(const LVList* lvl) {
         assert(!lvars);
         lvars = new LVList(*lvl);

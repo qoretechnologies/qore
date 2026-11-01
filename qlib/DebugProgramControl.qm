@@ -101,6 +101,9 @@ module DebugProgramControl {
       @ref DebugProgramControl::DebugProgramControl::terminateProgram() "terminateProgram()" and
       @ref DebugProgramControl::DebugProgramControl::isTerminating() "isTerminating()": a debugged program ends, and its
       threads end with a \c THREAD-CANCELLED exception, also those that wait, as for a lock or for I/O
+    - the condition and the expressions of the log message of a breakpoint are parsed with the variables of its
+      statements when they are set, and refused with \c BREAKPOINT-CONDITION-ERROR if they cannot be parsed; expressions
+      are evaluated also with the top-level local variables of the program, which have global scope
     - the \c thread/local/&lt;name&gt;/get and \c thread/variable/get commands give the declared type of a local
       variable in \c declaredType, and \c unassigned is @ref True for a variable that was declared but not assigned;
       exception events give the hint of an exception that matches a common pitfall of %Qore in its \c arg (see
@@ -940,8 +943,10 @@ public namespace DebugProgramControl {
                                         if (receiveData.value) {
                                             stmt = resolveStatement(pgmb, receiveData.value);
                                             # the options are checked before the breakpoint is created
-                                            map DebugProgramControl::validateBreakpointOption($1,
-                                                receiveData.value{$1}), BreakpointOptions;
+                                            foreach string opt in (BreakpointOptions) {
+                                                checkBreakpointOption(pgmb, stmt ? (stmt,) : (), opt,
+                                                    receiveData.value{opt});
+                                            }
                                         }
                                         b = new Breakpoint();
                                         b.setEnabled(True);
@@ -955,8 +960,7 @@ public namespace DebugProgramControl {
                                         if (receiveData.value) {
                                             foreach string opt in (BreakpointOptions) {
                                                 if (receiveData.value{opt}.val()) {
-                                                    setBreakpointOption(b.getBreakpointId(), opt,
-                                                        receiveData.value{opt});
+                                                    setBreakpointOption(b, opt, receiveData.value{opt});
                                                 }
                                             }
                                         }
@@ -1090,7 +1094,7 @@ public namespace DebugProgramControl {
                                                 result = getBreakpointOptions(b.getBreakpointId()){opt} ?? "";
                                                 break;
                                             case 'set':
-                                                setBreakpointOption(b.getBreakpointId(), opt, receiveData.value);
+                                                setBreakpointOption(b, opt, receiveData.value);
                                                 broadcastBreakpoint(cx, b, bkptCmd);
                                                 result = 'ok';
                                                 break;
@@ -1535,15 +1539,18 @@ public namespace DebugProgramControl {
         }
 
         #! Sets or removes the condition, hit condition or log message of a breakpoint
-        /** @param id the ID of the breakpoint
+        /** @param b the breakpoint
             @param opt \c condition, \c hitCondition or \c logMessage
             @param value the value; an empty value removes the option
 
             @throw BREAKPOINT-HIT-CONDITION-ERROR the hit condition is invalid
+            @throw BREAKPOINT-CONDITION-ERROR the condition or an expression of the log message cannot be parsed
+            with the variables of a statement of the breakpoint; see checkBreakpointOption()
             @throw DEBUG-HANDLER-ERROR the value is not a string
         */
-        private setBreakpointOption(int id, string opt, auto value) {
-            *string v = DebugProgramControl::validateBreakpointOption(opt, value);
+        private setBreakpointOption(Breakpoint b, string opt, auto value) {
+            *string v = checkBreakpointOption(b.getProgram(), b.getStatementIds(), opt, value);
+            int id = b.getBreakpointId();
             AutoLock al(bkptLock);
             if (v) {
                 bkptOptions{id}{opt} = v;
@@ -1554,6 +1561,65 @@ public namespace DebugProgramControl {
             if (!(bkptOptions{id} - "hits")) {
                 remove bkptOptions{id};
             }
+        }
+
+        #! Returns the value of a condition, hit condition or log message of a breakpoint, or @ref nothing for none,
+        #! after checking it with the variables of the statements of the breakpoint
+        /** The condition and the expressions in braces of a log message are parsed with the global variables of the
+            Program and the local variables of each statement (see
+            @ref Qore::ProgramControl::getStatementIdInfo() "ProgramControl::getStatementIdInfo()"), as they are
+            evaluated when a thread hits the breakpoint, so that an invalid expression, or one with a variable that a
+            statement cannot refer to, is refused when it is set.  An expression of a breakpoint without statements,
+            or of a statement whose local variables are not known, as of AOT-compiled code, is checked when it is
+            evaluated
+
+            @param pgm the Program of the breakpoint
+            @param sids the IDs of the statements of the breakpoint
+            @param opt \c condition, \c hitCondition or \c logMessage
+            @param value the value; an empty value removes the option
+
+            @throw BREAKPOINT-HIT-CONDITION-ERROR the hit condition is invalid
+            @throw BREAKPOINT-CONDITION-ERROR the condition or an expression of the log message cannot be parsed
+            @throw DEBUG-HANDLER-ERROR the value is not a string
+        */
+        private *string checkBreakpointOption(ProgramControl pgm, *softlist<softint> sids, string opt, auto value) {
+            *string v = DebugProgramControl::validateBreakpointOption(opt, value);
+            if (!v || opt == "hitCondition") {
+                return v;
+            }
+            list<string> exprs = opt == "condition" ? (v,) : DebugProgramControl::getLogMessageExpressions(v);
+            foreach softint sid in (sids) {
+                *list<string> locals = pgm.getStatementIdInfo(sid).locals;
+                if (!exists locals) {
+                    continue;
+                }
+                list<string> names = getEvalVariableNames(pgm, locals);
+                foreach string expr in (exprs) {
+                    try {
+                        prepareEvalFunction(pgm, expr, names, False);
+                    } catch (hash<ExceptionInfo> ex) {
+                        throw "BREAKPOINT-CONDITION-ERROR", sprintf("invalid %s %y: %s",
+                            opt == "condition" ? "condition" : "expression of the log message", expr, ex.desc);
+                    }
+                }
+            }
+            return v;
+        }
+
+        #! Returns the expressions in braces of the message of a logpoint; see formatLogMessage()
+        static list<string> getLogMessageExpressions(string msg) {
+            list<string> rv = ();
+            int pos = 0;
+            while (True) {
+                int open = index(msg, "{", pos);
+                int close = open >= 0 ? index(msg, "}", open) : -1;
+                if (close < 0) {
+                    break;
+                }
+                push rv, msg.substr(open + 1, close - open - 1);
+                pos = close + 1;
+            }
+            return rv;
         }
 
         #! Returns the value of a condition, hit condition or log message of a breakpoint, or @ref nothing for none
@@ -1956,7 +2022,9 @@ public namespace DebugProgramControl {
             @ref Qore::ProgramControl::createEvalProgram() "ProgramControl::createEvalProgram()"), so the expression can
             refer to its functions, classes, constants and other code; functions and methods run in the debugged
             Program.  The expression is the body of a function whose local variables are the global variables of the
-            Program and the given local variables, which hide global variables with the same names.  Values are
+            Program, its top-level local variables, which have global scope, with the values of the current thread (see
+            @ref Qore::ProgramControl::getTopLevelLocalVars() "ProgramControl::getTopLevelLocalVars()"), and the given
+            local variables, which hide the others with the same names.  Values are
             copied into the variables, so assigning a variable in the expression does not change the program's
             variable; the members of objects are changed in the objects.
 
@@ -1979,12 +2047,48 @@ public namespace DebugProgramControl {
                     vars{i.key} = i.value;
                 }
             }
+            # the top-level local variables have global scope, with the values of the thread; local variables of the
+            # frame hide them
+            foreach hash<auto> i in (pgm.getTopLevelLocalVars().pairIterator()) {
+                if (i.key =~ /^[A-Za-z_][A-Za-z0-9_]*$/) {
+                    vars{i.key} = i.value.value;
+                }
+            }
             foreach hash<auto> i in (lv.pairIterator()) {
                 if (i.key =~ /^[A-Za-z_][A-Za-z0-9_]*$/) {
                     vars{i.key} = i.value.value;
                 }
             }
-            list<string> names = sort(keys vars);
+            hash<auto> f = prepareEvalFunction(pgm, expr, sort(keys vars), True);
+            Counter calls = f.calls;
+            on_exit calls.dec();
+            return f.program.callFunction(f.function, vars);
+        }
+
+        #! Returns the names of the variables of an expression: the global variables of a Program and local variables
+        /** @param pgm the Program
+            @param locals the names of the local variables; \c self, which is not a variable of an expression, is left
+            out
+        */
+        private list<string> getEvalVariableNames(ProgramControl pgm, list<string> locals) {
+            hash<string, bool> names = map {$1: True}, keys pgm.getGlobalVars(), $1 =~ /^[A-Za-z_][A-Za-z0-9_]*$/;
+            names += map {$1: True}, locals, $1 != "self" && $1 =~ /^[A-Za-z_][A-Za-z0-9_]*$/;
+            return sort(keys names);
+        }
+
+        #! Parses the function of an expression with the given variables, unless it is parsed already, and returns it
+        /** @param pgm the Program whose code the expression can use
+            @param expr the expression
+            @param names the sorted names of the variables of the expression
+            @param call @ref True if the function is called: its \c calls counter is incremented, and the caller must
+            decrement it after the call
+
+            @return a hash with the \c program and the name of the \c function, and \c calls, the counter of the
+            calls of the Program
+
+            @throw DEBUG-EVALUATE-ERROR the expression cannot be parsed, or the Program is being parsed
+        */
+        private hash<auto> prepareEvalFunction(ProgramControl pgm, string expr, list<string> names, bool call) {
             # the function of an expression depends on the names of the variables, which are identifiers, so the first
             # ":" ends them
             string key = names.join(",") + ":" + expr;
@@ -2033,10 +2137,11 @@ public namespace DebugProgramControl {
                     ++evalPrograms{id}.n;
                 }
                 # the evaluation runs; no expression is parsed in the Program until it has ended
-                calls.inc();
+                if (call) {
+                    calls.inc();
+                }
             }
-            on_exit calls.dec();
-            return epgm.callFunction(fname, vars);
+            return {"program": epgm, "function": fname, "calls": calls};
         }
 
         #! Returns True if no statement in the call stack is in the body of a try statement

@@ -56,6 +56,7 @@
 
 // all definitions in this file are private to the library and subject to change
 // forward references
+class LocalVar;
 class LVList;
 class StatementBlock;
 class QoreBreakpoint;
@@ -94,6 +95,21 @@ public:
     */
     DLLLOCAL bool isInTry() const {
         return in_try;
+    }
+
+    //! Returns true if the local variables that the statement can refer to are known; see getScopeLocalVars()
+    /** They are known for a statement that was parsed, and not for one of AOT-compiled code
+    */
+    DLLLOCAL bool isScopeKnown() const {
+        return scope_known;
+    }
+
+    //! Returns the innermost local variable that the statement can refer to, if any
+    /** The other variables follow with LocalVar::getParseScopePrev(); set at parse time, for debuggers, which check
+        the expressions of breakpoints with them
+    */
+    DLLLOCAL const LocalVar* getScopeLocalVars() const {
+        return scope_top;
     }
 
     DLLLOCAL bool getBreakpointFlag() const {
@@ -144,6 +160,8 @@ protected:
     QoreBreakpointList_t* breakpoints = nullptr;
     volatile bool breakpointFlag = false;  // fast access to check if breakpoints are non-empty
     bool in_try = false;  // in the body of a try statement of its function; see isInTry()
+    bool scope_known = false;  // see isScopeKnown()
+    const LocalVar* scope_top = nullptr;  // see getScopeLocalVars()
 
     DLLLOCAL virtual int execImpl(QoreValue& return_value, ExceptionSink* xsink) = 0;
     DLLLOCAL virtual int execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);

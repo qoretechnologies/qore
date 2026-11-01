@@ -53,6 +53,8 @@ module DebugLinenoiseCmdLine {
     - with input that is not a terminal, a command that resumes a thread returns when a thread pauses, or when the
       thread stops being debugged (see \c waitsForStops)
     - \c history \c load and \c history \c save without a file name show an error
+    - \c quit tells when a program that the debugger runs continues without it, and <tt>quit kill</tt> ends the
+      program first
     - JSON output (see @ref DebugCmdLine::DebugCommandLine::jsonOutput "jsonOutput"): the commands are read without
       a prompt and written to
       @ref DebugLinenoiseCmdLine::DebugLinenoiseCommandLine::outputFile "outputFile"
@@ -135,9 +137,25 @@ public namespace DebugLinenoiseCmdLine {
                         'the debugger starts and saved when it ends, in the file of the -y (--history) option.',
                 ),
                 'quit': (
-                    'desc': 'End the debugger.',
-                    'action': bool sub(DebugCommandLine dcl, softlist path, softlist args) {
-                        return True;
+                    'desc': 'End the debugger. A program that the debugger runs continues without it, and is ended '
+                        'first with "quit kill". Usage: quit [kill]',
+                    'action': *bool sub(DebugCommandLine dcl, softlist path, softlist args) {
+                        *string arg = shift args;
+                        if (exists arg && arg != "kill") {
+                            throw "DEBUG-COMMAND", sprintf("unknown argument %y; usage: quit [kill]", arg);
+                        }
+                        *string note = dcl.getQuitNote();
+                        if (!note) {
+                            return True;
+                        }
+                        if (!arg) {
+                            dcl.setQuitLeavesProgram();
+                            printfImpl("%s\n", dcl.tc.warning(note));
+                            return True;
+                        }
+                        # the program is ended first; the debugger does not end if it cannot be ended
+                        dcl.processCmdLine("kill");
+                        return !exists dcl.getCommandError() ? True : NOTHING;
                     },
                 ),
 
