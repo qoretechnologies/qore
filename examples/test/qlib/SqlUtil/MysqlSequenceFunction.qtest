@@ -179,7 +179,16 @@ class MysqlSequenceFunctionTest inherits QUnit::Test {
         if (ds.getDriverName() != "mysql") {
             testSkip(sprintf("connection uses driver %y, not mysql", ds.getDriverName()));
         }
-        ds.open();
+        # a configured server that cannot be reached (ex: the CI service on a host without it) is a skip, as in the
+        # other MySQL tests; every other error fails the test
+        try {
+            ds.open();
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "DBI:MYSQL:CONNECT-ERROR") {
+                rethrow;
+            }
+            testSkip(sprintf("cannot connect to MySQL: %s: %s", ex.err, ex.desc));
+        }
         hash<auto> vars = ds.selectRow("select @@log_bin as log_bin, "
             "@@log_bin_trust_function_creators as trust");
         bool refused = vars.log_bin.toBool() && !vars.trust.toBool();
