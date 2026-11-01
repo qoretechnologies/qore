@@ -16,171 +16,226 @@
 
 # a run on PostgreSQL has its own schema
 %requires ../SqlUtil/PgsqlTestIsolation.qm
+# the test runs against every database connection that is configured
+%requires ../../DbTestConnections.qm
 
 %exec-class Main
 
-#
-# NOTE: SchemaReverse automatically creates hashes and strings. So the reference
-#       (REF_...) constants must be more strict than in user code.
-#       Ex: if there is something like string or list, list should be used:
-#       ("columns" : ("id",), "unique" : True))...
-#
-our hash REF_TABLE;
-our hash REF_SCHEMA;
-#! the description that TableReverse gives for REF_TABLE: REF_TABLE, but for what the server makes of its columns
-our hash REF_TABLE_REVERSE;
+#! the tables and sequences that a connection's test cases create and reverse, and the connection
+class SchemaReverseContext {
+    public {
+        #! the connection
+        hash<DbTestConnection> conn;
 
+        #! the open connection, or @ref nothing if it could not be opened
+        *Datasource ds;
+
+        #! the reason the connection's test cases are skipped, if it is not open
+        string skip_reason = "the connection is not open";
+
+        #! the schema that is created: a table and a sequence
+        /** SchemaReverse creates hashes and strings, so the reference values must be more strict than in user
+            code: a list where a string would do in user code, as in <tt>("columns": ("id",), "unique": True)</tt>
+        */
+        hash<auto> ref_schema;
+
+        #! the description that TableReverse gives for the table: its description, but for what the server makes
+        #! of its columns
+        hash<auto> ref_table_reverse;
+
+        #! the error that creating the schema raised, if any
+        *hash<ExceptionInfo> setup_error;
+    }
+
+    constructor(hash<DbTestConnection> conn) {
+        self.conn = conn;
+    }
+
+    #! returns the name of the connection's test case
+    string name(string test) {
+        return sprintf("%s (%s): %s", conn.label, conn.driver ?? "unknown driver", test);
+    }
+}
+
+#! tests SchemaReverse against every database connection that is configured (see DbTestConnections)
 class Main inherits QUnit::Test {
     private {
         const LOCAL_OPTS = Opts + (
             "connstr": "c,conn=s",
         );
 
-        Datasource m_ds;
-        Database m_db;
+        #! the drivers whose reverse output the test knows
+        const Drivers = ("oracle", "pgsql", "mysql");
+
+        #! the test's connections
+        list<SchemaReverseContext> contexts = ();
     }
 
     constructor() : QUnit::Test("SchemaReverseTest", "1.0", \ARGV, LOCAL_OPTS) {
-        addTestCase("schema reverse - table", \testSchemaReverseTable());
-        addTestCase("schema reverse - tables", \testSchemaReverseTables());
-        addTestCase("schema reverse - sequence", \testSchemaReverseSequence());
-        addTestCase("schema reverse - sequences", \testSchemaReverseSequences());
-        addTestCase("schema reverse - toYaml", \testSchemaReverseToYaml());
-        addTestCase("schema reverse - toJson", \testSchemaReverseToJson());
-        addTestCase("schema reverse - full toQore", \testSchemaReverseFullToQore());
-        addTestCase("schema reverse - filtered toQore", \testSchemaReverseFilteredToQore());
+        contexts = map new SchemaReverseContext($1), DbTestConnections::get(m_options.connstr);
+        if (!contexts) {
+            addTestCase("schema reverse", sub () { testSkip("no DB connection"); });
+        }
+        foreach SchemaReverseContext ctx in (contexts) {
+            addTestCase(ctx.name("schema reverse - table"), \testSchemaReverseTable(), ctx);
+            addTestCase(ctx.name("schema reverse - tables"), \testSchemaReverseTables(), ctx);
+            addTestCase(ctx.name("schema reverse - sequence"), \testSchemaReverseSequence(), ctx);
+            addTestCase(ctx.name("schema reverse - sequences"), \testSchemaReverseSequences(), ctx);
+            addTestCase(ctx.name("schema reverse - toYaml"), \testSchemaReverseToYaml(), ctx);
+            addTestCase(ctx.name("schema reverse - toJson"), \testSchemaReverseToJson(), ctx);
+            addTestCase(ctx.name("schema reverse - full toQore"), \testSchemaReverseFullToQore(), ctx);
+            addTestCase(ctx.name("schema reverse - filtered toQore"), \testSchemaReverseFilteredToQore(), ctx);
+        }
 
         set_return_value(main());
     }
 
-    private globalMakeSchema(string method) {
-        if (!m_ds)
+    private static makeSchema(SchemaReverseContext ctx, string method) {
+        if (!ctx.ds) {
             return;
-        on_exit m_ds.commit();
-        list<auto> sql = call_object_method(m_db, method, REF_SCHEMA);
-        ListIterator it(sql);
-        while (it.next()) {
-            m_ds.exec(it.getValue());
         }
+        on_exit ctx.ds.commit();
+        Database db(ctx.ds);
+        list<auto> sql = call_object_method(db, method, ctx.ref_schema);
+        map ctx.ds.exec($1), sql;
     }
 
     globalSetUp() {
-        try {
-            if (!m_options.connstr) {
-                m_options.connstr = ENV.QORE_DB_CONNSTR
-                    ? ENV.QORE_DB_CONNSTR
-                    : (ENV.QORE_DB_CONNSTR_ORACLE
-                        ? ENV.QORE_DB_CONNSTR_ORACLE
-                        : ENV.QORE_DB_CONNSTR_PGSQL);
-            }
+        # on PostgreSQL, every connection of the run uses the run's own schema; this is set up before any
+        # connection is opened
+        map PgsqlRunSchema::setup($1.conn.connstr, "SchemaReverse"), contexts;
+        map setUpContext($1), contexts;
+    }
 
-            # on PostgreSQL, every connection of the run uses the run's own schema
-            PgsqlRunSchema::setup(m_options.connstr, "SchemaReverse");
-            m_ds = new Datasource(m_options.connstr);
-            m_ds.open();
-            m_db = new Database(m_ds);
+    #! opens the connection and creates its schema; the connection's test cases are skipped if it fails
+    private setUpContext(SchemaReverseContext ctx) {
+        if (!inlist(ctx.conn.driver, Drivers)) {
+            ctx.skip_reason = sprintf("the expected reverse output of driver %y is not known", ctx.conn.driver);
+            return;
+        }
+        try {
+            Datasource ds(ctx.conn.connstr);
+            ds.open();
+            ctx.ds = ds;
         } catch (hash<ExceptionInfo> ex) {
-            if (m_options.verbose)
-                printf("%s: %s\n", ex.err, ex.desc);
-            delete m_ds;
+            ctx.skip_reason = sprintf("cannot open the connection: %s: %s", ex.err, ex.desc);
+            if (m_options.verbose) {
+                printf("%s: %s\n", ctx.conn.label, ctx.skip_reason);
+            }
             return;
         }
 
-        REF_TABLE = (
-            "columns" : (
-                "id" : c_number(C_NOT_NULL, "comment for id"),
-                "foo" : c_varchar(10, C_NULL, "comment for foo"),
-                "bar" : c_date(C_NOT_NULL, "comment for bar"),
-            ),
+        string drv = ctx.ds.getDriverName();
+        # the columns are added one by one, so that the hash takes a column description of any type, as a literal
+        # of column descriptions would take only GenericColumnInfo hashes
+        hash<auto> columns = {};
+        columns.id = c_number(C_NOT_NULL, "comment for id");
+        columns.foo = c_varchar(10, C_NULL, "comment for foo");
+        columns.bar = c_date(C_NOT_NULL, "comment for bar");
+        hash<auto> ref_table = (
+            "columns" : columns,
             "indexes" : ( "schema_reverse_ix1" : ("columns" : ("id",), "unique" : True)),
         );
         # named types data
-        if (m_ds.getDriverName() == "oracle") {
-            REF_TABLE.columns.loc_col = ( "driver" : ( "oracle" : ("native_type" : "sdo_geometry", "notnull" : False )));
+        if (drv == "oracle") {
+            ref_table.columns.loc_col = ( "driver" : ( "oracle" : ("native_type" : "sdo_geometry", "notnull" : False )));
         }
-        REF_TABLE_REVERSE = REF_TABLE;
-        string drv = m_ds.getDriverName();
+        ctx.ref_table_reverse = ref_table;
         if (drv == "pgsql" || drv == "mysql") {
             # an integer column is a bigint, which TableReverse gives with its native type, and with its comment
-            REF_TABLE.columns.cnt = {"qore_type": Type::Int, "notnull": True, "comment": "comment for cnt"};
-            REF_TABLE_REVERSE.columns.cnt = {
+            ref_table.columns.cnt = {"qore_type": Type::Int, "notnull": True, "comment": "comment for cnt"};
+            ctx.ref_table_reverse.columns.cnt = {
                 "driver": {drv: {"native_type": "bigint", "notnull": True}},
                 "comment": "comment for cnt",
             };
         }
         if (drv == "mysql") {
             # MySQL has no numeric without a precision: a numeric column without one is decimal(10,0)
-            REF_TABLE_REVERSE.columns.id.size = 10;
+            ctx.ref_table_reverse.columns.id.size = 10;
             # MySQL has no date type with a time, as Oracle has: a date column is a timestamp; the c_date() native
             # types are for Oracle and PostgreSQL only
-            REF_TABLE_REVERSE.columns.bar = c_timestamp(C_NOT_NULL, "comment for bar");
+            ctx.ref_table_reverse.columns.bar = c_timestamp(C_NOT_NULL, "comment for bar");
         }
 
-        REF_SCHEMA = (
+        ctx.ref_schema = (
             "sequences" : (
                 "schema_reverse_seq" : hash(),
             ),
             "tables" : (
-                "schema_reverse_t1" : REF_TABLE,
+                "schema_reverse_t1" : ref_table,
             ),
         );
 
-        globalMakeSchema("getAlignSql");
+        try {
+            makeSchema(ctx, "getAlignSql");
+        } catch (hash<ExceptionInfo> ex) {
+            # the connection's test cases fail with the error
+            ctx.setup_error = ex;
+        }
     }
 
     globalTearDown() {
-        globalMakeSchema("getDropSchemaSql");
+        foreach SchemaReverseContext ctx in (contexts) {
+            try {
+                makeSchema(ctx, "getDropSchemaSql");
+            } catch (hash<ExceptionInfo> ex) {
+                printf("WARNING: %s: cannot drop the test schema: %s: %s\n", ctx.conn.label, ex.err, ex.desc);
+            }
+        }
         # drop the run's schema on PostgreSQL
         PgsqlRunSchema::teardown();
     }
 
-    testSchemaReverseTable() {
-        if (!m_ds)
-            testSkip("no DB connection");
-
-        TableReverse r(m_ds, "schema_reverse_t1");
-        hash q = r.toQore();
-        assertEq(REF_TABLE_REVERSE, q, "TableReverse::toQore()");
+    #! skips the test case if the connection is not open; fails it if its schema could not be created
+    private checkContext(SchemaReverseContext ctx) {
+        if (!ctx.ds) {
+            testSkip(ctx.skip_reason);
+        }
+        if (*hash<ExceptionInfo> ex = ctx.setup_error) {
+            throw ex.err, sprintf("the test schema could not be created: %s", ex.desc), ex.arg;
+        }
     }
 
-    testSchemaReverseTables() {
-        if (!m_ds)
-            testSkip("no DB connection");
+    testSchemaReverseTable(SchemaReverseContext ctx) {
+        checkContext(ctx);
+
+        TableReverse r(ctx.ds, "schema_reverse_t1");
+        hash q = r.toQore();
+        assertEq(ctx.ref_table_reverse, q, "TableReverse::toQore()");
+    }
+
+    testSchemaReverseTables(SchemaReverseContext ctx) {
+        checkContext(ctx);
 
         # the mask is anchored: another schema of the search_path can have a table of this name, listed as
         # "<schema>.schema_reverse_t1"
-        TablesReverse r(m_ds, "^schema_reverse_t1$");
+        TablesReverse r(ctx.ds, "^schema_reverse_t1$");
         hash q = r.toQore();
-        assertEq({"schema_reverse_t1": REF_TABLE_REVERSE}, q, "TableReverse::toQore()");
+        assertEq({"schema_reverse_t1": ctx.ref_table_reverse}, q, "TableReverse::toQore()");
     }
 
-    testSchemaReverseSequence() {
-        if (!m_ds)
-            testSkip("no DB connection");
+    testSchemaReverseSequence(SchemaReverseContext ctx) {
+        checkContext(ctx);
 
-        SequenceReverse r(m_ds, "schema_reverse_seq");
+        SequenceReverse r(ctx.ds, "schema_reverse_seq");
         hash q = r.toQore();
-        assertEq(REF_SCHEMA.sequences.schema_reverse_seq, q, "SequenceReverse::toQore()");
+        assertEq(ctx.ref_schema.sequences.schema_reverse_seq, q, "SequenceReverse::toQore()");
     }
 
-    testSchemaReverseSequences() {
-        if (!m_ds) {
-            testSkip("no DB connection");
-        }
+    testSchemaReverseSequences(SchemaReverseContext ctx) {
+        checkContext(ctx);
 
         # the mask is anchored: another schema of the search_path can have a sequence of this name, listed as
         # "<schema>.schema_reverse_seq"
-        SequencesReverse r(m_ds, "^schema_reverse_seq$");
+        SequencesReverse r(ctx.ds, "^schema_reverse_seq$");
         hash q = r.toQore();
-        assertEq(REF_SCHEMA.sequences, q, "SequencesReverse::toQore()");
+        assertEq(ctx.ref_schema.sequences, q, "SequencesReverse::toQore()");
     }
 
-    testSchemaReverseToYaml() {
-        if (!m_ds) {
-            testSkip("no DB connection");
-        }
+    testSchemaReverseToYaml(SchemaReverseContext ctx) {
+        checkContext(ctx);
 
-        SchemaReverse rev(m_ds, "TestSchema");
+        SchemaReverse rev(ctx.ds, "TestSchema");
         string yaml_output = rev.toYaml();
         assertTrue(yaml_output.size() > 0, "toYaml() returns non-empty string");
         assertTrue(yaml_output.contains("schema_reverse_t1"), "YAML contains table name");
@@ -193,7 +248,7 @@ class Main inherits QUnit::Test {
         assertEq("TestSchema", parsed.schema.name, "schema name matches");
 
         # TableReverse toYaml
-        TableReverse tr(m_ds, "schema_reverse_t1");
+        TableReverse tr(ctx.ds, "schema_reverse_t1");
         string table_yaml = tr.toYaml();
         assertTrue(table_yaml.size() > 0, "TableReverse.toYaml() returns non-empty");
         auto parsed_table = parse_yaml(table_yaml);
@@ -201,12 +256,10 @@ class Main inherits QUnit::Test {
         assertTrue(parsed_table.hasKey("columns"), "table YAML has columns");
     }
 
-    testSchemaReverseToJson() {
-        if (!m_ds) {
-            testSkip("no DB connection");
-        }
+    testSchemaReverseToJson(SchemaReverseContext ctx) {
+        checkContext(ctx);
 
-        SchemaReverse rev(m_ds, "TestSchema");
+        SchemaReverse rev(ctx.ds, "TestSchema");
         string json_output = rev.toJson();
         assertTrue(json_output.size() > 0, "toJson() returns non-empty string");
         assertTrue(json_output.contains("schema_reverse_t1"), "JSON contains table name");
@@ -218,12 +271,10 @@ class Main inherits QUnit::Test {
         assertEq("TestSchema", parsed.schema.name, "schema name matches");
     }
 
-    testSchemaReverseFullToQore() {
-        if (!m_ds) {
-            testSkip("no DB connection");
-        }
+    testSchemaReverseFullToQore(SchemaReverseContext ctx) {
+        checkContext(ctx);
 
-        SchemaReverse rev(m_ds, "TestSchema");
+        SchemaReverse rev(ctx.ds, "TestSchema");
         hash<auto> qore_data = rev.toQore();
 
         # Verify structure
@@ -242,12 +293,10 @@ class Main inherits QUnit::Test {
         assertTrue(table_data.columns.hasKey("bar"), "table has bar column");
     }
 
-    testSchemaReverseFilteredToQore() {
-        if (!m_ds) {
-            testSkip("no DB connection");
-        }
+    testSchemaReverseFilteredToQore(SchemaReverseContext ctx) {
+        checkContext(ctx);
 
-        SchemaReverse rev(m_ds, "TestSchema");
+        SchemaReverse rev(ctx.ds, "TestSchema");
 
         # filtering to a single object type yields a complete data-schema document with only that type
         hash<auto> only_tables = rev.toQore({"tables": ".*"});

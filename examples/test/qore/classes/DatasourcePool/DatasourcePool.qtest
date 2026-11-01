@@ -6,6 +6,8 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires Util
 %requires QUnit
+# the tests that need a connection run against every database connection that is configured
+%requires ../../../DbTestConnections.qm
 
 %exec-class DatasourcePoolTest
 
@@ -21,7 +23,10 @@ public class DatasourcePoolTest inherits QUnit::Test {
     constructor() : Test("DatasourcePoolTest", "1.0", \ARGV, MyOpts) {
         addTestCase("option test", \optionTest());
         addTestCase("DatasourcePool string test", \DatasourcePoolStringTest());
-        addTestCase("serialization test", \serializationTest());
+        foreach hash<DbTestConnection> conn in (getConnections()) {
+            addTestCase(sprintf("%s (%s): serialization test", conn.label, conn.driver ?? "unknown driver"),
+                \serializationTest(), conn.connstr);
+        }
 
         set_return_value(main());
     }
@@ -59,10 +64,10 @@ public class DatasourcePoolTest inherits QUnit::Test {
         assertThrows("DATASOURCEPOOL-CONSTRUCTOR-ERROR", "expecting.*driver", sub() { DatasourcePool ds("a/b@c(utf8)%localhost:5432"); });
     }
 
-    serializationTest() {
+    serializationTest(string connstr) {
         DatasourcePool ds;
         try {
-            ds = getAnyDatasourcePool();
+            ds = getAnyDatasourcePool(connstr);
         } catch (hash<ExceptionInfo> ex) {
             testSkip("skipping tests: " + ex.err + ": " + ex.desc);
         }
@@ -90,14 +95,13 @@ public class DatasourcePoolTest inherits QUnit::Test {
         assertThrows("DESERIALIZATION-ERROR", \Serializable::deserialize(), h1);
     }
 
-    DatasourcePool getAnyDatasourcePool() {
-        string connstr = m_options.connstr
-            ?? ENV.QORE_DB_CONNSTR
-            ?? ENV.QORE_DB_CONNSTR_PGSQL
-            ?? ENV.QORE_DB_CONNSTR_MYSQL
-            ?? ENV.QORE_DB_CONNSTR_ORACLE
-            ?? "oracle:omquser/omquser@xbox";
+    #! the connections of the tests that need one: the configured connections, or a default one if none is
+    private list<hash<DbTestConnection>> getConnections() {
+        return DbTestConnections::get(m_options.connstr)
+            ?: (<DbTestConnection>{"label": "default", "connstr": "oracle:omquser/omquser@xbox", "driver": "oracle"},);
+    }
 
+    DatasourcePool getAnyDatasourcePool(string connstr) {
         return new DatasourcePool(connstr);
     }
 }
