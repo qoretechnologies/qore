@@ -150,10 +150,12 @@ hash<auto> desc = {
     @ref SqlUtil::AbstractSequence::getAlterSql() "AbstractSequence::getAlterSql()"), so that it keeps its current
     value.
 
-    The function updates the table, so it is neither deterministic nor free of SQL that modifies data.  A server with binary logging enabled (the default of MySQL 8.0 and later) creates such a function
-    only with the global \c log_bin_trust_function_creators system variable set to 1: then any user with the
-    \c CREATE \c ROUTINE privilege can create it.  Without it, the server refuses the function for every user,
-    one with the \c SUPER privilege too, with error 1418, or for a user without \c SUPER with error 1419.  When
+    The function updates the table, so it is neither deterministic nor free of SQL that modifies data.  A server
+    with binary logging enabled (the default of MySQL 8.0 and later) creates such a function only when the global
+    system variable \c log_bin_trust_function_creators is 1, whatever the user's privileges (\c SUPER does not
+    lift this); then any user with the \c CREATE \c ROUTINE privilege can create it.  Otherwise the server
+    refuses the function with error 1418; error 1419, which MySQL gives a user without \c SUPER for a function
+    that passes its check of the function's characteristics, is handled the same way.  When
     the function is created with @ref SqlUtil::AbstractDatabase::tryExecRaw() "AbstractDatabase::tryExecRaw()",
     as schema alignment with the Schema module creates it, such a refusal raises \c MYSQL-SEQUENCE-ERROR, which
     names the requirement and gives the server's message.  A server without binary logging, as MariaDB's default,
@@ -196,7 +198,7 @@ hash<auto> desc = {
 
     @subsection mysqlsqlutilv16 MysqlSqlUtil v1.6
     - documented that a server with binary logging enabled, as MySQL 8.0 and later by default, creates the function
-      that emulates sequences only with \c log_bin_trust_function_creators set to 1 (see @ref mysql_sequences), and
+      that emulates sequences only when \c log_bin_trust_function_creators is 1 (see @ref mysql_sequences), and
       a refusal to create it with @ref SqlUtil::AbstractDatabase::tryExecRaw() "AbstractDatabase::tryExecRaw()", as
       schema alignment creates it, raises \c MYSQL-SEQUENCE-ERROR, which names the requirement and gives the
       server's message
@@ -1733,9 +1735,9 @@ end";
                 return;
             }
             throw "MYSQL-SEQUENCE-ERROR", sprintf("cannot create function %y, which emulates sequences: the server "
-                "has binary logging enabled, and it creates this function, which modifies data, only with the global "
-                "system variable log_bin_trust_function_creators set to 1, for any user, one with the SUPER "
-                "privilege too; the server said: %s: %s", sequence_function, ex.err, ex.desc), ex;
+                "has binary logging enabled, and it creates this function, which modifies data, only when the "
+                "global system variable log_bin_trust_function_creators is 1, whatever the user's privileges (SUPER "
+                "does not lift this); the server said: %s: %s", sequence_function, ex.err, ex.desc), ex;
         }
 
         #! returns the next value in the given sequence

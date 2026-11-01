@@ -131,9 +131,10 @@ class MysqlSequenceFunctionTest inherits QUnit::Test {
                     assertEq("MYSQL-SEQUENCE-ERROR", ex.err, sprintf("error %d: the error", code));
                     assertRegex("cannot create function \"" + fname + "\", which emulates sequences",
                         ex.desc ?? "", sprintf("error %d: the function is named", code));
-                    assertRegex("log_bin_trust_function_creators set to 1", ex.desc ?? "",
+                    assertRegex("only when the global system variable log_bin_trust_function_creators is 1",
+                        ex.desc ?? "",
                         sprintf("error %d: the requirement is named", code));
-                    assertRegex("the SUPER privilege too", ex.desc ?? "",
+                    assertRegex("whatever the user's privileges \\(SUPER does not lift this\\)", ex.desc ?? "",
                         sprintf("error %d: SUPER is not enough", code));
                     assertRegex("the server said: DBI:MYSQL:ERROR: refused " + code, ex.desc ?? "",
                         sprintf("error %d: the server's message is given", code));
@@ -215,7 +216,8 @@ class MysqlSequenceFunctionTest inherits QUnit::Test {
         }
         assertEq("MYSQL-SEQUENCE-ERROR", ex.err, "the server refuses the function with binary logging and without "
             "log_bin_trust_function_creators");
-        assertRegex("log_bin_trust_function_creators set to 1", ex.desc ?? "", "the requirement is named");
+        assertRegex("only when the global system variable log_bin_trust_function_creators is 1", ex.desc ?? "",
+            "the requirement is named");
         assertRegex("the server said: .*binary logging is enabled", ex.desc ?? "", "the server's message is given");
         assertTrue(inlist(ex.arg.arg.alterr_code, (1418, 1419)), "the server's error is the argument");
     }
