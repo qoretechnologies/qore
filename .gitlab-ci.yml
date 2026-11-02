@@ -58,8 +58,8 @@ check-third-party-sources:
     - cmake -DQORE_THIRD_PARTY_MIRROR="${QORE_THIRD_PARTY_MIRROR}" -P cmake/QoreCheckThirdPartySources.cmake
 
 # The release notes of each module begin with "- initial release" only and have no bullets before the first release
-# section, and the language release notes follow the structure in design/release-notes.md; the checkers' own tests
-# run first
+# section, the language release notes follow the structure in design/release-notes.md, and module logos have the
+# standard sizes; the checkers' own tests run first
 check-module-release-notes:
   stage: build
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
@@ -73,6 +73,8 @@ check-module-release-notes:
     - git ls-files -z 'qlib/*.qm' 'qlib/**/*.qm' 'modules/*/docs/*.dox.tmpl' | xargs -0 python3 -I doxygen/check-module-release-notes.py
     - python3 examples/test/cmake/test_release_notes.py
     - python3 -I doxygen/check-release-notes.py
+    - python3 examples/test/cmake/test_module_mainpage_layout.py
+    - git ls-files -z 'qlib/*.qm' 'qlib/**/*.qm' 'qlib/**/*.qc' 'modules/*/docs/*.dox.tmpl' | xargs -0 python3 -I doxygen/check-module-mainpage.py --sources
 
 # Build stage - compile once per platform, save build/ as artifact
 build-ubuntu-amd64:

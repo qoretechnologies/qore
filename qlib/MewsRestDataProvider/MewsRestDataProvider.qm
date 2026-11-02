@@ -480,7 +480,7 @@ module MewsRestDataProvider {
 
     @htmlonly
     <div class="image">
-      <img src="mews-logo-white.svg" alt="Mews Logo" style="width:40%;">
+      <img src="mews-logo-white.svg" height="48" alt="Mews Logo">
     </div>
     @endhtmlonly
 

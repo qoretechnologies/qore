@@ -59,7 +59,7 @@ module SqlUtil {
 
     @htmlonly
     <div class="image">
-      <img src="SqlUtil-Full.svg" alt="SqlUtil Logo" style="width:25%;">
+      <img src="SqlUtil-Full.svg" height="48" alt="SqlUtil Logo">
     </div>
     @endhtmlonly
 

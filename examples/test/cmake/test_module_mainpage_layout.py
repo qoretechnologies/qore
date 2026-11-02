@@ -42,8 +42,51 @@ class MainpageLayoutTest(unittest.TestCase):
         html = '''<div class="textblock"><h1><a id="nativeintro"></a>Introduction</h1>
 <p>Description.</p><h1>Companion modules</h1><ul><li><img src="app.svg"/>Provider</li></ul></div>'''
         self.assertEqual(1, len(checker.inspect_mainpage(html, 'app.svg')))
-        html = html.replace('<p>Description.</p>', '<p><img src="app.svg"/>Description.</p>')
+        html = html.replace('<p>Description.</p>', '<p><img src="app.svg" width="96"/>Description.</p>')
         self.assertEqual([], checker.inspect_mainpage(html, 'app.svg'))
+
+    def test_logo_size_in_rendered_intro(self):
+        page = '''<div class="textblock"><h1><a id="nativeintro"></a>Introduction</h1>
+<p><img src="app.svg" {size}/>Description.</p></div>'''
+        for size in ('width="96"', 'height="48"'):
+            with self.subTest(size=size):
+                self.assertEqual([], checker.inspect_mainpage(page.format(size=size), 'app.svg'))
+        for size in ('', 'style="width:40%;"', 'width="96" style="width:40%;"', 'width="200"', 'width="96" height="96"'):
+            with self.subTest(size=size):
+                issues = checker.inspect_mainpage(page.format(size=size), 'app.svg')
+                self.assertEqual(1, len(issues), issues)
+                self.assertIn('a logo has width="96", or height="48"', issues[0])
+
+    def test_logo_size_in_sources(self):
+        source = '''/** @mainpage Example
+    @htmlonly
+    <div class="image">
+      <img src="example-logo.svg" alt="Example Logo" style="width:40%;">
+    </div>
+    @endhtmlonly
+    <img src="diagram.svg" style="width:80%;"/> a diagram is not a logo
+    <img src="cid:logo123"> an email example is not a logo
+*/'''
+        issues = checker.inspect_logo_sources(source)
+        self.assertEqual([(4, issues[0][1])], issues)
+        self.assertIn('example-logo.svg', issues[0][1])
+        for fixed in ('width="96"', 'height="48"'):
+            with self.subTest(fixed=fixed):
+                self.assertEqual([], checker.inspect_logo_sources(source.replace('style="width:40%;"', fixed)))
+        # a logo found by its alt text, and a logo with no size
+        self.assertEqual(1, len(checker.inspect_logo_sources('<img src="mark.svg" alt="Vendor logo"/>')))
+        with tempfile.TemporaryDirectory() as directory:
+            good = Path(directory) / 'good.qm'
+            bad = Path(directory) / 'bad.qm'
+            good.write_text(source.replace('style="width:40%;"', 'width="96"'), encoding='utf-8')
+            bad.write_text(source, encoding='utf-8')
+            result = subprocess.run([sys.executable, '-I', str(CHECKER), '--sources', str(good)], capture_output=True,
+                                    text=True)
+            self.assertEqual(0, result.returncode, result.stderr)
+            result = subprocess.run([sys.executable, '-I', str(CHECKER), '--sources', str(good), str(bad)],
+                                    capture_output=True, text=True)
+            self.assertEqual(1, result.returncode)
+            self.assertIn(f'{bad}:4:', result.stderr)
 
     def test_rendered_navigation_anchors_and_exported_logo(self):
         doxygen = os.environ.get('DOXYGEN_EXECUTABLE') or shutil.which('doxygen')

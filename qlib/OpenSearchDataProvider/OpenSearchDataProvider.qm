@@ -286,7 +286,7 @@ module OpenSearchDataProvider {
 
     @htmlonly
     <div class="image">
-      <img src="opensearch-logo.svg" alt="OpenSearch Logo" style="width:40%;">
+      <img src="opensearch-logo.svg" width="96" alt="OpenSearch Logo">
     </div>
     @endhtmlonly
 
