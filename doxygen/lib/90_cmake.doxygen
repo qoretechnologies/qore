@@ -216,26 +216,26 @@
     @subsection qore_cmake_aot_macros AOT Module-Build Macros (qcc .qo pipeline)
 
     Most module authors do not need these directly: with \c QORE_BUILD_AOT_MODULES
-    (default \c ON), the standard user-module build compiles \c .qm/\c .qc sources to
-    \c .qmod artifacts with \c qcc automatically. The following functions in
+    (default \c ON), the standard user-module build compiles <tt>.qm/</tt><tt>.qc</tt> sources to
+    <tt>.qmod</tt> artifacts with \c qcc automatically. The following functions in
     \c cmake/QoreMacros.cmake are the lower-level building blocks of that AOT pipeline,
     exposed for projects that drive \c qcc compilation/linking themselves (for example a
-    module that ships pre-compiled \c .qo objects, or a C/C++ host that links Qore code).
+    module that ships pre-compiled <tt>.qo</tt> objects, or a C/C++ host that links Qore code).
     They participate in the @ref qcc_parallel_codegen "parallel codegen / make jobserver"
     model automatically. All take keyword arguments; see the macro definitions for the
     full argument set.
 
     Standard user-module AOT rules request \c --depfile-module-deps=source.
     Therefore module depfiles are independent of whether a required sibling's
-    generated \c .qmod exists when \c qcc runs, and a split dependency is
-    represented by its complete \c .qm / \c .qc / \c .ql source set. A resolved
+    generated <tt>.qmod</tt> exists when \c qcc runs, and a split dependency is
+    represented by its complete <tt>.qm</tt> / <tt>.qc</tt> / <tt>.ql</tt> source set. A resolved
     artifact is retained only when no source representation is available.
 
     - \c qore_qcc_compile_objects() — compile one or more Qore sources to relocatable
-      \c .qo objects with \c qcc (\c SOURCES, \c OUTPUT_DIR, \c LOAD_MODULES, \c STUBS,
+      <tt>.qo</tt> objects with \c qcc (\c SOURCES, \c OUTPUT_DIR, \c LOAD_MODULES, \c STUBS,
       \c PARSE_DEFINES, \c PARSE_OPTIONS, \c INCLUDE_DIR, \c MODULE_DIR, …); emits the
       custom commands and returns the generated object list.
-    - \c qore_qcc_link_objects() — link a set of \c .qo \c INPUTS into a final artifact
+    - \c qore_qcc_link_objects() — link a set of <tt>.qo</tt> \c INPUTS into a final artifact
       (\c OUTPUT, \c AGGREGATE_SYMBOL, \c MANIFEST_INPUTS, \c ALLOW_UNRESOLVED_IMPORTS, …).
     - \c qore_qcc_script_aggregate() — build a single script-context aggregate object
       from \c SOURCES for multi-file script/application AOT.
@@ -247,7 +247,7 @@
     - \c qore_write_if_changed() / \c qore_content_digest_target() — write a generated file
       only when its content changes, so downstream \c qcc steps re-run only on real changes.
     - \c qore_install_qmod_atomic(<built qmod> <install dir> <installed name> <component>) — install a
-      built \c .qmod by staging it beside its destination and renaming it into place, so a running process
+      built <tt>.qmod</tt> by staging it beside its destination and renaming it into place, so a running process
       that has the old module loaded keeps it intact; an installed module that is byte-identical to the
       built one is left alone, keeping its modification time.  The installed module is listed in
       \c install_manifest.txt either way.

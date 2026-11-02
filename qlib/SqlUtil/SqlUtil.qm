@@ -9884,8 +9884,9 @@ AbstractForeignConstraint ix = fcs.fk_jobs_job_defs;
     /** @defgroup fk_actions Foreign Constraint Referential Actions
         The action a database takes on the rows of a foreign constraint's table when a referenced row is deleted
         (\c ON \c DELETE) or its referenced columns are updated (\c ON \c UPDATE).  An action is set with the
-        \c on_delete and \c on_update @ref SqlUtil::AbstractTable::ForeignConstraintOptions "foreign constraint
-        options" or the @ref SqlUtil::AbstractForeignConstraint::on_delete "on_delete" and
+        \c on_delete and \c on_update
+        @ref SqlUtil::AbstractTable::ForeignConstraintOptions "foreign constraint options" or the
+        @ref SqlUtil::AbstractForeignConstraint::on_delete "on_delete" and
         @ref SqlUtil::AbstractForeignConstraint::on_update "on_update" members; NOTHING or @ref FK_NO_ACTION is the
         database default, which emits no clause, so a foreign constraint without actions creates exactly as before.
         Not every database supports every action; a driver refuses an action that its database does not support

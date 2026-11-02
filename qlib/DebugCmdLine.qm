@@ -1872,7 +1872,7 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
         }
 
         #! Returns the name of the variable and the keys of a path of a value, as \c "h.lines[1]" or \c "h{key}"
-        /** @param p the path: a variable name and optionally \c .member, \c [index], \c {key} or \c {"key"} parts
+        /** @param p the path: a variable name and optionally <tt>.member</tt>, <tt>[index]</tt>, \c {key} or \c {"key"} parts
 
             @return a hash with \c name, the name of the variable, and \c path, the list of the keys
 

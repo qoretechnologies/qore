@@ -108,7 +108,7 @@ public bool sub is_valid_qore_file(string path) {
 }
 
 #! Directory name patterns that are not searched for source files by default
-/** Patterns are shell-style globs (@c * and @c ?) matched against the name of each subdirectory; version control
+/** Patterns are shell-style globs (@c * and <tt>?</tt>) matched against the name of each subdirectory; version control
     metadata, dependency trees, agent worktrees and build output hold copies of sources or generated files that
     would otherwise be indexed again.
 */
@@ -136,7 +136,7 @@ public hashdecl FileScanOptions {
 }
 
 #! Returns a regular expression matching any of the given shell-style glob patterns
-/** @param patterns glob patterns using @c * and @c ?
+/** @param patterns glob patterns using @c * and <tt>?</tt>
 
     @return an anchored regular expression, or @ref nothing if there are no patterns
 */

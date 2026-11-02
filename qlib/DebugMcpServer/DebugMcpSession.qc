@@ -243,7 +243,7 @@ public class DebugMcpSession inherits DebugCmdLine::DebugCommandLine {
     }
 
     #! Returns the filters of the exceptions that pause threads, as given to the exception filter tool
-    /** @return the filters, as \c "user", \c "system", \c "uncaught" or exception codes; \c ("none",) if no
+    /** @return the filters, as \c "user", \c "system", \c "uncaught" or exception codes; <tt>(&quot;none&quot;,)</tt> if no
         exception pauses threads
     */
     public list<string> getExceptionFilters() {

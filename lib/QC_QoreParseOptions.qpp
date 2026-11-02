@@ -101,7 +101,7 @@ ParseOptions::constructor(string name) [flags=NAMED_ARGS] {
 }
 
 //! Creates a ParseOptions object from a list of parse option name strings
-/** @param names a list of parse option names (e.g. \c ("no-network", "no-class-defs"))
+/** @param names a list of parse option names (e.g. <tt>(&quot;no-network&quot;</tt>, "no-class-defs"))
 
     @par Example:
     @code{.py}

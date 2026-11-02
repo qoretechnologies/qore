@@ -1919,8 +1919,9 @@ string Datasource::getOSCharset() [flags=CONSTANT] {
 /** @param timeout_ms the transaction lock timeout value in milliseconds: a thread that waits longer than this for the
     @ref transaction_lock "transaction lock" gets a \c TRANSACTION-LOCK-TIMEOUT exception; 0 (the default value of the
     argument) or a negative value sets no timeout: the thread waits until the lock is released, or until it is
-    cancelled.  Like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time
-    value" may be passed instead of an integer to make the timeout units clear (ex: \c 2500ms for 2.5 seconds).
+    cancelled.  Like all %Qore functions and methods taking timeout values, a
+    @ref relative_dates "relative date/time value" may be passed instead of an integer to make the timeout units
+    clear (ex: \c 2500ms for 2.5 seconds).
 
     @par Example:
     @code{.py}

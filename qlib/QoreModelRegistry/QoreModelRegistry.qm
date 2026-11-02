@@ -68,12 +68,12 @@ module QoreModelRegistry {
     are isolated from other tenants. A single shared registry instance can serve
     multiple independent tenants with full data isolation.
 
-    The artifact storage layer supports both native Qore \c .qml models and
+    The artifact storage layer supports both native Qore <tt>.qml</tt> models and
     multi-file model packages. A package can contain an ONNX model, HuggingFace
     \c tokenizer.json, model \c config.json, SafeTensors weights, generation
     configuration, and other named artifacts. The registry inspects package
     metadata safely: JSON and SafeTensors headers are parsed, but PyTorch pickle
-    artifacts (\c .pt, \c .pth, \c .bin) are never deserialized or executed.
+    artifacts (<tt>.pt</tt>, <tt>.pth</tt>, <tt>.bin</tt>) are never deserialized or executed.
 
     Locally executable artifacts use explicit runtime metadata:
     - native Qore ML artifacts use the \c qore-ml runtime

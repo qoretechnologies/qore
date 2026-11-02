@@ -41,7 +41,7 @@
 enum class AssignmentMode : unsigned char {
     //! an ordinary strong reference; owned, and followed by the DGC scanner
     Normal = 0,
-    //! a weak reference (the \c := operator); not owned, and not followed by the scanner
+    //! a weak reference (the <tt>:=</tt> operator); not owned, and not followed by the scanner
     Weak = 1,
     //! an opaque reference (the \c \@= operator); owned, but NOT followed by the scanner
     /** A cycle running through an opaque reference cannot be collected by cycle detection; it is

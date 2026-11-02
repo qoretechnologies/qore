@@ -202,7 +202,7 @@ public class EmbeddingModel {
     #! Embeds a batch of texts and returns one dense tensor
     /** This method is the lowest-copy local ONNX embedding API. In ONNX mode,
         tokenization, pooling, and normalization stay in dense tensor form and
-        the returned tensor has shape \c (texts.size(), dimension). In HTTP mode,
+        the returned tensor has shape <tt>(texts.size()</tt>, dimension). In HTTP mode,
         the endpoint response is converted to a \c float32 tensor.
 
         @param texts list of texts to embed

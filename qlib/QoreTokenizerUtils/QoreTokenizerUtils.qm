@@ -82,7 +82,7 @@ module QoreTokenizerUtils {
     \c buffer<float32> columns without first materializing nested row lists.
     Multi-output ONNX embedding and reranker models can set \c output_names
     to ask ONNX Runtime to materialize only the tensor used downstream, for
-    example \c ("last_hidden_state",) for embedding pooling or \c ("logits",)
+    example <tt>(&quot;last_hidden_state&quot;,)</tt> for embedding pooling or <tt>(&quot;logits&quot;,)</tt>
     for cross-encoder scoring.
 
     @par Example: Chunk a document for RAG

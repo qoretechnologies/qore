@@ -79,7 +79,7 @@ module QoreLlmUtils {
     with request-local placeholders, restoring them only at a caller's tool
     execution boundary, and redacting protected values from execution errors
     or logs.  Protection is language-independent: exact canonical machine
-    keys, URI userinfo, and the structural \c := protected-binding delimiter
+    keys, URI userinfo, and the structural <tt>:=</tt> protected-binding delimiter
     identify sensitive values without translated keyword lists.
 
     Language-independent safety and grounding helpers are provided by

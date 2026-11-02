@@ -95,7 +95,7 @@ printf("queued=%d completed=%d\n",
 
     - Omit \c providers to let %Qore try the best available accelerator provider
       reported by ONNX Runtime, then fall back to CPU when policy allows it.
-    - Use \c providers: \c () for explicit CPU-only execution.
+    - Use \c providers: <tt>()</tt> for explicit CPU-only execution.
     - Set \c required_providers when a model version is only valid with a
       particular provider.
     - Set \c allow_cpu_fallback: \c False or
@@ -121,7 +121,7 @@ printf("active=%s diagnostics=%y\n",
 
     Migration note: code that previously relied on implicit provider selection
     should record \c getEffectiveProviderReport() and choose an explicit policy
-    before moving to production. Use \c providers: \c () for reproducible
+    before moving to production. Use \c providers: <tt>()</tt> for reproducible
     CPU-only behavior in tests and CI.
 
     @section ai_model_package_registry Packaging and Registry Metadata

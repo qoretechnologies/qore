@@ -90,7 +90,7 @@ class ValidatedWsHandler inherits WebSocketHandler {
     @par HTTP/3 WebSocket Server Example
     To accept WebSocket connections over HTTP/3, add a QUIC listener to the HttpServer
     with \c enable_h3 set to \c True. The %WebSocketHandler automatically detects HTTP/3
-    extended CONNECT requests with \c :protocol=websocket (RFC 9220):
+    extended CONNECT requests with <tt>:protocol=websocket</tt> (RFC 9220):
     @code{.py}
 %requires HttpServer
 %requires WebSocketHandler
@@ -204,7 +204,7 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
       "MaxDrainFramesPerIteration" constant to cap drain time per loop iteration
     - added support for WebSocket over HTTP/2 (RFC 8441 — Extended CONNECT)
     - added support for WebSocket over HTTP/3 (RFC 9220 — Extended CONNECT over QUIC)
-      - server-side detection of HTTP/3 CONNECT requests with \c :protocol=websocket
+      - server-side detection of HTTP/3 CONNECT requests with <tt>:protocol=websocket</tt>
       - bidirectional WebSocket frame exchange over QUIC streams
       - backpressure handling via QUIC flow control with I/O controller wake integration
       - explicit QUIC stream close on WebSocket handler exit (essential for stream multiplexing)
@@ -2346,7 +2346,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
           value in milliseconds; when it expires, the connection is closed with the close code 1006; 0 means that
           the server does not wait, and closes the connection once its close frame has been sent (since
           WebSocketHandler 2.8)
-        - \c extensions: a list of extension names to support (e.g., \c ("permessage-deflate")) or a
+        - \c extensions: a list of extension names to support (e.g., <tt>(&quot;permessage-deflate&quot;)</tt>) or a
           @ref WebSocketUtil::WebSocketExtensionRegistry "WebSocketExtensionRegistry" instance (since WebSocketHandler
           2.3)
         - \c asyncapi: a string URL or file path to an AsyncAPI schema to load for automatic message validation

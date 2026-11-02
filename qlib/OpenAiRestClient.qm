@@ -1128,7 +1128,7 @@ class OpenAiStrictOutputSchema {
 
     This class is the reusable base for <b>any</b> OpenAI-compatible chat
     backend that speaks the OpenAI wire shape (\c messages, \c tools,
-    \c response_format, \c usage, SSE \c data: deltas with \c [DONE]
+    \c response_format, \c usage, SSE \c data: deltas with <tt>[DONE]</tt>
     terminator) with \c Authorization: \c Bearer authentication.  Concrete
     subclasses register a distinct
     @ref QoreLlmUtils::AbstractLlmProviderFactory under a vendor-specific

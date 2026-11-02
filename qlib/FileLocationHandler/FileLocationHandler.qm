@@ -114,7 +114,7 @@ FileLocationHandler::writeFileToLocation("conn://prod-s3/reports/2026-08.csv", t
     @section filelocationhandler_env FileLocationHandler Environment variable
 
     The \c QORE_FILE_LOCATION_HANDLERS environment variable will be read to initialize modules that provide support
-    for custom URL schemes; multiple modules can be separated by the OS-specific path separator (\c : on Linux / UNIX,
+    for custom URL schemes; multiple modules can be separated by the OS-specific path separator (<tt>:</tt> on Linux / UNIX,
     \c ; on Windows).
 
     Each module listed in this environment variable should call either

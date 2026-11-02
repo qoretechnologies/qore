@@ -110,7 +110,7 @@ public:
             nullptr; set later via @ref setSelf)
         @param sock the already-connected (and SSL-handshook) socket
             (ref'd by caller, ownership transferred)
-        @param target_host target hostname (for @c :authority pseudo-header)
+        @param target_host target hostname (for <tt>:authority</tt> pseudo-header)
         @param target_port target TCP port
         @param connection_priv the owning C++ connection priv
 

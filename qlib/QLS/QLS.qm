@@ -82,7 +82,7 @@ module QLS {
 
     <b>Navigation</b>
     |!Feature|!LSP Method|!Description
-    |Hover|@c textDocument/hover|Shows type, documentation, and source info for the symbol under the cursor; declarations in the source show the documentation of their @c #! and @c /** doc comments, with parameters, return values, exceptions and code examples, also while the document has syntax errors, as do signature help and completion items; members accessed with @c . are resolved by the types of their receivers, including the methods of basic types and the members of typed hashes (see @ref qls_builtins)
+    |Hover|@c textDocument/hover|Shows type, documentation, and source info for the symbol under the cursor; declarations in the source show the documentation of their @c #! and @c /** doc comments, with parameters, return values, exceptions and code examples, also while the document has syntax errors, as do signature help and completion items; members accessed with <tt>.</tt> are resolved by the types of their receivers, including the methods of basic types and the members of typed hashes (see @ref qls_builtins)
     |Go to Definition|@c textDocument/definition|Jumps to the definition of a symbol
     |Go to Declaration|@c textDocument/declaration|Jumps to the declaration of a symbol; declarations are definitions in %Qore
     |Document Links|@c textDocument/documentLink|Links the module names and paths of @c %%requires, @c %%try-module and @c %%include directives to their source files, resolving module names like %Qore with the document's module path directives, @c QORE_MODULE_DIR and the library module path
@@ -92,10 +92,10 @@ module QLS {
 
     <b>Code Intelligence</b>
     |!Feature|!LSP Method|!Description
-    |Code Completion|@c textDocument/completion|Context-aware completions with trigger characters @c . (member access), @c : (namespace/static), and normal identifier completion; uses @ref qorecodecompletionintro "QoreCodeCompletion"; callables are inserted as snippets with the cursor between the parentheses, VS Code clients are asked to show parameter hints and further suggestions after callables and namespaces, and documentation is Markdown when the client supports it; the members of builtin classes include inherited members, and the receivers of @c . can be calls such as @c now() (see @ref qls_builtins)
-    |Signature Help|@c textDocument/signatureHelp|Function/method parameter hints with trigger characters @c ( and @c ,, including the functions of builtin namespaces and the methods of builtin types
+    |Code Completion|@c textDocument/completion|Context-aware completions with trigger characters <tt>.</tt> (member access), <tt>:</tt> (namespace/static), and normal identifier completion; uses @ref qorecodecompletionintro "QoreCodeCompletion"; callables are inserted as snippets with the cursor between the parentheses, VS Code clients are asked to show parameter hints and further suggestions after callables and namespaces, and documentation is Markdown when the client supports it; the members of builtin classes include inherited members, and the receivers of <tt>.</tt> can be calls such as @c now() (see @ref qls_builtins)
+    |Signature Help|@c textDocument/signatureHelp|Function/method parameter hints with trigger characters <tt>(</tt> and <tt>,</tt>, including the functions of builtin namespaces and the methods of builtin types
     |Inlay Hints|@c textDocument/inlayHint|Shows parameter names at call sites as inline hints
-    |Semantic Tokens|@c textDocument/semanticTokens/full, @c .../full/delta and @c .../range|Full semantic syntax highlighting with node-level classification
+    |Semantic Tokens|@c textDocument/semanticTokens/full, <tt>.../full/delta</tt> and <tt>.../range|Full</tt> semantic syntax highlighting with node-level classification
     |Document Highlight|@c textDocument/documentHighlight|Highlights all occurrences of the symbol under the cursor
     |Linked Editing|@c textDocument/linkedEditingRange|Edits the occurrences of a local variable or parameter together; occurrences of variables with the same name in other functions are not included
     |Inline Values|@c textDocument/inlineValue|Shows the values of the local variables and parameters of the function where the debugger stopped, in the visible lines up to the stopped line
@@ -208,7 +208,7 @@ server.main();
 
     These limits can be set with the @c initializationOptions of the @c initialize request:
     |!Option|!Type|!Description
-    |@c excludeDirs|list of strings|shell-style glob patterns (@c * and @c ?) for subdirectory names that are not searched; replaces @ref QLS::Files::DefaultExcludeDirs
+    |@c excludeDirs|list of strings|shell-style glob patterns (@c * and <tt>?</tt>) for subdirectory names that are not searched; replaces @ref QLS::Files::DefaultExcludeDirs
     |@c maxIndexFileSize|int|files larger than this many bytes are not indexed; @c 0 means no limit (default: @ref QLS::Files::DefaultMaxIndexFileSize)
     |@c treeCacheSize|int|syntax trees of indexed files are cached up to this many bytes of source; @c 0 disables the cache (default: @ref QLS::DefaultTreeCacheSize)
     |@c diagnostics|string|@c "qore" (the default) to check standalone scripts with the %Qore parser, or @c "syntax" to only report syntax errors (see @ref qls_diagnostics)
@@ -252,7 +252,7 @@ server.main();
 
     @subsection qls_diagnostics Diagnostics
 
-    Standalone scripts (@c .q, @c .qr and @c .qtest files, and files without an extension that start with a
+    Standalone scripts (<tt>.q</tt>, <tt>.qr</tt> and <tt>.qtest</tt> files, and files without an extension that start with a
     @c qore @c "#!" line) are checked with the %Qore parser when they are opened and when they are saved:
     <tt>qore --diag-format=json -W</tt> parses the file in a separate process, so the modules that the script
     requires are loaded there and not in the server.  The diagnostics include type errors, unresolved symbols,
@@ -295,7 +295,7 @@ server.main();
     metadata: the methods of @c \<string\> can be called on strings, for example, and the methods of @c \<value\> on
     all values.
 
-    Members accessed with @c . are resolved by the types of their receivers, which
+    Members accessed with <tt>.</tt> are resolved by the types of their receivers, which
     @ref astparser::AstTreeSearcher::getExpressionChain() returns as chains of variables, calls and members; in
     @code{.py}
 string text = now().format("YYYY-MM-DD") + ": " + hstat(path).size;

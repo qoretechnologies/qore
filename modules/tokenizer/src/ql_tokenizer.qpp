@@ -51,7 +51,7 @@ hashdecl Qore::Tokenizer::TokenizerEncoding {
     @ref HFTokenizer::encodeBatchForModel(), and
     @ref HFTokenizer::encodeBatchPairsForModel().
 
-    The buffers are row-major with shape \c (rows, columns). They can be passed
+    The buffers are row-major with shape <tt>(rows</tt>, columns). They can be passed
     directly to \c ML::Tensor::fromBuffer(buffer, shape) without materializing
     per-row token lists.
 
@@ -66,7 +66,7 @@ hashdecl Qore::Tokenizer::TokenizerModelInputBatch {
     auto token_type_ids;
     //! Actual sequence length before batch padding for each row
     auto sequence_lengths;
-    //! Tensor shape, always \c (rows, columns)
+    //! Tensor shape, always <tt>(rows</tt>, columns)
     list<int> shape;
     //! Number of batch rows
     int rows;

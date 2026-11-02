@@ -76,9 +76,9 @@ auto data = parse_yaml(yaml_str);
     @section yaml_scalar_resolution Numeric Scalar Resolution
 
     Plain decimal numbers require at least one mantissa digit and, when present, at least one exponent digit.
-    For example, \c .5, \c 5., and \c 1e3 are floats; \c ., \c -., \c +., \c .e3, and \c 1e2+3 are strings.
-    The YAML special float spellings \c .inf, \c .Inf, and \c .INF accept an optional sign; \c .nan,
-    \c .NaN, and \c .NAN represent NaN without a sign. Quoting these YAML spellings preserves string values;
+    For example, <tt>.5</tt>, \c 5., and \c 1e3 are floats; <tt>.</tt>, \c -., \c +., <tt>.e3</tt>, and \c 1e2+3 are strings.
+    The YAML special float spellings <tt>.inf</tt>, <tt>.Inf</tt>, and <tt>.INF</tt> accept an optional sign; <tt>.nan</tt>,
+    <tt>.NaN</tt>, and <tt>.NAN</tt> represent NaN without a sign. Quoting these YAML spellings preserves string values;
     literal and folded block scalars also remain strings.
     The same rules apply to parse_yaml(), parse_yaml_documents(), YamlDocumentIterator, and YamlSaxParser.
     An explicit \c !!float tag requires a valid float value; invalid values raise \c YAML-PARSER-ERROR.
@@ -138,8 +138,8 @@ hash<auto> api = parse_yaml("example:\n  created_at: 2025-03-05T14:59:25Z\n  cou
 
     |!QoreType|!YAML Tag|!Qore Example|!YAML Example|!Notes
     |int|\c !!int|\c 300|\c 300|direct serialization
-    |float|\c !!float|\c 3.5|\c 3.5|exact round-trip serialization; infinity is serialized as \c .inf or \
-        \c -.inf, and "not a number" as \c .nan
+    |float|\c !!float|\c 3.5|\c 3.5|exact round-trip serialization; infinity is serialized as <tt>.inf</tt> or \
+        \c -.inf, and "not a number" as <tt>.nan</tt>
     |number|\c !number|\c 3.5|<tt>3.5n{128}</tt>|String serialization in scientific notation (for brevity) with the \
         number appended with an \c "n"; the number is serialized so that no precision is lost.<br><br>Infinity is \
         serialized as <tt>\@inf\@n{128}</tt>, "not a number" as <tt>\@nan\@n{128}</tt><br><br>The precision is \
@@ -162,8 +162,8 @@ hash<auto> api = parse_yaml("example:\n  created_at: 2025-03-05T14:59:25Z\n  cou
     |NULL|\c !!null or \c !sqlnull|\c NULL|\c null or \c !sqlnull|without \
         @ref Qore::YAML::EmitSqlNull "EmitSqlNull", serialization to YAML null, just like \c NOTHING; will be \
         deserialized as \c NOTHING, with @ref Qore::YAML::EmitSqlNull "EmitSqlNull" will be deserialized to \c NULL.
-    |list|\c !!seq|\c (1, 2, "three")|\c [1, 2, "three"]|direct serialization
-    |hash|\c !!map|\c ("key" : 1, "other" : 2.0, "data" : "three")|\c {key: 1, other: 2.0, data: "three"}|direct \
+    |list|\c !!seq|<tt>(1</tt>, 2, "three")|<tt>[1</tt>, 2, "three"]|direct serialization
+    |hash|\c !!map|<tt>(&quot;key&quot;</tt> : 1, "other" : 2.0, "data" : "three")|\c {key: 1, other: 2.0, data: "three"}|direct \
         serialization, although qore will maintain key order as well even though this property is only defined for \
         an ordered map
 

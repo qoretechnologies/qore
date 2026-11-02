@@ -23,8 +23,8 @@ namespace QoreTokenizer {
 //! Splits input text on regex pattern matches
 /** The pattern is compiled with PCRE2 in Unicode mode (\c PCRE2_UTF | \c PCRE2_UCP)
     so that HuggingFace \c Split patterns work as written: Unicode property classes
-    (\c \\p{L}, \c \\p{N}), inline group flags (\c (?i:...)), and lookarounds
-    (\c (?!\\S)) are all supported, and matching is codepoint-correct over UTF-8.
+    (\c \\p{L}, \c \\p{N}), inline group flags (<tt>(?i:...)</tt>), and lookarounds
+    (<tt>(?!</tt>\\S)) are all supported, and matching is codepoint-correct over UTF-8.
     This is required for GPT-2/GPT-4/Llama/Qwen-style byte-level BPE tokenizers,
     whose pre-tokenizer is a \c Split{Regex} followed by a \c ByteLevel.
 */

@@ -3670,7 +3670,7 @@ sock.connect("/tmp/socket");@endcode
       filesystem with the given name.
     - Enclose ipv6 addresses in square brackets (ex: \c "[2001:0db8:85a3:0000:0000:8a2e:0370:7334]:80", will connect
       to port 80 on the given ipv6 address); also if a hostname is enclosed in square brackets, it will be resolved as
-      an IPv6 address (ex: \c "[localhost]:80" will connect to port \c 80 on \c ::1, assuming \c "localhost" can be
+      an IPv6 address (ex: \c "[localhost]:80" will connect to port \c 80 on <tt>::1</tt>, assuming \c "localhost" can be
       resolved to the IPv6 loopback address on the system).
     @param timeout_ms If a timeout value is passed and the connection takes longer to establish than the timeout, a
     \c "SOCKET-CONNECT-ERROR" exception is thrown. Note that like all %Qore functions and methods taking timeout
@@ -3767,7 +3767,7 @@ nothing Socket::connectUNIX(string path, softint socket_type = SOCK_STREAM,
 //! Connects to a remote socket and attempts to establish a TLS/SSL connection; accepts an optional timeout value with a millisecond resolution
 /** Connects to a remote socket and attempts to establish a TLS/SSL connection, for network (INET) connections, accepts an optional timeout value in milliseconds (@ref relative_dates "relative date/time values" can be given instead of an integer in milliseconds to make the source more readable; ex: \c 20s). If any errors occur, an exception is thrown.
 
-    Enclose ipv6 addresses in square brackets (ex: \c "[2001:0db8:85a3:0000:0000:8a2e:0370:7334]:80", will connect to port 80 on the given ipv6 address); also if a hostname is enclosed in square brackets, it will be resolved as an ipv6 adress (ex: \c "[localhost]:80" will connect to port \c 80 on \c ::1, assuming \c "localhost" can be resolved to the ipv6 loopback address on the system).
+    Enclose ipv6 addresses in square brackets (ex: \c "[2001:0db8:85a3:0000:0000:8a2e:0370:7334]:80", will connect to port 80 on the given ipv6 address); also if a hostname is enclosed in square brackets, it will be resolved as an ipv6 adress (ex: \c "[localhost]:80" will connect to port \c 80 on <tt>::1</tt>, assuming \c "localhost" can be resolved to the ipv6 loopback address on the system).
 
     @par Examples:
     @code{.py} # connect to ipv4 adress 192.168.1.45 port 8080 with a 30 second timeout
@@ -3785,7 +3785,7 @@ sock.connectSSL("/tmp/socket"); @endcode
     @param target The target address interpreted with the following rules:
     - If a colon appears in the string, the string will be assumed to be a \c "hostname:port" specification to connect to; where \c "port" can also be a service name (ex: \c "example.com:https")
     - If the string contains no colon, the socket will try to connect to a UNIX domain socket file on the local filesystem with the given name.
-    - Enclose ipv6 addresses in square brackets (ex: \c "[2001:0db8:85a3:0000:0000:8a2e:0370:7334]:80", will connect to port 80 on the given ipv6 address); also if a hostname is enclosed in square brackets, it will be resolved as an ipv6 address (ex: \c "[localhost]:80" will connect to port \c 80 on \c ::1, assuming \c "localhost" can be resolved to the ipv6 loopback address on the system).
+    - Enclose ipv6 addresses in square brackets (ex: \c "[2001:0db8:85a3:0000:0000:8a2e:0370:7334]:80", will connect to port 80 on the given ipv6 address); also if a hostname is enclosed in square brackets, it will be resolved as an ipv6 address (ex: \c "[localhost]:80" will connect to port \c 80 on <tt>::1</tt>, assuming \c "localhost" can be resolved to the ipv6 loopback address on the system).
     @param timeout_ms if a timeout value is passed and the connection takes longer to establish than the timeout, an exception is thrown. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
 
     @throw SOCKET-CONNECT-ERROR An error occured connecting to the remote socket (cannot resolve hostname, no listener, timeout exceeded, etc)
@@ -3964,7 +3964,7 @@ nothing Socket::bindUNIX(string path, softint socket_type = SOCK_STREAM,
 
     Internally, bind addresses are resolved by the socket async I/O controller; internal bind() operations are tried in sequence for each address returned; as soon as a bind operation is successful, the method returns. If none of the addresses can be bound, then an exception is thrown.
 
-    A stream socket without a bind address and with @ref Qore::AF_UNSPEC "AF_UNSPEC" is bound on all interfaces with one dual-stack socket on the IPv6 wildcard address \c "::", which serves both IPv4 and IPv6 clients (RFC 3493 section 5.3), so a client reaches it through any address of the local host, including the IPv6 loopback address \c ::1 that \c "localhost" resolves to first; when the port is assigned by the system (port \c 0), the port is free in both address families.  If the port is in use in either address family, the bind fails, as described below.  Only on a system without IPv6 or without dual-stack sockets is the socket bound on the IPv4 wildcard address \c "0.0.0.0" instead.  A datagram socket without a bind address is bound on the IPv4 wildcard address, and an explicit address family binds the wildcard address of that family only.
+    A stream socket without a bind address and with @ref Qore::AF_UNSPEC "AF_UNSPEC" is bound on all interfaces with one dual-stack socket on the IPv6 wildcard address \c "::", which serves both IPv4 and IPv6 clients (RFC 3493 section 5.3), so a client reaches it through any address of the local host, including the IPv6 loopback address <tt>::1</tt> that \c "localhost" resolves to first; when the port is assigned by the system (port \c 0), the port is free in both address families.  If the port is in use in either address family, the bind fails, as described below.  Only on a system without IPv6 or without dual-stack sockets is the socket bound on the IPv4 wildcard address \c "0.0.0.0" instead.  A datagram socket without a bind address is bound on the IPv4 wildcard address, and an explicit address family binds the wildcard address of that family only.
 
     A socket bound on all interfaces for IPv4, that is a stream or datagram socket on \c "0.0.0.0" or a dual-stack
     socket on \c "::", never shares its port with another socket that uses the port for IPv4, because the IPv4

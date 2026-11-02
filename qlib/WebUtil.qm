@@ -85,7 +85,7 @@ module WebUtil {
         \c ETag values
       - added conditional request handling: \c If-None-Match and \c If-Modified-Since return
         304 Not Modified (RFC 7232 compliant)
-      - added automatic pre-compressed file serving: checks for \c .br, \c .zst, \c .gz, \c .bz2
+      - added automatic pre-compressed file serving: checks for <tt>.br</tt>, <tt>.zst</tt>, <tt>.gz</tt>, <tt>.bz2</tt>
         variants on the filesystem and serves them with the appropriate \c Content-Encoding header;
         preference order: brotli > zstd > gzip > bzip2; a variant older than the original file is ignored
       - added HTTP Range request support: single byte-range requests return 206 Partial Content
@@ -1620,7 +1620,7 @@ public class FileHandler inherits public HttpServer::AbstractUrlHandler, private
     }
 
     #! tries to serve a pre-compressed variant of the requested file
-    /** Checks for pre-compressed files (e.g. \c .br, \c .gz, \c .zst, \c .bz2) in order of
+    /** Checks for pre-compressed files (e.g. <tt>.br</tt>, <tt>.gz</tt>, <tt>.zst</tt>, <tt>.bz2</tt>) in order of
         compression quality and serves the best match that the client accepts.
 
         @param path the original file path

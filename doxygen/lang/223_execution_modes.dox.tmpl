@@ -31,7 +31,7 @@ qore --exec-mode=ast oldstyle.q
 
     Use AST mode for:
 
-    - legacy \c .q code that intentionally relies on old-style defaults
+    - legacy <tt>.q</tt> code that intentionally relies on old-style defaults
     - debugging scenarios where AST execution is required
     - short-lived scripts where native compilation would not amortize
 
@@ -254,9 +254,9 @@ qore --exec-mode=tiered --jit-ir-threshold=50 --jit-jit-threshold=500 script.qr
     |Executable|<tt>qcc -o app script.qr</tt>|Native launcher for one script
     |Executable from sources|<tt>qcc -o app lib.qr main.qr</tt>|One-shot native launcher for multiple script/application sources
     |Executable from objects|<tt>qcc -o app *.qo</tt>|Generated host that registers linked Qore objects
-    |\c .qmod|<tt>qcc -m Module.qm</tt> or <tt>qcc -m qlib/Module</tt>|Binary user module
-    |\c .qo|<tt>qcc -c file.qr</tt>|Relocatable object with native code and AOT metadata
-    |\c .qoa|<tt>qcc -a --context=DIR *.qo</tt>|Static archive for C/C++ hosts
+    |<tt>.qmod|<tt>qcc</tt> -m Module.qm</tt> or <tt>qcc -m qlib/Module</tt>|Binary user module
+    |<tt>.qo|<tt>qcc</tt> -c file.qr</tt>|Relocatable object with native code and AOT metadata
+    |<tt>.qoa|<tt>qcc</tt> -a --context=DIR *.qo</tt>|Static archive for C/C++ hosts
 
     Multi-file applications can be compiled directly to an executable:
 
@@ -265,7 +265,7 @@ qcc -o app src/lib.qr src/main.qr src/worker.qr
     @endcode
 
     Build systems should normally use the explicit two-step form, compiling
-    modern script/application sources to \c .qo objects, then linking those
+    modern script/application sources to <tt>.qo</tt> objects, then linking those
     objects:
 
     @code{.sh}
@@ -273,7 +273,7 @@ qcc -c --output-dir=build/aot src/lib.qr src/main.qr src/worker.qr
 qcc -o app build/aot/*.qo
     @endcode
 
-    An executable built from several sources or from \c .qo objects registers their declarations, functions and
+    An executable built from several sources or from <tt>.qo</tt> objects registers their declarations, functions and
     global variable initializers and then calls only its entry function (\c main() unless <tt>-e FN</tt> /
     <tt>--entry=FN</tt> names another one): the top-level statements of its sources never run.  \c qcc therefore
     refuses to link such an executable when that would silently change what the code does, with a diagnostic
@@ -308,7 +308,7 @@ int sub bump() {
     sidecars needed to seed later per-file incremental builds from the one
     shared parse.
 
-    For incremental per-file builds, use \c -L to preload sibling \c .qo
+    For incremental per-file builds, use \c -L to preload sibling <tt>.qo</tt>
     declarations before parsing the changed source:
 
     @code{.sh}
@@ -316,7 +316,7 @@ qcc -c -L build/aot --output-dir=build/aot src/worker.qr
 qcc -o app build/aot/*.qo
     @endcode
 
-    Each \c .qo object is written atomically: \c qcc compiles to a temporary
+    Each <tt>.qo</tt> object is written atomically: \c qcc compiles to a temporary
     file in the output directory and renames it into place on success.  A
     concurrent \c -L sibling scan therefore only ever observes a complete
     object, never a half-written one, so independent per-file \c qcc \c -c
@@ -325,11 +325,11 @@ qcc -o app build/aot/*.qo
 
     @subsection aot_modules AOT-Compiled User Modules
 
-    Standard user modules are compiled to \c .qmod during the CMake build when
+    Standard user modules are compiled to <tt>.qmod</tt> during the CMake build when
     \c QORE_BUILD_AOT_MODULES is enabled. This option defaults to \c ON.
 
-    Installed \c .qmod files are placed in the architecture-specific module
-    directory.  Source \c .qm modules remain installed in the user-module source
+    Installed <tt>.qmod</tt> files are placed in the architecture-specific module
+    directory.  Source <tt>.qm</tt> modules remain installed in the user-module source
     directory.  Module lookup checks compiled module directories before the
     corresponding source module directories, so installed user modules run
     through AOT by default while source modules remain available for
@@ -373,10 +373,10 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
     |!Option|!Description
     |\c -o, \c --output=FILE|Output file path
     |\c -O, \c --opt-level=N|LLVM optimization level 0-3, default 3
-    |\c -m, \c --module|Compile a user module to \c .qmod
-    |\c -c, \c --compile-only|Compile to a \c .qo relocatable object
+    |\c -m, \c --module|Compile a user module to <tt>.qmod</tt>
+    |\c -c, \c --compile-only|Compile to a <tt>.qo</tt> relocatable object
     |\c --context=DIR|Context directory for split-module or per-file object compilation
-    |\c -L DIR|Preload sibling \c .qo declarations for script-context compilation
+    |\c -L DIR|Preload sibling <tt>.qo</tt> declarations for script-context compilation
     |\c --output-dir=DIR|Output directory for batch \c -c compilation
     |\c --depfile-dir=DIR|Write one dependency file per batch output into \c DIR
     |\c --batch-build-sidecars|Write incremental-build sidecars for every batch output; requires \c --depfile-dir
@@ -389,15 +389,15 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
     |\c --parse-option=NAME|OR a parse option into the compile program
     |\c --script-aggregate-native-registers|Bind aggregate metadata to the linked per-file native bodies; valid with standalone or fused batch script aggregates. Unless \c --include-source is given, the aggregate then carries declarations only and lowers no code bodies of its own, so it is reported as emitting declaration metadata rather than a code-variant count
     |\c --depfile=FILE|Write a Make-format dependency file
-    |\c --depfile-module-deps=MODE|For module depfiles, record dependency sources (default), resolved artifact files, or none; source mode expands split modules to all \c .qm / \c .qc / \c .ql files and retains an artifact only when no source representation is available
-    |\c --from-objects|Aggregate \c .qo inputs into a \c .qmod with \c -m
-    |\c -a, \c --archive|Create a \c .qoa archive from \c .qo inputs
+    |\c --depfile-module-deps=MODE|For module depfiles, record dependency sources (default), resolved artifact files, or none; source mode expands split modules to all <tt>.qm</tt> / <tt>.qc</tt> / <tt>.ql</tt> files and retains an artifact only when no source representation is available
+    |\c --from-objects|Aggregate <tt>.qo</tt> inputs into a <tt>.qmod</tt> with \c -m
+    |\c -a, \c --archive|Create a <tt>.qoa</tt> archive from <tt>.qo</tt> inputs
     |\c -S, \c --static|Static link single-source executables against \c libqore
     |\c -t, \c --target=TRIPLE|Cross-compilation target triple
     |\c --include-source|Embed Qore source text
     |\c --strip-source|Omit Qore source text
     |\c --strip-debug-info|Omit DWARF debug info
-    |<tt>--file-prefix-map=OLD=NEW</tt>|Map source paths that start with \c OLD to \c NEW in the metadata, debug information and exception locations of a final executable or whole module, for reproducible builds; repeatable, and the last matching prefix wins; \c OLD also matches the canonical form of the path it names; input files and dependency files keep their physical paths; not for incremental \c .qo or object-link modes. The %Qore CMake macros pass each \c -ffile-prefix-map option in the C++ compiler flags (\c CMAKE_CXX_FLAGS) to \c qcc in this form when compiling a user module
+    |<tt>--file-prefix-map=OLD=NEW</tt>|Map source paths that start with \c OLD to \c NEW in the metadata, debug information and exception locations of a final executable or whole module, for reproducible builds; repeatable, and the last matching prefix wins; \c OLD also matches the canonical form of the path it names; input files and dependency files keep their physical paths; not for incremental <tt>.qo</tt> or object-link modes. The %Qore CMake macros pass each \c -ffile-prefix-map option in the C++ compiler flags (\c CMAKE_CXX_FLAGS) to \c qcc in this form when compiling a user module
     |\c -g|Emit DWARF debug info
     |\c --time-trace[=PATH]|Emit Chrome-format LLVM timing trace
     |\c --big-fn-threshold=N|Use \c OptimizeNone for functions with at least N IR blocks, default 200
@@ -429,7 +429,7 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
 
     <b>GNU make jobserver integration.</b> When \c qcc runs as part of a parallel
     <tt>make -jN</tt> build (for example the CMake user-module build, or a module or host
-    project that compiles \c .qo files), it participates as a
+    project that compiles <tt>.qo</tt> files), it participates as a
     <a href="https://www.gnu.org/software/make/manual/html_node/Job-Slots.html">GNU make
     jobserver</a> client so that \c qcc's internal codegen threads and make's own parallel
     recipes share one global job budget rather than oversubscribing the machine. \c qcc
@@ -537,8 +537,8 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
 
     @subsection aot_inspection Inspecting AOT Artifacts
 
-    Use \c qcc \c --dump-info to inspect AOT metadata in executables, \c .qmod
-    modules, \c .qo fragments, \c .qoa archives, or ordinary object files:
+    Use \c qcc \c --dump-info to inspect AOT metadata in executables, <tt>.qmod</tt>
+    modules, <tt>.qo</tt> fragments, <tt>.qoa</tt> archives, or ordinary object files:
 
     @code{.sh}
 qcc --dump-info MyModule.qmod
@@ -546,7 +546,7 @@ qcc --dump-info --dump-symbols app
 qcc --dump-info --dump-sections build/file.qo
     @endcode
 
-    For a \c .qmod, the output ends with the module metadata that the loader reads before loading the module (its
+    For a <tt>.qmod</tt>, the output ends with the module metadata that the loader reads before loading the module (its
     name, dependencies, and the modules of failed \c %%try-module directives), and where it is stored in the image;
     see @ref aot_module_code_signing.
 
@@ -583,13 +583,13 @@ int result = pgm.callFunction("compute");
     - \c PO_STRICT_ARGS (\c %%strict-args; cleared by \c %%loose-args)
     - \c PO_STRONG_ENCAPSULATION (\c %%strong-encapsulation)
 
-    Other parse options do not affect this rule.  Files whose extension is not \c .q, including \c .qr and
-    \c .qm, enable modern mode by default; \c .q remains legacy by default for compatibility.
+    Other parse options do not affect this rule.  Files whose extension is not <tt>.q</tt>, including <tt>.qr</tt> and
+    <tt>.qm</tt>, enable modern mode by default; <tt>.q</tt> remains legacy by default for compatibility.
 
     Code that does not meet this rule is executed by the AST interpreter only: an explicitly requested
     <tt>--exec-mode=ir</tt>, \c jit or \c tiered raises an \c EXEC-MODE-ERROR exception listing the missing
     options, the default mode falls back to AST, and @ref qcc_tool "qcc" rejects it for every kind of output
-    (executables, \c .qo objects and archives, and modules) with an error naming the source file and the missing
+    (executables, <tt>.qo</tt> objects and archives, and modules) with an error naming the source file and the missing
     options, without writing any output.
 
     LLVM 16 or later is required for JIT and AOT support.

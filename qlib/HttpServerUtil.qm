@@ -957,7 +957,7 @@ public class CookieHelper {
 /** @param cx the call context hash
     @param hdr the header hash
 
-    @return @ref True if the request is an HTTP/2 or HTTP/3 extended CONNECT with any \c :protocol value
+    @return @ref True if the request is an HTTP/2 or HTTP/3 extended CONNECT with any <tt>:protocol</tt> value
 
     @since %HttpServerUtil 1.0.15
 */

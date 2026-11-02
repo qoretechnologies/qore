@@ -109,13 +109,13 @@ public class AsyncJobPoller {
     }
 
     private {
-        #! Status-fetch closure: \c (string job_id) -> hash<auto>
+        #! Status-fetch closure: <tt>(string</tt> job_id) -> hash<auto>
         code<hash<auto>(string)> status_fetcher;
 
-        #! Terminal predicate: \c (hash<auto> status) -> bool
+        #! Terminal predicate: <tt>(hash<auto></tt> status) -> bool
         code<bool(hash<auto>)> terminal_predicate;
 
-        #! Sleeper closure (test seam): \c (timeout to) -> nothing
+        #! Sleeper closure (test seam): <tt>(timeout</tt> to) -> nothing
         code<nothing(timeout)> sleeper;
 
         #! Exception class raised when the overall timeout fires

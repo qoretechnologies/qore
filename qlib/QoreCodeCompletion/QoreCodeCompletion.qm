@@ -54,8 +54,8 @@ module QoreCodeCompletion {
     The engine detects the following completion contexts from cursor position:
     - @ref QoreCodeCompletion::CC_IDENTIFIER "CC_IDENTIFIER": bare identifier (keywords, types, all symbols)
     - @ref QoreCodeCompletion::CC_NEW "CC_NEW": after @c new keyword (class names only)
-    - @ref QoreCodeCompletion::CC_DOT "CC_DOT": after @c . (instance members/methods)
-    - @ref QoreCodeCompletion::CC_SCOPE "CC_SCOPE": after @c :: (namespace/class static/enum members)
+    - @ref QoreCodeCompletion::CC_DOT "CC_DOT": after <tt>.</tt> (instance members/methods)
+    - @ref QoreCodeCompletion::CC_SCOPE "CC_SCOPE": after <tt>::</tt> (namespace/class static/enum members)
 
     @par Provider Interface
 

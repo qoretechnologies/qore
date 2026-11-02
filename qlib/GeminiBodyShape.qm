@@ -1200,7 +1200,7 @@ class GeminiSchemaShaper {
 
     #! Returns the summary of one schema value
     /** @param node the schema
-        @param levels the levels of nesting still shown in full; below them an object is \c {…} and an array \c […]
+        @param levels the levels of nesting still shown in full; below them an object is \c {…} and an array <tt>[…]</tt>
         @param budget the maximum length of the summary of an object's members, or -1 for no limit (used only at the
         top level)
         @param refs the references being expanded, to show a recursive reference as \c {…}
@@ -2713,7 +2713,7 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
 
     #! Returns the \c streamGenerateContent SSE path for the given request
     /** The default derives the path from @ref getRequestPath() by replacing its
-        \c :generateContent method with \c :streamGenerateContent and requesting
+        <tt>:generateContent</tt> method with <tt>:streamGenerateContent</tt> and requesting
         SSE framing with \c alt=sse.
 
         @param opts per-call overrides
@@ -2721,7 +2721,7 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
         @return the streaming request path
 
         @throw LLM-CONFIG-ERROR the path returned by @ref getRequestPath() does
-        not end with \c :generateContent
+        not end with <tt>:generateContent</tt>
     */
     string getStreamRequestPath(*hash<QoreLlmUtils::LlmRequestOptions> opts) {
         string path = getRequestPath(opts);

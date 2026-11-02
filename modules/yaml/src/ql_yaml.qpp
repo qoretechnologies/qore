@@ -103,7 +103,7 @@ namespace Qore::YAML;
 
 //! parse option: resolve plain scalars with the YAML 1.2 core schema only
 /** Only plain scalars are resolved, and only to @ref nothing (\c null, \c ~ and empty scalars),
-    booleans, integers (decimal, \c 0o octal and \c 0x hexadecimal) and floats (including \c .inf and \c .nan);
+    booleans, integers (decimal, \c 0o octal and \c 0x hexadecimal) and floats (including <tt>.inf</tt> and <tt>.nan</tt>);
     every other scalar, including every quoted scalar, is a string.  Qore's extended implicit types - absolute and
     relative dates, arbitrary-precision numbers, and SQL null - are not recognized; explicit tags still are.
 

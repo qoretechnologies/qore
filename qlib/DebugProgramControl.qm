@@ -122,7 +122,7 @@ module DebugProgramControl {
     - a program created with the \c program//create command is removed from debugging also when it ends with an
       exception
     - @ref DebugProgramControl::DebugProgramControl::createProgram() "createProgram()" parses a script in the mode
-      that the interpreter gives its file: in @ref modern "%modern" mode unless its name ends in \c .q (see
+      that the interpreter gives its file: in @ref modern "%modern" mode unless its name ends in <tt>.q</tt> (see
       @ref Qore::Program::applySourceDefaults() "Program::applySourceDefaults()")
     - fixed the \c file/source and \c label/source commands for command hashes whose values all have the same type,
       such as a literal <tt>{"cmd": "program/1/file/source", "file": "..."}</tt>; setting the start line raised

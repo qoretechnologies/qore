@@ -2110,7 +2110,7 @@ hash: (2 members)
                 key; if a header field is present more than once in a part, the value is a list of all values
                 received in the order received
               - \c body: the body of the part as a string; this can only be a binary object if the \a decode argument is @ref True "True", the part's content-encoding is base64 and the part's content type does not contain the word \c "text"
-              - \c [part]: if the \a decode parameter is @ref True "True" then any content-encoding for parts is decoded automatically; also parts that have parts themselves are processed recursively if this argument is set
+              - <tt>[part]:</tt> if the \a decode parameter is @ref True "True" then any content-encoding for parts is decoded automatically; also parts that have parts themselves are processed recursively if this argument is set
 
             @throw MULTIPART-PARSEBODY-ERROR no boundary found in body; no closing boundary; malformatted part or
             part header; a part has a repeated \c Content-Type or \c Content-Transfer-Encoding header and \a decode

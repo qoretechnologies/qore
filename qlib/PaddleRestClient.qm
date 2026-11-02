@@ -152,7 +152,7 @@ public class PaddleRestClientBase {
 
         #! Default ping path
         /** Listing event types is the only authenticated read Paddle offers that requires <b>no</b>
-            permissions at all (\c "x-permissions": \c []), so a ping succeeds for any valid key,
+            permissions at all (\c "x-permissions": <tt>[]</tt>), so a ping succeeds for any valid key,
             however narrowly it is scoped, and fails only when the key itself is not accepted.
         */
         const DefaultPingPath = "/event-types";

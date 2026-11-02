@@ -689,7 +689,7 @@ public:
     DLLLOCAL int loadProviderModule(ExceptionSink& xsink, const char* name, QoreProgram* path_pgm);
 
     //! Adds the existing files that could provide the module with the given name in the module search path
-    /** The binary (\c .qmod), source (\c .qm), and split module forms are included; used for build
+    /** The binary (<tt>.qmod</tt>), source (<tt>.qm</tt>), and split module forms are included; used for build
         dependencies of AOT artifacts that were compiled without the module, since a change to one of these files
         can make the module available.
 

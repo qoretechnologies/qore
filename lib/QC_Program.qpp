@@ -1920,7 +1920,7 @@ bool Program::existsFunction(string function_name) [flags=RET_VALUE_ONLY,NAMED_A
     return p->existsFunction(tmp->c_str());
 }
 
-//! Runs the program and optionally returns a value if the top-level code exits with a @ref return "return statement
+//! Runs the program and optionally returns a value if the top-level code exits with a @ref return "return statement"
 /** @return the value given to the @ref return "return statement" at the top-level, if any, otherwise @ref nothing
 
     @par Example:
@@ -2287,7 +2287,7 @@ nothing Program::setParseOptions(ParseOptions[QoreParseOptionsData] parse_option
 
 //! Applies the parse options that the interpreter gives a source file by its name
 /** The interpreter parses a source file in @ref modern "%modern" mode with all warnings enabled unless the name of the
-    file ends in \c .q or the \c QORE_OLD_STYLE_DEFAULT environment variable disables it (see
+    file ends in <tt>.q</tt> or the \c QORE_OLD_STYLE_DEFAULT environment variable disables it (see
     @ref parse_directives).  Code parsed with Program::parse() gets no such default, so a program that reads the
     source of a file itself, such as a debugger, calls this method before parsing it, so that the source is parsed as
     the interpreter would parse the file.

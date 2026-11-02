@@ -30,7 +30,7 @@
     and change the data of the debugged code.
 
     The debuggers parse a script in the mode that the interpreter gives its file (see
-    @ref Qore::Program::applySourceDefaults() "Program::applySourceDefaults()"): a file whose name ends in \c .q is
+    @ref Qore::Program::applySourceDefaults() "Program::applySourceDefaults()"): a file whose name ends in <tt>.q</tt> is
     parsed in the default mode, other files in @ref modern "%modern" mode, as \c qore runs them.
 
     @section debugging_features Debugging Features
@@ -192,7 +192,7 @@ qdbg myfile.q < commands.txt
     @endcode
 
     Files of commands have one command on each line; lines that start with \c # are comments.  \c qdbg and
-    \c qdbg-remote run the commands of the init file, \c .qdbginit in the home folder, at their start, unless \c -n is
+    \c qdbg-remote run the commands of the init file, <tt>.qdbginit</tt> in the home folder, at their start, unless \c -n is
     given, or of the file of \c -i instead, and then the files of \c -x, and continue with the commands of their input;
     the \c script command runs a file of commands at the prompt.  A command of a file that resumes a thread waits until
     a thread pauses, and the first command that fails ends the file.  A file of commands in the current folder is not

@@ -86,8 +86,8 @@ public hashdecl GroundingVerificationResult {
 /** The validator intentionally does not know any product-specific citation
     syntax.  It accepts a citation when the answer contains a supplied
     \c source_id either directly in square brackets (for example
-    \c [source-1]) or in a typed marker (for example \c [source:source-1],
-    \c [doc:source-1], or \c [artifact:source-1]).
+    <tt>[source-1]</tt>) or in a typed marker (for example <tt>[source:source-1]</tt>,
+    <tt>[doc:source-1]</tt>, or <tt>[artifact:source-1]</tt>).
 
     @since QoreLlmUtils 1.0.0
 */

@@ -2280,7 +2280,7 @@ public class CodeFormatter {
         return left + getAssignmentOp(node) + right;
     }
 
-    #! Returns the operator of an assignment with the spaces around it: \c := for a weak assignment
+    #! Returns the operator of an assignment with the spaces around it: <tt>:=</tt> for a weak assignment
     private static string getAssignmentOp(hash<auto> node) {
         return node.weak ? " := " : " = ";
     }

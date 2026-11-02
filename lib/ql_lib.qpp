@@ -1589,7 +1589,7 @@ list<hash<auto>> l = getaddrinfo("localhost");
     @note A localhost name (\c "localhost" or a name ending in \c ".localhost"; RFC 6761) resolves to the addresses
     that the hosts file gives it, as with the system resolver; in an address family that the hosts file does not give
     the name, and when the hosts file does not have the name, it resolves to the loopback address (\c 127.0.0.1 or
-    \c ::1)
+    <tt>::1</tt>)
 
     @since %Qore 3.0 a node or service name with a NUL character raises \c QOREADDRINFO-GETINFO-ERROR; previously the
     name was cut at the NUL character

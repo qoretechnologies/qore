@@ -132,9 +132,9 @@ binary data = schema.encode("mypackage.Point", {"x": 1.0, "y": 2.0, "label": "or
 */
 qclass ProtobufSchema [arg=QoreProtobufSchema* schema; ns=Qore::Protobuf; dom=FILESYSTEM];
 
-//! Creates a ProtobufSchema from a \c .proto file on the filesystem
-/** @param path the directory path for \c .proto file imports
-    @param proto_file the \c .proto file name to load
+//! Creates a ProtobufSchema from a <tt>.proto</tt> file on the filesystem
+/** @param path the directory path for <tt>.proto</tt> file imports
+    @param proto_file the <tt>.proto</tt> file name to load
 
     @throw PROTOBUF-SCHEMA-ERROR if the file cannot be loaded or parsed, or if \a path or \a proto_file contains a NUL
     character
@@ -156,11 +156,11 @@ ProtobufSchema::constructor(string path, string proto_file) {
 //! Creates a ProtobufSchema from a proto definition string
 /** The content is named \c "input.proto"; use @ref fromContent() to give it another file name.
 
-    @param proto_content the \c .proto file content as a string
+    @param proto_content the <tt>.proto</tt> file content as a string
 
     @throw PROTOBUF-SCHEMA-ERROR if the content cannot be parsed
 
-    @note a constructor with two strings loads a \c .proto file from the filesystem
+    @note a constructor with two strings loads a <tt>.proto</tt> file from the filesystem
 
     @since %protobuf 1.0
 */
@@ -169,7 +169,7 @@ ProtobufSchema::constructor(string proto_content) {
 }
 
 //! Creates a ProtobufSchema from a proto definition string with the given file name
-/** @param proto_content the \c .proto file content as a string
+/** @param proto_content the <tt>.proto</tt> file content as a string
     @param filename the file name of the content, used in error messages and as the name of its file descriptor
     (ex: for @ref serializeFileDescriptorByName()); defaults to \c "input.proto"
 
@@ -183,7 +183,7 @@ ProtobufSchema schema = ProtobufSchema::fromContent(proto, "orders.proto");
 list<binary> descriptors = schema.serializeFileDescriptorByName("orders.proto");
     @endcode
 
-    @note This is a static method rather than a constructor, as a constructor with two strings loads a \c .proto file
+    @note This is a static method rather than a constructor, as a constructor with two strings loads a <tt>.proto</tt> file
     from the filesystem
 
     @since %protobuf 1.0
@@ -215,7 +215,7 @@ ProtobufSchema::constructor(list<binary> serialized_descriptors) {
 
 //! Creates a ProtobufSchema from a programmatic definition hash
 /** Builds a protobuf schema definition entirely from Qore data structures,
-    without requiring \c .proto files.
+    without requiring <tt>.proto</tt> files.
 
     @param schema_def a hash with the following keys:
     - \c syntax (optional string, default \c "proto3"): the protobuf syntax version

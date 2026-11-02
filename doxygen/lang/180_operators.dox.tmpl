@@ -2110,7 +2110,7 @@ if (x || y)
     @code{.py} x = a ?* b ?* c;@endcode
     @code{.py} x = a ?: b ?: c;@endcode
 
-    @note \c ?: is an alias for \c ?*.  The two characters must be adjacent.  The \c ?:
+    @note <tt>?:</tt> is an alias for <tt>?*</tt>.  The two characters must be adjacent.  The <tt>?:</tt>
     value-coalescing alias is different from the conditional operator written as
     <tt>\a condition ? \a if_true_expression : \a if_false_expression</tt>.
 
@@ -2257,7 +2257,7 @@ if (x || y)
     |All|Assigns the value of \a expression to \a lvalue
 
     @anchor compound_assignment_conversion
-    @note The compound assignment operators (\c +=, \c -=, \c *=, \c /=, \c %=, \c &=, \c |=, \c ^=, \c <<= and
+    @note The compound assignment operators (\c +=, \c -=, \c *=, \c /=, \c %=, \c &=, <tt>|=</tt>, \c ^=, \c <<= and
     \c >>=), \c ++ and \c -- store their result as an assignment of the result does: converted to the declared type
     of the lvalue, or to the value type of the hash or list holding it, or refused with \c RUNTIME-TYPE-ERROR (ex:
     with \c x holding 1.5, <tt>softint v = 10; v *= x</tt> leaves the int 15, and <tt>timeout t; t *= x</tt>
@@ -2313,8 +2313,8 @@ if (x || y)
     its target alive exactly as \c = does and can never dangle; what differs is that a cycle running through
     it cannot be detected, and therefore cannot be collected.\n<br>
     This makes it the opposite trade from the @ref weak_assignment_operator "weak assignment operator (:=)":
-    \c := gives up ownership so the collector need not consider the reference at all, while \c \@= keeps
-    ownership and asks the collector to ignore the reference.  A mistake with \c := loses an object that is
+    <tt>:=</tt> gives up ownership so the collector need not consider the reference at all, while \c \@= keeps
+    ownership and asks the collector to ignore the reference.  A mistake with <tt>:=</tt> loses an object that is
     still in use; a mistake with \c \@= leaks one.
 
     @par Warning

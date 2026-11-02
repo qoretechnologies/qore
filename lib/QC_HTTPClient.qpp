@@ -960,7 +960,7 @@ if (resp.status_code == 200) {
 }
 
 //! Sends an HTTP/3 extended CONNECT request (RFC 9220) and waits for the response
-/** Submits a CONNECT request with the \c :protocol pseudo-header over the active HTTP/3
+/** Submits a CONNECT request with the <tt>:protocol</tt> pseudo-header over the active HTTP/3
     connection and drives QUIC I/O until the server responds.
 
     @param path the request path (e.g., "/" or "/chat")
@@ -1422,15 +1422,15 @@ nothing HTTPClient::disconnect() {
       - \c request-uri: a string giving the request line (ex: <tt>PUT / HTTP/1.1</tt>)
       - \c effective-url: the absolute URL of the last request sent, which is the URL that produced the response
         after any redirects; it never contains user information or a fragment (since %Qore 3.0)
-      - \c [redirects]: a list of @ref Qore::HttpRedirectInfo "HttpRedirectInfo" hashes, one for each redirect
+      - <tt>[redirects]:</tt> a list of @ref Qore::HttpRedirectInfo "HttpRedirectInfo" hashes, one for each redirect
         followed, if any (since %Qore 3.0)
-      - \c [redirect-<i>n</i>]: the \c Location value of the <i>n</i>th redirect followed
-      - \c [redirect-message-<i>n</i>]: the status message of the <i>n</i>th redirect followed
+      - <tt>[redirect-<i>n</i>]:</tt> the \c Location value of the <i>n</i>th redirect followed
+      - <tt>[redirect-message-<i>n</i>]:</tt> the status message of the <i>n</i>th redirect followed
       - \c response-uri: a string giving the response line (ex: <tt>HTTP/1.1 200 OK</tt>)
       - \c headers-raw: a hash of raw response headers received
       - \c charset: the character encoding used in the response
       - [\c body-content-type]: the MIME \c Content-Type for the response body (if any)
-      - \c [response-body]: the raw message body in the response (after any content decoding)
+      - <tt>[response-body]:</tt> the raw message body in the response (after any content decoding)
       - \c response-headers: a hash of incoming HTTP headers in the response with keys converted to all lower case for
         each header in the response message, plus the following %Qore-provided keys:
         - \c http_version: the HTTP version in the response URI
@@ -1475,15 +1475,15 @@ AbstractPollOperation<auto> HTTPClient::startPollSendRecv(string method, *string
       - \c request-uri: a string giving the request line (ex: <tt>PUT / HTTP/1.1</tt>)
       - \c effective-url: the absolute URL of the last request sent, which is the URL that produced the response
         after any redirects; it never contains user information or a fragment (since %Qore 3.0)
-      - \c [redirects]: a list of @ref Qore::HttpRedirectInfo "HttpRedirectInfo" hashes, one for each redirect
+      - <tt>[redirects]:</tt> a list of @ref Qore::HttpRedirectInfo "HttpRedirectInfo" hashes, one for each redirect
         followed, if any (since %Qore 3.0)
-      - \c [redirect-<i>n</i>]: the \c Location value of the <i>n</i>th redirect followed
-      - \c [redirect-message-<i>n</i>]: the status message of the <i>n</i>th redirect followed
+      - <tt>[redirect-<i>n</i>]:</tt> the \c Location value of the <i>n</i>th redirect followed
+      - <tt>[redirect-message-<i>n</i>]:</tt> the status message of the <i>n</i>th redirect followed
       - \c response-uri: a string giving the response line (ex: <tt>HTTP/1.1 200 OK</tt>)
       - \c headers-raw: a hash of raw response headers received
       - \c charset: the character encoding used in the response
       - [\c body-content-type]: the Content-Type for the response body (if any)
-      - \c [response-body]: the raw message body in the response (after any content decoding)
+      - <tt>[response-body]:</tt> the raw message body in the response (after any content decoding)
       - \c response-headers: a hash of incoming HTTP headers in the response with keys converted to all lower case for
         each header in the response message, plus the following %Qore-provided keys:
         - \c http_version: the HTTP version in the response URI
@@ -1577,23 +1577,23 @@ hash<auto> msg = httpclient.send(body, "POST", "/path", {"Content-Type": "applic
     bodies without a \c "Content-Length" header.
     @param info An optional reference to an lvalue that will be used as an output variable giving a hash of request
     headers and other information about the HTTP request; this hash contains the following keys:
-    - \c [accept-charset]: this key will be set to an appropriate value from any \c "Accept-Charset" header; if any of
+    - <tt>[accept-charset]:</tt> this key will be set to an appropriate value from any \c "Accept-Charset" header; if any of
       \c "*", \c "utf8", or \c "utf-8" are present, then this will be set to \c "utf8", otherwise it will be set to
       the first requested character encoding in the list
-    - \c [charset]: if there is a \c "charset" declaration in the \c "Content-Type" header, the value is returned in
+    - <tt>[charset]:</tt> if there is a \c "charset" declaration in the \c "Content-Type" header, the value is returned in
       this key; a quoted-string value is unquoted
-    - \c [body-content-type]: the MIME \c Content-Type for the response body (if any)
+    - <tt>[body-content-type]:</tt> the MIME \c Content-Type for the response body (if any)
     - \c headers: a hash of outgoing HTTP request headers (returned as sent, without any case conversions)
     - \c request-uri: the request URI string sent (ex: \c "GET /services/async/38.0/job HTTP/1.1")
     - \c effective-url: the absolute URL of the last request sent, which is the URL that produced the response after
       any redirects; it never contains user information or a fragment (since %Qore 3.0; see
       @ref httpclient_redirects)
-    - \c [redirects]: a list of @ref Qore::HttpRedirectInfo "HttpRedirectInfo" hashes, one for each redirect
+    - <tt>[redirects]:</tt> a list of @ref Qore::HttpRedirectInfo "HttpRedirectInfo" hashes, one for each redirect
       followed, if any (since %Qore 3.0; see @ref httpclient_redirects)
-    - \c [redirect-<i>n</i>]: the \c Location value of the <i>n</i>th redirect followed
-    - \c [redirect-message-<i>n</i>]: the status message of the <i>n</i>th redirect followed
-    - \c [request-body]: the raw message body in the request (before any content encoding)
-    - \c [response-body]: the raw message body in the response (after any content decoding)
+    - <tt>[redirect-<i>n</i>]:</tt> the \c Location value of the <i>n</i>th redirect followed
+    - <tt>[redirect-message-<i>n</i>]:</tt> the status message of the <i>n</i>th redirect followed
+    - <tt>[request-body]:</tt> the raw message body in the request (before any content encoding)
+    - <tt>[response-body]:</tt> the raw message body in the response (after any content decoding)
     - \c response-headers: a hash of incoming HTTP headers in the response with keys converted to all lower case for
       each header in the response message, plus the following %Qore-provided keys:
       - \c http_version: the HTTP version in the response URI
@@ -1667,23 +1667,23 @@ hash<auto> msg = httpclient.send(body, "POST", "/path", {"Content-Type": "applic
     @param headers An optional hash of headers to include in the message; values are converted to strings; a list is converted to a string of comma-separated values; headers that differ only in case will be overwritten by the last header in the hash with a matching name with a case-insensitive search
     @param read_response_body If this argument is @ref True, then the object will try to receive a message body even if no \c "Content-Length" header is present in the response. Use this only with broken servers that send message bodies without a \c "Content-Length" header.
     @param info An optional reference to an lvalue that will be used as an output variable giving a hash of request headers and other information about the HTTP request; this hash contains the following keys:
-    - \c [accept-charset]: this key will be set to an appropriate value from any \c "Accept-Charset" header; if any of
+    - <tt>[accept-charset]:</tt> this key will be set to an appropriate value from any \c "Accept-Charset" header; if any of
       \c "*", \c "utf8", or \c "utf-8" are present, then this will be set to \c "utf8", otherwise it will be set to
       the first requested character encoding in the list
-    - \c [charset]: if there is a \c "charset" declaration in the \c "Content-Type" header, the value is returned in
+    - <tt>[charset]:</tt> if there is a \c "charset" declaration in the \c "Content-Type" header, the value is returned in
       this key; a quoted-string value is unquoted
-    - \c [body-content-type]: the MIME \c Content-Type for the response body (if any)
+    - <tt>[body-content-type]:</tt> the MIME \c Content-Type for the response body (if any)
     - \c headers: a hash of outgoing HTTP request headers (returned as sent, without any case conversions)
     - \c request-uri: the request URI string sent (ex: \c "GET /services/async/38.0/job HTTP/1.1")
     - \c effective-url: the absolute URL of the last request sent, which is the URL that produced the response after
       any redirects; it never contains user information or a fragment (since %Qore 3.0; see
       @ref httpclient_redirects)
-    - \c [redirects]: a list of @ref Qore::HttpRedirectInfo "HttpRedirectInfo" hashes, one for each redirect
+    - <tt>[redirects]:</tt> a list of @ref Qore::HttpRedirectInfo "HttpRedirectInfo" hashes, one for each redirect
       followed, if any (since %Qore 3.0; see @ref httpclient_redirects)
-    - \c [redirect-<i>n</i>]: the \c Location value of the <i>n</i>th redirect followed
-    - \c [redirect-message-<i>n</i>]: the status message of the <i>n</i>th redirect followed
-    - \c [request-body]: the raw message body in the request (before any content encoding)
-    - \c [response-body]: the raw message body in the response (after any content decoding)
+    - <tt>[redirect-<i>n</i>]:</tt> the \c Location value of the <i>n</i>th redirect followed
+    - <tt>[redirect-message-<i>n</i>]:</tt> the status message of the <i>n</i>th redirect followed
+    - <tt>[request-body]:</tt> the raw message body in the request (before any content encoding)
+    - <tt>[response-body]:</tt> the raw message body in the response (after any content decoding)
     - \c response-headers: a hash of incoming HTTP headers in the response with keys converted to all lower case for
       each header in the response message, plus the following %Qore-provided keys:
       - \c http_version: the HTTP version in the response URI
@@ -2161,23 +2161,23 @@ hash<auto> msg = httpclient.sendWithSendCallback(callback, "POST", "/path", {"Co
     @param timeout_ms the timeout in milliseconds for the socket I/O operations; 0 means use the default timeout value
     @param read_response_body If this argument is @ref True, then the object will try to receive a message body even if no \c "Content-Length" header is present in the response. Use this only with broken servers that send message bodies without a \c "Content-Length" header.
     @param info An optional reference to an lvalue that will be used as an output variable giving a hash of request headers and other information about the HTTP request; this hash contains the following keys:
-    - \c [accept-charset]: this key will be set to an appropriate value from any \c "Accept-Charset" header; if any of
+    - <tt>[accept-charset]:</tt> this key will be set to an appropriate value from any \c "Accept-Charset" header; if any of
       \c "*", \c "utf8", or \c "utf-8" are present, then this will be set to \c "utf8", otherwise it will be set to
       the first requested character encoding in the list
-    - \c [charset]: if there is a \c "charset" declaration in the \c "Content-Type" header, the value is returned in
+    - <tt>[charset]:</tt> if there is a \c "charset" declaration in the \c "Content-Type" header, the value is returned in
       this key; a quoted-string value is unquoted
-    - \c [body-content-type]: the MIME \c Content-Type for the response body (if any)
+    - <tt>[body-content-type]:</tt> the MIME \c Content-Type for the response body (if any)
     - \c headers: a hash of outgoing HTTP request headers (returned as sent, without any case conversions)
     - \c request-uri: the request URI string sent (ex: \c "GET /services/async/38.0/job HTTP/1.1")
     - \c effective-url: the absolute URL of the last request sent, which is the URL that produced the response after
       any redirects; it never contains user information or a fragment (since %Qore 3.0; see
       @ref httpclient_redirects)
-    - \c [redirects]: a list of @ref Qore::HttpRedirectInfo "HttpRedirectInfo" hashes, one for each redirect
+    - <tt>[redirects]:</tt> a list of @ref Qore::HttpRedirectInfo "HttpRedirectInfo" hashes, one for each redirect
       followed, if any (since %Qore 3.0; see @ref httpclient_redirects)
-    - \c [redirect-<i>n</i>]: the \c Location value of the <i>n</i>th redirect followed
-    - \c [redirect-message-<i>n</i>]: the status message of the <i>n</i>th redirect followed
-    - \c [request-body]: the raw message body in the request (before any content encoding)
-    - \c [response-body]: the raw message body in the response (after any content decoding)
+    - <tt>[redirect-<i>n</i>]:</tt> the \c Location value of the <i>n</i>th redirect followed
+    - <tt>[redirect-message-<i>n</i>]:</tt> the status message of the <i>n</i>th redirect followed
+    - <tt>[request-body]:</tt> the raw message body in the request (before any content encoding)
+    - <tt>[response-body]:</tt> the raw message body in the response (after any content decoding)
     - \c response-headers: a hash of incoming HTTP headers in the response with keys converted to all lower case for
       each header in the response message, plus the following %Qore-provided keys:
       - \c http_version: the HTTP version in the response URI
@@ -2262,23 +2262,23 @@ httpclient.sendWithRecvCallback(rcv_callback, data, "POST", "/path", {"Content-T
     @param timeout_ms the timeout in milliseconds for the socket I/O operations; 0 means use the default timeout value
     @param read_response_body If this argument is @ref True, then the object will try to receive a message body even if no \c "Content-Length" header is present in the response. Use this only with broken servers that send message bodies without a \c "Content-Length" header.
     @param info An optional reference to an lvalue that will be used as an output variable giving a hash of request headers and other information about the HTTP request; this hash contains the following keys:
-    - \c [accept-charset]: this key will be set to an appropriate value from any \c "Accept-Charset" header; if any of
+    - <tt>[accept-charset]:</tt> this key will be set to an appropriate value from any \c "Accept-Charset" header; if any of
       \c "*", \c "utf8", or \c "utf-8" are present, then this will be set to \c "utf8", otherwise it will be set to
       the first requested character encoding in the list
-    - \c [charset]: if there is a \c "charset" declaration in the \c "Content-Type" header, the value is returned in
+    - <tt>[charset]:</tt> if there is a \c "charset" declaration in the \c "Content-Type" header, the value is returned in
       this key; a quoted-string value is unquoted
-    - \c [body-content-type]: the MIME \c Content-Type for the response body (if any)
+    - <tt>[body-content-type]:</tt> the MIME \c Content-Type for the response body (if any)
     - \c headers: a hash of outgoing HTTP request headers (returned as sent, without any case conversions)
     - \c request-uri: the request URI string sent (ex: \c "GET /services/async/38.0/job HTTP/1.1")
     - \c effective-url: the absolute URL of the last request sent, which is the URL that produced the response after
       any redirects; it never contains user information or a fragment (since %Qore 3.0; see
       @ref httpclient_redirects)
-    - \c [redirects]: a list of @ref Qore::HttpRedirectInfo "HttpRedirectInfo" hashes, one for each redirect
+    - <tt>[redirects]:</tt> a list of @ref Qore::HttpRedirectInfo "HttpRedirectInfo" hashes, one for each redirect
       followed, if any (since %Qore 3.0; see @ref httpclient_redirects)
-    - \c [redirect-<i>n</i>]: the \c Location value of the <i>n</i>th redirect followed
-    - \c [redirect-message-<i>n</i>]: the status message of the <i>n</i>th redirect followed
-    - \c [request-body]: the raw message body in the request (before any content encoding)
-    - \c [response-body]: the raw message body in the response (after any content decoding)
+    - <tt>[redirect-<i>n</i>]:</tt> the \c Location value of the <i>n</i>th redirect followed
+    - <tt>[redirect-message-<i>n</i>]:</tt> the status message of the <i>n</i>th redirect followed
+    - <tt>[request-body]:</tt> the raw message body in the request (before any content encoding)
+    - <tt>[response-body]:</tt> the raw message body in the response (after any content decoding)
     - \c response-headers: a hash of incoming HTTP headers in the response with keys converted to all lower case for
       each header in the response message, plus the following %Qore-provided keys:
       - \c http_version: the HTTP version in the response URI
@@ -2360,23 +2360,23 @@ httpclient.sendWithRecvCallback(rcv_callback, data, "POST", "/path", {"Content-T
     @param timeout_ms the timeout in milliseconds for the socket I/O operations; 0 means use the default timeout value
     @param read_response_body If this argument is @ref True, then the object will try to receive a message body even if no \c "Content-Length" header is present in the response. Use this only with broken servers that send message bodies without a \c "Content-Length" header.
     @param info An optional reference to an lvalue that will be used as an output variable giving a hash of request headers and other information about the HTTP request; this hash contains the following keys:
-    - \c [accept-charset]: this key will be set to an appropriate value from any \c "Accept-Charset" header; if any of
+    - <tt>[accept-charset]:</tt> this key will be set to an appropriate value from any \c "Accept-Charset" header; if any of
       \c "*", \c "utf8", or \c "utf-8" are present, then this will be set to \c "utf8", otherwise it will be set to
       the first requested character encoding in the list
-    - \c [charset]: if there is a \c "charset" declaration in the \c "Content-Type" header, the value is returned in
+    - <tt>[charset]:</tt> if there is a \c "charset" declaration in the \c "Content-Type" header, the value is returned in
       this key; a quoted-string value is unquoted
-    - \c [body-content-type]: the MIME \c Content-Type for the response body (if any)
+    - <tt>[body-content-type]:</tt> the MIME \c Content-Type for the response body (if any)
     - \c headers: a hash of outgoing HTTP request headers (returned as sent, without any case conversions)
     - \c request-uri: the request URI string sent (ex: \c "GET /services/async/38.0/job HTTP/1.1")
     - \c effective-url: the absolute URL of the last request sent, which is the URL that produced the response after
       any redirects; it never contains user information or a fragment (since %Qore 3.0; see
       @ref httpclient_redirects)
-    - \c [redirects]: a list of @ref Qore::HttpRedirectInfo "HttpRedirectInfo" hashes, one for each redirect
+    - <tt>[redirects]:</tt> a list of @ref Qore::HttpRedirectInfo "HttpRedirectInfo" hashes, one for each redirect
       followed, if any (since %Qore 3.0; see @ref httpclient_redirects)
-    - \c [redirect-<i>n</i>]: the \c Location value of the <i>n</i>th redirect followed
-    - \c [redirect-message-<i>n</i>]: the status message of the <i>n</i>th redirect followed
-    - \c [request-body]: the raw message body in the request (before any content encoding)
-    - \c [response-body]: the raw message body in the response (after any content decoding)
+    - <tt>[redirect-<i>n</i>]:</tt> the \c Location value of the <i>n</i>th redirect followed
+    - <tt>[redirect-message-<i>n</i>]:</tt> the status message of the <i>n</i>th redirect followed
+    - <tt>[request-body]:</tt> the raw message body in the request (before any content encoding)
+    - <tt>[response-body]:</tt> the raw message body in the response (after any content decoding)
     - \c response-headers: a hash of incoming HTTP headers in the response with keys converted to all lower case for
       each header in the response message, plus the following %Qore-provided keys:
       - \c http_version: the HTTP version in the response URI
@@ -2630,23 +2630,23 @@ httpclient.sendWithCallbacks(send_callback, rcv_callback, "POST", "/path", {"Con
     @param timeout_ms the timeout in milliseconds for the socket I/O operations; 0 means use the default timeout value
     @param read_response_body If this argument is @ref True, then the object will try to receive a message body even if no \c "Content-Length" header is present in the response. Use this only with broken servers that send message bodies without a \c "Content-Length" header.
     @param info An optional reference to an lvalue that will be used as an output variable giving a hash of request headers and other information about the HTTP request; this hash contains the following keys:
-    - \c [accept-charset]: this key will be set to an appropriate value from any \c "Accept-Charset" header; if any of
+    - <tt>[accept-charset]:</tt> this key will be set to an appropriate value from any \c "Accept-Charset" header; if any of
       \c "*", \c "utf8", or \c "utf-8" are present, then this will be set to \c "utf8", otherwise it will be set to
       the first requested character encoding in the list
-    - \c [charset]: if there is a \c "charset" declaration in the \c "Content-Type" header, the value is returned in
+    - <tt>[charset]:</tt> if there is a \c "charset" declaration in the \c "Content-Type" header, the value is returned in
       this key; a quoted-string value is unquoted
-    - \c [body-content-type]: the MIME \c Content-Type for the response body (if any)
+    - <tt>[body-content-type]:</tt> the MIME \c Content-Type for the response body (if any)
     - \c headers: a hash of outgoing HTTP request headers (returned as sent, without any case conversions)
     - \c request-uri: the request URI string sent (ex: \c "GET /services/async/38.0/job HTTP/1.1")
     - \c effective-url: the absolute URL of the last request sent, which is the URL that produced the response after
       any redirects; it never contains user information or a fragment (since %Qore 3.0; see
       @ref httpclient_redirects)
-    - \c [redirects]: a list of @ref Qore::HttpRedirectInfo "HttpRedirectInfo" hashes, one for each redirect
+    - <tt>[redirects]:</tt> a list of @ref Qore::HttpRedirectInfo "HttpRedirectInfo" hashes, one for each redirect
       followed, if any (since %Qore 3.0; see @ref httpclient_redirects)
-    - \c [redirect-<i>n</i>]: the \c Location value of the <i>n</i>th redirect followed
-    - \c [redirect-message-<i>n</i>]: the status message of the <i>n</i>th redirect followed
-    - \c [request-body]: the raw message body in the request (before any content encoding)
-    - \c [response-body]: the raw message body in the response (after any content decoding)
+    - <tt>[redirect-<i>n</i>]:</tt> the \c Location value of the <i>n</i>th redirect followed
+    - <tt>[redirect-message-<i>n</i>]:</tt> the status message of the <i>n</i>th redirect followed
+    - <tt>[request-body]:</tt> the raw message body in the request (before any content encoding)
+    - <tt>[response-body]:</tt> the raw message body in the response (after any content decoding)
     - \c response-headers: a hash of incoming HTTP headers in the response with keys converted to all lower case for
       each header in the response message, plus the following %Qore-provided keys:
       - \c http_version: the HTTP version in the response URI
@@ -2721,10 +2721,10 @@ nothing HTTPClient::sendWithCallbacks(code send_callback, code receive_callback,
     - \c effective-url: the absolute URL of the last request sent, which is the URL that produced the response after
       any redirects; it never contains user information or a fragment (since %Qore 3.0; see
       @ref httpclient_redirects)
-    - \c [redirects]: a list of @ref Qore::HttpRedirectInfo "HttpRedirectInfo" hashes, one for each redirect
+    - <tt>[redirects]:</tt> a list of @ref Qore::HttpRedirectInfo "HttpRedirectInfo" hashes, one for each redirect
       followed, if any (since %Qore 3.0; see @ref httpclient_redirects)
-    - \c [redirect-<i>n</i>]: the \c Location value of the <i>n</i>th redirect followed
-    - \c [redirect-message-<i>n</i>]: the status message of the <i>n</i>th redirect followed
+    - <tt>[redirect-<i>n</i>]:</tt> the \c Location value of the <i>n</i>th redirect followed
+    - <tt>[redirect-message-<i>n</i>]:</tt> the status message of the <i>n</i>th redirect followed
     - \c request-body: the raw message body in the request (before any content encoding)
     - \c response-body: the raw message body in the response (after any content decoding)
     - \c response-headers: a hash of incoming HTTP headers in the response with keys converted to all lower case for each header in the response message, plus the following %Qore-provided keys:
@@ -2795,10 +2795,10 @@ hash<auto> msg = httpclient.head("/path");
     - \c effective-url: the absolute URL of the last request sent, which is the URL that produced the response after
       any redirects; it never contains user information or a fragment (since %Qore 3.0; see
       @ref httpclient_redirects)
-    - \c [redirects]: a list of @ref Qore::HttpRedirectInfo "HttpRedirectInfo" hashes, one for each redirect
+    - <tt>[redirects]:</tt> a list of @ref Qore::HttpRedirectInfo "HttpRedirectInfo" hashes, one for each redirect
       followed, if any (since %Qore 3.0; see @ref httpclient_redirects)
-    - \c [redirect-<i>n</i>]: the \c Location value of the <i>n</i>th redirect followed
-    - \c [redirect-message-<i>n</i>]: the status message of the <i>n</i>th redirect followed
+    - <tt>[redirect-<i>n</i>]:</tt> the \c Location value of the <i>n</i>th redirect followed
+    - <tt>[redirect-message-<i>n</i>]:</tt> the status message of the <i>n</i>th redirect followed
     - \c request-body: the raw message body in the request (before any content encoding)
     - \c response-body: the raw message body in the response (after any content decoding)
     - \c response-headers: a hash of incoming HTTP headers in the response with keys converted to all lower case for each header in the response message, plus the following %Qore-provided keys:
@@ -2867,10 +2867,10 @@ httpclient.post("/path", body);
     - \c effective-url: the absolute URL of the last request sent, which is the URL that produced the response after
       any redirects; it never contains user information or a fragment (since %Qore 3.0; see
       @ref httpclient_redirects)
-    - \c [redirects]: a list of @ref Qore::HttpRedirectInfo "HttpRedirectInfo" hashes, one for each redirect
+    - <tt>[redirects]:</tt> a list of @ref Qore::HttpRedirectInfo "HttpRedirectInfo" hashes, one for each redirect
       followed, if any (since %Qore 3.0; see @ref httpclient_redirects)
-    - \c [redirect-<i>n</i>]: the \c Location value of the <i>n</i>th redirect followed
-    - \c [redirect-message-<i>n</i>]: the status message of the <i>n</i>th redirect followed
+    - <tt>[redirect-<i>n</i>]:</tt> the \c Location value of the <i>n</i>th redirect followed
+    - <tt>[redirect-message-<i>n</i>]:</tt> the status message of the <i>n</i>th redirect followed
     - \c request-body: the raw message body in the request (before any content encoding)
     - \c response-body: the raw message body in the response (after any content decoding)
     - \c response-headers: a hash of incoming HTTP headers in the response with keys converted to all lower case for each header in the response message, plus the following %Qore-provided keys:
@@ -2944,10 +2944,10 @@ httpclient.post("/path", body);
     - \c effective-url: the absolute URL of the last request sent, which is the URL that produced the response after
       any redirects; it never contains user information or a fragment (since %Qore 3.0; see
       @ref httpclient_redirects)
-    - \c [redirects]: a list of @ref Qore::HttpRedirectInfo "HttpRedirectInfo" hashes, one for each redirect
+    - <tt>[redirects]:</tt> a list of @ref Qore::HttpRedirectInfo "HttpRedirectInfo" hashes, one for each redirect
       followed, if any (since %Qore 3.0; see @ref httpclient_redirects)
-    - \c [redirect-<i>n</i>]: the \c Location value of the <i>n</i>th redirect followed
-    - \c [redirect-message-<i>n</i>]: the status message of the <i>n</i>th redirect followed
+    - <tt>[redirect-<i>n</i>]:</tt> the \c Location value of the <i>n</i>th redirect followed
+    - <tt>[redirect-message-<i>n</i>]:</tt> the status message of the <i>n</i>th redirect followed
     - \c request-body: the raw message body in the request (before any content encoding)
     - \c response-body: the raw message body in the response (after any content decoding)
     - \c response-headers: a hash of incoming HTTP headers in the response with keys converted to all lower case for each header in the response message, plus the following %Qore-provided keys:

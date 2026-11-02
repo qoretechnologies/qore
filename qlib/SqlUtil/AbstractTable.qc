@@ -1356,8 +1356,8 @@ target.createAsSelectCommit(source, {
 
         @param source the source table for the select statement; this table must use the exact same datasource
         object as the current target table
-        @param select_hash a hash of conditions for the select statement; see @ref select_option_hash "select option
-        hash" for information about this argument
+        @param select_hash a hash of conditions for the select statement; see
+        @ref select_option_hash "select option hash" for information about this argument
         @param opt optional creation and data callback options; see
         @ref SqlUtil::AbstractTable::CreateAsSelectOptions for more info
 
@@ -1384,8 +1384,8 @@ target.createAsSelect(source, {"columns": ("id", "name")});
 
         @param source the source table for the select statement; this table must use the exact same datasource
         object as the current target table
-        @param select_hash a hash of conditions for the select statement; see @ref select_option_hash "select option
-        hash" for information about this argument
+        @param select_hash a hash of conditions for the select statement; see
+        @ref select_option_hash "select option hash" for information about this argument
         @param opt optional creation and data callback options; see
         @ref SqlUtil::AbstractTable::CreateAsSelectOptions for more info
 
@@ -1415,8 +1415,8 @@ hash<SqlResultInfo> info = target.createAsSelectWithInfo(source, {"columns": ("i
 
         @param source the source table for the select statement; this table must use the exact same datasource
         object as the current target table
-        @param select_hash a hash of conditions for the select statement; see @ref select_option_hash "select option
-        hash" for information about this argument
+        @param select_hash a hash of conditions for the select statement; see
+        @ref select_option_hash "select option hash" for information about this argument
         @param opt optional creation and data callback options; see
         @ref SqlUtil::AbstractTable::CreateAsSelectOptions for more info
 
@@ -1449,8 +1449,8 @@ string sql = target.getCreateAsSelectSql(source, {"columns": ("id", "name")}, \a
 
         @param source the source table for the select statement; it must use the exact same datasource object as the
         current target table
-        @param select_hash a hash of conditions for the select statement; see @ref select_option_hash "select option
-        hash" for information about this argument
+        @param select_hash a hash of conditions for the select statement; see
+        @ref select_option_hash "select option hash" for information about this argument
         @param args an optional reference to a list for any bind arguments
         @param opt optional creation and data callback options; see
         @ref SqlUtil::AbstractTable::CreateAsSelectOptions for more info
@@ -1488,8 +1488,8 @@ hash<SqlResultInfo> info = target.getCreateAsSelectSqlWithInfo(source, {"columns
 
         @param source the source table for the select statement; it must use the exact same datasource object as the
         current target table
-        @param select_hash a hash of conditions for the select statement; see @ref select_option_hash "select option
-        hash" for information about this argument
+        @param select_hash a hash of conditions for the select statement; see
+        @ref select_option_hash "select option hash" for information about this argument
         @param opt optional creation and data callback options; see
         @ref SqlUtil::AbstractTable::CreateAsSelectOptions for more info
 
@@ -8917,7 +8917,7 @@ bool reclaimed = table.dropEmptyPartitionCommit(partition, 1000, 5000);
 
     #! detaches a partition without transaction management
     /** Detaches the named partition from this table, turning it into a standalone table with the same name and
-        data, without dropping the data (PostgreSQL @c ALTER @c TABLE @c ... @c DETACH @c PARTITION semantics).
+        data, without dropping the data (PostgreSQL <tt>ALTER TABLE ... DETACH PARTITION</tt> semantics).
 
         @param partition_name the name of the partition to detach
         @param opt optional @ref PartitionLifecycleOptions "partition lifecycle options"

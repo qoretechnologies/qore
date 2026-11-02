@@ -72,7 +72,7 @@ public class ActionIntentRule inherits AbstractGuardrailRule {
         /** Default: just \c confirmation-required, so the rule surfaces
             ambiguous phrasings but passes both clearly read-only and
             clearly action-requested turns.  Tighten to
-            \c ("action-requested", "confirmation-required") for
+            <tt>(&quot;action-requested&quot;</tt>, "confirmation-required") for
             strictly read-only endpoints.
         */
         list<string> block_intents;
@@ -89,7 +89,7 @@ public class ActionIntentRule inherits AbstractGuardrailRule {
             intent is in \c block_intents
         @param params optional parameters:
             - \c block_intents (list<string>): which classified intents
-              fail the rule; default \c ("confirmation-required",)
+              fail the rule; default <tt>(&quot;confirmation-required&quot;,)</tt>
         @param llm_config required LlmBackendConfig for the classifier
             LLM call; if absent, the rule fails closed on every
             evaluation (no classifier → no safe default)

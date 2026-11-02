@@ -777,7 +777,7 @@ public class A2aClient {
 
     #! Sends a message with SSE streaming for real-time updates
     /** @param msg the message to send
-        @param on_event callback called for each SSE event; receives \c (string event_type, hash event_data)
+        @param on_event callback called for each SSE event; receives <tt>(string</tt> event_type, hash event_data)
         @param config optional configuration
 
         @throw A2A-ERROR if the request fails

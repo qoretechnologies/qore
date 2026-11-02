@@ -66,7 +66,7 @@ DLLLOCAL void yaml_format_finite_float(QoreString& out, double f);
 
 //! Parse an untagged scalar with the YAML 1.2 core schema
 /** Only plain scalars are resolved, and only to null, booleans, integers (decimal, \c 0o octal and \c 0x
-    hexadecimal), and floats (including \c .inf and \c .nan); every other scalar is a string.  This is the
+    hexadecimal), and floats (including <tt>.inf</tt> and <tt>.nan</tt>); every other scalar is a string.  This is the
     type resolution of JSON-compatible YAML documents such as OpenAPI descriptions, where Qore's extended types
     (dates, durations, arbitrary-precision numbers, SQL null) would change values.
 

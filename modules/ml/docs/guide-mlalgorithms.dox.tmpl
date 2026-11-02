@@ -401,7 +401,7 @@ if (caps.has_onnx) {
 
     A caller that must prove which model produced a result needs to identify the content the
     session actually loaded. A model path, file size, modification time or execution provider name
-    does not identify that content, and neither does a digest of the \c .onnx bytes alone: when a
+    does not identify that content, and neither does a digest of the <tt>.onnx</tt> bytes alone: when a
     model stores tensors in external data files, identical model bytes produce different results
     depending on files the model only refers to.
 

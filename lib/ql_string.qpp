@@ -779,7 +779,7 @@ const RE_Global = QRE_GLOBAL;
 */
 const RE_Unicode = PCRE2_UCP;
 
-//! makes quantifiers ungreedy by default (individual quantifiers can be made greedy by appending \c ?), equivalent to <tt>/U</tt>
+//! makes quantifiers ungreedy by default (individual quantifiers can be made greedy by appending <tt>?</tt>), equivalent to <tt>/U</tt>
 /** @since %Qore 3.0
 */
 const RE_Ungreedy = PCRE2_UNGREEDY;
@@ -2556,7 +2556,7 @@ string strmul(softstring str, softint count, *softint offset) [flags=RET_VALUE_O
     - \a thousands_separator and \a decimal_separator are single characters defining the thousands and decimal
       separator characters respectively, and
     - \a decimals is one or more digits defining how may decimals should appear after the decimal point
-    - if \a thousands_separator is the special character \c ?, then no thousands separator character will be output
+    - if \a thousands_separator is the special character <tt>?</tt>, then no thousands separator character will be output
     @param value the number to format
 
     @return a string of a formatted number according to a number argument and a format string; if the format string
@@ -2570,7 +2570,7 @@ string nstr = format_number(".,3", -48392093894.2349); # returns "-48.392.093.89
     @see <float>::format()
 
     @since
-    - %Qore 2.0 implemented support for supressing the thousands separator with the \c ? character
+    - %Qore 2.0 implemented support for supressing the thousands separator with the <tt>?</tt> character
  */
 string format_number(string format, softfloat value) [flags=CONSTANT,NAMED_ARGS] {
    return format_float_intern(*format, value, xsink);

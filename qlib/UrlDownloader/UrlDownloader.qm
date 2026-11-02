@@ -54,7 +54,7 @@ module UrlDownloader {
     - HTTP/1.1, HTTP/2, and HTTP/3 through @ref HttpClientIo::HttpClientConnectionManager
       "HttpClientConnectionManager", with connections reused between downloads from the same server
     - redirects are followed up to a configurable limit
-    - data is written to a temporary \c .part file that is renamed when the download is complete, so an incomplete
+    - data is written to a temporary <tt>.part</tt> file that is renamed when the download is complete, so an incomplete
       file never has the final name
     - an existing file is not overwritten unless allowed
     - the file name can be taken from a \c Content-Disposition header; any directory in it is ignored, so a server
@@ -111,7 +111,7 @@ public hashdecl UrlDownloadOptions {
     #! @ref True "True" to overwrite an existing file, @ref False "False" to fail with \c DOWNLOAD-FILE-EXISTS
     bool clobber = True;
 
-    #! @ref True "True" to write data to a \c .part file that is renamed when the download is complete
+    #! @ref True "True" to write data to a <tt>.part</tt> file that is renamed when the download is complete
     bool part_file = True;
 
     #! @ref True "True" to take the file name from the \c Content-Disposition header of the response, if any
@@ -219,7 +219,7 @@ public hashdecl UrlDownloadResult {
     #! the file written, or @ref NOTHING if the data was written to an output stream or not written
     *string file;
 
-    #! the \c .part file that holds the data received by a download that failed, if it was kept
+    #! the <tt>.part</tt> file that holds the data received by a download that failed, if it was kept
     *string part_file;
 
     #! the number of bytes written

@@ -823,42 +823,39 @@ pipeline.append(new QoreFilterRecordsProcessor({
 }));
     @endcode
 
-    @note
-    The built-in @ref DataProvider::QoreFilterRecordsProcessor "QoreFilterRecordsProcessor" supports
-    \c DataFrameBlock and \c BufferColumns directly when configured with either a structured \c where_cond
-    expression, a DPQL \c where_cond string, or a DPQL \c dpql_where string.  Supported scalar comparisons,
-    expression-to-expression comparisons, computed arithmetic, numeric function, trim/concat/null-handling,
-    case-folding, date-part, and row-independent date arithmetic expressions, \c between, \c inRange,
-    \c in, \c notIn, null checks, string predicates including \c containsAny, list membership predicates,
-    list/hash accessors, ternary computed values, boolean combinations, and structured strict
-    equality/inequality compile to DataFrame row masks or dense ColumnarResult \c buffer<bool> masks;
-    BufferColumns temporal comparisons
-    against Qore/DPQL date literals compare the dense microsecond values without materializing rows.
-    String predicates support the legacy
-    bool ignore-case argument and, when the \c i18n module is available, a locale options hash such as
-    <tt>{"locale": "tr-TR"}</tt> or <tt>{"locale": "en-US", "strength": "primary"}</tt> for ICU-backed
-    locale-sensitive comparison.  BufferColumns input also lowers
-    SQL-like \c like and regular expression predicates to dense masks.  More complex expressions fall back
-    to row-record evaluation while preserving the negotiated shape when possible.
-    @ref DataProvider::QoreSelectFieldsProcessor "QoreSelectFieldsProcessor",
-    @ref DataProvider::QoreRemoveFieldsProcessor "QoreRemoveFieldsProcessor", and
-    @ref DataProvider::QoreRecordLimitProcessor "QoreRecordLimitProcessor" preserve \c DataFrameBlock and
-    \c BufferColumns values for simple top-level field projection/removal and contiguous limiting.
-    @ref DataProvider::QoreSetFieldsProcessor "QoreSetFieldsProcessor" and
-    @ref DataProvider::QoreSearchReplaceProcessor "QoreSearchReplaceProcessor" also preserve these shapes for
-    top-level constant-field and string-column updates.  For \c ColumnarResult input, these projection and
-    simple-update processors rebuild the output columnar block from referenced column containers instead of
-    constructing an intermediate DataFrame.
-    @ref DataProvider::QoreGroupByProcessor "QoreGroupByProcessor" supports \c DataFrameBlock and
-    \c BufferColumns input as well; it accumulates logical rows from the block and, when used through pipeline
-    \c flush(), preserves a DataFrame, ColumnarResult, or hash-of-lists aggregate block for downstream
-    shape-aware processors.
-    Analytics processors, including @ref DataProvider::QoreCorrelationProcessor "QoreCorrelationProcessor" and
-    @ref DataProvider::QoreCrossCorrelationProcessor "QoreCrossCorrelationProcessor", accept
-    \c DataFrameBlock and \c BufferColumns input directly and emit analytics event records as hash-of-lists blocks.
-    For top-level configured fields, these processors read only the selected DataFrame or dense ColumnarResult
-    columns instead of materializing the full input block as hash-of-lists data.
-    Direct calls to \c flushRecords() still return ordinary row records for compatibility.
+    @par Columnar Input in the Built-in Processors
+    The built-in processors work on \c DataFrameBlock and \c BufferColumns input directly, without converting it
+    to row records where they can:
+    - @ref DataProvider::QoreFilterRecordsProcessor "QoreFilterRecordsProcessor", with a structured or DPQL
+      \c where_cond or a DPQL \c dpql_where filter, compiles the filter to a DataFrame row mask or a dense
+      <tt>buffer&lt;bool&gt;</tt> mask when it uses only:
+      - comparisons of fields, values and expressions, including \c between, \c inRange, \c in, \c notIn and
+        null checks
+      - computed values: arithmetic, numeric functions, trimming, concatenation, null handling, case folding, date
+        parts, row-independent date arithmetic and ternary values
+      - string predicates, including \c containsAny and, for \c BufferColumns input, \c like and regular
+        expressions; their ignore-case argument can be a locale options hash such as <tt>{&quot;locale&quot;: &quot;tr-TR&quot;}</tt>
+        for locale-sensitive comparison when the \c i18n module is available
+      - list membership, list and hash accessors, boolean combinations, and strict equality and inequality
+    - a filter that cannot be compiled to a mask is evaluated row by row, keeping the shape of the block where
+      possible; temporal comparisons of \c BufferColumns input with date literals compare the microsecond values
+      without creating rows
+    - @ref DataProvider::QoreSelectFieldsProcessor "QoreSelectFieldsProcessor",
+      @ref DataProvider::QoreRemoveFieldsProcessor "QoreRemoveFieldsProcessor" and
+      @ref DataProvider::QoreRecordLimitProcessor "QoreRecordLimitProcessor" keep the shape of the block when they
+      select or remove top-level fields or limit a contiguous range of records
+    - @ref DataProvider::QoreSetFieldsProcessor "QoreSetFieldsProcessor" and
+      @ref DataProvider::QoreSearchReplaceProcessor "QoreSearchReplaceProcessor" keep it for updates of top-level
+      fields with constants and of string columns; for \c ColumnarResult input, these processors and the projection
+      processors build the output block from the referenced columns without an intermediate DataFrame
+    - @ref DataProvider::QoreGroupByProcessor "QoreGroupByProcessor" accumulates the rows of the block and, when
+      flushed through the pipeline, returns a DataFrame, \c ColumnarResult or hash-of-lists block to the processors
+      that follow
+    - the analytics processors, such as @ref DataProvider::QoreCorrelationProcessor "QoreCorrelationProcessor" and
+      @ref DataProvider::QoreCrossCorrelationProcessor "QoreCrossCorrelationProcessor", read only the columns of
+      the configured top-level fields and emit their events as hash-of-lists blocks
+
+    A direct call to \c flushRecords() returns row records.
 
     @section dataprovider_debugging Debugging Data Providers
 
@@ -967,7 +964,7 @@ class MyDebugCollector inherits AbstractDebugInfoCollector {
       name starting with a digit; <tt>\@\"create.order-id\"</tt> is the key \c order-id of the key \c create
     - <tt>\@\"Unit\\.Price\"</tt> - a dot that is part of a key is escaped: this is the key \c Unit.Price
 
-    In a quoted name, <tt>\\"</tt> is a quote, <tt>\\\\</tt> a backslash, <tt>\\.</tt> a dot that is part of a key,
+    In a quoted name, <tt>\\&quot;</tt> is a quote, <tt>\\\\</tt> a backslash, <tt>\\.</tt> a dot that is part of a key,
     and <tt>\\n</tt>, <tt>\\r</tt> and <tt>\\t</tt> a line feed, a carriage return and a tab; any other escape is an
     error (\c DPQL-E003).  The \c field of a @ref DataProvider::DataProviderFieldReference "DataProviderFieldReference"
     holds the path, in which <tt>\\.</tt> is a dot and <tt>\\\\</tt> a backslash of a key (<tt>Unit\\.Price</tt>);
@@ -994,7 +991,7 @@ class MyDebugCollector inherits AbstractDebugInfoCollector {
     - \c > - greater than
     - \c >= - greater than or equal
     - \c between - range comparison (\c \@age \c between \c 18 \c and \c 65)
-    - \c in - set membership (\c \@status \c in <tt>("active", "pending")</tt>)
+    - \c in - set membership (\c \@status \c in <tt>(&quot;active&quot;, &quot;pending&quot;)</tt>)
     - \c =~ - regex match (\c \@email \c =~ <tt>/example.com$/i</tt>)
 
     @par Logical Operators
@@ -1007,8 +1004,8 @@ class MyDebugCollector inherits AbstractDebugInfoCollector {
     @par Fields That a Record Does Not Have
     A field reference to a field that the record does not have raises an error; <tt>exists \@field</tt> is \c true
     when the record has the field, also when its value is \c null, and \c false when it does not, so records of
-    different shapes can be told apart: <tt>exists \@type && \@type == "return"</tt> is \c false for a record
-    without \c type, while <tt>\@type == "return"</tt> raises an error for it.  \c exists binds tighter than any
+    different shapes can be told apart: <tt>exists \@type && \@type == &quot;return&quot;</tt> is \c false for a record
+    without \c type, while <tt>\@type == &quot;return&quot;</tt> raises an error for it.  \c exists binds tighter than any
     other operator (<tt>!exists \@type</tt>, <tt>exists \@type == false</tt>), and its field reference can be in
     parentheses (<tt>exists(\@type)</tt>).  Its field reference is a path:
     - <tt>exists \@a.b</tt> and <tt>exists \@a{b}</tt>: the record has \c a, which is a hash with the key \c b
@@ -1016,8 +1013,8 @@ class MyDebugCollector inherits AbstractDebugInfoCollector {
       with a character there; a negative position counts from the end
     - wildcards (<tt>[*]</tt>, <tt>{*}</tt>), ranges, and several positions or keys are not accepted
       (\c DPQL-E025); each item is tested with \c any or \c all instead: <tt>any exists \@id, \@orders</tt>
-    - the field reference is a path as everywhere else (@ref dpql_field_paths): <tt>exists \@"x.y"</tt> is the
-      path \c x, \c y, and <tt>exists \@"a\\.b"</tt> is the key <tt>a.b</tt>
+    - the field reference is a path as everywhere else (@ref dpql_field_paths): <tt>exists \@&quot;x.y&quot;</tt> is the
+      path \c x, \c y, and <tt>exists \@&quot;a\\.b&quot;</tt> is the key <tt>a.b</tt>
 
     Whether a field has a value is tested with <tt>isNotNull(\@field)</tt>, which needs the record to have the
     field.  A database cannot search with \c exists, as every row has every column: it is not pushed down, and is
@@ -1059,16 +1056,16 @@ class MyDebugCollector inherits AbstractDebugInfoCollector {
 
     @par Function Calls
     Custom functions can be used: <tt>calculate(\@score, 100)</tt> \c > \c 50
-    Built-in DataProvider functions such as <tt>containsAny(\@name, "li", "av")</tt>,
-    <tt>listContains(\@tags, "vip")</tt>, and
-    <tt>listContainsAny(\@tags, "trial", "standard")</tt> are available when the target provider exposes them.
+    Built-in DataProvider functions such as <tt>containsAny(\@name, &quot;li&quot;, &quot;av&quot;)</tt>,
+    <tt>listContains(\@tags, &quot;vip&quot;)</tt>, and
+    <tt>listContainsAny(\@tags, &quot;trial&quot;, &quot;standard&quot;)</tt> are available when the target provider exposes them.
     The varargs form is the clearest DPQL syntax for list/string "any" predicates.
 
     @par Accessors
     DPQL can access nested values without changing the source record shape:
     - <tt>\@scores[0] &gt;= 90</tt> - list or string index accessor
     - <tt>\@scores[0..1]</tt> - list slice accessor
-    - <tt>\@payload{region} == "EU"</tt> - hash key accessor
+    - <tt>\@payload{region} == &quot;EU&quot;</tt> - hash key accessor
     - <tt>\@items[0].id</tt> - a member after an accessor: the key \c id of the first item
     - <tt>\@orders[*].id</tt> and <tt>\@prices{*}</tt> - @ref dpql_wildcards "wildcard accessors": a value from
       each item of a list or each value of a hash
@@ -1091,7 +1088,7 @@ class MyDebugCollector inherits AbstractDebugInfoCollector {
     \c index and the number of items in the source as \c size, so that a template callback that resolves
     \c $local values from the template context (as Qorus does) gives <tt>$local:item</tt>, <tt>$local:index</tt>
     and <tt>$local:size</tt>:
-    - <tt>map concat($local:index, ":", $local:item), \@tags</tt> - each tag with its position
+    - <tt>map concat($local:index, &quot;:&quot;, $local:item), \@tags</tt> - each tag with its position
     - <tt>select \@rows, $local:index < $local:size - 1</tt> - all rows but the last
     - <tt>hash_map $local:item.key, $local:index, \@weights</tt> - for a hash source, the item is the \c key /
       \c value entry
@@ -1103,14 +1100,14 @@ class MyDebugCollector inherits AbstractDebugInfoCollector {
 
     @subsection dpql_wildcards Wildcard Accessors
 
-    The wildcard accessors \c [*] and \c {*} take a value from each item of a list and from each value of a hash.
+    The wildcard accessors <tt>[*]</tt> and \c {*} take a value from each item of a list and from each value of a hash.
     A wildcard is the \c map operator written as an accessor: the accessors after it are the expression that
     \c map evaluates for each item, and the wildcard evaluates exactly as that \c map expression does.
 
     |!Wildcard|!Same as|!Result
     |<tt>\@orders[*].id</tt>|<tt>map \@id, \@orders</tt>|the \c id of each order
     |<tt>\@orders[*].customer.name</tt>|<tt>map \@customer.name, \@orders</tt>|the customer name of each order
-    |<tt>\@orders[*]{"order-id"}</tt>|<tt>map \@"order-id", \@orders</tt>|a key that is not a name
+    |<tt>\@orders[*]{&quot;order-id&quot;}</tt>|<tt>map \@&quot;order-id&quot;, \@orders</tt>|a key that is not a name
     |<tt>\@orders[*].tags[0]</tt>|<tt>map \@tags[0], \@orders</tt>|the first tag of each order
     |<tt>\@orders[*].items[*].sku</tt>|<tt>map (map \@sku, \@items), \@orders</tt>|a list with the list of SKUs of each order
     |<tt>\@prices{*}</tt>|<tt>map \@value, \@prices</tt>|the values of the hash, in key order
@@ -1118,12 +1115,12 @@ class MyDebugCollector inherits AbstractDebugInfoCollector {
     |<tt>\@orders[*]</tt>|<tt>\@orders</tt>|the items of the list: the list itself
     |<tt>\@matrix[*][0]</tt>|<tt>map \@value[0], \@matrix</tt>|the first element of each list
 
-    - after \c [*], a first accessor that names a field (<tt>.name</tt>, or <tt>{"key"}</tt> with one key) reads that
+    - after <tt>[*]</tt>, a first accessor that names a field (<tt>.name</tt>, or <tt>{&quot;key&quot;}</tt> with one key) reads that
       field of each item as <tt>\@name</tt> does in the body of \c map, and the <tt>.name</tt> steps right after it
       are part of the same field reference, as in <tt>\@customer.name</tt>; ordinary accessors can follow
-      (<tt>\@orders[*].tags[0]</tt>, <tt>\@orders[*].customer{"name"}</tt>)
-    - after \c [*], any other accessor applies to the item itself, so <tt>\@matrix[*][0]</tt> is the first element
-      of each list in \c matrix; and a trailing \c [*] gives the items themselves: the list itself, or the
+      (<tt>\@orders[*].tags[0]</tt>, <tt>\@orders[*].customer{&quot;name&quot;}</tt>)
+    - after <tt>[*]</tt>, any other accessor applies to the item itself, so <tt>\@matrix[*][0]</tt> is the first element
+      of each list in \c matrix; and a trailing <tt>[*]</tt> gives the items themselves: the list itself, or the
       \c key / \c value records of the entries of a hash, as \c select gives them
     - after \c {*}, the accessors apply to each value, which is \c \@value in the body of \c map; a trailing
       \c {*} gives the values
@@ -1131,15 +1128,15 @@ class MyDebugCollector inherits AbstractDebugInfoCollector {
       list of lists
     - everything else is as \c map does it, with the same results and the same errors: an item that does not have
       the field is an \c INVALID-OPERATION error, a source that is not a list or a hash (including no value) is a
-      \c DATA-PROVIDER-EXPRESSION-ERROR, and an empty list or hash gives an empty list; \c [*] over a hash goes
+      \c DATA-PROVIDER-EXPRESSION-ERROR, and an empty list or hash gives an empty list; <tt>[*]</tt> over a hash goes
       through its \c key / \c value entries (<tt>\@weights[*].key</tt> is the keys), and \c {*} over a list gives
       the \c \@value of each element
-    - a quoted key is never a wildcard: <tt>\@data{"*"}</tt> is the key \c *
+    - a quoted key is never a wildcard: <tt>\@data{&quot;*&quot;}</tt> is the key \c *
     - a wildcard is kept as written when an expression is serialized
       (@ref DataProvider::DataProvider::serializeDpqlExpression() "serializeDpqlExpression()"); its type
       (@ref DataProvider::ExpressionTypes "ExpressionTypes") is a list of the type of the value taken from each item
       when that is known (<tt>list&lt;int&gt;</tt> for <tt>\@orders[*].id</tt> when \c id is an \c int field),
-      and completion offers \c [*] after a list and \c {*} after a hash
+      and completion offers <tt>[*]</tt> after a list and \c {*} after a hash
 
     In a @ref DataProvider::DataProviderExpression "DataProviderExpression", a wildcard is a
     @ref DataProvider::DP_FUNC_LIST_WILDCARD "DP_FUNC_LIST_WILDCARD" or
@@ -1275,7 +1272,7 @@ string dpql = DataProvider::serializeDpqlExpression(exp);
     Accessors are written as they are read:
     - a single key that is a name, after an accessor, is written as a member: <tt>\@items[0]{id}</tt> and
       <tt>\@items[0].id</tt> are both written <tt>\@items[0].id</tt>; other keys keep their braces, quoted when
-      they are not names (<tt>\@items[0]{"order id"}</tt>, <tt>\@items[0]{"true"}</tt>, <tt>\@items[0]{a, b}</tt>)
+      they are not names (<tt>\@items[0]{&quot;order id&quot;}</tt>, <tt>\@items[0]{&quot;true&quot;}</tt>, <tt>\@items[0]{a, b}</tt>)
     - a key of a field reference keeps its braces (<tt>\@record{id}</tt>), since <tt>\@record.id</tt> is the field
       <tt>record.id</tt>
     - an accessor whose index or key is not a literal (<tt>index(\@items, \@i)</tt>), or that applies to a value
@@ -1299,8 +1296,8 @@ if (!result.success) {
 
     A diagnostic's message is written for a person who builds an expression from lists of fields and templates:
     it says in plain words what is wrong and how to make the text valid, without naming parts of the grammar, as in
-    <tt>"A `$` starts a template: pick one from the list, or remove the `$`."</tt> or
-    <tt>"Something follows a complete value here: join them with an operator, such as +, == or &&."</tt>.  A
+    <tt>&quot;A `$` starts a template: pick one from the list, or remove the `$`.&quot;</tt> or
+    <tt>&quot;Something follows a complete value here: join them with an operator, such as +, == or &&.&quot;</tt>.  A
     program that reacts to a diagnostic reads its \c code and its range, which do not change when a message is
     reworded; one code can have a message for each situation that raises it.  A character or a token that a
     diagnostic has reported is not reported a second time by a diagnostic about the same text, nor is text that an
@@ -1693,7 +1690,7 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       so
     - added @ref DataProvider::DpqlSerializer::templateReference() "DpqlSerializer::templateReference()", which
       writes a template reference in the form that the parser reads back: a value with characters other than letters,
-      digits, \c _, \c . and \c *, and an empty value, in braces (<tt>$local:{order id}</tt>, <tt>$var:{}</tt>);
+      digits, \c _, <tt>.</tt> and \c *, and an empty value, in braces (<tt>$local:{order id}</tt>, <tt>$var:{}</tt>);
       the serializer and @ref DataProvider::DataProvider::renderExpression() "DataProvider::renderExpression()" write
       a template reference given by its context and value this way
     - added @ref DataProvider::DataTypeCatalogue "DataTypeCatalogue" and
@@ -1709,27 +1706,27 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       "setAllowedValues()" now leaves the previous allowed values of a field when it refuses a list
     - DPQL field completion follows field paths: after \c @ and a path of keys (<tt>\@create.</tt>,
       <tt>\@create.it</tt>), it offers the keys of the type the path reaches, each inserted as the field reference to
-      its path as the serializer writes it (<tt>\@create.items</tt>, <tt>\@"create.order-id"</tt>); after accessors and
+      its path as the serializer writes it (<tt>\@create.items</tt>, <tt>\@&quot;create.order-id&quot;</tt>); after accessors and
       a dot (<tt>\@create.items[*].</tt>, <tt>\@stats{*}.</tt>), it offers the keys of the value the accessors give,
-      each inserted as the member after the dot (\c id, <tt>\@"Unit.Price"</tt>), also after a member written so
-      (<tt>\@create.items[*].order-id.</tt>, <tt>\@create.items[*].\@"Unit.Price".</tt>) and after a quoted field
-      reference (<tt>\@"create.unit price".</tt>); in an open quoted field reference (<tt>\@"create.</tt>,
-      <tt>\@"create.order-</tt>), it offers the keys of the path typed in the quotes, read as the parser reads it (an
+      each inserted as the member after the dot (\c id, <tt>\@&quot;Unit.Price&quot;</tt>), also after a member written so
+      (<tt>\@create.items[*].order-id.</tt>, <tt>\@create.items[*].\@&quot;Unit.Price&quot;.</tt>) and after a quoted field
+      reference (<tt>\@&quot;create.unit price&quot;.</tt>); in an open quoted field reference (<tt>\@&quot;create.</tt>,
+      <tt>\@&quot;create.order-</tt>), it offers the keys of the path typed in the quotes, read as the parser reads it (an
       escaped dot is part of a key), each inserted as the field reference to its path, and in an open quoted member
-      (<tt>\@create.items[*].\@"Unit.</tt>) the keys that start with the text typed; as a key of a list is the key
+      (<tt>\@create.items[*].\@&quot;Unit.</tt>) the keys that start with the text typed; as a key of a list is the key
       of each of its items at run time, a key accessor or a member after a list (<tt>\@items{</tt>,
       <tt>\@items{product}.</tt>, <tt>\@items[0..1]{</tt>) offers the keys of its items, through nested lists;
-      quoted text in an accessor does not end it (<tt>\@spec{"a}b"}.</tt>); inside an accessor that has been
+      quoted text in an accessor does not end it (<tt>\@spec{&quot;a}b&quot;}.</tt>); inside an accessor that has been
       opened, it offers the wildcard \c * in <tt>[</tt> after a list and in <tt>{</tt> after a hash; after a slice of
       a list (<tt>\@orders[0..1]</tt>) or a key of a list (<tt>\@items{product}</tt>), which give a list, it offers
-      \c [*] and not \c {*}.  A type without known fields offers no keys.  The new
+      <tt>[*]</tt> and not \c {*}.  A type without known fields offers no keys.  The new
       @ref DataProvider::DpqlSerializer::fieldReferenceForPath() "DpqlSerializer::fieldReferenceForPath()" and
       @ref DataProvider::DpqlSerializer::memberNameForKey() "DpqlSerializer::memberNameForKey()" give these forms
     - added @ref DataProvider::DpqlSerializer::fieldReference() "DpqlSerializer::fieldReference()" and
       @ref DataProvider::DpqlSerializer::accessorForm() "DpqlSerializer::accessorForm()", which give the forms in
       which @ref DataProvider::DataProvider::renderExpression() "DataProvider::renderExpression()" and the DPQL
       serializer write a field reference and the accessors and wildcards on it: \c @pos,
-      <tt>\@"create.order-id"</tt>, <tt>\@"Unit\\.Price"</tt>, <tt>\@orders[*].id</tt>
+      <tt>\@&quot;create.order-id&quot;</tt>, <tt>\@&quot;Unit\\.Price&quot;</tt>, <tt>\@orders[*].id</tt>
     - added @ref DataProvider::AbstractDataProvider::getFieldListOption() "AbstractDataProvider::getFieldListOption()",
       with which the processors read a list option of fields: each element of a list is one field, as it is given,
       so a field whose name has a comma (\c "Price, USD") can be given in a list, and a single string is a
@@ -1766,7 +1763,7 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
     - added the DPQL operator @ref dpql_exists "exists" (@ref DP_OP_EXISTS): <tt>exists \@field</tt> is \c true
       when the record has the field, also with no value, and \c false when it does not, without the error that a
       field reference to a missing field raises, so records of different shapes can be tested, as with
-      <tt>exists \@type && \@type == "return"</tt>; the field reference can have accessors that read one key or
+      <tt>exists \@type && \@type == &quot;return&quot;</tt>; the field reference can have accessors that read one key or
       one position (<tt>exists \@a.b</tt>, <tt>exists \@a[0].b</tt>); it is offered by completion, written back by
       the serializer, typed as \c bool, and evaluated locally, as databases cannot search with it
     - added @ref DataProvider::DpqlSerializer::fieldReferenceForKey() "DpqlSerializer::fieldReferenceForKey()" and
@@ -1826,7 +1823,7 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       argument of an expression is evaluated for each item of a source (the body and filter of \c map, the
       predicates of the streaming operators, the expression after a wildcard), so that code that collects or
       validates the fields of a record can leave out the fields of the items, as DPQL validation does
-    - added the DPQL @ref dpql_wildcards "wildcard accessors" \c [*] and \c {*}, which take a value from each item
+    - added the DPQL @ref dpql_wildcards "wildcard accessors" <tt>[*]</tt> and \c {*}, which take a value from each item
       of a list or each value of a hash: <tt>\@orders[*].id</tt> is <tt>map \@id, \@orders</tt>,
       <tt>\@prices{*}.amount</tt> is <tt>map \@value.amount, \@prices</tt>, and <tt>\@orders[*].items[*].sku</tt>
       is a list of lists; they are parsed, evaluated, typed, serialized as written and offered by completion
@@ -1891,7 +1888,7 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       - a condition, such as an argument of \c &&, \c || or \c !, or the condition of \c ternary, accepts a
         result of any type that converts to a boolean value, such as <tt>size(\@items) && \@active</tt>, but not a
         string or a date, such as <tt>lwr(\@status) && \@id > 1</tt>, which must be compared explicitly instead
-        (ex: <tt>\@status == "open"</tt> or <tt>\@x != ""</tt>)
+        (ex: <tt>\@status == &quot;open&quot;</tt> or <tt>\@x != &quot;&quot;</tt>)
       - other arguments need a result of a type that they accept, so <tt>lwr(size(\@a))</tt> is rejected
       - a result of any type, such as from \c ternary or \c coalesce, is accepted everywhere
 
@@ -2471,7 +2468,7 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       - @ref DataProvider::AbstractDataProvider::upsertRecordAsync() "upsertRecordAsync()"
       - @ref DataProvider::AbstractDataProvider::doRequestAsync() "doRequestAsync()"
     - fixed @ref DataProvider::DefaultRecordIterator "DefaultRecordIterator" to accept search options whose
-      values all have the same type, such as a literal <tt>{"columns": "id"}</tt>; converting the \c columns
+      values all have the same type, such as a literal <tt>{&quot;columns&quot;: &quot;id&quot;}</tt>; converting the \c columns
       option to a list raised \c RUNTIME-TYPE-ERROR
     - \c qore-data-provider-i18n records the %Qore that generated the catalogs it writes (version and git hash, in
       <tt>.qore-generator.json</tt> in each catalog directory, which is not installed with the catalogs); a check

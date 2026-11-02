@@ -101,7 +101,7 @@ public class PromptSecretProtector {
 
         @par Language-independent input forms
         Any Unicode label can mark a protected value with the structural
-        \c := delimiter, for example \c contraseña:=valor or
+        <tt>:=</tt> delimiter, for example \c contraseña:=valor or
         \c 認証情報:="値".  Values assigned to exact canonical sensitive
         machine keys and URI userinfo passwords are also protected.  Natural
         language words are never classified as sensitive.

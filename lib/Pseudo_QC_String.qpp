@@ -736,7 +736,7 @@ AbstractIterator<string> <string>::splitLinesRegex(string separator_pattern, int
     @param trim_unquoted remove leading and trailing whitespace from unquoted fields
     @param keep_trailing_empty keep the empty final field produced by a subject that ends with the separator; see
     @ref split_trailing_empty_fields
-    @param quote_escape the escape of a quote character in a quoted field: \c "\\\\" (the default) for a backslash
+    @param quote_escape the escape of a quote character in a quoted field: <tt>&quot;\\\\&quot;</tt> (the default) for a backslash
     before the quote; the quote character itself, or an empty string, for RFC 4180 CSV data, where a backslash is an
     ordinary character
 

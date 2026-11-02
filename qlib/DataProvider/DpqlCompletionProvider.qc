@@ -249,7 +249,7 @@ public class DpqlCompletionProvider {
             "documentation": "Each value of the hash, in key order: @prices{*} is map @value, @prices",
             "sort_priority": 9};
 
-        #! The wildcards offered inside an accessor that has been opened, after a list (\c [) or a hash (\c {)
+        #! The wildcards offered inside an accessor that has been opened, after a list (<tt>[</tt>) or a hash (\c {)
         /** @since DataProvider 3.11
         */
         const ListWildcardInAccessor = {"label": "*", "kind": "operator", "insert_text": "*",
@@ -701,10 +701,10 @@ public class DpqlCompletionProvider {
     }
 
     #! Analyzes the text before the cursor when it ends in an open quoted field reference or member
-    /** In an open quoted field reference (<tt>\@"create.it</tt>), the path typed in the quotes is read as the parser
+    /** In an open quoted field reference (<tt>\@&quot;create.it</tt>), the path typed in the quotes is read as the parser
         reads it: dots separate its keys, an escaped dot is part of a key, and the other escapes are decoded.  In an
         open quoted member after the dot that follows an accessor or a quoted field name
-        (<tt>\@orders[*].\@"Unit.</tt>), the text typed in the quotes is one key, dots included.
+        (<tt>\@orders[*].\@&quot;Unit.</tt>), the text typed in the quotes is one key, dots included.
 
         @param before the text before the cursor
         @param quote the byte offset of the quote that opens the string that \a before ends in
@@ -984,7 +984,7 @@ public class DpqlCompletionProvider {
         fields, or a key that the types do not have, offers nothing.
 
         Each item inserts the field reference to the path, as the serializer writes it
-        (@ref DpqlSerializer::fieldReferenceForPath()): \c @create.items, <tt>\@"create.order-id"</tt>.
+        (@ref DpqlSerializer::fieldReferenceForPath()): \c @create.items, <tt>\@&quot;create.order-id&quot;</tt>.
 
         @param fields the fields of the record
         @param prefix the text typed after \c @
@@ -1039,7 +1039,7 @@ public class DpqlCompletionProvider {
     #! Gets the keys of the value that the accessors before a dot give, for the member after the dot
     /** @param fields the fields of the record
         @param base_text the text before the dot: a field reference followed by accessors, or a quoted field
-        reference, after which a dot is followed by a member (<tt>\@"my field".name</tt>)
+        reference, after which a dot is followed by a member (<tt>\@&quot;my field&quot;.name</tt>)
         @param prefix the part of the member typed after the dot
 
         @return the key completion items; each inserts the member as the parser reads it after the dot
@@ -1389,7 +1389,7 @@ public class DpqlCompletionProvider {
 
     #! Annotates completion items with the expected type for the current argument position
     /** Adds what the argument takes to each item's \c detail field, after the detail that the item has, if any:
-        <tt>"Whole number; this argument takes text"</tt>
+        <tt>&quot;Whole number; this argument takes text&quot;</tt>
 
         @param items the list of completion items to annotate
         @param annotation the detail text that says the type of the argument (\c "this argument takes text")
@@ -1566,18 +1566,18 @@ public class DpqlCompletionProvider {
     }
 
     #! Returns the wildcard accessors that the value before the cursor can take
-    /** The type of the field reference and accessors before the cursor decides: a list takes \c [*] and a hash
+    /** The type of the field reference and accessors before the cursor decides: a list takes <tt>[*]</tt> and a hash
         takes \c {*}; when the type is not known, both are possible.  A slice of a list, and a key of a list, give a
         list.
 
         @param before the text before the cursor
         @param fields the fields of the record
 
-        @return a hash with \c list (\c [*]) and \c hash (\c {*}) keys, each True if the wildcard can follow, and
+        @return a hash with \c list (<tt>[*]</tt>) and \c hash (\c {*}) keys, each True if the wildcard can follow, and
         \c known, True if the type of the value is known
 
         @since DataProvider 3.10
-        @since DataProvider 3.11 a slice of a list and a key of a list take \c [*], not \c {*}, and the \c known key
+        @since DataProvider 3.11 a slice of a list and a key of a list take <tt>[*]</tt>, not \c {*}, and the \c known key
     */
     private hash<string, bool> getWildcardKinds(string before, *hash<string, AbstractDataField> fields) {
         *AbstractDataProviderType type;
@@ -1598,7 +1598,7 @@ public class DpqlCompletionProvider {
     }
 
     #! Gets the wildcard accessor completions after a field reference or an accessor
-    /** \c [*] is offered after a list and \c {*} after a hash; both are offered when the type is not known
+    /** <tt>[*]</tt> is offered after a list and \c {*} after a hash; both are offered when the type is not known
 
         @param before the text before the cursor
         @param fields the fields of the record
@@ -2034,7 +2034,7 @@ public class DpqlCompletionProvider {
     }
 
     #! Reads the member after the dot that follows an accessor or a quoted field name, as the parser reads it
-    /** A member is one key: a field token (<tt>\@name</tt>, or <tt>\@"name"</tt> whose escapes are decoded, an
+    /** A member is one key: a field token (<tt>\@name</tt>, or <tt>\@&quot;name&quot;</tt> whose escapes are decoded, an
         escaped dot to a dot; the dots of either are part of the key), or an identifier: letters, combining marks,
         digits and \c _, and a \c - followed by an ASCII letter (<tt>order-id</tt>), which is not a keyword
         (\c true, \c false, \c null are values, which the parser does not take as a member)
@@ -2307,7 +2307,7 @@ public class DpqlCompletionProvider {
     }
 
     #! Unescapes DPQL escape sequences in a quoted string
-    /** Handles \\\\, \\", \\', \\n, \\r, \\t
+    /** Handles \\\\, \\&quot;, \\', \\n, \\r, \\t
         @param s the escaped string content (without surrounding quotes)
         @return the unescaped string
     */

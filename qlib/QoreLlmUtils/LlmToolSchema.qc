@@ -270,7 +270,7 @@ public hash<auto> sub qoreTypeNameToJsonSchema(*string qore_type) {
     sanitization rules.
 
     @par Rules applied
-    - Characters outside \c [a-zA-Z0-9_-] are replaced with \c "_".
+    - Characters outside <tt>[a-zA-Z0-9_-]</tt> are replaced with \c "_".
     - If the first character is not a letter or underscore (for example
       a digit, or a leading replacement underscore that came from
       sanitization of an originally-invalid first char), an underscore

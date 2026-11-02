@@ -272,7 +272,7 @@ log("started listener on %s", lh.desc);
       or handler setting, the \c max_request_body_size of the listener when none is set, and otherwise
       @ref HttpServer::DefaultMaxDecodedBodySize "DefaultMaxDecodedBodySize" (128 MiB)
     - a listener added with a service or port and no address listens on all interfaces in both address families
-      with one dual-stack socket, so a client reaches it through any address of the host, including \c ::1, which
+      with one dual-stack socket, so a client reaches it through any address of the host, including <tt>::1</tt>, which
       \c "localhost" resolves to first; it was bound on the IPv4 wildcard address only, so such a client could
       reach an unrelated IPv6 service holding the same port number instead.  IPv4 clients are reported with their
       IPv4 addresses in the \c "peer-info" of the request context

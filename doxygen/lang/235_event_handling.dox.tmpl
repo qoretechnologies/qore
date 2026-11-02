@@ -33,7 +33,7 @@
     |\c id|A unique integer ID for the underlying socket object
     |\c read|The number of bytes read in the packet.
     |\c total_read|The total number of bytes read in the read loop.
-    |\c [total_to_read]|The total number of bytes to read in the read loop (this key is only present if the total number of bytes to read is known).
+    |<tt>[total_to_read]|The</tt> total number of bytes to read in the read loop (this key is only present if the total number of bytes to read is known).
 
     <hr>
     @section EVENT_PACKET_SENT EVENT_PACKET_SENT
@@ -125,7 +125,7 @@
     |\c source|@ref Qore::SOURCE_HTTPCLIENT, indicating the @ref Qore::HTTPClient "HTTPClient class"
     |\c id|A unique integer ID for the socket object.
     |\c location|The redirect location given by the HTTP server
-    |\c [status_message]|Any status message sent by the HTTP server; if no message was sent, then this key will not be present in the event hash.
+    |<tt>[status_message]|Any</tt> status message sent by the HTTP server; if no message was sent, then this key will not be present in the event hash.
 
     <hr>
     @section EVENT_CHANNEL_CLOSED EVENT_CHANNEL_CLOSED
@@ -178,7 +178,7 @@
     |\c source|@ref Qore::SOURCE_FTPCLIENT, indicating the @ref Qore::FtpClient "FtpClient class"
     |\c id|A unique integer ID for the underlying socket object
     |\c command|A string giving the FTP command sent (ex: \c "RETR").
-    |\c [arg]|The argument to the command; if no argument is sent, then this key will not be present.
+    |<tt>[arg]|The</tt> argument to the command; if no argument is sent, then this key will not be present.
 
     <hr>
     @section EVENT_FTP_MESSAGE_RECEIVED EVENT_FTP_MESSAGE_RECEIVED
@@ -197,7 +197,7 @@
     |\c source|@ref Qore::SOURCE_FTPCLIENT, indicating the @ref Qore::FtpClient "FtpClient class"
     |\c id|A unique integer ID for the underlying socket object
     |\c command|A string giving the FTP command sent (ex: \c "RETR").
-    |\c [arg]|The argument to the command; if no argument is sent, then this key will not be present.
+    |<tt>[arg]|The</tt> argument to the command; if no argument is sent, then this key will not be present.
 
     <hr>
     @section EVENT_HOSTNAME_LOOKUP EVENT_HOSTNAME_LOOKUP
@@ -345,7 +345,7 @@
     |\c typename|A descriptive name for the address family (ex: \c "ipv4", \c "ipv6")
    	|\c address|A string giving the target address (ex: \c "::1", \c "192.168.20.4")
     |\c target|The target address for the connection.
-    |\c [port]|The target port for the connection; if not applicable for the address family then this hash key is not included.
+    |<tt>[port]|The</tt> target port for the connection; if not applicable for the address family then this hash key is not included.
 
     <hr>
     @section EVENT_CONNECTED EVENT_CONNECTED

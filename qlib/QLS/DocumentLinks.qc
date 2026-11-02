@@ -27,7 +27,7 @@ public namespace QLS {
 /** Module names in @c %%requires and @c %%try-module directives are resolved like %Qore resolves them: in the
     directories of the document's @c %%prepend-module-path directives, the directories in @c QORE_MODULE_DIR,
     the default module path of the %Qore library and the directories of @c %%append-module-path directives.
-    Only user modules (@c .qm files) have source files that can be opened.  Paths in @c %%include directives and
+    Only user modules (<tt>.qm</tt> files) have source files that can be opened.  Paths in @c %%include directives and
     module paths are relative to the document's directory.
 
     @par Example
@@ -100,7 +100,7 @@ public class DocumentLinks {
         @param text the document's text
 
         @return a list of hashes with \c line, \c start and \c length (the position of the argument), \c arg (the
-        argument without quotes), \c module (@ref True for a module path, which can omit the \c .qm extension) and
+        argument without quotes), \c module (@ref True for a module path, which can omit the <tt>.qm</tt> extension) and
         \c path (the absolute path that the argument refers to, which need not exist)
     */
     static list<hash<auto>> getPathDirectives(string path, string text) {

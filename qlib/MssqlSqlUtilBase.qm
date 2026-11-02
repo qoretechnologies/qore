@@ -216,9 +216,9 @@ hash<auto> desc = {
       @ref SqlUtil::AbstractDatabase::createTempTable() "AbstractDatabase::createTempTable()"
     - fixed column renaming; \c sp_rename was called with an \c "@objtype" of \c "COLUMNS", which the server
       rejects, and with a quoted new column name, which would have made the quoting part of the name
-    - fixed default values read from SQL Server: a string or expression default value (ex: \c ('abc'),
-      \c (getdate())) kept its parentheses and never matched its declared value, and an expression in two pairs of
-      parentheses lost its inner ones (ex: \c ((1)+(2))), so schema alignment changed the default value on every
+    - fixed default values read from SQL Server: a string or expression default value (ex: <tt>('abc')</tt>,
+      <tt>(getdate())</tt>) kept its parentheses and never matched its declared value, and an expression in two pairs of
+      parentheses lost its inner ones (ex: <tt>((1)+(2))</tt>), so schema alignment changed the default value on every
       run
     - fixed changing the default value of a column: the existing default constraint is dropped by its name in the
       database before the new one is added; adding it failed with "Column already has a DEFAULT bound to it"

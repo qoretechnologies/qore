@@ -146,7 +146,7 @@ abstract string AbstractLineIterator::getValue();
     @param line_separator the end of line string to be readded in case of a field split between lines, if the
     iterator does not report the line end that it removed from the line
     @param trim_unquoted remove leading and trailing whitespace from unquoted fields
-    @param quote_escape the escape of a quote character in a quoted field: \c "\\\\" (the default) for a backslash
+    @param quote_escape the escape of a quote character in a quoted field: <tt>&quot;\\\\&quot;</tt> (the default) for a backslash
     before the quote; the quote character itself, or an empty string, for RFC 4180 CSV data, where a quote in a quoted
     field is only escaped by doubling it and a backslash is an ordinary character
 

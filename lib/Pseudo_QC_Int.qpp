@@ -112,7 +112,7 @@ bool <int>::strp() [const;flags=CONSTANT] {
     - \a decimals is one or more digits defining how may decimals should appear after the decimal point - if this is
       non-zero then the decimals will all be \c "0"; a negative number means to round that number of digits before the
       decimal place
-    - if \a thousands_separator is the special character \c ?, then no thousands separator character will be output
+    - if \a thousands_separator is the special character <tt>?</tt>, then no thousands separator character will be output
 
     @return a string of the integer according to a format string; if the format string does not follow the given
     format, then the number without formatting is returned
@@ -132,7 +132,7 @@ string nstr = i.format(".,3"); # returns "-48.392.093.894,000"
 
     @since
     - %Qore 0.8.6
-    - %Qore 2.0 implemented support for supressing the thousands separator with the \c ? character
+    - %Qore 2.0 implemented support for supressing the thousands separator with the <tt>?</tt> character
  */
 string <int>::format(string format) [const;flags=CONSTANT,NAMED_ARGS] {
    // the number is formatted in the default encoding, which is ASCII-compatible, and converted to the encoding of the

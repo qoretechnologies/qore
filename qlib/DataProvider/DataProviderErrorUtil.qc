@@ -42,7 +42,7 @@ public namespace DataProvider {
 public class DataProviderErrorUtil {
     #! Returns the first non-empty string value found by walking dotted paths in the given value
     /** @param data the root value to probe (typically \c ex.arg.body); may be of any type
-        @param paths dotted key paths to try in order, e.g. \c ("meta.message", "error", "description")
+        @param paths dotted key paths to try in order, e.g. <tt>(&quot;meta.message&quot;</tt>, "error", "description")
 
         @return the first resolved value that is a non-empty string; \c NOTHING if no path
         resolves to a non-empty string, or if \a data is not a hash
@@ -105,9 +105,9 @@ public class DataProviderErrorUtil {
 
         @param errors the value to format (typically \c body.errors); \c NOTHING is returned
         unless this is a non-empty list
-        @param field_keys candidate keys to probe for the field name (default \c ("field",))
-        @param code_keys candidate keys to probe for the error code (default \c ("error_code", "code"))
-        @param message_keys candidate keys to probe for the human message (default \c ("message", "msg"))
+        @param field_keys candidate keys to probe for the field name (default <tt>(&quot;field&quot;,)</tt>)
+        @param code_keys candidate keys to probe for the error code (default <tt>(&quot;error_code&quot;</tt>, "code"))
+        @param message_keys candidate keys to probe for the human message (default <tt>(&quot;message&quot;</tt>, "msg"))
 
         @return the formatted bracketed string, or \c NOTHING if no parts could be produced
     */

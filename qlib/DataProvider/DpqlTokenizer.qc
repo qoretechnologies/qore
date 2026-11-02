@@ -108,7 +108,7 @@ public const DPQL_TOK_TEMPLATE = 39;
 public const DPQL_TOK_WHITESPACE = 40;
 #! Newline character
 public const DPQL_TOK_NEWLINE = 41;
-#! Wildcard in an accessor: the \c * of \c [*] and \c {*}
+#! Wildcard in an accessor: the \c * of <tt>[*]</tt> and \c {*}
 /** @since DataProvider 3.10
 */
 public const DPQL_TOK_WILDCARD = 42;
@@ -306,8 +306,8 @@ public class DpqlTokenizer {
 
     #! Returns True if a key can be written without quotes in a key accessor (<tt>{key}</tt>)
     /** A bare key is an ASCII name that is not a keyword (\c true, \c false or \c null in any case); any other key,
-        including an empty one, is written as a string (<tt>{"true"}</tt>, <tt>{"key with spaces"}</tt>,
-        <tt>{"123"}</tt>)
+        including an empty one, is written as a string (<tt>{&quot;true&quot;}</tt>, <tt>{&quot;key with spaces&quot;}</tt>,
+        <tt>{&quot;123&quot;}</tt>)
 
         @param key the key
 
@@ -321,13 +321,13 @@ public class DpqlTokenizer {
 
     #! Returns True if a field name can be written without quotes after \c @
     /** A bare field name starts with a letter (any script) or \c _, and goes on with letters, combining marks,
-        digits and \c _; dots separate its segments, each non-empty: \c @menge_bestätigt, \c @größe and
-        \c @order.id are bare; a name with spaces or other characters, or one starting with a digit, is written
+        digits and \c _; dots separate its segments, each non-empty: <tt>\@menge_bestätigt</tt>, <tt>\@größe</tt> and
+        <tt>\@order.id</tt> are bare; a name with spaces or other characters, or one starting with a digit, is written
         <tt>\@\"...\"</tt>.
 
         @param name the field name
 
-        @return True if the name can be written as \c @name
+        @return True if the name can be written as <tt>\@name</tt>
 
         @since DataProvider 3.9
     */
@@ -515,7 +515,7 @@ public class DpqlTokenizer {
     #! Returns the byte at the current position as a 1-byte string, or NOTHING.
     /** Uses @ref Qore::zzz8stringzzz9::getByte() for O(1) byte access
         (vs O(N) UTF-8 walk on @c input[pos]).  Returning a 1-byte string
-        keeps existing comparisons (<tt>c == "#"</tt>) and concatenation
+        keeps existing comparisons (<tt>c == &quot;#&quot;</tt>) and concatenation
         (<tt>value += currentChar()</tt>) working unchanged. */
     private:internal *string currentChar() {
         *int b = input.getByte(pos);

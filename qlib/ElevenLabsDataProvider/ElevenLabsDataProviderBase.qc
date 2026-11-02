@@ -388,7 +388,7 @@ public class ElevenLabsDataProviderBase inherits DataProvider::AbstractDataProvi
     /** ElevenLabs uses FastAPI/Pydantic error conventions with a polymorphic \c detail field in the body:
         - scalar string (e.g. \c "Not Found", \c "Method Not Allowed")
         - nested hash (e.g. \c {"status": "invalid_api_key", "message": "Invalid API key"}) on auth errors
-        - list of per-field Pydantic entries (e.g. \c [{"type": "...", "loc": ["body","field"], "msg": "...", "input": ...}])
+        - list of per-field Pydantic entries (e.g. <tt>[{&quot;type&quot;:</tt> "...", "loc": ["body","field"], "msg": "...", "input": ...}])
           on 422 validation failures
     */
     private string getApiErrorDesc(hash<ExceptionInfo> ex) {

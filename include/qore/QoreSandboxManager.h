@@ -387,8 +387,8 @@ public:
         @return true if allowed, false if denied (exception raised)
 
         The rules are applied in this order:
-        - an IPv4-mapped IPv6 address (\c ::%ffff:a.b.c.d) is checked as the IPv4 address it carries, and an
-          unspecified destination address (\c 0.0.0.0 or \c ::), which the system connects to the local host, is
+        - an IPv4-mapped IPv6 address (<tt>::%ffff:a.b.c.d</tt>) is checked as the IPv4 address it carries, and an
+          unspecified destination address (\c 0.0.0.0 or <tt>::</tt>), which the system connects to the local host, is
           checked as the loopback address
         - a denied IP range containing the address denies the connection, also for an allowed host name, so a host
           name that resolves to a blocked network (DNS rebinding) is denied
@@ -411,13 +411,13 @@ public:
 
         Binding is controlled like a connection to the local address, without host names: an IPv4-mapped address is
         checked as the IPv4 address it carries; a denied IP range containing the address denies the bind, unless
-        the address is a loopback address (\c 127.0.0.0/8 or \c ::1), because a socket bound there can only be
+        the address is a loopback address (\c 127.0.0.0/8 or <tt>::1</tt>), because a socket bound there can only be
         reached from the local host, which is less than a bind on all interfaces exposes (denied ranges still deny
         connections to loopback addresses); a
         specific port outside the allowed ports for the protocol denies the bind (a system-assigned port, port 0, is
         not restricted); an address outside all configured allowed IP ranges denies the bind; otherwise the default
-        policy decides.  A wildcard address (\c 0.0.0.0 or \c ::) binds all interfaces, so it is allowed by an
-        allowed IP range only if the range contains the wildcard address itself (\c 0.0.0.0/0 or \c ::/0).
+        policy decides.  A wildcard address (\c 0.0.0.0 or <tt>::</tt>) binds all interfaces, so it is allowed by an
+        allowed IP range only if the range contains the wildcard address itself (\c 0.0.0.0/0 or <tt>::/0</tt>).
     */
     DLLEXPORT bool checkBind(const struct sockaddr* addr, socklen_t len,
                              int proto, ExceptionSink* xsink);

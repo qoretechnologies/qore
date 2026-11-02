@@ -68,7 +68,7 @@ module Schema {
     - @ref Schema::AbstractVersionedSchema "AbstractVersionedSchema": base class for versioned schema representation
       and management where the schema contains its current version
     - @ref Schema::DataSchema "DataSchema": pure data schema class that loads definitions from
-      YAML (\c .ysm) or JSON (\c .jsm) files
+      YAML (<tt>.ysm</tt>) or JSON (<tt>.jsm</tt>) files
     - @ref Schema::DataSchemaLoader "DataSchemaLoader": static utility class for loading, validating, and
       normalizing data schema files
     - @ref Schema::MigrationExecutor "MigrationExecutor": executes data-driven migration actions defined
@@ -83,8 +83,8 @@ module Schema {
 
     @section schema_data_schema Pure Data Schema Definitions
 
-    The @ref Schema::DataSchema "DataSchema" class supports defining database schemas using YAML (\c .ysm)
-    or JSON (\c .jsm) files instead of Qore code. This makes schemas accessible to non-programmers and
+    The @ref Schema::DataSchema "DataSchema" class supports defining database schemas using YAML (<tt>.ysm</tt>)
+    or JSON (<tt>.jsm</tt>) files instead of Qore code. This makes schemas accessible to non-programmers and
     enables schema management without code execution.
 
     @par Example: Creating a schema from a .ysm file
@@ -667,7 +667,7 @@ module Schema {
 
     @section schema_qschema The qschema CLI Tool
 
-    The \c qschema command-line tool provides database schema management from \c .ysm/\c .jsm files.
+    The \c qschema command-line tool provides database schema management from <tt>.ysm/</tt><tt>.jsm</tt> files.
 
     @subsection schema_qschema_syntax Syntax
 
@@ -848,7 +848,7 @@ module Schema {
 
     Schema files are validated against a JSON Schema (Draft 2020-12) definition stored in the
     @ref Schema::DataSchemaJsonSchema "DataSchemaJsonSchema" constant. This meta-schema validates
-    the structure of \c .ysm/\c .jsm files including required fields, column types, migration
+    the structure of <tt>.ysm/</tt><tt>.jsm</tt> files including required fields, column types, migration
     action types, and reference data format.
 
     @par Accessing the meta-schema
@@ -953,13 +953,13 @@ module Schema {
 
     @subsection schema_v1_5_0 Schema Module v1.5.0
     - added @ref Schema::DataSchema "DataSchema" class for pure data schema definitions from
-      YAML (\c .ysm) or JSON (\c .jsm) files — no Qore code required
+      YAML (<tt>.ysm</tt>) or JSON (<tt>.jsm</tt>) files — no Qore code required
     - added @ref Schema::DataSchemaLoader "DataSchemaLoader" class for loading, validating, and
       normalizing data schema files against a JSON Schema (Draft 2020-12) meta-schema
     - added @ref Schema::MigrationExecutor "MigrationExecutor" class for executing data-driven
       migration actions with access level enforcement and dependency-based step ordering
     - added @ref Schema::DataSchemaJsonSchema "DataSchemaJsonSchema" constant with the meta-schema
-      for validating \c .ysm/\c .jsm files
+      for validating <tt>.ysm/</tt><tt>.jsm</tt> files
     - added access level constants: @ref Schema::AL_UNTRUSTED "AL_UNTRUSTED",
       @ref Schema::AL_TRUSTED "AL_TRUSTED", @ref Schema::AL_ADMIN "AL_ADMIN"
     - added \c qschema CLI tool for schema management (align, drop, diff, validate, info, export)

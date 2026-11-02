@@ -317,7 +317,7 @@ public class AbstractFileLocationHandler {
     #! Returns a location as an absolute URI path
     /** Used by handlers bound to an already-authenticated client, where the location is a path on that client's
         target rather than a URL.  A leading slash is added if missing, since HTTP/2 and HTTP/3 require the
-        \c :path pseudo-header to be absolute and a relative path would otherwise be rejected at the transport
+        <tt>:path</tt> pseudo-header to be absolute and a relative path would otherwise be rejected at the transport
         layer rather than reported here.
 
         @param location the location string

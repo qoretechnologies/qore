@@ -484,7 +484,7 @@ sm.addNetworkAllowedPortRange(8000, 9000, QSEC_NET_TCP);  # Custom range
 
     A connection is decided by these rules in order, after DNS resolution, for each address:
     -# an IPv4-mapped IPv6 address (<tt>&#58;&#58;ffff:a.b.c.d</tt>) is checked as the IPv4 address it carries, and an
-       unspecified destination address (\c 0.0.0.0 or \c ::), which the system connects to the local host, is
+       unspecified destination address (\c 0.0.0.0 or <tt>::</tt>), which the system connects to the local host, is
        checked as the loopback address
     -# an address in a denied IP range is denied, also for an allowed host name, so a name that resolves to a
        blocked network (DNS rebinding) is denied
@@ -495,13 +495,13 @@ sm.addNetworkAllowedPortRange(8000, 9000, QSEC_NET_TCP);  # Custom range
 
     A bind is decided by the same rules without host names, except that a system-assigned port (port \c 0) is
     not restricted by allowed ports, and denied IP ranges do not deny a bind to a loopback address (\c 127.0.0.0/8
-    or \c ::1, also as an IPv4-mapped address): a socket bound there can only be reached from the local host, which
+    or <tt>::1</tt>, also as an IPv4-mapped address): a socket bound there can only be reached from the local host, which
     is less than a bind on all interfaces exposes, so a sandbox that blocks private networks, such as with
     @ref Qore::SandboxManager::blockPrivateNetworks() "SandboxManager::blockPrivateNetworks()", can still run a
     local listener, while connections to loopback addresses stay denied.  Denied ranges still deny a bind to any
     other address in them, such as a private interface address; allowed ports, allowed IP ranges and the default
     policy apply to loopback binds as to any other bind.  A bind on all interfaces uses the wildcard address, which an allowed IP range
-    only allows if it contains the wildcard address itself (for example \c 0.0.0.0/0 or \c ::/0); with the default
+    only allows if it contains the wildcard address itself (for example \c 0.0.0.0/0 or <tt>::/0</tt>); with the default
     deny policy and no allowed IP ranges, no socket can be bound.
 
     A UNIX domain socket is a file: in addition to the network policy, connecting to one requires read and write

@@ -34,8 +34,8 @@ ModuleName/
     |-SomeModuleFunction.ql
     @endcode \n
 
-    The \c .qm file is parsed first, then the other files in the bytewise order of their names.  Parse directives
-    belong in the \c .qm file: the parse options and the warnings it sets apply to every file of the module.  A warning
+    The <tt>.qm</tt> file is parsed first, then the other files in the bytewise order of their names.  Parse directives
+    belong in the <tt>.qm</tt> file: the parse options and the warnings it sets apply to every file of the module.  A warning
     directive in another file, such as @ref disable-warning "%disable-warning", applies only to that file.
 
     Use the load_module() function to load %Qore modules at run-time; however, note that any module providing parse support (classes, constants, functions, etc) must be loaded at parse time using the @ref requires "%requires" or @ref try-module "%try-module" parse directive.

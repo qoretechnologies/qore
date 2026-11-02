@@ -154,7 +154,7 @@
     accepted as hash member names after the @ref dot_operator ". operator", but \c enum is a hard
     keyword and is not.  This bites when mirroring an external field name — a JSON Schema \c enum
     field, or OpenID Connect's \c sub — into %Qore code.  Write the key as a quoted subscript
-    (<tt>h{"enum"}</tt>) whenever it could collide. The parser reports the exact \c .enum span and
+    (<tt>h{"enum"}</tt>) whenever it could collide. The parser reports the exact <tt>.enum</tt> span and
     supplies that quoted-subscript replacement to diagnostic tools.
 
     @subsection pitfalls_new Constructing an object in an expression requires new

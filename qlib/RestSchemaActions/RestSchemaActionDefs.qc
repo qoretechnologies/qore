@@ -585,7 +585,7 @@ public hashdecl RestSchemaActionInfo {
 {"data": {"type": "profile", "attributes": {"email": ..., "first_name": ...}}}
         @endcode
         and lifting one level yields a single \c "data" option with everything meaningful two levels inside
-        it.  Naming \c ("data", "attributes") here lifts the *attributes* instead, so the action offers
+        it.  Naming <tt>(&quot;data&quot;</tt>, "attributes") here lifts the *attributes* instead, so the action offers
         \c email and \c first_name, and the envelope is rebuilt when the request is sent.
 
         A property the schema declares <b>required</b> with exactly one permitted value - JSON:API's \c type

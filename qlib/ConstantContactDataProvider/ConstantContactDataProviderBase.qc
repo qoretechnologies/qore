@@ -410,7 +410,7 @@ public class ConstantContactDataProviderBase inherits DataProvider::AbstractData
     }
 
     #! Returns an enriched error description that includes the ConstantContact API error message if available
-    /** ConstantContact V3 error bodies are polymorphic: typically \c [{"error_key": "...",
+    /** ConstantContact V3 error bodies are polymorphic: typically <tt>[{&quot;error_key&quot;:</tt> "...",
         "error_message": "..."}, ...] (a list, for endpoint errors like 404/422) but may also
         be a bare \c {"error_key": "unauthorized", "error_message": "Unauthorized"} hash on
         auth failures. Both shapes are normalised here.

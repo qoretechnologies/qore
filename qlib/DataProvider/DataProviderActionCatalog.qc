@@ -2241,7 +2241,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         @par Failure mode
         Returns @ref False on any error (scheme not registered, @c ConnectionProvider not loaded, @c cls
         absent, etc.).  This is the conservative default: if we cannot prove the scheme is REST, we do
-        not inject.  In normal init order, both real registration paths (qlib @c *RestClient.qm and
+        not inject.  In normal init order, both real registration paths (qlib <tt>*RestClient.qm</tt> and
         module-v8 @c TypeScriptActionInterface) register the scheme @em before the app, so this
         unknown-state path is not expected.
 
