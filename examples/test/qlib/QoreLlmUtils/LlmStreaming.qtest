@@ -73,6 +73,14 @@ hashdecl FakeStreamResult {
     bool completed = False;
 }
 
+#! How a connection to the fake LLM server ended
+hashdecl FakeConnectionResult {
+    #! The sequence number of the connection, in the order the server accepted the connections
+    int seq = 0;
+    #! True if the request of the connection was read, False if the client closed it before
+    bool request_read = False;
+}
+
 #! Fake LLM server speaking HTTP/1.1 on a raw socket, so any response, including a stalled event stream, can be
 #! sent; replies come from a script and every request is recorded
 class FakeLlmServer {
@@ -85,6 +93,8 @@ class FakeLlmServer {
         Queue client_closed();
         #! Receives a FakeStreamResult when the chunks of a reply with report_stream have ended
         Queue stream_results();
+        #! Receives a FakeConnectionResult when a connection has been served
+        Queue connection_results();
     }
 
     private {
@@ -94,7 +104,16 @@ class FakeLlmServer {
         Queue release_queue();
         Counter running();
         bool stopping = False;
+        #! The sequence number of the last accepted connection
+        int accepted = 0;
+        #! The sequence number of the last connection accepted before the last script() call
+        int script_base = 0;
+        #! Receives the sequence number of each probe connection (see getCallConnection())
+        Queue probe_results();
     }
+
+    #! The path of a probe request (see getCallConnection())
+    const ProbePath = "/__probe";
 
     constructor() {
         listener.bind("127.0.0.1:0");
@@ -132,6 +151,40 @@ class FakeLlmServer {
         request_queue.clear();
         client_closed.clear();
         stream_results.clear();
+        connection_results.clear();
+        probe_results.clear();
+        script_base = accepted;
+    }
+
+    #! Returns how the first connection accepted since the last script() call ended, or no value without one
+    /** A call whose deadline expires before it has connected reaches the server never, so the server's queues
+        would wait for it for ever.  The server accepts the connections in order: a probe connection opened after
+        the call is accepted after any connection of the call, so the sequence number of the probe gives the
+        number of the call's connections deterministically, without waiting for a time.
+
+        @return how the first connection accepted since the last script() call ended; every queue entry of that
+        connection (client_closed, stream_results) has been pushed when this returns
+    */
+    *hash<FakeConnectionResult> getCallConnection() {
+        Socket probe();
+        on_exit probe.close();
+        probe.connect(sprintf("127.0.0.1:%d", port), 60s);
+        probe.send(sprintf("GET %s HTTP/1.1\r\nHost: localhost\r\n\r\n", ProbePath));
+        int probe_seq = probe_results.get(60s);
+        int first;
+        {
+            AutoLock al(m);
+            first = script_base + 1;
+        }
+        if (probe_seq == first) {
+            return;
+        }
+        while (True) {
+            hash<FakeConnectionResult> result = connection_results.get(60s);
+            if (result.seq == first) {
+                return result;
+            }
+        }
     }
 
     #! Releases a stalled response
@@ -157,18 +210,33 @@ class FakeLlmServer {
                 conn.close();
                 break;
             }
+            int seq;
+            {
+                AutoLock al(m);
+                seq = ++accepted;
+            }
             running.inc();
-            background serve(conn);
+            background serve(conn, seq);
         }
     }
 
-    private serve(Socket conn) {
+    private serve(Socket conn, int seq) {
+        bool probe = False;
+        bool request_read = False;
         on_exit {
             conn.close();
+            if (!probe) {
+                connection_results.push(<FakeConnectionResult>{"seq": seq, "request_read": request_read});
+            }
             running.dec();
         }
         try {
             hash<auto> hdr = conn.readHTTPHeader(10s);
+            if (hdr.path == ProbePath) {
+                probe = True;
+                probe_results.push(seq);
+                return;
+            }
             *data body;
             if (hdr."transfer-encoding" =~ /chunked/i) {
                 body = conn.readHTTPChunkedBody(10s).body;
@@ -176,6 +244,7 @@ class FakeLlmServer {
                 body = conn.recv(hdr."content-length".toInt(), 10s);
             }
             hash<FakeReply> reply = takeReply(hdr, body);
+            request_read = True;
             if (reply.hold_headers) {
                 waitForClientClose(conn);
                 return;
@@ -660,6 +729,9 @@ public class LlmStreamingTest inherits QUnit::Test {
                 }
             } catch (hash<ExceptionInfo> ex) { error = ex; }
             assertTrue(hasTransportTimeout(error), "the call ends on its deadline");
+            if (!callRequestRead("the call")) {
+                continue;
+            }
             assertTrue(server.client_closed.get(60s), "the call's deadline closes the connection");
             assertEq(1, server.requests.size());
         }
@@ -705,6 +777,9 @@ public class LlmStreamingTest inherits QUnit::Test {
                 } catch (hash<ExceptionInfo> ex) { error = ex; }
                 string label = mode + " " + stage;
                 assertTrue(hasTransportTimeout(error), label + ": the call ends on its deadline");
+                if (!callRequestRead(label)) {
+                    continue;
+                }
                 if (held_headers) {
                     # the deadline expired before the headers arrived: no event of the stream is read
                     assertTrue(server.client_closed.get(60s), label + ": the deadline closes the connection");
@@ -723,6 +798,22 @@ public class LlmStreamingTest inherits QUnit::Test {
                 assertEq(1, server.requests.size());
             }
         }
+    }
+
+    #! Returns True if the server has read the request of the last call
+    /** The deadline of a call also covers connecting and sending the request: when it expires before, the
+        server has nothing to report for the call, and only the client's side of the call can be checked.
+    */
+    private bool callRequestRead(string label) {
+        *hash<FakeConnectionResult> conn = server.getCallConnection();
+        if (!conn) {
+            assertEq(0, server.requests.size(), label + ": no request without a connection");
+            return False;
+        }
+        if (!conn.request_read) {
+            assertEq(0, server.requests.size(), label + ": the connection was closed before its request");
+        }
+        return conn.request_read;
     }
 
     private static bool hasTransportTimeout(auto error) {
