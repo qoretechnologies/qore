@@ -104,9 +104,23 @@ class AOTReloadChainFlushGrowthTest inherits QUnit::Test {
         return helpers + inline_ops;
     }
 
+    #! returns the number of LLVM instructions in the code of big(): its indented lines, as labels are not
+    private static int countInstructions(string code) {
+        int count = 0;
+        foreach string line in (code.split("\n")) {
+            if (line =~ /^  [^ ]/) {
+                ++count;
+            }
+        }
+        return count;
+    }
+
     #! compiles the fixture at each size and returns the flush operations of each; checks the output of each
-    private list<int> measure(code fixture, string prefix, TmpDir dir) {
+    /** @param instructions receives the number of instructions in big() at each size
+    */
+    private list<int> measure(code fixture, string prefix, TmpDir dir, *reference<list<int>> instructions) {
         list<int> counts = ();
+        instructions = ();
         foreach int n in (Sizes) {
             string source = dir.path + "/fixture" + n + ".q";
             write(source, fixture(n));
@@ -114,7 +128,9 @@ class AOTReloadChainFlushGrowthTest inherits QUnit::Test {
             string executable = dir.path + "/fixture" + n;
             string ir = run((qcc, "-O0", "--strip-source", "-o", executable, source), prefix + "QORE_DUMP_LLVM_IR=1 ");
             assertEq(expected, run((executable,)), "AOT result " + prefix + n);
-            push counts, countFlushOperations(bigBody(ir));
+            string body = bigBody(ir);
+            push counts, countFlushOperations(body);
+            push instructions, countInstructions(body);
         }
         return counts;
     }
@@ -122,13 +138,20 @@ class AOTReloadChainFlushGrowthTest inherits QUnit::Test {
     #! checks that the growth from 2N to 4N statements is near twice that from N to 2N
     private checkGrowth(code fixture, string name) {
         TmpDir dir("qore-reload-chain-growth-");
-        list<int> counts = measure(fixture, "", dir);
+        list<int> instructions;
+        list<int> counts = measure(fixture, "", dir, \instructions);
         assertGt(0, counts[0], name + ": the fixture has reload-chain flushes");
         int first = counts[1] - counts[0];
         int second = counts[2] - counts[1];
         assertGt(0, first, name + ": flushes grow with the statements");
         # linear growth doubles the difference; growth with (locals x boundaries) quadruples it
         assertLe(first * 5 / 2, second, sprintf("%s: near-linear growth %y", name, counts));
+        # the whole function grows linearly too: doubling the statements at most doubles its instructions, plus a
+        # margin; growth with (locals x exits) or (locals x try statements) gives ratios near 3 or more
+        for (int i = 1; i < instructions.size(); ++i) {
+            assertLe(instructions[i - 1] * 11 / 5, instructions[i],
+                sprintf("%s: instructions %y: N=%d vs 2N", name, instructions, Sizes[i - 1]));
+        }
 
         # the control flushes every tracked local at every boundary, as before: the measure sees quadratic growth
         list<int> unpruned = measure(fixture, DisablePruning, dir);

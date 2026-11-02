@@ -2157,6 +2157,18 @@ linear growth and that the control shows the quadratic one.
 
 Together these took that method from an unbounded hang to 29s.
 
+A try statement's scope exit and landing pad call the runtime helper that runs
+the handlers registered in its scope, and reloaded every local of the function
+eagerly after it, so a function of N try statements, each declaring locals, had
+N x N reloads (and as many reload-chain sources).  Only the function's own
+`OnBlockExit` instructions register handlers in that list, and a callee runs and
+removes its own before it returns, so `reloadLocalsAfterHandlers()` emits the
+reload only in a function with handlers, as `publishLocalsForHandlers()` already
+published the locals only there.  With the pruned flushes, the AOT `-O0` body of
+such a function went from 20100/56253/177913/618033 instructions (N =
+20/40/80/160) to 11505/22608/44968/89688; `AOTReloadChainFlushGrowth.qtest`
+bounds the growth of the whole body from N to 2N statements.
+
 Two details matter for correctness. The runtime helper releases slots in LIFO
 order, so the addresses are stored in reverse and the values are released in
 exactly the order the inline sequence used; destruction order of locals is
