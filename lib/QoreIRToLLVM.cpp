@@ -32524,6 +32524,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     eligible = isFiniteCallRefCallBound(call, targets.variants[i], infos[i]);
                 }
                 std::vector<llvm::Value*> args;
+                // the boxed form of an argument converted to its native form, for the ordinary call: boxValue()
+                // returns a value of a NaN-boxed id unchanged, so it cannot box the native form
+                std::vector<llvm::Value*> boxed_args;
                 bool nanboxed_arg_converted = false;
                 if (eligible && nargs) {
                     uint32_t id = inst->operands[1].id;
@@ -32534,6 +32537,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     if (arg && nanboxed_values.count(id)) {
                         // a boxed parameter cache of a reflective frame, for example
                         if (llvm::Value* native = getProvenScalarLocalLoad(id, type, module)) {
+                            boxed_args.push_back(arg);
                             arg = native;
                             nanboxed_arg_converted = true;
                         }
@@ -32598,7 +32602,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                     if (nargs) {
                                         arg_ids.push_back(inst->operands[1].id);
                                     }
-                                    llvm::Value* args_array = emitAotDebuggerCallArgs(args, arg_ids, {}, nargs,
+                                    llvm::Value* args_array = emitAotDebuggerCallArgs(args, arg_ids, boxed_args, nargs,
                                         llvm_func, error);
                                     if (!args_array) {
                                         return nullptr;
