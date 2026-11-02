@@ -73,6 +73,12 @@ while (True) {
     An callback has to be used to provide line completion values.
     The callback is registered with @ref Qore::Linenoise::set_callback().
 
+    The callback receives the text of the line up to the cursor, and each string that it returns is a completion of
+    the word before the cursor: the word starts after the last space or other break character before the cursor
+    (such as \c "(", \c "=", \c ":", \c "/" or a quote), and a completion selected by the user replaces it.
+    The rest of the line up to the cursor gives the callback the context of the word (for example, a \c "new "
+    before it); the callback returns completed words, not completed lines.
+
     @note The callback code must accept a \c string as an input argument and return a \c list.
 
     If the input argument isn't a string, a \c RUNTIME-OVERLOAD-ERROR exception will be thrown.

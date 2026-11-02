@@ -193,6 +193,14 @@ const S_ISVTX = S_ISVTX;
     thread is cancelled or its @ref Qore::Program "Program" is interrupted, with a \c THREAD-CANCELLED or
     \c PROGRAM-INTERRUPTED exception.
 
+    @anchor file_close_on_exec
+    The descriptors of files opened with this class and with @ref Qore::File "File", of sockets created or accepted by
+    @ref Qore::Socket "Socket" and of the pipes of @ref Qore::File::getPipe() "File::getPipe()" are close-on-exec: a
+    program started with @ref Qore::system() "system()", @ref Qore::backquote() "backquote()",
+    @ref Qore::exec() "exec()" (also after @ref Qore::fork() "fork()") or by a module does not inherit them.  The
+    descriptors given to a child as its standard input and output are not affected; to pass another descriptor to a
+    command, make it available explicitly, for example as the command's standard input or output.
+
     @see @ref file_events for a list of I/O events raised by this object
 
     @since %Qore 3.0 reads of lines, characters and binary integers wait for data on a nonblocking descriptor instead

@@ -165,6 +165,13 @@
     - @ref variable_declarations "global variables"
     - (non-class) @ref constants "constants" \n\n
 
+    @anchor bare_refs_top_level_locals
+    In a method, a bare name refers to the method's own local variables first, then to the class's members,
+    constants, static variables and methods, and only then to a top-level local variable of the program, which has
+    global scope like a global variable (see @ref threading_and_variables).  In a static method, a bare name of an
+    instance member is a parse error, also when a top-level local variable or a global variable has the same name;
+    give the top-level local variable a different name.
+
     @note
     - when using this option (or @ref new-style "%new-style) the lack of \c "$" characters in variable names makes it necessary to declare local variables before using them
     - ref implicit_arguments "implicit arguments" are still referenced with the \c "$" character even when this parse option is set.

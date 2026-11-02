@@ -415,6 +415,21 @@ module SqlUtil {
       @ref SqlUtil::AbstractTable::getInsertFromSelectSqlWithInfo()
       "AbstractTable::getInsertFromSelectSqlWithInfo()" for non-executing SQL preview with bind arguments, and
       added reliable target/source projection-cardinality validation
+    - added @ref SqlUtil::generate_auto_triggers() "generate_auto_triggers()" and
+      @ref SqlUtil::generate_auto_triggers_all_drivers() "generate_auto_triggers_all_drivers()" for standard
+      created/modified-timestamp and sequence-ID triggers on PostgreSQL, Oracle, MySQL and SQL Server
+    - added Oracle local and global partitioned index and constraint placement with tablespace and statistics
+      options
+    - added portable deferrable foreign constraint options, capability discovery, schema-description round-trip,
+      and alignment for PostgreSQL and Oracle
+      (<a href="https://github.com/qoretechnologies/qore/issues/5373">issue 5373</a>)
+    - PostgreSQL indexes keep partial predicates, non-key \c INCLUDE columns, \c NULLS \c NOT \c DISTINCT and the
+      sort and null order of each key through introspection, SQL dumps, schema exports and alignment (see
+      @ref pgsql_index_options)
+    - fixed @ref SqlUtil::Tables::populate() "Tables::populate()" leaving the cache out of sync for structurally
+      divergent tables; tables are processed in foreign-key dependency order
+    - fixed the foreign constraint DDL of Oracle, MySQL, SQL Server, Firebird and SQLite to keep quoted and renamed
+      column names on both sides of the constraint
 
     @subsection sqlutilv1_9_3 SqlUtil v1.9.3
     - fixed support for orderby with a matching unique index

@@ -2473,6 +2473,30 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
     - fixed @ref DataProvider::DefaultRecordIterator "DefaultRecordIterator" to accept search options whose
       values all have the same type, such as a literal <tt>{"columns": "id"}</tt>; converting the \c columns
       option to a list raised \c RUNTIME-TYPE-ERROR
+    - \c qore-data-provider-i18n records the %Qore that generated the catalogs it writes (version and git hash, in
+      <tt>.qore-generator.json</tt> in each catalog directory, which is not installed with the catalogs); a check
+      of stale catalogs that another %Qore generated exits with 3 instead of 2, catalogs generated with a newer
+      %Qore are not overwritten by an older one (\c --allow-other-qore allows a %Qore whose order cannot be
+      determined), and \c --record-qore records the installed %Qore for catalogs that a check finds current
+    - the \c qore-data-provider-i18n catalog check validates every discovered sibling translation against the
+      current producer metadata, rejecting removed message IDs and stale source text while allowing partial
+      catalogs and identical brand names or cognates; it can validate catalog trees of %Qore, external modules and
+      downstream products recursively; owner-scoped extraction makes source checks independent of ambient modules,
+      rejects orphaned catalog domains, separates the action contributions of modules that share an application
+      catalog domain, discovers new provider owner modules before their first catalog exists, and keeps the owner
+      of registrations made by a module loaded from a deferred provider initializer
+    - the user-module catalog install helper accepts explicit source directories, package components and install
+      destinations, so products with nonstandard module layouts and installation prefixes install the same
+      owner-qualified, composable catalog fragments as %Qore and external modules
+    - provider presentation, including multilingual embedding population, rejects conflicting owner-catalog
+      messages, so user-facing text never depends on the order of catalog search paths or file names; disjoint
+      and identical shared-application contributions are composed
+    - added native catalog-locale discovery and a cached multilingual action embedding projection, so semantic
+      indexes include every shipped provider translation without a language list and without changing application
+      and action identities; the embedding gives producer-first, per-locale documents in addition to the combined
+      document, so vector indexes avoid semantic dilution as translations are added
+    - action option generation returns an empty hash for operations without input fields
+    - added HTTP/3 debug tracking, context-sensitive action filtering, and the \c amqp factory registration
 
     @subsection dataprovider_v3_2_2 DataProvider v3.2.2
     - fixed setting the mandatory flag for hashes with dynamic fields

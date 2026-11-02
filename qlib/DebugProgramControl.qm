@@ -127,6 +127,8 @@ module DebugProgramControl {
     - fixed the \c file/source and \c label/source commands for command hashes whose values all have the same type,
       such as a literal <tt>{"cmd": "program/1/file/source", "file": "..."}</tt>; setting the start line raised
       \c RUNTIME-TYPE-ERROR
+    - fixed a step stopping twice at the first statement of a block or a function; it stops once at each statement
+    - fixed stepping out of a function stopping at its first line; it stops at the closing brace of the function
     - fixed a thread that stopped while the last client disconnected: it waited for a client that no longer existed,
       and the code waiting for the program to end, such as the debug adapter of an IDE ending its session, waited for
       that thread forever

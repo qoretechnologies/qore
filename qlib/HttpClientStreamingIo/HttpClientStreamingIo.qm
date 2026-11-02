@@ -47,6 +47,10 @@ module HttpClientStreamingIo {
     @ref httpclientiointro "HttpClientIo" module: Server-Sent Events (SSE) event reading, a push-based
     SSE observable, and stream decompression across HTTP/1.x, HTTP/2, and HTTP/3.
 
+    @ref HttpClientStreamingIo::SseObservable "SseObservable" can validate deserialized event data against an
+    AsyncAPI 3.0 schema with the \c asyncapi or \c validator option and the \c asyncapi_channel option (see
+    @ref HttpClientStreamingIo::SseObservable::constructor() "SseObservable::constructor()").
+
     @section httpclientstreamingioreleasenotes Release Notes
 
     @subsection httpclientstreamingio_v1_0 HttpClientStreamingIo v1.0

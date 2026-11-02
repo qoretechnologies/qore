@@ -140,6 +140,10 @@ foreach hash ih in (h.pairIterator())
 
     @note
     - If a reference (<tt>\\lvalue_expression</tt>) is used as the list expression, any changes made to the <tt><b>foreach</b></tt> iterator variable will be written back to the list (in which case any @ref Qore::AbstractIterator "AbstractIterator" object is not iterated; references cannot be used with @ref Qore::AbstractIterator "AbstractIterator" objects as such objects provide read-only iteration).
+      @anchor foreach_reference_exit
+      When the loop ends early with \c break or \c return, the elements already iterated keep their changes and the
+      elements not yet iterated are kept unchanged; when an exception (including thread cancellation) leaves the
+      loop, the referenced list is left unchanged.
     - When used with @ref new-style "%new-style" (which is a recommended parse option) or @ref allow-bare-refs "%allow-bare-refs", the \c \b my or \c \b our keywords are required with new variables or their type has to be declared, otherwise a parse exception will be raised
     - If an element of the list is a weak reference (see the @ref weak_assignment_operator "weak assignment operator (:=)"), the iterator variable is assigned the weak reference itself: the variable reads as the target of the weak reference but does not keep it alive while the loop body runs
 
@@ -499,6 +503,14 @@ string sub getName() {
 }
 string name = getName();@endcode
 
+    @anchor return_interrupted_by_exception
+    @par Return Interrupted by an Exception
+    When an exception interrupts a return, such as an error raised for a value that the declared return type rejects
+    or an exception raised by an @ref on_exit "on_exit" handler, and a @ref try "catch" block of the function handles
+    the exception, the value is not returned: it is released, and execution continues after the \c catch block as if
+    the return had not been made.  A function with a declared return type then raises a \c RUNTIME-TYPE-ERROR for a
+    missing return statement unless a later \c return statement returns a value.
+
     <hr>
     @section on_exit on_exit Statements
 
@@ -628,7 +640,7 @@ string name = getName();@endcode
         db.rollback();
         # this replaces the exception error code, updated the exception description, and leaves any exception
         # argument unchanged
-        rethrow "TRANSACTION-ERROR", sprintf("%s: $s", $1.err, $1.desc);
+        rethrow "TRANSACTION-ERROR", sprintf("%s: %s", $1.err, $1.desc);
     }
     db.select("select * from table where id = %v for update", id);
     # .. more code

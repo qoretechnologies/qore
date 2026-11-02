@@ -35,6 +35,17 @@ Define a preprocessor macro. May be specified more than once.
 .TP
 .BR \-h , " \-\-help"
 Show all available options.
+.SH EXIT STATUS
+.B qpp
+reports problems on standard error as errors or warnings.  An error means that
+an output would be wrong or incomplete, for example a function with functional
+domains or code flags but no long comment, whose documentation would lack the
+restriction or code flag note.  After it has reported every error in its input,
+.B qpp
+exits with status 1 if it reported any error and removes the output files that
+it wrote in that run, so that the build fails and the next build runs it again.
+A problem that leaves the output complete is reported as a warning and does not
+change the exit status.
 .SH SEE ALSO
 .BR qore (1),
 .BR qcc (1),

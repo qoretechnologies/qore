@@ -72,7 +72,7 @@ const DataMap = (
     # output field: "explicit_count": maps from the input "Count" field, if any value is present then it is converted to an integer
     "explicit_count": ("type": "int", "name": "Count"),
     # output field: "implicit_count": runs the given code on the input record and retuns the result, the code returns the number of "Products" sub-records
-    "implicit_count": int sub (any ignored, hash rec) { return rec.Products.size(); },
+    "implicit_count": int sub (auto ignored, hash rec) { return rec.Products.size(); },
     # output field: "order_date": converts the "OrderDate" string input field to a date in the specified format
     "order_date": ("name": "OrderDate", "date_format": "DD.MM.YYYY HH:mm:SS.us"),
 );
@@ -832,7 +832,7 @@ const DataMap = (
 # output field: "explicit_count": maps from the input "Count" field, if any value is present then it is converted to an integer
 "explicit_count": ("type": "int", "name": "Count"),
 # output field: "implicit_count": runs the given code on the input record and retuns the result, the code returns the number of "Products" sub-records
-"implicit_count": int sub (any ignored, hash rec) { return rec.Products.size(); },
+"implicit_count": int sub (auto ignored, hash rec) { return rec.Products.size(); },
 # output field: "order_date": converts the "OrderDate" string input field to a date in the specified format
 "order_date": ("name": "OrderDate", "date_format": "DD.MM.YYYY HH:mm:SS.us"),
 );

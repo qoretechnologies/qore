@@ -12,6 +12,14 @@
     interactive REPL (Read-Eval-Print Loop) mode if standard input is a terminal. Use \c --no-repl to disable
     this behavior and read from standard input instead.
 
+    @anchor cmdline_std_descriptors
+    @note When a standard file descriptor (standard input, output or error) is closed when \c qore or \c qcc starts,
+    it is opened on the null device before any other file is opened, so that a script or data file can never be
+    given that descriptor number and receive output meant for standard output or error; descriptors that are open
+    are kept with their flags.  If a missing descriptor cannot be opened, the process exits with status 1.  The
+    %Qore library does the same when it is initialized, so an application that embeds %Qore must initialize it
+    before its own file operations.
+
     <b>Parse Option Command-Line Parameters</b>
     |!Long Param|!Short|!Description
     |<tt>--define=</tt><em>arg</em>|\c -D|Creates and optionally sets a value for a parse define

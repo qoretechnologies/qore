@@ -917,15 +917,17 @@ hashdecl Qore::UnicodeByteOrderInfo {
 
     @subsection yaml_format_specifications YAML Format Specifications
 
-    The \c "%y" and \c "%Y" format specifications render values so that they can be parsed as YAML; this differs
-    from \c "%n" and \c "%N" for the following types:
+    The \c "%y" and \c "%Y" format specifications produce a YAML-like rendering for display; it is not YAML output
+    (use the \c yaml module's \c make_yaml() for that).  It differs from \c "%n" and \c "%N" for the following
+    types:
     - @ref absolute_dates "absolute date/time values" are rendered as YAML timestamps (ex:
       \c "2026-08-03 11:12:28.795991 +02:00"); the day of the week and the time zone name are omitted, since YAML
       timestamps cannot represent them
     - non-finite @ref float "floating-point" and @ref number "arbitrary-precision number" values are rendered as
       \c ".nan", \c ".inf", and \c "-.inf" instead of \c "nan.0", \c "inf.0", \c "@NaN@", and \c "@Inf@"
-    - @ref object "objects" are rendered as a single-key mapping from the class to the mapping of the object's
-      members; with \c "%y" the member mapping is a flow mapping
+    - @ref object "objects" are shown as a single-key mapping from the object's description to the mapping of its
+      members; this is for display only, as an object has no YAML representation (\c make_yaml() raises an
+      exception for an object); with \c "%y" the member mapping is a flow mapping
       (ex: <tt>{&lt;MyClass object&gt;: {a: 1, b: 2}}</tt>), and with \c "%Y" the members are indented in a block
       mapping:
       @verbatim
@@ -1569,9 +1571,9 @@ list<string> split(string separator, string str, bool with_separator = False, bo
     @param trim_unquoted remove leading and trailing whitespace from unquoted fields
     @param keep_trailing_empty keep the empty final field produced by a subject that ends with the separator; see
     @ref split_trailing_empty_fields
-    @param quote_escape the escape of a quote character in a quoted field: \c "\\\\" (the default) for a backslash
-    before the quote; the quote character itself, or an empty string, for RFC 4180 CSV data, where a backslash is an
-    ordinary character
+    @param quote_escape the escape of a quote character in a quoted field: a string holding a single backslash (the
+    default) for a backslash before the quote; the quote character itself, or an empty string, for RFC 4180 CSV data,
+    where a backslash is an ordinary character
 
     @return a list of each component of a string separated by a separator string, with the separator and any enclosing
     quote characters removed

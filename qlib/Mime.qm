@@ -404,7 +404,7 @@ public namespace Mime {
     public const string MimeTypeSoapXml = "application/soap+xml";
 
     #! Mime type for yaml data files (RFC 9512)
-    /** @since Mime 1.8 the value is \c "application/yaml" (RFC 9512); it was \c "text/x-yaml", which peers of %Qore
+    /** @since %Mime 1.9 the value is \c "application/yaml" (RFC 9512); it was \c "text/x-yaml", which peers of %Qore
         releases before 3.0 require, and which @ref Mime::YamlMimeTypes "YamlMimeTypes" and
         @ref Mime::mime_check_equivalent_type() "mime_check_equivalent_type()" treat as equivalent
     */
@@ -429,7 +429,7 @@ public namespace Mime {
     public const string MimeTypeYamlRpc = "application/x-yaml";
 
     #! Official IANA MIME type for YAML (RFC 9512)
-    /** @since Mime 1.7
+    /** @since %Mime 1.9
     */
     public const string MimeTypeYamlApp = "application/yaml";
 
@@ -437,7 +437,7 @@ public namespace Mime {
     /** All of these MIME types represent YAML content and should be treated as equivalent
         when validating content types against API schemas.
 
-        @since Mime 1.8
+        @since %Mime 1.9
     */
     public const hash<string, bool> YamlMimeTypes = {
         MimeTypeYaml: True,
@@ -447,7 +447,7 @@ public namespace Mime {
     };
 
     #! MIME type for CBOR (RFC 8949)
-    /** @since Mime 1.7
+    /** @since %Mime 1.9
     */
     public const string MimeTypeCbor = "application/cbor";
 
@@ -563,7 +563,7 @@ public namespace Mime {
 
         @return True if an equivalent MIME type is found in the accepted set
 
-        @since Mime 1.8
+        @since %Mime 1.9
     */
     public bool sub mime_check_equivalent_type(string content, hash<string, bool> mime_types) {
         # check YAML equivalence
@@ -3100,7 +3100,7 @@ hash: (2 members)
     /** This class is used for sending multiple messages in a digest format, commonly used for
         mailing list digests. Each part defaults to message/rfc822 content type.
 
-        @since %Mime 1.7
+        @since %Mime 1.9
     */
     public class MultiPartDigestMessage inherits MultiPartMessage {
         #! creates the object
@@ -3152,7 +3152,7 @@ hash: (2 members)
     /** This class is used for HTTP 206 Partial Content responses when serving multiple byte ranges.
         It's commonly used for resumable downloads and video streaming.
 
-        @since %Mime 1.7
+        @since %Mime 1.9
     */
     public class MultiPartByteRangesMessage inherits MultiPartMessage {
         #! creates the object
@@ -3214,7 +3214,7 @@ hash: (2 members)
         @note The actual cryptographic signing must be performed externally; this class only handles
         the MIME structure.
 
-        @since %Mime 1.7
+        @since %Mime 1.9
     */
     public class MultiPartSignedMessage inherits MultiPartMessage {
         private {
@@ -3294,7 +3294,7 @@ hash: (2 members)
 
         @note The actual encryption must be performed externally; this class only handles the MIME structure.
 
-        @since %Mime 1.7
+        @since %Mime 1.9
     */
     public class MultiPartEncryptedMessage inherits MultiPartMessage {
         private {
@@ -3368,7 +3368,7 @@ hash: (2 members)
     /** This class is used for encapsulating complete email messages, commonly used for
         forwarding messages as attachments.
 
-        @since %Mime 1.7
+        @since %Mime 1.9
     */
     public class MultiPartMessageMessage inherits MultiPartMessage {
         #! creates the object

@@ -164,6 +164,13 @@ module VscDebugAdapter {
       attached; threads that were stopped when it was attached, threads that the runtime stops at their next
       statement when it is attached, and threads that start during the configuration phase run on after the
       \c configurationDone request; they were not resumed and not reported as stopped
+    - the shortcuts and aliases of \c qdbg, such as \c n and \c backtrace, are not commands in the debug console of
+      Visual Studio Code, as they can be the names of variables
+    - the exception filters are described in Visual Studio Code, and a breakpoint that cannot be set is explained in
+      plain words, such as <tt>there is no statement on line 1 of "target.q" where the program can pause</tt>
+    - the output of a program of a remote debug server (\c qdbg-server) is shown in the IDE, and the server's own
+      log is not sent as output; the output that a thread writes before it stops is shown before the stop; fixed
+      \c qdbg-vsc-adapter writing every event of a remote debug server to the debug console of the IDE
 
     @subsection vda_v0_2
     - updated to use a Logger

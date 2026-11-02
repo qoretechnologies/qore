@@ -184,7 +184,13 @@ printf("%Y\n", ans.body);
       \c "application/yaml", which the servers of %Qore releases before 3.0 do not decode
     - added support for the OAuth2 \c implicit grant type, and the
       @ref RestClient::RestConnection::RCF_OAUTH2_IMPLICIT "oauth2-implicit" and
-      @ref RestClient::RestConnection::RCF_OAUTH2_AUTH "oauth2-auth" connection features
+      @ref RestClient::RestConnection::RCF_OAUTH2_AUTH "oauth2-auth" connection features, the
+      \c oauth2_redirect_passthrough_state option for providers that do not pass the \c state parameter through
+      the redirect, and <tt>{{option_name}}</tt> template substitution in \c oauth2_auth_args values for providers
+      that use non-standard parameter names
+    - added Kerberos/SPNEGO HTTP Negotiate authentication (the \c negotiate_auth option and related options) for
+      synchronous and polling requests, @ref restclientiointro "RestClientIo" requests, SSE readers and polling
+      pings
     - <b>security</b>: a credential sent in a header with a name of its own, such as \c Qorus-Token, no longer appears
       in exception arguments, the request information (\c info) of a failed request or debug messages, nor where
       a server echoes it in an error: headers whose names contain \c token, \c secret, \c api-key or \c apikey,
@@ -267,6 +273,9 @@ printf("%Y\n", ans.body);
       for inbound responses
     - fixed non-blocking polling with connections that use basic auth
       (<a href="https://github.com/qoretechnologies/qore/issues/5001">issue 5001</a>)
+    - added the @ref RestClient::RestClientPool "RestClientPool" class, a thread-safe connection pool for
+      @ref RestClient::RestClient "RestClient" objects based on
+      @ref Qore::Thread::AbstractConnectionPool "AbstractConnectionPool"
 
     @subsection restclientv2_3_2 RestClient v2.3.2
     - fixed acqquiring OAuth2 tokens when the \c oauth2_token_use_basic_auth option is set

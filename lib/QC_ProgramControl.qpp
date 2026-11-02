@@ -103,6 +103,24 @@ hashdecl StepInTargetInfo {
 /** The object is never instantiated in script but returned by a API function.
     The class provides only safe data non breaking security model.
 
+    @anchor programcontrol_object_identity
+    Each call that returns a ProgramControl object, such as
+    @ref Qore::Program::getProgram() "Program::getProgram()",
+    @ref Qore::ProgramControl::getProgram() "ProgramControl::getProgram()",
+    @ref Qore::ProgramControl::resolveProgramId() "ProgramControl::resolveProgramId()",
+    @ref Qore::ProgramControl::getAllPrograms() "ProgramControl::getAllPrograms()" and
+    @ref Qore::Breakpoint::getProgram() "Breakpoint::getProgram()", returns a new object, so two ProgramControl
+    objects for the same Program are not the same object; compare them by their
+    @ref Qore::ProgramControl::getProgramId() "program IDs".  The same holds for the
+    @ref Qore::Breakpoint "Breakpoint" objects returned by
+    @ref Qore::Breakpoint::resolveBreakpointId() "Breakpoint::resolveBreakpointId()" and
+    @ref Qore::ProgramControl::getBreakpoints() "ProgramControl::getBreakpoints()", which are compared by their
+    @ref Qore::Breakpoint::getBreakpointId() "breakpoint IDs".  A Program or a breakpoint whose last reference has been
+    released cannot be found by its ID, is not listed by
+    @ref Qore::ProgramControl::getAllPrograms() "ProgramControl::getAllPrograms()" and is not returned by
+    @ref Qore::Breakpoint::getProgram() "Breakpoint::getProgram()"; the breakpoints of a Program are unassigned when
+    its last reference is released.
+
     @see
         @ref Qore::Program "Program"
 
@@ -532,7 +550,10 @@ list<int> ProgramControl::getStatementIds() {
 //! Find statement related to position in file
 /**
    @param file name where is looking for. Searching is done in three steps, in the first one is looking for full name match, in the second is looking for label full match (if exists) and
-      in the third for end suffix match. File can by empty if program contains only one file. Beware of label formating, see @ref Qore::Program::parse
+      in the third for end suffix match; finally the name is matched as an absolute path against the absolute path of
+      each file, made absolute with the working directory that the file was parsed in, so that a file can be given
+      with another path than it was parsed with, as an IDE gives it. File can by empty if program contains only one
+      file. Beware of label formating, see @ref Qore::Program::parse
    @param line to find statement. In case of multiple statements of line the first one is found
 
    @see

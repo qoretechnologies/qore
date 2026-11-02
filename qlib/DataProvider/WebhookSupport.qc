@@ -30,6 +30,9 @@ public namespace DataProvider {
     The webhook infrastructure must be registered by the runtime environment
     before data providers can use these methods.
 
+    The callbacks are registered once per process with registerWebhookApis(); they cannot be read or replaced
+    by other code afterwards.
+
     @par Webhook Creation Callback
     The creation callback takes a hash with the following keys:
     - \c method (string): the HTTP method for the webhook (e.g., "POST")
@@ -61,6 +64,8 @@ public class DataProviderWebhook {
         @param create a callback for creating webhooks; takes a hash with webhook config,
                returns a hash with \c url and \c ctx keys
         @param destroy a callback for deleting webhooks; takes the hash returned by \a create
+
+        @throw WEBHOOK-API-ERROR the webhook APIs are already registered
     */
     static registerWebhookApis(code create, code destroy) {
         if (webhookCreate) {

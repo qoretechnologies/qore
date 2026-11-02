@@ -242,6 +242,12 @@ module ImapClientDataProvider {
     |\c watch|Raises an event for every new message matching the search criteria
     |\c watch-attachment|Raises an event for every attachment on a new matching message
 
+    The watches track messages by UID.  With
+    @ref DataProvider::AbstractWatchDataProviderBase::setCheckpointPersistence() "checkpoint persistence"
+    configured, the mailbox's UID validity and the last delivered UID survive a service reload, so mail that was
+    already delivered is not processed again and mail that arrived while the watch was down is reported; see
+    @ref ImapClientDataProvider::ImapWatchDataProviderBase "ImapWatchDataProviderBase".
+
     @section imapclientdataprovider_factory IMAP Data Provider Factory
 
     The name of the IMAP data provider factory is <b><tt>imap</tt></b>.

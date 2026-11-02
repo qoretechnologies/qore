@@ -165,6 +165,14 @@ sse.observersReady();
       have been validated, and raises \c SOCKET-TIMEOUT when the connection's \c timeout expires; the
       \c ServerSentEventConnection ping uses it instead of \c HTTPClient
       (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
+    - fixed chunked event streams: each received chunk was parsed as exactly one event, so an event spanning chunks
+      or several events in one chunk were misparsed, and an uncompressed chunked stream failed; events are read with
+      @ref Qore::HTTPClient::readServerSentEvent() "HTTPClient::readServerSentEvent()", which also decodes \c br and
+      \c zstd streams and limits the size of an event to the \c max_response_body_size option, or to 128 MiB by
+      default
+    - added \c "3.0" to the \c http_version data provider option for HTTP/3 SSE connections
+    - added optional AsyncAPI 3.0 validation of received event data with the \c asyncapi, \c validator and
+      \c asyncapi_channel options
 
     @subsection serversenteventclient_v1_0 Version 1.0
     - initial release

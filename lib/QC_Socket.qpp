@@ -2434,6 +2434,12 @@ const SOCK_RAW = SOCK_RAW;
     on the parameters required for these methods). Then Socket::acceptSSL() should be called after the socket is in a
     listening state to accept client connections and negotiate a TLS/SSL connection.
 
+    @anchor openssl_config
+    %Qore processes the OpenSSL configuration file when it is initialized, unless another library in the process has
+    used OpenSSL before.  A configuration file that cannot be processed is reported once on \c stderr with the reason
+    given by OpenSSL; the parts of the configuration that could not be processed are not applied, and TLS connections
+    can still be made from every thread.
+
     @par Async I/O and the Event Loop
 
     The Socket class provides low-level poll operations (Socket::startPollConnect(),

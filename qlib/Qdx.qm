@@ -64,6 +64,12 @@ module Qdx {
     - render MIME wildcards and URL paths literally in prose, code examples and verbatim blocks
     - respect conditional parse directives during documentation builds using QORE_DOC_DEFINES
     - added formatted astparser diagnostics for tooling that consumes Qore source
+    - added the @ref Qdx::QoreTokenizer "QoreTokenizer" class for the lexical analysis of %Qore code, which tells
+      \c $# (the loop iteration variable) from \c # (the start of a comment) and supports strings, comments, regular
+      expressions, heredocs, substitution and transliteration, and the @ref Qdx::count_braces() "count_braces()"
+      and @ref Qdx::count_all_brackets() "count_all_brackets()" functions for counting brackets in %Qore code
+      (<a href="https://github.com/qoretechnologies/qore/issues/5109">issue 5109</a>)
+    - module documentation resolves the symbols of transitive user and bundled native module dependencies
 
     @subsection qdx_1_1_1 Qdx v1.1.1
     - fixed stripping the final <tt>\\</tt> character in multi-line entries in tables

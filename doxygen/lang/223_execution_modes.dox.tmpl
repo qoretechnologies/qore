@@ -397,6 +397,7 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
     |\c --include-source|Embed Qore source text
     |\c --strip-source|Omit Qore source text
     |\c --strip-debug-info|Omit DWARF debug info
+    |<tt>--file-prefix-map=OLD=NEW</tt>|Map source paths that start with \c OLD to \c NEW in the metadata, debug information and exception locations of a final executable or whole module, for reproducible builds; repeatable, and the last matching prefix wins; \c OLD also matches the canonical form of the path it names; input files and dependency files keep their physical paths; not for incremental \c .qo or object-link modes. The %Qore CMake macros pass each \c -ffile-prefix-map option in the C++ compiler flags (\c CMAKE_CXX_FLAGS) to \c qcc in this form when compiling a user module
     |\c -g|Emit DWARF debug info
     |\c --time-trace[=PATH]|Emit Chrome-format LLVM timing trace
     |\c --big-fn-threshold=N|Use \c OptimizeNone for functions with at least N IR blocks, default 200

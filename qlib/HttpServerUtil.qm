@@ -200,6 +200,11 @@ module HttpServerUtil {
     - added \c sync option to allow non-blocking listener addition in async I/O mode
     - added Brotli (\c br) and Zstandard (\c zstd) Content-Encoding support in decodeBody() and encodeBody()
       (<a href="https://github.com/qoretechnologies/qore/issues/5071">issue 5071</a>)
+    - added the \c http_version option of @ref HttpServer::HttpListenerOptionInfo "HttpListenerOptionInfo" for
+      HTTP/2 and HTTP/3 mode control
+    - added @ref HttpServer::StreamResponseProducer "StreamResponseProducer", which streams a response body from a
+      worker thread for @ref Qore::InputStream "InputStream" bodies that cannot be read in the I/O thread on HTTP/2
+      and HTTP/3
 
     @subsection httputil1_3 HttpServerUtil 1.3
     - allow authentication methods to set the call context

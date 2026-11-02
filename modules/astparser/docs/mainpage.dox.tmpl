@@ -5,7 +5,9 @@
     @section astparserintro astparser Module Introduction
 
     The \c astparser module supports reporting of %Qore-language declarations for rich language support in
-    %Qore code editors.
+    %Qore code editors.  It parses %Qore source with a
+    <a href="https://tree-sitter.github.io/tree-sitter/">tree-sitter</a> grammar, which tolerates incomplete and
+    erroneous code, as in a file being edited.
 
     This module is released under the MIT license (see \c COPYING.MIT in the source distribution for
     more information).  The module is tagged as such in the module's header (meaning it can be loaded

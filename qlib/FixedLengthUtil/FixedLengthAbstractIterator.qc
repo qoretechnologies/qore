@@ -116,7 +116,7 @@ public class FixedLengthAbstractIterator inherits FixedLengthBase, Qore::Abstrac
     #! Returns the current record as a hash
     /** @par Example:
         @code{.py}
-my hash $h = $i.getValue();
+hash<auto> h = i.getValue();
         @endcode
 
         @return The current record as a hash with the following keys:

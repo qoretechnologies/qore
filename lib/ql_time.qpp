@@ -1878,6 +1878,12 @@ date date(date value) [flags=CONSTANT,NAMED_ARGS] {
     - <b>RFC 7231 asctime</b> (obsolete HTTP format): \c "Sun Nov  6 08:49:37 1994"
     - <b>RFC 2822</b> (email dates with numeric timezone offset): \c "Sun, 06 Nov 1994 08:49:37 +0500"
 
+    RFC 7231 and RFC 2822 dates are returned in UTC: \c GMT and \c UTC are UTC, a numeric offset such as \c +0530 is
+    applied, the obsolete North American zone names of
+    <a href="https://datatracker.ietf.org/doc/html/rfc5322#section-4.3">RFC 5322 section 4.3</a> have their offsets
+    (\c EST is \c -0500, \c EDT \c -0400, \c CST \c -0600, \c CDT \c -0500, \c MST \c -0700, \c MDT \c -0600,
+    \c PST \c -0800, \c PDT \c -0700), and any other zone name is UTC (\c -0000), as that section recommends.
+
     @return the @ref absolute_dates "absolute date/time value" corresponding to the string argument passed
 
     @par Example:

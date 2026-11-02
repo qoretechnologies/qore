@@ -143,6 +143,51 @@
     QORE_DOC_DEFINES="NoXml,NoYaml" make docs
     @endcode
 
+    @subsection qore_cmake_module_docs Module Documentation and Cross-Module Links
+
+    The shared HTML header, stylesheet, icon and logo of the documentation are taken from the directory of the
+    SDK's installed \c Doxyfile.in, not from the module's \c CMAKE_INSTALL_PREFIX, so a module installed under
+    another prefix than %Qore can build its documentation with them.  The HTML footer is the module's own
+    \c docs/footer_template.html.
+
+    When %Qore's documentation was built before installation, the SDK installs the reference index of the language
+    documentation (\c share/qore/qore.tag) and the indexes of the bundled modules (\c share/qore/module-tags); an
+    external binary module whose documentation was built installs its index there too, under
+    \c CMAKE_INSTALL_DATADIR (default: \c share under the module's install prefix; \c DESTDIR staging and
+    <tt>cmake --install --prefix</tt> are honored).  The documentation of a module links to %Qore types and to the
+    API of the modules named in \c QORE_DOXYGEN_MODULES, set before \c find_package(Qore):
+    @code
+    set(QORE_DOXYGEN_MODULES DataProvider reflection json yaml)
+    find_package(Qore REQUIRED)
+    @endcode
+
+    <table>
+    <tr><th>Variable</th><th>Description</th></tr>
+    <tr><td>\c QORE_DOXYGEN_MODULES</td><td>The installed modules whose API documentation the module links to;
+        indexes that were not built are omitted</td></tr>
+    <tr><td>\c QORE_DOXYGEN_MODULE_TAG_DIR</td><td>The directory of the module indexes (default:
+        \c share/qore/module-tags of the %Qore installation)</td></tr>
+    <tr><td>\c QORE_DOXYGEN_MODULE_URL</td><td>The base HTML URL of the module documentation;
+        <tt>/&lt;module&gt;/html</tt> is appended (default: <tt>https://docs.qore.org/current/modules</tt>)</td></tr>
+    <tr><td>\c QORE_DOXYGEN_TAGFILE</td><td>The language reference index (default: \c share/qore/qore.tag of the
+        %Qore installation)</td></tr>
+    <tr><td>\c QORE_DOXYGEN_TAG_URL</td><td>The HTML location of the language reference (default:
+        <tt>https://docs.qore.org/current/lang/html</tt>)</td></tr>
+    </table>
+
+    A binary module that includes user modules builds its documentation in two passes, so that the binary module
+    and its user modules link to each other: the first pass generates the indexes and the final pass renders the
+    pages with all of them.  Call \c qore_binary_module_two_phase_docs() after \c qore_external_binary_module() and
+    all \c qore_external_user_module() calls, with the name of the binary module and the list of its user modules:
+    @code
+    qore_external_binary_module(krb5 ${PROJECT_VERSION})
+    qore_external_user_module("qlib/Krb5Util" "")
+    qore_binary_module_two_phase_docs(krb5 "Krb5Util")
+    @endcode
+
+    A module configured against a %Qore build tree, without installing %Qore, uses the build tree's documentation
+    template and language index.
+
 
     @subsection QORE_DIST QORE_DIST
     

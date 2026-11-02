@@ -24,6 +24,9 @@ const *string LABEL = NOTHING;
 # const int Bad = "not an int";  # PARSE-TYPE-ERROR
     @endcode
 
+    The explicit type is resolved when the constant is initialized at parse commit, like an inferred type, so it can
+    name a @ref hashdecl "hashdecl" or @ref qore_classes "class" declared later in the same source or module.
+
     @note The \c const keyword also declares @ref readonly_local_variables "read-only local variables" and @ref readonly_function_parameters "read-only function parameters" in statement and parameter contexts, and marks @ref const_methods "const methods" after a method parameter list. Read-only bindings are runtime local variables, not parse-time constants, and are not affected by @ref no-constant-defs "%no-constant-defs".
 
     @since 0.8.1 The expression used to initialize a constant can be any valid @ref expressions "Qore expression" as long as no variables are referenced.

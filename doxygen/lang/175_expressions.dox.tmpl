@@ -27,6 +27,13 @@
     |A reference to the entire @ref implicit_arguments "implicit argument" list (\c $$)|References the implicit argument list|@code{.py} $$@endcode
     |An @ref implicit_index "implicit index" reference|Gives the list index position when implicitly iterating a list|@code{.py} $#@endcode
 
+    @anchor parse_nesting_limit
+    @par Nesting Limit
+    The parser supports up to 1000 nested syntax elements, counting each operator in an expression, and raises a
+    \c PARSE-EXCEPTION for code that is nested more deeply, or more deeply than the stack of the parsing thread allows;
+    for example, an expression that adds more than about 1000 terms with \c + is rejected.  Lists, hashes, argument
+    lists, statement lists and adjacent string literals are not nested by their length, so they are not limited.
+
     <hr>
     @section static_method_calls Static Method Calls
 
@@ -143,7 +150,7 @@
 
     @par Description
     Closures encapsulate the state and value of local variables of the outer code block referenced from within the closure when the closure is created. Whenever local variables are bound within a closure, these variables are subject to concurrent thread access protection (locking) just as with global variables, in order to allow closures to be used in any context without restriction and to preseve thread-safety regarding bound local variables.\n\n
-    Note that returning a closure from within an object method encapsulates the state of the object as well (it's legal to refer to \c self and <tt>$.</tt><em>member</em> from within closures created from objects), but the closure does not prolong the scope of the object: once the object has been destroyed (for example a temporary object as in <tt>new MyClass().getClosure()</tt>, which is destroyed at the end of the statement that created it, so a closure that the statement calls still sees it, but one that is called by a later statement does not), \c self evaluates to no value in the closure and member accesses and method calls raise \c OBJECT-ALREADY-DELETED exceptions; see @ref object_scope "object scope" and @ref temporary_lifetime "the lifetime of temporary values".\n\n
+    Note that returning a closure from within an object method encapsulates the state of the object as well (it's legal to refer to \c self and to object members from within closures created from objects), but the closure does not prolong the scope of the object: once the object has been destroyed (for example a temporary object as in <tt>new MyClass().getClosure()</tt>, which is destroyed at the end of the statement that created it, so a closure that the statement calls still sees it, but one that is called by a later statement does not), \c self evaluates to no value in the closure and member accesses and method calls raise \c OBJECT-ALREADY-DELETED exceptions; see @ref object_scope "object scope" and @ref temporary_lifetime "the lifetime of temporary values".\n\n
     Note that parameter and return types are required when the @ref Qore::PO_REQUIRE_TYPES or @ref Qore::PO_REQUIRE_PROTOTYPES parse options are set.
 
     @par Example

@@ -334,7 +334,13 @@ log("started listener on %s", lh.desc);
       @ref HttpServer::HttpServer::addListenersAsync() "addListenersAsync()" methods for Future-based listener setup
     - fixed a shutdown crash when HttpServer instances created with the deprecated logger callback constructor were
       torn down while async logging was still active
-    - introduced async I/O for HttpServer (now the only mode)
+    - introduced async I/O for HttpServer (now the only mode): a single I/O thread accepts connections and handles
+      TLS and the reading of headers, and requests are dispatched to a thread pool
+      (<a href="https://github.com/qoretechnologies/qore/issues/5019">issue 5019</a>)
+    - @ref Qore::InputStream "InputStream" response bodies are streamed incrementally, without buffering the whole
+      body, with backpressure over HTTP/1.x, HTTP/2 and HTTP/3
+    - added the \c after_send response callback, called once after the response has been sent or has failed to be
+      sent (see @ref httpserver_after_send)
 
     @subsection http1_4 HttpServer 1.4
     - allow authentication methods to set the call context

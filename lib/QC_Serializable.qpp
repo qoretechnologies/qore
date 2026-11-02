@@ -163,6 +163,21 @@ hashdecl ListSerializationInfo {
     @ref call_reference "call references", or a @ref lvalue_references "reference" will
     result in a \c SERIALIZATION-ERROR as well.
 
+    @anchor serializable_weak_references
+    A @ref weak_assignment_operator "weak reference" whose target has been destroyed is serialized as no value.
+
+    @anchor serializable_container_types
+    The element types of lists and the value types of hashes are written with their namespace paths, so that a
+    container of a class whose name is used by two modules loaded in the same @ref Qore::Program "Program"
+    deserializes to the class that the data was written from; unqualified types in data written by %Qore 2.x are
+    also accepted.  An empty list keeps its declared element type.
+
+    @anchor serializable_rejected_input
+    When deserialization rejects its input, the error that rejected it is raised, and the objects created for the
+    rejected data are discarded without running their destructors, also when they reference each other or
+    themselves; a reference to such an object that a custom deserialization method kept raises
+    \c OBJECT-ALREADY-DELETED when it is used.
+
     @since %Qore 0.9
  */
 qclass Serializable [

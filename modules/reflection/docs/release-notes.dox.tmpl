@@ -5,4 +5,24 @@
     @tableofcontents
 
     This module is always delivered with %Qore and therefore mirrors the %Qore version.
+
+    @section reflection_3_0 reflection Module Version 3.0
+    - added the @ref Qore::Reflection::Enum "Enum" and @ref Qore::Reflection::EnumMember "EnumMember" classes for
+      enum reflection, and @ref Qore::Reflection::Namespace::getEnums() "Namespace::getEnums()" and
+      @ref Qore::Reflection::Namespace::getEnum() "Namespace::getEnum()" to list the enums of a namespace and to get
+      an enum by name
+    - added @ref Qore::Reflection::Class::tryGetConstant() "Class::tryGetConstant()"
+    - added @ref Qore::Reflection::Class::getStaticMethods() "Class::getStaticMethods()", the static-method
+      counterpart to @ref Qore::Reflection::Class::getNormalMethods() "Class::getNormalMethods()"; like every other
+      \c get*() enumerator, it returns only the methods declared in the class itself
+    - added @ref Qore::Reflection::Class::getAllMethods() "Class::getAllMethods()",
+      @ref Qore::Reflection::Class::getAllNormalMethods() "Class::getAllNormalMethods()" and
+      @ref Qore::Reflection::Class::getAllStaticMethods() "Class::getAllStaticMethods()", which return every method
+      accessible in the class, inherited methods included: an overridden method is returned once, as the method that
+      is called, and inherited methods that cannot be accessed in the class (such as a parent's
+      @ref private_methods "private:internal" methods) are excluded
+    - @ref Qore::Reflection::TypedHash "TypedHash" objects can be serialized; the serialized form records the typed
+      hash's anchored namespace path (with type arguments for an instantiated generic @ref hashdecl "hashdecl") and
+      the module providing it, so that \c DataProvider::HashDeclDataType objects, and data provider action output
+      types based on them, can be serialized
 */

@@ -79,7 +79,7 @@ module OracleSqlUtilBase {
 
     For example, for the following select:
     @code{.py}
-*list<auto> rows = $table.selectRows({"where": {"type": "user"}, "limit": 100, "offset": 200});
+*list<auto> rows = table.selectRows({"where": {"type": "user"}, "limit": 100, "offset": 200});
     @endcode
     the following SQL is generated for Oracle with a pre 12c server:
     @code{.py}
@@ -168,7 +168,7 @@ list<hash<auto>> l = ds.selectRows("select * from schema.table where created > c
     @ref SqlUtil::AbstractTable::supportsPartitionRead() "supportsPartitionRead()" and validates the canonical
     partition name before generating Oracle's partition extension:
     @code{.py}
-*list<auto> rows = $table.selectRows(("created": op_gt(2012-05-01), "partition": "p1"));
+*list<auto> rows = table.selectRows(("created": op_gt(2012-05-01), "partition": "p1"));
     @endcode
     Which generates an SQL command like the following:
     @code{.py}
@@ -180,12 +180,12 @@ list<hash<auto>> l = ds.selectRows("select * from schema.table where created > c
     It's possible to perform a join on a particular partition of a table with %OracleSqlUtilBase; the join option
     \c "partition" is supported to specify the partition to join on as in the following example:
     @code{.py}
-*list<auto> $rows = table.selectRows({"join": join_inner($table2, "t2", ("id": "altid"), NOTHING,
+*list<auto> rows = table.selectRows({"join": join_inner(table2, "t2", ("id": "altid"), NOTHING,
     {"partition": "p2"})});
     @endcode
     Which generates an SQL command like the following:
     @code{.py}
-*list<auto> $rows = ds.vselectRows("select * from schema.table inner join schema.table2 partition(p2) t2 on
+*list<auto> rows = ds.vselectRows("select * from schema.table inner join schema.table2 partition(p2) t2 on
     (schema.table.id = t2.altid)");
     @endcode
 

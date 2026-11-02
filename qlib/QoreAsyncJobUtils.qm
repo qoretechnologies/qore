@@ -49,7 +49,10 @@ module QoreAsyncJobUtils {
     Provider modules hand the poller two closures plus optional timeouts;
     the poller drives the polling loop, calls an injectable sleeper between
     iterations (overridable for deterministic tests), and raises a caller-
-    supplied error class when the overall timeout is exceeded.
+    supplied error class when the overall timeout is exceeded.  Each sleep is
+    bounded by the time remaining before the deadline, and a status fetched
+    after the deadline has passed raises the timeout error even if it is
+    terminal.
 
     @section qoreasyncjobutilsusage Usage Example
 

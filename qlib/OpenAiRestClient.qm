@@ -161,6 +161,26 @@ stream.close();
     - fixed @ref OpenAiRestClient::OpenAiRestClientBase::getOptions() "OpenAiRestClientBase::getOptions()" and
       the client constructors to accept an option hash whose values all have the same type, such as
       \c {"use_schema": True}; adding the schema path raised \c RUNTIME-TYPE-ERROR
+    - native OpenAI reasoning requests made through the LLM interface use the Responses API, including strict
+      structured output, streaming, encrypted reasoning continuation and completion status; OpenAI-compatible
+      servers use Chat Completions unless the \c openai_api provider option selects the Responses API
+    - @ref OpenAiRestClient::OpenAiLlmProvider "OpenAiLlmProvider" is the base for any backend that speaks the
+      OpenAI chat-completions wire format (xAI Grok, Perplexity, Azure OpenAI, etc.); the
+      @ref OpenAiRestClient::OpenAiLlmProvider::getChatCompletionsPath() "getChatCompletionsPath()" hook lets a
+      derived provider use another URL path
+    - added the \c chat-model connection option (default \c "gpt-4o-mini"), the model used when the connection is
+      selected for chat; @ref QoreLlmUtils::AbstractLlmProvider::getRequestModel() "getRequestModel()" falls back
+      to the @ref QoreLlmUtils::AbstractLlmProvider::getDefaultModel() "getDefaultModel()" hook, so a chat request
+      always carries a model; providers whose model is not an OpenAI model name (Azure, which routes by deployment)
+      return @ref nothing
+    - OpenAI-compatible requests preserve reasoning effort, strict tool schemas, JSON output formats, parallel-tool
+      controls and service-tier selection through the generic LLM facade; GPT-5 and GPT-6 reasoning requests use
+      the supported output-token field and omit unsupported sampling defaults, and explicitly disabled reasoning is
+      preserved
+    - streaming completions request and keep the provider's token usage, including usage delivered after the final
+      content or tool-call chunk; cache-write usage is kept for both OpenAI token detail formats without counting
+      reasoning twice; chat clients keep usage and output-limit status when tool arguments are incomplete, and
+      truncated or content-filtered responses are not given as executable tool calls
 
     @subsection OpenAiRestClientv1_0 OpenAiRestClient v1.0
     - initial release

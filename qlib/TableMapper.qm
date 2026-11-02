@@ -88,7 +88,7 @@ const DataMap = (
     # output column: "explicit_count": maps from the input "Count" field
     "explicit_count": "Count",
     # output column: "implicit_count": runs the given code on the input record and retuns the result, the code returns the number of "Products" sub-records
-    "implicit_count": int sub (any ignored, hash rec) { return rec.Products.size(); },
+    "implicit_count": int sub (auto ignored, hash rec) { return rec.Products.size(); },
     # output column: "order_date": converts the "OrderDate" string input field to a date in the specified format
     "order_date": ("name": "OrderDate", "date_format": "DD.MM.YYYY HH:mm:SS.us"),
     # output column: order_type: given as a constant value
@@ -123,7 +123,7 @@ Table table(ds, "order_table");
 const DataMap = (
     "id": True,
     "foo": "name",
-    "bar": ("code": string sub (any ignored, hash rec) { return format_date("YYYYMMDD", rec."order_table"); }),
+    "bar": ("code": string sub (auto ignored, hash rec) { return format_date("YYYYMMDD", rec."order_table"); }),
 );
 # SqlUtil select hash
 hash sh = (
@@ -390,7 +390,7 @@ const DbMapper = {
     "available": "Available",
     "in_transit": "InTransit",
     "status": {"constant": "01"},
-    "total": int sub (any x, hash rec) { return rec.Available.toInt() + rec.Ordered.toInt() + rec.InTransit.toInt(); },
+    "total": int sub (auto x, hash rec) { return rec.Available.toInt() + rec.Ordered.toInt() + rec.InTransit.toInt(); },
 };
 
 InboundTableMapper mapper(table, DbMapper);
@@ -429,7 +429,7 @@ const DbMapper = {
     "available": "Available",
     "in_transit": "InTransit",
     "status": {"constant": "01"},
-    "total": int sub (any x, hash rec) { return rec.Available.toInt() + rec.Ordered.toInt() + rec.InTransit.toInt(); },
+    "total": int sub (auto x, hash rec) { return rec.Available.toInt() + rec.Ordered.toInt() + rec.InTransit.toInt(); },
 };
 
 InboundTableMapper mapper(table, DbMapper);
@@ -1431,7 +1431,7 @@ const DbMapper = (
     "available": "Available",
     "in_transit": "InTransit",
     "status": ("constant": "01"),
-    "total": int sub (any x, hash rec) { return rec.Available.toInt() + rec.Ordered.toInt() + rec.InTransit.toInt(); },
+    "total": int sub (auto x, hash rec) { return rec.Available.toInt() + rec.Ordered.toInt() + rec.InTransit.toInt(); },
     );
 
 InboundTableMapperIterator i(input, table, DbMapper);
@@ -1465,7 +1465,7 @@ const DbMapper = (
     "available": "Available",
     "in_transit": "InTransit",
     "status": ("constant": "01"),
-    "total": int sub (any x, hash rec) { return rec.Available.toInt() + rec.Ordered.toInt() + rec.InTransit.toInt(); },
+    "total": int sub (auto x, hash rec) { return rec.Available.toInt() + rec.Ordered.toInt() + rec.InTransit.toInt(); },
     );
 
 InboundTableMapperIterator i(input, table, DbMapper);
@@ -1498,7 +1498,7 @@ const DbMapper = (
     "ordered": "Ordered",
     "available": "Available",
     "in_transit": "InTransit",
-    "total": int sub (any x, hash rec) { return rec.Available.toInt() + rec.Ordered.toInt() + rec.InTransit.toInt(); },
+    "total": int sub (auto x, hash rec) { return rec.Available.toInt() + rec.Ordered.toInt() + rec.InTransit.toInt(); },
     );
 
 InboundTableMapper mapper(table, DbMapper);

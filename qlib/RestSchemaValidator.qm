@@ -79,6 +79,25 @@ module RestSchemaValidator {
     - @ref RestSchemaValidator::AbstractRestSchemaValidator "AbstractRestSchemaValidator"
     - @ref RestSchemaValidator::NullRestSchemaValidator "NullRestSchemaValidator"
 
+    @section restschemavalidator_data_types Data Types of REST Schemas
+
+    The data types that a REST schema (OpenAPI or Swagger) gives its operations, which are the types of the options
+    and fields of REST schema data providers and their actions, follow these rules:
+    - the type of an object schema is the type of a request value, which has no field for a property that the schema
+      declares \c readOnly: a request value with such a field is refused with a \c RUNTIME-TYPE-ERROR exception;
+      the type of a response value
+      (@ref RestSchemaValidator::AbstractRestSchemaValidator::getResponseDataType() "getResponseDataType()") has the
+      read-only properties, and an OpenAPI one has no field for a \c writeOnly property
+    - the type of a field for a scalar property enforces the constraints of the property's schema, such as
+      \c maxLength, \c maximum, \c pattern and \c enum, before a request is sent, also when it converts a value
+      from a string, and a value that does not meet them is refused with a \c RUNTIME-TYPE-ERROR or
+      \c TYPE-VALUE-ERROR exception; the description of the type gives the constraints
+    - the \c default of a property or parameter is the remote default value of its field, which is shown and never
+      applied or sent (see @ref dataprovider_remote_default_values)
+    - a nullable enumeration, which OpenAPI 3.1 writes as an \c anyOf or \c oneOf of the enumeration and the
+      \c null type, offers the values of the enumeration as its choices, with the display names that the schema
+      gives them, as a plain enumeration does; as an optional field, it also accepts no value and \c NULL
+
     @section restschemavalidator_relnotes RestSchemaValidator Module Release Notes
 
     @subsection restschemavalidator_2_5 RestSchemaValidator v2.5
@@ -136,7 +155,11 @@ module RestSchemaValidator {
       (public minimum/maximum and numeric exclusive bounds now use Qore numbers instead of floats)
     - accept opaque GLB model responses as binary media
     - enforce boolean enumerations and preserve false values in generated enumeration examples
-    - preserve opaque audio, image, and video response bytes in the null schema validator
+    - preserve opaque audio, image, and video response bytes in the null schema validator, and opaque PDF response
+      bytes on synchronous and asynchronous transports
+    - fixed validating a request or response value holding @ref NULL "NULL", which raised
+      \c RUNTIME-OVERLOAD-ERROR; \c NULL is validated as no value, so a \c nullable property accepts it and any other
+      property raises \c SCHEMA-VALIDATION-ERROR, and the value is left unchanged
     - retain nullable value types and independent presence requirements across cached field uses
     - extracted shared base classes for schema validation across Swagger, OpenApi3, and AsyncApi modules:
       - @ref RestSchemaValidator::AbstractObjectBase "AbstractObjectBase": vendor extensions support
@@ -151,8 +174,8 @@ module RestSchemaValidator {
       recursive property from recursing forever, and a use whose description or default differs from it now
       gets its own copy over the same type
     - fixed a parameter description being joined to its schema's when one already contains the other, which
-      published a repeated sentence such as \c "Agent run ID.: Agent run ID. New run IDs are returned with
-      the \c agent_run_ prefix."; whichever says more is now kept
+      published a repeated sentence such as <tt>"Agent run ID.: Agent run ID. New run IDs are returned with
+      the agent_run_ prefix."</tt>; whichever says more is now kept
     - added abstract \c check() method to @ref RestSchemaValidator::AbstractSchemaObject "AbstractSchemaObject"
     - added CBOR serialization/deserialization support (\c "application/cbor") when the \c json module
       version 1.12+ is available (RFC 8949)

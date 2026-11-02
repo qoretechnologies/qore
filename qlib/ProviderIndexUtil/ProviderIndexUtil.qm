@@ -251,6 +251,11 @@ if (*hash<ProviderIndexFailureInfo> failure = ProviderIndexUtil::tryGetActionFai
     - an action whose metadata cannot be read is logged and omitted
     - fixed @ref ProviderIndexUtil::ProviderIndexUtil::removeCachedApp() "ProviderIndexUtil::removeCachedApp()"
       leaving the removed app's actions available
+    - fixed the index directory being created with mode \c 0664, which made it untraversable so that no index file
+      in it could be read or written; it is created with mode \c 0755
+    - index files are written atomically (to a temporary file in the target directory, which is renamed over the
+      target), and the existing index is not moved away before the new one is written, so an interrupted or failed
+      index creation leaves the previous index in place
     - loaded dependency filtering recognizes exact module names and loaded artifact paths, including compiled
       modules with API-version suffixes; legacy explicit-path indexes remain readable
 

@@ -83,6 +83,11 @@ hashdecl FtpResponseInfo {
 
     To manually control which modes are tried, see the FtpClient::setModeEPSV(), FtpClient::setModePASV(), and FtpClient::setModePORT() methods.
 
+    A transfer that fails before the server's reply to it is read, for example because the
+    @ref Qore::OutputStream "OutputStream" that it is written to raises an exception, closes the control connection,
+    so that the next method that needs a connection makes a new one instead of reading the reply of the failed
+    transfer.
+
     This class supports posting network events to a Queue, either events on the control or data channels or both can be monitored. See @ref event_handling for more information.
 
     The events raised by this object are listed in the following table:

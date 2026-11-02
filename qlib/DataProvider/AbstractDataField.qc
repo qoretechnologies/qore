@@ -56,6 +56,8 @@ public hashdecl DataFieldInfo {
     auto remote_default_value;
 
     #! for enum fields; allowed values
+    /** A field whose type is optional also accepts no value and @ref null, which are not among its allowed values
+    */
     *list<hash<AllowedValueInfo>> allowed_values;
 
     #! Does the field accept values not defined in allowed_values too?

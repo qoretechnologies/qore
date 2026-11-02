@@ -100,14 +100,16 @@ module DeepSeekDataProvider {
 
     @section deepseekdataproviderintro DeepSeekDataProvider Introduction
 
-    The %DeepSeekDataProvider module provides a data provider API for
-    <a href="https://platform.deepseek.com">DeepSeek</a> chat models.
+    The %DeepSeekDataProvider module provides a data provider API for the
+    <a href="https://platform.deepseek.com">DeepSeek</a> API: chat completions, fill-in-the-middle completions,
+    responses, models, the account balance and image files (see @ref deepseekdataprovidercoverage).
 
     The following data providers are exposed:
     - @ref DeepSeekDataProvider::DeepSeekDataProvider "DeepSeekDataProvider"
       — the root provider
-    - @ref DeepSeekDataProvider::DeepSeekChatCompletionDataProvider
-      "DeepSeekChatCompletionDataProvider" — OpenAI-compatible chat
+    - @ref DeepSeekDataProvider::DeepSeekChatCompletionDataProvider "DeepSeekChatCompletionDataProvider"
+      — OpenAI-compatible chat
+    - one child provider for each of the other actions listed in @ref deepseekdataprovidercoverage
 
     @par Example:
     @code{.py}

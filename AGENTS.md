@@ -39,6 +39,19 @@
   A Markdown table renders as literal text in the generated HTML. See `design/doc-tables.md`;
   malformed tables fail the build (`QORE_DOX_TABLE_STRICT`, on by default in this repo).
 
+## Release Notes
+- The language release notes are `doxygen/lang/900_release_notes.dox.tmpl`; see `design/release-notes.md`.
+- **Never add text directly after a `@section qore_X_Y_Z` line or after its `@par Release Summary`.** A new entry goes
+  into the matching subsection of the newest section: `_compatibility` or `_new_features` as a `@par Title` block
+  (`@parblock` for more than one paragraph), `_updated_modules`, `_new_builtin_modules`, `_new_user_modules` or
+  `_bug_fixes` as a bullet. The summary lists only headline-level highlights.
+- Entries are one-sentence summaries (at most four lines) that link (`@ref`) to the reference documentation, which
+  holds the details; put any detail there first. Describe only changes relative to the last *release*: a fix to
+  functionality that no release has shipped is not an entry.
+- Never write a backslash before a double quote (`\\"`) in doxygen text: it breaks the markup that follows.
+- `python3 -I doxygen/check-release-notes.py` checks the structure (CI and the `docs-lang*` targets run it); check the
+  rendered page with `cmake --build build --target docs-lang-final-fast`.
+
 ## Testing Guidelines
 - Primary tests are Qore scripts under `examples/test/` with the `*.qtest` suffix; a binary module's own tests are in
   `modules/<module>/test/`.

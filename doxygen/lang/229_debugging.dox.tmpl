@@ -39,12 +39,15 @@
 
     A breakpoint is set on a statement, which is given by:
     - its line in a file or source label; a line in a statement of more than one line is the statement that contains
-      it
+      it.  The file can also be given with another path than it was parsed with, such as an absolute path for a
+      program started with a relative path: it is then matched as an absolute path, made absolute with the working
+      directory that the file was parsed in (see
+      @ref Qore::ProgramControl::findStatementId() "ProgramControl::findStatementId()")
     - its line and column, for a statement of a line with more than one statement, as in
       <tt>int x = f(1); int y = g(2);</tt>; the breakpoint is on the last statement of the line that starts at or
       before the column
-    - a function, possibly with the types of its parameters to select one variant of an overloaded function; the
-      breakpoint is on the start of the function
+    - a function, possibly with the types of its parameters to select one variant of an overloaded function (a
+      function with one variant can be given by its name only); the breakpoint is on the start of the function
 
     A breakpoint can have:
     - a condition: an expression that is evaluated with the variables of the thread that hits the breakpoint; the

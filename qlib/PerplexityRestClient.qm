@@ -76,6 +76,12 @@ module PerplexityRestClient {
     - @ref PerplexityRestClient::PerplexityChatSseStreamIo "PerplexityChatSseStreamIo"
     - @ref PerplexityRestClient::PerplexityRestConnection "PerplexityRestConnection"
 
+    The module registers the \c perplexity mode in the
+    @ref QoreLlmUtils::LlmProviderRegistry "LlmProviderRegistry" with
+    @ref PerplexityRestClient::PerplexityLlmProvider "PerplexityLlmProvider", an OpenAI-compatible chat provider
+    that uses Perplexity's \c /chat/completions path.  The \c chat-model connection option sets the model used when
+    the connection is selected for chat (default: \c "sonar").
+
     @section perplexityrestclientrelnotes Release Notes
 
     @subsection perplexityrestclientv1_0 PerplexityRestClient v1.0

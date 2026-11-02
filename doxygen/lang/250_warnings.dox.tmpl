@@ -18,6 +18,7 @@
 
     @par List of All Warnings
     - @ref ambiguous-call-resolution
+    - @ref ambiguous-overload
     - @ref warning-broken-logic-precedence broken-logic-precedence
     - @ref call-with-type-errors
     - @ref deprecated-warning
@@ -67,6 +68,20 @@ AMBIGUOUS-CALL-RESOLUTION: call to function 'f()' is ambiguous; matches: 'A::f()
     @endverbatim
 
     Note that which of the two candidates wins is unspecified, which is precisely what the warning reports.  Silence it by giving the call an explicit @ref namespace_paths "namespace path" (<tt>A::f()</tt>) or by renaming one of the functions.
+    @since %Qore 3.0
+
+    <hr>
+    @section ambiguous-overload ambiguous-overload
+    Raised when a class declares a method that hides overloaded variants of the same method in a base class with
+    signatures that a call could match ambiguously, or when more than one base class provides a method with the same
+    name that the class does not declare itself, so that a call of the method resolves to only one of them.  The
+    warning gives the matching signatures and the method that calls resolve to; silence it by calling the method with
+    a fully-qualified base class path, by renaming one of the methods, or by giving the overloads distinct signatures.
+
+    This is a strict warning: it is not included in @ref enable-all-warnings "%enable-all-warnings" and must be
+    enabled explicitly, either by name or with @ref strict-warnings "%strict-warnings".  It additionally requires
+    @ref require-types "%require-types" (implied by @ref modern "%modern"), and it is never raised in a
+    @ref user_modules "user module" or for static methods.
     @since %Qore 3.0
 
     <hr>

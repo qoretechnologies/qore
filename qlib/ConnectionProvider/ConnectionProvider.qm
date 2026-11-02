@@ -251,6 +251,16 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
     - omit sensitive declared connection options from ping and connection diagnostics
     - added async HTTP ping polling support for HTTP and HTTP-based connections
     - added the @ref ConnectionProvider::RestartableIoHelper "RestartableIoHelper" class
+    - added the \c max_response_body_size option to @ref ConnectionProvider::HttpConnection "HttpConnection" and
+      the connections based on it, which limits the size of a response body received into memory, as received and
+      after its content encoding is decoded, for both the synchronous and the asynchronous clients
+    - the \c http_version option of @ref ConnectionProvider::HttpConnection "HttpConnection" and of the
+      connections based on it, such as @ref RestClient::RestConnection "RestConnection", also accepts \c "auto",
+      the default, \c "2.0" and \c "3.0"
+    - added the \c amqp and \c amqps connection schemes for the
+      <a href="https://github.com/qoretechnologies/module-amqp">amqp</a> module, and the \c sglang scheme and the
+      \c chromas, \c milvuss, \c ollamas, \c sglangs and \c weaviates TLS schemes to
+      @ref ConnectionProvider::ConnectionSchemeCache::SchemeMap "ConnectionSchemeCache::SchemeMap"
 
     @subsection connectionprovider_2_0_1 ConnectionProvider 2.0.1
     - make the original connection status available when pings are made so that status changes can be detected

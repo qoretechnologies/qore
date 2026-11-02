@@ -306,7 +306,7 @@ while (i.next())
     - a backslash is an ordinary character: <tt>"C:\\data\\"</tt> is the field <tt>C:\\data\\</tt>
     - line breaks in a quoted field are part of the field, as they are in the data
 
-    Files that escape a quote in a field with a backslash (<tt>\\"</tt>), such as files written by %CsvUtil before
+    Files that escape a quote in a field with a backslash (<tt>\\&quot;</tt>), such as files written by %CsvUtil before
     1.12 with the writers' default \c "quote_escape" option, are read with the \c "quote_escape" option of the
     iterators and the read data provider set to \c '\\'; the writers write such files with their \c "quote_escape"
     option set to \c '\\'.

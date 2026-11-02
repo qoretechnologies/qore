@@ -137,7 +137,19 @@ total(strs);    # calls total(list<string>), which gets a list<string>
 
     When resolving an overloaded method in a class hierarchy, the first method that matches the arguments is selected, so even if a better match might be declared in a parent class, if any method variant matches in a class, then that class's method is used.  The same rules are used with parse-time resolution as at runtime.
 
-    For calls and call references with a class prefix, when @ref allow-bare-refs "%allow-bare-refs" or @ref new-style "%new-style" are in effect, static methods are searched first, then, if no match is found in the hierarchy, normal methods are searched.  For calls without a class prefix, normal methods are searched first, then static methods.
+    When a class hierarchy has static and normal methods with the same name, the method is found by its name before
+    the arguments are matched:
+    - a call or call reference with a class prefix (<tt>Class::name()</tt>) finds a static method with that name
+      anywhere in the hierarchy, and a normal method only if the hierarchy has no static method with that name; in
+      code without @ref new-style "%new-style" or @ref allow-bare-refs "%allow-bare-refs", it finds only static
+      methods
+    - a call without a class prefix (<tt>name()</tt>) finds a normal method with that name anywhere in the hierarchy,
+      and a static method only if the hierarchy has no normal method with that name
+
+    Only the variants of the method found are matched against the arguments: a call whose arguments match only a
+    method of the other kind raises a parse exception.  Since the whole hierarchy is searched before the other kind
+    of method is considered, <tt>Child::p()</tt> calls a static \c p() method of a parent class even when \c Child
+    declares a normal \c p() method.
 
     @see @ref qore_classes for more information
 */

@@ -356,12 +356,19 @@ queue.push(value: "wrong");  # PARSE-TYPE-ERROR
       @ref Qore::Thread::AutoGate "AutoGate", @ref Qore::Thread::AutoReadLock "AutoReadLock", and
       @ref Qore::Thread::AutoWriteLock "AutoWriteLock"
     - <b>Queue operations:</b> @ref Qore::Thread::Queue "Queue"::\c get() and \c pop() (both timed and untimed)
-    - <b>I/O operations:</b> pipe reads/writes, file locking, and backquote command execution
+    - <b>Channels:</b> @ref Qore::channel_select() "channel_select()", also with a timeout
+    - <b>I/O operations:</b> reads of backquote and @ref Qore::backquote() "backquote()" output; reads from pipes,
+      FIFOs and terminals with @ref Qore::File "File" and @ref Qore::ReadOnlyFile "ReadOnlyFile" and
+      @ref Qore::ReadOnlyFile::isDataAvailable() "ReadOnlyFile::isDataAvailable()"; blocked writes to the standard
+      output and error streams; @ref Qore::StreamPipe "StreamPipe" reads, writes and closes; timed stream reads
+      (@ref Qore::InputStream::readWithTimeout() "InputStream::readWithTimeout()"); and the retries of
+      @ref Qore::File::lockBlocking() "File::lockBlocking()"
+    - <b>Database operations:</b> waiting for a @ref Qore::SQL::Datasource "Datasource" transaction lock
 
-    Blocking check points (threading primitives, I/O) use a 500ms polling interval; the thread does not respond to
-    cancellation instantly but will detect it within 500ms of the flag being set.  Inside a
-    @ref cancel_cleanup "cleanup critical section" no cancellation can be delivered, so lock acquisitions there wait
-    without polling.
+    A thread blocked at a check point is woken as soon as cancellation is requested, so the wait ends at once with
+    \c THREAD-CANCELLED; @ref Qore::Thread::Condition::wait() "Condition::wait()" returns with its lock held also
+    then.  Inside a @ref cancel_cleanup "cleanup critical section" no cancellation can be delivered, so lock
+    acquisitions there wait until the lock is acquired.
 
     @subsection cancel_handling Handling Cancellation
 
