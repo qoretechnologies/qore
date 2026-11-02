@@ -1391,18 +1391,15 @@
     - when an AOT module could not be loaded (for example, refused by the restrictions of the
       @ref Qore::Program "Program" loading it) and its source module failed as well, only the source error was
       reported; the AOT module's error now follows it in the exception chain (see @ref aot_module_source_fallback)
-    - the \c BINARY-MODULE-SOURCE-FALLBACK warning of a module loaded by \c %%requires or \c %%try-module was written
-      to stderr; it is now a parse warning of the code with the directive, returned by Program::parse() and written
-      by \c qore with the other warnings, and not issued for code parsed without warnings; the same applies to the
-      \c MODULE-CHILD-FAILED and \c MODULE-CHILD-SKIPPED warnings of @ref user_module_children "child modules",
-      and a broken child is still always reported (see @ref aot_module_source_fallback)
+    - \c BINARY-MODULE-SOURCE-FALLBACK and the @ref user_module_children "child module" warnings of a module loaded
+      by \c %%requires or \c %%try-module are now parse warnings at the directive, returned by Program::parse(),
+      instead of being written to stderr; a broken child is still always reported (see
+      @ref aot_module_source_fallback)
     - when an AOT module of a build tree was out of date with its sources and its source module failed to load, only
       the source error was reported; an \c AOT-MODULE-STALE error now follows it in the exception chain
-    - an AOT module of a build tree that is a regular file, such as a module in the directory of the built modules
-      that the test runner puts first in the module path, was used even when its sources had changed since it was
-      compiled; it is now checked like a module linked into the source tree when the dependency file that \c qcc
-      wrote is next to it.  Installed modules, and modules compiled with <tt>qcc --compile-module</tt> without
-      <tt>--depfile</tt>, are not checked (see @ref aot_module_build_tree_staleness)
+    - an AOT module in a build tree that is a regular file with the dependency file written by \c qcc next to it is
+      now checked against its sources like a linked module, so an out-of-date module is no longer used; installed
+      modules are not checked (see @ref aot_module_build_tree_staleness)
     - a @ref thread_local "thread_local" variable declared in a user module was refused when the module inherited
       @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL": thread-local storage is not thread control (see
       @ref module_parse_option_masks)
