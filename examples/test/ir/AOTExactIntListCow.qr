@@ -62,12 +62,31 @@ list<int> sub exactCowReflect(int value) {
     values[0] += 1;
     call_function("replaceCowLocal");
     push values, value;
-    # The append keeps the reflected plain list's runtime type before the return filter, as the
-    # interpreter does; a store of the result must not coerce it back to the declared list<int>.
-    if (ARGV && ARGV[0] == "check-aot-store-type" && values.fullType() != "list") {
+    # The reflected plain list is assigned with the declared type of the local, as an assignment in the code is,
+    # and the append keeps it.
+    if (ARGV && ARGV[0] == "check-aot-store-type" && values.fullType() != "list<int>") {
         throw "COW-REFLECT-TYPE", values.fullType();
     }
     return values;
+}
+
+sub replaceCowLocalInvalid() {
+    set_local_var_value(1, "values", ("x",));
+}
+
+# A refused reflective write leaves the local and its alias unchanged; the append still copies on write.
+string sub exactCowReflectRefused(int value) {
+    list<int> values = (17,);
+    values[0] += 1;
+    list<int> alias = values;
+    string err = "unexpected";
+    try {
+        call_function("replaceCowLocalInvalid");
+    } catch (hash<ExceptionInfo> ex) {
+        err = ex.err;
+    }
+    push values, value;
+    return sprintf("%s:%y:%y:%s", err, alias, values, values.fullType());
 }
 
 string sub exactCowCaught(int value) {
@@ -94,6 +113,7 @@ foreach int value in ((0, 1, -1, 140737488355327, 140737488355328,
     printf("caught:%d:%s\n", value, exactCowCaught(value));
     printf("reflect:%d:%y:", value, call_function("exactCowReflect", value));
     printf("%y\n", cow_snapshot);
+    printf("refused:%d:%s\n", value, call_function("exactCowReflectRefused", value));
 }
 foreach int count in ((0, 1, 16, 1024)) {
     printf("loop:%d:%d\n", count, exactCowLoop(count, 7));
