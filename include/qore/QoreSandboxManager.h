@@ -481,8 +481,7 @@ private:
     QoreSandboxManager sm;
     sm.filesystem().setSandboxRoot("/sandbox", xsink);
     sm.network().blockPrivateNetworks();
-    sm.setMemoryLimit(100 * 1024 * 1024);  // 100MB
-    sm.setWallTimeLimit(30000);            // 30 seconds
+    sm.setMaxThreads(4);
 
     QoreProgram* pgm = new QoreProgram(PO_NEW_STYLE);
     pgm->setSandboxManager(&sm);
@@ -514,39 +513,6 @@ public:
     //! Gets the network security manager (const version)
     DLLEXPORT const QoreNetworkSecurityManager& network() const;
 
-    //! Sets maximum memory usage in bytes
-    /** @param bytes Maximum memory allocation in bytes (0 = unlimited)
-
-        @note This limit is checked when allocating memory in sandboxed code.
-        Exceeding the limit raises a SANDBOX-MEMORY-LIMIT exception.
-    */
-    DLLEXPORT void setMemoryLimit(size_t bytes);
-
-    //! Gets the memory limit
-    DLLEXPORT size_t getMemoryLimit() const;
-
-    //! Sets maximum CPU time in milliseconds
-    /** @param ms Maximum CPU time in milliseconds (0 = unlimited)
-
-        @note CPU time is checked periodically during execution.
-        Exceeding the limit raises a SANDBOX-TIMEOUT exception.
-    */
-    DLLEXPORT void setCPUTimeLimit(int64 ms);
-
-    //! Gets the CPU time limit
-    DLLEXPORT int64 getCPUTimeLimit() const;
-
-    //! Sets maximum wall clock time in milliseconds
-    /** @param ms Maximum wall clock time in milliseconds (0 = unlimited)
-
-        @note Wall time is checked periodically during execution.
-        Exceeding the limit raises a SANDBOX-TIMEOUT exception.
-    */
-    DLLEXPORT void setWallTimeLimit(int64 ms);
-
-    //! Gets the wall time limit
-    DLLEXPORT int64 getWallTimeLimit() const;
-
     //! Sets maximum number of threads
     /** @param count Maximum number of threads (0 = unlimited)
 
@@ -565,17 +531,6 @@ public:
 
     //! Gets the max threads limit
     DLLEXPORT int getMaxThreads() const;
-
-    //! Sets maximum recursion depth
-    /** @param depth Maximum recursion depth (0 = unlimited)
-
-        @note This limits function call stack depth.
-        Exceeding the limit raises a SANDBOX-RECURSION-LIMIT exception.
-    */
-    DLLEXPORT void setMaxRecursionDepth(int depth);
-
-    //! Gets the max recursion depth
-    DLLEXPORT int getMaxRecursionDepth() const;
 
     //! Requests graceful interruption of sandboxed code
     /** This sets an interrupt flag that is checked at various points
@@ -737,20 +692,8 @@ private:
     //! Network security manager
     QoreNetworkSecurityManager net_mgr;
 
-    //! Memory limit in bytes (0 = unlimited)
-    size_t memory_limit;
-
-    //! CPU time limit in milliseconds (0 = unlimited)
-    int64 cpu_time_limit;
-
-    //! Wall time limit in milliseconds (0 = unlimited)
-    int64 wall_time_limit;
-
     //! Maximum threads (0 = unlimited)
     std::atomic<int> max_threads;
-
-    //! Maximum recursion depth (0 = unlimited)
-    int max_recursion;
 
     //! Interrupt flag
     std::atomic<bool> interrupt_requested;

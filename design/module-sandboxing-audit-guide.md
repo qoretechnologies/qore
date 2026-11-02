@@ -484,15 +484,14 @@ if (sandbox_manager && !sandbox_manager->checkNetworkAccess(host, addr, len, QSE
 
 ### 3.1 How It Works
 
-Resource limits are enforced by the Qore runtime, but modules can contribute to or bypass them:
+The thread limit is the only resource limit; the Qore runtime enforces it, but modules can bypass it:
 
 | Limit | Enforcement Point | Module Responsibility |
 |-------|-------------------|----------------------|
-| Memory (`memory_limit`) | Allocation tracking | Report large allocations |
-| CPU Time (`cpu_time_limit`) | Periodic runtime check | Yield periodically in tight loops |
-| Wall Time (`wall_time_limit`) | Periodic runtime check | Don't block indefinitely |
 | Threads (`max_threads`) | Thread creation | Use Qore's threading APIs |
-| Recursion (`max_recursion`) | Call stack tracking | Avoid deep native recursion |
+
+Code that runs too long is stopped by an interrupt (`requestInterrupt()`), which a module honors by waiting
+interruptibly (see the interrupt sections of this guide).
 
 ### 3.2 Audit Checklist - Resource Consumption
 
@@ -500,27 +499,20 @@ Resource limits are enforced by the Qore runtime, but modules can contribute to 
 
 | Pattern to Find | Concern |
 |-----------------|---------|
-| `malloc`, `new`, large allocations | May bypass memory tracking |
-| `mmap` for large regions | May bypass memory tracking |
-| Tight loops without yields | May bypass CPU time checks |
-| `sleep()`, blocking syscalls | May bypass wall time checks |
+| Tight loops that never check for an interrupt | Cannot be interrupted |
+| `sleep()`, blocking syscalls | Cannot be interrupted unless the wait is interruptible |
 | `pthread_create` | May bypass thread limits |
-| Deep recursion | May bypass recursion limits |
-| Caching large data structures | Memory growth over time |
 
 #### Qore-Language Modules
 
 | Pattern to Find | Concern |
 |-----------------|---------|
-| Building large data structures | Memory consumption |
-| Infinite loops | CPU time |
 | `background` statements | Thread creation |
-| Recursive functions | Recursion depth |
 
 ### 3.3 Implementation Pattern - Resource Awareness
 
 ```cpp
-// For tight loops that may run long, periodically check for timeout
+// For tight loops that may run long, periodically check for an interrupt
 void processLargeDataset(ExceptionSink* xsink) {
     // the governing sandbox: its interrupts apply inside a system-policy capability too
     QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::All);
@@ -534,7 +526,6 @@ void processLargeDataset(ExceptionSink* xsink) {
                     "operation interrupted");
                 return;
             }
-            // Also gives runtime a chance to check time limits
         }
 
         process_item(item);
@@ -852,10 +843,7 @@ These are lower risk but should still be addressed for defense in depth:
 | `FILESYSTEM-ACCESS-DENIED` | Filesystem | Path access blocked by policy |
 | `NETWORK-ACCESS-DENIED` | Network | Connection blocked by policy |
 | `PROGRAM-INTERRUPTED` | Interrupt | Operation interrupted by request |
-| `SANDBOX-MEMORY-LIMIT` | Resources | Memory allocation would exceed limit |
-| `SANDBOX-TIMEOUT` | Resources | CPU or wall time limit exceeded |
-| `SANDBOX-THREAD-LIMIT` | Resources | Thread creation would exceed limit |
-| `SANDBOX-RECURSION-LIMIT` | Resources | Call depth would exceed limit |
+| `THREAD-CREATION-FAILURE` | Resources | Thread creation would exceed the thread limit |
 | `SANDBOX-PATH-ERROR` | Filesystem | Path canonicalization failed |
 
 ## Appendix B: Header Reference

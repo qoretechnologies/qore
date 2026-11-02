@@ -1037,8 +1037,7 @@ void QoreNetworkSecurityManager::copyFrom(const QoreNetworkSecurityManager& othe
 //------------------------------------------------------------------------------
 
 QoreSandboxManager::QoreSandboxManager()
-    : memory_limit(0), cpu_time_limit(0), wall_time_limit(0),
-      max_threads(0), max_recursion(0), interrupt_requested(false), active_threads(0) {
+    : max_threads(0), interrupt_requested(false), active_threads(0) {
 }
 
 QoreSandboxManager::~QoreSandboxManager() {
@@ -1073,30 +1072,6 @@ static T sandbox_intersection_limit(const QoreSandboxManager* manager, T own,
         }
     }
     return own;
-}
-
-void QoreSandboxManager::setMemoryLimit(size_t bytes) {
-    memory_limit = bytes;
-}
-
-size_t QoreSandboxManager::getMemoryLimit() const {
-    return sandbox_intersection_limit<size_t>(this, memory_limit, &QoreSandboxManager::getMemoryLimit);
-}
-
-void QoreSandboxManager::setCPUTimeLimit(int64 ms) {
-    cpu_time_limit = ms;
-}
-
-int64 QoreSandboxManager::getCPUTimeLimit() const {
-    return sandbox_intersection_limit<int64>(this, cpu_time_limit, &QoreSandboxManager::getCPUTimeLimit);
-}
-
-void QoreSandboxManager::setWallTimeLimit(int64 ms) {
-    wall_time_limit = ms;
-}
-
-int64 QoreSandboxManager::getWallTimeLimit() const {
-    return sandbox_intersection_limit<int64>(this, wall_time_limit, &QoreSandboxManager::getWallTimeLimit);
 }
 
 void QoreSandboxManager::setMaxThreads(int count) {
@@ -1146,14 +1121,6 @@ void QoreSandboxManager::releaseThreadSlot() {
     int prev = active_threads.fetch_sub(1);
     assert(prev > 0);
     (void)prev;
-}
-
-void QoreSandboxManager::setMaxRecursionDepth(int depth) {
-    max_recursion = depth;
-}
-
-int QoreSandboxManager::getMaxRecursionDepth() const {
-    return sandbox_intersection_limit<int>(this, max_recursion, &QoreSandboxManager::getMaxRecursionDepth);
 }
 
 void QoreSandboxManager::requestInterrupt() {
@@ -1256,11 +1223,7 @@ QoreHashNode* QoreSandboxManager::getConfiguration(ExceptionSink* xsink) const {
     config->setKeyValue("filesystem", fs_mgr.getConfiguration(xsink), xsink);
     config->setKeyValue("network", net_mgr.getConfiguration(xsink), xsink);
 
-    config->setKeyValue("memory_limit", (int64)memory_limit, xsink);
-    config->setKeyValue("cpu_time_limit", cpu_time_limit, xsink);
-    config->setKeyValue("wall_time_limit", wall_time_limit, xsink);
     config->setKeyValue("max_threads", max_threads.load(), xsink);
-    config->setKeyValue("max_recursion", max_recursion, xsink);
     config->setKeyValue("interrupt_requested", interrupt_requested.load(), xsink);
 
     return config.release();
@@ -1341,13 +1304,8 @@ QoreSandboxManager* QoreSandboxManager::copy() const {
     result->fs_mgr.copyFrom(fs_mgr);
     result->net_mgr.copyFrom(net_mgr);
 
-    // Copy the limits
-    result->memory_limit = memory_limit;
-    result->cpu_time_limit = cpu_time_limit;
-    result->wall_time_limit = wall_time_limit;
+    // Copy the thread limit; the copy governs no threads yet
     result->max_threads = max_threads.load();
-    // the copy governs no threads yet
-    result->max_recursion = max_recursion;
     // Don't copy interrupt state
 
     return result;
@@ -1362,12 +1320,8 @@ QoreSandboxManager* QoreSandboxManager::createLockdown() {
     // No network access - leave empty allow list
     sm->net_mgr.setDefaultPolicy(false);
 
-    // Strict resource limits
-    sm->setMemoryLimit(10 * 1024 * 1024);   // 10 MB
-    sm->setCPUTimeLimit(1000);               // 1 second
-    sm->setWallTimeLimit(5000);              // 5 seconds
-    sm->setMaxThreads(1);                    // one thread started by the sandboxed code at a time
-    sm->setMaxRecursionDepth(100);           // Limited recursion
+    // one thread started by the sandboxed code at a time
+    sm->setMaxThreads(1);
 
     return sm;
 }
@@ -1382,12 +1336,8 @@ QoreSandboxManager* QoreSandboxManager::createWebSafe() {
     sm->net_mgr.setDefaultPolicy(true);
     sm->net_mgr.blockPrivateNetworks();
 
-    // Reasonable resource limits
-    sm->setMemoryLimit(100 * 1024 * 1024);   // 100 MB
-    sm->setCPUTimeLimit(10000);               // 10 seconds
-    sm->setWallTimeLimit(30000);              // 30 seconds
-    sm->setMaxThreads(4);                     // Up to 4 threads
-    sm->setMaxRecursionDepth(200);            // Reasonable recursion
+    // up to 4 threads
+    sm->setMaxThreads(4);
 
     return sm;
 }

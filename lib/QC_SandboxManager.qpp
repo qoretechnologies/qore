@@ -93,16 +93,8 @@ hashdecl SandboxConfigInfo {
     hash<FilesystemSecurityConfigInfo> filesystem;
     //! Network security configuration
     hash<NetworkSecurityConfigInfo> network;
-    //! Memory limit in bytes (0 = unlimited)
-    int memory_limit;
-    //! CPU time limit in milliseconds (0 = unlimited)
-    int cpu_time_limit;
-    //! Wall time limit in milliseconds (0 = unlimited)
-    int wall_time_limit;
     //! Maximum number of threads (0 = unlimited)
     int max_threads;
-    //! Maximum recursion depth (0 = unlimited)
-    int max_recursion;
     //! Whether an interrupt has been requested
     bool interrupt_requested;
 }
@@ -151,14 +143,12 @@ const QSEC_NET_ALL = QSEC_NET_ALL;
 /** The SandboxManager class provides a unified interface for all
     sandboxing features including:
 
-    - Resource limits (memory, CPU time, wall time, threads)
+    - A limit on the number of threads that sandboxed code runs at once
     - Safe interruption of sandboxed code
 
     @par Example:
     @code{.py}
 SandboxManager sm();
-sm.setMemoryLimit(100 * 1024 * 1024);  # 100MB
-sm.setWallTimeLimit(30000);            # 30 seconds
 sm.setMaxThreads(4);
     @endcode
 
@@ -190,63 +180,6 @@ SandboxManager::copy() {
     self->setPrivate(CID_SANDBOXMANAGER, sm->copy());
 }
 
-//! Sets maximum memory usage in bytes
-/** @param max_bytes Maximum memory allocation in bytes (0 = unlimited)
-
-    @par Example:
-    @code{.py}
-sm.setMemoryLimit(max_bytes: 100 * 1024 * 1024);  # 100 MB
-    @endcode
-*/
-nothing SandboxManager::setMemoryLimit(int max_bytes) [flags=NAMED_ARGS] {
-    sm->setMemoryLimit(max_bytes);
-}
-
-//! Gets the memory limit
-/** @return Maximum memory in bytes, or 0 for unlimited
-*/
-int SandboxManager::getMemoryLimit() {
-    return sm->getMemoryLimit();
-}
-
-//! Sets maximum CPU time in milliseconds
-/** @param max_cpu_time_ms Maximum CPU time in milliseconds (0 = unlimited)
-
-    @par Example:
-    @code{.py}
-sm.setCPUTimeLimit(max_cpu_time_ms: 10000);  # 10 seconds
-    @endcode
-*/
-nothing SandboxManager::setCPUTimeLimit(int max_cpu_time_ms) [flags=NAMED_ARGS] {
-    sm->setCPUTimeLimit(max_cpu_time_ms);
-}
-
-//! Gets the CPU time limit
-/** @return Maximum CPU time in milliseconds, or 0 for unlimited
-*/
-int SandboxManager::getCPUTimeLimit() {
-    return sm->getCPUTimeLimit();
-}
-
-//! Sets maximum wall clock time in milliseconds
-/** @param max_wall_time_ms Maximum wall clock time in milliseconds (0 = unlimited)
-
-    @par Example:
-    @code{.py}
-sm.setWallTimeLimit(max_wall_time_ms: 30000);  # 30 seconds
-    @endcode
-*/
-nothing SandboxManager::setWallTimeLimit(int max_wall_time_ms) [flags=NAMED_ARGS] {
-    sm->setWallTimeLimit(max_wall_time_ms);
-}
-
-//! Gets the wall time limit
-/** @return Maximum wall clock time in milliseconds, or 0 for unlimited
-*/
-int SandboxManager::getWallTimeLimit() {
-    return sm->getWallTimeLimit();
-}
-
 //! Sets maximum number of threads
 /** @param max_threads Maximum number of threads (0 = unlimited)
 
@@ -264,25 +197,6 @@ nothing SandboxManager::setMaxThreads(int max_threads) [flags=NAMED_ARGS] {
 */
 int SandboxManager::getMaxThreads() {
     return sm->getMaxThreads();
-}
-
-//! Sets maximum recursion depth
-/** @param max_depth Maximum recursion depth (0 = unlimited)
-
-    @par Example:
-    @code{.py}
-sm.setMaxRecursionDepth(max_depth: 100);
-    @endcode
-*/
-nothing SandboxManager::setMaxRecursionDepth(int max_depth) [flags=NAMED_ARGS] {
-    sm->setMaxRecursionDepth(max_depth);
-}
-
-//! Gets the max recursion depth
-/** @return Maximum recursion depth, or 0 for unlimited
-*/
-int SandboxManager::getMaxRecursionDepth() {
-    return sm->getMaxRecursionDepth();
 }
 
 //! Requests graceful interruption of sandboxed code
@@ -730,6 +644,9 @@ static code SandboxManager::bindCall(code call) [flags=RET_VALUE_ONLY] {
     @throw SANDBOX-CAPABILITY-ERROR a sandbox governs registration, or @p call has sandbox provenance
     @note Register capabilities during trusted initialization, before loading or invoking tenant code. An ordinary
     callWithSystemPolicy() barrier does not remove object or callback provenance.
+    @note The arguments of a call to the returned capability are evaluated by the caller, under the caller's own
+    sandbox, before the capability runs; the caller's local variables, including those captured by its closures,
+    can be passed to it
     @par Example:
     @code{.py}
 # During trusted startup; the callback uses a fixed, system-owned credential path.

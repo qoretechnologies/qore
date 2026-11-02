@@ -17,11 +17,8 @@
 class SandboxManagerTest inherits QUnit::Test {
     constructor() : QUnit::Test("SandboxManagerTest", "1.0", \ARGV) {
         addTestCase("SandboxManager creation test", \testCreation());
-        addTestCase("Memory limit test", \testMemoryLimit());
-        addTestCase("CPU time limit test", \testCPUTimeLimit());
-        addTestCase("Wall time limit test", \testWallTimeLimit());
         addTestCase("Max threads test", \testMaxThreads());
-        addTestCase("Max recursion test", \testMaxRecursion());
+        addTestCase("Only the thread limit is a resource limit", \testOnlyThreadLimit());
         addTestCase("Interrupt mechanism test", \testInterrupt());
         addTestCase("Configuration hash test", \testConfiguration());
         addTestCase("Copy test", \testCopy());
@@ -96,48 +93,8 @@ class SandboxManagerTest inherits QUnit::Test {
         SandboxManager sm();
         assertEq(True, sm instanceof SandboxManager, "SandboxManager instance created");
 
-        # Default values should be 0 (unlimited)
-        assertEq(0, sm.getMemoryLimit(), "Default memory limit is 0 (unlimited)");
-        assertEq(0, sm.getCPUTimeLimit(), "Default CPU time limit is 0 (unlimited)");
-        assertEq(0, sm.getWallTimeLimit(), "Default wall time limit is 0 (unlimited)");
+        # the default thread limit is 0 (unlimited)
         assertEq(0, sm.getMaxThreads(), "Default max threads is 0 (unlimited)");
-        assertEq(0, sm.getMaxRecursionDepth(), "Default max recursion is 0 (unlimited)");
-    }
-
-    testMemoryLimit() {
-        SandboxManager sm();
-
-        # Test setting memory limit
-        sm.setMemoryLimit(100 * 1024 * 1024);  # 100 MB
-        assertEq(104857600, sm.getMemoryLimit(), "Memory limit set to 100MB");
-
-        # Test setting to 0 (unlimited)
-        sm.setMemoryLimit(0);
-        assertEq(0, sm.getMemoryLimit(), "Memory limit set to 0 (unlimited)");
-
-        # Test different values
-        sm.setMemoryLimit(1024);
-        assertEq(1024, sm.getMemoryLimit(), "Memory limit set to 1024 bytes");
-    }
-
-    testCPUTimeLimit() {
-        SandboxManager sm();
-
-        sm.setCPUTimeLimit(10000);  # 10 seconds
-        assertEq(10000, sm.getCPUTimeLimit(), "CPU time limit set to 10000ms");
-
-        sm.setCPUTimeLimit(0);
-        assertEq(0, sm.getCPUTimeLimit(), "CPU time limit set to 0 (unlimited)");
-    }
-
-    testWallTimeLimit() {
-        SandboxManager sm();
-
-        sm.setWallTimeLimit(30000);  # 30 seconds
-        assertEq(30000, sm.getWallTimeLimit(), "Wall time limit set to 30000ms");
-
-        sm.setWallTimeLimit(0);
-        assertEq(0, sm.getWallTimeLimit(), "Wall time limit set to 0 (unlimited)");
     }
 
     testMaxThreads() {
@@ -153,14 +110,16 @@ class SandboxManagerTest inherits QUnit::Test {
         assertEq(0, sm.getMaxThreads(), "Max threads set to 0 (unlimited)");
     }
 
-    testMaxRecursion() {
+    # the thread limit is the only resource limit: there are no memory, CPU time, wall time or recursion limits
+    testOnlyThreadLimit() {
         SandboxManager sm();
-
-        sm.setMaxRecursionDepth(100);
-        assertEq(100, sm.getMaxRecursionDepth(), "Max recursion set to 100");
-
-        sm.setMaxRecursionDepth(0);
-        assertEq(0, sm.getMaxRecursionDepth(), "Max recursion set to 0 (unlimited)");
+        foreach string method in ("setMemoryLimit", "getMemoryLimit", "setCPUTimeLimit", "getCPUTimeLimit",
+                "setWallTimeLimit", "getWallTimeLimit", "setMaxRecursionDepth", "getMaxRecursionDepth") {
+            assertFalse(sm.hasCallableMethod(method), method + "() does not exist");
+        }
+        assertTrue(sm.hasCallableMethod("setMaxThreads"), "setMaxThreads() exists");
+        assertEq(("filesystem", "network", "max_threads", "interrupt_requested"), keys sm.getConfiguration(),
+            "the configuration has the thread limit as its only resource limit");
     }
 
     testInterrupt() {
@@ -189,22 +148,14 @@ class SandboxManagerTest inherits QUnit::Test {
     testConfiguration() {
         SandboxManager sm();
 
-        sm.setMemoryLimit(1024);
-        sm.setCPUTimeLimit(5000);
-        sm.setWallTimeLimit(10000);
         sm.setMaxThreads(2);
-        sm.setMaxRecursionDepth(50);
 
         hash<SandboxConfigInfo> config = sm.getConfiguration();
         assertEq(True, exists config, "Configuration hash exists");
         assertEq("hash<SandboxConfigInfo>", config.fullType(), "Configuration has correct type");
 
         # Verify config contains expected keys
-        assertEq(True, exists config.memory_limit, "Config has memory_limit");
-        assertEq(True, exists config.cpu_time_limit, "Config has cpu_time_limit");
-        assertEq(True, exists config.wall_time_limit, "Config has wall_time_limit");
-        assertEq(True, exists config.max_threads, "Config has max_threads");
-        assertEq(True, exists config.max_recursion, "Config has max_recursion");
+        assertEq(2, config.max_threads, "Config has max_threads");
         assertEq("hash<FilesystemSecurityConfigInfo>", config.filesystem.fullType(), "Filesystem config has correct type");
         assertEq("hash<NetworkSecurityConfigInfo>", config.network.fullType(), "Network config has correct type");
     }
@@ -212,17 +163,15 @@ class SandboxManagerTest inherits QUnit::Test {
     testCopy() {
         SandboxManager sm();
 
-        sm.setMemoryLimit(2048);
-        sm.setCPUTimeLimit(1000);
+        sm.setMaxThreads(3);
 
         SandboxManager copy = sm.copy();
 
-        assertEq(2048, copy.getMemoryLimit(), "Copy has same memory limit");
-        assertEq(1000, copy.getCPUTimeLimit(), "Copy has same CPU time limit");
+        assertEq(3, copy.getMaxThreads(), "Copy has same thread limit");
 
         # Modifying original should not affect copy
-        sm.setMemoryLimit(4096);
-        assertEq(2048, copy.getMemoryLimit(), "Copy is independent of original");
+        sm.setMaxThreads(5);
+        assertEq(3, copy.getMaxThreads(), "Copy is independent of original");
     }
 
     testLockdownPreset() {
@@ -231,11 +180,7 @@ class SandboxManagerTest inherits QUnit::Test {
         assertEq(True, sm instanceof SandboxManager, "Lockdown preset creates SandboxManager");
 
         # Lockdown should have restrictive defaults
-        assertEq(10 * 1024 * 1024, sm.getMemoryLimit(), "Lockdown memory limit is 10MB");
-        assertEq(1000, sm.getCPUTimeLimit(), "Lockdown CPU time limit is 1000ms");
-        assertEq(5000, sm.getWallTimeLimit(), "Lockdown wall time limit is 5000ms");
         assertEq(1, sm.getMaxThreads(), "Lockdown max threads is 1");
-        assertEq(100, sm.getMaxRecursionDepth(), "Lockdown max recursion is 100");
     }
 
     testWebSafePreset() {
@@ -244,11 +189,7 @@ class SandboxManagerTest inherits QUnit::Test {
         assertEq(True, sm instanceof SandboxManager, "WebSafe preset creates SandboxManager");
 
         # Web-safe should have moderate defaults
-        assertEq(100 * 1024 * 1024, sm.getMemoryLimit(), "WebSafe memory limit is 100MB");
-        assertEq(10000, sm.getCPUTimeLimit(), "WebSafe CPU time limit is 10000ms");
-        assertEq(30000, sm.getWallTimeLimit(), "WebSafe wall time limit is 30000ms");
         assertEq(4, sm.getMaxThreads(), "WebSafe max threads is 4");
-        assertEq(200, sm.getMaxRecursionDepth(), "WebSafe max recursion is 200");
     }
 
     testConstants() {
@@ -1592,17 +1533,17 @@ sub noOp() {}
         # Test 1: Basic ref counting - setSandboxManager takes a ref
         {
             SandboxManager sm();
-            sm.setMemoryLimit(42);
+            sm.setMaxThreads(42);
             {
                 Program p(PO_NO_CHILD_PO_RESTRICTIONS);
                 p.setSandboxManager(sm);
 
                 # The program holds its own ref; sm is still valid
                 SandboxManager sm2 = p.getSandboxManager();
-                assertEq(42, sm2.getMemoryLimit(), "Sandbox manager accessible while program alive");
+                assertEq(42, sm2.getMaxThreads(), "Sandbox manager accessible while program alive");
             }
             # Program destroyed, deref'd the sandbox manager, but sm still holds a ref
-            assertEq(42, sm.getMemoryLimit(), "Sandbox manager alive after program destroyed");
+            assertEq(42, sm.getMaxThreads(), "Sandbox manager alive after program destroyed");
         }
 
         # Test 2: SandboxManager scope ends before Program — Program holds strong ref
@@ -1610,34 +1551,34 @@ sub noOp() {}
             Program p(PO_NO_CHILD_PO_RESTRICTIONS);
             {
                 SandboxManager sm();
-                sm.setWallTimeLimit(12345);
+                sm.setMaxThreads(12345);
                 p.setSandboxManager(sm);
             }
             # sm out of scope, but Program holds a strong ref via setSandboxManager()
 
             # Verify the sandbox manager is still accessible and valid
             SandboxManager sm2 = p.getSandboxManager();
-            assertEq(12345, sm2.getWallTimeLimit(), "Sandbox manager alive after local var goes out of scope");
+            assertEq(12345, sm2.getMaxThreads(), "Sandbox manager alive after local var goes out of scope");
         }
         # p goes out of scope - waitForTerminationAndClear safely derefs the sandbox manager
 
         # Test 3: Multiple setSandboxManager calls properly deref the old manager
         {
             SandboxManager sm1();
-            sm1.setMemoryLimit(100);
+            sm1.setMaxThreads(100);
             SandboxManager sm2();
-            sm2.setMemoryLimit(200);
+            sm2.setMaxThreads(200);
 
             Program p(PO_NO_CHILD_PO_RESTRICTIONS);
             p.setSandboxManager(sm1);
-            assertEq(100, p.getSandboxManager().getMemoryLimit(), "First sandbox manager set");
+            assertEq(100, p.getSandboxManager().getMaxThreads(), "First sandbox manager set");
 
             # Replace with a new sandbox manager - old one must be deref'd
             p.setSandboxManager(sm2);
-            assertEq(200, p.getSandboxManager().getMemoryLimit(), "Second sandbox manager replaced first");
+            assertEq(200, p.getSandboxManager().getMaxThreads(), "Second sandbox manager replaced first");
 
             # sm1 is still alive (we hold a ref)
-            assertEq(100, sm1.getMemoryLimit(), "Old sandbox manager still valid");
+            assertEq(100, sm1.getMaxThreads(), "Old sandbox manager still valid");
         }
 
         # Test 4: Concurrent access during cleanup - stress test ref counting
@@ -1666,21 +1607,21 @@ sub doNothing() {}
         {
             Program p(PO_NO_CHILD_PO_RESTRICTIONS);
             SandboxManager sm1();
-            sm1.setMemoryLimit(999);
+            sm1.setMaxThreads(999);
             p.setSandboxManager(sm1);
 
             # Verify it's set
             assertEq(True, exists p.getSandboxManager(), "sandbox manager set");
-            assertEq(999, p.getSandboxManager().getMemoryLimit(), "sandbox manager value correct");
+            assertEq(999, p.getSandboxManager().getMaxThreads(), "sandbox manager value correct");
 
             # Replace with a new sandbox manager - old one properly deref'd
             SandboxManager sm2();
-            sm2.setMemoryLimit(888);
+            sm2.setMaxThreads(888);
             p.setSandboxManager(sm2);
-            assertEq(888, p.getSandboxManager().getMemoryLimit(), "sandbox manager replaced");
+            assertEq(888, p.getSandboxManager().getMaxThreads(), "sandbox manager replaced");
 
             # sm1 still valid (we hold our own ref)
-            assertEq(999, sm1.getMemoryLimit(), "original sandbox manager still valid after replacement");
+            assertEq(999, sm1.getMaxThreads(), "original sandbox manager still valid after replacement");
         }
 
         # Test that program without sandbox manager returns NOTHING
@@ -1692,14 +1633,14 @@ sub doNothing() {}
         # Test that sandbox manager is properly cleaned up when program is destroyed
         {
             SandboxManager sm();
-            sm.setMemoryLimit(777);
+            sm.setMaxThreads(777);
             {
                 Program p(PO_NO_CHILD_PO_RESTRICTIONS);
                 p.setSandboxManager(sm);
             }
             # Program destroyed - sandbox manager properly deref'd
             # but sm still alive since we hold a ref
-            assertEq(777, sm.getMemoryLimit(), "sandbox manager alive after program destroyed");
+            assertEq(777, sm.getMaxThreads(), "sandbox manager alive after program destroyed");
         }
     }
 
@@ -1712,7 +1653,7 @@ sub doNothing() {}
             {
                 Program p(PO_NO_CHILD_PO_RESTRICTIONS);
                 SandboxManager sm();
-                sm.setMemoryLimit(42);
+                sm.setMaxThreads(42);
                 p.setSandboxManager(sm);
 
                 p.parse("
@@ -1757,17 +1698,17 @@ sub startBusyLoop(Counter done) {
         {
             Program p1(PO_NO_CHILD_PO_RESTRICTIONS);
             SandboxManager sm1();
-            sm1.setMemoryLimit(111);
+            sm1.setMaxThreads(111);
             p1.setSandboxManager(sm1);
 
             Program p2(PO_NO_CHILD_PO_RESTRICTIONS);
             SandboxManager sm2();
-            sm2.setMemoryLimit(222);
+            sm2.setMaxThreads(222);
             p2.setSandboxManager(sm2);
 
             # Verify each program has its own sandbox manager
-            assertEq(111, p1.getSandboxManager().getMemoryLimit(), "p1 has its own sandbox manager");
-            assertEq(222, p2.getSandboxManager().getMemoryLimit(), "p2 has its own sandbox manager");
+            assertEq(111, p1.getSandboxManager().getMaxThreads(), "p1 has its own sandbox manager");
+            assertEq(222, p2.getSandboxManager().getMaxThreads(), "p2 has its own sandbox manager");
         }
 
         # Test: Program without sandbox manager returns NOTHING
@@ -1779,7 +1720,7 @@ sub startBusyLoop(Counter done) {
         # Test: sandbox manager survives program replacement
         {
             SandboxManager sm();
-            sm.setMemoryLimit(333);
+            sm.setMaxThreads(333);
             {
                 Program p1(PO_NO_CHILD_PO_RESTRICTIONS);
                 p1.setSandboxManager(sm);
@@ -1788,9 +1729,9 @@ sub startBusyLoop(Counter done) {
             {
                 Program p2(PO_NO_CHILD_PO_RESTRICTIONS);
                 p2.setSandboxManager(sm);
-                assertEq(333, p2.getSandboxManager().getMemoryLimit(), "sandbox manager reused across programs");
+                assertEq(333, p2.getSandboxManager().getMaxThreads(), "sandbox manager reused across programs");
             }
-            assertEq(333, sm.getMemoryLimit(), "sandbox manager survives all programs");
+            assertEq(333, sm.getMaxThreads(), "sandbox manager survives all programs");
         }
     }
 

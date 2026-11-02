@@ -955,16 +955,8 @@ public class NamedArgumentsTest inherits QUnit::Test {
 
     reviewedSandboxManagerBuiltinOptIn() {
         SandboxManager sm();
-        sm.setMemoryLimit(max_bytes: 1024 * 1024);
-        assertEq(1024 * 1024, sm.getMemoryLimit(), "SandboxManager memory limit exposes max_bytes");
-        sm.setCPUTimeLimit(max_cpu_time_ms: 1000);
-        assertEq(1000, sm.getCPUTimeLimit(), "SandboxManager CPU limit exposes max_cpu_time_ms");
-        sm.setWallTimeLimit(max_wall_time_ms: 2000);
-        assertEq(2000, sm.getWallTimeLimit(), "SandboxManager wall limit exposes max_wall_time_ms");
         sm.setMaxThreads(max_threads: 2);
         assertEq(2, sm.getMaxThreads(), "SandboxManager thread limit exposes max_threads");
-        sm.setMaxRecursionDepth(max_depth: 20);
-        assertEq(20, sm.getMaxRecursionDepth(), "SandboxManager recursion limit exposes max_depth");
 
         string cwd = getcwd();
         sm.addFilesystemAllowedPath(path: cwd, access_modes: QSEC_READ);
