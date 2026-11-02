@@ -12543,6 +12543,19 @@ load_local_done:
             }
             case QoreIROpcode::ScopeExit: {
                 auto* scope_inst = static_cast<QoreIRScopeExitInstruction*>(inst);
+                if (scope_inst->trim) {
+                    // The scope stays open: only the handlers registered after its first keep_handlers ones are
+                    // dropped, without running them, because they are lowered inline; the handlers kept run on the
+                    // exception path of the scope if an inlined handler raises an exception
+                    if (!scope_stack.empty()) {
+                        size_t keep = scope_stack.back() + scope_inst->keep_handlers;
+                        if (on_block_exit_handlers.size() > keep) {
+                            on_block_exit_handlers.resize(keep);
+                        }
+                    }
+                    ++ip;
+                    break;
+                }
                 // Execute handlers registered since matching ScopeEnter (only if not inline-lowered)
                 if (!scope_stack.empty()) {
                     size_t scope_start = scope_stack.back();

@@ -10877,7 +10877,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     const bool disable_obe_free_fast_path = q_env_is_set(aot_mode
         ? "QORE_DISABLE_AOT_OBE_FREE_FAST_PATH"
         : "QORE_DISABLE_JIT_OBE_FREE_FAST_PATH");
-    if (!disable_obe_free_fast_path) {
+    // the scan also tells whether the local reload epoch is needed from the function's entry (see below), so it
+    // runs whether or not the fast path is disabled
+    {
         size_t scanned = 0;
         for (const auto& block : func.blocks) {
             for (const auto& inst : block->instructions) {
@@ -10896,7 +10898,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 break;
             }
         }
-        track_on_block_exit_scope = has_on_block_exit_handlers;
+        if (!disable_obe_free_fast_path) {
+            track_on_block_exit_scope = has_on_block_exit_handlers;
+        }
     }
     catch_depth_saved = nullptr;
     catch_scope_count = nullptr;
@@ -10952,6 +10956,17 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     "qore_rt_get_on_block_exit_count",
                     llvm::FunctionType::get(i64_type, {}, false));
             obe_saved_count = builder->CreateCall(obe_count_fn, {});
+        }
+        // A function with handlers runs them through runtime helpers that can assign its locals, after which the
+        // local caches are reloaded lazily through the reload epoch.  The epoch must exist before any block is
+        // lowered: ensureLocalCacheFresh() emits no freshness check while it does not exist, and blocks are lowered
+        // in layout order, which is not the order of execution.  Otherwise a block laid out before the first
+        // reload but run after it, such as a try block's landing pad reached from a block's exception cleanup
+        // block (laid out at the end of the function) after that block's handlers ran, published the stale cached
+        // value of a local to the runtime stack before running its own handlers, losing the value the handlers had
+        // assigned.
+        if (has_on_block_exit_handlers) {
+            getOrCreateLocalReloadEpoch(llvm_func);
         }
 
         // Save the catch-scope stack depth at entry for functions containing
@@ -31219,7 +31234,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             const auto* sinst = static_cast<const QoreIRScopeExitInstruction*>(inst);
             // Execute on_block_exit handlers registered since the matching ScopeEnter
             auto it = scope_obe_counts.find(sinst->scope_id);
-            if (it != scope_obe_counts.end()) {
+            if (it != scope_obe_counts.end() && sinst->trim) {
+                // The scope stays open: drop the handlers registered after its first keep_handlers ones without
+                // running them (they are lowered inline); see QoreIRScopeExitInstruction::trim
+                auto discard_fn = module.getOrInsertFunction("qore_rt_discard_on_block_exit",
+                        llvm::FunctionType::get(void_type, {i64_type}, false));
+                llvm::Value* keep = builder->CreateAdd(it->second,
+                        llvm::ConstantInt::get(i64_type, sinst->keep_handlers));
+                builder->CreateCall(discard_fn, {keep});
+            } else if (it != scope_obe_counts.end()) {
                 llvm::Value* saved_count = it->second;
                 // Call the implementation function with inline_lowered flag
                 // If inline_lowered=true, skip handler execution (handlers were already inlined)

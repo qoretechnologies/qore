@@ -1853,6 +1853,15 @@ QoreIRScopeExitInstruction* QoreIRBuilder::createScopeExit(uint32_t scope_id, bo
     return inst;
 }
 
+QoreIRScopeExitInstruction* QoreIRBuilder::createScopeTrim(uint32_t scope_id, uint32_t keep_handlers,
+        const QoreProgramLocation* loc) {
+    auto inst = append<QoreIRScopeExitInstruction>(scope_id, false, true);
+    inst->trim = true;
+    inst->keep_handlers = keep_handlers;
+    inst->loc = loc;
+    return inst;
+}
+
 QoreIRContextInstruction* QoreIRBuilder::createContext(const std::string& name, const QoreValue& exp,
         const QoreValue& where_exp, const QoreValue& sort_exp, int sort_type,
         const QoreProgramLocation* loc) {

@@ -5579,6 +5579,17 @@ while (*binary chunk = input.read(65536)) {
       \c qdbg with it; \c qdbg now ends the program and exits with 128 plus the number of the signal, as does
       \c qdbg-remote, whose debug server's programs continue.  \c qdbg-remote also looked up a connection for a URL
       without a scheme, such as \c localhost:8001, which loaded the modules of all connections
+    - with the \c ir, \c jit and \c tiered execution modes and in code compiled with \c qcc, when an
+      @ref on_exit "on_exit", @ref on_success "on_success" or @ref on_error "on_error" handler raised an exception
+      as a block was left normally (at its end, or with \c return, \c break or \c continue), the handlers registered
+      before it in the block did not run, so cleanup code such as releasing a resource was skipped; when the block
+      was left with \c return from a \c try block in it, the \c catch block caught the exception, and the handler ran
+      twice.  As with the \c ast execution mode, every remaining handler of the block now runs, the following
+      \c on_error handlers see the exception and the \c on_success handlers do not run, the exceptions of several
+      handlers are chained in the order they were raised, and the exception leaves the block; a \c return in a
+      handler no longer skips the handlers registered before it either.  With the \c jit and \c tiered execution
+      modes, a value that a handler assigned to a local variable of the function when an exception left a block in
+      a \c try block could also be lost
     - a call passing no value for a parameter of an overloaded function or method (a literal \c NOTHING, an omitted
       argument, or a variable holding no value) could select a different variant at parse time than at run time
       when three or more variants accepted no value equally well: the parse-time resolution selected the last of

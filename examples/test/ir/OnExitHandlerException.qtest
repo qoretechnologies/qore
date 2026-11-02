@@ -1,0 +1,122 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class OnExitHandlerExceptionTest
+
+#! Regression coverage for on_exit/on_success/on_error handlers that raise exceptions
+/** When a handler of a block raises an exception, the AST interpreter still runs every handler registered before it
+    in the block, in reverse order of registration: the exception goes to the block's exception sink, so the
+    following on_error handlers run (and see the error) and the on_success handlers do not, and the exceptions of
+    several handlers are chained in the order they were raised (StatementBlock::execIntern()).
+
+    The IR lowering inlines the handlers at the normal exits of a block (fall-through, return, break, continue)
+    after it had dropped all of them from the runtime scope, so when one raised an exception, the handlers
+    registered before it never ran in the IR interpreter, JIT, tiered and AOT code; a cleanup handler was skipped
+    after a later handler that checked results threw, leaving a server lease unreleased.  The exception also went
+    to the exception target of the statement that left the block, so a try block containing a return caught the
+    exception of a handler that runs after the try block was left, and ran the handler a second time.
+
+    The fixture records the handlers that run and the exceptions that leave each case; every tier and the AOT
+    executable must print exactly the AST output below.
+*/
+class OnExitHandlerExceptionTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string fixture;
+
+        #! per-case trace, as the AST interpreter prints it; each case runs three times
+        const ExpectedCases = (
+            ("reproducer", "body, fail CHECK, export, close, exception CHECK"),
+            ("fall-through", "body, b, fail B, a, exception B"),
+            ("return-value", "body, b, fail B, a, exception B"),
+            ("return-expression", "b 2, fail B, a 2, exception B"),
+            ("all-throw", "body, c, fail C, b, fail B, a, fail A, exception C B A"),
+            ("alternating", "e, fail D, c, fail B, a, exception D B"),
+            ("mixed", "body, success3, exit3, fail E3, error2 E3, exit2, error1 E3, exit1, exception E3"),
+            ("success-throws", "body, success2, fail S2, exit1, error1 S2, exception S2"),
+            ("exception-path", "fail BODY, c, b, fail B, error BODY, a, exception BODY B"),
+            ("nested-fall-through",
+                "body, inner-b, fail B, inner-error B, inner-a, outer-error B, outer, exception B"),
+            ("nested-return", "innermost-b, fail B, innermost-a, inner-a, outer, exception B"),
+            ("return-in-try", "try, b, fail B, a, exception B"),
+            ("caught-in-function", "body, b, fail B, a, caught B, after"),
+            ("loop-exits", "b0, a0, end1, b1, a1, end2, b2, fail B2, a2, outer, exception B2"),
+            ("loop-caught", "a0, fail B1, a1, caught B1, a2, after"),
+            ("resources", "r1+, r2+, body, fail R, r2 closed, r2-, r1 closed, r1-, exception R"),
+            ("handler-return", "body, b, a, returned 2"),
+            ("nested-handler", "body, b, b-throw, fail BI, b-inner, a, exception BI"),
+            ("handler-assigns-local", "fail L, returned \"none exit error1 caught L\""),
+            ("handler-assigns-local-only", "returned \"error1\""),
+            ("closure", "body, c, fail C, b local, a captured, exception C"),
+        );
+
+        #! the line of the top-level code of the fixture, which runs once
+        const ExpectedTopLevel = "top-level: body, b, fail B, a, caught B";
+    }
+
+    constructor() : QUnit::Test("OnExitHandlerExceptionTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        fixture = get_script_dir() + "/OnExitHandlerExceptionScenario.qr";
+
+        foreach string m in (ExecModeHarness::ExecModes) {
+            # a local of the loop body, so each closure captures its own mode
+            string mode = m;
+            addTestCase(sprintf("handler exceptions: %s", mode), sub () {
+                checkMode(mode);
+            });
+        }
+        addTestCase("handler exceptions: AOT", \testAot());
+
+        set_return_value(main());
+    }
+
+    private static string expected() {
+        string rv;
+        foreach list<string> c in (ExpectedCases) {
+            for (int i = 0; i < 3; ++i) {
+                rv += sprintf("%s[%d]: %s\n", c[0], i, c[1]);
+            }
+        }
+        return rv + ExpectedTopLevel + "\n";
+    }
+
+    private checkMode(string mode) {
+        # ExecModeHarness compiles synchronously after the first call, so with tiered execution each case runs on
+        # the AST tier, the IR tier and as native code, and with JIT execution as native code every time
+        string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s",
+            shellQuote(libqore_dir), shellQuote(qore_bin), mode, shellQuote(fixture)));
+        assertEq(expected(), output, sprintf("exec-mode=%s output", mode));
+    }
+
+    testAot() {
+        if (!is_file(qcc_bin) && !backquote("command -v " + qcc_bin + " 2>/dev/null")) {
+            testSkip("qcc not available");
+        }
+        TmpDir tmp("qore-on-exit-handler-exception-");
+        string exe = tmp.path + "/on-exit-handler-exception";
+        string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -o %s %s 2>&1", shellQuote(libqore_dir),
+            shellQuote(qcc_bin), shellQuote(exe), shellQuote(fixture)));
+        assertTrue(is_file(exe), "AOT compile produced an executable: " + compile_out);
+        assertEq(expected(), backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", shellQuote(libqore_dir),
+            shellQuote(exe))), "AOT output");
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}
