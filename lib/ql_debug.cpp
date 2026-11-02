@@ -43,6 +43,7 @@
 #include "qore/intern/QC_Http2ClientPollOperationBase.h"
 
 #include <map>
+#include <memory>
 #include "qore/intern/QC_Counter.h"
 #include "qore/intern/QC_Datasource.h"
 #include "qore/intern/QC_DatasourcePool.h"
@@ -76,6 +77,7 @@
 #include "qore/intern/QoreSignal.h"
 #include "qore/intern/QoreJIT.h"
 #include "qore/intern/QoreAOT.h"
+#include "qore/intern/QoreAOTBatchMemory.h"
 #include "qore/intern/FileStreamIo.h"
 
 #include <llvm/MC/TargetRegistry.h>
@@ -12679,6 +12681,272 @@ static QoreValue f_dbg_jobserver_admit(const QoreListNode* params, RuntimeConfig
     return h.release();
 }
 
+//! returns an integer option of a hash, or the default
+static int64 dbg_aot_mem_int(const QoreHashNode* h, const char* key, int64 def) {
+    if (!h) {
+        return def;
+    }
+    QoreValue v = h->getKeyValue(key);
+    return v.isNothing() ? def : v.getAsBigInt();
+}
+
+//! returns a string option of a hash, or the default
+static std::string dbg_aot_mem_str(const QoreHashNode* h, const char* key, const char* def = "") {
+    if (!h) {
+        return def;
+    }
+    QoreValue v = h->getKeyValue(key);
+    if (v.getType() != NT_STRING) {
+        return def;
+    }
+    return v.get<const QoreStringNode>()->c_str();
+}
+
+//! Debug-only: runs operations on the memory admission of qcc batch compiles, over a simulated memory domain
+/** The domain is shared by all governors of the call: each one stands for a batch process with its own pid, and
+    they share the ledger named by \c ledger in @p cfg (empty: none).  The model is the default one (with
+    QORE_AOT_BATCH_MEM_PER_JOB_MB applied), with any of \c unit_base, \c unit_per_source_kib and
+    \c parse_per_source_kib from @p cfg in its place.
+
+    Each operation is a hash with \c op:
+    - \c world: sets \c available and \c limit of the domain, and \c resident and \c start (hashes of pid strings to
+      the resident bytes and the start id of a process; a start id of 0 means the process has gone)
+    - \c create (\c gov, \c pid), \c destroy (\c gov)
+    - \c parse (\c gov, \c bytes: the total source size), \c codegen (\c gov)
+    - \c estimate (\c gov, \c bytes: a source size): the unit estimate
+    - \c would (\c gov, \c bytes): whether the unit would be admitted
+    - \c reserve (\c gov, \c bytes): a hash: \c admitted, \c alone, \c available, \c reserved, \c headroom
+    - \c release (\c gov, \c bytes)
+    - \c resize (\c gov, \c bytes, \c to): changes a reservation; returns the new one
+    - \c resize_async (\c gov, \c bytes, \c to): the same in a thread, which may wait for memory
+    - \c wait_growers (\c gov, \c count): waits until \c count resizes wait for memory
+    - \c join: waits for the threads of \c resize_async
+    - \c estimate_lowered (\c gov, \c bytes: an LLVM instruction count, \c sq: the sum of the squared
+      instruction counts of the functions): the lowered unit estimate
+    - \c stats (\c gov): the governor's counts
+
+    @return a list with the result of each operation (NOTHING for those with none)
+*/
+static QoreValue f_dbg_aot_batch_memory(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreHashNode* cfg = get_param_value(params, 0).get<const QoreHashNode>();
+    const QoreListNode* ops = get_param_value(params, 1).get<const QoreListNode>();
+    struct World {
+        uint64_t available = 0;
+        uint64_t limit = 0;
+        std::map<int64, uint64_t> resident;
+        std::map<int64, uint64_t> start;
+    };
+    auto world = std::make_shared<World>();
+    QoreAOTBatchMemoryModel model = QoreAOTBatchMemoryModel::getDefault();
+    model.unit_base = static_cast<uint64_t>(dbg_aot_mem_int(cfg, "unit_base",
+        static_cast<int64>(model.unit_base)));
+    model.unit_per_source_kib = static_cast<uint64_t>(dbg_aot_mem_int(cfg, "unit_per_source_kib",
+        static_cast<int64>(model.unit_per_source_kib)));
+    model.parse_per_source_kib = static_cast<uint64_t>(dbg_aot_mem_int(cfg, "parse_per_source_kib",
+        static_cast<int64>(model.parse_per_source_kib)));
+    model.lowered_per_inst = static_cast<uint64_t>(dbg_aot_mem_int(cfg, "lowered_per_inst",
+        static_cast<int64>(model.lowered_per_inst)));
+    model.lowered_sq_divisor = static_cast<uint64_t>(dbg_aot_mem_int(cfg, "lowered_sq_divisor",
+        static_cast<int64>(model.lowered_sq_divisor)));
+    std::string ledger = dbg_aot_mem_str(cfg, "ledger");
+    std::map<std::string, std::unique_ptr<QoreAOTBatchMemoryGovernor>> govs;
+    // the threads of "resize_async"; joined however the call ends, before the governors are destroyed
+    std::vector<std::thread> threads;
+    ON_BLOCK_EXIT([&threads] () {
+        for (std::thread& t : threads) {
+            if (t.joinable()) {
+                t.join();
+            }
+        }
+    });
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    ConstListIterator li(ops);
+    while (li.next()) {
+        const QoreHashNode* op = li.getValue().getType() == NT_HASH ? li.getValue().get<const QoreHashNode>()
+            : nullptr;
+        if (!op) {
+            xsink->raiseException("DBG-AOT-MEMORY-ERROR", "operation %zu is not a hash", li.index());
+            return QoreValue();
+        }
+        std::string name = dbg_aot_mem_str(op, "op");
+        std::string gname = dbg_aot_mem_str(op, "gov");
+        uint64_t bytes = static_cast<uint64_t>(dbg_aot_mem_int(op, "bytes", 0));
+        if (name == "world") {
+            world->available = static_cast<uint64_t>(dbg_aot_mem_int(op, "available",
+                static_cast<int64>(world->available)));
+            world->limit = static_cast<uint64_t>(dbg_aot_mem_int(op, "limit", static_cast<int64>(world->limit)));
+            for (const char* key : {"resident", "start"}) {
+                QoreValue v = op->getKeyValue(key);
+                if (v.getType() != NT_HASH) {
+                    continue;
+                }
+                ConstHashIterator hi(v.get<const QoreHashNode>());
+                while (hi.next()) {
+                    int64 pid = strtoll(hi.getKey(), nullptr, 10);
+                    uint64_t val = static_cast<uint64_t>(hi.get().getAsBigInt());
+                    (key[0] == 'r' ? world->resident : world->start)[pid] = val;
+                }
+            }
+            rv->push(QoreValue(), xsink);
+            continue;
+        }
+        if (name == "create") {
+            QoreAOTMemorySource src;
+            src.read = [world]() {
+                QoreAOTMemoryReading r;
+                r.available = world->available;
+                r.limit = world->limit;
+                return r;
+            };
+            src.resident = [world](pid_t pid) -> uint64_t {
+                auto i = world->resident.find(pid);
+                return i == world->resident.end() ? 0 : i->second;
+            };
+            src.start_id = [world](pid_t pid) -> uint64_t {
+                auto i = world->start.find(pid);
+                // a process the test did not name is live with start id 1
+                return i == world->start.end() ? 1 : i->second;
+            };
+            src.self = static_cast<pid_t>(dbg_aot_mem_int(op, "pid", 0));
+            src.domain = "dbg";
+            govs[gname] = std::make_unique<QoreAOTBatchMemoryGovernor>(std::move(src), model, ledger);
+            rv->push(govs[gname]->hasLedger(), xsink);
+            continue;
+        }
+        if (name == "join") {
+            for (std::thread& t : threads) {
+                t.join();
+            }
+            threads.clear();
+            rv->push(QoreValue(), xsink);
+            continue;
+        }
+        auto gi = govs.find(gname);
+        if (gi == govs.end()) {
+            xsink->raiseException("DBG-AOT-MEMORY-ERROR", "operation %zu ('%s'): no governor '%s'", li.index(),
+                name.c_str(), gname.c_str());
+            return QoreValue();
+        }
+        QoreAOTBatchMemoryGovernor& gov = *gi->second;
+        if (name == "destroy") {
+            govs.erase(gi);
+            rv->push(QoreValue(), xsink);
+        } else if (name == "parse") {
+            gov.beginParse(bytes);
+            rv->push(QoreValue(), xsink);
+        } else if (name == "codegen") {
+            gov.beginCodegen();
+            rv->push(QoreValue(), xsink);
+        } else if (name == "estimate") {
+            rv->push(static_cast<int64>(gov.estimateUnit(bytes)), xsink);
+        } else if (name == "would") {
+            rv->push(gov.wouldAdmit(bytes), xsink);
+        } else if (name == "reserve") {
+            QoreAOTBatchMemoryGovernor::Decision d = gov.reserve(bytes);
+            ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+            h->setKeyValue("admitted", d.admitted, xsink);
+            h->setKeyValue("alone", d.alone, xsink);
+            h->setKeyValue("available", static_cast<int64>(d.available), xsink);
+            h->setKeyValue("reserved", static_cast<int64>(d.reserved), xsink);
+            h->setKeyValue("headroom", static_cast<int64>(d.headroom), xsink);
+            rv->push(h.release(), xsink);
+        } else if (name == "release") {
+            gov.release(bytes);
+            rv->push(QoreValue(), xsink);
+        } else if (name == "resize") {
+            rv->push(static_cast<int64>(gov.resize(bytes, static_cast<uint64_t>(dbg_aot_mem_int(op, "to", 0)))),
+                xsink);
+        } else if (name == "resize_async") {
+            // the resize runs in a thread, which may wait for memory; "join" waits for it
+            uint64_t to = static_cast<uint64_t>(dbg_aot_mem_int(op, "to", 0));
+            QoreAOTBatchMemoryGovernor* g = &gov;
+            threads.emplace_back([g, bytes, to]() { g->resize(bytes, to); });
+            rv->push(QoreValue(), xsink);
+        } else if (name == "wait_growers") {
+            gov.dbgWaitForGrowWaiters(static_cast<unsigned>(dbg_aot_mem_int(op, "count", 1)));
+            rv->push(QoreValue(), xsink);
+        } else if (name == "estimate_lowered") {
+            rv->push(static_cast<int64>(gov.estimateLowered(bytes,
+                static_cast<uint64_t>(dbg_aot_mem_int(op, "sq", 0)))), xsink);
+        } else if (name == "stats") {
+            QoreAOTBatchMemoryGovernor::Stats st = gov.getStats();
+            ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+            h->setKeyValue("admitted", static_cast<int64>(st.admitted), xsink);
+            h->setKeyValue("alone", static_cast<int64>(st.alone), xsink);
+            h->setKeyValue("deferred", static_cast<int64>(st.deferred), xsink);
+            h->setKeyValue("max_inflight", static_cast<int64>(st.max_inflight), xsink);
+            h->setKeyValue("max_inflight_bytes", static_cast<int64>(st.max_inflight_bytes), xsink);
+            h->setKeyValue("parse_estimate", static_cast<int64>(st.parse_estimate), xsink);
+            h->setKeyValue("parse_measured", static_cast<int64>(st.parse_measured), xsink);
+            h->setKeyValue("inflight", static_cast<int64>(gov.inflight()), xsink);
+            h->setKeyValue("grown", static_cast<int64>(st.grown), xsink);
+            h->setKeyValue("grow_waits", static_cast<int64>(st.grow_waits), xsink);
+            h->setKeyValue("grown_alone", static_cast<int64>(st.grown_alone), xsink);
+            rv->push(h.release(), xsink);
+        } else {
+            xsink->raiseException("DBG-AOT-MEMORY-ERROR", "operation %zu: unknown op '%s'", li.index(), name.c_str());
+            return QoreValue();
+        }
+    }
+    return rv.release();
+}
+
+//! Debug-only: runs qcc's batch coordinator with memory admission over simulated units
+/** @p cfg: \c estimates and \c costs (lists of the estimate and the memory each unit in dispatch order really
+    uses; the costs default to the estimates), \c limit and \c free (the domain's size and its free memory when no
+    unit is in work), and \c jobs (the most workers).  Before each wait of the coordinator, the oldest unit in work
+    completes and its worker claims the next one; see qore_aot_dbg_batch_schedule().
+
+    @return a hash: \c started, \c memory_waits, \c waits, \c max_running, \c completed, \c alone, \c deferred,
+    \c unclaimed, \c peak_used, \c stalled, \c order
+*/
+static QoreValue f_dbg_aot_batch_schedule(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreHashNode* cfg = get_param_value(params, 0).get<const QoreHashNode>();
+    std::vector<uint64_t> estimates;
+    std::vector<uint64_t> costs;
+    for (const char* key : {"estimates", "costs"}) {
+        QoreValue v = cfg->getKeyValue(key);
+        if (v.getType() != NT_LIST) {
+            continue;
+        }
+        ConstListIterator li(v.get<const QoreListNode>());
+        while (li.next()) {
+            (key[0] == 'e' ? estimates : costs).push_back(static_cast<uint64_t>(li.getValue().getAsBigInt()));
+        }
+    }
+    if (costs.empty()) {
+        costs = estimates;
+    }
+    if (costs.size() != estimates.size()) {
+        return xsink->raiseException("DBG-AOT-MEMORY-ERROR", "%zu costs for %zu estimates", costs.size(),
+            estimates.size());
+    }
+    QoreAOTDbgScheduleResult out;
+    if (qore_aot_dbg_batch_schedule(estimates, costs, static_cast<uint64_t>(dbg_aot_mem_int(cfg, "limit", 0)),
+            static_cast<uint64_t>(dbg_aot_mem_int(cfg, "free", 0)),
+            static_cast<unsigned>(dbg_aot_mem_int(cfg, "jobs", 1)), out, xsink)) {
+        assert(*xsink);
+        return QoreValue();
+    }
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+    h->setKeyValue("started", static_cast<int64>(out.started), xsink);
+    h->setKeyValue("memory_waits", static_cast<int64>(out.memory_waits), xsink);
+    h->setKeyValue("waits", static_cast<int64>(out.waits), xsink);
+    h->setKeyValue("max_running", static_cast<int64>(out.max_running), xsink);
+    h->setKeyValue("completed", static_cast<int64>(out.completed), xsink);
+    h->setKeyValue("alone", static_cast<int64>(out.alone), xsink);
+    h->setKeyValue("deferred", static_cast<int64>(out.deferred), xsink);
+    h->setKeyValue("unclaimed", static_cast<int64>(out.unclaimed), xsink);
+    h->setKeyValue("peak_used", static_cast<int64>(out.peak_used), xsink);
+    h->setKeyValue("stalled", out.stalled, xsink);
+    ReferenceHolder<QoreListNode> order(new QoreListNode(bigIntTypeInfo), xsink);
+    for (size_t pos : out.order) {
+        order->push(static_cast<int64>(pos), xsink);
+    }
+    h->setKeyValue("order", order.release(), xsink);
+    return h.release();
+}
+
 //! Debug-only: takes up to @p max tokens from the make jobserver named in a MAKEFLAGS value, as qcc's parallel
 //! codegen does, and returns them to the jobserver
 /** DEBUG builds only.
@@ -15320,6 +15588,10 @@ void init_debug_functions(QoreNamespace& qns) {
         hashTypeInfo, 4, stringTypeInfo, QORE_PARAM_NO_ARG, "makeflags", bigIntTypeInfo, QORE_PARAM_NO_ARG,
         "requested_jobs", bigIntTypeInfo, QORE_PARAM_NO_ARG, "work_items", codeTypeInfo, QORE_PARAM_NO_ARG,
         "before_wait");
+    qns.addBuiltinVariant("dbg_aot_batch_memory", f_dbg_aot_batch_memory, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        listTypeInfo, 2, hashTypeInfo, QORE_PARAM_NO_ARG, "cfg", listTypeInfo, QORE_PARAM_NO_ARG, "ops");
+    qns.addBuiltinVariant("dbg_aot_batch_schedule", f_dbg_aot_batch_schedule, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        hashTypeInfo, 1, hashTypeInfo, QORE_PARAM_NO_ARG, "cfg");
     qns.addBuiltinVariant("dbg_jobserver_acquire", f_dbg_jobserver_acquire, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "makeflags", bigIntTypeInfo, QORE_PARAM_NO_ARG, "max");
     qns.addBuiltinVariant("dbg_signal_reassign_release", f_dbg_signal_reassign_release, QCF_NO_FLAGS,

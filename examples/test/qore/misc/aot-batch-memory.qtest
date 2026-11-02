@@ -1,0 +1,606 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The memory admission of the codegen workers of qcc batch compiles ("qcc -c").  Each batch process sized its worker
+# pool once, when its codegen started, from 60% of the memory free then and a flat 1 GiB per worker: concurrent batch
+# processes in one cgroup each budgeted against the same free memory, and the largest units, dispatched first,
+# started together whatever their size.  A Qorus CI build was OOM-killed in a 16 GiB container that way.
+#
+# Now each unit is admitted with an estimate from its source size only when that memory is free in the memory domain
+# at that moment, after the reservations that every batch process of the domain has made and not used yet (a ledger
+# file shared by the processes); the first unit of a process always proceeds.
+#
+# dbg_aot_batch_memory() runs the admission over a simulated memory domain, with any number of governors standing
+# for batch processes; dbg_aot_batch_schedule() runs the batch coordinator itself over simulated units.  The builtins
+# are only in a debug build of the library.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires FsUtil
+
+%exec-class AotBatchMemoryTest
+
+class AotBatchMemoryTest inherits QUnit::Test {
+    public {
+        const MiB = 1024 * 1024;
+        const GiB = 1024 * MiB;
+        # a 16 GiB domain keeps a tenth of it free for what nothing reserves
+        const Limit = 16 * GiB;
+        const Headroom = Limit / 10;
+        # the model used by the tests: units at 100 MiB plus 1000x their source size; the parse at 100x
+        const Model = {
+            "unit_base": 100 * MiB,
+            "unit_per_source_kib": 1000 * 1024,
+            "parse_per_source_kib": 100 * 1024,
+        };
+    }
+
+    constructor() : QUnit::Test("qcc batch memory admission", "1.0", \ARGV) {
+        addTestCase("unit and parse estimates", \testEstimates());
+        addTestCase("QORE_AOT_BATCH_MEM_PER_JOB_MB sets the unit estimate", \testOverride());
+        addTestCase("units are admitted while their memory is free", \testAdmission());
+        addTestCase("used reservations are not counted twice", \testMaterialized());
+        addTestCase("the first unit always proceeds", \testAlone());
+        addTestCase("unknown memory admits every unit", \testUnknownMemory());
+        addTestCase("a lowered unit's reservation follows its code size", \testResize());
+        addTestCase("a growing unit waits for memory, and goes before new units", \testResizeWait());
+        addTestCase("growing units cannot stall each other", \testResizeNoStall());
+        addTestCase("processes in one domain see each other's reservations", \testLedgerSiblings());
+        addTestCase("the shared parse is reserved until it is measured", \testParseReservation());
+        addTestCase("the reservations of a process that has gone are dropped", \testLedgerDeadProcess());
+        addTestCase("a process removes its reservations when it ends", \testLedgerDestroy());
+        addTestCase("an unsafe ledger file is not used", \testLedgerUnsafe());
+        addTestCase("the largest units do not start together beyond the free memory", \testScheduleLargestFirst());
+        addTestCase("a batch with too little memory still finishes", \testScheduleNoStall());
+        addTestCase("the worker count still caps the units in work", \testScheduleJobsCap());
+        addTestCase("a unit that cannot be admitted gives its worker back", \testScheduleWorkerReturn());
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        unsetenv("QORE_AOT_BATCH_MEM_PER_JOB_MB");
+    }
+
+    testEstimates() {
+%ifndef QoreDebug
+        testSkip("dbg_aot_batch_memory() is only in a debug build of the library");
+%endif
+%ifdef QoreDebug
+        list<auto> r = dbg_aot_batch_memory(Model, (
+            {"op": "create", "gov": "a", "pid": 1001},
+            {"op": "estimate", "gov": "a", "bytes": 1000},
+            {"op": "estimate", "gov": "a", "bytes": 200 * 1024},
+            {"op": "estimate", "gov": "a", "bytes": 2 * MiB},
+            {"op": "estimate", "gov": "a", "bytes": 4 * MiB},
+            {"op": "parse", "gov": "a", "bytes": 10 * MiB},
+            {"op": "stats", "gov": "a"},
+        ));
+        assertFalse(r[0], "no ledger");
+        assertEq(100 * MiB + 1000 * 1000, r[1], "a small unit is estimated at about the base");
+        assertEq(100 * MiB + 200 * 1000 * 1024, r[2], "a larger unit follows its source size");
+        assertEq(100 * MiB + 2000 * MiB, r[3], "the estimate grows with the source (1)");
+        assertEq(100 * MiB + 4000 * MiB, r[4], "the estimate grows with the source (2)");
+        assertEq(1000 * MiB, r[6].parse_estimate, "the parse follows the total source size");
+
+        # the default model
+        unsetenv("QORE_AOT_BATCH_MEM_PER_JOB_MB");
+        r = dbg_aot_batch_memory({}, (
+            {"op": "create", "gov": "a", "pid": 1001},
+            {"op": "estimate", "gov": "a", "bytes": 100},
+            {"op": "estimate", "gov": "a", "bytes": 100 * 1024},
+            {"op": "estimate", "gov": "a", "bytes": 400 * 1024},
+        ));
+        assertGt(0, r[1], "the default base is not 0");
+        assertGe(r[1], r[2], "the default estimate grows with the source (1)");
+        assertGt(r[2], r[3], "the default estimate grows with the source (2)");
+%endif
+    }
+
+    testOverride() {
+%ifndef QoreDebug
+        testSkip("dbg_aot_batch_memory() is only in a debug build of the library");
+%endif
+%ifdef QoreDebug
+        setenv("QORE_AOT_BATCH_MEM_PER_JOB_MB", "700");
+        on_exit unsetenv("QORE_AOT_BATCH_MEM_PER_JOB_MB");
+        list<auto> r = dbg_aot_batch_memory({}, (
+            {"op": "create", "gov": "a", "pid": 1001},
+            {"op": "estimate", "gov": "a", "bytes": 100},
+            {"op": "estimate", "gov": "a", "bytes": 4 * MiB},
+        ));
+        assertEq(700 * MiB, r[1], "a small unit is estimated at the value set");
+        assertEq(700 * MiB, r[2], "a large unit is estimated at the value set");
+
+        # values that are not positive numbers leave the model in place
+        foreach string v in (("0", "-5", "abc")) {
+            setenv("QORE_AOT_BATCH_MEM_PER_JOB_MB", v);
+            r = dbg_aot_batch_memory(Model, (
+                {"op": "create", "gov": "a", "pid": 1001},
+                {"op": "estimate", "gov": "a", "bytes": 4 * MiB},
+            ));
+            assertEq(4100 * MiB, r[1], "'" + v + "' is ignored");
+        }
+%endif
+    }
+
+    testAdmission() {
+%ifndef QoreDebug
+        testSkip("dbg_aot_batch_memory() is only in a debug build of the library");
+%endif
+%ifdef QoreDebug
+        # the reservations are not used yet: the resident memory stays as it was
+        list<auto> r = dbg_aot_batch_memory(Model, (
+            {"op": "world", "available": 10 * GiB, "limit": Limit, "resident": {"1001": GiB}},
+            {"op": "create", "gov": "a", "pid": 1001},
+            {"op": "reserve", "gov": "a", "bytes": 3 * GiB},
+            {"op": "reserve", "gov": "a", "bytes": 3 * GiB},
+            # 6 GiB reserved: 3 GiB more and the headroom do not fit in 10 GiB
+            {"op": "would", "gov": "a", "bytes": 3 * GiB},
+            {"op": "reserve", "gov": "a", "bytes": 3 * GiB},
+            # a smaller unit fits
+            {"op": "reserve", "gov": "a", "bytes": GiB},
+            {"op": "release", "gov": "a", "bytes": 3 * GiB},
+            {"op": "reserve", "gov": "a", "bytes": 3 * GiB},
+            {"op": "stats", "gov": "a"},
+        ));
+        assertEq(True, r[2].admitted, "the first unit is admitted");
+        assertEq(False, r[2].alone, "the first unit has memory to spare");
+        assertEq(Headroom, r[2].headroom, "a tenth of the domain is kept free");
+        assertEq(True, r[3].admitted, "the second unit fits");
+        assertEq(3 * GiB, r[3].reserved, "the first unit's reservation is deducted");
+        assertFalse(r[4], "the third unit would not fit");
+        assertEq(False, r[5].admitted, "the third unit is not admitted");
+        assertEq(6 * GiB, r[5].reserved, "both reservations are deducted");
+        assertEq(True, r[6].admitted, "a smaller unit fits");
+        assertEq(True, r[8].admitted, "a released unit's memory is free again");
+        hash<auto> st = r[9];
+        assertEq(4, st.admitted, "four units admitted");
+        assertEq(1, st.deferred, "one deferral");
+        assertEq(3, st.inflight, "three units in work");
+        assertEq(7 * GiB, st.max_inflight_bytes, "the most memory reserved at once");
+%endif
+    }
+
+    testMaterialized() {
+%ifndef QoreDebug
+        testSkip("dbg_aot_batch_memory() is only in a debug build of the library");
+%endif
+%ifdef QoreDebug
+        list<auto> r = dbg_aot_batch_memory(Model, (
+            {"op": "world", "available": 10 * GiB, "limit": Limit, "resident": {"1001": GiB}},
+            {"op": "create", "gov": "a", "pid": 1001},
+            {"op": "codegen", "gov": "a"},
+            {"op": "reserve", "gov": "a", "bytes": 3 * GiB},
+            # the unit now uses its memory: the domain has 3 GiB less, and the process 3 GiB more
+            {"op": "world", "available": 7 * GiB, "resident": {"1001": 4 * GiB}},
+            {"op": "reserve", "gov": "a", "bytes": 3 * GiB},
+            # half of the second unit's memory is used
+            {"op": "world", "available": 11 * GiB / 2, "resident": {"1001": 11 * GiB / 2}},
+            {"op": "reserve", "gov": "a", "bytes": 5 * GiB / 2},
+            {"op": "reserve", "gov": "a", "bytes": GiB},
+        ));
+        assertEq(True, r[3].admitted, "the first unit is admitted");
+        assertEq(True, r[5].admitted, "the used reservation is in the free memory only");
+        assertEq(0, r[5].reserved, "nothing is reserved and unused");
+        assertEq(3 * GiB / 2, r[7].reserved, "the unused half of the second unit is reserved");
+        assertEq(False, r[7].admitted, "2.5 GiB do not fit: 5.5 < 1.5 + 2.5 + 1.6");
+        assertEq(True, r[8].admitted, "1 GiB fits: 5.5 >= 1.5 + 1 + 1.6");
+%endif
+    }
+
+    testAlone() {
+%ifndef QoreDebug
+        testSkip("dbg_aot_batch_memory() is only in a debug build of the library");
+%endif
+%ifdef QoreDebug
+        list<auto> r = dbg_aot_batch_memory(Model, (
+            {"op": "world", "available": 100 * MiB, "limit": Limit},
+            {"op": "create", "gov": "a", "pid": 1001},
+            {"op": "would", "gov": "a", "bytes": 4 * GiB},
+            {"op": "reserve", "gov": "a", "bytes": 4 * GiB},
+            {"op": "reserve", "gov": "a", "bytes": 100 * MiB},
+            {"op": "release", "gov": "a", "bytes": 4 * GiB},
+            {"op": "reserve", "gov": "a", "bytes": 4 * GiB},
+            {"op": "stats", "gov": "a"},
+        ));
+        assertTrue(r[2], "a unit would be admitted with nothing in work");
+        assertEq(True, r[3].admitted, "the first unit proceeds without free memory");
+        assertEq(True, r[3].alone, "it is admitted alone");
+        assertEq(False, r[4].admitted, "a second unit waits");
+        assertEq(True, r[6].admitted, "with nothing in work again, the next unit proceeds");
+        assertEq(2, r[7].alone, "two units admitted alone");
+        assertEq(0, r[7].admitted, "none with memory to spare");
+%endif
+    }
+
+    testUnknownMemory() {
+%ifndef QoreDebug
+        testSkip("dbg_aot_batch_memory() is only in a debug build of the library");
+%endif
+%ifdef QoreDebug
+        list<auto> r = dbg_aot_batch_memory(Model, (
+            {"op": "world", "available": 0, "limit": 0},
+            {"op": "create", "gov": "a", "pid": 1001},
+            {"op": "reserve", "gov": "a", "bytes": 40 * GiB},
+            {"op": "reserve", "gov": "a", "bytes": 40 * GiB},
+        ));
+        assertEq(True, r[2].admitted, "unknown memory: the first unit");
+        assertEq(False, r[2].alone, "unknown memory is not too little memory");
+        assertEq(True, r[3].admitted, "unknown memory: the worker count alone limits the units");
+%endif
+    }
+
+    testResize() {
+%ifndef QoreDebug
+        testSkip("dbg_aot_batch_memory() is only in a debug build of the library");
+%endif
+%ifdef QoreDebug
+        list<auto> r = dbg_aot_batch_memory(Model + {"lowered_per_inst": 10000, "lowered_sq_divisor": 100}, (
+            {"op": "world", "available": 10 * GiB, "limit": Limit},
+            {"op": "create", "gov": "a", "pid": 1001},
+            {"op": "estimate_lowered", "gov": "a", "bytes": 1000, "sq": 1000000},
+            {"op": "reserve", "gov": "a", "bytes": 2 * GiB},
+            {"op": "resize", "gov": "a", "bytes": 2 * GiB, "to": GiB},
+            {"op": "reserve", "gov": "a", "bytes": 5 * GiB},
+            # 1 + 5 reserved: 2 GiB more fit with the headroom (10 >= 6 + 2 + 1.6)
+            {"op": "resize", "gov": "a", "bytes": GiB, "to": 3 * GiB},
+            {"op": "would", "gov": "a", "bytes": GiB},
+            {"op": "stats", "gov": "a"},
+        ));
+        assertEq(100 * MiB + 10000 * 1000 + 10000, r[2],
+            "the lowered estimate follows the instruction count and the squared function sizes");
+        assertEq(GiB, r[4], "a smaller lowered estimate is taken at once");
+        assertEq(True, r[5].admitted, "the memory released by shrinking is free for another unit");
+        assertEq(GiB, r[5].reserved, "only the shrunk reservation is deducted");
+        assertEq(3 * GiB, r[6], "the reservation grows when the memory is free");
+        assertFalse(r[7], "the grown reservation is deducted: 10 < 8 + 1 + 1.6");
+        hash<auto> st = r[8];
+        assertEq(1, st.grown, "one unit grew");
+        assertEq(0, st.grow_waits, "it did not wait");
+        assertEq(8 * GiB, st.max_inflight_bytes, "the most memory reserved at once");
+
+        # the explicit estimate applies to lowered units too
+        setenv("QORE_AOT_BATCH_MEM_PER_JOB_MB", "300");
+        on_exit unsetenv("QORE_AOT_BATCH_MEM_PER_JOB_MB");
+        r = dbg_aot_batch_memory({}, (
+            {"op": "create", "gov": "a", "pid": 1001},
+            {"op": "estimate_lowered", "gov": "a", "bytes": 1000000},
+        ));
+        assertEq(300 * MiB, r[1], "QORE_AOT_BATCH_MEM_PER_JOB_MB sets the lowered estimate");
+%endif
+    }
+
+    testResizeWait() {
+%ifndef QoreDebug
+        testSkip("dbg_aot_batch_memory() is only in a debug build of the library");
+%endif
+%ifdef QoreDebug
+        list<auto> r = dbg_aot_batch_memory(Model, (
+            {"op": "world", "available": 10 * GiB, "limit": Limit},
+            {"op": "create", "gov": "a", "pid": 1001},
+            {"op": "reserve", "gov": "a", "bytes": 4 * GiB},
+            {"op": "reserve", "gov": "a", "bytes": 3 * GiB},
+            # the second unit is lowered: it needs 6 GiB, which do not fit beside the first unit
+            {"op": "resize_async", "gov": "a", "bytes": 3 * GiB, "to": 6 * GiB},
+            {"op": "wait_growers", "gov": "a", "count": 1},
+            # while it waits, no new unit is admitted, even a small one that would fit
+            {"op": "would", "gov": "a", "bytes": 100 * MiB},
+            {"op": "reserve", "gov": "a", "bytes": 100 * MiB},
+            # the first unit is done: the growing unit proceeds
+            {"op": "release", "gov": "a", "bytes": 4 * GiB},
+            {"op": "join"},
+            {"op": "stats", "gov": "a"},
+            {"op": "reserve", "gov": "a", "bytes": GiB},
+        ));
+        assertFalse(r[6], "a waiting growth goes before a new unit");
+        assertEq(False, r[7].admitted, "no new unit while a unit waits to grow");
+        hash<auto> st = r[10];
+        assertEq(1, st.grown, "the unit grew");
+        assertEq(1, st.grow_waits, "it waited for memory");
+        assertEq(0, st.grown_alone, "it grew with memory to spare once the first unit was done");
+        assertEq(1, st.inflight, "one unit in work");
+        assertEq(True, r[11].admitted, "new units are admitted again: 10 >= 6 + 1 + 1.6");
+        assertEq(6 * GiB, r[11].reserved, "the grown reservation is deducted");
+%endif
+    }
+
+    testResizeNoStall() {
+%ifndef QoreDebug
+        testSkip("dbg_aot_batch_memory() is only in a debug build of the library");
+%endif
+%ifdef QoreDebug
+        list<auto> r = dbg_aot_batch_memory(Model, (
+            {"op": "world", "available": 6 * GiB, "limit": Limit},
+            {"op": "create", "gov": "a", "pid": 1001},
+            {"op": "reserve", "gov": "a", "bytes": 2 * GiB},
+            {"op": "reserve", "gov": "a", "bytes": 2 * GiB},
+            # both units need 5 GiB once lowered; neither fits beside the other
+            {"op": "resize_async", "gov": "a", "bytes": 2 * GiB, "to": 5 * GiB},
+            {"op": "wait_growers", "gov": "a", "count": 1},
+            # the second unit would wait for the first as the first waits for it: as the last one running, it
+            # proceeds
+            {"op": "resize", "gov": "a", "bytes": 2 * GiB, "to": 5 * GiB},
+            # it is done: the first unit is alone now and proceeds
+            {"op": "release", "gov": "a", "bytes": 5 * GiB},
+            {"op": "join"},
+            {"op": "stats", "gov": "a"},
+        ));
+        assertEq(5 * GiB, r[6], "the last running unit grows without waiting");
+        hash<auto> st = r[9];
+        assertEq(2, st.grown, "both units grew");
+        assertEq(1, st.grow_waits, "one waited");
+        assertEq(2, st.grown_alone, "both grew without memory to spare, one after the other");
+        assertEq(1, st.inflight, "the first unit is in work");
+%endif
+    }
+
+    testLedgerSiblings() {
+%ifndef QoreDebug
+        testSkip("dbg_aot_batch_memory() is only in a debug build of the library");
+%endif
+%ifdef QoreDebug
+        TmpDir tmp("qore-aot-batch-memory-");
+        string ledger = join_paths(tmp.path, "domain.ledger");
+        list<hash<auto>> ops = (
+            {"op": "world", "available": 10 * GiB, "limit": Limit, "resident": {"1001": GiB, "1002": GiB}},
+            {"op": "create", "gov": "a", "pid": 1001},
+            {"op": "create", "gov": "b", "pid": 1002},
+            {"op": "reserve", "gov": "a", "bytes": 3 * GiB},
+            {"op": "reserve", "gov": "a", "bytes": 3 * GiB},
+            {"op": "reserve", "gov": "b", "bytes": GiB},
+            {"op": "reserve", "gov": "b", "bytes": 2 * GiB},
+        );
+        list<auto> r = dbg_aot_batch_memory(Model + {"ledger": ledger}, ops);
+        assertTrue(r[1], "a: the ledger is used");
+        assertTrue(r[2], "b: the ledger is used");
+        assertEq(True, r[5].admitted, "b's first unit is admitted");
+        assertEq(6 * GiB, r[5].reserved, "b sees a's reservations");
+        assertEq(False, r[6].admitted, "b's second unit does not fit beside a's");
+        assertEq(7 * GiB, r[6].reserved, "all reservations of the domain are deducted");
+
+        # without the ledger, each process counts the same free memory: the domain is overcommitted
+        r = dbg_aot_batch_memory(Model, ops);
+        assertEq(True, r[6].admitted, "without a ledger, b admits a unit that does not fit");
+        assertEq(GiB, r[6].reserved, "without a ledger, b sees only its own reservation");
+%endif
+    }
+
+    testParseReservation() {
+%ifndef QoreDebug
+        testSkip("dbg_aot_batch_memory() is only in a debug build of the library");
+%endif
+%ifdef QoreDebug
+        TmpDir tmp("qore-aot-batch-memory-");
+        string ledger = join_paths(tmp.path, "domain.ledger");
+        list<auto> r = dbg_aot_batch_memory(Model + {"ledger": ledger}, (
+            {"op": "world", "available": 10 * GiB, "limit": Limit, "resident": {"1001": GiB, "1002": GiB}},
+            {"op": "create", "gov": "a", "pid": 1001},
+            {"op": "create", "gov": "b", "pid": 1002},
+            # a starts its parse: 50 MiB of source is estimated at 5000 MiB
+            {"op": "parse", "gov": "a", "bytes": 50 * MiB},
+            {"op": "reserve", "gov": "b", "bytes": GiB},
+            {"op": "reserve", "gov": "b", "bytes": 3 * GiB},
+            # a's parse has grown by 1 GiB
+            {"op": "world", "available": 9 * GiB, "resident": {"1001": 2 * GiB}},
+            {"op": "reserve", "gov": "b", "bytes": 3 * GiB},
+            # the parse is done with 1.5 GiB: that replaces the estimate
+            {"op": "world", "available": 17 * GiB / 2, "resident": {"1001": 5 * GiB / 2}},
+            {"op": "codegen", "gov": "a"},
+            {"op": "reserve", "gov": "b", "bytes": 3 * GiB},
+            {"op": "stats", "gov": "a"},
+        ));
+        assertEq(5000 * MiB, r[4].reserved, "b sees a's whole parse estimate");
+        assertEq(False, r[5].admitted, "the parse estimate leaves no room for 3 GiB: 10 < 4.9 + 1 + 3 + 1.6");
+        assertEq(3976 * MiB + GiB, r[7].reserved,
+            "the part of the parse that is resident is no longer reserved: 3976 MiB of a's and 1 GiB of b's");
+        assertEq(False, r[7].admitted, "still no room: 9 < 4.9 + 3 + 1.6");
+        assertEq(GiB, r[10].reserved, "the measured parse is resident: only b's unit is reserved");
+        assertEq(True, r[10].admitted, "now 3 GiB fit");
+        assertEq(3 * GiB / 2, r[11].parse_measured, "the parse took 1.5 GiB");
+        assertEq(5000 * MiB, r[11].parse_estimate, "the estimate is kept for diagnostics");
+%endif
+    }
+
+    testLedgerDeadProcess() {
+%ifndef QoreDebug
+        testSkip("dbg_aot_batch_memory() is only in a debug build of the library");
+%endif
+%ifdef QoreDebug
+        TmpDir tmp("qore-aot-batch-memory-");
+        string ledger = join_paths(tmp.path, "domain.ledger");
+        list<auto> r = dbg_aot_batch_memory(Model + {"ledger": ledger}, (
+            {"op": "world", "available": 10 * GiB, "limit": Limit, "start": {"1001": 5, "1002": 7}},
+            {"op": "create", "gov": "a", "pid": 1001},
+            {"op": "reserve", "gov": "a", "bytes": 5 * GiB},
+            {"op": "create", "gov": "b", "pid": 1002},
+            {"op": "reserve", "gov": "b", "bytes": GiB},
+            # a was killed and its pid reused by a process with another start time
+            {"op": "world", "start": {"1001": 9}},
+            {"op": "reserve", "gov": "b", "bytes": GiB},
+            # the slot was cleared: a's pid back with the old start time does not resurrect it
+            {"op": "world", "start": {"1001": 5}},
+            {"op": "reserve", "gov": "b", "bytes": GiB},
+        ));
+        assertEq(5 * GiB, r[4].reserved, "a's reservation counts while a lives");
+        assertEq(GiB, r[6].reserved, "a's reservation is dropped when its pid is another process's");
+        assertEq(2 * GiB, r[8].reserved, "the cleared slot stays cleared");
+%endif
+    }
+
+    testLedgerDestroy() {
+%ifndef QoreDebug
+        testSkip("dbg_aot_batch_memory() is only in a debug build of the library");
+%endif
+%ifdef QoreDebug
+        TmpDir tmp("qore-aot-batch-memory-");
+        string ledger = join_paths(tmp.path, "domain.ledger");
+        list<auto> r = dbg_aot_batch_memory(Model + {"ledger": ledger}, (
+            {"op": "world", "available": 10 * GiB, "limit": Limit},
+            {"op": "create", "gov": "a", "pid": 1001},
+            {"op": "reserve", "gov": "a", "bytes": 5 * GiB},
+            {"op": "create", "gov": "b", "pid": 1002},
+            {"op": "reserve", "gov": "b", "bytes": GiB},
+            {"op": "release", "gov": "a", "bytes": 5 * GiB},
+            {"op": "reserve", "gov": "b", "bytes": GiB},
+            {"op": "reserve", "gov": "a", "bytes": 2 * GiB},
+            {"op": "destroy", "gov": "a"},
+            {"op": "reserve", "gov": "b", "bytes": GiB},
+        ));
+        assertEq(5 * GiB, r[4].reserved, "a's reservation counts");
+        assertEq(GiB, r[6].reserved, "a released its unit");
+        assertEq(2 * GiB, r[9].reserved, "a's slot is removed when it ends: only b's two units are left");
+
+        # the last process to leave the ledger removes the file; a process holding the removed file opens the new one
+        r = dbg_aot_batch_memory(Model + {"ledger": ledger}, (
+            {"op": "world", "available": 10 * GiB, "limit": Limit},
+            {"op": "create", "gov": "a", "pid": 1001},
+            {"op": "create", "gov": "b", "pid": 1002},
+            {"op": "reserve", "gov": "a", "bytes": GiB},
+            {"op": "reserve", "gov": "b", "bytes": GiB},
+            {"op": "release", "gov": "a", "bytes": GiB},
+            {"op": "release", "gov": "b", "bytes": GiB},
+        ));
+        assertFalse(is_file(ledger), "the empty ledger is removed");
+        r = dbg_aot_batch_memory(Model + {"ledger": ledger}, (
+            {"op": "world", "available": 10 * GiB, "limit": Limit},
+            {"op": "create", "gov": "a", "pid": 1001},
+            {"op": "create", "gov": "b", "pid": 1002},
+            {"op": "reserve", "gov": "a", "bytes": GiB},
+            {"op": "release", "gov": "a", "bytes": GiB},
+            # the file is gone, and both still hold it open: each opens the file at the path again
+            {"op": "reserve", "gov": "a", "bytes": 2 * GiB},
+            {"op": "reserve", "gov": "b", "bytes": GiB},
+            {"op": "destroy", "gov": "a"},
+            {"op": "destroy", "gov": "b"},
+        ));
+        assertEq(2 * GiB, r[6].reserved, "b sees a's reservation in the ledger a created again");
+        assertFalse(is_file(ledger), "the ledger is removed when the last process ends");
+%endif
+    }
+
+    testLedgerUnsafe() {
+%ifndef QoreDebug
+        testSkip("dbg_aot_batch_memory() is only in a debug build of the library");
+%endif
+%ifdef QoreDebug
+        TmpDir tmp("qore-aot-batch-memory-");
+        string target = join_paths(tmp.path, "target");
+        string link = join_paths(tmp.path, "link.ledger");
+        File f();
+        f.open2(target, O_CREAT | O_WRONLY | O_TRUNC, 0600);
+        f.close();
+        symlink(target, link);
+        list<auto> r = dbg_aot_batch_memory({"ledger": link}, ({"op": "create", "gov": "a", "pid": 1001},));
+        assertFalse(r[0], "a symbolic link is not followed");
+
+        string shared = join_paths(tmp.path, "shared.ledger");
+        f.open2(shared, O_CREAT | O_WRONLY | O_TRUNC, 0600);
+        f.close();
+        chmod(shared, 0666);
+        r = dbg_aot_batch_memory({"ledger": shared}, ({"op": "create", "gov": "a", "pid": 1001},));
+        assertFalse(r[0], "a file others can write is not used");
+
+        r = dbg_aot_batch_memory({"ledger": join_paths(tmp.path, "new.ledger")},
+            ({"op": "create", "gov": "a", "pid": 1001},));
+        assertTrue(r[0], "a new ledger is created");
+        hash<StatInfo> st = hstat(join_paths(tmp.path, "new.ledger"));
+        assertEq(0600, st.mode & 0777, "the new ledger is private");
+%endif
+    }
+
+    testScheduleLargestFirst() {
+%ifndef QoreDebug
+        testSkip("dbg_aot_batch_schedule() is only in a debug build of the library");
+%endif
+%ifdef QoreDebug
+        # six large units of 4 GiB, dispatched first; 10 GiB free in a 16 GiB domain
+        hash<auto> h = dbg_aot_batch_schedule({
+            "estimates": (map 4 * GiB, xrange(6)),
+            "limit": Limit,
+            "free": 10 * GiB,
+            "jobs": 12,
+        });
+        assertFalse(h.stalled, "no stall");
+        assertEq(6, h.completed, "every unit is done");
+        assertEq(0, h.unclaimed, "nothing is left");
+        assertEq(2, h.max_running, "two large units at once: 4 + 4 + 1.6 <= 10");
+        assertEq(8 * GiB, h.peak_used, "the units never use more than they fit");
+        assertEq((map $1, xrange(6)), h.order, "the units start in dispatch order");
+        assertGt(0, h.memory_waits, "the coordinator waited for memory");
+        assertEq(0, h.alone, "no unit had to be admitted alone");
+
+        # the small units after the large ones run as many at once as fit
+        h = dbg_aot_batch_schedule({
+            "estimates": (map 4 * GiB, xrange(4)) + (map GiB, xrange(12)),
+            "limit": Limit,
+            "free": 10 * GiB,
+            "jobs": 12,
+        });
+        assertFalse(h.stalled, "mixed: no stall");
+        assertEq(16, h.completed, "mixed: every unit is done");
+        assertLe(10 * GiB - Headroom, h.peak_used, "mixed: the free memory less the headroom is never exceeded");
+        assertEq(8, h.max_running, "mixed: eight small units at once: 8 + 1.6 <= 10");
+%endif
+    }
+
+    testScheduleNoStall() {
+%ifndef QoreDebug
+        testSkip("dbg_aot_batch_schedule() is only in a debug build of the library");
+%endif
+%ifdef QoreDebug
+        # every unit is larger than the free memory
+        hash<auto> h = dbg_aot_batch_schedule({
+            "estimates": (map 4 * GiB, xrange(5)),
+            "limit": Limit,
+            "free": GiB,
+            "jobs": 8,
+        });
+        assertFalse(h.stalled, "the coordinator never waits with nothing in work");
+        assertEq(5, h.completed, "every unit is done");
+        assertEq(1, h.max_running, "one unit at a time");
+        assertEq(5, h.alone, "each unit was admitted alone");
+%endif
+    }
+
+    testScheduleJobsCap() {
+%ifndef QoreDebug
+        testSkip("dbg_aot_batch_schedule() is only in a debug build of the library");
+%endif
+%ifdef QoreDebug
+        hash<auto> h = dbg_aot_batch_schedule({
+            "estimates": (map 100 * MiB, xrange(20)),
+            "limit": Limit,
+            "free": 14 * GiB,
+            "jobs": 3,
+        });
+        assertFalse(h.stalled, "no stall");
+        assertEq(20, h.completed, "every unit is done");
+        assertEq(3, h.max_running, "the worker count caps the units in work");
+        assertEq(0, h.memory_waits, "memory never ran short");
+%endif
+    }
+
+    testScheduleWorkerReturn() {
+%ifndef QoreDebug
+        testSkip("dbg_aot_batch_schedule() is only in a debug build of the library");
+%endif
+%ifdef QoreDebug
+        # three medium units fit, then a large one does not: its worker ends and is started again later
+        hash<auto> h = dbg_aot_batch_schedule({
+            "estimates": (2 * GiB, 2 * GiB, 2 * GiB, 2 * GiB, 6 * GiB, GiB, GiB),
+            "limit": Limit,
+            "free": 9 * GiB,
+            "jobs": 6,
+        });
+        assertFalse(h.stalled, "no stall");
+        assertEq(7, h.completed, "every unit is done");
+        assertLe(9 * GiB - Headroom, h.peak_used, "the free memory less the headroom is never exceeded");
+        assertGt(0, h.deferred, "some admissions found too little memory");
+        assertGt(h.max_running, h.started, "workers were started again after giving their place back");
+%endif
+    }
+}

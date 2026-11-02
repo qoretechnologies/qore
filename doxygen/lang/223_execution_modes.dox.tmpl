@@ -442,6 +442,41 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
     output is the same either way. Outside a jobserver-aware make (a bare \c qcc
     invocation), \c --jobs / \c QCC_JOBS apply directly.
 
+    @subsection qcc_batch_memory Memory Admission of Batch Compiles
+
+    A batch compile (\c qcc \c -c with several sources) parses all of its sources into one program and then
+    compiles one object per source on a pool of threads, each with its own LLVM backend.  The memory a thread needs is
+    the size of the object it compiles, and a build usually runs several batch compiles and module compiles at once in
+    the same memory: a container, a CI job or the host.  So that they do not run out of memory together, each object
+    is compiled only when the memory it is estimated to need is free at that moment:
+
+    - the free memory is read from the memory domain of the process each time: on Linux, the tightest cgroup memory
+      limit of the process (\c memory.max or \c memory.high, cgroup v2 or v1) less the cgroup's usage, not counting
+      the inactive file cache that the kernel reclaims first, or the host's available memory if that is less or there
+      is no limit; on macOS and other systems, the host's available memory
+    - each batch process records the memory it has reserved and not used yet in a ledger file shared with the other
+      batch processes of the same domain (\c qore-aot-memory-<em>uid</em>-<em>hash</em>.ledger in \c TMPDIR or
+      \c /tmp, removed by the last process to leave it), and every admission deducts the reservations of all of
+      them, so that two processes compiling at the same time do not count the same free memory; a reservation counts
+      as used as the process's resident memory grows
+    - an object is first admitted with an estimate from the size of its source; once its code is lowered to %Qore
+      IR, and before LLVM optimizes and compiles it, its reservation is changed to an estimate from the size of the
+      lowered code: a smaller one releases memory at once, and a larger one waits until the memory is free (no new
+      object is admitted meanwhile) or until no other object of the batch is running (set
+      \c QORE_AOT_BATCH_MEM_PER_JOB_MB to estimate every object at a fixed size instead); the shared parse is
+      reserved from the total size of the sources until its real size is known
+    - a tenth of the domain (at least 256 MiB, at most 2 GiB) is kept free for memory that nothing reserves
+    - the largest sources are compiled first, each admitted with its own estimate, so they start together only as
+      far as the memory allows
+    - the first object of a batch always proceeds, so that every batch makes progress even with too little memory;
+      a thread that cannot get the memory for its next object ends and returns its GNU make jobserver token, and a
+      new thread is started when the memory is free again; the waits have no timer and end at once when the compile
+      is cancelled
+
+    The objects do not depend on how many are compiled at once.  With \c QORE_AOT_VERBOSE or
+    \c QORE_AOT_BATCH_TIMING set, \c qcc prints how many threads ran at once and how many objects were admitted,
+    admitted alone and deferred for memory.
+
     @subsection aot_builds Incremental and Parallel Object Builds
 
     A <tt>.qo</tt> fragment carries declarations rather than executable bodies.  Preloading sibling

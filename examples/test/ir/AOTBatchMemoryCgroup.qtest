@@ -1,0 +1,187 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTBatchMemoryCgroupTest
+
+# Two qcc batch compiles ("qcc -c") run at once in one memory-limited cgroup, as the group compiles of a large build
+# do in a CI container.
+#
+# Each batch process used to size its codegen worker pool once, from 60% of the memory free when its own codegen
+# started and a flat 1 GiB per worker: the two processes each counted the same free memory, and units that need more
+# than 1 GiB were admitted together anyway, so the cgroup ran out of memory and the kernel killed a compiler.  Now
+# each unit is admitted with its own estimate only while that memory is free in the cgroup, after the reservations
+# of both processes.  Both compiles must finish without an OOM kill, and their objects must be byte-identical to the
+# objects of a serial compile outside the cgroup.
+#
+# The test needs Linux, systemd-run with a user manager that has the memory controller, and about 6 GiB of memory,
+# and takes a minute or two; it runs when QORE_AOT_MEMORY_CGROUP_TEST is set.  Without the fix, it fails with an OOM
+# kill (the old qcc can be run with QCC=<path>).
+class AOTBatchMemoryCgroupTest inherits QUnit::Test {
+    public {
+        #! the memory limit of the cgroup
+        const MemoryMax = 6 * 1024 * 1024 * 1024;
+        #! the units of each batch; each needs about 1.1 GiB at -O3
+        const Units = 4;
+        const Methods = 20;
+        const Statements = 200;
+    }
+
+    private {
+        string qcc_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("AOTBatchMemoryCgroupTest", "1.0", \ARGV) {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("concurrent batch compiles in a memory-limited cgroup", \testConcurrentBatches());
+
+        set_return_value(main());
+    }
+
+    #! the source of one unit: a class whose methods are large enough for a big LLVM module
+    private static string unitSource(int group, int unit) {
+        list<string> l = ("%new-style", "%require-types", "%strict-args", "",
+            sprintf("public class Unit%d_%d {", group, unit));
+        for (int m = 0; m < Methods; ++m) {
+            l += sprintf("    public hash<auto> m%d(int a, string s, list<auto> l) {", m);
+            l += "        hash<auto> h = {};";
+            l += "        int x = a;";
+            for (int k = 0; k < Statements; ++k) {
+                l += sprintf("        if (x %% %d == %d) { h.\"k%d\" = s + \"%d\" + x; x += l.size() * %d; } "
+                    "else { h.\"j%d\" = (x, s, %d); x -= %d; }", k + 2, k % 3, k, k, k + 1, k, k, k);
+            }
+            l += "        return h;";
+            l += "    }";
+        }
+        l += "}";
+        return (foldl $1 + "\n" + $2, l) + "\n";
+    }
+
+    #! writes the sources of a batch and returns their paths
+    private static list<string> writeGroup(string dir, int group) {
+        mkdir(dir);
+        list<string> files;
+        for (int u = 0; u < Units; ++u) {
+            string path = join_paths(dir, sprintf("unit%d.qc", u));
+            File f();
+            f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(unitSource(group, u));
+            files += path;
+        }
+        return files;
+    }
+
+    #! returns the shell-quoted form of a string
+    private static string q(string s) {
+        return "'" + replace(s, "'", "'\\''") + "'";
+    }
+
+    private string compileCommand(string out_dir, list<string> files) {
+        return sprintf("%s -O3 -c --output-dir=%s %s", q(qcc_bin), q(out_dir),
+            (foldl $1 + " " + $2, (map q($1), files)));
+    }
+
+    #! returns true if a transient systemd user scope with a memory limit can be made here
+    private static bool haveMemoryScope() {
+        int rc;
+        backquote("systemd-run --user --scope --quiet -p MemoryMax=64M -- true 2>&1", \rc);
+        return !rc;
+    }
+
+    testConcurrentBatches() {
+        if (PlatformOS != "Linux") {
+            testSkip("needs Linux cgroups");
+        }
+        if (!ENV.QORE_AOT_MEMORY_CGROUP_TEST) {
+            testSkip("set QORE_AOT_MEMORY_CGROUP_TEST=1 to run: needs about 6 GiB of memory and a minute or two");
+        }
+        if (!haveMemoryScope()) {
+            testSkip("systemd-run --user cannot make a scope with a memory limit here");
+        }
+
+        TmpDir tmp("qore-aot-batch-memory-cgroup-");
+        string root = tmp.path;
+        list<list<string>> groups = (
+            writeGroup(join_paths(root, "g1"), 1),
+            writeGroup(join_paths(root, "g2"), 2),
+        );
+        string env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s TMPDIR=%s", q(libqore_dir), q(libqore_dir), q(root));
+
+        # the reference objects: serial compiles, outside the cgroup
+        for (int g = 0; g < 2; ++g) {
+            string ref = join_paths(root, sprintf("ref%d", g));
+            mkdir(ref);
+            int rc;
+            string out = backquote(sprintf("%s QORE_AOT_BATCH_JOBS=1 %s 2>&1", env,
+                compileCommand(ref, groups[g])), \rc);
+            assertEq(0, rc, sprintf("serial compile %d: %s", g, out));
+        }
+
+        # both batches at once in a cgroup that their old worker pools overcommit
+        string script = join_paths(root, "both.sh");
+        {
+            File f();
+            f.open2(script, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("cg=/sys/fs/cgroup$(sed -n 's/^0:://p' /proc/self/cgroup)\n");
+            for (int g = 0; g < 2; ++g) {
+                string out = join_paths(root, sprintf("out%d", g));
+                mkdir(out);
+                f.printf("%s QORE_AOT_VERBOSE=1 %s > %s 2>&1 &\np%d=$!\n", env, compileCommand(out, groups[g]),
+                    q(join_paths(root, sprintf("log%d", g))), g);
+            }
+            f.write("wait $p0; r0=$?\nwait $p1; r1=$?\n");
+            f.write("echo \"rc0=$r0 rc1=$r1\"\n");
+            f.write("echo \"peak=$(cat $cg/memory.peak 2>/dev/null)\"\n");
+            f.write("sed -n 's/^oom_kill /oom_kill=/p' $cg/memory.events\n");
+        }
+        int rc;
+        string res = backquote(sprintf("systemd-run --user --scope --quiet -p MemoryMax=%d -p MemorySwapMax=0 -p OOMPolicy=continue -- "
+            "sh %s 2>&1", MemoryMax, q(script)), \rc);
+        # the script's "key=value" output
+        hash<string, string> vals = {};
+        foreach string line in (res.split("\n")) {
+            foreach string pair in (line.split(" ")) {
+                (*string k, *string v) = (pair =~ x/^([a-z_0-9]+)=([0-9]*)$/);
+                if (exists k) {
+                    vals{k} = v;
+                }
+            }
+        }
+        string logs = ReadOnlyFile::readTextFile(join_paths(root, "log0")) + "\n"
+            + ReadOnlyFile::readTextFile(join_paths(root, "log1"));
+        on_error printf("cgroup run:\n%s\ncompiler output:\n%s\n", res, logs);
+        assertEq(0, rc, "the scope ran");
+        assertEq("0", vals.oom_kill, "no process was killed for memory");
+        assertEq("0", vals.rc0, "the first batch finished");
+        assertEq("0", vals.rc1, "the second batch finished");
+        assertGt(0, (vals.peak ?? "0").toInt(), "the cgroup's peak memory was read");
+        assertLe(MemoryMax, (vals.peak ?? "0").toInt(), "the peak is within the limit");
+
+        # the objects do not depend on how many were compiled at once
+        for (int g = 0; g < 2; ++g) {
+            list<string> refs = glob(join_paths(root, sprintf("ref%d", g), "*.qo"));
+            assertEq(Units, refs.size(), "every reference object is there");
+            foreach string ref in (refs) {
+                string obj = join_paths(root, sprintf("out%d", g), basename(ref));
+                assertTrue(is_file(obj), "compiled in the cgroup: " + basename(ref));
+                if (is_file(obj)) {
+                    assertTrue(ReadOnlyFile::readBinaryFile(ref) == ReadOnlyFile::readBinaryFile(obj),
+                        "byte-identical to the serial compile: " + basename(ref));
+                }
+            }
+        }
+    }
+}

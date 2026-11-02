@@ -3271,7 +3271,15 @@ void QoreIRToLLVM::emitPreinstantiatedCleanup(llvm::Module& module) {
 }
 
 void QoreIRToLLVM::emitExitStatementCleanup(llvm::Module& module, bool pending_ssa) {
-    if (!invoke_result_allocas.empty()) {
+    if (exit_temp_cleanup_array && !exit_temp_cleanup_array_overflow
+            && exit_temp_cleanup_array_count == exit_temp_cleanup_count
+            && exit_temp_cleanup_array_count >= 32) {
+        // the same releases as the inline sequence below, in the same (reverse registration) order, in one call
+        auto helper = module.getOrInsertFunction("qore_rt_cleanup_run_allocas",
+                llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
+        builder->CreateCall(helper, {exit_temp_cleanup_array,
+            llvm::ConstantInt::get(i32_type, exit_temp_cleanup_array_count), xsink_arg});
+    } else if (!invoke_result_allocas.empty()) {
         auto helper = module.getOrInsertFunction("qore_rt_decref",
                 llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
         size_t count = 0;
@@ -3623,6 +3631,17 @@ unsigned QoreIRToLLVM::estimateInvokeCleanupArrayCapacity(const QoreIRFunction& 
 
 void QoreIRToLLVM::registerInvokeCleanupAlloca(llvm::Value* alloca_ptr) {
     invoke_result_allocas.push_back(alloca_ptr);
+    // a persistent cleanup is marked before it is registered
+    if (!persistent_cleanup_allocas.count(alloca_ptr)) {
+        ++exit_temp_cleanup_count;
+        if (exit_temp_cleanup_array && !exit_temp_cleanup_array_overflow) {
+            if (exit_temp_cleanup_array_count >= invoke_cleanup_array_capacity) {
+                exit_temp_cleanup_array_overflow = true;
+            } else {
+                storeCleanupSlotAddress(exit_temp_cleanup_array, exit_temp_cleanup_array_count++, alloca_ptr);
+            }
+        }
+    }
     if (!invoke_cleanup_array || invoke_cleanup_array_overflow) {
         return;
     }
@@ -3630,11 +3649,14 @@ void QoreIRToLLVM::registerInvokeCleanupAlloca(llvm::Value* alloca_ptr) {
         invoke_cleanup_array_overflow = true;
         return;
     }
+    storeCleanupSlotAddress(invoke_cleanup_array, invoke_cleanup_array_count++, alloca_ptr);
+}
 
-    llvm::BasicBlock& entry = *invoke_cleanup_array->getParent();
-    llvm::Instruction* insert_after = invoke_cleanup_array;
+void QoreIRToLLVM::storeCleanupSlotAddress(llvm::AllocaInst* array, unsigned idx, llvm::Value* alloca_ptr) {
+    llvm::BasicBlock& entry = *array->getParent();
+    llvm::Instruction* insert_after = array;
     if (auto* inst = llvm::dyn_cast<llvm::Instruction>(alloca_ptr)) {
-        if (inst->getParent() == &entry && invoke_cleanup_array->comesBefore(inst)) {
+        if (inst->getParent() == &entry && array->comesBefore(inst)) {
             insert_after = inst;
         }
     }
@@ -3646,8 +3668,7 @@ void QoreIRToLLVM::registerInvokeCleanupAlloca(llvm::Value* alloca_ptr) {
         reg_builder.SetInsertPoint(&entry);
     }
 
-    llvm::Value* idx = llvm::ConstantInt::get(i32_type, invoke_cleanup_array_count++);
-    llvm::Value* gep = reg_builder.CreateGEP(ptr_type, invoke_cleanup_array, idx,
+    llvm::Value* gep = reg_builder.CreateGEP(ptr_type, array, llvm::ConstantInt::get(i32_type, idx),
             "cleanup_slot_ptr");
     reg_builder.CreateStore(alloca_ptr, gep);
 }
@@ -3655,20 +3676,30 @@ void QoreIRToLLVM::registerInvokeCleanupAlloca(llvm::Value* alloca_ptr) {
 void QoreIRToLLVM::finalizeInvokeCleanupArray() {
     llvm::AllocaInst* array = invoke_cleanup_array;
     invoke_cleanup_array = nullptr;
-    if (!array) {
-        return;
+    llvm::AllocaInst* exit_array = exit_temp_cleanup_array;
+    exit_temp_cleanup_array = nullptr;
+    if (array) {
+        finalizeCleanupSlotArray(array, invoke_cleanup_array_count, invoke_cleanup_array_capacity,
+            "JIT invoke cleanup array finalization");
     }
+    if (exit_array) {
+        finalizeCleanupSlotArray(exit_array, exit_temp_cleanup_array_count, invoke_cleanup_array_capacity,
+            "JIT exit temporary cleanup array finalization");
+    }
+}
 
+void QoreIRToLLVM::finalizeCleanupSlotArray(llvm::AllocaInst* array, unsigned count, unsigned capacity,
+        const char* what) {
     // The array is only read through the qore_rt_cleanup_run_allocas() calls
-    // emitted by emitInvokeCleanup(); every other user is a registration GEP
-    // whose only users are the stores written by registerInvokeCleanupAlloca().
+    // emitted by emitInvokeCleanup() or emitExitStatementCleanup(); every other user is a registration GEP
+    // whose only users are the stores written by storeCleanupSlotAddress().
     // Anything else keeps the array alive.
     std::vector<llvm::Instruction*> dead;
     bool read = false;
     size_t scanned = 0;
     for (llvm::User* user : array->users()) {
         if (++scanned % 100 == 0
-                && qore_check_cancel(nullptr, "JIT invoke cleanup array finalization")) {
+                && qore_check_cancel(nullptr, what)) {
             // the array is left at its estimated capacity, which is correct but oversized
             return;
         }
@@ -3709,14 +3740,13 @@ void QoreIRToLLVM::finalizeInvokeCleanupArray() {
     // size it to the slots actually registered instead of the capacity
     // estimate, which is several times larger and dominates the frame size of
     // large functions (exhausting the stack in deep recursion).
-    assert(invoke_cleanup_array_count <= invoke_cleanup_array_capacity);
-    if (!invoke_cleanup_array_count
-            || invoke_cleanup_array_count == invoke_cleanup_array_capacity) {
+    assert(count <= capacity);
+    if (!count || count == capacity) {
         return;
     }
     llvm::IRBuilder<> ab(array);
     llvm::AllocaInst* exact = ab.CreateAlloca(ptr_type,
-            llvm::ConstantInt::get(i32_type, invoke_cleanup_array_count));
+            llvm::ConstantInt::get(i32_type, count));
     exact->setAlignment(array->getAlign());
     exact->takeName(array);
     array->replaceAllUsesWith(exact);
@@ -10807,6 +10837,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     invoke_cleanup_array_capacity = estimateInvokeCleanupArrayCapacity(func);
     invoke_cleanup_array_count = 0;
     invoke_cleanup_array_overflow = false;
+    exit_temp_cleanup_array = nullptr;
+    exit_temp_cleanup_array_count = 0;
+    exit_temp_cleanup_array_overflow = false;
+    exit_temp_cleanup_count = 0;
     invoke_alloca_map.clear();
     iterator_element_allocas.clear();
     iterator_cleanup_allocas.clear();
@@ -10935,6 +10969,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         invoke_cleanup_array = ab.CreateAlloca(ptr_type,
                 llvm::ConstantInt::get(i32_type, invoke_cleanup_array_capacity),
                 "cleanup_slots");
+        exit_temp_cleanup_array = ab.CreateAlloca(ptr_type,
+                llvm::ConstantInt::get(i32_type, invoke_cleanup_array_capacity),
+                "cleanup_exit_temp_slots");
     }
 
     // Collect all unique LocalVar* pointers from the function and emit

@@ -1,0 +1,105 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTConstantInitializerMemoryTest
+
+# The memory of compiling constant initializers does not grow with the size of the program's constants.
+#
+# Lowering code that refers to constant values uses a reverse map of every constant value node of the program to the
+# constant it is recovered from.  Each constant initializer needs that map less the paths into the constants still
+# being initialized and into its own constant, and got a full copy of it, which it kept until the object was written:
+# memory was the count of initializers times the size of the program's constants (a Qorus unit with about 70
+# initializers held over 300 MiB of copies).  The filtered maps are now views of the one map.
+#
+# The test compiles a unit with 2000 constants and 400 classes whose constants are initialized from them, measures the
+# compiler's peak resident memory, and checks that it stays well below what the copies took (2.3 GiB in a debug
+# build), and that the compiled constants have their values.  It needs GNU time (/usr/bin/time -f).
+class AOTConstantInitializerMemoryTest inherits QUnit::Test {
+    public {
+        const Constants = 2000;
+        const Classes = 400;
+        #! the most memory the compile may take; the copies took 2.3 GiB in a debug build, the views about 400 MiB
+        const MaxPeakKb = 1200 * 1024;
+    }
+
+    private {
+        string qcc_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("AOTConstantInitializerMemoryTest", "1.0", \ARGV) {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("constant initializers do not copy the program's constants", \testMemory());
+
+        set_return_value(main());
+    }
+
+    private static string source() {
+        list<string> l = ("%modern", "");
+        for (int i = 0; i < Constants; ++i) {
+            l += sprintf("const Base%d = {\"a\": \"x%d\", \"l\": (1, 2, \"s%d\"), \"h\": {\"k\": \"v%d\", \"n\": (%d, "
+                "\"t\")}};", i, i, i, i, i);
+        }
+        for (int j = 0; j < Classes; ++j) {
+            int b = j % Constants;
+            l += sprintf("class C%d {", j);
+            l += "    public {";
+            l += sprintf("        const P = {\"name\": \"c%d\", \"x\": Base%d.a, \"l\": Base%d.l};", j, b, b);
+            l += sprintf("        const Q = P + {\"y\": Base%d.h, \"z\": P.name};", b);
+            l += "    }";
+            l += "    static string f() { return Q.z + P.x + Q.y.k; }";
+            l += "}";
+        }
+        l += "";
+        l += "int errors;";
+        l += sprintf("if (C0::f() != \"c0x0v0\") { ++errors; }");
+        l += sprintf("if (C%d::f() != \"c%dx%dv%d\") { ++errors; }", Classes - 1, Classes - 1, Classes - 1,
+            Classes - 1);
+        l += "printf(\"errors=%d\\n\", errors);";
+        return (foldl $1 + "\n" + $2, l) + "\n";
+    }
+
+    private static string q(string s) {
+        return "'" + replace(s, "'", "'\\''") + "'";
+    }
+
+    testMemory() {
+        if (!is_executable("/usr/bin/time") || PlatformOS != "Linux") {
+            testSkip("needs GNU time (/usr/bin/time -f) on Linux to measure the compiler's peak memory");
+        }
+        TmpDir tmp("qore-aot-constant-initializer-memory-");
+        string src = join_paths(tmp.path, "constants.q");
+        File f();
+        f.open2(src, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(source());
+        f.close();
+        string exe = join_paths(tmp.path, "constants");
+        string rss_file = join_paths(tmp.path, "rss");
+        int rc;
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s /usr/bin/time -o %s -f %%M %s -O1 -o %s %s 2>&1",
+            q(libqore_dir), q(libqore_dir), q(rss_file), q(qcc_bin), q(exe), q(src)), \rc);
+        assertEq(0, rc, "compiled: " + out);
+        int peak_kb = ReadOnlyFile::readTextFile(rss_file).toInt();
+        printf("peak resident memory of the compile: %d MiB\n", peak_kb / 1024);
+        assertGt(0, peak_kb, "the peak was measured");
+        assertLt(MaxPeakKb, peak_kb, "the compile does not keep a copy of the constants per initializer");
+
+        out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s 2>&1", q(libqore_dir), q(libqore_dir), q(exe)),
+            \rc);
+        assertEq(0, rc, "ran: " + out);
+        assertEq("errors=0\n", out, "the compiled constants have their values");
+    }
+}

@@ -2452,11 +2452,10 @@ static void aot_add_constant_root_reverse_mapping(AOTConstantReverseMap& crm,
     }
 }
 
-static bool aot_constant_path_belongs_to_fqns(const std::string& path,
-        const std::unordered_set<std::string>& excluded_fqns,
-        const std::string& excluded_direct_fqn) {
+bool qore_aot_constant_path_belongs_to_fqns(const std::string& path, const std::unordered_set<std::string>* fqns,
+        const std::string& direct_fqn) {
     if (!aot_is_encoded_constant_path(path.c_str())) {
-        return !excluded_direct_fqn.empty() && path == excluded_direct_fqn;
+        return !direct_fqn.empty() && path == direct_fqn;
     }
 
     size_t pos = strlen(AOT_CONST_PATH_PREFIX);
@@ -2464,9 +2463,69 @@ static bool aot_constant_path_belongs_to_fqns(const std::string& path,
     if (!aot_parse_size_component(path, pos, base_len) || pos + base_len > path.size()) {
         return false;
     }
-    std::string base = path.substr(pos, base_len);
-    return (!excluded_direct_fqn.empty() && base == excluded_direct_fqn)
-        || excluded_fqns.find(base) != excluded_fqns.end();
+    std::string_view base(path.data() + pos, base_len);
+    if (!direct_fqn.empty() && base == direct_fqn) {
+        return true;
+    }
+    return fqns && !fqns->empty() && fqns->find(std::string(base)) != fqns->end();
+}
+
+AOTConstantReverseMap AOTConstantReverseMap::viewOf(const AOTConstantReverseMap& src) {
+    AOTConstantReverseMap rv;
+    if (src.view_base) {
+        rv.view_base = src.view_base;
+        rv.view_keep = src.view_keep;
+        rv.view_filters = src.view_filters;
+    } else {
+        rv.view_base = &src;
+        // a map owned by a std::shared_ptr is kept alive by its views; any other map outlives them
+        rv.view_keep = src.weak_from_this().lock();
+    }
+    return rv;
+}
+
+AOTConstantReverseMap AOTConstantReverseMap::filtered(const AOTConstantReverseMap& src,
+        const std::unordered_set<std::string>* fqns, const std::string& direct_fqn) {
+    AOTConstantReverseMap rv = viewOf(src);
+    if ((fqns && !fqns->empty()) || !direct_fqn.empty()) {
+        Filter f;
+        f.fqns = fqns;
+        f.direct_fqn = direct_fqn;
+        rv.view_filters.push_back(std::move(f));
+    }
+    return rv;
+}
+
+AOTConstantReverseMap AOTConstantReverseMap::filtered(const AOTConstantReverseMap& src,
+        const std::vector<std::string>& fqns, const std::string& direct_fqn) {
+    AOTConstantReverseMap rv = viewOf(src);
+    if (!fqns.empty() || !direct_fqn.empty()) {
+        Filter f;
+        if (!fqns.empty()) {
+            f.owned_fqns = std::make_shared<const std::unordered_set<std::string>>(fqns.begin(), fqns.end());
+            f.fqns = f.owned_fqns.get();
+        }
+        f.direct_fqn = direct_fqn;
+        rv.view_filters.push_back(std::move(f));
+    }
+    return rv;
+}
+
+AOTConstantReverseMap::const_iterator AOTConstantReverseMap::find(const key_type& key) const {
+    if (!view_base) {
+        return map_type::find(key);
+    }
+    const_iterator i = view_base->map_type::find(key);
+    const_iterator e = view_base->map_type::end();
+    if (i == e) {
+        return e;
+    }
+    for (const Filter& f : view_filters) {
+        if (qore_aot_constant_path_belongs_to_fqns(i->second.path, f.fqns, f.direct_fqn)) {
+            return e;
+        }
+    }
+    return i;
 }
 
 static bool aot_constant_path_belongs_to_fqn(const std::string& path,
@@ -2562,15 +2621,8 @@ static bool aot_constant_path_available_for_writer(const QoreAOTBinaryWriter& wr
 static AOTConstantReverseMap aot_filter_constant_reverse_map(
         const AOTConstantReverseMap& crm, const std::vector<std::string>& excluded_fqns,
         const std::string& excluded_direct_fqn) {
-    std::unordered_set<std::string> excluded_set(excluded_fqns.begin(), excluded_fqns.end());
-    AOTConstantReverseMap rv;
-    rv.reserve(crm.size());
-    for (const auto& it : crm) {
-        if (!aot_constant_path_belongs_to_fqns(it.second.path, excluded_set, excluded_direct_fqn)) {
-            rv.emplace(it.first, it.second);
-        }
-    }
-    return rv;
+    // a view: the exclusions are applied by its lookups instead of copying the rest of the map
+    return AOTConstantReverseMap::filtered(crm, excluded_fqns, excluded_direct_fqn);
 }
 
 // Resolve a constant FQN (e.g. "Reflection::AutoHashType" or

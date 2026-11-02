@@ -583,6 +583,17 @@ private:
     unsigned invoke_cleanup_array_capacity = 0;
     unsigned invoke_cleanup_array_count = 0;
     bool invoke_cleanup_array_overflow = false;
+    // Entry-block array of pointers to the slots of invoke_result_allocas that are not persistent cleanups, in
+    // registration order.  Every exit of a function releases these temporaries before its on_block_exit handlers
+    // (emitExitStatementCleanup()); emitted inline, that is a load/store/decref triple per temporary of the whole
+    // function at every exit, so a function with many statements and many exits (ex: a large switch whose cases
+    // return) grew quadratically -- 3.9 million LLVM instructions and over 6 GiB of compile memory for 1600
+    // returning cases.  Large functions release them with one qore_rt_cleanup_run_allocas() call instead.
+    llvm::AllocaInst* exit_temp_cleanup_array = nullptr;
+    unsigned exit_temp_cleanup_array_count = 0;
+    bool exit_temp_cleanup_array_overflow = false;
+    // the slots of invoke_result_allocas that are not persistent cleanups
+    size_t exit_temp_cleanup_count = 0;
     // Map from value ID to invoke-result alloca (for clearing at Return)
     std::unordered_map<uint32_t, llvm::Value*> invoke_alloca_map;
     //! the output slot of each IteratorNext, by its result id: it holds a reference to the current element, which
@@ -1229,6 +1240,13 @@ private:
         after every emitInvokeCleanup() call for the function has been emitted.
     */
     void finalizeInvokeCleanupArray();
+
+    //! Stores the address of a cleanup slot at the next index of an entry-block cleanup pointer array
+    void storeCleanupSlotAddress(llvm::AllocaInst* array, unsigned idx, llvm::Value* alloca_ptr);
+
+    //! Sizes a cleanup pointer array to the slots registered, or erases it with its registration stores when no
+    //! exit reads it
+    void finalizeCleanupSlotArray(llvm::AllocaInst* array, unsigned count, unsigned capacity, const char* what);
 
     // Conservative upper bound for the cleanup pointer array.  Overflow falls
     // back to the expanded cleanup path, so the estimate only affects whether

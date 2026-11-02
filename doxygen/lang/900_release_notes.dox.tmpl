@@ -5626,6 +5626,23 @@ while (*binary chunk = input.read(65536)) {
       printed as an unhandled exception outside the structured diagnostics and so broke the output of
       <tt>qore --diag-format=json</tt> for tools that also read stderr.  Only the parse error for the undefined
       reference is now reported
+    - compiling constant initializers with \c qcc took memory for each initializer in proportion to all constant
+      values of the program: each initializer kept its own copy of the map from the program's constant values to
+      their constants until its object was written, so a Qorus unit with about 70 initializers held over 300 MiB of
+      copies, and a unit with 400 initializers over 2000 constants took 2.2 GiB to compile where it now takes 320 MiB
+    - code compiled with \c qcc or by the JIT grew with the square of the size of a function with many statements
+      and many \c return statements, such as a large \c switch whose cases return a value: every exit of a function
+      released the temporaries of the statements it leaves with inline code for every temporary of the whole
+      function, so that one function of about 1300 cases compiled to 2.7 million LLVM instructions and took more than
+      6 GiB of memory to compile.  Large functions now release them with one call, and their code grows linearly
+    - \c qcc batch compiles (\c qcc \c -c with several sources) could run a build out of memory, so that the
+      kernel killed a compiler: each batch process chose its number of codegen threads once, from the memory free when
+      its own codegen started and a fixed 1 GiB per thread, so that batch processes running at the same time in one
+      container counted the same free memory, and the largest objects, compiled first, started together whatever
+      memory they needed.  Each object is now compiled only when the memory it is estimated to need, from the size of
+      its source and then from the size of its lowered code, is free at that moment, after the reservations of every
+      batch process in the same cgroup or host; see
+      @ref qcc_batch_memory.  \c QORE_AOT_BATCH_MEM_PER_JOB_MB now sets the estimate of every object of a batch
     - \c qcc could hang forever at full CPU while compiling a module, when the JIT compiler started on a background
       thread at the same time: both registered LLVM's targets, which is not thread-safe, and the registry was left
       corrupted.  LLVM's targets are now registered once for the process, before any thread uses LLVM

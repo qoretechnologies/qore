@@ -91,8 +91,127 @@ struct AOTConstantReversePath {
     bool deferred_init = false;
 };
 
+//! Tells whether a constant path belongs to one of \a fqns or to \a direct_fqn
+/** A plain path belongs to \a direct_fqn only if it is \a direct_fqn; an encoded subscript path belongs to the
+    constant it starts from.  \a fqns may be null.
+*/
+bool qore_aot_constant_path_belongs_to_fqns(const std::string& path, const std::unordered_set<std::string>* fqns,
+    const std::string& direct_fqn);
+
 //! Reverse map from constant value node pointer to the constant path it is recovered from
-typedef std::unordered_map<const AbstractQoreNode*, AOTConstantReversePath> AOTConstantReverseMap;
+/** A map either owns its entries, or is a view of an owning map without the entries whose constant path belongs
+    to excluded constants (see filtered()).  The lowering of a unit needs the program's whole map less the paths
+    into the constants that are still being initialized, and each constant initializer needs that less its own
+    constant; the filtered maps used to be full copies, made for every initializer and kept until the object was
+    written, so a unit with many constant initializers held one copy of the program's map per initializer (over
+    300 MiB of a 500 MiB unit of a Qorus batch).  A view keeps only the exclusions; lookups apply them, so it
+    gives exactly what the copy gave.
+
+    Invariant: a view must not outlive the map it filters, unless that map is owned by a std::shared_ptr, which
+    the view then holds; and the filtered map must not change while a view of it is used.  The constant sets a
+    view refers to (the pending initializer set) must outlive it as well.  Only find() / end() / count() may be
+    used on a view.
+*/
+class AOTConstantReverseMap : public std::unordered_map<const AbstractQoreNode*, AOTConstantReversePath>,
+        public std::enable_shared_from_this<AOTConstantReverseMap> {
+public:
+    typedef std::unordered_map<const AbstractQoreNode*, AOTConstantReversePath> map_type;
+
+    AOTConstantReverseMap() = default;
+    AOTConstantReverseMap(const AOTConstantReverseMap& old) : map_type(old), std::enable_shared_from_this<
+            AOTConstantReverseMap>(), view_base(old.view_base), view_keep(old.view_keep),
+            view_filters(old.view_filters) {
+    }
+    AOTConstantReverseMap(AOTConstantReverseMap&& old) noexcept : map_type(std::move(old)),
+            std::enable_shared_from_this<AOTConstantReverseMap>(), view_base(old.view_base),
+            view_keep(std::move(old.view_keep)), view_filters(std::move(old.view_filters)) {
+        old.view_base = nullptr;
+    }
+    AOTConstantReverseMap& operator=(const AOTConstantReverseMap& old) {
+        if (this != &old) {
+            map_type::operator=(old);
+            view_base = old.view_base;
+            view_keep = old.view_keep;
+            view_filters = old.view_filters;
+        }
+        return *this;
+    }
+    AOTConstantReverseMap& operator=(AOTConstantReverseMap&& old) noexcept {
+        if (this != &old) {
+            map_type::operator=(std::move(old));
+            view_base = old.view_base;
+            view_keep = std::move(old.view_keep);
+            view_filters = std::move(old.view_filters);
+            old.view_base = nullptr;
+        }
+        return *this;
+    }
+
+    //! Returns a view of \a src without the entries whose constant path belongs to \a fqns or to \a direct_fqn
+    /** \a fqns may be null; if not, it must outlive the view.  A view of a view filters the same owning map.
+    */
+    static AOTConstantReverseMap filtered(const AOTConstantReverseMap& src,
+            const std::unordered_set<std::string>* fqns, const std::string& direct_fqn);
+
+    //! Returns a view of \a src without the entries whose constant path belongs to one of \a fqns or to
+    //! \a direct_fqn; the view keeps its own copy of \a fqns
+    static AOTConstantReverseMap filtered(const AOTConstantReverseMap& src, const std::vector<std::string>& fqns,
+            const std::string& direct_fqn);
+
+    //! Returns true if this map is a view of another one
+    bool isView() const {
+        return view_base != nullptr;
+    }
+
+    const_iterator find(const key_type& key) const;
+    iterator find(const key_type& key) {
+        assert(!view_base);
+        return map_type::find(key);
+    }
+    const_iterator end() const {
+        return view_base ? view_base->map_type::end() : map_type::end();
+    }
+    iterator end() {
+        assert(!view_base);
+        return map_type::end();
+    }
+    size_type count(const key_type& key) const {
+        return find(key) == end() ? 0 : 1;
+    }
+    const_iterator begin() const {
+        assert(!view_base);
+        return map_type::begin();
+    }
+    iterator begin() {
+        assert(!view_base);
+        return map_type::begin();
+    }
+    size_type size() const {
+        assert(!view_base);
+        return map_type::size();
+    }
+
+private:
+    //! one exclusion of a view
+    struct Filter {
+        //! the excluded constants, not owned; may be null
+        const std::unordered_set<std::string>* fqns = nullptr;
+        //! the excluded constants, owned
+        std::shared_ptr<const std::unordered_set<std::string>> owned_fqns;
+        //! the constant excluded by its own path
+        std::string direct_fqn;
+    };
+
+    //! the owning map this map is a view of; null for an owning map
+    const AOTConstantReverseMap* view_base = nullptr;
+    //! the owner of the filtered map, if it is owned by a std::shared_ptr
+    std::shared_ptr<const AOTConstantReverseMap> view_keep;
+    //! the exclusions of a view
+    std::vector<Filter> view_filters;
+
+    //! Returns a view of \a src with the exclusions of \a src
+    static AOTConstantReverseMap viewOf(const AOTConstantReverseMap& src);
+};
 
 //! Adds a constant value and any nested hash/list node values to the AOT reverse map.
 /** \a init_seq is ConstantEntry::getInitSeq() of the constant \a path names.  A node reached from more than

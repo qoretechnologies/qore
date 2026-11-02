@@ -58,16 +58,6 @@
 #include <unordered_set>
 #include <unistd.h>
 
-// Platform-specific headers for querying available physical memory, used to
-// cap the AOT batch worker-thread count so a large parallel -O3 codegen run
-// cannot exhaust RAM and trip the OOM killer (see qoreAotAvailableMemoryBytes).
-#if defined(__APPLE__)
-#include <mach/mach.h>
-#elif defined(__FreeBSD__) || defined(__DragonFly__)
-#include <sys/types.h>
-#include <sys/sysctl.h>
-#endif
-
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/QoreNamespaceIntern.h"
@@ -83,6 +73,7 @@
 #include "qore/intern/QoreIRPrinter.h"
 #include "qore/intern/QoreJIT.h"
 #include "qore/intern/QoreAOTExprNodeRegistry.h"
+#include "qore/intern/QoreAOTBatchMemory.h"
 
 static_assert(QORE_AOT_INT_EXPRESSION_MAX_NODES <= QORE_AOT_WIRE_INT_EXPRESSION_MAX_NODES,
     "AOT integer expression wire bound is smaller than the runtime bound");
@@ -5406,25 +5397,11 @@ static bool getAOTConstantPathBase(const std::string& path, std::string& base) {
 }
 
 static AOTConstantReverseMap filterPendingInitConstantReverseMap(
-        const AOTConstantReverseMap& crm, const std::unordered_set<std::string>& pending_fqns,
+        const AOTConstantReverseMap& crm, const std::unordered_set<std::string>* pending_fqns,
         const std::string& direct_exclude_fqn) {
-    AOTConstantReverseMap rv;
-    rv.reserve(crm.size());
-    for (const auto& it : crm) {
-        if (!direct_exclude_fqn.empty() && it.second.path == direct_exclude_fqn) {
-            continue;
-        }
-        if (isAOTEncodedConstantPath(it.second.path)) {
-            std::string base;
-            if (getAOTConstantPathBase(it.second.path, base)
-                    && ((!direct_exclude_fqn.empty() && base == direct_exclude_fqn)
-                        || pending_fqns.find(base) != pending_fqns.end())) {
-                continue;
-            }
-        }
-        rv.emplace(it.first, it.second);
-    }
-    return rv;
+    // a view of the map: the pending constants and the direct exclusion are applied by its lookups, so that
+    // each constant initializer does not copy (and keep until its object is written) the program's whole map
+    return AOTConstantReverseMap::filtered(crm, pending_fqns, direct_exclude_fqn);
 }
 
 static void addConstantRootReverseMapping(AOTConstantReverseMap& crm,
@@ -20141,11 +20118,12 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             && !pending_init_constant_fqns->empty()) {
         pending_safe_const_reverse_map = std::make_unique<AOTConstantReverseMap>(
             filterPendingInitConstantReverseMap(*const_reverse_map,
-                *pending_init_constant_fqns, std::string()));
+                pending_init_constant_fqns, std::string()));
         const_reverse_map = pending_safe_const_reverse_map.get();
     }
 
-    std::unique_ptr<AOTConstantReverseMap> local_init_base_crm;
+    // owned by a std::shared_ptr: the views the constant initializers keep of it hold it after this call returns
+    std::shared_ptr<AOTConstantReverseMap> local_init_base_crm;
     if (!init_base_const_reverse_map) {
         if (full_const_reverse_map) {
             // The caller builds this map from every namespace tree visible to the
@@ -20155,8 +20133,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             // constants referenced by the init expression.
             init_base_const_reverse_map = full_const_reverse_map;
         } else if (pending_init_constant_fqns && !pending_init_constant_fqns->empty()) {
-            local_init_base_crm.reset(new AOTConstantReverseMap(
-                buildPendingSafeConstantReverseMap(ns, *pending_init_constant_fqns)));
+            local_init_base_crm = std::make_shared<AOTConstantReverseMap>(
+                buildPendingSafeConstantReverseMap(ns, *pending_init_constant_fqns));
             init_base_const_reverse_map = local_init_base_crm.get();
         }
     }
@@ -21193,7 +21171,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         if (init_base_const_reverse_map && ((pending_init_constant_fqns
                 && !pending_init_constant_fqns->empty()) || !direct_exclude_fqn.empty())) {
             filtered_crm = std::make_shared<AOTConstantReverseMap>(filterPendingInitConstantReverseMap(
-                *init_base_const_reverse_map, *pending_init_constant_fqns, direct_exclude_fqn));
+                *init_base_const_reverse_map, pending_init_constant_fqns, direct_exclude_fqn));
             init_const_reverse_map = filtered_crm.get();
         }
         QoreIRFunction* ir_func = nullptr;
@@ -21836,11 +21814,22 @@ public:
         return got;
     }
     void releaseAll() {
-        for (char c : tokens) {
-            ssize_t w = write(wfd, &c, 1);
+        releaseDownTo(0);
+    }
+    //! Returns tokens until at most `keep` are held
+    void releaseDownTo(size_t keep) {
+        while (tokens.size() > keep) {
+            char c = tokens.back();
+            tokens.pop_back();
+            ssize_t w;
+            while ((w = write(wfd, &c, 1)) < 0 && errno == EINTR) {
+            }
             (void)w;  // best-effort; the same token byte is written back
         }
-        tokens.clear();
+    }
+    //! The count of the tokens held
+    size_t held() const {
+        return tokens.size();
     }
 private:
     int rfd = -1;
@@ -21955,51 +21944,158 @@ private:
 //! The results of qoreAotBatchAdmitWorkers()
 struct AOTBatchAdmitResult {
     unsigned wakeups = 0;           //!< the waits that ended with a token, a work event or the jobserver's end
+    unsigned memory_waits = 0;      //!< the waits for memory: the next unit's estimate was not free
+    unsigned started = 0;           //!< the workers the coordinator started
     bool jobserver_closed = false;  //!< the jobserver pipe hung up (make has gone): no token can be admitted
 };
 
-// Admits batch workers under a make jobserver: a worker is started for each token taken while work is unclaimed,
-// up to `requested_jobs` workers in all (`jobs` counts them, the one running under the process's implicit token
-// included).  Between the tokens, the coordinator waits without a timer for the jobserver pipe to become readable
-// (a token), for the wakeup (a work event: the work has run out, or a worker stopped), and for a cancellation
-// request, which ends the wait at once.  A jobserver pipe that hangs up ends the admission; the workers running
-// finish the work.
+//! The units of a batch compile in dispatch order, claimed one at a time with their memory
+/** A unit is claimed together with the reservation of its estimated memory (see QoreAOTBatchMemoryGovernor), and
+    released when it is done.  The claim of the last unit, the release of a unit while the coordinator waits for
+    memory, and the end of a worker that could not get memory are work events that wake the coordinator.
+*/
+class AOTBatchWork {
+public:
+    //! The outcome of a claim
+    enum Claim {
+        Claimed,   //!< a unit was claimed with its memory
+        NoWork,    //!< no unit is left
+        NoMemory,  //!< the next unit's memory is not free
+    };
+
+    //! Sets up the work: `estimates` holds the memory estimate of each unit in dispatch order
+    AOTBatchWork(std::vector<uint64_t> estimates, QoreAOTBatchMemoryGovernor* gov, AOTBatchWakeup& wakeup)
+            : estimates(std::move(estimates)), gov(gov), wakeup(wakeup) {
+    }
+
+    //! The count of the units not claimed yet
+    size_t unclaimed() const {
+        size_t n = next.load();
+        return n < estimates.size() ? estimates.size() - n : 0;
+    }
+
+    //! The estimate of the next unit; 0 if none is left
+    uint64_t nextEstimate() const {
+        size_t n = next.load();
+        return n < estimates.size() ? estimates[n] : 0;
+    }
+
+    //! Claims the next unit and reserves its memory
+    Claim claim(size_t& pos) {
+        std::lock_guard<std::mutex> l(m);
+        size_t n = next.load();
+        if (n >= estimates.size()) {
+            return NoWork;
+        }
+        if (gov && !gov->reserve(estimates[n]).admitted) {
+            return NoMemory;
+        }
+        next.store(n + 1);
+        pos = n;
+        if (n + 1 == estimates.size()) {
+            // the work has run out: the coordinator admits no more workers
+            wakeup.signal();
+        }
+        return Claimed;
+    }
+
+    //! Changes the memory reserved for a claimed unit to its estimate once lowered; may wait for the memory (see
+    //! QoreAOTBatchMemoryGovernor::resize())
+    void resize(size_t pos, uint64_t to) {
+        assert(pos < estimates.size());
+        if (gov) {
+            estimates[pos] = gov->resize(estimates[pos], to);
+            wakeup.signal();
+        }
+    }
+
+    //! Releases the memory of a unit that is done; the coordinator re-checks the memory
+    void release(size_t pos) {
+        assert(pos < estimates.size());
+        if (gov) {
+            gov->release(estimates[pos]);
+            wakeup.signal();
+        }
+    }
+
+    //! Counts a worker that is about to start
+    void workerStarting() {
+        unsigned a = ++active;
+        unsigned m = max_active.load();
+        while (a > m && !max_active.compare_exchange_weak(m, a)) {
+        }
+    }
+
+    //! Counts a worker that has ended; `wake` wakes the coordinator
+    void workerEnded(bool wake) {
+        assert(active.load());
+        --active;
+        if (wake) {
+            wakeup.signal();
+        }
+    }
+
+    //! The workers running
+    unsigned activeWorkers() const {
+        return active.load();
+    }
+
+    //! The most workers that ran at once
+    unsigned maxActiveWorkers() const {
+        return max_active.load();
+    }
+
+    //! Tells whether the next unit's memory is free now, without reserving it
+    bool wouldAdmitNext() const {
+        if (!gov) {
+            return true;
+        }
+        size_t n = next.load();
+        return n >= estimates.size() || gov->wouldAdmit(estimates[n]);
+    }
+
+private:
+    //! the memory reserved for each unit; a claimed unit's entry is only used by its worker
+    std::vector<uint64_t> estimates;
+    QoreAOTBatchMemoryGovernor* gov;
+    AOTBatchWakeup& wakeup;
+    std::mutex m;                       //!< serializes the claims
+    std::atomic<size_t> next{0};        //!< the next unit to claim
+    std::atomic<unsigned> active{0};
+    std::atomic<unsigned> max_active{0};
+};
+
+// Admits the workers of a batch compile: a worker is started for each unit claimed while the work lasts, up to
+// `requested_jobs` workers at once (the one running under the process's implicit token included).  Under a make
+// jobserver (`js` not null), a worker also needs a token, and the tokens of the workers that have ended are returned
+// at once.  With memory admission, a unit is claimed only when its estimated memory is free in the memory domain; the
+// coordinator then waits for this process's own work events only (a unit's release, a worker's end, the end of the
+// work), because the jobserver pipe would wake it again while it could not use a token.  Every wait is without a
+// timer and ends at once with a cancellation request.  A jobserver pipe that hangs up ends the admission; the
+// workers running finish the work.
+//
+// `start_worker` starts a worker for a claimed unit (counted with AOTBatchWork::workerStarting() before it is
+// called); when it throws, the unit's memory and the token are released and the exception propagates.
 //
 // Returns 0, or -1 with an exception in `xsink` when the wait was cancelled or failed.
-static int qoreAotBatchAdmitWorkers(JobserverClient& js, unsigned requested_jobs, unsigned& jobs,
-        const std::function<size_t()>& unclaimed, const std::atomic<bool>& stop, AOTBatchWakeup& wakeup,
-        const std::function<void()>& start_worker, AOTBatchAdmitResult& result, ExceptionSink* xsink
+static int qoreAotBatchAdmitWorkers(JobserverClient* js, unsigned requested_jobs, AOTBatchWork& work,
+        const std::atomic<bool>& stop, AOTBatchWakeup& wakeup, const std::function<void(size_t)>& start_worker,
+        AOTBatchAdmitResult& result, ExceptionSink* xsink
 #ifdef DEBUG
         , const std::function<void()>* dbg_before_wait = nullptr
 #endif
         ) {
-    assert(js.available() && wakeup.ok());
-    while (!stop.load() && jobs < requested_jobs) {
-        size_t left = unclaimed();
-        if (!left) {
-            break;
-        }
-        unsigned remaining = static_cast<unsigned>(std::min<size_t>(left, requested_jobs - jobs));
-        int acquired = js.acquire(static_cast<int>(remaining));
-        if (acquired > 0) {
-            for (int i = 0; i < acquired; ++i) {
-                start_worker();
-            }
-            jobs += static_cast<unsigned>(acquired);
-            continue;
-        }
-        if (js.closed()) {
-            // make has gone: no token can come, and the pipe would keep the wait from blocking
-            result.jobserver_closed = true;
-            break;
-        }
+    assert(wakeup.ok());
+    assert(!js || js->available());
+    // waits for a token (if `for_token`) or a work event
+    auto wait = [&](bool for_token) -> int {
 #ifdef DEBUG
         if (dbg_before_wait && *dbg_before_wait) {
             (*dbg_before_wait)();
         }
 #endif
-        struct pollfd pfds[2] = {{js.readFd(), POLLIN, 0}, {wakeup.readFd(), POLLIN, 0}};
-        int rc = qore_cancellable_poll(pfds, 2, -1, xsink, "AOT batch jobserver wait");
+        struct pollfd pfds[2] = {{wakeup.readFd(), POLLIN, 0}, {js ? js->readFd() : -1, POLLIN, 0}};
+        int rc = qore_cancellable_poll(pfds, for_token ? 2 : 1, -1, xsink, "AOT batch jobserver wait");
         if (rc == QORE_POLL_CANCELLED) {
             return -1;
         }
@@ -22008,10 +22104,76 @@ static int qoreAotBatchAdmitWorkers(JobserverClient& js, unsigned requested_jobs
             return -1;
         }
         ++result.wakeups;
-        if (pfds[1].revents) {
+        if (pfds[0].revents) {
             wakeup.drain();
         }
         // a token or the jobserver's end is found by the next acquire()
+        return 0;
+    };
+    while (!stop.load() && work.unclaimed()) {
+        unsigned active = work.activeWorkers();
+        if (js) {
+            // the tokens of the workers that have ended go back to make; the process's own token covers one worker
+            js->releaseDownTo(active ? active - 1 : 0);
+        }
+        if (active >= requested_jobs) {
+            // all workers run: wait until one ends or the work runs out
+            if (wait(false)) {
+                return -1;
+            }
+            continue;
+        }
+        if (active && !work.wouldAdmitNext()) {
+            // the next unit's memory is not free: no token is taken for it, and the units in work release theirs
+            ++result.memory_waits;
+            if (wait(false)) {
+                return -1;
+            }
+            continue;
+        }
+        // the first worker runs under the process's own token
+        bool token = js && active;
+        if (token) {
+            if (js->acquire(1) <= 0) {
+                if (js->closed()) {
+                    // make has gone: no token can come, and the pipe would keep the wait from blocking
+                    result.jobserver_closed = true;
+                    break;
+                }
+                if (wait(true)) {
+                    return -1;
+                }
+                continue;
+            }
+        }
+        size_t pos = 0;
+        AOTBatchWork::Claim c = work.claim(pos);
+        if (c != AOTBatchWork::Claimed) {
+            if (token) {
+                js->releaseDownTo(js->held() - 1);
+            }
+            if (c == AOTBatchWork::NoWork) {
+                break;
+            }
+            // the memory is not free: the units in work release theirs
+            ++result.memory_waits;
+            if (wait(false)) {
+                return -1;
+            }
+            continue;
+        }
+        work.workerStarting();
+        try {
+            start_worker(pos);
+        } catch (...) {
+            work.release(pos);
+            work.workerEnded(false);
+            if (token) {
+                js->releaseDownTo(js->held() - 1);
+            }
+            throw;
+        }
+        ++result.started;
     }
     return 0;
 }
@@ -22030,8 +22192,9 @@ DLLLOCAL int qore_aot_dbg_jobserver_acquire(const char* makeflags, int max) {
 
 //! Debug-only: runs the batch coordinator under the jobserver named in @p makeflags with simulated work
 /** The coordinator admits workers (counted, not started) for `work_items` items of work, with up to
-    `requested_jobs` workers.  Right before each wait, @p before_wait is called; it returns how many items the
-    workers claim then, and a claim that takes the last item signals a work event, as the batch workers do.
+    `requested_jobs` workers; one worker runs from the start, under the process's own token, and claims nothing
+    until the test's code says so.  Right before each wait, @p before_wait is called; it returns how many items the
+    workers claim then, and the claim of the last one signals a work event, as the batch workers do.
 
     @return 0, or -1 with an exception in @p xsink; @p wakeups, @p waits and @p started receive the counts
 */
@@ -22044,10 +22207,10 @@ DLLLOCAL int qore_aot_dbg_jobserver_admit(const char* makeflags, unsigned reques
         xsink->raiseException("AOT-BATCH-ERROR", "no usable jobserver in '%s' or no wakeup", makeflags);
         return -1;
     }
-    std::atomic<size_t> claimed{0};
+    AOTBatchWork work(std::vector<uint64_t>(work_items, 0), nullptr, wakeup);
     std::atomic<bool> stop{false};
-    unsigned jobs = 1;
-    started = 0;
+    // the worker under the process's own token
+    work.workerStarting();
     waits = 0;
     AOTBatchAdmitResult result;
     std::function<void()> dbg_before_wait = [&]() {
@@ -22061,16 +22224,106 @@ DLLLOCAL int qore_aot_dbg_jobserver_admit(const char* makeflags, unsigned reques
         }
         for (size_t i = 0; i < n; ++i) {
             // a worker claims an item; the claim of the last one is a work event
-            if (claimed.fetch_add(1) + 1 == work_items) {
-                wakeup.signal();
+            size_t pos;
+            if (work.claim(pos) != AOTBatchWork::Claimed) {
+                break;
             }
         }
     };
-    int rc = qoreAotBatchAdmitWorkers(js, requested_jobs, jobs,
-        [&]() -> size_t { size_t c = claimed.load(); return c < work_items ? work_items - c : 0; }, stop, wakeup,
-        [&]() { ++started; }, result, xsink, &dbg_before_wait);
+    int rc = qoreAotBatchAdmitWorkers(&js, requested_jobs, work, stop, wakeup, [](size_t) {}, result, xsink,
+        &dbg_before_wait);
     wakeups = result.wakeups;
+    started = result.started;
     jobserver_closed = result.jobserver_closed;
+    return *xsink ? -1 : rc;
+}
+
+//! Debug-only: runs the batch coordinator with memory admission over simulated units, without a jobserver
+/** The memory domain is simulated: its free memory is @p free_base less the cost of the units in work, and this
+    process's resident memory grows by the cost of each unit in work.  Right before each wait of the coordinator, the
+    oldest unit in work is completed: its memory is released, and its worker claims the next unit with its memory,
+    or ends.  When the coordinator is done, the units still in work are completed in the same way.  A wait with no
+    unit in work could never end: it is reported as a stall.
+
+    @return 0, or -1 with an exception in @p xsink
+*/
+DLLLOCAL int qore_aot_dbg_batch_schedule(const std::vector<uint64_t>& estimates, const std::vector<uint64_t>& costs,
+        uint64_t limit, uint64_t free_base, unsigned requested_jobs, QoreAOTDbgScheduleResult& out,
+        ExceptionSink* xsink) {
+    assert(estimates.size() == costs.size());
+    AOTBatchWakeup wakeup;
+    if (!wakeup.ok()) {
+        xsink->raiseException("AOT-BATCH-ERROR", "no wakeup");
+        return -1;
+    }
+    uint64_t used = 0;
+    QoreAOTMemorySource src;
+    src.read = [&]() {
+        QoreAOTMemoryReading r;
+        r.limit = limit;
+        r.available = free_base > used ? free_base - used : 1;
+        return r;
+    };
+    src.resident = [&](pid_t) -> uint64_t { return 100 * 1024 * 1024 + used; };
+    src.start_id = [](pid_t) -> uint64_t { return 1; };
+    src.self = 1;
+    src.domain = "dbg";
+    QoreAOTBatchMemoryModel model = QoreAOTBatchMemoryModel::getDefault();
+    QoreAOTBatchMemoryGovernor gov(std::move(src), model, std::string());
+    gov.beginCodegen();
+    AOTBatchWork work(estimates, &gov, wakeup);
+    std::atomic<bool> stop{false};
+    // the units in work, oldest first
+    std::vector<size_t> running;
+    out = QoreAOTDbgScheduleResult();
+    auto run = [&](size_t pos) {
+        running.push_back(pos);
+        used += costs[pos];
+        out.order.push_back(pos);
+        if (running.size() > out.max_running) {
+            out.max_running = static_cast<unsigned>(running.size());
+        }
+        if (used > out.peak_used) {
+            out.peak_used = used;
+        }
+    };
+    // completes the oldest unit in work; its worker claims the next one
+    auto complete = [&]() {
+        size_t pos = running.front();
+        running.erase(running.begin());
+        used -= costs[pos];
+        work.release(pos);
+        ++out.completed;
+        size_t next;
+        AOTBatchWork::Claim c = work.claim(next);
+        if (c == AOTBatchWork::Claimed) {
+            run(next);
+        } else {
+            work.workerEnded(c == AOTBatchWork::NoMemory);
+        }
+    };
+    std::function<void()> dbg_before_wait = [&]() {
+        ++out.waits;
+        if (running.empty()) {
+            out.stalled = true;
+            stop.store(true);
+            wakeup.signal();
+            return;
+        }
+        complete();
+    };
+    AOTBatchAdmitResult result;
+    int rc = qoreAotBatchAdmitWorkers(nullptr, requested_jobs, work, stop, wakeup, run, result, xsink,
+        &dbg_before_wait);
+    while (!running.empty()) {
+        complete();
+    }
+    out.started = result.started;
+    out.memory_waits = result.memory_waits;
+    out.unclaimed = work.unclaimed();
+    QoreAOTBatchMemoryGovernor::Stats st = gov.getStats();
+    out.alone = st.alone;
+    out.deferred = st.deferred;
     return *xsink ? -1 : rc;
 }
 #endif
@@ -26865,7 +27118,8 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
         const AOTConstantReverseMap* shared_const_reverse_map = nullptr,
         const std::unordered_set<std::string>* shared_pending_init_constant_fqns = nullptr,
         const AOTStatementLocIndex* shared_statement_locs = nullptr,
-        AOTBatchEmitTiming* batch_timing = nullptr) {
+        AOTBatchEmitTiming* batch_timing = nullptr,
+        const std::function<void(const llvm::Module&)>* after_lowering = nullptr) {
     // LLVM target registration is process-wide and not safe to run concurrently; the helper runs it once, so this
     // emit can be invoked from a batch worker-thread pool (compileScriptFilesBatch parallel codegen)
     qore_llvm_initialize_targets();
@@ -26950,6 +27204,11 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
     }
     if (batch_timing) {
         batch_timing->lowering_ns.fetch_add(aotElapsedNs(phase_start), std::memory_order_relaxed);
+    }
+    // the size of the lowered code is known now, before LLVM optimizes and compiles it (see
+    // QoreAOTBatchMemoryGovernor::resize())
+    if (after_lowering && *after_lowering) {
+        (*after_lowering)(*module);
     }
 
     reportAOTCompileStats("script-context .qo (batch)",
@@ -27312,344 +27571,50 @@ static void apply_parse_defines(QoreProgram* pgm,
     }
 }
 
-#if defined(__linux__)
-// Read a single leading unsigned decimal integer from `path` into `out`.
-// Returns false if the file is unreadable or does not begin with a digit (e.g.
-// the cgroup-v2 "max" sentinel that means "no limit").  Allocation-free: uses a
-// small stack buffer and raw open/read/close, so it does not perturb the
-// codegen heap (see qoreAotAvailableMemoryBytes for why that matters).
-static bool qoreAotReadLeadingUintFile(const char* path, uint64_t& out) {
-    int fd = open(path, O_RDONLY | O_CLOEXEC);
-    if (fd < 0) {
-        return false;
-    }
-    char buf[64];
-    ssize_t n;
-    do {
-        n = read(fd, buf, sizeof(buf) - 1);
-    } while (n < 0 && errno == EINTR);
-    close(fd);
-    if (n <= 0) {
-        return false;
-    }
-    buf[n] = '\0';
-    const char* p = buf;
-    while (*p == ' ' || *p == '\t') {
-        ++p;
-    }
-    if (*p < '0' || *p > '9') {
-        return false;
-    }
-    uint64_t v = 0;
-    while (*p >= '0' && *p <= '9') {
-        v = v * 10 + static_cast<uint64_t>(*p - '0');
-        ++p;
-    }
-    out = v;
-    return true;
-}
-
-// Extract this process's cgroup path into `out` for the given controller.
-// `v2` selects the unified hierarchy (the "0::<path>" line of /proc/self/cgroup);
-// otherwise the v1 line whose controller list contains "memory".  Returns false
-// if no matching line is found.  Allocation-free.
-static bool qoreAotReadSelfCgroupPath(bool v2, char* out, size_t out_size) {
-    int fd = open("/proc/self/cgroup", O_RDONLY | O_CLOEXEC);
-    if (fd < 0) {
-        return false;
-    }
-    char buf[2048];
-    ssize_t n;
-    do {
-        n = read(fd, buf, sizeof(buf) - 1);
-    } while (n < 0 && errno == EINTR);
-    close(fd);
-    if (n <= 0) {
-        return false;
-    }
-    buf[n] = '\0';
-    // Lines look like "hierarchy-id:controllers:path".  v2 uses id 0 and an
-    // empty controller field ("0::/path"); v1 lists controllers ("N:memory:/p").
-    for (char* line = buf; line && *line; ) {
-        char* nl = strchr(line, '\n');
-        if (nl) {
-            *nl = '\0';
-        }
-        char* c1 = strchr(line, ':');
-        char* c2 = c1 ? strchr(c1 + 1, ':') : nullptr;
-        if (c1 && c2) {
-            bool match;
-            if (v2) {
-                match = (c1 - line == 1) && line[0] == '0' && (c2 - (c1 + 1) == 0);
-            } else {
-                // controller field is c1+1 .. c2; look for the "memory" token
-                *c2 = '\0';
-                match = strstr(c1 + 1, "memory") != nullptr;
-                *c2 = ':';
-            }
-            if (match) {
-                size_t i = 0;
-                const char* q = c2 + 1;
-                while (*q && i < out_size - 1) {
-                    out[i++] = *q++;
-                }
-                out[i] = '\0';
-                return i > 0;
-            }
-        }
-        line = nl ? nl + 1 : nullptr;
-    }
-    return false;
-}
-
-// Return the memory still allocatable within this process's cgroup, or 0 if
-// there is no effective limit.  The binding constraint is the tightest
-// (limit - usage) over the process's cgroup and all its ancestors, so a limit
-// set on a parent slice is honored even when the leaf is unlimited.  Handles
-// cgroup v2 (memory.max / memory.current, walked up the hierarchy) and v1
-// (memory.limit_in_bytes / memory.usage_in_bytes at the process's node).  This
-// keeps the batch worker cap correct for containerized/CI and cgroup-limited
-// builds, where /proc/meminfo still reports host-wide memory rather than the
-// cgroup limit.
-static uint64_t qoreAotCgroupAvailableBytes() {
-    char rel[512];
-    // cgroup v2 unified hierarchy: walk from the process's cgroup up to root.
-    if (qoreAotReadSelfCgroupPath(true, rel, sizeof(rel)) && rel[0] == '/') {
-        uint64_t best = 0;
-        bool any = false;
-        for (;;) {
-            char path[640];
-            uint64_t limit = 0;
-            uint64_t current = 0;
-            snprintf(path, sizeof(path), "/sys/fs/cgroup%s/memory.max", rel);
-            if (qoreAotReadLeadingUintFile(path, limit)) {
-                snprintf(path, sizeof(path), "/sys/fs/cgroup%s/memory.current", rel);
-                if (qoreAotReadLeadingUintFile(path, current)) {
-                    uint64_t head = limit > current ? limit - current : 1;
-                    if (!any || head < best) {
-                        best = head;
-                        any = true;
-                    }
-                }
-            }
-            if (rel[0] == '\0') {
-                break;
-            }
-            char* slash = strrchr(rel, '/');
-            if (!slash) {
-                break;
-            }
-            *slash = '\0';
-        }
-        if (any) {
-            return best;
-        }
-        return 0;
-    }
-    // cgroup v1 memory controller: read the limit at the process's own node.
-    if (qoreAotReadSelfCgroupPath(false, rel, sizeof(rel)) && rel[0] == '/') {
-        char path[640];
-        uint64_t limit = 0;
-        uint64_t current = 0;
-        snprintf(path, sizeof(path),
-            "/sys/fs/cgroup/memory%s/memory.limit_in_bytes", rel);
-        if (qoreAotReadLeadingUintFile(path, limit)) {
-            snprintf(path, sizeof(path),
-                "/sys/fs/cgroup/memory%s/memory.usage_in_bytes", rel);
-            if (qoreAotReadLeadingUintFile(path, current)) {
-                // v1 has no "max" string; an unset limit is a huge sentinel
-                // near the top of the address space.  Treat that as "no limit".
-                if (limit < (uint64_t(1) << 62)) {
-                    return limit > current ? limit - current : 1;
-                }
-            }
-        }
-    }
-    return 0;
-}
-#endif // __linux__
-
-// Return an estimate of currently-available memory in bytes, or 0 if it cannot
-// be determined.  "Available" means memory that can be allocated without paging
-// (free + reclaimable), not total installed RAM.  On Linux this is the tighter
-// of the host figure and this process's cgroup headroom, so the cap is correct
-// both on bare metal and inside a memory-limited container.  This is used only
-// as a heuristic to bound AOT batch parallelism, so callers MUST tolerate a 0
-// (unknown) result by falling back to the CPU-count default.
-static uint64_t qoreAotAvailableMemoryBytes() {
-#if defined(__linux__)
-    // MemAvailable is the kernel's own estimate of what can be allocated
-    // without swapping; it is the most accurate host figure when /proc is
-    // readable.
-    //
-    // Read it with raw open/read/close into a stack buffer rather than stdio:
-    // this query runs between the shared parse and the codegen worker pool, and
-    // AOT object emission is (pre-existing) sensitive to heap-allocation order,
-    // so a stdio FILE allocation here would perturb the emitted .qo bytes.  A
-    // syscall-only read touches no heap and keeps the output byte-stable.
-    // MemAvailable appears within the first few lines, so one 4 KiB read covers
-    // it on any real kernel.
-    uint64_t phys = 0;
-    int fd = open("/proc/meminfo", O_RDONLY | O_CLOEXEC);
-    if (fd >= 0) {
-        char buf[4096];
-        ssize_t n;
-        do {
-            n = read(fd, buf, sizeof(buf) - 1);
-        } while (n < 0 && errno == EINTR);
-        close(fd);
-        if (n > 0) {
-            buf[n] = '\0';
-            const char* p = strstr(buf, "MemAvailable:");
-            if (p) {
-                p += sizeof("MemAvailable:") - 1;
-                while (*p == ' ' || *p == '\t') {
-                    ++p;
-                }
-                uint64_t kb = 0;
-                bool any = false;
-                while (*p >= '0' && *p <= '9') {
-                    kb = kb * 10 + static_cast<uint64_t>(*p - '0');
-                    ++p;
-                    any = true;
-                }
-                if (any) {
-                    phys = kb * 1024ull;
-                }
-            }
-        }
-    }
-    // A memory-limited cgroup (container/CI) can be far tighter than host
-    // MemAvailable; take whichever constraint is smaller.
-    uint64_t cg = qoreAotCgroupAvailableBytes();
-    if (phys && cg) {
-        return phys < cg ? phys : cg;
-    }
-    if (phys) {
-        return phys;
-    }
-    if (cg) {
-        return cg;
-    }
-    // Fall through to the sysconf fallback below if MemAvailable was missing
-    // (very old kernels) or /proc was not mounted.
-#elif defined(__APPLE__)
-    // Sum the reclaimable Mach VM page classes (free + inactive + purgeable).
-    mach_port_t host = mach_host_self();
-    vm_size_t page_size = 0;
-    uint64_t rv = 0;
-    if (host_page_size(host, &page_size) == KERN_SUCCESS) {
-        vm_statistics64_data_t vm;
-        mach_msg_type_number_t count = HOST_VM_INFO64_COUNT;
-        if (host_statistics64(host, HOST_VM_INFO64,
-                reinterpret_cast<host_info64_t>(&vm), &count) == KERN_SUCCESS) {
-            uint64_t avail_pages = static_cast<uint64_t>(vm.free_count)
-                + static_cast<uint64_t>(vm.inactive_count)
-                + static_cast<uint64_t>(vm.purgeable_count);
-            rv = avail_pages * static_cast<uint64_t>(page_size);
-        }
-    }
-    mach_port_deallocate(mach_task_self(), host);
-    if (rv) {
-        return rv;
-    }
-#elif defined(__FreeBSD__) || defined(__DragonFly__)
-    // FreeBSD/DragonFly expose per-class page counters via sysctl; free +
-    // inactive + cache pages are all reclaimable for a fresh allocation.
-    long page_size = sysconf(_SC_PAGESIZE);
-    if (page_size > 0) {
-        auto add_pages = [](const char* name, uint64_t& acc) -> bool {
-            unsigned val = 0;
-            size_t len = sizeof(val);
-            if (sysctlbyname(name, &val, &len, nullptr, 0) == 0) {
-                acc += static_cast<uint64_t>(val);
-                return true;
-            }
-            return false;
-        };
-        uint64_t pages = 0;
-        bool any = false;
-        any |= add_pages("vm.stats.vm.v_free_count", pages);
-        any |= add_pages("vm.stats.vm.v_inactive_count", pages);
-        add_pages("vm.stats.vm.v_cache_count", pages);
-        if (any) {
-            return pages * static_cast<uint64_t>(page_size);
-        }
-    }
-#endif
-    // Portable fallback: sysconf reports the count of physical pages not
-    // currently in use.  Available on Linux (no /proc), OpenBSD, NetBSD,
-    // Solaris, and others.  If the platform lacks it we return 0 (unknown).
-#if defined(_SC_AVPHYS_PAGES) && defined(_SC_PAGESIZE)
-    long avail_pages = sysconf(_SC_AVPHYS_PAGES);
-    long page_size = sysconf(_SC_PAGESIZE);
-    if (avail_pages > 0 && page_size > 0) {
-        return static_cast<uint64_t>(avail_pages) * static_cast<uint64_t>(page_size);
-    }
-#endif
-    return 0;
-}
-
 // Choose the maximum AOT batch worker-thread count. An explicit
-// QORE_AOT_BATCH_JOBS controls the requested cap (1 = serial, identical to the
-// pre-parallel path). Otherwise the default is hardware concurrency, capped at
-// the measured throughput knee and then by available memory so a large -O3 run
-// cannot exhaust RAM: each worker runs an independent LLVM backend on top of
-// the shared parsed program, and on a big core file set that private working
-// set is on the order of ~1 GB per worker. More than 12 concurrent modules
-// increases allocator/cache contention without improving throughput. The
-// caller narrows this maximum further through GNU make's jobserver so several
-// qcc groups cannot each create a full-sized pool during the same build.
+// QORE_AOT_BATCH_JOBS sets it (1 = serial, identical to the pre-parallel
+// path). Otherwise it is the hardware concurrency, capped at the measured
+// throughput knee: more than 12 concurrent modules increase allocator/cache
+// contention without improving throughput. Memory does not set this count:
+// each unit is admitted only when its estimated memory is free in the memory
+// domain at that moment (see QoreAOTBatchMemoryGovernor), and GNU make's
+// jobserver supplies the build slots that several qcc groups share.
 //
 // @param num_entries number of files in the batch (final clamp; never spin up
 //        more workers than files)
+//! The size of a lowered unit, from which the memory LLVM needs to optimize and compile it is estimated
+struct AOTLoweredSize {
+    //! the LLVM instructions of all functions
+    uint64_t insts = 0;
+    //! the sum of the squares of the instruction counts of the functions
+    uint64_t sum_sq_insts = 0;
+};
+
+//! Measures a lowered unit; deterministic: it depends only on the module
+static AOTLoweredSize qoreAotLoweredSize(const llvm::Module& m) {
+    AOTLoweredSize rv;
+    for (const llvm::Function& f : m) {
+        uint64_t n = 0;
+        for (const llvm::BasicBlock& bb : f) {
+            n += bb.size();
+        }
+        rv.insts += n;
+        rv.sum_sq_insts += n * n;
+    }
+    return rv;
+}
+
 static unsigned qoreAotChooseBatchJobs(size_t num_entries) {
     unsigned hw = std::thread::hardware_concurrency();
     unsigned jobs = hw ? hw : 1;
-    bool explicit_jobs = false;
 
     if (QoreEnvironmentValue j_holder("QORE_AOT_BATCH_JOBS"); const char* j = j_holder.c_str()) {
         long v = strtol(j, nullptr, 10);
         jobs = v > 0 ? static_cast<unsigned>(v) : 1;
-        explicit_jobs = true;
-    }
-
-    if (!explicit_jobs) {
+    } else {
         constexpr unsigned max_auto_jobs = 12;
         if (jobs > max_auto_jobs) {
             jobs = max_auto_jobs;
-        }
-
-        // Per-worker peak for a single -O3 emit over a large core file.
-        // Overridable for tuning / testing without recompiling.
-        uint64_t per_worker = 1024ull * 1024ull * 1024ull; // 1 GiB default
-        if (QoreEnvironmentValue pw_holder("QORE_AOT_BATCH_MEM_PER_JOB_MB"); const char* pw = pw_holder.c_str()) {
-            long mb = strtol(pw, nullptr, 10);
-            if (mb > 0) {
-                per_worker = static_cast<uint64_t>(mb) * 1024ull * 1024ull;
-            }
-        }
-
-        uint64_t avail = qoreAotAvailableMemoryBytes();
-        if (avail && per_worker) {
-            // Reserve headroom for the shared parsed program and the rest of
-            // the system: only budget ~60% of currently-available memory for
-            // the worker pool.
-            uint64_t budget = (avail / 10) * 6;
-            unsigned mem_jobs = static_cast<unsigned>(budget / per_worker);
-            if (mem_jobs < 1) {
-                mem_jobs = 1;
-            }
-            if (mem_jobs < jobs) {
-                if (qccAOTVerbose()) {
-                    fprintf(stderr, "%sAOT batch: limiting workers to %u "
-                        "(cpu=%u) to fit ~%llu MiB available memory "
-                        "(~%llu MiB/job)\n", QCC_LOG_PREFIX, mem_jobs, jobs,
-                        (unsigned long long)(avail / (1024ull * 1024ull)),
-                        (unsigned long long)(per_worker / (1024ull * 1024ull)));
-                }
-                jobs = mem_jobs;
-            }
         }
     }
 
@@ -28228,6 +28193,17 @@ bool QoreAOT::compileScriptFilesBatch(
         ++input_i;
     }
     input_done = std::chrono::steady_clock::now();
+    // The memory admission of the codegen workers: the shared parse is reserved in the memory domain's ledger from
+    // the total source size now, until its real size is measured when the codegen starts
+    uint64_t batch_source_bytes = 0;
+    for (const SrcEntry& e : entries) {
+        batch_source_bytes += e.source.size();
+    }
+    QoreAOTMemorySource batch_memory_source = qore_aot_system_memory_source();
+    std::string batch_memory_ledger = qore_aot_memory_ledger_path(batch_memory_source.domain);
+    QoreAOTBatchMemoryGovernor batch_memory(std::move(batch_memory_source), QoreAOTBatchMemoryModel::getDefault(),
+        batch_memory_ledger);
+    batch_memory.beginParse(batch_source_bytes);
     // Single shared QoreProgram — parse every source into it.
     QoreParseOptions po = parse_options;
     applyAOTModernSourceDefault(po, target_files);
@@ -28614,20 +28590,22 @@ bool QoreAOT::compileScriptFilesBatch(
     // the committed program.  So the emits run on a worker-thread pool to
     // parallelize the otherwise single-threaded -O3 LLVM backend, which
     // dominates clean-build time.  The shared parse/commit above stays
-    // single-threaded. The requested worker count defaults to hardware
-    // concurrency capped by available memory (qoreAotChooseBatchJobs), then
+    // single-threaded. The most workers default to the hardware concurrency
+    // (qoreAotChooseBatchJobs); each file is emitted only when its estimated
+    // memory is free in the memory domain (QoreAOTBatchMemoryGovernor), and
     // GNU make's jobserver supplies the actually spare build slots across all
     // concurrently running qcc groups. QORE_AOT_BATCH_JOBS overrides the
-    // requested cap (1 = serial, identical to the old path).
+    // most workers (1 = serial, identical to the old path).
     const bool trace_emit = q_env_is_set("QORE_AOT_TRACE_BATCH_EMIT");
     unsigned requested_jobs = qoreAotChooseBatchJobs(entries.size());
     JobserverClient batch_jobserver;
-    unsigned jobs = batch_jobserver.available() ? 1u : requested_jobs;
     AOTBatchEmitTiming emit_timing;
 
     // Long source files generally produce the largest LLVM modules. Dispatch
     // them first so they overlap with the rest of the batch instead of leaving
-    // a few long-running workers after every short file has completed.
+    // a few long-running workers after every short file has completed.  The
+    // memory admission keeps the largest from starting together beyond the
+    // memory that is free: each is admitted with its own estimate.
     std::vector<size_t> work_order(entries.size());
     for (size_t i = 0; i < entries.size(); ++i) {
         if (i && !(i % 100)
@@ -28640,193 +28618,271 @@ bool QoreAOT::compileScriptFilesBatch(
     std::stable_sort(work_order.begin(), work_order.end(), [&](size_t lhs, size_t rhs) {
         return entries[lhs].source.size() > entries[rhs].source.size();
     });
+    std::vector<uint64_t> unit_estimates(work_order.size());
+    for (size_t pos = 0; pos < work_order.size(); ++pos) {
+        unit_estimates[pos] = batch_memory.estimateUnit(entries[work_order[pos]].source.size());
+    }
+    // the shared parse is resident now: its measured size replaces its estimate in the domain's ledger
+    batch_memory.beginCodegen();
 
-    std::atomic<size_t> next_work{0};
     std::atomic<int> total_compiled_count{0};
     std::atomic<bool> stop{false};
-    // signalled by the workers when the claim of the last file is made and when they stop, so that the jobserver
-    // coordinator below wakes exactly then; it outlives the workers
+    // signalled by the workers when the claim of the last file is made, when a file's memory is released and when
+    // they stop, so that the coordinator below wakes exactly then; it outlives the workers
     AOTBatchWakeup batch_wakeup;
+    AOTBatchWork batch_work(std::move(unit_estimates), &batch_memory, batch_wakeup);
     std::mutex err_mutex;   // guards first_error
     std::mutex io_mutex;    // serializes diagnostic output across workers
     std::string first_error;
+    auto set_error = [&](const std::string& err) {
+        std::lock_guard<std::mutex> l(err_mutex);
+        if (first_error.empty()) {
+            first_error = err;
+        }
+        stop.store(true);
+    };
 
-    auto worker = [&]() {
+    // Emits the object of the source at work-order position `pos`; false with the error set on failure
+    auto emit_unit = [&](size_t pos, int& local_compiled) -> bool {
+        auto& e = entries[work_order[pos]];
+        // once lowered, the unit's memory is reserved for the size of its code
+        std::function<void(const llvm::Module&)> after_lowering
+                = [&batch_work, &batch_memory, pos](const llvm::Module& m) {
+            AOTLoweredSize ls = qoreAotLoweredSize(m);
+            batch_work.resize(pos, batch_memory.estimateLowered(ls.insts, ls.sum_sq_insts));
+        };
+        if (trace_emit) {
+            std::lock_guard<std::mutex> l(io_mutex);
+            fprintf(stderr, "[aot-trace] emit start: %s\n", e.canon.c_str());
+            fflush(stderr);
+        }
+        std::string per_err;
+        int per_file_compiled_count = 0;
+        std::unordered_set<std::string> emit_dependencies;
+        QoreAOTBodyContractDependencyMap body_contract_dependencies;
+        struct AOTBatchEmitDepGuard {
+            AOTBatchEmitDepGuard(
+                    std::unordered_set<std::string>* dependencies,
+                    QoreAOTBodyContractDependencyMap*
+                        body_contract_dependencies) {
+                qore_aot_set_dep_sink(dependencies);
+                qore_aot_set_body_contract_dep_sink(
+                    body_contract_dependencies);
+            }
+            ~AOTBatchEmitDepGuard() {
+                qore_aot_set_dep_sink(nullptr);
+                qore_aot_set_body_contract_dep_sink(nullptr);
+            }
+        } emit_dep_guard(e.depfile_path.empty()
+                ? nullptr : &emit_dependencies,
+            &body_contract_dependencies);
+        if (!emitScriptQoFromParsedProgram(*qpgm, e.canon, e.source,
+                e.out_path, opt_level, target_triple, include_source,
+                per_err, e.module_cmd_begin, e.module_cmd_end,
+                &per_file_compiled_count, report_artifacts,
+                shared_batch_callees.empty() ? nullptr : &shared_batch_callees,
+                &batch_const_reverse_map,
+                &batch_pending_init_constant_fqns,
+                &batch_statement_locs,
+                trace_timing ? &emit_timing : nullptr, &after_lowering)) {
+            std::lock_guard<std::mutex> l(err_mutex);
+            if (first_error.empty()) {
+                first_error = per_err;
+            }
+            stop.store(true);
+            return false;
+        }
+        if (!e.depfile_path.empty()) {
+            std::unordered_set<std::string> seen(e.dep_sources.begin(), e.dep_sources.end());
+            size_t dep_i = 0;
+            for (const std::string& dep : emit_dependencies) {
+                if (dep_i++ && !(dep_i % 100)
+                        && qore_check_cancel(nullptr,
+                            "AOT batch emitted dependency collection")) {
+                    std::lock_guard<std::mutex> l(err_mutex);
+                    if (first_error.empty()) {
+                        first_error = "cancelled during AOT batch emitted dependency collection";
+                    }
+                    stop.store(true);
+                    return false;
+                }
+                std::string canon = canonicalizeDepPath(dep);
+                if (batch_target_set.count(canon) && seen.insert(canon).second) {
+                    e.dep_sources.push_back(std::move(canon));
+                }
+            }
+            if (stop.load()) {
+                return false;
+            }
+            std::sort(e.dep_sources.begin(), e.dep_sources.end());
+        }
+        if (!e.depfile_path.empty()) {
+            std::string depfile_target;
+            if (depfile_targets_are_stamps) {
+                depfile_target = e.out_path + ".stamp";
+            }
+            if (!writeAOTMakeDepfile(e.depfile_path, e.out_path,
+                    e.dep_sources, per_err, "AOT batch depfile emission",
+                    depfile_target.empty() ? nullptr : depfile_target.c_str())) {
+                std::lock_guard<std::mutex> l(err_mutex);
+                if (first_error.empty()) {
+                    first_error = per_err;
+                }
+                stop.store(true);
+                return false;
+            }
+        }
+        local_compiled += per_file_compiled_count;
+        if (report_artifacts && qccAOTVerbose()) {
+            std::lock_guard<std::mutex> l(io_mutex);
+            printf("%sbatch-compiled script-context .qo (-O%d%s): %s\n",
+                QCC_LOG_PREFIX, opt_level,
+                include_source ? ", include-source" : "", e.out_path.c_str());
+        }
+        return true;
+    };
+
+    // A worker emits the claimed file at work-order position `pos`, then claims the next file with its memory,
+    // until no file is left, the batch stops, or the next file's memory is not free while other files are in work:
+    // then the worker ends, and the coordinator starts another one when the memory is free.
+    auto worker = [&](size_t pos) {
         // A batch worker is a fresh OS thread; register it as a foreign Qore
         // thread so it has the thread context Qore APIs touched during codegen
         // expect.  (Run inline with jobs==1 on the main thread, which is
         // already registered -> q_register returns QFT_REGISTERED, no-op.)
         int reg = q_register_foreign_thread();
         if (reg != QFT_OK && reg != QFT_REGISTERED) {
-            std::lock_guard<std::mutex> l(err_mutex);
-            if (first_error.empty()) {
-                first_error = "failed to register AOT batch worker thread";
-            }
-            stop.store(true);
+            batch_work.release(pos);
+            set_error("failed to register AOT batch worker thread");
+            batch_work.workerEnded(true);
             return;
         }
         int local_compiled = 0;
-        for (;;) {
-            if (stop.load()) {
-                break;
-            }
-            size_t work = next_work.fetch_add(1);
-            if (work + 1 == work_order.size()) {
-                // the work has run out: the jobserver coordinator admits no more workers
-                batch_wakeup.signal();
-            }
-            if (work >= work_order.size()) {
-                break;
-            }
-            size_t i = work_order[work];
-            auto& e = entries[i];
-            if (trace_emit) {
-                std::lock_guard<std::mutex> l(io_mutex);
-                fprintf(stderr, "[aot-trace] emit start: %s\n", e.canon.c_str());
-                fflush(stderr);
-            }
-            std::string per_err;
-            int per_file_compiled_count = 0;
-            std::unordered_set<std::string> emit_dependencies;
-            QoreAOTBodyContractDependencyMap body_contract_dependencies;
-            struct AOTBatchEmitDepGuard {
-                AOTBatchEmitDepGuard(
-                        std::unordered_set<std::string>* dependencies,
-                        QoreAOTBodyContractDependencyMap*
-                            body_contract_dependencies) {
-                    qore_aot_set_dep_sink(dependencies);
-                    qore_aot_set_body_contract_dep_sink(
-                        body_contract_dependencies);
-                }
-                ~AOTBatchEmitDepGuard() {
-                    qore_aot_set_dep_sink(nullptr);
-                    qore_aot_set_body_contract_dep_sink(nullptr);
-                }
-            } emit_dep_guard(e.depfile_path.empty()
-                    ? nullptr : &emit_dependencies,
-                &body_contract_dependencies);
-            if (!emitScriptQoFromParsedProgram(*qpgm, e.canon, e.source,
-                    e.out_path, opt_level, target_triple, include_source,
-                    per_err, e.module_cmd_begin, e.module_cmd_end,
-                    &per_file_compiled_count, report_artifacts,
-                    shared_batch_callees.empty() ? nullptr : &shared_batch_callees,
-                    &batch_const_reverse_map,
-                    &batch_pending_init_constant_fqns,
-                    &batch_statement_locs,
-                    trace_timing ? &emit_timing : nullptr)) {
-                std::lock_guard<std::mutex> l(err_mutex);
-                if (first_error.empty()) {
-                    first_error = per_err;
-                }
-                stop.store(true);
-                break;
-            }
-            if (!e.depfile_path.empty()) {
-                std::unordered_set<std::string> seen(e.dep_sources.begin(), e.dep_sources.end());
-                size_t dep_i = 0;
-                for (const std::string& dep : emit_dependencies) {
-                    if (dep_i++ && !(dep_i % 100)
-                            && qore_check_cancel(nullptr,
-                                "AOT batch emitted dependency collection")) {
-                        std::lock_guard<std::mutex> l(err_mutex);
-                        if (first_error.empty()) {
-                            first_error = "cancelled during AOT batch emitted dependency collection";
-                        }
-                        stop.store(true);
-                        break;
+        bool no_memory = false;
+        while (true) {
+            {
+                // the file's memory is released however its emission ends
+                struct AOTBatchUnitGuard {
+                    AOTBatchWork& work;
+                    size_t pos;
+                    ~AOTBatchUnitGuard() {
+                        work.release(pos);
                     }
-                    std::string canon = canonicalizeDepPath(dep);
-                    if (batch_target_set.count(canon) && seen.insert(canon).second) {
-                        e.dep_sources.push_back(std::move(canon));
-                    }
-                }
+                } unit_guard{batch_work, pos};
                 if (stop.load()) {
                     break;
                 }
-                std::sort(e.dep_sources.begin(), e.dep_sources.end());
-            }
-            if (!e.depfile_path.empty()) {
-                std::string depfile_target;
-                if (depfile_targets_are_stamps) {
-                    depfile_target = e.out_path + ".stamp";
+                bool ok;
+                try {
+                    ok = emit_unit(pos, local_compiled);
+                } catch (const std::exception& ex) {
+                    set_error(std::string("AOT batch emission failed: ") + ex.what());
+                    ok = false;
+                } catch (...) {
+                    set_error("AOT batch emission failed with an unknown exception");
+                    ok = false;
                 }
-                if (!writeAOTMakeDepfile(e.depfile_path, e.out_path,
-                        e.dep_sources, per_err, "AOT batch depfile emission",
-                        depfile_target.empty() ? nullptr : depfile_target.c_str())) {
-                    std::lock_guard<std::mutex> l(err_mutex);
-                    if (first_error.empty()) {
-                        first_error = per_err;
-                    }
-                    stop.store(true);
+                if (!ok) {
                     break;
                 }
             }
-            local_compiled += per_file_compiled_count;
-            if (report_artifacts && qccAOTVerbose()) {
-                std::lock_guard<std::mutex> l(io_mutex);
-                printf("%sbatch-compiled script-context .qo (-O%d%s): %s\n",
-                    QCC_LOG_PREFIX, opt_level,
-                    include_source ? ", include-source" : "", e.out_path.c_str());
+            if (stop.load()) {
+                break;
+            }
+            AOTBatchWork::Claim c = batch_work.claim(pos);
+            if (c == AOTBatchWork::NoWork) {
+                break;
+            }
+            if (c == AOTBatchWork::NoMemory) {
+                no_memory = true;
+                break;
             }
         }
         total_compiled_count.fetch_add(local_compiled);
-        if (stop.load()) {
-            // the batch stops: the jobserver coordinator admits no more workers
-            batch_wakeup.signal();
-        }
+        // the batch stops, or a worker gives its place back: the coordinator re-checks
+        batch_work.workerEnded(no_memory || stop.load());
         if (reg == QFT_OK) {
             q_deregister_foreign_thread();
         }
     };
 
-    if (requested_jobs == 1) {
-        worker();
-    } else if (batch_jobserver.available()) {
+    if (requested_jobs == 1 || !batch_wakeup.ok()) {
+        // serial: the main thread emits every file; its memory is admitted alone, and recorded in the ledger
+        // (without a wakeup, a coordinator could not wait, and the batch runs on one worker)
+        size_t pos;
+        if (batch_work.claim(pos) == AOTBatchWork::Claimed) {
+            batch_work.workerStarting();
+            if (requested_jobs == 1) {
+                worker(pos);
+            } else {
+                llvm::thread th = q_start_llvm_compile_thread(worker, pos);
+                th.join();
+            }
+        }
+    } else {
         // A one-shot nonblocking jobserver read can permanently starve the
         // long-pole batch: QORUS_CORE_MAIN commonly finishes parsing while
         // several short groups hold every spare token, then those groups exit
-        // while core continues serially. Keep one worker productive under the
-        // process's implicit make slot and admit new workers whenever tokens
-        // become available, while files are unclaimed. The coordinator waits
-        // without a timer for a token, the end of the work, a worker that
-        // stops, or a cancellation request (see qoreAotBatchAdmitWorkers());
-        // without a wakeup, the batch runs on the one worker.
+        // while core continues serially. The coordinator keeps one worker
+        // productive under the process's implicit make slot and admits new
+        // workers whenever the next file's memory is free and (under make) a
+        // token is free, while files are unclaimed. It waits without a timer
+        // (see qoreAotBatchAdmitWorkers()).
         std::vector<llvm::thread> pool;
-        pool.reserve(requested_jobs);
-        pool.push_back(q_start_llvm_compile_thread(worker));
-        if (batch_wakeup.ok()) {
-            ExceptionSink admit_xsink;
-            AOTBatchAdmitResult admit;
-            if (qoreAotBatchAdmitWorkers(batch_jobserver, requested_jobs, jobs,
-                    [&]() -> size_t {
-                        size_t claimed = next_work.load();
-                        return claimed < work_order.size() ? work_order.size() - claimed : 0;
-                    }, stop, batch_wakeup,
-                    [&]() { pool.push_back(q_start_llvm_compile_thread(worker)); }, admit, &admit_xsink)) {
-                QoreStringValueHelper err(admit_xsink.getExceptionErr());
-                std::lock_guard<std::mutex> l(err_mutex);
-                if (first_error.empty()) {
-                    first_error = (!strcmp(err->c_str(), "THREAD-CANCELLED")
-                            || !strcmp(err->c_str(), "PROGRAM-INTERRUPTED"))
-                        ? "cancelled while waiting for AOT batch jobserver slots"
-                        : "the wait for AOT batch jobserver slots failed";
-                }
+        // the workers are joined however the coordinator ends
+        struct AOTBatchPoolGuard {
+            std::vector<llvm::thread>& pool;
+            std::atomic<bool>& stop;
+            ~AOTBatchPoolGuard() {
+                // when the coordinator ends with an exception, the workers stop after their current file
                 stop.store(true);
-                admit_xsink.clear();
+                for (auto& th : pool) {
+                    if (th.joinable()) {
+                        th.join();
+                    }
+                }
             }
+        } pool_guard{pool, stop};
+        ExceptionSink admit_xsink;
+        AOTBatchAdmitResult admit;
+        int rc;
+        try {
+            rc = qoreAotBatchAdmitWorkers(batch_jobserver.available() ? &batch_jobserver : nullptr,
+                requested_jobs, batch_work, stop, batch_wakeup,
+                [&](size_t pos) {
+                    // the slot exists before the thread does, so that storing the thread cannot fail
+                    pool.emplace_back();
+                    pool.back() = q_start_llvm_compile_thread(worker, pos);
+                }, admit, &admit_xsink);
+        } catch (const std::exception& ex) {
+            set_error(std::string("cannot start an AOT batch worker: ") + ex.what());
+            rc = 0;
+        } catch (...) {
+            set_error("cannot start an AOT batch worker");
+            rc = 0;
+        }
+        if (rc) {
+            QoreStringValueHelper err(admit_xsink.getExceptionErr());
+            set_error((!strcmp(err->c_str(), "THREAD-CANCELLED")
+                    || !strcmp(err->c_str(), "PROGRAM-INTERRUPTED"))
+                ? "cancelled while waiting for AOT batch jobserver slots"
+                : "the wait for AOT batch jobserver slots failed");
+            admit_xsink.clear();
         }
         for (auto& th : pool) {
             th.join();
         }
-    } else {
-        std::vector<llvm::thread> pool;
-        pool.reserve(jobs);
-        for (unsigned t = 0; t < jobs; ++t) {
-            pool.push_back(q_start_llvm_compile_thread(worker));
-        }
-        for (auto& th : pool) {
-            th.join();
-        }
+    }
+    unsigned jobs = batch_work.maxActiveWorkers();
+    if (qccAOTVerbose() || trace_timing) {
+        QoreAOTBatchMemoryGovernor::Stats ms = batch_memory.getStats();
+        fprintf(stderr, "%sAOT batch memory: sources=%zu workers=%u (max %u) units admitted=%u alone=%u "
+            "deferred=%u grown=%u (waited %u, alone %u) max-in-work=%u (%llu MiB) parse=%llu MiB (estimate %llu MiB) "
+            "ledger=%s\n",
+            QCC_LOG_PREFIX, entries.size(), jobs, requested_jobs, ms.admitted, ms.alone, ms.deferred, ms.grown,
+            ms.grow_waits, ms.grown_alone, ms.max_inflight, static_cast<unsigned long long>(ms.max_inflight_bytes >> 20),
+            static_cast<unsigned long long>(ms.parse_measured >> 20),
+            static_cast<unsigned long long>(ms.parse_estimate >> 20), batch_memory.hasLedger() ? "yes" : "no");
     }
 
     if (!first_error.empty()) {

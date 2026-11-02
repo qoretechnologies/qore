@@ -1840,6 +1840,7 @@ set(LIBQORE_CPP_SRC
     lib/QoreIRToLLVM.cpp
     lib/QoreIRVerifier.cpp
     lib/QoreAOT.cpp
+    lib/QoreAOTBatchMemory.cpp
     lib/QoreAOTRuntime.cpp
     lib/QoreAOTBinary.cpp
     lib/QoreAOTInstRegistry.cpp
@@ -2474,6 +2475,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreIRToLLVM.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreIRVerifier.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreAOT.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreAOTBatchMemory.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreAOTRuntime.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreAOTBinary.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreAOTInstRegistry.cpp\"
@@ -3009,7 +3011,12 @@ set(_qcc_format_sources
 #                      now lives in QoreIRAnalysis.cpp -- if the compiler ever
 #                      calls into the interpreter again, this decision changes.
 #   QoreIRPrinter      diagnostic IR dumps to stderr behind a debug flag.
+#   QoreAOTBatchMemory the memory admission of batch codegen workers: it decides
+#                      how many objects are compiled at once, never what they
+#                      contain (the objects are the same with any worker count).
 set(_qcc_format_excluded_sources
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreAOTBatchMemory.h
+    ${CMAKE_SOURCE_DIR}/lib/QoreAOTBatchMemory.cpp
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRInterpreter.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRPrinter.h
     ${CMAKE_SOURCE_DIR}/lib/QoreIRInterpreter.cpp
