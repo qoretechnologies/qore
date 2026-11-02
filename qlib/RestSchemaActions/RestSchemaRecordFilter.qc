@@ -358,8 +358,8 @@ public class RestSchemaRecordFilter {
     }
 
     #! Returns the name of the field of a field reference in a query language, or @ref nothing
-    /** The field is a field path (@ref DataProvider::AbstractDataProvider::getFieldPath()
-        "AbstractDataProvider::getFieldPath()"); its keys are joined with dots, as the query languages of REST APIs
+    /** The field is a field path
+        (@ref DataProvider::AbstractDataProvider::getFieldPath() "AbstractDataProvider::getFieldPath()"); its keys are joined with dots, as the query languages of REST APIs
         write a nested field (\c owner.uuid).  A key that has a dot (the field reference <tt>\@"Unit\\.Price"</tt>)
         cannot be written so, and gives @ref nothing.
 

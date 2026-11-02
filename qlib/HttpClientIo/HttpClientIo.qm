@@ -57,12 +57,11 @@ module HttpClientIo {
       periodically.  The race ends early only when a protocol connects, so a server that receives only HTTP/3 is
       reached whatever its head start; a denial of the @ref sandboxing "sandbox" or a refused server certificate
       ends the race with that error (see
-      @ref HttpClientIo::HttpClientConnectionManager::isTerminalConnectionError()
-      "HttpClientConnectionManager::isTerminalConnectionError()").  Alt-Svc advertisements supply the UDP port for
+      @ref HttpClientIo::HttpClientConnectionManager::isTerminalConnectionError() "HttpClientConnectionManager::isTerminalConnectionError()").  Alt-Svc advertisements supply the UDP port for
       later races.  Poll-operation callers race without blocking with
       @ref HttpClientIo::HttpClientConnectionManager::acquireConnectionAsync() "acquireConnectionAsync()" and can
-      cancel a race with @ref HttpClientIo::HttpClientConnectionManager::abandonAsyncHEForUrl()
-      "abandonAsyncHEForUrl()"
+      cancel a race with
+      @ref HttpClientIo::HttpClientConnectionManager::abandonAsyncHEForUrl() "abandonAsyncHEForUrl()"
     - <b>HTTP/1.1 support</b>: Serial request/response with keep-alive; connection manager creates
       multiple connections for concurrent requests
     - <b>True multiplexing</b>: Multiple concurrent streams on a single connection (HTTP/2, HTTP/3)
@@ -78,12 +77,12 @@ module HttpClientIo {
       @ref HttpClientIo::HttpClientRequestPollOperation "HttpClientRequestPollOperation" follow 301, 302, 303, 307,
       and 308 redirects, resolving \c Location values according to RFC 3986; \c Authorization, \c Cookie, and
       \c Host request headers are only sent to the origin of the original request, and the response reports the
-      effective URL and the redirects followed (see @ref HttpClientIo::HttpClientResponseInfo
-      "HttpClientResponseInfo")
+      effective URL and the redirects followed (see
+      @ref HttpClientIo::HttpClientResponseInfo "HttpClientResponseInfo")
     - <b>Response decoding</b>: response bodies are decoded once, by the rules shared by all HTTP clients, after
       any content encoding is decompressed; a request can receive a text body as octets instead (the
-      \c decode_text argument and @ref HttpClientIo::HttpClientStreamHandle::setDecodeText()
-      "HttpClientStreamHandle::setDecodeText()"), which
+      \c decode_text argument and
+      @ref HttpClientIo::HttpClientStreamHandle::setDecodeText() "HttpClientStreamHandle::setDecodeText()"), which
       @ref HttpClientIo::HttpClientStreamHandle::decodeResponseText() "decodeResponseText()" decodes as the default
       would
     - <b>Async I/O</b>: All I/O driven by the process-wide AsyncSocketIoController shared by all managers
@@ -549,8 +548,8 @@ public namespace HttpClientIo {
 
     #! Credentials for HTTP authentication
     /** Credentials are sent only to the origin (scheme, host, and port) of the request they are given for, with the
-        Basic scheme, or with the Digest scheme after a Digest challenge; see @ref HttpUtil::HttpAuthenticator
-        "HttpAuthenticator"
+        Basic scheme, or with the Digest scheme after a Digest challenge; see
+        @ref HttpUtil::HttpAuthenticator "HttpAuthenticator"
 
         @since HttpClientIo 1.0
     */
@@ -799,12 +798,12 @@ public namespace HttpClientIo {
         int max_response_body_size = 0;
 
         #! The character encoding assumed for text response bodies whose encoding is not determined otherwise
-        /** Response bodies are decoded by the rules documented for @ref Qore::get_http_body_encoding()
-            "get_http_body_encoding()", the same for all HTTP clients: the assumed encoding applies to text types
+        /** Response bodies are decoded by the rules documented for
+            @ref Qore::get_http_body_encoding() "get_http_body_encoding()", the same for all HTTP clients: the assumed encoding applies to text types
             without a default encoding of their own and without an encoding declaration.  The default is ISO-8859-1,
             the default character set of text media types in HTTP/1.1 (RFC 2616).  A request for the octets of a
-            body does not decode it; see @ref HttpClientIo::HttpClientStreamHandle::setDecodeText()
-            "HttpClientStreamHandle::setDecodeText()"
+            body does not decode it; see
+            @ref HttpClientIo::HttpClientStreamHandle::setDecodeText() "HttpClientStreamHandle::setDecodeText()"
         */
         string assume_encoding = "ISO-8859-1";
 

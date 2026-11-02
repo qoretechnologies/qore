@@ -480,13 +480,13 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
         @note With @ref ProviderIndexCreateOptions::workers "workers" set, providers are loaded and indexed in
             worker processes; see @ref runIndexWorker()
         @note An app or action that cannot be initialized does not fail the build: it is recorded in the index with its
-            error (see @ref ProviderIndexUtil::ProviderIndexUtil::getIndexedFailures()
-            "ProviderIndexUtil::getIndexedFailures()"), and is unavailable in it, while the other apps and actions are
+            error (see
+            @ref ProviderIndexUtil::ProviderIndexUtil::getIndexedFailures() "ProviderIndexUtil::getIndexedFailures()"), and is unavailable in it, while the other apps and actions are
             indexed; an app that registered its info before failing is indexed with its info and connection scheme and
             without the actions that failed.  The failures are in the \c unavailable member of the \c qualification
             report, which is then not \c complete, and are logged; a caller that requires a complete catalog checks
-            \c summary.qualification.complete (see @ref DataProvider::DataProviderActionCatalog::isAppDiscoveryFailure()
-            "DataProviderActionCatalog::isAppDiscoveryFailure()")
+            \c summary.qualification.complete (see
+            @ref DataProvider::DataProviderActionCatalog::isAppDiscoveryFailure() "DataProviderActionCatalog::isAppDiscoveryFailure()")
         @note Existing explicit-path indexes remain readable. Rebuilding persists module names so the runtime
             can select source or compiled representations through its normal search path. This is a semantic
             catalog, not a binary digest or a lease over concurrently replaced module files.
@@ -632,8 +632,7 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
 
     #! Returns the failures of individual apps and actions to record in the index
     /** @param unavailable the failures of individual apps and actions (see
-            @ref DataProvider::DataProviderActionCatalog::isAppDiscoveryFailure()
-            "DataProviderActionCatalog::isAppDiscoveryFailure()")
+            @ref DataProvider::DataProviderActionCatalog::isAppDiscoveryFailure() "DataProviderActionCatalog::isAppDiscoveryFailure()")
         @param module_names maps the module paths of the process to module names
 
         @return the failures keyed by app, as

@@ -38,8 +38,8 @@ public namespace DataProvider {
     cannot process an event must therefore let the exception out.
 
     An event source that genuinely does not want back-pressure — a fire-and-forget push feed with no
-    cursor to protect — catches exceptions from @ref DataProvider::Observable::notifyObservers()
-    "notifyObservers()" itself, where the decision to ignore a failed handler is visible in the
+    cursor to protect — catches exceptions from
+    @ref DataProvider::Observable::notifyObservers() "notifyObservers()" itself, where the decision to ignore a failed handler is visible in the
     source rather than hidden in each observer.
 */
 public class Observer {

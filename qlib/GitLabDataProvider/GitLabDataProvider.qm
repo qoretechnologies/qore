@@ -145,6 +145,27 @@ module GitLabDataProvider {
     The %GitLabDataProvider module provides a @ref dataproviderintro "data provider" API for
     <a href="https://gitlab.com">GitLab</a>, on GitLab.com and on self-managed installations alike.
 
+    It exports 70 actions generated from GitLab's own OpenAPI 3 description, four polling events, and twelve
+    of GitLab's collections as record-based tables.
+
+    Documentation:
+    - @subpage gitlabdataproviderguide "Actions, Events and Tables": how the actions are generated, the pinned
+      schema, the action groups, IDs and IIDs, paging, the polling events and the record-based tables
+    - @subpage gitlabdataprovider_examples "Examples": getting the data provider, paging through a listing,
+      issues, commits, events and calling endpoints the application does not export
+    - @subpage gitlabdataproviderrelnotes "Release Notes": the changes in each version
+*/
+/** @page gitlabdataproviderrelnotes Release Notes
+
+
+    @section gitlabdataproviderv1_0 GitLabDataProvider v1.0
+    - initial release
+*/
+
+/** @page gitlabdataproviderguide Actions, Events and Tables
+
+    @tableofcontents
+
     @section gitlabdataprovider_generated Generated, Not Hand-Written
 
     The actions this application exports are <b>generated from GitLab's own OpenAPI 3 description</b> by the
@@ -169,7 +190,7 @@ module GitLabDataProvider {
     alter the contract of an action that existing workflows already call:
 
     |!Property|!Value
-    |Source|https://gitlab.com/gitlab-org/gitlab \c doc/api/openapi/openapi_v3.yaml
+    |Source|https://gitlab.com/gitlab-org/gitlab <tt>doc/api/openapi/openapi_v3.yaml</tt>
     |SHA-256|\c 1c16d4750bd37b52386a7ea58216398434152f2789e9405a3f60af3c41e63b1b
     |GitLab version|19.3.0-pre
     |Imported|2026-08-10
@@ -204,7 +225,7 @@ module GitLabDataProvider {
     @section gitlabdataprovider_iids IDs and IIDs
 
     GitLab addresses an issue or a merge request inside a project by its <b>IID</b> - the number shown in the
-    web UI and written \c "#42" - while the instance-wide \c /issues listing filters by \c id.  They are
+    web UI and written <tt>&quot;#42&quot;</tt> - while the instance-wide <tt>/issues</tt> listing filters by \c id.  They are
     different numbers for the same object.  Each action takes whichever its endpoint takes, and each
     dropdown says which it supplies.
 
@@ -248,12 +269,15 @@ module GitLabDataProvider {
     because that is what every GitLab endpoint reading or changing one takes; a CI variable is addressed by
     its \c key, a branch by its name and a wiki page by its \c slug, for the same reason.
 
-    The record-based actions are registered against \c "tables/{table}", each naming its table in the path,
+    The record-based actions are registered against <tt>&quot;tables/{table}&quot;</tt>, each naming its table in the path,
     and their options are resolved from the chosen table rather than declared once for the application.
+*/
 
-    @section gitlabdataprovider_examples Examples
+/** @page gitlabdataprovider_examples Examples
 
-    @subsection gitlabdataprovider_ex_provider Getting the Data Provider
+    @tableofcontents
+
+    @section gitlabdataprovider_ex_provider Getting the Data Provider
 
     From a connection, which is how a data-provider-aware caller reaches it:
 
@@ -276,7 +300,7 @@ GitLabDataProvider gitlab(new GitLabRestClientIo({
 }));
     @endcode
 
-    @subsection gitlabdataprovider_ex_list Listing, and Paging Through a Listing
+    @section gitlabdataprovider_ex_list Listing, and Paging Through a Listing
 
     A listing returns the records as a bare array, so paging ends when a short page comes back:
 
@@ -301,7 +325,7 @@ while (True) {
 printf("%d open issues\n", all.size());
     @endcode
 
-    @subsection gitlabdataprovider_ex_issue Raising an Issue and Closing It
+    @section gitlabdataprovider_ex_issue Raising an Issue and Closing It
 
     @code{.py}
 hash<auto> issue = gitlab.getChildProviderEx("postApiV4ProjectsIdIssues").doRequest({
@@ -320,7 +344,7 @@ gitlab.getChildProviderEx("putApiV4ProjectsIdIssuesIssueIid").doRequest({
 });
     @endcode
 
-    @subsection gitlabdataprovider_ex_commit Committing a File Change
+    @section gitlabdataprovider_ex_commit Committing a File Change
 
     Every change lands in one commit, or none of them do:
 
@@ -340,7 +364,7 @@ hash<auto> commit = gitlab.getChildProviderEx("postApiV4ProjectsIdRepositoryComm
 printf("committed %s\n", commit.id);
     @endcode
 
-    @subsection gitlabdataprovider_ex_events Reacting to an Event
+    @section gitlabdataprovider_ex_events Reacting to an Event
 
     @code{.py}
 class MergeRequestObserver inherits DataProvider::Observer {
@@ -355,7 +379,7 @@ event.registerObserver(new MergeRequestObserver());
 cast<DelayedObservable>(event).observersReady();
     @endcode
 
-    @subsection gitlabdataprovider_ex_call Calling an Endpoint the Manifest Does Not Export
+    @section gitlabdataprovider_ex_call Calling an Endpoint the Manifest Does Not Export
 
     The application exports a reviewed subset of GitLab's API - 70 actions covering 69 of 1752 operations,
     the two counts differing because \c get_project_id_by_url reads a project through the same endpoint
@@ -370,11 +394,6 @@ hash<auto> res = gitlab.getChildProviderEx("__call__").doRequest({
 });
 printf("%d pipelines\n", res.body.size());
     @endcode
-
-    @section gitlabdataproviderrelnotes Release Notes
-
-    @subsection gitlabdataproviderv1_0 GitLabDataProvider v1.0
-    - initial release
 */
 
 #! contains all public definitions in the GitLabDataProvider module

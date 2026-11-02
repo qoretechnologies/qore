@@ -687,8 +687,8 @@ public class Document {
     #! Get parse options derived from parse directives in the document text
     /** Scans the document text for lines starting with recognized parse directives
         (e.g., \c %modern, \c %strict-args, \c %no-thread-control) and accumulates the
-        corresponding PO_* flags using the built-in @ref Qore::ParseOptionCmdStringMap
-        "ParseOptionCmdStringMap". The result is cached and invalidated on content changes.
+        corresponding PO_* flags using the built-in
+        @ref Qore::ParseOptionCmdStringMap "ParseOptionCmdStringMap". The result is cached and invalidated on content changes.
 
         @return bitfield of PO_* parse option flags, or 0 if no directives found
     */

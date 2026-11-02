@@ -79,8 +79,8 @@ module TavilyRestClient {
     @par Agent integration
 
     The @ref TavilyRestClient::TavilyAgentTools namespace exports helpers for wiring
-    Tavily into a @ref QoreAgentStrategies::SimpleAgentStrategy
-    "SimpleAgentStrategy":
+    Tavily into a
+    @ref QoreAgentStrategies::SimpleAgentStrategy "SimpleAgentStrategy":
 
     @code{.py}
 %requires TavilyRestClient

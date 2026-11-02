@@ -184,8 +184,7 @@ module McpServerHandler {
     and are listed in the description when they only suggest values (\c element_allowed_values_creatable); reference
     data of the elements (a field's \c element_ref_data attribute) is never listed or read, and the parameter's
     description says where each element comes from, see
-    @ref McpServerHandler::McpServerHandler::getElementReferenceDataDescription()
-    "getElementReferenceDataDescription()" and
+    @ref McpServerHandler::McpServerHandler::getElementReferenceDataDescription() "getElementReferenceDataDescription()" and
     @ref McpServerHandler::McpServerHandler::getElementAllowedValues() "getElementAllowedValues()".
 
     @subsection McpServer_intro_notifications Notifications

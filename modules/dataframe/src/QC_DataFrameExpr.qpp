@@ -106,7 +106,7 @@ RowMask ColumnRef::compare(string op, auto value) [flags=RET_VALUE_ONLY] {
     DataFrame filtered = df.filter(high_value & current);
     @endcode
 
-    Row masks support predicate composition with the \c &, \c |, \c ^, and \c ~
+    Row masks support predicate composition with the <tt>&amp;</tt>, <tt>|</tt>, <tt>^</tt>, and <tt>~</tt>
     operators. These operators combine the masks directly without materializing
     rows, which lets a caller build one composite predicate and filter the
     DataFrame once. The named methods @ref RowMask::intersect(), @ref

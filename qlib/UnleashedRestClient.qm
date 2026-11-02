@@ -471,8 +471,8 @@ public class UnleashedRestConnection inherits RestClient::RestConnection {
 #! REST client for Unleashed REST API using multiplexed HTTP connections
 /** @see UnleashedRestClient for more information
 */
-/** All requests are signed with HMAC-SHA256 as with @ref UnleashedRestClient::UnleashedRestClient
-    "UnleashedRestClient"
+/** All requests are signed with HMAC-SHA256 as with
+    @ref UnleashedRestClient::UnleashedRestClient "UnleashedRestClient"
 */
 public class UnleashedRestClientIo inherits RestClientIo::RestClientIo, UnleashedRestClientBase {
     private {

@@ -175,9 +175,12 @@ public class MyTestClass inherits QUnit::DependencyInjectedTest {
       operator) is created in the Program that its thread started in, so when that Program may use process control,
       the handler is installed and replaces the host's \c SIGUSR1 handler
 
-    @section qunit_relnotes Release Notes
+    See @subpage qunit_relnotes "Release Notes" for the changes in each version.
+*/
+/** @page qunit_relnotes Release Notes
 
-    @subsection qunit_v0_5_2 Version 0.5.2
+
+    @section qunit_v0_5_2 Version 0.5.2
     - a test prints the call stacks of all its threads when it receives \c SIGUSR1 (for example
       <tt>kill -USR1 \<pid\></tt> on a test that hangs); \c run_tests.sh sends it to a test that exceeds its
       time limit before ending it, so the log shows where the test hangs; a test that installs its own
@@ -203,36 +206,36 @@ public class MyTestClass inherits QUnit::DependencyInjectedTest {
     - skip reasons (failed prerequisite, filter exclusion, or a user
       @ref QUnit::Test::testSkip() reason) are now shown on the test report line
 
-    @subsection qunit_v0_4_3 Version 0.4.3
+    @section qunit_v0_4_3 Version 0.4.3
     - added constructors for use with languages that don't support lvalue references (ex: %Python)
       (<a href="https://github.com/qoretechnologies/qore/issues/3934">issue 3934</a>)
 
-    @subsection qunit_v0_4_2 Version 0.4.2
+    @section qunit_v0_4_2 Version 0.4.2
     - allow %QUnit to be used from other languages like Java
       (<a href="https://github.com/qoretechnologies/qore/issues/3857">issue 3857</a>)
 
-    @subsection qunit_v0_4_1 Version 0.4.1
+    @section qunit_v0_4_1 Version 0.4.1
     - allow binary modules to be subjected to dependency injections
       (<a href="https://github.com/qoretechnologies/qore/issues/3382">issue 3382</a>)
     - allow tests to be nested
       (<a href="https://github.com/qoretechnologies/qore/issues/3306">issue 3306</a>)
 
-    @subsection qunit_v0_4 Version 0.4
+    @section qunit_v0_4 Version 0.4
     - updated @ref QUnit::Test::testSkip() "Test::testSkip()" to use the reason argument a format string with
       @ref Qore::vsprintf() "vsprintf()"
       (<a href="https://github.com/qoretechnologies/qore/issues/3172">issue 3172</a>)
     - fixed error reporting with type errors with number values
       (<a href="https://github.com/qoretechnologies/qore/issues/2984">issue 2984</a>)
 
-    @subsection qunit_v0_3_3 Version 0.3.3
+    @section qunit_v0_3_3 Version 0.3.3
     - improved output in assertion failures for strings with special whitespace and for multi-line data structures (<a href="https://github.com/qoretechnologies/qore/issues/2680">issue 2680</a>)
 
-    @subsection qunit_v0_3_2 Version 0.3.2
+    @section qunit_v0_3_2 Version 0.3.2
     - improved error location reporting by providing all stack location information up until the QUnit call to cover the case when multiple code layers are used such as one or more test modules (<a href="https://github.com/qoretechnologies/qore/issues/1720">issue 1720</a>)
     - overloaded testAssertionValue supports auto/number/float
     - more verbose output when number/float difference is found
 
-    @subsection qunit_v0_3_1 Version 0.3.1
+    @section qunit_v0_3_1 Version 0.3.1
     - added the following methods:
       - @ref QUnit::Test::assertRegex()
       - @ref QUnit::Test::assertNRegex()
@@ -248,13 +251,13 @@ public class MyTestClass inherits QUnit::DependencyInjectedTest {
       - @ref QUnit::Test::assertLeSoft()
       - @ref QUnit::Test::assertNothing()
 
-    @subsection qunit_v0_3 Version 0.3
+    @section qunit_v0_3 Version 0.3
     - updated for complex types
 
-    @subsection qunit_v0_2 Version 0.2
+    @section qunit_v0_2 Version 0.2
     - fixed showing the assertion location when there are test modules on top of QUnit.qm (<a href="https://github.com/qoretechnologies/qore/issues/1046">issue 1046</a>)
 
-    @subsection qunit_v0_1 Version 0.1
+    @section qunit_v0_1 Version 0.1
     - initial release
 */
 

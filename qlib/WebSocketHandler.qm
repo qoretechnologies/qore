@@ -132,11 +132,14 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
     @ref WebSocketHandler::WebSocketHandler::sendOne() "sendOne()" /
     @ref WebSocketHandler::WebSocketHandler::sendAll() "sendAll()" APIs work across all transports.
 
-    @section websockethandler_relnotes WebSocketHandler Release History
+    See @subpage websockethandler_relnotes "WebSocketHandler Release History" for the changes in each version.
+*/
+/** @page websockethandler_relnotes WebSocketHandler Release History
 
-    @subsection websockethandler_v2_8 Version 2.8
-    - a close started by the server (with @ref WebSocketHandler::WebSocketConnection::stop()
-      "WebSocketConnection::stop()", when the server or a listener stops, on an idle timeout, or for a message that
+
+    @section websockethandler_v2_8 Version 2.8
+    - a close started by the server (with
+      @ref WebSocketHandler::WebSocketConnection::stop() "WebSocketConnection::stop()", when the server or a listener stops, on an idle timeout, or for a message that
       is too big) sends the server's close frame and waits for the client's close frame, as RFC 6455 requires, at
       most the new close timeout (the \c close_timeout handler option and
       @ref WebSocketHandler::WebSocketHandler::setCloseTimeout() "setCloseTimeout()"; default: 5 seconds), before the
@@ -176,71 +179,68 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
     - added \c asyncapi, \c validator, and \c asyncapi_channel constructor options to configure an AsyncAPI
       validator once on a @ref WebSocketHandler::WebSocketHandler "WebSocketHandler" and apply it automatically
       to every new @ref WebSocketHandler::WebSocketConnection "WebSocketConnection"
-    - added @ref WebSocketHandler::WebSocketConnection::setEchoMode()
-      "WebSocketConnection::setEchoMode()" for automatic echo of received frames
-    - added @ref WebSocketHandler::WebSocketConnection::setWsPollOp()
-      "WebSocketConnection::setWsPollOp()" and
-      @ref WebSocketHandler::WebSocketConnection::setStreamProcessor()
-      "WebSocketConnection::setStreamProcessor()" for async I/O integration
+    - added
+      @ref WebSocketHandler::WebSocketConnection::setEchoMode() "WebSocketConnection::setEchoMode()" for automatic echo of received frames
+    - added
+      @ref WebSocketHandler::WebSocketConnection::setWsPollOp() "WebSocketConnection::setWsPollOp()" and
+      @ref WebSocketHandler::WebSocketConnection::setStreamProcessor() "WebSocketConnection::setStreamProcessor()" for async I/O integration
     - added @ref WebSocketHandler::WebSocketStreamProcessor "WebSocketStreamProcessor" class
       for HTTP/2 and HTTP/3 WebSocket stream processing on worker threads
-    - added async I/O event-driven model: @ref WebSocketHandler::WebSocketConnection::notifyIo()
-      "WebSocketConnection::notifyIo()" and
-      @ref WebSocketHandler::WebSocketConnection::waitForIoEvent()
-      "WebSocketConnection::waitForIoEvent()" for non-polling WebSocket I/O
-    - deprecated @ref WebSocketHandler::WebSocketConnection::pollData()
-      "WebSocketConnection::pollData()" in favor of the event-driven model
+    - added async I/O event-driven model:
+      @ref WebSocketHandler::WebSocketConnection::notifyIo() "WebSocketConnection::notifyIo()" and
+      @ref WebSocketHandler::WebSocketConnection::waitForIoEvent() "WebSocketConnection::waitForIoEvent()" for non-polling WebSocket I/O
+    - deprecated
+      @ref WebSocketHandler::WebSocketConnection::pollData() "WebSocketConnection::pollData()" in favor of the event-driven model
     - frames that cannot be sent at once because of transport backpressure are kept in a per-connection pending
       send buffer that is drained at each handler loop iteration
       - HTTP/2 flow control (\c HTTP2-FLOW-CONTROL) and HTTP/1.1 async contention
         (\c SOCKET-NON-BLOCK-ERROR) queue frames
       - natural backpressure to the application layer: the Channel is not polled while the
-        pending send buffer has data, so @ref WebSocketHandler::WebSocketConnection::send()
-        "WebSocketConnection::send()" blocks when the Channel fills up
+        pending send buffer has data, so
+        @ref WebSocketHandler::WebSocketConnection::send() "WebSocketConnection::send()" blocks when the Channel fills up
       - heartbeat pings are suppressed during backpressure to avoid growing the buffer
-    - added @ref WebSocketHandler::WebSocketHandler::MaxPendingSendBytes
-      "MaxPendingSendBytes" constant (4 MB safety limit)
-    - added @ref WebSocketHandler::WebSocketHandler::MaxDrainFramesPerIteration
-      "MaxDrainFramesPerIteration" constant to cap drain time per loop iteration
+    - added
+      @ref WebSocketHandler::WebSocketHandler::MaxPendingSendBytes "MaxPendingSendBytes" constant (4 MB safety limit)
+    - added
+      @ref WebSocketHandler::WebSocketHandler::MaxDrainFramesPerIteration "MaxDrainFramesPerIteration" constant to cap drain time per loop iteration
     - added support for WebSocket over HTTP/2 (RFC 8441 — Extended CONNECT)
     - added support for WebSocket over HTTP/3 (RFC 9220 — Extended CONNECT over QUIC)
       - server-side detection of HTTP/3 CONNECT requests with <tt>:protocol=websocket</tt>
       - bidirectional WebSocket frame exchange over QUIC streams
       - backpressure handling via QUIC flow control with I/O controller wake integration
       - explicit QUIC stream close on WebSocket handler exit (essential for stream multiplexing)
-    - added @ref WebSocketHandler::WebSocketConnection::setStreamContext()
-      "WebSocketConnection::setStreamContext()" and
-      @ref WebSocketHandler::WebSocketConnection::getStreamContext()
-      "WebSocketConnection::getStreamContext()" methods for unified stream context management
+    - added
+      @ref WebSocketHandler::WebSocketConnection::setStreamContext() "WebSocketConnection::setStreamContext()" and
+      @ref WebSocketHandler::WebSocketConnection::getStreamContext() "WebSocketConnection::getStreamContext()" methods for unified stream context management
     - added WebSocket extension support (RFC 6455 Section 9) with permessage-deflate (RFC 7692)
       (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
     - added @ref WebSocketHandler::WebSocketHandler "WebSocketHandler" constructor option \c "extensions" to enable
       server-side extension support
-    - added @ref WebSocketHandler::WebSocketConnection::hasPerMessageDeflate()
-      "WebSocketConnection::hasPerMessageDeflate()" method
-    - added @ref WebSocketHandler::WebSocketConnection::getActiveExtensions()
-      "WebSocketConnection::getActiveExtensions()" method
-    - added optional AsyncAPI validation support via @ref WebSocketHandler::WebSocketConnection::setAsyncApiValidator()
-      "WebSocketConnection::setAsyncApiValidator()" for validating WebSocket messages against AsyncAPI schemas
+    - added
+      @ref WebSocketHandler::WebSocketConnection::hasPerMessageDeflate() "WebSocketConnection::hasPerMessageDeflate()" method
+    - added
+      @ref WebSocketHandler::WebSocketConnection::getActiveExtensions() "WebSocketConnection::getActiveExtensions()" method
+    - added optional AsyncAPI validation support via
+      @ref WebSocketHandler::WebSocketConnection::setAsyncApiValidator() "WebSocketConnection::setAsyncApiValidator()" for validating WebSocket messages against AsyncAPI schemas
       (<a href="https://github.com/qoretechnologies/qore/issues/5014">issue 5014</a>)
     - added the @ref WebSocketHandler::WebSocketHandler::hasExtensionSupport() "hasExtensionSupport()" and
       @ref WebSocketHandler::WebSocketHandler::getSupportedExtensions() "getSupportedExtensions()" handler methods
 
-    @subsection websockethandler_v2_1 Version 2.1
+    @section websockethandler_v2_1 Version 2.1
     - implemented support for a variable send timeout
 
-    @subsection websockethandler_v2_0 Version 2.0
+    @section websockethandler_v2_0 Version 2.0
     - implemented support for @ref Qore::Logger::Logger "Logger" objects for logging
 
-    @subsection websockethandler_v1_5_4 Version 1.5.4
+    @section websockethandler_v1_5_4 Version 1.5.4
     - fixed a bug in @ref WebSocketHandler::WebSocketHandler::sendOne() "WebSocketHandler::sendOne()"
       (<a href="https://github.com/qoretechnologies/qore/issues/4634">issue 4634</a>)
 
-    @subsection websockethandler_v1_5_3 Version 1.5.3
+    @section websockethandler_v1_5_3 Version 1.5.3
     - fixed a bug handling valid empty \c PING messages
       (<a href="https://github.com/qoretechnologies/qore/issues/4565">issue 4565</a>)
 
-    @subsection websockethandler_v1_5_2 Version 1.5.2
+    @section websockethandler_v1_5_2 Version 1.5.2
     - fixed a bug handling closing server-side web sockets on demand
       (<a href="https://github.com/qoretechnologies/qore/issues/4075">issue 4075</a>)
     - fixed a bug where I/O could not be flushed before closing the socket
@@ -248,44 +248,44 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
     - added support for continuation frames
       (<a href="https://github.com/qoretechnologies/qore/issues/4073">issue 4073</a>)
 
-    @subsection websockethandler_v1_5_1 Version 1.5.1
+    @section websockethandler_v1_5_1 Version 1.5.1
     - fixed a bug handling the case when a connection object is deleted in a callback method
       (<a href="https://github.com/qoretechnologies/qore/issues/4063">issue 4063</a>)
 
-    @subsection websockethandler_v1_5 Version 1.5
+    @section websockethandler_v1_5 Version 1.5
     - allow the WebSocket handler to have connections added to it from outside the class
 
-    @subsection websockethandler_v1_4_3 Version 1.4.3
+    @section websockethandler_v1_4_3 Version 1.4.3
     - added missing exception handling to connection registration code
       (<a href="https://github.com/qoretechnologies/qore/issues/3215">issue 3215</a>)
     - added @ref WebSocketHandler::WebSocketConnection::stop() and @ref WebSocketHandler::WebSocketHandler::stopOne()
 
-    @subsection websockethandler_v1_4_2 Version 1.4.2
+    @section websockethandler_v1_4_2 Version 1.4.2
     - added support for heartbeat messages
       (<a href="https://github.com/qoretechnologies/qore/issues/2887">issue 2887</a>)
 
-    @subsection websockethandler_v1_4_1 Version 1.4.1
+    @section websockethandler_v1_4_1 Version 1.4.1
     - fixed a bug where unsolicited \c PONG messages caused the connection to be prematurely closed
       (<a href="https://github.com/qoretechnologies/qore/issues/2566">issue 2566</a>)
 
-    @subsection websockethandler_v1_4 Version 1.4
+    @section websockethandler_v1_4 Version 1.4
     - added support for complex types
     - added the @ref WebSocketHandler::WebSocketConnection::registered() method
 
-    @subsection websockethandler_v1_3 Version 1.3
+    @section websockethandler_v1_3 Version 1.3
     - added timeout values to @ref Qore::Socket "Socket" calls
       (<a href="https://github.com/qoretechnologies/qore/issues/1725">issue 1725</a>)
 
-    @subsection websockethandler_v1_2 Version 1.2
+    @section websockethandler_v1_2 Version 1.2
     - fixed a bug parsing and generating the websocket close status code
       (<a href="https://github.com/qoretechnologies/qore/issues/1216">issue 1216</a>)
 
-    @subsection websockethandler_v1_1 Version 1.1
+    @section websockethandler_v1_1 Version 1.1
     - bug fix: do not delete the connection object when the connection closes, remove it so it can go out of scope
       naturally to avoid excess exceptions in the server code
     - added the WebSocketConnection::connectionClosed() method which is called when the connection is closed
 
-    @subsection websockethandler_v1_0 Version 1.0
+    @section websockethandler_v1_0 Version 1.0
     - initial release
 */
 
@@ -2286,8 +2286,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
             cause the connection to be closed with status code 1009 (Message Too Big).  The limit also applies to
             a message after it is decompressed by the permessage-deflate extension; when it is not set, the
             decompressed size is limited by
-            @ref WebSocketUtil::PerMessageDeflateExtension::DefaultMaxMessageSize
-            "PerMessageDeflateExtension::DefaultMaxMessageSize".
+            @ref WebSocketUtil::PerMessageDeflateExtension::DefaultMaxMessageSize "PerMessageDeflateExtension::DefaultMaxMessageSize".
 
             @since WebSocketHandler 2.5
         */
@@ -2604,8 +2603,8 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
     }
 
     #! Sets how long a close started by the server waits for the client's close frame
-    /** A close started by the server (with @ref WebSocketHandler::WebSocketConnection::stop()
-        "WebSocketConnection::stop()", when the server or a listener stops, on an idle timeout, or on a protocol
+    /** A close started by the server (with
+        @ref WebSocketHandler::WebSocketConnection::stop() "WebSocketConnection::stop()", when the server or a listener stops, on an idle timeout, or on a protocol
         error) sends the server's close frame and waits for the client's close frame before the server closes the
         connection, as RFC 6455 section 5.5.1 requires; this sets the longest wait, which starts when the server's
         close frame has been sent.  When it expires, the connection is closed with the close code 1006 (no close
@@ -3145,8 +3144,8 @@ handler.setCloseTimeout(2s);
 
         Connections without active extensions or an AsyncAPI validator share a single pre-encoded frame
         for efficiency.  Connections that need per-connection transforms (e.g., permessage-deflate) are
-        encoded individually via @ref WebSocketHandler::WebSocketConnection::send()
-        "WebSocketConnection::send()".
+        encoded individually via
+        @ref WebSocketHandler::WebSocketConnection::send() "WebSocketConnection::send()".
 
         @since WebSocketHandler 2.3 per-connection extension transforms are now properly applied
     */

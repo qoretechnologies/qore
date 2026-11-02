@@ -73,8 +73,8 @@ module QoreLlmUtils {
     See @ref QoreLlmUtils::LlmBackend "LlmBackend" for the complete list of
     modes, their client modules, and their configuration requirements.
 
-    The module also includes @ref QoreLlmUtils::PromptSecretProtector
-    "PromptSecretProtector", a provider-neutral helper for keeping
+    The module also includes
+    @ref QoreLlmUtils::PromptSecretProtector "PromptSecretProtector", a provider-neutral helper for keeping
     user-supplied credentials out of model-visible prompts by replacing them
     with request-local placeholders, restoring them only at a caller's tool
     execution boundary, and redacting protected values from execution errors

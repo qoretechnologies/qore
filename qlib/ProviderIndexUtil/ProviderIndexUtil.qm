@@ -128,9 +128,12 @@ if (*hash<ProviderIndexFailureInfo> failure = ProviderIndexUtil::tryGetActionFai
     @ref ProviderIndexUtil::ProviderIndexUtil::hasIndexedFailureInfo() "ProviderIndexUtil::hasIndexedFailureInfo()"
     reports.
 
-    @section providerindexutil_relnotes Release Notes
+    See @subpage providerindexutil_relnotes "Release Notes" for the changes in each version.
+*/
+/** @page providerindexutil_relnotes Release Notes
 
-    @subsection providerindexutil_v1_2 ProviderIndexUtil v1.2
+
+    @section providerindexutil_v1_2 ProviderIndexUtil v1.2
     - @ref ProviderIndexUtil::ProviderIndexUtil::writeDataProviderIndexByApp() "writeDataProviderIndexByApp()"
       accepts index maps whose values all have the same type, such as an index of factories only
     - added a versioned, app-sharded MessagePack metadata cache with per-shard integrity validation and canonical
@@ -259,7 +262,7 @@ if (*hash<ProviderIndexFailureInfo> failure = ProviderIndexUtil::tryGetActionFai
     - loaded dependency filtering recognizes exact module names and loaded artifact paths, including compiled
       modules with API-version suffixes; legacy explicit-path indexes remain readable
 
-    @subsection providerindexutil_v1_0 ProviderIndexUtil v1.0
+    @section providerindexutil_v1_0 ProviderIndexUtil v1.0
     - initial release
 */
 

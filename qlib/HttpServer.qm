@@ -137,11 +137,11 @@ class DecoupledReplyHandler inherits AbstractHttpRequestHandler {
     @par Paired Listener Architecture
     - Each TCP/TLS listener with HTTP/3 enabled gets a paired QUIC listener
     - The QUIC listener binds to the same port on UDP
-    - Handlers added via @ref HttpServer::HttpServer::addHandlerToListenerID()
-      "addHandlerToListenerID()" are automatically propagated to the paired QUIC listener
+    - Handlers added via
+      @ref HttpServer::HttpServer::addHandlerToListenerID() "addHandlerToListenerID()" are automatically propagated to the paired QUIC listener
       (with a \c "-h3" suffix on the handler name)
-    - Handler removal via @ref HttpServer::HttpServer::removeHandlerFromListenerID()
-      "removeHandlerFromListenerID()" also removes the propagated handler from the paired
+    - Handler removal via
+      @ref HttpServer::HttpServer::removeHandlerFromListenerID() "removeHandlerFromListenerID()" also removes the propagated handler from the paired
       QUIC listener
     - Stopping a TCP listener also stops its paired QUIC listener
     - The \c Alt-Svc header is set per-listener so each TCP listener only advertises its own
@@ -210,9 +210,12 @@ hash<auto> lh = hs.addListener(MyHttpPort);
 log("started listener on %s", lh.desc);
     @endcode
 
-    @section http_relnotes HttpServer Module Release Notes
+    See @subpage http_relnotes "HttpServer Module Release Notes" for the changes in each version.
+*/
+/** @page http_relnotes HttpServer Module Release Notes
 
-    @subsection http1_7 HttpServer 1.7
+
+    @section http1_7 HttpServer 1.7
     - fixed the \c hdr option of @ref HttpServer::HttpServerOptionInfo "HttpServerOptionInfo" with values that all
       have the same type, such as a literal <tt>{"X-Instance": 1}</tt>: responses failed with status 500
       (\c RUNTIME-TYPE-ERROR); @ref HttpServer::HttpServer::sendHttpError() "sendHttpError()" also accepts extra
@@ -234,12 +237,12 @@ log("started listener on %s", lh.desc);
       stop waits at most the handlers' close timeout in total for the clients to answer the server's close frame
       (code 1001, going away); before, a WebSocket connection was closed as soon as the server's close frame was sent
     - response bodies are compressed on the fly with levels suited to compressing them for each request, set with the
-      new \c compression_levels server option and @ref HttpServer::HttpServer::setCompressionLevels()
-      "setCompressionLevels()" (defaults: Brotli quality 5, Zstandard level 3, gzip and deflate level 6, bzip2 level
+      new \c compression_levels server option and
+      @ref HttpServer::HttpServer::setCompressionLevels() "setCompressionLevels()" (defaults: Brotli quality 5, Zstandard level 3, gzip and deflate level 6, bzip2 level
       3; see @ref HttpServer::HttpServer::DefaultCompressionLevels "DefaultCompressionLevels")
     - among the content encodings that a client accepts with the same weight, the cheapest one to compress is used
-      (Zstandard, then Brotli, gzip, deflate, and bzip2; see @ref HttpServer::HttpServer::ContentEncodingPreference
-      "ContentEncodingPreference"); weights and exclusions in \c Accept-Encoding are honored
+      (Zstandard, then Brotli, gzip, deflate, and bzip2; see
+      @ref HttpServer::HttpServer::ContentEncodingPreference "ContentEncodingPreference"); weights and exclusions in \c Accept-Encoding are honored
     - generated response charset parameters use canonical encoding names such as \c utf-8,
       including default content types and error responses
     - text is sent in the character encoding that the response declares: a string or a
@@ -255,8 +258,8 @@ log("started listener on %s", lh.desc);
       the same way, and no charset is added to the type of a binary error message
     - request bodies are decoded by the rules shared by all HTTP clients and servers (see
       @ref Qore::decode_http_body() "decode_http_body()") whether they are read from the socket, buffered, or
-      received over HTTP/2 or HTTP/3; the default text encoding (@ref HttpServer::HttpServer::setDefaultTextEncoding()
-      "setDefaultTextEncoding()") is the assumed encoding for text without an encoding declaration, and no longer
+      received over HTTP/2 or HTTP/3; the default text encoding
+      (@ref HttpServer::HttpServer::setDefaultTextEncoding() "setDefaultTextEncoding()") is the assumed encoding for text without an encoding declaration, and no longer
       replaces the encoding of a JSON body or one declared in the body
     - every request handler receives the effective maximum request body size of the listener
       (@ref HttpServer::HttpListener::getMaxRequestBodySize() "HttpListener::getMaxRequestBodySize()") in
@@ -342,53 +345,53 @@ log("started listener on %s", lh.desc);
     - added the \c after_send response callback, called once after the response has been sent or has failed to be
       sent (see @ref httpserver_after_send)
 
-    @subsection http1_4 HttpServer 1.4
+    @section http1_4 HttpServer 1.4
     - allow authentication methods to set the call context
       (<a href="https://github.com/qoretechnologies/qore/issues/4970">issue 4970</a>)
 
-    @subsection http1_3 HttpServer 1.3
+    @section http1_3 HttpServer 1.3
     - fixed a bug where idle connections were never disconnected
       (<a href="https://github.com/qoretechnologies/qore/issues/4878">issue 4878</a>)
 
-    @subsection http1_2 HttpServer 1.2
+    @section http1_2 HttpServer 1.2
     - allow handlers to remove thread-local auth information after requests have been handled
 
-    @subsection http1_1_2 HttpServer 1.1.2
+    @section http1_1_2 HttpServer 1.1.2
     - allow context info to be cleared after handling each request to ensure that context info (like thread-local
       data) does not leak into other connections on the same thread
       (<a href="https://github.com/qoretechnologies/qore/issues/4802">issue 4802</a>)
 
-    @subsection http1_1_1 HttpServer 1.1.1
+    @section http1_1_1 HttpServer 1.1.1
     - fixed a bug reloading X.509 certificates on running listeners
       (<a href="https://github.com/qoretechnologies/qore/issues/4720">issue 4720</a>)
 
-    @subsection http1_1 HttpServer 1.1
+    @section http1_1 HttpServer 1.1
     - implemented support for reloading X.509 certificate information without manually restarting listeners
       (<a href="https://github.com/qoretechnologies/qore/issues/4574">issue 4574</a>)
 
-    @subsection http1_0_12 HttpServer 1.0.12
+    @section http1_0_12 HttpServer 1.0.12
     - fixed a bug where incorrect URI decoding was applied to URLs in received HTTP messages instead of URL decoding
       (<a href="https://github.com/qoretechnologies/qore/issues/4363">issue 4363</a>)
 
-    @subsection http1_0_2 HttpServer 1.0.2
+    @section http1_0_2 HttpServer 1.0.2
     - @ref HttpServer::HttpServer::addListeners() "HttpServer::addListeners()" has no mechanism for returning errors
       to the caller
       (<a href="https://github.com/qoretechnologies/qore/issues/4312">issue 4312</a>)
 
-    @subsection http1_0_1 HttpServer 1.0.1
+    @section http1_0_1 HttpServer 1.0.1
     - allow dynamic handlers to be removed without waiting for all connections to terminate
       (<a href="https://github.com/qoretechnologies/qore/issues/4273">issue 4273</a>)
     - allow for full logging of authentication errors if HTTP server debugging is enabled
       (<a href="https://github.com/qoretechnologies/qore/issues/4217">issue 4217</a>)
 
-    @subsection http1_0 HttpServer 1.0
+    @section http1_0 HttpServer 1.0
     - allow dynamic handlers to be disabled before being removed
       (<a href="https://github.com/qoretechnologies/qore/issues/4173">issue 4173</a>)
     - added support for the Logger module for logging
       (<a href="https://github.com/qoretechnologies/qore/issues/4157">issue 4157</a>)
     - removed deprecated APIs
 
-    @subsection http0911 HttpServer 0.9.11
+    @section http0911 HttpServer 0.9.11
     - fixed a bug shutting down dedicated socket I/O handlers
       (<a href="https://github.com/qoretechnologies/qore/issues/4130">issue 4130</a>)
     - fixed a bug where invalid HTTP responses were send with error messages and chunked transfer encoding
@@ -396,15 +399,15 @@ log("started listener on %s", lh.desc);
     - fixed a bug where it was not possible for an HTTP stream handler to support switching protocols
       (<a href="https://github.com/qoretechnologies/qore/issues/4111">issue 4111</a>)
 
-    @subsection http095 HttpServer 0.9.5
+    @section http095 HttpServer 0.9.5
     - fixed a bug where the HTTP server would not always stop the ThreadPool which caused process shutdowns to hang
       (<a href="https://github.com/qoretechnologies/qore/issues/3999">issue 3999</a>)
 
-    @subsection http094 HttpServer 0.9.4
+    @section http094 HttpServer 0.9.4
     - added support for sending chunked replies from an @ref Qore::InputStream "InputStream"
       (<a href="https://github.com/qoretechnologies/qore/issues/3702">issue 3702</a>)
 
-    @subsection http03131 HttpServer 0.3.13.1
+    @section http03131 HttpServer 0.3.13.1
     - enable remote certificates to be retrieved in listeners and handlers by default; added new API entry points for
       listeners and handlers with more flexible and saner parameters, deprecated old complex methods
       (<a href="https://github.com/qoretechnologies/qore/issues/3512">issue 3512</a>)
@@ -414,26 +417,26 @@ log("started listener on %s", lh.desc);
     - fixed certificate and key errors for HTTPS listeners to generate user-friendly exceptions
       (<a href="https://github.com/qoretechnologies/qore/issues/3397">issue 3397</a>)
 
-    @subsection http0313 HttpServer 0.3.13
+    @section http0313 HttpServer 0.3.13
     - added the \c "header-info" hash to the context argument when calling handlers
       (<a href="https://github.com/qoretechnologies/qore/issues/3026">issue 3026</a>)
     - added support for adding new HTTP methods to the server with the
       @ref HttpServer::HttpServer::addHttpMethod() "HttpServer::addHttpMethod()" method
       (<a href="https://github.com/qoretechnologies/qore/issues/2805">issue 2805</a>)
 
-    @subsection http03121 HttpServer 0.3.12.1
+    @section http03121 HttpServer 0.3.12.1
     - fixed \c HEAD and other responses that cannot have a message body
       (<a href="https://github.com/qoretechnologies/qore/issues/3116">bug 3116</a>)
 
-    @subsection http0312 HttpServer 0.3.12
+    @section http0312 HttpServer 0.3.12
     - added a minimal substring of string bodies received to the log message when logging HTTP requests
     - added logic to allow sensitive data to be masked in log messages (<a href="https://github.com/qoretechnologies/qore/issues/1086">issue 1086</a>)
     - added support for the HTTP \c "PATCH" method
 
-    @subsection http03111 HttpServer 0.3.11.1
+    @section http03111 HttpServer 0.3.11.1
     - fixed a bug where @ref HttpServer::HttpServer::addListener() would not accept port 0 meaning bind on any random open port (<a href="https://github.com/qoretechnologies/qore/issues/1284">bug 1284</a>)
 
-    @subsection http0311 HttpServer 0.3.11
+    @section http0311 HttpServer 0.3.11
     - fixed a bug setting the response encoding in @ref HttpServer::HttpServer::setReplyHeaders() where the Socket encoding was not set properly and therefore the encoding in the \c Content-Type in the response header did not necessarily match the encoding of the response
     - added support for private keys with passwords
     - added the @ref HttpServer::PermissiveAuthenticator "PermissiveAuthenticator" class
@@ -456,14 +459,14 @@ log("started listener on %s", lh.desc);
     - fixed typos causing bugs in HTTP error logging (<a href="https://github.com/qoretechnologies/qore/issues/308">bug 308</a>)
     - fixed bugs handling persistent connections
 
-    @subsection http0310 HttpServer 0.3.10
+    @section http0310 HttpServer 0.3.10
     - if an error occurs receiving a message with chunked transfer encoding, send the response immediately before reading the rest of the chunked transfer
 
-    @subsection http039 HttpServer 0.3.9
+    @section http039 HttpServer 0.3.9
     - when binding a wildcard address with @ref Qore::AF_UNSPEC "AF_UNSPEC" on Windows with \c HttpServer::HttpServer::addListeners()
       and both IPv6 and IPv4 addresses are returned, bind both addresses since Windows doesn't direct the IPv4 requests to the wildcard-bound IPv6 listener
 
-    @subsection http038 HttpServer 0.3.8
+    @section http038 HttpServer 0.3.8
     - moved more message handling code to HttpServer::AbstractHttpRequestHandler so that chunked transfers can be efficiently supported by handlers
     - added a minimum body size threshold for \c Content-Encoding compression to HttpServer
     - added the following classes to facilitate handling chunked requests and responses:
@@ -471,7 +474,7 @@ log("started listener on %s", lh.desc);
       - HttpServer::AbstractStreamRequest
     - added support for persistent connections to a given handler to the HTTP server
 
-    @subsection http037 HttpServer 0.3.7
+    @section http037 HttpServer 0.3.7
     - fixed a bug in parsing arguments in @ref HttpServer::parse_uri_query() "parse_uri_query()"
     - updated @ref HttpServer::parse_uri_query() "parse_uri_query()" to accept both \c "&" and \c ";" as argument separators
     - added support for the \c PUT and \c DELETE methods and for optional message bodies independent of the HTTP method
@@ -490,36 +493,36 @@ log("started listener on %s", lh.desc);
     - implemented support for simple string path matching when finding a handler for a request
     - added static @ref HttpServer::AbstractHttpRequestHandler::redirect() to help in generating 301 Moved Permanently messages
 
-    @subsection http036 HttpServer 0.3.6
+    @section http036 HttpServer 0.3.6
     - fixed a race condition in tracking active requests in dynamic HTTP handlers and removing dynamic HTTP handlers
 
-    @subsection http035 HttpServer 0.3.5
+    @section http035 HttpServer 0.3.5
     - fixed bugs in regexes in the @ref HttpServer::HttpServer::addListeners() "HttpServer::addListeners()" and
       \c HttpServer::addListenersWithHandler() methods
     - updated module example code in summary
     - added \c "listener-id" to request context hash
 
-    @subsection http034 HttpServer 0.3.4
+    @section http034 HttpServer 0.3.4
     - added public @ref HttpServer::parse_uri_query() "parse_uri_query()" function
 
-    @subsection http033 HttpServer 0.3.3
+    @section http033 HttpServer 0.3.3
     - updated to a user module
     - added support for custom redirects from user handlers
     - use the @ref mimeintro "Mime" module for mime definitions
 
-    @subsection http032 HttpServer 0.3.2
+    @section http032 HttpServer 0.3.2
     - added support for listeners with specific handler lists
     - added the ability to manage dynamic content handlers
     - implemented content-encoding handling flags in @ref HttpServer::AbstractHttpRequestHandler "AbstractHttpRequestHandler"
     - implemented support for \c "identity" encoding (if anyone ever sends it)
 
-    @subsection http031 HttpServer 0.3.1
+    @section http031 HttpServer 0.3.1
     - added IPv6 support in qore 0.8.2
 
-    @subsection http030 HttpServer 0.3.0
+    @section http030 HttpServer 0.3.0
     - added the ability to start and stop listeners on demand
 
-    @subsection http029 HttpServer 0.2.9
+    @section http029 HttpServer 0.2.9
     - updates for new SSL and timeout behavior with with @ref Qore::Socket "Socket" class with qore 0.8.1+
     - set socket encoding to UTF-8 by default
     - add \c "charset=utf-8" to \c Content-Type header if not already present
@@ -527,40 +530,40 @@ log("started listener on %s", lh.desc);
     - fixed setting X.509 certificate and private key for HTTPS listeners
     - require qore >= 0.8.1 for new Socket features
 
-    @subsection http028 HttpServer 0.2.8
+    @section http028 HttpServer 0.2.8
     - converted to hard typing for use with %require-types
     - require qore >= 0.8.0 for new @ref Qore::Socket "Socket" features
 
-    @subsection http027 HttpServer 0.2.7
+    @section http027 HttpServer 0.2.7
     - set \c TCP_NODELAY on all sockets to ensure that clients get all data before closing the socket, especially in case of errors
     - require qore >= 0.7.4 for new @ref Qore::Socket "Socket" features
 
-    @subsection http026 HttpServer 0.2.6
+    @section http026 HttpServer 0.2.6
     - minor fixes for SOAP support
     - improved handler matching
 
-    @subsection http025 HttpServer 0.2.5
+    @section http025 HttpServer 0.2.5
     - minor fixes for SOAP support
 
-    @subsection http024 HttpServer 0.2.4
+    @section http024 HttpServer 0.2.4
     - improved \c Content-Type handling
     - improved URL/path support
 
-    @subsection http023 HttpServer 0.2.3
+    @section http023 HttpServer 0.2.3
     - bzip2 \c Content-Encoding support
 
-    @subsection http022 HttpServer 0.2.2
+    @section http022 HttpServer 0.2.2
     - basic authentication
 
-    @subsection http021 HttpServer 0.2.1
+    @section http021 HttpServer 0.2.1
     - implementing logic to handle \c "deflate" and \c "gzip" content-encoding
     - chunked content-encoding supported for POSTs
     - Date: header always sent as per HTTP 1.1 spec
 
-    @subsection http020 HttpServer 0.2.0
+    @section http020 HttpServer 0.2.0
     - modular/multiple listener support added
     - https support added
- */
+*/
 
 #! the main namespace for the HttpServer module
 /** To use this module, use \c "%requires HttpServer" in your code.
@@ -684,8 +687,7 @@ public hashdecl HttpServerOptionInfo {
         A listener can override the limit with
         @ref HttpServer::HttpListenerOptionInfo::max_decoded_body_size "HttpListenerOptionInfo::max_decoded_body_size",
         and a handler with
-        @ref HttpServer::AbstractHttpRequestHandler::max_decoded_body_size
-        "AbstractHttpRequestHandler::max_decoded_body_size".
+        @ref HttpServer::AbstractHttpRequestHandler::max_decoded_body_size "AbstractHttpRequestHandler::max_decoded_body_size".
 
         @since HttpServer 1.7
     */
@@ -1331,8 +1333,8 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
 
     #! Sets the maximum size in bytes of a decompressed request body
     /** @param size the maximum size in bytes of a decompressed request body; \c 0 means that the default applies
-        (see @ref HttpServer::HttpServerOptionInfo::max_decoded_body_size
-        "HttpServerOptionInfo::max_decoded_body_size"); a negative value means no limit
+        (see
+        @ref HttpServer::HttpServerOptionInfo::max_decoded_body_size "HttpServerOptionInfo::max_decoded_body_size"); a negative value means no limit
 
         @since HttpServer 1.7
     */
@@ -1371,8 +1373,8 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
     }
 
     #! Returns a request body received as binary data as a string
-    /** Text is decoded by the rules shared by all HTTP clients and servers (see @ref Qore::decode_http_body()
-        "decode_http_body()"), with the default text encoding (@ref getDefaultTextEncoding()) as the assumed
+    /** Text is decoded by the rules shared by all HTTP clients and servers (see
+        @ref Qore::decode_http_body() "decode_http_body()"), with the default text encoding (@ref getDefaultTextEncoding()) as the assumed
         encoding; a body of another type that is not delivered as binary data is returned in the default text
         encoding.
 
@@ -1444,8 +1446,8 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         @throw SOCKET-BIND-ERROR the socket could not be bound to the given address
         @throw HTTPLISTENER-BIND-ERROR the listener could not bind on the given address
 
-        @note This method returns immediately after submitting setup work. Call @ref Qore::Thread::Future::get()
-        "Future::get()" to wait for listener registration, and @ref waitForAsyncIo() to wait until async I/O is ready
+        @note This method returns immediately after submitting setup work. Call
+        @ref Qore::Thread::Future::get() "Future::get()" to wait for listener registration, and @ref waitForAsyncIo() to wait until async I/O is ready
         to accept connections.
 
         @par Example
@@ -1503,8 +1505,8 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         @throw SOCKET-BIND-ERROR the socket could not be bound to the given address
         @throw HTTPLISTENER-BIND-ERROR the listener could not bind on the given address
 
-        @note This method returns immediately after submitting setup work. Call @ref Qore::Thread::Future::get()
-        "Future::get()" to wait for listener registration, and @ref waitForAsyncIo() to wait until async I/O is ready
+        @note This method returns immediately after submitting setup work. Call
+        @ref Qore::Thread::Future::get() "Future::get()" to wait for listener registration, and @ref waitForAsyncIo() to wait until async I/O is ready
         to accept connections.
 
         @par Example
@@ -1563,8 +1565,8 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         @throw SOCKET-BIND-ERROR the socket could not be bound to the given address
         @throw HTTPLISTENER-BIND-ERROR the listener could not bind on the given address
 
-        @note This method returns immediately after submitting setup work. Call @ref Qore::Thread::Future::get()
-        "Future::get()" to wait for listener registration, and @ref waitForAsyncIo() to wait until async I/O is ready
+        @note This method returns immediately after submitting setup work. Call
+        @ref Qore::Thread::Future::get() "Future::get()" to wait for listener registration, and @ref waitForAsyncIo() to wait until async I/O is ready
         to accept connections.
 
         @par Example
@@ -1600,8 +1602,8 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         @ref waitForAsyncIo() manually.
 
         @note A listener with a \c service and no \c node or \c family listens on all interfaces with one
-        dual-stack socket that serves both IPv4 and IPv6 clients; see @ref Qore::Socket::bindINET()
-        "Socket::bindINET()"
+        dual-stack socket that serves both IPv4 and IPv6 clients; see
+        @ref Qore::Socket::bindINET() "Socket::bindINET()"
 
         @note On macOS, a listener on all interfaces is refused a port that another program already uses for IPv4 on
         \c 0.0.0.0 or \c 127.0.0.1 (\c SOCKET-BIND-ERROR), as Linux refuses it, and a port assigned by the system
@@ -1627,8 +1629,8 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         @throw SOCKET-BIND-ERROR the socket could not be bound to the given address
         @throw HTTPLISTENER-BIND-ERROR the listener could not bind on the given address
 
-        @note This method returns immediately after submitting setup work. Call @ref Qore::Thread::Future::get()
-        "Future::get()" to wait for listener registration, and @ref waitForAsyncIo() to wait until async I/O is ready
+        @note This method returns immediately after submitting setup work. Call
+        @ref Qore::Thread::Future::get() "Future::get()" to wait for listener registration, and @ref waitForAsyncIo() to wait until async I/O is ready
         to accept connections.
 
         @par Example
@@ -2155,8 +2157,7 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
 
     #! Closes the dedicated connections of all listeners with their protocol's closing handshake, all at the same time
     /** Each dedicated socket handler starts the closing handshake on its connections
-        (@ref HttpServer::AbstractHttpSocketHandlerInterface::startClosingConnections()
-        "AbstractHttpSocketHandlerInterface::startClosingConnections()"), and then the server waits until the latest
+        (@ref HttpServer::AbstractHttpSocketHandlerInterface::startClosingConnections() "AbstractHttpSocketHandlerInterface::startClosingConnections()"), and then the server waits until the latest
         of the deadlines that the handlers return; the connections still open then are stopped at once with the
         listeners.
     */
@@ -7945,8 +7946,8 @@ class HttpServerCallbackAppender inherits LoggerAppenderWithLayout {
 #! Native async target implementing HttpAsyncTarget for the callback-based HttpAsyncSocketIoController
 /** Request dispatch uses a two-path model:
     -# @ref tryInlineRequest() runs on an async callback dispatcher worker for lightweight requests
-       (HTTP/1.x only, no body, handler opts in via @ref HttpServer::AbstractHttpRequestHandler::canHandleInline()
-       "canHandleInline()"); returns the response immediately without a thread hop
+       (HTTP/1.x only, no body, handler opts in via
+       @ref HttpServer::AbstractHttpRequestHandler::canHandleInline() "canHandleInline()"); returns the response immediately without a thread hop
     -# If @ref tryInlineRequest() returns @ref nothing, the request is dispatched to the
        handler thread pool via @ref onHttpRequest() which calls
        HttpListener::processNativeRequest() for full context setup, body reading, and handler

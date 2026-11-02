@@ -144,10 +144,10 @@ private nothing recvDataImpl(auto data) {
       which the clients of earlier releases require
     - added automatic Connect protocol (DataStream 2.0) detection: the handler now accepts
       both Connect-framed and DataStream v1 chunked requests without any changes to subclasses
-    - added @ref DataStreamRequestHandler::AbstractDataStreamRequestHandler::isConnectProtocol()
-      "isConnectProtocol()" method to query the detected protocol
-    - added @ref DataStreamRequestHandler::AbstractDataStreamRequestHandler::getResponseHeaderMessage()
-      "getResponseHeaderMessage()" override: non-streaming responses (subclasses that return a body in
+    - added
+      @ref DataStreamRequestHandler::AbstractDataStreamRequestHandler::isConnectProtocol() "isConnectProtocol()" method to query the detected protocol
+    - added
+      @ref DataStreamRequestHandler::AbstractDataStreamRequestHandler::getResponseHeaderMessage() "getResponseHeaderMessage()" override: non-streaming responses (subclasses that return a body in
       \c getResponseHeaderMessageImpl()) are automatically wrapped in a Connect frame when the request
       used the Connect protocol, so clients always receive a well-formed Connect response
     - added \c %strict-args compile-time requirement

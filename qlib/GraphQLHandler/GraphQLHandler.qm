@@ -63,8 +63,8 @@ module GraphQLHandler {
 
     To use this module, use \c "%requires GraphQLHandler" in your code. To use just the engine
     (no HTTP dependency), use \c "%requires GraphQL" instead. To generate a schema automatically
-    from a @ref dataproviderintro "DataProvider", use the @ref graphqldataproviderintro
-    "GraphQLDataProvider" module.
+    from a @ref dataproviderintro "DataProvider", use the
+    @ref graphqldataproviderintro "GraphQLDataProvider" module.
 
     All the public symbols are defined in the GraphQLHandler namespace.
 

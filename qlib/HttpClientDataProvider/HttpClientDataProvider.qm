@@ -108,8 +108,8 @@ module HttpClientDataProvider {
     A request body is sent with \c "Content-Type: application/octet-stream" (binary data) or \c "text/plain" with
     the string's character encoding, unless a \c Content-Type header is given.
 
-    Responses keep the format of @ref HttpClientDataProvider::HttpClientCallResponseDataType
-    "HttpClientCallResponseDataType", and errors are raised with the codes of the synchronous client: an error status
+    Responses keep the format of
+    @ref HttpClientDataProvider::HttpClientCallResponseDataType "HttpClientCallResponseDataType", and errors are raised with the codes of the synchronous client: an error status
     raises \c HTTP-CLIENT-RECEIVE-ERROR (unless the \c error_passthru option is set), a timeout raises
     \c SOCKET-TIMEOUT, and redirect errors raise \c HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED or
     \c HTTP-CLIENT-REDIRECT-ERROR.  Request paths are percent-encoded like the synchronous client encodes them,

@@ -1099,9 +1099,9 @@ bool always_on = AnthropicLlmProvider::reasoningAlwaysOn("claude-opus-5-5"); # T
 
         Evidence:
         - https://platform.claude.com/docs/en/build-with-claude/thinking ("Response prefill and forced tool use"):
-          "The exceptions are Claude Opus 5.5, Claude Sonnet 5.5, Claude Fable 5.1, and Claude Mythos 5.1, which reject
-          forced tool use on every request with a 400 error. On those models, use \c tool_choice: {"type": "auto"} with
-          strict tool use or structured outputs instead."
+          &ldquo;The exceptions are Claude Opus 5.5, Claude Sonnet 5.5, Claude Fable 5.1, and Claude Mythos 5.1, which reject
+          forced tool use on every request with a 400 error. On those models, use <tt>tool_choice: {&quot;type&quot;: &quot;auto&quot;}</tt> with
+          strict tool use or structured outputs instead.&rdquo;
         - measured on Bedrock on 2026-10-13: Claude Opus 5.5 and Claude Sonnet 5.5 answer a forced tool choice with
           HTTP 400 ("tool_choice: type "tool" and "any" are not supported for this model"), and Claude Opus 5 answers
           it with the tool call; Claude Fable 5.1 and Claude Mythos 5.1 were not available to measure
@@ -1713,8 +1713,7 @@ public class AnthropicLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProvi
         for the models and the evidence) are reported with
         @ref QoreLlmUtils::LlmProviderInfo::reasoning_always_on "LlmProviderInfo::reasoning_always_on", and Claude
         models that reject a forced tool choice (see
-        @ref AnthropicRestClient::AnthropicLlmProvider::rejectsForcedToolChoice()
-        "AnthropicLlmProvider::rejectsForcedToolChoice()") with
+        @ref AnthropicRestClient::AnthropicLlmProvider::rejectsForcedToolChoice() "AnthropicLlmProvider::rejectsForcedToolChoice()") with
         @ref QoreLlmUtils::LlmProviderInfo::rejects_forced_tool_choice "LlmProviderInfo::rejects_forced_tool_choice".
 
         @param model the model ID that calls are made with

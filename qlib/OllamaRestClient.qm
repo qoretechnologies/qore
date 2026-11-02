@@ -63,8 +63,8 @@ module OllamaRestClient {
     Ollama exposes two HTTP surfaces side by side:
 
     - <b>OpenAI-compatible</b> endpoints at <tt>/v1/chat/completions</tt> and
-      <tt>/v1/embeddings</tt> — used by @ref OllamaRestClient::OllamaLlmProvider
-      "OllamaLlmProvider" (a thin @ref OpenAiRestClient::OpenAiLlmProvider
+      <tt>/v1/embeddings</tt> — used by
+      @ref OllamaRestClient::OllamaLlmProvider "OllamaLlmProvider" (a thin @ref OpenAiRestClient::OpenAiLlmProvider
       subclass) so existing OpenAI-shape consumers work unchanged
     - <b>Native</b> endpoints at <tt>/api/embed</tt>, <tt>/api/tags</tt>, <tt>/api/pull</tt> —
       surfaced by the @ref ollamadataproviderintro "OllamaDataProvider" for embeddings (with
@@ -339,8 +339,8 @@ public class OllamaLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProvider
         };
     }
     #! Returns the provider's information for a model
-    /** The GPT-OSS models cannot turn reasoning off (@ref QoreLlmUtils::LlmProviderInfo::reasoning_always_on
-        "LlmProviderInfo::reasoning_always_on").
+    /** The GPT-OSS models cannot turn reasoning off
+        (@ref QoreLlmUtils::LlmProviderInfo::reasoning_always_on "LlmProviderInfo::reasoning_always_on").
 
         Evidence, https://docs.ollama.com/capabilities/thinking: \c think \c false "request[s] no thinking output, if
         the model permits it", and the thinking values of GPT-OSS are \c "low", \c "medium" and \c "high", with

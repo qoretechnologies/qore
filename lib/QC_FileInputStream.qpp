@@ -70,8 +70,8 @@ qclass FileInputStream [system_constructor=FILEINPUTSTREAM_system_constructor; a
 //! Creates the FileInputStream by opening a file
 /**
     @param path the name of the file to open
-    @param timeout_ms a timeout period with a resolution of milliseconds (a @ref relative_dates
-           "relative date/time value"; integer arguments will be assumed to be milliseconds);
+    @param timeout_ms a timeout period with a resolution of milliseconds (a
+           @ref relative_dates "relative date/time value"; integer arguments will be assumed to be milliseconds);
            if not given or negative the operations will never time out
     @param nonblocking_open if @ref True, then the \c O_NONBLOCK flag will be set in the call to <tt>open() (2)</tt>
 

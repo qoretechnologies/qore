@@ -81,7 +81,20 @@ module Schema {
     executing one reviewed DataSchema action with a datasource-aware metadata
     callback.
 
-    @section schema_data_schema Pure Data Schema Definitions
+    Documentation pages:
+    - @subpage schema_data_schema "Pure Data Schema Definitions": defining tables, sequences, indexes, triggers,
+      reference data and migrations in YAML (<tt>.ysm</tt>) or JSON (<tt>.jsm</tt>) files, with shared column and
+      index definitions
+    - @subpage schema_upgrades "Schema Upgrades and Migrations": upgrade phases, data-driven, raw SQL and script
+      migrations, access levels and step dependencies
+    - @subpage schema_qschema "The qschema CLI Tool": syntax, commands, options and a typical workflow
+    - @subpage schema_meta_schema "Meta-Schema Validation": the JSON Schema used to validate schema files and the
+      keys each level accepts
+    - @subpage schema_relnotes "Schema Module Release History": the changes in each version
+*/
+/** @page schema_data_schema Pure Data Schema Definitions
+
+    @tableofcontents
 
     The @ref Schema::DataSchema "DataSchema" class supports defining database schemas using YAML (<tt>.ysm</tt>)
     or JSON (<tt>.jsm</tt>) files instead of Qore code. This makes schemas accessible to non-programmers and
@@ -303,7 +316,7 @@ module Schema {
     after it is populated, with the DDL of the database's SqlUtil driver
     (@ref SqlUtil::AbstractColumn::getModifySql() "AbstractColumn::getModifySql()"); SQLite can do this only from
     SQLite 3.53.0 (see "Changing Columns" in the Sqlite3SqlUtil module), so with an older SQLite the alignment
-    raises \c UNSUPPORTED and is rolled back
+    raises \c UNSUPPORTED and is rolled back.
 
     @par Example: Insert-only tables with auto-triggers
     @code{.yaml}
@@ -373,7 +386,7 @@ module Schema {
     @section schema_shared_definitions Shared Column and Index Definitions
 
     A column used in nine tables should be described once. Declare it under the top-level
-    \c columns (or \c indexes) and draw from it in a table with \c $use; any key set alongside
+    \c columns (or \c indexes) and draw from it in a table with <tt>$use</tt>; any key set alongside
     overrides the shared value.
 
     @par Example: A column defined once and used twice
@@ -402,15 +415,17 @@ module Schema {
     A reference naming a definition that does not exist raises \c DATA-SCHEMA-ERROR at load,
     naming the table, the entry and what it asked for.
 
-    See \c design/data-schema-format.md in the Qore source for the complete format specification.
+    See <tt>design/data-schema-format.md</tt> in the Qore source for the complete format specification.
+*/
+/** @page schema_upgrades Schema Upgrades and Migrations
 
-    @section schema_upgrades Schema Upgrades and Migrations
+    @tableofcontents
 
     When a schema version changes, the @ref Schema::MigrationExecutor "MigrationExecutor" runs
     migration steps to transform data alongside DDL changes. Migrations are defined per-version
     and execute in version order.
 
-    @subsection schema_upgrade_phases Upgrade Phases
+    @section schema_upgrade_phases Upgrade Phases
 
     Each migration has two phases:
     - \b pre_align — runs \b before DDL changes (table creation, column additions, etc.)
@@ -471,7 +486,7 @@ module Schema {
     When upgrading from v1.0.0 to v2.0.0, all three migration blocks execute in order.
     When upgrading from v1.2.0 to v2.0.0, only the v2.0.0 migration executes.
 
-    @subsection schema_upgrade_data Data-Driven Migrations
+    @section schema_upgrade_data Data-Driven Migrations
 
     Most migrations use data-driven actions that work across all database drivers:
 
@@ -545,7 +560,7 @@ module Schema {
             indexes: []
     @endcode
 
-    @subsection schema_upgrade_sql Raw SQL Migrations
+    @section schema_upgrade_sql Raw SQL Migrations
 
     For driver-specific operations not covered by data-driven actions, use the \c sql action.
     This requires \c trusted or \c admin access level.
@@ -570,7 +585,7 @@ module Schema {
     driver-specific SQL statement lists. If a match is found for the current driver, those
     statements execute instead of the \c statements list.
 
-    @subsection schema_upgrade_scripts Script-Based Migrations
+    @section schema_upgrade_scripts Script-Based Migrations
 
     For complex migrations requiring procedural logic, use the \c script action to run a
     Qore script file. This requires \c trusted or \c admin access level.
@@ -608,7 +623,7 @@ module Schema {
     }
     @endcode
 
-    @subsection schema_upgrade_access Access Levels
+    @section schema_upgrade_access Access Levels
 
     Access levels control which migration actions are permitted:
 
@@ -629,7 +644,7 @@ module Schema {
     Use \c untrusted for schemas from external sources where raw SQL execution would be a
     security risk. Use \c trusted (the default) for internal schemas.
 
-    @subsection schema_upgrade_deps Step Dependencies
+    @section schema_upgrade_deps Step Dependencies
 
     By default, steps execute in declaration order. For complex migrations where steps have
     dependencies, use \c id and \c depends_on for explicit ordering:
@@ -664,12 +679,14 @@ module Schema {
 
     The dependency resolver uses topological sort (Kahn's algorithm) with declaration order
     as tiebreaker. Circular dependencies are detected and throw \c MIGRATION-ERROR.
+*/
+/** @page schema_qschema The qschema CLI Tool
 
-    @section schema_qschema The qschema CLI Tool
+    @tableofcontents
 
     The \c qschema command-line tool provides database schema management from <tt>.ysm/</tt><tt>.jsm</tt> files.
 
-    @subsection schema_qschema_syntax Syntax
+    @section schema_qschema_syntax Syntax
 
     @code
     qschema <command> <connection> <schema-file> [options]   # DB commands
@@ -680,7 +697,7 @@ module Schema {
     - A \b connection \b name registered with \c DatasourceProvider (via \c QORE_DATASOURCE_PROVIDERS env var)
     - A direct \b connection \b string: <tt>driver:user/pass&#64;host/db</tt> (e.g., <tt>pgsql:admin/secret&#64;localhost/myapp</tt>)
 
-    @subsection schema_qschema_commands Commands
+    @section schema_qschema_commands Commands
 
     @par align — Create or upgrade a database schema
     @code
@@ -792,7 +809,7 @@ module Schema {
     The legacy \c schema-reverse command is a compatibility alias for \c qschema \c export and accepts the same
     options. New scripts should use \c qschema \c export directly.
 
-    @subsection schema_qschema_options Options
+    @section schema_qschema_options Options
 
     |!Option|!Description
     |\c --data-ts \e name|Data tablespace name
@@ -822,7 +839,7 @@ module Schema {
     value selects all objects of that type; without any selection options, the whole schema is exported.
     Plain views cannot be exported because the data-schema format has no representation for them.
 
-    @subsection schema_qschema_workflow Typical Workflow
+    @section schema_qschema_workflow Typical Workflow
 
     @code
     # 1. Write your schema definition
@@ -843,8 +860,10 @@ module Schema {
     # 6. Reverse-engineer an existing database to start managing it
     qschema export mydb -o existing_schema.ysm
     @endcode
+*/
+/** @page schema_meta_schema Meta-Schema Validation
 
-    @section schema_meta_schema Meta-Schema Validation
+    @tableofcontents
 
     Schema files are validated against a JSON Schema (Draft 2020-12) definition stored in the
     @ref Schema::DataSchemaJsonSchema "DataSchemaJsonSchema" constant. This meta-schema validates
@@ -886,11 +905,12 @@ module Schema {
     The meta-schema defines:
     - Required top-level keys: \c schema (with \c name and \c version)
     - Column types: \c int, \c varchar, \c char, \c timestamp, \c date, \c number, \c blob,
-      \c clob, \c binary, \c bool, \c float, \c text
+      \c clob, \c binary, \c bool, \c float, \c text, and the PostgreSQL pgvector types \c vector, \c halfvec
+      and \c sparsevec
     - Migration action types: all 18 supported actions with their field definitions
     - Reference data categories: \c strict, \c normal, \c create_only, \c insert_only
     - Auto-trigger configuration: \c created, \c modified, \c sequence_columns, \c insert_only
-    - Shared definitions: top-level \c columns and \c indexes, drawn from with \c $use
+    - Shared definitions: top-level \c columns and \c indexes, drawn from with <tt>$use</tt>
 
     The top level of a data schema, a table, its \c auto_triggers configuration, the \c reference_data section
     and each of its tables, and a column written with the \c type shorthand or as a pure driver override accept
@@ -901,10 +921,11 @@ module Schema {
     @ref Schema::DataSchemaLoader::normalize() "DataSchemaLoader::normalize()" rejects these keys as well.  A
     column in the GenericColumnInfo form (with \c qore_type or \c native_type) is kept as written and checked by
     SqlUtil when the table is created.
+*/
+/** @page schema_relnotes Schema Module Release History
 
-    @section schema_relnotes Schema Module Release History
 
-    @subsection schema_v1_9_0 Schema Module v1.9.0
+    @section schema_v1_9_0 Schema Module v1.9.0
     - added @ref Schema::AbstractSchema::alignWithInfoInTransaction()
       for alignment with caller-controlled commit or rollback; DataSchema
       rejects migration actions that commit independently in this mode
@@ -912,12 +933,12 @@ module Schema {
       object filtering, YAML or JSON output and physical-partition options; \c schema-reverse is kept as a
       compatibility alias for it
 
-    @subsection schema_v1_8_0 Schema Module v1.8.0
+    @section schema_v1_8_0 Schema Module v1.8.0
     - added shared \c columns and \c indexes definitions at the top level of a data schema: a
       definition named once and drawn from by any table with \c {$use:\ name}, with any key set
       alongside overriding the shared value — see @ref schema_shared_definitions
 
-    @subsection schema_v1_7_0 Schema Module v1.7.0
+    @section schema_v1_7_0 Schema Module v1.7.0
     - added the additive, data-preserving \c reconcile_table DataSchema
       migration action with bounded conversion preflight, restartable
       backfill, quarantine, indexes, and deterministic aggregate verification
@@ -926,7 +947,7 @@ module Schema {
       schema-alignment DDL without relying on datasource names embedded in
       the schema format
 
-    @subsection schema_v1_6_0 Schema Module v1.6.0
+    @section schema_v1_6_0 Schema Module v1.6.0
     - added \c populate attribute on column definitions for automatic backfill when adding new
       columns to non-empty tables — automates the add-nullable → UPDATE → SET NOT NULL pattern, with the
       \c NOT \c NULL DDL of the database's SqlUtil driver (SQLite: from 3.53.0); a populate column of a table that
@@ -951,7 +972,7 @@ module Schema {
       @ref Schema::MigrationExecutor::migrationApplies() and
       @ref Schema::MigrationExecutor::stepApplies()
 
-    @subsection schema_v1_5_0 Schema Module v1.5.0
+    @section schema_v1_5_0 Schema Module v1.5.0
     - added @ref Schema::DataSchema "DataSchema" class for pure data schema definitions from
       YAML (<tt>.ysm</tt>) or JSON (<tt>.jsm</tt>) files — no Qore code required
     - added @ref Schema::DataSchemaLoader "DataSchemaLoader" class for loading, validating, and
@@ -969,39 +990,39 @@ module Schema {
       rename_column, rename_table, add_index, drop_index, add_constraint,
       drop_constraint, add_trigger, drop_trigger, sql, script
 
-    @subsection schema_v1_4_2 Schema Module v1.4.2
+    @section schema_v1_4_2 Schema Module v1.4.2
     - fixed reporting changes with negative verbose options
       (<a href="https://github.com/qoretechnologies/qore/issues/4702">issue 4702</a>)
 
-    @subsection schema_v1_4_1 Schema Module v1.4.1
+    @section schema_v1_4_1 Schema Module v1.4.1
     - allow information about schema changes after alignments to be returned to the user
       (<a href="https://github.com/qoretechnologies/qore/issues/4637">issue 4637</a>)
 
-    @subsection schema_v1_4 Schema Module v1.4
+    @section schema_v1_4 Schema Module v1.4
     - allow schema operations to be executed with no output (verbose < 0)
       (<a href="https://github.com/qoretechnologies/qore/issues/3996">issue 3996</a>)
 
-    @subsection schema_v1_3_1 Schema Module v1.3.1
+    @section schema_v1_3_1 Schema Module v1.3.1
     - fixed a bug where too little information was passed to post schema alignment code
       (<a href="https://github.com/qoretechnologies/qore/issues/3640">issue 3640</a>)
 
-    @subsection schema_v1_3 Schema Module v1.3
+    @section schema_v1_3 Schema Module v1.3
     - improved logging output when performing schema alignments
       (<a href="https://github.com/qoretechnologies/qore/issues/3114">issue 3114</a>)
     - fixed AbstractSchema::checkExistence()
       (<a href="https://github.com/qoretechnologies/qore/issues/3266">issue 3266</a>)
 
-    @subsection schema_v1_2 Schema Module v1.2
+    @section schema_v1_2 Schema Module v1.2
     - added the following public functions: (<a href="https://github.com/qoretechnologies/qore/issues/1851">issue 1851</a>)
       - Schema::c_blob()
       - Schema::c_clob()
     - updated for complex types
 
-    @subsection schema_v1_1_1 Schema Module v1.1.1
+    @section schema_v1_1_1 Schema Module v1.1.1
     - applied the \a force option (i.e. cascade) when aligning schemas
       (<a href="https://github.com/qoretechnologies/qore/issues/1314">issue 1314</a>)
 
-    @subsection schema_v1_1 Schema Module v1.1
+    @section schema_v1_1 Schema Module v1.1
     - added the following public functions:
       - Schema::c_char()
       - Schema::c_date()
@@ -1020,7 +1041,7 @@ module Schema {
       - fixed a bug where it was not possible to provide Database options when creating schemas
         (<a href="https://github.com/qoretechnologies/qore/issues/501">bug 501</a>)
 
-    @subsection schema_v1_0 Schema Module v1.0
+    @section schema_v1_0 Schema Module v1.0
     - initial release
 */
 

@@ -1280,8 +1280,8 @@ float ml_calinski_harabasz_score(list<list<float>> data, list<float> labels) [do
 }
 
 //! Serializes a fitted ML model to binary format
-/** @param model a fitted ML model — any concrete @ref Qore::ML::AbstractMLModel
-    "AbstractMLModel" subclass (KMeans, LinearRegression, Ridge, MLPipeline,
+/** @param model a fitted ML model — any concrete
+    @ref Qore::ML::AbstractMLModel "AbstractMLModel" subclass (KMeans, LinearRegression, Ridge, MLPipeline,
     SparseMatrix, ...)
     @return binary data containing the serialized model
 
@@ -1344,8 +1344,8 @@ AbstractMLModel ml_deserialize(binary data) [dom=DEFAULT] {
 }
 
 //! Saves a fitted ML model to a file in native binary (.qml) format
-/** @param model a fitted ML model — any concrete @ref Qore::ML::AbstractMLModel
-    "AbstractMLModel" subclass
+/** @param model a fitted ML model — any concrete
+    @ref Qore::ML::AbstractMLModel "AbstractMLModel" subclass
     @param path the file path to save to
     @param options reserved for future use; currently ignored
 

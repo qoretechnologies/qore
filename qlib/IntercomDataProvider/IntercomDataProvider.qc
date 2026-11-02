@@ -41,8 +41,8 @@ public class IntercomDataProvider inherits RestSchemaActions::RestSchemaActionSe
         const TablesChildName = "tables";
 
         #! The ID of the one hand-written action
-        /** @see @ref IntercomDataProvider::IntercomReplyConversationDataProvider
-            "IntercomReplyConversationDataProvider" for why it is not generated
+        /** @see
+            @ref IntercomDataProvider::IntercomReplyConversationDataProvider "IntercomReplyConversationDataProvider" for why it is not generated
         */
         const ReplyConversationAction = "replyConversation";
 

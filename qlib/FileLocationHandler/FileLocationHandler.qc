@@ -458,8 +458,8 @@ string uri = AbstractFileLocationHandler::getFileUri("/var/data/my file#1.xml");
 
     #! Returns the local path named by an absolute \c file:// URI
     /** This is the inverse of @ref getFileUri(): use it to read a resource whose URI was obtained by resolving a
-        reference against a \c file:// @ref FileLocationHandler::FileResourceInfo::effective_location
-        "effective location", as the \c file:// scheme of this module takes a literal path rather than a
+        reference against a \c file://
+        @ref FileLocationHandler::FileResourceInfo::effective_location "effective location", as the \c file:// scheme of this module takes a literal path rather than a
         percent-encoded URI.
 
         The URI must have one of the forms \c file:/path, \c file:///path, or \c file://localhost/path (RFC 8089);

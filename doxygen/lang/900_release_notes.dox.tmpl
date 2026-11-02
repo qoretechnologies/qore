@@ -667,8 +667,8 @@
     @par Dense Buffers and Typed DBI Results
     The new @ref buffer "buffer<T>" type stores numeric, boolean, string and decimal values without boxing, with
     views, elementwise operators and reductions;
-    @ref Qore::SQL::Datasource::selectTyped() "selectTyped()", @ref Qore::SQL::Datasource::selectRowsTyped()
-    "selectRowsTyped()" and @ref Qore::SQL::Datasource::selectColumnar() "selectColumnar()" return typed query
+    @ref Qore::SQL::Datasource::selectTyped() "selectTyped()",
+    @ref Qore::SQL::Datasource::selectRowsTyped() "selectRowsTyped()" and @ref Qore::SQL::Datasource::selectColumnar() "selectColumnar()" return typed query
     results and @ref Qore::SQL::ColumnarResult "ColumnarResult" columns that can be exchanged with Arrow and the
     @ref dataframeintro "dataframe" module.  See @ref buffer "Buffer".
 
@@ -920,6 +920,10 @@
     - @ref loggerintro "Logger" module
       - memory-based backpressure for @ref Qore::Logger::LoggerAppenderQueue "LoggerAppenderQueue"
       - see @ref logger_v1_1 for all changes
+
+    - @ref mapperintro "Mapper" module
+      - the documented @ref mapperoptions "trunc_all" option is accepted; it was rejected with \c MAP-ERROR
+      - see @ref mapperv1_8 for all changes
 
     - @ref mewsrestclientintro "MewsRestClient" module
       - the connection URL is not generated automatically and must be supplied by the user
@@ -7087,8 +7091,8 @@
       possible for a thread to be canceled while holding a @ref Qore::Thread::Mutex "Mutex" (for example) and then for another
       thread to deadlock trying to acquire the @ref Qore::Thread::Mutex "Mutex" and therefore for the process to deadlock because
       pthread_mutex_lock() is not a cancellation point. The solution was to cancel all threads first, then wait half a second, then call exit()
-    - fixed a bug where global variables were being evaluated with strict mathematical boolean evaluation even when @ref perl-bool-eval
-      "%perl-bool-eval" was enabled (which is the default)
+    - fixed a bug where global variables were being evaluated with strict mathematical boolean evaluation even when
+      @ref perl-bool-eval "%perl-bool-eval" was enabled (which is the default)
     - fixed bug in @ref Qore::parseBase64String() and @ref Qore::parseBase64StringToString() when called with an empty string argument; in this case uninitialized memory was returned
     - fixed runtime dynamic memory leaks in the @ref select and @ref map operators when used with iterators
     - do thread-specific cleanup in the main thread when cleaning up/shutting down the qore library

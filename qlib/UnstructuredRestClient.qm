@@ -474,8 +474,8 @@ public class UnstructuredRestConnection inherits RestClient::RestConnection {
     #! Returns a client for the Unstructured Platform API
     /** @param rtopts runtime options for connection acquisition
 
-        @return a @ref UnstructuredRestClient::UnstructuredPlatformRestClientIo
-        "UnstructuredPlatformRestClientIo" for the deployment this connection targets
+        @return a
+        @ref UnstructuredRestClient::UnstructuredPlatformRestClientIo "UnstructuredPlatformRestClientIo" for the deployment this connection targets
 
         The Platform API takes the same API key as the partition API, so this reuses the
         connection's credentials; its host is derived from the connection URL unless the

@@ -334,8 +334,8 @@ public hashdecl DataProviderSummaryInfo inherits NameDescInfo {
     bool supports_bulk_read = False;
 
     #! Native bulk read shapes supported by the data provider
-    /** If not set, the provider is assumed to return @ref DataProvider::DataProviderShape::HashOfLists
-        "HashOfLists" from bulk read APIs.  Providers that can preserve dense columnar data should include
+    /** If not set, the provider is assumed to return
+        @ref DataProvider::DataProviderShape::HashOfLists "HashOfLists" from bulk read APIs.  Providers that can preserve dense columnar data should include
         @ref DataProvider::DataProviderShape::BufferColumns "BufferColumns" or
         @ref DataProvider::DataProviderShape::DataFrameBlock "DataFrameBlock".
 
@@ -350,8 +350,8 @@ public hashdecl DataProviderSummaryInfo inherits NameDescInfo {
     bool supports_bulk_create = False;
 
     #! Native bulk create input shapes supported by the data provider
-    /** If not set, the provider is assumed to accept @ref DataProvider::DataProviderShape::HashOfLists
-        "HashOfLists".  Providers that can consume dense columnar data directly should include
+    /** If not set, the provider is assumed to accept
+        @ref DataProvider::DataProviderShape::HashOfLists "HashOfLists".  Providers that can consume dense columnar data directly should include
         @ref DataProvider::DataProviderShape::BufferColumns "BufferColumns" or
         @ref DataProvider::DataProviderShape::DataFrameBlock "DataFrameBlock".
 
@@ -366,8 +366,8 @@ public hashdecl DataProviderSummaryInfo inherits NameDescInfo {
     bool supports_bulk_upsert = False;
 
     #! Native bulk upsert input shapes supported by the data provider
-    /** If not set, the provider is assumed to accept @ref DataProvider::DataProviderShape::HashOfLists
-        "HashOfLists".  Providers that can consume dense columnar data directly should include
+    /** If not set, the provider is assumed to accept
+        @ref DataProvider::DataProviderShape::HashOfLists "HashOfLists".  Providers that can consume dense columnar data directly should include
         @ref DataProvider::DataProviderShape::BufferColumns "BufferColumns" or
         @ref DataProvider::DataProviderShape::DataFrameBlock "DataFrameBlock".
 
@@ -2704,8 +2704,8 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
 
     #! Creates the given records in the data provider from any supported bulk shape
     /** @param recs a shaped record block; supported shapes are @ref DataProviderShape::HashOfLists "HashOfLists",
-        @ref DataProviderShape::BufferColumns "BufferColumns", @ref DataProviderShape::DataFrameBlock
-        "DataFrameBlock", and a single row record
+        @ref DataProviderShape::BufferColumns "BufferColumns",
+        @ref DataProviderShape::DataFrameBlock "DataFrameBlock", and a single row record
         @param create_options the create options after processing by validateCreateOptions()
 
         @return the data written to the data provider for each record in bulk format
@@ -2901,8 +2901,8 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
 
     #! Upserts the given records in the data provider from any supported bulk shape
     /** @param recs a shaped record block; supported shapes are @ref DataProviderShape::HashOfLists "HashOfLists",
-        @ref DataProviderShape::BufferColumns "BufferColumns", @ref DataProviderShape::DataFrameBlock
-        "DataFrameBlock", and a single row record
+        @ref DataProviderShape::BufferColumns "BufferColumns",
+        @ref DataProviderShape::DataFrameBlock "DataFrameBlock", and a single row record
         @param upsert_options the upsert options; will be processed by validateUpsertOptions()
 
         @return an array of upsert results corresponding to each record in order
@@ -8328,8 +8328,8 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
 
     #! Creates records from any shaped bulk block
     /** The default implementation converts the input to hash-of-lists compatibility format. Providers that list
-        @ref DataProviderShape::BufferColumns "BufferColumns" or @ref DataProviderShape::DataFrameBlock
-        "DataFrameBlock" in \c bulk_create_shapes should override this method to consume those shapes directly.
+        @ref DataProviderShape::BufferColumns "BufferColumns" or
+        @ref DataProviderShape::DataFrameBlock "DataFrameBlock" in \c bulk_create_shapes should override this method to consume those shapes directly.
 
         @since DataProvider 3.5
     */
@@ -8361,8 +8361,8 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
 
     #! Upserts records from any shaped bulk block
     /** The default implementation converts the input to hash-of-lists compatibility format. Providers that list
-        @ref DataProviderShape::BufferColumns "BufferColumns" or @ref DataProviderShape::DataFrameBlock
-        "DataFrameBlock" in \c bulk_upsert_shapes should override this method to consume those shapes directly.
+        @ref DataProviderShape::BufferColumns "BufferColumns" or
+        @ref DataProviderShape::DataFrameBlock "DataFrameBlock" in \c bulk_upsert_shapes should override this method to consume those shapes directly.
 
         @since DataProvider 3.5
     */

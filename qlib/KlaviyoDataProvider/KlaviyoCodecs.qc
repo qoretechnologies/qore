@@ -50,7 +50,7 @@ public namespace KlaviyoDataProvider {
     A field a codec does not declare cannot be filtered on through the action; \c make-api-call reaches the
     rest of the syntax.
 
-    @section klaviyocodecs_campaign The Campaign Listing Is the Reason \c lift Exists
+    @section klaviyocodecs_campaign The Campaign Listing Is the Reason for the lift Overlay
 
     \c "GET /api/campaigns" declares \c filter <b>required</b>, because Klaviyo will not list campaigns across
     channels: a request has to say \c "equals(messages.channel,\"email\")" or the SMS equivalent.  The

@@ -51,8 +51,8 @@ module UrlDownloader {
     \c data, \c sftp, and \c conn locations, and further schemes registered by other modules), to files or to an
     output stream, without holding them in memory.  It is the engine of the \c qget program and can be used by
     any program that needs to download files:
-    - HTTP/1.1, HTTP/2, and HTTP/3 through @ref HttpClientIo::HttpClientConnectionManager
-      "HttpClientConnectionManager", with connections reused between downloads from the same server
+    - HTTP/1.1, HTTP/2, and HTTP/3 through
+      @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager", with connections reused between downloads from the same server
     - redirects are followed up to a configurable limit
     - data is written to a temporary <tt>.part</tt> file that is renamed when the download is complete, so an incomplete
       file never has the final name

@@ -82,8 +82,8 @@ public hashdecl PineconeSchemaProvenanceInfo {
     |db_control|inference|the integrated-embedding index action offers a model dropdown
     |db_data|db_control, inference|the index dropdown and the host source come from the control plane; the reranking model from inference
 
-    The control-plane set also declares the @ref PineconeDataProvider::PineconeManifest::HostSources
-    "host source" that routes every data-plane request, because it exports the lookup that resolves it.
+    The control-plane set also declares the
+    @ref PineconeDataProvider::PineconeManifest::HostSources "host source" that routes every data-plane request, because it exports the lookup that resolves it.
 
     @section pineconeschema_version All Four Move Together
 

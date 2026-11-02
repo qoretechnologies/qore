@@ -148,12 +148,15 @@ module SqlUtil {
     @ref SqlUtil::AbstractSqlUtilBase::getSqlIdentifier() "getSqlIdentifier()" for any name that can come from
     untrusted data.
 
-    @section sqlutil_relnotes Release Notes for the SqlUtil Module
+    See @subpage sqlutil_relnotes "Release Notes for the SqlUtil Module" for the changes in each version.
+*/
+/** @page sqlutil_relnotes Release Notes for the SqlUtil Module
 
-    @subsection sqlutilv3_11_0 SqlUtil v3.11.0
+
+    @section sqlutilv3_11_0 SqlUtil v3.11.0
     - added @ref SqlUtil::AbstractDatabase::refreshMaterializedView() "AbstractDatabase::refreshMaterializedView()"
-      and @ref SqlUtil::AbstractDatabase::getMaterializedViewRefreshOptions()
-      "AbstractDatabase::getMaterializedViewRefreshOptions()" to refresh the stored data of a materialized view, with
+      and
+      @ref SqlUtil::AbstractDatabase::getMaterializedViewRefreshOptions() "AbstractDatabase::getMaterializedViewRefreshOptions()" to refresh the stored data of a materialized view, with
       the transaction semantics of each database; a database without materialized views raises
       \c MATERIALIZED-VIEW-ERROR
     - added @ref SqlUtil::AbstractDatabase::supportsMaterializedViews() "AbstractDatabase::supportsMaterializedViews()"
@@ -166,8 +169,8 @@ module SqlUtil {
       with columns whose descriptions all have the same value type, such as <tt>{"id": {"qore_type": "integer"}}</tt>;
       applying the description raised \c RUNTIME-TYPE-ERROR
     - a database module can give the SQL of the comparison of a column with a value in a where clause from the
-      column's type with @ref SqlUtil::AbstractTable::getWhereColumnComparisonIntern()
-      "AbstractTable::getWhereColumnComparisonIntern()" and
+      column's type with
+      @ref SqlUtil::AbstractTable::getWhereColumnComparisonIntern() "AbstractTable::getWhereColumnComparisonIntern()" and
       @ref SqlUtil::AbstractTable::getWhereColumnIntern() "AbstractTable::getWhereColumnIntern()"; the Oracle
       module uses it to bind a date compared with a \c DATE or \c TIMESTAMP column in the column's type
       (<a href="https://github.com/qoretechnologies/qore/issues/5563">issue 5563</a>)
@@ -183,8 +186,8 @@ module SqlUtil {
       Added @ref SqlUtil::AbstractSqlUtilBase::getSqlIdentifier() "getSqlIdentifier()",
       @ref SqlUtil::AbstractTable::getAliasSqlName() "getAliasSqlName()" and
       @ref SqlUtil::AbstractTable::getDelimitedAliasName() "getDelimitedAliasName()"
-    - Added @ref SqlUtil::AbstractDatabase::getCurrentSchemaPhysicalSize()
-      "AbstractDatabase::getCurrentSchemaPhysicalSize()", which measures the physical size of the schema that
+    - Added
+      @ref SqlUtil::AbstractDatabase::getCurrentSchemaPhysicalSize() "AbstractDatabase::getCurrentSchemaPhysicalSize()", which measures the physical size of the schema that
       unqualified names resolve to on the connection, without the cost of measuring the whole database, on
       PostgreSQL, Oracle, MySQL/MariaDB and SQL Server.
     - foreign constraints have referential actions: the \c on_delete and \c on_update options and members (see
@@ -317,8 +320,8 @@ module SqlUtil {
       rollback, and unsupported database drivers reject the operation without changing data
     - added explicit capability-checked non-key update row locks: status writers can permit independent
       foreign-key checks while continuing to exclude competing writers, deletes and key changes
-    - added capability-checked @ref SqlUtil::AbstractTable::dropEmptyPartition()
-      "dropEmptyPartition()" and its commit wrapper: physical identity, emptiness proof, and removal are
+    - added capability-checked
+      @ref SqlUtil::AbstractTable::dropEmptyPartition() "dropEmptyPartition()" and its commit wrapper: physical identity, emptiness proof, and removal are
       protected by the same database locks, preventing late inserts from being lost during retention
     - callers must supply current catalog discovery, use a dedicated transaction, and reconcile ambiguous
       results before retrying; PostgreSQL supplies the first implementation, with bounded lock waits and
@@ -337,8 +340,8 @@ module SqlUtil {
       bounded, driver-independent recovery of complete idempotent transaction
       bodies after a transaction abort (a deadlock or any other serialization
       failure), database failover, and datasource-pool timeout errors
-    - added @ref SqlUtil::AbstractDatabase::getSchemaPhysicalSize()
-      "AbstractDatabase::getSchemaPhysicalSize()" for portable schema-level
+    - added
+      @ref SqlUtil::AbstractDatabase::getSchemaPhysicalSize() "AbstractDatabase::getSchemaPhysicalSize()" for portable schema-level
       physical storage measurement; PostgreSQL includes tables, partitions,
       materialized views, indexes, TOAST storage, and sequences without
       double counting
@@ -368,8 +371,8 @@ module SqlUtil {
       object that the caller cannot reach
     - fixed an exception raised by an @ref sql_callback "sql_callback" for a list of SQL statements writing the
       failed statement to standard output; the statement is only passed to the @ref error_callback "error_callback"
-    - added a portable temporary-table abstraction: @ref SqlUtil::AbstractDatabase::supportsTempTables()
-      "AbstractDatabase::supportsTempTables()" and @ref SqlUtil::AbstractDatabase::createTempTable()
+    - added a portable temporary-table abstraction:
+      @ref SqlUtil::AbstractDatabase::supportsTempTables() "AbstractDatabase::supportsTempTables()" and @ref SqlUtil::AbstractDatabase::createTempTable()
       "AbstractDatabase::createTempTable()" create a temporary table from an in-memory column description (no
       catalog introspection), with a @ref SqlUtil::TempTableHelper "TempTableHelper" scope guard for
       exception-safe cleanup; see @ref temporary_tables for details and a worked fill-and-join example.  This
@@ -412,8 +415,7 @@ module SqlUtil {
       byte sizes where equivalent catalog metadata is available
     - enforced exact datasource object identity for create-as-select and insert-select operations; added
       @ref SqlUtil::AbstractTable::getInsertFromSelectSql() "AbstractTable::getInsertFromSelectSql()" and
-      @ref SqlUtil::AbstractTable::getInsertFromSelectSqlWithInfo()
-      "AbstractTable::getInsertFromSelectSqlWithInfo()" for non-executing SQL preview with bind arguments, and
+      @ref SqlUtil::AbstractTable::getInsertFromSelectSqlWithInfo() "AbstractTable::getInsertFromSelectSqlWithInfo()" for non-executing SQL preview with bind arguments, and
       added reliable target/source projection-cardinality validation
     - added @ref SqlUtil::generate_auto_triggers() "generate_auto_triggers()" and
       @ref SqlUtil::generate_auto_triggers_all_drivers() "generate_auto_triggers_all_drivers()" for standard
@@ -431,37 +433,37 @@ module SqlUtil {
     - fixed the foreign constraint DDL of Oracle, MySQL, SQL Server, Firebird and SQLite to keep quoted and renamed
       column names on both sides of the constraint
 
-    @subsection sqlutilv1_9_3 SqlUtil v1.9.3
+    @section sqlutilv1_9_3 SqlUtil v1.9.3
     - fixed support for orderby with a matching unique index
       (<a href="https://github.com/qoretechnologies/qore/issues/4977">issue 4977</a>)
     - added support for complex expressions and field reference in update operations
       (<a href="https://github.com/qoretechnologies/qore/issues/4959">issue 4959</a>)
 
-    @subsection sqlutilv1_9_2 SqlUtil v1.9.2
-    - fixed a bug where @ref SqlUtil::AbstractTable::getDropAllConstraintsAndIndexesOnColumnSql()
-      "AbstractTable::getDropAllConstraintsAndIndexesOnColumnSql()" did not work on foreign constraints
+    @section sqlutilv1_9_2 SqlUtil v1.9.2
+    - fixed a bug where
+      @ref SqlUtil::AbstractTable::getDropAllConstraintsAndIndexesOnColumnSql() "AbstractTable::getDropAllConstraintsAndIndexesOnColumnSql()" did not work on foreign constraints
       (<a href="https://github.com/qoretechnologies/qore/issues/4875">issue 4875</a>)
 
-    @subsection sqlutilv1_9_1 SqlUtil v1.9.1
+    @section sqlutilv1_9_1 SqlUtil v1.9.1
     - set the column size in the type when creating types for \c VARCHAR columns
       (<a href="https://github.com/qoretechnologies/qore/issues/4832">issue 4832</a>)
 
-    @subsection sqlutilv1_9 SqlUtil v1.9
+    @section sqlutilv1_9 SqlUtil v1.9
     - updated the logic used to find implementation-specific %SqlUtil modules to use the new
       @ref Qore::SQL::AbstractDatasource::getDriverRealName() "AbstractDatasource::getDriverRealName()" APIs to
       better support the \c jdbc and \c odbc drivers
       (<a href="https://github.com/qoretechnologies/qore/issues/4684">issue 4684</a>)
 
-    @subsection sqlutilv1_8_1 SqlUtil v1.8.1
+    @section sqlutilv1_8_1 SqlUtil v1.8.1
     - fixed a bug serializing and deserializing \c Table objects using the \c odbc driver
       (<a href="https://github.com/qoretechnologies/qore/issues/4620">issue 4620</a>)
 
-    @subsection sqlutilv1_8 SqlUtil v1.8
+    @section sqlutilv1_8 SqlUtil v1.8
     - implemented support for generating queries based on generic expressions using the DataProvider module's generic
       expression support
       (<a href="https://github.com/qoretechnologies/qore/issues/4538">issue 4538</a>)
 
-    @subsection sqlutilv1_7_5 SqlUtil v1.7.5
+    @section sqlutilv1_7_5 SqlUtil v1.7.5
     - respect "or nothing" %Qore types when mapping to column types
       (<a href="https://github.com/qoretechnologies/qore/issues/4400">issue 4400</a>)
     - allow a \c VARCHAR column to be created without a size, assume a default size
@@ -469,88 +471,88 @@ module SqlUtil {
     - fixed a bug where objects created did not always contain the actual name used to create it
       (<a href="https://github.com/qoretechnologies/qore/issues/4396">issue 4396</a>)
 
-    @subsection sqlutilv1_7_4 SqlUtil v1.7.4
+    @section sqlutilv1_7_4 SqlUtil v1.7.4
     - fixed upsert usage with unique constraints and indices when there is a non-matching PK
       (<a href="https://github.com/qoretechnologies/qore/issues/4347">issue 4347</a>)
     - added support for starting a transaction with @ref SqlUtil::Table "Table" and
       @ref SqlUtil::AbstractTable "AbstractTable" objects
       (<a href="https://github.com/qoretechnologies/qore/issues/4346">issue 4346</a>)
 
-    @subsection sqlutilv1_7_3 SqlUtil v1.7.3
+    @section sqlutilv1_7_3 SqlUtil v1.7.3
     - added APIs to enable duplicate record creation errors to be detected
       (<a href="https://github.com/qoretechnologies/qore/issues/4308">issue 4308</a>)
 
-    @subsection sqlutilv1_7_2 SqlUtil v1.7.2
+    @section sqlutilv1_7_2 SqlUtil v1.7.2
     - fixed a bug handling foreign constraints backed by indices on DBs that link indices and constraints
       automatically
       (<a href="https://github.com/qoretechnologies/qore/issues/4269">issue 4269</a>)
 
-    @subsection sqlutilv1_7_1 SqlUtil v1.7.1
+    @section sqlutilv1_7_1 SqlUtil v1.7.1
     - fixed a bug where pseudocolumn references were used ambiguously in joins
       (<a href="https://github.com/qoretechnologies/qore/issues/4214">issue 4214</a>)
 
-    @subsection sqlutilv1_7 SqlUtil v1.7
+    @section sqlutilv1_7 SqlUtil v1.7
     - added the @ref SqlUtil::SqlResultInfo "SqlResultInfo" hash and methods that return this hash instead of taking
       an optional output reference for SQL for use in languages that do not support lvalue references
       (<a href="https://github.com/qoretechnologies/qore/issues/3934">issue 3934</a>)
 
-    @subsection sqlutilv1_6 SqlUtil v1.6
+    @section sqlutilv1_6 SqlUtil v1.6
     - added support for the DataProvider module
       (<a href="https://github.com/qoretechnologies/qore/issues/3545">issue 3545</a>)
     - implemented the @ref SqlUtil::op_in_select() "op_in_select()" function for @ref where_clauses
       (<a href="https://github.com/qoretechnologies/qore/issues/3371">issue 3371</a>)
 
-    @subsection sqlutilv1_5_2 SqlUtil v1.5.2
+    @section sqlutilv1_5_2 SqlUtil v1.5.2
     - implemented the @ref SqlUtil::AbstractDatabase::getPhysicalSize() functionality
       (<a href="https://github.com/qoretechnologies/qore/issues/3385">issue 3385</a>)
 
-    @subsection sqlutilv1_5_1 SqlUtil v1.5.1
+    @section sqlutilv1_5_1 SqlUtil v1.5.1
     - fixed a bug that could lead to a deadlock when DML methods on the
       @ref SqlUtil::AbstractTable "AbstractTable" class are used with a datasource pool with connection contention
       (<a href="https://github.com/qoretechnologies/qore/issues/3352">issue 3352</a>)
 
-    @subsection sqlutilv1_5 SqlUtil v1.5
+    @section sqlutilv1_5 SqlUtil v1.5
     - implemented the @ref SqlUtil::AbstractTable::getStatementNoExec() "AbstractTable::getStatementNoExec()" method (<a href="https://github.com/qoretechnologies/qore/issues/2773">issue 2773</a>)
     - added support for serializing and deserializing @ref SqlUtil::AbstractTable "AbstractTable" objects (<a href="https://github.com/qoretechnologies/qore/issues/2663">issue 2663</a>)
     - updated the module to use the @ref Qore::SQL::AbstractSQLStatement "AbstractSQLStatement" class instead of the @ref Qore::SQL::SQLStatement "SQLStatement" (<a href="https://github.com/qoretechnologies/qore/issues/2326">issue 2326</a>)
     - deprecated @ref SqlUtil::AbstractTable::getRowIterator() "AbstractTable::getRowIterator()" for @ref SqlUtil::AbstractTable::getStatement() "AbstractTable::getStatement()" (<a href="https://github.com/qoretechnologies/qore/issues/2326">issue 2326</a>)
 
-    @subsection sqlutilv1_4_4 SqlUtil v1.4.4
+    @section sqlutilv1_4_4 SqlUtil v1.4.4
     - implemented the @ref SqlUtil::AbstractTable::getRowIteratorNoExec() "AbstractTable::getRowIteratorNoExec()" method (<a href="https://github.com/qoretechnologies/qore/issues/2773">issue 2773</a>)
 
-    @subsection sqlutilv1_4_3 SqlUtil v1.4.3
+    @section sqlutilv1_4_3 SqlUtil v1.4.3
     - implemented support for an optional error-handling method in SQL callbacks to allow SqlUtil to recover from error scenarios in schema creation/alignment (<a href="https://github.com/qoretechnologies/qore/issues/2643">issue 2643</a>)
 
-    @subsection sqlutilv1_4_2 SqlUtil v1.4.2
+    @section sqlutilv1_4_2 SqlUtil v1.4.2
     - implemented support for literal values in column operators taking column arguments with @ref SqlUtil::cop_value() "cop_value()" (<a href="https://github.com/qoretechnologies/qore/issues/2555">issue 2555</a>)
 
-    @subsection sqlutilv1_4_1 SqlUtil v1.4.1
+    @section sqlutilv1_4_1 SqlUtil v1.4.1
     - implemented support for user custom column operators (<a href="https://github.com/qoretechnologies/qore/issues/2314">issue 2314</a>)
 
-    @subsection sqlutilv1_4 SqlUtil v1.4
+    @section sqlutilv1_4 SqlUtil v1.4
     - fixed a bug in update and upsert statement generation when the given data does not have enough columns to use the unique index found, an error message is generated that contains all the columns names instead of just the column names required by the index (<a href="https://github.com/qoretechnologies/qore/issues/1013">issue 1013</a>)
     - implemented @ref cop_trunc_date() operator (<a href="https://github.com/qoretechnologies/qore/issues/2032">issue 2032</a>)
     - updated to support complex types (<a href="https://github.com/qoretechnologies/qore/issues/1724">issue 1724</a>)
     - implemented analytic/window functions: new functions [<a href="https://github.com/qoretechnologies/qore/issues/2203">issue 2202</a>]
     - implemented analytic/window functions: cop_over full support including ORDER BY [<a href="https://github.com/qoretechnologies/qore/issues/2203">issue 2203</a>]
 
-    @subsection sqlutilv1_3_4 SqlUtil v1.3.4
+    @section sqlutilv1_3_4 SqlUtil v1.3.4
     - fixed a bug in with column aliases that are reserved words (<a href="https://github.com/qoretechnologies/qore/issues/2163">issue 2163</a>)
 
-    @subsection sqlutilv1_3_3 SqlUtil v1.3.3
+    @section sqlutilv1_3_3 SqlUtil v1.3.3
     - fixed a bug in the \c offset query hash argument in SQL operation methods (<a href="https://github.com/qoretechnologies/qore/issues/1880">issue 1880</a>)
     - implemented the @ref select_option_alias "alias" select option to fix a bug that prohibited only columns from the main query to be selected when joins are used (<a href="https://github.com/qoretechnologies/qore/issues/1909">issue 1909</a>)
 
-    @subsection sqlutilv1_3_2 SqlUtil v1.3.2
+    @section sqlutilv1_3_2 SqlUtil v1.3.2
     - fixed schema alignment skips column with name "driver" (<a href="https://github.com/qoretechnologies/qore/issues/1684">issue 1684</a>)
     - fixed sqlutil schema management: functional indexes are rejected without () in name (<a href="https://github.com/qoretechnologies/qore/issues/1610">issue 1610</a>)
 
-    @subsection sqlutilv1_3_1 SqlUtil v1.3.1
+    @section sqlutilv1_3_1 SqlUtil v1.3.1
     - implemented the \a force option (i.e. cascade) for dropping code objects (<a href="https://github.com/qoretechnologies/qore/issues/1314">issue 1314</a>)
     - fixed the ignored character_semantics column option in schema alignmed (<a href="https://github.com/qoretechnologies/qore/issues/1379">issue 1379</a>)
     - implemented the @ref SqlUtil::cop_length() column function (<a href="https://github.com/qoretechnologies/qore/issues/1395">issue 1395</a>)
 
-    @subsection sqlutilv1_3 SqlUtil v1.3
+    @section sqlutilv1_3 SqlUtil v1.3
     - implemented insert option support (see @ref SqlUtil::AbstractTable::InsertOptions "AbstractTable::InsertOptions") with the \c "returning" clause in supported drivers
     - implemented support for late table resolution in joins to support executing SQL from serialized parameters
     - improved error messages for common errors such as join errors
@@ -593,7 +595,7 @@ module SqlUtil {
     - fixed a bug where updating an index without any source constraints caused an invalid exception to be raised (<a href="https://github.com/qoretechnologies/qore/issues/768">issue 768</a>)
     - fixed a bug in @ref SqlUtil::AbstractTable::update() "AbstractTable::update()" with sequence operators (<a href="https://github.com/qoretechnologies/qore/issues/942">issue 942</a>)
 
-    @subsection sqlutilv1_2 SqlUtil v1.2
+    @section sqlutilv1_2 SqlUtil v1.2
     - added insert operator support; for example, for inserting with values from sequences
     - added new upsert constant maps: @ref SqlUtil::AbstractTable::UpsertStrategyMap "UpsertStrategyMap" and @ref SqlUtil::AbstractTable::UpsertStrategyDescriptionMap "UpsertStrategyDescriptionMap"
     - added static SqlUtil::AbstractSqlUtilBase::getDatasourceDesc() method
@@ -603,13 +605,13 @@ module SqlUtil {
     - fixed a bug in schema management where excessively verbose column aliases were used that caused errors when automatically updating columns with existing rows and new default values and non-null contraints with PostgreSQL databases
     - fixed a bug where select and row iterator operations could fail with certain select hash arguments without a \c "columns" entry but where column names were otherwise required
 
-    @subsection sqlutilv1_1 SqlUtil v1.1
+    @section sqlutilv1_1 SqlUtil v1.1
     - implemented new upsert strategy @ref SqlUtil::AbstractTable::UpsertInsertOnly
     - adding a default value to a column with a not null constraint and existing data populates existing null columns with the new default value automatically in schema alignment
     - fixed an infinitely recursive call in SqlUtil::AbstractTable::del()
     - fixed bugs generating "create table" and "align table" SQL with DBs where unique indexes automatically create unique constraints (ex: MySQL)
 
-    @subsection sqlutilv1_0 SqlUtil v1.0
+    @section sqlutilv1_0 SqlUtil v1.0
     - initial release
 */
 /** @page sql_operations SQL Operations
@@ -9953,8 +9955,8 @@ AbstractForeignConstraint ix = fcs.fk_jobs_job_defs;
 
             #! @ref True "True" if constraint checks can be deferred until transaction commit
             /** Only the PostgreSQL and Oracle drivers create deferrable foreign constraints; the other drivers refuse
-                the \c deferrable option (see @ref SqlUtil::AbstractTable::ForeignConstraintOptions
-                "ForeignConstraintOptions"), and their SQL does not give this member
+                the \c deferrable option (see
+                @ref SqlUtil::AbstractTable::ForeignConstraintOptions "ForeignConstraintOptions"), and their SQL does not give this member
             */
             bool deferrable;
 

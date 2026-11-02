@@ -748,8 +748,8 @@ class HttpIoSupport {
         const DefaultAssumedEncoding = "ISO-8859-1";
 
         #! The number of bytes examined at the start of a text body to determine its encoding
-        /** The size of the WHATWG MIME Sniffing resource header; see @ref Qore::get_http_body_encoding()
-            "get_http_body_encoding()"
+        /** The size of the WHATWG MIME Sniffing resource header; see
+            @ref Qore::get_http_body_encoding() "get_http_body_encoding()"
         */
         const EncodingSniffSize = 1445;
 

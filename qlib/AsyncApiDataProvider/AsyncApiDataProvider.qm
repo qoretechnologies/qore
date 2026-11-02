@@ -65,8 +65,7 @@ module AsyncApiDataProvider {
     an AsyncAPI schema, while the @ref AsyncApiDataProvider::AsyncApiOperationDataProvider "AsyncApiOperationDataProvider"
     class supports the @ref dataproviderintro "data provider" message API for communication with messaging servers.
 
-    @ref AsyncApiDataProvider::AsyncApiDataProvider::getApiManagementEndpoints()
-    "AsyncApiDataProvider::getApiManagementEndpoints()" returns the inbound and outbound operations of a schema for
+    @ref AsyncApiDataProvider::AsyncApiDataProvider::getApiManagementEndpoints() "AsyncApiDataProvider::getApiManagementEndpoints()" returns the inbound and outbound operations of a schema for
     API management.  Each endpoint has a \c display_name naming the action and the channel address (for example
     <tt>"send rma"</tt>), which is the event-API counterpart of an HTTP method and path; operations that would share a
     label also carry their operation ID, so that a label always identifies exactly one endpoint.

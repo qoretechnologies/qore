@@ -255,8 +255,7 @@ module ServiceNowRestDataProvider {
       \c getAsync() or created from the options; a synchronous
       @ref ServiceNowRestClient::ServiceNowRestClient "ServiceNowRestClient" passed to the data provider, directly
       or in the \c snrestclient option, is converted with
-      @ref ServiceNowRestDataProvider::ServiceNowRestDataProviderBase::getAsyncClient()
-      "ServiceNowRestDataProviderBase::getAsyncClient()"
+      @ref ServiceNowRestDataProvider::ServiceNowRestDataProviderBase::getAsyncClient() "ServiceNowRestDataProviderBase::getAsyncClient()"
       (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
     - the child data providers take a @ref ServiceNowRestClient::ServiceNowRestClientIo "ServiceNowRestClientIo"
     - fixed passing a REST client in the \c snrestclient option, which always failed with

@@ -454,8 +454,8 @@ public class EmbedderRateLimiter {
 
     #! Admits one request, waiting until it fits in the window
     /** @param tokens the request's estimated tokens
-        @param deadline_us the latest monotonic time (see @ref Qore::clock_get_monotonic_us()
-            "clock_get_monotonic_us()") at which the request may be admitted
+        @param deadline_us the latest monotonic time (see
+            @ref Qore::clock_get_monotonic_us() "clock_get_monotonic_us()") at which the request may be admitted
 
         @return the ticket identifier to pass to @ref settle()
 

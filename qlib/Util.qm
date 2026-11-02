@@ -102,9 +102,12 @@ module Util {
     Classes:
     - @ref Util::TerminalColor "TerminalColor"
 
-    @section utilrelnotes Release Notes
+    See @subpage utilrelnotes "Release Notes" for the changes in each version.
+*/
+/** @page utilrelnotes Release Notes
 
-    @subsection util_3_0 Util 3.0
+
+    @section util_3_0 Util 3.0
     - @ref Util::get_exception_string() "get_exception_string()" shows a
       @ref Qore::RuntimeDiagnosticInfo "RuntimeDiagnosticInfo" exception argument as a hint with its suggestions
     - added get_http_endpoint_url() for fixed HTTP endpoints with a fallback path, preserving queries and
@@ -144,7 +147,7 @@ module Util {
     - fixed the @ref Util::glob_to_regex() "glob_to_regex()" function
       (<a href="https://github.com/qoretechnologies/qore/issues/4996">issue 4996</a>)
 
-    @subsection util_2_1_0 Util 2.1.0
+    @section util_2_1_0 Util 2.1.0
     - added
       - @ref Util::is_ip_private() "is_ip_private()"
       - @ref Util::is_ip_private_ex() "is_ip_private_ex()"
@@ -152,67 +155,67 @@ module Util {
       - @ref Util::ip_address_type_ex() "ip_address_type_ex()"
       (<a href="https://github.com/qoretechnologies/qore/issues/4966">issue 4966</a>)
 
-    @subsection util_2_0_1 Util 2.0.1
+    @section util_2_0_1 Util 2.0.1
     - fixed base64 and base64url file options in @ref Util::parse_to_qore_value() "parse_to_qore_value()"
       (<a href="https://github.com/qoretechnologies/qore/issues/4948">issue 4948</a>)
 
-    @subsection util_2_0 Util 2.0
+    @section util_2_0 Util 2.0
     - added @ref Util::get_bit_string() "get_bit_string()"
     - added file references to @ref Util::parse_to_qore_value() "parse_to_qore_value()"
 
-    @subsection util_1_11 Util 1.11
+    @section util_1_11 Util 1.11
     - added @ref Util::AllowedValueInfo "AllowedValueInfo"
 
-    @subsection util_1_10 Util 1.10
+    @section util_1_10 Util 1.10
     - added the @ref Util::check_exception_serializable() "check_exception_serializable()" method
       (<a href="https://github.com/qoretechnologies/qore/issues/4708">issue 4708</a>)
 
-    @subsection util_1_9 Util 1.9
+    @section util_1_9 Util 1.9
     - added a \c path_params element to the @ref Util::UriQueryInfo "UriQueryInfo" typed hash to allow for reporting
       path arguments in calls supported by REST schemas
       (<a href="https://github.com/qoretechnologies/qore/issues/4661">issue 4661</a>)
 
-    @subsection util_1_8_1 Util 1.8.1
+    @section util_1_8_1 Util 1.8.1
     - fixed a bug in @ref Util::substitute_env_vars() "substitute_env_vars()" where an exception would be thrown if
       any referenced environment variable was not set
       (<a href="https://github.com/qoretechnologies/qore/issues/4632">issue 4632</a>)
 
-    @subsection util_1_8 Util 1.8
+    @section util_1_8 Util 1.8
     - added @ref Util::get_relative_path() "get_relative_path()"
       (<a href="https://github.com/qoretechnologies/qore/issues/4488">issue 4488</a>)
 
-    @subsection util_1_7 Util 1.7
+    @section util_1_7 Util 1.7
     - @ref Util::parse_uri_query() "parse_uri_query()" fails if the string has newlines in it
       (<a href="https://github.com/qoretechnologies/qore/issues/4429">issue 4429</a>)
     - implemented the @ref Util::serialize_to_string() "serialize_to_string()" API
       (<a href="https://github.com/qoretechnologies/qore/issues/4428">issue 4428</a>)
 
-    @subsection util_1_6_2 Util 1.6.2
+    @section util_1_6_2 Util 1.6.2
     - fixed a bug in @ref Util::parse_to_qore_value() "parse_to_qore_value()" with floats and numbers with trailing zeros
       (<a href="https://github.com/qoretechnologies/qore/issues/4349">issue 4349</a>)
 
-    @subsection util_1_6_1 Util 1.6.1
+    @section util_1_6_1 Util 1.6.1
     - fixed a bug in @ref Util::parse_memory_size() "parse_memory_size()" with numbers larger than \c 9
       (<a href="https://github.com/qoretechnologies/qore/issues/4198">issue 4198</a>)
 
-    @subsection util_1_6 Util 1.6
+    @section util_1_6 Util 1.6
     - added the @ref Util::parse_memory_size() "parse_memory_size()" function
       (<a href="https://github.com/qoretechnologies/qore/issues/4004">issue 4004</a>)
 
-    @subsection util_1_5_1 Util 1.5.1
+    @section util_1_5_1 Util 1.5.1
     - fixed bugs in \c %EVAL= expressions in @ref Util::parse_to_qore_value() "parse_to_qore_value()" where
       expressions that evaluated to integer 0 or floating-point values were returned as @ref NOTHING
       (<a href="https://github.com/qoretechnologies/qore/issues/3851">issue 3851</a>)
     - added the get_file_from_url() function
 
-    @subsection util_1_5 Util 1.5
+    @section util_1_5 Util 1.5
     - added the get_file_from_url() function
 
-    @subsection util_1_4_1 Util 1.4.1
+    @section util_1_4_1 Util 1.4.1
     - fixed a bug in @ref Util::get_exception_string() "get_exception_string()" with Java exceptions
       (<a href="https://github.com/qoretechnologies/qore/issues/3304">issue 3304</a>)
 
-    @subsection util_1_4 Util 1.4
+    @section util_1_4 Util 1.4
     - added the @ref Util::parse_ranges() "parse_ranges()" function (<a href="https://github.com/qoretechnologies/qore/issues/2438">issue 2438</a>)
     - added the @ref Util::check_ip_address() "check_ip_address()" function (<a href="https://github.com/qoretechnologies/qore/issues/2483">issue 2483</a>)
     - updated @ref Util::parse_to_qore_value() "parse_to_qore_value()" to support single-element lists and hashes with
@@ -221,7 +224,7 @@ module Util {
     - updated @ref Util::get_exception_string() "get_exception_string()" to show the \c lang value
       (<a href="https://github.com/qoretechnologies/qore/issues/3182">issue 3182</a>)
 
-    @subsection util_1_3 Util 1.3
+    @section util_1_3 Util 1.3
     - updated for complex types
     - added the @ref Util::make_uri_query() "make_uri_query()" function
     - added the @ref Util::parse_uri_query() "parse_uri_query()" function
@@ -229,7 +232,7 @@ module Util {
     - added the @ref Util::flatten() "flatten()" function
     - added the @ref Util::uniq() "uniq()" function
 
-    @subsection util_1_2 Util 1.2
+    @section util_1_2 Util 1.2
     - the following functions are now actually implemented in the %Qore library and only reexported here for backwards-compatibility:
       - @ref Qore::absolute_path()
       - @ref Qore::absolute_path_windows()
@@ -252,10 +255,10 @@ module Util {
     - fixed Util::parse_to_qore_value() with hashes with a comma in the first key name; now respects parentheses when parsing lists and hashes (<a href="https://github.com/qoretechnologies/qore/issues/846">issue 846</a>)
     - fixed Util::normalize_dir_windows() handling of UNC paths (<a href="https://github.com/qoretechnologies/qore/issues/813">issue 813</a>)
 
-    @subsection util_1_1 Util 1.1
+    @section util_1_1 Util 1.1
     - added the Util::get_byte_size() and Util::get_marketing_byte_size() functions
 
-    @subsection util_1_0 Util 1.0
+    @section util_1_0 Util 1.0
     - initial release
 */
 
@@ -2747,7 +2750,7 @@ public data sub get_file_from_url(string url, *hash<UrlRetrievalOptions> options
     Supports the following syntax:
     - \c $VAR - simple variable reference
     - \c ${VAR} - braced variable reference (allows adjacent text without spaces)
-    - \c $(VAR) - parenthesized variable reference
+    - <tt>\$(VAR)</tt> - parenthesized variable reference
 
     @par Example:
     @code{.py}

@@ -96,8 +96,8 @@ public class SseObservableBridge inherits DataProvider::Observer {
         const DefaultSerialization = "json";
 
         #! Supported serializations
-        /** "json": data is rendered via @ref Qore::Json::make_json();
-            "none": data is rendered as a string via @c sprintf("%s", value)
+        /** "json": data is rendered via
+            @ref Qore::Json::make_json(); "none": data is rendered as a string via @c sprintf("%s", value)
             with embedded newlines/carriage-returns escaped so they cannot
             break the SSE framing. */
         const SupportedSerializations = ("json", "none");

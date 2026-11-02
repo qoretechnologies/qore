@@ -215,7 +215,202 @@ module CsvUtil {
 
     Note that the @ref CsvUtil::CsvIterator "CsvIterator" class can be used to parse arbitrary text data; the field separator character can be specified in the @ref CsvUtil::CsvIterator::constructor() "constructor", as well as the quote character and end of line sequence.  See the @ref CsvUtil::CsvIterator::constructor() "constructor documentation" for more information.
 
-    <b>Examples:</b>
+    Documentation:
+    - @subpage csvutilexamples "CsvUtil Examples": reading and writing CSV data, with and without header names and
+      field types
+    - @subpage csvutilformatguide "CSV Data Format": byte order marks, and quoting and escaping as in RFC 4180
+    - @subpage csvutil_multitype "Multi-type Support": files with different record types, and how a line's record
+      type is resolved
+    - @subpage csvutil_relnotes "Release Notes": the changes in each version
+*/
+/** @page csvutil_relnotes Release Notes
+
+
+    @section csvutil_v1_12 Version 1.12
+    - fixed the CSV writers to accept an option hash whose values all have the same type, such as a literal
+      <tt>{"fields": {"a": "string", "b": "int"}}</tt>; setting the default headers from the fields raised
+      \c RUNTIME-TYPE-ERROR
+    - a header name with a NUL character, which cannot be the key of a field in a record, raises
+      \c ABSTRACTCSVITERATOR-ERROR when the headers are read; before, the name was cut at the NUL character
+    - added the \c write-data action, which returns the CSV data created from the records given to it and the
+      number of records (@ref DataProvider::GeneratedDataInfo "GeneratedDataInfo") instead of writing a file;
+      @ref CsvUtil::CsvWriteDataProvider "CsvWriteDataProvider" returns the data from
+      @ref DataProvider::AbstractDataProvider::finishCreate() "finishCreate()" when it has no \c path or \c stream
+      option, where it discarded the data
+    - the write data provider closes its output location in
+      @ref DataProvider::AbstractDataProvider::finishCreate() "finishCreate()", so an error writing to a location,
+      such as a failed upload to a remote location, is raised to the caller instead of being lost when the data
+      provider is destroyed
+    - the writers write in the character encoding of their \c "encoding" option, as documented: the file and
+      stream writers and the write data provider wrote the text in the default encoding (normally UTF-8) whatever
+      the option, and @ref CsvUtil::CsvStringWriter::getContent() "CsvStringWriter::getContent()" returned it in the
+      default encoding
+    - CSV files are written and read as RFC 4180 CSV data by default, so every value written is read back
+      unchanged (see @ref csvutil_rfc4180):
+      - the writers escape a quote in a quoted field by doubling it: the \c "quote_escape" option is empty by
+        default, which means the quote character itself, where it was a backslash
+      - the writers quote fields containing a carriage return, a line feed or the end of line, or starting or
+        ending with white space, which the readers strip from unquoted fields; such values were written unquoted
+        and read back as other records or without their white space
+      - the writers quote fields with the \c "quote" character; fields were quoted with \c '"' whatever the
+        \c "quote" option
+      - the iterators and the read data provider take a \c "quote_escape" option; by default a backslash is an
+        ordinary character, so a field such as <tt>&quot;C:\\data\\&quot;</tt> is read as <tt>C:\\data\\</tt>, where it
+        raised \c SPLIT-ERROR; files written with a backslash as the quote escape (the writers' default before
+        this version) are read with \c "quote_escape" set to \c '\\'
+      - a field of escaped quotes (ex: <tt>&quot;&quot;&quot;&quot;</tt>, one quote character) is read, where it raised
+        \c SPLIT-ERROR, a field whose value starts with a line break is read as one field, and line breaks in
+        fields are read as they are in the data, where \c "\r\n" and \c "\r" were read as \c "\n" when line ends
+        are detected automatically
+    - the new \c "mask" attribute of a field description reads and writes a \c "date", \c "int", \c "float" or
+      \c "number" field with a mask of the @ref valuemaskintro "ValueMask" module, such as \c "DD.MM.YYYY",
+      \c "hh:mm AM" or \c "#.##0,00 €", in the iterators, the writers and the data providers, so that a file is
+      written exactly as a mask describes and read back with the same mask as the same values
+    - the writers and the write data provider take a \c "timezone" option: dates are written as the wall-clock time
+      in that time zone, and a field's \c "timezone" attribute, which was only used for reading, overrides it for
+      the field
+    - the \c "format" attribute of a field description is accepted for \c "int", \c "float" and \c "number" fields
+      (also with the \c "*" prefix) by the iterators, the writers and the data providers, as documented: it is a
+      number format as for the \c "number_format" option and overrides that option for the field; it was rejected
+      with an error saying that it is only valid for \c "date" fields; a number format with only a thousands
+      separator (ex: \c ".") no longer raises an error when parsing
+    - number formats given in the \c "format" field attribute or the \c "number_format" option are checked when the
+      object is created: the thousands separator, optionally followed by a different decimal separator and the
+      number of decimals as digits (ex: \c ".,2"); and an \c "int" field read with a number format raises
+      \c FIELD-VALUE-ERROR for a value with decimals (ex: \c "1.234,5" with \c ".,"), which was truncated to an
+      integer
+    - the CSV readers skip a byte order mark at the start of UTF-8 file, stream, binary, and string input, so the first
+      header of a file saved as "CSV UTF-8" by a spreadsheet program matches its field name (see @ref csvutil_bom)
+    - completed the option metadata of the read data provider and the \c read and \c read-data actions, so tools
+      and agents learn the reader from the action catalog and the data provider index: the defaults of
+      \c ignore_empty, \c ignore_whitespace (both \c true) and \c header_lines (\c 0) are declared, common
+      values of \c encoding, \c separator, \c quote and \c eol are listed (other values are still accepted;
+      see @ref CsvUtil::CsvReadDataProvider::CsvEncodingValues "CsvEncodingValues" and related constants), and the
+      interactions of options with each other are declared as
+      @ref DataProvider::DataProviderOptionInteraction "DataProviderOptionInteraction" metadata
+    - added @ref CsvUtil::CsvProfiler "CsvProfiler", which detects the separator, encoding, byte order mark, and
+      line ending of delimited text data and profiles its layout and column types with
+      @ref DataProvider::TabularProfiler "TabularProfiler", and the \c profile application action; both take a
+      \c quote option for files quoted with another character than \c "\"", and the profile's text format reports
+      the quote character
+    - the read data provider's \c path option is now tagged
+      @ref DataProvider::DTT_FromLocation "DTT_FromLocation", advertising that the
+      value (already resolved with \c FileLocationHandler::getBinaryStreamFromLocation())
+      may be a bare path or any registered scheme (\c file://, \c http(s)://, \c sftp://, ...)
+    - the \c read-data application action no longer offers the \c stream option; its input is the \c data option
+    - the read data provider's \c data option and the \c read-data application action accept binary data, which
+      is decoded with the \c encoding option (default \c UTF-8), as file and stream input is
+
+    @section csvutil_v1_11 Version 1.11
+    - added support for data provider application actions
+      (<a href="https://github.com/qoretechnologies/qore/issues/4808">issue 4808</a>)
+
+    @section csvutil_v1_10_1 Version 1.10.1
+    - fixed the CSV writer to automatically detect headers
+      (<a href="https://github.com/qoretechnologies/qore/issues/4838">issue 4838</a>)
+
+    @section csvutil_v1_10 Version 1.10
+    - updated with initial support for generic expressions
+      (<a href="https://github.com/qoretechnologies/qore/issues/4538">issue 4538</a>)
+
+    @section csvutil_v1_9 Version 1.9
+    - added support for resolving locations with the \c FileLocationHandler module
+      (<a href="https://github.com/qoretechnologies/qore/issues/4456">issue 4456</a>)
+
+    @section csvutil_v1_8 Version 1.8
+    - added support for generic record search operators and options
+      (<a href="https://github.com/qoretechnologies/qore/issues/4430">issue 4430</a>)
+
+    @section csvutil_v1_7_2 Version 1.7.2
+    - updated read and write data providers to provide verbose option support
+      (<a href="https://github.com/qoretechnologies/qore/issues/4139">issue 4139</a>)
+    - implemented support for the missing \c bool and <tt>*bool</tt> types
+      (<a href="https://github.com/qoretechnologies/qore/issues/4118">issue 4118</a>)
+
+    @section csvutil_v1_7_1 Version 1.7.1
+    - fixed a bug where CSV iteration would fail if a quoted field had a line break in it
+      (<a href="https://github.com/qoretechnologies/qore/issues/4079">issue 4079</a>)
+
+    @section csvutil_v1_7 Version 1.7
+    - added data provider API support
+      (<a href="https://github.com/qoretechnologies/qore/issues/3545">issue 3545</a>)
+
+    @section csvutil_v1_6_2 Version 1.6.2
+    - implemented the \c number_format option to allow numbers with alternative decimal separators to be parsed
+      and generated (<a href="https://github.com/qoretechnologies/qore/issues/2806">issue 2806</a>)
+
+    @section csvutil_v1_6_1 Version 1.6.1
+    - implemented the @ref CsvUtil::csvutil_set_global_compat_force_empty_string() function and the
+    \c compat_force_empty_string CSV parsing option to force "*string" fields with no
+    value to return an empty string when parsing rather than @ref nothing for backwards compatibility
+    with very early versions of CsvUtil (<a href="https://github.com/qoretechnologies/qore/issues/2476">issue 2476</a>)
+
+    @section csvutil_v1_6 Version 1.6
+    - added support for streams; the following stream-based classes have been added:
+      - @ref CsvUtil::CsvIterator "CsvIterator": provides a more generic interface than @ref CsvUtil::CsvDataIterator "CsvDataIterator" and @ref CsvUtil::CsvFileIterator "CsvFileIterator"
+      - @ref CsvUtil::CsvWriter "CsvWriter": provides a more generic interface than @ref CsvUtil::CsvStringWriter "CsvStringWriter" and @ref CsvUtil::CsvFileWriter "CsvFileWriter"
+    - fixed a bug in an error message validating input data (<a href="https://github.com/qoretechnologies/qore/issues/1062">issue 1062</a>)
+    - improved \a fields option documentation and added an exception when detected headers do not match the \a fields option (<a href="https://github.com/qoretechnologies/qore/issues/2179">issue 2179</a>)
+
+    @section csvutil_v1_5_1 Version 1.5.1
+    - fixed a bug in @ref CsvUtil::AbstractCsvIterator::identifyTypeImpl() "AbstractCsvIterator::identifyTypeImpl()" generating an error message (<a href="https://github.com/qoretechnologies/qore/issues/1355">issue 1355</a>)
+
+    @section csvutil_v1_5 Version 1.5
+    - fixed a bug handling the global option \c "eol"
+    - converted to new-style
+    - if "headers" are not given in the @ref CsvUtil::AbstractCsvWriter::constructor() but "fields" are, then set the headers from the field descriptions automatically
+    - added write() methods returning the generated strings to the @ref CsvUtil::CsvStringWriter class for API compatibility with the corresponding FixedLengthDataWriter methods
+    - implemented support for @ref Qore::SQL::SQLStatement "SQLStatement" as an iterator source for @ref CsvUtil::AbstractCsvWriter::write()
+    - implemented the \c "datamap" and \c "info_log" options for CSV generation
+    - implemented options with underscores to replace options with dashes:
+      - @ref CsvUtil::AbstractCsvWriter
+        - \c "date-format" is now \c "date_format"
+        - \c "optimal-quotes" is now \c "optimal_quotes"
+        - \c "verify-columns" is now \c "verify_columns"
+        - \c "write-headers" is now \c "write_headers"
+      - @ref CsvUtil::AbstractCsvIterator
+        - \c "ignore-empty" is now \c "ignore_empty"
+        - \c "ignore-whitespace" is now \c "ignore_whitespace"
+        - \c "header-names" is now \c "header_names"
+        - \c "header-lines" is now \c "header_lines"
+        - \c "verify-columns" is now \c "verify_columns"
+    - implemented multi-type line support
+    - two constructors for backward CsvUtil compatability and similarity with FixedLengthUtil API
+    - implemented new options \c "header_reorder"; @ref CsvUtil::AbstractCsvIterator \c "date_format",\c "extended_record"
+    - implemented options for field specification: \c "index", \c "default", \c "header", \c "value", \c "regex"
+    - fixed a UTC bug for default date 1970-01-01Z
+
+    @section csvutil_v1_4 Version 1.4
+    - fixed the \c "format" field option when used with \c "*date" field types
+    - implemented the \c "tolwr" parser option
+    - changed the default field type when parsing and generating CSV files from \c "string" to \c "*string"
+
+    @section csvutil_v1_3 Version 1.3
+    - added the \c "write-headers" option to @ref CsvUtil::AbstractCsvWriter and subclasses to enable headers to be suppressed
+    - added the \c "optimal-quotes" option to @ref CsvUtil::AbstractCsvWriter and subclasses to enable more efficient csv output (now the default output option); to revert back to the previous behavior (where all fields are quoted regardless of data type or content), set to @ref False "False" in the constructor
+
+    @section csvutil_v1_2 Version 1.2
+    - fixed @ref CsvUtil::CsvDataIterator::next() when header_lines > 0 and working with empty input data
+    - implemented support for the \c "*int", \c "*float", \c "*number", and \c "*date" types
+    - implemented support for allowing subclasses of @ref CsvUtil::CsvFileIterator to implement support for other custom types
+    - fixed \c "date" type handling with empty input; now returns 1970-01-01Z (use "*date" to map empty input to NOTHING)
+    - added the @ref CsvUtil::CsvStringWriter, @ref CsvUtil::AbstractCsvWriter, and @ref CsvUtil::CsvFileWriter classes
+    - if "headers" are not given in the @ref CsvUtil::CsvFileIterator::constructor() but "fields" are, then set the headers from the field descriptions automatically
+
+    @section csvutil_v1_1 Version 1.1
+    - bug fixes to header and fields option processing
+    - fixed @ref CsvUtil::CsvFileIterator::index() to return the line index
+    - added @ref CsvUtil::CsvFileIterator::lineNumber() to return the current line number in the file
+
+    @section csvutil_v1_0 Version 1.0
+    - initial release
+*/
+/** @page csvutilexamples CsvUtil Examples
+
+    @tableofcontents
+
+    @section csvutilexamples_basic Reading and Writing CSV Data
+
     @code{.py}
 #!/usr/bin/env qore
 
@@ -234,7 +429,7 @@ while (i.next()) {
 }
     @endcode
 
-    If \c "example-file.csv" is:
+    If <tt>example-file.csv</tt> is:
     @verbatim
 UK,1234567890,"Sony, Xperia S",31052012
 UK,1234567891,"Sony, Xperia S",31052012
@@ -250,7 +445,7 @@ UK,1234567893,"Sony, Xperia S",31052012
 4: {0: "UK", 1: "1234567893", 2: "Sony, Xperia S", 3: "31052012"}
     @endverbatim
 
-    Also the \c "example-file-copy.csv" will contain data from the original file formatted as CSV.
+    Also the <tt>example-file-copy.csv</tt> file will contain data from the original file formatted as CSV.
 
     @anchor complex_example
     If header names are provided and field types are specified, the output looks different:
@@ -267,7 +462,7 @@ while (i.next())
     printf("%d: %y\n", i.index(), i.getValue());
     @endcode
 
-    Now the hash keys in each record returned are those given in the @ref CsvUtil::CsvFileIterator::constructor() "constructor", and the fields \c "serno" and \c "received" are given other data types; this produces:
+    Now the hash keys in each record returned are those given in the @ref CsvUtil::CsvIterator::constructor() "constructor", and the fields \c "serno" and \c "received" are given other data types; this produces:
     @verbatim
 1: {cc: "UK", serno: 1234567890, desc: "Sony, Xperia S", received: 2012-05-31 00:00:00 Thu +02:00 (CEST)}
 2: {cc: "UK", serno: 1234567891, desc: "Sony, Xperia S", received: 2012-05-31 00:00:00 Thu +02:00 (CEST)}
@@ -276,6 +471,10 @@ while (i.next())
     @endverbatim
 
     Use the \c "header_lines" and \c "header_names" @ref abstractcsviterator_options "options" to automatically read the header names from the file if present.  Use the \c "fields" @ref abstractcsviterator_options "option" to describe the fields and perform transformations on the data read.  For more information, see the @ref CsvUtil::CsvFileIterator "CsvFileIterator" class.
+*/
+/** @page csvutilformatguide CSV Data Format
+
+    @tableofcontents
 
     @section csvutil_bom Byte Order Marks
 
@@ -298,18 +497,18 @@ while (i.next())
     @section csvutil_rfc4180 Quoting and RFC 4180
 
     The writers and the readers follow RFC 4180 by default, so every value written is read back unchanged:
-    - a field is quoted with the \c "quote" character (default \c '"') if it contains the quote character, the
+    - a field is quoted with the \c "quote" character (default <tt>'&quot;'</tt>) if it contains the quote character, the
       separator, the end of line, a carriage return or a line feed, or if it starts or ends with white space; with
       the \c "optimal_quotes" writer option set to @ref False "False", every field is quoted
-    - a quote character in a quoted field is escaped by doubling it: <tt>"say ""hi"""</tt> is the field
-      <tt>say "hi"</tt>
-    - a backslash is an ordinary character: <tt>"C:\\data\\"</tt> is the field <tt>C:\\data\\</tt>
+    - a quote character in a quoted field is escaped by doubling it: <tt>&quot;say &quot;&quot;hi&quot;&quot;&quot;</tt> is the field
+      <tt>say &quot;hi&quot;</tt>
+    - a backslash is an ordinary character: <tt>&quot;C:\\data\\&quot;</tt> is the field <tt>C:\\data\\</tt>
     - line breaks in a quoted field are part of the field, as they are in the data
 
     Files that escape a quote in a field with a backslash (<tt>\\&quot;</tt>), such as files written by %CsvUtil before
     1.12 with the writers' default \c "quote_escape" option, are read with the \c "quote_escape" option of the
-    iterators and the read data provider set to \c '\\'; the writers write such files with their \c "quote_escape"
-    option set to \c '\\'.
+    iterators and the read data provider set to <tt>'\\'</tt>; the writers write such files with their \c "quote_escape"
+    option set to <tt>'\\'</tt>.
 
     @code{.py}
 # write values that need quoting and read them back unchanged
@@ -323,12 +522,14 @@ list<hash<auto>> recs = map $1, new CsvDataIterator(csv, {"header_names": True})
 # read a file written with backslash-escaped quotes
 CsvFileIterator i("legacy.csv", {"header_names": True, "quote_escape": "\\"});
     @endcode
+*/
+/** @page csvutil_multitype Multi-type Support
 
-    @section csvutil_multitype Multi-type support
+    @tableofcontents
 
     The %CsvUtil module supports multi-type records, meaning that different input lines may have different structures, and input record type
     resolution is performed at run-time using predefined rules.
-    %CsvUtil classes have two constructors, a backwards-compatible constructor variant, which accepts field definition in options and supports only a single record type, and a new constructor avariant, which ccepts field specifications and options passed as separate parameters.
+    %CsvUtil classes have two constructors, a backwards-compatible constructor variant, which accepts field definition in options and supports only a single record type, and a new constructor variant, which accepts field specifications and options passed as separate parameters.
 
     When used with multi-type definitions, the @ref CsvUtil::AbstractCsvIterator::getValue() method returns
     records in an extended form.  In this case, the return value of @ref CsvUtil::AbstractCsvIterator::getValue()
@@ -344,7 +545,7 @@ CsvFileIterator i("legacy.csv", {"header_names": True, "quote_escape": "\\"});
 
     Typically the value of a particular field determines the record type, however even multiple fields could be used.  Record type detection configuration is supplied by the \c "value" (field value equality test) or \c "regex" (regular expression test) keys in the
     @ref abstractcsviterator_option_field_hash "field specification hash" for the record in question.  If multiple fields in a record
-    definintion have \c "value" or \c "regex" keys, then all fields must match the input data in order for the input
+    definition have \c "value" or \c "regex" keys, then all fields must match the input data in order for the input
     line to match the record.
 
     The above record type resolution logic is executed in
@@ -399,14 +600,14 @@ FileInputStream input("example-multi-file.csv");
 CsvIterator i(input, NOTHING, Spec, {"extended_record": True} + Opts);
 
 FileOutputStream output("example-multi-file-copy.csv");
-CsvWriter writer(output, Spec, {"write-headers": False, "optimal-quotes": True, "quote_escape": "\"") + Opts);
+CsvWriter writer(output, Spec, {"write_headers": False, "optimal_quotes": True} + Opts);
 while (i.next()) {
     printf("%d: %y\n", i.index(), i.getValue());
     writer.writeLine(i.getValue());
 }
     @endcode
 
-    If \c "example-multi-file.csv" is:
+    If <tt>example-multi-file.csv</tt> is:
     @verbatim
 1,2016-01,20160401
 2,123,"Sony, Xperia S",1,100
@@ -414,7 +615,8 @@ while (i.next()) {
 3,250
     @endverbatim
 
-    The data is read verbatim, each value is returned as a string, header names are generated numerically; the output is:
+    Each record is returned in the extended form with its resolved record type, and its values are converted to the
+    types given in the specification; the output is:
     @verbatim
 1: {type: "header", record: {type: 1, invoice_no: "2016-01", date: 2016-04-01 00:00:00.000000 Fri +02:00 (CEST)}}
 2: {type: "item", record: {type: 2, item_no: "123", item: "Sony, Xperia S", pcs: 1, price: 100}}
@@ -422,188 +624,7 @@ while (i.next()) {
 4: {type: "footer", record: {type: 3, total: 250}}
     @endverbatim
 
-    Also the \c "example-multi-file-copy.csv" will contain data from the original file formatted as CSV.
-
-    @section csvutil_relnotes Release Notes
-
-    @subsection csvutil_v1_12 Version 1.12
-    - fixed the CSV writers to accept an option hash whose values all have the same type, such as a literal
-      <tt>{"fields": {"a": "string", "b": "int"}}</tt>; setting the default headers from the fields raised
-      \c RUNTIME-TYPE-ERROR
-    - a header name with a NUL character, which cannot be the key of a field in a record, raises
-      \c ABSTRACTCSVITERATOR-ERROR when the headers are read; before, the name was cut at the NUL character
-    - added the \c write-data action, which returns the CSV data created from the records given to it and the
-      number of records (@ref DataProvider::GeneratedDataInfo "GeneratedDataInfo") instead of writing a file;
-      @ref CsvUtil::CsvWriteDataProvider "CsvWriteDataProvider" returns the data from
-      @ref DataProvider::AbstractDataProvider::finishCreate() "finishCreate()" when it has no \c path or \c stream
-      option, where it discarded the data
-    - the write data provider closes its output location in
-      @ref DataProvider::AbstractDataProvider::finishCreate() "finishCreate()", so an error writing to a location,
-      such as a failed upload to a remote location, is raised to the caller instead of being lost when the data
-      provider is destroyed
-    - the writers write in the character encoding of their \c "encoding" option, as documented: the file and
-      stream writers and the write data provider wrote the text in the default encoding (normally UTF-8) whatever
-      the option, and @ref CsvUtil::CsvStringWriter::getContent() "CsvStringWriter::getContent()" returned it in the
-      default encoding
-    - CSV files are written and read as RFC 4180 CSV data by default, so every value written is read back
-      unchanged (see @ref csvutil_rfc4180):
-      - the writers escape a quote in a quoted field by doubling it: the \c "quote_escape" option is empty by
-        default, which means the quote character itself, where it was a backslash
-      - the writers quote fields containing a carriage return, a line feed or the end of line, or starting or
-        ending with white space, which the readers strip from unquoted fields; such values were written unquoted
-        and read back as other records or without their white space
-      - the writers quote fields with the \c "quote" character; fields were quoted with \c '"' whatever the
-        \c "quote" option
-      - the iterators and the read data provider take a \c "quote_escape" option; by default a backslash is an
-        ordinary character, so a field such as <tt>"C:\\data\\"</tt> is read as <tt>C:\\data\\</tt>, where it
-        raised \c SPLIT-ERROR; files written with a backslash as the quote escape (the writers' default before
-        this version) are read with \c "quote_escape" set to \c '\\'
-      - a field of escaped quotes (ex: <tt>&quot;&quot;&quot;&quot;</tt>, one quote character) is read, where it raised
-        \c SPLIT-ERROR, a field whose value starts with a line break is read as one field, and line breaks in
-        fields are read as they are in the data, where \c "\r\n" and \c "\r" were read as \c "\n" when line ends
-        are detected automatically
-    - the new \c "mask" attribute of a field description reads and writes a \c "date", \c "int", \c "float" or
-      \c "number" field with a mask of the @ref valuemaskintro "ValueMask" module, such as \c "DD.MM.YYYY",
-      \c "hh:mm AM" or \c "#.##0,00 €", in the iterators, the writers and the data providers, so that a file is
-      written exactly as a mask describes and read back with the same mask as the same values
-    - the writers and the write data provider take a \c "timezone" option: dates are written as the wall-clock time
-      in that time zone, and a field's \c "timezone" attribute, which was only used for reading, overrides it for
-      the field
-    - the \c "format" attribute of a field description is accepted for \c "int", \c "float" and \c "number" fields
-      (also with the \c "*" prefix) by the iterators, the writers and the data providers, as documented: it is a
-      number format as for the \c "number_format" option and overrides that option for the field; it was rejected
-      with an error saying that it is only valid for \c "date" fields; a number format with only a thousands
-      separator (ex: \c ".") no longer raises an error when parsing
-    - number formats given in the \c "format" field attribute or the \c "number_format" option are checked when the
-      object is created: the thousands separator, optionally followed by a different decimal separator and the
-      number of decimals as digits (ex: \c ".,2"); and an \c "int" field read with a number format raises
-      \c FIELD-VALUE-ERROR for a value with decimals (ex: \c "1.234,5" with \c ".,"), which was truncated to an
-      integer
-    - the CSV readers skip a byte order mark at the start of UTF-8 file, stream, binary, and string input, so the first
-      header of a file saved as "CSV UTF-8" by a spreadsheet program matches its field name (see @ref csvutil_bom)
-    - completed the option metadata of the read data provider and the \c read and \c read-data actions, so tools
-      and agents learn the reader from the action catalog and the data provider index: the defaults of
-      \c ignore_empty, \c ignore_whitespace (both \c true) and \c header_lines (\c 0) are declared, common
-      values of \c encoding, \c separator, \c quote and \c eol are listed (other values are still accepted;
-      see @ref CsvUtil::CsvReadDataProvider::CsvEncodingValues "CsvEncodingValues" and related constants), and the
-      interactions of options with each other are declared as
-      @ref DataProvider::DataProviderOptionInteraction "DataProviderOptionInteraction" metadata
-    - added @ref CsvUtil::CsvProfiler "CsvProfiler", which detects the separator, encoding, byte order mark, and
-      line ending of delimited text data and profiles its layout and column types with
-      @ref DataProvider::TabularProfiler "TabularProfiler", and the \c profile application action; both take a
-      \c quote option for files quoted with another character than \c "\"", and the profile's text format reports
-      the quote character
-    - the read data provider's \c path option is now tagged
-      @ref DataProvider::DTT_FromLocation "DTT_FromLocation", advertising that the
-      value (already resolved with \c FileLocationHandler::getBinaryStreamFromLocation())
-      may be a bare path or any registered scheme (\c file://, \c http(s)://, \c sftp://, ...)
-    - the \c read-data application action no longer offers the \c stream option; its input is the \c data option
-    - the read data provider's \c data option and the \c read-data application action accept binary data, which
-      is decoded with the \c encoding option (default \c UTF-8), as file and stream input is
-
-    @subsection csvutil_v1_11 Version 1.11
-    - added support for data provider application actions
-      (<a href="https://github.com/qoretechnologies/qore/issues/4808">issue 4808</a>)
-
-    @subsection csvutil_v1_10_1 Version 1.10.1
-    - fixed the CSV writer to automatically detect headers
-      (<a href="https://github.com/qoretechnologies/qore/issues/4838">issue 4838</a>)
-
-    @subsection csvutil_v1_10 Version 1.10
-    - updated with initial support for generic expressions
-      (<a href="https://github.com/qoretechnologies/qore/issues/4538">issue 4538</a>)
-
-    @subsection csvutil_v1_9 Version 1.9
-    - added support for resolving locations with the \c FileLocationHandler module
-      (<a href="https://github.com/qoretechnologies/qore/issues/4456">issue 4456</a>)
-
-    @subsection csvutil_v1_8 Version 1.8
-    - added support for generic record search operators and options
-      (<a href="https://github.com/qoretechnologies/qore/issues/4430">issue 4430</a>)
-
-    @subsection csvutil_v1_7_2 Version 1.7.2
-    - updated read and write data providers to provide verbose option support
-      (<a href="https://github.com/qoretechnologies/qore/issues/4139">issue 4139</a>)
-    - implemented support for the missing \c bool and <tt>*bool</tt> types
-      (<a href="https://github.com/qoretechnologies/qore/issues/4118">issue 4118</a>)
-
-    @subsection csvutil_v1_7_1 Version 1.7.1
-    - fixed a bug where CSV iteration would fail if a quoted field had a line break in it
-      (<a href="https://github.com/qoretechnologies/qore/issues/4079">issue 4079</a>)
-
-    @subsection csvutil_v1_7 Version 1.7
-    - added data provider API support
-      (<a href="https://github.com/qoretechnologies/qore/issues/3545">issue 3545</a>)
-
-    @subsection csvutil_v1_6_2 Version 1.6.2
-    - implemented the \c number_format option to allow numbers with alternative decimal separators to be parsed
-      and generated (<a href="https://github.com/qoretechnologies/qore/issues/2806">issue 2806</a>)
-
-    @subsection csvutil_v1_6_1 Version 1.6.1
-    - implemented the @ref CsvUtil::csvutil_set_global_compat_force_empty_string() function and the
-    \c compat_force_empty_string CSV parsing option to force "*string" fields with no
-    value to return an empty string when parsing rather than @ref nothing for backwards compatibility
-    with very early versions of CsvUtil (<a href="https://github.com/qoretechnologies/qore/issues/2476">issue 2476</a>)
-
-    @subsection csvutil_v1_6 Version 1.6
-    - added support for streams; the following stream-based classes have been added:
-      - @ref CsvUtil::CsvIterator "CsvIterator": provides a more generic interface than @ref CsvUtil::CsvDataIterator "CsvDataIterator" and @ref CsvUtil::CsvFileIterator "CsvFileIterator"
-      - @ref CsvUtil::CsvWriter "CsvWriter": provides a more generic interface than @ref CsvUtil::CsvStringWriter "CsvStringWriter" and @ref CsvUtil::CsvFileWriter "CsvFileWriter"
-    - fixed a bug in an error message validating input data (<a href="https://github.com/qoretechnologies/qore/issues/1062">issue 1062</a>)
-    - improved \a fields option documentation and added an exception when detected headers do not match the \a fields option (<a href="https://github.com/qoretechnologies/qore/issues/2179">issue 2179</a>)
-
-    @subsection csvutil_v1_5_1 Version 1.5.1
-    - fixed a bug in @ref CsvUtil::AbstractCsvIterator::identifyTypeImpl() "AbstractCsvIterator::identifyTypeImpl()" generating an error message (<a href="https://github.com/qoretechnologies/qore/issues/1355">issue 1355</a>)
-
-    @subsection csvutil_v1_5 Version 1.5
-    - fixed a bug handling the global option \c "eol"
-    - converted to new-style
-    - if "headers" are not given in the @ref CsvUtil::AbstractCsvWriter::constructor() but "fields" are, then set the headers from the field descriptions automatically
-    - added write() methods returning the generated strings to the @ref CsvUtil::CsvStringWriter class for API compatibility with the corresponding FixedLengthDataWriter methods
-    - implemented support for @ref Qore::SQL::SQLStatement "SQLStatement" as an iterator source for @ref CsvUtil::AbstractCsvWriter::write()
-    - implemented the \c "datamap" and \c "info_log" options for CSV generation
-    - implemented options with underscores to replace options with dashes:
-      - @ref CsvUtil::AbstractCsvWriter
-        - \c "date-format" is now \c "date_format"
-        - \c "optimal-quotes" is now \c "optimal_quotes"
-        - \c "verify-columns" is now \c "verify_columns"
-        - \c "write-headers" is now \c "write_headers"
-      - @ref CsvUtil::AbstractCsvIterator
-        - \c "ignore-empty" is now \c "ignore_empty"
-        - \c "ignore-whitespace" is now \c "ignore_whitespace"
-        - \c "header-names" is now \c "header_names"
-        - \c "header-lines" is now \c "header_lines"
-        - \c "verify-columns" is now \c "verify_columns"
-    - implemented multi-type line support
-    - two constructors for backward CsvUtil compatability and similarity with FixedLengthUtil API
-    - implemented new options \c "header_reorder"; @ref CsvUtil::AbstractCsvIterator \c "date_format",\c "extended_record"
-    - implemented options for field specification: \c "index", \c "default", \c "header", \c "value", \c "regex"
-    - fixed a UTC bug for default date 1970-01-01Z
-
-    @subsection csvutil_v1_4 Version 1.4
-    - fixed the \c "format" field option when used with \c "*date" field types
-    - implemented the \c "tolwr" parser option
-    - changed the default field type when parsing and generating CSV files from \c "string" to \c "*string"
-
-    @subsection csvutil_v1_3 Version 1.3
-    - added the \c "write-headers" option to @ref CsvUtil::AbstractCsvWriter and subclasses to enable headers to be suppressed
-    - added the \c "optimal-quotes" option to @ref CsvUtil::AbstractCsvWriter and subclasses to enable more efficient csv output (now the default output option); to revert back to the previous behavior (where all fields are quoted regardless of data type or content), set to @ref False "False" in the constructor
-
-    @subsection csvutil_v1_2 Version 1.2
-    - fixed @ref CsvUtil::CsvDataIterator::next() when header_lines > 0 and working with empty input data
-    - implemented support for the \c "*int", \c "*float", \c "*number", and \c "*date" types
-    - implemented support for allowing subclasses of @ref CsvUtil::CsvFileIterator to implement support for other custom types
-    - fixed \c "date" type handling with empty input; now returns 1970-01-01Z (use "*date" to map empty input to NOTHING)
-    - added the @ref CsvUtil::CsvStringWriter, @ref CsvUtil::AbstractCsvWriter, and @ref CsvUtil::CsvFileWriter classes
-    - if "headers" are not given in the @ref CsvUtil::CsvFileIterator::constructor() but "fields" are, then set the headers from the field descriptions automatically
-
-    @subsection csvutil_v1_1 Version 1.1
-    - bug fixes to header and fields option processing
-    - fixed @ref CsvUtil::CsvFileIterator::index() to return the line index
-    - added @ref CsvUtil::CsvFileIterator::lineNumber() to return the current line number in the file
-
-    @subsection csvutil_v1_0 Version 1.0
-    - initial release
+    Also the <tt>example-multi-file-copy.csv</tt> file will contain data from the original file formatted as CSV.
 */
 
 #! the CsvUtil namespace contains all the objects in the CsvUtil module

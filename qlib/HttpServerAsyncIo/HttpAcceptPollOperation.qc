@@ -51,8 +51,7 @@ public class HttpAcceptPollOperation inherits HttpAcceptPollOperationBase {
 
         #! Controller for completion callback
         /** Assigned with the opaque reference operator \c "@=" - see
-            @ref HttpServerAsyncIo::HttpConnectionPollOperationBase::completion_controller
-            "HttpConnectionPollOperationBase::completion_controller" for why the collector must
+            @ref HttpServerAsyncIo::HttpConnectionPollOperationBase::completion_controller "HttpConnectionPollOperationBase::completion_controller" for why the collector must
             not follow an operation's reference back to its controller.
         */
         *HttpAsyncSocketIoController completion_controller;

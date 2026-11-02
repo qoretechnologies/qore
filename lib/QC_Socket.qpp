@@ -2010,8 +2010,8 @@ hashdecl Qore::DatagramInfo {
 */
 hashdecl Qore::QuicGoawayStateInfo {
     //! True if the final GOAWAY has been queued via @ref Qore::Socket::submitQuicShutdown() "submitQuicShutdown()"
-    /** This is \c False during the notice phase (@ref Qore::Socket::submitQuicShutdownNotice()
-        "submitQuicShutdownNotice()") and only becomes \c True when the final GOAWAY — which
+    /** This is \c False during the notice phase
+        (@ref Qore::Socket::submitQuicShutdownNotice() "submitQuicShutdownNotice()") and only becomes \c True when the final GOAWAY — which
         carries the actual last stream ID — is submitted.
 
         @note Set eagerly when the frame is queued in the HTTP/3 layer, before it is
@@ -6645,8 +6645,7 @@ bool Socket::getNoDelay() [flags=CONSTANT] {
     ack's bytes but the application stops generating responses,
     \c TCP_USER_TIMEOUT never fires (nothing is unack'd).  Use an
     application-level deadline for that case
-    (e.g.\ \ref HttpClientIo::HttpClientConnectionManagerOptions::request_timeout
-    "HttpClientConnectionManager request_timeout").
+    (e.g.\ \ref HttpClientIo::HttpClientConnectionManagerOptions::request_timeout "HttpClientConnectionManager request_timeout").
 
     The configured value is stored on the socket and re-applied on every
     successful TCP connect, so callers may set it before connecting.  Passing

@@ -161,8 +161,8 @@ public class DbViewDataProvider inherits DbDataProviderBase {
     }
 
     #! Returns the names of the relations of the kind of this provider in the database
-    /** @return the names of the views in the database, as @ref SqlUtil::AbstractDatabase::listViews()
-        "AbstractDatabase::listViews()" lists them
+    /** @return the names of the views in the database, as
+        @ref SqlUtil::AbstractDatabase::listViews() "AbstractDatabase::listViews()" lists them
     */
     list<string> getRelationNames() {
         return db.listViews();
@@ -245,8 +245,8 @@ public class DbViewDataProvider inherits DbDataProviderBase {
 }
 
 #! Defines a data provider based on a single materialized view: its records are read-only, and a request refreshes it
-/** The provider reads the materialized view's stored data as @ref DbDataProvider::DbViewDataProvider
-    "DbViewDataProvider" reads a view; reading does not refresh it.  Its records cannot be written.
+/** The provider reads the materialized view's stored data as
+    @ref DbDataProvider::DbViewDataProvider "DbViewDataProvider" reads a view; reading does not refresh it.  Its records cannot be written.
 
     A request (@ref DataProvider::AbstractDataProvider::doRequest() "doRequest()") refreshes the materialized view
     with @ref SqlUtil::AbstractDatabase::refreshMaterializedView() "AbstractDatabase::refreshMaterializedView()"; the
@@ -383,8 +383,8 @@ public class DbMaterializedViewDataProvider inherits DbViewDataProvider {
 }
 
 #! The request type of a refresh of a materialized view: the refresh options of the database
-/** The fields are the options of @ref SqlUtil::AbstractDatabase::refreshMaterializedView()
-    "AbstractDatabase::refreshMaterializedView()"; the type of a materialized view's provider has only those of its
+/** The fields are the options of
+    @ref SqlUtil::AbstractDatabase::refreshMaterializedView() "AbstractDatabase::refreshMaterializedView()"; the type of a materialized view's provider has only those of its
     database.
 
     @since DbDataProvider 2.5

@@ -439,8 +439,7 @@ public const string DPAD_PASS_THROUGH = "pass-through";
 #! Modified pass-through data
 /** The output type is a modification of the input type based on the processor's configuration.
     The actual output type must be computed using
-    @ref AbstractDataProvider::getPipelineProcessorOutputTypeWithInputType()
-    "getPipelineProcessorOutputTypeWithInputType()" with the input type from the preceding
+    @ref AbstractDataProvider::getPipelineProcessorOutputTypeWithInputType() "getPipelineProcessorOutputTypeWithInputType()" with the input type from the preceding
     pipeline state.
 
     @since %DataProvider 3.6

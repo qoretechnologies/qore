@@ -114,8 +114,8 @@ public class SseStreamReader {
         @param max_event_size the maximum size in bytes of an event and of the data decompressed from one received
         chunk; an event that grows beyond it before it ends raises \c SSE-EVENT-TOO-LARGE and cancels the stream, so
         that a stream that never ends an event, or a small compressed stream that expands to a huge one, cannot
-        exhaust memory; \c 0 (the default) means @ref HttpClientStreamingIo::DefaultMaxEventSize
-        "DefaultMaxEventSize"; a negative value means no limit
+        exhaust memory; \c 0 (the default) means
+        @ref HttpClientStreamingIo::DefaultMaxEventSize "DefaultMaxEventSize"; a negative value means no limit
 
         @throw ENCODING-ERROR if the content encoding is not supported
 

@@ -2609,8 +2609,8 @@ string reverse(softstring str) [flags=CONSTANT,NAMED_ARGS] {
 print("hello\n");
     @endcode
 
-    @note the output is written whole, also when standard output is nonblocking (see @ref file_blocking_io
-    "ReadOnlyFile"); a wait for room ends with a \c THREAD-CANCELLED or \c PROGRAM-INTERRUPTED exception when the
+    @note the output is written whole, also when standard output is nonblocking (see
+    @ref file_blocking_io "ReadOnlyFile"); a wait for room ends with a \c THREAD-CANCELLED or \c PROGRAM-INTERRUPTED exception when the
     thread is cancelled or its @ref Qore::Program "Program" is interrupted
 
     @see printf() for a function that allows for formatted output
@@ -2876,8 +2876,8 @@ string vsprintf_bounded(string format, softlist<auto> values, *hash<FormatBounds
 f_printf("%5s", "a long string"); # will print out "a lon"
     @endcode
 
-    @note the output is written whole, also when standard output is nonblocking (see @ref file_blocking_io
-    "ReadOnlyFile"); a wait for room ends with a \c THREAD-CANCELLED or \c PROGRAM-INTERRUPTED exception when the
+    @note the output is written whole, also when standard output is nonblocking (see
+    @ref file_blocking_io "ReadOnlyFile"); a wait for room ends with a \c THREAD-CANCELLED or \c PROGRAM-INTERRUPTED exception when the
     thread is cancelled or its @ref Qore::Program "Program" is interrupted
 
     @see
@@ -2914,8 +2914,8 @@ string f_printf() [flags=NOOP] {
 printf("%5s", "a long string"); # will print out "a long string"
     @endcode
 
-    @note the output is written whole, also when standard output is nonblocking (see @ref file_blocking_io
-    "ReadOnlyFile"); a wait for room ends with a \c THREAD-CANCELLED or \c PROGRAM-INTERRUPTED exception when the
+    @note the output is written whole, also when standard output is nonblocking (see
+    @ref file_blocking_io "ReadOnlyFile"); a wait for room ends with a \c THREAD-CANCELLED or \c PROGRAM-INTERRUPTED exception when the
     thread is cancelled or its @ref Qore::Program "Program" is interrupted
 
     @see
@@ -2952,8 +2952,8 @@ string printf() [flags=NOOP;dom=TERMINAL_IO] {
 f_vprintf("%5s %3d", ("a long string", 5000)); # will print out "a lon 500"
     @endcode
 
-    @note the output is written whole, also when standard output is nonblocking (see @ref file_blocking_io
-    "ReadOnlyFile"); a wait for room ends with a \c THREAD-CANCELLED or \c PROGRAM-INTERRUPTED exception when the
+    @note the output is written whole, also when standard output is nonblocking (see
+    @ref file_blocking_io "ReadOnlyFile"); a wait for room ends with a \c THREAD-CANCELLED or \c PROGRAM-INTERRUPTED exception when the
     thread is cancelled or its @ref Qore::Program "Program" is interrupted
 
     @see
@@ -2985,8 +2985,8 @@ string f_vprintf(string[doc] format, auto[doc] values) [flags=NAMED_ARGS;dom=TER
 vprintf("%5s %3d", ("a long string", 5000)); # will print out "a long string 5000"
     @endcode
 
-    @note the output is written whole, also when standard output is nonblocking (see @ref file_blocking_io
-    "ReadOnlyFile"); a wait for room ends with a \c THREAD-CANCELLED or \c PROGRAM-INTERRUPTED exception when the
+    @note the output is written whole, also when standard output is nonblocking (see
+    @ref file_blocking_io "ReadOnlyFile"); a wait for room ends with a \c THREAD-CANCELLED or \c PROGRAM-INTERRUPTED exception when the
     thread is cancelled or its @ref Qore::Program "Program" is interrupted
 
     @see

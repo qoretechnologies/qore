@@ -148,15 +148,15 @@ $ gdb --args qore --exec-mode=jit script.qr
     the code they were compiled with.
 
     The level can be set in three ways, in decreasing order of precedence:
-    - per %Program, with @ref Qore::Program::setJitOptimizationLevel()
-      "Program::setJitOptimizationLevel()" (or its static form, which applies to
+    - per %Program, with
+      @ref Qore::Program::setJitOptimizationLevel() "Program::setJitOptimizationLevel()" (or its static form, which applies to
       the current %Program), or from C++ with \c QoreProgram::setJitOptimizationLevel()
     - process-wide, from C++ with \c QoreJIT::setJITOptLevel()
     - process-wide, with the \c QORE_JIT_OPT_LEVEL environment variable
 
     A %Program that sets no level of its own uses the process-wide default.  Pass
-    \c -1 to @ref Qore::Program::setJitOptimizationLevel()
-    "Program::setJitOptimizationLevel()" to clear a %Program's override so that
+    \c -1 to
+    @ref Qore::Program::setJitOptimizationLevel() "Program::setJitOptimizationLevel()" to clear a %Program's override so that
     the process-wide default applies again.
 
     @code{.py}

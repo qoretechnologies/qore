@@ -308,8 +308,8 @@ public hashdecl RestSchemaImportResultInfo {
     @par Multi-document applications
 
     An application whose API is split across documents served from different base paths - Xero, for one -
-    imports each document separately and ships one @ref RestSchemaActions::RestSchemaActionSet
-    "RestSchemaActionSet" per document.  @ref importAll() does the whole set in one call and returns one
+    imports each document separately and ships one
+    @ref RestSchemaActions::RestSchemaActionSet "RestSchemaActionSet" per document.  @ref importAll() does the whole set in one call and returns one
     result per document.
 */
 public class RestSchemaImporter {

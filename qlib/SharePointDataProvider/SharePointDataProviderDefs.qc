@@ -60,8 +60,8 @@ public const MinPollInterval = 30;
 public const MaxPageSize = 200;
 
 #! List templates that hold documents rather than records
-/** A document library is reached through the drive-item API (@ref SharePointDataProvider::AppName
-    "the file actions"), so it is excluded where lists are offered as record tables.
+/** A document library is reached through the drive-item API
+    (@ref SharePointDataProvider::AppName "the file actions"), so it is excluded where lists are offered as record tables.
 */
 public const DocumentLibraryTemplates = {
     "documentLibrary": True,

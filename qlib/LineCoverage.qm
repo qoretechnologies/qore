@@ -73,8 +73,8 @@ public namespace LineCoverage {
     /**
         The recorder attaches to @ref Qore::ProgramControl "ProgramControl"
         instances and keeps stepping without blocking debugged threads.  Call
-        @ref start() with an explicit @ref Qore::ProgramControl
-        "ProgramControl" before executing code, @ref stop() when collection
+        @ref start() with an explicit
+        @ref Qore::ProgramControl "ProgramControl" before executing code, @ref stop() when collection
         should end, and @ref snapshot() to retrieve a deterministic report.
 
         The report has this shape:

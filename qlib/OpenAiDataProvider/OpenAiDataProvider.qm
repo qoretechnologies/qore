@@ -560,9 +560,62 @@ module OpenAiDataProvider {
 
     The %OpenAiDataProvider module provides a @ref dataproviderintro "data provider" API for OpenAI services.
 
-    @section openaidataprovider_examples Examples
+    Documentation:
+    - @subpage openaidataprovider_examples "OpenAiDataProvider Examples": responses with tool calls and structured
+      output, conversation context stores, streaming responses and their event payloads, and server-side
+      conversations
+    - @subpage openaidataprovidermigration "Migrating to the Responses API": replacing the deprecated Assistants
+      API data providers, and changes to response output, streaming and conversation persistence
+    - @subpage openaidataprovider_relnotes "Release Notes": the changes in each version
+*/
+/** @page openaidataprovider_relnotes Release Notes
 
-    @subsection openaidataprovider_response_tools Responses with Tool Calls and Structured Output
+    @section openaidataprovider_v1_7 OpenAiDataProvider v1.7
+    - added the \c transcribe-audio data provider and the <b>Transcribe Audio</b> action implementing the OpenAI
+      audio transcription (speech-to-text) API; the audio file is uploaded as \c multipart/form-data and the
+      \c gpt-4o-transcribe, \c gpt-4o-mini-transcribe, and \c whisper-1 models are supported with the \c json,
+      \c text, \c srt, \c verbose_json, and \c vtt response formats
+    - added the \c conversations data provider tree implementing the OpenAI Conversations API
+      (create, get, update, delete, and item list/create/get/delete), replacing the deprecated Assistants API
+      threads
+    - added the \c responses/cancel and \c responses/input-items data providers, replacing the deprecated
+      Assistants API run cancel and run steps endpoints
+    - added the \c conversation field to create-response requests and responses, binding a response to a
+      server-side conversation
+    - added \c function_call_output input items to create-response requests, so function tool results can be
+      returned to the model; this replaces the deprecated Assistants API \c submit_tool_outputs endpoint
+    - deprecated all \c assistants, \c threads, and \c runs data providers ahead of OpenAI's 2026-08-26 removal
+      of the Assistants API
+    - added OpenAiResponseActionSession for action-based response creation and streaming
+    - added typed response output items for tool calls, tool results, and output content parts
+    - added response stream data provider for Server-Sent Events streaming
+    - added conversation context store hooks for response continuity
+    - added action catalog entry for streaming responses
+    - added responses API input content support for text, image, audio, and file parts
+    - added conversation context helpers for response continuity
+    - fixed
+      @ref OpenAiDataProvider::OpenAiModelCreateResponseDataProvider::prepareRequest() "OpenAiModelCreateResponseDataProvider::prepareRequest()" to accept a request whose values all have the same
+      type, such as <tt>{&quot;input&quot;: ({&quot;text&quot;: &quot;...&quot;},)}</tt>; setting the model or the converted input raised
+      \c RUNTIME-TYPE-ERROR
+    - fixed create-response requests with tools: a request with a \c function, \c web_search, or
+      \c computer_use tool, or with a \c compound file search filter, was rejected with \c MISSING-VALUE-ERROR, and
+      a file search tool with \c filters raised \c RUNTIME-OVERLOAD-ERROR; filters are now sent in the API format,
+      with the \c operator of a compound filter as its \c type, and a filter that is not a hash with exactly one of
+      the keys \c comparison or \c compound raises \c INVALID-REQUEST
+
+    @section openaidataprovider_v1_4 OpenAiDataProvider v1.4
+    - missing APIs and actions to handle image analysis
+      (<a href="https://github.com/qoretechnologies/qore/issues/4947">issue 4947</a>)
+    - added APIs to handle image generation
+
+    @section openaidataprovider_v1_0 OpenAiDataProvider v1.0
+    - initial release
+*/
+/** @page openaidataprovider_examples OpenAiDataProvider Examples
+
+    @tableofcontents
+
+    @section openaidataprovider_response_tools Responses with Tool Calls and Structured Output
 
     @code{.py}
 %requires OpenAiDataProvider
@@ -646,7 +699,7 @@ list<hash<auto>> tool_results = result.tool_results;
 string text = result.output_text;
     @endcode
 
-    @subsection openaidataprovider_context_store Conversation Context Store
+    @section openaidataprovider_context_store Conversation Context Store
 
     @code{.py}
 class MyContextStore inherits OpenAiConversationContextStore {
@@ -678,7 +731,7 @@ hash<auto> result = resp.doRequest({
 });
     @endcode
 
-    @subsection openaidataprovider_context_callbacks Conversation Context Store Callbacks
+    @section openaidataprovider_context_callbacks Conversation Context Store Callbacks
 
     @code{.py}
 OpenAiConversationContextStoreCallbacks store(
@@ -691,7 +744,7 @@ OpenAiDataProvider::OpenAiDataProvider prov(rc.get());
 prov.setConversationContextStore(store);
     @endcode
 
-    @subsection openaidataprovider_stream_example Streaming Responses
+    @section openaidataprovider_stream_example Streaming Responses
 
     @code{.py}
 %requires OpenAiDataProvider
@@ -718,14 +771,14 @@ stream.doRequest({
         },
     ),
 });
-@endcode
+    @endcode
 
     For Creator WebSocket integrations, the action-based
     @ref OpenAiDataProvider::OpenAiResponseActionSession "OpenAiResponseActionSession"
     class provides a transport-agnostic interface for response creation and streaming
     with normalized rich content output.
 
-    @subsection openaidataprovider_stream_events Stream Event Payloads
+    @section openaidataprovider_stream_events Stream Event Payloads
 
     The stream provider emits SSE events with a <tt>type</tt> field matching the Responses API event types. A few common
     examples:
@@ -736,7 +789,7 @@ stream.doRequest({
     The emitted event hash also includes <tt>event</tt> and <tt>id</tt> when provided by the server. The <tt>responses/stream</tt>
     provider will persist conversation context on <tt>response.completed</tt> when a <tt>conversation_key</tt> is used.
 
-    @subsection openaidataprovider_conversations Server-Side Conversations
+    @section openaidataprovider_conversations Server-Side Conversations
 
     Conversations are the Responses API replacement for the deprecated Assistants API threads.  A conversation
     stores items (messages, tool calls, and tool call outputs); attaching a response to a conversation with the
@@ -776,6 +829,11 @@ hash<auto> items = conversations.getChildProvider("items").getChildProvider("lis
 });
     @endcode
 
+*/
+/** @page openaidataprovidermigration Migrating to the Responses API
+
+    @tableofcontents
+
     @section openaidataprovider_assistants_deprecation Assistants API Deprecation
 
     OpenAI deprecated the Assistants API on 2025-08-26 and will remove it on <b>2026-08-26</b>.  Every
@@ -784,9 +842,6 @@ hash<auto> items = conversations.getChildProvider("items").getChildProvider("lis
     process.
 
     Migrate as follows:
-
-    @note Each table row below must stay on a single line; \c qdx does not support backslash line continuation
-    inside a table and silently truncates the table where one appears.
 
     |!Assistants API|!Replacement
     |\c assistants|the \c responses data provider, with configuration moved into a reusable prompt
@@ -801,48 +856,6 @@ hash<auto> items = conversations.getChildProvider("items").getChildProvider("lis
     field of a create-response request.  Tool outputs are returned to the model as \c function_call_output input
     items on a follow-up request that sets \c previous_response_id or reuses the same \c conversation.
 
-    @section openaidataprovider_relnotes Release Notes
-
-    @subsection openaidataprovider_v1_7 OpenAiDataProvider v1.7
-    - added the \c transcribe-audio data provider and the <b>Transcribe Audio</b> action implementing the OpenAI
-      audio transcription (speech-to-text) API; the audio file is uploaded as \c multipart/form-data and the
-      \c gpt-4o-transcribe, \c gpt-4o-mini-transcribe, and \c whisper-1 models are supported with the \c json,
-      \c text, \c srt, \c verbose_json, and \c vtt response formats
-    - added the \c conversations data provider tree implementing the OpenAI Conversations API
-      (create, get, update, delete, and item list/create/get/delete), replacing the deprecated Assistants API
-      threads
-    - added the \c responses/cancel and \c responses/input-items data providers, replacing the deprecated
-      Assistants API run cancel and run steps endpoints
-    - added the \c conversation field to create-response requests and responses, binding a response to a
-      server-side conversation
-    - added \c function_call_output input items to create-response requests, so function tool results can be
-      returned to the model; this replaces the deprecated Assistants API \c submit_tool_outputs endpoint
-    - deprecated all \c assistants, \c threads, and \c runs data providers ahead of OpenAI's 2026-08-26 removal
-      of the Assistants API
-    - added OpenAiResponseActionSession for action-based response creation and streaming
-    - added typed response output items for tool calls, tool results, and output content parts
-    - added response stream data provider for Server-Sent Events streaming
-    - added conversation context store hooks for response continuity
-    - added action catalog entry for streaming responses
-    - added responses API input content support for text, image, audio, and file parts
-    - added conversation context helpers for response continuity
-    - fixed @ref OpenAiDataProvider::OpenAiModelCreateResponseDataProvider::prepareRequest()
-      "OpenAiModelCreateResponseDataProvider::prepareRequest()" to accept a request whose values all have the same
-      type, such as \c {"input": ({"text": "..."},)}; setting the model or the converted input raised
-      \c RUNTIME-TYPE-ERROR
-    - fixed create-response requests with tools: a request with a \c function, \c web_search, or
-      \c computer_use tool, or with a \c compound file search filter, was rejected with \c MISSING-VALUE-ERROR, and
-      a file search tool with \c filters raised \c RUNTIME-OVERLOAD-ERROR; filters are now sent in the API format,
-      with the \c operator of a compound filter as its \c type, and a filter that is not a hash with exactly one of
-      the keys \c comparison or \c compound raises \c INVALID-REQUEST
-
-    @subsection openaidataprovider_v1_4 OpenAiDataProvider v1.4
-    - missing APIs and actions to handle image analysis
-      (<a href="https://github.com/qoretechnologies/qore/issues/4947">issue 4947</a>)
-    - added APIs to handle image generation
-
-    @subsection openaidataprovider_v1_0 OpenAiDataProvider v1.0
-    - initial release
     @section openaidataprovider_migration Migration Notes
 
     - Response output items are now typed; downstream code should prefer <tt>output_text</tt>, <tt>tool_calls</tt>, and

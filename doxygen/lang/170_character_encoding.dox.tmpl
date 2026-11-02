@@ -14,8 +14,8 @@
     \c ENCODING-CONVERSION-ERROR exception (\c "cannot convert from ... to ...").
 
     A conversion never replaces a character that the target encoding cannot hold: string conversions
-    (convert_encoding()) and stream conversions (@ref Qore::EncodingConversionInputStream
-    "EncodingConversionInputStream", @ref Qore::EncodingConversionOutputStream "EncodingConversionOutputStream")
+    (convert_encoding()) and stream conversions
+    (@ref Qore::EncodingConversionInputStream "EncodingConversionInputStream", @ref Qore::EncodingConversionOutputStream "EncodingConversionOutputStream")
     raise an \c ENCODING-CONVERSION-ERROR exception with the byte offset in the input of the first such character,
     with every \c iconv library, also with the ones that would replace the character with an approximation or a
     placeholder.  Text in a stateful encoding that ends in the middle of a character or shift sequence raises the

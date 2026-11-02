@@ -208,8 +208,8 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         caller is woken via CV when the notifier becomes readable or the timeout
         elapses.
 
-        On success the caller should invoke @ref Qore::EventNotifier::acknowledge()
-        "acknowledge()" to drain the notifier's fd, matching the @c Socket::poll
+        On success the caller should invoke
+        @ref Qore::EventNotifier::acknowledge() "acknowledge()" to drain the notifier's fd, matching the @c Socket::poll
         pattern the caller is replacing.
 
         @param notifier the notifier to wait on
@@ -397,8 +397,8 @@ public class AsyncSocketIoController inherits LoggerWrapper {
 
         For non-callable \c user_data (numbers, strings, hashes, …) see
         @ref Qore::AsyncIoController::setTimerCallback() "AsyncIoController::setTimerCallback()";
-        when installed, that single callback receives a @ref Qore::TimerEventInfo
-        "hash<TimerEventInfo>" for each fire.  With no callback installed, non-callable
+        when installed, that single callback receives a
+        @ref Qore::TimerEventInfo "hash<TimerEventInfo>" for each fire.  With no callback installed, non-callable
         \c user_data is silently dropped.
 
         @param deadline the absolute time when the timer should fire

@@ -55,8 +55,8 @@ class MyClass inherits MyBaseClass {
     Classes can declare formal type parameters in their public API. User code
     supplies concrete type arguments in type positions, as documented in
     @ref generic_class_type "Generic Class Types". Generic builtin classes now
-    include the threading value-container classes @ref Qore::Thread::Queue
-    "Queue<T>", @ref Qore::Thread::Channel "Channel<T>",
+    include the threading value-container classes
+    @ref Qore::Thread::Queue "Queue<T>", @ref Qore::Thread::Channel "Channel<T>",
     @ref Qore::Thread::Promise "Promise<T>", and
     @ref Qore::Thread::Future "Future<T>", the iterator hierarchy such as
     @ref Qore::AbstractIterator "AbstractIterator<T>" and
@@ -416,8 +416,8 @@ int id = d.getId();          # OK
     Const-method metadata is exposed through the \c reflection module as
     @ref Qore::Reflection::AbstractMethodVariant::isConstMethod() "AbstractMethodVariant::isConstMethod()",
     @ref Qore::Reflection::MC_CONST "MC_CONST", and the \c "const" modifier string. The \c QoreApiMetadata module
-    exposes the same information as @ref QoreApiMetadata::MethodInfo::is_const_method
-    "MethodInfo::is_const_method".
+    exposes the same information as
+    @ref QoreApiMetadata::MethodInfo::is_const_method "MethodInfo::is_const_method".
 
     @note A const method is not the same as a @ref CONSTANT "CONSTANT" code flag. Code flags describe side effects and
     exception behavior; const-method metadata describes whether a method can be called through a read-only receiver.

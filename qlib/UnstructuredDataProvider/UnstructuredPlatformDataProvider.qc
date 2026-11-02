@@ -25,8 +25,7 @@
 public namespace UnstructuredDataProvider {
 #! The Unstructured Platform API subtree
 /** Hosts the actions generated from the vendored Platform API schema, plus the hand-written
-    @ref UnstructuredDataProvider::UnstructuredConnectorFieldsDataProvider
-    "UnstructuredConnectorFieldsDataProvider" that answers what a connector type needs configuring.
+    @ref UnstructuredDataProvider::UnstructuredConnectorFieldsDataProvider "UnstructuredConnectorFieldsDataProvider" that answers what a connector type needs configuring.
 
     The Platform API is a separate service from the partition API on a separate host, but takes the same
     API key, so one connection serves both; see

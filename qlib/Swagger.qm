@@ -138,9 +138,12 @@ SwaggerSchema swagger = SwaggerLoader::fromFile(ENV.SCHEMA_DIR + DirSep + "MySch
 RestHandler handler(NOTHING, swagger);
     @endcode
 
-    @section swagger_relnotes Swagger Module Release Notes
+    See @subpage swagger_relnotes "Swagger Module Release Notes" for the changes in each version.
+*/
+/** @page swagger_relnotes Swagger Module Release Notes
 
-    @subsection swagger_2_6 Swagger v2.6
+
+    @section swagger_2_6 Swagger v2.6
     - a path that differs from another only by a trailing slash, such as Pipedrive's \c /oauth/token and
       \c /oauth/token/, is a path of its own instead of making the schema fail to load with
       \c INVALID-PATH-COMPONENT; a URI path with or without the trailing slash still matches the path declared only
@@ -214,17 +217,17 @@ RestHandler handler(NOTHING, swagger);
       - @ref Swagger::OperationObject "OperationObject" now inherits from
         @ref RestSchemaValidator::AbstractOperationObject "AbstractOperationObject"
 
-    @subsection swagger_2_2_3 Swagger v2.2.3
+    @section swagger_2_2_3 Swagger v2.2.3
     - improved parsing Swagger schemas with type errors
 
-    @subsection swagger_2_2_2 Swagger v2.2.2
+    @section swagger_2_2_2 Swagger v2.2.2
     - fixed handling type declarations with unknown format values
       (<a href="https://github.com/qoretechnologies/qore/issues/4907">issue 4907</a>)
     - fixed validating Swagger schemas with objects that declare no properties
       (<a href="https://github.com/qoretechnologies/qore/issues/4906">issue 4906</a>)
     - implemented the \c utc_dates and \c query_date_format options
 
-    @subsection swagger_2_2_1 Swagger v2.2.1
+    @section swagger_2_2_1 Swagger v2.2.1
     - fixed a bug converting arguments to fit the Swagger schema to avoid spurious and very difficult to debug type
       errors
       (<a href="https://github.com/qoretechnologies/qore/issues/4825">issue 4825</a>)
@@ -233,21 +236,21 @@ RestHandler handler(NOTHING, swagger);
     - fixed support of nullable object properties
       (<a href="https://github.com/qoretechnologies/qore/issues/4854">issue 4854</a>)
 
-    @subsection swagger_2_2 Swagger v2.2
+    @section swagger_2_2 Swagger v2.2
     - implemented lax mode parsing for Swagger schemas with common errors to work
       (<a href="https://github.com/qoretechnologies/qore/issues/4741">issue 4741</a>)
 
-    @subsection swagger_2_1_1 Swagger v2.1.1
+    @section swagger_2_1_1 Swagger v2.1.1
     - do not require \c items for arrays not describing a body parameter
       (<a href="https://github.com/qoretechnologies/qore/issues/4730">issue 4730</a>)
     - ensure that URI paths are created without duplicated slashes by handling the base path consistently
       (<a href="https://github.com/qoretechnologies/qore/issues/4728">issue 4728</a>)
 
-    @subsection swagger_2_1 Swagger v2.1
+    @section swagger_2_1 Swagger v2.1
     - parse and report path arguments when processing REST requests on the server side
       (<a href="https://github.com/qoretechnologies/qore/issues/4661">issue 4661</a>)
 
-    @subsection swagger_2_0_10 Swagger v2.0.10
+    @section swagger_2_0_10 Swagger v2.0.10
     - REST handlers must throw a \c DESERIALIZATION-ERROR when deserialization errors occur, so that a
       <tt>400 Bad Request</tt> response is returned
       (<a href="https://github.com/qoretechnologies/qore/issues/4647">issue 4647</a>)
@@ -256,39 +259,39 @@ RestHandler handler(NOTHING, swagger);
     - allow for the client's time zone locale to be set for data serialization / deserialization
       (<a href="https://github.com/qoretechnologies/qore/issues/4639">issue 4639</a>)
 
-    @subsection swagger_2_0_9 Swagger v2.0.9
+    @section swagger_2_0_9 Swagger v2.0.9
     - fixed a bug where empty definitions could be ignored
       (<a href="https://github.com/qoretechnologies/qore/issues/4545">issue 4545</a>)
 
-    @subsection swagger_2_0_8 Swagger v2.0.8
+    @section swagger_2_0_8 Swagger v2.0.8
     - do not raise a validation error when a response with an unknown code has a message body; this hides the true
       error message from the caller in case of error messages
       (<a href="https://github.com/qoretechnologies/qore/issues/4534">issue 4534</a>)
     - allow a logger to be set in validators
       (<a href="https://github.com/qoretechnologies/qore/issues/4509">issue 4509</a>)
 
-    @subsection swagger_2_0_7 Swagger v2.0.7
+    @section swagger_2_0_7 Swagger v2.0.7
     - fixed a bug where global \c consumes and \c produces declarations were not respected
       (<a href="https://github.com/qoretechnologies/qore/issues/4494">issue 4494</a>)
 
-    @subsection swagger_2_0_6 Swagger v2.0.6
+    @section swagger_2_0_6 Swagger v2.0.6
     - fixed a bug where schemas with recursive references could not be loaded
       (<a href="https://github.com/qoretechnologies/qore/issues/4350">issue 4350</a>)
 
-    @subsection swagger_2_0_5 Swagger v2.0.5
+    @section swagger_2_0_5 Swagger v2.0.5
     - fixed a bug where unknown string format types were not ignored but instead caused an exception to be thrown
       (<a href="https://github.com/qoretechnologies/qore/issues/4203">issue 4203</a>)
 
-    @subsection swagger_2_0_4 Swagger v2.0.4
+    @section swagger_2_0_4 Swagger v2.0.4
     - fixed a type error in @ref RestSchemaValidator::AbstractRestSchemaValidator::getBasePath() "Swagger::getBasePath()" for the case when the base
       path is not set
       (<a href="https://github.com/qoretechnologies/qore/issues/4064">issue 4064</a>)
 
-    @subsection swagger_2_0_3 Swagger v2.0.3
+    @section swagger_2_0_3 Swagger v2.0.3
     - fixed a bug supporting number formats
       (<a href="https://github.com/qoretechnologies/qore/issues/3979">issue 3979</a>)
 
-    @subsection swagger_2_0_2 Swagger v2.0.2
+    @section swagger_2_0_2 Swagger v2.0.2
     - fixed \c date-time value handling
       (<a href="https://github.com/qoretechnologies/qore/issues/3847">issue 3847</a>)
     - fixed a bug where sibling elements to a \c "$ref" were not ignored (see
@@ -297,7 +300,7 @@ RestHandler handler(NOTHING, swagger);
     - fixed support for query parameters of type object
       (<a href="https://github.com/qoretechnologies/qore/issues/3799">issue 3799</a>)
 
-    @subsection swagger_2_0_1 Swagger v2.0.1
+    @section swagger_2_0_1 Swagger v2.0.1
     - added support for the <tt>x-nullable</tt> attribute to allow for nullable values
       (<a href="https://github.com/qoretechnologies/qore/issues/3785">issue 3785</a>)
     - added location support from the @ref filelocationhandlerintro "FileLocationHandler" module
@@ -305,23 +308,23 @@ RestHandler handler(NOTHING, swagger);
     - fixed support for types with no type declaration
       (<a href="https://github.com/qoretechnologies/qore/issues/3775">issue 3775</a>)
 
-    @subsection swagger_2_0 Swagger v2.0
+    @section swagger_2_0 Swagger v2.0
     - fixed support for additional YAML MIME types
       (<a href="https://github.com/qoretechnologies/qore/issues/3699">issue 3699</a>)
     - implemented support for the DataProvider API
       (<a href="https://github.com/qoretechnologies/qore/issues/3545">issue 3545</a>)
 
-    @subsection swagger_1_1_0 Swagger v1.1.0
+    @section swagger_1_1_0 Swagger v1.1.0
     - fixed accepting multipart/form-data content-type and also working with list and hash parameters
       (<a href="https://github.com/qoretechnologies/qore/issues/2932">issue 2932</a>)
 
-    @subsection swagger_1_0_2 Swagger v1.0.2
+    @section swagger_1_0_2 Swagger v1.0.2
     - fixed sending of simple string responses to use text/plain Content-Type if possible
       (<a href="https://github.com/qoretechnologies/qore/issues/2893">issue 2893</a>)
     - fixed checking of response body in case response schema is not present
       (<a href="https://github.com/qoretechnologies/qore/issues/2894">issue 2894</a>)
 
-    @subsection swagger_1_0_1 Swagger v1.0.1
+    @section swagger_1_0_1 Swagger v1.0.1
     - fixed handling of string type date and date-time formats (<a href="https://github.com/qoretechnologies/qore/issues/2341">issue 2341</a>)
     - fixed example value for binary type (<a href="https://github.com/qoretechnologies/qore/issues/2342">issue 2342</a>)
     - fixed serialization of date/time values (<a href="https://github.com/qoretechnologies/qore/issues/2349">issue 2349</a>)
@@ -339,7 +342,7 @@ RestHandler handler(NOTHING, swagger);
     - fixed parsing of responses without Content-Type header (<a href="https://github.com/qoretechnologies/qore/issues/2517">issue 2517</a>)
     - fixed path matching for paths not beginning with a slash (<a href="https://github.com/qoretechnologies/qore/issues/2516">issue 2516</a>)
 
-    @subsection swagger_1_0 Swagger v1.0
+    @section swagger_1_0 Swagger v1.0
     - initial release
 */
 
@@ -1536,7 +1539,7 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
         type
         @throw SERIALIZATION-ERROR the response body could not be serialized due to an error
 
-        @note <a href="http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html>RFC 2616 section 14</a>: If an Accept
+        @note <a href="http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html">RFC 2616 section 14</a>: If an Accept
         header field is present, and if the server cannot send a response which is acceptable according to the
         combined Accept field value, then the server SHOULD send a 406 (not acceptable) response.  To ensure this
         happens, if an Accept error of this nature occurs in this call, an \c "ACCEPT-ERROR" must be thrown
@@ -1948,7 +1951,7 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
         type
         @throw SERIALIZATION-ERROR the response body could not be serialized due to an error
 
-        @note <a href="http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html>RFC 2616 section 14</a>: If an Accept
+        @note <a href="http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html">RFC 2616 section 14</a>: If an Accept
         header field is present, and if the server cannot send a response which is acceptable according to the
         combined Accept field value, then the server SHOULD send a 406 (not acceptable) response.  To ensure this
         happens, if an Accept error of this nature occurs in this call, an \c "ACCEPT-ERROR" must be thrown

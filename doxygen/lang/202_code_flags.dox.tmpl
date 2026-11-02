@@ -82,8 +82,8 @@
       (PO_NO_THREAD_CONTROL)</em>), and so are a call reference to builtin code and non-callable timer data, which a
       process-wide timer callback would receive
     - a timer can be cancelled only if module code added it for the same application, the first Program in the
-      chain of callers that is not a module; @ref Qore::AsyncIoController::cancelTimer()
-      "AsyncIoController::cancelTimer()" returns @ref False otherwise
+      chain of callers that is not a module;
+      @ref Qore::AsyncIoController::cancelTimer() "AsyncIoController::cancelTimer()" returns @ref False otherwise
 
     This keeps the caller's restrictions: a caller that may not control threads cannot use module code to run its own
     code in another thread or to escape a cancellation request, while modules such as

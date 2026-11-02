@@ -114,7 +114,7 @@ module FixedLengthUtil {
 
     The %FixedLengthUtil module provides functionality for parsing files with fixed length lines. This means that we have at least one line type and each line type is described as several data items with fixed length.
 
-    To use this module, use \c "%requires FixedLengthUtil" in your code.
+    To use this module, use <tt>%requires FixedLengthUtil</tt> in your code.
 
     All the public symbols in the module are defined in the FixedLengthUtil namespace.
 
@@ -128,6 +128,72 @@ module FixedLengthUtil {
     - @ref FixedLengthUtil::FixedLengthDataWriter "FixedLengthDataWriter": Fixed length line writer into a variable
     - @ref FixedLengthUtil::FixedLengthFileIterator "FixedLengthFileIterator": Iterator class allowing for fixed-length line file to be processed line by line on a record basis
     - @ref FixedLengthUtil::FixedLengthFileWriter "FixedLengthFileWriter": Fixed length line writer into a file
+
+    Documentation:
+    - @subpage fixedlengthutilspecguide "Specifications and Options": the global options, the specification hash
+      with its record descriptions, field specifications and field types, and record type resolution
+    - @subpage fixedlengthformat "Data Format and Examples": the format of input and output data, with complete
+      reading and writing examples
+    - @subpage fixedlengthutil_relnotes "Release Notes": the changes in each version
+*/
+/** @page fixedlengthutil_relnotes Release Notes
+
+
+    @section fixedlengthutil_v1_7 Version 1.7
+    - field lengths are bytes, as documented, also when a line has characters of more than one byte (ex: non-ASCII
+      text in UTF-8, or UTF-16): fields were extracted by character while lines were matched by byte length, so their
+      values were shifted; a field that would start or end inside a character raises
+      \c FIXED-LENGTH-UTIL-CHARACTER-SPLIT
+    - the writers size fields in bytes of the output encoding, as documented: values were padded and truncated by
+      character, so lines with such characters were longer than their record and could not be read back; a value is
+      truncated at a character boundary, a field that whole padding characters cannot fill raises
+      \c FIXED-LENGTH-UTIL-CHARACTER-SPLIT, and @ref FixedLengthUtil::FixedLengthDataWriter "FixedLengthDataWriter"
+      returns strings in the \c "encoding" option, as documented
+    - the read data provider's \c path option is now tagged
+      @ref DataProvider::DTT_FromLocation "DTT_FromLocation", advertising that the
+      value (already resolved with \c FileLocationHandler::getBinaryStreamFromLocation())
+      may be a bare path or any registered scheme (<tt>file://</tt>, <tt>http(s)://</tt>, <tt>sftp://</tt>, ...)
+    - the read data provider's \c ignore_empty option declares its default (\c false: an empty line is read as a
+      record)
+
+    @section fixedlengthutil_v1_6 Version 1.6
+    - added support for data provider application actions
+      (<a href="https://github.com/qoretechnologies/qore/issues/4808">issue 4808</a>)
+
+    @section fixedlengthutil_v1_5 Version 1.5
+    - updated with initial support for generic expressions
+      (<a href="https://github.com/qoretechnologies/qore/issues/4538">issue 4538</a>)
+
+    @section fixedlengthutil_v1_4 Version 1.4
+    - added support for resolving locations with the \c FileLocationHandler module
+      (<a href="https://github.com/qoretechnologies/qore/issues/4456">issue 4456</a>)
+
+    @section fixedlengthutil_v1_3 Version 1.3
+    - added support for generic record search operators and options
+      (<a href="https://github.com/qoretechnologies/qore/issues/4430">issue 4430</a>)
+
+    @section fixedlengthutil_v1_2_1 Version 1.2.1
+    - updated read and write data providers to provide verbose option support
+      (<a href="https://github.com/qoretechnologies/qore/issues/4139">issue 4139</a>)
+
+    @section fixedlengthutil_v1_1 Version 1.1
+    - added support for streams; the following classes implement fixed-length input and output based on streams:
+      - @ref FixedLengthUtil::FixedLengthIterator "FixedLengthIterator": provides a more generic interface than @ref FixedLengthUtil::FixedLengthDataIterator "FixedLengthDataIterator" and @ref FixedLengthUtil::FixedLengthFileIterator "FixedLengthFileIterator"
+      - @ref FixedLengthUtil::FixedLengthWriter "FixedLengthWriter": provides a more generic interface than @ref FixedLengthUtil::FixedLengthDataWriter "FixedLengthDataWriter" and @ref FixedLengthUtil::FixedLengthFileWriter "FixedLengthFileWriter"
+    - added @ref FixedLengthUtil::FixedLengthFileIterator::getFileName() (<a href="https://github.com/qoretechnologies/qore/issues/1164">issue 1164</a>)
+    - added field as well as global option "truncate" (<a href="https://github.com/qoretechnologies/qore/issues/1841">issue 1841</a>)
+    - added field as well as global option "tab2space" (<a href="https://github.com/qoretechnologies/qore/issues/1866">issue 1866</a>)
+
+    @section fixedlengthutil_v1_0_1 Version 1.0.1
+    - fixes and improvements to errors and exceptions (<a href="https://github.com/qoretechnologies/qore/issues/1828">issue 1828</a>)
+
+    @section fixedlengthutil_v1_0 Version 1.0
+    - initial release
+*/
+
+/** @page fixedlengthutilspecguide Specifications and Options
+
+    @tableofcontents
 
     @section fixedlengthglobals Global Options
 
@@ -194,7 +260,7 @@ const Specs = (
     | \c format|string|a date mask if the \a type of the field is \c "date"; see @ref date_formatting "date formatting" for more information
     | \c timezone|string|override global timezone for current "date" field
     | \c padding|string|set padding of the field "left" (default) or "right"; used only in writers; if not given then the default padding depends on the field's \a type: \c "int" fields get left padding (right justification) and all others get right padding (left justification)
-    | \c padding_char|string|a string with size 1 to use for \c padding. Default \c " " (space). Used only in writers
+    | \c padding_char|string|a string with size 1 to use for \c padding. Default <tt>&quot; &quot;</tt> (space). Used only in writers
     | \c value|string|the value to use to compare to input data when determining the record type; if \c "value" is defined for a field, then \c "regex" cannot be defined
     | \c regex|string|the regular expression to use to apply to input data lines when determining the record type
     | \c default|string|In writer the value is default output value when value is not specified in record data.
@@ -220,7 +286,7 @@ const Specs = (
     determine the record type or even multiple fields could be used.  Record type detection configuration is supplied
     by the \c "value" (field value equality test) or \c "regex" (regular expression test) keys in the
     @ref fixedlengthspecrow "field specification hash" for the record in question.  If multiple fields in a record
-    definintion have \c "value" or \c "regex" keys, then all fields must match the input data in order for the input
+    definition have \c "value" or \c "regex" keys, then all fields must match the input data in order for the input
     line to match the record.
 
     The above record type resolution logic is executed in
@@ -242,8 +308,9 @@ const Specs = (
     - It is an error to have both \c "regex" and \c "value" keys in a @ref fixedlengthspecrow "field specification hash"
     - If multiple fields have configuration for input line matching (i.e. \c "regex" and \c "value" keys), then all
       fields with this configuration must match for the record to be matched
+*/
 
-    @section fixedlengthformat Fixed Length Data Format
+/** @page fixedlengthformat Data Format and Examples
 
     Input and output data are formatted in a hash with two mandatory keys:
     - \c "type": a string with name of the type
@@ -324,59 +391,6 @@ hash<auto> global_options = {
 FixedLengthFileWriter w(file, specs, global_options);
 w.write(data);
     @endcode
-
-    @section fixedlengthutil_relnotes Release Notes
-
-    @subsection fixedlengthutil_v1_7 Version 1.7
-    - field lengths are bytes, as documented, also when a line has characters of more than one byte (ex: non-ASCII
-      text in UTF-8, or UTF-16): fields were extracted by character while lines were matched by byte length, so their
-      values were shifted; a field that would start or end inside a character raises
-      \c FIXED-LENGTH-UTIL-CHARACTER-SPLIT
-    - the writers size fields in bytes of the output encoding, as documented: values were padded and truncated by
-      character, so lines with such characters were longer than their record and could not be read back; a value is
-      truncated at a character boundary, a field that whole padding characters cannot fill raises
-      \c FIXED-LENGTH-UTIL-CHARACTER-SPLIT, and @ref FixedLengthUtil::FixedLengthDataWriter "FixedLengthDataWriter"
-      returns strings in the \c "encoding" option, as documented
-    - the read data provider's \c path option is now tagged
-      @ref DataProvider::DTT_FromLocation "DTT_FromLocation", advertising that the
-      value (already resolved with \c FileLocationHandler::getBinaryStreamFromLocation())
-      may be a bare path or any registered scheme (\c file://, \c http(s)://, \c sftp://, ...)
-    - the read data provider's \c ignore_empty option declares its default (\c false: an empty line is read as a
-      record)
-
-    @subsection fixedlengthutil_v1_6 Version 1.6
-    - added support for data provider application actions
-      (<a href="https://github.com/qoretechnologies/qore/issues/4808">issue 4808</a>)
-
-    @subsection fixedlengthutil_v1_5 Version 1.5
-    - updated with initial support for generic expressions
-      (<a href="https://github.com/qoretechnologies/qore/issues/4538">issue 4538</a>)
-
-    @subsection fixedlengthutil_v1_4 Version 1.4
-    - added support for resolving locations with the \c FileLocationHandler module
-      (<a href="https://github.com/qoretechnologies/qore/issues/4456">issue 4456</a>)
-
-    @subsection fixedlengthutil_v1_3 Version 1.3
-    - added support for generic record search operators and options
-      (<a href="https://github.com/qoretechnologies/qore/issues/4430">issue 4430</a>)
-
-    @subsection fixedlengthutil_v1_2_1 Version 1.2.1
-    - updated read and write data providers to provide verbose option support
-      (<a href="https://github.com/qoretechnologies/qore/issues/4139">issue 4139</a>)
-
-    @subsection fixedlengthutil_v1_1 Version 1.1
-    - added support for streams; the following classes implement fixed-length input and output based on streams:
-      - @ref FixedLengthUtil::FixedLengthIterator "FixedLengthIterator": provides a more generic interface than @ref FixedLengthUtil::FixedLengthDataIterator "FixedLengthDataIterator" and @ref FixedLengthUtil::FixedLengthFileIterator "FixedLengthFileIterator"
-      - @ref FixedLengthUtil::FixedLengthWriter "FixedLengthWriter": provides a more generic interface than @ref FixedLengthUtil::FixedLengthDataWriter "FixedLengthDataWriter" and @ref FixedLengthUtil::FixedLengthFileWriter "FixedLengthFileWriter"
-    - added @ref FixedLengthUtil::FixedLengthFileIterator::getFileName() (<a href="https://github.com/qoretechnologies/qore/issues/1164">issue 1164</a>)
-    - added field as well as global option "truncate" (<a href="https://github.com/qoretechnologies/qore/issues/1841">issue 1841</a>)
-    - added field as well as global option "tab2space" (<a href="https://github.com/qoretechnologies/qore/issues/1866">issue 1866</a>)
-
-    @subsection fixedlengthutil_v1_0_1 Version 1.0.1
-    - fixes and improvements to errors and exceptions (<a href="https://github.com/qoretechnologies/qore/issues/1828">issue 1828</a>)
-
-    @subsection fixedlengthutil_v1_0 Version 1.0
-    - initial release
 */
 
 #! The FixedLengthUtil namespace contains all the definitions in the FixedLengthUtil module

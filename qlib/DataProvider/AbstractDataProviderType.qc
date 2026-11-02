@@ -689,8 +689,7 @@ public class AbstractDataProviderType inherits Qore::Serializable {
         schema it stands for (for a REST schema, the location of the schema in its document).  Two types with the
         same name and fields built from different schemas, which can describe their fields differently, can then
         be told apart: the identity is part of the type's presentation identity
-        (@ref DataProvider::DataProviderPresentation::typePresentationIdentity()
-        "DataProviderPresentation::typePresentationIdentity()"), so that each schema has its own catalog
+        (@ref DataProvider::DataProviderPresentation::typePresentationIdentity() "DataProviderPresentation::typePresentationIdentity()"), so that each schema has its own catalog
         messages.  The identity is technical; it never depends on a description or other presentation text.
 
         Copies of the type, such as its "or nothing" type, have the same identity.
@@ -2004,8 +2003,8 @@ AbstractDataProviderType restored = AbstractDataProviderType::getFromGraph(graph
     /** Recursively walks the type's fields, building field paths for nested hash fields.
 
         Each value is the field path of the field, as processors and field references read it: the keys of the path
-        joined with dots, each key escaped with @ref DataProvider::AbstractDataProvider::escapeFieldPathKey()
-        "AbstractDataProvider::escapeFieldPathKey()", so a field whose name has a dot is one key (the field
+        joined with dots, each key escaped with
+        @ref DataProvider::AbstractDataProvider::escapeFieldPathKey() "AbstractDataProvider::escapeFieldPathKey()", so a field whose name has a dot is one key (the field
         \c Unit.Price is the value <tt>Unit\\.Price</tt>).  The display name is the names of the path joined with
         dots, as they are written (\c Unit.Price).
 

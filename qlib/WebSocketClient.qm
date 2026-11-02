@@ -256,9 +256,12 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
 
     See @ref dataprovider_debugging "Debugging Data Providers" in the DataProvider module for more information.
 
-    @section websocketclient_relnotes WebSocketClient Module Release History
+    See @subpage websocketclient_relnotes "WebSocketClient Module Release History" for the changes in each version.
+*/
+/** @page websocketclient_relnotes WebSocketClient Module Release History
 
-    @subsection wsc_v2_5 v2.5
+
+    @section wsc_v2_5 v2.5
     - fixed the @ref WebSocketClient::WebSocketClient "WebSocketClient" constructor to accept a \c headers option
       whose values all have the same type, such as a literal <tt>{"X-Count": 1}</tt>, with the \c token or
       \c cookie option; adding the \c Authorization or \c Cookie header raised \c RUNTIME-TYPE-ERROR
@@ -300,8 +303,8 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
         async I/O mode is enabled
       - added @ref WebSocketClient::WebSocketClient::connectAsync() "WebSocketClient::connectAsync()" for
         fully non-blocking connect + event loop startup
-      - added @ref WebSocketClient::WebSocketClient::getPollOperation()
-        "WebSocketClient::getPollOperation()" for advanced async I/O usage
+      - added
+        @ref WebSocketClient::WebSocketClient::getPollOperation() "WebSocketClient::getPollOperation()" for advanced async I/O usage
     - added the @ref WebSocketClient::WebSocketClientPollOperation "WebSocketClientPollOperation" class
       implementing @ref Qore::AbstractPollOperation for non-blocking WebSocket I/O with buffer-based
       frame parsing, thread-safe send/receive queues, and full protocol support (text, binary, ping/pong,
@@ -310,8 +313,8 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
       - automatic detection and use of HTTP/3 extended CONNECT when connecting to HTTP/3 servers
       - added @ref WebSocketClient::WebSocketClient::isHttp3() "WebSocketClient::isHttp3()" method to check if
         HTTP/3 WebSocket is being used
-      - added \c http3 key to @ref WebSocketClient::WebSocketClient::getConnectionInfo()
-        "WebSocketClient::getConnectionInfo()"
+      - added \c http3 key to
+        @ref WebSocketClient::WebSocketClient::getConnectionInfo() "WebSocketClient::getConnectionInfo()"
       - data provider's \c ws-connected-event now includes \c http3 field indicating HTTP/3 usage
     - debug info now includes \c http3 field for HTTP/3 WebSocket connections
     - added async polling API support for WebSocket connections
@@ -329,15 +332,15 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
       - automatic detection and use of HTTP/2 extended CONNECT when connecting to HTTP/2 servers
       - added @ref WebSocketClient::WebSocketClient::isHttp2() "WebSocketClient::isHttp2()" method to check if
         HTTP/2 WebSocket is being used
-      - added \c http2 key to @ref WebSocketClient::WebSocketClient::getConnectionInfo()
-        "WebSocketClient::getConnectionInfo()"
+      - added \c http2 key to
+        @ref WebSocketClient::WebSocketClient::getConnectionInfo() "WebSocketClient::getConnectionInfo()"
       - data provider's \c ws-connected-event now includes \c http2 field indicating HTTP/2 usage
       - in the default \c "auto" HTTP-version mode, a \c wss:// connection falls back to an HTTP/1.1 \c 101
         Upgrade on a new HTTP/1.1 connection when the server negotiates HTTP/2 or HTTP/3 but the extended
         \c CONNECT handshake fails (for example behind a reverse proxy that does not implement RFC 8441/9220);
         there is no fallback when a specific HTTP version was requested or HTTP/3 was required
-    - added debug info collection support via @ref DataProvider::AbstractDataProvider::setDebugCollector()
-      "AbstractDataProvider::setDebugCollector()" for the WebSocket data provider
+    - added debug info collection support via
+      @ref DataProvider::AbstractDataProvider::setDebugCollector() "AbstractDataProvider::setDebugCollector()" for the WebSocket data provider
     - debug info includes WebSocket message type, size, timing, connection protocol, and error info
     - added WebSocket extension support with permessage-deflate compression
       (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
@@ -348,13 +351,13 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
         method
       - added @ref WebSocketClient::WebSocketClient::getActiveExtensions() "WebSocketClient::getActiveExtensions()"
         method
-    - added optional AsyncAPI validation support via @ref WebSocketClient::WebSocketClient::setAsyncApiValidator()
-      "WebSocketClient::setAsyncApiValidator()" for validating WebSocket messages against AsyncAPI schemas
+    - added optional AsyncAPI validation support via
+      @ref WebSocketClient::WebSocketClient::setAsyncApiValidator() "WebSocketClient::setAsyncApiValidator()" for validating WebSocket messages against AsyncAPI schemas
       (<a href="https://github.com/qoretechnologies/qore/issues/5014">issue 5014</a>)
     - added the \c heartbeat and \c idle_timeout constructor options for the pacing of PING frames and the detection
       of peers that stop responding
 
-    @subsection wsc_v2_3 v2.3
+    @section wsc_v2_3 v2.3
     - added the @ref WebSocketClient::WebSocketClientWithSerialization "WebSocketClientWithSerialization" class, added
       support in the @ref WebSocketClient::WebSocketClient "WebSocketClient" class for tokens and a logger instead of
       log closures / callbacks
@@ -362,42 +365,42 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
       (<a href="https://github.com/qoretechnologies/qore/issues/4808">issue 4808</a>)
     - added support for protocol version 13
 
-    @subsection wsc_v2_2 v2.2
+    @section wsc_v2_2 v2.2
     - fixed creating example WebSocket client data providers from factories with templated option values
       (<a href="https://github.com/qoretechnologies/qore/issues/4716">issue 4716</a>)
     - added a "wait for message" API data provider to the WebSocket client data providers
       (<a href="https://github.com/qoretechnologies/qore/issues/4716">issue 4716</a>)
 
-    @subsection wsc_v2_1_1 v2.1.1
+    @section wsc_v2_1_1 v2.1.1
     - the data provider factory uses the delayed observable class instead
       (<a href="https://github.com/qoretechnologies/qore/issues/4701">issue 4701</a>)
 
-    @subsection wsc_v2_1 v2.1
+    @section wsc_v2_1 v2.1
     - fixed a deadlock deleting the client object when it goes out of scope in the event thread
       (<a href="https://github.com/qoretechnologies/qore/issues/4697">issue 4697</a>)
     - added the \c headers option to allow auth headers to be set in WebSocket client connections and data providers
       (<a href="https://github.com/qoretechnologies/qore/issues/4694">issue 4694</a>)
 
-    @subsection wsc_v2_0 v2.0
+    @section wsc_v2_0 v2.0
     - added support for events and messages from the DataProvider API
       (<a href="https://github.com/qoretechnologies/qore/issues/4557">issue 4557</a>)
 
-    @subsection wsc_v1_9_1 v1.9.1
+    @section wsc_v1_9_1 v1.9.1
     - added support for continuation frames
       (<a href="https://github.com/qoretechnologies/qore/issues/4073">issue 4073</a>)
 
-    @subsection wsc_v1_9 v1.9
+    @section wsc_v1_9 v1.9
     - implemented support for a data provider scheme cache and rich option information for connections
       (<a href="https://github.com/qoretechnologies/qore/issues/4025">issue 4025</a>)
 
-    @subsection wsc_v1_8 v1.8
+    @section wsc_v1_8 v1.8
     - removed the \c WebSocketConnectionObject::getConstructorInfo() and
       \c WebSocketConnectionObject::getConstructorInfoImpl() methods
       (<a href="https://github.com/qoretechnologies/qore/issues/3696">issue 3696</a>)
     - added support for socket events
       (<a href="https://github.com/qoretechnologies/qore/issues/3425">issue 3425</a>)
 
-    @subsection wsc_v1_7 v1.7
+    @section wsc_v1_7 v1.7
     - all connection clases have unified constructor
     - added the \c WebSocketConnectionObject::getConstructorInfo()
       method to allow connections to be created dynamically, potentially in another process from a network
@@ -405,20 +408,20 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
       (<a href="https://github.com/qoretechnologies/qore/issues/2628">issue 2628</a>)
     - add WebSocketClient handling of WSCC_GoingAway event
 
-    @subsection wsc_v1_6_3 v1.6.3
+    @section wsc_v1_6_3 v1.6.3
     - added missing exception handling in the connection close callback
       (<a href="https://github.com/qoretechnologies/qore/issues/3225">issue 3225</a>)
 
-    @subsection wsc_v1_6_2 v1.6.2
+    @section wsc_v1_6_2 v1.6.2
     - allowed the handling of \c PING messages to be customized
       (<a href="https://github.com/qoretechnologies/qore/issues/2887">issue 2887</a>)
 
-    @subsection wsc_v1_6_1 v1.6.1
+    @section wsc_v1_6_1 v1.6.1
     - added @ref WebSocketClient::WebSocketClient::pong() "WebSocketClient::pong()" to allow an unsolicited \c PONG
       message to be sent as a unidirectional keep-alive message from the client to the server
       (<a href="https://github.com/qoretechnologies/qore/issues/2566">issue 2566</a>)
 
-    @subsection wsc_v1_6 v1.6
+    @section wsc_v1_6 v1.6
     - added the @ref WebSocketClient::WebSocketConnectionObject "WebSocketConnectionObject" class to support the
       @ref connectionproviderintro "ConnectionProvider" module
     - updated for complex types
@@ -430,24 +433,24 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
       (<a href="https://github.com/qoretechnologies/qore/issues/2062">issue 2062</a>)
     - added support for the \c yield option in the constructor
 
-    @subsection wsc_v1_5 v1.5
+    @section wsc_v1_5 v1.5
     - added timeout values to @ref Qore::Socket "Socket" and @ref Qore::HTTPClient "HTTPClient" calls
       (<a href="https://github.com/qoretechnologies/qore/issues/1725">issue 1725</a>)
 
-    @subsection wsc_v1_4 v1.4
+    @section wsc_v1_4 v1.4
     - fixed a bug parsing and generating the websocket close status code
       (<a href="https://github.com/qoretechnologies/qore/issues/1216">issue 1216</a>)
 
-    @subsection wsc_v1_3 v1.3
+    @section wsc_v1_3 v1.3
     - ignore \c SOCKET-NOT-OPEN errors when closing (server already closed the connection)
 
-    @subsection wsc_v1_2 v1.2
+    @section wsc_v1_2 v1.2
     - prepend \c "WebSocketClient: " to log messages
 
-    @subsection wsc_v1_1 v1.1
+    @section wsc_v1_1 v1.1
     - added socket instrumention support from Qore 0.8.9
 
-    @subsection wsc_v1_0 v1.0
+    @section wsc_v1_0 v1.0
     - initial release
 */
 

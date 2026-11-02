@@ -53,7 +53,7 @@ pipeline.waitDone();
     including flush-time output from partial windows;
     top-level configured fields are read from selected columns directly instead
     of materializing full input blocks as hash-of-lists data.
-    Supported compiled filter forms include \c &&, \c ||, \c !,
+    Supported compiled filter forms include <tt>&amp;&amp;</tt>, <tt>||</tt>, <tt>!</tt>,
     scalar \c ==, \c !=, \c <, \c <=, \c >, and \c >= comparisons, computed
     scalar comparisons over top-level fields, expression-to-expression
     comparisons such as \c \@amount \c >= \c \@target or

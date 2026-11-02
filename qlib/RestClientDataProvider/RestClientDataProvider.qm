@@ -339,8 +339,8 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
       @ref RestClientIo::RestClientIo "RestClientIo" (async HTTP/1.x, HTTP/2, and HTTP/3) as
       the default REST transport; this enables HTTP/2 and HTTP/3 support with concurrent
       request multiplexing against the same host
-    - added debug info collection support via @ref DataProvider::AbstractDataProvider::setDebugCollector()
-      "AbstractDataProvider::setDebugCollector()"
+    - added debug info collection support via
+      @ref DataProvider::AbstractDataProvider::setDebugCollector() "AbstractDataProvider::setDebugCollector()"
     - debug info includes HTTP method, URL, headers, request/response bodies, status codes, timing, and protocol info
 
     @subsection restclientdataprovider_v2_0_1 RestClientDataProvider v2.0.1

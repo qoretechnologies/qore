@@ -85,8 +85,7 @@ printf("%Y\n", ans.body);
     preserves reasoning across tool and conversation turns. It passes on sampling options and prompt-cache routing
     keys (\c prompt_cache_key) in synchronous and streaming requests; with a zero temperature, it sends
     \c top_p \c 1 unless \c top_p is given, as Mistral requires.
-    @ref MistralRestClient::MistralRestClientBase::getModelReasoningEfforts()
-    "MistralRestClientBase::getModelReasoningEfforts()" returns the reasoning efforts of the known models, for
+    @ref MistralRestClient::MistralRestClientBase::getModelReasoningEfforts() "MistralRestClientBase::getModelReasoningEfforts()" returns the reasoning efforts of the known models, for
     example for application policies.
     @ref MistralRestClient::MistralLlmProviderFactory::getModelInfo() "MistralLlmProviderFactory::getModelInfo()"
     reports which models cannot turn hidden reasoning off (\c reasoning_always_on): the dated Magistral models. A
@@ -508,8 +507,8 @@ public class MistralLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProvide
         - https://docs.mistral.ai/resources/deprecated/native-reasoning: "Native reasoning models always generate
           thinking traces without any extra parameters"; these are the dated Magistral models, such as
           \c magistral-medium-2509 and \c magistral-small-2509
-        - the reasoning models of @ref MistralRestClient::MistralRestClientBase::getModelReasoningEfforts()
-          "MistralRestClientBase::getModelReasoningEfforts()", including the \c magistral-medium-latest and
+        - the reasoning models of
+          @ref MistralRestClient::MistralRestClientBase::getModelReasoningEfforts() "MistralRestClientBase::getModelReasoningEfforts()", including the \c magistral-medium-latest and
           \c magistral-small-latest aliases, accept the reasoning effort \c "none" (verified against the reasoning API
           on 2026-10-07); https://docs.mistral.ai/capabilities/reasoning/ describes it as "The model thinks minimally
           and the thinking chunk is omitted from the response", and whether it spends reasoning tokens has not been

@@ -90,8 +90,8 @@ public class AbstractTable inherits AbstractSqlUtilBase {
               and foreign key relationships between tables
             - \c deferrable: (@ref bool_type) if @ref True "True", constraint checks can be deferred until
               transaction commit; only the PostgreSQL and Oracle drivers support deferrable foreign constraints
-              (see @ref SqlUtil::AbstractTable::supportsDeferrableForeignConstraints()
-              "supportsDeferrableForeignConstraints()"), which create, describe and compare them; every other
+              (see
+              @ref SqlUtil::AbstractTable::supportsDeferrableForeignConstraints() "supportsDeferrableForeignConstraints()"), which create, describe and compare them; every other
               driver (MySQL, SQL Server and Sybase, SQLite and Firebird) refuses this option with
               \c FOREIGN-CONSTRAINT-ERROR.  The SQL of a foreign constraint object gives deferrability only on
               PostgreSQL and Oracle, so a @ref SqlUtil::AbstractForeignConstraint::deferrable "deferrable" member
@@ -165,8 +165,8 @@ public class AbstractTable inherits AbstractSqlUtilBase {
             - \c trigger_map: (@ref hash_type) a hash for automatically renaming triggers; if the source name (key) exists and the target name (value) does not exist, then the source trigger is automatically renamed
             - \c db_table_cache: (@ref SqlUtil::Tables "Tables") an optional table cache for maintaining tables in the database and foreign key relationships between tables
             - \c force: (\c bool_type) if @ref True "True" and supported by the driver and object, any objects dropped will be dropped with \c FORCE or \c CASCADE options
-            - \c foreign_constraint_alignment: (@ref SqlUtil::SchemaForeignConstraintAlignment
-              "SchemaForeignConstraintAlignment") the foreign constraints of the tables of a schema alignment; set by
+            - \c foreign_constraint_alignment:
+              (@ref SqlUtil::SchemaForeignConstraintAlignment "SchemaForeignConstraintAlignment") the foreign constraints of the tables of a schema alignment; set by
               @ref SqlUtil::AbstractDatabase::getAlignSql() "AbstractDatabase::getAlignSql()"
         */
         const AlignTableOptions = TableCreationOptions + {
@@ -5736,8 +5736,8 @@ string sql = table.getSelectSql(sh, \args);
     /** Pure determinism guard — no DB rejects non-unique orderby+offset+limit
         at the SQL level; the check exists so pagination across pages doesn't
         silently mis-order rows that share an orderby key.  Strict callers
-        should opt in via the @ref select_option_orderby
-        "orderby_no_unique" select option (default: False — i.e. require
+        should opt in via the
+        @ref select_option_orderby "orderby_no_unique" select option (default: False — i.e. require
         uniqueness) or override this method in a DB-specific subclass.
 
         Default returns True (current behavior preserved); DB-specific
@@ -6196,15 +6196,15 @@ string sql = table.getSelectSql(sh, \args);
         - the \c "tablecode" callback option, if present (see
           @ref SqlUtil::AbstractTable::SqlDataCallbackOptions "SqlDataCallbackOptions"; note that plain select
           calls take no such option)
-        - the resolver registered with @ref SqlUtil::sqlutil_register_table_resolver()
-          "sqlutil_register_table_resolver()", if any
+        - the resolver registered with
+          @ref SqlUtil::sqlutil_register_table_resolver() "sqlutil_register_table_resolver()", if any
         - otherwise a new table object is created for the name
 
         A resolved table reads its entire description from the database the first time SQL is generated for it,
         so an application that already holds resolved table objects should register a resolver returning them;
         otherwise every SQL-generation call for a query with a name-referenced join or sub-select re-reads the
-        description of every referenced table.  Register @ref SqlUtil::sqlutil_get_cached_table()
-        "sqlutil_get_cached_table()" to use the cache provided by this module instead.
+        description of every referenced table.  Register
+        @ref SqlUtil::sqlutil_get_cached_table() "sqlutil_get_cached_table()" to use the cache provided by this module instead.
 
         @param table the table name to resolve
         @param opt optional call options; the \c "tablecode" option is used to resolve the name if present

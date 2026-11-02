@@ -683,8 +683,8 @@ public class DbTableDataProvider inherits DbDataProviderBase {
     }
 
     #! Returns the field reference to the column of a field reference of an expression, or @ref nothing
-    /** The field of a field reference is a field path (@ref DataProvider::AbstractDataProvider::getFieldPath()
-        "AbstractDataProvider::getFieldPath()"): a path of one key is the column of that name, and SqlUtil quotes it if
+    /** The field of a field reference is a field path
+        (@ref DataProvider::AbstractDataProvider::getFieldPath() "AbstractDataProvider::getFieldPath()"): a path of one key is the column of that name, and SqlUtil quotes it if
         it is a reserved word.  A path of more than one key, and a key with a dot, which SqlUtil reads as an alias and
         a column, cannot be named as a column.
 

@@ -565,8 +565,8 @@ public class GrokLlmProvider inherits OpenAiRestClient::OpenAiLlmProvider {
         @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning "disable_reasoning" sends this reasoning effort.
 
         Evidence:
-        - https://docs.x.ai/developers/models/grok-4.3.md: "Reasoning efforts (supported): \c none, \c low,
-          \c medium, \c high, \c xhigh"
+        - https://docs.x.ai/developers/models/grok-4.3.md: &ldquo;Reasoning efforts (supported): \c none, \c low,
+          \c medium, \c high, \c xhigh&rdquo;
         - https://docs.x.ai/docs/guides/reasoning: \c grok-4.7, \c grok-4.6 and \c grok-4.5: "Reasoning cannot be
           disabled", and their lowest effort is \c low
         - \c grok-4.20-0309-non-reasoning does not reason; \c grok-4.20-0309-reasoning, \c grok-build-0.1 and
@@ -624,12 +624,12 @@ public class GrokLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProviderFa
         };
     }
     #! Returns the provider's information for a model
-    /** Grok 4.5, 4.6 and 4.7 cannot turn reasoning off (@ref QoreLlmUtils::LlmProviderInfo::reasoning_always_on
-        "LlmProviderInfo::reasoning_always_on").
+    /** Grok 4.5, 4.6 and 4.7 cannot turn reasoning off
+        (@ref QoreLlmUtils::LlmProviderInfo::reasoning_always_on "LlmProviderInfo::reasoning_always_on").
 
-        Evidence, https://docs.x.ai/docs/guides/reasoning: "\c grok-4.7, \c grok-4.6, and \c grok-4.5 support the
-        \c reasoning_effort parameter ... If not specified, \c reasoning_effort defaults to "high". Reasoning cannot be
-        disabled."; their lowest effort is \c low.  \c grok-4.3 accepts the reasoning effort \c none
+        Evidence, https://docs.x.ai/docs/guides/reasoning: &ldquo;\c grok-4.7, \c grok-4.6, and \c grok-4.5 support the
+        \c reasoning_effort parameter ... If not specified, \c reasoning_effort defaults to &quot;high&quot;. Reasoning cannot be
+        disabled.&rdquo;; their lowest effort is \c low.  \c grok-4.3 accepts the reasoning effort \c none
         (https://docs.x.ai/developers/models/grok-4.3.md), and \c grok-4.20-0309-non-reasoning does not reason;
         \c grok-4.20-0309-reasoning, \c grok-build-0.1 and \c grok-3-mini have not been verified.
 

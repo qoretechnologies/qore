@@ -622,26 +622,11 @@ module DataProvider {
     record-based data providers if supported by the underlying data provider implementation as well.
 
     The %Qore command-line program \c qdp provides a user-friendly interface to data provider functionality.
-    It auto-detects DPQL search expressions and also supports forcing DPQL parsing with the \c -q/--dpql option,
+    It auto-detects DPQL search expressions and also supports forcing DPQL parsing with the <tt>-q/--dpql</tt> option,
     for example:
     @code{.py}
 qdp mydb/tables/users search -q '@name == "John"'
     @endcode
-
-    @section dataprovider_qdp qdp Command-Line Usage
-
-    The \c qdp CLI exposes the DataProvider API for inspection and data access. It supports DPQL for search criteria,
-    auto-detects DPQL expressions by default, and can show DPQL syntax help with \c --dpql-help. For a full DPQL
-    reference, see @ref dataprovider_dpql "DPQL - Data Provider Query Language".
-
-    @par Example Searches
-    @code{.py}
-qdp mydb/tables/users search '@name == "John"'
-qdp mydb/tables/users search '@age between 18 and 65'
-qdp mydb/tables/users search '(@active == true) && (@age >= 21)'
-qdp mydb/tables/users search '@role in ("admin", "editor")'
-    @endcode
-    Use \c - or \c {} as an empty expression to return all records.
 
     This module provides the following primary classes:
     - @ref DataProvider::AbstractDataField "AbstractDataField"
@@ -662,12 +647,49 @@ qdp mydb/tables/users search '@role in ("admin", "editor")'
 
     Many classes for specific data types are provided as well.
 
-    @subsection dataprovider_modules Data Provider Modules
+    The documentation of this module is organized in the following pages:
+    - @subpage dataprovidergettingstarted "Getting Started": the \c qdp command-line program and the registration
+      of data provider modules
+    - @subpage dataprovider_pipelines "Data Provider Pipelines": multi-stage and multi-threaded record processing,
+      bulk processing, shape negotiation, and columnar input in the built-in processors
+    - @subpage dataprovider_dpql "DPQL - Data Provider Query Language": the syntax of DPQL search expressions,
+      field paths, wildcard accessors, examples, and round-trip serialization
+    - @subpage dataproviderdpqltools "DPQL Diagnostics, Editor Support and Validation": parse diagnostics,
+      tokens for syntax highlighting, auto-completion, the DPQL WebSocket API, and expression validation
+    - @subpage dataprovider_watch "Watch Data Providers": event ordering, delivery, and durability guarantees of
+      polling watch data providers
+    - @subpage dataprovider_debugging "Debugging Data Providers": collecting technical details of requests,
+      messages, and connection events
+    - @subpage dataprovider_remote_default_values "Remote Default Values": default values documented by a remote
+      API, which are shown but never applied
+
+    See @subpage dataprovider_relnotes "Release Notes" for the changes in each version.
+*/
+/** @page dataprovidergettingstarted Getting Started with the DataProvider Module
+
+    @tableofcontents
+
+    @section dataprovider_qdp qdp Command-Line Usage
+
+    The \c qdp CLI exposes the DataProvider API for inspection and data access. It supports DPQL for search criteria,
+    auto-detects DPQL expressions by default, and can show DPQL syntax help with <tt>--dpql-help</tt>. For a full DPQL
+    reference, see @ref dataprovider_dpql "DPQL - Data Provider Query Language".
+
+    @par Example Searches
+    @code{.py}
+qdp mydb/tables/users search '@name == "John"'
+qdp mydb/tables/users search '@age between 18 and 65'
+qdp mydb/tables/users search '(@active == true) && (@age >= 21)'
+qdp mydb/tables/users search '@role in ("admin", "editor")'
+    @endcode
+    Use \c - or \c {} as an empty expression to return all records.
+
+    @section dataprovider_modules Data Provider Modules
 
     This module uses the \c "QORE_DATA_PROVIDERS" environment variable to register data provider
     modules.  Each data provider registration module must provide one of the following two public functions.
 
-    @subsubsection dataprovider_dynamic_discovery Data Provider Dynamic Discovery
+    @subsection dataprovider_dynamic_discovery Data Provider Dynamic Discovery
 
     Implement a public function with the following signature to support dynamic discovery of data providers:
     @code{.py}
@@ -675,11 +697,11 @@ qdp mydb/tables/users search '@role in ("admin", "editor")'
 public hash<string, string> sub get_data_provider_map() { ... }
     @endcode
 
-    @subsubsection dataprovider_type_dynamic_discovery Data Provider Type Dynamic Discovery
+    @subsection dataprovider_type_dynamic_discovery Data Provider Type Dynamic Discovery
 
     Implement a public function with the following signature to support dynamic discovery of data provider types:
     @code{.py}
-# returns a hash of type prefix paths (ex: \c "qore/sftp") to module names
+# returns a hash of type prefix paths (ex: "qore/sftp") to module names
 public hash<string, string> sub get_type_provider_map() { ... }
     @endcode
 
@@ -701,14 +723,16 @@ set QORE_DATA_PROVIDERS=MyDataProvider;OtherDataProvider
     @verbatim
 $env:QORE_DATA_PROVIDERS="MyDataProvider;OtherDataProvider"
     @endverbatim
+*/
+/** @page dataprovider_pipelines Data Provider Pipelines
 
-    @section dataprovider_pipelines Data Provider Pipelines
+    @tableofcontents
 
     Data provider pipelines allow for efficient processing of record or other data in multiple streams and, if
     desired, in multiple threads.
 
     Pipeline data can be any data type except a list, as list values are interpreted as multiple output values in
-    @ref DataProvider::AbstractDataProcessor "pipeline procesor objects".
+    @ref DataProvider::AbstractDataProcessor "pipeline processor objects".
 
     @section dataprovider_pipeline_bulk_processing Data Provider Pipeline Bulk Processing
 
@@ -727,12 +751,10 @@ $env:QORE_DATA_PROVIDERS="MyDataProvider;OtherDataProvider"
     processing large volumes of data.
 
     Native bulk readers can return their most efficient runtime representation with
-    @ref DataProvider::AbstractDataProviderBulkRecordInterface::getShapedValue()
-    "AbstractDataProviderBulkRecordInterface::getShapedValue()".  This preserves
-    \c BufferColumns and \c DataFrameBlock values for shape-aware pipelines.  The older
-    @ref DataProvider::AbstractDataProviderBulkRecordInterface::getValue()
-    "getValue()" method remains the compatibility API and materializes a hash-of-lists view
-    when the native block is columnar.
+    @ref DataProvider::AbstractDataProviderBulkRecordInterface::getShapedValue() "AbstractDataProviderBulkRecordInterface::getShapedValue()".
+    This preserves \c BufferColumns and \c DataFrameBlock values for shape-aware pipelines.  The older
+    @ref DataProvider::AbstractDataProviderBulkRecordInterface::getValue() "getValue()" method remains the
+    compatibility API and materializes a hash-of-lists view when the native block is columnar.
 
     @subsection dataprovider_pipeline_shapes Data Provider Pipeline Shape Negotiation
 
@@ -745,23 +767,23 @@ $env:QORE_DATA_PROVIDERS="MyDataProvider;OtherDataProvider"
     - @ref DataProvider::DataProviderShape::RowRecords "RowRecords": one logical row at a time
     - @ref DataProvider::DataProviderShape::HashOfLists "HashOfLists": bulk record blocks in hash-of-lists form
     - @ref DataProvider::DataProviderShape::BufferColumns "BufferColumns": dense column blocks represented by
-      @ref Qore::SQL::ColumnarResult "ColumnarResult" objects or hashes whose values are typed \c buffer<T>
+      @ref Qore::SQL::ColumnarResult "ColumnarResult" objects or hashes whose values are typed <tt>buffer&lt;T&gt;</tt>
       columns
     - @ref DataProvider::DataProviderShape::DataFrameBlock "DataFrameBlock": a \c DataFrame object block from the
       \c dataframe module
 
     Processor classes advertise shapes with
-    @ref DataProvider::AbstractDataProcessor::getSupportedInputShapes()
-    "AbstractDataProcessor::getSupportedInputShapes()" and
-    @ref DataProvider::AbstractDataProcessor::getSupportedOutputShapes()
-    "AbstractDataProcessor::getSupportedOutputShapes()".  Pipelines keep the current shape when the next processor
+    @ref DataProvider::AbstractDataProcessor::getSupportedInputShapes() "AbstractDataProcessor::getSupportedInputShapes()"
+    and
+    @ref DataProvider::AbstractDataProcessor::getSupportedOutputShapes() "AbstractDataProcessor::getSupportedOutputShapes()".
+    Pipelines keep the current shape when the next processor
     supports it; otherwise they convert with
     @ref DataProvider::AbstractDataProcessor::convertShape() "AbstractDataProcessor::convertShape()".
     Shape-aware built-in processors preserve \c DataFrameBlock and \c BufferColumns bulk blocks for filter,
     projection, update, search/replace, grouping, and analytics results when they can represent the output columns
     without row materialization.
-    \c DataFrameBlock values convert to \c HashOfLists with \c df.toColumnHash() and to row records with
-    \c df.toRecords().  \c DataFrameBlock values convert to \c BufferColumns with \c df.toColumnarResult().
+    \c DataFrameBlock values convert to \c HashOfLists with <tt>df.toColumnHash()</tt> and to row records with
+    <tt>df.toRecords()</tt>.  \c DataFrameBlock values convert to \c BufferColumns with <tt>df.toColumnarResult()</tt>.
     \c BufferColumns values convert back to rows or hash-of-lists for processors that do not yet support dense
     columns directly.
 
@@ -823,7 +845,8 @@ pipeline.append(new QoreFilterRecordsProcessor({
 }));
     @endcode
 
-    @par Columnar Input in the Built-in Processors
+    @subsection dataprovider_pipeline_columnar_input Columnar Input in the Built-in Processors
+
     The built-in processors work on \c DataFrameBlock and \c BufferColumns input directly, without converting it
     to row records where they can:
     - @ref DataProvider::QoreFilterRecordsProcessor "QoreFilterRecordsProcessor", with a structured or DPQL
@@ -856,100 +879,16 @@ pipeline.append(new QoreFilterRecordsProcessor({
       the configured top-level fields and emit their events as hash-of-lists blocks
 
     A direct call to \c flushRecords() returns row records.
+*/
+/** @page dataprovider_dpql DPQL - Data Provider Query Language
 
-    @section dataprovider_debugging Debugging Data Providers
-
-    Data providers support an opt-in debug info collection mechanism that allows capturing technical details about
-    operations such as HTTP requests, WebSocket messages, and connection events. This is useful for debugging,
-    logging, and monitoring data provider interactions.
-
-    @subsection debug_collector_classes Debug Collector Classes
-
-    The following classes are provided for debug info collection:
-    - @ref DataProvider::AbstractDebugInfoCollector "AbstractDebugInfoCollector": Abstract base class - implement
-      your own collector by overriding the @ref DataProvider::AbstractDebugInfoCollector::collect "collect()" method
-    - @ref DataProvider::BufferedDebugInfoCollector "BufferedDebugInfoCollector": Stores debug info in memory for
-      later retrieval and analysis
-    - @ref DataProvider::ConsoleDebugInfoCollector "ConsoleDebugInfoCollector": Outputs debug info to the console
-      immediately, with optional colorized output
-
-    @subsection debug_info_structure Debug Info Structure
-
-    Debug info is captured in the @ref DataProvider::DataProviderDebugInfo "DataProviderDebugInfo" hashdecl which
-    includes:
-    - Operation type (request, response, connect, disconnect, send, receive)
-    - Timestamps and duration
-    - URL, HTTP method, and protocol (HTTP/1.1 or HTTP/2)
-    - Request and response headers
-    - Request and response bodies
-    - Status codes and error messages
-    - WebSocket message types and sizes
-    - TLS/SSL information
-
-    @subsection debug_usage Using Debug Collection
-
-    To enable debug collection, register a debug collector with a data provider:
-
-    @code{.py}
-# Using BufferedDebugInfoCollector for programmatic access
-BufferedDebugInfoCollector collector();
-provider.setDebugCollector(collector);
-
-# Make some requests
-auto response = provider.doRequest(request);
-
-# Retrieve collected debug info
-list<hash<DataProviderDebugInfo>> info = collector.getAll();
-foreach hash<DataProviderDebugInfo> debug in (info) {
-    printf("%s %s -> %d (%dms)\n", debug.method, debug.url, debug.status_code, debug.duration_ms);
-}
-
-# Clear the buffer when done
-collector.clear();
-    @endcode
-
-    @code{.py}
-# Using ConsoleDebugInfoCollector for immediate output
-# Verbosity: 1 = basic, 2 = headers, 3 = full with bodies
-ConsoleDebugInfoCollector collector(2);
-provider.setDebugCollector(collector);
-
-# Debug info is printed to console as operations occur
-auto response = provider.doRequest(request);
-
-# Disable debug collection when done
-provider.setDebugCollector();
-    @endcode
-
-    @subsection debug_custom_collector Custom Debug Collectors
-
-    You can create custom debug collectors by inheriting from
-    @ref DataProvider::AbstractDebugInfoCollector "AbstractDebugInfoCollector":
-
-    @code{.py}
-class MyDebugCollector inherits AbstractDebugInfoCollector {
-    collect(hash<DataProviderDebugInfo> info) {
-        # Log to a file, send to monitoring system, etc.
-        logger.info("Operation: %s %s -> %d", info.method, info.url, info.status_code);
-    }
-
-    flush() {
-        # Called when the data provider is done - flush any buffers
-    }
-
-    clear() {
-        # Called to clear any collected data
-    }
-}
-    @endcode
-
-    @section dataprovider_dpql DPQL - Data Provider Query Language
+    @tableofcontents
 
     DPQL (Data Provider Query Language) is a human-readable query language for constructing DataProviderExpression
     structures. It provides a simple, intuitive syntax for writing search expressions that can be used with data
     provider search, update, and delete operations.
 
-    @subsection dpql_syntax DPQL Syntax
+    @section dpql_syntax DPQL Syntax
 
     DPQL supports the following syntax elements:
 
@@ -959,10 +898,10 @@ class MyDebugCollector inherits AbstractDebugInfoCollector {
     it reads one after the other, in quoted and unquoted names alike:
     - \c \@name - simple field name: a letter of any script or \c _, then letters, combining marks, digits and
       \c _, such as <tt>\@menge_bestätigt</tt>, <tt>\@größe</tt> or <tt>\@名前</tt>
-    - \c \@user.email - dotted paths for nested fields: the key \c email of the key \c user
-    - <tt>\@\"field with spaces\"</tt> - quoted field names for characters that an unquoted name cannot hold, or a
-      name starting with a digit; <tt>\@\"create.order-id\"</tt> is the key \c order-id of the key \c create
-    - <tt>\@\"Unit\\.Price\"</tt> - a dot that is part of a key is escaped: this is the key \c Unit.Price
+    - <tt>\@user.email</tt> - dotted paths for nested fields: the key \c email of the key \c user
+    - <tt>\@&quot;field with spaces&quot;</tt> - quoted field names for characters that an unquoted name cannot hold, or a
+      name starting with a digit; <tt>\@&quot;create.order-id&quot;</tt> is the key \c order-id of the key \c create
+    - <tt>\@&quot;Unit\\.Price&quot;</tt> - a dot that is part of a key is escaped: this is the key <tt>Unit.Price</tt>
 
     In a quoted name, <tt>\\&quot;</tt> is a quote, <tt>\\\\</tt> a backslash, <tt>\\.</tt> a dot that is part of a key,
     and <tt>\\n</tt>, <tt>\\r</tt> and <tt>\\t</tt> a line feed, a carriage return and a tab; any other escape is an
@@ -977,8 +916,8 @@ class MyDebugCollector inherits AbstractDebugInfoCollector {
     A provider that searches on its server names a field in its query language by the keys of the path, never by
     the escaped text of the path:
     @ref DataProvider::AbstractDataProvider::getFieldPathName() "AbstractDataProvider::getFieldPathName()" joins
-    them with the separator of the language (\c order.id, or \c order/id in OData).  A key that has the separator
-    cannot be named in that language (<tt>\@\"Unit\\.Price\"</tt> in SOQL): depending on the provider, a
+    them with the separator of the language (<tt>order.id</tt>, or <tt>order/id</tt> in OData).  A key that has the
+    separator cannot be named in that language (<tt>\@&quot;Unit\\.Price&quot;</tt> in SOQL): depending on the provider, a
     predicate on it is evaluated on the client or raises \c WHERE-ERROR.
 
     @par Comparison Operators
@@ -997,7 +936,7 @@ class MyDebugCollector inherits AbstractDebugInfoCollector {
     @par Logical Operators
     These are standard DPQL operators; individual data providers can expose additional or different operators.
     - \c && - logical AND
-    - \c || - logical OR
+    - <tt>||</tt> - logical OR
     - \c ! - logical NOT
 
     @anchor dpql_exists
@@ -1023,7 +962,7 @@ class MyDebugCollector inherits AbstractDebugInfoCollector {
     \c DPQL-E041.
 
     @par Literals
-    - Strings: \c "hello" or \c 'world'
+    - Strings: \c "hello" or <tt>'world'</tt>
     - Dates: <tt>2026-01-02</tt>, <tt>2026-01-02T15:20:11.123+01:00</tt>; a date or a time of day that does not exist
       (<tt>2026-02-30</tt>, <tt>2026-01-02T24:00</tt>) is refused with \c DPQL-E011, which says which part is out of
       its range
@@ -1031,26 +970,26 @@ class MyDebugCollector inherits AbstractDebugInfoCollector {
     - Lists: <tt>(one, two, 3)</tt>
     - Hashes: <tt>{a=1, b=two}</tt>
     - Unquoted identifiers are treated as strings: \c \@domain \c == \c example
-    - Numbers: \c 123, \c 45.67, \c -10
+    - Numbers: \c 123, <tt>45.67</tt>, \c -10
     - Booleans: \c true, \c false
     - Null: \c null
 
     @anchor dpql_number_float
     @par Numbers and Floats
-    A decimal literal such as \c 1.19 is a float, as are float fields; a float holds the nearest binary value
-    (\c 1.19 is \c 1.18999999999999994670929481799248605966567993164062).  When an arithmetic operator
-    (\c +, \c -, \c *, \c /, \c %), a comparison (\c ==, \c !=, \c <, \c <=, \c >, \c >=,
+    A decimal literal such as <tt>1.19</tt> is a float, as are float fields; a float holds the nearest binary value
+    (<tt>1.19</tt> is <tt>1.18999999999999994670929481799248605966567993164062</tt>).  When an arithmetic operator
+    (\c +, \c -, \c *, <tt>/</tt>, \c %), a comparison (\c ==, \c !=, \c <, \c <=, \c >, \c >=,
     \c between, \c inRange, \c in, <tt>not in</tt>, \c nullif) or \c toNumber() combines a float with a
     number (an arbitrary-precision field, such as a money amount), the float is converted with
     @ref DataProvider::DataProvider::floatToNumber() "DataProvider::floatToNumber()": to the number that its
     decimal representation with 15 significant digits gives.  So <tt>\@price * 1.19</tt> for a number field
-    \c price of \c 2125 gives the same number as <tt>2125n * 1.19n</tt> in %Qore (\c 2528.75), and
-    <tt>\@rate == 1.19</tt> is \c true for a number field \c rate of \c 1.19n.  Without this conversion, the
-    float's binary value would show: <tt>2125n * number(1.19)</tt> is \c 2528.7499999999997875.
+    \c price of \c 2125 gives the same number as <tt>2125n * 1.19n</tt> in %Qore (<tt>2528.75</tt>), and
+    <tt>\@rate == 1.19</tt> is \c true for a number field \c rate of <tt>1.19n</tt>.  Without this conversion, the
+    float's binary value would show: <tt>2125n * number(1.19)</tt> is <tt>2528.7499999999997875</tt>.
     - a float's digits after the 15th significant digit are lost; a double cannot hold them exactly anyway
     - numbers are binary floating-point values with a larger precision, not decimal values: a number literal such
-      as \c 1.19n is itself the binary value nearest to the decimal value, so <tt>2125n * 1.19n</tt> prints as
-      \c 2528.75 but is not equal to \c 2528.75n
+      as <tt>1.19n</tt> is itself the binary value nearest to the decimal value, so <tt>2125n * 1.19n</tt> prints as
+      <tt>2528.75</tt> but is not equal to <tt>2528.75n</tt>
     - operations on two floats, on two integers, and on an integer and a number are not affected; NaN and infinity
       are converted as with @ref Qore::number() "number()"
 
@@ -1098,7 +1037,7 @@ class MyDebugCollector inherits AbstractDebugInfoCollector {
     never changed, also when an expression raises an error.  Other arguments, such as the source and the count of
     \c take, are evaluated with the caller's template context.
 
-    @subsection dpql_wildcards Wildcard Accessors
+    @section dpql_wildcards Wildcard Accessors
 
     The wildcard accessors <tt>[*]</tt> and \c {*} take a value from each item of a list and from each value of a hash.
     A wildcard is the \c map operator written as an accessor: the accessors after it are the expression that
@@ -1165,7 +1104,7 @@ auto has_2 = AbstractDataProvider::evalGenericExpressionValue(rec,
     DataProvider::parseDpqlExpression('listContains(@orders[*].id, 2)'));
     @endcode
 
-    @subsection dpql_examples DPQL Examples
+    @section dpql_examples DPQL Examples
 
     @par Simple Comparison
     @code{.py}
@@ -1259,7 +1198,7 @@ AbstractDataProviderRecordIterator i2 = provider.searchRecords(
     '@created > 2024-01-01 && @type == "order"');
     @endcode
 
-    @subsection dpql_round_trip Round-Trip Conversion
+    @section dpql_round_trip Round-Trip Conversion
 
     DPQL expressions can be serialized back to strings:
     @code{.py}
@@ -1279,7 +1218,17 @@ string dpql = DataProvider::serializeDpqlExpression(exp);
       that is not a field reference or another accessor, such as a wildcard (<tt>index(\@orders[*].id, 0)</tt>), a
       template reference, a call or an operation, is written as a call
 
-    @subsection dpql_diagnostics Error Handling and Diagnostics
+    Parse diagnostics, tokens for syntax highlighting, auto-completion and expression validation are described in
+    @ref dataproviderdpqltools "DPQL Diagnostics, Editor Support and Validation".
+*/
+/** @page dataproviderdpqltools DPQL Diagnostics, Editor Support and Validation
+
+    @tableofcontents
+
+    This page describes the APIs that report errors in, and support editing of,
+    @ref dataprovider_dpql "DPQL" expressions.
+
+    @section dpql_diagnostics Error Handling and Diagnostics
 
     The parser provides detailed diagnostics for syntax errors:
     @code{.py}
@@ -1302,7 +1251,7 @@ if (!result.success) {
     reworded; one code can have a message for each situation that raises it.  A character or a token that a
     diagnostic has reported is not reported a second time by a diagnostic about the same text, nor is text that an
     earlier error made unreadable, such as the closing quote of a field name written on the next line.  A template
-    without what it refers to after its \c ':' (<tt>$local:</tt>) is refused wherever it is written, also when
+    without what it refers to after its <tt>':'</tt> (<tt>$local:</tt>) is refused wherever it is written, also when
     something follows it (\c DPQL-E033).
 
     @ref DataProvider::DpqlParser::parse() "DpqlParser::parse()" and
@@ -1311,7 +1260,7 @@ if (!result.success) {
     (<tt>DPQL parse error at line 1, column 7: Something is missing at the end: a value after '=='.</tt>) and the
     list of diagnostics as the exception argument.
 
-    @subsection dpql_syntax_highlighting Syntax Highlighting
+    @section dpql_syntax_highlighting Syntax Highlighting
 
     For IDE integration, DPQL provides token information with position tracking:
     @code{.py}
@@ -1336,7 +1285,7 @@ foreach hash<DpqlTokenInfo> tok in (tokens) {
     - \c DPQL_TOK_OP_EQ (10) through \c DPQL_TOK_OP_REGEX (19) - operators
     - \c DPQL_TOK_REGEX (20) - regex patterns
 
-    @subsection dpql_completions Auto-Completion
+    @section dpql_completions Auto-Completion
 
     For IDE integration, DPQL provides context-aware completions:
     @code{.py}
@@ -1352,15 +1301,16 @@ list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@na', 3
 
     The \c detail of a completion item says in plain words what the item is, with the type names of the
     @ref DataProvider::DataTypeCatalogue "DataTypeCatalogue": the type of a field or a template value
-    (\c "Whole number"), what a function or an operator gives (\c "gives true or false"), what the argument that the
-    cursor is in takes (\c "this argument takes text"), and that a template context needs a value after its \c ':'
-    (\c "needs a value after ':'").  A client that needs to tell kinds of items apart reads the item's \c kind, not
-    its \c detail.
+    (<tt>&quot;Whole number&quot;</tt>), what a function or an operator gives
+    (<tt>&quot;gives true or false&quot;</tt>), what the argument that the cursor is in takes
+    (<tt>&quot;this argument takes text&quot;</tt>), and that a template context needs a value after its <tt>':'</tt>
+    (<tt>&quot;needs a value after ':'&quot;</tt>).  A client that needs to tell kinds of items apart reads the
+    item's \c kind, not its \c detail.
 
     In an empty document, or one with only spaces, completion offers what can start an expression: the fields, the
     template contexts, the functions and the operators that can start a value, as after an operator.
 
-    @subsection dpql_websocket DPQL WebSocket API
+    @section dpql_websocket DPQL WebSocket API
 
     The DPQL WebSocket API is provided by the optional @ref dpqlwebsocketintro "DpqlWebSocket" module. It exposes
     language-server services for tokenization, parsing, validation, and completion, and can be used by UI clients
@@ -1381,9 +1331,9 @@ server.start();
     @endcode
 
     The WebSocket message protocol is defined in:
-    - @c DpqlWebSocket/DpqlApi.asyncapi.yaml
+    - <tt>DpqlWebSocket/DpqlApi.asyncapi.yaml</tt>
 
-    @subsection dpql_validation Expression Validation
+    @section dpql_validation Expression Validation
 
     @ref DataProvider::AbstractDataProvider::prepareExpression() "AbstractDataProvider::prepareExpression()", which
     prepares an expression for generic evaluation (as \c filter-records does), verifies every expression in the
@@ -1412,21 +1362,24 @@ if (errors) {
     - \c +: numbers; a number and a date (seconds); a string with a string, number, date or boolean (joined as
       text); a list with any value (appended); two hashes (merged); two binary values (joined)
     - \c -: numbers; a date minus a date or a number; a hash minus a string or a list of strings (keys removed)
-    - \c *, \c /, \c %: numbers
+    - \c *, <tt>/</tt>, \c %: numbers
+
     An operand whose type can hold more than one kind of value (ex: \c data, a string or binary value) or any value
     is not checked.
 
     A comparison whose result is the same for every record, because it compares a value with itself
     (<tt>\@price > \@price</tt>, <tt>\@a + 1 == \@a + 1</tt>) or two literal values (<tt>1 == 1</tt>), is reported
     as warning \c DPQL-W006.
+*/
+/** @page dataprovider_watch Watch Data Providers
 
-    @section dataprovider_watch Watch Data Providers
+    @tableofcontents
 
     A <b>watch data provider</b> polls an external system and raises an event for each new item it
     finds. Getting that right is mostly about one question: what happens to an item when something
     fails? The answers are contracts, not implementation details, so they are stated here.
 
-    @subsection dataprovider_watch_template The Shared Processing Sequence
+    @section dataprovider_watch_template The Shared Processing Sequence
 
     @ref DataProvider::AbstractOrderedWatchDataProvider "AbstractOrderedWatchDataProvider" implements
     the sequence every ordered watch provider needs:
@@ -1450,7 +1403,7 @@ fetch
     IDs already delivered at exactly that timestamp, which is what makes the cursor safe at its own
     boundary.
 
-    @subsection dataprovider_watch_ordering Dispatch Order
+    @section dataprovider_watch_ordering Dispatch Order
 
     Events representing an ordered feed are dispatched in ascending source order. This is a
     correctness property, not a presentation one: a watch cursor is monotonic, so dispatching a newer
@@ -1471,7 +1424,7 @@ fetch
     answers the question a consumer actually cares about: whether events arrive oldest-first. Both
     ascending and descending upstream feeds do; an unordered feed does not.
 
-    @subsection dataprovider_watch_failure Advance On Success Only
+    @section dataprovider_watch_failure Advance On Success Only
 
     The cursor advances only after an item has been dispatched successfully, and a cycle <b>stops at
     the first failure</b> rather than continuing with later items. Continuing would advance the
@@ -1489,7 +1442,7 @@ fetch
     registers a handler called once the same item has failed a configurable number of consecutive
     cycles, and called again when that item is finally delivered.
 
-    @subsection dataprovider_watch_durability Durability
+    @section dataprovider_watch_durability Durability
 
     Checkpoint persistence is optional at this layer because %Qore does not own a database:
     - <b>with</b> a callback configured through
@@ -1505,7 +1458,7 @@ fetch
     format and rejects one it does not recognize, so a stored checkpoint from a different provider or
     an older format cannot be silently ignored.
 
-    @subsection dataprovider_watch_snapshot Snapshot Collapse
+    @section dataprovider_watch_snapshot Snapshot Collapse
 
     Some feeds are snapshots rather than logs: each item restates the current state, so after an
     outage only the last one is worth processing. A provider that supports snapshot mode raises one
@@ -1519,7 +1472,7 @@ fetch
     because the retained event has already been raised and the cursor has already moved past it. The
     item is therefore never raised as an event again, but it is also never lost silently.
 
-    @subsection dataprovider_watch_delivery Observer Failures Reach The Source
+    @section dataprovider_watch_delivery Observer Failures Reach The Source
 
     @ref DataProvider::Observable::notifyObservers() "notifyObservers()" notifies every subscribed
     observer, collects the failures, and then throws an aggregate \c OBSERVER-NOTIFICATION-ERROR
@@ -1538,7 +1491,7 @@ fetch
     @ref DataProvider::Observable::notifyObservers() "notifyObservers()" itself, where the decision
     is visible in the source rather than hidden in every handler.
 
-    @subsection dataprovider_watch_removal Removal Follows The Delivery Call
+    @section dataprovider_watch_removal Removal Follows The Delivery Call
 
     A watch provider observes exactly one thing: that raising an event returned without an exception.
     Because observer failures reach it (see @ref dataprovider_watch_delivery), that one fact covers a
@@ -1556,8 +1509,96 @@ fetch
     For a workload with an asynchronous consumer, leave those options unset and act from the consumer
     once processing has succeeded: every event carries the identity of its source item, and providers
     expose first-class actions that take it.
+*/
+/** @page dataprovider_debugging Debugging Data Providers
 
-    @section dataprovider_remote_default_values Remote Default Values
+    @tableofcontents
+
+    Data providers support an opt-in debug info collection mechanism that allows capturing technical details about
+    operations such as HTTP requests, WebSocket messages, and connection events. This is useful for debugging,
+    logging, and monitoring data provider interactions.
+
+    @section debug_collector_classes Debug Collector Classes
+
+    The following classes are provided for debug info collection:
+    - @ref DataProvider::AbstractDebugInfoCollector "AbstractDebugInfoCollector": Abstract base class - implement
+      your own collector by overriding the @ref DataProvider::AbstractDebugInfoCollector::collect "collect()" method
+    - @ref DataProvider::BufferedDebugInfoCollector "BufferedDebugInfoCollector": Stores debug info in memory for
+      later retrieval and analysis
+    - @ref DataProvider::ConsoleDebugInfoCollector "ConsoleDebugInfoCollector": Outputs debug info to the console
+      immediately, with optional colorized output
+
+    @section debug_info_structure Debug Info Structure
+
+    Debug info is captured in the @ref DataProvider::DataProviderDebugInfo "DataProviderDebugInfo" hashdecl which
+    includes:
+    - Operation type (request, response, connect, disconnect, send, receive)
+    - Timestamps and duration
+    - URL, HTTP method, and protocol (HTTP/1.1 or HTTP/2)
+    - Request and response headers
+    - Request and response bodies
+    - Status codes and error messages
+    - WebSocket message types and sizes
+    - TLS/SSL information
+
+    @section debug_usage Using Debug Collection
+
+    To enable debug collection, register a debug collector with a data provider:
+
+    @code{.py}
+# Using BufferedDebugInfoCollector for programmatic access
+BufferedDebugInfoCollector collector();
+provider.setDebugCollector(collector);
+
+# Make some requests
+auto response = provider.doRequest(request);
+
+# Retrieve collected debug info
+list<hash<DataProviderDebugInfo>> info = collector.getAll();
+foreach hash<DataProviderDebugInfo> debug in (info) {
+    printf("%s %s -> %d (%dms)\n", debug.method, debug.url, debug.status_code, debug.duration_ms);
+}
+
+# Clear the buffer when done
+collector.clear();
+    @endcode
+
+    @code{.py}
+# Using ConsoleDebugInfoCollector for immediate output
+# Verbosity: 1 = basic, 2 = headers, 3 = full with bodies
+ConsoleDebugInfoCollector collector(2);
+provider.setDebugCollector(collector);
+
+# Debug info is printed to console as operations occur
+auto response = provider.doRequest(request);
+
+# Disable debug collection when done
+provider.setDebugCollector();
+    @endcode
+
+    @section debug_custom_collector Custom Debug Collectors
+
+    You can create custom debug collectors by inheriting from
+    @ref DataProvider::AbstractDebugInfoCollector "AbstractDebugInfoCollector":
+
+    @code{.py}
+class MyDebugCollector inherits AbstractDebugInfoCollector {
+    collect(hash<DataProviderDebugInfo> info) {
+        # Log to a file, send to monitoring system, etc.
+        logger.info("Operation: %s %s -> %d", info.method, info.url, info.status_code);
+    }
+
+    flush() {
+        # Called when the data provider is done - flush any buffers
+    }
+
+    clear() {
+        # Called to clear any collected data
+    }
+}
+    @endcode
+*/
+/** @page dataprovider_remote_default_values Remote Default Values
 
     Many APIs document the value that they assume when a request does not give one, such as the \c default of a
     property or parameter in an OpenAPI or Swagger schema.  That value is useful to see beside the field, since it
@@ -1585,10 +1626,11 @@ QoreDataField limit({"name": "limit", "type": IntOrNothingType, "remote_default_
 # shown as "20 if not given"; the field has no value of its own
 auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
     @endcode
+*/
+/** @page dataprovider_relnotes Release Notes
 
-    @section dataprovider_relnotes Release Notes
 
-    @subsection dataprovider_v3_11 DataProvider v3.11
+    @section dataprovider_v3_11 DataProvider v3.11
     - fixed searches with a where hash whose operator hash is a typed hash without an \c op_args member, such as a
       SqlUtil \c OperatorInfo hash from \c op_gt(), which raised \c INVALID-MEMBER; the arguments of such an operator
       of more than two arguments, such as \c "between", are taken from its \c arg list, and the argument count of
@@ -1596,8 +1638,8 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       operator whose argument is an operator with a false argument, such as \c dp_op_not(dp_op_eq(0)), is
       supported as well
     - the presentation identity of a type with a path or a schema identity no longer names the class that implements
-      it (@ref DataProvider::DataProviderPresentation::typePresentationIdentity()
-      "DataProviderPresentation::typePresentationIdentity()"), so building a type with another class keeps the message
+      it
+      (@ref DataProvider::DataProviderPresentation::typePresentationIdentity() "DataProviderPresentation::typePresentationIdentity()"), so building a type with another class keeps the message
       IDs of its texts; catalogs with the previous IDs are moved to the new ones, carrying their translations, with
       \c qore-data-provider-i18n \c --rekey-source-tree
     - \c qore-data-provider-i18n \c --rekey-source-tree reports the translations missing in the standard locales
@@ -1677,8 +1719,7 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       and written back to it, kept in the data provider index, and set by the REST schema field overlays; the string
       format types (\c email, \c uri, \c uuid, \c hostname, \c ipv4, \c ipv6 and \c phone) give one for their
       patterns in the new \c qore.validation_regex_desc tag and
-      @ref DataProvider::QoreStringFormatDataType::getValidationRegexDesc()
-      "QoreStringFormatDataType::getValidationRegexDesc()"; it is translated with the other texts of an option or of
+      @ref DataProvider::QoreStringFormatDataType::getValidationRegexDesc() "QoreStringFormatDataType::getValidationRegexDesc()"; it is translated with the other texts of an option or of
       a field of an option's type: \c qore-data-provider-i18n extracts it to the provider's catalogs, and
       @ref DataProvider::DataProviderPresentationCatalog "DataProviderPresentationCatalog" presents its translation
       in the requested locale; the translated texts are listed in the new
@@ -1702,8 +1743,8 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       allowed values, raises \c RUNTIME-TYPE-ERROR when it is set on a field or type, and a value with a NUL
       character is refused as outside the allowed values (\c FIELD-VALUE-ERROR or \c TYPE-VALUE-ERROR); before, the
       allowed values of a field and a value checked against them were cut at the NUL character, so that a value
-      could be accepted that was not an allowed value.  @ref DataProvider::AbstractDataField::setAllowedValues()
-      "setAllowedValues()" now leaves the previous allowed values of a field when it refuses a list
+      could be accepted that was not an allowed value.
+      @ref DataProvider::AbstractDataField::setAllowedValues() "setAllowedValues()" now leaves the previous allowed values of a field when it refuses a list
     - DPQL field completion follows field paths: after \c @ and a path of keys (<tt>\@create.</tt>,
       <tt>\@create.it</tt>), it offers the keys of the type the path reaches, each inserted as the field reference to
       its path as the serializer writes it (<tt>\@create.items</tt>, <tt>\@&quot;create.order-id&quot;</tt>); after accessors and
@@ -1730,16 +1771,13 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
     - added @ref DataProvider::AbstractDataProvider::getFieldListOption() "AbstractDataProvider::getFieldListOption()",
       with which the processors read a list option of fields: each element of a list is one field, as it is given,
       so a field whose name has a comma (\c "Price, USD") can be given in a list, and a single string is a
-      comma-separated list (@ref DataProvider::AbstractDataProvider::parseFieldList()
-      "AbstractDataProvider::parseFieldList()")
-    - @ref DataProvider::AbstractDataProvider::splitPushdownableExpression()
-      "AbstractDataProvider::splitPushdownableExpression()" and
-      @ref DataProvider::AbstractDataProvider::expressionPushdownable()
-      "AbstractDataProvider::expressionPushdownable()" take an optional closure that gives the field reference a
+      comma-separated list
+      (@ref DataProvider::AbstractDataProvider::parseFieldList() "AbstractDataProvider::parseFieldList()")
+    - @ref DataProvider::AbstractDataProvider::splitPushdownableExpression() "AbstractDataProvider::splitPushdownableExpression()" and
+      @ref DataProvider::AbstractDataProvider::expressionPushdownable() "AbstractDataProvider::expressionPushdownable()" take an optional closure that gives the field reference a
       provider reads for a field reference of the expression, or no value if the provider cannot name the field, whose
       expression is then evaluated client-side; the pushdown part has the field references the closure gives; added
-      @ref DataProvider::AbstractDataProvider::translateFieldReferences()
-      "AbstractDataProvider::translateFieldReferences()"
+      @ref DataProvider::AbstractDataProvider::translateFieldReferences() "AbstractDataProvider::translateFieldReferences()"
     - added @ref DataProvider::AbstractDataProvider::getFieldPathName() "AbstractDataProvider::getFieldPathName()",
       which gives the keys of a field path joined with the separator of a query language (\c order.id, or
       \c order/id in OData), or no value for a key that has the separator, so that a query is never sent the
@@ -1786,14 +1824,14 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       as it is; \c remove-fields reads each of its fields as a field path, so \c address.city removes the key
       \c city of \c address, and <tt>Unit\\.Price</tt> removes the key \c Unit.Price; its output type does not
       have the fields removed, also from a nested hash type
-    - added @ref DataProvider::AbstractDataProvider::getFieldPathDisplayName()
-      "AbstractDataProvider::getFieldPathDisplayName()", which gives a field path as it is written (the display name
+    - added
+      @ref DataProvider::AbstractDataProvider::getFieldPathDisplayName() "AbstractDataProvider::getFieldPathDisplayName()", which gives a field path as it is written (the display name
       of its allowed value); \c select-fields outputs a field that is not renamed, and \c group-by a group-by field,
       under that name (<tt>Unit\\.Price</tt> as \c Unit.Price), and so is the field in the default name of a
       \c group-by aggregate; two fields, or a field and an aggregate, that give the same output name are refused when
       the processor is created, as are two aggregates with the same name
-    - added @ref DataProvider::AbstractDataProvider::checkFieldPathOption()
-      "AbstractDataProvider::checkFieldPathOption()": a field option of a processor names one field by its path, and
+    - added
+      @ref DataProvider::AbstractDataProvider::checkFieldPathOption() "AbstractDataProvider::checkFieldPathOption()": a field option of a processor names one field by its path, and
       the processors whose options take fields of the input (\c select-fields, \c remove-fields, \c search-replace,
       \c group-by, \c correlation, \c cross-correlation and the analytics processors) refuse a field with a DPQL
       wildcard (<tt>[*]</tt> or <tt>{*}</tt>) when they are created
@@ -1873,16 +1911,14 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       expression, such as \c nosuch in <tt>nosuch(\@a) > 1</tt>, or too few or too many arguments, such as
       <tt>substr(\@a)</tt>, raises a \c DATA-PROVIDER-EXPRESSION-ERROR when the expression is prepared instead of
       when a record is evaluated; added
-      @ref DataProvider::AbstractDataProvider::verifyGenericExpression()
-      "AbstractDataProvider::verifyGenericExpression()" and
+      @ref DataProvider::AbstractDataProvider::verifyGenericExpression() "AbstractDataProvider::verifyGenericExpression()" and
       @ref DataProvider::AbstractDataProvider::getRequiredArgCount() "AbstractDataProvider::getRequiredArgCount()"
     - @ref DataProvider::AbstractDataProvider::verifyExpression() "AbstractDataProvider::verifyExpression()" with an
       expression map verifies the nested expressions in the arguments as well: with the expression map if it has
       them, otherwise for generic evaluation, as a provider with client-side filtering evaluates them
     - expression verification checks each nested expression and field reference against the type that its argument
       position requires (with
-      @ref DataProvider::AbstractDataProvider::verifyGenericExpression()
-      "AbstractDataProvider::verifyGenericExpression()" and
+      @ref DataProvider::AbstractDataProvider::verifyGenericExpression() "AbstractDataProvider::verifyGenericExpression()" and
       @ref DataProvider::AbstractDataProvider::verifyExpression() "AbstractDataProvider::verifyExpression()" with an
       expression map); a field reference is checked when the new \c fields parameter gives the record's fields:
       - a condition, such as an argument of \c &&, \c || or \c !, or the condition of \c ternary, accepts a
@@ -1895,8 +1931,8 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       the DPQL argument type warning \c DPQL-W004 uses the same rules, and is also given for \c !; added
       @ref DataProvider::AbstractDataProvider::isConditionType() "AbstractDataProvider::isConditionType()",
       @ref DataProvider::AbstractDataProvider::isArgTypeCompatible() "AbstractDataProvider::isArgTypeCompatible()"
-      and @ref DataProvider::AbstractDataProvider::getFieldReferenceType()
-      "AbstractDataProvider::getFieldReferenceType()"; expressions are prepared for evaluation without checking
+      and
+      @ref DataProvider::AbstractDataProvider::getFieldReferenceType() "AbstractDataProvider::getFieldReferenceType()"; expressions are prepared for evaluation without checking
       argument types, so that expressions saved before still run
     - the \c a member of an RGB color (@ref DataProvider::RgbColorDataType "RgbColorDataType") is its opacity, as
       every user interface stores it: a number from \c 0 (transparent) to \c 1 (opaque), which is \c 1 when it is
@@ -2047,10 +2083,10 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       producer schema path so equal-shaped objects with different semantics cannot silently share translations; a
       nested type has one identity in an action, whichever option or path reaches it, so each of its texts has one
       message per action, and equal-shaped types that give a field different texts in one action are refused with an
-      error that names them in clear text (@ref DataProvider::DataProviderPresentation::describeMessageId()
-      "DataProviderPresentation::describeMessageId()"); the identity includes the identity of the schema a type was
-      built from (@ref DataProvider::AbstractDataProviderType::getSchemaIdentity()
-      "AbstractDataProviderType::getSchemaIdentity()"), which REST schema types and the types REST schema action
+      error that names them in clear text
+      (@ref DataProvider::DataProviderPresentation::describeMessageId() "DataProviderPresentation::describeMessageId()"); the identity includes the identity of the schema a type was
+      built from
+      (@ref DataProvider::AbstractDataProviderType::getSchemaIdentity() "AbstractDataProviderType::getSchemaIdentity()"), which REST schema types and the types REST schema action
       overlays change have, so that schemas with the same name and fields have their own messages. New
       static @ref DataProvider::AbstractDataField::getPresentationInfo() "presentation metadata" and
       @ref DataProvider::AbstractDataField::getDeclaredType() "declared types" keep extraction deterministic without
@@ -2121,10 +2157,8 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       through any application without knowing its action and option names, which differ from application to
       application; used by the \c "conn://" scheme in the \c FileLocationHandler module:
       - @ref DataProvider::DataProviderFileApiInfo "DataProviderFileApiInfo"
-      - @ref DataProvider::DataProviderActionCatalog::registerAppFileApi()
-        "DataProviderActionCatalog::registerAppFileApi()"
-      - @ref DataProvider::DataProviderActionCatalog::getAppFileApi()
-        "DataProviderActionCatalog::getAppFileApi()"
+      - @ref DataProvider::DataProviderActionCatalog::registerAppFileApi() "DataProviderActionCatalog::registerAppFileApi()"
+      - @ref DataProvider::DataProviderActionCatalog::getAppFileApi() "DataProviderActionCatalog::getAppFileApi()"
       \n
       (<a href="https://github.com/qoretechnologies/qore/issues/5386">issue 5386</a>)
     - the generic data provider APIs now preserve the exception they wrap: the provider-specific exception is
@@ -2202,10 +2236,9 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
     - added @ref DataProvider::DataProviderShape "DataProviderShape" and shape-aware pipeline APIs on
       @ref DataProvider::AbstractDataProcessor "AbstractDataProcessor" for row records, hash-of-lists bulk blocks,
       dense buffer-column blocks, and DataFrame blocks
-    - added @ref DataProvider::AbstractDataProviderBulkRecordInterface::getShapedValue()
-      "AbstractDataProviderBulkRecordInterface::getShapedValue()" and
-      @ref DataProvider::AbstractDataProviderBulkRecordInterface::getValueShape()
-      "getValueShape()" so native bulk readers can preserve \c BufferColumns and \c DataFrameBlock values while
+    - added
+      @ref DataProvider::AbstractDataProviderBulkRecordInterface::getShapedValue() "AbstractDataProviderBulkRecordInterface::getShapedValue()" and
+      @ref DataProvider::AbstractDataProviderBulkRecordInterface::getValueShape() "getValueShape()" so native bulk readers can preserve \c BufferColumns and \c DataFrameBlock values while
       keeping @ref DataProvider::AbstractDataProviderBulkRecordInterface::getValue() "getValue()" as a
       hash-of-lists compatibility API
     - added automatic DataProvider pipeline shape routing and conversion with row-record boundary preservation for
@@ -2237,8 +2270,8 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
     - updated @ref DataProvider::QoreSetFieldsProcessor "QoreSetFieldsProcessor" and
       @ref DataProvider::QoreSearchReplaceProcessor "QoreSearchReplaceProcessor" to preserve shaped
       \c DataFrameBlock and \c BufferColumns values for top-level constant-field and string-column updates
-    - updated analytics processors, including @ref DataProvider::QoreCorrelationProcessor
-      "QoreCorrelationProcessor" and @ref DataProvider::QoreCrossCorrelationProcessor
+    - updated analytics processors, including
+      @ref DataProvider::QoreCorrelationProcessor "QoreCorrelationProcessor" and @ref DataProvider::QoreCrossCorrelationProcessor
       "QoreCrossCorrelationProcessor", to accept \c DataFrameBlock and \c BufferColumns input and preserve
       shaped rectangular event blocks, including flush-time output from partial windows; this covers the full
       @ref DataProvider::AbstractAnalyticsProcessor "AbstractAnalyticsProcessor" family, and top-level configured
@@ -2307,8 +2340,8 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
     - added @ref DataProvider::AbstractSimulationRecorder "AbstractSimulationRecorder" and
       @ref DataProvider::AbstractDataProvider::simulateRequest() "AbstractDataProvider::simulateRequest()" for
       side-effect-free dry-run execution
-    - added @ref DataProvider::AbstractDataProvider::getSimulationVolatileFields()
-      "AbstractDataProvider::getSimulationVolatileFields()" for simulation signature hashing
+    - added
+      @ref DataProvider::AbstractDataProvider::getSimulationVolatileFields() "AbstractDataProvider::getSimulationVolatileFields()" for simulation signature hashing
     - added 67 generic DPQL expressions for use in data-driven contexts (arithmetic, string
       operations, type conversions, encoding, cryptographic operations, regex, date/time,
       collection operations, and serialization functions)
@@ -2319,8 +2352,8 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       serialization (\c make_yaml, \c parse_yaml, \c make_json, \c parse_json, \c make_xml,
       \c parse_xml)
     - added \c now() function returning current timestamp with microsecond precision
-    - added @ref DataProvider::AbstractDataProvider::ExtraExpressionImplementations
-      "ExtraExpressionImplementations" static member for module-conditional expression
+    - added
+      @ref DataProvider::AbstractDataProvider::ExtraExpressionImplementations "ExtraExpressionImplementations" static member for module-conditional expression
       registration (YAML, JSON, XML expressions registered when modules are available)
     - added @ref DataProvider::dp_get_all_expression_info() "dp_get_all_expression_info()"
       public function to retrieve all available expression metadata
@@ -2334,15 +2367,15 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       @ref DataProvider::BaseOptionInfo "BaseOptionInfo" to mark pipeline processor options whose
       allowed values should be dynamically populated from the preceding pipeline state's output
       type field names
-    - added @ref DataProvider::AbstractDataProviderType::getFieldNamesAsAllowedValues()
-      "AbstractDataProviderType::getFieldNamesAsAllowedValues()" static method to recursively
+    - added
+      @ref DataProvider::AbstractDataProviderType::getFieldNamesAsAllowedValues() "AbstractDataProviderType::getFieldNamesAsAllowedValues()" static method to recursively
       enumerate field names from a data provider type as allowed value entries, including
       dot-notation paths for nested hash fields
-    - added @ref DataProvider::AbstractDataProvider::getFieldValue()
-      "AbstractDataProvider::getFieldValue()" static method for dot-notation field access in
+    - added
+      @ref DataProvider::AbstractDataProvider::getFieldValue() "AbstractDataProvider::getFieldValue()" static method for dot-notation field access in
       record hashes (e.g. \c "address.city")
-    - added @ref DataProvider::AbstractDataProvider::parseFieldList()
-      "AbstractDataProvider::parseFieldList()" static method for backward-compatible parsing of
+    - added
+      @ref DataProvider::AbstractDataProvider::parseFieldList() "AbstractDataProvider::parseFieldList()" static method for backward-compatible parsing of
       field lists from both comma-separated strings and string lists
     - multi-field processor options (\c fields, \c group_by) take a \c softlist<string> for multi-select UI
       support, or a comma-separated string
@@ -2495,57 +2528,57 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
     - action option generation returns an empty hash for operations without input fields
     - added HTTP/3 debug tracking, context-sensitive action filtering, and the \c amqp factory registration
 
-    @subsection dataprovider_v3_2_2 DataProvider v3.2.2
+    @section dataprovider_v3_2_2 DataProvider v3.2.2
     - fixed setting the mandatory flag for hashes with dynamic fields
       (<a href="https://github.com/qoretechnologies/qore/issues/4992">issue 4992</a>)
     - fixed returning dynamic options for data-dependent action options
       (<a href="https://github.com/qoretechnologies/qore/issues/4985">issue 4985</a>)
     - default values are no longer generated for optional hash types based on their fields
       (<a href="https://github.com/qoretechnologies/qore/issues/4972">issue 4972</a>)
-    - fixed typos in @ref DataProvider::DataProviderActionCatalog::getTypeForActionOptions()
-      "DataProviderActionCatalog::getTypeForActionOptions()"
+    - fixed typos in
+      @ref DataProvider::DataProviderActionCatalog::getTypeForActionOptions() "DataProviderActionCatalog::getTypeForActionOptions()"
       (<a href="https://github.com/qoretechnologies/qore/issues/4971">issue 4971</a>)
 
-    @subsection dataprovider_v3_2_1 DataProvider v3.2.1
+    @section dataprovider_v3_2_1 DataProvider v3.2.1
     - improved logic handling locked types in the type cache
 
-    @subsection dataprovider_v3_2 DataProvider v3.2
+    @section dataprovider_v3_2 DataProvider v3.2
     - added the SuperSoftStringDataType and SuperSoftStringOrNothingDataType types to support
       "soft" string types that accept almost any type and convert it to a string
 
-    @subsection dataprovider_v3_1 DataProvider v3.1
+    @section dataprovider_v3_1 DataProvider v3.1
     - added an API to retrieve event data in the context of specific option values
     - fixed handling element allowed values in fields
       (<a href="https://github.com/qoretechnologies/qore/issues/4951">issue 4951</a>)
     - fixed handling implicit default values in @ref DataProvider::HashDataType "HashDataType"
       (<a href="https://github.com/qoretechnologies/qore/issues/4941">issue 4941</a>)
 
-    @subsection dataprovider_v3_0 DataProvider v3.0
+    @section dataprovider_v3_0 DataProvider v3.0
     - added support for a data provider action catalog
       (<a href="https://github.com/qoretechnologies/qore/issues/4808">issue 4808</a>)
     - added support for automatically deregistering factories, applications, and actions if an error occurs during
       foreign module initialization
       (<a href="https://github.com/qoretechnologies/qore/issues/4816">issue 4816</a>)
 
-    @subsection dataprovider_v2_7_5 DataProvider v2.7.5
+    @section dataprovider_v2_7_5 DataProvider v2.7.5
     - fixed conversion of soft binary, bool, float, int, and number "or nothing" types from an empty string to
       @ref NOTHING
       (<a href="https://github.com/qoretechnologies/qore/issues/4836">issue 4836</a>)
 
-    @subsection dataprovider_v2_7_4 DataProvider v2.7.4
+    @section dataprovider_v2_7_4 DataProvider v2.7.4
     - added \c allowed_values to field data info
       (<a href="https://github.com/qoretechnologies/qore/issues/4762">issue 4762</a>)
 
-    @subsection dataprovider_v2_7_3 DataProvider v2.7.3
+    @section dataprovider_v2_7_3 DataProvider v2.7.3
     - added missing \c base64binary and \c hexbinary type support
       (<a href="https://github.com/qoretechnologies/qore/issues/4732">issue 4732</a>)
 
-    @subsection dataprovider_v2_7_2 DataProvider v2.7.2
+    @section dataprovider_v2_7_2 DataProvider v2.7.2
     - fixed bugs handling null hash assignments with fields with default values in
       @ref DataProvider::HashDataType "HashDataType"
       (<a href="https://github.com/qoretechnologies/qore/issues/4715">issue 4715</a>)
 
-    @subsection dataprovider_v2_7_1 DataProvider v2.7.1
+    @section dataprovider_v2_7_1 DataProvider v2.7.1
     - added
       @ref DataProvider::DataProvider::getFactoryObjectWithTemplate() "DataProvider::getFactoryObjectWithTemplate()"
       and
@@ -2558,25 +2591,25 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
     - \c AbstractDataProvider::search*() methods fail with an empty \c where hash argument
       (<a href="https://github.com/qoretechnologies/qore/issues/4622">issue 4622</a>)
 
-    @subsection dataprovider_v2_7 DataProvider v2.7
+    @section dataprovider_v2_7 DataProvider v2.7
     - fixed a bug accepting the element type in @ref DataProvider::SoftListDataType "SoftListDataType"
       (<a href="https://github.com/qoretechnologies/qore/issues/4603">issue 4603</a>)
     - added child capability support to data provider summary info
       (<a href="https://github.com/qoretechnologies/qore/issues/4576">issue 4576</a>)
 
-    @subsection dataprovider_v2_6 DataProvider v2.6
+    @section dataprovider_v2_6 DataProvider v2.6
     - added child capability support to data provider info
       (<a href="https://github.com/qoretechnologies/qore/issues/4572">issue 4572</a>)
 
-    @subsection dataprovider_v2_5 DataProvider v2.5
+    @section dataprovider_v2_5 DataProvider v2.5
     - implemented support for the observer pattern / event API
       (<a href="https://github.com/qoretechnologies/qore/issues/4557">issue 4557</a>)
 
-    @subsection dataprovider_v2_4 DataProvider v2.4
+    @section dataprovider_v2_4 DataProvider v2.4
     - allow data providers to be introspected with additional information about children
       (<a href="https://github.com/qoretechnologies/qore/issues/4543">issue 4543</a>)
 
-    @subsection dataprovider_v2_3 DataProvider v2.3
+    @section dataprovider_v2_3 DataProvider v2.3
     - updated to use new generic expression support for searches
       (<a href="https://github.com/qoretechnologies/qore/issues/4538">issue 4538</a>)
     - addded support for data provider options to support default values
@@ -2586,17 +2619,17 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
     - fixed a type error in \c DataProvider::search*() calls with an empty \c where hash argument
       (<a href="https://github.com/qoretechnologies/qore/issues/4511">issue 4511</a>)
 
-    @subsection dataprovider_v2_2_1 DataProvider v2.2.1
+    @section dataprovider_v2_2_1 DataProvider v2.2.1
     - made it possible to determine the default field type in @ref DataProvider::HashDataType "HashDataType"
       (<a href="https://github.com/qoretechnologies/qore/issues/4491">issue 4491</a>)
 
-    @subsection dataprovider_v2_2 DataProvider v2.2
+    @section dataprovider_v2_2 DataProvider v2.2
     - added an attribute to factories to indicate if any children can support the request-response pattern
       (<a href="https://github.com/qoretechnologies/qore/issues/4486">issue 4486</a>)
     - added the @ref DataProvider::DTT_ClientOnly "DTT_ClientOnly" type tag constant
       (<a href="https://github.com/qoretechnologies/qore/issues/4477">issue 4477</a>)
 
-    @subsection dataprovider_v2_1_2 DataProvider v2.1.2
+    @section dataprovider_v2_1_2 DataProvider v2.1.2
     - fixed a bug where %DataProvider types based on string that accept multiple input types with conversions but are
       not soft types threw spurious errors at runtime with non-string types
       (<a href="https://github.com/qoretechnologies/qore/issues/4471">issue 4471</a>)
@@ -2605,11 +2638,11 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
     - fixed a bug where hash types incorrectly claimed compatibility with incompatible hashes
       (<a href="https://github.com/qoretechnologies/qore/issues/4463">issue 4463</a>)
 
-    @subsection dataprovider_v2_1_1 DataProvider v2.1.1
+    @section dataprovider_v2_1_1 DataProvider v2.1.1
     - fixed a type error iterating data in @ref DataProvider::DefaultBulkRecordInterface "DefaultBulkRecordInterface"
       (<a href="https://github.com/qoretechnologies/qore/issues/4457">issue 4457</a>)
 
-    @subsection dataprovider_v2_1 DataProvider v2.1
+    @section dataprovider_v2_1 DataProvider v2.1
     - added support for tags on data provider types (i.e.
       @ref DataProvider::AbstractDataProviderType "AbstractDataProviderType")
       (<a href="https://github.com/qoretechnologies/qore/issues/4442">issue 4442</a>)
@@ -2623,38 +2656,38 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
     - added generic search capabilities to data providers with no native search capabilities
       (<a href="https://github.com/qoretechnologies/qore/issues/4430">issue 4430</a>)
 
-    @subsection dataprovider_v2_0 DataProvider v2.0
+    @section dataprovider_v2_0 DataProvider v2.0
     - added a logger to the @ref DataProvider::AbstractDataProvider "AbstractDataProvider" class to enable logging
       (<a href="https://github.com/qoretechnologies/qore/issues/4409">issue 4409</a>)
     - added support for creating, reading, updating, and modifying data providers
       (<a href="https://github.com/qoretechnologies/qore/issues/4395">issue 4395</a>)
 
-    @subsection dataprovider_v1_2_3 DataProvider v1.3
+    @section dataprovider_v1_2_3 DataProvider v1.3
     - added @ref DataProvider::DataProviderTypeCache::listParentTypes() "DataProviderTypeCache::listParentTypes()" to
       allow a list of parent types to be returned
       (<a href="https://github.com/qoretechnologies/qore/issues/4385">issue 4385</a>)
 
-    @subsection dataprovider_v1_2_2 DataProvider v1.2.2
+    @section dataprovider_v1_2_2 DataProvider v1.2.2
     - added support for starting a transaction with DataProviders that support transaction management
       (<a href="https://github.com/qoretechnologies/qore/issues/4346">issue 4346</a>)
 
-    @subsection dataprovider_v1_2_1 DataProvider v1.2.1
+    @section dataprovider_v1_2_1 DataProvider v1.2.1
     - return the \c base_type key in input type info in
       AbstractDataProviderType::getInputInfo()
       (<a href="https://github.com/qoretechnologies/qore/issues/4311">issue 4311</a>)
 
-    @subsection dataprovider_v1_2 DataProvider v1.2
+    @section dataprovider_v1_2 DataProvider v1.2
     - greatly improved dataprovider and type acquisition speed from clients requiring initialization from the environment
       (<a href="https://github.com/qoretechnologies/qore/issues/4305">issue 4305</a>)
 
-    @subsection dataprovider_v1_1 DataProvider v1.1
+    @section dataprovider_v1_1 DataProvider v1.1
     - the @ref DataProvider::DefaultRecordIterator class supports the \c limit search option
 
-    @subsection dataprovider_v1_0_6 DataProvider v1.0.6
+    @section dataprovider_v1_0_6 DataProvider v1.0.6
     - fixed a bug where the @ref data_type "data" type was not supported correctly as a data provider type
       (<a href="https://github.com/qoretechnologies/qore/issues/4232">issue 4232</a>)
 
-    @subsection dataprovider_v1_0_5 DataProvider v1.0.5
+    @section dataprovider_v1_0_5 DataProvider v1.0.5
     - fixed an issue where it was not possible for pipeline to flush any pending data or to perform reset or purge
       operations when pipeline processing is complete; for this the
       @ref DataProvider::AbstractDataProcessor::flush() "AbstractDataProcessor::flush()" and
@@ -2662,17 +2695,17 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       implemented
       (<a href="https://github.com/qoretechnologies/qore/issues/4107">issue 4107</a>)
 
-    @subsection dataprovider_v1_0_4 DataProvider v1.0.4
+    @section dataprovider_v1_0_4 DataProvider v1.0.4
     - fixed type-handling bugs handling data provider options
       (<a href="https://github.com/qoretechnologies/qore/issues/4062">issue 4062</a>)
 
-    @subsection dataprovider_v1_0_3 DataProvider v1.0.3
+    @section dataprovider_v1_0_3 DataProvider v1.0.3
     - fixed bugs in the default return value for
       @ref DataProvider::AbstractDataProcessor::getExpectedType() "AbstractDataProcessor::getExpectedType()" and
       @ref DataProvider::AbstractDataProcessor::getReturnType() "AbstractDataProcessor::getReturnType()"
       (<a href="https://github.com/qoretechnologies/qore/issues/4043">issue 4043</a>)
 
-    @subsection dataprovider_v1_0_2 DataProvider v1.0.2
+    @section dataprovider_v1_0_2 DataProvider v1.0.2
     - fixed a bug where @ref DataProvider::HashDataType "HashDataType" would not enforce fields or field types when
       checking for type and value compatibility
       (<a href="https://github.com/qoretechnologies/qore/issues/4037">issue 4037</a>)
@@ -2687,7 +2720,7 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
     - updated to allow data provider type attributes to appear as children in the type hierarchy
       (<a href="https://github.com/qoretechnologies/qore/issues/4015">issue 4015</a>)
 
-    @subsection dataprovider_v1_0_1 DataProvider v1.0.1
+    @section dataprovider_v1_0_1 DataProvider v1.0.1
     - implemented callbacks to allow for dynamic elements of request-response data providers (such as URI paths) to be
       resolved at runtime
       (<a href="https://github.com/qoretechnologies/qore/issues/3838">issue 3838</a>)
@@ -2698,7 +2731,7 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       type caching logic
       (<a href="https://github.com/qoretechnologies/qore/issues/3810">issue 3810</a>)
 
-    @subsection dataprovider_v1_0 DataProvider v1.0
+    @section dataprovider_v1_0 DataProvider v1.0
     - initial release
 */
 

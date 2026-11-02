@@ -368,9 +368,12 @@ gh.getChildProviderEx("actions-create-or-update-repo-secret").doRequest(scope + 
 });
     @endcode
 
-    @section githubdataproviderrelnotes Release Notes
+    See @subpage githubdataproviderrelnotes "Release Notes" for the changes in each version.
+*/
+/** @page githubdataproviderrelnotes Release Notes
 
-    @subsection githubdataproviderv1_0 GitHubDataProvider v1.0
+
+    @section githubdataproviderv1_0 GitHubDataProvider v1.0
     - initial release
 */
 

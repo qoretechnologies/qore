@@ -192,11 +192,11 @@ hash<auto> desc = {
       SQL, instead of double quotes in queries and DML, which needed \c QUOTED_IDENTIFIER on; a name that database
       drivers would read as SQL also in brackets is refused with \c IDENTIFIER-ERROR (see @ref mssql_identifiers)
     - fixed @ref SqlUtil::iop_seq() "iop_seq()", which gave the sequence as a bind value, which SQL Server does not
-      accept, and the next value of a sequence (@ref SqlUtil::AbstractDatabase::getNextSequenceValue()
-      "AbstractDatabase::getNextSequenceValue()"), index rebuilding (@ref SqlUtil::AbstractDatabase::rebuildIndex()
+      accept, and the next value of a sequence
+      (@ref SqlUtil::AbstractDatabase::getNextSequenceValue() "AbstractDatabase::getNextSequenceValue()"), index rebuilding (@ref SqlUtil::AbstractDatabase::rebuildIndex()
       "AbstractDatabase::rebuildIndex()", which now takes the table of the index in the required \c table_name
-      option) and statistics updates (@ref SqlUtil::AbstractDatabase::computeStatistics()
-      "AbstractDatabase::computeStatistics()"), which gave identifiers as bind values as well
+      option) and statistics updates
+      (@ref SqlUtil::AbstractDatabase::computeStatistics() "AbstractDatabase::computeStatistics()"), which gave identifiers as bind values as well
     - added foreign constraint referential actions: \c on_delete and \c on_update, which are described from the
       database and aligned; \c RESTRICT, which SQL Server does not have, is refused with
       \c FOREIGN-CONSTRAINT-ERROR, as is any action on Sybase (see @ref mssql_fk_actions)

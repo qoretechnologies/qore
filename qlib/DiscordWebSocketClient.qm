@@ -82,8 +82,7 @@ module DiscordWebSocketClient {
       accepts an optional discovery URL and raises \c DISCORD-ERROR if the response gives no gateway URL
       (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
     - fixed platform-generated connection URLs by declaring
-      @ref DiscordWebSocketClient::DiscordWebSocketConnection::DefaultConnectionUrl
-      "DiscordWebSocketConnection::DefaultConnectionUrl"
+      @ref DiscordWebSocketClient::DiscordWebSocketConnection::DefaultConnectionUrl "DiscordWebSocketConnection::DefaultConnectionUrl"
     - fixed a bug where a @ref DiscordWebSocketClient::DiscordWebSocketConnection "DiscordWebSocketConnection" created
       without a URL did not use the discovered gateway URL
     - fixed a bug where a server-initiated \c Heartbeat request (gateway opcode 1) caused an unhandled
@@ -647,8 +646,8 @@ hash<auto> h = ws.getInfo();
     /** The reconnect must not be driven from the heartbeat thread itself: the reconnect path
         calls @ref reconnectPreamble() -> stopHeartbeatThread(), which waits for the heartbeat
         thread to exit, so driving it from the heartbeat thread would deadlock.  This method
-        starts a short-lived thread to call @ref WebSocketClient::WebSocketClient::reconnect()
-        "reconnect()" and returns immediately so the heartbeat thread can exit.
+        starts a short-lived thread to call
+        @ref WebSocketClient::WebSocketClient::reconnect() "reconnect()" and returns immediately so the heartbeat thread can exit.
     */
     private triggerZombieReconnect() {
         code reconnector = sub () {

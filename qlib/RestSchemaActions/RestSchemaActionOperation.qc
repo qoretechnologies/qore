@@ -1718,8 +1718,8 @@ public class RestSchemaActionOperation {
         only their own discriminator value.
 
         @param type the schema-derived type of the field, or of its elements
-        @param choices the values the overlay offers: raw values or @ref DataProvider::AllowedValueInfo
-        "AllowedValueInfo" records, as for @ref DataProvider::AbstractDataField::setAllowedValues()
+        @param choices the values the overlay offers: raw values or
+        @ref DataProvider::AllowedValueInfo "AllowedValueInfo" records, as for @ref DataProvider::AbstractDataField::setAllowedValues()
         "AbstractDataField::setAllowedValues()"
         @param key the overlay key that offers them
 

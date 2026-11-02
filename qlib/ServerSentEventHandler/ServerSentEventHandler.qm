@@ -100,8 +100,8 @@ hash<HttpHandlerResponseInfo> getEvents(hash<auto> cx, *hash<auto> ah) {
       sent, and so is a negative retry value; before, a line break in an event type or ID started a field or an
       event of its own, and a client ignored an ID with a NUL character.  A line break (CRLF, CR or LF) in a comment
       or in the serialized data of an event starts another line of the field
-    - added the internal @ref ServerSentEventHandler::ServerSentEventHandler::createConnectionIntern()
-      "createConnectionIntern()" seam so that a handler needing a specific connection type for certain requests
+    - added the internal
+      @ref ServerSentEventHandler::ServerSentEventHandler::createConnectionIntern() "createConnectionIntern()" seam so that a handler needing a specific connection type for certain requests
       cannot be displaced by a subclass customizing the documented
       @ref ServerSentEventHandler::ServerSentEventHandler::getConnectionImpl() "getConnectionImpl()" factory
     - added a per-connection outbound queue limit (the \c max_queue_size handler option and
@@ -116,8 +116,8 @@ hash<HttpHandlerResponseInfo> getEvents(hash<auto> cx, *hash<auto> ah) {
       SSE response from a REST handler (or any other handler that returns
       an @ref HttpServer::HttpHandlerResponseInfo "HttpHandlerResponseInfo"),
       with no extra threads required
-    - added @ref ServerSentEventHandler::ServerSentEventHandler::setupAsyncSseConnection()
-      "ServerSentEventHandler::setupAsyncSseConnection()" for async SSE connection setup via the
+    - added
+      @ref ServerSentEventHandler::ServerSentEventHandler::setupAsyncSseConnection() "ServerSentEventHandler::setupAsyncSseConnection()" for async SSE connection setup via the
       I/O controller, replacing the legacy synchronous \c startImpl() entry point
     - \c startImpl() now throws \c SSE-SYNC-NOT-SUPPORTED; all SSE connections are managed by
       the async I/O controller

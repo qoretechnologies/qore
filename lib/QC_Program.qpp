@@ -395,8 +395,8 @@ const DOM_REFLECTION = QDOM_REFLECTION;
 ///@}
 
 /** @defgroup code_flag_constants Code Flag Constants
-    These are the possible code flags that can be returned by @ref Reflection::AbstractVariant::getCodeFlags()
-    "AbstractVariant::getCodeFlags()" to describe variant attributes.
+    These are the possible code flags that can be returned by
+    @ref Reflection::AbstractVariant::getCodeFlags() "AbstractVariant::getCodeFlags()" to describe variant attributes.
 
     @since %Qore 3.0
 */
@@ -3477,8 +3477,8 @@ int Program::getCapabilityMask() [flags=RET_VALUE_ONLY] {
 }
 
 //! Returns the LLVM optimization level used when JIT-compiling this %Program's functions
-/** @return the level set with @ref Qore::Program::setJitOptimizationLevel()
-    "Program::setJitOptimizationLevel()", or the process-wide default (see
+/** @return the level set with
+    @ref Qore::Program::setJitOptimizationLevel() "Program::setJitOptimizationLevel()", or the process-wide default (see
     @ref jit_optimization_level) if this %Program has no override of its own
 
     @par Example:

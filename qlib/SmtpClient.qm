@@ -956,8 +956,8 @@ smtp.setToken(new_access_token);
         - This method is subject to thread serialization
         - The message is sent with SMTP transparency, whatever the SMTP mode of the message: every CR or LF
           character that is not part of a CRLF line break is sent as CRLF, and a \c "." is added at the start of
-          every line that starts with \c "."; see @ref SmtpClient::SmtpSendPollOperation::getData()
-          "SmtpSendPollOperation::getData()"
+          every line that starts with \c "."; see
+          @ref SmtpClient::SmtpSendPollOperation::getData() "SmtpSendPollOperation::getData()"
 
         @throw MESSAGE-ERROR the message is incomplete and cannot be sent, or the sender or a recipient address
         contains a NUL, CR or LF character
