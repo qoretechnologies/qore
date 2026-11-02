@@ -15,7 +15,9 @@
 
 #! How the module loader reports an AOT module of a build tree that is out of date with its sources
 /** An AOT module of a build tree one of whose sources has changed since it was compiled is not loaded: its source
-    module is loaded instead (see design/aot-linked-module-sources.md).  When the source module fails to load, the
+    module is loaded instead (see design/aot-linked-module-sources.md).  A module of a build tree is a symbolic link
+    to a built module, or a regular file with the depfile that qcc wrote next to it, as in the directory of the
+    built modules that run_tests.sh puts first in the module path; a module without a depfile is not checked.  When the source module fails to load, the
     error that tells why the AOT module was not loaded (\c AOT-MODULE-STALE) follows the error of the source module in
     the exception chain.
 */
@@ -37,6 +39,9 @@ class AOTModuleStaleFallbackTest inherits QUnit::Test {
 
         addTestCase("an out-of-date linked module whose source fails reports why it was not loaded",
             \staleSourceFailsTest());
+        addTestCase("a built module that is a regular file with a depfile is checked (the run_tests.sh layout)",
+            \regularWithDepfileTest());
+        addTestCase("a module compiled without a depfile is not checked", \regularWithoutDepfileTest());
         set_return_value(main());
     }
 
@@ -77,6 +82,59 @@ class AOTModuleStaleFallbackTest inherits QUnit::Test {
             "printf(\"%%s %%s\\n\", call_function(\"Stale::value\"), basename(get_module_hash().Stale.filename)); } "
             "catch (hash<ExceptionInfo> ex) { while (ex) { printf(\"ex: %%s: %%s\\n\", ex.err, ex.desc); "
             "ex = ex.next; } }'", env, module_path, qore_bin)));
+    }
+
+    #! runs a script with %requires in a child process, as a test run by run_tests.sh does
+    private string runRequires(string module_path, string script_dir) {
+        string script = script_dir + "/requires.q";
+        write(script, "%modern\n%requires Stale\nprintf(\"%s %s\\n\", Stale::value(), "
+            "basename(get_module_hash().Stale.filename));\n");
+        return trim(run(sprintf("%s QORE_MODULE_DIR=%s %s %s", env, module_path, qore_bin, script)));
+    }
+
+    regularWithDepfileTest() {
+        # run_tests.sh puts the directory of the built modules first in the module path, before the sources
+        TmpDir tmp("qore-aot-stale-fallback-");
+        string src_dir = tmp.path + "/qlib";
+        string qmod_dir = tmp.path + "/build/qlib-qmod";
+        mkdir(src_dir);
+        mkdir(qmod_dir, 0755, True);
+        writeStale(src_dir, "return \"v1\";");
+        compile(src_dir, qmod_dir + "/Stale.qmod");
+        string module_path = qmod_dir + ":" + src_dir;
+        assertEq("v1 Stale.qmod", runRequires(module_path, tmp.path));
+
+        # a source with only a new modification time has not changed: the module is loaded
+        touchLater(src_dir + "/Stale.qm");
+        assertEq("v1 Stale.qmod", runRequires(module_path, tmp.path));
+
+        # a changed source: the source module is loaded instead, with a warning
+        writeStale(src_dir, "return \"v2\";");
+        touchLater(src_dir + "/Stale.qm");
+        string out = runRequires(module_path, tmp.path);
+        assertEq("v2 Stale.qm", out.split("\n").last(), out);
+        assertRegex("BINARY-MODULE-SOURCE-FALLBACK: AOT module '.*/qlib-qmod/Stale\\.qmod' for feature 'Stale' is out "
+            "of date: its source '.*/qlib/Stale\\.qm' has changed since it was compiled", out);
+
+        # without its depfile, the module is not checked
+        unlink(qmod_dir + "/Stale.qmod.d");
+        assertEq("v1 Stale.qmod", runRequires(module_path, tmp.path));
+    }
+
+    regularWithoutDepfileTest() {
+        # qcc --compile-module without --depfile writes no depfile: the module is used even with a changed source
+        TmpDir tmp("qore-aot-stale-fallback-");
+        string src_dir = tmp.path + "/src";
+        mkdir(src_dir);
+        writeStale(src_dir, "return \"v1\";");
+        string qmod = src_dir + "/Stale.qmod";
+        string out = run(sprintf("%s QORE_MODULE_DIR=%s %s -b --compile-module --output %s %s", env, src_dir,
+            qore_bin, qmod, src_dir + "/Stale.qm"));
+        assertTrue(is_file(qmod), out);
+        assertFalse(is_file(qmod + ".d"));
+        writeStale(src_dir, "return \"v2\";");
+        touchLater(src_dir + "/Stale.qm");
+        assertEq("v1 Stale.qmod", runRequires(src_dir, tmp.path));
     }
 
     staleSourceFailsTest() {

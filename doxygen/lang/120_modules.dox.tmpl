@@ -1479,6 +1479,22 @@ qcc of this Qore installation
      to stderr
     |any load with a warning mask of 0, including Program::parse() without a warning mask|not issued
 
+    @subsection aot_module_build_tree_staleness AOT Modules of a Build Tree That Are Out of Date
+
+    In a build tree, an AOT-compiled module that is out of date with its sources is not loaded: if one of the sources
+    listed in the dependency file that \c qcc wrote next to the module (<tt>\<module\>.qmod.d</tt>, written with
+    <tt>--depfile</tt> by the %Qore CMake support) has changed since the module was compiled, the source module is
+    loaded instead, with a \c BINARY-MODULE-SOURCE-FALLBACK warning that the module must be rebuilt (see
+    @ref aot_module_source_fallback).  A source whose content is unchanged, as after a checkout or a copy, has not
+    changed.  This applies to a module that is a symbolic link to a built module (as the build links modules into
+    the source \c qlib directory) and to a module that is a regular file with its dependency file next to it (as in
+    the directory of the built modules).
+
+    A module without a dependency file next to it is not checked: an installed module (the install rules do not
+    install dependency files), and a module compiled by hand with <tt>qcc --compile-module</tt> without
+    <tt>--depfile</tt>, which is loaded even if its source has changed since it was compiled.  Rebuild such a module
+    after changing its source, or compile it with <tt>--depfile</tt>.
+
     @subsection aot_module_code_signing AOT Module Metadata, Stripping and Code Signing
 
     \c qcc stores the metadata that the module loader reads before it maps an AOT-compiled module (the module's name,

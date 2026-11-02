@@ -1396,6 +1396,11 @@
       and a broken child is still always reported (see @ref aot_module_source_fallback)
     - when an AOT module of a build tree was out of date with its sources and its source module failed to load, only
       the source error was reported; an \c AOT-MODULE-STALE error now follows it in the exception chain
+    - an AOT module of a build tree that is a regular file, such as a module in the directory of the built modules
+      that the test runner puts first in the module path, was used even when its sources had changed since it was
+      compiled; it is now checked like a module linked into the source tree when the dependency file that \c qcc
+      wrote is next to it.  Installed modules, and modules compiled with <tt>qcc --compile-module</tt> without
+      <tt>--depfile</tt>, are not checked (see @ref aot_module_build_tree_staleness)
     - a @ref thread_local "thread_local" variable declared in a user module was refused when the module inherited
       @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL": thread-local storage is not thread control (see
       @ref module_parse_option_masks)

@@ -1,20 +1,42 @@
-# Linked AOT Modules and Their Sources
+# AOT Modules of a Build Tree and Their Sources
 
 Copyright (C) 2026 Qore Technologies, s.r.o.
 
 A build tree links the AOT `.qmod` files that it builds into the source `qlib` directory
 (`QORE_AOT_LINK_SOURCE_MODULES`, and `cmake/EnsureSourceQmodSymlinks.cmake` in a CI test stage), where the in-tree
 tests find them before the module sources: the loader takes a `.qmod` over a `.qm` in the same directory.  The module
-loader checks such a link before it loads the module (`qore_linked_aot_module_is_stale()` in `lib/ModuleManager.cpp`):
+loader checks such a link before it loads the module (`qore_build_aot_module_is_stale()` in `lib/ModuleManager.cpp`):
 if one of the module's sources has changed since the module was compiled, the source module is loaded instead, with
 the warning
 
     AOT module '<qmod>' for feature '<name>' is out of date: its source '<source>' has changed since it was compiled;
     loading source module '<qm>' instead; rebuild the AOT module
 
-Only a `.qmod` that is a symbolic link is checked, so an installed module never is.  The check is skipped for a
-Program that cannot access the filesystem (`PO_NO_FILESYSTEM`), and a file that the filesystem policy of a sandbox
-does not allow to be read is not checked.
+Two kinds of `.qmod` are checked (`qore_build_aot_module_is_stale()`):
+
+- a `.qmod` that is a symbolic link, against the dependency file next to the module it links to, or, without one,
+  against its own sources by modification time;
+- a `.qmod` that is a regular file **with its own dependency file** (`<qmod>.d`, which qcc writes with `--depfile`, as
+  every build of a tree does), with the same fingerprint and content-hash rules.  This covers the directory of the
+  built modules that `run_tests.sh` puts first in `QORE_MODULE_DIR` (`build/qlib-qmod`), so that a child process of
+  a test, or any script that does not prepend the source `qlib` directory, does not run a module that is out of date
+  with its source either.
+
+A regular `.qmod` without a dependency file next to it is **not checked**:
+
+- an installed module: the install rules remove an installed `<qmod>.d` (`cmake/QoreMacros.cmake`), so installed and
+  packaged trees are unchanged, and the check costs one `stat()` of the missing dependency file per load;
+- a module compiled by hand with `qcc --compile-module` (or `qore --compile-module`) without `--depfile`: it is used
+  even if its source has changed since; rebuild it, or compile it with `--depfile` to have it checked.
+
+A modification-time rule is not used for a regular file without a dependency file: a checkout, a copy or a package
+extraction gives files new modification times without changing them (see below), and there is no fingerprint to
+tell a changed source from a touched one.
+
+The check is skipped for a Program that cannot access the filesystem (`PO_NO_FILESYSTEM`), and a file that the
+filesystem policy of a sandbox does not allow to be read is not checked.  When the source module that is loaded
+instead fails, `AOT-MODULE-STALE` follows its error in the exception chain (see
+`design/module-parse-option-masks.md`, "Reporting a refused AOT module").
 
 ## The sources of a module
 
@@ -69,3 +91,7 @@ process.
 another size) and a changed dependency are found; sources that only got new modification times are not; the
 fingerprint file lists the sources of the depfile; without a fingerprint file or a depfile, the modification time
 decides; a module that is not a link, or one that a Program without filesystem access loads, is not checked.
+`examples/test/ir/AOTModuleStaleFallback.qtest`: a built module that is a regular file with its depfile, first in the
+module path of a child process as in `run_tests.sh`, is checked (a changed source is found, a touched one is not, and
+without the depfile the module is loaded); a module compiled without `--depfile` is not checked; and an out-of-date
+module whose source fails reports `AOT-MODULE-STALE` after the source error.
