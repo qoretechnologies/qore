@@ -112,7 +112,13 @@ class NameMethodContinuationTest inherits QUnit::Test {
                     string executable = dir.path + "/fixture";
                     string ir = run((qcc, level, "--strip-source", "-o", executable, fixture),
                         prefix + "QORE_DUMP_LLVM_IR=1 ");
-                    assertRegex("name_method_native_value", ir);
+                    if (name == "AOTNativeMethodFrameReaders") {
+                        assertRegex("name_method_native_value", ir);
+                    } else {
+                        # the parameter assigned from the call is read after the release of the old receiver, whose
+                        # destructor could replace it by reflection: it stays boxed, and only the call is native
+                        assertRegex("call i32 @qore_rt_try_method_int_unary_v1", ir);
+                    }
                     assertEq(expected, run((executable,)), name + prefix + level);
                     assertEq(expected, run((executable,), "QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION=1 "),
                         name + " disabled " + prefix + level);

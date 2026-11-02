@@ -6251,7 +6251,7 @@ After higher-priority object summaries and batch entries, AOT now admits non-sta
 
 The [optimized evidence](../bench/runtime-comparison/results-resolved-native-method-macos-arm64.json) contains the20-workload pilot and41-workload confirmation,1098processes/3294windows, and all slower controls. Release/fullDebug each pass4697assertions in9fixtures; nativeDebug4003/5668 and391Release alias restoration pass. Direct/final LLVM bodies and existing runtime helper instruction counts/frame sizes are preserved; executable code adds13384bytes.
 
-A pre-existing native-parameter reflection mismatch was reproduced in both baseline and candidate. Final tests check full boxed-local reflection in all source/AOT modes; native parameter visibility/reload requires separate work. Binary arithmetic may still rebox native method results. That continuation opportunity and bounded known-receiver scalar summaries remain prospective, with no Java-parity or global-ceiling claim.
+A pre-existing native-parameter reflection mismatch was reproduced in both baseline and candidate. Final tests check full boxed-local reflection in all source/AOT modes; native parameter visibility/reload requires separate work. Resolved 2026-11-02; see [reflective loop reloads](#resolved-reflective-loop-reloads-2026-11-02). Binary arithmetic may still rebox native method results. That continuation opportunity and bounded known-receiver scalar summaries remain prospective, with no Java-parity or global-ceiling claim.
 
 
 ### Native binary call results (2026-10-30)
@@ -6271,7 +6271,7 @@ AOTSlotMap assigns additional method targets from the same checked index space a
 
 The [optimized evidence](../bench/runtime-comparison/results-polymorphic-scalar-macos-arm64.json) records1170processes/3510windows, with module scalar calls about73% faster and expression calls about87% faster in confirmation. Local expression calls improve about16-17%; all slower controls are retained. Focused Release/Debug tests, native Debug suites, six extra metadata fixtures and391restored Release aliases qualify the change. QORE_DISABLE_AOT_POLYMORPHIC_SCALAR_IMPORT restores prior lowering. No RuntimeConfig/TLS ABI or serialized wire kind changes.
 
-Remaining work: refresh the cumulative optimized Java/develop checkpoint; inspect whether one receiver classification and hoisted immutable target checks can replace repeated guard work in loops. Preserve live validity, exact object identity, cross-Program behavior, logical frames and fallback. Broader receiver/native-local lifetime proofs must address the separately reproduced native-parameter reflection visibility/reload issue. No Java parity or maximum-performance claim is made.
+Remaining work: refresh the cumulative optimized Java/develop checkpoint; inspect whether one receiver classification and hoisted immutable target checks can replace repeated guard work in loops. Preserve live validity, exact object identity, cross-Program behavior, logical frames and fallback. Broader receiver/native-local lifetime proofs must keep the reflective reload rules of the [2026-11-02 resolution](#resolved-reflective-loop-reloads-2026-11-02). No Java parity or maximum-performance claim is made.
 
 
 ### Optimized post-polymorphic checkpoint (2026-10-30)
@@ -6289,7 +6289,7 @@ qore_rt_get_live_aot_override_receiver_class_v1 checks the current strong receiv
 
 The [optimized evidence](../bench/runtime-comparison/results-scalar-override-guard-macos-arm64.json) records 1,170 processes and 3,510 windows. All eight target kernels improve in every layout in both campaigns; confirmation improves calls by 13-16% and expressions by 24-25%, while the monomorphic integer control is 3.77% slower. All control costs are retained. Release/Debug regression matrices, native Debug suites and restored 391 Release aliases qualify the change. No metadata wire kind or RuntimeConfig/TLS ABI changes.
 
-Remaining work: investigate already-retained parameter receiver classification and selected receiver expressions. Preserve actual-value identity checks, live validity, borrowed-view lifetime, reflective replacement, Program/provenance fallback and frame behavior. General effectful calls and object-local ownership remain significant gaps. The known native-parameter reflection discrepancy is not resolved here. No universal Java parity or global performance ceiling is established.
+Remaining work: investigate already-retained parameter receiver classification and selected receiver expressions. Preserve actual-value identity checks, live validity, borrowed-view lifetime, reflective replacement, Program/provenance fallback and frame behavior. General effectful calls and object-local ownership remain significant gaps. The native-parameter reflection discrepancy was resolved later ([2026-11-02](#resolved-reflective-loop-reloads-2026-11-02)). No universal Java parity or global performance ceiling is established.
 
 
 ### Inlined method bodies and attached debuggers (2026-11-01)
@@ -6393,3 +6393,36 @@ The invariant v9 unary floating helper now defers zero initialization to handled
 ### Native conversion in fast AOT method entries (2026-10-31)
 
 AArch64 object emission replaces explicitly marked double-to-int native method-result conversions inside fast AOT entries with llvm.fptosi.sat.i64.f64. Destination selection precedes the pass; ordinary entries, callbacks, x86 and boxed fallback preserve runtime helper calls. NaN, infinities, subnormals and integer-boundary neighbors are qualified against actual runtime helpers. QORE_DISABLE_AOT_NATIVE_METHOD_FLOAT_TO_INT disables the pass at compile time; AOT artifacts must be rebuilt. No runtime ABI or JIT/IR execution change. The final paired local method-result kernel improves 6.37%, with a 1.67% paired floating-callback control cost retained; wider scopes were rejected. All seven epochs and short controls are in the [results](../bench/runtime-comparison/RESULTS.md#native-floating-conversion-in-fast-aot-method-entries-2026-10-31) and [audit](../bench/runtime-comparison/audit-fast-method-float-to-int.md). Next inspect invariant callback helper/callee boundaries and scalar result stores while preserving live admission, diagnostic publication and physical-stack semantics.
+
+### Resolved reflective loop reloads (2026-11-02)
+
+In a program that allows the debugger, a callee can replace any parameter or body local of a frame that may reflect
+(`QoreIRFunction::reflective_frame`) with `set_local_var_value()`. Two defects let compiled code keep the old value:
+
+- JIT: the reload epoch of a frame is created lazily by the first call lowered in it, and `ensureLocalCacheFresh()`
+  emits nothing before that. Blocks are lowered in layout order, so a loop read placed before the loop's first call
+  had no freshness check and read the stale alloca on every later iteration (`cacheStable()` in
+  AOTClassParamCache: 6 instead of 51). AOT already creates the epoch eagerly for any function with a reloadable
+  local and more than one block; `QoreIRToLLVM` now does the same in the JIT for reflective frames only. A frame that
+  cannot reflect keeps the lazy epoch and its unchecked reads.
+- AOT: `tryLowerFunction()` moved only the body locals of a reflective frame out of `ir_only_locals`; parameters
+  stayed private. IR LICM (`qore_ir_is_hoistable_load()`) hoisted native scalar parameter loads out of loops, and
+  native parameter allocas are never reloaded, so a reflective write to an `int`, `float` or `bool` parameter was
+  ignored, in loops or not. Now a parameter that the function may access after an instruction that may reflect,
+  before assigning it, moves to the runtime stack (`qore_ir_get_params_read_after_reflection()`: later in the same
+  block or in a reachable block, exception edges included). Instructions that may reflect are those of
+  `qore_ir_function_may_reflect_locally()` and, where a value can hold an object, the releases of temporaries and
+  locals; a plain local load reflects only through a reference, and the first assignment of a body local only after
+  another instruction that may reflect. A parameter read only before anything that may reflect stays private,
+  keeping native closure, receiver-forwarding and method entries (AOTDynamicClosureEntry, AOTFloatReceiverEntry,
+  AOTNameMethodContinuation).
+- AOT consumers that assumed an IR native-scalar value is native in LLVM now accept the boxed cache of a published
+  parameter: the object scalar projection (`aot_object_scalar_projection_source`) used its boxed bits as a native
+  integer (AOTFusedCallDebugger), and the finite call-reference and name-method native calls declined it or took
+  their boxed-argument variants. `QoreIRToLLVM::getProvenScalarLocalLoad()` unboxes a load of a local of exactly
+  `int` or `float` type covered by `assigned_non_nothing_locals`.
+
+Reflection-free functions (`reflection_free`) and programs without `%allow-debugger` are unchanged.
+AOTReflectiveLoopReload covers parameters and body locals of object, string and scalar types in `for`, `while` and
+`foreach` loops, in functions, methods, static methods and closures, in ir/jit/tiered and AOT `-O0`/`-O3`;
+AOTClassParamCache now also checks ir/jit/tiered.

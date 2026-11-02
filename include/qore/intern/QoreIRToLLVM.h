@@ -1466,6 +1466,15 @@ private:
     // Ensure a value is a native int64_t for typed int operations.
     // Handles: native i64 (pass through), NaN-boxed INT48 or big int (runtime conversion).
     llvm::Value* ensureIntType(llvm::Value* val, uint32_t value_id);
+    //! Returns the native value of a boxed load of a local proven to hold an int (or a float), or nullptr
+    /** A local of exactly the scalar type that is read from its boxed runtime-visible cache (such as a parameter
+        of a reflective frame) holds an assigned value when the assigned-state proof of native local selection
+        (assigned_non_nothing_locals) covers it; the boxed value is borrowed, so its native value can be passed where
+        a native argument is required.
+        @param value_id the SSA value of the load
+        @param type i64_type for an int, double_type for a float
+    */
+    llvm::Value* getProvenScalarLocalLoad(uint32_t value_id, llvm::Type* type, llvm::Module& module);
 
     llvm::Value* getCachedStableConversion(
         uint32_t value_id, const NativeConversionCache& cache) const;

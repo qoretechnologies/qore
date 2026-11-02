@@ -18129,6 +18129,100 @@ static bool qore_ir_builtin_may_reflect(const QoreFunction* func, const Abstract
     return !strncmp(name, "call_", 5) || strstr(name, "thread_data") || strstr(name, "thread_resource");
 }
 
+//! Returns true if one instruction may run a reflection builtin, apart from the exact user variants it calls
+/** The local part of qore_ir_function_may_reflect_locally() for one instruction; the exact user variants called are
+    added to \a callees.  Not covered here: the function-level rules (opaque AST local access, and locals that can
+    hold an object, whose release can run a destructor wherever the local is replaced or goes out of scope).
+*/
+static bool qore_ir_instruction_may_reflect_locally(const QoreIRFunction& func, const QoreIRInstruction* inst,
+        std::vector<const AbstractQoreFunctionVariant*>& callees) {
+    // a constructed list or hash holds only its operands, which are checked as the results they are, and the
+    // invocation holds a reference to self for its whole duration, so releasing a loaded self runs nothing
+    const bool self_load = inst->opcode == QoreIROpcode::LoadLocal
+        && static_cast<const QoreIRLocalInstruction*>(inst)->local
+        && !strcmp(static_cast<const QoreIRLocalInstruction*>(inst)->local->getName(), "self");
+    if (inst->result.isValid() && !self_load && inst->opcode != QoreIROpcode::MakeList
+            && inst->opcode != QoreIROpcode::MakeHash && inst->opcode != QoreIROpcode::MakeHashConstKeys) {
+        const QoreIRValueFacts* facts = func.getValueFacts(inst->result);
+        if (facts && facts->type_info && qore_ir_type_may_hold_object(facts->type_info)) {
+            return true;
+        }
+    }
+    QoreIROpcode opcode = inst->opcode;
+    if (opcode == QoreIROpcode::Invoke) {
+        opcode = static_cast<const QoreIRInvokeInstruction*>(inst)->invoke_opcode;
+    }
+    switch (opcode) {
+        case QoreIROpcode::CallDirect:
+        case QoreIROpcode::CallStaticDirect:
+        case QoreIROpcode::CallMethodDirect:
+        case QoreIROpcode::InvokeMethodDirect: {
+            bool has_ref_args = true;
+            const AbstractQoreFunctionVariant* callee = inst->opcode == QoreIROpcode::Invoke
+                ? nullptr : qore_ir_get_resolved_effect_callee(inst, has_ref_args);
+            if (!callee || has_ref_args || qore_ir_type_may_hold_object(callee->getReturnTypeInfo())) {
+                return true;
+            }
+            if (!callee->getUserVariantBase()) {
+                // only a plain function call is classified by name; a builtin method is treated as user code
+                if (opcode != QoreIROpcode::CallDirect
+                        || qore_ir_builtin_may_reflect(
+                            static_cast<const QoreIRCallDirectInstruction*>(inst)->func, callee)) {
+                    return true;
+                }
+                break;
+            }
+            callees.push_back(callee);
+            break;
+        }
+        // calls and evaluations that are not resolved to an exact variant, closures, new objects, handlers,
+        // context statements, and the variables that can hold values of any type
+        case QoreIROpcode::Call:
+        case QoreIROpcode::CallIndirect:
+        case QoreIROpcode::CallMethod:
+        case QoreIROpcode::CallStatic:
+        case QoreIROpcode::CallClosureDirect:
+        case QoreIROpcode::CallAOTHelper:
+        case QoreIROpcode::PluginCall:
+        case QoreIROpcode::DotEvalMethodDirect:
+        case QoreIROpcode::InvokeDotEvalMethodDirect:
+        case QoreIROpcode::DotEvalAny:
+        case QoreIROpcode::DotEvalInt:
+        case QoreIROpcode::DotEvalFloat:
+        case QoreIROpcode::DotEvalString:
+        case QoreIROpcode::DotEvalDate:
+        case QoreIROpcode::DotEvalList:
+        case QoreIROpcode::DotEvalHash:
+        case QoreIROpcode::DotEvalObject:
+        case QoreIROpcode::NewObject:
+        case QoreIROpcode::CreateClosure:
+        case QoreIROpcode::CreateCallRef:
+        case QoreIROpcode::CreateParseRef:
+        case QoreIROpcode::OnBlockExit:
+        case QoreIROpcode::ScopeExit:
+        case QoreIROpcode::Context:
+        case QoreIROpcode::Summarize:
+        case QoreIROpcode::LoadGlobal:
+        case QoreIROpcode::LoadThreadLocal:
+        case QoreIROpcode::LoadClosure:
+        case QoreIROpcode::StoreGlobal:
+        case QoreIROpcode::StoreThreadLocal:
+        case QoreIROpcode::StoreClosure:
+            return true;
+        default:
+            if (inst->opcode == QoreIROpcode::Invoke) {
+                // an invoked call is resolved from its instruction above; any other invoked operation is
+                // evaluated through its expression tree, which can contain calls
+                const auto* invoke = static_cast<const QoreIRInvokeInstruction*>(inst);
+                if (invoke->expr.hasNode()) {
+                    return true;
+                }
+            }
+            break;
+    }
+    return false;
+}
+
 // documented in QoreIRAnalysis.h
 bool qore_ir_function_may_reflect_locally(const QoreIRFunction& func,
         std::vector<const AbstractQoreFunctionVariant*>& callees) {
@@ -18163,91 +18257,417 @@ bool qore_ir_function_may_reflect_locally(const QoreIRFunction& func,
             if (!inst) {
                 continue;
             }
-            // a constructed list or hash holds only its operands, which are checked as the results they are, and the
-            // invocation holds a reference to self for its whole duration, so releasing a loaded self runs nothing
-            const bool self_load = inst->opcode == QoreIROpcode::LoadLocal
-                && static_cast<const QoreIRLocalInstruction*>(inst)->local
-                && !strcmp(static_cast<const QoreIRLocalInstruction*>(inst)->local->getName(), "self");
-            if (inst->result.isValid() && !self_load && inst->opcode != QoreIROpcode::MakeList
-                    && inst->opcode != QoreIROpcode::MakeHash && inst->opcode != QoreIROpcode::MakeHashConstKeys) {
-                const QoreIRValueFacts* facts = func.getValueFacts(inst->result);
-                if (facts && facts->type_info && qore_ir_type_may_hold_object(facts->type_info)) {
-                    return true;
-                }
-            }
-            QoreIROpcode opcode = inst->opcode;
-            if (opcode == QoreIROpcode::Invoke) {
-                opcode = static_cast<const QoreIRInvokeInstruction*>(inst)->invoke_opcode;
-            }
-            switch (opcode) {
-                case QoreIROpcode::CallDirect:
-                case QoreIROpcode::CallStaticDirect:
-                case QoreIROpcode::CallMethodDirect:
-                case QoreIROpcode::InvokeMethodDirect: {
-                    bool has_ref_args = true;
-                    const AbstractQoreFunctionVariant* callee = inst->opcode == QoreIROpcode::Invoke
-                        ? nullptr : qore_ir_get_resolved_effect_callee(inst, has_ref_args);
-                    if (!callee || has_ref_args || qore_ir_type_may_hold_object(callee->getReturnTypeInfo())) {
-                        return true;
-                    }
-                    if (!callee->getUserVariantBase()) {
-                        // only a plain function call is classified by name; a builtin method is treated as user code
-                        if (opcode != QoreIROpcode::CallDirect
-                                || qore_ir_builtin_may_reflect(
-                                    static_cast<const QoreIRCallDirectInstruction*>(inst)->func, callee)) {
-                            return true;
-                        }
-                        break;
-                    }
-                    callees.push_back(callee);
-                    break;
-                }
-                // calls and evaluations that are not resolved to an exact variant, closures, new objects, handlers,
-                // context statements, and the variables that can hold values of any type
-                case QoreIROpcode::Call:
-                case QoreIROpcode::CallIndirect:
-                case QoreIROpcode::CallMethod:
-                case QoreIROpcode::CallStatic:
-                case QoreIROpcode::CallClosureDirect:
-                case QoreIROpcode::CallAOTHelper:
-                case QoreIROpcode::PluginCall:
-                case QoreIROpcode::DotEvalMethodDirect:
-                case QoreIROpcode::InvokeDotEvalMethodDirect:
-                case QoreIROpcode::DotEvalAny:
-                case QoreIROpcode::DotEvalInt:
-                case QoreIROpcode::DotEvalFloat:
-                case QoreIROpcode::DotEvalString:
-                case QoreIROpcode::DotEvalDate:
-                case QoreIROpcode::DotEvalList:
-                case QoreIROpcode::DotEvalHash:
-                case QoreIROpcode::DotEvalObject:
-                case QoreIROpcode::NewObject:
-                case QoreIROpcode::CreateClosure:
-                case QoreIROpcode::CreateCallRef:
-                case QoreIROpcode::CreateParseRef:
-                case QoreIROpcode::OnBlockExit:
-                case QoreIROpcode::ScopeExit:
-                case QoreIROpcode::Context:
-                case QoreIROpcode::Summarize:
-                case QoreIROpcode::LoadGlobal:
-                case QoreIROpcode::LoadThreadLocal:
-                case QoreIROpcode::LoadClosure:
-                case QoreIROpcode::StoreGlobal:
-                case QoreIROpcode::StoreThreadLocal:
-                case QoreIROpcode::StoreClosure:
-                    return true;
-                default:
-                    if (inst->opcode == QoreIROpcode::Invoke) {
-                        // an invoked call is resolved from its instruction above; any other invoked operation is
-                        // evaluated through its expression tree, which can contain calls
-                        const auto* invoke = static_cast<const QoreIRInvokeInstruction*>(inst);
-                        if (invoke->expr.hasNode()) {
-                            return true;
-                        }
-                    }
-                    break;
+            if (qore_ir_instruction_may_reflect_locally(func, inst, callees)) {
+                return true;
             }
         }
     }
     return false;
+}
+
+//! Returns true if an instruction neither accesses a local variable nor runs anything beyond its own SSA computation
+static bool qore_ir_instruction_is_local_free_scalar_op(const QoreIRInstruction* inst) {
+    switch (inst->opcode) {
+        case QoreIROpcode::ConstInt:
+        case QoreIROpcode::ConstFloat:
+        case QoreIROpcode::ConstBool:
+        case QoreIROpcode::ConstBoolBoxed:
+        case QoreIROpcode::ConstNothing:
+        case QoreIROpcode::ConstNull:
+        case QoreIROpcode::AddInt:
+        case QoreIROpcode::AddFloat:
+        case QoreIROpcode::SubInt:
+        case QoreIROpcode::SubFloat:
+        case QoreIROpcode::MulInt:
+        case QoreIROpcode::MulFloat:
+        case QoreIROpcode::DivInt:
+        case QoreIROpcode::DivFloat:
+        case QoreIROpcode::ModInt:
+        case QoreIROpcode::AndInt:
+        case QoreIROpcode::OrInt:
+        case QoreIROpcode::XorInt:
+        case QoreIROpcode::ShlInt:
+        case QoreIROpcode::ShrInt:
+        case QoreIROpcode::EqInt:
+        case QoreIROpcode::EqFloat:
+        case QoreIROpcode::NeInt:
+        case QoreIROpcode::NeFloat:
+        case QoreIROpcode::LtInt:
+        case QoreIROpcode::LtFloat:
+        case QoreIROpcode::LeInt:
+        case QoreIROpcode::LeFloat:
+        case QoreIROpcode::GtInt:
+        case QoreIROpcode::GtFloat:
+        case QoreIROpcode::GeInt:
+        case QoreIROpcode::GeFloat:
+        case QoreIROpcode::CmpInt:
+        case QoreIROpcode::CmpFloat:
+        case QoreIROpcode::ToBool:
+        case QoreIROpcode::ToInt:
+        case QoreIROpcode::ToFloat:
+        case QoreIROpcode::Not:
+        case QoreIROpcode::IsNullOrNothing:
+        case QoreIROpcode::UnaryMinusInt:
+        case QoreIROpcode::UnaryMinusFloat:
+        case QoreIROpcode::Phi:
+        case QoreIROpcode::Br:
+        case QoreIROpcode::BrIf:
+        case QoreIROpcode::SwitchInt:
+        case QoreIROpcode::Return:
+        case QoreIROpcode::ReturnNothing:
+        case QoreIROpcode::CheckException:
+        case QoreIROpcode::CheckReturnValue:
+        case QoreIROpcode::PushTempMark:
+        case QoreIROpcode::DiscardTemps:
+        case QoreIROpcode::DiscardTempsKeep:
+        case QoreIROpcode::RefSelf:
+        case QoreIROpcode::DebugBlock:
+        case QoreIROpcode::DebugStatement:
+            return true;
+        default:
+            return false;
+    }
+}
+
+// documented in QoreIRAnalysis.h
+bool qore_ir_get_params_read_after_reflection(const QoreIRFunction& func,
+        std::unordered_set<const void*>& params) {
+    params.clear();
+    auto all_params = [&]() {
+        for (const auto& [index, lv] : func.param_local_vars) {
+            (void)index;
+            if (lv) {
+                params.insert(reinterpret_cast<const void*>(lv));
+            }
+        }
+    };
+    if (func.has_opaque_ast_local_access || func.blocks.empty()) {
+        all_params();
+        return true;
+    }
+    size_t check_count = 0;
+    // as in qore_ir_function_may_reflect_locally(): a local that can hold an object can run a destructor wherever it
+    // is replaced or goes out of scope, so then every instruction that is not a local-free scalar operation counts
+    auto local_may_hold_object = [](const LocalVar* lv) {
+        return lv && strcmp(lv->getName(), "self") && qore_ir_type_may_hold_object(lv->getTypeInfo());
+    };
+    bool object_locals = false;
+    for (const auto& [index, lv] : func.param_local_vars) {
+        (void)index;
+        if (qore_ir_analysis_cancelled(check_count, "IR reflected parameter analysis")) {
+            return false;
+        }
+        object_locals = object_locals || local_may_hold_object(lv);
+    }
+    for (const LocalVar* lv : func.all_body_locals) {
+        if (qore_ir_analysis_cancelled(check_count, "IR reflected parameter analysis")) {
+            return false;
+        }
+        object_locals = object_locals || local_may_hold_object(lv);
+    }
+    // a value that can hold an object can run its destructor where it is released: a temporary or a local
+    bool object_values = object_locals;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst_ptr : block->instructions) {
+            if (qore_ir_analysis_cancelled(check_count, "IR reflected parameter analysis")) {
+                return false;
+            }
+            const QoreIRInstruction* inst = inst_ptr.get();
+            if (!object_values && inst && inst->result.isValid()) {
+                const QoreIRValueFacts* facts = func.getValueFacts(inst->result);
+                object_values = !facts || !facts->type_info || qore_ir_type_may_hold_object(facts->type_info);
+            }
+        }
+    }
+    std::vector<const AbstractQoreFunctionVariant*> callees;
+    auto may_reflect = [&](const QoreIRInstruction* inst) {
+        switch (inst->opcode) {
+            case QoreIROpcode::LoadLocal: {
+                // a plain load runs nothing; what it yields is checked where it is used or released
+                const auto* load = static_cast<const QoreIRLocalInstruction*>(inst);
+                if (!load->is_ref && !load->is_closure) {
+                    return false;
+                }
+                break;
+            }
+            // a release of a temporary or of a local's previous value
+            case QoreIROpcode::StoreLocal:
+            case QoreIROpcode::InstantiateLocal:
+            case QoreIROpcode::UninstantiateLocal:
+            case QoreIROpcode::DiscardTemps:
+            case QoreIROpcode::DiscardTempsKeep:
+            case QoreIROpcode::UnwindTemps:
+            case QoreIROpcode::ReleaseOwnedTemp:
+            case QoreIROpcode::Decref:
+            case QoreIROpcode::DecrefNoThrow:
+                return object_values;
+            default:
+                break;
+        }
+        callees.clear();
+        // an exact user callee is followed only by the group analysis: here it may reflect
+        return qore_ir_instruction_may_reflect_locally(func, inst, callees) || !callees.empty()
+            || (object_locals && !qore_ir_instruction_is_local_free_scalar_op(inst));
+    };
+    // A parameter is replaced by reflection only while an instruction that may reflect runs; it matters only if the
+    // function can access the parameter afterwards (later in the same block, or in a block reachable from it) before
+    // assigning it.  An instruction that is neither a plain local access nor a local-free scalar operation (a fused
+    // local operation, an lvalue path and the like) counts as accessing every parameter.
+    QoreIRControlFlowGraph cfg(func, true);
+    if (cfg.cancelled) {
+        return false;
+    }
+    // The first assignment of a body local releases nothing: the local holds no value before it, unless reflection
+    // has assigned one, which needs an earlier instruction that may reflect.  Such an assignment is the only write of
+    // the local and runs at most once per invocation (its block is on no cycle).
+    std::unordered_map<const LocalVar*, size_t> writes;
+    for (const auto& block : cfg.blocks) {
+        for (const auto& inst_ptr : block->instructions) {
+            if (qore_ir_analysis_cancelled(check_count, "IR reflected parameter analysis")) {
+                return false;
+            }
+            if (const LocalVar* written = inst_ptr ? qore_ir_get_written_local(inst_ptr.get()) : nullptr) {
+                ++writes[written];
+            }
+        }
+    }
+    std::unordered_set<const LocalVar*> body_locals(func.all_body_locals.begin(), func.all_body_locals.end());
+    std::vector<int8_t> on_cycle(cfg.blocks.size(), -1);
+    auto block_on_cycle = [&](size_t block_id, bool& cancelled) {
+        if (on_cycle[block_id] < 0) {
+            std::vector<uint8_t> seen(cfg.blocks.size(), 0);
+            std::vector<size_t> work(cfg.successors[block_id].begin(), cfg.successors[block_id].end());
+            on_cycle[block_id] = 0;
+            while (!work.empty()) {
+                if (qore_ir_analysis_cancelled(check_count, "IR reflected parameter analysis")) {
+                    cancelled = true;
+                    return true;
+                }
+                size_t next = work.back();
+                work.pop_back();
+                if (next == block_id) {
+                    on_cycle[block_id] = 1;
+                    break;
+                }
+                if (seen[next]) {
+                    continue;
+                }
+                seen[next] = 1;
+                work.insert(work.end(), cfg.successors[next].begin(), cfg.successors[next].end());
+            }
+        }
+        return on_cycle[block_id] != 0;
+    };
+    // Releasing the temporaries of a region releases nothing either when each one that can hold an object is a load
+    // of a local that the region does not assign: the local still holds the value, unless reflection replaced it
+    // after an earlier instruction that may reflect.
+    auto borrowed_temps = [&](const std::vector<std::unique_ptr<QoreIRInstruction>>& instructions, size_t start,
+            size_t end) {
+        for (size_t i = start; i < end; ++i) {
+            const QoreIRInstruction* inst = instructions[i].get();
+            if (!inst || !inst->result.isValid()) {
+                continue;
+            }
+            const QoreIRValueFacts* facts = func.getValueFacts(inst->result);
+            if (facts && facts->type_info && !qore_ir_type_may_hold_object(facts->type_info)) {
+                continue;
+            }
+            // a value assigned in the region to a local that cannot hold an object is no object once the region ends
+            bool stored_scalar = false;
+            for (size_t j = i + 1; j < end && !stored_scalar; ++j) {
+                const QoreIRInstruction* store = instructions[j].get();
+                if (store && store->opcode == QoreIROpcode::StoreLocal && store->operands.size() == 1
+                        && store->operands[0].id == inst->result.id) {
+                    const LocalVar* local = static_cast<const QoreIRLocalInstruction*>(store)->local;
+                    stored_scalar = local && !qore_ir_type_may_hold_object(local->getTypeInfo());
+                }
+            }
+            if (stored_scalar) {
+                continue;
+            }
+            if (inst->opcode != QoreIROpcode::LoadLocal) {
+                return false;
+            }
+            const auto* load = static_cast<const QoreIRLocalInstruction*>(inst);
+            if (!load->local || load->is_ref || load->is_closure) {
+                return false;
+            }
+            for (size_t j = start; j < end; ++j) {
+                if (instructions[j] && qore_ir_get_written_local(instructions[j].get()) == load->local) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    };
+    // instructions that may reflect, and those that reflect only if such an instruction precedes them (first
+    // assignments and releases of borrowed temporaries: conditional points)
+    std::vector<std::pair<size_t, size_t>> reflect_points;
+    std::vector<std::pair<size_t, size_t>> conditional_points;
+    for (size_t block_id = 0; block_id < cfg.blocks.size(); ++block_id) {
+        const auto& instructions = cfg.blocks[block_id]->instructions;
+        std::vector<size_t> temp_marks;
+        for (size_t i = 0; i < instructions.size(); ++i) {
+            if (qore_ir_analysis_cancelled(check_count, "IR reflected parameter analysis")) {
+                return false;
+            }
+            const QoreIRInstruction* inst = instructions[i].get();
+            if (!inst) {
+                continue;
+            }
+            if (inst->opcode == QoreIROpcode::PushTempMark) {
+                temp_marks.push_back(i);
+                continue;
+            }
+            const bool discard = inst->opcode == QoreIROpcode::DiscardTemps
+                || inst->opcode == QoreIROpcode::DiscardTempsKeep;
+            size_t region_start = std::numeric_limits<size_t>::max();
+            if (discard && !temp_marks.empty()) {
+                region_start = temp_marks.back() + 1;
+                temp_marks.pop_back();
+            }
+            if (!may_reflect(inst)) {
+                continue;
+            }
+            if (discard && region_start != std::numeric_limits<size_t>::max()
+                    && borrowed_temps(instructions, region_start, i)) {
+                conditional_points.emplace_back(block_id, i);
+                continue;
+            }
+            if (inst->opcode == QoreIROpcode::StoreLocal) {
+                const LocalVar* local = static_cast<const QoreIRLocalInstruction*>(inst)->local;
+                bool cancelled = false;
+                if (local && body_locals.count(local) && writes[local] == 1
+                        && !block_on_cycle(block_id, cancelled)) {
+                    conditional_points.emplace_back(block_id, i);
+                    continue;
+                }
+                if (cancelled) {
+                    return false;
+                }
+            }
+            reflect_points.emplace_back(block_id, i);
+        }
+    }
+    // a conditional point that such an instruction precedes may reflect itself, and so may precede another one
+    for (bool changed = !reflect_points.empty(); changed && !conditional_points.empty();) {
+        changed = false;
+        // the blocks entered after an instruction that may reflect, and the first such instruction of each block
+        std::vector<uint8_t> entered(cfg.blocks.size(), 0);
+        std::vector<size_t> first_point(cfg.blocks.size(), std::numeric_limits<size_t>::max());
+        std::vector<size_t> work;
+        for (const auto& [block_id, i] : reflect_points) {
+            first_point[block_id] = std::min(first_point[block_id], i);
+            work.insert(work.end(), cfg.successors[block_id].begin(), cfg.successors[block_id].end());
+        }
+        while (!work.empty()) {
+            if (qore_ir_analysis_cancelled(check_count, "IR reflected parameter analysis")) {
+                return false;
+            }
+            size_t block_id = work.back();
+            work.pop_back();
+            if (entered[block_id]) {
+                continue;
+            }
+            entered[block_id] = 1;
+            work.insert(work.end(), cfg.successors[block_id].begin(), cfg.successors[block_id].end());
+        }
+        for (auto it = conditional_points.begin(); it != conditional_points.end();) {
+            if (entered[it->first] || first_point[it->first] < it->second) {
+                reflect_points.push_back(*it);
+                it = conditional_points.erase(it);
+                changed = true;
+            } else {
+                ++it;
+            }
+        }
+    }
+    if (reflect_points.empty()) {
+        return true;
+    }
+    for (const auto& [index, param] : func.param_local_vars) {
+        (void)index;
+        if (!param) {
+            continue;
+        }
+        std::vector<uint8_t> visited(cfg.blocks.size(), 0);
+        std::vector<size_t> pending;
+        auto add_handler = [&](const QoreIRBasicBlock* target) {
+            auto it = cfg.block_ids.find(target);
+            if (it != cfg.block_ids.end()) {
+                pending.push_back(it->second);
+            }
+        };
+        // returns true if the parameter is accessed from the position on, before an assignment ends the path
+        auto scan = [&](size_t block_id, size_t from, bool& cancelled) {
+            const auto& instructions = cfg.blocks[block_id]->instructions;
+            for (size_t i = from; i < instructions.size(); ++i) {
+                if (qore_ir_analysis_cancelled(check_count, "IR reflected parameter analysis")) {
+                    cancelled = true;
+                    return false;
+                }
+                const QoreIRInstruction* inst = instructions[i].get();
+                if (!inst) {
+                    continue;
+                }
+                switch (inst->opcode) {
+                    case QoreIROpcode::StoreLocal:
+                        if (static_cast<const QoreIRLocalInstruction*>(inst)->local == param) {
+                            // an assignment that fails leaves the parameter as it was; a later exception leaves
+                            // with the assigned value
+                            add_handler(inst->exception_target);
+                            return false;
+                        }
+                        break;
+                    case QoreIROpcode::LoadLocal:
+                    case QoreIROpcode::InstantiateLocal:
+                    case QoreIROpcode::UninstantiateLocal:
+                        if (static_cast<const QoreIRLocalInstruction*>(inst)->local == param) {
+                            return true;
+                        }
+                        break;
+                    default:
+                        if (!qore_ir_instruction_is_local_free_scalar_op(inst)) {
+                            return true;
+                        }
+                        break;
+                }
+                add_handler(inst->exception_target);
+                if (const auto* throw_inst = dynamic_cast<const QoreIRThrowInstruction*>(inst)) {
+                    add_handler(throw_inst->exception_target);
+                }
+            }
+            pending.insert(pending.end(), cfg.successors[block_id].begin(), cfg.successors[block_id].end());
+            return false;
+        };
+        bool accessed = false;
+        bool cancelled = false;
+        for (const auto& [block_id, i] : reflect_points) {
+            const QoreIRInstruction* inst = cfg.blocks[block_id]->instructions[i].get();
+            add_handler(inst->exception_target);
+            if (scan(block_id, i + 1, cancelled)) {
+                accessed = true;
+                break;
+            }
+            if (cancelled) {
+                return false;
+            }
+        }
+        while (!accessed && !pending.empty()) {
+            size_t block_id = pending.back();
+            pending.pop_back();
+            if (visited[block_id]) {
+                continue;
+            }
+            visited[block_id] = 1;
+            accessed = scan(block_id, 0, cancelled);
+            if (cancelled) {
+                return false;
+            }
+        }
+        if (accessed) {
+            params.insert(reinterpret_cast<const void*>(param));
+        }
+    }
+    return true;
 }

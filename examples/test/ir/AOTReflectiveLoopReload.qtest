@@ -1,0 +1,73 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class ReflectiveLoopReloadTest
+
+#! Tests that compiled loops observe parameters and body locals replaced by reflection from a callee
+/** In a program that allows the debugger, a callee can replace any parameter or body local of its caller with
+    set_local_var_value().  Each loop of the fixture reads the variable before the call that replaces it, so the
+    next iteration must read the replacement: the JIT has to check the read even though it is lowered before the
+    call that first invalidates cached locals, and AOT must keep neither a private native copy of a parameter nor a
+    load hoisted out of the loop as invariant.  Every compiled mode must match the interpreter; a function that
+    cannot reach reflection keeps its native entry.
+*/
+class ReflectiveLoopReloadTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+
+    public {
+        #! the output of one pass of the fixture, which runs every function twice
+        const Pass = "forObjectParam: 31\nwhileObjectLocal: 31\nforeachObjectParam: 91\nforScalarParam: 15\n"
+            "whileScalarLocal: 604\nforeachScalarLocal: 30\nforeachStringParam: a1,ax2,axx3,axxx4,\n"
+            "forObjectLocalByFunction: 31\nmethodIntParam: 40\nstaticFloatParam: 15.0\nforeachBoolParam: 4\n"
+            "closureIntParam: 34\nstraightLine: 6 5 7\n";
+    }
+
+    constructor() : Test("Reflective writes in compiled loops", "1.0", \ARGV) {
+        addTestCase("parameter and local replacement inside loops", \check());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+
+    private check() {
+        string source = get_script_dir() + "/AOTReflectiveLoopReload.qr";
+        string expected = Pass + "reflectionFree: 6\n" + Pass + "reflectionFree: 10\n";
+        assertEq(expected, run((qore, "--exec-mode=ast", source)), "ast");
+        foreach string mode in (("ir", "jit", "tiered")) {
+            # synchronous compilation with thresholds of 1 makes the JIT really compile the functions in the
+            # jit and tiered modes before they run
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source),
+                "QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "), mode);
+        }
+        TmpDir dir("qore-aot-reflective-loop-reload-");
+        foreach string prefix in (("", "QORE_AOT_EH=1 ", "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                string ir = run((qcc, level, "--strip-source", "-o", executable, source),
+                    prefix + "QORE_DUMP_LLVM_IR=1 ");
+                assertEq(expected, run((executable,)), prefix + level);
+                assertTrue(regex(ir, "(?s)define [^\n]*@reflectionFree_[^\n]*_fast_"),
+                    "a function that cannot reach reflection keeps its native entry " + prefix + level);
+            }
+        }
+    }
+}

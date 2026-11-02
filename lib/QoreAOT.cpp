@@ -3030,9 +3030,19 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
                 specialization_type_param_instantiation, constant_reverse_map, emit_debug_statements, true,
                 unwind_order_proven);
         }
-        // Body locals move to the runtime stack.  Parameters keep their classification: a native entry of a
-        // reflective frame publishes them for reflection, and an unused one is never private there
-        // (qore_ir_fast_entry_param_is_private()).
+        // Body locals move to the runtime stack.  A parameter is published for reflection by every entry of a
+        // reflective frame, which makes reads by name correct; but set_local_var_value() in a callee replaces it
+        // in its runtime slot, and a body that accesses it afterwards must see the new value: a private (IR-only)
+        // parameter can be hoisted out of a loop as invariant (qore_ir_is_hoistable_load()) or kept in a native
+        // alloca that is never reloaded.  Such parameters move to the runtime stack too; the others, read only
+        // before anything that may reflect, keep their private slots and the native entries based on them.
+        std::unordered_set<const void*> reflected_params;
+        if (!qore_ir_get_params_read_after_reflection(*ir_func, reflected_params)) {
+            for (const auto& [index, lv] : ir_func->param_local_vars) {
+                (void)index;
+                reflected_params.insert(reinterpret_cast<const void*>(lv));
+            }
+        }
         size_t check_count = 0;
         for (LocalVar* lv : ir_func->all_body_locals) {
             if (++check_count % 100 == 0 && qore_check_cancel(nullptr, "AOT reflective local publication")) {
@@ -3042,6 +3052,9 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
                 return -1;
             }
             ir_func->ir_only_locals.erase(reinterpret_cast<const void*>(lv));
+        }
+        for (const void* key : reflected_params) {
+            ir_func->ir_only_locals.erase(key);
         }
         ir_func->ast_visible_body_locals = ir_func->all_body_locals;
         ir_func->reflective_frame = true;

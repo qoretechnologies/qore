@@ -164,6 +164,19 @@ DLLLOCAL const LocalVar* qore_ir_get_written_local(
 DLLLOCAL bool qore_ir_function_may_reflect_locally(const QoreIRFunction& func,
     std::vector<const AbstractQoreFunctionVariant*>& callees);
 
+//! Returns the parameters that the function may access after an instruction that may reflect
+/** A reflection builtin run by a callee, a callback or a destructor can replace a parameter of the function's frame
+    (set_local_var_value()); the function observes that only if it accesses the parameter afterwards, in the same
+    block or a block reachable from it, before assigning it.  The rules are those of qore_ir_function_may_reflect_locally(), except that an
+    exact user callee counts as reflecting; an instruction that is not a plain local access or a local-free scalar
+    operation counts as accessing every parameter.
+    @param func the function, lowered for a program that allows the debugger
+    @param params receives the keys (LocalVar pointers) of the parameters accessed after a possible reflection
+    @return false if cancelled; then \a params is incomplete and every parameter must be assumed
+*/
+DLLLOCAL bool qore_ir_get_params_read_after_reflection(const QoreIRFunction& func,
+    std::unordered_set<const void*>& params);
+
 //! Returns true if a value of the type can be or hold an object, whose destructor can run when it is released
 //! @param ti the type; nullptr means any type
 //! @param depth the nesting depth of complex container types already examined

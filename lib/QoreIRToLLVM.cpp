@@ -4047,6 +4047,26 @@ llvm::Value* QoreIRToLLVM::ensureIntType(llvm::Value* val, uint32_t value_id) {
     return result;
 }
 
+// documented in QoreIRToLLVM.h
+llvm::Value* QoreIRToLLVM::getProvenScalarLocalLoad(uint32_t value_id, llvm::Type* type, llvm::Module& module) {
+    auto value = values.find(value_id);
+    if (value == values.end() || value->second->getType() != i64_type || !nanboxed_values.count(value_id)
+            || native_boxed_sources.count(value_id) || invoke_alloca_map.count(value_id) || !current_ir_func) {
+        return nullptr;
+    }
+    auto definition = value_definitions.find(value_id);
+    const auto* load = definition != value_definitions.end() && definition->second->opcode == QoreIROpcode::LoadLocal
+        ? static_cast<const QoreIRLocalInstruction*>(definition->second) : nullptr;
+    // the assigned-state proof that native local selection uses (see assigned_non_nothing_locals)
+    if (!load || !load->local || load->is_ref || load->is_closure || !assigned_non_nothing_locals.count(load->local)
+            || specializeType(load->local->getTypeInfoForLValue())
+                != (type == i64_type ? bigIntTypeInfo : floatTypeInfo)) {
+        return nullptr;
+    }
+    return type == i64_type ? ensureIntType(value->second, value_id)
+        : ensureFloatType(value->second, value_id, module);
+}
+
 // Inline fast-path for ensureIntType: check INT48 tag inline, call runtime only for big ints.
 // Safe to use in typed int ops (AddInt, SubInt, etc.) where branch creation doesn't interfere
 // with PHI fixup or block ordering.
@@ -13106,6 +13126,25 @@ bool QoreIRToLLVM::tryEmitAotNameMethodNativeContinuation(const QoreIRInstructio
         return false;
     }
     bool boxed_argument = nanboxed_values.count(arg_id) || native_boxed_sources.count(arg_id);
+    if (boxed_argument) {
+        // a boxed parameter cache of a reflective frame, for example, can still be passed natively
+        const QoreTypeInfo* load_type = nullptr;
+        auto definition = value_definitions.find(arg_id);
+        if (definition != value_definitions.end() && definition->second->opcode == QoreIROpcode::LoadLocal) {
+            const LocalVar* local = static_cast<const QoreIRLocalInstruction*>(definition->second)->local;
+            load_type = local ? specializeType(local->getTypeInfoForLValue()) : nullptr;
+        }
+        llvm::Value* native = nullptr;
+        if (load_type == bigIntTypeInfo) {
+            native = getProvenScalarLocalLoad(arg_id, i64_type, module);
+        } else if (load_type == floatTypeInfo) {
+            native = getProvenScalarLocalLoad(arg_id, double_type, module);
+        }
+        if (native) {
+            arg = native;
+            boxed_argument = false;
+        }
+    }
     if (boxed_argument && q_env_is_set("QORE_DISABLE_AOT_NAME_METHOD_BOXED_ARGUMENT")) {
         return false;
     }
@@ -17068,13 +17107,18 @@ bool QoreIRToLLVM::lowerFunctionIntern(const QoreIRFunction& func, llvm::Module&
             }
         }
     }
-    if (aot_mode) {
+    if (aot_mode || func.reflective_frame) {
         // A read lowered before the first invalidating call can execute after
         // that call through a backedge or an out-of-order block. Its freshness
         // check must exist independently of parameter-cache eligibility: written,
         // optional and AST-visible locals need the same correctness guarantee.
         // A single returning block retains lazy setup; its first read cannot
         // follow a later instruction. Do not exempt a self-loop/unknown terminator.
+        // The JIT needs it in a reflective frame (see QoreIRFunction::reflective_frame):
+        // any call there can replace a parameter or body local by name through
+        // set_local_var_value(), including a loop read lowered before the call
+        // that first creates the epoch.  A frame that cannot reflect keeps the
+        // lazy epoch.
         const auto& entry_instructions = func.blocks.front()->instructions;
         bool straight_line_return = func.blocks.size() == 1 && !entry_instructions.empty()
             && entry_instructions.back()
@@ -28179,6 +28223,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 if (!projected) {
                     return false;
                 }
+                // The projected source is a native scalar in the IR, but its LLVM value is boxed where the source
+                // is a boxed local cache, such as a parameter of a reflective frame: unbox it; the boxed value is
+                // borrowed and needs no release.
+                if (nanboxed_values.count(projected_value.id)) {
+                    if (aggregate_projection == QoreIRCallDirectInstruction::AOTAggregateProjectionKind::NativeInt) {
+                        projected = ensureIntType(projected, projected_value.id);
+                    } else if (aggregate_projection
+                            == QoreIRCallDirectInstruction::AOTAggregateProjectionKind::NativeFloat) {
+                        projected = ensureFloatType(projected, projected_value.id, module);
+                    }
+                }
                 if ((aggregate_projection
                             == QoreIRCallDirectInstruction::
                                 AOTAggregateProjectionKind::NativeInt
@@ -31923,16 +31978,25 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     eligible = isFiniteCallRefCallBound(call, targets.variants[i], infos[i]);
                 }
                 std::vector<llvm::Value*> args;
+                bool nanboxed_arg_converted = false;
                 if (eligible && nargs) {
                     uint32_t id = inst->operands[1].id;
                     auto value = values.find(id);
                     llvm::Type* type = infos[0]->param_kinds[0] == BatchCalleeParamKind::NativeInt
                         ? i64_type : double_type;
-                    eligible = value != values.end() && value->second->getType() == type
-                        && !nanboxed_values.count(id) && !native_boxed_sources.count(id)
-                        && !invoke_alloca_map.count(id);
+                    llvm::Value* arg = value != values.end() ? value->second : nullptr;
+                    if (arg && nanboxed_values.count(id)) {
+                        // a boxed parameter cache of a reflective frame, for example
+                        if (llvm::Value* native = getProvenScalarLocalLoad(id, type, module)) {
+                            arg = native;
+                            nanboxed_arg_converted = true;
+                        }
+                    }
+                    eligible = arg && arg->getType() == type
+                        && (!nanboxed_values.count(id) || nanboxed_arg_converted)
+                        && !native_boxed_sources.count(id) && !invoke_alloca_map.count(id);
                     if (eligible) {
-                        args.push_back(value->second);
+                        args.push_back(arg);
                     }
                 }
                 if (eligible) {

@@ -101,8 +101,15 @@ visible) before code generation.  This ordering change is the main implementatio
 - The IR tiers (`UserVariantBase::lowerIRFunction()`) re-lower a function that neither reflects by itself nor calls a
   user function.  AOT (`tryLowerFunction()`, `aotFunctionMayReflect()`) follows exact callees through their own
   conservatively lowered bodies, up to 64.
-- In a reflective AOT frame only the body locals move to the runtime stack: the native method, receiver and closure
-  entries already publish parameters for reflection, and an unused parameter is never private in a reflective frame.
+- In a reflective AOT frame the body locals move to the runtime stack, and so do the parameters that the function
+  may access after an instruction that may reflect, before assigning them (`qore_ir_get_params_read_after_reflection()`).
+  The native method, receiver and closure entries publish parameters for reflection, which makes reads by name
+  correct, but a private parameter is read from a native alloca that is never reloaded, or from a load hoisted out
+  of a loop, so a later access would miss a reflective write (fixed 2026-11-02).  A parameter read only before
+  anything that may reflect stays private, with the native entries based on it; an unused parameter is never private
+  in a reflective frame.
+- The JIT creates the reload epoch of a reflective frame eagerly, as AOT does for every frame: a loop read lowered
+  before the call that would create the epoch lazily otherwise gets no freshness check.
 - Only the private direct entries of functions and static methods are refused to reflective frames
   (`isAOTDirectEntryFrameSafe()`): those calls push no runtime frame boundary.  Entries dispatched through the runtime
   call helpers (methods, closures, call references, self recursion) push it.
