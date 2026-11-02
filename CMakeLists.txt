@@ -1433,7 +1433,10 @@ if (NOT QUIC_FOUND_SYSTEM)
     # Link against the FetchContent-built static library targets.
     # nghttp3/ngtcp2 use "_static" suffix for static targets when
     # ENABLE_STATIC_LIB=ON and ENABLE_SHARED_LIB=OFF.
-    list(APPEND LIBQORE_OPTIONAL_LIBS ngtcp2_static ngtcp2_crypto_ossl_static nghttp3_static)
+    # ngtcp2_static is not named: ngtcp2_crypto_ossl_static links it, so CMake places it after the crypto library,
+    # where the static link needs it; naming it as well put it on the link line twice, which the macOS linker warns
+    # about ("ignoring duplicate libraries")
+    list(APPEND LIBQORE_OPTIONAL_LIBS ngtcp2_crypto_ossl_static nghttp3_static)
 endif()
 
 if (WIN32 OR MINGW OR MSYS)
@@ -1632,7 +1635,6 @@ add_executable(qpp
 target_compile_definitions(qpp PUBLIC HAVE_UNIX_CONFIG_H)
 # just fake qpp for macro
 set(QORE_QPP_EXECUTABLE ${CMAKE_BINARY_DIR}/qpp)
-target_link_libraries(qpp ${CMAKE_CXX_IMPLICIT_LINK_LIBRARIES})
 
 # malformed documentation tables are silently emitted as literal text, so they must fail the build
 # in this repo; see design/doc-tables.md

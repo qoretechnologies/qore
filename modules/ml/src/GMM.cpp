@@ -59,7 +59,6 @@ QoreGMM::QoreGMM(int n_components, int max_iterations, double tolerance,
 
 void QoreGMM::initializeKMeansPP(const MatrixXd& data) {
     int n = static_cast<int>(data.rows());
-    int d = static_cast<int>(data.cols());
 
     // Choose first center randomly
     std::uniform_int_distribution<int> dist(0, n - 1);

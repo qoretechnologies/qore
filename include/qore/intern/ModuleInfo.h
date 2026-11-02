@@ -1057,7 +1057,7 @@ public:
     }
 
     //! returns the Program of an AOT user module, or nullptr for a binary module
-    DLLLOCAL virtual QoreProgram* getModuleProgram() const;
+    DLLLOCAL QoreProgram* getModuleProgram() const override;
 
     DLLLOCAL virtual ~QoreBuiltinModule() {
         printd(5, "QoreBuiltinModule::~QoreBuiltinModule() '%s' (feature '%s'): %s calling module_delete: %p\n",
@@ -1145,7 +1145,7 @@ public:
         return pgm;
     }
 
-    DLLLOCAL virtual QoreProgram* getModuleProgram() const {
+    DLLLOCAL QoreProgram* getModuleProgram() const override {
         return pgm;
     }
 

@@ -41,6 +41,9 @@ if (MONGOC_FOUND AND BSON_FOUND)
     set(MONGODB_INCLUDE_DIRS ${MONGOC_INCLUDE_DIRS} ${BSON_INCLUDE_DIRS})
     set(MONGODB_LIBRARY_DIRS ${MONGOC_LIBRARY_DIRS} ${BSON_LIBRARY_DIRS})
     set(MONGODB_LIBRARIES ${MONGOC_LIBRARIES} ${BSON_LIBRARIES})
+    # the libmongoc pkg-config libraries already include libbson: link it once (the macOS linker warns about the
+    # duplicate)
+    list(REMOVE_DUPLICATES MONGODB_LIBRARIES)
 else()
     # Fall back to cmake config
     # mongo-c-driver 2.x: package "mongoc" with target mongoc::mongoc
