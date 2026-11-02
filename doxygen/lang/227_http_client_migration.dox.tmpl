@@ -109,7 +109,7 @@ rest.restDoRequestTarget("GET", <RestRequestTarget>{
 
     With base <tt>https://api.example.com/base/file?old=1</tt>, URI resolution gives <tt>/base/send</tt>
     for <tt>send</tt>, <tt>/send</tt> for <tt>/send</tt>, <tt>/base/file?rev=2</tt> for <tt>?rev=2</tt>,
-    and <tt>/base/file?old=1</tt> for an empty reference or <tt>#help</tt>. An explicit <tt>?</tt>
+    and <tt>/base/file?old=1</tt> for an empty reference or <tt>\#help</tt>. An explicit <tt>?</tt>
     removes the inherited query value but keeps an empty query. A trailing slash on the base makes it a
     directory: base <tt>/base/file/</tt> plus <tt>send</tt> resolves to <tt>/base/file/send</tt>.
     WSDL HTTP operation locations must be relative references; a scheme-bearing absolute operation URL is

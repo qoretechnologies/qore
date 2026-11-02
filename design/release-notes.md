@@ -67,6 +67,9 @@ that release:
 - from Qore 3.0.0 on, no list item (without its nested items) or paragraph, including those of the release summary,
   is longer than four lines;
 - every `@parblock`, `@code`, `@verbatim`, `@htmlonly`, `@dot` and `@msc` in a subsection or summary is closed in it;
+- no `\c "..."` literal contains a `\r`, `\n` or `\t` escape, which doxygen reads as a line break or an unknown
+  command (write `<tt>&quot;\\r\\n&quot;</tt>`), and no `\c` precedes a word starting with `.`, `?`, `(` or `[`,
+  which renders an empty code span;
 - no line contains a backslash before a double quote (`\\"`): doxygen reads it as an escaped quote, which leaves the
   quotes of the paragraph unbalanced, so that the markup after it (such as `</tt>`) is not processed and the rest of
   the paragraph is rendered in a monospace font.

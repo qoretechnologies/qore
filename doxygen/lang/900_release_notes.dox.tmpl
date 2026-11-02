@@ -1737,7 +1737,7 @@
     - fixed splitting quoted fields with @ref Qore::AbstractLineIterator::getSplitLine() "getSplitLine()" and
       @ref Qore::zzz8stringzzz9::split() "<string>::split()"; the new \c quote_escape parameter selects RFC 4180
       splitting
-    - fixed reading lines in encodings that are not ASCII-compatible, such as UTF-16, ending only at \c "\n"
+    - fixed reading lines in encodings that are not ASCII-compatible, such as UTF-16, ending only at <tt>&quot;\\n&quot;</tt>
     - the files of a @ref user_modules "user module" split into a directory are parsed in a fixed order (see
       @ref mod_overview), and @ref Qore::get_module_hash() "get_module_hash()" reports the right file name for one
       found through a relative module path
@@ -4359,7 +4359,7 @@
     - the @ref cast "cast<>" operator can now cast directly to "or nothing" types: ex:
       @code{.py} *list<int> l = cast<*list<int>>(getList()); @endcode
       (<a href="https://github.com/qoretechnologies/qore/issues/3331">issue 3331</a>)
-    - fixed detecting invalid input in @ref Qore::date(string, string) "date(string, string)
+    - fixed detecting invalid input in @ref Qore::date(string, string) "date(string, string)"
       (<a href="https://github.com/qoretechnologies/qore/issues/3239">issue 3239</a>)
 
     @section qore_0933 Qore 0.9.3.3
@@ -7059,7 +7059,7 @@
     - @ref smtpclientintro "SmtpClient" module improvements:
       - added automatic recognition and support of the \c "STARTTLS" command when connecting to an ESMTP server; this way
         the class will automatically upgrade the connection to a secure TLS/SSL connection if the server supports it
-      - added support for SMTP server schemes in the URL in the constructor (ex: \c "esmtptls://user@password:smtp.example.com")
+      - added support for SMTP server schemes in the URL in the constructor (ex: \c "esmtptls://user\@password:smtp.example.com")
       - added support for the deprecated (but still in use) \c "smtps" scheme with a default port of 465
       - when throwing an exception when a Message cannot be sent because it is incomplete, the reason for the error is also included
         in the exception (previously the exception message was generic making problems with the Message object harder to debug)
@@ -7316,7 +7316,7 @@ class MyConcreteClass inherits MyAbstractClass {
     @par Text File Parsing Enhancements
     The following improvements were made in qore to support more flexible file parsing:
     - the @ref Qore::ReadOnlyFile class was added as a parent class of @ref Qore::File to allow for a more convenient API for reading files (the @ref Qore::File class's API remains the same as it publically inherits  @ref Qore::ReadOnlyFile)
-    - the @ref Qore::ReadOnlyFile::readLine() "ReadOnlyFile::readLine()" method (formerlly a method of the @ref Qore::File class) was enhanced to accept 2 optional arguments, allowing the end of line character(s) to be stripped from the line returned, and also to allow the end of line characters to be specified.  If no end of line characters are specified, then the method automatically determines the end of line characters (can be \c "\n", \c "\r", or \c "\r\n"; the last one only if the underlying file is not a TTY in order to avoid stalling I/O on an interactive TTY)
+    - the @ref Qore::ReadOnlyFile::readLine() "ReadOnlyFile::readLine()" method (formerlly a method of the @ref Qore::File class) was enhanced to accept 2 optional arguments, allowing the end of line character(s) to be stripped from the line returned, and also to allow the end of line characters to be specified.  If no end of line characters are specified, then the method automatically determines the end of line characters (can be <tt>&quot;\\n&quot;</tt>, <tt>&quot;\\r&quot;</tt>, or <tt>&quot;\\r\\n&quot;</tt>; the last one only if the underlying file is not a TTY in order to avoid stalling I/O on an interactive TTY)
     - the @ref file_stat_constants were moved from the @ref Qore::File class to the @ref Qore::ReadOnlyFile class
     - added a new @ref Qore::FileLineIterator "FileLineIterator" iterator class
     - added a new optional parameter to @ref <string>::split() "<string>::split(string, string, bool)" and Qore::split(string, string, string, bool) to allow for automatic stripping unquoted fields of leading and trailing whitespace (the default is the old behavior; i.e. leave the whitespace as it is read)
@@ -7695,7 +7695,7 @@ our int i1;
     - fixed Qore::File::getchar() to always retrieve 1 character (even for multi-byte character encodings)
     - fixed string evaluation in a boolean context to return @ref True "True" with floating-point numbers between -1.0 and 1.0 exclusive
     - printf formatting fix: output YAML-style \c "null" for @ref nothing with %%y
-    - scanner fix: accept \c "\r" as whitespace to allow better parsing of sources with Windows EOL markers
+    - scanner fix: accept <tt>&quot;\\r&quot;</tt> as whitespace to allow better parsing of sources with Windows EOL markers
     - fixed parse-time type processing/checks for the keys, + and * operators
     - foreach statement fix: unconditionally evaluate the hash when iterating as otherwise it could change during iteration which could cause a crash
     - fixed another parse-time variant matching bug where the variant-matching algorithm was too aggressive and excluded possible matches at parse time which could result in a false parse-time definitive match even though a better match could be available at runtime

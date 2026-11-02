@@ -458,7 +458,7 @@ while (i.next()) {
         ordinary character, so a field such as <tt>"C:\\data\\"</tt> is read as <tt>C:\\data\\</tt>, where it
         raised \c SPLIT-ERROR; files written with a backslash as the quote escape (the writers' default before
         this version) are read with \c "quote_escape" set to \c '\\'
-      - a field of escaped quotes (ex: <tt>""""</tt>, one quote character) is read, where it raised
+      - a field of escaped quotes (ex: <tt>&quot;&quot;&quot;&quot;</tt>, one quote character) is read, where it raised
         \c SPLIT-ERROR, a field whose value starts with a line break is read as one field, and line breaks in
         fields are read as they are in the data, where \c "\r\n" and \c "\r" were read as \c "\n" when line ends
         are detected automatically

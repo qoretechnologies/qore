@@ -226,6 +226,18 @@ class ReleaseNotesStructureTest(unittest.TestCase):
                               lengthen('    - a legacy section keeps its historical subsection id', 8))
         self.assertEqual([], checker.inspect_source(legacy))
 
+    def test_escape_literal(self):
+        for lit in ('\\c "\\r\\n"', '\\c "\\n"', '\\c "1\\r\\nDELE 2"', '@c "a\\tb"'):
+            with self.subTest(lit=lit):
+                source = GOOD.replace('    - fixed a bug\n', f'    - fixed {lit} handling\n', 1)
+                issues = checker.inspect_source(source)
+                self.assertEqual(1, len(issues), issues)
+                self.assertIn('renders wrongly', issues[0][1])
+        # the recommended form and plain \c literals are accepted
+        for ok in ('<tt>&quot;\\\\r\\\\n&quot;</tt>', '\\c "abc"', '\\c "%y"'):
+            with self.subTest(ok=ok):
+                self.assertEqual([], checker.inspect_source(GOOD.replace('    - fixed a bug\n', f'    - fixed {ok}\n', 1)))
+
     def test_no_sections(self):
         self.assertEqual(['no release sections found'], messages('/** @page release_notes Release Notes */'))
 

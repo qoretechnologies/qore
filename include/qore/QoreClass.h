@@ -990,7 +990,6 @@ public:
         The read/modify/write sequence is not atomic; modules must provide synchronization when needed.
 
         @param gate callback; nullptr disables this class's own gate before initialization
-        @return no value
         @throw none
         @note The callback must not be changed after class initialization. It runs without Qore lvalue locks.
         @par Example

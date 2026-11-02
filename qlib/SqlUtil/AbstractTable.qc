@@ -3842,8 +3842,7 @@ table.insertCommit(row);
     }
 
     #! inserts a row into the table without any transaction management; a transaction will be in progress after this method is successfully executed
-    /** @ingroup inserts
-        @par Example:
+    /** @par Example:
         @code{.py}
 table.insert(row);
         @endcode

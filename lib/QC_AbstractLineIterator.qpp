@@ -166,7 +166,7 @@ list<string> list = "some,'text with spaces, and commas, here is another one! ,'
     @since
     - %Qore 0.9.8 added this method
     - %Qore 3.0 added the \c quote_escape parameter; a quoted field starting with an even number of quotes, such as
-      <tt>""""</tt>, is read as escaped quotes; a quoted field whose first line ends with its opening quote continues on
+      <tt>&quot;&quot;&quot;&quot;</tt>, is read as escaped quotes; a quoted field whose first line ends with its opening quote continues on
       the next line; and the line ends of a field read from a native line iterator are kept as they are in the data
  */
 list<string> AbstractLineIterator::getSplitLine(string separator, string quote, string line_separator = "\n",

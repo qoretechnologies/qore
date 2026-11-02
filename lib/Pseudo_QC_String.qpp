@@ -760,7 +760,7 @@ list<string> list = "some,'text with spaces, and commas, here is another one! ,'
     - %Qore 0.8.5 added this pseudo-method
     - %Qore 0.8.6 added the \c trim_unquoted parameter
     - %Qore 3.0 added the \c keep_trailing_empty and \c quote_escape parameters; a quoted field starting with an
-      even number of quotes, such as <tt>""""</tt>, is split as escaped quotes, and a quoted field without its closing
+      even number of quotes, such as <tt>&quot;&quot;&quot;&quot;</tt>, is split as escaped quotes, and a quoted field without its closing
       quote raises \c SPLIT-ERROR
  */
 list<string> <string>::split(string separator, string quote, bool trim_unquoted = False, bool keep_trailing_empty = False, string quote_escape = "\\") [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {

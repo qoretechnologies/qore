@@ -57,6 +57,8 @@ QUOTE_TRAP = re.compile(r'\\\\"')
 # doxygen's \c and @c take a word, and render nothing for a word that starts with one of these characters: the
 # word is then plain text after an empty code span
 EMPTY_CODE = re.compile(r'[@\\]c[ \t]+[.?(\[]')
+# doxygen reads \n in text as a line break and \r as an unknown command, also in a \c "..." literal
+ESCAPE_LITERAL = re.compile(r'[@\\]c[ \t]+"[^"\s]*\\[rnt]')
 
 
 def section_version(name):
@@ -218,6 +220,9 @@ def inspect_source(source):
         if QUOTE_TRAP.search(line):
             issues.append((number, 'a backslash before a double quote (\\\\") unbalances doxygen\'s quotes and breaks '
                            'the markup that follows; rephrase or use &quot;'))
+        if ESCAPE_LITERAL.search(line):
+            issues.append((number, 'a \\c "..." literal with a \\r, \\n or \\t escape renders wrongly (doxygen reads \\n as '
+                           'a line break); write <tt>&quot;\\\\r\\\\n&quot;</tt> instead'))
         if EMPTY_CODE.search(line):
             issues.append((number, '\\c before a word starting with ".", "?", "(" or "[" renders an empty code span; '
                            'use <tt>...</tt>'))

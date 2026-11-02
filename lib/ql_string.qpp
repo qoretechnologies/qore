@@ -1593,7 +1593,7 @@ list<string> l = split(",", "some,'text with spaces',here", "'"); # returns ("so
     - %Qore 0.8.6 the \c trim_unquoted parameter was added
     - %Qore 0.9.4 processes doubled quote characters as an escaped quote within a quoted field
     - %Qore 3.0 added the \c keep_trailing_empty and \c quote_escape parameters; a quoted field starting with an
-      even number of quotes, such as <tt>""""</tt>, is split as escaped quotes, and a quoted field without its closing
+      even number of quotes, such as <tt>&quot;&quot;&quot;&quot;</tt>, is split as escaped quotes, and a quoted field without its closing
       quote raises \c SPLIT-ERROR
  */
 list<string> split(string separator, string str, string quote, bool trim_unquoted = False, bool keep_trailing_empty = False, string quote_escape = "\\") [flags=RET_VALUE_ONLY,NAMED_ARGS] {

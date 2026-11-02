@@ -521,8 +521,8 @@ HTTPClient httpclient(("url":"http://hostname:8080/path"));
     - \c pre_encoded_urls: If @ref True "True" then all URI paths in URLs are assumed to be already
       <a href="https://en.wikipedia.org/wiki/Percent-encoding">percent encoded</a>; if this flag is set and any
       unencoded characters are sent in a URL with a new request, an exception is raised.  Characters that must require
-      percent encoding are control characters and <tt>{}|\\^[]`</tt>; the URI unreserved character <tt>~</tt> is
-      accepted unencoded (ex: <tt>/~user/catalog.xsd</tt>)
+      percent encoding are control characters, <tt>{}|\\^[]</tt> and the backquote (grave accent) character;
+      the URI unreserved character <tt>~</tt> is accepted unencoded (ex: <tt>/~user/catalog.xsd</tt>)
     - \c protocols: A hash describing new protocols, the key is the protocol name and the value is either an integer
       giving the default port number or a hash with \c "port" and \c "ssl" keys giving the default port number and a
       boolean value to indicate that an SSL connection should be established
