@@ -7635,6 +7635,17 @@ void QoreIRToLLVM::markLocalCacheFresh(const void* key, llvm::Function* llvm_fun
     builder->CreateStore(epoch, valid_epoch);
 }
 
+void QoreIRToLLVM::markLocalCacheStale(const void* key, llvm::Function* llvm_func) {
+    if (!local_reload_epoch || !canReloadLocalFromRuntime(key)) {
+        return;
+    }
+    // a valid epoch that differs from the current one in every bit can never equal it
+    llvm::Value* epoch = builder->CreateLoad(i64_type, local_reload_epoch);
+    llvm::AllocaInst* valid_epoch = getOrCreateLocalValidEpoch(key, llvm_func);
+    builder->CreateStore(builder->CreateXor(epoch,
+        llvm::ConstantInt::get(i64_type, std::numeric_limits<uint64_t>::max())), valid_epoch);
+}
+
 void QoreIRToLLVM::ensureLocalCacheFresh(const void* key, llvm::Module& module,
         llvm::Function* llvm_func) {
     if (!local_reload_epoch || !canReloadLocalFromRuntime(key)) {
@@ -9049,6 +9060,9 @@ void QoreIRToLLVM::clearLocalCachedValue(const void* key, llvm::Module& module,
         builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING),
                 alloca_it->second.storage());
     }
+    // the cache no longer holds the local's value: a path that does not reload it after the operation, such as the
+    // exception edge of a member or key store to the handler of its try block, reloads it on its next use
+    markLocalCacheStale(key, llvm_func);
 }
 
 void QoreIRToLLVM::releaseLocalsForOutlinedHelper(const std::vector<const LocalVar*>& locals, llvm::Module& module,
@@ -34406,8 +34420,6 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 nanboxed_values.insert(inst->result.id);
                 trackResultForCleanup(call_result, inst->result.id, llvm_func);
             }
-            emitExceptionCheck(module, llvm_func, inst);
-
             // CRITICAL: After HashKeyStore COW, reload the hash from the LocalVar.
             // qore_rt_hash_key_store_cow updates the LocalVar, but the hash value
             // in values[] array might be stale if COW created a copy. For single-pass
@@ -34416,7 +34428,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // reloadLocalFromRuntime updates the alloca cache so subsequent
             // LoadLocal(h) reads the post-COW hash (not a stale cached value).
             // This is critical for both JIT and AOT modes.
+            // The reload precedes the exception check: the cache was cleared above, and the handler of a try block
+            // reads the local too; the local holds its value whether or not the store raised an exception.
             reloadLocalFromRuntime(container_key, module, llvm_func);
+            emitExceptionCheck(module, llvm_func, inst);
 
             return true;
         }
@@ -34475,8 +34490,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 nanboxed_values.insert(inst->result.id);
                 trackResultForCleanup(call_result, inst->result.id, llvm_func);
             }
-            emitExceptionCheck(module, llvm_func, inst);
+            // as for HashKeyStore: the handler of a try block reads the local too
             reloadLocalFromRuntime(container_key, module, llvm_func);
+            emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
         case QoreIROpcode::ListIndexStore: {
@@ -34544,13 +34560,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 nanboxed_values.insert(inst->result.id);
                 trackResultForCleanup(call_result, inst->result.id, llvm_func);
             }
-            emitExceptionCheck(module, llvm_func, inst);
-
             // CRITICAL: After ListIndexStore COW, reload the list from the LocalVar.
             // reloadLocalFromRuntime updates the alloca cache so subsequent
             // LoadLocal(l) reads the post-COW list (not a stale cached value).
             // This is critical for both JIT and AOT modes.
+            // As for HashKeyStore, the reload precedes the exception check, for the handler of a try block.
             reloadLocalFromRuntime(container_key, module, llvm_func);
+            emitExceptionCheck(module, llvm_func, inst);
 
             return true;
         }

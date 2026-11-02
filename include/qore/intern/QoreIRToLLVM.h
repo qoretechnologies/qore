@@ -2383,6 +2383,12 @@ private:
     llvm::AllocaInst* getOrCreateLocalValidEpoch(const void* key,
             llvm::Function* llvm_func);
     void markLocalCacheFresh(const void* key, llvm::Function* llvm_func);
+    //! Marks the cache of a reloadable local stale, so that its next use reloads it from the runtime
+    /** For a cache that no longer holds the local's value (clearLocalCachedValue()): the path that follows the
+        operation that cleared it reloads it, but another path, such as the exception edge of the operation to the
+        handler of its try block, would otherwise read the cleared cache.
+    */
+    void markLocalCacheStale(const void* key, llvm::Function* llvm_func);
     void ensureLocalCacheFresh(const void* key, llvm::Module& module,
             llvm::Function* llvm_func);
 
