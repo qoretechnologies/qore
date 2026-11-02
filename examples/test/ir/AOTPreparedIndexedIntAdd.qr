@@ -65,16 +65,29 @@ sub replaceIndexedLocal(int kind) {
     } else if (kind == 1) {
         list replacement = ("x",);
         set_local_var_value(1, "values", replacement);
-    } else {
+    } else if (kind == 2) {
         set_local_var_value(1, "values", NOTHING);
+    } else if (kind == 3) {
+        list<int> replacement = (40,);
+        set_local_var_value(1, "values", replacement);
+    } else {
+        list replacement = (41,);
+        set_local_var_value(1, "values", replacement);
     }
 }
 
+# A reflective write is assigned with the type of the local: a value of another type is refused and leaves the
+# local unchanged; an accepted replacement is used by the next indexed update.
 string sub indexedAddReflected(int kind) {
     list<int> values = (1,);
-    call_function("replaceIndexedLocal", kind);
+    string err = "";
+    try {
+        call_function("replaceIndexedLocal", kind);
+    } catch (hash<ExceptionInfo> ex) {
+        err = ex.err + ":";
+    }
     auto result = values[0] += 2;
-    return sprintf("%y:%y:%s", result, values, values.fullType());
+    return sprintf("%s%y:%y:%s", err, result, values, values.fullType());
 }
 
 string sub indexedAddNested(int value) {
@@ -129,7 +142,7 @@ foreach int kind in ((0, 2)) {
     printf("owned:%d:%s\n", kind, indexedAddOwned(kind));
 }
 printf("native-negative:%s\n", indexedAddNativeNegative());
-foreach int kind in ((0, 1, 2)) {
+foreach int kind in ((0, 1, 2, 3, 4)) {
     printf("reflect:%d:%s\n", kind, call_function("indexedAddReflected", kind));
 }
 printf("indexed-int-add: ok\n");

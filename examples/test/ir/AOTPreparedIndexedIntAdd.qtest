@@ -48,7 +48,11 @@ class AOTPreparedIndexedIntAddTest inherits QUnit::Test {
         assertRegex("owned:0:140737488355335:\\[140737488355335\\]", expected);
         assertRegex("owned:2:9:\\[9\\]", expected);
         assertRegex("native-negative:\\[7, 10\\]", expected);
-        assertRegex("reflect:0:6.5:\\[6.5\\]:list", expected);
+        assertRegex("reflect:0:RUNTIME-TYPE-ERROR:3:\\[3\\]:list<int>\n", expected);
+        assertRegex("reflect:1:RUNTIME-TYPE-ERROR:3:\\[3\\]:list<int>\n", expected);
+        assertRegex("reflect:2:RUNTIME-TYPE-ERROR:3:\\[3\\]:list<int>\n", expected);
+        assertRegex("reflect:3:42:\\[42\\]:list<int>\n", expected);
+        assertRegex("reflect:4:43:\\[43\\]:list<int>\n", expected);
         assertRegex("indexed-int-add: ok", expected);
         foreach string mode in (("ir", "jit", "tiered")) {
             assertEq(expected, run((qore, "--exec-mode=" + mode, source)), mode);

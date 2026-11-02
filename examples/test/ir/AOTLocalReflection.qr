@@ -56,20 +56,26 @@ sub replaceSameList(int kind) {
     } else if (kind == 1) {
         list<int> other = (45,);
         set_local_var_value(1, "values", other);
-    } else {
+    } else if (kind == 2) {
         set_local_var_value(1, "values", "invalid");
+    } else {
+        list other = (46,);
+        set_local_var_value(1, "values", other);
     }
 }
 
+# A reflective write is assigned with the type of the local: a value of another type is refused and leaves the
+# local unchanged, and a plain list of integers is assigned as list<int>.
 string sub sameListReflected(int kind) {
     list<int> values = (7,);
-    call_function("replaceSameList", kind);
+    string err = "";
     try {
-        push values, 3;
-        return sprintf("%y:%s", values, values.fullType());
+        call_function("replaceSameList", kind);
     } catch (hash<ExceptionInfo> ex) {
-        return ex.err;
+        err = ex.err + ":";
     }
+    push values, 3;
+    return sprintf("%s%y:%s", err, values, values.fullType());
 }
 
 expect(29, visible(5, 17));
@@ -84,8 +90,9 @@ expect(17, receiver.unusedParameter(17));
 expect(17, ReflectionReceiver::staticParameter(17));
 code<int(int)> closure = int sub (int unused) { return get_local_vars(0).unused.value; };
 expect(17, closure(17));
-expect("[3]:list<int>", call_function("sameListReflected", 0));
-expect("[45, 3]:list", call_function("sameListReflected", 1));
-expect("PUSH-ERROR", call_function("sameListReflected", 2));
+expect("RUNTIME-TYPE-ERROR:[7, 3]:list<int>", call_function("sameListReflected", 0));
+expect("[45, 3]:list<int>", call_function("sameListReflected", 1));
+expect("RUNTIME-TYPE-ERROR:[7, 3]:list<int>", call_function("sameListReflected", 2));
+expect("[46, 3]:list<int>", call_function("sameListReflected", 3));
 blockReentry();
 printf("local-reflection: ok\n");
