@@ -33,6 +33,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <limits>
+#include <typeinfo>
 #include <unordered_set>
 
 static bool qore_ir_analysis_cancelled(size_t& count, const char* operation) {
@@ -926,7 +927,8 @@ bool QoreIRDebuggerAlternativeBuilder::planFold(QoreIRInstruction* call, QoreIRV
     if (!needs(call)) {
         return true;
     }
-    if (call->debugger_alternative) {
+    // a call keeps one unfused form
+    if (call->debugger_alternative || planned(call)) {
         return false;
     }
     Plan plan;
@@ -940,12 +942,13 @@ bool QoreIRDebuggerAlternativeBuilder::planFold(QoreIRInstruction* call, QoreIRV
 }
 
 bool QoreIRDebuggerAlternativeBuilder::planEventsOnly(QoreIRInstruction* call,
-        std::vector<QoreIRInstruction*> prefix) {
+        std::vector<QoreIRInstruction*> prefix, uint32_t site, bool gated) {
     assert(call && call->result.isValid());
     if (!needs(call)) {
         return true;
     }
-    if (call->debugger_alternative) {
+    // a call keeps one unfused form
+    if (call->debugger_alternative || planned(call)) {
         return false;
     }
     Plan plan;
@@ -953,8 +956,181 @@ bool QoreIRDebuggerAlternativeBuilder::planEventsOnly(QoreIRInstruction* call,
     plan.call_result = call->result;
     plan.kind = QoreIRDebuggerAlternative::Kind::EventsOnly;
     plan.prefix = std::move(prefix);
+    plan.site = site;
+    plan.site_store = site && !gated;
+    plan.site_gated = site && gated;
     plans.push_back(std::move(plan));
     return true;
+}
+
+std::unique_ptr<QoreIRInstruction> QoreIRDebuggerAlternativeBuilder::cloneConsumer(const QoreIRInstruction& inst) {
+    std::unique_ptr<QoreIRInstruction> clone;
+    // the copyable instruction classes of the consumers that the aggregate pass eliminates
+    const std::type_info& type = typeid(inst);
+    if (type == typeid(QoreIRInstruction)) {
+        clone = std::make_unique<QoreIRInstruction>(inst);
+    } else if (type == typeid(QoreIRConstInstruction)) {
+        clone = std::make_unique<QoreIRConstInstruction>(static_cast<const QoreIRConstInstruction&>(inst));
+    } else if (type == typeid(QoreIRLocalInstruction)) {
+        clone = std::make_unique<QoreIRLocalInstruction>(static_cast<const QoreIRLocalInstruction&>(inst));
+    } else if (type == typeid(QoreIRHashKeyAccessInstruction)) {
+        clone = std::make_unique<QoreIRHashKeyAccessInstruction>(
+            static_cast<const QoreIRHashKeyAccessInstruction&>(inst));
+    } else if (type == typeid(QoreIRListIndexAccessInstruction)) {
+        clone = std::make_unique<QoreIRListIndexAccessInstruction>(
+            static_cast<const QoreIRListIndexAccessInstruction&>(inst));
+    } else if (type == typeid(QoreIRExprInstruction)) {
+        auto* copy = new QoreIRExprInstruction(static_cast<const QoreIRExprInstruction&>(inst));
+        // the copy holds a reference of its own to the expression
+        if (copy->expr) {
+            copy->expr.ref();
+        }
+        clone.reset(copy);
+    } else if (type == typeid(QoreIRCallDirectInstruction)) {
+        auto* copy = new QoreIRCallDirectInstruction(static_cast<const QoreIRCallDirectInstruction&>(inst));
+        if (copy->expr) {
+            copy->expr.ref();
+        }
+        clone.reset(copy);
+    } else if (type == typeid(QoreIRCallStaticDirectInstruction)) {
+        auto* copy = new QoreIRCallStaticDirectInstruction(
+            static_cast<const QoreIRCallStaticDirectInstruction&>(inst));
+        if (copy->expr) {
+            copy->expr.ref();
+        }
+        clone.reset(copy);
+    } else if (type == typeid(QoreIRCallMethodDirectInstruction)) {
+        auto* copy = new QoreIRCallMethodDirectInstruction(
+            static_cast<const QoreIRCallMethodDirectInstruction&>(inst));
+        if (copy->expr) {
+            copy->expr.ref();
+        }
+        clone.reset(copy);
+    } else if (type == typeid(QoreIRDotEvalMethodDirectInstruction)) {
+        auto* copy = new QoreIRDotEvalMethodDirectInstruction(
+            static_cast<const QoreIRDotEvalMethodDirectInstruction&>(inst));
+        if (copy->expr) {
+            copy->expr.ref();
+        }
+        clone.reset(copy);
+    } else {
+        return nullptr;
+    }
+    // the copy is lowered as without the fusion: it has no unfused form of its own and no exception edge
+    if (clone->exception_target) {
+        return nullptr;
+    }
+    clone->debugger_alternative.reset();
+    return clone;
+}
+
+bool QoreIRDebuggerAlternativeBuilder::planDerived(QoreIRInstruction* kept, QoreIRDebuggerAlternative::Kind kind,
+        QoreIRValue native_value, uint32_t site, QoreIRValue call_result,
+        const std::vector<const QoreIRInstruction*>& consumers,
+        const std::unordered_map<uint32_t, QoreIRValue>& aliases,
+        const std::unordered_map<uint32_t, const QoreIRInstruction*>& reloads, bool at_consumers,
+        bool site_gated) {
+    assert(kept && call_result.isValid() && !consumers.empty());
+    if (!enabled) {
+        return true;
+    }
+    if (kept->debugger_alternative || !buildDefinitions()) {
+        return false;
+    }
+    auto alternative = std::make_unique<QoreIRDebuggerAlternative>();
+    alternative->kind = kind;
+    alternative->native_value = native_value;
+    alternative->site = site;
+    alternative->site_keyed = site && !site_gated;
+    alternative->site_gated = site && site_gated;
+    // the copies take the ordinary call's result as a value of their own
+    alternative->call_result = func.createValue();
+    if (const QoreIRValueFacts* facts = func.getValueFacts(call_result)) {
+        QoreIRValueFacts copy = *facts;
+        func.setValueFacts(alternative->call_result, copy);
+    }
+    auto copy_facts = [&](QoreIRValue from, QoreIRValue to) {
+        if (const QoreIRValueFacts* facts = func.getValueFacts(from)) {
+            QoreIRValueFacts copy = *facts;
+            func.setValueFacts(to, copy);
+        }
+    };
+    std::unordered_map<uint32_t, QoreIRValue> renamed;
+    for (const auto& [id, value] : aliases) {
+        renamed.emplace(id, value.id == call_result.id ? alternative->call_result : value);
+    }
+    // a reload reads its local after the ordinary call, which can change the local while a debugger is attached
+    for (const auto& [id, source] : reloads) {
+        if (qore_ir_analysis_cancelled(check_count, "IR debugger alternative reload copy")) {
+            return false;
+        }
+        if (!source || source->opcode != QoreIROpcode::LoadLocal) {
+            return false;
+        }
+        std::unique_ptr<QoreIRInstruction> clone = cloneConsumer(*source);
+        if (!clone) {
+            return false;
+        }
+        clone->result = func.createValue();
+        copy_facts(source->result, clone->result);
+        renamed[id] = clone->result;
+        alternative->consumers.push_back(std::move(clone));
+    }
+    for (const QoreIRInstruction* consumer : consumers) {
+        if (qore_ir_analysis_cancelled(check_count, "IR debugger alternative consumer copy")) {
+            return false;
+        }
+        std::unique_ptr<QoreIRInstruction> clone = cloneConsumer(*consumer);
+        if (!clone || !consumer->result.isValid()) {
+            return false;
+        }
+        for (QoreIRValue& operand : clone->operands) {
+            auto found = renamed.find(operand.id);
+            if (found != renamed.end()) {
+                operand = found->second;
+                continue;
+            }
+            if (at_consumers) {
+                continue;
+            }
+            // a constant is copied, as its definition can follow the call
+            auto definition = definitions.find(operand.id);
+            if (definition == definitions.end() || !qore_ir_is_constant_instruction(definition->second)) {
+                return false;
+            }
+            std::unique_ptr<QoreIRInstruction> constant = cloneConsumer(*definition->second);
+            if (!constant) {
+                return false;
+            }
+            constant->result = func.createValue();
+            copy_facts(definition->second->result, constant->result);
+            renamed.emplace(operand.id, constant->result);
+            operand = constant->result;
+            alternative->consumers.push_back(std::move(constant));
+        }
+        clone->result = func.createValue();
+        copy_facts(consumer->result, clone->result);
+        renamed[consumer->result.id] = clone->result;
+        alternative->consumers.push_back(std::move(clone));
+    }
+    alternative->result = alternative->consumers.back()->result;
+    Plan plan;
+    plan.call = kept;
+    plan.call_result = call_result;
+    plan.kind = kind;
+    plan.derived = std::move(alternative);
+    plans.push_back(std::move(plan));
+    return true;
+}
+
+void QoreIRDebuggerAlternativeBuilder::setNativeValue(const QoreIRInstruction* kept, QoreIRValue native_value) {
+    for (auto plan = plans.rbegin(); plan != plans.rend(); ++plan) {
+        if (plan->call == kept && plan->derived) {
+            plan->derived->native_value = native_value;
+            return;
+        }
+    }
+    assert(false);
 }
 
 bool QoreIRDebuggerAlternativeBuilder::planKeyed(uint32_t site, bool store, QoreIRInstruction* call,
@@ -1084,7 +1260,13 @@ void QoreIRDebuggerAlternativeBuilder::finish() {
             }
         }
         // a consumer that the pass kept is not fused, and the call keeps its ordinary form
-            if (!complete) {
+        if (!complete) {
+            continue;
+        }
+        if (plan.derived) {
+            // planDerived() made the copies
+            plan.call->debugger_alternative = std::shared_ptr<const QoreIRDebuggerAlternative>(
+                std::move(plan.derived));
             continue;
         }
         if (plan.kind != QoreIRDebuggerAlternative::Kind::Consumers) {
@@ -1094,6 +1276,9 @@ void QoreIRDebuggerAlternativeBuilder::finish() {
             alternative->call_result = plan.call_result;
             alternative->result = plan.call_result;
             alternative->native_value = plan.native_value;
+            alternative->site = plan.site;
+            alternative->site_store = plan.site_store;
+            alternative->site_gated = plan.site_gated;
             for (const QoreIRInstruction* key : plan.prefix) {
                 alternative->prefix.push_back(std::move(taken[key]));
             }
@@ -11341,7 +11526,8 @@ size_t qore_ir_fold_fresh_list_size_calls(QoreIRFunction& func,
         }
         if (call->exception_target || !call->result.isValid()
                 || call->operands.size() != 1
-                || call->operands[0].id != result_id) {
+                || call->operands[0].id != result_id
+                || call->debugger_alternative) {
             continue;
         }
         bool has_ref_args = true;
@@ -11557,7 +11743,8 @@ size_t qore_ir_fold_fresh_hash_key_calls(QoreIRFunction& func,
                     && call->opcode != QoreIROpcode::CallStaticDirect)
                 || call->exception_target || !call->result.isValid()
                 || call->operands.size() != 1
-                || call->operands[0].id != result_id) {
+                || call->operands[0].id != result_id
+                || call->debugger_alternative) {
             continue;
         }
         bool has_ref_args = true;
@@ -11825,9 +12012,11 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             QoreIRValue base, QoreIRInstruction* consumer,
             Projection& projection,
             bool allow_cross_block_parameter_guard = false) {
+        // an instruction that keeps an unfused form for a debugger is fused already
         if (!call || !consumer || consumer->exception_target
                 || !consumer->result.isValid() || consumer->operands.empty()
-                || !base.isValid()) {
+                || !base.isValid() || call->debugger_alternative
+                || consumer->debugger_alternative) {
             return false;
         }
         bool direct_call = call->opcode == QoreIROpcode::CallDirect;
@@ -12554,6 +12743,8 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         std::vector<QoreIRInstruction*> eliminated;
         std::vector<std::pair<uint32_t, QoreIRValue>> replacements;
         std::vector<Projection> materialized_projections;
+        //! the consumers whose results native code takes from the call's arguments, in their order
+        std::vector<QoreIRInstruction*> consumers;
     };
     struct VirtualizedPhi {
         QoreIRPhiInstruction* phi = nullptr;
@@ -12561,8 +12752,9 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         std::vector<QoreIRInstruction*> eliminated;
         std::vector<std::pair<uint32_t, QoreIRValue>> replacements;
         std::vector<Projection> projected_calls;
-        //! the calls eliminated into native phi inputs
-        std::vector<QoreIRInstruction*> native_calls;
+        //! the native phi inputs of the calls eliminated into them, and their projections
+        std::vector<QoreIRValue> native_values;
+        std::vector<Projection> native_projections;
         //! the consumer of the phi (or of its local), and the value that it takes
         QoreIRInstruction* consumer = nullptr;
         QoreIRValue base;
@@ -12648,6 +12840,7 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                 return false;
             }
             candidate.materialized_projections.push_back(projection);
+            candidate.consumers.push_back(projection.consumer);
             return true;
         }
         if (projection.kind
@@ -12660,6 +12853,7 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             candidate.replacements.emplace_back(
                 projection.result.id,
                 projection.call->operands[projection.operand]);
+            candidate.consumers.push_back(projection.consumer);
             return true;
         }
         if (projection.kind
@@ -12732,6 +12926,7 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                 return false;
             }
             candidate.materialized_projections.push_back(projection);
+            candidate.consumers.push_back(projection.consumer);
             return true;
         }
         return false;
@@ -13643,7 +13838,8 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                         value = projection.call->operands[
                             static_cast<size_t>(projection.operand)];
                         candidate.eliminated.push_back(projection.call);
-                        candidate.native_calls.push_back(projection.call);
+                        candidate.native_values.push_back(value);
+                        candidate.native_projections.push_back(projection);
                     } else {
                         value = projection.call->result;
                         candidate.projected_calls.push_back(
@@ -13727,7 +13923,14 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         std::unique_ptr<QoreIRInstruction> source;
         std::unique_ptr<QoreIRInstruction> replacement;
         Projection* projection = nullptr;
+        //! the consumer is kept for a debugger: the replacement precedes it and defines \a native
+        bool keep = false;
+        QoreIRValue native;
     };
+    //! the consumers kept for a debugger, with the values that native code gives them
+    std::vector<std::pair<QoreIRInstruction*, QoreIRValue>> kept_consumer_values;
+    //! the calls kept for a debugger that native code does not make: their inputs are dead in native code
+    std::unordered_set<const QoreIRInstruction*> natively_unused_calls;
     std::unordered_map<QoreIRInstruction*, MaterializedProjection>
         materialized_replacements;
     std::unordered_set<uint32_t> rewrite_sources;
@@ -13844,16 +14047,57 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         }
         return true;
     };
+    // the candidates that are not fused, as a debugger could not take the values of their calls
+    size_t skipped_candidates = 0;
     for (VirtualizedCall& candidate : virtualized) {
         if (qore_ir_analysis_cancelled(check_count,
                 "IR aggregate virtualization rewrite preparation")) {
             return 0;
         }
         // native code takes the projections from the call's arguments; while a debugger is attached, the kept call
-        // is made for its events
-        if (alternatives.needs(candidate.call) && alternatives.planEventsOnly(candidate.call)) {
+        // makes the ordinary call and keeps its result, from which the kept consumers take their values as without
+        // the fusion
+        std::unordered_set<const QoreIRInstruction*> keep_consumers;
+        if (alternatives.needs(candidate.call)) {
+            bool copyable = true;
+            for (const QoreIRInstruction* consumer : candidate.consumers) {
+                if (!QoreIRDebuggerAlternativeBuilder::cloneConsumer(*consumer)) {
+                    copyable = false;
+                    break;
+                }
+            }
+            // without copies of its consumers the call cannot give their values to a debugger: it is not fused
+            if (!copyable || candidate.consumers.empty()) {
+                ++skipped_candidates;
+                continue;
+            }
+            uint32_t site = alternatives.newSite();
+            if (!alternatives.planEventsOnly(candidate.call, {}, site)) {
+                return 0;
+            }
             candidate.eliminated.erase(std::remove(candidate.eliminated.begin(), candidate.eliminated.end(),
                 candidate.call), candidate.eliminated.end());
+            for (QoreIRInstruction* consumer : candidate.consumers) {
+                if (!alternatives.planDerived(consumer, QoreIRDebuggerAlternative::Kind::Fold, QoreIRValue(), site,
+                        candidate.call->result, {consumer}, {{consumer->operands[0].id, candidate.call->result}}, {},
+                        true)) {
+                    return 0;
+                }
+                keep_consumers.insert(consumer);
+                // the kept consumer stays, reading the call's result; native code replaces it by its value
+                auto replacement = std::find_if(candidate.replacements.begin(), candidate.replacements.end(),
+                    [&](const std::pair<uint32_t, QoreIRValue>& entry) {
+                        return entry.first == consumer->result.id;
+                    });
+                if (replacement != candidate.replacements.end()) {
+                    alternatives.setNativeValue(consumer, replacement->second);
+                    kept_consumer_values.emplace_back(consumer, replacement->second);
+                    candidate.replacements.erase(replacement);
+                    candidate.eliminated.erase(std::remove(candidate.eliminated.begin(),
+                        candidate.eliminated.end(), consumer), candidate.eliminated.end());
+                }
+                consumer->operands[0] = candidate.call->result;
+            }
         }
         eliminated.insert(candidate.eliminated.begin(),
             candidate.eliminated.end());
@@ -13865,6 +14109,15 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         for (Projection& projection :
                 candidate.materialized_projections) {
             MaterializedProjection materialized;
+            // a kept consumer stays: its replacement defines a value of its own, which native code gives it
+            const bool keep = keep_consumers.count(projection.consumer);
+            const QoreIRValue keep_result = keep ? func.createValue() : QoreIRValue();
+            materialized.keep = keep;
+            materialized.native = keep_result;
+            if (keep) {
+                alternatives.setNativeValue(projection.consumer, keep_result);
+                kept_consumer_values.emplace_back(projection.consumer, keep_result);
+            }
             if (projection.guarded_index.isValid()) {
                 if (!projection.call
                         || projection.call->opcode
@@ -13885,7 +14138,7 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                 replacement->temp_scope_id =
                     source_call->temp_scope_id;
                 replacement->element_type = source_call->element_type;
-                replacement->result = projection.result;
+                replacement->result = keep ? keep_result : projection.result;
                 replacement->operands = source_call->operands;
                 replacement->explicit_type_param_inst =
                     source_call->explicit_type_param_inst;
@@ -13919,7 +14172,7 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                     projection.consumer->cached_start_line;
                 replacement->temp_scope_id =
                     projection.consumer->temp_scope_id;
-                replacement->result = projection.consumer->result;
+                replacement->result = keep ? keep_result : projection.consumer->result;
                 replacement->constant.kind =
                     QoreIRConstant::Kind::Nothing;
                 QoreIRValueFacts facts;
@@ -13982,6 +14235,15 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                 rewrite_sources.insert(source.id);
                 if (can_borrow_materialized_projection(
                         projection, source)) {
+                    if (keep) {
+                        // native code gives the kept consumer the source itself, borrowed
+                        alternatives.setNativeValue(projection.consumer, source);
+                        kept_consumer_values.back().second = source;
+                        if (borrowed_projections) {
+                            ++*borrowed_projections;
+                        }
+                        continue;
+                    }
                     eliminated.insert(projection.consumer);
                     replacements.emplace(projection.result.id, source);
                     if (borrowed_projections) {
@@ -13998,7 +14260,7 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                 source_constant->temp_scope_id =
                     projection.consumer->temp_scope_id;
                 source_constant->result = boxed
-                    ? func.createValue() : projection.consumer->result;
+                    ? func.createValue() : (keep ? keep_result : projection.consumer->result);
                 QoreIRValueFacts facts;
                 facts.assigned_state = QoreIRAssignedState::Assigned;
                 facts.never_nothing = true;
@@ -14061,7 +14323,7 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                     projection.consumer->cached_start_line;
                 replacement->temp_scope_id =
                     projection.consumer->temp_scope_id;
-                replacement->result = projection.consumer->result;
+                replacement->result = keep ? keep_result : projection.consumer->result;
                 replacement->operands.push_back(source);
                 materialized.replacement = std::move(replacement);
                 QoreIRValueFacts facts;
@@ -14077,7 +14339,7 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                     facts.assigned_state = QoreIRAssignedState::Assigned;
                     facts.never_nothing = true;
                 }
-                func.setValueFacts(projection.consumer->result, facts);
+                func.setValueFacts(keep ? keep_result : projection.consumer->result, facts);
             }
             materialized_replacements.emplace(
                 projection.consumer, std::move(materialized));
@@ -14098,20 +14360,147 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                 "IR aggregate phi rewrite preparation")) {
             return 0;
         }
-        // while a debugger is attached, each projected call makes the ordinary call and takes the phi's consumer,
-        // and a call eliminated into a native phi input is kept and made for its events
-        for (QoreIRInstruction* call : candidate.native_calls) {
-            if (alternatives.needs(call) && alternatives.planEventsOnly(call)) {
-                candidate.eliminated.erase(std::remove(candidate.eliminated.begin(), candidate.eliminated.end(),
-                    call), candidate.eliminated.end());
+        // while a debugger is attached, each call makes the ordinary call and takes the phi's consumer from its
+        // result: a call eliminated into a native phi input is kept and gives the phi the consumer's value, a
+        // projected call takes a copy of the consumer, which reloads a guarded index after the call; a candidate
+        // whose consumer cannot be copied is not fused
+        bool debuggable = false;
+        for (const Projection& projection : candidate.native_projections) {
+            debuggable = debuggable || alternatives.needs(projection.call);
+            for (const QoreIRInstruction* inst : projection.eliminated) {
+                debuggable = debuggable || alternatives.needs(inst);
             }
         }
-        if (!candidate.projected_calls.empty() && candidate.consumer) {
-            std::vector<QoreIRInstruction*> calls;
-            for (const Projection& projection : candidate.projected_calls) {
-                calls.push_back(projection.call);
+        for (const Projection& projection : candidate.projected_calls) {
+            debuggable = debuggable || alternatives.needs(projection.call);
+        }
+        if (debuggable) {
+            const size_t plan_mark = alternatives.planCount();
+            bool planned = candidate.consumer != nullptr;
+            // each phi input's call, the outer call of a nested projection, is kept: it gives the phi the value of
+            // copies of the consumers that native code eliminated (those of the nested projection, then the phi's),
+            // lowered from its ordinary result; the nested calls, whose results its arguments take, are kept for
+            // their events, the innermost one storing a site that the others follow
+            std::vector<QoreIRInstruction*> kept_native_calls;
+            std::vector<QoreIRInstruction*> kept_inputs;
+            auto is_call = [](const QoreIRInstruction* inst) {
+                return inst->opcode == QoreIROpcode::CallDirect || inst->opcode == QoreIROpcode::CallStaticDirect
+                    || inst->opcode == QoreIROpcode::CallMethodDirect;
+            };
+            for (size_t i = 0; planned && i < candidate.native_projections.size(); ++i) {
+                const Projection& projection = candidate.native_projections[i];
+                QoreIRInstruction* outer = nullptr;
+                std::vector<QoreIRInstruction*> inner;
+                std::vector<const QoreIRInstruction*> chain;
+                for (QoreIRInstruction* inst : projection.eliminated) {
+                    if (!is_call(inst)) {
+                        chain.push_back(inst);
+                    } else if (!outer) {
+                        outer = inst;
+                    } else {
+                        inner.push_back(inst);
+                    }
+                }
+                if (!outer) {
+                    outer = projection.call;
+                } else {
+                    inner.push_back(projection.call);
+                }
+                chain.push_back(candidate.consumer);
+                bool any_debuggable = alternatives.needs(outer);
+                bool all_debuggable = any_debuggable;
+                for (const QoreIRInstruction* call : inner) {
+                    any_debuggable = any_debuggable || alternatives.needs(call);
+                    all_debuggable = all_debuggable && alternatives.needs(call);
+                }
+                kept_inputs.push_back(any_debuggable ? outer : nullptr);
+                if (!any_debuggable) {
+                    continue;
+                }
+                // the calls of one projection take their unfused forms together: they must all be debuggable
+                if (!all_debuggable) {
+                    planned = false;
+                    break;
+                }
+                uint32_t site = 0;
+                if (!inner.empty()) {
+                    // the innermost call is made first
+                    site = alternatives.newSite();
+                    planned = alternatives.planEventsOnly(projection.call, {}, site);
+                    for (QoreIRInstruction* call : inner) {
+                        if (planned && call != projection.call) {
+                            planned = alternatives.planEventsOnly(call, {}, site, true);
+                        }
+                    }
+                }
+                planned = planned && alternatives.planDerived(outer, QoreIRDebuggerAlternative::Kind::Fold,
+                    candidate.native_values[i], site, outer->result, chain, {{candidate.base.id, outer->result}},
+                    {}, false, site != 0);
+                kept_native_calls.push_back(outer);
+                kept_native_calls.insert(kept_native_calls.end(), inner.begin(), inner.end());
             }
-            (void)alternatives.planShared(calls, candidate.base, candidate.consumer);
+            bool guarded = false;
+            for (const Projection& projection : candidate.projected_calls) {
+                guarded = guarded || projection.guarded_index.isValid();
+            }
+            if (planned && !candidate.projected_calls.empty() && !guarded) {
+                std::vector<QoreIRInstruction*> calls;
+                for (const Projection& projection : candidate.projected_calls) {
+                    calls.push_back(projection.call);
+                }
+                planned = alternatives.planShared(calls, candidate.base, candidate.consumer);
+            } else if (planned && guarded) {
+                for (const Projection& projection : candidate.projected_calls) {
+                    if (!planned) {
+                        break;
+                    }
+                    if (!alternatives.needs(projection.call)) {
+                        continue;
+                    }
+                    // the guarded index is the consumer's selector, a parameter that the copy loads again
+                    std::unordered_map<uint32_t, const QoreIRInstruction*> reloads;
+                    if (candidate.consumer->operands.size() > 1) {
+                        QoreIRValue index = candidate.consumer->operands[1];
+                        auto definition = definitions.find(index.id);
+                        if (definition == definitions.end()
+                                || definition->second->opcode != QoreIROpcode::LoadLocal) {
+                            planned = false;
+                            break;
+                        }
+                        reloads.emplace(index.id, definition->second);
+                    }
+                    planned = alternatives.planDerived(projection.call, QoreIRDebuggerAlternative::Kind::Consumers,
+                        QoreIRValue(), 0, projection.call->result, {candidate.consumer},
+                        {{candidate.base.id, projection.call->result}}, reloads, false);
+                }
+            }
+            if (!planned) {
+                alternatives.rollback(plan_mark);
+                ++skipped_candidates;
+                continue;
+            }
+            // the kept input calls give the phi their consumers' values
+            for (QoreIRInstruction* call : kept_native_calls) {
+                candidate.eliminated.erase(std::remove(candidate.eliminated.begin(), candidate.eliminated.end(),
+                    call), candidate.eliminated.end());
+                natively_unused_calls.insert(call);
+            }
+            for (size_t i = 0; i < kept_inputs.size(); ++i) {
+                QoreIRInstruction* call = kept_inputs[i];
+                if (!call) {
+                    continue;
+                }
+                QoreIRValue value = candidate.native_values[i];
+                // the native calls are those of the phi's incoming values, in their order
+                assert(i < candidate.scalar_phi->incoming.size()
+                    && candidate.scalar_phi->incoming[i].value.id == value.id);
+                candidate.scalar_phi->incoming[i].value = call->result;
+                candidate.scalar_phi->operands[i] = call->result;
+                if (const QoreIRValueFacts* facts = func.getValueFacts(value)) {
+                    QoreIRValueFacts copy = *facts;
+                    func.setValueFacts(call->result, copy);
+                }
+            }
         }
         eliminated.insert(candidate.eliminated.begin(),
             candidate.eliminated.end());
@@ -14204,6 +14593,9 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
     for (QoreIRInstruction* instruction : eliminated) {
         enqueue_discard_inputs(instruction);
     }
+    for (const QoreIRInstruction* instruction : natively_unused_calls) {
+        enqueue_discard_inputs(instruction);
+    }
     while (!discard_worklist.empty()) {
         if (qore_ir_analysis_cancelled(check_count,
                 "IR dead aggregate-return call analysis")) {
@@ -14224,8 +14616,14 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         if (call_uses == uses.end() || call_uses->second.empty()) {
             continue;
         }
+        // a use by a kept call that native code does not make is dead in native code
         bool dead = true;
+        bool kept_user = false;
         for (const QoreIRScalarUse& call_use : call_uses->second) {
+            if (call_use.inst && natively_unused_calls.count(call_use.inst)) {
+                kept_user = true;
+                continue;
+            }
             if (!call_use.inst
                     || !eliminated.count(
                         const_cast<QoreIRInstruction*>(call_use.inst))) {
@@ -14267,10 +14665,22 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         if (retained_use) {
             continue;
         }
+        // a call kept for a debugger by another fusion stays; the uses taken before the pass do not show its kept
+        // consumers
+        if (alternatives.planned(call)) {
+            continue;
+        }
         // native code does not make the discarded call; while a debugger is attached, the kept call is made for
         // its events
         if (alternatives.needs(call)) {
-            (void)alternatives.planEventsOnly(call);
+            if (alternatives.planEventsOnly(call)) {
+                natively_unused_calls.insert(call);
+                enqueue_discard_inputs(call);
+            }
+            continue;
+        }
+        // the unfused form of a kept call takes the result
+        if (kept_user) {
             continue;
         }
         eliminated.insert(call);
@@ -14476,6 +14886,27 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                     inst = instructions.begin()
                         + static_cast<std::ptrdiff_t>(offset + 1);
                 }
+                if (materialized->second.keep) {
+                    // the replacement precedes the kept consumer
+                    size_t offset = static_cast<size_t>(
+                        std::distance(instructions.begin(), inst));
+                    instructions.insert(inst,
+                        std::move(materialized->second.replacement));
+                    inst = instructions.begin()
+                        + static_cast<std::ptrdiff_t>(offset);
+                    if (materialized->second.projection) {
+                        apply_call_projection(
+                            *materialized->second.projection,
+                            materialized->second.native);
+                    }
+                    (void)qore_ir_rewrite_value_operands(
+                        **inst, replacements, check_count, false);
+                    ++inst;
+                    (void)qore_ir_rewrite_value_operands(
+                        **inst, replacements, check_count, false);
+                    ++inst;
+                    continue;
+                }
                 *inst = std::move(materialized->second.replacement);
                 if (materialized->second.projection) {
                     apply_call_projection(
@@ -14554,10 +14985,18 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             ++inst;
         }
     }
+    // native code gives a kept consumer the value that replaces it
+    for (const auto& [consumer, native] : kept_consumer_values) {
+        (void)qore_ir_analysis_cancelled(check_count, "IR kept aggregate consumer facts");
+        if (const QoreIRValueFacts* facts = func.getValueFacts(native)) {
+            QoreIRValueFacts copy = *facts;
+            func.setValueFacts(consumer->result, copy);
+        }
+    }
     alternatives.take(erased);
     alternatives.finish();
     return projections.size() + virtualized.size()
-        + virtualized_phis.size();
+        + virtualized_phis.size() - skipped_candidates;
 }
 
 size_t qore_ir_specialize_proven_native_operations(QoreIRFunction& func,
@@ -15989,6 +16428,10 @@ size_t qore_ir_fold_boxed_return_param_calls(QoreIRFunction& func,
                             || !qore_ir_is_non_overridable_method_call(
                                 *inst_ptr))
                         && !supported_invoke)) {
+                continue;
+            }
+            // a call kept for a debugger by another fusion is not folded
+            if (inst_ptr->debugger_alternative) {
                 continue;
             }
             QoreIRInstruction* call = inst_ptr.get();

@@ -2196,6 +2196,9 @@ private:
         llvm::AllocaInst* flag = nullptr;
     };
     AotDebuggerSite& getAotDebuggerSite(uint32_t site, llvm::Function* llvm_func);
+    //! Creates the sites of the function's instructions before its blocks are lowered, so that every exit, also
+    //! one lowered first, releases their results
+    bool preCreateAotDebuggerSites(const QoreIRFunction& func, llvm::Function* llvm_func, std::string& error);
     std::unordered_map<uint32_t, AotDebuggerSite> aot_debugger_sites;
     //! Ends the native lowering of a call begun by beginAotDebuggerDetour()
     /** Emits the ordinary call through the runtime helper in the debugger block, with the call's exception check,

@@ -45,6 +45,14 @@ public namespace FusedShapesTarget {
     public string sub identityString(string value) {
         return value; # line 46
     }
+    public final class RowFactory {
+        static hash<string, int> makeRow(int left, int middle, int right) {
+            return {"left": left, "middle": middle, "right": right}; # line 50
+        }
+        static list<int> makeValues(int left, int middle, int right) {
+            return (left, middle, right); # line 53
+        }
+    }
 
     public final class Shapes {
         # string producers whose local is read by several consumers, in a function without loops
@@ -59,7 +67,7 @@ public namespace FusedShapesTarget {
         }
 
         # the shapes in a loop that can attach the debugger before them
-        list<auto> shapesLoop(int n, int attach_at, code attach) {
+        list<auto> shapesLoop(int n, int attach_at, code attach, int index = 1) {
             list<auto> results = ();
             for (int i = 0; i < n; ++i) {
                 if (i == attach_at) {
@@ -71,6 +79,10 @@ public namespace FusedShapesTarget {
                 hash<string, int> row = makeRow(i, i + 1, i + 2);
                 t += row.left + row.right;
                 t += (i % 2 ? makeValues(i, 1, 2) : makeValues(3, i, 4))[1];
+                t += (i % 2 ? makeValues(i, 5, 6) : makeValues(7, i, 8))[index];
+                list<int> guarded_values = makeValues(i, i + 2, i + 4);
+                t += guarded_values[index] * 10 + guarded_values[0];
+                t += RowFactory::makeRow(i, i + 1, i + 2).middle + RowFactory::makeValues(i, i + 5, i + 9)[2];
                 t += readListSize((1, 2, 3, i)) + readMiddle({"left": 1, "middle": i, "right": 3});
                 hash<string, int> value_row = {"value": i};
                 list<int> values = (3, i);

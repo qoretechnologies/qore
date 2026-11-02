@@ -8496,16 +8496,34 @@ QoreIRToLLVM::AotDebuggerSite& QoreIRToLLVM::getAotDebuggerSite(uint32_t site, l
     ab.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), entry.result);
     entry.flag = ab.CreateAlloca(i1_type, nullptr, "debugger_site_taken");
     ab.CreateStore(llvm::ConstantInt::getFalse(ctx), entry.flag);
-    // the result of the last ordinary call of the site is released when the function exits
-    registerInvokeCleanupAlloca(entry.result);
+    // the result of the last ordinary call of the site stays until the next call of the site, also across
+    // statements (a virtualized call's consumers), and is released when the function exits, as an owned local
+    owned_ir_local_allocas.push_back(entry.result);
     return aot_debugger_sites.emplace(site, entry).first->second;
+}
+
+bool QoreIRToLLVM::preCreateAotDebuggerSites(const QoreIRFunction& func, llvm::Function* llvm_func,
+        std::string& error) {
+    size_t count = 0;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (++count % 100 == 0 && qore_check_cancel(nullptr, "LLVM debugger site preparation")) {
+                error = "cancelled during LLVM debugger site preparation";
+                return false;
+            }
+            if (inst->debugger_alternative && inst->debugger_alternative->site) {
+                (void)getAotDebuggerSite(inst->debugger_alternative->site, llvm_func);
+            }
+        }
+    }
+    return true;
 }
 
 QoreIRToLLVM::AotDebuggerDetour QoreIRToLLVM::beginAotDebuggerDetour(int32_t slot,
         const AbstractQoreFunctionVariant* variant, llvm::Module& module, llvm::Function* llvm_func,
         const QoreIRInstruction* inst) {
     const QoreIRDebuggerAlternative* alternative = inst ? inst->debugger_alternative.get() : nullptr;
-    if (!alternative || !alternative->site_keyed) {
+    if (!alternative || !(alternative->site_keyed || alternative->site_gated)) {
         return beginAotDebuggerDetour(slot, variant, module, llvm_func);
     }
     // the instruction takes its unfused form exactly when the site's first instruction did
@@ -8658,7 +8676,7 @@ llvm::Value* QoreIRToLLVM::emitAotDebuggerColdPath(AotDebuggerDetour& detour, ll
         if (!boxed_result) {
             return nullptr;
         }
-        if (site) {
+        if (site && site_alternative->site_store) {
             // the site keeps the call's result for its other instructions and releases it at the next call or exit
             llvm::Value* previous = builder->CreateLoad(i64_type, site->result);
             builder->CreateStore(boxed_result, site->result);
@@ -8679,7 +8697,8 @@ llvm::Value* QoreIRToLLVM::emitAotDebuggerColdPath(AotDebuggerDetour& detour, ll
     // the value that the instruction's result takes, owned by the merged result if it is boxed
     llvm::Value* cold_value = boxed_result;
     uint32_t cold_id = 0;
-    bool cold_owned = true;
+    // a result borrowed from the site is not released here: the site releases it
+    bool cold_owned = call_owned;
     const QoreIRDebuggerAlternative* alternative = inst->debugger_alternative.get();
     if (alternative && !alternative->consumers.empty()) {
         // the consumers are lowered as without the fusion, from the call's ordinary result, which is owned as the
@@ -16372,6 +16391,9 @@ bool QoreIRToLLVM::lowerFunctionIntern(const QoreIRFunction& func, llvm::Module&
             aot_body_local_slot_anchor = &aot_body_local_slot_entry->back();
         }
         preCreateLocalAllocas(module, llvm_func);
+        if (!preCreateAotDebuggerSites(func, llvm_func, error)) {
+            return false;
+        }
 
         // Save on_block_exit handler count at function entry so we can
         // execute handlers registered during this function at exit.
@@ -19333,9 +19355,13 @@ bool QoreIRToLLVM::lowerKeptDebuggerCall(const QoreIRInstruction* inst, llvm::Fu
     const QoreValue* expr = nullptr;
     const AbstractQoreFunctionVariant* variant = qore_llvm_kept_call_variant(inst, op, expr);
     // the gate of the call target
-    int32_t slot = -1;
+    int32_t slot = aot_mode && expr ? getAotExprSlot(*expr) : -1;
     AotDebuggerDetour detour;
-    if (op == QoreIROpcode::CallClosureDirect) {
+    if (alternative.site_keyed || alternative.site_gated) {
+        // a consumer of a kept call, or a call taking its result, takes its unfused form exactly when the call made
+        // the ordinary call
+        detour = beginAotDebuggerDetour(slot, nullptr, module, llvm_func, inst);
+    } else if (op == QoreIROpcode::CallClosureDirect) {
         if (llvm::Value* detached = emitAotContextDebuggerDetached(module)) {
             auto* native_bb = llvm::BasicBlock::Create(ctx, "aot_call_native", llvm_func);
             detour.debug_bb = llvm::BasicBlock::Create(ctx, "aot_call_debugger", llvm_func);
@@ -19345,7 +19371,6 @@ bool QoreIRToLLVM::lowerKeptDebuggerCall(const QoreIRInstruction* inst, llvm::Fu
         }
     } else if (aot_mode) {
         if (expr) {
-            slot = getAotExprSlot(*expr);
             detour = beginAotDebuggerDetour(slot, variant, module, llvm_func);
         }
     } else if (variant) {
@@ -19413,7 +19438,7 @@ bool QoreIRToLLVM::lowerKeptDebuggerCall(const QoreIRInstruction* inst, llvm::Fu
 
 bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Function* llvm_func,
         llvm::Module& module, std::string& error) {
-    // a call that an optimization folded or discarded, kept for an attached debugger
+    // a call that an optimization folded or discarded, or a consumer of such a call, kept for an attached debugger
     if (inst->debugger_alternative
             && inst->debugger_alternative->kind != QoreIRDebuggerAlternative::Kind::Consumers) {
         return lowerKeptDebuggerCall(inst, llvm_func, module, error);
@@ -27063,8 +27088,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 normalized);
                         }
                     } else {
-                        if (index->getType() != i64_type
-                                || nanboxed_values.count(index_value.id)) {
+                        // the analysis proved an assigned integer index; a local that native code keeps boxed
+                        // loads it boxed (a parameter without a native slot), as for the integer operations
+                        if (nanboxed_values.count(index_value.id)) {
+                            index = ensureIntType(index, index_value.id);
+                        }
+                        if (index->getType() != i64_type) {
                             error = "internal error: guarded AOT aggregate"
                                 " projection index is not a native integer";
                             return false;

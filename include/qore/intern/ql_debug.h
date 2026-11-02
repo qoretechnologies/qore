@@ -176,6 +176,12 @@ DLLLOCAL void qore_dbg_cares_lookup_env_read();
 //! been counted for the collector and before the lock is released, with the queue's object; set by the C++ unit tests
 typedef void (*qore_dbg_queue_push_locked_hook_t)(const QoreObject* self);
 DLLLOCAL extern std::atomic<qore_dbg_queue_push_locked_hook_t> qore_dbg_queue_push_locked_hook;
+
+//! called by the AOT debugger gate helpers (qore_rt_get_aot_method_debugger_gate_v1(),
+//! qore_rt_get_aot_context_debugger_gate_v1()) when the entry of native code takes the address of a debugger gate,
+//! before its body runs; set by dbg_call_at_next_debugger_gate()
+typedef void (*qore_dbg_debugger_gate_hook_t)();
+DLLLOCAL extern std::atomic<qore_dbg_debugger_gate_hook_t> qore_dbg_debugger_gate_hook;
 #endif
 
 #endif

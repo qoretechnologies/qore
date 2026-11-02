@@ -15335,6 +15335,48 @@ static void dbg_fsio_hook(int fd) {
     }
 }
 
+//! the callback of dbg_call_at_next_debugger_gate(), taken by the first gate that native code fetches
+static std::atomic<ResolvedCallReferenceNode*> dbg_debugger_gate_callback{nullptr};
+
+static void dbg_debugger_gate_hook() {
+    ResolvedCallReferenceNode* callback = dbg_debugger_gate_callback.exchange(nullptr);
+    if (!callback) {
+        return;
+    }
+    qore_dbg_debugger_gate_hook.store(nullptr, std::memory_order_release);
+    ExceptionSink xsink;
+    {
+        ReferenceHolder<ResolvedCallReferenceNode> holder(callback, &xsink);
+        ValueHolder rv(callback->invoke(nullptr, &xsink), &xsink);
+    }
+    // the gate helpers have no exception sink of their own: an exception of the callback is reported here
+    if (xsink) {
+        xsink.handleExceptions();
+    }
+}
+
+//! Debug-only: calls the code once, when the entry of AOT-compiled code next takes the address of a debugger gate
+/** The code runs before the body of the native function whose entry takes the gate, so that a debugger that it
+    attaches is attached while that function runs natively (AOTFusedShapesDebugger.qtest).  JIT code embeds the gate
+    addresses and never calls the code.  DEBUG builds only.
+
+    @param code the code to call, or NOTHING to remove a code that was not called
+*/
+static QoreValue f_dbg_call_at_next_debugger_gate(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const ResolvedCallReferenceNode* code = get_param_value(params, 0).get<const ResolvedCallReferenceNode>();
+    ResolvedCallReferenceNode* callback = code ? code->refRefSelf() : nullptr;
+    if (callback) {
+        qore_dbg_debugger_gate_hook.store(dbg_debugger_gate_hook, std::memory_order_release);
+    } else {
+        qore_dbg_debugger_gate_hook.store(nullptr, std::memory_order_release);
+    }
+    if (ResolvedCallReferenceNode* previous = dbg_debugger_gate_callback.exchange(callback)) {
+        previous->deref(xsink);
+    }
+    return QoreValue();
+}
+
 //! Debug-only: runs the code with a second holder of the file description of the descriptor, and reports the flags
 //! that the holder sees at each read or write of the description that a file stream makes without waiting
 /** The second holder is a duplicate of the descriptor (the same file description, as an inherited standard input
@@ -18118,6 +18160,8 @@ void init_debug_functions(QoreNamespace& qns) {
         "name");
     qns.addBuiltinVariant("dbg_file_stream_io_flags", f_dbg_file_stream_io_flags, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         hashTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "fd", codeTypeInfo, QORE_PARAM_NO_ARG, "call");
+    qns.addBuiltinVariant("dbg_call_at_next_debugger_gate", f_dbg_call_at_next_debugger_gate, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 1, codeOrNothingTypeInfo, QORE_PARAM_NO_ARG, "code");
     qns.addBuiltinVariant("dbg_fork_while_handler_held", f_dbg_fork_while_handler_held, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "name", codeOrNothingTypeInfo,
         QORE_PARAM_NO_ARG, "child");

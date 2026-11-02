@@ -5,10 +5,10 @@
 %allow-debugger
 
 # The fused or folded calls that have no single unfused form of their own: a string producer whose local is read by
-# several consumers or that reaches its consumer through a phi, virtualized and phi aggregate projections, fresh
-# list-size and hash-key folds and boxed return-parameter folds.  While a debugger is attached, each must report the
-# callee's function events and give the values of the ordinary call (AOTFusedShapesDebugger.qtest compares the output
-# with the AST interpreter).  The callees' lines are matched by line number below (CalleeLines); keep them in place.
+# several consumers or that reaches its consumer through a phi, virtualized, phi and guarded aggregate projections,
+# fresh list-size and hash-key folds and boxed return-parameter folds.  While a debugger is attached, each must report
+# the callee's events and give the values of the ordinary call, also when the debugger replaces them (compared with
+# the AST interpreter by AOTFusedShapesDebugger.qtest).  CalleeLines matches the callees' lines; keep them in place.
 
 string sub pair(string left, string right) {
     return left + right; # line 14
@@ -42,16 +42,72 @@ list<int> sub identityList(list<int> value) {
 string sub identityString(string value) {
     return value; # line 43
 }
+final class RowFactory {
+    static hash<string, int> makeRow(int left, int middle, int right) {
+        return {"left": left, "middle": middle, "right": right}; # line 47
+    }
+    static list<int> makeValues(int left, int middle, int right) {
+        return (left, middle, right); # line 50
+    }
+}
+int sub chooseA(int value) {
+    return value * 2; # line 54
+}
+int sub chooseB(int value) {
+    return value * 3; # line 57
+}
+hash<string, hash<string, int>> sub wrapRow(hash<string, int> row, hash<string, int> unused) {
+    return {"row": row, "unused": unused}; # line 60
+}
+int sub consumeRow(hash<string, int> row) {
+    return row.middle; # line 63
+}
 
 const CalleeLines = {
     "14": "pair", "17": "triple", "21": "StringFactory::makeStatic", "25": "makeRow", "28": "makeValues",
     "31": "readListSize", "34": "readMiddle", "37": "identityHash", "40": "identityList", "43": "identityString",
+    "47": "RowFactory::makeRow", "50": "RowFactory::makeValues", "54": "chooseA", "57": "chooseB",
+    "60": "wrapRow", "63": "consumeRow",
 };
 
 class CalleeRecorder inherits DebugProgram {
     public {
         hash<string, int> entries = {};
         hash<string, int> exits = {};
+        #! replaces the callees' results while true
+        bool replace = False;
+    }
+
+    #! the replaced result of a callee: another value of the same type
+    static auto replaceResult(auto value) {
+        switch (value.typeCode()) {
+            case NT_INT:
+                return value + 1000;
+            case NT_STRING:
+                return value + "!";
+            case NT_HASH: {
+                if (value.firstValue().typeCode() == NT_HASH) {
+                    hash<string, hash<string, int>> result = {};
+                    foreach hash<auto> pair in (value.pairIterator()) {
+                        result{pair.key} = replaceResult(pair.value);
+                    }
+                    return result;
+                }
+                hash<string, int> result = {};
+                foreach hash<auto> pair in (value.pairIterator()) {
+                    result{pair.key} = pair.value + 1000;
+                }
+                return result;
+            }
+            case NT_LIST: {
+                list<int> result = ();
+                foreach int element in (value) {
+                    result += element + 1000;
+                }
+                return result;
+            }
+        }
+        return value;
     }
     onAttach(ProgramControl pgm, reference rs, reference rts) { rs = DebugStep; }
     onDetach(ProgramControl pgm, reference rs, reference rts) { rs = DebugDetach; }
@@ -69,6 +125,9 @@ class CalleeRecorder inherits DebugProgram {
         *string key = CalleeLines{pgm.getStatementIdInfo(sid).start_line.toString()};
         if (key) {
             ++exits{key};
+            if (replace) {
+                rv = replaceResult(rv);
+            }
         }
     }
     onException(ProgramControl pgm, int sid, hash<auto> ex, reference dismiss, reference rs, reference rts) {}
@@ -104,8 +163,22 @@ sub maybeAttach(int i) {
     }
 }
 
+# a finite call-reference target: native code calls one of the two known functions
+int sub finiteChoice(bool first, int value) {
+    code<int(int)> fn = first ? \chooseA() : \chooseB();
+    return fn(value);
+}
+
+# virtualized projections of calls' results through locals, in a function that cannot attach a debugger, whose
+# locals stay private: native code takes the members from the arguments
+int sub privateRow(int i, int index) {
+    hash<string, int> row = makeRow(i, i + 1, i + 2);
+    list<int> values = makeValues(i, i + 2, i + 4);
+    return row.left + row.right * 10 + values[index] * 100 + values[0] * 1000 + consumeRow(row) * 10000;
+}
+
 # the shapes in a loop that can attach the debugger before them
-list<auto> sub shapesLoop(int n) {
+list<auto> sub shapesLoop(int n, int index = 1) {
     list<auto> results = ();
     for (int i = 0; i < n; ++i) {
         maybeAttach(i);
@@ -121,6 +194,15 @@ list<auto> sub shapesLoop(int n) {
         t += row.left + row.right;
         # aggregate projections through a phi
         t += (i % 2 ? makeValues(i, 1, 2) : makeValues(3, i, 4))[1];
+        # a nested projection through a phi: the outer calls take the inner calls' results
+        t += (i % 2 ? wrapRow(makeRow(i, 1, 2), makeRow(3, 4, 5))
+            : wrapRow(makeRow(6, i, 7), makeRow(8, 9, 10))).row.middle;
+        # a guarded projection of a phi of aggregate calls, by a parameter, and of a virtualized aggregate call
+        t += (i % 2 ? makeValues(i, 5, 6) : makeValues(7, i, 8))[index];
+        list<int> guarded_values = makeValues(i, i + 2, i + 4);
+        t += guarded_values[index] * 10 + guarded_values[0];
+        # virtualized projections of static calls: the arguments replace the members
+        t += RowFactory::makeRow(i, i + 1, i + 2).middle + RowFactory::makeValues(i, i + 5, i + 9)[2];
         # a fresh list-size fold and a fresh hash-key fold
         t += readListSize((1, 2, 3, i)) + readMiddle({"left": 1, "middle": i, "right": 3});
         # boxed return-parameter folds
@@ -143,12 +225,51 @@ list<auto> sub shapesTryLoop(int n) {
             t += (i % 2 ? pair("left", "right") : triple("one", "two", "three")).size();
             hash<string, int> row = makeRow(i, i + 1, i + 2);
             t += row.left + row.right;
+            t += RowFactory::makeRow(i, i + 1, i + 2).middle + RowFactory::makeValues(i, i + 5, i + 9)[2];
             t += readListSize((1, 2, 3, i)) + readMiddle({"left": 1, "middle": i, "right": 3});
             t += identityHash({"value": i}).value * 100 + identityString("abc").size();
             results += t;
         }
     } catch (hash<ExceptionInfo> ex) {
         results += ex.err;
+    }
+    return results;
+}
+
+# Debug builds attach the debugger from the entry of the native code of the next call (a test hook), so that the
+# call's own native code runs with the debugger attached; the reference run (FUSED_SHAPES_ATTACH_BEFORE) attaches it
+# before the call, as without the hook
+bool use_gate_hook = Option::HAVE_LIBRARY_DEBUGGING && !ENV.FUSED_SHAPES_ATTACH_BEFORE;
+bool gate_hook_called;
+sub armAttach() {
+    if (use_gate_hook) {
+        gate_hook_called = False;
+        call_function("dbg_call_at_next_debugger_gate", sub () {
+            gate_hook_called = True;
+            attachRecorder();
+        });
+    } else {
+        attachRecorder();
+    }
+}
+sub checkAttached(string call) {
+    detachRecorder();
+    if (use_gate_hook) {
+        call_function("dbg_call_at_next_debugger_gate");
+        if (!gate_hook_called) {
+            throw "TEST-ERROR", sprintf("the native code of %s took no debugger gate", call);
+        }
+    }
+}
+list<auto> sub hookedCalls(int n) {
+    list<auto> results = ();
+    for (int i = 0; i < n; ++i) {
+        armAttach();
+        results += finiteChoice(i % 2 == 0, i);
+        checkAttached("finiteChoice()");
+        armAttach();
+        results += privateRow(i, 1);
+        checkAttached("privateRow()");
     }
     return results;
 }
@@ -172,6 +293,8 @@ sub report(string label, list<auto> results) {
 for (int i = 0; i < 32; ++i) {
     shapesLoop(3);
     shapesTryLoop(3);
+    finiteChoice(i % 2 == 0, i);
+    privateRow(i, 1);
 }
 report("warmup", ());
 
@@ -192,6 +315,23 @@ detachRecorder();
 results += shapesTryLoop(8);
 detachRecorder();
 report("during", results);
+
+# attached during the loops, replacing the callees' results
+recorder.replace = True;
+attach_at = 3;
+results = shapesLoop(8);
+detachRecorder();
+results += shapesTryLoop(8);
+detachRecorder();
+recorder.replace = False;
+report("replaced", results);
+
+# attached by the entry of the calls' native code, also replacing the callees' results
+report("hooked", hookedCalls(4));
+recorder.replace = True;
+results = hookedCalls(4);
+recorder.replace = False;
+report("hooked replaced", results);
 
 attach_at = -1;
 results = shapesLoop(4) + shapesTryLoop(4);

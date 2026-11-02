@@ -9,11 +9,14 @@
 
 #! Fused and folded native calls without a single unfused form honor a debugger attached while they run
 /** The shapes: a string producer whose local is read by several consumers (each consumer takes a clone of the call)
-    or that reaches its consumer through a phi, virtualized and phi aggregate projections, a call whose result is
-    discarded, fresh list-size and hash-key folds and boxed return-parameter folds.  While a debugger is attached,
-    the native code makes the ordinary call, and the fixtures print the values and the callees' function events,
-    which must be those of the AST interpreter in every mode.  AOTFusedShapesDebugger.qr runs the shapes in a Program
-    that allows a debugger; fused-shapes-debugger/FusedShapesHost.qr debugs the Program of a module without
+    or that reaches its consumer through a phi, virtualized, phi and guarded aggregate projections, a call whose
+    result is discarded, fresh list-size and hash-key folds, boxed return-parameter folds and a finite call-reference
+    target.  While a debugger is attached, the native code makes the ordinary call and uses its result, and the
+    fixtures print the values and the callees' function events, which must be those of the AST interpreter in every
+    mode, also when the debugger replaces the callees' results.  AOTFusedShapesDebugger.qr runs the shapes in a
+    Program that allows a debugger; in a Debug build, a test hook (dbg_call_at_next_debugger_gate()) attaches the
+    debugger from the entry of a call's native code, which then runs with the debugger attached (the reference runs
+    attach it before the call).  fused-shapes-debugger/FusedShapesHost.qr debugs the Program of a module without
     %allow-debugger, whose functions keep their locals private, so the string fusions that clone a producer apply
     there.  The fusions stay selected, and a Program that cannot be debugged has no gate.
 */
@@ -32,6 +35,8 @@ class FusedShapesDebuggerTest inherits QUnit::Test {
 
         #! the build prefixes: plain, exception handling by unwinding and split modules
         const Prefixes = ("", "QORE_AOT_EH=1 ", "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ");
+        #! the reference runs attach the debugger before the calls that the test hook attaches it in
+        const AttachBefore = "FUSED_SHAPES_ATTACH_BEFORE=1 ";
     }
 
     constructor() : Test("fused AOT shapes honor debuggers", "1.0", \ARGV) {
@@ -79,7 +84,7 @@ class FusedShapesDebuggerTest inherits QUnit::Test {
 
     private string getExpected() {
         if (!expected) {
-            expected = run((qore, "--exec-mode=ast", source));
+            expected = run((qore, "--exec-mode=ast", source), AttachBefore);
             # each callee reports its events while the debugger is attached during the loops
             foreach string callee in (("pair", "triple", "StringFactory::makeStatic", "makeRow", "makeValues",
                     "readListSize", "readMiddle", "identityHash", "identityList", "identityString")) {
@@ -88,6 +93,13 @@ class FusedShapesDebuggerTest inherits QUnit::Test {
             }
             assertRegex("detached entry counts: null", expected);
             assertRegex("after entry counts: null", expected);
+            # the debugger's results replace the callees' results
+            *list<*string> during = regex_extract(expected, "\nduring values: ([^\n]*)");
+            *list<*string> replaced = regex_extract(expected, "\nreplaced values: ([^\n]*)");
+            assertTrue(during && replaced && during[0] != replaced[0], "replaced values");
+            assertRegex("hooked entry counts: \\{chooseA: 2, chooseB: 2, consumeRow: 4, makeRow: 4, makeValues: 4\\}",
+                expected);
+            assertRegex("hooked replaced values: \\[1000, ", expected);
         }
         return expected;
     }
@@ -95,7 +107,8 @@ class FusedShapesDebuggerTest inherits QUnit::Test {
     private string getHostExpected() {
         if (!host_expected) {
             host_expected = runHost(module_dir, "ast");
-            assertRegex("during entry counts: \\{StringFactory::makeStatic: 13, [^\n]*pair: 11, ", host_expected);
+            assertRegex("during entry counts: \\{[^\n]*StringFactory::makeStatic: 13, [^\n]*pair: 11, ", host_expected);
+            assertRegex("replaced entry counts: \\{RowFactory::makeRow: 5, ", host_expected);
             for (int i = 0; i < 4; ++i) {
                 assertRegex("call " + i + " entry counts: \\{StringFactory::makeStatic: 1, pair: 1\\}",
                     host_expected);
@@ -105,13 +118,16 @@ class FusedShapesDebuggerTest inherits QUnit::Test {
         return host_expected;
     }
 
-    #! the fusions of the fixture's loop
+    #! the fusions of the fixture's loop and of its virtualized and finite call-reference functions
     private checkFusions(string output, string label) {
         string line = stats(output, "shapesLoop", label);
         foreach string kind in (("fresh-list-size-calls", "fresh-hash-key-calls", "aggregate-projections",
                 "boxed-return-calls", "string-consumers")) {
             assertRegex(kind + "=[1-9]", line, label + " " + kind);
         }
+        # the virtualized projections: native code takes the members from the arguments, also through a call
+        assertRegex("aggregate-projections=2", stats(output, "privateRow", label), label + " virtualized calls");
+        assertRegex("finite_callref_result", body(output, "finiteChoice"), label + " finite call reference");
     }
 
     #! the fusions of the module's functions
@@ -126,7 +142,7 @@ class FusedShapesDebuggerTest inherits QUnit::Test {
     private checkModes() {
         string expected = getExpected();
         foreach string mode in (("ir", "jit", "tiered")) {
-            assertEq(expected, run((qore, "--exec-mode=" + mode, source)), mode);
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source), AttachBefore), mode);
         }
         string host_expected = getHostExpected();
         foreach string mode in (("ir", "jit", "tiered")) {
@@ -149,6 +165,10 @@ class FusedShapesDebuggerTest inherits QUnit::Test {
                 assertRegex("\naot_call_debugger[0-9]*:", fn, label + " debugger blocks");
                 assertRegex("call i64 @qore_rt_call_direct_aot\\(", fn, label + " ordinary function calls");
                 assertRegex("call ptr @qore_rt_get_aot_method_debugger_gate_v1", output, label + " gates");
+                # the consumers of a virtualized call take the call's result when it made the ordinary call
+                assertRegex("debugger_site_taken", body(output, "privateRow"), label + " keyed consumers");
+                assertRegex("call ptr @qore_rt_get_aot_context_debugger_gate_v1", body(output, "finiteChoice"),
+                    label + " call reference gate");
                 foreach string runtime in (("", "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 ")) {
                     assertEq(expected, run((executable,), runtime), label + " " + runtime);
                 }
@@ -190,7 +210,8 @@ class FusedShapesDebuggerTest inherits QUnit::Test {
         file.open2(module, O_CREAT | O_WRONLY | O_TRUNC);
         file.write(replace(ReadOnlyFile::readTextFile(module_source), "%modern\n", "%modern\n%no-debugging\n"));
         file.close();
-        string ast = run((qore, "--exec-mode=ast", nodebug));
+        # without gates, the test hook is never called
+        string ast = run((qore, "--exec-mode=ast", nodebug), AttachBefore);
         assertRegex("before values: ", ast);
         assertRegex("during entry counts: null", ast);
         foreach string level in (("-O0", "-O3")) {
@@ -206,7 +227,7 @@ class FusedShapesDebuggerTest inherits QUnit::Test {
                 "qore_rt_get_aot_context_debugger_gate_v1"), "no gate " + level);
             assertFalse(regex(output, "aot_call_debugger|method_debugger_detached|debugger_site_taken"),
                 "no debugger blocks " + level);
-            assertEq(ast, run((executable,)), level);
+            assertEq(ast, run((executable,), AttachBefore), level);
         }
     }
 }

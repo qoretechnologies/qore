@@ -7,17 +7,45 @@
 
 # Debugs the Program of the FusedShapesTarget module, which AOTFusedShapesDebugger.qtest loads from its source or
 # from an AOT qmod, and prints the values and the callees' function events, which must be those of the AST
-# interpreter.
+# interpreter, also when the debugger replaces the callees' results.
 
 const CalleeLines = {
     "17": "pair", "20": "triple", "24": "StringFactory::makeStatic", "28": "makeRow", "31": "makeValues",
     "34": "readListSize", "37": "readMiddle", "40": "identityHash", "43": "identityList", "46": "identityString",
+    "50": "RowFactory::makeRow", "53": "RowFactory::makeValues",
 };
 
 class CalleeRecorder inherits DebugProgram {
     public {
         hash<string, int> entries = {};
         hash<string, int> exits = {};
+        #! replaces the callees' results while true
+        bool replace = False;
+    }
+
+    #! the replaced result of a callee: another value of the same type
+    static auto replaceResult(auto value) {
+        switch (value.typeCode()) {
+            case NT_INT:
+                return value + 1000;
+            case NT_STRING:
+                return value + "!";
+            case NT_HASH: {
+                hash<string, int> result = {};
+                foreach hash<auto> pair in (value.pairIterator()) {
+                    result{pair.key} = pair.value + 1000;
+                }
+                return result;
+            }
+            case NT_LIST: {
+                list<int> result = ();
+                foreach int element in (value) {
+                    result += element + 1000;
+                }
+                return result;
+            }
+        }
+        return value;
     }
     onAttach(ProgramControl pgm, reference rs, reference rts) { rs = DebugStep; }
     onDetach(ProgramControl pgm, reference rs, reference rts) { rs = DebugDetach; }
@@ -35,6 +63,9 @@ class CalleeRecorder inherits DebugProgram {
         *string key = sid ? CalleeLines{pgm.getStatementIdInfo(sid).start_line.toString()} : NOTHING;
         if (key) {
             ++exits{key};
+            if (replace) {
+                rv = replaceResult(rv);
+            }
         }
     }
     onException(ProgramControl pgm, int sid, hash<auto> ex, reference dismiss, reference rs, reference rts) {}
@@ -117,6 +148,13 @@ for (int i = 0; i < 4; ++i) {
     detach();
     report("call " + i, results);
 }
+
+# attached during calls that already run natively, replacing the callees' results
+recorder.replace = True;
+results = runShapes(8, 3);
+detach();
+recorder.replace = False;
+report("replaced", results);
 
 results = runShapes(4, -1);
 report("after", results);

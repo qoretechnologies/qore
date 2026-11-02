@@ -1150,7 +1150,9 @@ struct QoreIRDebuggerAlternative {
         //! the instruction fuses the call with its consumers: the ordinary call, then the consumers
         Consumers,
         //! the instruction is the call, whose result native code takes from \a native_value (a fold): the ordinary
-        //! call gives the result instead
+        //! call gives the result instead, through \a consumers if there are any; or the instruction is a consumer
+        //! of a call keyed on the call's site (\a site_keyed), which native code replaces by \a native_value and
+        //! which takes \a consumers from the result of the call's ordinary call when the call made it
         Fold,
         //! the instruction is the call, which native code does not make (its result is not used): the ordinary call
         //! is made for its debugger events
@@ -1178,6 +1180,9 @@ struct QoreIRDebuggerAlternative {
     uint32_t site = 0;
     bool site_store = false;
     bool site_keyed = false;
+    //! the instruction takes its unfused form exactly when the site's first instruction did, and makes its own
+    //! ordinary call (a call whose arguments are the results of the site's calls)
+    bool site_gated = false;
 
     DLLLOCAL ~QoreIRDebuggerAlternative();
 };
@@ -2563,6 +2568,22 @@ private:
 //@}
 
 //! Common metadata for exact calls whose string result is consumed in AOT lowering.
+//! The cached state of a call instruction, which a copy of the instruction computes again (0: unchecked)
+/** A copy of a call is made for the unfused form of a fused consumer (QoreIRDebuggerAlternativeBuilder).
+*/
+struct QoreIRCallCacheState : public std::atomic<int8_t> {
+    QoreIRCallCacheState() : std::atomic<int8_t>(0) {
+    }
+
+    QoreIRCallCacheState(const QoreIRCallCacheState&) : std::atomic<int8_t>(0) {
+    }
+
+    QoreIRCallCacheState& operator=(const QoreIRCallCacheState&) {
+        store(0);
+        return *this;
+    }
+};
+
 class QoreIRStringConsumerCallInstruction : public QoreIRInstruction {
 public:
     enum class AOTStringConsumerKind : uint8_t {
@@ -2717,14 +2738,14 @@ public:
     //!< operands[0..n-1] are the function arguments
 
     // Cached inline IR call state (computed on first execution, avoids repeated lookups)
-    mutable std::atomic<int8_t> inline_ir_state{0};  //!< 0=unchecked, 1=eligible, -1=ineligible
+    mutable QoreIRCallCacheState inline_ir_state;  //!< 0=unchecked, 1=eligible, -1=ineligible
     mutable const QoreIRFunction* cached_callee_ir = nullptr;
     mutable const UserVariantBase* cached_uvb = nullptr;
     mutable const QoreTypeInfo* cached_return_type = nullptr;
 
     // Cached native leaf-call state. The release/acquire state publishes the
     // descriptor fields below: 0=unchecked, -2=analyzing, -1=ineligible, 1=eligible.
-    mutable std::atomic<int8_t> native_leaf_state{0};
+    mutable QoreIRCallCacheState native_leaf_state;
     mutable NativeLeafKind native_leaf_kind = NativeLeafKind::IntBinary;
     mutable QoreIROpcode native_leaf_opcode = QoreIROpcode::AddInt;
     mutable int8_t native_leaf_lhs_param = -1;
@@ -2768,7 +2789,7 @@ public:
     bool has_ref_args = false;              //!< True if any operand is a reference type (may be modified by callee)
 
     // Phase 3: Aggressive inlining fields
-    mutable std::atomic<int8_t> inline_ir_state{0};  //!< 0=unchecked, 1=eligible, -1=ineligible
+    mutable QoreIRCallCacheState inline_ir_state;  //!< 0=unchecked, 1=eligible, -1=ineligible
     mutable const QoreIRFunction* cached_callee_ir = nullptr; //!< Cached callee IR for inlining
     mutable const UserVariantBase* cached_uvb = nullptr;
     mutable const QoreTypeInfo* cached_return_type = nullptr;
@@ -2806,7 +2827,7 @@ public:
     bool has_ref_args = false;                  //!< True if any operand is a reference type (may be modified by callee)
 
     // Cached inline IR call state (computed on first execution, avoids repeated lookups)
-    mutable std::atomic<int8_t> inline_ir_state{0};  //!< 0=unchecked, 1=eligible, -1=ineligible
+    mutable QoreIRCallCacheState inline_ir_state;  //!< 0=unchecked, 1=eligible, -1=ineligible
     mutable const QoreIRFunction* cached_callee_ir = nullptr;
     mutable const UserVariantBase* cached_uvb = nullptr;
     mutable const QoreTypeInfo* cached_return_type = nullptr;
@@ -2840,7 +2861,7 @@ public:
     bool has_ref_args = false;              //!< True if any operand is a reference type (may be modified by callee)
 
     // Phase 3: Aggressive inlining fields
-    mutable std::atomic<int8_t> inline_ir_state{0};  //!< 0=unchecked, 1=eligible, -1=ineligible
+    mutable QoreIRCallCacheState inline_ir_state;  //!< 0=unchecked, 1=eligible, -1=ineligible
     mutable const QoreIRFunction* cached_callee_ir = nullptr; //!< Cached callee IR for inlining
     mutable const UserVariantBase* cached_uvb = nullptr;
     mutable const QoreTypeInfo* cached_return_type = nullptr;
@@ -2911,7 +2932,7 @@ public:
     bool aot_string_transform_upper = false;
 
     // Cached inline IR call state for direct object-method calls.
-    mutable std::atomic<int8_t> inline_ir_state{0};  //!< 0=unchecked, 1=eligible, -1=ineligible
+    mutable QoreIRCallCacheState inline_ir_state;  //!< 0=unchecked, 1=eligible, -1=ineligible
     mutable const QoreIRFunction* cached_callee_ir = nullptr;
     mutable const UserVariantBase* cached_uvb = nullptr;
     mutable const QoreTypeInfo* cached_return_type = nullptr;
@@ -2961,7 +2982,7 @@ public:
     QoreIRBasicBlock* normal_target = nullptr;  //!< Target block on success
 
     // Cached inline IR call state for direct object-method calls.
-    mutable std::atomic<int8_t> inline_ir_state{0};  //!< 0=unchecked, 1=eligible, -1=ineligible
+    mutable QoreIRCallCacheState inline_ir_state;  //!< 0=unchecked, 1=eligible, -1=ineligible
     mutable const QoreIRFunction* cached_callee_ir = nullptr;
     mutable const UserVariantBase* cached_uvb = nullptr;
     mutable const QoreTypeInfo* cached_return_type = nullptr;

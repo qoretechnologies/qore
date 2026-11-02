@@ -30,6 +30,7 @@
 */
 
 #include "qore/intern/QoreRuntimeDiagnostic.h"
+#include "qore/intern/ql_debug.h"
 #include "qore/intern/QoreJITIncludes.h"
 #include "qore/intern/JITRuntime.h"
 #include "qore/intern/QoreJITException.h"
@@ -18263,6 +18264,17 @@ extern "C" DLLEXPORT const QoreClass* qore_rt_get_aot_override_class_v1(QoreAOTC
     return uvb && qore_rt_method_execution_program(target.method, uvb) == ctx->pgm ? target.qc : nullptr;
 }
 
+#ifdef DEBUG
+std::atomic<qore_dbg_debugger_gate_hook_t> qore_dbg_debugger_gate_hook{nullptr};
+
+//! runs the test hook of dbg_call_at_next_debugger_gate(), which can attach a debugger before native code runs
+static void qore_rt_aot_debugger_gate_hook() {
+    if (qore_dbg_debugger_gate_hook_t hook = qore_dbg_debugger_gate_hook.load(std::memory_order_acquire)) {
+        hook();
+    }
+}
+#endif
+
 // The gate words of a call target without a Program of its own: a call never inlined, and a call that the ordinary
 // method call path takes with two different Programs' debugger checks (qore_rt_get_aot_method_debugger_gate_v1())
 static constinit const std::atomic<const void*> qore_rt_aot_debugger_gate_detached{nullptr};
@@ -18272,6 +18284,9 @@ extern "C" DLLEXPORT const void* qore_rt_get_aot_method_debugger_gate_v1(QoreAOT
     static_assert(sizeof(std::atomic<qore_debug_program_private*>) == sizeof(void*)
         && std::atomic<qore_debug_program_private*>::is_always_lock_free,
         "AOT debugger gates are loaded as pointer-sized atomic words");
+#ifdef DEBUG
+    qore_rt_aot_debugger_gate_hook();
+#endif
     if (!ctx || !ctx->call_targets || slot < 0 || slot >= ctx->num_exprs) {
         return &qore_rt_aot_debugger_gate_attached;
     }
@@ -18300,6 +18315,9 @@ extern "C" DLLEXPORT const void* qore_rt_get_aot_method_debugger_gate_v1(QoreAOT
 }
 
 extern "C" DLLEXPORT const void* qore_rt_get_aot_context_debugger_gate_v1(QoreAOTContext* ctx) {
+#ifdef DEBUG
+    qore_rt_aot_debugger_gate_hook();
+#endif
     return ctx && ctx->pgm
         ? static_cast<const void*>(qore_program_private::get(*ctx->pgm)->getAttachedDebugProgramAddr())
         : static_cast<const void*>(&qore_rt_aot_debugger_gate_attached);
