@@ -1055,7 +1055,7 @@ printf("open_parens: %d, close_parens: %d\n", counts.open_parens, counts.close_p
         Rows that do not follow the format are reported by @ref takeWarnings(); note that this class
         converts any \c "|"-led line to a table, while \c qpp only recognizes a table whose header
         row starts with \c "|!", so a table written without a header row renders as literal text in
-        \c .qpp and \c .dox.tmpl sources.
+        <tt>.qpp</tt> and <tt>.dox.tmpl</tt> sources.
      */
     public class DocumentTableHelper {
         private:internal {
@@ -3142,8 +3142,11 @@ string doxygen_output = proc.process();
                 # from being treated as part of the @ref target by doxygen
                 line =~ s/@ref\s+([A-Za-z0-9_:]+)\(\):/@ref $1 "$1():"/g;
                 line =~ s/@ref\s+([A-Za-z0-9_:]+)\(\)/@ref $1/g;
-                # Process tables in doc comments
+                # Process tables in doc comments; the lines are joined with newlines below, so the newline that ends
+                # a converted table row is removed: a blank line between the rows of a table makes doxygen render the
+                # last cell of each row as a paragraph, misaligned with the other cells
                 line = dth.process(line);
+                line =~ s/\n$//;
 
                 if (line =~ /\/\/!\s*@file\s+\S+/) {
                     int file_pos = line.find("@file");

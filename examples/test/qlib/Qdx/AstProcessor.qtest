@@ -42,6 +42,7 @@ public class AstProcessorTests inherits QUnit::Test {
         addTestCase("Global variable processing", \testGlobalVariables());
         addTestCase("Doc comment conversion", \testDocCommentConversion());
         addTestCase("Block comment handling", \testBlockComments());
+        addTestCase("Doc comment tables have no blank lines between rows", \testDocCommentTable());
         addTestCase("Soft type formatting", \testSoftTypeFormatting());
         addTestCase("Doxygen indexes nested callable field types", \testCallableTypes());
         addTestCase("Abstract method parameter declarations", \testAbstractMethodParameters());
@@ -157,6 +158,26 @@ class MyClass { }
         string output = processCode(code);
 
         assertTrue(output =~ /\/\/! This is a doc comment/, "doc comment converted from #! to //!");
+    }
+
+    # a blank line between the rows of a table makes doxygen render the last cell of each row as a paragraph
+    testDocCommentTable() {
+        string code = '
+/** The objects:
+
+    |!Object|!Alignment
+    |Columns|aligned in place
+    |Indexes|dropped and recreated
+
+    @param x the parameter
+*/
+sub f(int x) { }
+';
+        string output = processCode(code);
+        assertEq(3, (output =~ x/(<tr>)/g).size(), "the rows are converted: " + output);
+        assertFalse(output =~ /<\/tr>\n\s*\n\s*<tr>/, "no blank line between rows: " + output);
+        assertTrue(output =~ /<\/tr>\n\s*<\/table>/, "the table ends after its last row: " + output);
+        assertTrue(output =~ /@param x the parameter/, "the text after the table is kept");
     }
 
     testBlockComments() {
