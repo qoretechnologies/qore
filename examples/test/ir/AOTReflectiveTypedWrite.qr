@@ -1,0 +1,148 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%allow-debugger
+
+# set_local_var_value() assigns a value with the declared type of the local, as an assignment in the code does: a
+# value of another type is refused with RUNTIME-TYPE-ERROR and a read-only local with RUNTIME-READONLY-VIOLATION,
+# and the local keeps its value in every execution mode, including the caches and reloads of compiled code.
+
+class TypedBase { int next(int v) { return v + 1; } }
+class TypedDerived inherits TypedBase { int next(int v) { return v + 10; } }
+our TypedBase typed_target = new TypedDerived();
+
+# A class argument keeps a normal observable helper frame.
+sub write(TypedBase frame, string name, auto value) { set_local_var_value(1, name, value); }
+string sub attempt(TypedBase frame, string name, auto value) {
+    try {
+        set_local_var_value(1, name, value);
+        return "ok";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+string sub attemptReference(TypedBase frame) {
+    try {
+        set_local_var_value(1, "receiver", \typed_target);
+        return "ok";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+string sub classParam(TypedBase receiver) {
+    int first = receiver.next(0);
+    string e1 = attemptReference(new TypedBase());
+    int second = receiver.next(0);
+    string e2 = attempt(new TypedBase(), "receiver", 42);
+    string e3 = attempt(new TypedBase(), "receiver", NOTHING);
+    int third = receiver.next(0);
+    write(new TypedBase(), "receiver", new TypedDerived());
+    return sprintf("%d:%s:%d:%s:%s:%d:%d:%s", first, e1, second, e2, e3, third, receiver.next(0),
+        receiver.className());
+}
+string sub optionalParam(*TypedBase receiver) {
+    int first = receiver.next(0);
+    string e1 = attempt(new TypedBase(), "receiver", 42);
+    string e2 = attemptReference(new TypedBase());
+    int second = receiver.next(0);
+    write(new TypedBase(), "receiver", NOTHING);
+    return sprintf("%d:%s:%s:%d:%y", first, e1, e2, second, exists receiver);
+}
+string sub classLoop(TypedBase receiver) {
+    int sum = 0;
+    string err = "";
+    for (int i = 0; i < 6; ++i) {
+        sum += receiver.next(0);
+        if (i == 1) {
+            err = attempt(new TypedBase(), "receiver", 42);
+        }
+    }
+    write(new TypedBase(), "receiver", new TypedDerived());
+    return sprintf("%s:%d:%d", err, sum, receiver.next(0));
+}
+string sub intList(auto replacement) {
+    list<int> values = (17,);
+    values[0] += 1;
+    list<int> alias = values;
+    string err = attempt(new TypedBase(), "values", replacement);
+    auto result = values[0] += 2;
+    push values, 3;
+    return sprintf("%s:%y:%y:%y:%s", err, result, alias, values, values.fullType());
+}
+string sub intListLoop() {
+    list<int> values = ();
+    string err = "";
+    for (int i = 0; i < 8; ++i) {
+        push values, i;
+        if (i == 3) {
+            err = attempt(new TypedBase(), "values", (1.5, 2.5));
+        } else if (i == 5) {
+            write(new TypedBase(), "values", (100,));
+        }
+        values[0] += 1;
+    }
+    return sprintf("%s:%y", err, values);
+}
+string sub scalars() {
+    int i = 5;
+    float f = 1.5;
+    string s = "a";
+    softint si = 5;
+    hash<string, int> h = {"a": 1};
+    list<string> errs = (
+        attempt(new TypedBase(), "i", "12"),
+        attempt(new TypedBase(), "i", 3.7),
+        attempt(new TypedBase(), "f", 3),
+        attempt(new TypedBase(), "s", 3),
+        attempt(new TypedBase(), "si", "12"),
+        attempt(new TypedBase(), "h", {"a": "x"}),
+        attempt(new TypedBase(), "h", {"c": 3}),
+        attempt(new TypedBase(), "missing", 1),
+    );
+    i += 1;
+    h.d = 4;
+    return sprintf("%s|%y:%s:%y:%y:%y:%y:%s", errs.join(","), i, i.type(), f * 2, s + "b", si + 1, h, h.fullType());
+}
+string sub readOnly(const int param, const list<int> plist) {
+    const int x = 5;
+    const list<int> l = (1, 2);
+    list<string> errs = (
+        attempt(new TypedBase(), "x", 7),
+        attempt(new TypedBase(), "l", (9,)),
+        attempt(new TypedBase(), "param", 7),
+        attempt(new TypedBase(), "plist", (9,)),
+    );
+    int sum = 0;
+    for (int i = 0; i < 3; ++i) {
+        sum += x + l[1] + param + plist[0];
+    }
+    return sprintf("%s|%d:%y:%d:%y:%d", errs.join(","), x, l, param, plist, sum);
+}
+string sub intLoop() {
+    int x = 0;
+    string err = "";
+    for (int i = 0; i < 5; ++i) {
+        x += 1;
+        if (i == 2) {
+            err = attempt(new TypedBase(), "x", "bad");
+        } else if (i == 3) {
+            write(new TypedBase(), "x", 100);
+        }
+    }
+    return sprintf("%s:%d", err, x);
+}
+
+TypedBase base();
+printf("class:%s\n", classParam(base));
+printf("optional:%s\n", optionalParam(base));
+printf("class-loop:%s\n", classLoop(base));
+foreach auto replacement in (((1.5,), ("x",), NOTHING, "invalid", (41,), cast<list<int>>((42,)))) {
+    printf("list:%s\n", intList(replacement));
+}
+printf("list-loop:%s\n", intListLoop());
+printf("scalars:%s\n", scalars());
+printf("read-only:%s\n", readOnly(3, (4,)));
+printf("int-loop:%s\n", intLoop());
