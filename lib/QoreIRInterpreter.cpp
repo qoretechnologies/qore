@@ -18383,8 +18383,8 @@ QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, Excepti
             if (qore_is_int_lvalue_type(v.getTypeInfo())) {
                 return qore_int_lvalue_minus_date(v, right, xsink);
             }
-            // any other lvalue subtracts the date's relative seconds
-            return v.minusEqualsBigInt(right.get<const DateTimeNode>()->getRelativeSeconds());
+            // any other lvalue subtracts the integer value of the date below, as += adds it: the seconds of a
+            // relative date or the epoch seconds of an absolute date
         }
         // do integer minus-equals
         return v.minusEqualsBigInt(right.getAsBigInt());
